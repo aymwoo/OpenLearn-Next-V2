@@ -1,0 +1,6 @@
+{
+  "name": "EduLearn LMS AI",
+  "description": "An AI-powered Learning Management System featuring assignments, quizzes, auto-grading, class scheduling, and attendance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
