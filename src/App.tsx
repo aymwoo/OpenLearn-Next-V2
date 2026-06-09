@@ -57,8 +57,8 @@ type WhiteboardElement = { id: string; type: string; data: string };
 type PluginType = { id: string; name: string; status: string; created_at: number; manifest: string };
 type VFSNode = { id: string; parent_id: string | null; type: 'file' | 'dir'; name: string; content?: string };
 type ProcessType = { id: string; name: string; status: string; created_at: number; updated_at: number };
-type ClassType = { id: string; name: string; description: string; created_at: number };
-type StudentType = { id: string; name: string; email: string; locked_lesson_id?: string | null; private_notes?: string | null; created_at: number };
+type ClassType = { id: string; name: string; description: string; class_passcode?: string | null; created_at: number };
+type StudentType = { id: string; name: string; email: string; password?: string; locked_lesson_id?: string | null; private_notes?: string | null; created_at: number };
 type AssignmentType = { id: string; class_id: string; title: string; description: string; content: string; created_at: number };
 type SubmissionType = { assignment_id: string; student_id: string; student_name?: string; content: string; score: number | null; feedback: string | null; status: string };
 type ScheduleType = { id: string; class_id: string; lesson_id: string; lesson_title: string; scheduled_date: string; created_at: number };
@@ -4605,6 +4605,72 @@ export default function App() {
                               transition={{ duration: 0.3, ease: 'easeOut' }}
                               className="pl-6 bg-gray-50 pb-2 pt-2 border-t border-gray-100 pr-2"
                             >
+                               {/* Class temporary passcode / Start Lesson controller */}
+                               <div className="mb-4 bg-gradient-to-r from-indigo-50/70 to-violet-50/70 p-3.5 rounded-2xl border border-indigo-150/40 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-sans text-left" onClick={(e) => e.stopPropagation()}>
+                                 <div className="space-y-1 text-left">
+                                   <div className="flex items-center gap-1.5 justify-start">
+                                     <span className="inline-block w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0" />
+                                     <span className="text-xs font-black text-indigo-950 uppercase tracking-wider">{lang === 'zh' ? '临时班级密码 (支持学生快速一键密码登录)' : 'Temporary Class Passcode'}</span>
+                                   </div>
+                                   <p className="text-[10px] text-indigo-600/80 font-semibold leading-relaxed text-left block">
+                                     {lang === 'zh' ? '开始课堂后，全班学生均可使用此特定临时密码统一安全登录，无需强制输入个人自设密码。' : 'Once set, any pupil in this class can use this temporary passcode to log in directly.'}
+                                   </p>
+                                 </div>
+                                 <div className="flex items-center gap-1.5 shrink-0 justify-end">
+                                   <input 
+                                     id={`class-passcode-${cls.id}`}
+                                     type="text"
+                                     value={cls.class_passcode || ""}
+                                     onChange={async (e) => {
+                                       const val = e.target.value;
+                                       await fetch(`/api/classes/${cls.id}`, {
+                                         method: 'PUT',
+                                         headers: { 'Content-Type': 'application/json' },
+                                         body: JSON.stringify({ class_passcode: val })
+                                       });
+                                       await fetchClasses();
+                                     }}
+                                     placeholder={lang === 'zh' ? '暂未设定 / 留空禁用' : 'Disabled / Enter code'}
+                                     className="border border-indigo-200/80 rounded-xl text-xs px-2.5 py-1.5 w-36 text-center bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono font-bold text-gray-800 focus:border-transparent transition-all"
+                                     onClick={(e) => e.stopPropagation()}
+                                   />
+                                   <button
+                                     onClick={async (e) => {
+                                       e.stopPropagation();
+                                       // Generate random 4 digit PIN
+                                       const randomPin = Math.floor(1000 + Math.random() * 9000).toString();
+                                       await fetch(`/api/classes/${cls.id}`, {
+                                         method: 'PUT',
+                                         headers: { 'Content-Type': 'application/json' },
+                                         body: JSON.stringify({ class_passcode: randomPin })
+                                       });
+                                       await fetchClasses();
+                                     }}
+                                     className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] p-2 py-1.5 font-black shadow-xs transition-all hover:shadow-sm cursor-pointer shrink-0"
+                                     title={lang === 'zh' ? '随机生成班级密码' : 'Generate random passcode'}
+                                   >
+                                     {lang === 'zh' ? '随机生成' : 'Random Gen'}
+                                   </button>
+                                   {cls.class_passcode && (
+                                     <button
+                                       onClick={async (e) => {
+                                         e.stopPropagation();
+                                         await fetch(`/api/classes/${cls.id}`, {
+                                           method: 'PUT',
+                                           headers: { 'Content-Type': 'application/json' },
+                                           body: JSON.stringify({ class_passcode: null })
+                                         });
+                                         await fetchClasses();
+                                       }}
+                                       className="bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-[10px] p-2 py-1.5 font-bold shadow-xs transition-colors cursor-pointer shrink-0"
+                                       title={lang === 'zh' ? '清除临时密码' : 'Clear temporary passcode'}
+                                     >
+                                       {lang === 'zh' ? '清除' : 'Clear'}
+                                     </button>
+                                   )}
+                                 </div>
+                               </div>
+
                                {/* Class level Tabs */}
                                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl mb-4 max-w-sm border border-slate-200/40" onClick={(e) => e.stopPropagation()}>
                                  <button
@@ -5297,12 +5363,13 @@ export default function App() {
                                           const name = window.prompt(lang === 'zh' ? '请输入学生姓名:' : 'Enter student name:');
                                           if (!name) return;
                                           const email = window.prompt(lang === 'zh' ? '请输入学生邮箱 (可选):' : 'Enter student email (optional):') || '';
+                                          const password = window.prompt(lang === 'zh' ? '请输入登录密码 (可选，默认 123456):' : 'Enter login password (optional, default 123456):') || '123456';
                                           
                                           // 1. Create a new student record
                                           const createRes = await fetch('/api/students', {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ name, email })
+                                            body: JSON.stringify({ name, email, password })
                                           });
                                           if (createRes.ok) {
                                             const newStudent = await createRes.json();
@@ -5655,6 +5722,28 @@ export default function App() {
                                                         <option value="">{lang === 'zh' ? '无 (自主学习)' : 'None (Free Dashboard)'}</option>
                                                         {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
                                                       </select>
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between text-[11px] p-1.5 bg-gray-150/35 rounded border border-gray-100 mt-1">
+                                                      <span className="font-semibold text-gray-600">
+                                                        {lang === 'zh' ? '该生个人登录密码:' : 'Personal Login Password:'}
+                                                      </span>
+                                                      <input 
+                                                        type="text"
+                                                        className="border rounded text-[11px] p-1 bg-white focus:ring-1 focus:ring-indigo-500 font-mono w-28 text-center select-all text-gray-750"
+                                                        value={st.password || "123456"}
+                                                        onChange={async (e) => {
+                                                          const newPwd = e.target.value;
+                                                          await fetch(`/api/students/${st.id}`, {
+                                                            method: 'PUT',
+                                                            headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ password: newPwd })
+                                                          });
+                                                          setStudents(prev => prev.map(s => s.id === st.id ? { ...s, password: newPwd } : s));
+                                                        }}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        title={lang === 'zh' ? '点击可修改密码' : 'Click to edit student password'}
+                                                      />
                                                     </div>
                                                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                                                       <select 

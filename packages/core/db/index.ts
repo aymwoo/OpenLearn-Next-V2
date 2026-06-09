@@ -79,6 +79,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT,
+    class_passcode TEXT,
     created_at INTEGER NOT NULL
   );
 
@@ -86,6 +87,7 @@ db.exec(`
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT,
+    password TEXT,
     locked_lesson_id TEXT,
     private_notes TEXT,
     created_at INTEGER NOT NULL
@@ -207,7 +209,19 @@ try {
 }
 
 try {
+  db.prepare('ALTER TABLE classes ADD COLUMN class_passcode TEXT').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
   db.prepare('ALTER TABLE students ADD COLUMN locked_lesson_id TEXT').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.prepare('ALTER TABLE students ADD COLUMN password TEXT').run();
 } catch (e) {
   // column already exists
 }

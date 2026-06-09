@@ -853,9 +853,10 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
   app.put('/api/classes/:id', (req, res) => {
     try {
-      const { name, description } = req.body;
+      const { name, description, class_passcode } = req.body;
       if (name) kernelContainer.db.prepare('UPDATE classes SET name = ? WHERE id = ?').run(name, req.params.id);
       if (description !== undefined) kernelContainer.db.prepare('UPDATE classes SET description = ? WHERE id = ?').run(description, req.params.id);
+      if (class_passcode !== undefined) kernelContainer.db.prepare('UPDATE classes SET class_passcode = ? WHERE id = ?').run(class_passcode, req.params.id);
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -962,6 +963,36 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         if (!studentObj) {
           return res.status(401).json({ error: 'Student not found in active roster' });
         }
+
+        const providedPassword = (password || '').trim();
+        if (!providedPassword) {
+          return res.status(400).json({ error: 'Password or Class Passcode is required' });
+        }
+
+        // 1. Check student own password
+        const matchesOwnPassword = studentObj.password && studentObj.password.trim() === providedPassword;
+
+        // 2. Check temporary class passcodes for classes the student is enrolled in
+        let matchesClassPasscode = false;
+        try {
+          const enrolledClasses = kernelContainer.db.prepare(`
+            SELECT c.class_passcode 
+            FROM classes c
+            INNER JOIN class_students cs ON c.id = cs.class_id
+            WHERE cs.student_id = ?
+          `).all(studentObj.id) as any[];
+
+          matchesClassPasscode = enrolledClasses.some(cls => 
+            cls.class_passcode && cls.class_passcode.trim() === providedPassword
+          );
+        } catch (dbErr) {
+          console.error("Failed to query active class passcodes", dbErr);
+        }
+
+        if (!matchesOwnPassword && !matchesClassPasscode) {
+          return res.status(401).json({ error: 'Incorrect student password or temporary class passcode' });
+        }
+
         sessionData = {
           role: 'student',
           studentId: studentObj.id,
@@ -1163,10 +1194,10 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
   app.post('/api/students', (req, res) => {
     try {
-      const { name, email } = req.body;
+      const { name, email, password } = req.body;
       const studentId = Math.random().toString(36).slice(2);
-      kernelContainer.db.prepare('INSERT INTO students (id, name, email, created_at) VALUES (?, ?, ?, ?)').run(
-        studentId, name, email || '', Date.now()
+      kernelContainer.db.prepare('INSERT INTO students (id, name, email, password, created_at) VALUES (?, ?, ?, ?, ?)').run(
+        studentId, name, email || '', password || '123456', Date.now()
       );
       res.json({ success: true, id: studentId });
     } catch (e: any) {
@@ -1176,9 +1207,10 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
   app.put('/api/students/:id', (req, res) => {
     try {
-      const { name, email, locked_lesson_id, private_notes } = req.body;
+      const { name, email, password, locked_lesson_id, private_notes } = req.body;
       if (name) kernelContainer.db.prepare('UPDATE students SET name = ? WHERE id = ?').run(name, req.params.id);
       if (email !== undefined) kernelContainer.db.prepare('UPDATE students SET email = ? WHERE id = ?').run(email, req.params.id);
+      if (password !== undefined) kernelContainer.db.prepare('UPDATE students SET password = ? WHERE id = ?').run(password, req.params.id);
       if (locked_lesson_id !== undefined) kernelContainer.db.prepare('UPDATE students SET locked_lesson_id = ? WHERE id = ?').run(locked_lesson_id, req.params.id);
       if (private_notes !== undefined) kernelContainer.db.prepare('UPDATE students SET private_notes = ? WHERE id = ?').run(private_notes, req.params.id);
       res.json({ success: true });

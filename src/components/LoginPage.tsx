@@ -33,6 +33,7 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [manualStudentId, setManualStudentId] = useState('');
+  const [studentPassword, setStudentPassword] = useState('');
   const [studentError, setStudentError] = useState('');
   const [studentSubmitting, setStudentSubmitting] = useState(false);
 
@@ -102,6 +103,10 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
       setStudentError(lang === 'zh' ? '请选择或输入学号/学生标识。' : 'Please select or enter your Student ID.');
       return;
     }
+    if (!studentPassword.trim()) {
+      setStudentError(lang === 'zh' ? '请输入个人密码或临时班级密码。' : 'Please enter your personal password or temporary class passcode.');
+      return;
+    }
 
     try {
       setStudentError('');
@@ -111,7 +116,8 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           entrance: 'student',
-          studentId: finalStudentId
+          studentId: finalStudentId,
+          password: studentPassword.trim()
         })
       });
 
@@ -285,6 +291,21 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
                   setSelectedStudentId('');
                 }}
                 placeholder={lang === 'zh' ? '手工输入您的特有学号' : 'Enter specific numeric ID code'}
+                className="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-xs sm:text-sm p-3 text-white outline-none placeholder-slate-500 transition-colors"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+                <Lock size={13} />
+                {lang === 'zh' ? '个人密码 / 临时班级密码' : 'Personal Password / Class Passcode'}
+              </label>
+              <input
+                type="password"
+                required
+                value={studentPassword}
+                onChange={(e) => setStudentPassword(e.target.value)}
+                placeholder={lang === 'zh' ? '输入个人密码 (默认: 123456) 或临时班级密码' : 'Enter standard password (default: 123456) or active class code'}
                 className="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-xs sm:text-sm p-3 text-white outline-none placeholder-slate-500 transition-colors"
               />
             </div>
