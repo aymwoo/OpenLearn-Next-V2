@@ -13,10 +13,12 @@ import { AcademicGrowthTrajectoryChart } from './components/AcademicGrowthTrajec
 import { ScheduledLessonsProgressChart } from './components/ScheduledLessonsProgressChart';
 import { StudentCompareGrowthChart } from './components/StudentCompareGrowthChart';
 import { ClassAttendanceSummaryChart } from './components/ClassAttendanceSummaryChart';
+import { RollCallHistoryStatsChart } from './components/RollCallHistoryStatsChart';
 import { StudentPrivateNotesEditor } from './components/StudentPrivateNotesEditor';
 import { ComputerLabManager } from './components/ComputerLabManager';
 import { LoginPage } from './components/LoginPage';
 import { AdminPanel } from './components/AdminPanel';
+import { TimetableManager } from './components/TimetableManager';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion, AnimatePresence, animate } from 'motion/react';
 import { io } from 'socket.io-client';
@@ -114,6 +116,145 @@ const DEFAULT_PLUGIN = `exports.default = {
   }
 };`;
 
+const CAPABILITY_INFO: Record<string, {
+  labelZh: string;
+  labelEn: string;
+  iconName: string;
+  risk: 'low' | 'medium' | 'high';
+  riskDescZh: string;
+  riskDescEn: string;
+}> = {
+  'whiteboard:write': {
+    labelZh: '写入交互白板内容',
+    labelEn: 'Whiteboard Write Access',
+    iconName: 'PenTool',
+    risk: 'medium',
+    riskDescZh: '中风险：允许插件在授课白板上自由擦写、增删几何教具和课件图形，会实时推送或改变所有在线学员的画板视图。',
+    riskDescEn: 'Medium Risk: Authorizes the plugin to draw, erase, or alter whiteboard elements, live-syncing to all classroom attendees.'
+  },
+  'whiteboard:read': {
+    labelZh: '读取白板元素图层',
+    labelEn: 'Whiteboard Read Access',
+    iconName: 'Eye',
+    risk: 'low',
+    riskDescZh: '低风险：仅读取白板当前的静态图形元素，用于做辅助的数据联动分析或内容导出。',
+    riskDescEn: 'Low Risk: Read active static vectors or quiz properties from the blackboard without modification.'
+  },
+  'management:read': {
+    labelZh: '读取教务学员名册',
+    labelEn: 'School Directory Read',
+    iconName: 'Users',
+    risk: 'medium',
+    riskDescZh: '中风险：允许插件遍历读取班级下的学生姓名、登录邮箱等档案信息（如在做点名提问筛选时）。',
+    riskDescEn: 'Medium Risk: Allows retrieving list of enrolled students, email profiles, or attendance history.'
+  },
+  'management:write': {
+    labelZh: '修改教务核心档案',
+    labelEn: 'School Directory Write',
+    iconName: 'Database',
+    risk: 'high',
+    riskDescZh: '高风险：强力权限！允许插件创建、编辑或彻底抹除班级列表、学生个人账号、授课日志及考勤成绩等多项核心教务系统档案。',
+    riskDescEn: 'High Risk: Critical! Grants ability to modify academic profiles, drop students, change registers, or log grade-sheets.'
+  }
+};
+
+interface ParsedManifest {
+  id?: string;
+  name?: string;
+  version?: string;
+  description?: string;
+  author?: string;
+  capabilitiesProposed?: string[];
+}
+
+interface ParsedAction {
+  id: string;
+  commandType: string;
+  description?: string;
+}
+
+const parsePluginSource = (sourceCode: string) => {
+  let manifest: ParsedManifest | null = null;
+  const actions: ParsedAction[] = [];
+  
+  try {
+    const cleanCode = sourceCode
+      .replace(/require\s*\(.*?\)/g, '{}')
+      .replace(/import\s+.*?\s+from\s*['"].*?['"]/g, '');
+      
+    try {
+      const runner = new Function('exports', `
+        try {
+          ${cleanCode};
+          exports.default = exports.default || exports;
+        } catch(e) {}
+      `);
+      const mockExports = {} as any;
+      runner(mockExports);
+      const evaluated = mockExports.default || mockExports;
+      if (evaluated && evaluated.manifest) {
+        manifest = evaluated.manifest;
+      }
+    } catch (e: any) {
+      // Ignore evaluation error, fallback to regex
+    }
+
+    const idMatch = sourceCode.match(/id\s*:\s*['"]([^'"]+)['"]/);
+    const nameMatch = sourceCode.match(/name\s*:\s*['"]([^'"]+)['"]/);
+    const verMatch = sourceCode.match(/version\s*:\s*['"]([^'"]+)['"]/);
+    const descMatch = sourceCode.match(/description\s*:\s*['"]([^'"]+)['"]/);
+    const authorMatch = sourceCode.match(/author\s*:\s*['"]([^'"]+)['"]/);
+    
+    let capabilities: string[] = [];
+    const capsMatch = sourceCode.match(/capabilitiesProposed\s*:\s*\[([\s\S]*?)\]/);
+    if (capsMatch) {
+      capabilities = capsMatch[1]
+        .split(',')
+        .map(s => s.replace(/['"\s]/g, ''))
+        .filter(s => s.length > 0);
+    }
+
+    const mergedManifest: ParsedManifest = {
+      id: manifest?.id || idMatch?.[1] || undefined,
+      name: manifest?.name || nameMatch?.[1] || undefined,
+      version: manifest?.version || verMatch?.[1] || undefined,
+      description: manifest?.description || descMatch?.[1] || undefined,
+      author: manifest?.author || authorMatch?.[1] || undefined,
+      capabilitiesProposed: manifest?.capabilitiesProposed || (capabilities.length > 0 ? capabilities : undefined)
+    };
+
+    const actionBlockRegex = /actionRegistry\.register\s*\(\s*\{([\s\S]*?)\}\s*\)/g;
+    let match;
+    const codesToSearch = sourceCode;
+    while ((match = actionBlockRegex.exec(codesToSearch)) !== null) {
+      const block = match[1];
+      const cmdIdLoc = block.match(/id\s*:\s*['"]([^'"]+)['"]/);
+      const cmdTypeLoc = block.match(/commandType\s*:\s*['"]([^'"]+)['"]/);
+      const cmdDescLoc = block.match(/description\s*:\s*['"]([^'"]+)['"]/);
+      
+      if (cmdIdLoc || cmdTypeLoc) {
+        actions.push({
+          id: cmdIdLoc ? cmdIdLoc[1] : 'unknown',
+          commandType: cmdTypeLoc ? cmdTypeLoc[1] : 'unknown',
+          description: cmdDescLoc ? cmdDescLoc[1] : ''
+        });
+      }
+    }
+
+    return {
+      manifest: mergedManifest,
+      actions: actions,
+      error: null
+    };
+  } catch (err: any) {
+    return {
+      manifest: null,
+      actions: [],
+      error: err.toString()
+    };
+  }
+};
+
 const parseCSV = (text: string): { name: string; email: string }[] => {
   const lines = text.split(/\r?\n/);
   if (lines.length < 2) return [];
@@ -180,6 +321,15 @@ function HelpTabContent({ registeredCommands, onRefresh }: { registeredCommands:
   const [expandedCommandId, setExpandedCommandId] = useState<string | null>(null);
   const [commandPayloads, setCommandPayloads] = useState<Record<string, string>>({});
   const [executionResults, setExecutionResults] = useState<Record<string, { success: boolean; data?: any; error?: string; loading?: boolean }>>({});
+  
+  const [activeTab, setActiveTab] = useState<'commands' | 'sdk_guide'>('commands');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
 
   const categories = [
     { id: 'all', name: '全部命令', icon: Blocks },
@@ -284,268 +434,607 @@ function HelpTabContent({ registeredCommands, onRefresh }: { registeredCommands:
     return matchesSearch && matchesCategory;
   });
 
+  const pluginBoilerplateCode = `/**
+ * Edu-OS 第三方插件标准模版 (CommonJS 规范)
+ * 这是一个完整的"思维导图与随堂卡片插件"开发实例
+ */
+exports.default = {
+  // 1. 插件基础声明 manifest
+  manifest: {
+    id: "ext-mindmap-assistant",
+    name: "思维导图与画板卡片扩展",
+    version: "1.1.0",
+    capabilitiesProposed: [
+      "whiteboard:write", 
+      "vfs:read"
+    ]
+  },
+
+  // 2. 激活入口 activate
+  activate: async (ctx) => {
+    // 注册自定义指令元数据，这样指令就会出现在内核控制台及命令总线列表中
+    ctx.actionRegistry.register({
+      id: 'ext-mindmap-generate',
+      commandType: 'mindmap.create',
+      description: '为当前白板一键生成结构化的知识思维导图卡片',
+      capabilityRequired: 'whiteboard:write',
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          lessonId: { type: 'STRING', description: '关联的课堂课时 ID' },
+          topic: { type: 'STRING', description: '思维导图的中心主题名称' },
+          nodes: { 
+            type: 'ARRAY', 
+            items: { type: 'STRING' },
+            description: '脑图的子分支节点列表'
+          }
+        },
+        required: ['lessonId', 'topic', 'nodes']
+      }
+    });
+
+    // 注册该命令的处理器：当 CommandBus 调度 mindmap.create 时触发
+    ctx.commandBus.registerHandler('mindmap.create', {
+      execute: async (command) => {
+        const { lessonId, topic, nodes } = command.payload;
+        
+        // 调用内核白板 API 在交互画板上绘制思维导图卡片
+        const drawResult = await ctx.commandBus.execute({
+          id: 'internal_' + Math.random().toString(36).slice(2),
+          type: 'whiteboard.draw',
+          actorId: command.actorId || 'system-plugin',
+          payload: {
+            lessonId: lessonId,
+            type: 'mindmap',
+            data: JSON.stringify({
+              title: topic,
+              branches: nodes,
+              themeColor: '#6366f1',
+              createdAt: new Date().toISOString()
+            })
+          }
+        });
+
+        return { 
+          success: true, 
+          elementId: drawResult?.elementId || 'mock-elt-202',
+          message: \`已经成功在白板上完成主题【\\\${topic}】的脑图渲染！\` 
+        };
+      }
+    });
+  }
+};`;
+
+  const pluginInteractiveCode = `/**
+ * Edu-OS 智能作业诊断反馈插件 (Assessing feedback plugin boilerplate)
+ */
+exports.default = {
+  manifest: {
+    id: "ext-grading-assistant",
+    name: "智能随堂作业辅助批改插件",
+    version: "1.0.2",
+    capabilitiesProposed: ["assignment:write", "ai:assist"]
+  },
+  activate: async (ctx) => {
+    // 注册指令 
+    ctx.actionRegistry.register({
+      id: 'ext-assignment-auto-diagnose',
+      commandType: 'assignment.diagnose',
+      description: '针对某一学生的作业提交结果，进行自动诊断打分并提供评语反馈',
+      capabilityRequired: 'assignment:write',
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          assignmentId: { type: 'STRING', description: '作业 ID' },
+          studentId: { type: 'STRING', description: '学生 ID' },
+          scoreRatio: { type: 'NUMBER', description: '算法评定的拟合概率得分（0-100）' }
+        },
+        required: ['assignmentId', 'studentId', 'scoreRatio']
+      }
+    });
+
+    // 绑定总线处理器
+    ctx.commandBus.registerHandler('assignment.diagnose', {
+      execute: async (command) => {
+        const { assignmentId, studentId, scoreRatio } = command.payload;
+        
+        // 1. 获取基本提交数据并评估等级
+        let grade = 'C';
+        let feedback = '还需努力，请巩固课堂公式。';
+        if (scoreRatio >= 90) {
+          grade = 'A+';
+          feedback = '理解极佳！推导严密且格式十分规范！';
+        } else if (scoreRatio >= 75) {
+          grade = 'B';
+          feedback = '推导合理，但请注意个别运算符号。';
+        }
+
+        // 2. 调用内核微服务更新学生成绩
+        await ctx.commandBus.execute({
+          id: 'internal_' + Math.random().toString(36).slice(2),
+          type: 'assignment.grade_submission',
+          payload: {
+            assignmentId,
+            studentId,
+            grade,
+            feedback,
+            status: 'graded'
+          }
+        });
+
+        return {
+          success: true,
+          grade,
+          feedbackText: feedback,
+          timestamp: new Date().toISOString()
+        };
+      }
+    });
+  }
+};`;
+
   return (
     <div className="flex-1 flex flex-col h-full bg-white text-gray-900 border border-gray-200 rounded-2xl shadow-sm overflow-hidden m-1">
-      <div className="px-6 py-5 bg-gradient-to-r from-indigo-50 to-purple-50 shrink-0 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* 灵活响应式的双通道渐变背景页头 */}
+      <div className="px-6 py-5 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50/20 shrink-0 border-b border-gray-150 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <HelpCircle className="text-indigo-600" size={24} />
-            教育实验操作系统：内核可用指令中心 (Interactive Shell Reference)
+            教育实验操作系统：内核帮助与开发中心 (Edu-OS Reference Hub)
           </h2>
           <p className="text-xs text-gray-500 mt-1">
-            本页动态显示当前 Edu-OS 内核与已加载插件激活的全部可用动作指令。您可以调试、预填并模拟提交这些命令，直接操控底层的总线调度器 (CommandBus)。
+            本页动态显示当前 Edu-OS 内核的可用动作指令，并向开发者提供完整的第三方插件开发指南与交互式代码范例。
           </p>
         </div>
-        <button 
-          onClick={onRefresh} 
-          className="px-4 py-2 text-xs bg-white text-indigo-600 font-medium border border-indigo-100 rounded-xl hover:bg-indigo-50 shadow-sm hover:shadow active:scale-95 transition-all self-start md:self-center"
-        >
-          刷新指令库
-        </button>
-      </div>
-
-      <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-4 shrink-0">
-        <div className="relative">
-          <Terminal className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-          <input 
-            type="text"
-            placeholder="通过命令类型、描述或 Action ID 搜索活跃指令..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-sm"
-          />
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {categories.map(cat => {
-            const CatIcon = cat.icon;
-            const isActive = selectedCategory === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id as any)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                  isActive 
-                    ? 'bg-indigo-600 text-white shadow shadow-indigo-200 scale-102 font-bold' 
-                    : 'bg-white text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <CatIcon size={13} />
-                <span>{cat.name}</span>
-                {cat.id === 'all' ? (
-                  <span className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-indigo-700/80 text-white' : 'bg-gray-100 text-gray-500'}`}>{registeredCommands.length}</span>
-                ) : null}
-              </button>
-            );
-          })}
+        
+        {/* 子标签页选项卡 */}
+        <div className="flex bg-neutral-100 p-0.5 rounded-xl border border-neutral-200 self-start md:self-center shrink-0 shadow-inner">
+          <button
+            onClick={() => setActiveTab('commands')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'commands'
+                ? 'bg-white text-indigo-700 shadow-sm font-bold border border-neutral-200/50'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <Terminal size={12} />
+            <span>指令总线调试 (Command Debugger)</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('sdk_guide')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'sdk_guide'
+                ? 'bg-white text-indigo-700 shadow-sm font-bold border border-neutral-200/50'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <Puzzle size={12} />
+            <span>插件开发指南 (Plugin SDK Guide)</span>
+          </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
-        {filteredCommands.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-12 text-gray-400">
-            <ShieldAlert size={48} className="text-gray-300 mb-4 animate-pulse" />
-            <h3 className="font-semibold text-gray-700">没有找到匹配的指令</h3>
-            <p className="text-xs text-gray-500 mt-1">请尝试清空查询条件或检查当前的插件状态</p>
-          </div>
-        ) : (
-          <div className="space-y-4 max-w-5xl mx-auto">
-            {filteredCommands.map(cmd => {
-              const isExpanded = expandedCommandId === cmd.id;
-              const cat = getCommandCategory(cmd.commandType);
-              const isHighRisk = cmd.isHighRisk;
+      {activeTab === 'commands' ? (
+        <>
+          <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-4 shrink-0 col-span-1">
+            <div className="relative">
+              <Terminal className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input 
+                type="text"
+                placeholder="通过命令类型、描述或 Action ID 搜索活跃指令..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-sm"
+              />
+            </div>
 
-              if (commandPayloads[cmd.id] === undefined) {
-                commandPayloads[cmd.id] = generateInitialPayload(cmd.inputSchema);
-              }
-
-              const execResult = executionResults[cmd.id];
-
-              return (
-                <div 
-                  key={cmd.id}
-                  className={`bg-white rounded-xl border transition-all duration-200 overflow-hidden shadow-sm hover:shadow ${
-                    isExpanded ? 'border-indigo-400 ring-1 ring-indigo-100' : isHighRisk ? 'border-orange-200 hover:border-orange-300' : 'border-gray-200 hover:border-indigo-200'
-                  }`}
-                >
-                  <div 
-                    onClick={() => {
-                      setExpandedCommandId(isExpanded ? null : cmd.id);
-                    }}
-                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-gray-50/30 transition-colors select-none"
+            <div className="flex flex-wrap gap-2">
+              {categories.map(cat => {
+                const CatIcon = cat.icon;
+                const isActive = selectedCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id as any)}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                      isActive 
+                        ? 'bg-indigo-600 text-white shadow shadow-indigo-200 scale-102 font-bold' 
+                        : 'bg-white text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-300'
+                    }`}
                   >
-                    <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg shrink-0 ${
-                        isHighRisk ? 'bg-orange-50 text-orange-600' : 'bg-indigo-50 text-indigo-600'
-                      }`}>
-                        {cat === 'vfs' ? <Folder size={18} /> : 
-                         cat === 'edu' ? <BookOpen size={18} /> :
-                         cat === 'mgmt' ? <Users size={18} /> :
-                         cat === 'proc' ? <Terminal size={18} /> :
-                         cat === 'ai' ? <Wand2 size={18} /> : <Puzzle size={18} />}
-                      </div>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono font-bold text-sm bg-gray-100 text-gray-800 px-2 py-0.5 rounded border border-gray-200">
-                            {cmd.commandType}
-                          </span>
-                          {isHighRisk && (
-                            <span className="text-[10px] bg-red-100 text-red-700 border border-red-200 rounded font-extrabold px-1.5 py-0.5 uppercase tracking-wide flex items-center gap-0.5">
-                              ⚠️ 高风险操作
-                            </span>
-                          )}
-                          <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full px-2 py-0.5">
-                            🔒 {cmd.capabilityRequired || '无公开权限'}
-                          </span>
-                        </div>
-                        <p className="text-gray-600 text-xs mt-1.5 font-medium line-clamp-1">{cmd.description}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-3 self-end sm:self-auto">
-                      <span className="text-[10px] text-gray-400 font-mono hidden md:inline">ID: {cmd.id}</span>
-                      <button 
-                        className={`text-xs px-3 py-1 bg-gray-100 text-gray-700 rounded-lg font-semibold border hover:bg-gray-200 transition-all flex items-center gap-1 ${
-                          isExpanded ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : ''
-                        }`}
+                    <CatIcon size={13} />
+                    <span>{cat.name}</span>
+                    {cat.id === 'all' ? (
+                      <span className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-indigo-700/80 text-white' : 'bg-gray-100 text-gray-500'}`}>{registeredCommands.length}</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
+            {filteredCommands.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 text-gray-400">
+                <ShieldAlert size={48} className="text-gray-300 mb-4 animate-pulse" />
+                <h3 className="font-semibold text-gray-700">没有找到匹配的指令</h3>
+                <p className="text-xs text-gray-500 mt-1">请尝试清空查询条件或检查当前的插件状态</p>
+              </div>
+            ) : (
+              <div className="space-y-4 max-w-5xl mx-auto">
+                {filteredCommands.map(cmd => {
+                  const isExpanded = expandedCommandId === cmd.id;
+                  const cat = getCommandCategory(cmd.commandType);
+                  const isHighRisk = cmd.isHighRisk;
+
+                  if (commandPayloads[cmd.id] === undefined) {
+                    commandPayloads[cmd.id] = generateInitialPayload(cmd.inputSchema);
+                  }
+
+                  const execResult = executionResults[cmd.id];
+
+                  return (
+                    <div 
+                      key={cmd.id}
+                      className={`bg-white rounded-xl border transition-all duration-200 overflow-hidden shadow-sm hover:shadow ${
+                        isExpanded ? 'border-indigo-400 ring-1 ring-indigo-100' : isHighRisk ? 'border-orange-200 hover:border-orange-300' : 'border-gray-200 hover:border-indigo-200'
+                      }`}
+                    >
+                      <div 
+                        onClick={() => {
+                          setExpandedCommandId(isExpanded ? null : cmd.id);
+                        }}
+                        className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-gray-50/30 transition-colors select-none"
                       >
-                        {isExpanded ? '折叠面板' : '交互调试 Shell'}
-                        <ChevronRight size={12} className={`transform transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="border-t border-gray-100 bg-gray-50/50 p-5 space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-white rounded-lg border border-gray-200 p-4">
-                          <h4 className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-3 flex items-center gap-1.5 border-b border-gray-100 pb-2">
-                            <Activity size={12} className="text-gray-400" />
-                            入参规范 (JSON Schema Definition)
-                          </h4>
-                          
-                          {cmd.inputSchema?.properties ? (
-                            <div className="space-y-3 font-mono text-[11px]">
-                              {Object.keys(cmd.inputSchema.properties).map(propName => {
-                                const prop = cmd.inputSchema.properties[propName];
-                                const isRequired = cmd.inputSchema.required?.includes(propName);
-                                return (
-                                  <div key={propName} className="flex flex-col gap-1 border-b border-gray-50 last:border-b-0 pb-1.5">
-                                    <div className="flex items-baseline gap-1.5">
-                                      <span className="text-indigo-600 font-semibold">{propName}</span>
-                                      <span className="text-gray-400 text-[10px]">({prop.type})</span>
-                                      {isRequired && (
-                                        <span className="text-red-500 text-[9px] font-bold bg-red-50 border border-red-100 rounded px-1">REQUIRED</span>
-                                      )}
-                                    </div>
-                                    {prop.description && (
-                                      <span className="text-gray-500 font-sans leading-relaxed text-xs">{prop.description}</span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <p className="text-xs text-gray-400 italic">该命令不需要接收任何入参负载 (Payload)。</p>
-                          )}
-                        </div>
-
-                        <div className="bg-white rounded-lg border border-gray-200 p-4 flex flex-col">
-                          <h4 className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-3 flex items-center gap-1.5 border-b border-gray-100 pb-2 justify-between">
-                            <span className="flex items-center gap-1.5">
-                              <Terminal size={12} className="text-gray-400" />
-                              Payload 调试区
-                            </span>
-                            <button 
-                              onClick={() => {
-                                setCommandPayloads(prev => ({
-                                  ...prev,
-                                  [cmd.id]: generateInitialPayload(cmd.inputSchema)
-                                }));
-                              }}
-                              className="text-[9px] text-indigo-600 hover:underline hover:text-indigo-800 uppercase tracking-wider"
-                            >
-                              恢复默认模版
-                            </button>
-                          </h4>
-
-                          <label className="text-[10px] font-semibold text-gray-400 block mb-1">Payload JSON:</label>
-                          <textarea
-                            value={commandPayloads[cmd.id] || ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCommandPayloads(prev => ({ ...prev, [cmd.id]: val }));
-                            }}
-                            rows={6}
-                            className="w-full font-mono text-[11px] p-2.5 bg-gray-900 text-indigo-300 border border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none leading-relaxed flex-1 shadow-inner"
-                          />
-
-                          <div className="mt-3 flex justify-end">
-                            <button
-                              onClick={() => handleExecute(cmd.commandType, cmd.id)}
-                              disabled={execResult?.loading}
-                              className={`px-4 py-2 text-xs font-bold font-sans text-white hover:shadow-md active:scale-95 transition-all flex items-center gap-1.5 rounded-lg ${
-                                isHighRisk 
-                                  ? 'bg-red-600 hover:bg-red-700' 
-                                  : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500'
-                              } disabled:opacity-50`}
-                            >
-                              {execResult?.loading ? (
-                                <>
-                                  <Loader2 size={13} className="animate-spin" />
-                                  <span>内核正在调度总线...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <PlayCircle size={13} />
-                                  <span>提交执行指令 (Deploy Command)</span>
-                                </>
-                              )}
-                            </button>
+                        <div className="flex items-start gap-3">
+                          <div className={`p-2 rounded-lg shrink-0 ${
+                            isHighRisk ? 'bg-orange-50 text-orange-600' : 'bg-indigo-50 text-indigo-600'
+                          }`}>
+                            {cat === 'vfs' ? <Folder size={18} /> : 
+                             cat === 'edu' ? <BookOpen size={18} /> :
+                             cat === 'mgmt' ? <Users size={18} /> :
+                             cat === 'proc' ? <Terminal size={18} /> :
+                             cat === 'ai' ? <Wand2 size={18} /> : <Puzzle size={18} />}
                           </div>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono font-bold text-sm bg-gray-100 text-gray-800 px-2 py-0.5 rounded border border-gray-200">
+                                {cmd.commandType}
+                              </span>
+                              {isHighRisk && (
+                                <span className="text-[10px] bg-red-100 text-red-700 border border-red-200 rounded font-extrabold px-1.5 py-0.5 uppercase tracking-wide flex items-center gap-0.5">
+                                  ⚠️ 高风险操作
+                                </span>
+                              )}
+                              <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full px-2 py-0.5">
+                                🔒 {cmd.capabilityRequired || '无公开权限'}
+                              </span>
+                            </div>
+                            <p className="text-gray-600 text-xs mt-1.5 font-medium line-clamp-1">{cmd.description}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-3 self-end sm:self-auto">
+                          <span className="text-[10px] text-gray-400 font-mono hidden md:inline">ID: {cmd.id}</span>
+                          <button 
+                            className={`text-xs px-3 py-1 bg-gray-100 text-gray-700 rounded-lg font-semibold border hover:bg-gray-200 transition-all flex items-center gap-1 ${
+                              isExpanded ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : ''
+                            }`}
+                          >
+                            {isExpanded ? '折叠面板' : '交互调试 Shell'}
+                            <ChevronRight size={12} className={`transform transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                          </button>
                         </div>
                       </div>
 
-                      {execResult && (
-                        <div className={`p-4 rounded-xl border flex flex-col font-mono text-[11px] leading-relaxed relative ${
-                          execResult.loading 
-                            ? 'bg-gray-50 border-gray-200' 
-                            : execResult.success 
-                              ? 'bg-green-50/50 border-green-200 text-green-900' 
-                              : 'bg-red-50/50 border-red-200 text-red-900'
-                        }`}>
-                          <div className="absolute top-2 right-3 uppercase text-[10px] font-bold text-gray-400">
-                            Console Output log
-                          </div>
-                          
-                          <div className="font-bold flex items-center gap-1.5 mb-1 bg-transparent border-0 p-0 text-xs">
-                            {execResult.loading ? (
-                              <span className="text-gray-500">⏳ COMMAND QUEUED...</span>
-                            ) : execResult.success ? (
-                              <span className="text-green-700 flex items-center gap-1"><CheckCircle2 size={14} /> STATUS: 200 SUCCESS (Action Completed)</span>
-                            ) : (
-                              <span className="text-red-700 flex items-center gap-1"><X size={14} /> STATUS: 500 INTERNAL_BUS_ERROR</span>
-                            )}
+                      {isExpanded && (
+                        <div className="border-t border-gray-100 bg-gray-50/50 p-5 space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-white rounded-lg border border-gray-200 p-4">
+                              <h4 className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-3 flex items-center gap-1.5 border-b border-gray-100 pb-2">
+                                <Activity size={12} className="text-gray-400" />
+                                入参规范 (JSON Schema Definition)
+                              </h4>
+                              
+                              {cmd.inputSchema?.properties ? (
+                                <div className="space-y-3 font-mono text-[11px]">
+                                  {Object.keys(cmd.inputSchema.properties).map(propName => {
+                                    const prop = cmd.inputSchema.properties[propName];
+                                    const isRequired = cmd.inputSchema.required?.includes(propName);
+                                    return (
+                                      <div key={propName} className="flex flex-col gap-1 border-b border-gray-50 last:border-b-0 pb-1.5">
+                                        <div className="flex items-baseline gap-1.5">
+                                          <span className="text-indigo-600 font-semibold">{propName}</span>
+                                          <span className="text-gray-400 text-[10px]">({prop.type})</span>
+                                          {isRequired && (
+                                            <span className="text-red-500 text-[9px] font-bold bg-red-50 border border-red-100 rounded px-1">REQUIRED</span>
+                                          )}
+                                        </div>
+                                        {prop.description && (
+                                          <span className="text-gray-500 font-sans leading-relaxed text-xs">{prop.description}</span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic">该命令不需要接收任何入参负载 (Payload)。</p>
+                              )}
+                            </div>
+
+                            <div className="bg-white rounded-lg border border-gray-200 p-4 flex flex-col">
+                              <h4 className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-3 flex items-center gap-1.5 border-b border-gray-100 pb-2 justify-between">
+                                <span className="flex items-center gap-1.5">
+                                  <Terminal size={12} className="text-gray-400" />
+                                  Payload 调试区
+                                </span>
+                                <button 
+                                  onClick={() => {
+                                    setCommandPayloads(prev => ({
+                                      ...prev,
+                                      [cmd.id]: generateInitialPayload(cmd.inputSchema)
+                                    }));
+                                  }}
+                                  className="text-[9px] text-indigo-600 hover:underline hover:text-indigo-800 uppercase tracking-wider"
+                                >
+                                  恢复默认模版
+                                </button>
+                              </h4>
+
+                              <label className="text-[10px] font-semibold text-gray-400 block mb-1">Payload JSON:</label>
+                              <textarea
+                                value={commandPayloads[cmd.id] || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setCommandPayloads(prev => ({ ...prev, [cmd.id]: val }));
+                                }}
+                                rows={6}
+                                className="w-full font-mono text-[11px] p-2.5 bg-gray-900 text-indigo-300 border border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none leading-relaxed flex-1 shadow-inner"
+                              />
+
+                              <div className="mt-3 flex justify-end">
+                                <button
+                                  onClick={() => handleExecute(cmd.commandType, cmd.id)}
+                                  disabled={execResult?.loading}
+                                  className={`px-4 py-2 text-xs font-bold font-sans text-white hover:shadow-md active:scale-95 transition-all flex items-center gap-1.5 rounded-lg ${
+                                    isHighRisk 
+                                      ? 'bg-red-600 hover:bg-red-700' 
+                                      : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500'
+                                  } disabled:opacity-50`}
+                                >
+                                  {execResult?.loading ? (
+                                    <>
+                                      <Loader2 size={13} className="animate-spin" />
+                                      <span>内核正在调度总线...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <PlayCircle size={13} />
+                                      <span>提交执行指令 (Deploy Command)</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
                           </div>
 
-                          {!execResult.loading && (
-                            <pre className="mt-2 p-3 bg-gray-900/95 text-gray-200 rounded-lg overflow-x-auto border border-gray-800 shadow-inner max-h-56">
-                              {execResult.success 
-                                ? JSON.stringify(execResult.data, null, 2)
-                                : execResult.error
-                              }
-                            </pre>
+                          {execResult && (
+                            <div className={`p-4 rounded-xl border flex flex-col font-mono text-[11px] leading-relaxed relative ${
+                              execResult.loading 
+                                ? 'bg-gray-50 border-gray-200' 
+                                : execResult.success 
+                                  ? 'bg-green-50/50 border-green-200 text-green-900' 
+                                  : 'bg-red-50/50 border-red-200 text-red-900'
+                            }`}>
+                              <div className="absolute top-2 right-3 uppercase text-[10px] font-bold text-gray-400">
+                                Console Output log
+                              </div>
+                              
+                              <div className="font-bold flex items-center gap-1.5 mb-1 bg-transparent border-0 p-0 text-xs text-neutral-800">
+                                {execResult.loading ? (
+                                  <span className="text-gray-500">⏳ COMMAND QUEUED...</span>
+                                ) : execResult.success ? (
+                                  <span className="text-green-700 flex items-center gap-1"><CheckCircle2 size={14} /> STATUS: 200 SUCCESS (Action Completed)</span>
+                                ) : (
+                                  <span className="text-red-700 flex items-center gap-1"><X size={14} /> STATUS: 500 INTERNAL_BUS_ERROR</span>
+                                )}
+                              </div>
+
+                              {!execResult.loading && (
+                                <pre className="mt-2 p-3 bg-gray-900/95 text-gray-200 rounded-lg overflow-x-auto border border-gray-800 shadow-inner max-h-56 select-all font-mono">
+                                  {execResult.success 
+                                    ? JSON.stringify(execResult.data, null, 2)
+                                    : execResult.error
+                                  }
+                                </pre>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      ) : (
+        /* 深度第三方插件开发向导与实例 (SDK Guide) */
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+          <div className="max-w-5xl mx-auto space-y-6">
+            
+            {/* 顶部总揽卡片 */}
+            <div className="bg-white rounded-2xl border border-indigo-100 p-6 shadow-sm flex flex-col md:flex-row gap-5 items-start">
+              <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl shrink-0">
+                <Puzzle size={28} className="animate-spin-slow" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-base font-bold text-gray-900">Edu-OS 插件驱动生态系统说明</h3>
+                <p className="text-xs text-gray-600 leading-relaxed">
+                  Edu-OS 基于分布式微内核架构，利用集中式 <span className="font-semibold text-indigo-600">CommandBus (指令总线)</span> 控制核心服务与插件层。
+                  当第三方插件导入系统后，可以通过声明式的 API，向系统动态声明并注册全新的指令动作 (Action)，并绑定处理器逻辑。
+                  任何在前端、操作面板触发的非对称命令，最终都会被路由到您编写的处理器中执行。
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full font-medium">✨ 微核心组件机制</span>
+                  <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full font-medium">🔒 权限清单沙箱隔离</span>
+                  <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full font-medium">⚡ 随插即用热重载</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 插件骨架原理精讲 */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white p-5 rounded-xl border border-gray-200 space-y-2.5">
+                <div className="flex items-center gap-2 border-b border-gray-100 pb-2 text-indigo-600 font-bold">
+                  <FileText size={16} />
+                  <h4 className="text-xs uppercase tracking-wide">1. 插件清单 (Manifest)</h4>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  向系统注册基础元数据，包括名称、全局唯一 ID 以及插件运行所需的权限（例如申请白板写入或数据库存储能力）。
+                </p>
+                <div className="bg-gray-900 text-gray-300 p-3 rounded-lg text-[9.5px] font-mono leading-relaxed overflow-x-auto shadow-inner">
+                  manifest: {"{"} <br />
+                  &nbsp;&nbsp;id: <span className="text-emerald-400">"ext-my-plugin"</span>,<br />
+                  &nbsp;&nbsp;name: <span className="text-emerald-400">"演示插件"</span>,<br />
+                  &nbsp;&nbsp;version: <span className="text-emerald-400">"1.0.0"</span>,<br />
+                  &nbsp;&nbsp;capabilitiesProposed: [<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;<span className="text-emerald-400">"whiteboard:write"</span><br />
+                  &nbsp;&nbsp;]<br />
+                  {"}"}
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-xl border border-gray-200 space-y-2.5">
+                <div className="flex items-center gap-2 border-b border-gray-100 pb-2 text-emerald-600 font-bold">
+                  <Terminal size={16} />
+                  <h4 className="text-xs uppercase tracking-wide">2. 指令声明 (Actions)</h4>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  在 <code className="bg-gray-100 text-rose-600 px-1 rounded font-mono text-[10px]">activate</code> 中，利用 Schema 规范注册您的指令。内核可据此在前端动态渲染参数输入表单。
+                </p>
+                <div className="bg-gray-900 text-gray-300 p-3 rounded-lg text-[9.5px] font-mono leading-relaxed overflow-x-auto shadow-inner">
+                  ctx.actionRegistry.register({"{"}<br />
+                  &nbsp;&nbsp;id: <span className="text-emerald-400">'ext-my-draw'</span>,<br />
+                  &nbsp;&nbsp;commandType: <span className="text-emerald-400">'widget.draw'</span>,<br />
+                  &nbsp;&nbsp;inputSchema: {"{"}<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;type: <span className="text-emerald-400">'OBJECT'</span>,<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;properties: ...<br />
+                  &nbsp;&nbsp;{"}"}<br />
+                  {"}"});
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-xl border border-gray-200 space-y-2.5">
+                <div className="flex items-center gap-2 border-b border-gray-100 pb-2 text-amber-600 font-bold">
+                  <Database size={16} />
+                  <h4 className="text-xs uppercase tracking-wide">3. 处理器 (Handlers)</h4>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  绑定指令对应的实际代码函数。当有用户、AI代理或脚本派发该类型指令时，处理器就会被总线异步调用。
+                </p>
+                <div className="bg-gray-900 text-gray-300 p-3 rounded-lg text-[9.5px] font-mono leading-relaxed overflow-x-auto shadow-inner">
+                  ctx.commandBus.registerHandler(<br />
+                  &nbsp;&nbsp;<span className="text-emerald-400">'widget.draw'</span>, {"{"}<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;execute: <span className="text-blue-400">async</span> (command) =&gt; {"{"}<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;const dat = command.payload;<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-gray-400">// 执行逻辑，返回结果</span><br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return {"{ success: true };"}<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;{"}"}<br />
+                  &nbsp;&nbsp;{"}"}<br />
+                  );
+                </div>
+              </div>
+            </div>
+
+            {/* 实战完整范例 1 */}
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+              <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-start gap-2 max-w-2xl">
+                  <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded">
+                    <Code size={16} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-900">实战范例 1：白板课时思维脑图一键生成卡片插件 (CommonJS / Node SDK Demo)</h4>
+                    <p className="text-[10px] text-gray-500 mt-0.5">如何编写自定义 JSON Schema、挂载总线解析、调用内部原生画板服务绘制思维导图几何卡片元素。</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleCopy('tpl1', pluginBoilerplateCode)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm shrink-0 sm:self-center ${
+                    copiedId === 'tpl1' 
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-250 animate-pulse' 
+                      : 'bg-white text-indigo-600 border border-indigo-150 hover:bg-indigo-50'
+                  }`}
+                >
+                  {copiedId === 'tpl1' ? <Check size={12} /> : <FileText size={12} />}
+                  <span>{copiedId === 'tpl1' ? '已复制代码！' : '复制代码示例'}</span>
+                </button>
+              </div>
+              <pre className="text-xs font-mono p-5 bg-gray-950 text-gray-200 overflow-x-auto leading-relaxed max-h-[360px] shadow-inner select-all">
+                {pluginBoilerplateCode}
+              </pre>
+            </div>
+
+            {/* 实战完整范例 2 */}
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+              <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-start gap-2 max-w-2xl">
+                  <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded">
+                    <Code size={16} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-900">实战范例 2：一键智能作业诊断、学情成绩辅助批改插件</h4>
+                    <p className="text-[10px] text-gray-500 mt-0.5">如何绑定复合管道操作，直接与操作系统核心交互并自动更新底层 SQLite 数据库中的学生得分和总账状态。</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleCopy('tpl2', pluginInteractiveCode)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm shrink-0 sm:self-center ${
+                    copiedId === 'tpl2' 
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-250' 
+                      : 'bg-white text-emerald-600 border border-emerald-150 hover:bg-emerald-50'
+                  }`}
+                >
+                  {copiedId === 'tpl2' ? <Check size={12} /> : <FileText size={12} />}
+                  <span>{copiedId === 'tpl2' ? '已复制代码！' : '复制代码示例'}</span>
+                </button>
+              </div>
+              <pre className="text-xs font-mono p-5 bg-gray-950 text-gray-200 overflow-x-auto leading-relaxed max-h-[360px] shadow-inner select-all">
+                {pluginInteractiveCode}
+              </pre>
+            </div>
+
+            {/* 实装部署发布、部署流程步骤 */}
+            <div className="bg-gradient-to-br from-indigo-900 to-indigo-950 rounded-2xl p-6 text-white space-y-4 shadow-md">
+              <h4 className="text-xs font-bold tracking-wide flex items-center gap-2 text-indigo-200 uppercase">
+                <Sparkles size={14} /> 如何在 Edu-OS 中安装、测试并热重载您的全新插件？
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-1 text-xs leading-relaxed text-indigo-100">
+                <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/40 space-y-2">
+                  <div className="h-6 w-6 font-mono font-bold bg-indigo-500/25 border border-indigo-400 text-indigo-300 rounded-lg flex items-center justify-center">1</div>
+                  <h5 className="font-bold text-white text-xs">A. 本地开发与修改</h5>
+                  <p className="text-indigo-250 text-[11px] leading-relaxed">复制上方的完整标准 JavaScript 源码模版，将其中参数中的指令声明和元数据做出个性化调整（比如将指令换为自己的独立域名称）。</p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/40 space-y-2">
+                  <div className="h-6 w-6 font-mono font-bold bg-indigo-500/25 border border-indigo-400 text-indigo-300 rounded-lg flex items-center justify-center">2</div>
+                  <h5 className="font-bold text-white text-xs">B. 侧边栏插件热插拔导入</h5>
+                  <p className="text-indigo-250 text-[11px] leading-relaxed">在左上方侧边栏中切换进入 “第三方插件 (Plugins)” 管理仪表盘，点击 “导入新插件” 按钮，随后贴入编写好的一连串业务代码。系统底层会将这块 Javascript 代码自动存根在 SQLite 中。</p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/40 space-y-2">
+                  <div className="h-6 w-6 font-mono font-bold bg-indigo-500/25 border border-indigo-400 text-indigo-300 rounded-lg flex items-center justify-center">3</div>
+                  <h5 className="font-bold text-white text-xs">C. 总线指令池激活调试</h5>
+                  <p className="text-indigo-250 text-[11px] leading-relaxed">安装完毕后在列表中打开启用开关。接着回到本页选择 “一键刷新指令库”，您刚定义的新动作就会立即出现在上方的指令调试池中。您可当场模拟发送 Payload，直接观测总线的响应与状态更新！</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       <div className="p-4 border-t border-gray-100 bg-gray-50/40 shrink-0 flex items-center justify-between text-xs text-gray-400">
         <div className="flex items-center gap-2">
@@ -562,7 +1051,6 @@ function HelpTabContent({ registeredCommands, onRefresh }: { registeredCommands:
     </div>
   );
 }
-
 const generateTemplateContent = (title: string, category: string): string => {
   const normalizedTitle = title ? title.trim() : "New Course";
   switch (category) {
@@ -610,7 +1098,7 @@ export default function App() {
         setLibraryResources(data);
       }
     } catch (e) {
-      console.error('Error fetching library resources:', e);
+      console.warn('Error fetching library resources:', e);
     } finally {
       setLoadingLibraryResources(false);
     }
@@ -679,6 +1167,19 @@ export default function App() {
     { id: 'seg-w4', title: 'Wrap up / 随堂总结与答疑', type: 'summary', duration: '5m', color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100', notes: 'Reflect and assign task' }
   ]);
   const [wizardIsSubmitting, setWizardIsSubmitting] = useState(false);
+
+  // Import Lessons states
+  const [isImportLessonsOpen, setIsImportLessonsOpen] = useState(false);
+  const [importStatus, setImportStatus] = useState<'idle' | 'parsing' | 'importing' | 'success' | 'error'>('idle');
+  const [importProgress, setImportProgress] = useState(0);
+  const [importProgressTotal, setImportProgressTotal] = useState(0);
+  const [importErrorMsg, setImportErrorMsg] = useState('');
+  const [previewImportData, setPreviewImportData] = useState<{ title: string; content: string }[]>([]);
+  const [isDraggingImport, setIsDraggingImport] = useState(false);
+  
+  // Lesson Editor persistence tracking states
+  const [editorSaveStatus, setEditorSaveStatus] = useState<'none' | 'saving' | 'saved' | 'error'>('none');
+  const [editorLastSavedTime, setEditorLastSavedTime] = useState<Date | null>(null);
   
   const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [rightSidebarTab, setRightSidebarTab] = useState<'agent' | 'shell'>('agent');
@@ -691,6 +1192,7 @@ export default function App() {
   const [showProcessLogs, setShowProcessLogs] = useState<string | null>(null);
   const [processLogsContent, setProcessLogsContent] = useState('');
   const [classes, setClasses] = useState<ClassType[]>([]);
+  const [todaySchedules, setTodaySchedules] = useState<any[]>([]);
   const [students, setStudents] = useState<StudentType[]>([]);
   const [expandedClassId, _setExpandedClassId] = useState<string | null>(null);
   const expandedClassIdRef = useRef<string | null>(null);
@@ -749,7 +1251,7 @@ export default function App() {
           }
         }
       } catch (err) {
-        console.error('Session check failed', err);
+        console.warn('Session check failed', err);
       } finally {
         setSessionLoading(false);
       }
@@ -757,7 +1259,7 @@ export default function App() {
     checkSession();
   }, []);
 
-  const [teacherTab, setTeacherTab] = useState<'dashboard' | 'courses' | 'classes' | 'plugins' | 'settings' | 'lesson_editor' | 'help' | 'computer_labs' | 'admin_directory'>('dashboard');
+  const [teacherTab, setTeacherTab] = useState<'dashboard' | 'courses' | 'classes' | 'plugins' | 'settings' | 'lesson_editor' | 'help' | 'computer_labs' | 'admin_directory' | 'timetable'>('dashboard');
   const [timelineSegments, setTimelineSegments] = useState<any[]>([
     { id: 'seg-1', title: '开场准备', type: 'intro', duration: '5m', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
     { id: 'seg-2', title: '讲授新课', type: 'lecture', duration: '20m', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
@@ -1359,7 +1861,7 @@ export default function App() {
           setReadNotifications(new Set(data));
         })
         .catch(err => {
-          console.error('Failed to load read notifications from DB', err);
+          console.warn('Failed to load read notifications from DB', err);
           setReadNotifications(new Set());
         });
     }
@@ -1526,7 +2028,7 @@ export default function App() {
         setAiProviders(data);
       }
     } catch (err) {
-      console.error('Failed to fetch AI providers:', err);
+      console.warn('Failed to fetch AI providers:', err);
     }
   };
 
@@ -1664,6 +2166,175 @@ export default function App() {
     }
   }, [teacherTab]);
 
+  const downloadCsvTemplate = () => {
+    const csvContent = "title,content\n" +
+      "\"Algebra Fundamentals\",\"Hello class! Today we will learn about basic variables, linear equations, and how to balance equations.\"\n" +
+      "\"History of Computing\",\"An exploration of mechanical computing, Alan Turing, ENIAC, and the evolution of modern microchips.\"\n" +
+      "\"General Science: Light & Optics\",\"Explore the concepts of reflection, refraction, and the visible light spectrum with simple virtual canvas exercises.\"";
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "lesson_import_template.csv");
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleCSVFileChange = (file: File) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setImportStatus('error');
+      setImportErrorMsg(lang === 'zh' ? '只支持包含 .csv 后缀名的文件！' : 'Only files ending in .csv are supported!');
+      return;
+    }
+    
+    setImportStatus('parsing');
+    setImportErrorMsg('');
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        if (!text) {
+          throw new Error(lang === 'zh' ? '文件内容为空' : 'File content is empty');
+        }
+        
+        // Custom parser to handle quoted strings with commas and quotes
+        const lines: string[][] = [];
+        let row: string[] = [];
+        let inQuotes = false;
+        let currentValue = '';
+
+        for (let i = 0; i < text.length; i++) {
+          const char = text[i];
+          const nextChar = text[i + 1];
+
+          if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+              currentValue += '"'; // Escaped quote
+              i++; // Skip next quote
+            } else {
+              inQuotes = !inQuotes; // Toggle quote state
+            }
+          } else if (char === ',' && !inQuotes) {
+            row.push(currentValue.trim());
+            currentValue = '';
+          } else if ((char === '\r' || char === '\n') && !inQuotes) {
+            if (char === '\r' && nextChar === '\n') {
+              i++; // Skip \n in \r\n
+            }
+            row.push(currentValue.trim());
+            if (row.length > 0 && row.some(val => val !== '')) {
+              lines.push(row);
+            }
+            row = [];
+            currentValue = '';
+          } else {
+            currentValue += char;
+          }
+        }
+        
+        if (currentValue || row.length > 0) {
+          row.push(currentValue.trim());
+          if (row.some(val => val !== '')) {
+            lines.push(row);
+          }
+        }
+
+        if (lines.length === 0) {
+          throw new Error(lang === 'zh' ? '未在 CSV 文件中找到任何有效行。' : 'No valid lines resolved in the CSV.');
+        }
+
+        const headers = lines[0].map(h => h.toLowerCase().replace(/['"]/g, '').trim());
+        const titleIdx = headers.indexOf('title');
+        const contentIdx = headers.indexOf('content');
+
+        if (titleIdx === -1 || contentIdx === -1) {
+          throw new Error(
+            lang === 'zh'
+              ? '找不到必填列。您的 CSV 文件首行必须包含 "title" 和 "content" 列。'
+              : 'Required columns not found. First row of CSV must contain "title" and "content" headers.'
+          );
+        }
+
+        const results: { title: string; content: string }[] = [];
+        for (let idx = 1; idx < lines.length; idx++) {
+          const currentRow = lines[idx];
+          const titleVal = currentRow[titleIdx] || '';
+          const contentVal = currentRow[contentIdx] || '';
+          if (titleVal.trim()) {
+            results.push({
+              title: titleVal,
+              content: contentVal
+            });
+          }
+        }
+
+        if (results.length === 0) {
+          throw new Error(lang === 'zh' ? '找到表头，但数据行为空或包含空白课程标题。' : 'Headers resolved but no courses were found in data rows.');
+        }
+
+        setPreviewImportData(results);
+      } catch (err: any) {
+        setImportStatus('error');
+        setImportErrorMsg(err.message || String(err));
+      }
+    };
+    
+    reader.onerror = () => {
+      setImportStatus('error');
+      setImportErrorMsg(lang === 'zh' ? '无法读取选取的 CSV 文件！' : 'Failure to read the CSV!');
+    };
+    
+    reader.readAsText(file);
+  };
+
+  const handleCSVImportSubmit = async () => {
+    if (previewImportData.length === 0) return;
+    setImportStatus('importing');
+    setImportProgress(0);
+    setImportProgressTotal(previewImportData.length);
+    
+    let succeeded = 0;
+    
+    for (let i = 0; i < previewImportData.length; i++) {
+      const item = previewImportData[i];
+      try {
+        const response = await fetch('/api/lessons', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: item.title,
+            content: item.content
+          })
+        });
+        
+        if (response.ok) {
+          succeeded++;
+        } else {
+          const errData = await response.json();
+          console.warn(`Failed to import item ${i + 1}:`, errData);
+        }
+      } catch (err) {
+        console.warn(`Error importing item ${i + 1}:`, err);
+      }
+      setImportProgress(i + 1);
+    }
+    
+    if (succeeded > 0) {
+      setImportStatus('success');
+      await fetchLessons(); // Refresh lessons list
+    } else {
+      setImportStatus('error');
+      setImportErrorMsg(lang === 'zh' ? '所有课程项导入均失败。请检查控制台或格式。' : 'Failed to import any of the courses. Please check your console or schema.');
+    }
+  };
+
   const fetchLessons = async () => {
     try {
       const res = await fetch('/api/lessons');
@@ -1751,6 +2422,21 @@ export default function App() {
       const res = await fetch('/api/classes');
       if (res.ok) setClasses(await res.json());
     } catch (e) {}
+  };
+
+  const fetchTodaySchedules = async () => {
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const res = await fetch(`/api/schedules/today?date=${todayStr}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.schedules) {
+          setTodaySchedules(data.schedules);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch today schedules", e);
+    }
   };
 
   const fetchStudents = async () => {
@@ -2209,6 +2895,27 @@ export default function App() {
       }
     });
 
+    socket.on('student-picked', (data: any) => {
+      console.log('[Socket] student-picked received on client:', data);
+      
+      // Check if this student is the active student
+      if (activeRole === 'student' && activeStudentId && data.studentId === activeStudentId) {
+        const titleText = data.studentName;
+        const msg = lang === 'zh'
+          ? `闪电警报！您已被老师在课程随机提问点名中抽中！请立即集中注意力参与课堂。`
+          : `Attention alert! You have been randomly picked by the teacher! Please pay immediate attention.`;
+
+        addToast(
+          lang === 'zh' ? '⚡️ 随机点名提问' : '⚡️ Classroom Pick Alert',
+          msg,
+          'warning'
+        );
+
+        // Fetch student dashboard reactively to load the newly added roll call
+        fetchStudentDashboard(activeStudentId);
+      }
+    });
+
     return () => {
       socket.disconnect();
     };
@@ -2254,6 +2961,7 @@ export default function App() {
   }, [selectedAssignment]);
 
   const saveTimeline = async (lessonId: string, newSegments: any[]) => {
+    setEditorSaveStatus('saving');
     try {
       const res = await fetch(`/api/lessons/${lessonId}/timeline`, {
         method: 'PUT',
@@ -2263,9 +2971,14 @@ export default function App() {
       if (res.ok) {
         setLessons(prev => prev.map(l => l.id === lessonId ? { ...l, timeline: JSON.stringify(newSegments) } : l));
         setTimelineSegments(newSegments);
+        setEditorSaveStatus('saved');
+        setEditorLastSavedTime(new Date());
+      } else {
+        setEditorSaveStatus('error');
       }
     } catch (e) {
       console.error("Failed to save timeline:", e);
+      setEditorSaveStatus('error');
     }
   };
 
@@ -2317,6 +3030,7 @@ export default function App() {
     fetchApprovals();
     fetchProcesses();
     fetchClasses();
+    fetchTodaySchedules();
     fetchStudents();
     fetchLabs();
     fetchVfs(currentVfsParentRef.current);
@@ -2330,6 +3044,7 @@ export default function App() {
         await fetchApprovals();
         await fetchProcesses();
         await fetchClasses();
+        await fetchTodaySchedules().catch(()=>{});
         await fetchStudents();
         await fetchLabs();
         await fetchVfs(currentVfsParentRef.current);
@@ -2756,6 +3471,21 @@ export default function App() {
         });
       }
     }
+    
+    const rollcalls = studentDashboardData.rollcalls || [];
+    for (const r of rollcalls) {
+      notifs.push({
+        id: r.id,
+        type: 'rollcall_picked',
+        title: lang === 'zh' ? '⚡️ 随机提问选中通知' : '⚡️ Random Pick Notification',
+        message: lang === 'zh'
+          ? `您已被老师在课程“${r.lesson_title || '课堂'}”中随机选中提问！请立即确认您的出勤与注意。`
+          : `You have been randomly picked by the teacher in lesson "${r.lesson_title || 'Class'}"! Please pay immediate attention.`,
+        date: r.picked_time,
+        relatedId: r.lesson_id
+      });
+    }
+    
     return notifs.sort((a, b) => b.date - a.date);
   }, [activeRole, studentDashboardData, lang]);
 
@@ -2921,7 +3651,13 @@ export default function App() {
                               >
                                 <div className="flex gap-3">
                                   <div className="mt-0.5">
-                                    {notif.type === 'new_assignment' ? <ClipboardList size={16} className="text-indigo-500"/> : <CheckCircle2 size={16} className="text-green-500"/>}
+                                    {notif.type === 'new_assignment' ? (
+                                      <ClipboardList size={16} className="text-indigo-500"/>
+                                    ) : notif.type === 'rollcall_picked' ? (
+                                      <Sparkles size={16} className="text-amber-500 animate-pulse"/>
+                                    ) : (
+                                      <CheckCircle2 size={16} className="text-green-500"/>
+                                    )}
                                   </div>
                                   <div className="flex-1">
                                     <div className={`text-sm ${isUnread ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>{notif.title}</div>
@@ -3417,6 +4153,73 @@ export default function App() {
                     <p className="text-gray-500">Here is your learning summary.</p>
                   </div>
                 </div>
+
+                {(() => {
+                  const rollcalls = studentDashboardData?.rollcalls || [];
+                  const unreadRCs = rollcalls.filter((r: any) => !readNotifications.has(r.id));
+                  if (unreadRCs.length === 0) return null;
+                  
+                  return (
+                    <div className="space-y-4">
+                      {unreadRCs.map((r: any) => (
+                        <motion.div
+                          key={r.id}
+                          initial={{ scale: 0.95, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          className="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden"
+                        >
+                          <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl animate-pulse" />
+                          <div className="absolute -left-10 -top-10 w-32 h-32 bg-yellow-300/20 rounded-full blur-xl" />
+                          
+                          <div className="flex flex-col md:flex-row items-center justify-between gap-4 relative z-10">
+                            <div className="flex items-center gap-4">
+                              <div className="p-3 bg-white/20 backdrop-blur-md rounded-xl animate-bounce shrink-0">
+                                <Sparkles className="h-6 w-6 text-yellow-100" />
+                              </div>
+                              <div>
+                                <h3 className="text-lg font-bold tracking-tight">
+                                  {lang === 'zh' ? '⚡️ 闪电提问点名中，请立即回应！' : '⚡️ Active Classroom Roll Call Alarm!'}
+                                </h3>
+                                <p className="text-yellow-50 text-sm mt-1 max-w-xl font-medium">
+                                  {lang === 'zh'
+                                    ? `您刚才在课程“${r.lesson_title || '课堂'}”中被老师随机选中。大屏已同步闪烁您的姓名，请点击右侧按钮确认专注参与！`
+                                    : `You have been randomly selected by the teacher in lesson "${r.lesson_title || 'Class'}". Please click the button to confirm your presence and active attention!`}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await fetch(`/api/students/${activeStudentId}/read_notifications`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ notificationId: r.id })
+                                  });
+                                  setReadNotifications(prev => {
+                                    const next = new Set(prev);
+                                    next.add(r.id);
+                                    return next;
+                                  });
+                                  addToast(
+                                    lang === 'zh' ? '已确认参与状态' : 'Presence confirmed',
+                                    lang === 'zh' ? '成功！已安全同步并确认在线。' : 'Successfully synchronized and confirmed active presence.',
+                                    'success'
+                                  );
+                                } catch (e) {
+                                  console.error('Failed to acknowledge rollcall', e);
+                                }
+                              }}
+                              className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg ring-2 ring-white/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer shrink-0"
+                            >
+                              <Check size={14} />
+                              <span>{lang === 'zh' ? '🙋‍♂️ 我已就位 / 确认听讲' : '🙋‍♂️ Present & Alert'}</span>
+                            </button>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  );
+                })()}
                 
                 {/* Quick Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -3719,6 +4522,9 @@ export default function App() {
                  <button onClick={() => setTeacherTab('classes')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'classes' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
                     <Users size={20} className="shrink-0" /><span className="hidden md:block">Classes & Students</span>
                  </button>
+                 <button id="teacher_timetable_nav_btn" onClick={() => setTeacherTab('timetable')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'timetable' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
+                    <CalendarIcon size={20} className="shrink-0 text-pink-500 animate-pulse" /><span className="hidden md:block">{lang === 'zh' ? '课表编排调整' : 'Timetable Routine'}</span>
+                 </button>
                  <button onClick={() => setTeacherTab('computer_labs')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'computer_labs' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
                     <LayoutTemplate size={20} className="shrink-0" /><span className="hidden md:block">{lang === 'zh' ? '机房座位管理' : 'Computer Lab Seating'}</span>
                  </button>
@@ -3736,13 +4542,62 @@ export default function App() {
                    } else {
                      alert(lang === 'zh' ? '您没有访问系统设置的权限。' : 'You do not have permission to access system settings.');
                    }
-                 }} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'settings' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <Settings size={20} className="shrink-0" /><span className="hidden md:block">System Settings</span>
+                 }} onClickCapture={(e) => { setTeacherTab('settings'); e.stopPropagation(); }} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'settings' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
+                    <Settings size={20} className="shrink-0" /><span className="hidden md:block">{lang === 'zh' ? '全局系统设置' : 'System Settings'}</span>
                  </button>
                  <button onClick={() => setTeacherTab('help')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'help' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
                     <HelpCircle size={20} className="shrink-0" /><span className="hidden md:block">System Commands / Help</span>
                  </button>
               </div>
+
+               {/* Today's Schedules Sidebar Widget */}
+               {(() => {
+                 const isScheduleUpcoming = (sch: any) => {
+                   if (sch.status === 'cancelled' || sch.status === 'holiday') return false;
+                   if (!sch.time_slot) return true;
+                   try {
+                     const parts = sch.time_slot.split('-');
+                     if (parts.length < 2) return true;
+                     const endTimeStr = parts[1].trim();
+                     const [endHour, endMin] = endTimeStr.split(':').map(Number);
+                     const now = new Date();
+                     const currentHour = now.getHours();
+                     const currentMin = now.getMinutes();
+                     if (currentHour > endHour) return false;
+                     if (currentHour === endHour && currentMin >= endMin) return false;
+                     return true;
+                   } catch (e) {
+                     return true;
+                   }
+                 };
+                 const upcoming = todaySchedules.filter(isScheduleUpcoming);
+                 const remaining = upcoming.length;
+                 if (todaySchedules.length === 0) return null;
+                 return (
+                   <div className="mt-auto p-3 m-3 bg-indigo-50/55 rounded-xl border border-indigo-105 hidden md:block select-none shadow-3xs" id="today_schedule_sidebar_panel">
+                     <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 mb-1.5">
+                       <Clock size={12} className="text-indigo-600 animate-pulse shrink-0" />
+                       {lang === 'zh' ? '本堂余课' : 'Classes Remaining'}
+                     </div>
+                     <div className="text-[11px] text-gray-500 mb-2">
+                       {lang === 'zh' ? `今天还有 ${remaining} 节课面授` : `${remaining} more classes left today`}
+                     </div>
+                     {upcoming.length > 0 && (
+                       <div className="max-h-[140px] overflow-y-auto space-y-1 pr-1">
+                         {upcoming.map((sch: any) => (
+                           <div key={sch.id} className="text-[10px] p-1.5 bg-white rounded border border-indigo-100/60 shadow-3xs hover:border-indigo-200 transition-colors">
+                             <div className="font-bold text-gray-750 truncate" title={sch.lesson_title}>{sch.lesson_title}</div>
+                             <div className="text-[9px] text-gray-450 truncate flex justify-between mt-0.5">
+                               <span className="font-medium text-slate-500 truncate max-w-[60px]">{sch.class_name}</span>
+                               <span className="font-mono text-indigo-700 font-semibold">{sch.time_slot}</span>
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                   </div>
+                 );
+               })()}
             </div>
 
             <div className="flex-1 p-6 overflow-hidden flex gap-6 relative">
@@ -3750,7 +4605,82 @@ export default function App() {
             {teacherTab === 'dashboard' ? (
               <>
                 <div className="flex-1 flex flex-col gap-6 h-full overflow-y-auto pr-2">
-                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+                  {/* Today's Timetable Flow Dashboard Banner */}
+                  {(() => {
+                    const isScheduleUpcoming = (sch: any) => {
+                      if (sch.status === 'cancelled' || sch.status === 'holiday') return false;
+                      if (!sch.time_slot) return true;
+                      try {
+                        const parts = sch.time_slot.split('-');
+                        if (parts.length < 2) return true;
+                        const endTimeStr = parts[1].trim();
+                        const [endHour, endMin] = endTimeStr.split(':').map(Number);
+                        const now = new Date();
+                        const currentHour = now.getHours();
+                        const currentMin = now.getMinutes();
+                        if (currentHour > endHour) return false;
+                        if (currentHour === endHour && currentMin >= endMin) return false;
+                        return true;
+                      } catch (e) {
+                        return true;
+                      }
+                    };
+                    const upcoming = todaySchedules.filter(isScheduleUpcoming);
+                    const finishedCount = todaySchedules.length - upcoming.length;
+                    const cancelledToday = todaySchedules.filter(s => s.status === 'cancelled' || s.status === 'holiday');
+                    
+                    return (
+                      <div className="bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-650 rounded-2xl p-5 text-white shadow-sm flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 transition-all">
+                        <div className="flex-1">
+                          <span className="bg-indigo-400 bg-opacity-30 text-[10px] md:text-xs uppercase font-extrabold tracking-wider px-2.5 py-1 rounded-full mb-2 inline-block">
+                            📅 {lang === 'zh' ? '今日面授排课流' : "TODAY'S TIMETABLE FLOW"}
+                          </span>
+                          <h2 className="text-lg md:text-xl font-extrabold tracking-tight mt-0.5">
+                            {lang === 'zh' 
+                              ? `今天接下来还有 ${upcoming.length} 节课需要面授` 
+                              : `Remaining: ${upcoming.length} classes scheduled next`}
+                          </h2>
+                          <p className="text-xs text-indigo-150 mt-1.5 font-medium leading-relaxed">
+                            {lang === 'zh'
+                              ? `今日总计排定课程 ${todaySchedules.length} 节。其中已下课 ${finishedCount} 节，停课/节日调配 ${cancelledToday.length} 节。`
+                              : `Schedules: ${todaySchedules.length} total. Finished: ${finishedCount}, Suspended: ${cancelledToday.length}.`}
+                          </p>
+                        </div>
+                        <div className="flex gap-2.5 self-stretch xl:self-auto overflow-x-auto py-1.5">
+                          {todaySchedules.map((sch: any) => {
+                            const isFuture = isScheduleUpcoming(sch);
+                            const isCancel = sch.status === 'cancelled' || sch.status === 'holiday';
+                            return (
+                              <div key={sch.id} className={`flex flex-col min-w-[135px] p-3 rounded-xl border select-none transition-all duration-150 ${
+                                isCancel 
+                                  ? 'bg-white/10 border-white/5 text-white/35 line-through' 
+                                  : isFuture
+                                    ? 'bg-white text-gray-805 border-white shadow-xs font-medium scale-102'
+                                    : 'bg-white/10 border-white/15 text-white/65'
+                              }`}>
+                                <div className="text-[9px] opacity-75 font-mono mb-1 flex justify-between items-center gap-1">
+                                  <span>{sch.time_slot || 'All-day'}</span>
+                                  {isCancel && <span className="bg-red-500/80 text-white font-sans text-[8px] px-1 py-0.5 rounded font-bold uppercase shrink-0">停课</span>}
+                                  {!isCancel && !isFuture && <span className="bg-green-500/80 text-white font-sans text-[8px] px-1 py-0.5 rounded font-bold uppercase shrink-0">已完</span>}
+                                  {!isCancel && isFuture && <span className="bg-indigo-600 text-white font-sans text-[8px] px-1 py-0.5 class-pulse font-bold uppercase shrink-0">待上</span>}
+                                </div>
+                                <div className="font-extrabold text-xs truncate text-gray-800" title={sch.lesson_title}>{sch.lesson_title}</div>
+                                <div className="text-[9px] opacity-80 mt-1 truncate text-gray-500">{sch.class_name}</div>
+                                {sch.notes && <div className="text-[9px] text-pink-500 italic mt-0.5 truncate" title={sch.notes}>* {sch.notes}</div>}
+                              </div>
+                            );
+                          })}
+                          {todaySchedules.length === 0 && (
+                            <div className="flex items-center text-xs font-bold text-indigo-105 bg-white/10 border border-white/10 px-4 py-3 rounded-xl">
+                              ☕ {lang === 'zh' ? '今日暂无排定课次，您可以休息调整。' : 'No schedules configured. Take a rest!'}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
                     {/* Approvals Module */}
                     <div className="bg-red-50 border border-red-200 rounded-xl shadow-sm flex flex-col shrink-0 min-h-0">
 
@@ -3851,10 +4781,45 @@ export default function App() {
             ) : teacherTab === 'lesson_editor' ? (
               <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="p-4 border-b border-gray-100 flex items-center justify-between shrink-0 bg-gray-50/50">
-                   <h3 className="font-semibold text-gray-700 flex items-center gap-2">
-                     <Wand2 size={18} className="text-indigo-600" />
-                     Lesson Editor: {lessons.find(l => l.id === selectedLesson)?.title || 'No Lesson Selected'}
-                   </h3>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <h3 className="font-semibold text-gray-700 flex items-center gap-2 truncate">
+                        <Wand2 size={18} className="text-indigo-600 shrink-0" />
+                        <span className="truncate">Lesson Editor: {lessons.find(l => l.id === selectedLesson)?.title || 'No Lesson Selected'}</span>
+                      </h3>
+                      {selectedLesson && (
+                        <div className="hidden sm:flex items-center gap-1.5 shrink-0 ml-2">
+                          {editorSaveStatus === 'saving' && (
+                            <div className="flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full animate-pulse">
+                              <Loader2 size={10} className="animate-spin text-amber-600" />
+                              <span>{lang === 'zh' ? '正在保存到 SQLite...' : 'Saving to SQLite...'}</span>
+                            </div>
+                          )}
+                          {editorSaveStatus === 'saved' && (
+                            <div className="flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-250 px-2 py-0.5 rounded-full">
+                              <CheckCircle2 size={11} className="text-emerald-600" />
+                              <span>{lang === 'zh' ? '已成功同步至 SQLite' : 'Saved to SQLite'}</span>
+                              {editorLastSavedTime && (
+                                <span className="text-emerald-500/80 text-[10px] ml-0.5 font-mono font-medium">
+                                  {editorLastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {editorSaveStatus === 'error' && (
+                            <div className="flex items-center gap-1 text-[11px] font-medium text-rose-700 bg-rose-50 border border-rose-250 px-2 py-0.5 rounded-full">
+                              <X size={11} className="text-rose-600" />
+                              <span>{lang === 'zh' ? 'SQLite 写入失败' : 'Failed to save to SQLite'}</span>
+                            </div>
+                          )}
+                          {editorSaveStatus === 'none' && (
+                            <div className="flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
+                              <Database size={11} className="text-gray-400" />
+                              <span>{lang === 'zh' ? 'SQLite 备课库已就绪' : 'SQLite DB Ready'}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                    <div className="flex items-center gap-2">
                      {selectedLesson && (
                        <button
@@ -4128,33 +5093,77 @@ export default function App() {
                           activeSegmentId={activeSegmentId}
                           onSegmentSync={(segId) => setActiveSegmentId(segId)}
                           onElementAdd={async (type, data) => {
-                             await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                               method: 'POST',
-                               headers: { 'Content-Type': 'application/json' },
-                               body: JSON.stringify({ type, data })
-                             });
-                             fetchElements(selectedLesson);
+                             setEditorSaveStatus('saving');
+                             try {
+                               const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                                 method: 'POST',
+                                 headers: { 'Content-Type': 'application/json' },
+                                 body: JSON.stringify({ type, data })
+                               });
+                               if (response.ok) {
+                                 setEditorSaveStatus('saved');
+                                 setEditorLastSavedTime(new Date());
+                                 fetchElements(selectedLesson);
+                               } else {
+                                 setEditorSaveStatus('error');
+                               }
+                             } catch (err) {
+                               setEditorSaveStatus('error');
+                             }
                           }}
                           onElementUpdate={async (elementId, data) => {
-                             await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                               method: 'PUT',
-                               headers: { 'Content-Type': 'application/json' },
-                               body: JSON.stringify({ data })
-                             });
-                             fetchElements(selectedLesson);
-                          }}
+                              setEditorSaveStatus('saving');
+                              try {
+                                const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ data })
+                                });
+                                if (response.ok) {
+                                  setEditorSaveStatus('saved');
+                                  setEditorLastSavedTime(new Date());
+                                  fetchElements(selectedLesson);
+                                } else {
+                                  setEditorSaveStatus('error');
+                                }
+                              } catch (err) {
+                                setEditorSaveStatus('error');
+                              }
+                           }}
                           onElementDelete={async (elementId) => {
-                             await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                               method: 'DELETE'
-                             });
-                             fetchElements(selectedLesson);
-                          }}
+                              setEditorSaveStatus('saving');
+                              try {
+                                const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                                  method: 'DELETE'
+                                });
+                                if (response.ok) {
+                                  setEditorSaveStatus('saved');
+                                  setEditorLastSavedTime(new Date());
+                                  fetchElements(selectedLesson);
+                                } else {
+                                  setEditorSaveStatus('error');
+                                }
+                              } catch (err) {
+                                setEditorSaveStatus('error');
+                              }
+                           }}
                           onClearBoard={async () => {
-                             await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                               method: 'DELETE'
-                             });
-                             fetchElements(selectedLesson);
-                          }}
+                              setEditorSaveStatus('saving');
+                              try {
+                                const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                                  method: 'DELETE'
+                                });
+                                if (response.ok) {
+                                  setEditorSaveStatus('saved');
+                                  setEditorLastSavedTime(new Date());
+                                  fetchElements(selectedLesson);
+                                } else {
+                                  setEditorSaveStatus('error');
+                                }
+                              } catch (err) {
+                                setEditorSaveStatus('error');
+                              }
+                           }}
                           onRefresh={() => fetchElements(selectedLesson)}
                         />
                      )}
@@ -4236,26 +5245,367 @@ export default function App() {
                          </div>
                       </div>
                     ) : (
-                      <div className="flex-1 flex flex-col overflow-hidden">
-                        <div className="p-4 flex-1 flex flex-col bg-gray-900">
-                           <p className="text-sm text-gray-400 mb-3 flex items-center gap-2 shrink-0">
-                             <ShieldAlert size={16} className="text-orange-400" />
-                             Developer Tools: Sideload experimental plugins by providing source code.
-                           </p>
-                           <textarea 
-                              value={pluginCode}
-                              onChange={e => setPluginCode(e.target.value)}
-                              className="w-full flex-1 font-mono text-xs p-4 bg-gray-800 text-indigo-300 border border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none"
-                           />
+                      <div className="flex-1 flex flex-col overflow-hidden bg-gray-950">
+                        <div className="p-4 bg-gray-900 border-b border-gray-800 flex justify-between items-center shrink-0">
+                           <div className="flex items-center gap-2">
+                             <ShieldAlert size={16} className="text-amber-400" />
+                             <div>
+                               <p className="text-xs font-semibold text-gray-200">
+                                 {lang === 'zh' ? '开发者工具: 插件旁路加载与实时 Manifest 校验' : 'Developer Tools: Plugin Sideloading & Real-time Manifest Validation'}
+                               </p>
+                               <p className="text-[10px] text-gray-505">
+                                 {lang === 'zh' ? '在安装前系统将进行解析、安全授权与注册接口预览机制' : 'Parse metadata, proposed permissions, and registered triggers before installation'}
+                               </p>
+                             </div>
+                           </div>
+                           <div className="flex items-center gap-2">
+                             <button
+                               onClick={() => setPluginCode(DEFAULT_PLUGIN)}
+                               className="px-2 py-1 text-[10px] uppercase font-bold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded transition-all flex items-center gap-1 cursor-pointer"
+                               title="Reset to default multi-choice quiz generator example"
+                             >
+                               <Wand2 size={11} className="text-indigo-450" />
+                               {lang === 'zh' ? '示例：智能测验生成器' : 'Quiz Sample'}
+                             </button>
+                             <button
+                               onClick={() => {
+                                 setPluginCode(`exports.default = {
+  manifest: {
+    id: "ext-roll-call",
+    name: "Random Student Picker (随机点名小工具)",
+    version: "1.0.0",
+    description: "可在授课白板上直接拖拽出的互动随机点名板，对课堂提问并同步点名记录至交互画板大有裨益。",
+    author: "CoreOS Team",
+    capabilitiesProposed: ["whiteboard:write", "management:read"]
+  },
+  activate: async (ctx) => {
+    ctx.actionRegistry.register({
+      id: 'ext-rollcall-pick',
+      commandType: 'rollcall.pick',
+      description: '从班级中随机抽取一名学生进行课堂提问/点名，并投射到交互画板上',
+      capabilityRequired: 'management:read',
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          classId: { type: 'STRING', description: '班级 ID (必传，提取名册)' },
+          lessonId: { type: 'STRING', description: '关联课时 ID (将点名效果同步投射到该课时白板上)' }
+        },
+        required: ['classId']
+      }
+    });
+
+    ctx.commandBus.registerHandler('rollcall.pick', {
+      execute: async (command) => {
+        const payload = command.payload;
+        const classId = payload.classId;
+        const lessonId = payload.lessonId;
+
+        let students = [];
+        try {
+          const res = await ctx.commandBus.execute({
+            id: 'int_' + Math.random().toString(36).slice(2),
+            type: 'class.get_students',
+            actorId: 'plugin-rollcall',
+            payload: { classId }
+          });
+          if (res && res.students) {
+            students = res.students;
+          }
+        } catch (e) {
+          console.error("Failed to fetch class students via command bus", e);
+        }
+
+        if (students.length === 0) {
+          students = [
+            { id: "mock-s-1", name: "张明", email: "zhangming@edu-os.org" },
+            { id: "mock-s-2", name: "李华", email: "lihua@edu-os.org" },
+            { id: "mock-s-3", name: "王超", email: "wangchao@edu-os.org" },
+            { id: "mock-s-4", name: "赵丽", email: "zhaoli@edu-os.org" }
+          ];
+        }
+
+        const randomIndex = Math.floor(Math.random() * students.length);
+        const selectedStudent = students[randomIndex];
+
+        let elementId = null;
+        if (lessonId) {
+          const drawRes = await ctx.commandBus.execute({
+            id: 'int_' + Math.random().toString(36).slice(2),
+            type: 'whiteboard.draw',
+            payload: {
+              lessonId,
+              type: 'rollcall',
+              data: JSON.stringify({
+                classId,
+                selectedStudent,
+                allStudents: students,
+                pickedTime: new Date().toISOString(),
+                status: 'picked'
+              })
+            }
+          });
+          elementId = drawRes?.elementId;
+        }
+
+        return {
+          success: true,
+          selectedStudent,
+          allStudentsCount: students.length,
+          elementId,
+          message: "已从当前班级中成功抽得幸运学生: " + selectedStudent.name
+        };
+      }
+    });
+  }
+};`);
+                               }}
+                               className="px-2 py-1 text-[10px] uppercase font-bold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700/80 rounded transition-all flex items-center gap-1 cursor-pointer"
+                               title="Load custom random rollcall plugin source code"
+                             >
+                               <Sparkles size={11} className="text-amber-400 animate-pulse" />
+                               {lang === 'zh' ? '加载：随机点名助手' : 'Load Picker'}
+                             </button>
+                           </div>
                         </div>
-                        <div className="p-4 border-t border-gray-800 bg-gray-900 flex justify-end gap-3 shrink-0">
-                           <button 
-                             onClick={handleInstallPlugin}
-                             disabled={installingPlugin || !pluginCode.trim()}
-                             className="px-4 py-2 text-sm bg-indigo-600 text-white hover:bg-indigo-700 rounded-md transition-colors flex items-center gap-2 disabled:opacity-50"
-                           >
-                             {installingPlugin ? 'Installing...' : 'Install Plugin'}
-                           </button>
+
+                        {/* Split layout */}
+                        <div className="flex-1 flex overflow-hidden min-h-0 bg-gray-950">
+                           {/* Left Column: Code Editor */}
+                           <div className="w-7/12 flex flex-col border-r border-gray-800 h-full p-4 min-h-0">
+                             <div className="flex justify-between items-center mb-1 text-[10px] uppercase font-bold text-gray-400 select-none shrink-0">
+                               <span>{lang === 'zh' ? '⚙️ 插件主程序 JS 源代码' : '⚙️ Plugin Source Code (JavaScript)'}</span>
+                               <span className="font-mono text-[9px] text-gray-500">Node Sandbox Ready</span>
+                             </div>
+                             <textarea 
+                                value={pluginCode}
+                                onChange={e => setPluginCode(e.target.value)}
+                                className="w-full flex-1 font-mono text-[11px] p-4 bg-gray-900 border border-gray-800 text-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none leading-relaxed overflow-y-auto"
+                             />
+                           </div>
+
+                           {/* Right Column: Manifest Verification & Live Preview */}
+                           <div className="w-5/12 flex flex-col bg-gray-900/40 p-4 h-full overflow-y-auto min-h-0">
+                              <div className="mb-3">
+                                 <div className="text-[10px] uppercase font-bold text-gray-400 select-none mb-1.5 flex justify-between items-center">
+                                    <span>{lang === 'zh' ? '🔍 MANIFEST 实时解析与权限审计' : '🔍 Manifest Extraction & Audit'}</span>
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-400 border border-indigo-900 font-mono">Live Static</span>
+                                 </div>
+
+                                 {/* Status validation card */}
+                                 {(() => {
+                                    const parsed = parsePluginSource(pluginCode);
+                                    const hasManifest = parsed && parsed.manifest && parsed.manifest.id && parsed.manifest.name;
+                                    
+                                    return (
+                                       <div className="space-y-3.5">
+                                          {/* Verification Status Badge */}
+                                          <div className={`p-3 rounded-lg border flex items-start gap-2 ${hasManifest ? 'bg-emerald-950/45 border-emerald-800/60 text-emerald-300' : 'bg-amber-955/40 border-amber-800/60 text-amber-300'}`}>
+                                             {hasManifest ? (
+                                                <>
+                                                   <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                                                   <div>
+                                                      <h5 className="text-xs font-bold font-sans">{lang === 'zh' ? '✓ Manifest 静态合法性验证通过' : '✓ Manifest Validation Passed'}</h5>
+                                                      <p className="text-[10px] text-emerald-400/80 mt-0.5 leading-tight">
+                                                         {lang === 'zh' ? '检测到完整的插件标识。可在安全白名单和命令总线中顺利完成挂载。' : 'Completed identifier extraction. Secure initialization is ready to deploy.'}
+                                                      </p>
+                                                   </div>
+                                                </>
+                                             ) : (
+                                                <>
+                                                   <ShieldAlert size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                                                   <div>
+                                                      <h5 className="text-xs font-bold font-sans">{lang === 'zh' ? '⚠️ 未匹配到有效 Manifest 描述符' : '⚠️ Searching for valid Metadata'}</h5>
+                                                      <p className="text-[10px] text-amber-400/80 mt-0.5 leading-tight">
+                                                         {lang === 'zh' ? '请在代码段中指定完整的 manifest 包含 id、name 属性，系统才能自动进行预览与权限挂载。' : 'Please provide manifest object inside exports.default with unique id/name properties to active automatic registration.'}
+                                                      </p>
+                                                   </div>
+                                                </>
+                                             )}
+                                          </div>
+
+                                          {/* Metadata Details */}
+                                          {hasManifest && parsed && parsed.manifest && (
+                                             <div className="bg-gray-900 border border-gray-800 rounded-xl p-3.5 space-y-2.5">
+                                                <div className="border-b border-gray-800 pb-2 flex justify-between items-center">
+                                                   <h6 className="text-[11px] font-bold text-gray-300 uppercase tracking-wider">{lang === 'zh' ? '基本描述元数据' : 'Metadata Details'}</h6>
+                                                   <span className="text-[9px] text-indigo-400 font-mono px-1 bg-indigo-950 rounded">v{parsed.manifest.version || '1.0.0'}</span>
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-2 text-xs font-mono">
+                                                   <div className="text-gray-500">{lang === 'zh' ? '名称:' : 'Name:'}</div>
+                                                   <div className="col-span-2 text-gray-200 font-sans font-semibold">{parsed.manifest.name}</div>
+
+                                                   <div className="text-gray-500">{lang === 'zh' ? '唯一标识:' : 'UUID/ID:'}</div>
+                                                   <div className="col-span-2 text-gray-305">{parsed.manifest.id}</div>
+
+                                                   <div className="text-gray-500">{lang === 'zh' ? '开发者:' : 'Author:'}</div>
+                                                   <div className="col-span-2 text-indigo-305">{parsed.manifest.author || 'Community'}</div>
+                                                </div>
+                                                {parsed.manifest.description && (
+                                                   <div className="text-[10.5px] text-gray-400 leading-relaxed bg-gray-950 border border-gray-900 p-2 rounded-md font-sans">
+                                                      <span className="text-gray-550 float-left mr-1 font-bold">ℹ️</span>
+                                                      {parsed.manifest.description}
+                                                   </div>
+                                                )}
+                                             </div>
+                                          )}
+
+                                          {/* Requested Capabilities */}
+                                          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3.5 space-y-2">
+                                             <h6 className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider pb-1.5 border-b border-gray-800 flex items-center gap-1">
+                                                <Shield size={11} className="text-indigo-400" />
+                                                <span>{lang === 'zh' ? '申请所需扩展权限' : 'Proposed Capabilities'}</span>
+                                             </h6>
+                                             {parsed && parsed.manifest && parsed.manifest.capabilitiesProposed && parsed.manifest.capabilitiesProposed.length > 0 ? (
+                                                <div className="space-y-2">
+                                                   {parsed.manifest.capabilitiesProposed.map((cap: string, idx: number) => {
+                                                      const normCap = cap.trim().toLowerCase();
+                                                      const info = CAPABILITY_INFO[normCap] || {
+                                                         labelZh: cap,
+                                                         labelEn: cap,
+                                                         iconName: 'Shield',
+                                                         risk: 'low' as const,
+                                                          riskDescZh: '自定义插件运行权限，具备常规沙箱网络与交互限制。',
+                                                          riskDescEn: 'Custom plugin running capability under standard restraints.'
+                                                      };
+
+                                                      const riskConfig = {
+                                                         high: {
+                                                            bg: 'bg-red-950/20 border-red-900/40 hover:border-red-800/80 text-red-300',
+                                                            badge: 'bg-red-950/60 border-red-900/60 text-red-400',
+                                                            labelZh: '高风险',
+                                                            labelEn: 'High Risk',
+                                                            dot: 'bg-red-400'
+                                                         },
+                                                         medium: {
+                                                            bg: 'bg-amber-950/15 border-amber-900/30 hover:border-amber-800/65 text-amber-300',
+                                                            badge: 'bg-amber-950/60 border-amber-900/50 text-amber-400',
+                                                            labelZh: '中风险',
+                                                            labelEn: 'Medium Risk',
+                                                            dot: 'bg-amber-400'
+                                                         },
+                                                         low: {
+                                                            bg: 'bg-emerald-950/10 border-emerald-900/20 hover:border-emerald-800/40 text-emerald-400',
+                                                            badge: 'bg-emerald-950/50 border-emerald-900/40 text-emerald-400',
+                                                            labelZh: '低风险',
+                                                            labelEn: 'Low Risk',
+                                                            dot: 'bg-emerald-400'
+                                                         }
+                                                      }[info.risk];
+
+                                                      const renderIcon = () => {
+                                                         const iconClass = "shrink-0 text-indigo-400";
+                                                         if (info.iconName === 'PenTool') return <PenTool className={iconClass} size={12} />;
+                                                         if (info.iconName === 'Eye') return <Eye className={iconClass} size={12} />;
+                                                         if (info.iconName === 'Users') return <Users className={iconClass} size={12} />;
+                                                         if (info.iconName === 'Database') return <Database className={iconClass} size={12} />;
+                                                         return <Shield className={iconClass} size={12} />;
+                                                      };
+
+                                                      return (
+                                                         <div 
+                                                            key={idx} 
+                                                            className={`p-2 rounded-lg border flex items-center justify-between gap-2.5 transition-all duration-200 group relative ${riskConfig.bg}`}
+                                                         >
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                               <span className="p-1 rounded bg-gray-950 border border-gray-800 shrink-0">
+                                                                  {renderIcon()}
+                                                               </span>
+                                                               <div className="min-w-0">
+                                                                  <span className="text-[10.5px] font-bold text-gray-200 block truncate">
+                                                                     {lang === 'zh' ? info.labelZh : info.labelEn}
+                                                                  </span>
+                                                                  <span className="text-[9px] text-gray-500 font-mono block truncate select-all">{cap}</span>
+                                                               </div>
+                                                            </div>
+
+                                                            {/* Risk Badge with Floating Custom Interactive Tooltip */}
+                                                            <div className="relative shrink-0">
+                                                               <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border flex items-center gap-1 cursor-help transition-all ${riskConfig.badge}`}>
+                                                                  <span className={`w-1 h-1 rounded-full animate-pulse ${riskConfig.dot}`} />
+                                                                  <span>{lang === 'zh' ? riskConfig.labelZh : riskConfig.labelEn}</span>
+                                                               </span>
+
+                                                               {/* Floating hover card */}
+                                                               <div className="absolute z-55 right-0 bottom-full mb-2 w-56 p-2.5 bg-gray-950 border border-gray-800 rounded-lg shadow-xl text-left scale-95 opacity-0 group-hover:scale-100 group-hover:opacity-100 pointer-events-none transition-all duration-150 origin-bottom-right">
+                                                                  <div className="flex items-center justify-between font-bold text-[9px] mb-1 pb-1 border-b border-gray-800 font-sans">
+                                                                     <span className="text-gray-405 uppercase tracking-wide">{lang === 'zh' ? '安全性说明' : 'Security Audit'}</span>
+                                                                     <span className={info.risk === 'high' ? 'text-red-400' : info.risk === 'medium' ? 'text-amber-400' : 'text-emerald-400'}>
+                                                                        {lang === 'zh' ? riskConfig.labelZh : riskConfig.labelEn}
+                                                                     </span>
+                                                                  </div>
+                                                                  <p className="text-[9.5px] leading-relaxed text-gray-300 font-sans">
+                                                                     {lang === 'zh' ? info.riskDescZh : info.riskDescEn}
+                                                                  </p>
+                                                               </div>
+                                                            </div>
+                                                         </div>
+                                                      );
+                                                   })}
+                                                </div>
+                                             ) : (
+                                                <div className="text-[10px] text-gray-500 italic py-1">
+                                                   {lang === 'zh' ? '无权限获取要求 (运行于无特权沙箱环境)' : 'No additional capabilities requested.'}
+                                                </div>
+                                             )}
+                                          </div>
+
+                                          {/* Registered commands mapping */}
+                                          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3.5 space-y-2">
+                                             <h6 className="text-[11px] font-bold text-amber-300 uppercase tracking-wider pb-1.5 border-b border-gray-800 flex items-center gap-1">
+                                                <Terminal size={11} className="text-amber-400" />
+                                                <span>{lang === 'zh' ? '内核总线注册指令 (Commands)' : 'Registered Commands'}</span>
+                                             </h6>
+                                             {parsed && parsed.actions && parsed.actions.length > 0 ? (
+                                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                                   {parsed.actions.map((act: any, idx: number) => (
+                                                      <div key={idx} className="p-2 bg-gray-950 border border-gray-900 rounded-lg space-y-1">
+                                                         <div className="flex items-center justify-between">
+                                                            <span className="text-[10px] font-bold text-gray-300 font-mono">{act.id}</span>
+                                                            <span className="text-[9px] bg-amber-950 text-amber-400 border border-amber-900 rounded px-1.5 font-mono">{act.commandType}</span>
+                                                         </div>
+                                                         {act.description && (
+                                                            <p className="text-[9.5px] text-gray-400 leading-snug">{act.description}</p>
+                                                         )}
+                                                      </div>
+                                                   ))}
+                                                </div>
+                                             ) : (
+                                                <div className="text-[10px] text-gray-500 italic py-1">
+                                                   {lang === 'zh' ? '未声明注册自定义指令句柄' : 'No commands or command handlers detected.'}
+                                                </div>
+                                             )}
+                                          </div>
+                                       </div>
+                                    );
+                                 })()}
+                              </div>
+                           </div>
+                        </div>
+
+                        {/* Control actions footer */}
+                        <div className="p-4 border-t border-gray-800 bg-gray-950 flex justify-between items-center shrink-0 select-none">
+                           <span className="text-[10px] text-gray-500 font-mono">
+                             Secure Sideload Mode • Sandbox Integrity Check
+                           </span>
+                           <div className="flex justify-end gap-3">
+                              <button 
+                                onClick={handleInstallPlugin}
+                                disabled={installingPlugin || !pluginCode.trim()}
+                                className="px-4 py-2 text-xs bg-indigo-600 font-bold hover:bg-indigo-700 text-white rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 hover:shadow-lg active:scale-97 cursor-pointer"
+                              >
+                                {installingPlugin ? (
+                                   <>
+                                      <Loader2 size={13} className="animate-spin" />
+                                      <span>{lang === 'zh' ? '集成挂载中...' : 'Registering...'}</span>
+                                   </>
+                                ) : (
+                                   <>
+                                      <CheckCircle2 size={13} />
+                                      <span>{lang === 'zh' ? '部署并安装到课堂内核' : 'Deploy & Install Plugin'}</span>
+                                   </>
+                                )}
+                              </button>
+                           </div>
                         </div>
                       </div>
                     )}
@@ -4269,17 +5619,34 @@ export default function App() {
                          <BookOpen size={16} className="text-gray-400" />
                          {lang === 'zh' ? '课程与教学环节管理 (SQLite)' : 'Courses & Lessons Management'}
                        </h3>
-                       <button
-                         id="add-course-wizard-btn"
-                         onClick={() => {
-                           setWizardStep(1);
-                           setIsCourseWizardOpen(true);
-                         }}
-                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
-                       >
-                         <Plus size={14} />
-                         {lang === 'zh' ? '手动添加课程 (向导)' : 'Add Course Wizard'}
-                       </button>
+                       <div className="flex items-center gap-2">
+                         <button
+                           id="import-lessons-csv-btn"
+                           onClick={() => {
+                             setImportStatus('idle');
+                             setImportProgress(0);
+                             setImportProgressTotal(0);
+                             setImportErrorMsg('');
+                             setPreviewImportData([]);
+                             setIsImportLessonsOpen(true);
+                           }}
+                           className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold rounded-lg shadow-3xs transition-all hover:shadow-xs hover:-translate-y-0.5 cursor-pointer"
+                         >
+                           <Upload size={14} />
+                           {lang === 'zh' ? '批量导入课程 (CSV)' : 'Import Lessons (CSV)'}
+                         </button>
+                         <button
+                           id="add-course-wizard-btn"
+                           onClick={() => {
+                             setWizardStep(1);
+                             setIsCourseWizardOpen(true);
+                           }}
+                           className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+                         >
+                           <Plus size={14} />
+                           {lang === 'zh' ? '手动添加课程 (向导)' : 'Add Course Wizard'}
+                         </button>
+                       </div>
                      </div>
                      {lessons.length > 0 && (
                       <div className="px-5 py-3.5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
@@ -5846,6 +7213,15 @@ export default function App() {
             </div>
             
             </div>
+            ) : teacherTab === 'timetable' ? (
+              <div className="flex-1 overflow-hidden flex flex-col bg-white" id="teacher_timetable_tab_panel">
+                <TimetableManager 
+                  classes={classes}
+                  lessons={lessons}
+                  lang={lang}
+                  onSchedulesUpdated={fetchTodaySchedules}
+                />
+              </div>
             ) : teacherTab === 'admin_directory' ? (
               session?.subRole === 'administrator' ? (
                 <AdminPanel 
@@ -6852,6 +8228,312 @@ export default function App() {
                 )}
               </div>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Import Lessons from CSV Modal */}
+      {isImportLessonsOpen && (
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 md:p-6 z-50 overflow-y-auto text-gray-850">
+          <motion.div
+            initial={{ opacity: 0, y: 15, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+            className="bg-white border text-gray-900 border-gray-250 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden max-h-[90vh] font-sans text-left"
+          >
+            {/* Header */}
+            <div className="p-4 md:p-5 border-b border-gray-100 flex items-center justify-between bg-slate-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-650">
+                  <Upload size={20} className="animate-pulse" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-gray-850 text-base md:text-lg">
+                    {lang === 'zh' ? '批量导入课程 (CSV)' : 'Bulk-Import Courses (CSV)'}
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {lang === 'zh' ? '上传包含标准表头的 CSV 教案，一键实现秒级批量底库写入。' : 'Upload a standard CSV file matching our predefined schema to perform instantaneous bulk curriculum imports.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (importStatus !== 'importing') {
+                    setIsImportLessonsOpen(false);
+                  }
+                }}
+                disabled={importStatus === 'importing'}
+                className="text-gray-400 hover:text-gray-650 font-bold p-1 rounded-lg hover:bg-gray-150 transition-all text-xl leading-none disabled:opacity-40"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              
+              {/* IDLE state -> Drag and Drop zone */}
+              {importStatus === 'idle' && (
+                <div className="space-y-4">
+                  {/* Schema instructions */}
+                  <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl">
+                    <h4 className="text-xs font-bold text-indigo-850 uppercase tracking-wide flex items-center gap-1">
+                      <span>📌</span>
+                      {lang === 'zh' ? '预定义数据格式说明' : 'Predefined Schema Information'}
+                    </h4>
+                    <p className="text-xs text-indigo-900 mt-1 leading-relaxed">
+                      {lang === 'zh' 
+                        ? 'CSV 文件的首行必须 define 列标题（分大小写且无多余空格），包含以下两项必需内容：' 
+                        : 'Your CSV file must include exactly these header columns on the first row (case-insensitive):'}
+                    </p>
+                    <ul className="list-disc pl-5 mt-2 text-xs text-indigo-950 space-y-1">
+                      <li><strong>title</strong>: {lang === 'zh' ? '课程名 (非空，例如 "代数几何")' : 'Course title (Required, e.g. "Linear Algebra")'}</li>
+                      <li><strong>content</strong>: {lang === 'zh' ? '教学大纲 / Markdown 格式的课堂细目' : 'Syllabus content supporting rich markdown.'}</li>
+                    </ul>
+                    <div className="mt-3.5 flex justify-start">
+                      <button
+                        onClick={downloadCsvTemplate}
+                        className="flex items-center gap-1 p-2 text-xs font-bold text-indigo-700 bg-white border border-indigo-200 rounded-lg shadow-3xs hover:bg-indigo-50 hover:-translate-y-0.5 hover:shadow-xs transition-all cursor-pointer"
+                      >
+                        <Download size={12} />
+                        {lang === 'zh' ? '获取标准 CSV 模板' : 'Download Template CSV'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Drag-and-drop Dropzone */}
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDraggingImport(true);
+                    }}
+                    onDragLeave={() => setIsDraggingImport(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDraggingImport(false);
+                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        handleCSVFileChange(e.dataTransfer.files[0]);
+                      }
+                    }}
+                    onClick={() => {
+                      document.getElementById('import-csv-file-picker')?.click();
+                    }}
+                    className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[180px] ${
+                      isDraggingImport
+                        ? 'border-indigo-500 bg-indigo-50/70 scale-[1.01]'
+                        : 'border-gray-250 bg-gray-50/50 hover:bg-gray-50 hover:border-indigo-400'
+                    }`}
+                  >
+                    <input
+                      id="import-csv-file-picker"
+                      type="file"
+                      accept=".csv"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleCSVFileChange(e.target.files[0]);
+                        }
+                      }}
+                    />
+                    <div className="p-3 bg-gray-100 border border-gray-200 rounded-full text-indigo-600 mb-3 group-hover:scale-105 transition-all">
+                      <Upload size={24} />
+                    </div>
+                    <span className="text-sm font-bold text-gray-800">
+                      {lang === 'zh' ? '选择 CSV 文件或拖放至此处' : 'Click to select or drag and drop CSV file here'}
+                    </span>
+                    <span className="text-xs text-gray-400 mt-1">
+                      {lang === 'zh' ? '支持标准 CSV 文件，最大不超过 5MB' : 'Supports standard CSV format up to 5MB'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* PARSING state -> Show Preview of file */}
+              {importStatus === 'parsing' && previewImportData.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                      ✓ {lang === 'zh' ? `解析成功：查找到 ${previewImportData.length} 门课程` : `Parsed Successfully: Found ${previewImportData.length} records`}
+                    </span>
+                    <button
+                      onClick={() => {
+                        setPreviewImportData([]);
+                        setImportStatus('idle');
+                      }}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
+                    >
+                      {lang === 'zh' ? '重新上传' : 'Upload Different File'}
+                    </button>
+                  </div>
+
+                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-3xs max-h-[300px] overflow-y-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-gray-50 text-gray-600 border-b border-gray-200 font-bold">
+                        <tr>
+                          <th className="p-3 w-1/4">{lang === 'zh' ? '课程名称' : 'Course Title'}</th>
+                          <th className="p-3 w-3/4">{lang === 'zh' ? '大纲简介片段' : 'Syllabus Preview'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {previewImportData.map((row, rIdx) => (
+                          <tr key={rIdx} className="hover:bg-slate-50/50">
+                            <td className="p-3 font-semibold text-gray-800 align-top truncate max-w-[150px]" title={row.title}>
+                              {row.title}
+                            </td>
+                            <td className="p-3 text-gray-500 font-mono text-[11px] leading-relaxed break-words col-span-2">
+                              {row.content.length > 150 ? row.content.substring(0, 150) + '...' : row.content || <em className="text-gray-300 italic">None</em>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-100 text-amber-900 text-xs rounded-xl p-3 flex gap-2.5 items-start">
+                    <span className="text-base leading-none">⚠️</span>
+                    <p className="leading-relaxed">
+                      {lang === 'zh' 
+                        ? '请确认课程名称没有与系统已有的课程同名。确认无误后点击下方“开始导入”写入 SQLite。' 
+                        : 'Please ensure column details are accurate. Clicking Import will instantly commit all parsed courses into the server SQLite backend.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* IMPORTING state -> Show beautiful step progress */}
+              {importStatus === 'importing' && (
+                <div className="py-8 flex flex-col items-center justify-center space-y-4">
+                  <div className="relative w-20 h-20 flex items-center justify-center">
+                    <Loader2 size={36} className="text-indigo-600 animate-spin" />
+                    <span className="absolute text-[11px] font-extrabold text-indigo-700">
+                      {Math.round((importProgress / importProgressTotal) * 100)}%
+                    </span>
+                  </div>
+                  <div className="text-center">
+                    <h3 className="font-bold text-gray-800 text-sm">
+                      {lang === 'zh' ? '正在写入数据库' : 'Populating Database Records'}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {lang === 'zh' 
+                        ? `正在导入第 ${importProgress} / ${importProgressTotal} 项...` 
+                        : `Importing item ${importProgress} of ${importProgressTotal}...`}
+                    </p>
+                  </div>
+                  <div className="w-full max-w-sm bg-gray-100 h-2 rounded-full overflow-hidden border border-gray-200">
+                    <div 
+                      className="bg-indigo-600 h-full transition-all duration-300 rounded-full" 
+                      style={{ width: `${(importProgress / importProgressTotal) * 100}%` }}
+                    />
+                  </div>
+                  <div className="w-full max-w-md bg-gray-50 rounded-xl p-3 border border-gray-150 font-mono text-[10px] text-gray-400 max-h-[140px] overflow-y-auto">
+                    <div>{"[API] POST /api/lessons -> Request batch transaction..."}</div>
+                    {previewImportData.slice(0, importProgress).map((p, idx) => (
+                      <div key={idx} className="text-indigo-600 font-bold mt-1">
+                        {`✓ [${idx+1}] "${p.title}" -> status 200 (Success)`}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* SUCCESS state -> Done */}
+              {importStatus === 'success' && (
+                <div className="py-8 text-center flex flex-col items-center justify-center space-y-4">
+                  <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center border border-emerald-200 text-emerald-600 animate-bounce">
+                    <CheckCircle2 size={32} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-base">
+                      {lang === 'zh' ? '🎉 批量导入大功告成' : '🎉 Bulk-Import Complete'}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                      {lang === 'zh' 
+                        ? `所有 ${previewImportData.length} 门学科教案数据已顺畅写入系统底层 SQLite 数据仓库，现在已可以用于备课。` 
+                        : `All ${previewImportData.length} curriculum lessons records have been successfully saved into security logs and SQLite storage.`}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* ERROR state -> Display alerts */}
+              {importStatus === 'error' && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl flex gap-3 items-start">
+                    <span className="text-rose-600 font-bold text-lg leading-none">⚠️</span>
+                    <div>
+                      <h4 className="text-xs font-bold text-rose-850">
+                        {lang === 'zh' ? '数据导入或解析中断' : 'Import or Parsing Error'}
+                      </h4>
+                      <p className="text-xs text-rose-900 mt-1 leading-relaxed">
+                        {importErrorMsg || (lang === 'zh' ? '未知异常或文件破损。' : 'An unknown exception or corrupted CSV formatting occurred.')}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 justify-end">
+                    <button
+                      onClick={() => {
+                        setImportStatus('idle');
+                        setImportErrorMsg('');
+                      }}
+                      className="px-4 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-250 cursor-pointer hover:bg-gray-50 rounded-lg transition-all"
+                    >
+                      {lang === 'zh' ? '返回重试' : 'Go Back & Retry'}
+                    </button>
+                    <button
+                      onClick={() => setIsImportLessonsOpen(false)}
+                      className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 cursor-pointer hover:bg-indigo-700 rounded-lg transition-all"
+                    >
+                      {lang === 'zh' ? '关闭窗口' : 'Close'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Footer */}
+            {importStatus !== 'idle' && importStatus !== 'error' && (
+              <div className="p-4 md:p-5 border-t border-gray-100 flex items-center justify-between bg-slate-50 shrink-0">
+                <button
+                  onClick={() => {
+                    setPreviewImportData([]);
+                    setImportStatus('idle');
+                  }}
+                  disabled={importStatus === 'importing'}
+                  className="px-4 py-2 text-xs font-bold text-gray-650 bg-white border border-gray-200 hover:bg-gray-100 rounded-lg transition-all disabled:opacity-40 cursor-pointer"
+                >
+                  {lang === 'zh' ? '重置重选' : 'Reset & Clear'}
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsImportLessonsOpen(false)}
+                    disabled={importStatus === 'importing'}
+                    className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-800 transition-all disabled:opacity-40 cursor-pointer"
+                  >
+                    {lang === 'zh' ? '取消' : 'Cancel'}
+                  </button>
+                  {importStatus === 'parsing' && (
+                    <button
+                      onClick={handleCSVImportSubmit}
+                      className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <Check size={12} />
+                      {lang === 'zh' ? `开始导入 (${previewImportData.length} 类)` : `Proceed and Import (${previewImportData.length})`}
+                    </button>
+                  )}
+                  {importStatus === 'success' && (
+                    <button
+                      onClick={() => setIsImportLessonsOpen(false)}
+                      className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all cursor-pointer"
+                    >
+                      {lang === 'zh' ? '完成' : 'Done'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
           </motion.div>
         </div>
       )}

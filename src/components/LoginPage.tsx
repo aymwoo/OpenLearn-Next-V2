@@ -50,7 +50,7 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
           }
         }
       } catch (err) {
-        console.error('Failed to fetch student roster for login selection:', err);
+        console.warn('Failed to fetch student roster for login selection:', err);
       }
     };
     fetchStudents();

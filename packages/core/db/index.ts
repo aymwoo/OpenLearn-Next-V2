@@ -134,6 +134,9 @@ db.exec(`
     class_id TEXT NOT NULL,
     lesson_id TEXT NOT NULL,
     scheduled_date TEXT NOT NULL,
+    time_slot TEXT,
+    status TEXT DEFAULT 'scheduled',
+    notes TEXT,
     created_at INTEGER NOT NULL
   );
 
@@ -234,6 +237,24 @@ try {
 
 try {
   db.prepare('ALTER TABLE lessons ADD COLUMN timeline TEXT').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.prepare('ALTER TABLE schedules ADD COLUMN time_slot TEXT').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.prepare('ALTER TABLE schedules ADD COLUMN status TEXT DEFAULT "scheduled"').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.prepare('ALTER TABLE schedules ADD COLUMN notes TEXT').run();
 } catch (e) {
   // column already exists
 }

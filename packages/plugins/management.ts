@@ -183,9 +183,39 @@ export function bootstrapManagementPlugins() {
   commandBus.registerHandler(classDeleteCmd, {
     async execute(command) {
       const payload = command.payload as any;
-      db.prepare('DELETE FROM class_students WHERE class_id = ?').run(payload.classId);
       db.prepare('DELETE FROM classes WHERE id = ?').run(payload.classId);
+      db.prepare('DELETE FROM class_students WHERE class_id = ?').run(payload.classId);
       return { success: true };
+    }
+  });
+
+  // 7b. CLASS GET STUDENTS
+  const classGetStudentsCmd = 'class.get_students';
+  actionRegistry.register({
+    id: 'core-class-get-students',
+    commandType: classGetStudentsCmd,
+    description: 'Get all students enrolled in a specific class.',
+    capabilityRequired: 'management:read',
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        classId: { type: 'STRING', description: 'ID of the class' }
+      },
+      required: ['classId']
+    }
+  });
+
+  commandBus.registerHandler(classGetStudentsCmd, {
+    async execute(command) {
+      const payload = command.payload as any;
+      const students = db.prepare(`
+        SELECT s.* 
+        FROM students s
+        JOIN class_students cs ON s.id = cs.student_id
+        WHERE cs.class_id = ?
+        ORDER BY s.name ASC
+      `).all(payload.classId);
+      return { success: true, students };
     }
   });
 
@@ -480,14 +510,17 @@ export function bootstrapManagementPlugins() {
   actionRegistry.register({
     id: 'core-schedule-create',
     commandType: scheduleCreateCmd,
-    description: 'Create a timetable schedule entry for class sessions on a calendar date (YYYY-MM-DD).',
+    description: 'Schedule a lesson instance/class slot for a class on a specific date and time.',
     capabilityRequired: 'management:write',
     inputSchema: {
       type: 'OBJECT',
       properties: {
-        classId: { type: 'STRING', description: 'ID of the target class' },
-        lessonId: { type: 'STRING', description: 'ID of the teaching lesson' },
-        scheduledDate: { type: 'STRING', description: 'Scheduled date of the session (e.g. 2026-06-12)' }
+        classId: { type: 'STRING', description: 'ID of the class' },
+        lessonId: { type: 'STRING', description: 'ID of the lesson/course content' },
+        scheduledDate: { type: 'STRING', description: 'Date of the slot (YYYY-MM-DD)' },
+        timeSlot: { type: 'STRING', description: 'Time interval, format HH:MM-HH:MM (e.g., 09:00-10:30)' },
+        status: { type: 'STRING', description: 'Status of class: scheduled, cancelled, holiday, etc.' },
+        notes: { type: 'STRING', description: 'Additional instructions or schedule comments' }
       },
       required: ['classId', 'lessonId', 'scheduledDate']
     }
@@ -496,10 +529,32 @@ export function bootstrapManagementPlugins() {
   commandBus.registerHandler(scheduleCreateCmd, {
     async execute(command) {
       const payload = command.payload as any;
-      const id = uuidv7();
-      db.prepare('INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, created_at) VALUES (?, ?, ?, ?, ?)')
-        .run(id, payload.classId, payload.lessonId, payload.scheduledDate, Date.now());
-      return { scheduleId: id, classId: payload.classId, lessonId: payload.lessonId, scheduledDate: payload.scheduledDate };
+      const id = 'sch-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      db.prepare(`
+        INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        payload.classId,
+        payload.lessonId,
+        payload.scheduledDate,
+        payload.timeSlot || null,
+        payload.status || 'scheduled',
+        payload.notes || null,
+        Date.now()
+      );
+      
+      // Dispatch schedule.created event so notification systems can respond
+      await eventBus.publish({
+        id: 'evt-' + Math.random().toString(36).slice(2, 10),
+        type: 'schedule.created',
+        source: 'management.schedule',
+        payload: { id, ...payload },
+        timestamp: Date.now(),
+        correlationId: command.id
+      });
+
+      return { success: true, scheduleId: id, details: { id, class_id: payload.classId, lesson_id: payload.lessonId, scheduled_date: payload.scheduledDate, time_slot: payload.timeSlot, status: payload.status || 'scheduled', notes: payload.notes } };
     }
   });
 
@@ -656,6 +711,99 @@ export function bootstrapManagementPlugins() {
       `).run(payload.classId, payload.studentId, payload.labId, payload.rowIdx, payload.colIdx);
 
       return { success: true, classId: payload.classId, studentId: payload.studentId, labId: payload.labId, rowIdx: payload.rowIdx, colIdx: payload.colIdx };
+    }
+  });
+
+  // 23. SCHEDULE CANCEL / SUSPEND
+  const scheduleCancelCmd = 'schedule.cancel';
+  actionRegistry.register({
+    id: 'core-schedule-cancel',
+    commandType: scheduleCancelCmd,
+    description: 'Cancel, suspend, or adjust a schedule slot/holiday arrangement.',
+    capabilityRequired: 'management:write',
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        scheduleId: { type: 'STRING', description: 'Specific schedule entry ID' },
+        classId: { type: 'STRING', description: 'Class ID to affect (optional if scheduleId provided)' },
+        scheduledDate: { type: 'STRING', description: 'Target date to suspend all schedules on (YYYY-MM-DD)' },
+        status: { type: 'STRING', description: 'New status: cancelled, holiday, scheduled' },
+        notes: { type: 'STRING', description: 'Cancellation reason (e.g., 国庆假期, 教师请假)' }
+      }
+    }
+  });
+
+  commandBus.registerHandler(scheduleCancelCmd, {
+    async execute(command) {
+      const payload = command.payload as any;
+      const statusValue = payload.status || 'cancelled';
+      const notesValue = payload.notes || 'System action';
+
+      if (payload.scheduleId) {
+        db.prepare('UPDATE schedules SET status = ?, notes = ? WHERE id = ?').run(
+          statusValue, notesValue, payload.scheduleId
+        );
+        return { success: true, affectedId: payload.scheduleId, count: 1 };
+      } else if (payload.classId && payload.scheduledDate) {
+        const result = db.prepare('UPDATE schedules SET status = ?, notes = ? WHERE class_id = ? AND scheduled_date = ?').run(
+          statusValue, notesValue, payload.classId, payload.scheduledDate
+        );
+        return { success: true, count: result.changes, classId: payload.classId, scheduledDate: payload.scheduledDate };
+      } else if (payload.scheduledDate) {
+        const result = db.prepare('UPDATE schedules SET status = ?, notes = ? WHERE scheduled_date = ?').run(
+          statusValue, notesValue, payload.scheduledDate
+        );
+        return { success: true, count: result.changes, scheduledDate: payload.scheduledDate };
+      }
+
+      throw new Error('Either scheduleId, or BOTH classId and scheduledDate, or just scheduledDate must be supplied.');
+    }
+  });
+
+  // 24. SCHEDULE LIST
+  const scheduleListCmd = 'schedule.list';
+  actionRegistry.register({
+    id: 'core-schedule-list',
+    commandType: scheduleListCmd,
+    description: 'List scheduled classes or timetables with query filters.',
+    capabilityRequired: 'management:read',
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        classId: { type: 'STRING', description: 'Filter by class ID' },
+        scheduledDate: { type: 'STRING', description: 'Filter by exact date (YYYY-MM-DD)' }
+      }
+    }
+  });
+
+  commandBus.registerHandler(scheduleListCmd, {
+    async execute(command) {
+      const payload = command.payload as any;
+      let query = `
+        SELECT s.*, l.title as lesson_title, c.name as class_name
+        FROM schedules s
+        JOIN lessons l ON s.lesson_id = l.id
+        JOIN classes c ON s.class_id = c.id
+      `;
+      const params: any[] = [];
+      const clauses: string[] = [];
+
+      if (payload.classId) {
+        clauses.push('s.class_id = ?');
+        params.push(payload.classId);
+      }
+      if (payload.scheduledDate) {
+        clauses.push('s.scheduled_date = ?');
+        params.push(payload.scheduledDate);
+      }
+
+      if (clauses.length > 0) {
+        query += ' WHERE ' + clauses.join(' AND ');
+      }
+      query += ' ORDER BY s.scheduled_date DESC, s.time_slot ASC, s.created_at ASC';
+
+      const schedules = db.prepare(query).all(...params);
+      return { success: true, schedules };
     }
   });
 }

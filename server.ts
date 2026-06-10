@@ -34,6 +34,21 @@ async function startServer() {
     console.error('Error upgrading old default plugin:', e);
   }
 
+  try {
+    kernelContainer.db.exec(`
+      CREATE TABLE IF NOT EXISTS student_rollcalls (
+        id TEXT PRIMARY KEY,
+        student_id TEXT NOT NULL,
+        class_id TEXT,
+        lesson_id TEXT,
+        picked_time INTEGER NOT NULL
+      );
+    `);
+    console.log('student_rollcalls table successfully ensured.');
+  } catch (e) {
+    console.error('Error creating student_rollcalls table:', e);
+  }
+
   await kernelContainer.pluginRuntime.loadFromDB();
   
   if (kernelContainer.pluginRuntime.loadedPlugins.length === 0) {
@@ -81,6 +96,109 @@ async function startServer() {
       }
     };`;
     await kernelContainer.pluginRuntime.installPlugin(DEFAULT_PLUGIN);
+  }
+
+  // Install Rollcall Plugin if not present
+  const rollCallPlugin = kernelContainer.db.prepare("SELECT count(*) as count FROM plugins WHERE name = ?").get("Random Student Picker (随机点名小工具)") as any;
+  if (!rollCallPlugin || rollCallPlugin.count === 0) {
+    console.log('Installing Random Student Picker (随机点名小工具) plugin...');
+    const ROLLCALL_PLUGIN = `exports.default = {
+      manifest: {
+        id: "ext-roll-call",
+        name: "Random Student Picker (随机点名小工具)",
+        version: "1.0.0",
+        capabilitiesProposed: ["whiteboard:write", "management:read"]
+      },
+      activate: async (ctx) => {
+        ctx.actionRegistry.register({
+          id: 'ext-rollcall-pick',
+          commandType: 'rollcall.pick',
+          description: '从班级中随机抽取一名学生进行课堂提问/点名，并投射到交互画板上',
+          capabilityRequired: 'management:read',
+          inputSchema: {
+            type: 'OBJECT',
+            properties: {
+              classId: { type: 'STRING', description: '班级 ID (必传，提取名册)' },
+              lessonId: { type: 'STRING', description: '关联课时 ID (传入后将点名效果同步投射到该课时白板上)' }
+            },
+            required: ['classId']
+          }
+        });
+
+        ctx.commandBus.registerHandler('rollcall.pick', {
+          execute: async (command) => {
+            const payload = command.payload;
+            const classId = payload.classId;
+            const lessonId = payload.lessonId;
+
+            let students = [];
+            try {
+              const res = await ctx.commandBus.execute({
+                id: 'int_' + Math.random().toString(36).slice(2),
+                type: 'class.get_students',
+                actorId: command.actorId || 'plugin-rollcall',
+                payload: { classId }
+              });
+              if (res && res.students) {
+                students = res.students;
+              }
+            } catch (e) {
+              console.error("Failed to fetch students via class.get_students", e);
+            }
+
+            if (students.length === 0) {
+              students = [
+                { id: "mock-s-1", name: "张明", email: "zhangming@edu-os.org" },
+                { id: "mock-s-2", name: "李华", email: "lihua@edu-os.org" },
+                { id: "mock-s-3", name: "王超", email: "wangchao@edu-os.org" },
+                { id: "mock-s-4", name: "赵丽", email: "zhaoli@edu-os.org" },
+                { id: "mock-s-5", name: "钱科", email: "qianke@edu-os.org" },
+                { id: "mock-s-6", name: "孙雪", email: "sunxue@edu-os.org" }
+              ];
+            }
+
+            const randomIndex = Math.floor(Math.random() * students.length);
+            const selectedStudent = students[randomIndex];
+
+            let elementId = null;
+            if (lessonId && lessonId !== "auto-id" && lessonId.trim() !== "") {
+              try {
+                const drawRes = await ctx.commandBus.execute({
+                  id: 'int_' + Math.random().toString(36).slice(2),
+                  type: 'whiteboard.draw',
+                  actorId: command.actorId || 'plugin-rollcall',
+                  payload: {
+                    lessonId: lessonId,
+                    type: 'rollcall',
+                    data: JSON.stringify({
+                      classId,
+                      selectedStudent,
+                      allStudents: students,
+                      pickedTime: new Date().toISOString(),
+                      status: 'picked'
+                    })
+                  }
+                });
+                if (drawRes && drawRes.elementId) {
+                  elementId = drawRes.elementId;
+                }
+              } catch (e) {
+                console.error("Failed to drop rollcall element on whiteboard", e);
+              }
+            }
+
+            return {
+              success: true,
+              selectedStudent,
+              allStudentsCount: students.length,
+              elementId,
+              message: "已从学员名单中随机提问抽选得主：" + selectedStudent.name
+            };
+          }
+        });
+      }
+    };`;
+    await kernelContainer.pluginRuntime.installPlugin(ROLLCALL_PLUGIN);
   }
 
   const app = express();
@@ -890,9 +1008,73 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
   app.get('/api/db-status', (req, res) => {
     try {
+      const startTime = performance.now();
       const result = kernelContainer.db.prepare('SELECT 1 as alive').get() as any;
       if (result && result.alive === 1) {
-        return res.json({ status: 'connected', type: 'sqlite', timestamp: Date.now() });
+        // Query SQLite inner structure variables
+        const pageSizeObj = kernelContainer.db.prepare('PRAGMA page_size').get() as any;
+        const pageCountObj = kernelContainer.db.prepare('PRAGMA page_count').get() as any;
+        const journalModeObj = kernelContainer.db.prepare('PRAGMA journal_mode').get() as any;
+        const autoVacuumObj = kernelContainer.db.prepare('PRAGMA auto_vacuum').get() as any;
+        const integrityObj = kernelContainer.db.prepare('PRAGMA integrity_check').get() as any;
+        const freelistCountObj = kernelContainer.db.prepare('PRAGMA freelist_count').get() as any;
+
+        const pageSize = pageSizeObj ? (pageSizeObj.page_size ?? pageSizeObj['page_size'] ?? 4096) : 4096;
+        const pageCount = pageCountObj ? (pageCountObj.page_count ?? pageCountObj['page_count'] ?? 0) : 0;
+        const journalMode = journalModeObj ? (journalModeObj.journal_mode ?? journalModeObj['journal_mode'] ?? 'N/A') : 'N/A';
+        const autoVacuum = autoVacuumObj ? (autoVacuumObj.auto_vacuum ?? autoVacuumObj['auto_vacuum'] ?? 0) : 0;
+        const integrity = integrityObj ? (integrityObj.integrity_check ?? integrityObj['integrity_check'] ?? 'ok') : 'ok';
+        const freelistCount = freelistCountObj ? (freelistCountObj.freelist_count ?? freelistCountObj['freelist_count'] ?? 0) : 0;
+        
+        const diskUsageBytes = pageSize * pageCount;
+        const sizeMb = parseFloat((diskUsageBytes / (1024 * 1024)).toFixed(3));
+        
+        // Friendly bytes converter
+        const formatBytes = (bytes: number) => {
+          if (bytes === 0) return '0 Bytes';
+          const k = 1024;
+          const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        };
+        const diskUsageFriendly = formatBytes(diskUsageBytes);
+
+        // Fetch tables listed in sqlite_master catalogs
+        const tables = kernelContainer.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[];
+        const coreTables = tables.filter((t: any) => !t.name.startsWith('sqlite_') && t.name !== 'sqlite_sequence');
+        const systemTablesCount = tables.length - coreTables.length;
+
+        const tableDetails = coreTables.map((t: any) => {
+          try {
+            const countObj = kernelContainer.db.prepare(`SELECT count(*) as cnt FROM ${t.name}`).get() as any;
+            return { name: t.name, rows: countObj ? (countObj.cnt ?? countObj.count ?? 0) : 0 };
+          } catch (err) {
+            return { name: t.name, rows: -1 };
+          }
+        });
+
+        const totalRows = tableDetails.reduce((sum, item) => sum + (item.rows > 0 ? item.rows : 0), 0);
+        const latencyMs = parseFloat((performance.now() - startTime).toFixed(3));
+
+        return res.json({
+          status: 'connected',
+          type: 'sqlite',
+          timestamp: Date.now(),
+          pageSize,
+          pageCount,
+          diskUsageBytes,
+          diskUsageFriendly,
+          sizeMb,
+          tableCount: coreTables.length,
+          systemTableCount: systemTablesCount,
+          journalMode,
+          autoVacuum,
+          integrity,
+          freelistCount,
+          tables: tableDetails,
+          totalRows,
+          latencyMs
+        });
       }
       return res.status(500).json({ status: 'disconnected', error: 'Unexpected response from SQLite' });
     } catch (e: any) {
@@ -1365,7 +1547,25 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         ORDER BY a.created_at, s.name
       `).all(req.params.classId);
 
-      res.json({ assignments, recentSubmissions, performance });
+      const rollcallStats = kernelContainer.db.prepare(`
+        SELECT 
+          s.id as student_id,
+          s.name as student_name,
+          COALESCE(rc.count, 0) as count,
+          rc.last_picked_time
+        FROM class_students cs
+        JOIN students s ON cs.student_id = s.id
+        LEFT JOIN (
+          SELECT student_id, COUNT(*) as count, MAX(picked_time) as last_picked_time
+          FROM student_rollcalls
+          WHERE class_id = ?
+          GROUP BY student_id
+        ) rc ON s.id = rc.student_id
+        WHERE cs.class_id = ?
+        ORDER BY count DESC, s.name ASC
+      `).all(req.params.classId, req.params.classId);
+
+      res.json({ assignments, recentSubmissions, performance, rollcallStats });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -1616,6 +1816,23 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
   });
 
   // Scheduling & Attendance
+  app.get('/api/schedules/today', (req, res) => {
+    try {
+      const clientDate = req.query.date as string || new Date().toISOString().split('T')[0];
+      const schedules = kernelContainer.db.prepare(`
+        SELECT s.*, l.title as lesson_title, c.name as class_name
+        FROM schedules s
+        JOIN lessons l ON s.lesson_id = l.id
+        JOIN classes c ON s.class_id = c.id
+        WHERE s.scheduled_date = ?
+        ORDER BY s.time_slot ASC, s.created_at ASC
+      `).all(clientDate) as any[];
+      res.json({ success: true, schedules });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get('/api/classes/:classId/schedules', (req, res) => {
     try {
       const schedules = kernelContainer.db.prepare(`
@@ -1623,7 +1840,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
         FROM schedules s
         JOIN lessons l ON s.lesson_id = l.id
         WHERE s.class_id = ?
-        ORDER BY s.scheduled_date DESC
+        ORDER BY s.scheduled_date DESC, s.time_slot ASC
       `).all(req.params.classId);
       res.json(schedules);
     } catch (e: any) {
@@ -1633,12 +1850,98 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
 
   app.post('/api/classes/:classId/schedules', (req, res) => {
     try {
-      const { lessonId, scheduledDate } = req.body;
+      const { lessonId, scheduledDate, timeSlot, status, notes } = req.body;
       const id = 'sch-' + Date.now().toString(36);
-      kernelContainer.db.prepare('INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, created_at) VALUES (?, ?, ?, ?, ?)').run(
-        id, req.params.classId, lessonId, scheduledDate, Date.now()
+      kernelContainer.db.prepare(`
+        INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, 
+        req.params.classId, 
+        lessonId, 
+        scheduledDate, 
+        timeSlot || null, 
+        status || 'scheduled', 
+        notes || null, 
+        Date.now()
       );
-      res.json({ success: true, schedule: { id, class_id: req.params.classId, lesson_id: lessonId, scheduled_date: scheduledDate } });
+      res.json({ 
+        success: true, 
+        schedule: { 
+          id, 
+          class_id: req.params.classId, 
+          lesson_id: lessonId, 
+          scheduled_date: scheduledDate,
+          time_slot: timeSlot || null,
+          status: status || 'scheduled',
+          notes: notes || null
+        } 
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.put('/api/classes/:classId/schedules/:scheduleId', (req, res) => {
+    try {
+      const { lessonId, scheduledDate, timeSlot, status, notes } = req.body;
+      kernelContainer.db.prepare(`
+        UPDATE schedules 
+        SET lesson_id = ?, scheduled_date = ?, time_slot = ?, status = ?, notes = ?
+        WHERE id = ? AND class_id = ?
+      `).run(
+        lessonId, 
+        scheduledDate, 
+        timeSlot || null, 
+        status || 'scheduled', 
+        notes || null, 
+        req.params.scheduleId, 
+        req.params.classId
+      );
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete('/api/classes/:classId/schedules/:scheduleId', (req, res) => {
+    try {
+      kernelContainer.db.prepare('DELETE FROM schedules WHERE id = ? AND class_id = ?').run(req.params.scheduleId, req.params.classId);
+      kernelContainer.db.prepare('DELETE FROM attendance WHERE schedule_id = ?').run(req.params.scheduleId);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/classes/:classId/schedules/batch', (req, res) => {
+    try {
+      const { schedules } = req.body; // array of { lessonId, scheduledDate, timeSlot, status, notes }
+      const db = kernelContainer.db;
+      
+      const insertStmt = db.prepare(`
+        INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, time_slot, status, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      
+      const transaction = db.transaction((items) => {
+        for (const item of items) {
+          const id = 'sch-' + Math.random().toString(36).slice(2, 10);
+          insertStmt.run(
+            id,
+            req.params.classId,
+            item.lessonId || item.lesson_id,
+            item.scheduledDate || item.scheduled_date,
+            item.timeSlot || item.time_slot || null,
+            item.status || 'scheduled',
+            item.notes || null,
+            Date.now()
+          );
+        }
+      });
+      
+      transaction(schedules);
+      res.json({ success: true, count: schedules.length });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -1851,7 +2154,17 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
         WHERE p.student_id = ?
       `).all(studentId);
 
-      res.json({ classes: studentClasses, schedules, assignments, progress });
+      // Get rollcalls
+      const rollcalls = kernelContainer.db.prepare(`
+        SELECT r.*, c.name as class_name, l.title as lesson_title
+        FROM student_rollcalls r
+        LEFT JOIN classes c ON r.class_id = c.id
+        LEFT JOIN lessons l ON r.lesson_id = l.id
+        WHERE r.student_id = ?
+        ORDER BY r.picked_time DESC
+      `).all(studentId);
+
+      res.json({ classes: studentClasses, schedules, assignments, progress, rollcalls });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -1995,6 +2308,71 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       });
     } catch (e) {
       console.error('[EventBus -> Socket.IO] Error dispatching assignment graded notification:', e);
+    }
+  });
+
+  const handleRollcallElement = (elementId: string) => {
+    try {
+      const el = kernelContainer.db.prepare('SELECT * FROM whiteboard_elements WHERE id = ?').get(elementId) as any;
+      if (el && el.type === 'rollcall') {
+        const elData = JSON.parse(el.data);
+        if (elData && elData.selectedStudent && elData.status === 'picked') {
+          const studentId = elData.selectedStudent.id;
+          const studentName = elData.selectedStudent.name;
+          let classId = elData.classId || '';
+          const lessonId = el.lesson_id;
+          if (!classId && lessonId) {
+            const sched = kernelContainer.db.prepare('SELECT class_id FROM schedules WHERE lesson_id = ? LIMIT 1').get(lessonId) as any;
+            if (sched) {
+              classId = sched.class_id;
+            }
+          }
+          const pickedTimeStr = elData.pickedTime || new Date().toISOString();
+          const pickedTime = new Date(pickedTimeStr).getTime();
+          
+          const rollcallId = `rollcall-${elementId}-${pickedTime}`;
+          
+          const exists = kernelContainer.db.prepare('SELECT id FROM student_rollcalls WHERE id = ?').get(rollcallId);
+          if (!exists) {
+            kernelContainer.db.prepare(
+              'INSERT INTO student_rollcalls (id, student_id, class_id, lesson_id, picked_time) VALUES (?, ?, ?, ?, ?)'
+            ).run(rollcallId, studentId, classId, lessonId, pickedTime);
+            
+            console.log(`[Rollcall] Saved rollcall for student ${studentId} (${studentName})`);
+            
+            io.emit('student-picked', {
+              rollcallId,
+              studentId,
+              studentName,
+              classId,
+              lessonId,
+              pickedTime
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error handling rollcall element:', e);
+    }
+  };
+
+  kernelContainer.eventBus.subscribe('whiteboard.element_drawn', (event) => {
+    try {
+      const payload = event.payload as any;
+      if (payload.type === 'rollcall') {
+        handleRollcallElement(payload.elementId);
+      }
+    } catch (e) {
+      console.error('[EventBus -> Socket.IO] Error processing whiteboard.element_drawn for rollcall:', e);
+    }
+  });
+
+  kernelContainer.eventBus.subscribe('whiteboard.element_updated', (event) => {
+    try {
+      const payload = event.payload as any;
+      handleRollcallElement(payload.elementId);
+    } catch (e) {
+      console.error('[EventBus -> Socket.IO] Error processing whiteboard.element_updated for rollcall:', e);
     }
   });
 
