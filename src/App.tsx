@@ -55,6 +55,7 @@ type AIProvider = {
   created_at: number;
   updated_at: number;
 };
+const AGENT_PROVIDER_STORAGE_KEY = 'openlearnv2.agentProviderId';
 type WhiteboardElement = { id: string; type: string; data: string };
 type PluginType = { id: string; name: string; status: string; created_at: number; manifest: string };
 type VFSNode = { id: string; parent_id: string | null; type: 'file' | 'dir'; name: string; content?: string };
@@ -1183,6 +1184,15 @@ export default function App() {
   
   const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [rightSidebarTab, setRightSidebarTab] = useState<'agent' | 'shell'>('agent');
+  const [agentProviderId, setAgentProviderId] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'system';
+    return window.localStorage.getItem(AGENT_PROVIDER_STORAGE_KEY) || 'system';
+  });
+  const effectiveAgentProviderId =
+    agentProviderId === 'system' || aiProviders.some(provider => provider.id === agentProviderId)
+      ? agentProviderId
+      : 'system';
+  const selectedAgentProvider = aiProviders.find(provider => provider.id === effectiveAgentProviderId) || null;
   const [events, setEvents] = useState<any[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [approvals, setApprovals] = useState<any[]>([]);
@@ -1914,6 +1924,18 @@ export default function App() {
     }
   }, [lang, t.agentIntro]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(AGENT_PROVIDER_STORAGE_KEY, agentProviderId);
+    }
+  }, [agentProviderId]);
+
+  useEffect(() => {
+    if (agentProviderId !== 'system' && aiProviders.length > 0 && !aiProviders.some(provider => provider.id === agentProviderId)) {
+      setAgentProviderId('system');
+    }
+  }, [aiProviders, agentProviderId]);
+
   const handleQuickScheduleClass = async (classId: string, lessonId: string, date: string): Promise<boolean> => {
     try {
       const res = await fetch(`/api/classes/${classId}/schedules`, {
@@ -2161,10 +2183,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (teacherTab === 'settings') {
+    if (teacherTab === 'settings' || rightSidebarTab === 'agent') {
       fetchAIProviders();
     }
-  }, [teacherTab]);
+  }, [teacherTab, rightSidebarTab]);
 
   const downloadCsvTemplate = () => {
     const csvContent = "title,content\n" +
@@ -3347,7 +3369,8 @@ export default function App() {
           message: input, 
           lang, 
           currentLessonId: selectedLesson,
-          attachments: attachmentsToSend
+          attachments: attachmentsToSend,
+          providerId: effectiveAgentProviderId === 'system' ? null : effectiveAgentProviderId
         })
       });
       const data = await res.json();
@@ -4546,7 +4569,7 @@ export default function App() {
                     <Settings size={20} className="shrink-0" /><span className="hidden md:block">{lang === 'zh' ? '全局系统设置' : 'System Settings'}</span>
                  </button>
                  <button onClick={() => setTeacherTab('help')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'help' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <HelpCircle size={20} className="shrink-0" /><span className="hidden md:block">System Commands / Help</span>
+                    <HelpCircle size={20} className="shrink-0" /><span className="hidden md:block">{lang === 'zh' ? '帮助文档' : 'System Commands / Help'}</span>
                  </button>
               </div>
 
@@ -7451,13 +7474,45 @@ export default function App() {
             
             {rightSidebarTab === 'agent' ? (
               <div className="flex-1 flex flex-col min-h-0">
-                <div className="p-4 border-b border-gray-100 flex items-center gap-2 shrink-0">
-                  <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
-                    <Wand2 size={16} />
-                  </div>
-                  <div>
-                    <h2 className="font-semibold text-gray-900 text-sm">{t.agentTitle}</h2>
-                    <p className="text-[10px] text-gray-500">{t.agentSubtitle}</p>
+                <div className="p-4 border-b border-gray-100 shrink-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                        <Wand2 size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <h2 className="font-semibold text-gray-900 text-sm">{t.agentTitle}</h2>
+                        <p className="text-[10px] text-gray-500">{t.agentSubtitle}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1.5 min-w-[150px] max-w-[50%]">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+                        {lang === 'zh' ? 'AI 提供商' : 'AI Provider'}
+                      </span>
+                      <div className="relative w-full">
+                        <select
+                          value={effectiveAgentProviderId}
+                          onChange={(e) => setAgentProviderId(e.target.value)}
+                          className="w-full appearance-none rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50 px-3 py-2 pr-9 text-[11px] font-medium text-gray-700 shadow-sm outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                        >
+                          <option value="system">
+                            {lang === 'zh' ? '系统默认（Gemini）' : 'System Default (Gemini)'}
+                          </option>
+                          {aiProviders.map((provider) => (
+                            <option key={provider.id} value={provider.id}>
+                              {provider.name}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown size={12} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      </div>
+                      <div className="text-[10px] text-gray-400 truncate w-full text-right" title={effectiveAgentProviderId === 'system' ? (lang === 'zh' ? '使用内置 Gemini 系统模型' : 'Using the built-in Gemini system model') : selectedAgentProvider?.model_name || ''}>
+                        {effectiveAgentProviderId === 'system'
+                          ? (lang === 'zh' ? '内置系统模型' : 'Built-in system model')
+                          : `${selectedAgentProvider?.name || (lang === 'zh' ? '已选提供商' : 'Selected provider')}`}
+                      </div>
+                    </div>
                   </div>
                 </div>
 

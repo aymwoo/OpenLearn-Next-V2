@@ -13,6 +13,28 @@ import { bootstrapAIPlannerPlugins } from './packages/plugins/ai-planner.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import crypto from 'crypto';
 
+type AgentChatAttachment = { name: string; content: string };
+type AgentChatRequest = {
+  message: string;
+  lang?: 'zh' | 'en';
+  currentLessonId?: string | null;
+  attachments?: AgentChatAttachment[];
+  providerId?: string | null;
+};
+type AgentToolExecution = {
+  callName: string;
+  success: boolean;
+  result?: any;
+  error?: string;
+};
+type StoredAIProvider = {
+  id: string;
+  name: string;
+  api_url: string;
+  api_key?: string | null;
+  model_name: string;
+};
+
 // Initialize core OS tools
 bootstrapBuiltinPlugins();
 bootstrapVFSPlugins();
@@ -22,6 +44,282 @@ bootstrapAIPlannerPlugins();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const buildAgentSystemInstruction = (lang: 'zh' | 'en', currentLessonId?: string | null) => {
+  let systemInstruction = lang === 'zh'
+    ? '你是一个教育系统底层的 OS Agent。你需要理解老师的指令，并调用可用的工具（命令）去执行这些操作。如果老师让你创建一节课，请务必利用工具生成详细的初始课程内容。如果老师要求管理进程/任务，请使用 process.spawn, process.kill, process.list。如果需存储文件、素材或创建目录，请使用 vfs.* 并在需要时管理班级和学生。你支持通过 class_create 创建班级, student_create 创建学生, class_add_student 将学生加入班级。当老师要求从提供的数据（如CSV、JSON、Markdown或对话中）创建班级或学生时，请依次发出这些指令。如果上一阶段返回了创建成功的班级ID或学生ID，你需要在后续的 functionCall 中引用这些ID（例如：把刚创建的学生ID加入到刚创建的班级ID中）。通过往复的工具调用，你可以自动完成完整的流程。'
+    : 'You are an educational OS kernel agent. You interpret teacher instructions and use your available tools (commands) to execute them. If the teacher asks to create a lesson, always generate some detailed initial content for it. If the teacher asks to spawn or kill processes, use process tools. Use vfs tools to store assets, and manage classes/students as necessary. You support class_create, student_create, class_add_student. Always use tool chaining if you need to create a class and enroll students: first call class_create/student_create, receive their returned IDs, and then call class_add_student in the next turn. Always answer with a helpful summary.';
+
+  if (currentLessonId) {
+    systemInstruction += `\n[Context] The current selected lesson ID is "${currentLessonId}". Use this ID if the teacher's instruction is about modifying or adding to the current lesson.\n\nAvailable tools (functions) can be used multiple times in sequence if needed.`;
+  }
+
+  return systemInstruction;
+};
+
+const buildAgentFinalMessage = (message: string, attachments?: AgentChatAttachment[]) => {
+  let finalMessage = message;
+  if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+    finalMessage += '\n\n[Attached Reference Files]';
+    attachments.forEach((file) => {
+      finalMessage += `\n\nFilename: "${file.name}"\nContent:\n"""\n${file.content}\n"""`;
+    });
+  }
+  return finalMessage;
+};
+
+const normalizeToolSchema = (schema: any): any => {
+  if (!schema || typeof schema !== 'object') return schema;
+  if (Array.isArray(schema)) return schema.map(normalizeToolSchema);
+
+  const normalized: Record<string, any> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'type' && typeof value === 'string') {
+      const typeMap: Record<string, string> = {
+        OBJECT: 'object',
+        STRING: 'string',
+        ARRAY: 'array',
+        INTEGER: 'integer',
+        NUMBER: 'number',
+        BOOLEAN: 'boolean'
+      };
+      normalized.type = typeMap[value.toUpperCase()] || value.toLowerCase();
+      continue;
+    }
+
+    if (key === 'properties' && value && typeof value === 'object' && !Array.isArray(value)) {
+      normalized.properties = Object.fromEntries(
+        Object.entries(value).map(([propKey, propSchema]) => [propKey, normalizeToolSchema(propSchema)])
+      );
+      continue;
+    }
+
+    if (key === 'items') {
+      normalized.items = normalizeToolSchema(value);
+      continue;
+    }
+
+    normalized[key] = value;
+  }
+
+  return normalized;
+};
+
+const buildOpenAITools = () => {
+  const actions = kernelContainer.actionRegistry.getAllActions();
+  return actions.map(action => ({
+    type: 'function',
+    function: {
+      name: action.commandType.replace(/[^a-zA-Z0-9_\-]/g, '_'),
+      description: action.description,
+      parameters: normalizeToolSchema(action.inputSchema)
+    }
+  }));
+};
+
+const executeAgentToolCall = async (
+  toolName: string,
+  args: any,
+  allExecutedTools: AgentToolExecution[]
+) => {
+  const actionDesc = kernelContainer.actionRegistry.getActionByToolName(toolName);
+  let actionResult: any;
+
+  if (actionDesc) {
+    const cmd = kernelContainer.commandBus.createCommand(
+      actionDesc.commandType,
+      args,
+      'agent-system-0'
+    );
+    try {
+      const cmdResult = await kernelContainer.commandBus.execute(cmd);
+      actionResult = cmdResult;
+      allExecutedTools.push({ callName: toolName, success: true, result: cmdResult });
+    } catch (err: any) {
+      actionResult = { error: err.message };
+      allExecutedTools.push({ callName: toolName, success: false, error: err.message });
+    }
+  } else {
+    actionResult = { error: `Command / Tool not found: ${toolName}` };
+    allExecutedTools.push({ callName: toolName, success: false, error: 'Command not registered' });
+  }
+
+  return actionResult;
+};
+
+const buildOpenAIChatUrl = (apiUrl: string) => {
+  let cleanUrl = apiUrl.trim();
+  if (!cleanUrl.endsWith('/chat/completions')) {
+    cleanUrl = cleanUrl.endsWith('/') ? cleanUrl + 'chat/completions' : cleanUrl + '/chat/completions';
+  }
+  return cleanUrl;
+};
+
+const runGeminiAgentChat = async (request: AgentChatRequest) => {
+  const { message, lang = 'zh', currentLessonId, attachments } = request;
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const tools = kernelContainer.actionRegistry.getAgentTools();
+  const systemInstruction = buildAgentSystemInstruction(lang, currentLessonId);
+  const finalMessage = buildAgentFinalMessage(message, attachments);
+
+  const contents: any[] = [{ role: 'user', parts: [{ text: finalMessage }] }];
+  let loopCount = 0;
+  const MAX_LOOPS = 5;
+  let finalResponseText = '';
+  const allExecutedTools: AgentToolExecution[] = [];
+
+  while (loopCount < MAX_LOOPS) {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: contents,
+      config: {
+        systemInstruction,
+        tools: tools,
+        temperature: 0.1
+      }
+    });
+
+    const candidate = response.candidates?.[0];
+    const contentParts = candidate?.content?.parts || [];
+    const functionCalls = contentParts.filter(p => 'functionCall' in p);
+
+    if (functionCalls.length === 0) {
+      finalResponseText = response.text || '';
+      break;
+    }
+
+    contents.push({
+      role: 'model',
+      parts: contentParts
+    });
+
+    const toolParts: any[] = [];
+    for (const part of contentParts) {
+      if ('functionCall' in part && part.functionCall) {
+        const call = part.functionCall;
+        const actionResult = await executeAgentToolCall(call.name, call.args, allExecutedTools);
+
+        toolParts.push({
+          functionResponse: {
+            name: call.name,
+            response: typeof actionResult === 'object' && actionResult !== null ? actionResult : { value: actionResult }
+          }
+        });
+      }
+    }
+
+    contents.push({
+      role: 'tool',
+      parts: toolParts
+    });
+
+    loopCount++;
+  }
+
+  if (loopCount >= MAX_LOOPS && !finalResponseText) {
+    finalResponseText = 'I have executed several internal commands to create or link resources, but reached the iteration limit. Please double-check the interface to confirm.';
+  }
+
+  return {
+    agentText: finalResponseText,
+    toolResults: allExecutedTools
+  };
+};
+
+const runOpenAIAgentChat = async (provider: StoredAIProvider, request: AgentChatRequest) => {
+  const { message, lang = 'zh', currentLessonId, attachments } = request;
+  const systemInstruction = buildAgentSystemInstruction(lang, currentLessonId);
+  const finalMessage = buildAgentFinalMessage(message, attachments);
+  const tools = buildOpenAITools();
+  const chatUrl = buildOpenAIChatUrl(provider.api_url);
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+
+  if (provider.api_key && provider.api_key.trim()) {
+    headers.Authorization = `Bearer ${provider.api_key.trim()}`;
+  }
+
+  const messages: any[] = [
+    { role: 'system', content: systemInstruction },
+    { role: 'user', content: finalMessage }
+  ];
+
+  const allExecutedTools: AgentToolExecution[] = [];
+  let finalResponseText = '';
+  const MAX_LOOPS = 5;
+  let loopCount = 0;
+
+  while (loopCount < MAX_LOOPS) {
+    const response = await fetch(chatUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: provider.model_name,
+        messages,
+        tools,
+        tool_choice: tools.length > 0 ? 'auto' : undefined,
+        temperature: 0.1
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`AI provider request failed (${response.status}): ${errorText || response.statusText}`);
+    }
+
+    const data = await response.json();
+    const assistantMessage = data.choices?.[0]?.message;
+    if (!assistantMessage) {
+      throw new Error('AI provider returned no assistant message');
+    }
+
+    finalResponseText = typeof assistantMessage.content === 'string' ? assistantMessage.content.trim() : '';
+    const toolCalls = Array.isArray(assistantMessage.tool_calls) ? assistantMessage.tool_calls : [];
+
+    messages.push({
+      role: 'assistant',
+      content: assistantMessage.content ?? '',
+      tool_calls: toolCalls
+    });
+
+    if (toolCalls.length === 0) {
+      break;
+    }
+
+    for (const call of toolCalls) {
+      const toolName = call?.function?.name;
+      if (!toolName) continue;
+
+      let parsedArgs: any = {};
+      if (typeof call?.function?.arguments === 'string' && call.function.arguments.trim()) {
+        try {
+          parsedArgs = JSON.parse(call.function.arguments);
+        } catch (err) {
+          parsedArgs = {};
+        }
+      }
+
+      const actionResult = await executeAgentToolCall(toolName, parsedArgs, allExecutedTools);
+      messages.push({
+        role: 'tool',
+        tool_call_id: call.id,
+        content: JSON.stringify(actionResult)
+      });
+    }
+
+    loopCount++;
+  }
+
+  if (loopCount >= MAX_LOOPS && !finalResponseText) {
+    finalResponseText = 'I have executed several internal commands, but reached the iteration limit. Please review the assistant panel for the latest state.';
+  }
+
+  return {
+    agentText: finalResponseText,
+    toolResults: allExecutedTools
+  };
+};
 
 async function startServer() {
   try {
@@ -202,7 +500,7 @@ async function startServer() {
   }
 
   const app = express();
-  const PORT = 3000;
+  const PORT = 9000;
 
   app.use(express.json());
 
@@ -236,113 +534,21 @@ async function startServer() {
   // OS Agent interaction
   app.post('/api/agent/chat', async (req, res) => {
     try {
-      const { message, lang = 'zh', currentLessonId, attachments } = req.body;
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const { message, lang = 'zh', currentLessonId, attachments, providerId } = req.body as AgentChatRequest;
+      const provider = providerId
+        ? kernelContainer.db.prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?').get(providerId) as StoredAIProvider | undefined
+        : undefined;
 
-      const tools = kernelContainer.actionRegistry.getAgentTools();
-
-      let systemInstruction = lang === 'zh' 
-        ? '你是一个教育系统底层的 OS Agent。你需要理解老师的指令，并调用可用的工具（命令）去执行这些操作。如果老师让你创建一节课，请务必利用工具生成详细的初始课程内容。如果老师要求管理进程/任务，请使用 process.spawn, process.kill, process.list。如果需存储文件、素材或创建目录，请使用 vfs.* 并在需要时管理班级和学生。你支持通过 class_create 创建班级, student_create 创建学生, class_add_student 将学生加入班级。当老师要求从提供的数据（如CSV、JSON、Markdown或对话中）创建班级或学生时，请依次发出这些指令。如果上一阶段返回了创建成功的班级ID或学生ID，你需要在后续的 functionCall 中引用这些ID（例如：把刚创建的学生ID加入到刚创建的班级ID中）。通过往复的工具调用，你可以自动完成完整的流程。'
-        : 'You are an educational OS kernel agent. You interpret teacher instructions and use your available tools (commands) to execute them. If the teacher asks to create a lesson, always generate some detailed initial content for it. If the teacher asks to spawn or kill processes, use process tools. Use vfs tools to store assets, and manage classes/students as necessary. You support class_create, student_create, class_add_student. Always use tool chaining if you need to create a class and enroll students: first call class_create/student_create, receive their returned IDs, and then call class_add_student in the next turn. Always answer with a helpful summary.';
-
-      if (currentLessonId) {
-        systemInstruction += `\n[Context] The current selected lesson ID is "${currentLessonId}". Use this ID if the teacher's instruction is about modifying or adding to the current lesson.\n\nAvailable tools (functions) can be used multiple times in sequence if needed.`;
-      }
-
-      // Add attached files to prompt
-      let finalMessage = message;
-      if (attachments && Array.isArray(attachments) && attachments.length > 0) {
-        finalMessage += "\n\n[Attached Reference Files]";
-        attachments.forEach((file: any) => {
-          finalMessage += `\n\nFilename: "${file.name}"\nContent:\n"""\n${file.content}\n"""`;
-        });
-      }
-
-      // Multi-turn tool execution loop
-      const contents: any[] = [{ role: 'user', parts: [{ text: finalMessage }] }];
-      let loopCount = 0;
-      const MAX_LOOPS = 5;
-      let finalResponseText = '';
-      const allExecutedTools: { callName: string; success: boolean; result?: any; error?: string }[] = [];
-
-      while (loopCount < MAX_LOOPS) {
-        const response = await ai.models.generateContent({
-          model: 'gemini-3.5-flash',
-          contents: contents,
-          config: {
-            systemInstruction,
-            tools: tools,
-            temperature: 0.1
-          }
-        });
-
-        const candidate = response.candidates?.[0];
-        const contentParts = candidate?.content?.parts || [];
-        const functionCalls = contentParts.filter(p => 'functionCall' in p);
-
-        if (functionCalls.length === 0) {
-          finalResponseText = response.text || '';
-          break;
-        }
-
-        // Add history
-        contents.push({
-          role: 'model',
-          parts: contentParts
-        });
-
-        // Execute actions
-        const toolParts: any[] = [];
-        for (const part of contentParts) {
-          if ('functionCall' in part && part.functionCall) {
-            const call = part.functionCall;
-            const actionDesc = kernelContainer.actionRegistry.getActionByToolName(call.name);
-            let actionResult: any;
-
-            if (actionDesc) {
-              const cmd = kernelContainer.commandBus.createCommand(
-                actionDesc.commandType,
-                call.args,
-                'agent-system-0'
-              );
-              try {
-                const cmdResult = await kernelContainer.commandBus.execute(cmd);
-                actionResult = cmdResult;
-                allExecutedTools.push({ callName: call.name, success: true, result: cmdResult });
-              } catch (err: any) {
-                actionResult = { error: err.message };
-                allExecutedTools.push({ callName: call.name, success: false, error: err.message });
-              }
-            } else {
-              actionResult = { error: `Command / Tool not found: ${call.name}` };
-              allExecutedTools.push({ callName: call.name, success: false, error: 'Command not registered' });
-            }
-
-            toolParts.push({
-              functionResponse: {
-                name: call.name,
-                response: typeof actionResult === 'object' && actionResult !== null ? actionResult : { value: actionResult }
-              }
-            });
-          }
-        }
-
-        contents.push({
-          role: 'tool',
-          parts: toolParts
-        });
-
-        loopCount++;
-      }
-
-      if (loopCount >= MAX_LOOPS && !finalResponseText) {
-        finalResponseText = 'I have executed several internal commands to create or link resources, but reached the iteration limit. Please double-check the interface to confirm.';
-      }
+      const result = provider
+        ? await runOpenAIAgentChat(provider, { message, lang, currentLessonId, attachments })
+        : await runGeminiAgentChat({ message, lang, currentLessonId, attachments });
 
       res.json({
         success: true,
-        agentText: finalResponseText,
-        toolResults: allExecutedTools
+        ...result,
+        providerUsed: provider
+          ? { id: provider.id, name: provider.name, model_name: provider.model_name }
+          : { id: 'system', name: 'Gemini', model_name: 'gemini-3.5-flash' }
       });
     } catch (err: any) {
       console.error(err);

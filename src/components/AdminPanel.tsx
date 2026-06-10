@@ -949,8 +949,8 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
               <div><span className="text-emerald-500 font-bold">[OK]</span> SQLite3 initialization complete: educational_os.db successfully mounted.</div>
               <div><span className="text-indigo-400 font-bold">[INFO]</span> Synchronizing 14 internal structural collections...</div>
               <div><span className="text-indigo-400 font-bold">[INFO]</span> Loaded active school credentials database. Current admins count: {users.filter(u=>u.role==='administrator').length}</div>
-              <div><span className="text-amber-500 font-bold">[WARN]</span> Port 3000 detected as default proxy ingress bypass bind.</div>
-              <div><span className="text-indigo-400 font-bold">[INFO]</span> Listening on network http://0.0.0.0:3000...</div>
+              <div><span className="text-amber-500 font-bold">[WARN]</span> Port 9000 detected as default proxy ingress bypass bind.</div>
+              <div><span className="text-indigo-400 font-bold">[INFO]</span> Listening on network http://0.0.0.0:9000...</div>
             </div>
           </div>
         </div>
