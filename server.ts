@@ -792,16 +792,119 @@ async function startServer() {
     }
   });
   
+  const getCookieToken = (req: any) => {
+    const rc = req.headers.cookie;
+    if (rc) {
+      const parts = rc.split(';');
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (trimmed.startsWith('edu_os_token=')) {
+          return trimmed.substring('edu_os_token='.length);
+        }
+      }
+    }
+    return null;
+  };
+
+  const checkIsTeacherOrAdmin = (req: any): boolean => {
+    const token = getCookieToken(req);
+    if (!token) return false;
+    try {
+      const sessionRow = kernelContainer.db.prepare('SELECT * FROM client_sessions WHERE id = ?').get(token) as any;
+      if (!sessionRow) return false;
+      const session = JSON.parse(sessionRow.session_data);
+      return session.role === 'teacher' || session.role === 'administrator';
+    } catch (e) {
+      return false;
+    }
+  };
+
   app.get('/api/lessons/:id/whiteboard', (req, res) => {
-    const elements = kernelContainer.db.prepare('SELECT * FROM whiteboard_elements WHERE lesson_id = ?').all(req.params.id);
+    const id = req.params.id;
+    const elements = kernelContainer.db.prepare('SELECT * FROM whiteboard_elements WHERE lesson_id = ?').all(id);
+    
+    // Take a snapshot on first load if it's a regular lesson and no snapshot exists yet
+    if (!id.startsWith('assignment-') && !id.startsWith('snapshot-')) {
+      try {
+        const snapshotId = `snapshot-${id}`;
+        const markerCheck = kernelContainer.db.prepare('SELECT count(*) as count FROM whiteboard_elements WHERE lesson_id = ?').get(snapshotId) as any;
+        const count = markerCheck ? markerCheck.count : 0;
+        if (count === 0) {
+          // Take snapshot
+          const insertStmt = kernelContainer.db.prepare(
+            'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)'
+          );
+          
+          // Insert marker
+          insertStmt.run(`marker-${id}-${Date.now()}`, snapshotId, 'snapshot_marker', '{}', Date.now());
+          
+          // Insert copies of all current elements
+          for (const el of elements as any[]) {
+            insertStmt.run(`snapshot-${el.id}`, snapshotId, el.type, el.data, el.created_at);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to create whiteboard snapshot:', err);
+      }
+    }
+    
     res.json(elements);
+  });
+
+  app.post('/api/lessons/:id/whiteboard/reset', async (req, res) => {
+    try {
+      const id = req.params.id;
+      
+      // If it's an assignment whiteboard, reset means clearing it (making it empty)
+      if (id.startsWith('assignment-')) {
+        const deleteStmt = kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?');
+        deleteStmt.run(id);
+        res.json({ success: true, message: 'Assignment whiteboard reset to empty' });
+        return;
+      }
+      
+      const snapshotId = `snapshot-${id}`;
+      const hasSnapshot = kernelContainer.db.prepare('SELECT count(*) as count FROM whiteboard_elements WHERE lesson_id = ?').get(snapshotId) as any;
+      const count = hasSnapshot ? hasSnapshot.count : 0;
+      
+      if (count > 0) {
+        // Revert to snapshot
+        // 1. Delete all current elements for this lesson
+        kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
+        
+        // 2. Fetch all snapshot elements (excluding the marker)
+        const snapshotElements = kernelContainer.db.prepare(
+          "SELECT * FROM whiteboard_elements WHERE lesson_id = ? AND type != 'snapshot_marker'"
+        ).all(snapshotId) as any[];
+        
+        // 3. Re-insert them into the active lesson whiteboard
+        const insertStmt = kernelContainer.db.prepare(
+          'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)'
+        );
+        for (const el of snapshotElements) {
+          const originalId = el.id.startsWith('snapshot-') ? el.id.substring('snapshot-'.length) : el.id;
+          insertStmt.run(originalId, id, el.type, el.data, el.created_at);
+        }
+        res.json({ success: true, message: 'Lesson whiteboard reset to start state' });
+      } else {
+        // If no snapshot exists, just clear it
+        kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
+        res.json({ success: true, message: 'Lesson whiteboard cleared (no snapshot)' });
+      }
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.post('/api/lessons/:id/whiteboard', async (req, res) => {
     try {
+      const { id } = req.params;
+      if (!id.startsWith('assignment-') && !checkIsTeacherOrAdmin(req)) {
+        return res.status(403).json({ error: 'Forbidden: Only teachers can draw on classroom whiteboards' });
+      }
       const { type, data } = req.body;
       const cmd = kernelContainer.commandBus.createCommand('whiteboard.draw', {
-        lessonId: req.params.id,
+        lessonId: id,
         type,
         data: JSON.stringify(data)
       }, 'user-frontend', { approved: true });
@@ -815,9 +918,13 @@ async function startServer() {
 
   app.put('/api/lessons/:id/whiteboard/:elementId', async (req, res) => {
     try {
+      const { id } = req.params;
+      if (!id.startsWith('assignment-') && !checkIsTeacherOrAdmin(req)) {
+        return res.status(403).json({ error: 'Forbidden: Only teachers can update elements on classroom whiteboards' });
+      }
       const { data } = req.body;
       const cmd = kernelContainer.commandBus.createCommand('whiteboard.update', {
-        lessonId: req.params.id,
+        lessonId: id,
         elementId: req.params.elementId,
         data: JSON.stringify(data)
       }, 'user-frontend', { approved: true });
@@ -831,8 +938,12 @@ async function startServer() {
 
   app.delete('/api/lessons/:id/whiteboard', async (req, res) => {
     try {
+      const { id } = req.params;
+      if (!id.startsWith('assignment-') && !checkIsTeacherOrAdmin(req)) {
+        return res.status(403).json({ error: 'Forbidden: Only teachers can clear the classroom whiteboard' });
+      }
       const cmd = kernelContainer.commandBus.createCommand('whiteboard.clear', {
-        lessonId: req.params.id
+        lessonId: id
       }, 'user-frontend', { approved: true });
       
       const result = await kernelContainer.commandBus.execute(cmd);
@@ -844,8 +955,12 @@ async function startServer() {
 
   app.delete('/api/lessons/:id/whiteboard/:elementId', async (req, res) => {
     try {
+      const { id } = req.params;
+      if (!id.startsWith('assignment-') && !checkIsTeacherOrAdmin(req)) {
+        return res.status(403).json({ error: 'Forbidden: Only teachers can delete elements from classroom whiteboards' });
+      }
       const cmd = kernelContainer.commandBus.createCommand('whiteboard.delete', {
-        lessonId: req.params.id,
+        lessonId: id,
         elementId: req.params.elementId
       }, 'user-frontend', { approved: true });
       
@@ -1261,19 +1376,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
   });
 
   // --- AUTHENTICATION & TEACHER USER ACCOUNTS APIS ---
-  const getCookieToken = (req: any) => {
-    const rc = req.headers.cookie;
-    if (rc) {
-      const parts = rc.split(';');
-      for (const part of parts) {
-        const trimmed = part.trim();
-        if (trimmed.startsWith('edu_os_token=')) {
-          return trimmed.substring('edu_os_token='.length);
-        }
-      }
-    }
-    return null;
-  };
+  // getCookieToken is now defined earlier to be used by whiteboard endpoints
 
   app.get('/api/db-status', (req, res) => {
     try {

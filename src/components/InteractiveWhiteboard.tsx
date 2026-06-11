@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Stage, Layer, Rect, Circle, Line, Text as KonvaText } from 'react-konva';
-import { MousePointer2, Square, Circle as CircleIcon, PenTool, Type, Eraser, Loader2, Presentation, ChevronLeft, ChevronRight, Wand2, Terminal, Activity, Trash2, Settings, Plus, X, Paintbrush, ChevronDown, Undo2, Redo2, Play, Pause, Maximize2, Minimize2, Edit3, BookOpen, Eye, FileText, Highlighter, Sparkles, HelpCircle, Shuffle, UserCheck } from 'lucide-react';
+import { MousePointer2, Square, Circle as CircleIcon, PenTool, Type, Eraser, Loader2, Presentation, ChevronLeft, ChevronRight, Wand2, Terminal, Activity, Trash2, Settings, Plus, X, Paintbrush, ChevronDown, Undo2, Redo2, RotateCcw, Play, Pause, Maximize2, Minimize2, Edit3, BookOpen, Eye, FileText, Highlighter, Sparkles, HelpCircle, Shuffle, UserCheck } from 'lucide-react';
 import { Html } from 'react-konva-utils';
 import Reveal from 'reveal.js';
 import 'reveal.js/reveal.css';
@@ -1375,6 +1375,30 @@ export function InteractiveWhiteboard({
     });
   };
 
+  const handleResetBoard = () => {
+    setDialog({
+      type: 'confirm',
+      title: '重置白板',
+      message: '您确定要将白板重置为开始上课的状态吗？您在白板上做的所有临时修改都将被重置。',
+      onConfirm: async () => {
+        setIsSyncing(true);
+        try {
+          await fetch(`/api/lessons/${lessonId}/whiteboard/reset`, {
+            method: 'POST'
+          });
+          socketRef.current?.emit('whiteboard-update', { roomId: lessonId, type: 'refresh' });
+          if (onRefresh) onRefresh();
+          setSelectedShapeId(null);
+        } catch (err) {
+          console.error("Reset board failed:", err);
+        } finally {
+          setIsSyncing(false);
+          setDialog(null);
+        }
+      }
+    });
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId) {
@@ -2585,13 +2609,23 @@ export function InteractiveWhiteboard({
             <Trash2 size={14} /> 删除选中
           </button>
         )}
-        <button
-          onClick={handleClearBoard}
-          className="p-1.5 rounded hover:bg-red-100 text-red-600 bg-red-50 shadow-sm font-semibold flex items-center gap-1 text-xs select-none"
-          title="Clear Board (Remove all elements)"
-        >
-          <Eraser size={14} /> 清空白板
-        </button>
+        {userRole !== 'student' ? (
+          <button
+            onClick={handleClearBoard}
+            className="p-1.5 rounded hover:bg-red-100 text-red-600 bg-red-50 shadow-sm font-semibold flex items-center gap-1 text-xs select-none"
+            title="Clear Board (Remove all elements)"
+          >
+            <Eraser size={14} /> 清空白板
+          </button>
+        ) : (
+          <button
+            onClick={handleResetBoard}
+            className="p-1.5 rounded hover:bg-amber-100 text-amber-600 bg-amber-50 shadow-sm font-semibold flex items-center gap-1 text-xs select-none"
+            title="Reset Board (Revert to initial state)"
+          >
+            <RotateCcw size={14} /> 重置白板
+          </button>
+        )}
         <div className="w-px h-4 bg-gray-300 mx-1"></div>
         {isSyncing && <Loader2 size={14} className="text-gray-400 animate-spin" />}
       </div>
