@@ -1026,6 +1026,24 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
     }
   });
 
+  // Helper functions for student number auto-generation (S001 style)
+  const generateStudentNumber = (db: any): string => {
+    const rows = db.prepare('SELECT student_number FROM students WHERE student_number LIKE "S%"').all() as { student_number: string }[];
+    let maxSeq = 0;
+    for (const row of rows) {
+      const numStr = row.student_number || '';
+      if (numStr.startsWith('S')) {
+        const seqStr = numStr.substring(1);
+        const seq = parseInt(seqStr, 10);
+        if (!isNaN(seq) && seq > maxSeq) {
+          maxSeq = seq;
+        }
+      }
+    }
+    const nextSeq = maxSeq + 1;
+    return `S${nextSeq.toString().padStart(3, '0')}`;
+  };
+
   // Management APIs
   app.post('/api/classes/import', (req, res) => {
     try {
@@ -1037,7 +1055,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       const db = kernelContainer.db;
       
       const insertClass = db.prepare('INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)');
-      const insertStudent = db.prepare('INSERT INTO students (id, name, email, created_at) VALUES (?, ?, ?, ?)');
+      const insertStudent = db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)');
       const insertClassStudent = db.prepare('INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)');
       const findStudentByEmail = db.prepare('SELECT id FROM students WHERE email = ?');
 
@@ -1070,7 +1088,8 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
           if (!studentId) {
             studentId = Math.random().toString(36).slice(2);
-            insertStudent.run(studentId, stName, stEmail, Date.now());
+            const studentNumber = generateStudentNumber(db) || `ST_${studentId}`;
+            insertStudent.run(studentId, studentNumber, stName, stEmail, Date.now());
           }
 
           insertClassStudent.run(classId, studentId, Date.now());
@@ -1098,13 +1117,14 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       }
 
       const db = kernelContainer.db;
-      const insertStudent = db.prepare('INSERT INTO students (id, name, email, created_at) VALUES (?, ?, ?, ?)');
+      const insertStudent = db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)');
       const findStudentByEmail = db.prepare('SELECT id FROM students WHERE email = ?');
 
       const imported = [];
       for (const st of students) {
         const stName = st.name;
         const stEmail = st.email || '';
+        const stNum = st.student_number || '';
         if (!stName) continue;
 
         let studentId = '';
@@ -1117,8 +1137,9 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
         if (!studentId) {
           studentId = Math.random().toString(36).slice(2);
-          insertStudent.run(studentId, stName, stEmail, Date.now());
-          imported.push({ id: studentId, name: stName, email: stEmail, new: true });
+          const finalNum = stNum && stNum.trim() !== '' ? stNum.trim() : `ST_${studentId}`;
+          insertStudent.run(studentId, finalNum, stName, stEmail, Date.now());
+          imported.push({ id: studentId, student_number: finalNum, name: stName, email: stEmail, new: true });
         } else {
           imported.push({ id: studentId, name: stName, email: stEmail, new: false });
         }
@@ -1189,8 +1210,50 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
   app.delete('/api/classes/:id', (req, res) => {
     try {
-      kernelContainer.db.prepare('DELETE FROM class_students WHERE class_id = ?').run(req.params.id);
-      kernelContainer.db.prepare('DELETE FROM classes WHERE id = ?').run(req.params.id);
+      const classId = req.params.id;
+      const db = kernelContainer.db;
+      
+      const deleteTransaction = db.transaction(() => {
+        // 1. Get all students in the class
+        const students = db.prepare('SELECT student_id FROM class_students WHERE class_id = ?').all(classId) as { student_id: string }[];
+        
+        // 2. Delete students and all their data
+        const deleteStudentStmt = db.prepare('DELETE FROM students WHERE id = ?');
+        const deleteClassStudentByStudentStmt = db.prepare('DELETE FROM class_students WHERE student_id = ?');
+        const deleteProgressStmt = db.prepare('DELETE FROM student_lesson_progress WHERE student_id = ?');
+        const deleteSubmissionsByStudentStmt = db.prepare('DELETE FROM assignment_submissions WHERE student_id = ?');
+        const deleteAttendanceByStudentStmt = db.prepare('DELETE FROM attendance WHERE student_id = ?');
+        const deleteSeatsByStudentStmt = db.prepare('DELETE FROM student_seats WHERE student_id = ?');
+        const deleteReadNotificationsStmt = db.prepare('DELETE FROM student_read_notifications WHERE student_id = ?');
+        const deleteRollcallsByStudentStmt = db.prepare('DELETE FROM student_rollcalls WHERE student_id = ?');
+        
+        for (const s of students) {
+          deleteStudentStmt.run(s.student_id);
+          deleteClassStudentByStudentStmt.run(s.student_id);
+          deleteProgressStmt.run(s.student_id);
+          deleteSubmissionsByStudentStmt.run(s.student_id);
+          deleteAttendanceByStudentStmt.run(s.student_id);
+          deleteSeatsByStudentStmt.run(s.student_id);
+          deleteReadNotificationsStmt.run(s.student_id);
+          try {
+            deleteRollcallsByStudentStmt.run(s.student_id);
+          } catch (e) {}
+        }
+        
+        // 3. Delete class-related data
+        db.prepare('DELETE FROM assignment_submissions WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?)').run(classId);
+        db.prepare('DELETE FROM assignments WHERE class_id = ?').run(classId);
+        db.prepare('DELETE FROM attendance WHERE schedule_id IN (SELECT id FROM schedules WHERE class_id = ?)').run(classId);
+        db.prepare('DELETE FROM schedules WHERE class_id = ?').run(classId);
+        db.prepare('DELETE FROM student_seats WHERE class_id = ?').run(classId);
+        try {
+          db.prepare('DELETE FROM student_rollcalls WHERE class_id = ?').run(classId);
+        } catch (e) {}
+        db.prepare('DELETE FROM class_students WHERE class_id = ?').run(classId);
+        db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
+      });
+      
+      deleteTransaction();
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -1347,7 +1410,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         if (!studentId) {
           return res.status(400).json({ error: 'Student ID is required' });
         }
-        const studentObj = kernelContainer.db.prepare('SELECT * FROM students WHERE id = ?').get(studentId) as any;
+        const studentObj = kernelContainer.db.prepare('SELECT * FROM students WHERE student_number = ? OR id = ?').get(studentId, studentId) as any;
         if (!studentObj) {
           return res.status(401).json({ error: 'Student not found in active roster' });
         }
@@ -1582,12 +1645,18 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
   app.post('/api/students', (req, res) => {
     try {
-      const { name, email, password } = req.body;
+      const { name, email, password, student_number } = req.body;
       const studentId = Math.random().toString(36).slice(2);
-      kernelContainer.db.prepare('INSERT INTO students (id, name, email, password, created_at) VALUES (?, ?, ?, ?, ?)').run(
-        studentId, name, email || '', password || '123456', Date.now()
+      
+      let finalNum = student_number && student_number.trim() !== '' ? student_number.trim() : '';
+      if (!finalNum) {
+        finalNum = generateStudentNumber(kernelContainer.db);
+      }
+
+      kernelContainer.db.prepare('INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+        studentId, finalNum, name, email || '', password || '123456', Date.now()
       );
-      res.json({ success: true, id: studentId });
+      res.json({ success: true, id: studentId, student_number: finalNum });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -1595,12 +1664,13 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
   app.put('/api/students/:id', (req, res) => {
     try {
-      const { name, email, password, locked_lesson_id, private_notes } = req.body;
+      const { name, email, password, locked_lesson_id, private_notes, student_number } = req.body;
       if (name) kernelContainer.db.prepare('UPDATE students SET name = ? WHERE id = ?').run(name, req.params.id);
       if (email !== undefined) kernelContainer.db.prepare('UPDATE students SET email = ? WHERE id = ?').run(email, req.params.id);
       if (password !== undefined) kernelContainer.db.prepare('UPDATE students SET password = ? WHERE id = ?').run(password, req.params.id);
       if (locked_lesson_id !== undefined) kernelContainer.db.prepare('UPDATE students SET locked_lesson_id = ? WHERE id = ?').run(locked_lesson_id, req.params.id);
       if (private_notes !== undefined) kernelContainer.db.prepare('UPDATE students SET private_notes = ? WHERE id = ?').run(private_notes, req.params.id);
+      if (student_number !== undefined) kernelContainer.db.prepare('UPDATE students SET student_number = ? WHERE id = ?').run(student_number, req.params.id);
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -1669,7 +1739,8 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       }
 
       const db = kernelContainer.db;
-      const insertStudent = db.prepare('INSERT INTO students (id, name, email, created_at) VALUES (?, ?, ?, ?)');
+
+      const insertStudent = db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)');
       const findStudentByEmail = db.prepare('SELECT id FROM students WHERE email = ?');
       const insertClassStudent = db.prepare('INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)');
 
@@ -1677,6 +1748,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       for (const st of students) {
         const stName = st.name ? st.name.trim() : '';
         const stEmail = st.email ? st.email.trim() : '';
+        const stNum = st.student_number ? st.student_number.trim() : '';
         if (!stName) continue;
 
         let studentId = '';
@@ -1687,10 +1759,14 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
           }
         }
 
+        let finalNum = stNum;
         if (!studentId) {
           studentId = Math.random().toString(36).slice(2);
-          insertStudent.run(studentId, stName, stEmail, Date.now());
-          results.push({ id: studentId, name: stName, email: stEmail, status: 'created_and_enrolled' });
+          if (!finalNum) {
+            finalNum = generateStudentNumber(db) || `ST_${studentId}`;
+          }
+          insertStudent.run(studentId, finalNum, stName, stEmail, Date.now());
+          results.push({ id: studentId, student_number: finalNum, name: stName, email: stEmail, status: 'created_and_enrolled' });
         } else {
           results.push({ id: studentId, name: stName, email: stEmail, status: 'enrolled_existing' });
         }

@@ -45,6 +45,14 @@ db.exec(`
     created_at INTEGER NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS plugin_storage (
+    plugin_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (plugin_id, key)
+  );
+
   CREATE TABLE IF NOT EXISTS pending_commands (
     id TEXT PRIMARY KEY,
     command_type TEXT NOT NULL,
@@ -85,6 +93,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS students (
     id TEXT PRIMARY KEY,
+    student_number TEXT UNIQUE,
     name TEXT NOT NULL,
     email TEXT,
     password TEXT,
@@ -231,6 +240,13 @@ try {
 
 try {
   db.prepare('ALTER TABLE students ADD COLUMN private_notes TEXT').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.prepare('ALTER TABLE students ADD COLUMN student_number TEXT').run();
+  db.prepare("UPDATE students SET student_number = 'ST_' || id WHERE student_number IS NULL OR student_number = ''").run();
 } catch (e) {
   // column already exists
 }

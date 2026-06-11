@@ -4,6 +4,24 @@ import { v7 as uuidv7 } from 'uuid';
 export function bootstrapManagementPlugins() {
   const { commandBus, actionRegistry, db, eventBus } = kernelContainer;
 
+  // Helper functions for student number auto-generation (S001 style)
+  const generateStudentNumber = (db: any): string => {
+    const rows = db.prepare('SELECT student_number FROM students WHERE student_number LIKE "S%"').all() as { student_number: string }[];
+    let maxSeq = 0;
+    for (const row of rows) {
+      const numStr = row.student_number || '';
+      if (numStr.startsWith('S')) {
+        const seqStr = numStr.substring(1);
+        const seq = parseInt(seqStr, 10);
+        if (!isNaN(seq) && seq > maxSeq) {
+          maxSeq = seq;
+        }
+      }
+    }
+    const nextSeq = maxSeq + 1;
+    return `S${nextSeq.toString().padStart(3, '0')}`;
+  };
+
   // 1. CLASS CREATE
   const classCreateCmd = 'class.create';
   actionRegistry.register({
@@ -63,7 +81,8 @@ export function bootstrapManagementPlugins() {
       type: 'OBJECT',
       properties: {
         name: { type: 'STRING', description: 'Name of the student' },
-        email: { type: 'STRING', description: 'Email of the student' }
+        email: { type: 'STRING', description: 'Email of the student' },
+        student_number: { type: 'STRING', description: 'Student ID number (optional, used as username)' }
       },
       required: ['name']
     }
@@ -73,8 +92,12 @@ export function bootstrapManagementPlugins() {
     async execute(command) {
       const payload = command.payload as any;
       const studentId = uuidv7();
-      db.prepare('INSERT INTO students (id, name, email, created_at) VALUES (?, ?, ?, ?)').run(
-        studentId, payload.name, payload.email || '', Date.now()
+      let studentNumber = payload.student_number || '';
+      if (!studentNumber) {
+        studentNumber = generateStudentNumber(db);
+      }
+      db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)').run(
+        studentId, studentNumber, payload.name, payload.email || '', Date.now()
       );
       return { studentId };
     }
@@ -183,8 +206,49 @@ export function bootstrapManagementPlugins() {
   commandBus.registerHandler(classDeleteCmd, {
     async execute(command) {
       const payload = command.payload as any;
-      db.prepare('DELETE FROM classes WHERE id = ?').run(payload.classId);
-      db.prepare('DELETE FROM class_students WHERE class_id = ?').run(payload.classId);
+      const classId = payload.classId;
+
+      const deleteTransaction = db.transaction(() => {
+        // 1. Get all students in the class
+        const students = db.prepare('SELECT student_id FROM class_students WHERE class_id = ?').all(classId) as { student_id: string }[];
+
+        // 2. Delete students and all their data
+        const deleteStudentStmt = db.prepare('DELETE FROM students WHERE id = ?');
+        const deleteClassStudentByStudentStmt = db.prepare('DELETE FROM class_students WHERE student_id = ?');
+        const deleteProgressStmt = db.prepare('DELETE FROM student_lesson_progress WHERE student_id = ?');
+        const deleteSubmissionsByStudentStmt = db.prepare('DELETE FROM assignment_submissions WHERE student_id = ?');
+        const deleteAttendanceByStudentStmt = db.prepare('DELETE FROM attendance WHERE student_id = ?');
+        const deleteSeatsByStudentStmt = db.prepare('DELETE FROM student_seats WHERE student_id = ?');
+        const deleteReadNotificationsStmt = db.prepare('DELETE FROM student_read_notifications WHERE student_id = ?');
+        const deleteRollcallsByStudentStmt = db.prepare('DELETE FROM student_rollcalls WHERE student_id = ?');
+
+        for (const s of students) {
+          deleteStudentStmt.run(s.student_id);
+          deleteClassStudentByStudentStmt.run(s.student_id);
+          deleteProgressStmt.run(s.student_id);
+          deleteSubmissionsByStudentStmt.run(s.student_id);
+          deleteAttendanceByStudentStmt.run(s.student_id);
+          deleteSeatsByStudentStmt.run(s.student_id);
+          deleteReadNotificationsStmt.run(s.student_id);
+          try {
+            deleteRollcallsByStudentStmt.run(s.student_id);
+          } catch (e) {}
+        }
+
+        // 3. Delete class-related data
+        db.prepare('DELETE FROM assignment_submissions WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?)').run(classId);
+        db.prepare('DELETE FROM assignments WHERE class_id = ?').run(classId);
+        db.prepare('DELETE FROM attendance WHERE schedule_id IN (SELECT id FROM schedules WHERE class_id = ?)').run(classId);
+        db.prepare('DELETE FROM schedules WHERE class_id = ?').run(classId);
+        db.prepare('DELETE FROM student_seats WHERE class_id = ?').run(classId);
+        try {
+          db.prepare('DELETE FROM student_rollcalls WHERE class_id = ?').run(classId);
+        } catch (e) {}
+        db.prepare('DELETE FROM class_students WHERE class_id = ?').run(classId);
+        db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
+      });
+
+      deleteTransaction();
       return { success: true };
     }
   });
@@ -231,7 +295,8 @@ export function bootstrapManagementPlugins() {
       properties: {
         studentId: { type: 'STRING', description: 'ID of the student' },
         name: { type: 'STRING', description: 'Name of the student' },
-        email: { type: 'STRING', description: 'Email of the student' }
+        email: { type: 'STRING', description: 'Email of the student' },
+        student_number: { type: 'STRING', description: 'Student ID number' }
       },
       required: ['studentId']
     }
@@ -245,6 +310,9 @@ export function bootstrapManagementPlugins() {
       }
       if (payload.email !== undefined) {
         db.prepare('UPDATE students SET email = ? WHERE id = ?').run(payload.email, payload.studentId);
+      }
+      if (payload.student_number !== undefined) {
+        db.prepare('UPDATE students SET student_number = ? WHERE id = ?').run(payload.student_number, payload.studentId);
       }
       return { success: true };
     }

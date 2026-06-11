@@ -2886,9 +2886,6 @@ export default function App() {
       if (student && student.locked_lesson_id) {
         setSelectedLesson(student.locked_lesson_id);
         setStudentViewStatus('lesson');
-      } else {
-        setStudentViewStatus('dashboard');
-        setSelectedLesson(null);
       }
     }
   }, [activeRole, activeStudentId, students]);
@@ -3106,7 +3103,7 @@ export default function App() {
 
   const handleChatFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    Array.from(e.target.files).forEach(file => {
+    Array.from(e.target.files).forEach((file: any) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
@@ -3123,7 +3120,7 @@ export default function App() {
   const handleChatDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (!e.dataTransfer.files) return;
-    Array.from(e.dataTransfer.files).forEach(file => {
+    Array.from(e.dataTransfer.files).forEach((file: any) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
@@ -3842,6 +3839,7 @@ export default function App() {
                        <InteractiveWhiteboard
                          lessonId={selectedLesson}
                          elements={elements}
+                         userRole={activeRole}
                          activeSegmentId={activeSegmentId} onSegmentSync={(segId) => setActiveSegmentId(segId)} onElementUpdate={async () => { /* readonly or sync */ }}
                          onElementDelete={async (elementId) => {
                             await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
@@ -4125,6 +4123,7 @@ export default function App() {
                               <InteractiveWhiteboard
                                 lessonId={`assignment-${selectedAssignment.id}-student-${activeStudentId}`}
                                 elements={elements}
+                                userRole={activeRole}
                                 enableAutoAI={activeRole === 'student' && !selectedAssignment.submission_status}
                                 onElementAdd={async (type, data) => {
                                    await fetch(`/api/lessons/assignment-${selectedAssignment.id}-student-${activeStudentId}/whiteboard`, {
@@ -5112,6 +5111,7 @@ export default function App() {
                      ) : (
                         <InteractiveWhiteboard
                           lessonId={selectedLesson}
+                          userRole={activeRole}
                           elements={elements}
                           activeSegmentId={activeSegmentId}
                           onSegmentSync={(segId) => setActiveSegmentId(segId)}
@@ -9107,6 +9107,7 @@ export default function App() {
                     <div className="flex-grow flex-1 min-h-0 w-full h-full relative rounded-lg overflow-hidden border border-gray-100 flex flex-col">
                       <InteractiveWhiteboard
                         lessonId={selectedLesson}
+                        userRole={activeRole}
                         elements={elements}
                         activeSegmentId={activeSegmentId}
                         onSegmentSync={(segId) => setActiveSegmentId(segId)}

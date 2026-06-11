@@ -38,6 +38,10 @@ export class CommandBus {
     this.handlers.set(commandType, handler);
   }
 
+  public unregisterHandler(commandType: string) {
+    this.handlers.delete(commandType);
+  }
+
   public async execute<T extends PlatformCommand>(command: T): Promise<any> {
     const normalizedCommand: PlatformCommand = {
       ...command,

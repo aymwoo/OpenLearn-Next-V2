@@ -11,6 +11,9 @@ export class ActionRegistry {
   private actions = new Map<string, ActionDescriptor>();
 
   public register(descriptor: ActionDescriptor): void {
+    if (this.actions.has(descriptor.id)) {
+      throw new Error(`Action ${descriptor.id} is already registered.`);
+    }
     this.actions.set(descriptor.id, descriptor);
   }
 

@@ -20,6 +20,10 @@ export class ProcessManager {
     this.handlers.set(taskType, handler);
   }
 
+  public unregisterHandler(taskType: string) {
+    this.handlers.delete(taskType);
+  }
+
   public restore() {
     const runnings = db.prepare('SELECT * FROM processes WHERE status = ?').all('running') as any[];
     for (const p of runnings) {

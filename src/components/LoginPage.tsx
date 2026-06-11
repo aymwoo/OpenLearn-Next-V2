@@ -5,6 +5,7 @@ interface Student {
   id: string;
   name: string;
   email: string;
+  student_number?: string;
 }
 
 interface LoginPageProps {
@@ -78,13 +79,7 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
 
       if (res.ok) {
         const data = await res.json();
-        onLoginSuccess({
-          role: 'teacher',
-          userId: data.userId,
-          username: data.username,
-          subRole: data.subRole, // 'administrator' | 'teacher'
-          name: data.name
-        });
+        onLoginSuccess(data.session);
       } else {
         const errData = await res.json();
         setTeacherError(errData.error || (lang === 'zh' ? '用户名或密码不正确' : 'Invalid username or password'));
@@ -123,12 +118,7 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
 
       if (res.ok) {
         const data = await res.json();
-        onLoginSuccess({
-          role: 'student',
-          studentId: data.studentId,
-          name: data.name,
-          email: data.email
-        });
+        onLoginSuccess(data.session);
       } else {
         const errData = await res.json();
         setStudentError(errData.error || (lang === 'zh' ? '找不到该学生记录' : 'Student record not found'));
@@ -153,10 +143,10 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
             <GraduationCap size={32} />
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center justify-center gap-2">
-            AI EDU OS <span className="text-indigo-400 font-medium text-xs bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-400/20">V1.5</span>
+            OpenLearn Next <span className="text-indigo-400 font-medium text-xs bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-400/20">V2.0</span>
           </h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-2">
-            {lang === 'zh' ? '智能教室分布式操作系统' : 'Intelligent Classroom Distributed OS Platform'}
+            {lang === 'zh' ? '下一代智能数字化学习系统' : 'Next-Generation Intelligent Digital Learning Platform'}
           </p>
         </div>
 
@@ -262,7 +252,7 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
                 >
                   {students.map((student) => (
                     <option key={student.id} value={student.id}>
-                      {student.name} ({student.id})
+                      {student.name} ({student.student_number || student.id})
                     </option>
                   ))}
                 </select>

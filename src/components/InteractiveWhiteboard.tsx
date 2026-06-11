@@ -781,6 +781,7 @@ interface InteractiveWhiteboardProps {
   enableAutoAI?: boolean;
   activeSegmentId?: string | null;
   onSegmentSync?: (segmentId: string) => void;
+  userRole?: 'teacher' | 'student';
 }
 
 export function InteractiveWhiteboard({ 
@@ -793,7 +794,8 @@ export function InteractiveWhiteboard({
   onRefresh, 
   enableAutoAI,
   activeSegmentId,
-  onSegmentSync
+  onSegmentSync,
+  userRole = 'teacher'
 }: InteractiveWhiteboardProps) {
   const [tool, setTool] = useState<'cursor' | 'rect' | 'circle' | 'pen' | 'text' | 'presentation' | 'highlighter'>('cursor');
   const [highlighterColor, setHighlighterColor] = useState('#facc15');
@@ -808,8 +810,23 @@ export function InteractiveWhiteboard({
   const socketRef = useRef<Socket | null>(null);
   const [remoteDrawings, setRemoteDrawings] = useState<Record<string, any>>({});
   const [activeDragElement, setActiveDragElement] = useState<{ id: string; currentX: number; currentY: number; startPointerX: number; startPointerY: number; data: any } | null>(null);
-  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; elementId?: string } | null>(null);
+  const [selectedShapeId, _setSelectedShapeId] = useState<string | null>(null);
+  const setSelectedShapeId = (id: string | null | ((prev: string | null) => string | null)) => {
+    if (userRole === 'teacher') {
+      if (typeof id === 'function') {
+        _setSelectedShapeId(id);
+      } else {
+        _setSelectedShapeId(id);
+      }
+    }
+  };
+
+  const [contextMenu, _setContextMenu] = useState<{ x: number; y: number; elementId?: string } | null>(null);
+  const setContextMenu = (val: { x: number; y: number; elementId?: string } | null) => {
+    if (userRole === 'teacher') {
+      _setContextMenu(val);
+    }
+  };
   const [activeResizeElement, setActiveResizeElement] = useState<{
     id: string;
     corner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
@@ -1129,6 +1146,7 @@ export function InteractiveWhiteboard({
   };
 
   const handleElementDragStart = (e: React.PointerEvent, elementId: string, elementData: any) => {
+    if (userRole !== 'teacher') return;
     e.preventDefault();
     const initialX = elementData.x ?? 0;
     const initialY = elementData.y ?? 0;
@@ -1188,6 +1206,7 @@ export function InteractiveWhiteboard({
     currentWidth: number,
     currentHeight: number
   ) => {
+    if (userRole !== 'teacher') return;
     e.preventDefault();
     e.stopPropagation();
     setActiveResizeElement({
@@ -1930,7 +1949,7 @@ export function InteractiveWhiteboard({
             tension={0.5}
             lineCap="round"
             lineJoin="round"
-            draggable={tool === 'cursor'}
+            draggable={userRole === 'teacher' && tool === 'cursor'}
             onClick={(e) => {
               if (tool === 'cursor') {
                 e.cancelBubble = true;
@@ -1973,7 +1992,7 @@ export function InteractiveWhiteboard({
             lineCap="round"
             lineJoin="round"
             opacity={0.5}
-            draggable={tool === 'cursor'}
+            draggable={userRole === 'teacher' && tool === 'cursor'}
             onClick={(e) => {
               if (tool === 'cursor') {
                 e.cancelBubble = true;
@@ -2016,7 +2035,7 @@ export function InteractiveWhiteboard({
             fill={data.fill || 'transparent'} 
             stroke={isSelected ? '#3b82f6' : (data.stroke || 'blue')}
             strokeWidth={isSelected ? 3 : 1}
-            draggable={tool === 'cursor'}
+            draggable={userRole === 'teacher' && tool === 'cursor'}
             onClick={(e) => {
               if (tool === 'cursor') {
                 e.cancelBubble = true;
@@ -2055,7 +2074,7 @@ export function InteractiveWhiteboard({
             fill={data.fill || 'transparent'} 
             stroke={isSelected ? '#3b82f6' : (data.stroke || 'green')}
             strokeWidth={isSelected ? 3 : 1}
-            draggable={tool === 'cursor'}
+            draggable={userRole === 'teacher' && tool === 'cursor'}
             onClick={(e) => {
               if (tool === 'cursor') {
                 e.cancelBubble = true;
@@ -2094,7 +2113,7 @@ export function InteractiveWhiteboard({
             fontSize={data.fontSize || 16} 
             fill={isSelected ? '#3b82f6' : (data.color || 'black')}
             fontStyle={isSelected ? 'bold' : 'normal'}
-            draggable={tool === 'cursor'}
+            draggable={userRole === 'teacher' && tool === 'cursor'}
             onClick={(e) => {
               if (tool === 'cursor') {
                 e.cancelBubble = true;

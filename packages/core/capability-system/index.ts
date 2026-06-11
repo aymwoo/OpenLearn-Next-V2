@@ -22,8 +22,14 @@ export class CapabilityGuard {
 
   public grant(actorId: string, cap: string) {
      const caps = this.actorCapabilities.get(actorId) || [];
-     caps.push(cap);
+     if (!caps.includes(cap)) {
+       caps.push(cap);
+     }
      this.actorCapabilities.set(actorId, caps);
+  }
+
+  public revokeAll(actorId: string) {
+    this.actorCapabilities.delete(actorId);
   }
 
   public check(actorId: string, requiredCap: string): boolean {
