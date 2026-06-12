@@ -1322,6 +1322,14 @@ export default function App() {
   const [previewLessonTab, setPreviewLessonTab] = useState<'whiteboard' | 'courseware'>('whiteboard');
   const [previewFullscreenPanel, setPreviewFullscreenPanel] = useState<'none' | 'left' | 'right'>('none');
   const [studentFullscreenPanel, setStudentFullscreenPanel] = useState<'none' | 'left' | 'right'>('none');
+  const [isStudentLessonContentCollapsed, setIsStudentLessonContentCollapsed] = useState(true);
+
+  // Reset Lesson Content to collapsed when leaving student lesson view
+  useEffect(() => {
+    if (studentViewStatus !== 'lesson') {
+      setIsStudentLessonContentCollapsed(true);
+    }
+  }, [studentViewStatus]);
   
   // Enhanced AI MCQ Quiz Generator
   const [isQuizGeneratorOpen, setIsQuizGeneratorOpen] = useState(false);
@@ -4010,7 +4018,7 @@ export default function App() {
                   <h2 className="text-xl font-bold text-gray-800">{lessons.find(l => l.id === selectedLesson)?.title}</h2>
                 </div>
                 <div className="flex-1 flex gap-6 min-h-0 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <div className={`${studentFullscreenPanel === 'left' ? 'w-full' : 'w-1/3'} border-gray-100 pr-4 overflow-y-auto ${studentFullscreenPanel === 'left' ? '' : 'hidden md:block'} ${studentFullscreenPanel === 'right' ? 'hidden' : ''} ${studentFullscreenPanel === 'left' ? '' : 'border-r'} transition-all duration-300`}>
+                  <div className={`${isStudentLessonContentCollapsed ? 'hidden' : studentFullscreenPanel === 'left' ? 'w-full' : 'w-1/3'} border-gray-100 pr-4 overflow-y-auto ${studentFullscreenPanel === 'left' ? '' : 'hidden md:block'} ${studentFullscreenPanel === 'right' ? 'hidden' : ''} ${studentFullscreenPanel === 'left' ? '' : 'border-r'} transition-all duration-300`}>
                     <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4 flex items-center justify-between pointer-events-auto shrink-0 select-none border-b border-gray-100 pb-2">
                       <span className="flex items-center gap-1">
                         <BookOpen size={14} className="text-indigo-500" /> Lesson Content (课程内容)
@@ -4076,9 +4084,17 @@ export default function App() {
                       <Markdown>{lessons.find(l => l.id === selectedLesson)?.content || ''}</Markdown>
                     </div>
                   </div>
-                  <div className={`${studentFullscreenPanel === 'right' ? 'w-full flex-grow' : 'flex-grow flex-1'} relative flex flex-col min-h-0 ${studentFullscreenPanel === 'left' ? 'hidden' : ''} transition-all duration-300`}>
+                  <div className={`${(isStudentLessonContentCollapsed || studentFullscreenPanel === 'right') ? 'w-full flex-grow' : 'flex-grow flex-1'} relative flex flex-col min-h-0 ${studentFullscreenPanel === 'left' ? 'hidden' : ''} transition-all duration-300`}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
+                         <button
+                           onClick={() => setIsStudentLessonContentCollapsed(!isStudentLessonContentCollapsed)}
+                           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-100/80 cursor-pointer shadow-3xs"
+                           title={isStudentLessonContentCollapsed ? "展开课程内容" : "折叠课程内容"}
+                         >
+                           <BookOpen size={13} className="text-indigo-650" />
+                           <span>{isStudentLessonContentCollapsed ? (lang === 'zh' ? '展开课程内容' : 'Expand Content') : (lang === 'zh' ? '折叠课程内容' : 'Collapse Content')}</span>
+                         </button>
                          <button onClick={() => setStudentLessonTab('whiteboard')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'whiteboard' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>Interactive Whiteboard</button>
                          <button onClick={() => setStudentLessonTab('courseware')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'courseware' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>Interactive Courseware Viewer</button>
                       </div>
