@@ -3981,7 +3981,7 @@ export default function App() {
         </header>
 
         {activeRole === 'student' ? (
-          <div className="flex-1 p-6 overflow-y-auto w-full max-w-7xl mx-auto space-y-6">
+          <div className="flex-1 p-6 overflow-y-auto w-full max-w-full space-y-6">
             {!activeStudentId ? (
               <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-500 flex flex-col items-center justify-center">
                 <Users size={48} className="text-gray-300 mb-4" />
