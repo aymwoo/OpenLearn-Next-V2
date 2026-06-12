@@ -371,7 +371,7 @@ function RevealPresentationWrapper({
 
   const isFullscreenSynced = !!data.isFullscreenSynced;
   const isFullscreenForced = !!data.isFullscreenForced;
-  const isContainerFullscreen = isTeacher ? isFullscreen : (isFullscreenSynced && isFullscreenForced);
+  const isContainerFullscreen = isFullscreen || (isStudent && isFullscreenSynced && isFullscreenForced);
 
   // Parse slides
   const slides = markdown
@@ -479,10 +479,10 @@ function RevealPresentationWrapper({
     return () => clearInterval(interval);
   }, [autoplay, autoplayInterval, slides.length, mode, fileType]);
 
-  // Keyboard navigation effect (Only for teachers/moderators)
+  // Keyboard navigation effect
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isStudent) return;
+      if (isStudent && isFullscreenSynced && isFullscreenForced) return;
       if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault();
         handleSlideChange(slideIndex + 1);
@@ -496,13 +496,13 @@ function RevealPresentationWrapper({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [slideIndex, isContainerFullscreen, isStudent, totalSlides]);
+  }, [slideIndex, isContainerFullscreen, isStudent, isFullscreenSynced, isFullscreenForced, totalSlides]);
 
   const handleSlideChange = (index: number) => {
-    if (isStudent) return;
+    if (isStudent && isFullscreenSynced && isFullscreenForced) return;
     const validIndex = Math.min(Math.max(0, index), totalSlides - 1);
     setSlideIndex(validIndex);
-    if (onElementUpdate) {
+    if (isTeacher && onElementUpdate) {
       onElementUpdate(elementId, { ...data, slideX: validIndex });
     }
   };
@@ -686,14 +686,18 @@ function RevealPresentationWrapper({
                       <span>同步学生全屏</span>
                     </label>
                     
-                    <button
-                      onClick={() => handleToggleFullscreen(false)}
-                      className="p-1 px-2.5 bg-red-655 text-white text-xs font-bold rounded-md transition-colors cursor-pointer border-0"
-                      title="退出放映"
-                    >
-                      退出放映 (Esc)
-                    </button>
                   </>
+                )}
+
+                {/* Exit Fullscreen Button */}
+                {(!isStudent || !isFullscreenForced || !isFullscreenSynced || isFullscreen) && (
+                  <button
+                    onClick={() => handleToggleFullscreen(false)}
+                    className="p-1 px-2.5 bg-red-600 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer border-0 hover:bg-red-700"
+                    title="退出放映"
+                  >
+                    退出放映 (Esc)
+                  </button>
                 )}
               </div>
             </div>
@@ -920,11 +924,11 @@ function RevealPresentationWrapper({
               </label>
             )}
 
-            {/* Fullscreen Toggle (Only for teacher, students follow sync) */}
-            {isTeacher && mode === 'ppt' && (
+            {/* Fullscreen Toggle */}
+            {mode === 'ppt' && (!isStudent || !(isFullscreenSynced && isFullscreenForced)) && (
               <button
                 onClick={() => handleToggleFullscreen(true)}
-                className="p-1 rounded text-slate-655 hover:bg-slate-200 border border-slate-200 bg-white transition-colors cursor-pointer"
+                className="p-1 rounded-lg text-slate-655 hover:bg-slate-200 border border-slate-200 bg-white transition-colors cursor-pointer"
                 title="全屏放映"
               >
                 <Maximize2 size={11} />
@@ -1040,10 +1044,10 @@ function RevealPresentationWrapper({
                   : 'bg-white px-4 py-2 rounded-full border border-slate-200/80 shadow-md relative z-10'
               }`}>
                 <button
-                  disabled={slideIndex === 0 || isStudent}
+                  disabled={slideIndex === 0 || (isStudent && isFullscreenSynced && isFullscreenForced)}
                   onClick={() => handleSlideChange(slideIndex - 1)}
                   className={`p-1.5 rounded-full border transition-colors cursor-pointer ${
-                    slideIndex === 0 || isStudent
+                    slideIndex === 0 || (isStudent && isFullscreenSynced && isFullscreenForced)
                       ? (isContainerFullscreen ? 'border-neutral-800 text-neutral-600 bg-neutral-950/20 cursor-not-allowed' : 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed') 
                       : (isContainerFullscreen ? 'border-neutral-700 text-neutral-300 hover:bg-neutral-800' : 'border-slate-205 text-slate-655 hover:bg-slate-50')
                   }`}
@@ -1059,10 +1063,10 @@ function RevealPresentationWrapper({
                 </div>
 
                 <button
-                  disabled={slideIndex >= totalSlides - 1 || isStudent}
+                  disabled={slideIndex >= totalSlides - 1 || (isStudent && isFullscreenSynced && isFullscreenForced)}
                   onClick={() => handleSlideChange(slideIndex + 1)}
                   className={`p-1.5 rounded-full border transition-colors cursor-pointer ${
-                    slideIndex >= totalSlides - 1 || isStudent
+                    slideIndex >= totalSlides - 1 || (isStudent && isFullscreenSynced && isFullscreenForced)
                       ? (isContainerFullscreen ? 'border-neutral-800 text-neutral-600 bg-neutral-950/20 cursor-not-allowed' : 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed') 
                       : (isContainerFullscreen ? 'border-neutral-700 text-neutral-300 hover:bg-neutral-800' : 'border-slate-205 text-slate-655 hover:bg-slate-50')
                   }`}
