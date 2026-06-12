@@ -4018,7 +4018,17 @@ export default function App() {
                   <h2 className="text-xl font-bold text-gray-800">{lessons.find(l => l.id === selectedLesson)?.title}</h2>
                 </div>
                 <div className="flex-1 flex gap-6 min-h-0 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <div className={`${isStudentLessonContentCollapsed ? 'hidden' : studentFullscreenPanel === 'left' ? 'w-full' : 'w-1/3'} border-gray-100 pr-4 overflow-y-auto ${studentFullscreenPanel === 'left' ? '' : 'hidden md:block'} ${studentFullscreenPanel === 'right' ? 'hidden' : ''} ${studentFullscreenPanel === 'left' ? '' : 'border-r'} transition-all duration-300`}>
+                  <div className={`${
+                    isStudentLessonContentCollapsed 
+                      ? 'hidden' 
+                      : studentFullscreenPanel === 'left' 
+                        ? 'w-full' 
+                        : 'w-1/3 md:block hidden'
+                  } border-gray-100 pr-4 overflow-y-auto ${
+                    studentFullscreenPanel === 'right' ? 'hidden' : ''
+                  } ${
+                    studentFullscreenPanel === 'left' ? '' : 'border-r'
+                  } transition-all duration-300`}>
                     <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4 flex items-center justify-between pointer-events-auto shrink-0 select-none border-b border-gray-100 pb-2">
                       <span className="flex items-center gap-1">
                         <BookOpen size={14} className="text-indigo-500" /> Lesson Content (课程内容)
