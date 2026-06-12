@@ -74,6 +74,12 @@ export function LiveClassroomView({
   const [lockingClass, setLockingClass] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [hoveredStudentId, setHoveredStudentId] = useState<string | null>(null);
+
+  // Random drawing states
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [activeDrawStudentId, setActiveDrawStudentId] = useState<string | null>(null);
+  const [selectedDrawStudentIds, setSelectedDrawStudentIds] = useState<string[]>([]);
+
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Find if class-wide locking is active (if all students are locked to this lesson)
@@ -316,6 +322,68 @@ export function LiveClassroomView({
     }
   };
 
+  const handleRandomPick = () => {
+    if (students.length === 0 || isDrawing) return;
+    
+    setIsDrawing(true);
+
+    // Pick from online students preferentially, fallback to all students
+    const candidates = students.filter(s => onlineStudentIds.includes(s.id));
+    const drawPool = candidates.length > 0 ? candidates : students;
+
+    let count = 0;
+    const maxTicks = 18;
+    let currentInterval = 75;
+
+    const tick = () => {
+      const randIndex = Math.floor(Math.random() * drawPool.length);
+      const randomStudent = drawPool[randIndex];
+      setActiveDrawStudentId(randomStudent.id);
+
+      count++;
+      if (count < maxTicks) {
+        if (count > maxTicks - 5) {
+          currentInterval += 45;
+        }
+        setTimeout(tick, currentInterval);
+      } else {
+        const finalStudent = drawPool[randIndex];
+        setActiveDrawStudentId(null);
+        setIsDrawing(false);
+
+        // Add the drawn student to the list of highlighted IDs
+        setSelectedDrawStudentIds(prev => {
+          if (prev.includes(finalStudent.id)) return prev;
+          return [...prev, finalStudent.id];
+        });
+
+        // Append draw result to live class feed
+        setLiveClassFeed(prev => [
+          {
+            id: Math.random().toString(),
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            type: 'success',
+            message: `🎯 随机提问抽选：学生 [${finalStudent.name}] 被抽中回答问题！`
+          },
+          ...prev
+        ]);
+
+        addToast(
+          lang === 'zh' ? '🎯 随机提问抽选' : '🎯 Student Drawn',
+          lang === 'zh' ? `恭喜学生 [${finalStudent.name}] 被抽中回答问题！` : `Student [${finalStudent.name}] was selected to answer!`,
+          'success'
+        );
+
+        // Recover highlight after 8 seconds
+        setTimeout(() => {
+          setSelectedDrawStudentIds(prev => prev.filter(id => id !== finalStudent.id));
+        }, 8000);
+      }
+    };
+
+    setTimeout(tick, currentInterval);
+  };
+
   const formatTime = (secs: number): string => {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
@@ -464,7 +532,7 @@ export function LiveClassroomView({
                         className={`w-full py-1 rounded text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
                           isActive 
                             ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' 
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-205 border border-slate-200/60'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200/60'
                         }`}
                       >
                         <Presentation size={10} />
@@ -492,7 +560,7 @@ export function LiveClassroomView({
                   {isLeftSidebarCollapsed && (
                     <button
                       onClick={() => setIsLeftSidebarCollapsed(false)}
-                      className="p-1 rounded bg-white hover:bg-slate-100 border border-slate-200 text-indigo-655 hover:text-indigo-700 transition-colors cursor-pointer mr-1.5 flex items-center gap-1 shadow-sm"
+                      className="p-1 rounded bg-white hover:bg-slate-100 border border-slate-200 text-indigo-650 hover:text-indigo-700 transition-colors cursor-pointer mr-1.5 flex items-center gap-1 shadow-sm"
                       title={lang === 'zh' ? '展开环节大纲' : 'Expand Sidebar'}
                     >
                       <ChevronRight size={10} />
@@ -543,8 +611,8 @@ export function LiveClassroomView({
 
               {/* Classroom Interactive Tool Shelf (Extensible Tools Panel) */}
               <div className="mt-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm shrink-0 flex flex-col gap-2 relative z-30">
-                <div className="flex items-center justify-between text-[10px] uppercase font-black text-slate-500 tracking-wider select-none">
-                  <span className="flex items-center gap-1.5 text-indigo-650">
+                <div className="flex items-center justify-between text-[10px] uppercase font-black text-slate-550 tracking-wider select-none">
+                  <span className="flex items-center gap-1.5 text-indigo-655">
                     <Shuffle size={12} className="text-indigo-600 animate-pulse" />
                     <span>{lang === 'zh' ? '互动工具 (插件扩展)' : 'Classroom Interactive Tools'}</span>
                   </span>
@@ -566,7 +634,7 @@ export function LiveClassroomView({
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="text-xs font-bold text-slate-700 group-hover:text-slate-900 truncate">{tool.name}</div>
-                          <div className="text-[9px] text-slate-400 group-hover:text-slate-500 truncate mt-0.5">{tool.description}</div>
+                          <div className="text-[9px] text-slate-400 group-hover:text-slate-555 truncate mt-0.5">{tool.description}</div>
                         </div>
                       </button>
                     ))}
@@ -580,8 +648,8 @@ export function LiveClassroomView({
 
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-2.5 select-none">
-              <Presentation size={38} className="text-slate-350 animate-bounce" style={{ animationDuration: '2.5s' }} />
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-455 gap-2.5 select-none">
+              <Presentation size={38} className="text-slate-300 animate-bounce" style={{ animationDuration: '2.5s' }} />
               <div className="text-sm font-bold text-slate-655">{lang === 'zh' ? '请在顶部栏选择一个授课课节' : 'Please select a lesson to start teaching'}</div>
               <p className="text-[10px] text-slate-400">白板及环节控制面板将在课节载入后自动生成</p>
             </div>
@@ -594,8 +662,21 @@ export function LiveClassroomView({
           {/* Student attendance grid */}
           <div className="flex-1 flex flex-col min-h-0 gap-2">
             <h3 className="text-[10px] font-black uppercase text-slate-555 tracking-wider select-none flex justify-between items-center shrink-0">
-              <span>{lang === 'zh' ? '学生专注力监控' : 'Student Status Console'}</span>
-              <span className="text-[9px] bg-slate-100 border border-slate-200 text-slate-550 font-mono px-1.5 py-0.5 rounded-md">
+              <span className="flex items-center gap-1">
+                <span>{lang === 'zh' ? '学生专注力监控' : 'Student Status Console'}</span>
+                {liveClassSelectedClassId && (
+                  <button
+                    onClick={handleRandomPick}
+                    disabled={students.length === 0 || isDrawing}
+                    className="ml-2 text-[9px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-200 px-1.5 py-0.5 rounded hover:bg-indigo-105 transition-colors flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+                    title={lang === 'zh' ? '随机抽取一名学生提问' : 'Pick a student randomly'}
+                  >
+                    <Shuffle size={8.5} className={isDrawing ? 'animate-spin' : ''} />
+                    <span>{lang === 'zh' ? '随机抽问' : 'Pick Student'}</span>
+                  </button>
+                )}
+              </span>
+              <span className="text-[9px] bg-slate-100 border border-slate-200 text-slate-555 font-mono px-1.5 py-0.5 rounded-md">
                 {students.filter(s => s.locked_lesson_id === selectedLesson).length} / {students.length} Locked
               </span>
             </h3>
@@ -615,6 +696,9 @@ export function LiveClassroomView({
                   const expectedProgress = timelineSegments.length > 0 ? Math.round(((teacherActiveIdx + 1) / timelineSegments.length) * 100) : 0;
                   const isBehind = teacherActiveIdx >= 0 && progPercent < expectedProgress;
 
+                  const isSelectedDraw = selectedDrawStudentIds.includes(st.id);
+                  const isActiveDraw = activeDrawStudentId === st.id;
+
                   // SVG ring calculation
                   const radius = 22;
                   const strokeWidth = 3;
@@ -623,7 +707,11 @@ export function LiveClassroomView({
 
                   // Circular color system
                   let ringColor = 'stroke-indigo-650'; // normal progress / in class
-                  if (!isOnline) {
+                  if (isSelectedDraw) {
+                    ringColor = 'stroke-amber-500 stroke-[3.5px]'; // jackpot winner!
+                  } else if (isActiveDraw) {
+                    ringColor = 'stroke-indigo-500 stroke-[3.5px] animate-pulse'; // flickering drawer
+                  } else if (!isOnline) {
                     ringColor = 'stroke-slate-200'; // offline
                   } else if (isStudentLocked) {
                     ringColor = 'stroke-rose-500 animate-pulse'; // focus locked
@@ -640,10 +728,27 @@ export function LiveClassroomView({
                       key={st.id}
                       onMouseEnter={() => setHoveredStudentId(st.id)}
                       onMouseLeave={() => setHoveredStudentId(null)}
-                      className="group relative flex flex-col items-center justify-center p-1 rounded-xl transition-all cursor-default"
+                      className={`group relative flex flex-col items-center justify-center p-1 rounded-xl transition-all cursor-default ${
+                        isSelectedDraw 
+                          ? 'z-20 duration-300' 
+                          : isActiveDraw 
+                            ? 'z-20' 
+                            : 'hover:bg-slate-50'
+                      }`}
                     >
                       {/* Main Circular Widget */}
-                      <div className="relative w-14 h-14 flex items-center justify-center">
+                      <div className={`relative w-14 h-14 flex items-center justify-center rounded-full transition-all duration-300 ${
+                        isSelectedDraw 
+                          ? 'shadow-[0_0_15px_#f59e0b] scale-110 z-10 bg-amber-50 ring-2 ring-amber-400 ring-offset-1' 
+                          : isActiveDraw 
+                            ? 'shadow-[0_0_10px_#6366f1] scale-105 z-10 bg-indigo-50 ring-1 ring-indigo-400' 
+                            : ''
+                      }`}>
+                        {/* Golden glow aura for selected draw */}
+                        {isSelectedDraw && (
+                          <div className="absolute inset-0 rounded-full bg-amber-400/30 animate-ping" style={{ animationDuration: '2s' }} />
+                        )}
+
                         {/* Circular Progress Ring */}
                         <svg className="absolute w-full h-full transform -rotate-90" viewBox="0 0 50 50">
                           {/* Inner circle background */}
@@ -668,10 +773,14 @@ export function LiveClassroomView({
                         </svg>
 
                         {/* Name (Static) or Controls (Hover) */}
-                        <div className="relative z-10 w-10 h-10 rounded-full flex items-center justify-center overflow-hidden">
+                        <div className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center overflow-hidden transition-colors ${
+                          isSelectedDraw ? 'bg-amber-100/90' : ''
+                        }`}>
                           {/* Name view: Visible by default, hidden on hover */}
                           <span className={`text-[10px] font-bold tracking-tight truncate max-w-[34px] group-hover:scale-0 group-hover:opacity-0 transition-all duration-200 select-none ${
-                            !isOnline ? 'text-slate-400' : 'text-slate-705'
+                            isSelectedDraw 
+                              ? 'text-amber-900 font-extrabold'
+                              : !isOnline ? 'text-slate-400' : 'text-slate-700'
                           }`}>
                             {st.name}
                           </span>
@@ -711,24 +820,32 @@ export function LiveClassroomView({
                           </div>
                         </div>
 
-                        {/* Top-Right Online/Lesson Badge Indicator */}
-                        {isOnline && (
-                          <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white shrink-0 ${
-                            isInLesson ? 'bg-emerald-500' : 'bg-blue-400'
-                          }`} title={isInLesson ? '正在上课' : '在线(但未进课堂)'} />
+                        {/* Top-Right Online/Lesson Badge Indicator or Jackpot winner target badge */}
+                        {isSelectedDraw ? (
+                          <span className="absolute -top-1.5 -right-1.5 z-20 text-[9px] bg-amber-500 text-white rounded-full w-4 h-4 flex items-center justify-center font-bold shadow-md animate-bounce">
+                            🎯
+                          </span>
+                        ) : (
+                          isOnline && (
+                            <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white shrink-0 ${
+                              isInLesson ? 'bg-emerald-500' : 'bg-blue-400'
+                            }`} title={isInLesson ? '正在上课' : '在线(但未进课堂)'} />
+                          )
                         )}
 
                         {/* Bottom-Right Acknowledged/Ready Indicator */}
-                        {isCheckedIn === true && (
+                        {isCheckedIn === true && !isSelectedDraw && (
                           <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white bg-amber-500 shrink-0 animate-bounce" title="已确认/就位" />
                         )}
                       </div>
 
-                      {/* Small Progress Label */}
-                      <span className={`text-[8.5px] mt-1 truncate max-w-[48px] select-none text-slate-505 font-medium ${
-                        !isOnline ? 'text-slate-350' : 'text-slate-505'
+                      {/* Small Progress Label or Draw Winner Label */}
+                      <span className={`text-[8.5px] mt-1 truncate max-w-[48px] select-none font-medium ${
+                        isSelectedDraw 
+                          ? 'text-amber-600 font-extrabold animate-bounce' 
+                          : !isOnline ? 'text-slate-350' : 'text-slate-505'
                       }`}>
-                        {progPercent}%
+                        {isSelectedDraw ? '🎯 抽中' : `${progPercent}%`}
                       </span>
                     </div>
                   );
@@ -868,7 +985,7 @@ export function LiveClassroomView({
                       ? 'text-emerald-700 font-medium' 
                       : f.type === 'warning' 
                         ? 'text-amber-700 font-medium' 
-                        : 'text-slate-650'
+                        : 'text-slate-655'
                   }>
                     {f.message}
                   </p>
