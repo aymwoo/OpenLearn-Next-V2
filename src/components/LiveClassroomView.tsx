@@ -81,6 +81,10 @@ export function LiveClassroomView({
   const [selectedDrawStudentIds, setSelectedDrawStudentIds] = useState<string[]>([]);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastAutoLockedRef = useRef<{ lesson: string | null; classId: string | null }>({
+    lesson: null,
+    classId: null
+  });
 
   // Find if class-wide locking is active (if all students are locked to this lesson)
   const isClassLocked = !!(liveClassSelectedClassId && students
@@ -119,12 +123,21 @@ export function LiveClassroomView({
     };
   }, [liveClassIsActive, liveClassTimeRemaining]);
 
-  // Auto-lock class when both lesson and class are selected
+  // Auto-lock class when selection changes
   useEffect(() => {
-    if (selectedLesson && liveClassSelectedClassId && !isClassLocked) {
+    if (!selectedLesson || !liveClassSelectedClassId) {
+      lastAutoLockedRef.current = { lesson: null, classId: null };
+      return;
+    }
+
+    if (
+      lastAutoLockedRef.current.lesson !== selectedLesson || 
+      lastAutoLockedRef.current.classId !== liveClassSelectedClassId
+    ) {
+      lastAutoLockedRef.current = { lesson: selectedLesson, classId: liveClassSelectedClassId };
       handleToggleClassLock(true);
     }
-  }, [selectedLesson, liveClassSelectedClassId, isClassLocked]);
+  }, [selectedLesson, liveClassSelectedClassId]);
 
   // Helper to parse "5m" or "20m" to seconds
   const parseDuration = (dur: string): number => {
