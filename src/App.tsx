@@ -5506,7 +5506,12 @@ export default function App() {
                   setLiveClassAcknowledgedMap={setLiveClassAcknowledgedMap}
                   elements={elements}
                   fetchElements={fetchElements}
-                  fetchStudents={fetchStudents}
+                  fetchStudents={async () => {
+                    await fetchStudents();
+                    if (liveClassSelectedClassId) {
+                      await fetchClassStudents(liveClassSelectedClassId);
+                    }
+                  }}
                   addToast={addToast}
                   onlineStudentIds={onlineStudentIds}
                   activeStudentLessons={activeStudentLessons}
