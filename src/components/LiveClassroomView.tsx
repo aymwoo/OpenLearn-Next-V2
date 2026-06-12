@@ -325,11 +325,19 @@ export function LiveClassroomView({
   const handleRandomPick = () => {
     if (students.length === 0 || isDrawing) return;
     
-    setIsDrawing(true);
+    // Only select students who are currently online and have entered the classroom (activeStudentLessons[s.id] === selectedLesson)
+    const drawPool = students.filter(s => onlineStudentIds.includes(s.id) && activeStudentLessons[s.id] === selectedLesson);
 
-    // Pick from online students preferentially, fallback to all students
-    const candidates = students.filter(s => onlineStudentIds.includes(s.id));
-    const drawPool = candidates.length > 0 ? candidates : students;
+    if (drawPool.length === 0) {
+      addToast(
+        lang === 'zh' ? '⚠️ 无法抽问' : '⚠️ Cannot Draw',
+        lang === 'zh' ? '当前课堂中没有已进入的活跃学生。' : 'No students have entered the classroom yet.',
+        'warning'
+      );
+      return;
+    }
+
+    setIsDrawing(true);
 
     let count = 0;
     const maxTicks = 18;
