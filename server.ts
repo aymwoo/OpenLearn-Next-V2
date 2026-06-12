@@ -890,6 +890,29 @@ async function startServer() {
       res.status(500).json({ error: e.message });
     }
   });
+
+  app.put('/api/lessons/:id/progress-mode', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { progressMode, progressConditions } = req.body;
+      const conditionsStr = typeof progressConditions === 'string'
+        ? progressConditions
+        : JSON.stringify(progressConditions || null);
+
+      kernelContainer.db.prepare('UPDATE lessons SET progress_mode = ?, progress_conditions = ?, updated_at = ? WHERE id = ?')
+        .run(progressMode || 'manual', conditionsStr, Date.now(), id);
+
+      io.emit('lesson-progress-mode-changed', {
+        lessonId: id,
+        progressMode: progressMode || 'manual',
+        progressConditions: progressConditions || null
+      });
+
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
   
   const getCookieToken = (req: any) => {
     const rc = req.headers.cookie;
@@ -1706,7 +1729,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       if (!lessonId) {
         return res.status(400).json({ error: 'lessonId is required' });
       }
-      kernelContainer.db.prepare('UPDATE students SET locked_lesson_id = ? WHERE id IN (SELECT student_id FROM student_classes WHERE class_id = ?)')
+      kernelContainer.db.prepare('UPDATE students SET locked_lesson_id = ? WHERE id IN (SELECT student_id FROM class_students WHERE class_id = ?)')
         .run(lessonId, req.params.classId);
       
       io.emit('class-lock-status-changed', {
@@ -1722,7 +1745,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
   app.post('/api/classes/:classId/unlock_lesson', (req, res) => {
     try {
-      kernelContainer.db.prepare('UPDATE students SET locked_lesson_id = NULL WHERE id IN (SELECT student_id FROM student_classes WHERE class_id = ?)')
+      kernelContainer.db.prepare('UPDATE students SET locked_lesson_id = NULL WHERE id IN (SELECT student_id FROM class_students WHERE class_id = ?)')
         .run(req.params.classId);
       
       io.emit('class-lock-status-changed', {
@@ -1946,20 +1969,33 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
   app.post('/api/students/:id/progress', (req, res) => {
     try {
-      const { lessonId, completed, progressPercent } = req.body;
+      const { lessonId, completed, progressPercent, completedSegments } = req.body;
+      const completedSegmentsStr = typeof completedSegments === 'string'
+        ? completedSegments
+        : JSON.stringify(completedSegments || []);
+
       kernelContainer.db.prepare(`
-        INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, assigned_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(student_id, lesson_id) DO UPDATE SET
           completed = excluded.completed,
-          progress_percent = excluded.progress_percent
-      `).run(req.params.id, lessonId, completed ? 1 : 0, progressPercent || 0, Date.now());
+          progress_percent = excluded.progress_percent,
+          completed_segments = excluded.completed_segments
+      `).run(
+        req.params.id,
+        lessonId,
+        completed ? 1 : 0,
+        progressPercent || 0,
+        completedSegmentsStr,
+        Date.now()
+      );
       
       io.emit('student-progress-updated', {
         studentId: req.params.id,
         lessonId,
         progressPercent: progressPercent || 0,
-        completed: !!completed
+        completed: !!completed,
+        completedSegments: completedSegments || []
       });
 
       res.json({ success: true });
@@ -2049,11 +2085,18 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
   app.get('/api/classes/:classId/lessons/:lessonId/progress', (req, res) => {
     try {
       const progress = kernelContainer.db.prepare(`
-        SELECT cs.student_id, COALESCE(slp.progress_percent, 0) as progress_percent, COALESCE(slp.completed, 0) as completed
+        SELECT cs.student_id, COALESCE(slp.progress_percent, 0) as progress_percent, 
+               COALESCE(slp.completed, 0) as completed, slp.completed_segments,
+               (
+                 SELECT MAX(sub.score)
+                 FROM assignment_submissions sub
+                 JOIN assignments a ON sub.assignment_id = a.id
+                 WHERE sub.student_id = cs.student_id AND a.lesson_id = ?
+               ) as quiz_score
         FROM class_students cs
         LEFT JOIN student_lesson_progress slp ON cs.student_id = slp.student_id AND slp.lesson_id = ?
         WHERE cs.class_id = ?
-      `).all(req.params.lessonId, req.params.classId);
+      `).all(req.params.lessonId, req.params.lessonId, req.params.classId);
       res.json(progress);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -2129,7 +2172,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
   app.post('/api/classes/:classId/assignments/generate', async (req, res) => {
     try {
-      const { topic } = req.body;
+      const { topic, lessonId } = req.body;
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const prompt = `You are an expert teacher. Generate a short 1-question quiz or assignment about "${topic}". Output in this JSON format: {"title": "...", "description": "...", "content": "..."} without markdown blocks.`;
       const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt });
@@ -2139,10 +2182,10 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       try { gen = JSON.parse(cleanText); } catch(e) {}
       
       const id = 'ast-' + Date.now().toString(36);
-      kernelContainer.db.prepare('INSERT INTO assignments (id, class_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-        id, req.params.classId, gen.title || `Quiz: ${topic}`, gen.description || '', gen.content || '', Date.now()
+      kernelContainer.db.prepare('INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+        id, req.params.classId, lessonId || null, gen.title || `Quiz: ${topic}`, gen.description || '', gen.content || '', Date.now()
       );
-      res.json({ success: true, assignment: { id, class_id: req.params.classId, title: gen.title, description: gen.description, content: gen.content } });
+      res.json({ success: true, assignment: { id, class_id: req.params.classId, lesson_id: lessonId || null, title: gen.title, description: gen.description, content: gen.content } });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -2222,7 +2265,7 @@ Generate the response in the specified JSON schema.`;
 
   app.post('/api/classes/:classId/assignments/create-suggested-quiz', async (req, res) => {
     try {
-      const { title, description, questions, learningObjectives, timeLimit } = req.body;
+      const { title, description, questions, learningObjectives, timeLimit, lessonId } = req.body;
       const id = 'ast-' + Date.now().toString(36);
       
       const contentJson = JSON.stringify({
@@ -2232,8 +2275,8 @@ Generate the response in the specified JSON schema.`;
         timeLimit: timeLimit || 0
       });
 
-      kernelContainer.db.prepare('INSERT INTO assignments (id, class_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-        id, req.params.classId, title || 'AI Suggested Quiz', description || '', contentJson, Date.now()
+      kernelContainer.db.prepare('INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+        id, req.params.classId, lessonId || null, title || 'AI Suggested Quiz', description || '', contentJson, Date.now()
       );
 
       res.json({ success: true, assignmentId: id });
@@ -2710,7 +2753,14 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
         ORDER BY r.picked_time DESC
       `).all(studentId);
 
-      res.json({ classes: studentClasses, schedules, assignments, progress, rollcalls });
+      // Get profile details (containing locked_lesson_id)
+      const profile = kernelContainer.db.prepare(`
+        SELECT id, name, email, locked_lesson_id, private_notes, student_number
+        FROM students
+        WHERE id = ?
+      `).get(studentId) as any;
+
+      res.json({ classes: studentClasses, schedules, assignments, progress, rollcalls, profile });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -2723,19 +2773,28 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
 
   app.post('/api/plugins/:id/toggle', async (req, res) => {
     try {
-      const newStatus = await kernelContainer.pluginRuntime.togglePlugin(req.params.id);
-      res.json({ success: true, status: newStatus });
-      // In a real system, you might need to gracefully unload the plugin or restart
+      const cmd = kernelContainer.commandBus.createCommand(
+        'plugin.toggle',
+        { pluginId: req.params.id },
+        'user-frontend'
+      );
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ success: false, error: err.message });
     }
   });
 
   app.post('/api/plugins', async (req, res) => {
     try {
       const { sourceCode } = req.body;
-      const manifest = await kernelContainer.pluginRuntime.installPlugin(sourceCode);
-      res.json({ success: true, manifest });
+      const cmd = kernelContainer.commandBus.createCommand(
+        'plugin.install',
+        { sourceCode },
+        'user-frontend'
+      );
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
     } catch (err: any) {
       console.error(err);
       res.status(500).json({ success: false, error: err.message });
@@ -2925,6 +2984,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
   // In-memory status maps
   const onlineStudents = new Map<string, { socketId: string, name: string }>();
   const activeStudentLessons = new Map<string, string>(); // studentId -> lessonId
+  const lessonActiveSegments = new Map<string, string>(); // lessonId -> activeSegmentId
 
   const broadcastPresence = () => {
     io.emit('presence-update', {
@@ -2945,11 +3005,25 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
 
     socket.on('enter-lesson', (data: { studentId: string, lessonId: string }) => {
       activeStudentLessons.set(data.studentId, data.lessonId);
+      socket.join(data.lessonId);
       console.log(`[Presence] Student ${data.studentId} entered lesson ${data.lessonId}`);
       broadcastPresence();
+
+      // Send current active segment if it exists
+      const activeSeg = lessonActiveSegments.get(data.lessonId);
+      if (activeSeg) {
+        socket.emit('student-active-segment-changed', {
+          lessonId: data.lessonId,
+          activeSegmentId: activeSeg
+        });
+      }
     });
 
     socket.on('leave-lesson', (data: { studentId: string }) => {
+      const oldRoom = activeStudentLessons.get(data.studentId);
+      if (oldRoom) {
+        socket.leave(oldRoom);
+      }
       activeStudentLessons.delete(data.studentId);
       console.log(`[Presence] Student ${data.studentId} left lesson`);
       broadcastPresence();
@@ -2962,6 +3036,24 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
     socket.on('whiteboard-update', (data: { roomId: string, type: string, payload: any }) => {
       // Broadcast to other clients in the exact same room
       socket.to(data.roomId).emit('whiteboard-sync', data);
+    });
+
+    socket.on('teacher-broadcast-segment', (data: { lessonId: string, activeSegmentId: string }) => {
+      // Store the active segment in memory
+      lessonActiveSegments.set(data.lessonId, data.activeSegmentId);
+      // Broadcast to everyone in the lesson room (including the teacher client)
+      io.to(data.lessonId).emit('student-active-segment-changed', data);
+    });
+
+    socket.on('teacher-ping-student', (data: { studentId: string, lessonId: string, message?: string }) => {
+      console.log(`[Ping] Teacher pinged student ${data.studentId} for lesson ${data.lessonId}`);
+      const studentOnlineInfo = onlineStudents.get(data.studentId);
+      if (studentOnlineInfo) {
+        io.to(studentOnlineInfo.socketId).emit('student-pinged', {
+          lessonId: data.lessonId,
+          message: data.message
+        });
+      }
     });
 
     socket.on('disconnect', () => {

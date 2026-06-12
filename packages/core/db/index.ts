@@ -24,6 +24,9 @@ db.exec(`
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     content TEXT,
+    timeline TEXT,
+    progress_mode TEXT DEFAULT 'manual',
+    progress_conditions TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   );
@@ -114,12 +117,14 @@ db.exec(`
     lesson_id TEXT NOT NULL,
     completed INTEGER NOT NULL DEFAULT 0,
     progress_percent INTEGER NOT NULL DEFAULT 0,
+    completed_segments TEXT,
     assigned_at INTEGER NOT NULL,
     PRIMARY KEY (student_id, lesson_id)
   );
   CREATE TABLE IF NOT EXISTS assignments (
     id TEXT PRIMARY KEY,
     class_id TEXT NOT NULL,
+    lesson_id TEXT,
     title TEXT NOT NULL,
     description TEXT,
     content TEXT,
@@ -258,6 +263,24 @@ try {
 }
 
 try {
+  db.prepare('ALTER TABLE lessons ADD COLUMN progress_mode TEXT DEFAULT "manual"').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.prepare('ALTER TABLE lessons ADD COLUMN progress_conditions TEXT').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.prepare('ALTER TABLE student_lesson_progress ADD COLUMN completed_segments TEXT').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
   db.prepare('ALTER TABLE schedules ADD COLUMN time_slot TEXT').run();
 } catch (e) {
   // column already exists
@@ -271,6 +294,12 @@ try {
 
 try {
   db.prepare('ALTER TABLE schedules ADD COLUMN notes TEXT').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.prepare('ALTER TABLE assignments ADD COLUMN lesson_id TEXT').run();
 } catch (e) {
   // column already exists
 }

@@ -1272,6 +1272,7 @@ export default function App() {
             setActiveRole(data.session.role);
             if (data.session.role === 'student' && data.session.studentId) {
               setActiveStudentId(data.session.studentId);
+              fetchStudents();
             }
           }
         }
@@ -2865,7 +2866,12 @@ export default function App() {
     try {
       const res = await fetch(`/api/students/${id}/dashboard`);
       if (res.ok) {
-        setStudentDashboardData(await res.json());
+        const data = await res.json();
+        setStudentDashboardData(data);
+        if (data.profile && data.profile.locked_lesson_id) {
+          setSelectedLesson(data.profile.locked_lesson_id);
+          setStudentViewStatus('lesson');
+        }
       }
     } catch (e) {}
   };
@@ -2924,6 +2930,39 @@ export default function App() {
       console.log('[Socket] presence-update received:', data);
       setOnlineStudentIds(data.onlineStudentIds);
       setActiveStudentLessons(data.activeStudentLessons);
+    });
+
+    socket.on('lesson-progress-mode-changed', (data: any) => {
+      console.log('[Socket] lesson-progress-mode-changed received:', data);
+      const { lessonId, progressMode, progressConditions } = data;
+      setLessons(prev => prev.map(l => {
+        if (l.id === lessonId) {
+          return {
+            ...l,
+            progress_mode: progressMode,
+            progress_conditions: progressConditions
+          };
+        }
+        return l;
+      }));
+    });
+
+    socket.on('student-active-segment-changed', (data: any) => {
+      console.log('[Socket] student-active-segment-changed received:', data);
+      const { activeSegmentId } = data;
+      setTeacherActiveSegmentId(activeSegmentId);
+    });
+
+    socket.on('student-pinged', (data: any) => {
+      console.log('[Socket] student-pinged received:', data);
+      const msg = data.message || (lang === 'zh'
+        ? '⚠️ 学习进度预警：老师注意到您的进度有些落后，请抓紧时间跟上！'
+        : '⚠️ Progress Alert: The teacher noticed you are falling behind. Please keep up!');
+      addToast(
+        lang === 'zh' ? '⚠️ 学习进度预警' : '⚠️ Progress Warning',
+        msg,
+        'warning'
+      );
     });
 
     socket.on('student-progress-updated', (data: any) => {
@@ -3096,6 +3135,15 @@ export default function App() {
       }
     } catch (e) {}
   };
+
+  useEffect(() => {
+    if (activeRole === 'teacher' && selectedLesson && activeSegmentId && socketRef.current) {
+      socketRef.current.emit('teacher-broadcast-segment', {
+        lessonId: selectedLesson,
+        activeSegmentId
+      });
+    }
+  }, [activeSegmentId, selectedLesson, activeRole]);
 
   useEffect(() => {
     if (liveClassSelectedClassId && selectedLesson) {
@@ -3688,6 +3736,7 @@ export default function App() {
     } else {
       setActiveRole('student');
       setActiveStudentId(newSession.studentId);
+      fetchStudents();
     }
   };
 
@@ -4760,38 +4809,38 @@ export default function App() {
               </div>
 
               <div className={`p-2 ${mainNavCollapsed ? 'md:p-2' : 'md:p-4'} flex flex-col gap-2 mt-2`}>
-                 <button onClick={() => setTeacherTab('dashboard')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'dashboard' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '控制台仪表盘' : 'Dashboard'}>
+                 <button onClick={() => setTeacherTab('dashboard')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'dashboard' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '系统总览' : 'Dashboard'}>
                     <Home size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '控制台仪表盘' : 'Dashboard'}</span>
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '系统总览' : 'Dashboard'}</span>
                  </button>
                  <button onClick={() => setTeacherTab('courses')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'courses' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '课程管理' : 'Courses'}>
                     <BookOpen size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '我的课程管理' : 'Courses'}</span>
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '课程管理' : 'Courses'}</span>
                  </button>
-                 <button onClick={() => setTeacherTab('live_class')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'live_class' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold border border-indigo-100' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '互动授课(上课)' : 'Live Class'}>
+                 <button onClick={() => setTeacherTab('live_class')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'live_class' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold border border-indigo-100' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '互动课堂' : 'Live Class'}>
                     <Presentation size={20} className="shrink-0 text-indigo-550" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '互动授课(上课)' : 'Live Class'}</span>
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '互动课堂' : 'Live Class'}</span>
                  </button>
                  <button onClick={() => setTeacherTab('classes')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'classes' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '班级管理' : 'Classes & Students'}>
                     <Users size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '班级学生管理' : 'Classes & Students'}</span>
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '班级管理' : 'Classes & Students'}</span>
                  </button>
-                 <button id="teacher_timetable_nav_btn" onClick={() => setTeacherTab('timetable')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'timetable' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '课表排程调整' : 'Timetable Routine'}>
+                 <button id="teacher_timetable_nav_btn" onClick={() => setTeacherTab('timetable')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'timetable' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '课表管理' : 'Timetable Routine'}>
                     <CalendarIcon size={20} className="shrink-0 text-pink-500 animate-pulse" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '课表排程调整' : 'Timetable Routine'}</span>
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '课表管理' : 'Timetable Routine'}</span>
                  </button>
-                 <button onClick={() => setTeacherTab('computer_labs')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'computer_labs' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '机房座位管理' : 'Computer Lab Seating'}>
+                 <button onClick={() => setTeacherTab('computer_labs')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'computer_labs' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '机房管理' : 'Computer Lab Seating'}>
                     <LayoutTemplate size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '机房座位管理' : 'Computer Lab Seating'}</span>
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '机房管理' : 'Computer Lab Seating'}</span>
                  </button>
-                 <button onClick={() => setTeacherTab('plugins')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'plugins' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '插件应用市场' : 'App Store / Plugins'}>
+                 <button onClick={() => setTeacherTab('plugins')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'plugins' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '插件中心' : 'App Store / Plugins'}>
                     <Puzzle size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '插件应用市场' : 'App Store / Plugins'}</span>
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '插件中心' : 'App Store / Plugins'}</span>
                  </button>
                  {session?.subRole === 'administrator' && (
-                    <button onClick={() => setTeacherTab('admin_directory')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium text-indigo-700 hover:bg-indigo-50 border border-slate-200/50 rounded-xl ${teacherTab === 'admin_directory' ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50/50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '⭐ 密 核心管理后台' : '⭐ Admin Center'}>
+                    <button onClick={() => setTeacherTab('admin_directory')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium text-indigo-700 hover:bg-indigo-50 border border-slate-200/50 rounded-xl ${teacherTab === 'admin_directory' ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50/50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '管理后台' : '⭐ Admin Center'}>
                        <Shield size={20} className="shrink-0 text-indigo-600 animate-pulse" />
-                       <span className={mainNavCollapsed ? "hidden" : "hidden md:block font-bold text-indigo-850"}>{lang === 'zh' ? '⭐ 密 核心管理后台' : '⭐ Admin Center'}</span>
+                       <span className={mainNavCollapsed ? "hidden" : "hidden md:block font-bold text-indigo-850"}>{lang === 'zh' ? '管理后台' : '⭐ Admin Center'}</span>
                     </button>
                  )}
                  <button onClick={() => {
@@ -4800,13 +4849,13 @@ export default function App() {
                    } else {
                      alert(lang === 'zh' ? '您没有访问系统设置的权限。' : 'You do not have permission to access system settings.');
                    }
-                 }} onClickCapture={(e) => { setTeacherTab('settings'); e.stopPropagation(); }} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'settings' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '全局系统设置' : 'System Settings'}>
+                 }} onClickCapture={(e) => { setTeacherTab('settings'); e.stopPropagation(); }} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'settings' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '系统设置' : 'System Settings'}>
                     <Settings size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '全局系统设置' : 'System Settings'}</span>
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '系统设置' : 'System Settings'}</span>
                  </button>
                  <button onClick={() => setTeacherTab('help')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'help' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '帮助文档' : 'System Commands / Help'}>
                     <HelpCircle size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '系统帮助文档' : 'System Commands / Help'}</span>
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '帮助文档' : 'System Commands / Help'}</span>
                  </button>
               </div>
 
@@ -5462,6 +5511,15 @@ export default function App() {
                   onlineStudentIds={onlineStudentIds}
                   activeStudentLessons={activeStudentLessons}
                   liveClassStudentProgress={liveClassStudentProgress}
+                  onPingStudent={(studentId, message) => {
+                    if (socketRef.current) {
+                      socketRef.current.emit('teacher-ping-student', {
+                        studentId,
+                        lessonId: selectedLesson,
+                        message
+                      });
+                    }
+                  }}
                 />
               </div>
             ) : teacherTab === 'plugins' ? (

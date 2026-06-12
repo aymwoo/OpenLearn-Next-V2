@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Stage, Layer, Rect, Circle, Line, Text as KonvaText } from 'react-konva';
+import { Stage, Layer, Rect, Circle, Line, Text as KonvaText, Group } from 'react-konva';
 import { MousePointer2, Square, Circle as CircleIcon, PenTool, Type, Eraser, Loader2, Presentation, ChevronLeft, ChevronRight, Wand2, Terminal, Activity, Trash2, Settings, Plus, X, Paintbrush, ChevronDown, Undo2, Redo2, RotateCcw, Play, Pause, Maximize2, Minimize2, Edit3, BookOpen, Eye, FileText, Highlighter, Sparkles, HelpCircle, Shuffle, UserCheck, Upload } from 'lucide-react';
 import { Html } from 'react-konva-utils';
 import { init as initPptxPreview } from 'pptx-preview';
@@ -2147,9 +2147,9 @@ export function InteractiveWhiteboard({
 
       if (el.type === 'rollcall') {
         return (
-          <Html
-            key={el.id}
-            divProps={{
+          <Group key={el.id}>
+            <Html
+              divProps={{
               style: {
                 position: 'absolute',
                 top: `${displayY}px`,
@@ -2191,14 +2191,15 @@ export function InteractiveWhiteboard({
               {renderResizeHandles()}
             </div>
           </Html>
+        </Group>
         );
       }
 
       if (el.type === 'quiz') {
         return (
-          <Html
-            key={el.id}
-            divProps={{
+          <Group key={el.id}>
+            <Html
+              divProps={{
               style: {
                 position: 'absolute',
                 top: `${displayY}px`,
@@ -2274,13 +2275,14 @@ export function InteractiveWhiteboard({
               {!data.isMinimized && renderResizeHandles()}
             </div>
           </Html>
+        </Group>
         );
       }
       if (el.type === 'assignment') {
         return (
-          <Html
-            key={el.id}
-            divProps={{
+          <Group key={el.id}>
+            <Html
+              divProps={{
               style: {
                 position: 'absolute',
                 top: `${displayY}px`,
@@ -2363,13 +2365,14 @@ export function InteractiveWhiteboard({
               {!data.isMinimized && renderResizeHandles()}
             </div>
           </Html>
+        </Group>
         );
       }
       if (el.type === 'html-applet') {
         return (
-          <Html
-            key={el.id}
-            divProps={{
+          <Group key={el.id}>
+            <Html
+              divProps={{
               style: {
                 position: 'absolute',
                 top: `${displayY}px`,
@@ -2443,6 +2446,7 @@ export function InteractiveWhiteboard({
               {!data.isMinimized && renderResizeHandles()}
             </div>
           </Html>
+        </Group>
         );
       }
       if (el.type === 'pen') {
@@ -2650,9 +2654,9 @@ export function InteractiveWhiteboard({
       }
       if (el.type === 'code-sandbox') {
         return (
-          <Html
-            key={el.id}
-            divProps={{
+          <Group key={el.id}>
+            <Html
+              divProps={{
               style: {
                 position: 'absolute',
                 top: `${displayY}px`,
@@ -2697,13 +2701,14 @@ export function InteractiveWhiteboard({
               {renderResizeHandles()}
             </div>
           </Html>
+        </Group>
         );
       }
       if (el.type === 'math-graph') {
         return (
-          <Html
-            key={el.id}
-            divProps={{
+          <Group key={el.id}>
+            <Html
+              divProps={{
               style: {
                 position: 'absolute',
                 top: `${displayY}px`,
@@ -2748,13 +2753,14 @@ export function InteractiveWhiteboard({
               {renderResizeHandles()}
             </div>
           </Html>
+        </Group>
         );
       }
       if (el.type === 'presentation') {
         return (
-          <Html
-            key={el.id}
-            divProps={{
+          <Group key={el.id}>
+            <Html
+              divProps={{
               style: {
                 position: 'absolute',
                 top: `${displayY}px`,
@@ -2831,6 +2837,7 @@ export function InteractiveWhiteboard({
               {!data.isMinimized && renderResizeHandles()}
             </div>
           </Html>
+        </Group>
         );
       }
     } catch (e) {

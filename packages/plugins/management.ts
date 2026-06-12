@@ -671,7 +671,8 @@ export function bootstrapManagementPlugins() {
         studentId: { type: 'STRING', description: 'ID of the student' },
         lessonId: { type: 'STRING', description: 'ID of the lesson key' },
         completed: { type: 'BOOLEAN', description: 'Completion check flag' },
-        progressPercent: { type: 'INTEGER', description: 'Gradual score progress percentage completed (0-100)' }
+        progressPercent: { type: 'INTEGER', description: 'Gradual score progress percentage completed (0-100)' },
+        completedSegments: { type: 'ARRAY', description: 'List of completed segment IDs' }
       },
       required: ['studentId', 'lessonId', 'completed', 'progressPercent']
     }
@@ -681,14 +682,18 @@ export function bootstrapManagementPlugins() {
     async execute(command) {
       const payload = command.payload as any;
       const compVal = payload.completed ? 1 : 0;
+      const completedSegmentsStr = typeof payload.completedSegments === 'string'
+        ? payload.completedSegments
+        : JSON.stringify(payload.completedSegments || []);
       db.prepare(`
-        INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, assigned_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(student_id, lesson_id) DO UPDATE SET
           completed = excluded.completed,
-          progress_percent = excluded.progress_percent
-      `).run(payload.studentId, payload.lessonId, compVal, payload.progressPercent, Date.now());
-      return { success: true, studentId: payload.studentId, lessonId: payload.lessonId, completed: payload.completed, progressPercent: payload.progressPercent };
+          progress_percent = excluded.progress_percent,
+          completed_segments = excluded.completed_segments
+      `).run(payload.studentId, payload.lessonId, compVal, payload.progressPercent, completedSegmentsStr, Date.now());
+      return { success: true, studentId: payload.studentId, lessonId: payload.lessonId, completed: payload.completed, progressPercent: payload.progressPercent, completedSegments: payload.completedSegments || [] };
     }
   });
 

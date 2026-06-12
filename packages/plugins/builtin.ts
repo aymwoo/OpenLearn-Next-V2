@@ -445,4 +445,54 @@ export function bootstrapBuiltinPlugins() {
       return { success: true };
     }
   });
+
+  // 6. PLUGIN INSTALL HANDLER
+  const installPluginCmdType = 'plugin.install';
+  actionRegistry.register({
+    id: 'core-plugin-install',
+    commandType: installPluginCmdType,
+    description: 'Install a custom JavaScript plugin source code. This is a high-risk operation.',
+    capabilityRequired: 'plugin:write',
+    isHighRisk: true,
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        sourceCode: { type: 'STRING', description: 'The complete JavaScript source code of the plugin.' }
+      },
+      required: ['sourceCode']
+    }
+  });
+
+  commandBus.registerHandler(installPluginCmdType, {
+    async execute(command) {
+      const payload = command.payload as any;
+      const manifest = await kernelContainer.pluginRuntime.installPlugin(payload.sourceCode);
+      return { success: true, manifest };
+    }
+  });
+
+  // 7. PLUGIN TOGGLE HANDLER
+  const togglePluginCmdType = 'plugin.toggle';
+  actionRegistry.register({
+    id: 'core-plugin-toggle',
+    commandType: togglePluginCmdType,
+    description: 'Toggle the status of an installed plugin between active and disabled. This is a high-risk operation.',
+    capabilityRequired: 'plugin:write',
+    isHighRisk: true,
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        pluginId: { type: 'STRING', description: 'The unique database ID of the plugin.' }
+      },
+      required: ['pluginId']
+    }
+  });
+
+  commandBus.registerHandler(togglePluginCmdType, {
+    async execute(command) {
+      const payload = command.payload as any;
+      const newStatus = await kernelContainer.pluginRuntime.togglePlugin(payload.pluginId);
+      return { success: true, status: newStatus };
+    }
+  });
 }

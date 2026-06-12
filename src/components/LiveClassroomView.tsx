@@ -38,6 +38,7 @@ interface LiveClassroomViewProps {
   onlineStudentIds: string[];
   activeStudentLessons: Record<string, string>;
   liveClassStudentProgress: any[];
+  onPingStudent?: (studentId: string, message?: string) => void;
 }
 
 export function LiveClassroomView({
@@ -67,11 +68,16 @@ export function LiveClassroomView({
   addToast,
   onlineStudentIds,
   activeStudentLessons,
-  liveClassStudentProgress
+  liveClassStudentProgress,
+  onPingStudent
 }: LiveClassroomViewProps) {
   const [lockingClass, setLockingClass] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Find if class-wide locking is active (if all students are locked to this lesson)
+  const isClassLocked = !!(liveClassSelectedClassId && students
+    .filter(s => s.locked_lesson_id === selectedLesson).length > 0);
 
   // Extract classroomTools from active plugins
   const activePlugins = plugins.filter(p => p.status === 'active');
@@ -105,6 +111,13 @@ export function LiveClassroomView({
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [liveClassIsActive, liveClassTimeRemaining]);
+
+  // Auto-lock class when both lesson and class are selected
+  useEffect(() => {
+    if (selectedLesson && liveClassSelectedClassId && !isClassLocked) {
+      handleToggleClassLock(true);
+    }
+  }, [selectedLesson, liveClassSelectedClassId, isClassLocked]);
 
   // Helper to parse "5m" or "20m" to seconds
   const parseDuration = (dur: string): number => {
@@ -307,10 +320,6 @@ export function LiveClassroomView({
     const s = secs % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
-
-  // Find if class-wide locking is active (if all students are locked to this lesson)
-  const isClassLocked = liveClassSelectedClassId && students
-    .filter(s => s.locked_lesson_id === selectedLesson).length > 0;
 
   return (
     <div className="flex-grow flex-1 flex flex-col min-h-0 bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl text-slate-100 overflow-hidden font-sans">
@@ -599,13 +608,80 @@ export function LiveClassroomView({
                   const activeLessonId = activeStudentLessons[st.id];
                   const isInLesson = activeLessonId === selectedLesson;
                   
-                  const progPercent = liveClassStudentProgress.find(p => p.student_id === st.id)?.progress_percent ?? 0;
+                  const studentProg = liveClassStudentProgress.find(p => p.student_id === st.id);
+                  const progPercent = studentProg?.progress_percent ?? 0;
+                  const teacherActiveIdx = activeSegmentId ? timelineSegments.findIndex(s => s.id === activeSegmentId) : -1;
+                  const expectedProgress = timelineSegments.length > 0 ? Math.round(((teacherActiveIdx + 1) / timelineSegments.length) * 100) : 0;
+                  const isBehind = teacherActiveIdx >= 0 && progPercent < expectedProgress;
+                  
+                  const completedSegIds = (() => {
+                    if (!studentProg || !studentProg.completed_segments) return [];
+                    try {
+                      return typeof studentProg.completed_segments === 'string'
+                        ? JSON.parse(studentProg.completed_segments)
+                        : studentProg.completed_segments;
+                    } catch (e) {
+                      return [];
+                    }
+                  })();
 
                   return (
                     <div
                       key={st.id}
-                      className="p-2.5 bg-slate-900 border border-slate-850 hover:border-slate-800 rounded-xl flex flex-col gap-2 text-xs text-left"
+                      className="group relative p-2.5 bg-slate-900 border border-slate-850 hover:border-slate-800 rounded-xl flex flex-col gap-2 text-xs text-left"
                     >
+                      {/* Hover details popover */}
+                      <div className="hidden group-hover:flex absolute right-[102%] top-0 w-64 bg-slate-955 border border-slate-800 rounded-xl p-3 shadow-2xl flex-col gap-2.5 z-50 text-[10.5px] leading-relaxed backdrop-blur-md">
+                        <div className="font-bold text-slate-100 border-b border-slate-850 pb-1.5 flex justify-between items-center">
+                          <span>{st.name} - {lang === 'zh' ? '学习情况详情' : 'Detailed Status'}</span>
+                          <span className="font-mono text-[9px] text-indigo-400 font-bold">{progPercent}%</span>
+                        </div>
+                        
+                        {/* Quiz Detail */}
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[9px] uppercase tracking-wider text-slate-400 font-extrabold font-sans">
+                            {lang === 'zh' ? '随堂测验成绩' : 'Quiz Performance'}
+                          </span>
+                          <div className="flex justify-between items-center bg-slate-900/55 p-1.5 rounded-lg border border-slate-850/50">
+                            <span className="text-slate-350">{lang === 'zh' ? '最高提交得分' : 'Best Submission Score'}</span>
+                            <span className={`font-bold font-mono text-[10px] ${studentProg?.quiz_score !== null ? 'text-indigo-400' : 'text-slate-500'}`}>
+                              {studentProg?.quiz_score !== null ? `${studentProg.quiz_score} / 100` : (lang === 'zh' ? '未提交/未评分' : 'No Submission')}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Completed Segments list */}
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[9px] uppercase tracking-wider text-slate-400 font-extrabold font-sans">
+                            {lang === 'zh' ? '教学环节达成情况' : 'Timeline Progress'}
+                          </span>
+                          <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
+                            {timelineSegments.map((seg, sIdx) => {
+                              const isSegCompleted = Array.isArray(completedSegIds) && completedSegIds.includes(seg.id);
+                              return (
+                                <div key={seg.id} className="flex items-center justify-between bg-slate-900/50 px-1.5 py-1 rounded-lg border border-slate-850/30">
+                                  <span className="text-slate-300 font-medium truncate max-w-[150px]">
+                                    {sIdx + 1}. {seg.title}
+                                  </span>
+                                  <span className={`font-bold text-[9px] px-1.5 py-0.5 rounded-lg ${
+                                    isSegCompleted 
+                                      ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/50' 
+                                      : 'bg-slate-900/60 text-slate-500 border border-slate-800/60'
+                                  }`}>
+                                    {isSegCompleted ? (lang === 'zh' ? '已完成' : 'Completed') : (lang === 'zh' ? '未完成' : 'Not Met')}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                            {timelineSegments.length === 0 && (
+                              <div className="text-slate-500 italic text-center text-[9px] py-1">
+                                {lang === 'zh' ? '当前无教学环节' : 'No timeline segments'}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
                       {/* Top Row: Name, Online status, and Lock Action */}
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 min-w-0 justify-start">
@@ -633,11 +709,36 @@ export function LiveClassroomView({
                             />
                           )}
 
+                          {/* Quick Warning / Ping button */}
+                          {selectedLesson && onPingStudent && (
+                            <button
+                              onClick={() => {
+                                const msg = lang === 'zh' 
+                                  ? `⚠️ 学习进度预警：您当前的进度 (${progPercent}%) 落后于老师的讲解进度。请专注课堂，跟上讲解！`
+                                  : `⚠️ Progress Alert: Your progress (${progPercent}%) is behind the lecture pacing. Please catch up!`;
+                                onPingStudent(st.id, msg);
+                                addToast(
+                                  lang === 'zh' ? '🔔 已发送提醒' : '🔔 Alert Sent',
+                                  lang === 'zh' ? `已向学生 ${st.name} 发送学习进度提醒。` : `Sent progress alert to ${st.name}.`,
+                                  'success'
+                                );
+                              }}
+                              className={`p-1 rounded-lg transition-all shrink-0 cursor-pointer ${
+                                isBehind
+                                  ? 'bg-amber-955 text-amber-400 border border-amber-900 hover:bg-amber-900 animate-pulse'
+                                  : 'bg-slate-800 text-slate-400 hover:bg-slate-750 hover:text-slate-250'
+                              }`}
+                              title={lang === 'zh' ? '发送进度提醒' : 'Send Progress Warning'}
+                            >
+                              <Send size={11} />
+                            </button>
+                          )}
+
                           {/* Individual Lock controller */}
                           <button
                             onClick={() => handleToggleStudentLock(st.id, st.locked_lesson_id)}
                             disabled={!selectedLesson}
-                            className={`p-1 rounded transition-colors shrink-0 cursor-pointer ${
+                            className={`p-1 rounded-lg transition-colors shrink-0 cursor-pointer ${
                               isStudentLocked 
                                 ? 'bg-red-950/60 text-red-400 hover:bg-red-900/50' 
                                 : 'bg-slate-800 text-slate-500 hover:bg-slate-750 hover:text-slate-300'

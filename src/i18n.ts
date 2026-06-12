@@ -6,7 +6,7 @@ export const translations = {
     agentSubtitle: '自主 Shell 控制器',
     agentIntro: '你好！我是你的教育系统 OS 内核助手。你可以让我“创建一节物理课并在白板上画一个圆”，我将通过底层总线为你构建。',
     placeholder: '例如：创建一节历史课并画一张地图...',
-    dashboard: 'OS 控制台',
+    dashboard: '系统总览',
     kernelRunning: '系统正常运行',
     lessons: '课程',
     noLessons: '暂无课程。请让助手创建一节课！',
