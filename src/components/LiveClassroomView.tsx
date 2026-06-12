@@ -560,7 +560,7 @@ export function LiveClassroomView({
                         className="p-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-indigo-200 rounded-xl text-left transition-all active:scale-[0.98] disabled:opacity-40 flex items-center gap-2.5 w-44 shrink-0 group cursor-pointer"
                         title={tool.description}
                       >
-                        <div className="p-1.5 bg-indigo-50 text-indigo-650 group-hover:bg-indigo-100 group-hover:text-indigo-700 rounded-lg border border-indigo-100 shrink-0 transition-colors">
+                        <div className="p-1.5 bg-indigo-50 text-indigo-655 group-hover:bg-indigo-100 group-hover:text-indigo-700 rounded-lg border border-indigo-100 shrink-0 transition-colors">
                           <DynamicIcon name={tool.icon} size={14} />
                         </div>
                         <div className="min-w-0 flex-1">
@@ -592,7 +592,7 @@ export function LiveClassroomView({
           
           {/* Student attendance grid */}
           <div className="h-1/2 flex flex-col min-h-0 gap-2">
-            <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-wider select-none flex justify-between items-center">
+            <h3 className="text-[10px] font-black uppercase text-slate-550 tracking-wider select-none flex justify-between items-center">
               <span>{lang === 'zh' ? '学生专注力监控' : 'Student Status Console'}</span>
               <span className="text-[9px] bg-slate-100 border border-slate-200 text-slate-500 font-mono px-1.5 py-0.5 rounded-md">
                 {students.filter(s => s.locked_lesson_id === selectedLesson).length} / {students.length} Locked
@@ -600,7 +600,7 @@ export function LiveClassroomView({
             </h3>
             
             {liveClassSelectedClassId ? (
-              <div className="overflow-y-auto flex-1 pr-1 grid grid-cols-2 gap-1.5 auto-rows-max scrollbar-thin">
+              <div className="overflow-y-auto flex-1 pr-1 grid grid-cols-3 gap-2 justify-items-center auto-rows-max scrollbar-thin py-2">
                 {students.map((st) => {
                   const isStudentLocked = st.locked_lesson_id === selectedLesson;
                   const isCheckedIn = liveClassAcknowledgedMap.get(st.id);
@@ -625,33 +625,63 @@ export function LiveClassroomView({
                     }
                   })();
 
+                  // SVG ring calculation
+                  const radius = 22;
+                  const strokeWidth = 3;
+                  const circumference = 2 * Math.PI * radius; // 138.23
+                  const strokeDashoffset = circumference - (progPercent / 100) * circumference;
+
+                  // Circular color system
+                  let ringColor = 'stroke-indigo-650'; // normal progress / in class
+                  if (!isOnline) {
+                    ringColor = 'stroke-slate-200'; // offline
+                  } else if (isStudentLocked) {
+                    ringColor = 'stroke-rose-500 animate-pulse'; // focus locked
+                  } else if (isBehind) {
+                    ringColor = 'stroke-amber-500 animate-pulse'; // behind progress
+                  } else if (!isInLesson) {
+                    ringColor = 'stroke-blue-400'; // not entered lesson but online
+                  } else if (progPercent === 100) {
+                    ringColor = 'stroke-emerald-500'; // completed
+                  }
+
                   return (
                     <div
                       key={st.id}
-                      className={`group relative p-2 rounded-xl border transition-all flex flex-col gap-1.5 text-[10.5px] text-left ${
-                        !isOnline
-                          ? 'bg-slate-50/80 border-slate-150 text-slate-400'
-                          : isStudentLocked
-                            ? 'bg-rose-50/40 border-rose-200 text-slate-700 shadow-sm'
-                            : isBehind
-                              ? 'bg-amber-50/40 border-amber-200 text-slate-700 shadow-sm'
-                              : 'bg-white border-slate-200 hover:border-slate-350 text-slate-755 shadow-sm'
-                      }`}
+                      className="group relative flex flex-col items-center justify-center p-1 rounded-xl transition-all cursor-default"
                     >
                       {/* Hover details popover */}
-                      <div className="hidden group-hover:flex absolute right-[102%] top-0 w-60 bg-white border border-slate-200 rounded-xl p-3 shadow-xl flex-col gap-2.5 z-50 text-[10.5px] leading-relaxed text-slate-700">
+                      <div className="hidden group-hover:flex absolute right-[108%] top-0 w-60 bg-white border border-slate-200 rounded-xl p-3 shadow-xl flex-col gap-2.5 z-50 text-[10.5px] leading-relaxed text-slate-700">
                         <div className="font-bold text-slate-800 border-b border-slate-100 pb-1.5 flex justify-between items-center">
                           <span>{st.name} - {lang === 'zh' ? '学习情况' : 'Status'}</span>
-                          <span className="font-mono text-[10px] text-indigo-650 font-bold">{progPercent}%</span>
+                          <span className="font-mono text-[10px] text-indigo-655 font-bold">{progPercent}%</span>
                         </div>
                         
+                        {/* Attendance Detail */}
+                        <div className="flex justify-between items-center bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                          <span className="text-slate-500">{lang === 'zh' ? '上课状态' : 'Class Status'}</span>
+                          <span className={`font-bold ${
+                            isOnline 
+                              ? isInLesson 
+                                ? 'text-emerald-600' 
+                                : 'text-blue-505' 
+                              : 'text-slate-400'
+                          }`}>
+                            {isOnline 
+                              ? isInLesson 
+                                ? (lang === 'zh' ? '已进课堂' : 'In Lesson') 
+                                : (lang === 'zh' ? '应用首页' : 'Dashboard') 
+                              : (lang === 'zh' ? '离线' : 'Offline')}
+                          </span>
+                        </div>
+
                         {/* Quiz Detail */}
                         <div className="flex flex-col gap-1">
                           <span className="text-[9px] uppercase tracking-wider text-slate-400 font-extrabold">
                             {lang === 'zh' ? '随堂测验成绩' : 'Quiz'}
                           </span>
                           <div className="flex justify-between items-center bg-slate-50 p-1.5 rounded-lg border border-slate-100">
-                            <span className="text-slate-500">{lang === 'zh' ? '最高分' : 'Best'}</span>
+                            <span className="text-slate-550">{lang === 'zh' ? '最高分' : 'Best'}</span>
                             <span className={`font-bold font-mono text-[10px] ${studentProg?.quiz_score !== null ? 'text-indigo-600' : 'text-slate-400'}`}>
                               {studentProg?.quiz_score !== null ? `${studentProg.quiz_score} / 100` : (lang === 'zh' ? '无' : 'None')}
                             </span>
@@ -685,100 +715,94 @@ export function LiveClassroomView({
                         </div>
                       </div>
 
-                      {/* Top Row: Name, Online status, and Quick controls */}
-                      <div className="flex items-center justify-between gap-1">
-                        <div className="flex items-center gap-1 min-w-0 justify-start">
-                          {/* Online Status Dot */}
-                          <div 
-                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                              isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
-                            }`}
-                            title={isOnline ? (lang === 'zh' ? '在线' : 'Online') : (lang === 'zh' ? '离线' : 'Offline')}
+                      {/* Main Circular Widget */}
+                      <div className="relative w-14 h-14 flex items-center justify-center">
+                        {/* Circular Progress Ring */}
+                        <svg className="absolute w-full h-full transform -rotate-90" viewBox="0 0 50 50">
+                          {/* Inner circle background */}
+                          <circle
+                            cx="25"
+                            cy="25"
+                            r={radius}
+                            className="stroke-slate-100 fill-white"
+                            strokeWidth={strokeWidth}
                           />
-                          <span className="font-bold truncate max-w-[50px] text-slate-700" title={st.name}>{st.name}</span>
-                        </div>
-                        
-                        <div className="flex items-center gap-0.5 justify-end shrink-0">
-                          {/* Check-in status indicator */}
-                          {isCheckedIn !== undefined && (
-                            <div 
-                              className={`w-1.5 h-1.5 rounded-full shrink-0 mr-0.5 ${
-                                isCheckedIn === true 
-                                  ? 'bg-amber-500 animate-bounce' 
-                                  : 'bg-slate-300'
-                              }`}
-                              title={isCheckedIn === true ? '已就位' : '待响应'}
-                            />
-                          )}
+                          {/* Outer circle progress indicator */}
+                          <circle
+                            cx="25"
+                            cy="25"
+                            r={radius}
+                            className={`fill-transparent transition-all duration-300 ${ringColor}`}
+                            strokeWidth={strokeWidth}
+                            strokeDasharray={circumference}
+                            strokeDashoffset={strokeDashoffset}
+                            strokeLinecap="round"
+                          />
+                        </svg>
 
-                          {/* Quick Warning / Ping button */}
-                          {selectedLesson && onPingStudent && (
+                        {/* Name (Static) or Controls (Hover) */}
+                        <div className="relative z-10 w-10 h-10 rounded-full flex items-center justify-center overflow-hidden">
+                          {/* Name view: Visible by default, hidden on hover */}
+                          <span className={`text-[10px] font-bold tracking-tight truncate max-w-[34px] group-hover:scale-0 group-hover:opacity-0 transition-all duration-200 select-none ${
+                            !isOnline ? 'text-slate-400' : 'text-slate-700'
+                          }`}>
+                            {st.name}
+                          </span>
+
+                          {/* Hover action overlay */}
+                          <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 bg-white/95 rounded-full shadow-inner">
+                            {/* Alert / Warning button */}
+                            {selectedLesson && onPingStudent && (
+                              <button
+                                onClick={() => {
+                                  const msg = lang === 'zh' 
+                                    ? `⚠️ 学习进度预警：您当前的进度 (${progPercent}%) 落后于老师的讲解进度。请专注课堂，跟上讲解！`
+                                    : `⚠️ Progress Alert: Your progress (${progPercent}%) is behind.`;
+                                  onPingStudent(st.id, msg);
+                                  addToast(lang === 'zh' ? '🔔 已发送提醒' : '🔔 Alert Sent', `已向学生 ${st.name} 发送进度提醒。`, 'success');
+                                }}
+                                className={`p-0.5 rounded-md hover:bg-slate-100 transition-colors shrink-0 cursor-pointer ${
+                                  isBehind ? 'text-amber-500 hover:text-amber-600 animate-pulse' : 'text-slate-400 hover:text-slate-650'
+                                }`}
+                                title="提醒"
+                              >
+                                <Send size={10} />
+                              </button>
+                            )}
+
+                            {/* Focus Lock controller */}
                             <button
-                              onClick={() => {
-                                const msg = lang === 'zh' 
-                                  ? `⚠️ 学习进度预警：您当前的进度 (${progPercent}%) 落后于老师的讲解进度。请专注课堂，跟上讲解！`
-                                  : `⚠️ Progress Alert: Your progress (${progPercent}%) is behind.`;
-                                onPingStudent(st.id, msg);
-                                addToast(lang === 'zh' ? '🔔 已发送提醒' : '🔔 Alert Sent', `已向学生 ${st.name} 发送进度提醒。`, 'success');
-                              }}
-                              className={`p-0.5 rounded transition-all shrink-0 cursor-pointer ${
-                                isBehind
-                                  ? 'text-amber-600 hover:bg-amber-100 animate-pulse'
-                                  : 'text-slate-400 hover:bg-slate-100'
+                              onClick={() => handleToggleStudentLock(st.id, st.locked_lesson_id)}
+                              disabled={!selectedLesson}
+                              className={`p-0.5 rounded-md hover:bg-slate-100 transition-colors shrink-0 cursor-pointer ${
+                                isStudentLocked ? 'text-rose-500 hover:text-rose-600' : 'text-slate-400 hover:text-slate-650'
                               }`}
-                              title="发送进度提醒"
+                              title={isStudentLocked ? '解锁' : '锁定'}
                             >
-                              <Send size={10} />
+                              {isStudentLocked ? <ShieldAlert size={10} /> : <Shield size={10} />}
                             </button>
-                          )}
-
-                          {/* Individual Lock controller */}
-                          <button
-                            onClick={() => handleToggleStudentLock(st.id, st.locked_lesson_id)}
-                            disabled={!selectedLesson}
-                            className={`p-0.5 rounded transition-colors shrink-0 cursor-pointer ${
-                              isStudentLocked 
-                                ? 'text-rose-500 hover:bg-rose-100' 
-                                : 'text-slate-400 hover:bg-slate-100'
-                            }`}
-                            title={isStudentLocked ? '解除限制' : '锁定屏幕'}
-                          >
-                            {isStudentLocked ? <ShieldAlert size={10} /> : <Shield size={10} />}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Bottom Row: Entrance Status & Progress Bar */}
-                      <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-slate-100 mt-auto">
-                        <div className="flex justify-start">
-                          {isOnline ? (
-                            isInLesson ? (
-                              <span className="text-[9px] px-1 py-0.2 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100 font-medium scale-90 origin-left inline-block shrink-0">
-                                {lang === 'zh' ? '已进' : 'In'}
-                              </span>
-                            ) : (
-                              <span className="text-[9px] px-1 py-0.2 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-100 scale-90 origin-left inline-block shrink-0">
-                                {lang === 'zh' ? '首页' : 'Dash'}
-                              </span>
-                            )
-                          ) : (
-                            <span className="text-[9px] px-1 py-0.2 rounded-md bg-slate-105 text-slate-400 scale-90 origin-left inline-block shrink-0">
-                              {lang === 'zh' ? '未进' : 'Off'}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Lesson Progress */}
-                        <div className="flex items-center gap-1 shrink-0 min-w-[55px]">
-                          <span className="font-bold text-[9px] text-slate-505 font-mono">{progPercent}%</span>
-                          <div className="w-8 h-1 bg-slate-100 rounded-full overflow-hidden shrink-0">
-                            <div 
-                              className={`h-full transition-all duration-300 ${progPercent === 100 ? 'bg-emerald-500' : 'bg-indigo-600'}`} 
-                              style={{ width: `${progPercent}%` }} 
-                            />
                           </div>
                         </div>
+
+                        {/* Top-Right Online/Lesson Badge Indicator */}
+                        {isOnline && (
+                          <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white shrink-0 ${
+                            isInLesson ? 'bg-emerald-500' : 'bg-blue-400'
+                          }`} title={isInLesson ? '正在上课' : '在线(但未进课堂)'} />
+                        )}
+
+                        {/* Bottom-Right Acknowledged/Ready Indicator */}
+                        {isCheckedIn === true && (
+                          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white bg-amber-500 shrink-0 animate-bounce" title="已确认/就位" />
+                        )}
                       </div>
+
+                      {/* Small Progress Label */}
+                      <span className={`text-[8.5px] mt-1 truncate max-w-[48px] select-none text-slate-500 font-medium ${
+                        !isOnline ? 'text-slate-350' : 'text-slate-505'
+                      }`}>
+                        {progPercent}%
+                      </span>
                     </div>
                   );
                 })}
