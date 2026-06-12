@@ -1,5 +1,7 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
+import { exec } from 'child_process';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { createServer as createHttpServer } from 'http';
@@ -323,13 +325,18 @@ const runOpenAIAgentChat = async (provider: StoredAIProvider, request: AgentChat
 
 async function startServer() {
   try {
-    const existing = kernelContainer.db.prepare('SELECT id, source_code FROM plugins WHERE name = ?').get('Quiz Component Plugin') as any;
-    if (existing && !existing.source_code.includes('actorId:')) {
-      console.log('Upgrading old Quiz Component Plugin to fix Actor undefined error...');
-      kernelContainer.db.prepare('DELETE FROM plugins WHERE id = ?').run(existing.id);
+    const existingQuiz = kernelContainer.db.prepare('SELECT id, manifest, source_code FROM plugins WHERE name = ?').get('Quiz Component Plugin') as any;
+    if (existingQuiz && (!existingQuiz.manifest || !existingQuiz.manifest.includes('classroomTools') || !existingQuiz.source_code.includes('actorId:'))) {
+      console.log('Upgrading old Quiz Component Plugin to add classroomTools and fix Actor...');
+      kernelContainer.db.prepare('DELETE FROM plugins WHERE id = ?').run(existingQuiz.id);
+    }
+    const existingRollCall = kernelContainer.db.prepare('SELECT id, manifest FROM plugins WHERE name = ?').get('Random Student Picker (随机点名小工具)') as any;
+    if (existingRollCall && (!existingRollCall.manifest || !existingRollCall.manifest.includes('classroomTools'))) {
+      console.log('Upgrading old Random Student Picker Plugin to add classroomTools...');
+      kernelContainer.db.prepare('DELETE FROM plugins WHERE id = ?').run(existingRollCall.id);
     }
   } catch (e) {
-    console.error('Error upgrading old default plugin:', e);
+    console.error('Error upgrading old default plugins:', e);
   }
 
   try {
@@ -356,7 +363,21 @@ async function startServer() {
         id: "ext-quiz-generator",
         name: "Quiz Component Plugin",
         version: "1.0.0",
-        capabilitiesProposed: ["quiz:write"]
+        capabilitiesProposed: ["quiz:write"],
+        classroomTools: [
+          {
+            id: "tool-quiz-gen",
+            name: "智能随堂测验",
+            icon: "Puzzle",
+            description: "在当前白板上快速生成一道选择题测验以检验听讲效果",
+            commandType: "quiz.create",
+            payload: {
+              lessonId: "$lessonId",
+              question: "课堂练习：请问以下哪一项是系统的核心运行架构？",
+              options: ["事件驱动指令总线", "集中式轮询数据库", "多线程文件独占锁", "手动旁路轮叫调度"]
+            }
+          }
+        ]
       },
       activate: async (ctx) => {
         ctx.actionRegistry.register({
@@ -405,7 +426,20 @@ async function startServer() {
         id: "ext-roll-call",
         name: "Random Student Picker (随机点名小工具)",
         version: "1.0.0",
-        capabilitiesProposed: ["whiteboard:write", "management:read"]
+        capabilitiesProposed: ["whiteboard:write", "management:read"],
+        classroomTools: [
+          {
+            id: "tool-rollcall-pick",
+            name: "随机学生抽问",
+            icon: "Shuffle",
+            description: "随机抽取一名学生进行课堂点名提问，并在白板和大屏上同步提示",
+            commandType: "rollcall.pick",
+            payload: {
+              classId: "$classId",
+              lessonId: "$lessonId"
+            }
+          }
+        ]
       },
       activate: async (ctx) => {
         ctx.actionRegistry.register({
@@ -502,7 +536,72 @@ async function startServer() {
   const app = express();
   const PORT = 9000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '100mb' }));
+  app.use(express.urlencoded({ limit: '100mb', extended: true }));
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+  app.post('/api/upload', async (req, res) => {
+    try {
+      const { filename, base64Data } = req.body;
+      if (!filename || !base64Data) {
+        return res.status(400).json({ error: 'Filename and base64Data are required' });
+      }
+
+      const ext = path.extname(filename).toLowerCase();
+      if (ext !== '.pdf' && ext !== '.pptx') {
+        return res.status(400).json({ error: 'Only .pdf and .pptx files are supported' });
+      }
+
+      const base64Content = base64Data.replace(/^data:[^;]+;base64,/, '');
+      const fileBuffer = Buffer.from(base64Content, 'base64');
+
+      const uploadsDir = path.join(process.cwd(), 'uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      const uniqueName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
+      const filePath = path.join(uploadsDir, uniqueName);
+
+      fs.writeFileSync(filePath, fileBuffer);
+
+      let slideCount = 1;
+      if (ext === '.pdf') {
+        try {
+          await new Promise<void>((resolve) => {
+            exec(`pdfinfo "${filePath}"`, (error, stdout) => {
+              if (error) {
+                console.error('Error running pdfinfo:', error);
+                return resolve();
+              }
+              const lines = stdout.split('\n');
+              const pagesLine = lines.find(line => line.startsWith('Pages:'));
+              if (pagesLine) {
+                const match = pagesLine.match(/Pages:\s+(\d+)/);
+                if (match) {
+                  slideCount = parseInt(match[1], 10);
+                }
+              }
+              resolve();
+            });
+          });
+        } catch (pdfErr) {
+          console.error('Failed to parse PDF pages:', pdfErr);
+        }
+      }
+
+      res.json({
+        success: true,
+        fileUrl: `/uploads/${uniqueName}`,
+        fileName: filename,
+        fileType: ext.substring(1),
+        slideCount
+      });
+    } catch (e: any) {
+      console.error('Upload error:', e);
+      res.status(500).json({ error: e.message });
+    }
+  });
 
   // OS Capability: Submit Command Manually via Web App Shell API
   app.post('/api/commands', async (req, res) => {
@@ -1590,9 +1689,49 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       }
       kernelContainer.db.prepare('INSERT OR IGNORE INTO student_read_notifications (student_id, notification_id) VALUES (?, ?)')
         .run(req.params.id, notificationId);
+      
+      io.emit('student-acknowledged', {
+        studentId: req.params.id,
+        notificationId
+      });
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/classes/:classId/lock_lesson', (req, res) => {
+    try {
+      const { lessonId } = req.body;
+      if (!lessonId) {
+        return res.status(400).json({ error: 'lessonId is required' });
+      }
+      kernelContainer.db.prepare('UPDATE students SET locked_lesson_id = ? WHERE id IN (SELECT student_id FROM student_classes WHERE class_id = ?)')
+        .run(lessonId, req.params.classId);
+      
+      io.emit('class-lock-status-changed', {
+        classId: req.params.classId,
+        lessonId,
+        locked: true
+      });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(550).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/classes/:classId/unlock_lesson', (req, res) => {
+    try {
+      kernelContainer.db.prepare('UPDATE students SET locked_lesson_id = NULL WHERE id IN (SELECT student_id FROM student_classes WHERE class_id = ?)')
+        .run(req.params.classId);
+      
+      io.emit('class-lock-status-changed', {
+        classId: req.params.classId,
+        locked: false
+      });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(550).json({ error: e.message });
     }
   });
 
@@ -1815,6 +1954,14 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
           completed = excluded.completed,
           progress_percent = excluded.progress_percent
       `).run(req.params.id, lessonId, completed ? 1 : 0, progressPercent || 0, Date.now());
+      
+      io.emit('student-progress-updated', {
+        studentId: req.params.id,
+        lessonId,
+        progressPercent: progressPercent || 0,
+        completed: !!completed
+      });
+
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -1893,6 +2040,20 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         WHERE cs.class_id = ?
         GROUP BY l.id
       `).all(req.params.id);
+      res.json(progress);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/classes/:classId/lessons/:lessonId/progress', (req, res) => {
+    try {
+      const progress = kernelContainer.db.prepare(`
+        SELECT cs.student_id, COALESCE(slp.progress_percent, 0) as progress_percent, COALESCE(slp.completed, 0) as completed
+        FROM class_students cs
+        LEFT JOIN student_lesson_progress slp ON cs.student_id = slp.student_id AND slp.lesson_id = ?
+        WHERE cs.class_id = ?
+      `).all(req.params.lessonId, req.params.classId);
       res.json(progress);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -2761,7 +2922,39 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
     }
   });
 
+  // In-memory status maps
+  const onlineStudents = new Map<string, { socketId: string, name: string }>();
+  const activeStudentLessons = new Map<string, string>(); // studentId -> lessonId
+
+  const broadcastPresence = () => {
+    io.emit('presence-update', {
+      onlineStudentIds: Array.from(onlineStudents.keys()),
+      activeStudentLessons: Object.fromEntries(activeStudentLessons.entries())
+    });
+  };
+
   io.on('connection', (socket: any) => {
+    let registeredStudentId: string | null = null;
+
+    socket.on('register-student', (data: { studentId: string, name: string }) => {
+      registeredStudentId = data.studentId;
+      onlineStudents.set(data.studentId, { socketId: socket.id, name: data.name });
+      console.log(`[Presence] Student online: ${data.name} (${data.studentId})`);
+      broadcastPresence();
+    });
+
+    socket.on('enter-lesson', (data: { studentId: string, lessonId: string }) => {
+      activeStudentLessons.set(data.studentId, data.lessonId);
+      console.log(`[Presence] Student ${data.studentId} entered lesson ${data.lessonId}`);
+      broadcastPresence();
+    });
+
+    socket.on('leave-lesson', (data: { studentId: string }) => {
+      activeStudentLessons.delete(data.studentId);
+      console.log(`[Presence] Student ${data.studentId} left lesson`);
+      broadcastPresence();
+    });
+
     socket.on('join-room', (roomId: string) => {
       socket.join(roomId);
     });
@@ -2769,6 +2962,21 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
     socket.on('whiteboard-update', (data: { roomId: string, type: string, payload: any }) => {
       // Broadcast to other clients in the exact same room
       socket.to(data.roomId).emit('whiteboard-sync', data);
+    });
+
+    socket.on('disconnect', () => {
+      if (registeredStudentId) {
+        onlineStudents.delete(registeredStudentId);
+        activeStudentLessons.delete(registeredStudentId);
+        console.log(`[Presence] Student offline: ${registeredStudentId}`);
+        broadcastPresence();
+      }
+    });
+
+    // Send initial status immediately on connection
+    socket.emit('presence-update', {
+      onlineStudentIds: Array.from(onlineStudents.keys()),
+      activeStudentLessons: Object.fromEntries(activeStudentLessons.entries())
     });
   });
 

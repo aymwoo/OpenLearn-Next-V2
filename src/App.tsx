@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import { translations, Language } from './i18n';
 import { InteractiveWhiteboard } from './components/InteractiveWhiteboard';
+import { LiveClassroomView } from './components/LiveClassroomView';
+import { ChevronLeft, Menu } from 'lucide-react';
 import { InteractiveCoursewareViewer } from './components/InteractiveCoursewareViewer';
 import { QuickActionsMenu } from './components/QuickActionsMenu';
 import { CountdownTimer } from './components/CountdownTimer';
@@ -1082,6 +1084,19 @@ export default function App() {
   const [lang, setLang] = useState<Language>('zh');
   const t = translations[lang];
 
+  const [mainNavCollapsed, setMainNavCollapsed] = useState(false);
+  const [liveClassSelectedClassId, setLiveClassSelectedClassId] = useState<string | null>(null);
+  const [liveClassIsActive, setLiveClassIsActive] = useState(false);
+  const [liveClassTimeRemaining, setLiveClassTimeRemaining] = useState(0);
+  const [liveClassFeed, setLiveClassFeed] = useState<any[]>([]);
+  const [liveClassAcknowledgedMap, setLiveClassAcknowledgedMap] = useState<Map<string, boolean>>(new Map());
+
+  const socketRef = useRef<any>(null);
+  const [onlineStudentIds, setOnlineStudentIds] = useState<string[]>([]);
+  const [activeStudentLessons, setActiveStudentLessons] = useState<Record<string, string>>({});
+  const [liveClassStudentProgress, setLiveClassStudentProgress] = useState<any[]>([]);
+  const [localProgressPercent, setLocalProgressPercent] = useState<number>(0);
+
   const [isCloudDriveOpen, setIsCloudDriveOpen] = useState(false);
   const [cloudDrivePreviewNode, setCloudDrivePreviewNode] = useState<{ id: string, name: string, content: string } | null>(null);
 
@@ -1269,7 +1284,7 @@ export default function App() {
     checkSession();
   }, []);
 
-  const [teacherTab, setTeacherTab] = useState<'dashboard' | 'courses' | 'classes' | 'plugins' | 'settings' | 'lesson_editor' | 'help' | 'computer_labs' | 'admin_directory' | 'timetable'>('dashboard');
+  const [teacherTab, setTeacherTab] = useState<'dashboard' | 'courses' | 'classes' | 'plugins' | 'settings' | 'lesson_editor' | 'help' | 'computer_labs' | 'admin_directory' | 'timetable' | 'live_class'>('dashboard');
   const [timelineSegments, setTimelineSegments] = useState<any[]>([
     { id: 'seg-1', title: '开场准备', type: 'intro', duration: '5m', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
     { id: 'seg-2', title: '讲授新课', type: 'lecture', duration: '20m', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
@@ -2892,6 +2907,39 @@ export default function App() {
 
   useEffect(() => {
     const socket = io();
+    socketRef.current = socket;
+
+    // Register student presence
+    if (activeRole === 'student' && activeStudentId) {
+      socket.emit('register-student', {
+        studentId: activeStudentId,
+        name: students.find(s => s.id === activeStudentId)?.name || activeStudentId
+      });
+      if (studentViewStatus === 'lesson' && selectedLesson) {
+        socket.emit('enter-lesson', { studentId: activeStudentId, lessonId: selectedLesson });
+      }
+    }
+
+    socket.on('presence-update', (data: { onlineStudentIds: string[], activeStudentLessons: Record<string, string> }) => {
+      console.log('[Socket] presence-update received:', data);
+      setOnlineStudentIds(data.onlineStudentIds);
+      setActiveStudentLessons(data.activeStudentLessons);
+    });
+
+    socket.on('student-progress-updated', (data: any) => {
+      console.log('[Socket] student-progress-updated received:', data);
+      const { studentId, lessonId, progressPercent, completed } = data;
+      setLiveClassStudentProgress(prev => {
+        const index = prev.findIndex(p => p.student_id === studentId);
+        if (index !== -1) {
+          const next = [...prev];
+          next[index] = { ...next[index], progress_percent: progressPercent, completed: completed ? 1 : 0 };
+          return next;
+        } else {
+          return [...prev, { student_id: studentId, progress_percent: progressPercent, completed: completed ? 1 : 0 }];
+        }
+      });
+    });
 
     socket.on('assignment-graded-toast', (data: any) => {
       console.log('[Socket] assignment-graded-toast received on client:', data);
@@ -2919,7 +2967,6 @@ export default function App() {
       
       // Check if this student is the active student
       if (activeRole === 'student' && activeStudentId && data.studentId === activeStudentId) {
-        const titleText = data.studentName;
         const msg = lang === 'zh'
           ? `闪电警报！您已被老师在课程随机提问点名中抽中！请立即集中注意力参与课堂。`
           : `Attention alert! You have been randomly picked by the teacher! Please pay immediate attention.`;
@@ -2933,12 +2980,136 @@ export default function App() {
         // Fetch student dashboard reactively to load the newly added roll call
         fetchStudentDashboard(activeStudentId);
       }
+
+      // Live Class Feed updates
+      setLiveClassFeed(prev => [
+        {
+          id: `feed-pick-${data.studentId}-${data.pickedTime || Date.now()}`,
+          time: new Date(data.pickedTime || Date.now()).toLocaleTimeString(),
+          type: 'picked',
+          message: lang === 'zh'
+            ? `点名互动：随机抽中学生【${data.studentName}】。`
+            : `Classroom Pick: Randomly selected student "${data.studentName}".`,
+        },
+        ...prev
+      ]);
+    });
+
+    socket.on('student-acknowledged', (data: any) => {
+      console.log('[Socket] student-acknowledged received on client:', data);
+      const { studentId, notificationId } = data;
+      setLiveClassAcknowledgedMap(prev => {
+        const next = new Map(prev);
+        next.set(studentId, true);
+        return next;
+      });
+      setLiveClassFeed(prev => [
+        {
+          id: `feed-ack-${studentId}-${Date.now()}`,
+          time: new Date().toLocaleTimeString(),
+          type: 'checkin',
+          message: lang === 'zh'
+            ? `学生已确认收到提问点名（学生 ID: ${studentId}）。`
+            : `Student acknowledged the classroom call (Student ID: ${studentId}).`,
+        },
+        ...prev
+      ]);
+      fetchStudents();
+    });
+
+    socket.on('class-lock-status-changed', (data: any) => {
+      console.log('[Socket] class-lock-status-changed received on client:', data);
+      const { classId, lessonId, locked } = data;
+      
+      // If we are student, reactively fetch students to update locked_lesson_id
+      if (activeRole === 'student' && activeStudentId) {
+        fetchStudents().then(() => {
+          // If locked, redirect to lock lesson
+          if (locked && lessonId) {
+            setSelectedLesson(lessonId);
+            setStudentViewStatus('lesson');
+            addToast(
+              lang === 'zh' ? '🔒 课程已被锁定' : '🔒 Lesson Locked',
+              lang === 'zh'
+                ? '老师已锁定当前授课，您将无法切换到其他页面。'
+                : 'The teacher has locked the active lesson. You cannot leave this page.',
+              'info'
+            );
+          }
+        });
+        fetchStudentDashboard(activeStudentId);
+      } else {
+        fetchStudents();
+      }
     });
 
     return () => {
       socket.disconnect();
+      socketRef.current = null;
     };
-  }, [activeRole, activeStudentId, lang]);
+  }, [activeRole, activeStudentId, lang, students, studentViewStatus, selectedLesson]);
+
+  useEffect(() => {
+    if (socketRef.current && activeRole === 'student' && activeStudentId) {
+      if (studentViewStatus === 'lesson' && selectedLesson) {
+        socketRef.current.emit('enter-lesson', { studentId: activeStudentId, lessonId: selectedLesson });
+        
+        // Fetch current progress of the student for this lesson
+        fetch(`/api/students/${activeStudentId}/progress`)
+          .then(res => res.json())
+          .then(progressData => {
+            if (Array.isArray(progressData)) {
+              const currentProg = progressData.find((p: any) => p.lesson_id === selectedLesson);
+              setLocalProgressPercent(currentProg ? currentProg.progress_percent : 0);
+            }
+          })
+          .catch(console.error);
+      } else {
+        socketRef.current.emit('leave-lesson', { studentId: activeStudentId });
+      }
+    }
+  }, [studentViewStatus, selectedLesson, activeRole, activeStudentId]);
+
+  const updateStudentProgress = async (progressVal: number) => {
+    if (activeRole === 'student' && activeStudentId && selectedLesson) {
+      try {
+        await fetch(`/api/students/${activeStudentId}/progress`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lessonId: selectedLesson,
+            completed: progressVal === 100,
+            progressPercent: progressVal
+          })
+        });
+      } catch (e) {
+        console.error('Failed to update student progress:', e);
+      }
+    }
+  };
+
+  const fetchLiveClassStudentProgress = async (classId: string, lessonId: string) => {
+    try {
+      const res = await fetch(`/api/classes/${classId}/lessons/${lessonId}/progress`);
+      if (res.ok) {
+        setLiveClassStudentProgress(await res.json());
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    if (liveClassSelectedClassId && selectedLesson) {
+      fetchLiveClassStudentProgress(liveClassSelectedClassId, selectedLesson);
+    } else {
+      setLiveClassStudentProgress([]);
+    }
+  }, [liveClassSelectedClassId, selectedLesson]);
+
+  useEffect(() => {
+    if (liveClassSelectedClassId) {
+      fetchClassStudents(liveClassSelectedClassId);
+    }
+  }, [liveClassSelectedClassId]);
 
   const fetchStudentProgress = async (id: string) => {
     try {
@@ -3807,6 +3978,45 @@ export default function App() {
                       </button>
                     </div>
                     <div className="prose prose-sm prose-indigo max-w-none">
+                      {/* Learning Progress Slider Feedback Widget */}
+                      <div className="mb-4 bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 shadow-3xs flex flex-col gap-1.5 text-left select-none">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-gray-500">
+                          <span className="flex items-center gap-1">
+                            <Activity size={12} className="text-indigo-500 animate-pulse" />
+                            {lang === 'zh' ? '自主学习进度反馈' : 'Learning Progress'}
+                          </span>
+                          <span className="font-mono text-indigo-600 font-extrabold">{localProgressPercent}%</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            value={localProgressPercent} 
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setLocalProgressPercent(val);
+                            }}
+                            onMouseUp={() => updateStudentProgress(localProgressPercent)}
+                            onTouchEnd={() => updateStudentProgress(localProgressPercent)}
+                            className="flex-grow h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                          />
+                          <button
+                            onClick={() => {
+                              setLocalProgressPercent(100);
+                              updateStudentProgress(100);
+                            }}
+                            className={`text-[9px] font-bold rounded-lg px-2 py-1 transition-all ${
+                              localProgressPercent === 100 
+                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                : 'bg-white hover:bg-slate-50 text-slate-650 border border-slate-200 hover:border-indigo-200 shadow-3xs cursor-pointer'
+                            }`}
+                          >
+                            {lang === 'zh' ? '已完成' : 'Done'}
+                          </button>
+                        </div>
+                      </div>
+
                       <Markdown>{lessons.find(l => l.id === selectedLesson)?.content || ''}</Markdown>
                     </div>
                   </div>
@@ -4532,30 +4742,57 @@ export default function App() {
         ) : (
           <div className="flex-1 overflow-hidden flex bg-gray-50">
             {/* Teacher Sidebar Navigation */}
-            <div className="w-16 md:w-64 bg-white border-r border-gray-200 flex flex-col">
-              <div className="p-2 md:p-4 flex flex-col gap-2 mt-4">
-                 <button onClick={() => setTeacherTab('dashboard')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'dashboard' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <Home size={20} className="shrink-0" /><span className="hidden md:block">Dashboard</span>
+            <div className={`${mainNavCollapsed ? 'w-16' : 'w-16 md:w-64'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300`}>
+              {/* Collapse/Expand Toggle Button */}
+              <div className={`p-2 flex border-b border-gray-150/60 ${mainNavCollapsed ? 'justify-center' : 'justify-between items-center px-4'} min-h-[48px] shrink-0`}>
+                {!mainNavCollapsed && (
+                  <span className="hidden md:inline text-[11px] font-black tracking-widest text-slate-400 uppercase select-none">
+                    {lang === 'zh' ? '系统导航' : 'NAVIGATION'}
+                  </span>
+                )}
+                <button 
+                  onClick={() => setMainNavCollapsed(!mainNavCollapsed)} 
+                  className="p-1.5 rounded-lg hover:bg-slate-100 text-gray-500 hover:text-indigo-600 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+                  title={mainNavCollapsed ? (lang === 'zh' ? '展开导航' : 'Expand Sidebar') : (lang === 'zh' ? '折叠导航' : 'Collapse Sidebar')}
+                >
+                  {mainNavCollapsed ? <Menu size={18} /> : <ChevronLeft size={18} />}
+                </button>
+              </div>
+
+              <div className={`p-2 ${mainNavCollapsed ? 'md:p-2' : 'md:p-4'} flex flex-col gap-2 mt-2`}>
+                 <button onClick={() => setTeacherTab('dashboard')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'dashboard' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '控制台仪表盘' : 'Dashboard'}>
+                    <Home size={20} className="shrink-0" />
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '控制台仪表盘' : 'Dashboard'}</span>
                  </button>
-                 <button onClick={() => setTeacherTab('courses')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'courses' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <BookOpen size={20} className="shrink-0" /><span className="hidden md:block">Courses</span>
+                 <button onClick={() => setTeacherTab('courses')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'courses' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '课程管理' : 'Courses'}>
+                    <BookOpen size={20} className="shrink-0" />
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '我的课程管理' : 'Courses'}</span>
                  </button>
-                 <button onClick={() => setTeacherTab('classes')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'classes' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <Users size={20} className="shrink-0" /><span className="hidden md:block">Classes & Students</span>
+                 <button onClick={() => setTeacherTab('live_class')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'live_class' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold border border-indigo-100' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '互动授课(上课)' : 'Live Class'}>
+                    <Presentation size={20} className="shrink-0 text-indigo-550" />
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '互动授课(上课)' : 'Live Class'}</span>
                  </button>
-                 <button id="teacher_timetable_nav_btn" onClick={() => setTeacherTab('timetable')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'timetable' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <CalendarIcon size={20} className="shrink-0 text-pink-500 animate-pulse" /><span className="hidden md:block">{lang === 'zh' ? '课表编排调整' : 'Timetable Routine'}</span>
+                 <button onClick={() => setTeacherTab('classes')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'classes' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '班级管理' : 'Classes & Students'}>
+                    <Users size={20} className="shrink-0" />
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '班级学生管理' : 'Classes & Students'}</span>
                  </button>
-                 <button onClick={() => setTeacherTab('computer_labs')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'computer_labs' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <LayoutTemplate size={20} className="shrink-0" /><span className="hidden md:block">{lang === 'zh' ? '机房座位管理' : 'Computer Lab Seating'}</span>
+                 <button id="teacher_timetable_nav_btn" onClick={() => setTeacherTab('timetable')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'timetable' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '课表排程调整' : 'Timetable Routine'}>
+                    <CalendarIcon size={20} className="shrink-0 text-pink-500 animate-pulse" />
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '课表排程调整' : 'Timetable Routine'}</span>
                  </button>
-                 <button onClick={() => setTeacherTab('plugins')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'plugins' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <Puzzle size={20} className="shrink-0" /><span className="hidden md:block">App Store / Plugins</span>
+                 <button onClick={() => setTeacherTab('computer_labs')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'computer_labs' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '机房座位管理' : 'Computer Lab Seating'}>
+                    <LayoutTemplate size={20} className="shrink-0" />
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '机房座位管理' : 'Computer Lab Seating'}</span>
+                 </button>
+                 <button onClick={() => setTeacherTab('plugins')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'plugins' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '插件应用市场' : 'App Store / Plugins'}>
+                    <Puzzle size={20} className="shrink-0" />
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '插件应用市场' : 'App Store / Plugins'}</span>
                  </button>
                  {session?.subRole === 'administrator' && (
-                   <button onClick={() => setTeacherTab('admin_directory')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium text-indigo-700 hover:bg-indigo-50 border border-slate-200/50 rounded-xl ${teacherTab === 'admin_directory' ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50/50'}`}>
-                      <Shield size={20} className="shrink-0 text-indigo-600 animate-pulse" /><span className="hidden md:block font-bold text-indigo-850">{lang === 'zh' ? '⭐ 密 核心管理后台' : '⭐ Admin Center'}</span>
-                   </button>
+                    <button onClick={() => setTeacherTab('admin_directory')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium text-indigo-700 hover:bg-indigo-50 border border-slate-200/50 rounded-xl ${teacherTab === 'admin_directory' ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50/50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '⭐ 密 核心管理后台' : '⭐ Admin Center'}>
+                       <Shield size={20} className="shrink-0 text-indigo-600 animate-pulse" />
+                       <span className={mainNavCollapsed ? "hidden" : "hidden md:block font-bold text-indigo-850"}>{lang === 'zh' ? '⭐ 密 核心管理后台' : '⭐ Admin Center'}</span>
+                    </button>
                  )}
                  <button onClick={() => {
                    if (session?.subRole === 'administrator') {
@@ -4563,11 +4800,13 @@ export default function App() {
                    } else {
                      alert(lang === 'zh' ? '您没有访问系统设置的权限。' : 'You do not have permission to access system settings.');
                    }
-                 }} onClickCapture={(e) => { setTeacherTab('settings'); e.stopPropagation(); }} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'settings' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <Settings size={20} className="shrink-0" /><span className="hidden md:block">{lang === 'zh' ? '全局系统设置' : 'System Settings'}</span>
+                 }} onClickCapture={(e) => { setTeacherTab('settings'); e.stopPropagation(); }} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'settings' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '全局系统设置' : 'System Settings'}>
+                    <Settings size={20} className="shrink-0" />
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '全局系统设置' : 'System Settings'}</span>
                  </button>
-                 <button onClick={() => setTeacherTab('help')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'help' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'}`}>
-                    <HelpCircle size={20} className="shrink-0" /><span className="hidden md:block">{lang === 'zh' ? '帮助文档' : 'System Commands / Help'}</span>
+                 <button onClick={() => setTeacherTab('help')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'help' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '帮助文档' : 'System Commands / Help'}>
+                    <HelpCircle size={20} className="shrink-0" />
+                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '系统帮助文档' : 'System Commands / Help'}</span>
                  </button>
               </div>
 
@@ -4593,7 +4832,7 @@ export default function App() {
                  };
                  const upcoming = todaySchedules.filter(isScheduleUpcoming);
                  const remaining = upcoming.length;
-                 if (todaySchedules.length === 0) return null;
+                 if (mainNavCollapsed || todaySchedules.length === 0) return null;
                  return (
                    <div className="mt-auto p-3 m-3 bg-indigo-50/55 rounded-xl border border-indigo-105 hidden md:block select-none shadow-3xs" id="today_schedule_sidebar_panel">
                      <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 mb-1.5">
@@ -5192,6 +5431,38 @@ export default function App() {
                    </div>
                    </div>
                 </div>
+              </div>
+            ) : teacherTab === 'live_class' ? (
+              <div className="flex-grow flex-1 flex flex-col min-h-0 min-w-0">
+                <LiveClassroomView
+                  selectedLesson={selectedLesson}
+                  setSelectedLesson={setSelectedLesson}
+                  lessons={lessons}
+                  classes={classes}
+                  students={liveClassSelectedClassId ? (classStudentsMap[liveClassSelectedClassId] || []) : []}
+                  plugins={plugins}
+                  lang={lang}
+                  timelineSegments={timelineSegments}
+                  activeSegmentId={activeSegmentId}
+                  setActiveSegmentId={setActiveSegmentId}
+                  liveClassSelectedClassId={liveClassSelectedClassId}
+                  setLiveClassSelectedClassId={setLiveClassSelectedClassId}
+                  liveClassIsActive={liveClassIsActive}
+                  setLiveClassIsActive={setLiveClassIsActive}
+                  liveClassTimeRemaining={liveClassTimeRemaining}
+                  setLiveClassTimeRemaining={setLiveClassTimeRemaining}
+                  liveClassFeed={liveClassFeed}
+                  setLiveClassFeed={setLiveClassFeed}
+                  liveClassAcknowledgedMap={liveClassAcknowledgedMap}
+                  setLiveClassAcknowledgedMap={setLiveClassAcknowledgedMap}
+                  elements={elements}
+                  fetchElements={fetchElements}
+                  fetchStudents={fetchStudents}
+                  addToast={addToast}
+                  onlineStudentIds={onlineStudentIds}
+                  activeStudentLessons={activeStudentLessons}
+                  liveClassStudentProgress={liveClassStudentProgress}
+                />
               </div>
             ) : teacherTab === 'plugins' ? (
               <div className="flex-1 flex flex-col h-full overflow-y-auto">

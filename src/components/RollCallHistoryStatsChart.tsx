@@ -275,7 +275,7 @@ export function RollCallHistoryStatsChart({
             />
             <YAxis 
               allowDecimals={false}
-              tick={{ fontSize: 9.5, fill: '#64748b', fontWeight: 'mono', fontWeightBold: 'bold' }}
+              tick={{ fontSize: 9.5, fill: '#64748b', fontWeight: 'bold' }}
               axisLine={false}
               tickLine={false}
             />
