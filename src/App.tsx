@@ -1286,6 +1286,13 @@ export default function App() {
   }, []);
 
   const [teacherTab, setTeacherTab] = useState<'dashboard' | 'courses' | 'classes' | 'plugins' | 'settings' | 'lesson_editor' | 'help' | 'computer_labs' | 'admin_directory' | 'timetable' | 'live_class'>('dashboard');
+
+  // Automatically collapse system navigation when entering interactive classroom
+  useEffect(() => {
+    if (teacherTab === 'live_class') {
+      setMainNavCollapsed(true);
+    }
+  }, [teacherTab]);
   const [timelineSegments, setTimelineSegments] = useState<any[]>([
     { id: 'seg-1', title: '开场准备', type: 'intro', duration: '5m', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
     { id: 'seg-2', title: '讲授新课', type: 'lecture', duration: '20m', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
