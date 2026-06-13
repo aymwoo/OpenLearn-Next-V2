@@ -10,6 +10,7 @@ interface TeacherUser {
   role: 'administrator' | 'teacher';
   name: string;
   created_at: number;
+  status?: 'active' | 'disabled';
 }
 
 interface AdminPanelProps {
@@ -36,16 +37,11 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<'administrator' | 'teacher'>('teacher');
+  const [status, setStatus] = useState<'active' | 'disabled'>('active');
   const [formError, setFormError] = useState('');
   const [submittingUser, setSubmittingUser] = useState(false);
 
-  // System-wide Settings State (Only modifiable for administrator role)
-  const [orchestrationMode, setOrchestrationMode] = useState('agent-assisted');
-  const [classInterval, setClassInterval] = useState(5000);
-  const [maintenanceMode, setMaintenanceMode] = useState(false);
-  const [debugLogVerbosity, setDebugLogVerbosity] = useState('info');
-  const [maxSessions, setMaxSessions] = useState(60);
-  const [savingSettings, setSavingSettings] = useState(false);
+
 
   // System Health Metrics (Dynamic Simulation data)
   const [dbStats, setDbStats] = useState({ tables: 14, sizeKb: 256, pingMs: 2 });
@@ -130,6 +126,7 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
     setPassword('');
     setName('');
     setRole('teacher');
+    setStatus('active');
     setFormError('');
     setIsFormOpen(true);
   };
@@ -140,6 +137,7 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
     setPassword(''); // leave blank for no change
     setName(user.name);
     setRole(user.role);
+    setStatus(user.status || 'active');
     setFormError('');
     setIsFormOpen(true);
   };
@@ -168,7 +166,8 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
           username: username.trim(),
           password: password || undefined,
           role,
-          name: name.trim()
+          name: name.trim(),
+          status
         })
       });
 
@@ -215,22 +214,7 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
     }
   };
 
-  const handleSaveSystemSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isAdmin) return;
 
-    try {
-      setSavingSettings(true);
-      // Simulate slow save for realism & robust feedback
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setSuccess(lang === 'zh' ? '全局系统参数同步成功！' : 'Global system properties updated!');
-      setTimeout(() => setSuccess(''), 4000);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSavingSettings(false);
-    }
-  };
 
   const filteredUsers = users.filter(user => {
     const matchesSearch = 
@@ -263,14 +247,6 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
             title={lang === 'zh' ? '刷新数据' : 'Refresh stats'}
           >
             <RefreshCw size={14} />
-          </button>
-          
-          <button
-            onClick={onLogout}
-            className="bg-slate-800 hover:bg-slate-950 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
-          >
-            <LogOut size={13} />
-            {lang === 'zh' ? '登出账户' : 'Sign Out'}
           </button>
         </div>
       </div>
@@ -562,9 +538,9 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
               </div>
 
               {/* Action operations center */}
-              <div className="bg-slate-900 border border-slate-800 text-white shadow-xl rounded-2xl p-5 block">
-                <h3 className="text-xs font-black text-slate-450 uppercase tracking-widest flex items-center gap-2 border-b border-slate-800 pb-3 mb-4 select-none text-left font-sans">
-                  <Activity size={14} className="text-indigo-400" />
+              <div className="bg-white border border-gray-200 rounded-2xl shadow-xs p-5 block text-left text-gray-800">
+                <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-2 border-b border-gray-100 pb-3 mb-4 select-none font-sans">
+                  <Activity size={14} className="text-indigo-600 animate-pulse" />
                   {lang === 'zh' ? '分布式内核维护工具箱' : 'In-Memory Engine Toolbox'}
                 </h3>
                 <div className="space-y-3">
@@ -572,12 +548,12 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
                     onClick={async () => {
                       alert(lang === 'zh' ? 'PRAGMA integrity_check 执行结果: 完整性检测通过(OK). SQLite 数据库物理区块没有任何损坏。' : 'Database physical consistency verification result: PASS. File blocks are structurally sound.');
                     }}
-                    className="w-full text-left bg-slate-800 hover:bg-slate-750 text-white border border-slate-700/65 p-3 rounded-xl transition-all cursor-pointer flex items-center gap-3"
+                    className="w-full text-left bg-slate-50 hover:bg-slate-100 text-gray-800 border border-gray-200 p-3 rounded-xl transition-all cursor-pointer flex items-center gap-3"
                   >
-                    <Shield size={16} className="text-indigo-400 shrink-0 animate-pulse" />
+                    <Shield size={16} className="text-indigo-600 shrink-0" />
                     <div className="text-left">
-                      <span className="text-xs font-bold block">{lang === 'zh' ? '立即执行物理文件自检' : 'Run Consistency self-audit'}</span>
-                      <span className="text-[9px] text-slate-400 block leading-tight mt-0.5">{lang === 'zh' ? '核验 educational_os.db 是否有损坏或空页' : 'Runs a full PRAGMA integrity_check cycle'}</span>
+                      <span className="text-xs font-bold block text-gray-800">{lang === 'zh' ? '立即执行物理文件自检' : 'Run Consistency self-audit'}</span>
+                      <span className="text-[9px] text-gray-500 block leading-tight mt-0.5">{lang === 'zh' ? '核验 educational_os.db 是否有损坏或空页' : 'Runs a full PRAGMA integrity_check cycle'}</span>
                     </div>
                   </button>
 
@@ -585,12 +561,12 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
                     onClick={async () => {
                       alert(lang === 'zh' ? '数据库空间优化成功！释放 0 空闲逻辑页，文件结构对齐完成。' : 'VACUUM command completed. Over-allocated files are fully reclaimed.');
                     }}
-                    className="w-full text-left bg-slate-800 hover:bg-slate-750 text-white border border-slate-700/65 p-3 rounded-xl transition-all cursor-pointer flex items-center gap-3"
+                    className="w-full text-left bg-slate-50 hover:bg-slate-100 text-gray-800 border border-gray-200 p-3 rounded-xl transition-all cursor-pointer flex items-center gap-3"
                   >
-                    <Cpu size={16} className="text-emerald-400 shrink-0" />
+                    <Cpu size={16} className="text-emerald-600 shrink-0" />
                     <div className="text-left">
-                      <span className="text-xs font-bold block">{lang === 'zh' ? '磁盘碎片整理与空间回缩 (VACUUM)' : 'Defragment Storage (VACUUM)'}</span>
-                      <span className="text-[9px] text-slate-400 block leading-tight mt-0.5">{lang === 'zh' ? '物理重排在册物理空间，释放可能存在的空置块' : 'Triggers VACUUM rebuild to compress physical file'}</span>
+                      <span className="text-xs font-bold block text-gray-800">{lang === 'zh' ? '磁盘碎片整理与空间回缩 (VACUUM)' : 'Defragment Storage (VACUUM)'}</span>
+                      <span className="text-[9px] text-gray-500 block leading-tight mt-0.5">{lang === 'zh' ? '物理重排在册物理空间，释放可能存在的空置块' : 'Triggers VACUUM rebuild to compress physical file'}</span>
                     </div>
                   </button>
                 </div>
@@ -665,18 +641,19 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
               filteredUsers.map(user => {
                 const isSelectedSelf = user.id === currentUserId;
                 const isUserAdmin = user.role === 'administrator';
+                const isDisabled = user.status === 'disabled';
                 return (
                   <div 
                     key={user.id}
-                    className="p-3 bg-white border border-gray-150 hover:border-gray-350 rounded-xl shadow-2xs flex items-center justify-between group transition-all"
+                    className={`p-3 bg-white border border-gray-150 hover:border-gray-350 rounded-xl shadow-2xs flex items-center justify-between group transition-all ${isDisabled ? 'opacity-75 bg-slate-50/50' : ''}`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-xl flex items-center justify-center ${isUserAdmin ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>
+                      <div className={`p-2 rounded-xl flex items-center justify-center ${isDisabled ? 'bg-slate-200 text-slate-400' : isUserAdmin ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>
                         {isUserAdmin ? <Shield size={18} /> : <Users size={18} />}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-gray-800">{user.name}</span>
+                          <span className={`text-xs font-black ${isDisabled ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{user.name}</span>
                           {isSelectedSelf && (
                             <span className="bg-indigo-100/80 text-indigo-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-indigo-200">
                               {lang === 'zh' ? '你自己' : 'You'}
@@ -687,6 +664,11 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
                           }`}>
                             {user.role}
                           </span>
+                          {isDisabled && (
+                            <span className="bg-rose-100 text-rose-700 text-[8.5px] font-black px-1.5 py-0.5 rounded-full border border-rose-200">
+                              {lang === 'zh' ? '已禁用' : 'Disabled'}
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10px] text-gray-450 font-mono mt-1 flex items-center gap-1.5">
                           <span>@{user.username}</span>
@@ -720,114 +702,17 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
           </div>
         </div>
 
-        {/* Right pane: Systemwide parameters & server status (xl:col-span-5) */}
+        {/* Right pane: Database health & server status (xl:col-span-5) */}
         <div className="xl:col-span-5 flex flex-col min-h-0 gap-6">
-          {/* Section 1: System-wide Configuration Form */}
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-xs p-5 flex flex-col shrink-0">
-            <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
-              <Settings size={15} className="text-slate-600 animate-spin" style={{ animationDuration: '8s' }} />
-              {lang === 'zh' ? '全局系统配置与偏好' : 'Global OS Configurations'}
-            </h3>
-
-            <form onSubmit={handleSaveSystemSettings} className="space-y-4">
-              <div className="space-y-1">
-                <label className="block text-[10.5px] font-bold text-gray-550 uppercase tracking-wider">
-                  {lang === 'zh' ? '智能教室编排模式 / Orchestration' : 'Classroom Coordinator System'}
-                </label>
-                <select
-                  value={orchestrationMode}
-                  onChange={(e) => setOrchestrationMode(e.target.value)}
-                  disabled={!isAdmin}
-                  className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:border-indigo-400 bg-slate-50 disabled:bg-gray-100 disabled:text-gray-450 outline-none cursor-pointer mt-1"
-                >
-                  <option value="agent-assisted">{lang === 'zh' ? 'AI Agent 协理 (模型全自动链式决策调度)' : 'AI Agent Assisted Model Chain'}</option>
-                  <option value="manual">{lang === 'zh' ? '手动模式 (仅由教师直接通过终端进行广播)' : 'Manual Instructor Broadcaster'}</option>
-                  <option value="restrictive">{lang === 'zh' ? '高可靠性封禁模式 (锁死白板协作及网络调试)' : 'Restrictive Safe OS Firewall'}</option>
-                </select>
-                <span className="text-[9.5px] text-gray-400 block mt-0.5 select-none">{lang === 'zh' ? '控制AI大模型是否拥有自动编排和在白板绘制习题的全新能力。' : 'Dictates the level of autonomous execution given to the background Gemini scheduling loop.'}</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="block text-[10.5px] font-bold text-gray-550 uppercase tracking-wider">
-                    {lang === 'zh' ? '指令侦听间隔 / sync ms' : 'Worker Sync Interval'}
-                  </label>
-                  <input
-                    type="number"
-                    value={classInterval}
-                    onChange={(e) => setClassInterval(parseInt(e.target.value) || 1000)}
-                    disabled={!isAdmin}
-                    min={1000}
-                    max={30000}
-                    step={1000}
-                    className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-slate-50 disabled:bg-gray-100 disabled:text-gray-450 mt-1"
-                    required
-                  />
-                  <span className="text-[9.5px] text-gray-450 block mt-0.5 select-none">{lang === 'zh' ? '最小1000毫秒' : 'Min 1000ms sync'}</span>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-[10.5px] font-bold text-gray-550 uppercase tracking-wider">
-                    {lang === 'zh' ? '最大并发会话' : 'Max Concurrent'}
-                  </label>
-                  <input
-                    type="number"
-                    value={maxSessions}
-                    onChange={(e) => setMaxSessions(parseInt(e.target.value) || 20)}
-                    disabled={!isAdmin}
-                    min={5}
-                    max={200}
-                    className="w-full text-xs p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-indigo-400 bg-slate-50 disabled:bg-gray-100 disabled:text-gray-450 mt-1"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-slate-50 border border-gray-150 rounded-xl mt-3 select-none">
-                <div>
-                  <span className="text-[11px] font-black text-gray-700 block">{lang === 'zh' ? '🔒 系统维护模式' : '🔒 Operational Maintenance Mode'}</span>
-                  <span className="text-[9.5px] text-gray-450 block leading-tight mt-0.5">{lang === 'zh' ? '暂时禁用学生端接入所有的白板协同及测验提交' : 'Restricts active pupils logins and bars submission buffers.'}</span>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={maintenanceMode}
-                  onChange={(e) => setMaintenanceMode(e.target.checked)}
-                  disabled={!isAdmin}
-                  className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 border-gray-300 cursor-pointer disabled:opacity-50"
-                />
-              </div>
-
-              {isAdmin ? (
-                <button
-                  type="submit"
-                  disabled={savingSettings}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-500 font-bold text-white text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-colors shadow-xs cursor-pointer"
-                >
-                  {savingSettings ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
-                  <span>{savingSettings ? (lang === 'zh' ? '存储同步中...' : 'Saving Properties...') : (lang === 'zh' ? '部署并写入全局设置' : 'Save System Properties')}</span>
-                </button>
-              ) : (
-                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[10.5px] leading-tight rounded-xl flex items-start gap-1.5">
-                  <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                  <span>
-                    {lang === 'zh' 
-                      ? '您的账户角色为非管理员。只有具备“administrator”标签的用户才能调整或更改前述硬件及应用同步选项。'
-                      : 'You are currently logged in as a regular teacher. System metrics and configurations are locked as read-only. Ask an administrator to update.'}
-                  </span>
-                </div>
-              )}
-            </form>
-          </div>
-
-          {/* Section: 'Database Health' Section Card */}
+          {/* Section 1: 'Database Health' Section Card */}
           <div className="bg-white border border-gray-200 rounded-2xl shadow-xs p-5 flex flex-col shrink-0 animate-fade-in text-gray-850" id="db_health_dashboard_card">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
               <div className="text-left">
                 <h3 className="text-xs font-black text-gray-750 uppercase tracking-widest flex items-center gap-1.5">
-                  <Database size={15} className="text-indigo-600 animate-pulse" />
+                  <Database size={15} className="text-indigo-600" />
                   {lang === 'zh' ? 'SQLite 数据库健康体检' : 'Database Engine Health'}
                 </h3>
-                <span className="text-[9.5px] text-gray-400 block mt-0.5">
+                <span className="text-[9.5px] text-gray-405 block mt-0.5">
                   {lang === 'zh' ? '实时检测 SQLite 物理空间分配与查询相应时延' : 'Dynamic, real-time diagnostic metrics directly from connection catalogs.'}
                 </span>
               </div>
@@ -917,40 +802,40 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
           </div>
 
           {/* Section 2: Real-time System Telemetry Grid */}
-          <div className="bg-slate-950 text-white border border-slate-800 shadow-xl rounded-2xl p-5 flex flex-col flex-1 overflow-y-auto selection:bg-slate-700">
-            <h3 className="text-xs font-black text-slate-450 uppercase tracking-widest flex items-center gap-2 border-b border-slate-900 pb-3 mb-4 select-none">
-              <Activity size={14} className="text-indigo-400" />
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-xs p-5 flex flex-col flex-1 overflow-y-auto">
+            <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-2 border-b border-gray-100 pb-3 mb-4 select-none">
+              <Activity size={14} className="text-indigo-600 animate-pulse" />
               {lang === 'zh' ? '分布式操作系统硬件状况' : 'Distributed Node Telemetry'}
             </h3>
 
             <div className="grid grid-cols-3 gap-3 mb-5">
-              <div className="bg-slate-900 border border-slate-850 p-2.5 rounded-xl text-center">
-                <span className="text-[9px] font-bold text-slate-500 block uppercase">{lang === 'zh' ? '处理器负载' : 'CPU Load'}</span>
-                <span className="text-sm font-black font-mono text-indigo-400 block mt-1">{cpuUsage}%</span>
+              <div className="bg-slate-50 border border-gray-150/65 p-2.5 rounded-xl text-center">
+                <span className="text-[9px] font-bold text-gray-500 block uppercase">{lang === 'zh' ? '处理器负载' : 'CPU Load'}</span>
+                <span className="text-sm font-black font-mono text-indigo-600 block mt-1">{cpuUsage}%</span>
               </div>
-              <div className="bg-slate-900 border border-slate-850 p-2.5 rounded-xl text-center">
-                <span className="text-[9px] font-bold text-slate-500 block uppercase">{lang === 'zh' ? '数据库行数' : 'DB Buffer'}</span>
-                <span className="text-sm font-black font-mono text-emerald-400 block mt-1">
+              <div className="bg-slate-50 border border-gray-150/65 p-2.5 rounded-xl text-center">
+                <span className="text-[9px] font-bold text-gray-500 block uppercase">{lang === 'zh' ? '数据库行数' : 'DB Buffer'}</span>
+                <span className="text-sm font-black font-mono text-emerald-600 block mt-1">
                   {sqliteStats !== null ? sqliteStats.totalRows.toLocaleString() : '2,840'}
                 </span>
               </div>
-              <div className="bg-slate-900 border border-slate-850 p-2.5 rounded-xl text-center">
-                <span className="text-[9px] font-bold text-slate-500 block uppercase">{lang === 'zh' ? '主数据库延迟' : 'DB Net Delay'}</span>
-                <span className="text-sm font-black font-mono text-amber-400 block mt-1">
+              <div className="bg-slate-50 border border-gray-150/65 p-2.5 rounded-xl text-center">
+                <span className="text-[9px] font-bold text-gray-500 block uppercase">{lang === 'zh' ? '主数据库延迟' : 'DB Net Delay'}</span>
+                <span className="text-sm font-black font-mono text-amber-600 block mt-1">
                   {sqliteStats !== null && sqliteStats.latencyMs !== undefined ? `${sqliteStats.latencyMs} ms` : '1.5 ms'}
                 </span>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto font-mono text-[10px] space-y-1.5 text-slate-400 scrollbar-none">
-              <div className="flex items-center gap-1 text-slate-500 select-none">
+            <div className="flex-1 min-h-[160px] overflow-y-auto bg-slate-50 border border-gray-150/60 p-3 rounded-xl font-mono text-[10px] space-y-1.5 text-gray-650 scrollbar-none">
+              <div className="flex items-center gap-1 text-gray-450 select-none">
                 <Terminal size={11} /> <span>[root@sys-kernel-0] logs --level=info</span>
               </div>
               <div><span className="text-emerald-500 font-bold">[OK]</span> SQLite3 initialization complete: educational_os.db successfully mounted.</div>
               <div><span className="text-indigo-400 font-bold">[INFO]</span> Synchronizing 14 internal structural collections...</div>
               <div><span className="text-indigo-400 font-bold">[INFO]</span> Loaded active school credentials database. Current admins count: {users.filter(u=>u.role==='administrator').length}</div>
               <div><span className="text-amber-500 font-bold">[WARN]</span> Port 9000 detected as default proxy ingress bypass bind.</div>
-              <div><span className="text-indigo-400 font-bold">[INFO]</span> Listening on network http://0.0.0.0:9000...</div>
+              <div><span className="text-indigo-600 font-bold">[INFO]</span> Listening on network http://0.0.0.0:9000...</div>
             </div>
           </div>
         </div>
@@ -1050,6 +935,35 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout }: A
                         className="text-indigo-600 focus:ring-indigo-500 h-4 w-4"
                       />
                       <span>{lang === 'zh' ? '管理员 (可调整设置)' : 'administrator (Full access)'}</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-1 pt-2">
+                  <label className="block text-[10px] font-bold text-gray-550 uppercase tracking-wide">
+                    {lang === 'zh' ? '账户状态 (是否允许登录系统) *' : 'Account Status (Active State) *'}
+                  </label>
+                  <div className="flex gap-4 mt-2">
+                    <label className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer select-none">
+                      <input
+                        type="radio"
+                        name="form_status"
+                        checked={status === 'active'}
+                        onChange={() => setStatus('active')}
+                        className="text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                      />
+                      <span>{lang === 'zh' ? '启用 (Active)' : 'Active'}</span>
+                    </label>
+                    
+                    <label className="flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer select-none">
+                      <input
+                        type="radio"
+                        name="form_status"
+                        checked={status === 'disabled'}
+                        onChange={() => setStatus('disabled')}
+                        className="text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                      />
+                      <span className="text-rose-600 font-medium">{lang === 'zh' ? '禁用 (Disabled)' : 'Disabled'}</span>
                     </label>
                   </div>
                 </div>

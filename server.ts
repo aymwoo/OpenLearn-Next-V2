@@ -2,7 +2,6 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { exec } from 'child_process';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
@@ -44,8 +43,6 @@ bootstrapProcessPlugins();
 bootstrapManagementPlugins();
 bootstrapAIPlannerPlugins();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const buildAgentSystemInstruction = (lang: 'zh' | 'en', currentLessonId?: string | null) => {
   let systemInstruction = lang === 'zh'
@@ -671,6 +668,14 @@ async function startServer() {
       if (!resource) return res.status(404).send('Resource not found');
 
       if (resource.type === 'html') {
+        // Dynamic registration into courseware
+        const existingCw = kernelContainer.db.prepare('SELECT id FROM courseware WHERE id = ?').get(resource.id);
+        if (!existingCw) {
+          kernelContainer.db.prepare(
+            'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+          ).run(resource.id, resource.id, resource.name, 'html', 'index.html', resource.created_at || Date.now());
+        }
+
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         let html = resource.content || '';
         const baseTag = `<base href="/api/resources/${req.params.id}/">`;
@@ -681,6 +686,8 @@ async function startServer() {
         } else {
           html = baseTag + html;
         }
+        
+        html = injectLmsSdk(html, req, { id: resource.id, name: resource.name, uuid: resource.id });
         return res.send(html);
       }
 
@@ -702,6 +709,14 @@ async function startServer() {
         return res.status(404).send('No index.html or entrypoint found in resource folder');
       }
 
+      // Dynamic registration into courseware
+      const existingCw = kernelContainer.db.prepare('SELECT id FROM courseware WHERE id = ?').get(resource.id);
+      if (!existingCw) {
+        kernelContainer.db.prepare(
+          'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        ).run(resource.id, resource.id, resource.name, 'folder', indexFile.path, resource.created_at || Date.now());
+      }
+
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       let html = indexFile.content || '';
       const baseTag = `<base href="/api/resources/${req.params.id}/">`;
@@ -712,6 +727,8 @@ async function startServer() {
       } else {
         html = baseTag + html;
       }
+      
+      html = injectLmsSdk(html, req, { id: resource.id, name: resource.name, uuid: resource.id });
       return res.send(html);
     } catch (e: any) {
       res.status(500).send(e.message);
@@ -734,7 +751,9 @@ async function startServer() {
           return res.status(404).send('Not found for single page HTML resource');
         }
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        return res.send(resource.content || '');
+        let html = resource.content || '';
+        html = injectLmsSdk(html, req, { id: resource.id, name: resource.name, uuid: resource.id });
+        return res.send(html);
       }
 
       // It's a folder, content is a JSON list of files: Array<{ path: string, content: string }>
@@ -765,6 +784,7 @@ async function startServer() {
         } else {
           html = baseTag + html;
         }
+        html = injectLmsSdk(html, req, { id: resource.id, name: resource.name, uuid: resource.id });
         return res.send(html);
       }
 
@@ -811,7 +831,11 @@ async function startServer() {
         const cleanBase64 = fileObj.content.replace(/^data:[^;]+;base64,/, '');
         return res.send(Buffer.from(cleanBase64, 'base64'));
       } else {
-        return res.send(fileObj.content);
+        let content = fileObj.content;
+        if (contentType.startsWith('text/html')) {
+          content = injectLmsSdk(content, req, { id: resource.id, name: resource.name, uuid: resource.id });
+        }
+        return res.send(content);
       }
     } catch (e: any) {
       res.status(500).send(e.message);
@@ -844,6 +868,915 @@ async function startServer() {
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // --- AI Courseware APIs ---
+  app.post('/api/courseware/upload', async (req, res) => {
+    try {
+      const { name, filename, base64Data } = req.body;
+      const cmd = kernelContainer.commandBus.createCommand('courseware.upload', { name, filename, base64Data }, 'teacher-demo');
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/courseware/confirm', async (req, res) => {
+    try {
+      const { uuid, name, entry } = req.body;
+      const cmd = kernelContainer.commandBus.createCommand('courseware.confirm', { uuid, name, entry }, 'teacher-demo');
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/courseware', async (req, res) => {
+    try {
+      const cmd = kernelContainer.commandBus.createCommand('courseware.list', {}, 'teacher-demo');
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete('/api/courseware/:id', async (req, res) => {
+    try {
+      const cmd = kernelContainer.commandBus.createCommand('courseware.delete', { id: req.params.id }, 'teacher-demo');
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  function extractScoreCommentCompletion(payload: any) {
+    let score: any = undefined;
+    let comment: any = undefined;
+    let completion: any = undefined;
+
+    const keysToSearch = {
+      score: ['score', 'grade', 'result', 'point', 'points', 'mark', 'marks', 'score_val', 'scoreval'],
+      comment: ['comment', 'feedback', 'msg', 'message', 'text', 'note', 'memo'],
+      completion: ['completion', 'progress', 'done', 'finished', 'completed', 'percentage']
+    };
+
+    const searchObj = (obj: any) => {
+      if (!obj || typeof obj !== 'object') return;
+      
+      for (const key in obj) {
+        const lowerKey = key.toLowerCase();
+        
+        if (keysToSearch.score.includes(lowerKey) && score === undefined) {
+          score = obj[key];
+        }
+        if (keysToSearch.comment.includes(lowerKey) && comment === undefined) {
+          comment = obj[key];
+        }
+        if (keysToSearch.completion.includes(lowerKey) && completion === undefined) {
+          completion = obj[key];
+        }
+      }
+
+      for (const key in obj) {
+        if (obj[key] && typeof obj[key] === 'object') {
+          for (const subKey in obj[key]) {
+            const lowerSubKey = subKey.toLowerCase();
+            if (keysToSearch.score.includes(lowerSubKey) && score === undefined) {
+              score = obj[key][subKey];
+            }
+            if (keysToSearch.comment.includes(lowerSubKey) && comment === undefined) {
+              comment = obj[key][subKey];
+            }
+            if (keysToSearch.completion.includes(lowerSubKey) && completion === undefined) {
+              completion = obj[key][subKey];
+            }
+          }
+        }
+      }
+    };
+
+    if (payload && typeof payload === 'object') {
+      searchObj(payload);
+
+      const urlString = payload.url || payload.action || '';
+      if (typeof urlString === 'string' && urlString.includes('?')) {
+        try {
+          const queryPart = urlString.split('?')[1];
+          const params = new URLSearchParams(queryPart);
+          const queryObj: any = {};
+          params.forEach((value, key) => {
+            queryObj[key] = value;
+          });
+          searchObj(queryObj);
+        } catch (e) {}
+      }
+
+      const bodyOrData = payload.data || payload.body;
+      if (bodyOrData) {
+        if (typeof bodyOrData === 'object') {
+          searchObj(bodyOrData);
+        } else if (typeof bodyOrData === 'string') {
+          let parsed = null;
+          try {
+            parsed = JSON.parse(bodyOrData);
+          } catch (e) {
+            try {
+              const params = new URLSearchParams(bodyOrData);
+              const formObj: any = {};
+              let hasKeys = false;
+              params.forEach((value, key) => {
+                formObj[key] = value;
+                hasKeys = true;
+              });
+              if (hasKeys) {
+                parsed = formObj;
+              }
+            } catch (e2) {}
+          }
+          if (parsed && typeof parsed === 'object') {
+            searchObj(parsed);
+          }
+        }
+      }
+    }
+
+    return { score, comment, completion };
+  }
+
+  app.post('/api/courseware/attempts/:attemptId/log', (req, res) => {
+    try {
+      const { attemptId } = req.params;
+      const { eventType, payload } = req.body;
+      
+      const rawId = 'raw_' + crypto.randomBytes(8).toString('hex');
+      kernelContainer.db.prepare(
+        'INSERT INTO submission_raw (id, attempt_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)'
+      ).run(rawId, attemptId, eventType, JSON.stringify(payload), Date.now());
+
+      const extracted = extractScoreCommentCompletion(payload);
+      const score = extracted.score;
+      const comment = extracted.comment;
+      const completion = extracted.completion;
+
+      if (score !== undefined || comment !== undefined || completion !== undefined) {
+        let parsedScore: number | null = null;
+        if (score !== undefined && score !== null) {
+          const num = parseFloat(score);
+          if (!isNaN(num)) {
+            parsedScore = num;
+          }
+        }
+        let parsedCompletion: number | null = null;
+        if (completion !== undefined && completion !== null) {
+          const num = parseFloat(completion);
+          if (!isNaN(num)) {
+            parsedCompletion = num;
+          }
+        }
+        
+        const existing = kernelContainer.db.prepare('SELECT * FROM submission_result WHERE attempt_id = ?').get(attemptId) as any;
+        if (!existing) {
+          kernelContainer.db.prepare(
+            'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)'
+          ).run(
+            'res_' + crypto.randomBytes(8).toString('hex'),
+            attemptId,
+            parsedScore,
+            comment || null,
+            parsedCompletion,
+            JSON.stringify(payload)
+          );
+        } else {
+          const finalScore = parsedScore !== null ? parsedScore : existing.score;
+          const finalComment = comment || existing.comment;
+          const finalCompletion = parsedCompletion !== null ? parsedCompletion : existing.completion;
+          
+          let mergedExtra = {};
+          try {
+            mergedExtra = JSON.parse(existing.extra_json || '{}');
+          } catch (e) {}
+          if (payload && typeof payload === 'object') {
+            mergedExtra = { ...mergedExtra, ...payload };
+          }
+
+          kernelContainer.db.prepare(
+            'UPDATE submission_result SET score = ?, comment = ?, completion = ?, extra_json = ? WHERE attempt_id = ?'
+          ).run(finalScore, finalComment, finalCompletion, JSON.stringify(mergedExtra), attemptId);
+        }
+      }
+
+      io.emit('courseware-attempt-updated', { attemptId, type: 'log' });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/courseware/attempts/:attemptId/submit', async (req, res) => {
+    try {
+      const { attemptId } = req.params;
+      let { score, comment, completion, status, extra = {} } = req.body;
+
+      const extracted = extractScoreCommentCompletion({ ...req.body, ...extra });
+      if (score === undefined || score === null) score = extracted.score;
+      if (comment === undefined || comment === null) comment = extracted.comment;
+      if (completion === undefined || completion === null) completion = extracted.completion;
+
+      let parsedScore: number | null = null;
+      if (score !== undefined && score !== null) {
+        const num = parseFloat(score);
+        if (!isNaN(num)) {
+          parsedScore = num;
+        }
+      }
+      let parsedCompletion: number | null = null;
+      if (completion !== undefined && completion !== null) {
+        const num = parseFloat(completion);
+        if (!isNaN(num)) {
+          parsedCompletion = num;
+        }
+      }
+
+      const cmd = kernelContainer.commandBus.createCommand('courseware.submit_attempt', {
+        attemptId,
+        score: parsedScore,
+        comment,
+        completion: parsedCompletion,
+        status,
+        extra
+      }, 'student-demo');
+      const result = await kernelContainer.commandBus.execute(cmd);
+      io.emit('courseware-attempt-updated', { attemptId, type: 'submit' });
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/courseware/attempts', (req, res) => {
+    try {
+      const rows = kernelContainer.db.prepare(`
+        SELECT a.id as attemptId, a.started_at, a.finished_at, a.status, 
+               cw.name as coursewareName, cw.uuid as coursewareUuid,
+               COALESCE(s.name, CASE WHEN a.student_id = 'teacher' THEN 'Teacher (Test)' WHEN a.student_id = 'guest' THEN 'Guest Student' ELSE a.student_id END) as studentName,
+               a.student_id as studentId,
+               r.score, r.comment, r.completion, r.extra_json,
+               (
+                 SELECT COUNT(*) FROM assignment_submissions sub
+                 JOIN assignments ast ON sub.assignment_id = ast.id
+                 WHERE sub.student_id = a.student_id 
+                   AND ast.title = '互动课件: ' || cw.name
+               ) as isPromoted
+        FROM courseware_attempt a
+        JOIN courseware cw ON a.courseware_id = cw.id
+        LEFT JOIN students s ON a.student_id = s.id
+        LEFT JOIN submission_result r ON a.id = r.attempt_id
+        ORDER BY a.started_at DESC
+      `).all();
+      res.json(rows);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/courseware/debug', (req, res) => {
+    try {
+      const { msg, url, student, courseware } = req.body;
+      const logMsg = `[CLIENT DEBUG] ${msg} | URL: ${url} | Student: ${JSON.stringify(student)} | Courseware: ${JSON.stringify(courseware)}`;
+      console.log(`\x1b[35m[CLIENT DEBUG]\x1b[0m ${msg}`);
+      
+      const fs = require('fs');
+      const path = require('path');
+      const logFile = path.join(process.cwd(), 'client_debug.log');
+      fs.appendFileSync(logFile, `${new Date().toISOString()} - ${logMsg}\n`);
+      
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/courseware/attempts/:attemptId/raw', async (req, res) => {
+    try {
+      const { attemptId } = req.params;
+      const cmd = kernelContainer.commandBus.createCommand('courseware.get_attempt_raw_data', { attemptId }, 'teacher-demo');
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/courseware/attempts/:attemptId/promote', async (req, res) => {
+    try {
+      const { attemptId } = req.params;
+      const { lessonId, classId } = req.body;
+
+      if (!lessonId || !classId) {
+        return res.status(400).json({ error: 'Missing lessonId or classId' });
+      }
+
+      const attempt = kernelContainer.db.prepare(`
+        SELECT a.*, cw.name as courseware_name, cw.uuid as courseware_uuid,
+               r.score, r.comment, r.completion, r.extra_json
+        FROM courseware_attempt a
+        JOIN courseware cw ON a.courseware_id = cw.id
+        LEFT JOIN submission_result r ON a.id = r.attempt_id
+        WHERE a.id = ?
+      `).get(attemptId) as any;
+
+      if (!attempt) {
+        return res.status(404).json({ error: 'Attempt not found' });
+      }
+
+      const studentId = attempt.student_id;
+      const coursewareName = attempt.courseware_name || '互动课件';
+      const rawScore = attempt.score;
+      const completion = attempt.completion || 0;
+
+      let finalScore = 100;
+      if (rawScore !== null && rawScore !== undefined) {
+        if (rawScore >= 0 && rawScore <= 1.0 && rawScore !== 0) {
+          finalScore = Math.round(rawScore * 100);
+        } else {
+          finalScore = Math.round(rawScore);
+        }
+      }
+
+      const assignmentTitle = `互动课件: ${coursewareName}`;
+      let assignment = kernelContainer.db.prepare(
+        'SELECT id FROM assignments WHERE class_id = ? AND lesson_id = ? AND title = ?'
+      ).get(classId, lessonId, assignmentTitle) as any;
+
+      let assignmentId = assignment?.id;
+      if (!assignmentId) {
+        assignmentId = 'ast-cw-' + crypto.randomBytes(8).toString('hex');
+        kernelContainer.db.prepare(
+          'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).run(
+          assignmentId,
+          classId,
+          lessonId,
+          assignmentTitle,
+          `来自互动课件 [${coursewareName}] 的随堂学习提交数据记录`,
+          JSON.stringify({ type: 'interactive_courseware', attemptId, coursewareUuid: attempt.courseware_uuid }),
+          Date.now()
+        );
+      }
+
+      kernelContainer.db.prepare(`
+        INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'graded')
+        ON CONFLICT(assignment_id, student_id) DO UPDATE SET
+          content = excluded.content,
+          score = excluded.score,
+          feedback = excluded.feedback,
+          submitted_at = excluded.submitted_at,
+          graded_at = excluded.graded_at,
+          status = 'graded'
+      `).run(
+        assignmentId,
+        studentId,
+        attempt.extra_json || '{}',
+        finalScore,
+        `由教师在课堂中保存录入。课件完成度: ${Math.round(completion * 100)}%。课件原始反馈: ${attempt.comment || '无'}`,
+        Date.now(),
+        Date.now()
+      );
+
+      kernelContainer.db.prepare(`
+        INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at)
+        VALUES (?, ?, 1, 100, '[]', ?)
+        ON CONFLICT(student_id, lesson_id) DO UPDATE SET
+          completed = 1,
+          progress_percent = 100
+      `).run(
+        studentId,
+        lessonId,
+        Date.now()
+      );
+
+      io.emit('student-progress-updated', {
+        studentId,
+        lessonId,
+        progressPercent: 100,
+        completed: true,
+        completedSegments: []
+      });
+
+      res.json({ success: true, assignmentId, score: finalScore });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get('/bridge.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const bridgeCode = `
+(function() {
+  // Proxy postMessage calls to enrich them with attempt_id and uuid
+  try {
+    const originalPostMessage = window.postMessage;
+    window.postMessage = function(message, targetOrigin, transfer) {
+      try {
+        if (message && typeof message === 'object') {
+          if (!message.attempt_id && window.__LMS_STUDENT__?.attempt_id) {
+            message.attempt_id = window.__LMS_STUDENT__.attempt_id;
+          }
+          if (!message.uuid && window.__LMS_COURSEWARE__?.uuid) {
+            message.uuid = window.__LMS_COURSEWARE__.uuid;
+          }
+        }
+      } catch (e) {}
+      return originalPostMessage.apply(this, arguments);
+    };
+
+    if (window.parent && window.parent !== window) {
+      const parentPostMessage = window.parent.postMessage;
+      try {
+        window.parent.postMessage = function(message, targetOrigin, transfer) {
+          try {
+            if (message && typeof message === 'object') {
+              if (!message.attempt_id && window.__LMS_STUDENT__?.attempt_id) {
+                message.attempt_id = window.__LMS_STUDENT__.attempt_id;
+              }
+              if (!message.uuid && window.__LMS_COURSEWARE__?.uuid) {
+                message.uuid = window.__LMS_COURSEWARE__.uuid;
+              }
+            }
+          } catch (e) {}
+          return parentPostMessage.apply(this, arguments);
+        };
+      } catch (e) {}
+    }
+  } catch (e) {}
+
+  window.LMS = {
+    submit(data) {
+      window.parent.postMessage({
+        type: "LMS_SUBMIT",
+        uuid: window.__LMS_COURSEWARE__?.uuid,
+        attempt_id: window.__LMS_STUDENT__?.attempt_id,
+        payload: data
+      }, "*");
+    },
+    saveProgress(data) {
+      window.parent.postMessage({
+        type: "LMS_SAVE_PROGRESS",
+        uuid: window.__LMS_COURSEWARE__?.uuid,
+        attempt_id: window.__LMS_STUDENT__?.attempt_id,
+        payload: data
+      }, "*");
+    },
+    finish(data) {
+      window.parent.postMessage({
+        type: "LMS_FINISH",
+        uuid: window.__LMS_COURSEWARE__?.uuid,
+        attempt_id: window.__LMS_STUDENT__?.attempt_id,
+        payload: data
+      }, "*");
+    },
+    getStudent() {
+      return window.__LMS_STUDENT__;
+    },
+    getCourseware() {
+      return window.__LMS_COURSEWARE__;
+    },
+    log(event, data) {
+      window.parent.postMessage({
+        type: "LMS_LOG",
+        uuid: window.__LMS_COURSEWARE__?.uuid,
+        attempt_id: window.__LMS_STUDENT__?.attempt_id,
+        event: event,
+        payload: data
+      }, "*");
+    }
+  };
+
+  try {
+    if (window.fetch) {
+      const originalFetch = window.fetch;
+      window.fetch = function(input, init) {
+        try {
+          const url = (typeof input === 'string') ? input : (input?.url || '');
+          const method = init?.method || input?.method || 'GET';
+          const headers = init?.headers || input?.headers || {};
+          let body = init?.body || input?.body || null;
+          
+          if (body && typeof body === 'object') {
+            try { body = JSON.stringify(body); } catch(e){}
+          }
+
+          if (url && !url.includes('/api/courseware/attempts/')) {
+            window.parent.postMessage({
+              type: "HOOK_FETCH",
+              uuid: window.__LMS_COURSEWARE__?.uuid,
+              attempt_id: window.__LMS_STUDENT__?.attempt_id,
+              payload: { url, method, headers: JSON.parse(JSON.stringify(headers)), body: body ? body.toString() : null }
+            }, "*");
+          }
+        } catch (e) {
+          console.error("Bridge Hook fetch error", e);
+        }
+        return originalFetch.apply(this, arguments);
+      };
+    }
+
+    if (window.XMLHttpRequest) {
+      const originalOpen = XMLHttpRequest.prototype.open;
+      const originalSend = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.open = function(method, url) {
+        this._method = method;
+        this._url = url;
+        return originalOpen.apply(this, arguments);
+      };
+      XMLHttpRequest.prototype.send = function(body) {
+        try {
+          let bodyStr = body;
+          if (body && typeof body === 'object') {
+            try { bodyStr = JSON.stringify(body); } catch(e){}
+          }
+          if (this._url && !this._url.includes('/api/courseware/attempts/')) {
+            window.parent.postMessage({
+              type: "HOOK_XHR",
+              uuid: window.__LMS_COURSEWARE__?.uuid,
+              attempt_id: window.__LMS_STUDENT__?.attempt_id,
+              payload: { url: this._url, method: this._method, body: bodyStr ? bodyStr.toString() : null }
+            }, "*");
+          }
+        } catch (e) {
+          console.error("Bridge Hook XHR error", e);
+        }
+        return originalSend.apply(this, arguments);
+      };
+    }
+
+    function attachToAxios(axiosInstance) {
+      if (axiosInstance && axiosInstance.interceptors && axiosInstance.interceptors.request) {
+        axiosInstance.interceptors.request.use(config => {
+          try {
+            if (config.url && !config.url.includes('/api/courseware/attempts/')) {
+              window.parent.postMessage({
+                type: "HOOK_AXIOS",
+                uuid: window.__LMS_COURSEWARE__?.uuid,
+                attempt_id: window.__LMS_STUDENT__?.attempt_id,
+                payload: { url: config.url, method: config.method, data: config.data }
+              }, "*");
+            }
+          } catch (e) {
+            console.error("Bridge Hook Axios error", e);
+          }
+          return config;
+        }, error => Promise.reject(error));
+      }
+    }
+    if (window.axios) {
+      attachToAxios(window.axios);
+    }
+    let _axios = window.axios;
+    Object.defineProperty(window, 'axios', {
+      get() { return _axios; },
+      set(val) {
+        _axios = val;
+        attachToAxios(val);
+      },
+      configurable: true
+    });
+
+    if (navigator && navigator.sendBeacon) {
+      const originalSendBeacon = navigator.sendBeacon;
+      navigator.sendBeacon = function(url, data) {
+        try {
+          if (url && !url.includes('/api/courseware/attempts/')) {
+            window.parent.postMessage({
+              type: "HOOK_BEACON",
+              uuid: window.__LMS_COURSEWARE__?.uuid,
+              attempt_id: window.__LMS_STUDENT__?.attempt_id,
+              payload: { url, data: data ? data.toString() : null }
+            }, "*");
+          }
+        } catch (e) {
+          console.error("Bridge Hook Beacon error", e);
+        }
+        return originalSendBeacon.apply(this, arguments);
+      };
+    }
+
+    window.addEventListener('submit', function(e) {
+      try {
+        const form = e.target;
+        const formData = new FormData(form);
+        const data = {};
+        formData.forEach((value, key) => {
+          data[key] = value;
+        });
+        if (form.action && !form.action.includes('/api/courseware/attempts/')) {
+          window.parent.postMessage({
+            type: "HOOK_FORM",
+            uuid: window.__LMS_COURSEWARE__?.uuid,
+            attempt_id: window.__LMS_STUDENT__?.attempt_id,
+            payload: { action: form.action, method: form.method, data }
+          }, "*");
+        }
+      } catch (err) {
+        console.error("Bridge Hook Form error", err);
+      }
+    }, true);
+    // --- SMART DOM SCRAPER FOR GENERIC COURSEWARES ---
+    function logToServer(msg, detail) {
+      try {
+        const payload = {
+          msg: msg + (detail ? " | " + JSON.stringify(detail) : ""),
+          url: window.location.href,
+          student: window.__LMS_STUDENT__,
+          courseware: window.__LMS_COURSEWARE__
+        };
+        fetch('/api/courseware/debug', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).catch(() => {});
+      } catch (e) {}
+    }
+
+    function findScoreInDOM() {
+      const logData = [];
+      try {
+        const commonVars = ['score', 'points', 'grade', 'totalScore', 'currentScore', 'userScore', 'finalScore', 'correctCount'];
+        for (const v of commonVars) {
+          if (typeof window[v] === 'number') {
+            logData.push("Global var " + v + " is number: " + window[v]);
+            return { score: window[v], log: logData };
+          }
+          if (typeof window[v] === 'string') {
+            const num = parseFloat(window[v]);
+            if (!isNaN(num)) {
+              logData.push("Global var " + v + " is string with number: " + window[v]);
+              return { score: num, log: logData };
+            }
+          }
+        }
+
+        const selectors = [
+          '#score', '#scoreDisplay', '#score-num', '#scoreDisplaySpan', '#points', '#grade',
+          '.score', '.points', '.grade', '.score-num', '.score-value',
+          '[id*="score" i]', '[id*="point" i]', '[id*="grade" i]', '[id*="result" i]',
+          '[class*="score" i]', '[class*="point" i]', '[class*="grade" i]', '[class*="result" i]'
+        ];
+
+        for (const selector of selectors) {
+          try {
+            const el = document.querySelector(selector);
+            if (el) {
+              const text = (el.textContent || el.innerText || '').trim();
+              if (text) {
+                logData.push("Selector '" + selector + "' matched text: '" + text + "'");
+                const fractionMatch = text.match(/(\d+(\.\d+)?)\s*[\/|之]\s*(\d+)/);
+                if (fractionMatch) {
+                  const num = parseFloat(fractionMatch[1]);
+                  const den = parseFloat(fractionMatch[3]);
+                  if (den > 0) {
+                    const pct = (num / den) * 100;
+                    logData.push("Parsed fraction: " + num + "/" + den + " -> " + pct);
+                    return { score: pct, log: logData };
+                  }
+                }
+                const match = text.match(/\d+(\.\d+)?/);
+                if (match) {
+                  const num = parseFloat(match[0]);
+                  if (!isNaN(num)) {
+                    logData.push("Parsed decimal: " + num);
+                    return { score: num, log: logData };
+                  }
+                }
+              }
+            }
+          } catch (e) {}
+        }
+
+        try {
+          const inputs = document.querySelectorAll('input[type="text"], input[type="number"], input[readonly]');
+          for (const input of inputs) {
+            const id = (input.id || '').toLowerCase();
+            const name = (input.name || '').toLowerCase();
+            if (id.includes('score') || name.includes('score') || id.includes('point') || name.includes('point')) {
+              const val = parseFloat(input.value);
+              if (!isNaN(val)) {
+                logData.push("Input id=" + id + " name=" + name + " value: " + input.value);
+                return { score: val, log: logData };
+              }
+            }
+          }
+        } catch (e) {}
+
+        // Fallback: search leaf DOM elements containing keywords and numbers
+        try {
+          const all = document.getElementsByTagName('*');
+          for (let i = 0; i < all.length; i++) {
+            const el = all[i];
+            if (el.children.length === 0) {
+              const txt = (el.textContent || el.innerText || '').trim();
+              if (txt) {
+                const hasKey = txt.includes('得分') || txt.includes('分数') || txt.includes('成绩') || txt.toLowerCase().includes('score') || txt.toLowerCase().includes('points');
+                if (hasKey) {
+                  const m = txt.match(/\d+(\.\d+)?/);
+                  if (m) {
+                    const val = parseFloat(m[0]);
+                    logData.push("Fallback leaf <" + el.tagName + "> '" + txt + "' parsed: " + val);
+                    return { score: val, log: logData };
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {}
+
+      } catch (err) {
+        logData.push("Scraper error: " + err.message);
+      }
+      return { score: null, log: logData };
+    }
+
+    function attachListeners() {
+      try {
+        const buttons = document.querySelectorAll('button, input[type="button"], input[type="submit"], .btn, .button');
+        buttons.forEach(btn => {
+          if (btn.dataset.lmsHooked) return;
+          btn.dataset.lmsHooked = "true";
+
+          const text = (btn.textContent || btn.value || '').trim();
+          
+          let classNameStr = '';
+          if (btn.className) {
+            if (typeof btn.className === 'string') {
+              classNameStr = btn.className;
+            } else if (typeof btn.className === 'object' && btn.className.baseVal) {
+              classNameStr = btn.className.baseVal;
+            }
+          }
+          const hasClassKeyword = classNameStr.toLowerCase().includes('submit') || classNameStr.toLowerCase().includes('finish');
+
+          const isSubmitBtn = 
+            text.includes('提交') || 
+            text.includes('完成') || 
+            text.includes('得分') || 
+            text.includes('确定') || 
+            text.toLowerCase().includes('submit') || 
+            text.toLowerCase().includes('finish') || 
+            text.toLowerCase().includes('check') || 
+            (btn.id && btn.id.toLowerCase().includes('submit')) || 
+            (btn.id && btn.id.toLowerCase().includes('finish')) || 
+            hasClassKeyword;
+
+          if (isSubmitBtn) {
+            logToServer("Hooked submit button: '" + text + "' | ID: '" + btn.id + "' | Classes: '" + classNameStr + "'");
+            btn.addEventListener('click', () => {
+              logToServer("Submit button clicked: '" + text + "'");
+              
+              let highestScore = null;
+              let attemptLogs = [];
+              let checkCount = 0;
+              const delays = [100, 200, 300, 400, 1000, 1000]; // Polling intervals
+              
+              function checkScore() {
+                if (checkCount >= delays.length) {
+                  const finalScore = highestScore !== null ? highestScore : 0;
+                  logToServer("Polling completed. Submitting final score: " + finalScore + ". Logs: " + JSON.stringify(attemptLogs));
+                  window.LMS.submit({
+                    score: finalScore,
+                    completion: 1.0,
+                    comment: "自动提取得分"
+                  });
+                  return;
+                }
+                
+                const result = findScoreInDOM();
+                attemptLogs.push({ delay: delays[checkCount], score: result.score, log: result.log });
+                
+                if (result.score !== null) {
+                  if (highestScore === null || result.score > highestScore) {
+                    highestScore = result.score;
+                  }
+                  
+                  if (result.score > 0) {
+                    logToServer("Found positive score " + result.score + ". Submitting early. Logs: " + JSON.stringify(attemptLogs));
+                    window.LMS.submit({
+                      score: result.score,
+                      completion: 1.0,
+                      comment: "自动提取得分"
+                    });
+                    return;
+                  }
+                }
+                
+                const nextDelay = delays[checkCount++];
+                setTimeout(checkScore, nextDelay);
+              }
+              
+              setTimeout(checkScore, delays[0]);
+            });
+          }
+        });
+      } catch (e) {
+        logToServer("Error in attachListeners: " + e.message);
+      }
+    }
+
+    function initAutoSubmit() {
+      try {
+        logToServer("Initializing AutoSubmit SDK");
+        const observer = new MutationObserver(() => {
+          attachListeners();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        attachListeners();
+      } catch (e) {
+        logToServer("Error in initAutoSubmit: " + e.message);
+      }
+    }
+
+    if (document.body) {
+      initAutoSubmit();
+    } else {
+      document.addEventListener('DOMContentLoaded', initAutoSubmit);
+    }
+  } catch (err) {
+    console.error("Failed to initialize Bridge SDK intercept hooks:", err);
+  }
+})();
+`;
+    res.send(bridgeCode);
+  });
+
+  app.get('/runtime/:uuid', (req, res) => {
+    res.redirect(`/runtime/${req.params.uuid}/`);
+  });
+
+  app.get('/runtime/:uuid/*', (req, res) => {
+    try {
+      const { uuid } = req.params;
+      let subpath = req.params[0] || '';
+      
+      const courseware = kernelContainer.db.prepare('SELECT * FROM courseware WHERE uuid = ?').get(uuid) as any;
+      if (!courseware) {
+        return res.status(404).send('Courseware not found');
+      }
+
+      if (!subpath || subpath === '') {
+        subpath = courseware.entry;
+      }
+
+      const storageDir = path.resolve(process.cwd(), 'storage', 'courseware', uuid);
+      const filePath = path.resolve(storageDir, subpath);
+      if (!filePath.startsWith(storageDir)) {
+        return res.status(403).send('Access denied');
+      }
+
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).send(`File not found: ${subpath}`);
+      }
+
+      const stat = fs.statSync(filePath);
+      if (stat.isDirectory()) {
+        const indexHtml = path.join(filePath, 'index.html');
+        if (fs.existsSync(indexHtml)) {
+          return res.redirect(`/runtime/${uuid}/${subpath.endsWith('/') ? subpath : subpath + '/'}index.html`);
+        }
+        return res.status(404).send('Directory index not found');
+      }
+
+      const ext = path.extname(filePath).toLowerCase();
+      let contentType = 'text/plain; charset=utf-8';
+      if (ext === '.html' || ext === '.htm') contentType = 'text/html; charset=utf-8';
+      else if (ext === '.css') contentType = 'text/css; charset=utf-8';
+      else if (ext === '.js' || ext === '.mjs') contentType = 'application/javascript; charset=utf-8';
+      else if (ext === '.json') contentType = 'application/json; charset=utf-8';
+      else if (ext === '.svg') contentType = 'image/svg+xml; charset=utf-8';
+      else if (ext === '.png') contentType = 'image/png';
+      else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+      else if (ext === '.gif') contentType = 'image/gif';
+      else if (ext === '.webp') contentType = 'image/webp';
+      else if (ext === '.ico') contentType = 'image/x-icon';
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+
+      const isHtml = ext === '.html' || ext === '.htm';
+      if (isHtml) {
+        let html = fs.readFileSync(filePath, 'utf8');
+        html = injectLmsSdk(html, req, { id: courseware.id, name: courseware.name, uuid: courseware.uuid });
+        return res.send(html);
+      } else {
+        return res.sendFile(filePath);
+      }
+    } catch (e: any) {
+      res.status(500).send(e.message);
     }
   });
 
@@ -914,7 +1847,7 @@ async function startServer() {
     }
   });
   
-  const getCookieToken = (req: any) => {
+  function getCookieToken(req: any) {
     const rc = req.headers.cookie;
     if (rc) {
       const parts = rc.split(';');
@@ -926,9 +1859,9 @@ async function startServer() {
       }
     }
     return null;
-  };
+  }
 
-  const checkIsTeacherOrAdmin = (req: any): boolean => {
+  function checkIsTeacherOrAdmin(req: any): boolean {
     const token = getCookieToken(req);
     if (!token) return false;
     try {
@@ -939,7 +1872,96 @@ async function startServer() {
     } catch (e) {
       return false;
     }
+  }
+
+  function injectLmsSdk(htmlContent: string, req: any, cwInfo: { id: string, name: string, uuid: string }) {
+    const token = getCookieToken(req);
+    let studentInfo = {
+      student_id: 'guest',
+      student_name: 'Guest Student',
+      class_id: '',
+      attempt_id: 'guest-attempt'
+    };
+
+    if (token) {
+      const sessionRow = kernelContainer.db.prepare('SELECT * FROM client_sessions WHERE id = ?').get(token) as any;
+      if (sessionRow) {
+        const session = JSON.parse(sessionRow.session_data);
+        if (session.role === 'student') {
+          const classRow = kernelContainer.db.prepare('SELECT class_id FROM class_students WHERE student_id = ? LIMIT 1').get(session.studentId) as any;
+          
+          let attempt = kernelContainer.db.prepare('SELECT id FROM courseware_attempt WHERE courseware_id = ? AND student_id = ? AND status = ?')
+            .get(cwInfo.id, session.studentId, 'active') as any;
+          
+          if (!attempt) {
+            const attemptId = 'att_' + crypto.randomBytes(8).toString('hex');
+            kernelContainer.db.prepare('INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, status) VALUES (?, ?, ?, ?, ?)')
+              .run(attemptId, cwInfo.id, session.studentId, Date.now(), 'active');
+            attempt = { id: attemptId };
+          }
+
+          studentInfo = {
+            student_id: session.studentId,
+            student_name: session.name,
+            class_id: classRow ? classRow.class_id : '',
+            attempt_id: attempt.id
+          };
+        } else if (session.role === 'teacher' || session.role === 'administrator') {
+          let attempt = kernelContainer.db.prepare('SELECT id FROM courseware_attempt WHERE courseware_id = ? AND student_id = ? AND status = ?')
+            .get(cwInfo.id, 'teacher', 'active') as any;
+          
+          if (!attempt) {
+            const attemptId = 'att_teacher_' + crypto.randomBytes(8).toString('hex');
+            kernelContainer.db.prepare('INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, status) VALUES (?, ?, ?, ?, ?)')
+              .run(attemptId, cwInfo.id, 'teacher', Date.now(), 'active');
+            attempt = { id: attemptId };
+          }
+
+          studentInfo = {
+            student_id: session.userId || 'teacher',
+            student_name: (session.name || 'Teacher') + ' (Test)',
+            class_id: '',
+            attempt_id: attempt.id
+          };
+        }
+      }
+    }
+
+    if (studentInfo.attempt_id === 'guest-attempt') {
+      let attempt = kernelContainer.db.prepare('SELECT id FROM courseware_attempt WHERE courseware_id = ? AND student_id = ? AND status = ?')
+        .get(cwInfo.id, 'guest', 'active') as any;
+      
+      if (!attempt) {
+        const attemptId = 'att_guest_' + crypto.randomBytes(8).toString('hex');
+        kernelContainer.db.prepare('INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, status) VALUES (?, ?, ?, ?, ?)')
+          .run(attemptId, cwInfo.id, 'guest', Date.now(), 'active');
+        attempt = { id: attemptId };
+      }
+      studentInfo.attempt_id = attempt.id;
+    }
+
+    const injection = `
+<!-- LMS Courseware SDK Inject -->
+<script>
+  window.__LMS_STUDENT__ = ${JSON.stringify(studentInfo)};
+  window.__LMS_COURSEWARE__ = {
+    uuid: ${JSON.stringify(cwInfo.uuid)},
+    name: ${JSON.stringify(cwInfo.name)}
   };
+</script>
+<script src="/bridge.js"></script>
+`;
+
+    let html = htmlContent;
+    if (html.toLowerCase().includes('<head>')) {
+      html = html.replace(/<head>/i, `<head>${injection}`);
+    } else if (html.toLowerCase().includes('<html>')) {
+      html = html.replace(/<html>/i, `<html><head>${injection}</head>`);
+    } else {
+      html = injection + html;
+    }
+    return html;
+  }
 
   app.get('/api/lessons/:id/whiteboard', (req, res) => {
     const id = req.params.id;
@@ -1191,9 +2213,16 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       const node = kernelContainer.db.prepare('SELECT * FROM vfs_nodes WHERE id = ?').get(req.params.id) as any;
       if (!node || node.type !== 'file') return res.status(404).send('Courseware not found');
       
-      res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline';");
+      const existingCw = kernelContainer.db.prepare('SELECT id FROM courseware WHERE id = ?').get(node.id);
+      if (!existingCw) {
+        kernelContainer.db.prepare(
+          'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        ).run(node.id, node.id, node.name, 'html', node.name, Date.now());
+      }
+
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.send(node.content || '');
+      const html = injectLmsSdk(node.content || '', req, { id: node.id, name: node.name, uuid: node.id });
+      res.send(html);
     } catch (e: any) {
       res.status(500).send(e.message);
     }
@@ -1620,6 +2649,9 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         if (!userObj) {
           return res.status(401).json({ error: 'User not found' });
         }
+        if (userObj.status === 'disabled') {
+          return res.status(403).json({ error: 'Your account has been disabled. Please contact the administrator.' });
+        }
         const hash = crypto.createHash('sha256').update(password).digest('hex');
         if (userObj.password_hash !== hash) {
           return res.status(401).json({ error: 'Incorrect password' });
@@ -1758,73 +2790,60 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
     }
   });
 
-  app.get('/api/users', (req, res) => {
+  app.get('/api/users', async (req, res) => {
     try {
-      const users = kernelContainer.db.prepare('SELECT id, username, role, name, created_at FROM users ORDER BY created_at DESC').all();
+      const cmd = kernelContainer.commandBus.createCommand('user.list', {}, 'user-demo');
+      const users = await kernelContainer.commandBus.execute(cmd);
       res.json(users);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(550).json({ error: e.message });
     }
   });
 
-  app.post('/api/users', (req, res) => {
+  app.post('/api/users', async (req, res) => {
     try {
-      const { username, password, role, name } = req.body;
-      if (!username || !password || !role || !name) {
-        return res.status(400).json({ error: 'username, password, role, and name are required' });
-      }
-      const existing = kernelContainer.db.prepare('SELECT id FROM users WHERE username = ?').get(username);
-      if (existing) {
-        return res.status(400).json({ error: 'Username is already taken' });
-      }
-      const id = 'usr_' + Math.random().toString(36).slice(2, 10);
-      const hash = crypto.createHash('sha256').update(password).digest('hex');
-      kernelContainer.db.prepare(
-        'INSERT INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(id, username, hash, role, name, Date.now());
-      res.json({ success: true, id, username, role, name });
+      const { username, password, role, name, status = 'active' } = req.body;
+      const cmd = kernelContainer.commandBus.createCommand('user.create', {
+        username,
+        password,
+        role,
+        name,
+        status
+      }, 'user-demo');
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(550).json({ error: e.message });
     }
   });
 
-  app.put('/api/users/:id', (req, res) => {
+  app.put('/api/users/:id', async (req, res) => {
     try {
-      const { username, role, name, password } = req.body;
-      if (!username || !role || !name) {
-        return res.status(400).json({ error: 'username, role, and name are required' });
-      }
-      const existing = kernelContainer.db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, req.params.id);
-      if (existing) {
-        return res.status(400).json({ error: 'Username is already taken' });
-      }
-      if (password) {
-        const hash = crypto.createHash('sha256').update(password).digest('hex');
-        kernelContainer.db.prepare(
-          'UPDATE users SET username = ?, password_hash = ?, role = ?, name = ? WHERE id = ?'
-        ).run(username, hash, role, name, req.params.id);
-      } else {
-        kernelContainer.db.prepare(
-          'UPDATE users SET username = ?, role = ?, name = ? WHERE id = ?'
-        ).run(username, role, name, req.params.id);
-      }
-      res.json({ success: true });
+      const { username, role, name, password, status } = req.body;
+      const cmd = kernelContainer.commandBus.createCommand('user.update', {
+        userId: req.params.id,
+        username,
+        role,
+        name,
+        password,
+        status
+      }, 'user-demo');
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(550).json({ error: e.message });
     }
   });
 
-  app.delete('/api/users/:id', (req, res) => {
+  app.delete('/api/users/:id', async (req, res) => {
     try {
-      const adminCountObj = kernelContainer.db.prepare('SELECT COUNT(*) as cnt FROM users WHERE role = ?').get('administrator') as any;
-      const userToDelete = kernelContainer.db.prepare('SELECT role FROM users WHERE id = ?').get(req.params.id) as any;
-      if (userToDelete && userToDelete.role === 'administrator' && adminCountObj.cnt <= 1) {
-        return res.status(400).json({ error: 'Cannot delete the only remaining administrator account' });
-      }
-      kernelContainer.db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
-      res.json({ success: true });
+      const cmd = kernelContainer.commandBus.createCommand('user.delete', {
+        userId: req.params.id
+      }, 'user-demo');
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(550).json({ error: e.message });
     }
   });
 
@@ -2409,9 +3428,9 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
     try {
       const clientDate = req.query.date as string || new Date().toISOString().split('T')[0];
       const schedules = kernelContainer.db.prepare(`
-        SELECT s.*, l.title as lesson_title, c.name as class_name
+        SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name
         FROM schedules s
-        JOIN lessons l ON s.lesson_id = l.id
+        LEFT JOIN lessons l ON s.lesson_id = l.id
         JOIN classes c ON s.class_id = c.id
         WHERE s.scheduled_date = ?
         ORDER BY s.time_slot ASC, s.created_at ASC
@@ -2422,12 +3441,27 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
     }
   });
 
+  app.get('/api/schedules', (req, res) => {
+    try {
+      const schedules = kernelContainer.db.prepare(`
+        SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name
+        FROM schedules s
+        LEFT JOIN lessons l ON s.lesson_id = l.id
+        LEFT JOIN classes c ON s.class_id = c.id
+        ORDER BY s.scheduled_date DESC, s.time_slot ASC
+      `).all();
+      res.json(schedules);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get('/api/classes/:classId/schedules', (req, res) => {
     try {
       const schedules = kernelContainer.db.prepare(`
-        SELECT s.*, l.title as lesson_title
+        SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title
         FROM schedules s
-        JOIN lessons l ON s.lesson_id = l.id
+        LEFT JOIN lessons l ON s.lesson_id = l.id
         WHERE s.class_id = ?
         ORDER BY s.scheduled_date DESC, s.time_slot ASC
       `).all(req.params.classId);
@@ -2447,7 +3481,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       `).run(
         id, 
         req.params.classId, 
-        lessonId, 
+        lessonId || '', 
         scheduledDate, 
         timeSlot || null, 
         status || 'scheduled', 
@@ -2459,7 +3493,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
         schedule: { 
           id, 
           class_id: req.params.classId, 
-          lesson_id: lessonId, 
+          lesson_id: lessonId || '', 
           scheduled_date: scheduledDate,
           time_slot: timeSlot || null,
           status: status || 'scheduled',
@@ -2479,7 +3513,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
         SET lesson_id = ?, scheduled_date = ?, time_slot = ?, status = ?, notes = ?
         WHERE id = ? AND class_id = ?
       `).run(
-        lessonId, 
+        lessonId || '', 
         scheduledDate, 
         timeSlot || null, 
         status || 'scheduled', 
@@ -2519,8 +3553,8 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
           insertStmt.run(
             id,
             req.params.classId,
-            item.lessonId || item.lesson_id,
-            item.scheduledDate || item.scheduled_date,
+            item.lessonId || item.lesson_id || '',
+            item.scheduledDate || item.scheduled_date || '',
             item.timeSlot || item.time_slot || null,
             item.status || 'scheduled',
             item.notes || null,
@@ -2532,6 +3566,208 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       transaction(schedules);
       res.json({ success: true, count: schedules.length });
     } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==================== Timetable OCR ====================
+  app.post('/api/timetable/ocr', async (req, res) => {
+    const startTime = Date.now();
+    console.log(`[OCR Start] Starting timetable OCR. Payload size: ${req.body.imageBase64?.length || 0} bytes. Lang: ${req.body.lang || 'zh'}`);
+    
+    try {
+      const { imageBase64, lang = 'zh', providerId } = req.body;
+
+      if (!imageBase64) {
+        console.warn(`[OCR Error] Missing imageBase64`);
+        return res.status(400).json({ error: 'imageBase64 is required' });
+      }
+
+      const base64Content = imageBase64.replace(/^data:[^;]+;base64,/, '');
+      const mimeMatch = imageBase64.match(/^data:(image\/[^;]+);base64,/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+
+      const prompt = `你是一个专业的课程表识别助手。请仔细分析这张学校教师的周课程表图片，直接提取出所有的课程条目。
+
+重要指令（非常关键，必须遵守）：
+1. 严禁输出任何长篇的推理过程、草稿或思考步骤（如不要输出 <think> 标签及其中的英文/中文思考过程）。
+2. 直接以 JSON 格式输出课程表数据数组，不要有任何前导说明文字或后随文字。
+3. 请立即输出结果，保持极简，避免输出长度超限而被API截断。
+
+对于每一个课程条目，请提取以下信息：
+- dayOfWeek: 星期几（1=周一, 2=周二, 3=周三, 4=周四, 5=周五, 6=周六, 7=周日）
+- periodNumber: 第几节课（1-9）
+- className: 班级名称（例如 "高一(13)"、"高二(5)"）
+- subject: 科目名称（例如 "信息"、"劳动"、"数学"）
+- timeSlot: 上课时间段（例如 "10:50-11:30"）。如果图片中可见，请填入具体时间。通常课表的最左侧或某列（“时间”列）会标注该节次对应的上下课时间（例如第4节对应“10:50-11:30”），请将对应的时段填入该节次的所有课程条目中。如果确实不可见则为空字符串
+- location: 教室/机房信息（如果图片中可见，例如 "312"），如果不可见则为空字符串
+- teacherName: 教师姓名（如果图片中可见），如果不可见则为空字符串
+
+请注意：
+1. 必须提取课程表中的所有课程条目，不要遗漏
+2. 仔细区分不同的星期和节次
+3. 只返回一个有效的 JSON 数组，包含在方括号 [] 中，严禁使用 markdown 格式包裹
+4. 如果某个字段在图片中不可见，请使用空字符串
+
+返回格式示例：
+[{"dayOfWeek":1,"periodNumber":1,"className":"高一(13)","subject":"信息","timeSlot":"08:00-08:40","location":"312","teacherName":""}]`;
+
+      let text = '';
+
+      const provider = providerId
+        ? kernelContainer.db.prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?').get(providerId) as StoredAIProvider | undefined
+        : undefined;
+
+      if (provider && provider.api_key && provider.api_key.trim()) {
+        let chatUrl = provider.api_url.trim();
+        if (!chatUrl.endsWith('/chat/completions')) {
+          chatUrl = chatUrl.endsWith('/') ? chatUrl + 'chat/completions' : chatUrl + '/chat/completions';
+        }
+
+        console.log(`[OCR Routing] Using AI Provider: ${provider.name} (${provider.model_name}) at URL: ${chatUrl}`);
+
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${provider.api_key.trim()}`
+        };
+
+        const messages = [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Content}`
+                }
+              },
+              {
+                type: 'text',
+                text: prompt
+              }
+            ]
+          }
+        ];
+
+        const controller = new AbortController();
+        let timeoutTriggered = false;
+        const timeout = setTimeout(() => {
+          timeoutTriggered = true;
+          console.warn(`[OCR Timeout] AI OCR request to ${provider.name} timed out after 300 seconds (300000ms)`);
+          controller.abort();
+        }, 300000); // 300s timeout
+
+        try {
+          console.log(`[OCR Request] Sending fetch request to AI Provider...`);
+          const response = await fetch(chatUrl, {
+            method: 'POST',
+            headers,
+            signal: controller.signal,
+            body: JSON.stringify({
+              model: provider.model_name,
+              messages,
+              temperature: 0.1,
+              max_tokens: 8192
+            })
+          });
+
+          clearTimeout(timeout);
+          console.log(`[OCR Response] Received response. Status: ${response.status} ${response.statusText}`);
+
+          const responseText = await response.text();
+          console.log(`[OCR Response Body] Length: ${responseText?.length || 0} bytes. Preview: ${responseText?.substring(0, 500)}`);
+
+          if (!response.ok) {
+            throw new Error(`AI Provider (${provider.name}) request failed (${response.status}): ${responseText || response.statusText}`);
+          }
+
+          if (!responseText || !responseText.trim()) {
+            throw new Error(lang === 'zh' ? `AI Provider (${provider.name}) 返回了空响应，请检查模型是否支持图片识别。` : `AI Provider (${provider.name}) returned an empty response.`);
+          }
+
+          let data: any;
+          try {
+            data = JSON.parse(responseText);
+          } catch (jsonErr) {
+            throw new Error(lang === 'zh' ? `AI Provider (${provider.name}) 返回了非 JSON 响应: ${responseText.substring(0, 200)}` : `AI Provider (${provider.name}) returned non-JSON: ${responseText.substring(0, 200)}`);
+          }
+
+          text = data.choices?.[0]?.message?.content?.trim() || '';
+          if (!text) {
+            throw new Error(lang === 'zh' ? `AI Provider (${provider.name}) 未返回有效文本内容。可能该模型不支持图片输入。` : `AI Provider (${provider.name}) returned no text content. The model may not support image input.`);
+          }
+        } catch (fetchErr: any) {
+          clearTimeout(timeout);
+          console.error(`[OCR Fetch Error] Detailed Error:`, {
+            name: fetchErr.name,
+            message: fetchErr.message,
+            stack: fetchErr.stack,
+            cause: fetchErr.cause,
+            timeoutTriggered
+          });
+          throw fetchErr;
+        }
+      } else {
+        console.log(`[OCR Routing] Using system default Gemini`);
+        const geminiKey = process.env.GEMINI_API_KEY;
+        if (!geminiKey) {
+          console.warn(`[OCR Error] GEMINI_API_KEY is not configured`);
+          return res.status(500).json({ error: lang === 'zh' ? '未配置 AI 服务。请在系统设置中添加 AI Provider 或配置 GEMINI_API_KEY。' : 'No AI provider configured. Please add an AI Provider in settings or set GEMINI_API_KEY.' });
+        }
+
+        const ai = new GoogleGenAI({ apiKey: geminiKey });
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [{
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType, data: base64Content } },
+              { text: prompt }
+            ]
+          }]
+        });
+
+        text = response.text?.trim() || '';
+        console.log(`[OCR Gemini Response] Length: ${text?.length || 0} bytes. Preview: ${text?.substring(0, 500)}`);
+      }
+
+      // Strip <think> tags if present
+      let cleanText = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+      // Find the first '[' and the last ']' to extract the JSON array
+      const startIdx = cleanText.indexOf('[');
+      const endIdx = cleanText.lastIndexOf(']');
+      
+      let jsonStr = '';
+      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+        jsonStr = cleanText.substring(startIdx, endIdx + 1).trim();
+      } else {
+        // Fallback to markdown strip
+        jsonStr = cleanText
+          .replace(/^```json\s*/i, '')
+          .replace(/^```\s*/i, '')
+          .replace(/\s*```$/i, '')
+          .trim();
+      }
+
+      const entries = JSON.parse(jsonStr);
+      console.log(`[OCR Success] Successfully parsed ${entries.length} timetable entries. Time elapsed: ${Date.now() - startTime}ms`);
+
+      res.json({
+        success: true,
+        entries,
+        providerUsed: provider
+          ? { id: provider.id, name: provider.name, model_name: provider.model_name }
+          : { id: 'system', name: 'Gemini', model_name: 'gemini-2.5-flash' }
+      });
+    } catch (e: any) {
+      const elapsed = Date.now() - startTime;
+      console.error(`[OCR Global Catch] Timetable OCR error after ${elapsed}ms:`, {
+        name: e.name,
+        message: e.message,
+        stack: e.stack,
+        cause: e.cause
+      });
       res.status(500).json({ error: e.message });
     }
   });
@@ -2551,9 +3787,9 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
 
       // Verify if there are any schedules for this class
       let schedules = db.prepare(`
-        SELECT s.*, l.title as lesson_title
+        SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title
         FROM schedules s
-        JOIN lessons l ON s.lesson_id = l.id
+        LEFT JOIN lessons l ON s.lesson_id = l.id
         WHERE s.class_id = ?
       `).all(classId) as any[];
 
@@ -2593,9 +3829,9 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
 
         // Re-fetch since we just created them
         schedules = db.prepare(`
-          SELECT s.*, l.title as lesson_title
+          SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title
           FROM schedules s
-          JOIN lessons l ON s.lesson_id = l.id
+          LEFT JOIN lessons l ON s.lesson_id = l.id
           WHERE s.class_id = ?
         `).all(classId) as any[];
       }
@@ -2699,6 +3935,459 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
     }
   });
 
+  // ==================== Grade Weights Endpoints ====================
+  app.get('/api/classes/:classId/grade-weights', (req, res) => {
+    try {
+      const weights = kernelContainer.db.prepare('SELECT * FROM class_grade_weights WHERE class_id = ?').get(req.params.classId);
+      if (!weights) {
+        return res.json({
+          class_id: req.params.classId,
+          attendance_weight: 0.15,
+          progress_weight: 0.25,
+          assignment_weight: 0.35,
+          exam_weight: 0.25
+        });
+      }
+      res.json(weights);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/classes/:classId/grade-weights', (req, res) => {
+    try {
+      const { attendance_weight, progress_weight, assignment_weight, exam_weight } = req.body;
+      const total = Number(attendance_weight) + Number(progress_weight) + Number(assignment_weight) + Number(exam_weight);
+      if (Math.abs(total - 1.0) > 0.001 && Math.abs(total - 100) > 0.1) {
+        return res.status(400).json({ error: 'Weights sum must equal 1.0 or 100%' });
+      }
+      // Standardize to 0-1 scale if they sent percentages
+      const att = Number(attendance_weight) > 1 ? Number(attendance_weight) / 100 : Number(attendance_weight);
+      const prog = Number(progress_weight) > 1 ? Number(progress_weight) / 100 : Number(progress_weight);
+      const assign = Number(assignment_weight) > 1 ? Number(assignment_weight) / 100 : Number(assignment_weight);
+      const ex = Number(exam_weight) > 1 ? Number(exam_weight) / 100 : Number(exam_weight);
+
+      kernelContainer.db.prepare(`
+        INSERT INTO class_grade_weights (class_id, attendance_weight, progress_weight, assignment_weight, exam_weight, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(class_id) DO UPDATE SET
+          attendance_weight = excluded.attendance_weight,
+          progress_weight = excluded.progress_weight,
+          assignment_weight = excluded.assignment_weight,
+          exam_weight = excluded.exam_weight,
+          updated_at = excluded.updated_at
+      `).run(req.params.classId, att, prog, assign, ex, Date.now());
+
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==================== Exams & Scores Endpoints ====================
+  app.get('/api/classes/:classId/exams', (req, res) => {
+    try {
+      const exams = kernelContainer.db.prepare('SELECT * FROM exams WHERE class_id = ? ORDER BY created_at DESC').all(req.params.classId);
+      res.json(exams);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/classes/:classId/exams', (req, res) => {
+    try {
+      const { title, description, max_score } = req.body;
+      if (!title) return res.status(400).json({ error: 'Title is required' });
+      const examId = 'exam-' + Math.random().toString(36).substring(2, 10);
+      kernelContainer.db.prepare(`
+        INSERT INTO exams (id, class_id, title, description, max_score, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(examId, req.params.classId, title, description || '', max_score || 100, Date.now());
+      res.json({ success: true, examId });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/exams/:examId/scores', (req, res) => {
+    try {
+      const scores = kernelContainer.db.prepare('SELECT * FROM exam_scores WHERE exam_id = ?').all(req.params.examId);
+      res.json(scores);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/exams/:examId/scores', (req, res) => {
+    try {
+      const { scores } = req.body; // Array of { studentId, score, notes }
+      if (!Array.isArray(scores)) return res.status(400).json({ error: 'Scores array is required' });
+
+      const insertStmt = kernelContainer.db.prepare(`
+        INSERT INTO exam_scores (exam_id, student_id, score, notes, recorded_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(exam_id, student_id) DO UPDATE SET
+          score = excluded.score,
+          notes = excluded.notes,
+          recorded_at = excluded.recorded_at
+      `);
+
+      const transaction = kernelContainer.db.transaction((scoresList) => {
+        for (const item of scoresList) {
+          insertStmt.run(req.params.examId, item.studentId, item.score !== undefined && item.score !== null ? Number(item.score) : null, item.notes || null, Date.now());
+        }
+      });
+
+      transaction(scores);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ==================== Semester Grades & Reports Endpoints ====================
+  app.get('/api/classes/:classId/semester-grades', (req, res) => {
+    try {
+      const classId = req.params.classId;
+      const semesterName = (req.query.semesterName as string) || '2026年春季学期';
+
+      // 1. Get weights
+      let weights = kernelContainer.db.prepare('SELECT * FROM class_grade_weights WHERE class_id = ?').get(classId) as any;
+      if (!weights) {
+        weights = {
+          attendance_weight: 0.15,
+          progress_weight: 0.25,
+          assignment_weight: 0.35,
+          exam_weight: 0.25
+        };
+      }
+
+      // 2. Get students
+      const students = kernelContainer.db.prepare(`
+        SELECT s.id, s.name, s.student_number
+        FROM students s
+        JOIN class_students cs ON s.id = cs.student_id
+        WHERE cs.class_id = ?
+      `).all(classId) as any[];
+
+      // 3. Get all metrics in bulk
+      const attendanceList = kernelContainer.db.prepare(`
+        SELECT student_id, status FROM attendance
+        WHERE schedule_id IN (SELECT id FROM schedules WHERE class_id = ?)
+      `).all(classId) as any[];
+
+      const progressList = kernelContainer.db.prepare(`
+        SELECT student_id, progress_percent FROM student_lesson_progress
+        WHERE lesson_id IN (SELECT DISTINCT lesson_id FROM schedules WHERE class_id = ?)
+      `).all(classId) as any[];
+
+      const assignmentSubmissions = kernelContainer.db.prepare(`
+        SELECT student_id, score FROM assignment_submissions
+        WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?) AND status = 'graded' AND score IS NOT NULL
+      `).all(classId) as any[];
+
+      const examScoresList = kernelContainer.db.prepare(`
+        SELECT es.student_id, es.score, e.max_score FROM exam_scores es
+        JOIN exams e ON es.exam_id = e.id
+        WHERE e.class_id = ? AND es.score IS NOT NULL
+      `).all(classId) as any[];
+
+      // Get archived reports
+      const archivedReports = kernelContainer.db.prepare(`
+        SELECT * FROM student_semester_reports
+        WHERE class_id = ? AND semester_name = ?
+      `).all(classId, semesterName) as any[];
+
+      const archivedMap = new Map(archivedReports.map(r => [r.student_id, r]));
+
+      // 4. Map metrics by student
+      const attendanceMap = new Map<string, string[]>();
+      attendanceList.forEach(a => {
+        if (!attendanceMap.has(a.student_id)) attendanceMap.set(a.student_id, []);
+        attendanceMap.get(a.student_id)!.push(a.status);
+      });
+
+      const progressMap = new Map<string, number[]>();
+      progressList.forEach(p => {
+        if (!progressMap.has(p.student_id)) progressMap.set(p.student_id, []);
+        progressMap.get(p.student_id)!.push(p.progress_percent);
+      });
+
+      const assignmentMap = new Map<string, number[]>();
+      assignmentSubmissions.forEach(a => {
+        if (!assignmentMap.has(a.student_id)) assignmentMap.set(a.student_id, []);
+        assignmentMap.get(a.student_id)!.push(a.score);
+      });
+
+      const examMap = new Map<string, { score: number; max: number }[]>();
+      examScoresList.forEach(e => {
+        if (!examMap.has(e.student_id)) examMap.set(e.student_id, []);
+        examMap.get(e.student_id)!.push({ score: e.score, max: e.max_score });
+      });
+
+      // 5. Compute grades for each student
+      const result = students.map(student => {
+        const archived = archivedMap.get(student.id);
+        if (archived) {
+          return {
+            studentId: student.id,
+            studentName: student.name,
+            studentNumber: student.student_number,
+            attendanceScore: archived.attendance_score,
+            progressScore: archived.progress_score,
+            assignmentScore: archived.assignment_score,
+            examScore: archived.exam_score,
+            totalScore: archived.total_score,
+            gradeLevel: archived.grade_level,
+            teacherEvaluation: archived.teacher_evaluation || '',
+            aiEvaluation: archived.ai_evaluation || '',
+            isArchived: true
+          };
+        }
+
+        // Compute Attendance Score
+        const statuses = attendanceMap.get(student.id) || [];
+        let attendanceScore = 100;
+        if (statuses.length > 0) {
+          const sum = statuses.reduce((acc, status) => {
+            if (status === 'present' || status === 'excused') return acc + 100;
+            if (status === 'late' || status === 'leave_early') return acc + 80;
+            return acc; // absent = 0
+          }, 0);
+          attendanceScore = Math.round(sum / statuses.length);
+        }
+
+        // Compute Progress Score
+        const progressPercents = progressMap.get(student.id) || [];
+        let progressScore = 100;
+        if (progressPercents.length > 0) {
+          progressScore = Math.round(progressPercents.reduce((acc, val) => acc + val, 0) / progressPercents.length);
+        }
+
+        // Compute Assignment Score
+        const scores = assignmentMap.get(student.id) || [];
+        let assignmentScore = 100;
+        if (scores.length > 0) {
+          assignmentScore = Math.round(scores.reduce((acc, val) => acc + val, 0) / scores.length);
+        }
+
+        // Compute Exam Score
+        const examScores = examMap.get(student.id) || [];
+        let examScore = 100;
+        if (examScores.length > 0) {
+          const sum = examScores.reduce((acc, val) => acc + (val.score / val.max) * 100, 0);
+          examScore = Math.round(sum / examScores.length);
+        }
+
+        // Calculate Weighted Total Score
+        const totalScore = Math.round(
+          attendanceScore * weights.attendance_weight +
+          progressScore * weights.progress_weight +
+          assignmentScore * weights.assignment_weight +
+          examScore * weights.exam_weight
+        );
+
+        // Calculate Grade Level
+        let gradeLevel = 'E';
+        if (totalScore >= 90) gradeLevel = 'A';
+        else if (totalScore >= 80) gradeLevel = 'B';
+        else if (totalScore >= 70) gradeLevel = 'C';
+        else if (totalScore >= 60) gradeLevel = 'D';
+
+        return {
+          studentId: student.id,
+          studentName: student.name,
+          studentNumber: student.student_number,
+          attendanceScore,
+          progressScore,
+          assignmentScore,
+          examScore,
+          totalScore,
+          gradeLevel,
+          teacherEvaluation: '',
+          aiEvaluation: '',
+          isArchived: false
+        };
+      });
+
+      res.json({ success: true, weights, students: result });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/classes/:classId/semester-reports/archive', (req, res) => {
+    try {
+      const { semesterName, reports } = req.body; // Array of reports to save
+      if (!semesterName) return res.status(400).json({ error: 'semesterName is required' });
+      if (!Array.isArray(reports)) return res.status(400).json({ error: 'reports array is required' });
+
+      const insertStmt = kernelContainer.db.prepare(`
+        INSERT INTO student_semester_reports (
+          id, student_id, class_id, semester_name,
+          attendance_score, progress_score, assignment_score, exam_score,
+          total_score, grade_level, teacher_evaluation, ai_evaluation,
+          created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(student_id, class_id, semester_name) DO UPDATE SET
+          attendance_score = excluded.attendance_score,
+          progress_score = excluded.progress_score,
+          assignment_score = excluded.assignment_score,
+          exam_score = excluded.exam_score,
+          total_score = excluded.total_score,
+          grade_level = excluded.grade_level,
+          teacher_evaluation = excluded.teacher_evaluation,
+          ai_evaluation = excluded.ai_evaluation,
+          updated_at = excluded.updated_at
+      `);
+
+      const transaction = kernelContainer.db.transaction((reportsList) => {
+        for (const r of reportsList) {
+          const reportId = r.id || 'rep-' + Math.random().toString(36).substring(2, 10);
+          insertStmt.run(
+            reportId,
+            r.studentId,
+            req.params.classId,
+            semesterName,
+            r.attendanceScore,
+            r.progressScore,
+            r.assignmentScore,
+            r.examScore,
+            r.totalScore,
+            r.gradeLevel,
+            r.teacherEvaluation || null,
+            r.aiEvaluation || null,
+            Date.now(),
+            Date.now()
+          );
+        }
+      });
+
+      transaction(reports);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/classes/:classId/students/:studentId/semester-ai-evaluation', async (req, res) => {
+    try {
+      const { classId, studentId } = req.params;
+      const { semesterName = '2026年春季学期', providerId } = req.body;
+
+      // 1. Get student and class info
+      const student = kernelContainer.db.prepare('SELECT name FROM students WHERE id = ?').get(studentId) as { name: string } | undefined;
+      if (!student) return res.status(404).json({ error: 'Student not found' });
+
+      // 2. Fetch student's grades / attendance / assignments details for prompt context
+      const attendanceStats = kernelContainer.db.prepare(`
+        SELECT status, COUNT(*) as count FROM attendance
+        WHERE student_id = ? AND schedule_id IN (SELECT id FROM schedules WHERE class_id = ?)
+        GROUP BY status
+      `).all(studentId, classId) as { status: string; count: number }[];
+
+      const progressObj = kernelContainer.db.prepare(`
+        SELECT AVG(progress_percent) as avg_progress FROM student_lesson_progress
+        WHERE student_id = ? AND lesson_id IN (SELECT DISTINCT lesson_id FROM schedules WHERE class_id = ?)
+      `).get(studentId, classId) as { avg_progress: number | null };
+
+      const assignmentGrades = kernelContainer.db.prepare(`
+        SELECT a.title, s.score, s.feedback FROM assignment_submissions s
+        JOIN assignments a ON s.assignment_id = a.id
+        WHERE s.student_id = ? AND a.class_id = ? AND s.status = 'graded' AND s.score IS NOT NULL
+      `).all(studentId, classId) as { title: string; score: number; feedback: string }[];
+
+      const examGrades = kernelContainer.db.prepare(`
+        SELECT e.title, es.score, e.max_score FROM exam_scores es
+        JOIN exams e ON es.exam_id = e.id
+        WHERE es.student_id = ? AND e.class_id = ? AND es.score IS NOT NULL
+      `).all(studentId, classId) as { title: string; score: number; max_score: number }[];
+
+      // Formatting context for AI
+      const attSummary = attendanceStats.map(a => `${a.status === 'present' ? '出勤' : a.status === 'late' ? '迟到' : a.status === 'leave_early' ? '早退' : a.status === 'excused' ? '请假' : '缺勤'}: ${a.count}次`).join(', ') || '暂无出勤记录';
+      const avgProg = progressObj.avg_progress !== null ? Math.round(progressObj.avg_progress) : 100;
+      const assignmentsText = assignmentGrades.map(a => `- 《${a.title}》得分: ${a.score}分 (教师评语: ${a.feedback || '无'})`).join('\n') || '- 暂无平时作业记录';
+      const examsText = examGrades.map(e => `- 《${e.title}》得分: ${e.score}/${e.max_score}`).join('\n') || '- 暂无考试成绩记录';
+
+      const prompt = `请扮演一位充满爱心、语气温馨的班主任老师。请结合下面这位学生的学期学习数据和作业表现，为该学生撰写一段【富有鼓励性、温馨、语气亲切】的学期期末总评语。
+
+学生姓名：${student.name}
+班级学期：${semesterName}
+
+学期学习数据：
+- 考勤统计：${attSummary}
+- 平均课程学习进度：${avgProg}%
+- 作业得分与历次反馈：
+${assignmentsText}
+- 考试/测验成绩：
+${examsText}
+
+评语撰写要求：
+1. 语气必须极其亲切、温馨、富有鼓励性，像长辈或良师益友对孩子的对话，多用鼓励性的句式。
+2. 评价要包含三个部分：
+   - 肯定其闪光点（如出勤好、某次作业优秀或取得的进步）。
+   - 指出其可以改进的地方（如进度落后、考试发挥不佳等），语气要非常温柔、委婉，给予其信心。
+   - 对未来的期许，激励学生在下学期继续努力。
+3. 长度控制在 150-250 字之间。不要包含任何 Markdown 格式，只返回纯文本评语。`;
+
+      // 3. Invoke AI Provider
+      let text = '';
+      const provider = providerId
+        ? kernelContainer.db.prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?').get(providerId) as StoredAIProvider | undefined
+        : kernelContainer.db.prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != "" LIMIT 1').get() as StoredAIProvider | undefined;
+
+      if (provider && provider.api_key && provider.api_key.trim()) {
+        let chatUrl = provider.api_url.trim();
+        if (!chatUrl.endsWith('/chat/completions')) {
+          chatUrl = chatUrl.endsWith('/') ? chatUrl + 'chat/completions' : chatUrl + '/chat/completions';
+        }
+
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${provider.api_key.trim()}`
+        };
+
+        const response = await fetch(chatUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model: provider.model_name,
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.7,
+            max_tokens: 1024
+          })
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`AI request failed (${response.status}): ${errorText}`);
+        }
+
+        const data = await response.json();
+        text = data.choices?.[0]?.message?.content?.trim() || '';
+      } else {
+        // Gemini fallback
+        const geminiKey = process.env.GEMINI_API_KEY;
+        if (!geminiKey) {
+          return res.status(500).json({ error: 'AI provider is not configured and GEMINI_API_KEY is missing.' });
+        }
+        const ai = new GoogleGenAI({ apiKey: geminiKey });
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          config: { temperature: 0.7 }
+        });
+        text = response.text?.trim() || '';
+      }
+
+      res.json({ success: true, aiEvaluation: text });
+    } catch (e: any) {
+      console.error('AI Semester Evaluation error:', e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.get('/api/students/:id/dashboard', (req, res) => {
     try {
       const studentId = req.params.id;
@@ -2713,10 +4402,10 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       
       // Get impending schedules (for classes they are in)
       const schedules = kernelContainer.db.prepare(`
-        SELECT s.*, l.title as lesson_title, c.name as class_name,
+        SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name,
                (SELECT status FROM attendance a WHERE a.schedule_id = s.id AND a.student_id = ?) as attendance_status
         FROM schedules s
-        JOIN lessons l ON s.lesson_id = l.id
+        LEFT JOIN lessons l ON s.lesson_id = l.id
         JOIN classes c ON s.class_id = c.id
         JOIN class_students cs ON s.class_id = cs.class_id
         WHERE cs.student_id = ?

@@ -21,6 +21,7 @@ import { ComputerLabManager } from './components/ComputerLabManager';
 import { LoginPage } from './components/LoginPage';
 import { AdminPanel } from './components/AdminPanel';
 import { TimetableManager } from './components/TimetableManager';
+import { SemesterGradeManager } from './components/SemesterGradeManager';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion, AnimatePresence, animate } from 'motion/react';
 import { io } from 'socket.io-client';
@@ -1363,7 +1364,7 @@ export default function App() {
   const [rosterSearchQuery, setRosterSearchQuery] = useState('');
   const [rosterTagFilter, setRosterTagFilter] = useState<'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare'>('all');
   const [classSubmissionFilters, setClassSubmissionFilters] = useState<Record<string, 'all' | 'submitted' | 'graded' | 'pending'>>({});
-  const [classActiveTabs, setClassActiveTabs] = useState<Record<string, 'students' | 'assignments' | 'schedules' | 'seating'>>({});
+  const [classActiveTabs, setClassActiveTabs] = useState<Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>>({});
   const [studentActiveTabs, setStudentActiveTabs] = useState<Record<string, 'progress' | 'settings' | 'notes'>>({});
 
   // Computer labs and seating admin structures
@@ -2965,7 +2966,7 @@ export default function App() {
     socket.on('student-active-segment-changed', (data: any) => {
       console.log('[Socket] student-active-segment-changed received:', data);
       const { activeSegmentId } = data;
-      setTeacherActiveSegmentId(activeSegmentId);
+      setActiveSegmentId(activeSegmentId);
     });
 
     socket.on('student-pinged', (data: any) => {
@@ -3212,6 +3213,108 @@ export default function App() {
   useEffect(() => {
     selectedAssignmentRef.current = selectedAssignment;
   }, [selectedAssignment]);
+
+  useEffect(() => {
+    const handleLmsMessage = async (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+
+      let attemptId = data.attempt_id;
+      let uuid = data.uuid;
+      let type = data.type || '';
+      let payload = data.payload || data;
+
+      // Try to extract attemptId from sending iframe if same-origin is accessible
+      if (!attemptId && event.source) {
+        try {
+          const iframe = Array.from(document.querySelectorAll('iframe')).find(
+            f => f.contentWindow === event.source
+          );
+          if (iframe && iframe.contentWindow) {
+            const iframeWindow = iframe.contentWindow as any;
+            if (iframeWindow.__LMS_STUDENT__?.attempt_id) {
+              attemptId = iframeWindow.__LMS_STUDENT__.attempt_id;
+            }
+            if (iframeWindow.__LMS_COURSEWARE__?.uuid) {
+              uuid = iframeWindow.__LMS_COURSEWARE__.uuid;
+            }
+          }
+        } catch (e) {
+          // Cross-origin or other error, ignore
+        }
+      }
+
+      if (!attemptId) return;
+
+      // Identify if this is a submission or progress or general log
+      const isSubmit = 
+        type === 'LMS_SUBMIT' || 
+        type === 'LMS_FINISH' || 
+        type === 'submit' || 
+        type === 'finish' || 
+        type === 'completed' ||
+        (payload && typeof payload === 'object' && (
+          payload.score !== undefined || 
+          payload.grade !== undefined || 
+          payload.result !== undefined || 
+          payload.points !== undefined
+        ));
+
+      const isSaveProgress = type === 'LMS_SAVE_PROGRESS' || type === 'saveProgress';
+
+      if (isSubmit) {
+        try {
+          await fetch(`/api/courseware/attempts/${attemptId}/submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              score: payload?.score ?? payload?.grade ?? payload?.result ?? payload?.points ?? undefined,
+              comment: payload?.comment ?? payload?.feedback ?? payload?.note ?? undefined,
+              completion: payload?.completion ?? 1.0,
+              status: 'submitted',
+              extra: payload
+            })
+          });
+        } catch (e) {
+          console.error('Failed to submit attempt data to backend:', e);
+        }
+      } else if (isSaveProgress) {
+        try {
+          await fetch(`/api/courseware/attempts/${attemptId}/submit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              score: payload?.score ?? payload?.grade ?? payload?.result ?? payload?.points ?? undefined,
+              comment: payload?.comment ?? payload?.feedback ?? undefined,
+              completion: payload?.completion ?? undefined,
+              status: 'inprogress',
+              extra: payload
+            })
+          });
+        } catch (e) {
+          console.error('Failed to save progress to backend:', e);
+        }
+      } else {
+        try {
+          await fetch(`/api/courseware/attempts/${attemptId}/log`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventType: type || 'log',
+              payload: payload
+            })
+          });
+        } catch (e) {
+          console.error('Failed to log event to backend:', e);
+        }
+      }
+    };
+
+    window.addEventListener('message', handleLmsMessage);
+    return () => {
+      window.removeEventListener('message', handleLmsMessage);
+    };
+  }, []);
 
   const saveTimeline = async (lessonId: string, newSegments: any[]) => {
     setEditorSaveStatus('saving');
@@ -4052,6 +4155,27 @@ export default function App() {
                       </button>
                     </div>
                     <div className="prose prose-sm prose-indigo max-w-none">
+                      {/* Timeline Segments (Only when student is unlocked) */}
+                      {!students.find(s => s.id === activeStudentId)?.locked_lesson_id && timelineSegments.length > 0 && (
+                        <div className="mb-4 flex flex-col gap-2 p-3 bg-slate-50/70 border border-slate-200/50 rounded-xl shadow-3xs text-left" onClick={(e) => e.stopPropagation()}>
+                          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1 select-none">
+                            <Activity size={12} className="text-indigo-500" />
+                            {lang === 'zh' ? '教学环节 (点击切换)' : 'Timeline Segments'}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {timelineSegments.map((seg, idx) => (
+                              <button
+                                key={seg.id || idx}
+                                onClick={() => setActiveSegmentId(seg.id)}
+                                className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer shadow-3xs ${seg.color} ${activeSegmentId === seg.id ? 'ring-2 ring-indigo-500 scale-[1.02] shadow-sm border-indigo-400 font-bold' : 'opacity-85 hover:opacity-100'}`}
+                              >
+                                {seg.title} ({seg.duration})
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Learning Progress Slider Feedback Widget */}
                       <div className="mb-4 bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 shadow-3xs flex flex-col gap-1.5 text-left select-none">
                         <div className="flex justify-between items-center text-[10px] font-bold text-gray-500">
@@ -6428,7 +6552,7 @@ export default function App() {
                                </div>
 
                                {/* Class level Tabs */}
-                               <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl mb-4 max-w-sm border border-slate-200/40" onClick={(e) => e.stopPropagation()}>
+                               <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl mb-4 max-w-md border border-slate-200/40" onClick={(e) => e.stopPropagation()}>
                                  <button
                                    onClick={(e) => {
                                      e.stopPropagation();
@@ -6470,6 +6594,20 @@ export default function App() {
                                  >
                                    <CalendarIcon size={12} />
                                    <span>{lang === 'zh' ? '课表考勤' : 'Attendance'}</span>
+                                 </button>
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     setClassActiveTabs(prev => ({ ...prev, [cls.id]: 'grades' }));
+                                   }}
+                                   className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
+                                     (classActiveTabs[cls.id] || 'students') === 'grades'
+                                       ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/50'
+                                       : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+                                   }`}
+                                 >
+                                   <ClipboardList size={12} />
+                                   <span>{lang === 'zh' ? '学期总评' : 'Grades'}</span>
                                  </button>
                                </div>
 
@@ -7590,6 +7728,15 @@ export default function App() {
                                     );
                                  })()}
                                </div>
+                               )}
+
+                               {(classActiveTabs[cls.id] || 'students') === 'grades' && (
+                                 <SemesterGradeManager
+                                   classId={cls.id}
+                                   className={cls.name}
+                                   students={cStudents}
+                                   lang={lang}
+                                 />
                                )}
                              </motion.div>
                            )}

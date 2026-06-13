@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Calendar, Check, X, Clock, Edit2, Trash2, CalendarDays, Download, Upload, 
-  Plus, AlertCircle, FileSpreadsheet, RotateCcw, Filter, Search, Loader2, Sparkles
+  Plus, AlertCircle, FileSpreadsheet, RotateCcw, Filter, Search, Loader2, Sparkles,
+  Camera, ImagePlus, ScanLine, CheckCircle2, XCircle, ArrowRight, Eye
 } from 'lucide-react';
 
 interface ClassType {
@@ -32,16 +33,18 @@ interface TimetableManagerProps {
   lessons: LessonType[];
   lang: 'zh' | 'en';
   onSchedulesUpdated: () => void;
+  onClassesUpdated?: () => void;
 }
 
 export const TimetableManager: React.FC<TimetableManagerProps> = ({
   classes,
   lessons,
   lang,
-  onSchedulesUpdated
+  onSchedulesUpdated,
+  onClassesUpdated
 }) => {
   // Navigation states
-  const [activeTab, setActiveTab] = useState<'view' | 'adjust' | 'import_export'>('view');
+  const [activeTab, setActiveTab] = useState<'view' | 'adjust' | 'import_export' | 'ocr_import'>('view');
   
   // Filtering states
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
@@ -73,6 +76,22 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   const [holEndDate, setHolEndDate] = useState<string>('');
   const [holType, setHolType] = useState<'holiday' | 'cancelled'>('holiday');
   const [holNotes, setHolNotes] = useState<string>('');
+
+  // OCR Image Recognition States
+  const [ocrImagePreview, setOcrImagePreview] = useState<string | null>(null);
+  const [ocrImageBase64, setOcrImageBase64] = useState<string | null>(null);
+  const [ocrLoading, setOcrLoading] = useState<boolean>(false);
+  const [ocrProgress, setOcrProgress] = useState<number>(0);
+  const [ocrProgressStatus, setOcrProgressStatus] = useState<string>('');
+  const [ocrEntries, setOcrEntries] = useState<any[]>([]);
+  const [ocrMessage, setOcrMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
+  const [ocrClassId, setOcrClassId] = useState<string>('');
+  const [ocrWeekStartDate, setOcrWeekStartDate] = useState<string>('');
+  const [ocrImporting, setOcrImporting] = useState<boolean>(false);
+  const [ocrSelectedEntries, setOcrSelectedEntries] = useState<Set<number>>(new Set());
+  const ocrFileInputRef = useRef<HTMLInputElement>(null);
+  const [aiProviders, setAiProviders] = useState<{id: string; name: string; model_name: string}[]>([]);
+  const [ocrProviderId, setOcrProviderId] = useState<string>('');
   
   // Time slots suggestions
   const presetTimeSlots = [
@@ -84,23 +103,28 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     '19:00 - 20:30'
   ];
 
+  const prevClassesKeyRef = useRef<string>('');
+  const prevSelectedClassIdRef = useRef<string>('');
+
   const fetchAllSchedules = async () => {
     setLoading(true);
     try {
-      // We will pull schedules class-by-class or design a global fetch query.
-      // Since local SQLite has /api/classes/:classId/schedules, we compile results for all classes.
-      const classList = selectedClassId === 'all' ? classes : classes.filter(c => c.id === selectedClassId);
-      
-      const all: ScheduleType[] = [];
-      for (const cls of classList) {
-        const res = await fetch(`/api/classes/${cls.id}/schedules`);
+      let all: ScheduleType[] = [];
+      if (selectedClassId === 'all') {
+        const res = await fetch('/api/schedules');
         if (res.ok) {
-          const list = await res.json() as ScheduleType[];
-          // Attach class identifier helper
-          list.forEach(sch => {
-            sch.class_name = cls.name;
-          });
-          all.push(...list);
+          all = await res.json() as ScheduleType[];
+        }
+      } else {
+        const cls = classes.find(c => c.id === selectedClassId);
+        if (cls) {
+          const res = await fetch(`/api/classes/${cls.id}/schedules`);
+          if (res.ok) {
+            all = await res.json() as ScheduleType[];
+            all.forEach(sch => {
+              sch.class_name = cls.name;
+            });
+          }
         }
       }
       
@@ -120,15 +144,29 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   };
 
   useEffect(() => {
-    if (classes.length > 0) {
+    const classesKey = classes.map(c => `${c.id}:${c.name}`).join(',');
+    const hasClassChanged = classesKey !== prevClassesKeyRef.current;
+    const hasSelectedClassChanged = selectedClassId !== prevSelectedClassIdRef.current;
+    
+    if (classes.length > 0 && (hasClassChanged || hasSelectedClassChanged)) {
+      prevClassesKeyRef.current = classesKey;
+      prevSelectedClassIdRef.current = selectedClassId;
       fetchAllSchedules();
     }
   }, [selectedClassId, classes]);
 
+  // Fetch AI providers for OCR feature
+  useEffect(() => {
+    fetch('/api/ai-providers')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setAiProviders(Array.isArray(data) ? data : []))
+      .catch(() => setAiProviders([]));
+  }, []);
+
   // Handle schedule creation
   const handleCreateSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formClassId || !formLessonId || !formDate) {
+    if (!formClassId || !formDate) {
       alert(lang === 'zh' ? '请填写所有必填字段' : 'Please fill all required fields');
       return;
     }
@@ -289,6 +327,497 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     }
   };
 
+  // OCR Image Recognition handler
+  const processOcrImageFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setOcrMessage({ type: 'error', text: lang === 'zh' ? '请选择图片文件（PNG, JPG, JPEG）' : 'Please select an image file (PNG, JPG, JPEG)' });
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setOcrMessage({ type: 'error', text: lang === 'zh' ? '图片大小不能超过 20MB' : 'Image size must be under 20MB' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setOcrImagePreview(dataUrl);
+      setOcrImageBase64(dataUrl);
+      setOcrEntries([]);
+      setOcrMessage(null);
+      setOcrSelectedEntries(new Set());
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleOcrImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processOcrImageFile(file);
+  };
+
+  const handleOcrPaste = (e: React.ClipboardEvent | ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        e.preventDefault();
+        const file = items[i].getAsFile();
+        if (file) processOcrImageFile(file);
+        return;
+      }
+    }
+  };
+
+  const handleOcrDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer?.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      processOcrImageFile(file);
+    }
+  };
+
+  // Listen for global paste when on OCR tab
+  useEffect(() => {
+    if (activeTab !== 'ocr_import') return;
+    const handler = (e: ClipboardEvent) => handleOcrPaste(e);
+    document.addEventListener('paste', handler);
+    return () => document.removeEventListener('paste', handler);
+  }, [activeTab, lang]);
+
+  const handleOcrRecognize = async () => {
+    if (!ocrImageBase64) {
+      setOcrMessage({ type: 'error', text: lang === 'zh' ? '请先上传课表图片' : 'Please upload a timetable image first' });
+      return;
+    }
+    
+    setOcrLoading(true);
+    setOcrProgress(0);
+    setOcrProgressStatus(lang === 'zh' ? '📤 正在上传并优化图像...' : '📤 Uploading and optimizing image...');
+    setOcrMessage({ type: 'info', text: lang === 'zh' ? '🔍 AI 正在分析课表图片，请稍候...' : '🔍 AI is analyzing the timetable image, please wait...' });
+    setOcrEntries([]);
+
+    let currentProgress = 0;
+    const interval = setInterval(() => {
+      currentProgress += Math.random() * 6 + 1; // Increment progress by 1-7%
+      if (currentProgress >= 95) {
+        currentProgress = 95;
+        clearInterval(interval);
+      }
+      setOcrProgress(Math.round(currentProgress));
+
+      // Update status text based on progress
+      if (currentProgress < 20) {
+        setOcrProgressStatus(lang === 'zh' ? '📤 正在上传并优化图像...' : '📤 Uploading and optimizing image...');
+      } else if (currentProgress < 50) {
+        setOcrProgressStatus(lang === 'zh' ? '🧠 AI 正在分析表格排版与单元格...' : '🧠 AI analyzing table layout...');
+      } else if (currentProgress < 75) {
+        setOcrProgressStatus(lang === 'zh' ? '📝 提取课程、班级及教师信息...' : '📝 Extracting lesson and teacher info...');
+      } else {
+        setOcrProgressStatus(lang === 'zh' ? '🔮 正在进行最终数据格式校验...' : '🔮 Verifying data formats...');
+      }
+    }, 400);
+    
+    try {
+      const response = await fetch('/api/timetable/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: ocrImageBase64, lang, providerId: ocrProviderId || undefined })
+      });
+      
+      const responseText = await response.text();
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(lang === 'zh' ? `服务端返回了无效响应: ${responseText.substring(0, 150)}` : `Server returned invalid response: ${responseText.substring(0, 150)}`);
+      }
+      
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'OCR recognition failed');
+      }
+      
+      clearInterval(interval);
+      setOcrProgress(100);
+      setOcrProgressStatus(lang === 'zh' ? '✅ 识别成功，正在载入结果...' : '✅ Recognition complete, loading results...');
+
+      if (data.entries && data.entries.length > 0) {
+        setOcrEntries(data.entries);
+        // Select all by default
+        setOcrSelectedEntries(new Set(data.entries.map((_: any, i: number) => i)));
+        setOcrMessage({ 
+          type: 'success', 
+          text: lang === 'zh' 
+            ? `✅ 识别成功！共检测到 ${data.entries.length} 节课程安排，请审核后导入。` 
+            : `✅ Success! Detected ${data.entries.length} class entries. Review and import below.` 
+        });
+      } else {
+        setOcrMessage({ type: 'error', text: lang === 'zh' ? '未能从图片中识别出课程信息，请尝试更清晰的图片。' : 'No class entries detected. Try a clearer image.' });
+      }
+    } catch (e: any) {
+      clearInterval(interval);
+      setOcrProgress(0);
+      setOcrMessage({ type: 'error', text: `${lang === 'zh' ? 'AI 识别失败：' : 'OCR Failed: '}${e.message}` });
+    } finally {
+      setOcrLoading(false);
+    }
+  };
+
+  const dayOfWeekToDate = (dayOfWeek: any, weekStartDate: string): string => {
+    if (!weekStartDate) return '';
+    try {
+      const start = new Date(weekStartDate);
+      let dayNum = Number(dayOfWeek);
+      if (isNaN(dayNum)) {
+        if (typeof dayOfWeek === 'string') {
+          if (dayOfWeek.includes('一') || dayOfWeek.includes('1') || dayOfWeek.includes('Mon')) dayNum = 1;
+          else if (dayOfWeek.includes('二') || dayOfWeek.includes('2') || dayOfWeek.includes('Tue')) dayNum = 2;
+          else if (dayOfWeek.includes('三') || dayOfWeek.includes('3') || dayOfWeek.includes('Wed')) dayNum = 3;
+          else if (dayOfWeek.includes('四') || dayOfWeek.includes('4') || dayOfWeek.includes('Thu')) dayNum = 4;
+          else if (dayOfWeek.includes('五') || dayOfWeek.includes('5') || dayOfWeek.includes('Fri')) dayNum = 5;
+          else if (dayOfWeek.includes('六') || dayOfWeek.includes('6') || dayOfWeek.includes('Sat')) dayNum = 6;
+          else if (dayOfWeek.includes('日') || dayOfWeek.includes('天') || dayOfWeek.includes('7') || dayOfWeek.includes('Sun')) dayNum = 7;
+        }
+      }
+      if (isNaN(dayNum) || dayNum < 1 || dayNum > 7) {
+        dayNum = 1;
+      }
+      const offset = dayNum - 1;
+      const target = new Date(start);
+      target.setDate(start.getDate() + offset);
+      return target.toISOString().split('T')[0];
+    } catch (err) {
+      console.error('Failed to convert day of week to date:', err);
+      return weekStartDate;
+    }
+  };
+
+  const normalizeClassName = (rawName: string): string | null => {
+    if (!rawName) return null;
+    const clean = rawName.replace(/\s+/g, '').trim();
+
+    // Find the class number at the end, e.g., (6), 6班, 6, (13), 13班
+    const classNumMatch = clean.match(/(\d+)(?:班)?\)?$/) || clean.match(/\((\d+)\)/);
+    if (!classNumMatch) return null;
+    const classNum = classNumMatch[1];
+
+    let segment = '';
+    let grade = 0;
+
+    // 1. Check Senior High (高中): 高一, 高二, 高三
+    if (clean.startsWith('高')) {
+      segment = '高';
+      if (clean.includes('一') || clean.includes('1')) grade = 1;
+      else if (clean.includes('二') || clean.includes('2')) grade = 2;
+      else if (clean.includes('三') || clean.includes('3')) grade = 3;
+    }
+    // 2. Check Junior High (初中): 初一, 初二, 初三, 七年级, 八年级, 九年级
+    else if (clean.startsWith('初')) {
+      segment = '初';
+      if (clean.includes('一') || clean.includes('1')) grade = 1;
+      else if (clean.includes('二') || clean.includes('2')) grade = 2;
+      else if (clean.includes('三') || clean.includes('3')) grade = 3;
+    } else if (clean.startsWith('七') || clean.startsWith('7')) {
+      segment = '初';
+      grade = 1;
+    } else if (clean.startsWith('八') || clean.startsWith('8')) {
+      segment = '初';
+      grade = 2;
+    } else if (clean.startsWith('九') || clean.startsWith('9')) {
+      segment = '初';
+      grade = 3;
+    }
+    // 3. Check Primary School (小学): 一年级, 二年级, 三年级, 四年级, 五年级, 六年级, 小学
+    else if (clean.startsWith('小')) {
+      segment = '小';
+      if (clean.includes('一') || clean.includes('1')) grade = 1;
+      else if (clean.includes('二') || clean.includes('2')) grade = 2;
+      else if (clean.includes('三') || clean.includes('3')) grade = 3;
+      else if (clean.includes('四') || clean.includes('4')) grade = 4;
+      else if (clean.includes('五') || clean.includes('5')) grade = 5;
+      else if (clean.includes('六') || clean.includes('6')) grade = 6;
+    } else {
+      if (clean.startsWith('一') || clean.startsWith('1')) { segment = '小'; grade = 1; }
+      else if (clean.startsWith('二') || clean.startsWith('2')) { segment = '小'; grade = 2; }
+      else if (clean.startsWith('三') || clean.startsWith('3')) { segment = '小'; grade = 3; }
+      else if (clean.startsWith('四') || clean.startsWith('4')) { segment = '小'; grade = 4; }
+      else if (clean.startsWith('五') || clean.startsWith('5')) { segment = '小'; grade = 5; }
+      else if (clean.startsWith('六') || clean.startsWith('6')) { segment = '小'; grade = 6; }
+    }
+
+    if (!segment || grade === 0) {
+      return null;
+    }
+
+    // Compute entry year
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
+    const baseYear = (currentMonth >= 9) ? currentYear : (currentYear - 1);
+    const entryYear = baseYear - (grade - 1);
+
+    return `${segment}${entryYear}级${classNum}班`;
+  };
+
+  const getClassDynamicTag = (className: string): string | null => {
+    if (!className) return null;
+    const match = className.match(/^(初|高|小|小学)(\d{4})级(\d+)班$/);
+    if (!match) return null;
+
+    const segment = match[1];
+    const entryYear = parseInt(match[2], 10);
+    const classNum = match[3];
+
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
+
+    let grade = currentYear - entryYear;
+    if (currentMonth >= 9) {
+      grade += 1;
+    }
+
+    if (grade < 1) {
+      return lang === 'zh' ? '未开学' : 'Not Started';
+    }
+
+    const maxGrade = (segment === '高' || segment === '初') ? 3 : 6;
+    if (grade > maxGrade) {
+      return lang === 'zh' ? '已毕业' : 'Graduated';
+    }
+
+    const chineseNumbers = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+    const gradeStr = lang === 'zh' 
+      ? (chineseNumbers[grade] || grade.toString()) 
+      : grade.toString();
+
+    return `${segment}${gradeStr}(${classNum})`;
+  };
+
+  const getClassDisplayName = (className: string): string => {
+    const tag = getClassDynamicTag(className);
+    if (tag) {
+      return `${className} (${tag})`;
+    }
+    return className;
+  };
+
+  const findMatchedClass = (ocrClassName: string) => {
+    if (!ocrClassName) return null;
+    const cleanOcr = ocrClassName.replace(/\s+/g, '').toLowerCase();
+    
+    // 1. Try exact/substring match
+    let found = classes.find(c => {
+      if (!c || !c.name) return false;
+      const cleanDb = c.name.replace(/\s+/g, '').toLowerCase();
+      return cleanDb === cleanOcr || cleanDb.includes(cleanOcr) || cleanOcr.includes(cleanDb);
+    });
+
+    // 2. Try robust alphanumeric-only fallback match
+    if (!found) {
+      const ocrNum = cleanOcr.replace(/[^0-9a-zA-Z\u4e00-\u9fa5]/g, '');
+      found = classes.find(c => {
+        if (!c || !c.name) return false;
+        const dbNum = c.name.replace(/\s+/g, '').toLowerCase().replace(/[^0-9a-zA-Z\u4e00-\u9fa5]/g, '');
+        return dbNum === ocrNum || dbNum.includes(ocrNum) || ocrNum.includes(dbNum);
+      });
+    }
+    return found || null;
+  };
+
+  const handleOcrImport = async () => {
+    try {
+      if (ocrSelectedEntries.size === 0) {
+        setOcrMessage({ type: 'error', text: lang === 'zh' ? '请至少选择一条课程记录' : 'Please select at least one entry' });
+        return;
+      }
+
+      const defaultTimeSlots: Record<number, string> = {
+        1: '08:00 - 08:40',
+        2: '08:50 - 09:30',
+        3: '10:00 - 10:40',
+        4: '10:50 - 11:30',
+        5: '11:40 - 12:15',
+        6: '14:20 - 15:00',
+        7: '15:10 - 15:50',
+        8: '16:20 - 17:00',
+        9: '19:00 - 20:30'
+      };
+
+      // Calculate current Monday automatically
+      const today = new Date();
+      const day = today.getDay();
+      const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(today.setDate(diff));
+      const autoWeekStartDate = monday.toISOString().split('T')[0];
+
+      setOcrImporting(true);
+      setOcrMessage(null);
+
+      const selectedItems = ocrEntries.filter((_, i) => ocrSelectedEntries.has(i));
+      
+      // Determine which classes need to be created dynamically
+      const classesToCreate = new Set<string>();
+      selectedItems.forEach(entry => {
+        if (entry.className) {
+          const normalized = normalizeClassName(entry.className) || entry.className.trim();
+          const matched = findMatchedClass(normalized);
+          if (!matched) {
+            classesToCreate.add(normalized);
+          }
+        }
+      });
+
+      // Create missing classes dynamically
+      const createdClassMap: Record<string, string> = {};
+      if (classesToCreate.size > 0) {
+        await Promise.all(
+          Array.from(classesToCreate).map(async className => {
+            try {
+              const res = await fetch('/api/classes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: className, description: 'OCR自动生成规范班级' })
+              });
+              if (res.ok) {
+                const data = await res.json();
+                if (data.success && data.id) {
+                  createdClassMap[className] = data.id;
+                }
+              }
+            } catch (err) {
+              console.error(`Failed to dynamically create class ${className}:`, err);
+            }
+          })
+        );
+
+        // Notify parent to refetch classes
+        if (onClassesUpdated) {
+          onClassesUpdated();
+        }
+      }
+
+      // Group schedules by class ID
+      const groupedSchedules: Record<string, any[]> = {};
+      const unmatchedClasses = new Set<string>();
+
+      selectedItems.forEach(entry => {
+        const scheduledDate = dayOfWeekToDate(entry.dayOfWeek || 1, autoWeekStartDate);
+        const timeSlot = entry.timeSlot || defaultTimeSlots[entry.periodNumber] || '09:00 - 10:30';
+        
+        const normalized = entry.className ? (normalizeClassName(entry.className) || entry.className.trim()) : '';
+        const matchedClass = findMatchedClass(normalized);
+        const classId = matchedClass ? matchedClass.id : (normalized ? createdClassMap[normalized] : null);
+
+        if (!classId) {
+          if (entry.className) unmatchedClasses.add(entry.className);
+          return;
+        }
+
+        // Try matching a lesson from the system by className/subject
+        const matchedLesson = lessons.find(l => {
+          const title = l.title.toLowerCase();
+          const className = normalized.toLowerCase();
+          const subject = (entry.subject || '').toLowerCase();
+          return title.includes(className) || title.includes(subject) || className.includes(title);
+        });
+
+        if (!groupedSchedules[classId]) {
+          groupedSchedules[classId] = [];
+        }
+
+        groupedSchedules[classId].push({
+          lessonId: matchedLesson?.id || '',
+          scheduledDate,
+          timeSlot,
+          status: 'scheduled',
+          notes: `${entry.className || ''} ${entry.subject || ''} ${entry.location ? '教室:' + entry.location : ''} ${entry.teacherName ? '教师:' + entry.teacherName : ''}`.trim()
+        });
+      });
+
+      const matchedClassIds = Object.keys(groupedSchedules);
+      if (matchedClassIds.length === 0) {
+        setOcrMessage({ 
+          type: 'error', 
+          text: lang === 'zh' 
+            ? '无法导入：没有解析出任何有效的班级名称。' 
+            : 'Could not match or create any classes for import.'
+        });
+        setOcrImporting(false);
+        return;
+      }
+
+      // Fire parallel batch requests for each class
+      let totalCount = 0;
+      await Promise.all(
+        matchedClassIds.map(async classId => {
+          const response = await fetch(`/api/classes/${classId}/schedules/batch`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ schedules: groupedSchedules[classId] })
+          });
+          if (response.ok) {
+            const resData = await response.json();
+            totalCount += resData.count || 0;
+          } else {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.error || `Failed to import schedules for class ${classId}`);
+          }
+        })
+      );
+
+      // Reset OCR state upon success
+      setOcrEntries([]);
+      setOcrSelectedEntries(new Set());
+      setOcrImagePreview(null);
+      setOcrImageBase64(null);
+      
+      let successMsg = lang === 'zh' 
+        ? `🎉 导入成功！共写入 ${totalCount} 节课时安排。` 
+        : `🎉 Import successful! Saved ${totalCount} schedule entries.`;
+
+      if (classesToCreate.size > 0) {
+        const successfullyCreated = Array.from(classesToCreate).filter(name => createdClassMap[name]);
+        if (successfullyCreated.length > 0) {
+          successMsg += lang === 'zh'
+            ? `（自动创建并规范了新班级：${successfullyCreated.join(', ')}）`
+            : ` (Automatically created classes: ${successfullyCreated.join(', ')})`;
+        }
+      }
+
+      setOcrMessage({ type: 'success', text: successMsg });
+      fetchAllSchedules();
+      onSchedulesUpdated();
+    } catch (err: any) {
+      console.error('OCR Import Error:', err);
+      alert(`${lang === 'zh' ? '导入出错提示：' : 'Import error alert: '}${err.message}`);
+      setOcrMessage({ type: 'error', text: `${lang === 'zh' ? '导入失败：' : 'Import failed: '}${err.message}` });
+    } finally {
+      setOcrImporting(false);
+    }
+  };
+
+  const toggleOcrEntry = (index: number) => {
+    setOcrSelectedEntries(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+
+  const toggleAllOcrEntries = () => {
+    if (ocrSelectedEntries.size === ocrEntries.length) {
+      setOcrSelectedEntries(new Set());
+    } else {
+      setOcrSelectedEntries(new Set(ocrEntries.map((_, i) => i)));
+    }
+  };
+
+  const dayNames = lang === 'zh' 
+    ? ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日']
+    : ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
   // General CSV Export
   const handleExportCSV = () => {
     // Columns: Date, Class Name, Lesson Title, Time Slot, Status, Notes, Class ID, Lesson ID
@@ -370,23 +899,23 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
           });
 
           // Validation
-          if (item.scheduledDate && item.lessonId) {
+          if (item.scheduledDate) {
             itemsToImport.push(item);
           }
         }
       }
 
       if (itemsToImport.length === 0) {
-        throw new Error(lang === 'zh' ? '未解析到合法的课时数据记录。请保证包含日期与课室ID字段！' : 'No valid schedules parsed. Date and lesson_id are required!');
+        throw new Error(lang === 'zh' ? '未解析到合法的课时数据记录。请保证包含日期字段！' : 'No valid schedules parsed. Date is required!');
       }
 
       // Verify that parsed lesson_ids exist or we search and maps properly
       // Match lessonIds to existing system lessons
       const verifiedItems = itemsToImport.map(item => {
         // Try exact match on lesson_id or title match
-        const found = lessons.find(l => l.id === item.lessonId || l.title.toLowerCase() === item.lessonId.toLowerCase());
+        const found = item.lessonId ? lessons.find(l => l.id === item.lessonId || l.title.toLowerCase() === item.lessonId.toLowerCase()) : null;
         return {
-          lessonId: found ? found.id : (lessons[0]?.id || ''),
+          lessonId: found ? found.id : '',
           scheduledDate: item.scheduledDate,
           timeSlot: item.timeSlot || '09:00 - 10:30',
           status: item.status || 'scheduled',
@@ -475,6 +1004,12 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
           >
             {lang === 'zh' ? '📥 快速导入导出' : 'Import / Export'}
           </button>
+          <button 
+            onClick={() => setActiveTab('ocr_import')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'ocr_import' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+          >
+            {lang === 'zh' ? '📷 AI 图片识课' : 'AI Image OCR'}
+          </button>
         </div>
       </div>
 
@@ -498,7 +1033,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                   onChange={e => setSelectedClassId(e.target.value)}
                 >
                   <option value="all">{lang === 'zh' ? '所有班级 (All Classes)' : 'All Classes'}</option>
-                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {classes.map(c => <option key={c.id} value={c.id}>{getClassDisplayName(c.name)}</option>)}
                 </select>
 
                 <select 
@@ -536,7 +1071,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 <button 
                   onClick={() => {
                     setFormClassId(classes[0]?.id || '');
-                    setFormLessonId(lessons[0]?.id || '');
+                    setFormLessonId('');
                     setFormDate(new Date().toISOString().split('T')[0]);
                     setFormStatus('scheduled');
                     setFormNotes('');
@@ -788,7 +1323,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                     onChange={e => setImportClassId(e.target.value)}
                   >
                     <option value="">{lang === 'zh' ? '选择班级...' : 'Select Class...'}</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {classes.map(c => <option key={c.id} value={c.id}>{getClassDisplayName(c.name)}</option>)}
                   </select>
                 </div>
 
@@ -828,6 +1363,320 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
             </div>
           </div>
         )}
+
+        {/* OCR Image Recognition Tab */}
+        {activeTab === 'ocr_import' && (
+          <div className="flex flex-col gap-5">
+            {/* Step 1: Upload Image */}
+            <div className="bg-slate-50/50 border border-slate-200 rounded-2xl p-5">
+              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
+                <Camera className="text-violet-500 shrink-0" size={18} />
+                {lang === 'zh' ? '第一步：上传课表图片' : 'Step 1: Upload Timetable Image'}
+              </h2>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                {lang === 'zh' 
+                  ? '拍照或截图您的纸质/电子课表，AI 将自动识别课程信息并生成结构化数据。支持 PNG、JPG 格式，建议图片清晰、文字可辨。' 
+                  : 'Upload a photo or screenshot of your timetable. AI will automatically recognize class information and generate structured data.'}
+              </p>
+
+              {/* AI Provider Selector */}
+              <div className="mb-4 p-3 bg-white rounded-xl border border-slate-200">
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                  <Sparkles size={12} className="text-violet-500" />
+                  {lang === 'zh' ? 'AI 识别引擎' : 'AI Recognition Engine'}
+                </label>
+                <select
+                  title="OCR AI Provider"
+                  className="w-full bg-slate-50 border border-gray-200 rounded-lg text-xs p-2.5 text-gray-750 cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-violet-500"
+                  value={ocrProviderId}
+                  onChange={e => setOcrProviderId(e.target.value)}
+                >
+                  <option value="">{lang === 'zh' ? '默认 (Gemini)' : 'Default (Gemini)'}</option>
+                  {aiProviders.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.model_name})</option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-gray-400 mt-1 block">
+                  {lang === 'zh' ? '选择用于识别课表图片的 AI 模型。需要支持图片输入的模型（如 GPT-4o、Gemini 等）。' : 'Choose the AI model for timetable recognition. Must support vision/image input.'}
+                </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                {/* Upload Area */}
+                <div 
+                  className="flex-1 border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-violet-400 hover:bg-violet-50/30 transition-all group"
+                  onClick={() => ocrFileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={handleOcrDrop}
+                >
+                  <input 
+                    ref={ocrFileInputRef}
+                    type="file" 
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    className="hidden"
+                    onChange={handleOcrImageSelect}
+                  />
+                  <ImagePlus className="text-slate-400 group-hover:text-violet-500 transition-colors" size={36} />
+                  <span className="text-xs font-semibold text-slate-500 group-hover:text-violet-600 transition-colors">
+                    {lang === 'zh' ? '点击选择、拖拽图片至此处 或 Ctrl+V 粘贴截图' : 'Click, drag & drop, or Ctrl+V to paste screenshot'}
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    {lang === 'zh' ? '支持 PNG / JPG / JPEG / WebP，最大 20MB' : 'Supports PNG / JPG / JPEG / WebP, max 20MB'}
+                  </span>
+                </div>
+
+                {/* Image Preview */}
+                {ocrImagePreview && (
+                  <div className="flex-1 relative rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+                    <img 
+                      src={ocrImagePreview} 
+                      alt="Timetable preview" 
+                      className="w-full h-full object-contain max-h-[280px]"
+                    />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOcrImagePreview(null);
+                        setOcrImageBase64(null);
+                        setOcrEntries([]);
+                        setOcrMessage(null);
+                        setOcrSelectedEntries(new Set());
+                        if (ocrFileInputRef.current) ocrFileInputRef.current.value = '';
+                      }}
+                      className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white p-1.5 rounded-lg transition-colors cursor-pointer"
+                      title={lang === 'zh' ? '移除图片' : 'Remove image'}
+                    >
+                      <X size={14} />
+                    </button>
+                    <div className="absolute bottom-2 left-2 bg-black/50 text-white text-[10px] px-2 py-1 rounded-lg flex items-center gap-1">
+                      <Eye size={10} />
+                      {lang === 'zh' ? '课表预览' : 'Preview'}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Recognize Button */}
+              <button
+                onClick={handleOcrRecognize}
+                disabled={!ocrImageBase64 || ocrLoading}
+                className="mt-4 w-full bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 shadow-sm disabled:cursor-not-allowed"
+              >
+                {ocrLoading ? (
+                  <>
+                    <Loader2 className="animate-spin" size={14} />
+                    {lang === 'zh' ? 'AI 识别中，请稍候...' : 'AI recognizing...'}
+                  </>
+                ) : (
+                  <>
+                    <ScanLine size={14} />
+                    {lang === 'zh' ? '开始 AI 智能识别' : 'Start AI Recognition'}
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Progress Display */}
+            {ocrLoading && (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5 animate-in fade-in duration-200 text-left">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-semibold text-slate-700">{ocrProgressStatus}</span>
+                  <span className="font-mono font-bold text-indigo-600">{ocrProgress}%</span>
+                </div>
+                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden shrink-0">
+                  <div 
+                    className="h-full bg-gradient-to-r from-violet-500 to-indigo-600 transition-all duration-300 rounded-full"
+                    style={{ width: `${ocrProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Status Message */}
+            {ocrMessage && (
+              <div className={`p-3 rounded-xl text-xs border flex items-start gap-2 ${
+                ocrMessage.type === 'error' 
+                  ? 'bg-red-50 border-red-200 text-red-700' 
+                  : ocrMessage.type === 'success'
+                    ? 'bg-green-50 border-green-200 text-green-700'
+                    : 'bg-blue-50 border-blue-200 text-blue-700'
+              }`}>
+                {ocrMessage.type === 'error' ? <XCircle size={14} className="shrink-0 mt-0.5" /> 
+                  : ocrMessage.type === 'success' ? <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
+                  : <ScanLine size={14} className="shrink-0 mt-0.5 animate-pulse" />}
+                <span>{ocrMessage.text}</span>
+              </div>
+            )}
+
+            {/* Step 2: Review Recognized Results */}
+            {ocrEntries.length > 0 && (
+              <div className="bg-slate-50/50 border border-slate-200 rounded-2xl p-5">
+                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
+                  <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
+                  {lang === 'zh' ? '第二步：审核识别结果' : 'Step 2: Review Recognized Entries'}
+                </h2>
+                <p className="text-xs text-gray-500 mb-3">
+                  {lang === 'zh' 
+                    ? '以下是 AI 从课表图片中识别出的课程安排，请勾选需要导入的条目。'
+                    : 'Below are the class entries recognized by AI. Select the ones you want to import.'}
+                </p>
+
+                {/* Select All */}
+                <div className="flex items-center justify-between mb-3">
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
+                    <input 
+                      type="checkbox"
+                      checked={ocrSelectedEntries.size === ocrEntries.length}
+                      onChange={toggleAllOcrEntries}
+                      className="accent-violet-600 cursor-pointer rounded"
+                    />
+                    {lang === 'zh' ? `全选 (${ocrSelectedEntries.size}/${ocrEntries.length})` : `Select All (${ocrSelectedEntries.size}/${ocrEntries.length})`}
+                  </label>
+                  <span className="text-[10px] text-slate-400">
+                    {lang === 'zh' ? '取消勾选可排除不需要导入的条目' : 'Uncheck to exclude entries from import'}
+                  </span>
+                </div>
+
+                {/* Entries Table */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                  <table className="w-full text-left border-collapse table-auto text-xs bg-white">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-gray-600 font-semibold text-[10px] uppercase tracking-wide">
+                        <th className="p-2.5 w-[40px] text-center">✓</th>
+                        <th className="p-2.5">{lang === 'zh' ? '星期' : 'Day'}</th>
+                        <th className="p-2.5">{lang === 'zh' ? '节次' : 'Period'}</th>
+                        <th className="p-2.5">{lang === 'zh' ? '班级' : 'Class'}</th>
+                        <th className="p-2.5">{lang === 'zh' ? '科目' : 'Subject'}</th>
+                        <th className="p-2.5">{lang === 'zh' ? '时间段' : 'Time'}</th>
+                        <th className="p-2.5">{lang === 'zh' ? '教室' : 'Room'}</th>
+                        <th className="p-2.5">{lang === 'zh' ? '教师' : 'Teacher'}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {ocrEntries.map((entry, idx) => (
+                        <tr 
+                          key={idx} 
+                          className={`hover:bg-violet-50/30 transition-colors cursor-pointer ${
+                            ocrSelectedEntries.has(idx) ? 'bg-violet-50/20' : 'opacity-50'
+                          }`}
+                          onClick={() => toggleOcrEntry(idx)}
+                        >
+                          <td className="p-2.5 text-center">
+                            <input 
+                              type="checkbox"
+                              checked={ocrSelectedEntries.has(idx)}
+                              onChange={() => toggleOcrEntry(idx)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="accent-violet-600 cursor-pointer"
+                            />
+                          </td>
+                          <td className="p-2.5 font-medium">
+                            <span className="inline-block bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                              {dayNames[entry.dayOfWeek] || `Day${entry.dayOfWeek}`}
+                            </span>
+                          </td>
+                          <td className="p-2.5">
+                            <span className="inline-block bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                              {lang === 'zh' ? `第${entry.periodNumber}节` : `P${entry.periodNumber}`}
+                            </span>
+                          </td>
+                          <td className="p-2.5 font-semibold text-slate-800">{entry.className || '-'}</td>
+                          <td className="p-2.5">
+                            <span className="inline-block bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                              {entry.subject || '-'}
+                            </span>
+                          </td>
+                          <td className="p-2.5 font-mono text-slate-600">{entry.timeSlot || '-'}</td>
+                          <td className="p-2.5 text-slate-600">{entry.location || '-'}</td>
+                          <td className="p-2.5 text-slate-600">{entry.teacherName || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Import Settings */}
+            {ocrEntries.length > 0 && (
+              <div className="bg-slate-50/50 border border-slate-200 rounded-2xl p-5">
+                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
+                  <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
+                  {lang === 'zh' ? '第三步：确认导入日程' : 'Step 3: Confirm Import'}
+                </h2>
+
+                {(() => {
+                  const today = new Date();
+                  const day = today.getDay();
+                  const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+                  const monday = new Date(today.setDate(diff));
+                  const mondayDate = monday.toISOString().split('T')[0];
+
+                  const selectedItems = ocrEntries.filter((_, i) => ocrSelectedEntries.has(i));
+                  const unmatchedClasses = new Set<string>();
+                  let matchedCount = 0;
+                  selectedItems.forEach(entry => {
+                    const matched = findMatchedClass(entry.className || '');
+                    if (matched) {
+                      matchedCount++;
+                    } else if (entry.className) {
+                      unmatchedClasses.add(entry.className.trim());
+                    }
+                  });
+
+                  return (
+                    <div className="flex flex-col gap-4 mb-4">
+                      <div className="p-3.5 bg-indigo-50 border border-indigo-100 rounded-xl text-xs leading-relaxed">
+                        <div className="font-semibold text-indigo-900 flex items-center gap-1.5 mb-1.5">
+                          <Sparkles size={14} className="text-indigo-600 animate-pulse" />
+                          {lang === 'zh' ? '智能自动匹配规则' : 'Intelligent Auto-Mapping'}
+                        </div>
+                        <div className="text-gray-650 space-y-1">
+                          <div>• {lang === 'zh' ? `本周起始日期（周一）：${mondayDate}` : `Week Start Date (Monday): ${mondayDate}`}</div>
+                          <div>• {lang === 'zh' ? '班级匹配：系统将根据识别到的班级名称自动导入至系统中对应班级。若班级不存在，将自动创建。' : 'Class Matching: System will automatically import entries into matched classes or create new classes on the fly.'}</div>
+                        </div>
+                      </div>
+
+                      <div className="text-xs">
+                        <div className="font-semibold text-gray-700">
+                          {lang === 'zh' 
+                            ? `已选择 ${selectedItems.length} 条记录，其中 ${matchedCount} 条可直接匹配到系统班级。` 
+                            : `${selectedItems.length} entries selected, ${matchedCount} matched existing classes.`}
+                        </div>
+                        {unmatchedClasses.size > 0 && (
+                          <div className="mt-2 p-2.5 bg-violet-50 border border-violet-200 text-violet-800 rounded-lg leading-relaxed">
+                            💡 {lang === 'zh' 
+                              ? `以下识别出的班级在系统中暂不存在，导入时将自动创建：${Array.from(unmatchedClasses).join(', ')}` 
+                              : `The following recognized classes do not exist and will be automatically created on import: ${Array.from(unmatchedClasses).join(', ')}.`}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <button
+                  onClick={handleOcrImport}
+                  disabled={ocrImporting || ocrSelectedEntries.size === 0}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 shadow-sm disabled:cursor-not-allowed"
+                >
+                  {ocrImporting ? (
+                    <>
+                      <Loader2 className="animate-spin" size={14} />
+                      {lang === 'zh' ? '正在导入...' : 'Importing...'}
+                    </>
+                  ) : (
+                    <>
+                      <Check size={14} />
+                      {lang === 'zh' ? `确认导入选中的 ${ocrSelectedEntries.size} 条课程` : `Import ${ocrSelectedEntries.size} Selected Entries`}
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+          </div>
+        )}
       </div>
 
       {/* Add Schedule Dialog */}
@@ -855,20 +1704,19 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                   required
                 >
                   <option value="">{lang === 'zh' ? '请选择班级...' : 'Select Class...'}</option>
-                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {classes.map(c => <option key={c.id} value={c.id}>{getClassDisplayName(c.name)}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '对应授课课题 / 课时 *' : 'Syllabus Lesson *'}</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '对应授课课题 / 课时 (可空，上课时自选)' : 'Syllabus Lesson (Optional, select during class)'}</label>
                 <select 
                   title="Form Lesson ID"
-                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white select-none cursor-pointer focus:outline-hidden"
+                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white select-none cursor-pointer focus:outline-hidden rounded-lg"
                   value={formLessonId}
                   onChange={e => setFormLessonId(e.target.value)}
-                  required
                 >
-                  <option value="">{lang === 'zh' ? '选择对应课时主题...' : 'Select Lesson...'}</option>
+                  <option value="">{lang === 'zh' ? '暂不设定内容 (上课时自由选择)' : 'No fixed content (select during class)'}</option>
                   {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
                 </select>
               </div>
@@ -976,15 +1824,15 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '换课：关联授课主体 *' : 'Swap Topic / Lesson *'}</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '换课：关联授课主体 (可空，上课时自选)' : 'Swap Topic / Lesson (Optional, select during class)'}</label>
                 <select 
                   id="edit_lesson_select"
                   title="Edit Lesson"
-                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white select-none cursor-pointer focus:outline-hidden"
+                  className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white select-none cursor-pointer focus:outline-hidden rounded-lg"
                   value={formLessonId}
                   onChange={e => setFormLessonId(e.target.value)}
-                  required
                 >
+                  <option value="">{lang === 'zh' ? '暂不设定内容 (上课时自由选择)' : 'No fixed content (select during class)'}</option>
                   {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
                 </select>
               </div>

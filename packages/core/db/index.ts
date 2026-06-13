@@ -3,9 +3,16 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const dbPath = path.join(__dirname, 'educational_os.db');
+const getDbDirname = () => {
+  if (typeof import.meta !== 'undefined' && import.meta && (import.meta as any).url) {
+    return path.dirname(fileURLToPath((import.meta as any).url));
+  }
+  if (typeof module !== 'undefined' && (module as any).path) {
+    return (module as any).path;
+  }
+  return process.cwd();
+};
+const dbPath = path.join(getDbDirname(), 'educational_os.db');
 
 export const db = new Database(dbPath);
 
@@ -193,7 +200,8 @@ db.exec(`
     password_hash TEXT NOT NULL,
     role TEXT NOT NULL,
     name TEXT NOT NULL,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    status TEXT DEFAULT 'active'
   );
 
   CREATE TABLE IF NOT EXISTS client_sessions (
@@ -216,6 +224,86 @@ db.exec(`
     model_name TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS exams (
+    id TEXT PRIMARY KEY,
+    class_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    max_score INTEGER NOT NULL DEFAULT 100,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS exam_scores (
+    exam_id TEXT NOT NULL,
+    student_id TEXT NOT NULL,
+    score REAL,
+    notes TEXT,
+    recorded_at INTEGER NOT NULL,
+    PRIMARY KEY (exam_id, student_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS class_grade_weights (
+    class_id TEXT PRIMARY KEY,
+    attendance_weight REAL NOT NULL DEFAULT 0.15,
+    progress_weight REAL NOT NULL DEFAULT 0.25,
+    assignment_weight REAL NOT NULL DEFAULT 0.35,
+    exam_weight REAL NOT NULL DEFAULT 0.25,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS student_semester_reports (
+    id TEXT PRIMARY KEY,
+    student_id TEXT NOT NULL,
+    class_id TEXT NOT NULL,
+    semester_name TEXT NOT NULL,
+    attendance_score REAL NOT NULL,
+    progress_score REAL NOT NULL,
+    assignment_score REAL NOT NULL,
+    exam_score REAL NOT NULL,
+    total_score REAL NOT NULL,
+    grade_level TEXT NOT NULL,
+    teacher_evaluation TEXT,
+    ai_evaluation TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE(student_id, class_id, semester_name)
+  );
+
+  CREATE TABLE IF NOT EXISTS courseware (
+    id TEXT PRIMARY KEY,
+    uuid TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    type TEXT,
+    entry TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS courseware_attempt (
+    id TEXT PRIMARY KEY,
+    courseware_id TEXT NOT NULL,
+    student_id TEXT NOT NULL,
+    started_at INTEGER NOT NULL,
+    finished_at INTEGER,
+    status TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS submission_raw (
+    id TEXT PRIMARY KEY,
+    attempt_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS submission_result (
+    id TEXT PRIMARY KEY,
+    attempt_id TEXT NOT NULL,
+    score REAL,
+    comment TEXT,
+    completion REAL,
+    extra_json TEXT
   );
 `);
 
@@ -300,6 +388,12 @@ try {
 
 try {
   db.prepare('ALTER TABLE assignments ADD COLUMN lesson_id TEXT').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.prepare('ALTER TABLE users ADD COLUMN status TEXT DEFAULT "active"').run();
 } catch (e) {
   // column already exists
 }

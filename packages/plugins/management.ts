@@ -853,9 +853,9 @@ export function bootstrapManagementPlugins() {
     async execute(command) {
       const payload = command.payload as any;
       let query = `
-        SELECT s.*, l.title as lesson_title, c.name as class_name
+        SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name
         FROM schedules s
-        JOIN lessons l ON s.lesson_id = l.id
+        LEFT JOIN lessons l ON s.lesson_id = l.id
         JOIN classes c ON s.class_id = c.id
       `;
       const params: any[] = [];

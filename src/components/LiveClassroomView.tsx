@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Square, Pause, Users, Presentation, Clock, Shuffle, CheckCircle2, XCircle, Shield, ShieldAlert, Check, RefreshCw, Send, HelpCircle, Activity, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Square, Pause, Users, Presentation, Clock, Shuffle, CheckCircle2, XCircle, Shield, ShieldAlert, Check, RefreshCw, Send, HelpCircle, Activity, ChevronLeft, ChevronRight, Eye, FileText, Database, Award, Search } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { InteractiveWhiteboard } from './InteractiveWhiteboard';
+import { io } from 'socket.io-client';
 
 // Dynamic Icon component to render Lucide icons by name string
 function DynamicIcon({ name, ...props }: { name: string; [key: string]: any }) {
@@ -85,6 +86,108 @@ export function LiveClassroomView({
     lesson: null,
     classId: null
   });
+
+  // Interactive courseware submission states
+  const [middleTab, setMiddleTab] = useState<'whiteboard' | 'submissions'>('whiteboard');
+  const [attempts, setAttempts] = useState<any[]>([]);
+  const [loadingAttempts, setLoadingAttempts] = useState(false);
+  const [selectedAttempt, setSelectedAttempt] = useState<any | null>(null);
+  const [rawPayload, setRawPayload] = useState<any | null>(null);
+  const [loadingRaw, setLoadingRaw] = useState(false);
+  const [submissionFilter, setSubmissionFilter] = useState<'all' | 'submitted' | 'started'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const fetchAttempts = async () => {
+    setLoadingAttempts(true);
+    try {
+      const res = await fetch('/api/courseware/attempts');
+      if (res.ok) {
+        const data = await res.json();
+        setAttempts(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch attempts', e);
+    } finally {
+      setLoadingAttempts(false);
+    }
+  };
+
+  useEffect(() => {
+    if (middleTab === 'submissions') {
+      fetchAttempts();
+    }
+  }, [middleTab]);
+
+  useEffect(() => {
+    const socket = io();
+    socket.on('courseware-attempt-updated', () => {
+      fetchAttempts();
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  const handlePromoteAttempt = async (attemptId: string) => {
+    if (!selectedLesson || !liveClassSelectedClassId) {
+      addToast(
+        lang === 'zh' ? '⚠️ 无法操作' : '⚠️ Action Prevented',
+        lang === 'zh' ? '请先在顶部栏选择要绑定的课节和班级。' : 'Please select lesson and class first.',
+        'warning'
+      );
+      return;
+    }
+    try {
+      const res = await fetch(`/api/courseware/attempts/${attemptId}/promote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lessonId: selectedLesson,
+          classId: liveClassSelectedClassId
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        addToast(
+          lang === 'zh' ? '✓ 学习数据已保存' : '✓ Data Recorded',
+          lang === 'zh' ? `成功将该数据存入数据库！分数: ${data.score}，已同步更新至学生学习进度。` : `Successfully recorded submission! Score: ${data.score}.`,
+          'success'
+        );
+        fetchAttempts();
+        if (fetchStudents) {
+          fetchStudents();
+        }
+      } else {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Server error');
+      }
+    } catch (err: any) {
+      addToast(
+        lang === 'zh' ? '❌ 保存失败' : '❌ Save Failed',
+        err.message || 'Error occurred while saving.',
+        'warning'
+      );
+    }
+  };
+
+  const handleViewRaw = async (attempt: any) => {
+    setSelectedAttempt(attempt);
+    setLoadingRaw(true);
+    setRawPayload(null);
+    try {
+      const res = await fetch(`/api/courseware/attempts/${attempt.attemptId}/raw`);
+      if (res.ok) {
+        const data = await res.json();
+        setRawPayload(data);
+      } else {
+        setRawPayload({ error: 'Failed to load raw data' });
+      }
+    } catch (e: any) {
+      setRawPayload({ error: e.message || 'Error loading data' });
+    } finally {
+      setLoadingRaw(false);
+    }
+  };
 
   // Find if class-wide locking is active (if all students are locked to this lesson)
   const isClassLocked = !!(liveClassSelectedClassId && students
@@ -460,8 +563,8 @@ export function LiveClassroomView({
               disabled={lockingClass || !selectedLesson || !liveClassSelectedClassId}
               className={`px-3 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer ${
                 isClassLocked 
-                  ? 'bg-gradient-to-r from-rose-500 to-red-650 hover:from-rose-600 hover:to-red-700 text-white' 
-                  : 'bg-gradient-to-r from-indigo-600 to-purple-650 hover:from-indigo-700 hover:to-purple-750 text-white'
+                  ? 'bg-rose-500 hover:bg-rose-600 text-white' 
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white'
               }`}
             >
               {isClassLocked ? <ShieldAlert size={12} /> : <Shield size={12} />}
@@ -576,97 +679,299 @@ export function LiveClassroomView({
         <div className="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-3 relative">
           {selectedLesson ? (
             <div className="w-full h-full relative flex flex-col min-h-0">
-              <div className="flex justify-between items-center px-1.5 py-1 select-none text-slate-500 text-[10px] uppercase font-extrabold tracking-wide shrink-0">
-                <div className="flex items-center gap-2">
+              <div className="flex justify-between items-center px-1.5 py-1 select-none text-slate-500 text-[10px] uppercase font-extrabold tracking-wide shrink-0 mb-1">
+                <div className="flex items-center gap-3">
                   {isLeftSidebarCollapsed && (
                     <button
                       onClick={() => setIsLeftSidebarCollapsed(false)}
-                      className="p-1 rounded bg-white hover:bg-slate-100 border border-slate-200 text-indigo-650 hover:text-indigo-700 transition-colors cursor-pointer mr-1.5 flex items-center gap-1 shadow-sm"
+                      className="p-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-205 text-indigo-650 hover:text-indigo-700 transition-colors cursor-pointer mr-1.5 flex items-center gap-1 shadow-sm"
                       title={lang === 'zh' ? '展开环节大纲' : 'Expand Sidebar'}
                     >
                       <ChevronRight size={10} />
-                      <span className="text-[9px] font-bold tracking-wider">{lang === 'zh' ? '展开大纲' : 'Expand'}</span>
+                      <span className="text-[9px] font-bold tracking-wider">{lang === 'zh' ? '展开' : 'Expand'}</span>
                     </button>
                   )}
-                  <span>{lang === 'zh' ? '💻 教师白板演示大屏 (实时同步至学生端)' : '💻 Live presentation screen'}</span>
+                  <div className="bg-slate-200/60 p-0.5 rounded-lg flex items-center gap-1">
+                    <button
+                      onClick={() => setMiddleTab('whiteboard')}
+                      className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                        middleTab === 'whiteboard'
+                          ? 'bg-white text-indigo-700 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {lang === 'zh' ? '💻 演示白板' : '💻 Whiteboard'}
+                    </button>
+                    <button
+                      onClick={() => setMiddleTab('submissions')}
+                      className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                        middleTab === 'submissions'
+                          ? 'bg-white text-indigo-700 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {lang === 'zh' ? '📊 学生提交数据' : '📊 Student Submissions'}
+                    </button>
+                  </div>
                 </div>
-                <span className="text-indigo-650 font-mono tracking-widest animate-pulse flex items-center gap-1">
+                <span className="text-indigo-655 font-mono tracking-widest animate-pulse flex items-center gap-1">
                   <Activity size={10} /> Live Broadcaster Connected
                 </span>
               </div>
               
-              {/* Whiteboard canvas wrapper */}
-              <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-slate-200 shadow-md bg-white flex flex-col">
-                <InteractiveWhiteboard
-                  lessonId={selectedLesson}
-                  userRole="teacher"
-                  isEditMode={false}
-                  elements={elements}
-                  activeSegmentId={activeSegmentId}
-                  onSegmentSync={(segId) => setActiveSegmentId(segId)}
-                  onElementAdd={async (type, data) => {
-                    await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ type, data })
-                    });
-                    fetchElements(selectedLesson);
-                  }}
-                  onElementUpdate={async (elementId, data) => {
-                    await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ data })
-                    });
-                    fetchElements(selectedLesson);
-                  }}
-                  onElementDelete={async (elementId) => {
-                    await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                      method: 'DELETE'
-                    });
-                    fetchElements(selectedLesson);
-                  }}
-                  onRefresh={() => fetchElements(selectedLesson)}
-                />
-              </div>
+              {middleTab === 'whiteboard' ? (
+                <>
+                  {/* Whiteboard canvas wrapper */}
+                  <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-slate-200 shadow-md bg-white flex flex-col">
+                    <InteractiveWhiteboard
+                      lessonId={selectedLesson}
+                      userRole="teacher"
+                      isEditMode={false}
+                      elements={elements}
+                      activeSegmentId={activeSegmentId}
+                      onSegmentSync={(segId) => setActiveSegmentId(segId)}
+                      onElementAdd={async (type, data) => {
+                        await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ type, data })
+                        });
+                        fetchElements(selectedLesson);
+                      }}
+                      onElementUpdate={async (elementId, data) => {
+                        await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ data })
+                        });
+                        fetchElements(selectedLesson);
+                      }}
+                      onElementDelete={async (elementId) => {
+                        await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                          method: 'DELETE'
+                        });
+                        fetchElements(selectedLesson);
+                      }}
+                      onRefresh={() => fetchElements(selectedLesson)}
+                    />
+                  </div>
 
-              {/* Classroom Interactive Tool Shelf (Extensible Tools Panel) */}
-              <div className="mt-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm shrink-0 flex flex-col gap-2 relative z-30">
-                <div className="flex items-center justify-between text-[10px] uppercase font-black text-slate-550 tracking-wider select-none">
-                  <span className="flex items-center gap-1.5 text-indigo-655">
-                    <Shuffle size={12} className="text-indigo-600 animate-pulse" />
-                    <span>{lang === 'zh' ? '互动工具 (插件扩展)' : 'Classroom Interactive Tools'}</span>
-                  </span>
-                  <span className="text-[8.5px] text-slate-400 font-mono">Plugins: {classroomTools.length} Active</span>
-                </div>
-                
-                {classroomTools.length > 0 ? (
-                  <div className="flex gap-2.5 overflow-x-auto py-0.5 pr-2 scrollbar-thin">
-                    {classroomTools.map((tool) => (
-                      <button
-                        key={tool.id}
-                        onClick={() => handleExecuteTool(tool)}
-                        disabled={!selectedLesson}
-                        className="p-2 bg-slate-50 hover:bg-slate-105 border border-slate-205 hover:border-indigo-200 rounded-xl text-left transition-all active:scale-[0.98] disabled:opacity-40 flex items-center gap-2.5 w-44 shrink-0 group cursor-pointer"
-                        title={tool.description}
+                  {/* Classroom Interactive Tool Shelf (Extensible Tools Panel) */}
+                  <div className="mt-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm shrink-0 flex flex-col gap-2 relative z-30">
+                    <div className="flex items-center justify-between text-[10px] uppercase font-black text-slate-555 tracking-wider select-none">
+                      <span className="flex items-center gap-1.5 text-indigo-655">
+                        <Shuffle size={12} className="text-indigo-600 animate-pulse" />
+                        <span>{lang === 'zh' ? '互动工具 (插件扩展)' : 'Classroom Interactive Tools'}</span>
+                      </span>
+                      <span className="text-[8.5px] text-slate-400 font-mono">Plugins: {classroomTools.length} Active</span>
+                    </div>
+                    
+                    {classroomTools.length > 0 ? (
+                      <div className="flex gap-2.5 overflow-x-auto py-0.5 pr-2 scrollbar-thin">
+                        {classroomTools.map((tool) => (
+                          <button
+                            key={tool.id}
+                            onClick={() => handleExecuteTool(tool)}
+                            disabled={!selectedLesson}
+                            className="p-2 bg-slate-50 hover:bg-slate-105 border border-slate-205 hover:border-indigo-200 rounded-xl text-left transition-all active:scale-[0.98] disabled:opacity-40 flex items-center gap-2.5 w-44 shrink-0 group cursor-pointer"
+                            title={tool.description}
+                          >
+                            <div className="p-1.5 bg-indigo-50 text-indigo-650 group-hover:bg-indigo-100 group-hover:text-indigo-700 rounded-lg border border-indigo-100 shrink-0 transition-colors">
+                              <DynamicIcon name={tool.icon} size={14} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-bold text-slate-700 group-hover:text-slate-900 truncate">{tool.name}</div>
+                              <div className="text-[9px] text-slate-400 group-hover:text-slate-555 truncate mt-0.5">{tool.description}</div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-2 text-[10px] text-slate-400 italic">
+                        {lang === 'zh' ? '暂无可用的互动工具。请在应用商店启用插件。' : 'No plugin tools loaded.'}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-slate-200 shadow-md bg-white flex flex-col p-4">
+                  {/* Submissions list view */}
+                  <div className="flex justify-between items-center mb-4 gap-3 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-700">{lang === 'zh' ? '学生互动提交数据列表' : 'Student Submissions'}</span>
+                      {attempts.length > 0 && (
+                        <span className="text-[9px] bg-indigo-50 text-indigo-750 px-2 py-0.5 rounded-full border border-indigo-100 font-bold">
+                          {attempts.length} {lang === 'zh' ? '条记录' : 'records'}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Search */}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder={lang === 'zh' ? '搜索学生或课件...' : 'Search student or courseware...'}
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="bg-white border border-slate-200 rounded-lg text-xs pl-8 pr-3 py-1.5 focus:ring-1 focus:ring-indigo-500 text-slate-700 outline-none w-44 transition-all"
+                        />
+                        <Search size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
+                      </div>
+
+                      {/* Filter */}
+                      <select
+                        value={submissionFilter}
+                        onChange={(e: any) => setSubmissionFilter(e.target.value)}
+                        className="bg-white border border-slate-200 rounded-lg text-xs px-3 py-1.5 focus:ring-1 focus:ring-indigo-500 text-slate-700 outline-none cursor-pointer hover:bg-slate-50 transition-colors"
                       >
-                        <div className="p-1.5 bg-indigo-50 text-indigo-650 group-hover:bg-indigo-100 group-hover:text-indigo-700 rounded-lg border border-indigo-100 shrink-0 transition-colors">
-                          <DynamicIcon name={tool.icon} size={14} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-xs font-bold text-slate-700 group-hover:text-slate-900 truncate">{tool.name}</div>
-                          <div className="text-[9px] text-slate-400 group-hover:text-slate-555 truncate mt-0.5">{tool.description}</div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-2 text-[10px] text-slate-400 italic">
-                    {lang === 'zh' ? '暂无可用的互动工具。请在应用商店启用插件。' : 'No plugin tools loaded.'}
-                  </div>
-                )}
-              </div>
+                        <option value="all">{lang === 'zh' ? '全部状态' : 'All Status'}</option>
+                        <option value="submitted">{lang === 'zh' ? '已提交/完成' : 'Submitted/Finished'}</option>
+                        <option value="started">{lang === 'zh' ? '进行中' : 'In Progress'}</option>
+                      </select>
 
+                      {/* Refresh */}
+                      <button
+                        onClick={fetchAttempts}
+                        disabled={loadingAttempts}
+                        className="p-1.5 bg-white hover:bg-slate-50 border border-slate-205 rounded-lg text-slate-605 hover:text-slate-800 transition-colors cursor-pointer flex items-center justify-center shadow-sm disabled:opacity-50"
+                        title={lang === 'zh' ? '刷新数据' : 'Refresh'}
+                      >
+                        <RefreshCw size={12} className={loadingAttempts ? 'animate-spin' : ''} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Table area */}
+                  <div className="flex-1 overflow-y-auto border border-slate-100 rounded-xl scrollbar-thin">
+                    {loadingAttempts ? (
+                      <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2">
+                        <RefreshCw size={24} className="animate-spin text-indigo-600 mb-2" />
+                        <span className="text-xs">{lang === 'zh' ? '正在加载学生提交数据...' : 'Loading submissions...'}</span>
+                      </div>
+                    ) : (() => {
+                      const classStudentIds = liveClassSelectedClassId ? students.map(s => s.id) : [];
+                      const classFiltered = liveClassSelectedClassId 
+                        ? attempts.filter(a => classStudentIds.includes(a.studentId))
+                        : attempts;
+
+                      const displayAttempts = classFiltered.filter(a => {
+                        const matchesSearch = 
+                          (a.studentName?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          (a.coursewareName?.toLowerCase().includes(searchQuery.toLowerCase()));
+                        
+                        const matchesStatus = 
+                          submissionFilter === 'all' ||
+                          (submissionFilter === 'submitted' && (a.status === 'submitted' || a.status === 'finished')) ||
+                          (submissionFilter === 'started' && a.status === 'started');
+                          
+                        return matchesSearch && matchesStatus;
+                      });
+
+                      if (displayAttempts.length === 0) {
+                        return (
+                          <div className="h-full flex flex-col items-center justify-center py-12 text-slate-400 gap-2">
+                            <FileText size={32} className="text-slate-300" />
+                            <span className="text-xs">{lang === 'zh' ? '暂无匹配的提交数据。' : 'No matching submissions found.'}</span>
+                            {!liveClassSelectedClassId && (
+                              <span className="text-[10px] text-slate-400 italic">
+                                {lang === 'zh' ? '提示：请在顶部选择一个班级进行筛选。' : 'Tip: Select a class at the top to filter.'}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <table className="w-full border-collapse text-left text-xs text-slate-700">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-550 select-none">
+                              <th className="p-3">{lang === 'zh' ? '学生姓名' : 'Student Name'}</th>
+                              <th className="p-3">{lang === 'zh' ? '交互课件' : 'Courseware'}</th>
+                              <th className="p-3">{lang === 'zh' ? '状态' : 'Status'}</th>
+                              <th className="p-3 text-center">{lang === 'zh' ? '成绩' : 'Score'}</th>
+                              <th className="p-3 text-center">{lang === 'zh' ? '完成度' : 'Completion'}</th>
+                              <th className="p-3 text-right">{lang === 'zh' ? '操作' : 'Actions'}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {displayAttempts.map((a) => {
+                              const isFinished = a.status === 'finished' || a.status === 'submitted';
+                              const formattedTime = a.started_at ? new Date(a.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+                              
+                              return (
+                                <tr key={a.attemptId} className="hover:bg-slate-50/50 transition-colors group">
+                                  <td className="p-3">
+                                    <div className="font-semibold text-slate-800">{a.studentName}</div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5">{lang === 'zh' ? '时间' : 'Time'}: {formattedTime}</div>
+                                  </td>
+                                  <td className="p-3 font-medium text-slate-600 max-w-[150px] truncate" title={a.coursewareName}>
+                                    {a.coursewareName}
+                                  </td>
+                                  <td className="p-3">
+                                    <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                                      isFinished
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                        : 'bg-blue-50 text-blue-700 border-blue-100 animate-pulse'
+                                    }`}>
+                                      {isFinished ? (lang === 'zh' ? '已提交' : 'Finished') : (lang === 'zh' ? '进行中' : 'Running')}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 text-center font-bold font-mono">
+                                    {a.score !== null ? (
+                                      <span className="text-indigo-650 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-md">
+                                        {a.score}分
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400 font-medium">-</span>
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-center font-semibold font-mono">
+                                    {a.completion !== null ? `${Math.round(a.completion * 100)}%` : '0%'}
+                                  </td>
+                                  <td className="p-3 text-right">
+                                    <div className="flex justify-end gap-2">
+                                      <button
+                                        onClick={() => handleViewRaw(a)}
+                                        className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 border border-transparent hover:border-slate-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-[10px]"
+                                        title={lang === 'zh' ? '查看提交轨迹事件数据' : 'View Raw Data'}
+                                      >
+                                        <Eye size={12} />
+                                        <span>{lang === 'zh' ? '轨迹' : 'Events'}</span>
+                                      </button>
+                                      
+                                      {a.isPromoted > 0 ? (
+                                        <span className="px-2 py-1 text-emerald-650 font-bold text-[10px] flex items-center gap-0.5 bg-emerald-50/50 rounded-lg border border-emerald-100">
+                                          <Check size={11} />
+                                          {lang === 'zh' ? '已归档' : 'Saved'}
+                                        </span>
+                                      ) : (
+                                        <button
+                                          onClick={() => handlePromoteAttempt(a.attemptId)}
+                                          disabled={!isFinished}
+                                          className={`px-2 py-1 text-[10px] font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border ${
+                                            isFinished 
+                                              ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
+                                              : 'bg-slate-55 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                                          }`}
+                                          title={lang === 'zh' ? '将分数和进度作为随堂学习数据存入数据库，记入学期成绩' : 'Save to DB & Semester grade'}
+                                        >
+                                          <Database size={11} />
+                                          <span>{lang === 'zh' ? '录入成绩' : 'Record'}</span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-455 gap-2.5 select-none">
@@ -1018,6 +1323,112 @@ export function LiveClassroomView({
         </div>
 
       </div>
+
+      {/* Raw Data Detail Modal */}
+      {selectedAttempt && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-100 animate-in fade-in zoom-in duration-200">
+            {/* Modal Header */}
+            <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="text-indigo-600" size={18} />
+                <h3 className="text-sm font-bold text-slate-800">
+                  {lang === 'zh' 
+                    ? `[${selectedAttempt.studentName}] 的互动提交轨迹详情` 
+                    : `Submission Details - ${selectedAttempt.studentName}`}
+                </h3>
+              </div>
+              <button
+                onClick={() => setSelectedAttempt(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 scrollbar-thin">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'zh' ? '课件名称' : 'Courseware'}</div>
+                  <div className="text-xs font-semibold text-slate-700 mt-1 truncate" title={selectedAttempt.coursewareName}>
+                    {selectedAttempt.coursewareName}
+                  </div>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'zh' ? '提交成绩' : 'Score'}</div>
+                  <div className="text-xs font-bold text-indigo-600 mt-1">
+                    {selectedAttempt.score !== null ? `${selectedAttempt.score} 分` : lang === 'zh' ? '未打分' : 'N/A'}
+                  </div>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'zh' ? '课件完成度' : 'Completion'}</div>
+                  <div className="text-xs font-bold text-emerald-600 mt-1">
+                    {selectedAttempt.completion !== null ? `${Math.round(selectedAttempt.completion * 100)}%` : '0%'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Event Logs Timeline */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-slate-700 border-b border-slate-100 pb-1.5 flex items-center gap-1.5 flex-wrap">
+                  <Activity size={13} className="text-indigo-650" />
+                  <span>{lang === 'zh' ? '实时捕获轨迹事件流 (LMS Bridge)' : 'LMS Event Captures'}</span>
+                </h4>
+
+                {loadingRaw ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-2">
+                    <RefreshCw size={20} className="animate-spin text-indigo-600" />
+                    <span className="text-xs">{lang === 'zh' ? '正在查询原始数据...' : 'Loading raw data...'}</span>
+                  </div>
+                ) : Array.isArray(rawPayload) && rawPayload.length > 0 ? (
+                  <div className="space-y-3 font-mono text-[11px] max-h-[40vh] overflow-y-auto pr-1 scrollbar-thin">
+                    {rawPayload.map((evt, idx) => {
+                      let parsedPayload = {};
+                      try {
+                        parsedPayload = typeof evt.payload_json === 'string' ? JSON.parse(evt.payload_json) : evt.payload_json;
+                      } catch(e) {}
+                      
+                      return (
+                        <div key={evt.id || idx} className="p-3 bg-slate-900 text-slate-200 rounded-xl border border-slate-800 flex flex-col gap-1.5">
+                          <div className="flex justify-between items-center text-[10px] text-slate-400 border-b border-slate-800 pb-1">
+                            <span className="font-bold text-indigo-400 bg-indigo-950/50 border border-indigo-900/50 px-1.5 py-0.5 rounded">
+                              {evt.event_type}
+                            </span>
+                            <span>{new Date(evt.created_at).toLocaleTimeString()}</span>
+                          </div>
+                          <pre className="overflow-x-auto text-[10px] leading-relaxed p-1 text-emerald-400/90 whitespace-pre-wrap word-break-all">
+                            {JSON.stringify(parsedPayload, null, 2)}
+                          </pre>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-xs text-slate-400 italic">
+                    {lang === 'zh' ? '该学生未产生任何轨迹事件数据。' : 'No trace events captured.'}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-between gap-3 shrink-0">
+              <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                <Award size={10} />
+                <span>Powered by LMS Bridge API v1</span>
+              </div>
+              <button
+                onClick={() => setSelectedAttempt(null)}
+                className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs transition-all cursor-pointer shadow-sm active:scale-95"
+              >
+                {lang === 'zh' ? '关闭窗口' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

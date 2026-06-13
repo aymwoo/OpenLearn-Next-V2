@@ -1,5 +1,9 @@
 import { kernelContainer } from '../core/kernel/index.js';
 import { v7 as uuidv7 } from 'uuid';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import JSZip from 'jszip';
 
 export function bootstrapBuiltinPlugins() {
   const { commandBus, actionRegistry, db, eventBus } = kernelContainer;
@@ -493,6 +497,578 @@ export function bootstrapBuiltinPlugins() {
       const payload = command.payload as any;
       const newStatus = await kernelContainer.pluginRuntime.togglePlugin(payload.pluginId);
       return { success: true, status: newStatus };
+    }
+  });
+
+  // 8. USER LIST HANDLER
+  const listUsersCmdType = 'user.list';
+  actionRegistry.register({
+    id: 'core-user-list',
+    commandType: listUsersCmdType,
+    description: 'List all registered teacher and administrator accounts',
+    capabilityRequired: 'management:read',
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        role: { type: 'STRING', description: 'Filter by role: administrator or teacher (optional)' }
+      }
+    }
+  });
+
+  commandBus.registerHandler(listUsersCmdType, {
+    async execute(command) {
+      const payload = command.payload as any;
+      let query = 'SELECT id, username, role, name, status, created_at FROM users';
+      const params: any[] = [];
+      if (payload.role) {
+        query += ' WHERE role = ?';
+        params.push(payload.role);
+      }
+      query += ' ORDER BY created_at DESC';
+      const users = db.prepare(query).all(...params);
+      return users;
+    }
+  });
+
+  // 9. USER CREATE HANDLER
+  const createUserCmdType = 'user.create';
+  actionRegistry.register({
+    id: 'core-user-create',
+    commandType: createUserCmdType,
+    description: 'Create a new teacher or administrator account',
+    capabilityRequired: 'management:write',
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        username: { type: 'STRING', description: 'Unique username for login' },
+        password: { type: 'STRING', description: 'Plaintext login password' },
+        role: { type: 'STRING', description: 'Role of the user: administrator or teacher' },
+        name: { type: 'STRING', description: 'Display name of the user' },
+        status: { type: 'STRING', description: 'Initial status: active or disabled (optional)' }
+      },
+      required: ['username', 'password', 'role', 'name']
+    }
+  });
+
+  commandBus.registerHandler(createUserCmdType, {
+    async execute(command) {
+      const payload = command.payload as any;
+      const { username, password, role, name, status = 'active' } = payload;
+      
+      if (!username || !password || !role || !name) {
+        throw new Error('username, password, role, and name are required');
+      }
+      
+      const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+      if (existing) {
+        throw new Error('Username is already taken');
+      }
+      
+      const id = 'usr_' + Math.random().toString(36).slice(2, 10);
+      const hash = crypto.createHash('sha256').update(password).digest('hex');
+      
+      db.prepare(
+        'INSERT INTO users (id, username, password_hash, role, name, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).run(id, username, hash, role, name, status, Date.now());
+
+      await eventBus.publish({
+        id: uuidv7(),
+        type: 'user.created',
+        source: 'builtin.user',
+        payload: { id, username, role, name, status },
+        timestamp: Date.now(),
+        correlationId: command.id
+      });
+
+      return { success: true, id, username, role, name, status };
+    }
+  });
+
+  // 10. USER UPDATE HANDLER
+  const updateUserCmdType = 'user.update';
+  actionRegistry.register({
+    id: 'core-user-update',
+    commandType: updateUserCmdType,
+    description: 'Update an existing user account details',
+    capabilityRequired: 'management:write',
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        userId: { type: 'STRING', description: 'The unique ID of the user to update' },
+        username: { type: 'STRING', description: 'New username (optional)' },
+        password: { type: 'STRING', description: 'New plaintext password to update (optional)' },
+        role: { type: 'STRING', description: 'New role: administrator or teacher (optional)' },
+        name: { type: 'STRING', description: 'New display name (optional)' },
+        status: { type: 'STRING', description: 'New status: active or disabled (optional)' }
+      },
+      required: ['userId']
+    }
+  });
+
+  commandBus.registerHandler(updateUserCmdType, {
+    async execute(command) {
+      const payload = command.payload as any;
+      const { userId, username, password, role, name, status } = payload;
+      
+      const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
+      if (!user) {
+        throw new Error(`User with ID ${userId} not found`);
+      }
+      
+      if (username && username !== user.username) {
+        const existing = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, userId);
+        if (existing) {
+          throw new Error('Username is already taken');
+        }
+      }
+
+      const updates: string[] = [];
+      const params: any[] = [];
+
+      if (username !== undefined) {
+        updates.push('username = ?');
+        params.push(username);
+      }
+      if (password !== undefined && password !== '') {
+        updates.push('password_hash = ?');
+        const hash = crypto.createHash('sha256').update(password).digest('hex');
+        params.push(hash);
+      }
+      if (role !== undefined) {
+        updates.push('role = ?');
+        params.push(role);
+      }
+      if (name !== undefined) {
+        updates.push('name = ?');
+        params.push(name);
+      }
+      if (status !== undefined) {
+        updates.push('status = ?');
+        params.push(status);
+      }
+
+      if (updates.length === 0) {
+        return { success: true, message: 'No fields updated' };
+      }
+
+      params.push(userId);
+      const query = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
+      db.prepare(query).run(...params);
+
+      await eventBus.publish({
+        id: uuidv7(),
+        type: 'user.updated',
+        source: 'builtin.user',
+        payload: { id: userId, username, role, name, status },
+        timestamp: Date.now(),
+        correlationId: command.id
+      });
+
+      return { success: true };
+    }
+  });
+
+  // 11. USER DELETE HANDLER
+  const deleteUserCmdType = 'user.delete';
+  actionRegistry.register({
+    id: 'core-user-delete',
+    commandType: deleteUserCmdType,
+    description: 'Delete a user account. This is a high-risk operation.',
+    capabilityRequired: 'management:write',
+    isHighRisk: true,
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        userId: { type: 'STRING', description: 'The unique ID of the user to delete' }
+      },
+      required: ['userId']
+    }
+  });
+
+  commandBus.registerHandler(deleteUserCmdType, {
+    async execute(command) {
+      const payload = command.payload as any;
+      const { userId } = payload;
+
+      const userToDelete = db.prepare('SELECT role FROM users WHERE id = ?').get(userId) as any;
+      if (!userToDelete) {
+        throw new Error(`User with ID ${userId} not found`);
+      }
+
+      if (userToDelete.role === 'administrator') {
+        const adminCountObj = db.prepare('SELECT COUNT(*) as cnt FROM users WHERE role = ?').get('administrator') as any;
+        if (adminCountObj.cnt <= 1) {
+          throw new Error('Cannot delete the only remaining administrator account');
+        }
+      }
+
+      db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+
+      await eventBus.publish({
+        id: uuidv7(),
+        type: 'user.deleted',
+        source: 'builtin.user',
+        payload: { id: userId },
+        timestamp: Date.now(),
+        correlationId: command.id
+      });
+
+      return { success: true };
+    }
+  });
+
+  // --- COURSEWARE UPLOAD HANDLER ---
+  const uploadCoursewareCmdType = 'courseware.upload';
+  actionRegistry.register({
+    id: 'core-courseware-upload',
+    commandType: uploadCoursewareCmdType,
+    description: 'Upload a single HTML page or a ZIP package of interactive courseware',
+    capabilityRequired: 'lesson:write',
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        name: { type: 'STRING', description: 'Name of the courseware' },
+        filename: { type: 'STRING', description: 'Filename of the uploaded file' },
+        base64Data: { type: 'STRING', description: 'Base64 data of the file (can start with data:URI prefix)' }
+      },
+      required: ['name', 'filename', 'base64Data']
+    }
+  });
+
+  commandBus.registerHandler(uploadCoursewareCmdType, {
+    async execute(command) {
+      const payload = command.payload as any;
+      const { name, filename, base64Data } = payload;
+      
+      const ext = path.extname(filename).toLowerCase();
+      if (ext !== '.html' && ext !== '.htm' && ext !== '.zip') {
+        throw new Error('Only .html, .htm and .zip files are supported for courseware');
+      }
+
+      const uuid = uuidv7();
+      const storageDir = path.resolve(process.cwd(), 'storage', 'courseware', uuid);
+      if (!fs.existsSync(storageDir)) {
+        fs.mkdirSync(storageDir, { recursive: true });
+      }
+
+      const base64Content = base64Data.replace(/^data:[^;]+;base64,/, '');
+      const fileBuffer = Buffer.from(base64Content, 'base64');
+
+      if (ext === '.html' || ext === '.htm') {
+        const entryName = filename;
+        fs.writeFileSync(path.join(storageDir, entryName), fileBuffer);
+
+        const coursewareId = 'cw_' + crypto.randomBytes(8).toString('hex');
+        db.prepare(
+          'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        ).run(coursewareId, uuid, name, 'html', entryName, Date.now());
+
+        await eventBus.publish({
+          id: uuidv7(),
+          type: 'courseware.uploaded',
+          source: 'builtin.courseware',
+          payload: { id: coursewareId, uuid, name, entry: entryName },
+          timestamp: Date.now(),
+          correlationId: command.id
+        });
+
+        return { success: true, id: coursewareId, uuid, name, entry: entryName };
+      } else {
+        // Zip file unzipping
+        const zip = new JSZip();
+        let loadedZip;
+        try {
+          loadedZip = await zip.loadAsync(fileBuffer);
+        } catch (zipErr: any) {
+          throw new Error('Failed to parse ZIP archive: ' + zipErr.message);
+        }
+
+        // Write files to storage
+        const files: string[] = [];
+        for (const [relativePath, file] of Object.entries(loadedZip.files)) {
+          const fileObj = file as any;
+          if (!fileObj.dir) {
+            const destPath = path.resolve(storageDir, relativePath);
+            if (!destPath.startsWith(storageDir)) {
+              throw new Error('Directory traversal attempt detected in ZIP archive');
+            }
+            const parentDir = path.dirname(destPath);
+            if (!fs.existsSync(parentDir)) {
+              fs.mkdirSync(parentDir, { recursive: true });
+            }
+            const fileContent = await fileObj.async('nodebuffer');
+            fs.writeFileSync(destPath, fileContent);
+            files.push(relativePath);
+          }
+        }
+
+        // Candidates scan
+        // First, check index.html, main.html, lesson.html
+        const primaryCandidates = files.filter(f => {
+          const base = path.basename(f).toLowerCase();
+          return base === 'index.html' || base === 'index.htm' || base === 'main.html' || base === 'lesson.html';
+        });
+
+        let entry = '';
+        if (primaryCandidates.length === 1) {
+          entry = primaryCandidates[0];
+        } else if (primaryCandidates.length > 1) {
+          // Check if there is an exact match for index.html at root
+          const rootIndex = primaryCandidates.find(f => f.toLowerCase() === 'index.html');
+          if (rootIndex) {
+            entry = rootIndex;
+          }
+        }
+
+        // If no primary candidates, search for any HTML files
+        const allHtmlCandidates = files.filter(f => {
+          const extName = path.extname(f).toLowerCase();
+          return extName === '.html' || extName === '.htm';
+        });
+
+        if (!entry) {
+          if (allHtmlCandidates.length === 1) {
+            entry = allHtmlCandidates[0];
+          }
+        }
+
+        if (entry) {
+          // Automatic entry selection
+          const coursewareId = 'cw_' + crypto.randomBytes(8).toString('hex');
+          db.prepare(
+            'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+          ).run(coursewareId, uuid, name, 'folder', entry, Date.now());
+
+          await eventBus.publish({
+            id: uuidv7(),
+            type: 'courseware.uploaded',
+            source: 'builtin.courseware',
+            payload: { id: coursewareId, uuid, name, entry },
+            timestamp: Date.now(),
+            correlationId: command.id
+          });
+
+          return { success: true, id: coursewareId, uuid, name, entry };
+        } else {
+          // Let teacher choose from allHtmlCandidates
+          if (allHtmlCandidates.length === 0) {
+            throw new Error('No HTML entry page found in ZIP archive');
+          }
+          return {
+            success: true,
+            need_select_entry: true,
+            candidates: allHtmlCandidates,
+            uuid,
+            name
+          };
+        }
+      }
+    }
+  });
+
+  // --- COURSEWARE CONFIRM ENTRY HANDLER ---
+  const confirmCoursewareCmdType = 'courseware.confirm';
+  actionRegistry.register({
+    id: 'core-courseware-confirm',
+    commandType: confirmCoursewareCmdType,
+    description: 'Confirm selection of entry page for a ZIP courseware package',
+    capabilityRequired: 'lesson:write',
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        uuid: { type: 'STRING', description: 'Generated UUID of the uploaded courseware' },
+        name: { type: 'STRING', description: 'Name of the courseware' },
+        entry: { type: 'STRING', description: 'Selected entry HTML file path' }
+      },
+      required: ['uuid', 'name', 'entry']
+    }
+  });
+
+  commandBus.registerHandler(confirmCoursewareCmdType, {
+    async execute(command) {
+      const payload = command.payload as any;
+      const { uuid, name, entry } = payload;
+
+      const coursewareId = 'cw_' + crypto.randomBytes(8).toString('hex');
+      db.prepare(
+        'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run(coursewareId, uuid, name, 'folder', entry, Date.now());
+
+      await eventBus.publish({
+        id: uuidv7(),
+        type: 'courseware.confirmed',
+        source: 'builtin.courseware',
+        payload: { id: coursewareId, uuid, name, entry },
+        timestamp: Date.now(),
+        correlationId: command.id
+      });
+
+      return { success: true, id: coursewareId, uuid, name, entry };
+    }
+  });
+
+  // --- COURSEWARE SUBMIT ATTEMPT HANDLER ---
+  const submitAttemptCmdType = 'courseware.submit_attempt';
+  actionRegistry.register({
+    id: 'core-courseware-submit-attempt',
+    commandType: submitAttemptCmdType,
+    description: 'Submit or record progress/results from a student courseware run',
+    capabilityRequired: 'student:write',
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        attemptId: { type: 'STRING', description: 'ID of the attempt' },
+        score: { type: 'NUMBER', description: 'Score out of 100' },
+        comment: { type: 'STRING', description: 'LMS or teacher comment' },
+        completion: { type: 'NUMBER', description: 'Completion status (0 to 1)' },
+        status: { type: 'STRING', description: 'Attempt status: active or completed' },
+        extra: { type: 'OBJECT', description: 'Extra parameters' }
+      },
+      required: ['attemptId']
+    }
+  });
+
+  commandBus.registerHandler(submitAttemptCmdType, {
+    async execute(command) {
+      const payload = command.payload as any;
+      const { attemptId, score, comment, completion, status, extra = {} } = payload;
+
+      // 1. Log to raw submission
+      const rawId = 'raw_' + crypto.randomBytes(8).toString('hex');
+      db.prepare(
+        'INSERT INTO submission_raw (id, attempt_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)'
+      ).run(rawId, attemptId, 'submit_lms', JSON.stringify({ score, comment, completion, status, ...extra }), Date.now());
+
+      // 2. Update status of the attempt
+      if (status === 'completed') {
+        db.prepare('UPDATE courseware_attempt SET finished_at = ?, status = ? WHERE id = ?')
+          .run(Date.now(), 'completed', attemptId);
+      }
+
+      // 3. Update standardized results
+      const existing = db.prepare('SELECT * FROM submission_result WHERE attempt_id = ?').get(attemptId) as any;
+      if (!existing) {
+        db.prepare(
+          'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)'
+        ).run(
+          'res_' + crypto.randomBytes(8).toString('hex'),
+          attemptId,
+          score !== undefined ? score : null,
+          comment || null,
+          completion !== undefined ? completion : null,
+          JSON.stringify(extra)
+        );
+      } else {
+        const finalScore = score !== undefined ? score : existing.score;
+        const finalComment = comment || existing.comment;
+        const finalCompletion = completion !== undefined ? completion : existing.completion;
+        
+        let mergedExtra = {};
+        try {
+          mergedExtra = JSON.parse(existing.extra_json || '{}');
+        } catch (e) {}
+        mergedExtra = { ...mergedExtra, ...extra };
+
+        db.prepare(
+          'UPDATE submission_result SET score = ?, comment = ?, completion = ?, extra_json = ? WHERE attempt_id = ?'
+        ).run(finalScore, finalComment, finalCompletion, JSON.stringify(mergedExtra), attemptId);
+      }
+
+      await eventBus.publish({
+        id: uuidv7(),
+        type: 'courseware.attempt_submitted',
+        source: 'builtin.courseware',
+        payload: { attemptId, score, comment, completion, status },
+        timestamp: Date.now(),
+        correlationId: command.id
+      });
+
+      return { success: true };
+    }
+  });
+
+  // --- COURSEWARE GET RAW DATA HANDLER ---
+  const getAttemptRawDataCmdType = 'courseware.get_attempt_raw_data';
+  actionRegistry.register({
+    id: 'core-courseware-get-attempt-raw-data',
+    commandType: getAttemptRawDataCmdType,
+    description: 'Get all captured raw events/submits for a student attempt',
+    capabilityRequired: 'lesson:read',
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        attemptId: { type: 'STRING', description: 'ID of the attempt to query' }
+      },
+      required: ['attemptId']
+    }
+  });
+
+  commandBus.registerHandler(getAttemptRawDataCmdType, {
+    async execute(command) {
+      const payload = command.payload as any;
+      const { attemptId } = payload;
+      const rows = db.prepare('SELECT * FROM submission_raw WHERE attempt_id = ? ORDER BY created_at ASC').all(attemptId);
+      return rows;
+    }
+  });
+
+  // --- COURSEWARE LIST HANDLER ---
+  const listCoursewareCmdType = 'courseware.list';
+  actionRegistry.register({
+    id: 'core-courseware-list',
+    commandType: listCoursewareCmdType,
+    description: 'List all uploaded interactive coursewares',
+    capabilityRequired: 'lesson:read',
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {}
+    }
+  });
+
+  commandBus.registerHandler(listCoursewareCmdType, {
+    async execute(command) {
+      const rows = db.prepare('SELECT * FROM courseware ORDER BY created_at DESC').all();
+      return rows;
+    }
+  });
+
+  // --- COURSEWARE DELETE HANDLER ---
+  const deleteCoursewareCmdType = 'courseware.delete';
+  actionRegistry.register({
+    id: 'core-courseware-delete',
+    commandType: deleteCoursewareCmdType,
+    description: 'Delete a courseware and remove all its local files',
+    capabilityRequired: 'lesson:write',
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        id: { type: 'STRING', description: 'ID of the courseware to delete' }
+      },
+      required: ['id']
+    }
+  });
+
+  commandBus.registerHandler(deleteCoursewareCmdType, {
+    async execute(command) {
+      const payload = command.payload as any;
+      const { id } = payload;
+      const courseware = db.prepare('SELECT uuid FROM courseware WHERE id = ?').get(id) as any;
+      if (courseware) {
+        db.prepare('DELETE FROM courseware WHERE id = ?').run(id);
+        const storageDir = path.resolve(process.cwd(), 'storage', 'courseware', courseware.uuid);
+        if (fs.existsSync(storageDir)) {
+          fs.rmSync(storageDir, { recursive: true, force: true });
+        }
+        await eventBus.publish({
+          id: uuidv7(),
+          type: 'courseware.deleted',
+          source: 'builtin.courseware',
+          payload: { id },
+          timestamp: Date.now(),
+          correlationId: command.id
+        });
+      }
+      return { success: true };
     }
   });
 }
