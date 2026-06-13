@@ -1537,7 +1537,7 @@ async function startServer() {
               const text = (el.textContent || el.innerText || '').trim();
               if (text) {
                 logData.push("Selector '" + selector + "' matched text: '" + text + "'");
-                const fractionMatch = text.match(/(\d+(\.\d+)?)\s*[\/|之]\s*(\d+)/);
+                const fractionMatch = text.match(/(\\d+(\\.\\d+)?)\\s*[\\/|之]\\s*(\\d+)/);
                 if (fractionMatch) {
                   const num = parseFloat(fractionMatch[1]);
                   const den = parseFloat(fractionMatch[3]);
@@ -1547,7 +1547,7 @@ async function startServer() {
                     return { score: pct, log: logData };
                   }
                 }
-                const match = text.match(/\d+(\.\d+)?/);
+                const match = text.match(/\\d+(\\.\\d+)?/);
                 if (match) {
                   const num = parseFloat(match[0]);
                   if (!isNaN(num)) {
@@ -1575,17 +1575,21 @@ async function startServer() {
           }
         } catch (e) {}
 
-        // Fallback: search leaf DOM elements containing keywords and numbers
+        // Fallback: search leaf DOM elements containing keywords and numbers (ignore style/script/metadata)
         try {
           const all = document.getElementsByTagName('*');
+          const ignoredTags = ['style', 'script', 'link', 'meta', 'svg', 'canvas', 'noscript', 'head', 'iframe'];
           for (let i = 0; i < all.length; i++) {
             const el = all[i];
+            const tag = (el.tagName || '').toLowerCase();
+            if (ignoredTags.indexOf(tag) >= 0) continue;
+            
             if (el.children.length === 0) {
               const txt = (el.textContent || el.innerText || '').trim();
               if (txt) {
                 const hasKey = txt.includes('得分') || txt.includes('分数') || txt.includes('成绩') || txt.toLowerCase().includes('score') || txt.toLowerCase().includes('points');
                 if (hasKey) {
-                  const m = txt.match(/\d+(\.\d+)?/);
+                  const m = txt.match(/\\d+(\\.\\d+)?/);
                   if (m) {
                     const val = parseFloat(m[0]);
                     logData.push("Fallback leaf <" + el.tagName + "> '" + txt + "' parsed: " + val);
