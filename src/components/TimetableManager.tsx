@@ -177,6 +177,8 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   // Date temporary override & weekend states
   const [overridingDateKey, setOverridingDateKey] = useState<string | null>(null);
   const [overrideTargetDate, setOverrideTargetDate] = useState<string>('');
+  const [overrideMode, setOverrideMode] = useState<'dow' | 'date'>('dow');
+  const [overrideTargetDow, setOverrideTargetDow] = useState<string>('');
   const [dateOverrides, setDateOverrides] = useState<Record<string, string>>({});
   const [showWeekend, setShowWeekend] = useState<boolean>(false);
   
@@ -1216,42 +1218,122 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
 
           const weekDates = getWeekDates(currentWeekMonday);
 
-          const getSchedulesForDate = (dateStr: string): ScheduleType[] => {
-            // 1. Prefer date-specific custom schedules
-            const realSchedules = filteredSchedules.filter(s => s.scheduled_date === dateStr);
-            if (realSchedules.length > 0) {
-              return realSchedules;
+          const getSchedulesForDate = (target: string, virtualDate: string): ScheduleType[] => {
+            // If no override, return normal behavior
+            if (target === virtualDate) {
+              // 1. Prefer date-specific custom schedules
+              const realSchedules = filteredSchedules.filter(s => s.scheduled_date === virtualDate);
+              if (realSchedules.length > 0) {
+                return realSchedules;
+              }
+
+              // 2. Fall back to repeating weekly template schedules from the past
+              const targetDow = getDayOfWeekIndex(virtualDate);
+              const historicalSchedules = filteredSchedules.filter(s => 
+                getDayOfWeekIndex(s.scheduled_date) === targetDow && 
+                s.scheduled_date <= virtualDate
+              );
+
+              // 3. Deduplicate by class_id and time_slot, keeping the latest one
+              const latestSchedulesMap: Record<string, ScheduleType> = {};
+              historicalSchedules.forEach(sch => {
+                const groupKey = `${sch.class_id}_${sch.time_slot || 'all-day'}`;
+                if (!latestSchedulesMap[groupKey]) {
+                  latestSchedulesMap[groupKey] = {
+                    ...sch,
+                    scheduled_date: virtualDate,
+                    isRepeating: true
+                  };
+                }
+              });
+
+              return Object.values(latestSchedulesMap);
             }
 
-            // 2. Fall back to repeating weekly template schedules from the past (scheduled_date <= dateStr)
-            const targetDow = getDayOfWeekIndex(dateStr);
-            const historicalSchedules = filteredSchedules.filter(s => 
-              getDayOfWeekIndex(s.scheduled_date) === targetDow && 
-              s.scheduled_date <= dateStr
-            );
+            // If override is active (target !== virtualDate)
+            let targetSchedules: ScheduleType[] = [];
 
-            // 3. Deduplicate by class_id and time_slot, keeping the latest one
-            const latestSchedulesMap: Record<string, ScheduleType> = {};
-            historicalSchedules.forEach(sch => {
-              const groupKey = `${sch.class_id}_${sch.time_slot || 'all-day'}`;
-              // Since filteredSchedules is already sorted descending by scheduled_date, the first encounter is the latest
-              if (!latestSchedulesMap[groupKey]) {
-                latestSchedulesMap[groupKey] = {
+            if (target.startsWith('dow-')) {
+              const targetDow = parseInt(target.split('-')[1], 10);
+              // Fetch repeating weekly template schedules for targetDow from the past (scheduled_date <= virtualDate)
+              const historicalSchedules = filteredSchedules.filter(s => 
+                getDayOfWeekIndex(s.scheduled_date) === targetDow && 
+                s.scheduled_date <= virtualDate
+              );
+
+              const latestSchedulesMap: Record<string, ScheduleType> = {};
+              historicalSchedules.forEach(sch => {
+                const groupKey = `${sch.class_id}_${sch.time_slot || 'all-day'}`;
+                if (!latestSchedulesMap[groupKey]) {
+                  latestSchedulesMap[groupKey] = {
+                    ...sch,
+                    scheduled_date: virtualDate,
+                    isRepeating: true
+                  };
+                }
+              });
+              targetSchedules = Object.values(latestSchedulesMap);
+            } else {
+              // Target is a specific date (e.g. '2026-06-18')
+              // 1. Prefer date-specific custom schedules on target
+              const realSchedules = filteredSchedules.filter(s => s.scheduled_date === target);
+              if (realSchedules.length > 0) {
+                targetSchedules = realSchedules.map(sch => ({
                   ...sch,
-                  scheduled_date: dateStr, // Virtualize date to the target week's date for exception overrides
-                  isRepeating: true
-                };
-              }
-            });
+                  scheduled_date: virtualDate,
+                  isRepeating: true // Treat as repeating so editing it creates an override on virtualDate
+                }));
+              } else {
+                // 2. Fall back to repeating weekly template schedules of the target's day of week from the past of target
+                const targetDow = getDayOfWeekIndex(target);
+                const historicalSchedules = filteredSchedules.filter(s => 
+                  getDayOfWeekIndex(s.scheduled_date) === targetDow && 
+                  s.scheduled_date <= target
+                );
 
-            return Object.values(latestSchedulesMap);
+                const latestSchedulesMap: Record<string, ScheduleType> = {};
+                historicalSchedules.forEach(sch => {
+                  const groupKey = `${sch.class_id}_${sch.time_slot || 'all-day'}`;
+                  if (!latestSchedulesMap[groupKey]) {
+                    latestSchedulesMap[groupKey] = {
+                      ...sch,
+                      scheduled_date: virtualDate,
+                      isRepeating: true
+                    };
+                  }
+                });
+                targetSchedules = Object.values(latestSchedulesMap);
+              }
+            }
+
+            // Now merge with any actual custom schedule records on virtualDate (which represent local overrides/cancellations)
+            const localOverrides = filteredSchedules.filter(s => s.scheduled_date === virtualDate);
+            if (localOverrides.length > 0) {
+              const mergedSchedules = [...targetSchedules];
+              localOverrides.forEach(localSch => {
+                const groupKey = `${localSch.class_id}_${localSch.time_slot || 'all-day'}`;
+                const matchIdx = mergedSchedules.findIndex(s => `${s.class_id}_${s.time_slot || 'all-day'}` === groupKey);
+                if (matchIdx !== -1) {
+                  // Replace with the local override
+                  mergedSchedules[matchIdx] = localSch;
+                } else {
+                  // If it's a new schedule added to virtualDate, we can append it if it's active
+                  if (localSch.status !== 'cancelled' && localSch.status !== 'holiday') {
+                    mergedSchedules.push(localSch);
+                  }
+                }
+              });
+              return mergedSchedules;
+            }
+
+            return targetSchedules;
           };
 
           const weeklySchedulesByDay = weekDays.map((day, idx) => {
             const dateStr = weekDates[idx];
             // Support temporary date switches: load schedules from override target date if configured
             const targetDateStr = dateOverrides[dateStr] || dateStr;
-            const daySchedules = getSchedulesForDate(targetDateStr);
+            const daySchedules = getSchedulesForDate(targetDateStr, dateStr);
             daySchedules.sort((a, b) => (a.time_slot || '').localeCompare(b.time_slot || ''));
             return {
               ...day,
@@ -1547,8 +1629,21 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                               {viewMode === 'week' && (
                                 <button
                                   onClick={() => {
+                                    const val = dateOverrides[day.dateStr] || '';
                                     setOverridingDateKey(day.dateStr);
-                                    setOverrideTargetDate(dateOverrides[day.dateStr] || '');
+                                    if (val.startsWith('dow-')) {
+                                      setOverrideMode('dow');
+                                      setOverrideTargetDow(val.split('-')[1]);
+                                      setOverrideTargetDate('');
+                                    } else if (val) {
+                                      setOverrideMode('date');
+                                      setOverrideTargetDate(val);
+                                      setOverrideTargetDow('');
+                                    } else {
+                                      setOverrideMode('dow');
+                                      setOverrideTargetDow('');
+                                      setOverrideTargetDate('');
+                                    }
                                   }}
                                   className="text-slate-400 hover:text-indigo-600 p-0.5 rounded-md hover:bg-slate-200/50 transition-all opacity-0 group-hover/col:opacity-100 focus:opacity-100 cursor-pointer flex items-center justify-center"
                                   title={lang === 'zh' ? '临时切换显示日期' : 'Temporarily switch date'}
@@ -1559,22 +1654,34 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                             </div>
 
                             {/* Override Indicator */}
-                            {viewMode === 'week' && dateOverrides[day.dateStr] && (
-                              <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 text-[9px] px-1.5 py-0.5 rounded-md font-semibold select-none shadow-3xs animate-fade-in">
-                                <span>🔄 {dateOverrides[day.dateStr].substring(5)}</span>
-                                <button 
-                                  onClick={() => {
-                                    const next = { ...dateOverrides };
-                                    delete next[day.dateStr];
-                                    setDateOverrides(next);
-                                  }}
-                                  className="hover:text-red-600 hover:bg-amber-100 rounded-sm p-px flex items-center justify-center cursor-pointer"
-                                  title={lang === 'zh' ? '恢复原日期课程' : 'Reset to original'}
-                                >
-                                  <X size={8} />
-                                </button>
-                              </div>
-                            )}
+                            {viewMode === 'week' && dateOverrides[day.dateStr] && (() => {
+                              const val = dateOverrides[day.dateStr];
+                              let label = '';
+                              if (val.startsWith('dow-')) {
+                                const dowNum = parseInt(val.split('-')[1], 10);
+                                const dowNamesZh = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+                                const dowNamesEn = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                                label = lang === 'zh' ? `常规${dowNamesZh[dowNum]}` : `Regular ${dowNamesEn[dowNum]}`;
+                              } else {
+                                label = val.substring(5); // e.g. "06-18"
+                              }
+                              return (
+                                <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 text-[9px] px-1.5 py-0.5 rounded-md font-semibold select-none shadow-3xs animate-fade-in">
+                                  <span>🔄 {label}</span>
+                                  <button 
+                                    onClick={() => {
+                                      const next = { ...dateOverrides };
+                                      delete next[day.dateStr];
+                                      setDateOverrides(next);
+                                    }}
+                                    className="hover:text-red-600 hover:bg-amber-100 rounded-sm p-px flex items-center justify-center cursor-pointer"
+                                    title={lang === 'zh' ? '恢复原日期课程' : 'Reset to original'}
+                                  >
+                                    <X size={8} />
+                                  </button>
+                                </div>
+                              );
+                            })()}
                           </div>
                         ))}
                       </div>
@@ -2391,6 +2498,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 onClick={() => {
                   setOverridingDateKey(null);
                   setOverrideTargetDate('');
+                  setOverrideTargetDow('');
                 }}
                 className="text-slate-400 hover:text-slate-600 hover:bg-slate-50 p-1 rounded-lg transition-colors cursor-pointer"
               >
@@ -2406,28 +2514,77 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               </p>
               <p className="mt-1">
                 {lang === 'zh' 
-                  ? '您可以指定本周或系统内的任意其他日期。指定后，该列将载入并显示目标日期的课次，用于临时对调或换课调休查看。' 
-                  : 'Specify another date to temporarily view its lessons in this weekday column.'}
+                  ? '您可以将某一个日期的课临时指定为星期几的常规课表，或者指定为系统内的任意其他具体日期课程。' 
+                  : 'Specify a day of the week or another target date to temporarily view its lessons.'}
               </p>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                {lang === 'zh' ? '选择目标日期 *' : 'Target Date *'}
-              </label>
-              <input 
-                type="date"
-                className="w-full border border-gray-250 rounded-lg text-xs p-2.5 bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-all font-sans text-gray-750 cursor-pointer"
-                value={overrideTargetDate}
-                onChange={e => setOverrideTargetDate(e.target.value)}
-              />
+            {/* Tabs */}
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setOverrideMode('dow')}
+                className={`flex-1 text-center py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  overrideMode === 'dow'
+                    ? 'bg-white text-indigo-700 shadow-3xs'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {lang === 'zh' ? '常规星期几' : 'Day of Week'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setOverrideMode('date')}
+                className={`flex-1 text-center py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  overrideMode === 'date'
+                    ? 'bg-white text-indigo-700 shadow-3xs'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {lang === 'zh' ? '具体日期' : 'Specific Date'}
+              </button>
             </div>
+
+            {overrideMode === 'dow' ? (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  {lang === 'zh' ? '选择常规星期几 *' : 'Select Day of Week *'}
+                </label>
+                <select
+                  value={overrideTargetDow}
+                  onChange={e => setOverrideTargetDow(e.target.value)}
+                  className="w-full border border-gray-250 rounded-lg text-xs p-2.5 bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-all font-sans text-gray-750 cursor-pointer"
+                >
+                  <option value="">{lang === 'zh' ? '-- 请选择星期 --' : '-- Select Day --'}</option>
+                  <option value="1">{lang === 'zh' ? '星期一' : 'Monday'}</option>
+                  <option value="2">{lang === 'zh' ? '星期二' : 'Tuesday'}</option>
+                  <option value="3">{lang === 'zh' ? '星期三' : 'Wednesday'}</option>
+                  <option value="4">{lang === 'zh' ? '星期四' : 'Thursday'}</option>
+                  <option value="5">{lang === 'zh' ? '星期五' : 'Friday'}</option>
+                  <option value="6">{lang === 'zh' ? '星期六' : 'Saturday'}</option>
+                  <option value="7">{lang === 'zh' ? '星期日' : 'Sunday'}</option>
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  {lang === 'zh' ? '选择具体日期 *' : 'Select Target Date *'}
+                </label>
+                <input 
+                  type="date"
+                  className="w-full border border-gray-250 rounded-lg text-xs p-2.5 bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-all font-sans text-gray-750 cursor-pointer"
+                  value={overrideTargetDate}
+                  onChange={e => setOverrideTargetDate(e.target.value)}
+                />
+              </div>
+            )}
 
             <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
               <button 
                 onClick={() => {
                   setOverridingDateKey(null);
                   setOverrideTargetDate('');
+                  setOverrideTargetDow('');
                 }}
                 className="px-3.5 py-2 rounded-lg text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200/80 transition-all cursor-pointer"
               >
@@ -2435,16 +2592,27 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               </button>
               <button 
                 onClick={() => {
-                  if (!overrideTargetDate) {
-                    alert(lang === 'zh' ? '请选择一个日期' : 'Please select a date');
-                    return;
+                  let val = '';
+                  if (overrideMode === 'dow') {
+                    if (!overrideTargetDow) {
+                      alert(lang === 'zh' ? '请选择星期几' : 'Please select a day of the week');
+                      return;
+                    }
+                    val = `dow-${overrideTargetDow}`;
+                  } else {
+                    if (!overrideTargetDate) {
+                      alert(lang === 'zh' ? '请选择一个日期' : 'Please select a date');
+                      return;
+                    }
+                    val = overrideTargetDate;
                   }
                   setDateOverrides(prev => ({
                     ...prev,
-                    [overridingDateKey]: overrideTargetDate
+                    [overridingDateKey]: val
                   }));
                   setOverridingDateKey(null);
                   setOverrideTargetDate('');
+                  setOverrideTargetDow('');
                 }}
                 className="px-3.5 py-2 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-all cursor-pointer"
               >
