@@ -13,6 +13,8 @@ import { bootstrapManagementPlugins } from './packages/plugins/management.js';
 import { bootstrapAIPlannerPlugins } from './packages/plugins/ai-planner.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import crypto from 'crypto';
+import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './packages/plugins/ai-submit-injector.js';
+
 
 type AgentChatAttachment = { name: string; content: string };
 type AgentChatRequest = {
@@ -842,7 +844,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/resources', (req, res) => {
+  app.post('/api/resources', async (req, res) => {
     try {
       const { name, type, content } = req.body;
       if (!name || !type) {
@@ -855,6 +857,52 @@ async function startServer() {
       kernelContainer.db.prepare(
         'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)'
       ).run(id, name, type, content, createdAt);
+
+      // Try calling AI provider to create an auto-submit version if needed
+      try {
+        if (type === 'html') {
+          if (!hasDataSubmission(content) && hasScoreDisplay(content)) {
+            const modified = await injectScoreSubmissionUsingAI(kernelContainer.db, content);
+            if (modified && modified !== content) {
+              const newId = 'res_' + Math.random().toString(36).substring(2, 10);
+              const newName = `[自动提交版] ${name}`;
+              kernelContainer.db.prepare(
+                'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)'
+              ).run(newId, newName, type, modified, createdAt + 10);
+            }
+          }
+        } else if (type === 'folder') {
+          let files: any[] = [];
+          try {
+            files = JSON.parse(content || '[]');
+          } catch (err) {}
+          const indexFile = files.find(f => {
+            const p = f.path.toLowerCase();
+            return p === 'index.html' || p === 'index.htm' || p.endsWith('/index.html') || p.endsWith('/index.htm');
+          }) || files.find(f => f.path.toLowerCase().endsWith('.html') || f.path.toLowerCase().endsWith('.htm')) || files[0];
+
+          if (indexFile && indexFile.content) {
+            if (!hasDataSubmission(indexFile.content) && hasScoreDisplay(indexFile.content)) {
+              const modified = await injectScoreSubmissionUsingAI(kernelContainer.db, indexFile.content);
+              if (modified && modified !== indexFile.content) {
+                const modifiedFiles = files.map(f => {
+                  if (f.path === indexFile.path) {
+                    return { ...f, content: modified };
+                  }
+                  return f;
+                });
+                const newId = 'res_' + Math.random().toString(36).substring(2, 10);
+                const newName = `[自动提交版] ${name}`;
+                kernelContainer.db.prepare(
+                  'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)'
+                ).run(newId, newName, type, JSON.stringify(modifiedFiles), createdAt + 10);
+              }
+            }
+          }
+        }
+      } catch (aiErr) {
+        console.error('Failed to create AI modified version:', aiErr);
+      }
 
       res.json({ success: true, id, name, type });
     } catch (e: any) {

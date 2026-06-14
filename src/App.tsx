@@ -2927,19 +2927,26 @@ export default function App() {
     }
   }, [activeRole, activeStudentId, students]);
 
+  const activeRoleRef = useRef(activeRole);
+  const activeStudentIdRef = useRef(activeStudentId);
+  const langRef = useRef(lang);
+  const studentsRef = useRef(students);
+
+  useEffect(() => { activeRoleRef.current = activeRole; }, [activeRole]);
+  useEffect(() => { activeStudentIdRef.current = activeStudentId; }, [activeStudentId]);
+  useEffect(() => { langRef.current = lang; }, [lang]);
+  useEffect(() => { studentsRef.current = students; }, [students]);
+
   useEffect(() => {
     const socket = io();
     socketRef.current = socket;
 
     // Register student presence
-    if (activeRole === 'student' && activeStudentId) {
+    if (activeRoleRef.current === 'student' && activeStudentIdRef.current) {
       socket.emit('register-student', {
-        studentId: activeStudentId,
-        name: students.find(s => s.id === activeStudentId)?.name || activeStudentId
+        studentId: activeStudentIdRef.current,
+        name: studentsRef.current.find(s => s.id === activeStudentIdRef.current)?.name || activeStudentIdRef.current
       });
-      if (studentViewStatus === 'lesson' && selectedLesson) {
-        socket.emit('enter-lesson', { studentId: activeStudentId, lessonId: selectedLesson });
-      }
     }
 
     socket.on('presence-update', (data: { onlineStudentIds: string[], activeStudentLessons: Record<string, string> }) => {
@@ -2971,11 +2978,11 @@ export default function App() {
 
     socket.on('student-pinged', (data: any) => {
       console.log('[Socket] student-pinged received:', data);
-      const msg = data.message || (lang === 'zh'
+      const msg = data.message || (langRef.current === 'zh'
         ? '⚠️ 学习进度预警：老师注意到您的进度有些落后，请抓紧时间跟上！'
         : '⚠️ Progress Alert: The teacher noticed you are falling behind. Please keep up!');
       addToast(
-        lang === 'zh' ? '⚠️ 学习进度预警' : '⚠️ Progress Warning',
+        langRef.current === 'zh' ? '⚠️ 学习进度预警' : '⚠️ Progress Warning',
         msg,
         'warning'
       );
@@ -3000,20 +3007,20 @@ export default function App() {
       console.log('[Socket] assignment-graded-toast received on client:', data);
       
       // Check if this student is the active student
-      if (activeRole === 'student' && activeStudentId && data.studentId === activeStudentId) {
+      if (activeRoleRef.current === 'student' && activeStudentIdRef.current && data.studentId === activeStudentIdRef.current) {
         const titleText = data.assignmentTitle || data.assignmentId;
-        const msg = lang === 'zh'
+        const msg = langRef.current === 'zh'
           ? `您的作业“${titleText}”已完成评分！得分：${data.score}%。建议反馈已收到，快去查看。`
           : `Your assignment "${titleText}" was graded. Score: ${data.score}%. Tutoring feedback has been posted.`;
 
         addToast(
-          lang === 'zh' ? '🎓 作业已评分' : '🎓 Assignment Graded',
+          langRef.current === 'zh' ? '🎓 作业已评分' : '🎓 Assignment Graded',
           msg,
           'success'
         );
 
         // Fetch student dashboard reactively
-        fetchStudentDashboard(activeStudentId);
+        fetchStudentDashboard(activeStudentIdRef.current);
       }
     });
 
@@ -3021,19 +3028,19 @@ export default function App() {
       console.log('[Socket] student-picked received on client:', data);
       
       // Check if this student is the active student
-      if (activeRole === 'student' && activeStudentId && data.studentId === activeStudentId) {
-        const msg = lang === 'zh'
+      if (activeRoleRef.current === 'student' && activeStudentIdRef.current && data.studentId === activeStudentIdRef.current) {
+        const msg = langRef.current === 'zh'
           ? `闪电警报！您已被老师在课程随机提问点名中抽中！请立即集中注意力参与课堂。`
           : `Attention alert! You have been randomly picked by the teacher! Please pay immediate attention.`;
 
         addToast(
-          lang === 'zh' ? '⚡️ 随机点名提问' : '⚡️ Classroom Pick Alert',
+          langRef.current === 'zh' ? '⚡️ 随机点名提问' : '⚡️ Classroom Pick Alert',
           msg,
           'warning'
         );
 
         // Fetch student dashboard reactively to load the newly added roll call
-        fetchStudentDashboard(activeStudentId);
+        fetchStudentDashboard(activeStudentIdRef.current);
       }
 
       // Live Class Feed updates
@@ -3042,7 +3049,7 @@ export default function App() {
           id: `feed-pick-${data.studentId}-${data.pickedTime || Date.now()}`,
           time: new Date(data.pickedTime || Date.now()).toLocaleTimeString(),
           type: 'picked',
-          message: lang === 'zh'
+          message: langRef.current === 'zh'
             ? `点名互动：随机抽中学生【${data.studentName}】。`
             : `Classroom Pick: Randomly selected student "${data.studentName}".`,
         },
@@ -3063,7 +3070,7 @@ export default function App() {
           id: `feed-ack-${studentId}-${Date.now()}`,
           time: new Date().toLocaleTimeString(),
           type: 'checkin',
-          message: lang === 'zh'
+          message: langRef.current === 'zh'
             ? `学生已确认收到提问点名（学生 ID: ${studentId}）。`
             : `Student acknowledged the classroom call (Student ID: ${studentId}).`,
         },
@@ -3077,22 +3084,22 @@ export default function App() {
       const { classId, lessonId, locked } = data;
       
       // If we are student, reactively fetch students to update locked_lesson_id
-      if (activeRole === 'student' && activeStudentId) {
+      if (activeRoleRef.current === 'student' && activeStudentIdRef.current) {
         fetchStudents().then(() => {
           // If locked, redirect to lock lesson
           if (locked && lessonId) {
             setSelectedLesson(lessonId);
             setStudentViewStatus('lesson');
             addToast(
-              lang === 'zh' ? '🔒 课程已被锁定' : '🔒 Lesson Locked',
-              lang === 'zh'
+              langRef.current === 'zh' ? '🔒 课程已被锁定' : '🔒 Lesson Locked',
+              langRef.current === 'zh'
                 ? '老师已锁定当前授课，您将无法切换到其他页面。'
                 : 'The teacher has locked the active lesson. You cannot leave this page.',
               'info'
             );
           }
         });
-        fetchStudentDashboard(activeStudentId);
+        fetchStudentDashboard(activeStudentIdRef.current);
       } else {
         fetchStudents();
       }
@@ -3102,7 +3109,7 @@ export default function App() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [activeRole, activeStudentId, lang, students, studentViewStatus, selectedLesson]);
+  }, [activeRole, activeStudentId]);
 
   useEffect(() => {
     if (socketRef.current && activeRole === 'student' && activeStudentId) {

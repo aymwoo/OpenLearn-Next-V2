@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import JSZip from 'jszip';
+import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './ai-submit-injector.js';
+
 
 export function bootstrapBuiltinPlugins() {
   const { commandBus, actionRegistry, db, eventBus } = kernelContainer;
@@ -717,6 +719,23 @@ export function bootstrapBuiltinPlugins() {
     }
   });
 
+  function copyFolderSync(src: string, dest: string) {
+    if ((fs as any).cpSync) {
+      (fs as any).cpSync(src, dest, { recursive: true });
+    } else {
+      fs.mkdirSync(dest, { recursive: true });
+      fs.readdirSync(src).forEach((child) => {
+        const srcChild = path.join(src, child);
+        const destChild = path.join(dest, child);
+        if (fs.lstatSync(srcChild).isDirectory()) {
+          copyFolderSync(srcChild, destChild);
+        } else {
+          fs.copyFileSync(srcChild, destChild);
+        }
+      });
+    }
+  }
+
   // --- COURSEWARE UPLOAD HANDLER ---
   const uploadCoursewareCmdType = 'courseware.upload';
   actionRegistry.register({
@@ -771,6 +790,36 @@ export function bootstrapBuiltinPlugins() {
           timestamp: Date.now(),
           correlationId: command.id
         });
+
+        // Let's check for AI version injection
+        try {
+          const htmlContent = fileBuffer.toString('utf-8');
+          if (!hasDataSubmission(htmlContent) && hasScoreDisplay(htmlContent)) {
+            const modified = await injectScoreSubmissionUsingAI(db, htmlContent);
+            if (modified && modified !== htmlContent) {
+              const newUuid = uuidv7();
+              const newCwId = 'cw_' + crypto.randomBytes(8).toString('hex');
+              const newStorageDir = path.resolve(process.cwd(), 'storage', 'courseware', newUuid);
+              fs.mkdirSync(newStorageDir, { recursive: true });
+              fs.writeFileSync(path.join(newStorageDir, entryName), modified);
+
+              db.prepare(
+                'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+              ).run(newCwId, newUuid, `[自动提交版] ${name}`, 'html', entryName, Date.now() + 10);
+
+              await eventBus.publish({
+                id: uuidv7(),
+                type: 'courseware.uploaded',
+                source: 'builtin.courseware',
+                payload: { id: newCwId, uuid: newUuid, name: `[自动提交版] ${name}`, entry: entryName },
+                timestamp: Date.now() + 10,
+                correlationId: command.id
+              });
+            }
+          }
+        } catch (aiErr) {
+          console.error('Failed to create AI auto-submit version for html upload:', aiErr);
+        }
 
         return { success: true, id: coursewareId, uuid, name, entry: entryName };
       } else {
@@ -848,6 +897,39 @@ export function bootstrapBuiltinPlugins() {
             correlationId: command.id
           });
 
+          // Check for AI version injection
+          try {
+            const entryPath = path.join(storageDir, entry);
+            if (fs.existsSync(entryPath)) {
+              const htmlContent = fs.readFileSync(entryPath, 'utf-8');
+              if (!hasDataSubmission(htmlContent) && hasScoreDisplay(htmlContent)) {
+                const modified = await injectScoreSubmissionUsingAI(db, htmlContent);
+                if (modified && modified !== htmlContent) {
+                  const newUuid = uuidv7();
+                  const newCwId = 'cw_' + crypto.randomBytes(8).toString('hex');
+                  const newStorageDir = path.resolve(process.cwd(), 'storage', 'courseware', newUuid);
+                  copyFolderSync(storageDir, newStorageDir);
+                  fs.writeFileSync(path.join(newStorageDir, entry), modified);
+
+                  db.prepare(
+                    'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+                  ).run(newCwId, newUuid, `[自动提交版] ${name}`, 'folder', entry, Date.now() + 10);
+
+                  await eventBus.publish({
+                    id: uuidv7(),
+                    type: 'courseware.uploaded',
+                    source: 'builtin.courseware',
+                    payload: { id: newCwId, uuid: newUuid, name: `[自动提交版] ${name}`, entry },
+                    timestamp: Date.now() + 10,
+                    correlationId: command.id
+                  });
+                }
+              }
+            }
+          } catch (aiErr) {
+            console.error('Failed to create AI auto-submit version for zip auto-confirm:', aiErr);
+          }
+
           return { success: true, id: coursewareId, uuid, name, entry };
         } else {
           // Let teacher choose from allHtmlCandidates
@@ -902,6 +984,40 @@ export function bootstrapBuiltinPlugins() {
         timestamp: Date.now(),
         correlationId: command.id
       });
+
+      // Check for AI version injection
+      try {
+        const storageDir = path.resolve(process.cwd(), 'storage', 'courseware', uuid);
+        const entryPath = path.join(storageDir, entry);
+        if (fs.existsSync(entryPath)) {
+          const htmlContent = fs.readFileSync(entryPath, 'utf-8');
+          if (!hasDataSubmission(htmlContent) && hasScoreDisplay(htmlContent)) {
+            const modified = await injectScoreSubmissionUsingAI(db, htmlContent);
+            if (modified && modified !== htmlContent) {
+              const newUuid = uuidv7();
+              const newCwId = 'cw_' + crypto.randomBytes(8).toString('hex');
+              const newStorageDir = path.resolve(process.cwd(), 'storage', 'courseware', newUuid);
+              copyFolderSync(storageDir, newStorageDir);
+              fs.writeFileSync(path.join(newStorageDir, entry), modified);
+
+              db.prepare(
+                'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+              ).run(newCwId, newUuid, `[自动提交版] ${name}`, 'folder', entry, Date.now() + 10);
+
+              await eventBus.publish({
+                id: uuidv7(),
+                type: 'courseware.confirmed',
+                source: 'builtin.courseware',
+                payload: { id: newCwId, uuid: newUuid, name: `[自动提交版] ${name}`, entry },
+                timestamp: Date.now() + 10,
+                correlationId: command.id
+              });
+            }
+          }
+        }
+      } catch (aiErr) {
+        console.error('Failed to create AI auto-submit version for manual confirm:', aiErr);
+      }
 
       return { success: true, id: coursewareId, uuid, name, entry };
     }
