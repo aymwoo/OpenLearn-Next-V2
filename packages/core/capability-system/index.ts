@@ -18,6 +18,8 @@ export class CapabilityGuard {
       'process:write',
       'process:read'
     ]);
+    this.actorCapabilities.set('teacher-demo', ['lesson:write', 'lesson:read']);
+    this.actorCapabilities.set('student-demo', ['student:write']);
   }
 
   public grant(actorId: string, cap: string) {
