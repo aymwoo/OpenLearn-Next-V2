@@ -222,7 +222,7 @@ export function QuickActionsMenu({
             id="quick-actions-popup-card"
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-4 text-white flex items-center justify-between shadow-inner">
+            <div className="bg-indigo-600 px-5 py-4 text-white flex items-center justify-between shadow-inner">
               <div className="flex items-center gap-2">
                 <Command size={18} className="animate-pulse" />
                 <h3 className="font-bold text-sm tracking-wide">{t.quickActions}</h3>
@@ -465,7 +465,7 @@ export function QuickActionsMenu({
           setIsOpen(!isOpen);
           setCurrentView('menu');
         }}
-        className={`w-14 h-14 bg-gradient-to-tr from-indigo-600 to-purple-600 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-indigo-200 hover:shadow-2xl transition-all duration-250 cursor-pointer active:scale-95 focus:outline-none relative group`}
+        className={`w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-indigo-200 hover:shadow-2xl transition-all duration-250 cursor-pointer active:scale-95 focus:outline-none relative group`}
         title="Trigger Education OS Quick Scheduler Command Panel"
         id="quick-actions-fab-button"
       >

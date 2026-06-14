@@ -4590,7 +4590,7 @@ export default function App() {
               <div className="space-y-8">
                 {/* Dashboard Header */}
                 <div className="flex items-center gap-4 border-b border-gray-200 pb-4">
-                  <div className="h-16 w-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+                  <div className="h-16 w-16 bg-indigo-600 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-lg">
                     {students.find(s => s.id === activeStudentId)?.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
@@ -4611,7 +4611,7 @@ export default function App() {
                           key={r.id}
                           initial={{ scale: 0.95, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
-                          className="bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden"
+                          className="bg-amber-500 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden"
                         >
                           <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl animate-pulse" />
                           <div className="absolute -left-10 -top-10 w-32 h-32 bg-yellow-300/20 rounded-full blur-xl" />
@@ -5103,7 +5103,7 @@ export default function App() {
                     const cancelledToday = todaySchedules.filter(s => s.status === 'cancelled' || s.status === 'holiday');
                     
                     return (
-                      <div className="bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-650 rounded-2xl p-5 text-white shadow-sm flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 transition-all">
+                      <div className="bg-indigo-600 rounded-2xl p-5 text-white shadow-sm flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 transition-all">
                         <div className="flex-1">
                           <span className="bg-indigo-400 bg-opacity-30 text-[10px] md:text-xs uppercase font-extrabold tracking-wider px-2.5 py-1 rounded-full mb-2 inline-block">
                             📅 {lang === 'zh' ? '今日面授排课流' : "TODAY'S TIMETABLE FLOW"}
