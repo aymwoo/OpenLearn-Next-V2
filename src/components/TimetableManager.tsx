@@ -27,6 +27,7 @@ interface ScheduleType {
   notes?: string | null;
   lesson_title?: string;
   class_name?: string;
+  isRepeating?: boolean;
 }
 
 interface TimetableManagerProps {
@@ -161,7 +162,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               <Edit2 size={11} />
             </button>
             <button 
-              onClick={() => handleDeleteSchedule(sch.id, sch.class_id)}
+              onClick={() => handleDeleteSchedule(sch.id, sch.class_id, sch.isRepeating, sch.scheduled_date)}
               className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-1 rounded-md transition-colors cursor-pointer"
               title={lang === 'zh' ? '删除' : 'Delete'}
             >
@@ -357,8 +358,14 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     if (!selectedSchedule) return;
     
     try {
-      const response = await fetch(`/api/classes/${selectedSchedule.class_id}/schedules/${selectedSchedule.id}`, {
-        method: 'PUT',
+      const isRepeating = selectedSchedule.isRepeating;
+      const url = isRepeating 
+        ? `/api/classes/${selectedSchedule.class_id}/schedules` 
+        : `/api/classes/${selectedSchedule.class_id}/schedules/${selectedSchedule.id}`;
+      const method = isRepeating ? 'POST' : 'PUT';
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           lessonId: formLessonId,
@@ -384,7 +391,40 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   };
 
   // Handle schedule deletion
-  const handleDeleteSchedule = async (scheduleId: string, classId: string) => {
+  const handleDeleteSchedule = async (scheduleId: string, classId: string, isRepeating?: boolean, targetDate?: string) => {
+    if (isRepeating && targetDate) {
+      const confirmation = confirm(
+        lang === 'zh'
+          ? '该课程是由上周循环生成的。您确定要取消（停课）本周这一天的课程安排吗？'
+          : 'This is a repeating class. Do you want to cancel (set to Cancelled) this class for this week?'
+      );
+      if (!confirmation) return;
+      
+      try {
+        const sch = schedules.find(s => s.id === scheduleId);
+        const response = await fetch(`/api/classes/${classId}/schedules`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lessonId: sch?.lesson_id || '',
+            scheduledDate: targetDate,
+            timeSlot: sch?.time_slot || '',
+            status: 'cancelled',
+            notes: lang === 'zh' ? '循环排课取消' : 'Repeating schedule cancelled'
+          })
+        });
+        if (response.ok) {
+          fetchAllSchedules();
+          onSchedulesUpdated();
+        } else {
+          alert('Cancel failed');
+        }
+      } catch (err: any) {
+        alert(err.message);
+      }
+      return;
+    }
+
     const confirmation = confirm(
       lang === 'zh' 
         ? '您确定要完全删除该条课表排课记录吗？关联的考勤记录也将一并清除！' 
@@ -1175,11 +1215,43 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
           ];
 
           const weekDates = getWeekDates(currentWeekMonday);
+
+          const getSchedulesForDate = (dateStr: string): ScheduleType[] => {
+            // 1. Prefer date-specific custom schedules
+            const realSchedules = filteredSchedules.filter(s => s.scheduled_date === dateStr);
+            if (realSchedules.length > 0) {
+              return realSchedules;
+            }
+
+            // 2. Fall back to repeating weekly template schedules from the past (scheduled_date <= dateStr)
+            const targetDow = getDayOfWeekIndex(dateStr);
+            const historicalSchedules = filteredSchedules.filter(s => 
+              getDayOfWeekIndex(s.scheduled_date) === targetDow && 
+              s.scheduled_date <= dateStr
+            );
+
+            // 3. Deduplicate by class_id and time_slot, keeping the latest one
+            const latestSchedulesMap: Record<string, ScheduleType> = {};
+            historicalSchedules.forEach(sch => {
+              const groupKey = `${sch.class_id}_${sch.time_slot || 'all-day'}`;
+              // Since filteredSchedules is already sorted descending by scheduled_date, the first encounter is the latest
+              if (!latestSchedulesMap[groupKey]) {
+                latestSchedulesMap[groupKey] = {
+                  ...sch,
+                  scheduled_date: dateStr, // Virtualize date to the target week's date for exception overrides
+                  isRepeating: true
+                };
+              }
+            });
+
+            return Object.values(latestSchedulesMap);
+          };
+
           const weeklySchedulesByDay = weekDays.map((day, idx) => {
             const dateStr = weekDates[idx];
             // Support temporary date switches: load schedules from override target date if configured
             const targetDateStr = dateOverrides[dateStr] || dateStr;
-            const daySchedules = filteredSchedules.filter(s => s.scheduled_date === targetDateStr);
+            const daySchedules = getSchedulesForDate(targetDateStr);
             daySchedules.sort((a, b) => (a.time_slot || '').localeCompare(b.time_slot || ''));
             return {
               ...day,
