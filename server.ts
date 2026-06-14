@@ -3479,14 +3479,28 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
   app.get('/api/schedules/today', (req, res) => {
     try {
       const clientDate = req.query.date as string || new Date().toISOString().split('T')[0];
+      
+      // Weekly repeating: match the day of week (strftime('%w', s.scheduled_date) = strftime('%w', ?))
+      // Partition by class_id and time_slot to get the latest schedule defined for this slot on this weekday
       const schedules = kernelContainer.db.prepare(`
-        SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name
-        FROM schedules s
-        LEFT JOIN lessons l ON s.lesson_id = l.id
-        JOIN classes c ON s.class_id = c.id
-        WHERE s.scheduled_date = ?
-        ORDER BY s.time_slot ASC, s.created_at ASC
-      `).all(clientDate) as any[];
+        WITH RankedSchedules AS (
+          SELECT s.*,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY s.class_id, s.time_slot, strftime('%w', s.scheduled_date)
+                   ORDER BY s.scheduled_date DESC, s.created_at DESC
+                 ) as rn
+          FROM schedules s
+          WHERE strftime('%w', s.scheduled_date) = strftime('%w', ?)
+        )
+        SELECT r.id, r.class_id, r.lesson_id, ? as scheduled_date, r.time_slot, r.status, r.notes, r.created_at,
+               COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name
+        FROM RankedSchedules r
+        LEFT JOIN lessons l ON r.lesson_id = l.id
+        JOIN classes c ON r.class_id = c.id
+        WHERE r.rn = 1
+        ORDER BY r.time_slot ASC, r.created_at ASC
+      `).all(clientDate, clientDate) as any[];
+      
       res.json({ success: true, schedules });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -4452,17 +4466,48 @@ ${examsText}
         WHERE cs.student_id = ?
       `).all(studentId);
       
-      // Get impending schedules (for classes they are in)
-      const schedules = kernelContainer.db.prepare(`
-        SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name,
-               (SELECT status FROM attendance a WHERE a.schedule_id = s.id AND a.student_id = ?) as attendance_status
-        FROM schedules s
-        LEFT JOIN lessons l ON s.lesson_id = l.id
-        JOIN classes c ON s.class_id = c.id
-        JOIN class_students cs ON s.class_id = cs.class_id
-        WHERE cs.student_id = ?
-        ORDER BY s.scheduled_date ASC
-      `).all(studentId, studentId);
+      // Get impending schedules (for classes they are in, repeating weekly)
+      const rawSchedules = kernelContainer.db.prepare(`
+        WITH RankedSchedules AS (
+          SELECT s.*,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY s.class_id, s.time_slot, strftime('%w', s.scheduled_date)
+                   ORDER BY s.scheduled_date DESC, s.created_at DESC
+                 ) as rn
+          FROM schedules s
+          JOIN class_students cs ON s.class_id = cs.class_id
+          WHERE cs.student_id = ?
+        )
+        SELECT r.id, r.class_id, r.lesson_id, r.scheduled_date, r.time_slot, r.status, r.notes, r.created_at,
+               COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name,
+               (SELECT status FROM attendance a WHERE a.schedule_id = r.id AND a.student_id = ?) as attendance_status
+        FROM RankedSchedules r
+        LEFT JOIN lessons l ON r.lesson_id = l.id
+        JOIN classes c ON r.class_id = c.id
+        WHERE r.rn = 1
+        ORDER BY CASE WHEN strftime('%w', r.scheduled_date) = '0' THEN 7 ELSE CAST(strftime('%w', r.scheduled_date) AS INTEGER) END ASC, r.time_slot ASC
+      `).all(studentId, studentId) as any[];
+
+      // Map the original scheduled_date to the current week's corresponding date
+      const today = new Date();
+      const day = today.getDay(); // 0 is Sunday, 1 is Monday, ..., 6 is Saturday
+      const diff = today.getDate() - day + (day === 0 ? -6 : 1); // Monday of current week
+      const monday = new Date(today.setDate(diff));
+      monday.setHours(0, 0, 0, 0);
+
+      const schedules = rawSchedules.map(sch => {
+        const origDate = new Date(sch.scheduled_date);
+        const dayOfWeekNum = origDate.getDay(); // 0-6
+
+        const offset = (dayOfWeekNum === 0) ? 6 : (dayOfWeekNum - 1);
+        const thisWeekOccurence = new Date(monday.getTime() + offset * 24 * 60 * 60 * 1000);
+        const dateStr = thisWeekOccurence.toISOString().split('T')[0];
+
+        return {
+          ...sch,
+          scheduled_date: dateStr
+        };
+      });
       
       // Get assignments and their submission status
       const assignments = kernelContainer.db.prepare(`
