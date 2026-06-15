@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, User, Users, Shield, GraduationCap, ArrowRight, AlertCircle, Sparkles } from 'lucide-react';
+import { Lock, User, Users, Shield, GraduationCap, ArrowRight, AlertCircle } from 'lucide-react';
 
 interface Student {
   id: string;
@@ -311,11 +311,7 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
           </form>
         )}
 
-        {/* Dev tip on how to switch back/toggle accounts */}
-        <div className="mt-8 pt-4 border-t border-slate-900 flex justify-center items-center gap-1.5 text-[10px] text-slate-500 text-center select-none">
-          <Sparkles size={11} className="text-indigo-400" />
-          <span>{lang === 'zh' ? '系统预设超级管理员：admin password: admin' : 'Built-in Super Administrative account: admin / admin'}</span>
-        </div>
+
       </div>
     </div>
   );
