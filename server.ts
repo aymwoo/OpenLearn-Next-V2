@@ -75,8 +75,12 @@ const buildAgentFinalMessage = (message: string, attachments?: AgentChatAttachme
   let finalMessage = message;
   if (attachments && Array.isArray(attachments) && attachments.length > 0) {
     finalMessage += '\n\n[Attached Reference Files]';
-    attachments.forEach((file) => {
-      finalMessage += `\n\nFilename: "${file.name}"\nContent:\n"""\n${file.content}\n"""`;
+    attachments.forEach((file, index) => {
+      if (file.name.endsWith('.zip') || file.content.startsWith('data:application/zip') || file.content.length > 5000) {
+        finalMessage += `\n\nFilename: "${file.name}"\nContent: "[ZIP or Binary content omitted. Use placeholder 'ATTACHMENT_BASE64:${index}' as the parameter for tools requiring this file's raw base64 data.]"`;
+      } else {
+        finalMessage += `\n\nFilename: "${file.name}"\nContent:\n"""\n${file.content}\n"""`;
+      }
     });
   }
   return finalMessage;
@@ -219,6 +223,17 @@ const runGeminiAgentChat = async (request: AgentChatRequest) => {
     for (const part of contentParts) {
       if ('functionCall' in part && part.functionCall) {
         const call = part.functionCall;
+        if (call.args && typeof call.args === 'object' && attachments) {
+          for (const key of Object.keys(call.args)) {
+            const val = call.args[key];
+            if (typeof val === 'string' && val.startsWith('ATTACHMENT_BASE64:')) {
+              const idx = parseInt(val.split(':')[1]);
+              if (attachments[idx]) {
+                call.args[key] = attachments[idx].content;
+              }
+            }
+          }
+        }
         const actionResult = await executeAgentToolCall(call.name, call.args, allExecutedTools);
 
         toolParts.push({
@@ -322,6 +337,17 @@ const runOpenAIAgentChat = async (provider: StoredAIProvider, request: AgentChat
         }
       }
 
+      if (parsedArgs && typeof parsedArgs === 'object' && attachments) {
+        for (const key of Object.keys(parsedArgs)) {
+          const val = parsedArgs[key];
+          if (typeof val === 'string' && val.startsWith('ATTACHMENT_BASE64:')) {
+            const idx = parseInt(val.split(':')[1]);
+            if (attachments[idx]) {
+              parsedArgs[key] = attachments[idx].content;
+            }
+          }
+        }
+      }
       const actionResult = await executeAgentToolCall(toolName, parsedArgs, allExecutedTools);
       messages.push({
         role: 'tool',
