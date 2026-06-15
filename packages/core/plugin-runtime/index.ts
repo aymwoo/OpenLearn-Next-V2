@@ -65,6 +65,16 @@ export class PluginRuntime {
      return newStatus;
   }
 
+  public async uninstallPlugin(id: string) {
+     const plugin = this.kernel.db.prepare('SELECT * FROM plugins WHERE id = ?').get(id) as any;
+     if (!plugin) throw new Error('Plugin not found');
+
+     this.deactivatePlugin(id);
+
+     this.kernel.db.prepare('DELETE FROM plugins WHERE id = ?').run(id);
+     this.kernel.db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ?').run(id);
+  }
+
   private deactivatePlugin(pluginId: string) {
     const registration = this.activePluginRegistrations.get(pluginId);
     if (!registration) return;

@@ -4618,6 +4618,20 @@ ${examsText}
     }
   });
 
+  app.delete('/api/plugins/:id', async (req, res) => {
+    try {
+      const cmd = kernelContainer.commandBus.createCommand(
+        'plugin.uninstall',
+        { pluginId: req.params.id },
+        'user-frontend'
+      );
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   app.post('/api/plugins', async (req, res) => {
     try {
       const { sourceCode } = req.body;

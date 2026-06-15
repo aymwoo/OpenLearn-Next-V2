@@ -555,6 +555,31 @@ export function bootstrapBuiltinPlugins() {
     }
   });
 
+  // 7.5. PLUGIN UNINSTALL HANDLER
+  const uninstallPluginCmdType = 'plugin.uninstall';
+  actionRegistry.register({
+    id: 'core-plugin-uninstall',
+    commandType: uninstallPluginCmdType,
+    description: 'Uninstall and completely delete a plugin from the system. This is a high-risk operation.',
+    capabilityRequired: 'plugin:write',
+    isHighRisk: true,
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        pluginId: { type: 'STRING', description: 'The unique database ID of the plugin.' }
+      },
+      required: ['pluginId']
+    }
+  });
+
+  commandBus.registerHandler(uninstallPluginCmdType, {
+    async execute(command) {
+      const payload = command.payload as any;
+      await kernelContainer.pluginRuntime.uninstallPlugin(payload.pluginId);
+      return { success: true };
+    }
+  });
+
   // 8. USER LIST HANDLER
   const listUsersCmdType = 'user.list';
   actionRegistry.register({
