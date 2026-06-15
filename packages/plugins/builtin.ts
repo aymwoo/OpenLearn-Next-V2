@@ -477,6 +477,59 @@ export function bootstrapBuiltinPlugins() {
     }
   });
 
+  // 6.5. PLUGIN INSTALL ZIP HANDLER
+  const installPluginZipCmdType = 'plugin.install_zip';
+  actionRegistry.register({
+    id: 'core-plugin-install-zip',
+    commandType: installPluginZipCmdType,
+    description: 'Install a custom plugin from a ZIP file containing index.js (or plugin.js) and manifest.json.',
+    capabilityRequired: 'plugin:write',
+    isHighRisk: true,
+    inputSchema: {
+      type: 'OBJECT',
+      properties: {
+        base64Data: { type: 'STRING', description: 'Base64 representation of the ZIP file.' },
+        filename: { type: 'STRING', description: 'Name of the zip file (optional).' }
+      },
+      required: ['base64Data']
+    }
+  });
+
+  commandBus.registerHandler(installPluginZipCmdType, {
+    async execute(command) {
+      const payload = command.payload as any;
+      const base64Content = payload.base64Data.replace(/^data:[^;]+;base64,/, '');
+      const fileBuffer = Buffer.from(base64Content, 'base64');
+
+      const zip = new JSZip();
+      let loadedZip;
+      try {
+        loadedZip = await zip.loadAsync(fileBuffer);
+      } catch (zipErr: any) {
+        throw new Error('Failed to parse ZIP archive: ' + zipErr.message);
+      }
+
+      let jsFile = loadedZip.file('index.js') || loadedZip.file('plugin.js');
+
+      if (!jsFile) {
+        for (const [name, file] of Object.entries(loadedZip.files)) {
+          if (!file.dir && name.endsWith('.js')) {
+            jsFile = file;
+            break;
+          }
+        }
+      }
+
+      if (!jsFile) {
+        throw new Error('ZIP plugin must contain index.js, plugin.js, or another .js file.');
+      }
+
+      const sourceCode = await jsFile.async('string');
+      const manifest = await kernelContainer.pluginRuntime.installPlugin(sourceCode);
+      return { success: true, manifest };
+    }
+  });
+
   // 7. PLUGIN TOGGLE HANDLER
   const togglePluginCmdType = 'plugin.toggle';
   actionRegistry.register({

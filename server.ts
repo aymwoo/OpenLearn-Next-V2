@@ -4587,6 +4587,22 @@ ${examsText}
     }
   });
 
+  app.post('/api/plugins/upload-zip', async (req, res) => {
+    try {
+      const { base64Data, filename } = req.body;
+      const cmd = kernelContainer.commandBus.createCommand(
+        'plugin.install_zip',
+        { base64Data, filename },
+        'user-frontend'
+      );
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // AI Provider Endpoints
   app.get('/api/ai-providers', (req, res) => {
     try {

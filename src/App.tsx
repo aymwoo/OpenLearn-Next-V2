@@ -3873,7 +3873,11 @@ export default function App() {
           ]);
         }
       };
-      reader.readAsText(file);
+      if (file.name.endsWith('.zip')) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
     });
   };
 
@@ -3890,7 +3894,11 @@ export default function App() {
           ]);
         }
       };
-      reader.readAsText(file);
+      if (file.name.endsWith('.zip')) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
     });
   };
 
@@ -4178,6 +4186,37 @@ export default function App() {
     } finally {
       setInstallingPlugin(false);
     }
+  };
+
+  const handleZipPluginUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target?.result as string;
+      setInstallingPlugin(true);
+      try {
+        const res = await fetch('/api/plugins/upload-zip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base64Data: base64, filename: file.name })
+        });
+        const data = await res.json();
+        if (data.success) {
+          await fetchPlugins();
+          alert(`Plugin "${data.manifest.name}" installed successfully!`);
+          setChatLog(prev => [...prev, { role: 'agent', content: `[System] Plugin "${data.manifest.name}" installed successfully from ZIP file.` }]);
+        } else {
+          alert("Plugin installation failed: " + data.error);
+        }
+      } catch (err: any) {
+        alert("Error: " + err.message);
+      } finally {
+        setInstallingPlugin(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleTogglePlugin = async (id: string) => {
@@ -6318,18 +6357,33 @@ export default function App() {
                                <p className="text-[10px] text-gray-505">
                                  {lang === 'zh' ? '在安装前系统将进行解析、安全授权与注册接口预览机制' : 'Parse metadata, proposed permissions, and registered triggers before installation'}
                                </p>
-                             </div>
                            </div>
-                           <div className="flex items-center gap-2">
-                             <button
-                               onClick={() => setPluginCode(DEFAULT_PLUGIN)}
-                               className="px-2 py-1 text-[10px] uppercase font-bold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded transition-all flex items-center gap-1 cursor-pointer"
-                               title="Reset to default multi-choice quiz generator example"
-                             >
-                               <Wand2 size={11} className="text-indigo-450" />
-                               {lang === 'zh' ? '示例：智能测验生成器' : 'Quiz Sample'}
-                             </button>
-                             <button
+                         </div>
+                         <div className="flex items-center gap-2">
+                           <input
+                             type="file"
+                             accept=".zip"
+                             id="zip-plugin-uploader"
+                             className="hidden"
+                             onChange={handleZipPluginUpload}
+                           />
+                           <button
+                             onClick={() => document.getElementById('zip-plugin-uploader')?.click()}
+                             className="px-2.5 py-1 text-[10px] uppercase font-bold text-emerald-400 hover:text-white bg-slate-900 border border-emerald-500/30 hover:bg-emerald-600 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                             title="Upload a ZIP plugin containing plugin.js/index.js and manifest.json"
+                           >
+                             <Upload size={11} />
+                             {lang === 'zh' ? '上传 ZIP 插件' : 'Upload ZIP Plugin'}
+                           </button>
+                           <button
+                             onClick={() => setPluginCode(DEFAULT_PLUGIN)}
+                             className="px-2.5 py-1 text-[10px] uppercase font-bold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                             title="Reset to default multi-choice quiz generator example"
+                           >
+                             <Wand2 size={11} className="text-indigo-450" />
+                             {lang === 'zh' ? '示例：智能测验生成器' : 'Quiz Sample'}
+                           </button>
+                           <button
                                onClick={() => {
                                  setPluginCode(`exports.default = {
   manifest: {
