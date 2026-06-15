@@ -1,6 +1,19 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
+
+// Auto-fallback NODE_ENV to production if executing the bundled output
+if (!process.env.NODE_ENV) {
+  const isCjs = typeof __filename !== 'undefined' && __filename.endsWith('.cjs');
+  const isDist = process.cwd().endsWith('/dist') || (typeof __dirname !== 'undefined' && __dirname.includes('/dist')) || (typeof __filename !== 'undefined' && __filename.includes('/dist'));
+  if (isCjs || isDist) {
+    process.env.NODE_ENV = 'production';
+  }
+}
 import { exec } from 'child_process';
 import { createServer as createViteServer } from 'vite';
 import { createServer as createHttpServer } from 'http';
@@ -158,7 +171,15 @@ const buildOpenAIChatUrl = (apiUrl: string) => {
 
 const runGeminiAgentChat = async (request: AgentChatRequest) => {
   const { message, lang = 'zh', currentLessonId, attachments } = request;
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey.trim() === '' || apiKey.trim() === 'MY_GEMINI_API_KEY') {
+    throw new Error(
+      lang === 'zh'
+        ? '系统默认 AI 服务的 API Key (GEMINI_API_KEY) 未配置。请在后台的「系统设置」-「AI 提供商管理」中配置可用的 AI 提供商并将它设为主用，或者在服务器根目录的 `.env` 文件中填写正确的 `GEMINI_API_KEY`。'
+        : 'The default System AI API Key (GEMINI_API_KEY) is not configured. Please configure a valid AI Provider in the admin dashboard and set it as active, or set `GEMINI_API_KEY` in the server `.env` file.'
+    );
+  }
+  const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
   const tools = kernelContainer.actionRegistry.getAgentTools();
   const systemInstruction = buildAgentSystemInstruction(lang, currentLessonId);
   const finalMessage = buildAgentFinalMessage(message, attachments);

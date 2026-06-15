@@ -4140,9 +4140,14 @@ export default function App() {
       });
       const data = await res.json();
       
-      let replyContent = data.agentText || '';
-      if (data.toolResults && data.toolResults.length > 0) {
-         replyContent += `\n\n${t.executedCommands}` + data.toolResults.map((r:any) => r.callName).join(', ');
+      let replyContent = '';
+      if (!res.ok || data.success === false) {
+        replyContent = `⚠️ [System Error] ${data.error || (lang === 'zh' ? '未知系统错误' : 'Unknown System Error')}`;
+      } else {
+        replyContent = data.agentText || '';
+        if (data.toolResults && data.toolResults.length > 0) {
+          replyContent += `\n\n${t.executedCommands}` + data.toolResults.map((r:any) => r.callName).join(', ');
+        }
       }
       
       setChatLog(prev => [...prev, { role: 'agent', content: replyContent }]);
