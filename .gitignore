@@ -6,4 +6,4 @@ coverage/
 *.log
 .env*
 !.env.example
-/packages/core/db
+/packages/core/db/*.db

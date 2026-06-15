@@ -4,8 +4,16 @@ import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 
 const getDbDirname = () => {
-  if (typeof import.meta !== 'undefined' && import.meta && (import.meta as any).url) {
-    return path.dirname(fileURLToPath((import.meta as any).url));
+  if (typeof __dirname !== 'undefined') {
+    return __dirname;
+  }
+  try {
+    const metaUrl = (new Function('return import.meta.url'))();
+    if (metaUrl) {
+      return path.dirname(fileURLToPath(metaUrl));
+    }
+  } catch (e) {
+    // Ignore error in environments where import.meta is not available
   }
   if (typeof module !== 'undefined' && (module as any).path) {
     return (module as any).path;
