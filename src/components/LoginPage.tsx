@@ -196,7 +196,7 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder={lang === 'zh' ? '默认管理员: admin / 普通教师: teacher' : 'e.g. admin or teacher'}
+                placeholder={lang === 'zh' ? '输入教工账户名' : 'Enter staff username'}
                 className="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-xs sm:text-sm p-3 text-white outline-none placeholder-slate-500 transition-colors"
                 required
               />
@@ -211,7 +211,7 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder={lang === 'zh' ? '默认管理员: admin / 普通教师: teacher' : 'e.g. admin or teacher'}
+                placeholder={lang === 'zh' ? '输入登录密码' : 'Enter access password'}
                 className="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-xs sm:text-sm p-3 text-white outline-none placeholder-slate-500 transition-colors"
                 required
               />
@@ -295,7 +295,7 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
                 required
                 value={studentPassword}
                 onChange={(e) => setStudentPassword(e.target.value)}
-                placeholder={lang === 'zh' ? '输入个人密码 (默认: 123456) 或临时班级密码' : 'Enter standard password (default: 123456) or active class code'}
+                placeholder={lang === 'zh' ? '输入个人密码或临时班级密码' : 'Enter personal password or class passcode'}
                 className="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-xs sm:text-sm p-3 text-white outline-none placeholder-slate-500 transition-colors"
               />
             </div>
