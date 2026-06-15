@@ -4235,6 +4235,21 @@ export default function App() {
     }
   };
 
+  const handleDeletePlugin = async (id: string) => {
+    if (!window.confirm(lang === 'zh' ? '确定要彻底删除该插件吗？删除后此插件相关的功能将无法使用。' : 'Are you sure you want to completely delete this plugin? This cannot be undone.')) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/plugins/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+         await fetchPlugins();
+         setChatLog(prev => [...prev, { role: 'agent', content: `[System] Plugin uninstalled and deleted.` }]);
+      }
+    } catch (e) {
+      console.error('Failed to delete plugin:', e);
+    }
+  };
+
   const handleApprove = async (id: string, payloadOverride?: any) => {
     try {
       const res = await fetch(`/api/approvals/${id}/approve`, { 
@@ -6321,12 +6336,20 @@ export default function App() {
                                     </div>
                                     <div className="flex items-center justify-between shrink-0">
                                        <span className="text-xs font-medium text-gray-400">By {manifestInfo.author}</span>
-                                       <button 
-                                           onClick={() => handleTogglePlugin(plugin.id)} 
-                                           className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${plugin.status === 'active' ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
-                                       >
-                                           {plugin.status === 'active' ? 'Disable' : 'Enable'}
-                                       </button>
+                                       <div className="flex gap-1.5">
+                                         <button 
+                                             onClick={() => handleTogglePlugin(plugin.id)} 
+                                             className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${plugin.status === 'active' ? 'bg-amber-50 text-amber-600 hover:bg-amber-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
+                                         >
+                                             {plugin.status === 'active' ? (lang === 'zh' ? '禁用' : 'Disable') : (lang === 'zh' ? '启用' : 'Enable')}
+                                         </button>
+                                         <button 
+                                             onClick={() => handleDeletePlugin(plugin.id)} 
+                                             className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                                         >
+                                             {lang === 'zh' ? '删除' : 'Delete'}
+                                         </button>
+                                       </div>
                                     </div>
                                  </div>
                               );
