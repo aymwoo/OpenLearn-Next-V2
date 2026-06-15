@@ -36,6 +36,7 @@ type AgentChatRequest = {
   currentLessonId?: string | null;
   attachments?: AgentChatAttachment[];
   providerId?: string | null;
+  callerRole?: string;
 };
 type AgentToolExecution = {
   callName: string;
@@ -138,16 +139,24 @@ const buildOpenAITools = () => {
 const executeAgentToolCall = async (
   toolName: string,
   args: any,
-  allExecutedTools: AgentToolExecution[]
+  allExecutedTools: AgentToolExecution[],
+  callerRole?: string
 ) => {
   const actionDesc = kernelContainer.actionRegistry.getActionByToolName(toolName);
   let actionResult: any;
+
+  // When the caller is an administrator, elevate the agent to superadmin
+  // and auto-approve high-risk operations (no manual approval queue).
+  const isAdmin = callerRole === 'administrator';
+  const actorId = isAdmin ? 'user-frontend' : 'agent-system-0';
+  const metadata = isAdmin ? { approved: true } : undefined;
 
   if (actionDesc) {
     const cmd = kernelContainer.commandBus.createCommand(
       actionDesc.commandType,
       args,
-      'agent-system-0'
+      actorId,
+      metadata
     );
     try {
       const cmdResult = await kernelContainer.commandBus.execute(cmd);
@@ -174,7 +183,7 @@ const buildOpenAIChatUrl = (apiUrl: string) => {
 };
 
 const runGeminiAgentChat = async (request: AgentChatRequest) => {
-  const { message, lang = 'zh', currentLessonId, attachments } = request;
+  const { message, lang = 'zh', currentLessonId, attachments, callerRole } = request;
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey.trim() === '' || apiKey.trim() === 'MY_GEMINI_API_KEY') {
     throw new Error(
@@ -234,7 +243,7 @@ const runGeminiAgentChat = async (request: AgentChatRequest) => {
             }
           }
         }
-        const actionResult = await executeAgentToolCall(call.name, call.args, allExecutedTools);
+        const actionResult = await executeAgentToolCall(call.name, call.args, allExecutedTools, callerRole);
 
         toolParts.push({
           functionResponse: {
@@ -264,7 +273,7 @@ const runGeminiAgentChat = async (request: AgentChatRequest) => {
 };
 
 const runOpenAIAgentChat = async (provider: StoredAIProvider, request: AgentChatRequest) => {
-  const { message, lang = 'zh', currentLessonId, attachments } = request;
+  const { message, lang = 'zh', currentLessonId, attachments, callerRole } = request;
   const systemInstruction = buildAgentSystemInstruction(lang, currentLessonId);
   const finalMessage = buildAgentFinalMessage(message, attachments);
   const tools = buildOpenAITools();
@@ -348,7 +357,7 @@ const runOpenAIAgentChat = async (provider: StoredAIProvider, request: AgentChat
           }
         }
       }
-      const actionResult = await executeAgentToolCall(toolName, parsedArgs, allExecutedTools);
+      const actionResult = await executeAgentToolCall(toolName, parsedArgs, allExecutedTools, callerRole);
       messages.push({
         role: 'tool',
         tool_call_id: call.id,
@@ -680,13 +689,35 @@ async function startServer() {
   app.post('/api/agent/chat', async (req, res) => {
     try {
       const { message, lang = 'zh', currentLessonId, attachments, providerId } = req.body as AgentChatRequest;
+
+      // Determine the caller's role from the session cookie
+      let callerRole: string | undefined;
+      const rc = req.headers.cookie;
+      if (rc) {
+        const parts = rc.split(';');
+        for (const part of parts) {
+          const trimmed = part.trim();
+          if (trimmed.startsWith('edu_os_token=')) {
+            const token = trimmed.substring('edu_os_token='.length);
+            try {
+              const sessionRow = kernelContainer.db.prepare('SELECT session_data FROM client_sessions WHERE id = ?').get(token) as any;
+              if (sessionRow) {
+                const session = JSON.parse(sessionRow.session_data);
+                callerRole = session.role;
+              }
+            } catch (_) {}
+            break;
+          }
+        }
+      }
+
       const provider = providerId
         ? kernelContainer.db.prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?').get(providerId) as StoredAIProvider | undefined
         : undefined;
 
       const result = provider
-        ? await runOpenAIAgentChat(provider, { message, lang, currentLessonId, attachments })
-        : await runGeminiAgentChat({ message, lang, currentLessonId, attachments });
+        ? await runOpenAIAgentChat(provider, { message, lang, currentLessonId, attachments, callerRole })
+        : await runGeminiAgentChat({ message, lang, currentLessonId, attachments, callerRole });
 
       res.json({
         success: true,
