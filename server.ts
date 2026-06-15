@@ -77,7 +77,7 @@ const buildAgentFinalMessage = (message: string, attachments?: AgentChatAttachme
     finalMessage += '\n\n[Attached Reference Files]';
     attachments.forEach((file, index) => {
       if (file.name.endsWith('.zip') || file.content.startsWith('data:application/zip') || file.content.length > 5000) {
-        finalMessage += `\n\nFilename: "${file.name}"\nContent: "[ZIP or Binary content omitted. Use placeholder 'ATTACHMENT_BASE64:${index}' as the parameter for tools requiring this file's raw base64 data.]"`;
+        finalMessage += `\n\nFilename: "${file.name}"\nContent: "ATTACHMENT_BASE64:${index}"`;
       } else {
         finalMessage += `\n\nFilename: "${file.name}"\nContent:\n"""\n${file.content}\n"""`;
       }
