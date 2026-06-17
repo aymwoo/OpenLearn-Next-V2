@@ -460,17 +460,15 @@ export class Kernel {
 
 **If this table is empty:** 不适用。
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **typescript-strict-plugin "opt-out" vs "opt-in" 模式选择**
+1. **typescript-strict-plugin "opt-out" vs "opt-in" 模式选择** — RESOLVED: opt-out 模式
    - What we know: v2.0+ 默认 opt-out 模式（所有文件 strict，仅注释排除的文件不 strict）。D-18 要求 Token 和 ServiceRegistry 源码文件使用 strict 模式
-   - What's unclear: 用户期望新文件默认 strict（opt-out）还是按文件显式标记（opt-in）
-   - Recommendation: 采用 opt-out 模式（插件默认行为）——新文件自动 strict，在 `di/` 目录中的文件无需特殊注释即获得 strict 检查。如果需要，在 tsconfig.json 的 plugins 配置中设置 `"paths": ["./packages/core/di"]` 限定范围
+   - Decision: 采用 opt-out 模式（插件默认行为）——新文件自动 strict，在 `di/` 目录中的文件无需特殊注释即获得 strict 检查。在 tsconfig.json 的 plugins 配置中设置 `"paths": ["./packages/core/di"]` 限定范围
 
-2. **Token 的 `Symbol` vs 字符串唯一性机制**
+2. **Token 的 `Symbol` vs 字符串唯一性机制** — RESOLVED: 字符串唯一键
    - What we know: D-03 已决定使用字符串标识符进行比较。Token 构造时可附加一个内部 Symbol 用于同进程内快速引用比较
-   - What's unclear: 是否需要额外存储 Symbol 以支持未来 Phase 6 的 SemVer Token Registry 优化
-   - Recommendation: Phase 1 以 `token.name` 字符串作为唯一键（与 D-03 一致）。Symbol 在需要时（Phase 6）可作为 Token 的附加字段引入，不破坏现有接口
+   - Decision: Phase 1 以 `token.name` 字符串作为唯一键（与 D-03 一致）。Symbol 在需要时（Phase 6）可作为 Token 的附加字段引入，不破坏现有接口
 
 ## Environment Availability
 

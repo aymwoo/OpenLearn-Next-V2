@@ -47,7 +47,6 @@ created: 2026-06-17
 | 01-03-03 | 03 | 3 | D-06 | T-01-02 | 缺失依赖注册时抛 MissingDependencyError | unit | `npx vitest run packages/core/di/__tests__/service-registry.test.ts` | ❌ W0 | ⬜ pending |
 | 01-03-04 | 03 | 3 | D-09 | — | N/A | unit | `npx vitest run packages/core/di/__tests__/service-registry.test.ts` | ❌ W0 | ⬜ pending |
 | 01-03-05 | 03 | 3 | D-10 | — | N/A | unit | `npx vitest run packages/core/di/__tests__/service-registry.test.ts` | ❌ W0 | ⬜ pending |
-| 01-04-01 | 04 | 4 | D-11 | — | N/A | unit | `npx vitest run packages/core/di/__tests__/kernel-integration.test.ts` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -58,7 +57,6 @@ created: 2026-06-17
 - [ ] `vitest.config.ts` — vitest 配置文件（项目根目录）
 - [ ] `packages/core/di/__tests__/token.test.ts` — Token 单元测试桩
 - [ ] `packages/core/di/__tests__/service-registry.test.ts` — ServiceRegistry 单元测试桩
-- [ ] `packages/core/di/__tests__/kernel-integration.test.ts` — Kernel 集成测试桩
 - [ ] `package.json` — 添加 `"test": "vitest run"` 脚本
 - [ ] vitest 框架安装：`pnpm add -D vitest@^4.1.9`
 
