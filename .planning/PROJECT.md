@@ -114,3 +114,23 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 *Last updated: 2026-06-17 after initialization*
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| PLUG-01 | Phase 3 — ESM 加载 + 包格式 | Pending |
+| PLUG-02 | Phase 3 — ESM 加载 + 包格式 | Pending |
+| PLUG-03 | Phase 5 — Worker 隔离 + 双运行时 | Pending |
+| PLUG-04 | Phase 1 — Token DI 内核 | Pending |
+| PLUG-05 | Phase 4 — PluginHost + 生命周期 | Pending |
+| PLUG-06 | Phase 2 — 现有能力 Token 化 | Pending |
+| PLUG-07 | Phase 6 — EventBus 服务 + SemVer 兼容 | Pending |
+| PLUG-08 | Phase 7 — 热重载 + 中间件管道 | Pending |
+| PLUG-09 | Phase 6 — EventBus 服务 + SemVer 兼容 | Pending |
+| PLUG-10 | Phase 7 — 热重载 + 中间件管道 | Pending |
+| PLUG-11 | Phase 2 — 现有能力 Token 化 | Pending |
+| PLUG-12 | Phase 8 — 现有插件迁移 | Pending |
+
+---
+*Last updated: 2026-06-17 after roadmap creation*
