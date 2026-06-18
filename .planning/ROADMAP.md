@@ -80,7 +80,7 @@
   5. 插件停用时，所有在 activate 中创建的资源（命令处理器、事件订阅、定时器）被自动追踪并清理，不会残留
 **Plans**: 4 plans
   - [x] 04-01-PLAN.md -- 基础类型层：types.ts（Disposable、PluginState、PluginContext、PluginInfo）+ errors.ts（4 个错误类）+ resource-tracker.ts + 单元测试
-  - [ ] 04-02-PLAN.md -- ContextBuilder（从 PluginRuntime 迁移 wrapped* 安全包装器）+ PluginHost 类骨架（构造函数、状态机、内省方法）+ 单元测试
+  - [x] 04-02-PLAN.md -- ContextBuilder（从 PluginRuntime 迁移 wrapped* 安全包装器）+ PluginHost 类骨架（构造函数、状态机、内省方法）+ 单元测试
   - [ ] 04-03-PLAN.md -- PluginHost 完整生命周期方法（installPlugin/activatePlugin/deactivatePlugin/uninstallPlugin/installPluginFromZip/restoreActivePlugins）+ 完整集成测试
   - [ ] 04-04-PLAN.md -- PluginRuntime facade 层 + Kernel 集成 PluginHost + 状态机单元测试 + 最终验证
 **UI hint**: no
@@ -177,7 +177,7 @@
 | 1. Token DI 内核 | 4/4 | Complete    | 2026-06-18 |
 | 2. 现有能力 Token 化 | 3/3 | Complete    | 2026-06-18 |
 | 3. ESM 加载 + 包格式 | 4/4 | Complete    | 2026-06-18 |
-| 4. PluginHost + 生命周期 | 1/4 | In Progress|  |
+| 4. PluginHost + 生命周期 | 2/4 | In Progress|  |
 | 5. Worker 隔离 + 双运行时 | 0/0 | Not started | - |
 | 6. EventBus 服务 + SemVer 兼容 | 0/0 | Not started | - |
 | 7. 热重载 + 中间件管道 | 0/0 | Not started | - |
