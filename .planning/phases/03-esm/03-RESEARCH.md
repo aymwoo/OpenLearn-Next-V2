@@ -599,7 +599,7 @@ for (const [name, file] of Object.entries(zip.files)) {
 | A3 | BrowserEsmLoader 在 jsdom/happy-dom 环境中的 `URL.createObjectURL` + `import()` 模拟是可行的 | Validation Architecture | jsdom 对 Blob URL 的 import() 支持可能不完整，可能需要额外 polyfill 或简化为纯 Node 测试 |
 | A4 | `import()` 返回的模块对象形状是 `{ default?: PluginModule, [key: string]: unknown }` | Architecture Pattern #1 | `import()` 的确切返回类型取决于 ES module namespace object 规范。如果模块使用 named exports 而非 default export，访问模式需要调整 |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **esbuild external 的 Token import 格式精确匹配**
    - What we know: `external: ['@openlearn/*']` 已验证对 `@openlearn/core:ITest` 有效
