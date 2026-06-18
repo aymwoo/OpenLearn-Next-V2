@@ -49,7 +49,7 @@
   - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [x] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [x] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
-  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
+  - [x] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
 **UI hint**: no
 
 ### Phase 3: ESM 加载 + 包格式
@@ -65,7 +65,7 @@
 **Plans**: 4 plans
   - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [x] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
-  - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
+  - [x] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
   - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
 **UI hint**: no
 
@@ -81,7 +81,7 @@
   5. 插件停用时，所有在 activate 中创建的资源（命令处理器、事件订阅、定时器）被自动追踪并清理，不会残留
 **Plans**: 4 plans
   - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
-  - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
+  - [x] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
   - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
 **UI hint**: no
@@ -97,7 +97,7 @@
   4. 所有跨 Worker 边界的 RPC 调用在主线程端通过 CapabilityGuard 进行能力检查，Worker 无法越过 manifest 声明的能力范围
   5. Worker 生命周期与插件生命周期绑定：插件 activate 时创建 Worker，deactivate 时 terminate Worker；Worker 资源泄漏被全局 Worker Registry 追踪和预防
 **Plans**: 4 plans
-  - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
+  - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
   - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
@@ -175,7 +175,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Token DI 内核 | 4/4 | Complete   | 2026-06-18 |
+| 1. Token DI 内核 | 4/4 | Complete    | 2026-06-18 |
 | 2. 现有能力 Token 化 | 0/0 | Not started | - |
 | 3. ESM 加载 + 包格式 | 0/0 | Not started | - |
 | 4. PluginHost + 生命周期 | 0/0 | Not started | - |
