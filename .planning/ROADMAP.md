@@ -112,11 +112,10 @@
   3. 版本不兼容时（如插件要求 `^2.0` 但基座提供 `1.5.0`），激活被明确拒绝并报告具体的版本不匹配信息，而非静默失败或运行时异常
   4. Token 版本匹配通过 Token Registry 模式实现——插件通过字符串 key 查询 Token 而非直接 import Token 对象，避免不同 bundle 的 Token 对象引用不同（`===` 比较失败）导致的"幻影"不匹配
   5. 安装插件时即检查 Token 版本兼容性，不兼容则在安装阶段拒绝，避免"安装成功但无法激活"的用户困惑
-**Plans**: 4 plans
-  - [ ] 06-01-PLAN.md -- (要规划)
-  - [ ] 06-02-PLAN.md -- (要规划)
-  - [ ] 06-03-PLAN.md -- (要规划)
-  - [ ] 06-04-PLAN.md -- (要规划)
+**Plans**: 3 plans
+  - [ ] 06-01-PLAN.md -- Token 版本 + ServiceRegistry 版本追踪 + 错误类 + semver
+  - [ ] 06-02-PLAN.md -- Manifest schema @version 扩展 + parseRequiresEntry 工具
+  - [ ] 06-03-PLAN.md -- PluginHost/PluginRuntime SemVer 双重检查集成
 **UI hint**: no
 
 ### Phase 7: 热重载 + 中间件管道
@@ -179,7 +178,7 @@
 | 3. ESM 加载 + 包格式 | 4/4 | Complete    | 2026-06-18 |
 | 4. PluginHost + 生命周期 | 4/4 | Complete    | 2026-06-18 |
 | 5. Worker 隔离 + 双运行时 | 4/4 | Complete    | 2026-06-18 |
-| 6. EventBus 服务 + SemVer 兼容 | 0/0 | Not started | - |
+| 6. EventBus 服务 + SemVer 兼容 | 0/3 | Planning    | - |
 | 7. 热重载 + 中间件管道 | 0/0 | Not started | - |
 | 8. 现有插件迁移 | 0/0 | Not started | - |
 | 9. 前端集成 + 过渡期 | 0/0 | Not started | - |
