@@ -8,7 +8,7 @@
 
 - [x] **Phase 1: Token DI 内核** — Token 类实现 + ServiceRegistry 依赖注入容器 (completed 2026-06-18)
 - [x] **Phase 2: 现有能力 Token 化** — IService 接口定义 + 现有子系统实现 Token 化接口并注册 (completed 2026-06-18)
-- [ ] **Phase 3: ESM 加载 + 包格式** — data:URL/Blob URL 双运行时加载策略 + ZIP 多文件插件包支持
+- [x] **Phase 3: ESM 加载 + 包格式** — data:URL/Blob URL 双运行时加载策略 + ZIP 多文件插件包支持 (completed 2026-06-18)
 - [ ] **Phase 4: PluginHost + 生命周期** — 插件生命周期管理器 + activate/deactivate 标准接口
 - [ ] **Phase 5: Worker 隔离 + 双运行时** — Worker Thread/Web Worker 沙箱 + RPC 服务代理 + 内联/Worker 双模式
 - [ ] **Phase 6: EventBus 服务 + SemVer 兼容** — 全局 IEventBusService 统一事件 + Token 语义化版本兼容检查
@@ -65,7 +65,7 @@
   - [x] 03-01-PLAN.md -- EsmLoader 抽象基类 + PluginModule 接口 + 结构化错误类层次 + manifest-schema zod 校验 + 单元测试
   - [x] 03-02-PLAN.md -- NodeEsmLoader (data: URL) + BrowserEsmLoader (Blob URL) 平台实现 + 测试 fixtures + 完整单元测试
   - [x] 03-03-PLAN.md -- EsmLoader barrel 导出 + 全量 vitest 测试验证
-  - [ ] 03-04-PLAN.md -- esbuild 打包 + ZIP 解压 + DB schema 扩展 + PluginRuntime ESM 分支 + Kernel DI 注入 + 集成测试
+  - [x] 03-04-PLAN.md -- esbuild 打包 + ZIP 解压 + DB schema 扩展 + PluginRuntime ESM 分支 + Kernel DI 注入 + 集成测试
 **UI hint**: no
 
 ### Phase 4: PluginHost + 生命周期
@@ -176,7 +176,7 @@
 |-------|----------------|--------|-----------|
 | 1. Token DI 内核 | 4/4 | Complete    | 2026-06-18 |
 | 2. 现有能力 Token 化 | 3/3 | Complete    | 2026-06-18 |
-| 3. ESM 加载 + 包格式 | 3/4 | In Progress|  |
+| 3. ESM 加载 + 包格式 | 4/4 | Complete    | 2026-06-18 |
 | 4. PluginHost + 生命周期 | 0/0 | Not started | - |
 | 5. Worker 隔离 + 双运行时 | 0/0 | Not started | - |
 | 6. EventBus 服务 + SemVer 兼容 | 0/0 | Not started | - |
