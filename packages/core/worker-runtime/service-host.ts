@@ -42,9 +42,11 @@
  * @module
  */
 
-import type { IWorkerTransport, InvokeMessage } from './types.js';
+import type { IWorkerTransport, InvokeMessage, SubscribeMessage, UnsubscribeMessage } from './types.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
 import type { CapabilityGuard } from '../capability-system/index.js';
+import type { EventBus } from '../event-bus/index.js';
+import { EventForwarder } from './event-forwarder.js';
 import { WorkerCapabilityError } from './errors.js';
 
 /** Maximum length of serialized stack trace in characters. */
@@ -68,12 +70,18 @@ export class ServiceHost {
    * @param capabilityGuard - CapabilityGuard instance (sync access, NOT async ICapabilityService wrapper)
    * @param pluginActorId - Actor identity for all invokes (e.g. `'plugin:ext-quiz-generator'`)
    * @param manifestCapabilities - Capability strings from manifest.capabilitiesProposed
+   * @param eventBus - Optional EventBus for event forwarding (Plan 4). When provided,
+   *                   subscribe/unsubscribe messages from Worker create EventForwarder
+   *                   subscriptions on the real EventBus. When absent, subscribe/unsubscribe
+   *                   emit a warning.
    */
   constructor(
     private readonly serviceRegistry: ServiceRegistry,
     private readonly capabilityGuard: CapabilityGuard,
     private readonly pluginActorId: string,
     private manifestCapabilities: string[],
+    private readonly eventBus?: EventBus,
+    private eventForwarder?: EventForwarder,
   ) {}
 
   // ── Public accessors ───────────────────────────────────────────────────
@@ -119,15 +127,11 @@ export class ServiceHost {
           break;
 
         case 'subscribe':
-          console.warn(
-            `[ServiceHost] subscribe not yet implemented for actor ${this.pluginActorId} (Plan 4)`,
-          );
+          this.handleSubscribe(msg as SubscribeMessage, transport);
           break;
 
         case 'unsubscribe':
-          console.warn(
-            `[ServiceHost] unsubscribe not yet implemented for actor ${this.pluginActorId} (Plan 4)`,
-          );
+          this.handleUnsubscribe(msg as UnsubscribeMessage);
           break;
 
         case 'activated':
@@ -146,6 +150,65 @@ export class ServiceHost {
         err,
       );
     }
+  }
+
+  // ── Event forwarding (Plan 4) ──────────────────────────────────────────
+
+  /**
+   * Handle a 'subscribe' message from the Worker.
+   *
+   * Delegates to EventForwarder.handleSubscribe() to create an EventBus
+   * subscription with a forwarding handler. The EventForwarder is created
+   * lazily on the first subscribe message if an EventBus was provided.
+   *
+   * If no EventBus is available (null EventBus), this is a no-op.
+   *
+   * @param msg - The parsed subscribe message with subId and eventType
+   * @param transport - The Worker transport to forward events through
+   */
+  private handleSubscribe(msg: SubscribeMessage, transport: IWorkerTransport): void {
+    if (!this.eventBus) {
+      console.warn(
+        `[ServiceHost] No EventBus available -- cannot subscribe for actor ${this.pluginActorId}`,
+      );
+      return;
+    }
+
+    // Lazily create EventForwarder on first subscribe
+    if (!this.eventForwarder) {
+      this.eventForwarder = new EventForwarder(this.eventBus, transport);
+    }
+
+    this.eventForwarder.handleSubscribe(msg);
+  }
+
+  /**
+   * Handle an 'unsubscribe' message from the Worker.
+   *
+   * Delegates to EventForwarder.handleUnsubscribe() to remove the
+   * forwarding handler from EventBus.
+   *
+   * If no EventForwarder was created yet (no prior subscribe), this is a no-op.
+   *
+   * @param msg - The parsed unsubscribe message with subId
+   */
+  private handleUnsubscribe(msg: UnsubscribeMessage): void {
+    if (!this.eventForwarder) return;
+    this.eventForwarder.handleUnsubscribe(msg);
+  }
+
+  /**
+   * Dispose the EventForwarder for this Worker.
+   *
+   * Calls EventForwarder.disposeAll() to unsubscribe all EventBus listeners
+   * for this Worker, then clears the reference for GC.
+   *
+   * Must be called BEFORE Worker termination to prevent orphan EventBus
+   * subscriptions. Called by WorkerManager.terminateWorker().
+   */
+  disposeEventForwarder(): void {
+    this.eventForwarder?.disposeAll();
+    this.eventForwarder = undefined;
   }
 
   // ── Invoke handling (core RPC logic) ───────────────────────────────────

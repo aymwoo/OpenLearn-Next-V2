@@ -32,6 +32,7 @@ import { Worker } from 'node:worker_threads';
 import type { Database } from 'better-sqlite3';
 import { ServiceRegistry } from '../di/service-registry.js';
 import { CapabilityGuard } from '../capability-system/index.js';
+import type { EventBus } from '../event-bus/index.js';
 import { NodeWorkerTransport } from './transport.js';
 import type { IWorkerTransport } from './types.js';
 import { ServiceHost } from './service-host.js';
@@ -249,6 +250,51 @@ import { parentPort, workerData } from 'node:worker_threads';
 
 var pendingCalls = new Map();
 
+// EventBusProxy — Worker 端事件订阅代理
+function createEventBusProxy(transport) {
+  var subscriptions = new Map();
+  return {
+    subscribe: function(eventType, handler) {
+      var subId = globalThis.crypto.randomUUID();
+      var handlers = subscriptions.get(subId) || [];
+      handlers.push(handler);
+      subscriptions.set(subId, handlers);
+      transport.postMessage({ type: 'subscribe', subId: subId, eventType: eventType });
+      return subId;
+    },
+    unsubscribe: function(eventType, handler) {
+      for (var entry of subscriptions) {
+        var subId = entry[0];
+        var handlers = entry[1];
+        var idx = handlers.indexOf(handler);
+        if (idx !== -1) {
+          handlers.splice(idx, 1);
+          if (handlers.length === 0) {
+            subscriptions.delete(subId);
+            transport.postMessage({ type: 'unsubscribe', subId: subId });
+          }
+          break;
+        }
+      }
+    },
+    handleEvent: function(subId, event) {
+      var handlers = subscriptions.get(subId);
+      if (!handlers) return;
+      for (var i = 0; i < handlers.length; i++) {
+        try { handlers[i](event); } catch (e) {
+          console.error('[EventBusProxy] Handler error:', e);
+        }
+      }
+    },
+    disposeAll: function() {
+      for (var entry of subscriptions) {
+        transport.postMessage({ type: 'unsubscribe', subId: entry[0] });
+      }
+      subscriptions.clear();
+    }
+  };
+}
+
 // 创建服务代理对象（内联 createServicesProxy + createMethodProxy）
 function createServiceProxies(serviceTokens) {
   var services = {};
@@ -280,8 +326,16 @@ function createServiceProxies(serviceTokens) {
 
 // ── 单消息处理器 ──
 
+var eventBusProxy = null;
+
 parentPort.on('message', async function(msg) {
-  // 1. RPC 结果/错误分发（有 invokeId 且在 pendingCalls 中）
+  // 1. 转发的平台事件分发
+  if (msg && msg.type === 'event' && eventBusProxy) {
+    eventBusProxy.handleEvent(msg.subId, msg.event);
+    return;
+  }
+
+  // 2. RPC 结果/错误分发（有 invokeId 且在 pendingCalls 中）
   if (msg && msg.invokeId && pendingCalls.has(msg.invokeId)) {
     var pending = pendingCalls.get(msg.invokeId);
     pendingCalls.delete(msg.invokeId);
@@ -296,10 +350,11 @@ parentPort.on('message', async function(msg) {
     return;
   }
 
-  // 2. 激活消息
+  // 3. 激活消息
   if (msg.type === 'activate') {
     try {
       var services = createServiceProxies(workerData.serviceTokens);
+      eventBusProxy = createEventBusProxy(parentPort);
 
       // 通过 data URL 加载插件代码
       var encoded = Buffer.from(msg.pluginCode, 'utf-8').toString('base64');
@@ -311,11 +366,18 @@ parentPort.on('message', async function(msg) {
         return;
       }
 
-      // 构建 PluginContext
+      // 构建 PluginContext（带事件代理）
       var ctx = {
         services: services,
         pluginId: workerData.pluginId,
-        manifest: msg.manifest
+        manifest: msg.manifest,
+        eventBus: {
+          subscribe: function(type, handler) { return eventBusProxy.subscribe(type, handler); },
+          unsubscribe: function(type, handler) { eventBusProxy.unsubscribe(type, handler); },
+          publish: async function() {
+            throw new Error('publish not supported from Worker');
+          }
+        }
       };
 
       // 调用 activate
@@ -323,7 +385,7 @@ parentPort.on('message', async function(msg) {
 
       parentPort.postMessage({ type: 'activated' });
 
-      // 3. 停用请求（激活后注册，避免竞争）
+      // 4. 停用请求（激活后注册，避免竞争）
       parentPort.on('message', async function handleDeactivate(dmsg) {
         if (dmsg.type === 'deactivate-request') {
           parentPort.removeListener('message', handleDeactivate);
@@ -332,8 +394,12 @@ parentPort.on('message', async function(msg) {
               await plugin.deactivate();
             }
           } finally {
-            // 清理 pending calls
+            // 清理 pending calls 和事件代理
             pendingCalls.clear();
+            if (eventBusProxy) {
+              eventBusProxy.disposeAll();
+              eventBusProxy = null;
+            }
             parentPort.postMessage({ type: 'deactivated' });
           }
         }
@@ -409,6 +475,8 @@ export class WorkerManager {
    * @param manifest - 插件 manifest
    * @param sourceCode - 插件源代码
    * @param serviceTokens - 服务 Token 名称列表
+   * @param eventBus - 可选的 EventBus 实例，用于事件转发。提供时，Worker
+   *                   的 subscribe 消息会创建 EventForwarder 订阅。
    * @returns transport 和 serviceHost
    * @throws WorkerActivateError — 创建失败
    * @throws WorkerTimeoutError — 激活超时
@@ -419,6 +487,7 @@ export class WorkerManager {
     manifest: Manifest,
     sourceCode: string,
     serviceTokens: string[],
+    eventBus?: EventBus,
   ): Promise<{ transport: IWorkerTransport; serviceHost: ServiceHost }> {
     // 1. 检查重复
     if (this.registry.get(pluginId)) {
@@ -457,7 +526,7 @@ export class WorkerManager {
     // 5. 创建 Transport
     const transport = new NodeWorkerTransport(worker);
 
-    // 6. 创建 ServiceHost
+    // 6. 创建 ServiceHost（带可选的 EventBus 用于事件转发）
     const actorId = `plugin:${manifest.id}`;
     const manifestCaps = manifest.capabilitiesProposed ?? [];
     const serviceHost = new ServiceHost(
@@ -465,6 +534,7 @@ export class WorkerManager {
       this.capabilityGuard,
       actorId,
       manifestCaps,
+      eventBus,  // optional: enables event forwarding
     );
 
     // 7. 注册到 WorkerRegistry（含 crash 检测）
@@ -541,6 +611,10 @@ export class WorkerManager {
    * @param pluginId - 插件标识符
    */
   async terminateWorker(pluginId: string): Promise<void> {
+    const instance = this.registry.get(pluginId);
+    if (instance) {
+      instance.serviceHost.disposeEventForwarder();
+    }
     await this.registry.terminate(pluginId);
   }
 
