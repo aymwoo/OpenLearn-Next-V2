@@ -51,6 +51,28 @@ const VALID_TRANSITIONS: Record<PluginState, PluginState[]> = {
   [PluginState.UNINSTALLED]: [],
 };
 
+/**
+ * 纯函数：验证插件状态转换是否合法。
+ *
+ * 从 PluginHost 的 validateTransition 提取，使其可独立测试。
+ * 使用 VALID_TRANSITIONS 查找表，非法转换时抛出 IllegalStateTransitionError。
+ *
+ * @param currentState - 当前插件状态
+ * @param nextState - 目标状态
+ * @param pluginId - 插件标识符（用于错误消息）
+ * @throws IllegalStateTransitionError 当转换不合法时
+ */
+export function validatePluginStateTransition(
+  currentState: PluginState,
+  nextState: PluginState,
+  pluginId: string,
+): void {
+  const allowed = VALID_TRANSITIONS[currentState];
+  if (!allowed?.includes(nextState)) {
+    throw new IllegalStateTransitionError(pluginId, currentState, nextState);
+  }
+}
+
 // ── Constants ──────────────────────────────────────────────────────────────
 
 /** 激活/停用超时阈值（毫秒） */
@@ -102,10 +124,7 @@ export class PluginHost {
     currentState: PluginState,
     nextState: PluginState,
   ): void {
-    const allowed = VALID_TRANSITIONS[currentState];
-    if (!allowed?.includes(nextState)) {
-      throw new IllegalStateTransitionError(pluginId, currentState, nextState);
-    }
+    validatePluginStateTransition(currentState, nextState, pluginId);
   }
 
   // ── 内省方法 ────────────────────────────────────────────────────────────
