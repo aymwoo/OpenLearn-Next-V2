@@ -118,11 +118,18 @@ describe('ServiceRegistry — dependency declaration and resolution', () => {
     const tokenB = new Token<IServiceB>('@openlearn/core:IServiceB');
     const missingName = '@openlearn/core:IServiceA';
 
-    await expect(
-      registry.register(tokenB, makeService('serviceB'), {
+    try {
+      await registry.register(tokenB, makeService('serviceB'), {
         requires: [missingName],
-      })
-    ).rejects.toThrow(MissingDependencyError);
+      });
+      expect.unreachable('Expected MissingDependencyError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(MissingDependencyError);
+      if (err instanceof MissingDependencyError) {
+        expect(err.tokenName).toBe(tokenB.name);
+        expect(err.missingDeps).toContain(missingName);
+      }
+    }
   });
 
   it('should resolve a chain A→B→C registered in dependency order (SC-3)', async () => {
@@ -177,9 +184,18 @@ describe('ServiceRegistry — circular dependency detection', () => {
     });
 
     // The topological order check should detect the cycle.
-    expect(() => {
+    try {
       (registry as any).topologicalOrder([tokenA.name, tokenB.name]);
-    }).toThrow(CircularDependencyError);
+      // Should not reach here
+      expect.unreachable('Expected CircularDependencyError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(CircularDependencyError);
+      if (err instanceof CircularDependencyError) {
+        // SC-4: error message must include participating token names
+        expect(err.cycleTokens).toContain(tokenA.name);
+        expect(err.cycleTokens).toContain(tokenB.name);
+      }
+    }
   });
 
   it('should detect indirect cycle A→B→C→A (SC-4)', () => {
@@ -275,9 +291,17 @@ describe('ServiceRegistry — unregister', () => {
       requires: [tokenB.name],
     });
 
-    await expect(registry.unregister(tokenB)).rejects.toThrow(
-      HasDependentError
-    );
+    try {
+      await registry.unregister(tokenB);
+      expect.unreachable('Expected HasDependentError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(HasDependentError);
+      if (err instanceof HasDependentError) {
+        // D-09: error message must include dependent name
+        expect(err.dependents).toContain(tokenA.name);
+        expect(err.tokenName).toBe(tokenB.name);
+      }
+    }
   });
 
   it('should clean up dependents reference when unregistering the dependent', async () => {
