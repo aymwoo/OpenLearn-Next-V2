@@ -24,6 +24,8 @@ import type { Manifest } from '../esm-loader/manifest-schema.js';
 import { validateAndBundleZip } from '../esm-loader/install-utils.js';
 import { ResourceTracker } from './resource-tracker.js';
 import { buildContext } from './context-builder.js';
+import semver from 'semver';
+import { parseRequiresEntry } from '../esm-loader/manifest-utils.js';
 import { PluginState } from './types.js';
 import type { PluginContext, PluginInfo } from './types.js';
 import {
@@ -150,6 +152,83 @@ export class PluginHost {
       // Column may not exist yet in test databases — fall back to 'inline'
       return 'inline';
     }
+  }
+
+  // ── Phase 6: SemVer compatibility check ─────────────────────────────────
+
+  /**
+   * Phase 6: 检查 manifest 中声明的 Token 版本兼容性。
+   *
+   * 供 installPlugin() 和 activatePlugin() 双重调用。
+   *
+   * - manifest.requires 中 Token 版本不兼容 -> 抛出 SemverMismatchError
+   * - manifest.optional 中 Token 版本不兼容 -> console.warn + 收集到返回 Set
+   * - 未注册的 Token -> 视为不兼容（requires 抛错，optional 收集到 Set）
+   *
+   * @returns Set<string> — 不兼容的 optional 依赖 tokenName 集合。
+   *   激活时调用方将此集合传给 buildContext() 以设置 ctx.services[key] = null。
+   *   安装时调用方可忽略返回值。
+   * @param manifest - 插件 manifest（已通过 manifestSchema.parse）
+   * @param pluginId - 插件 DB id
+   * @param phase - 检查阶段标识（'install' 或 'activate'），仅用于日志
+   */
+  private checkSemVerCompatibility(
+    manifest: { id?: string; name?: string; requires?: string[]; optional?: string[] },
+    pluginId: string,
+    phase: 'install' | 'activate',
+  ): Set<string> {
+    const pluginName = manifest.name ?? pluginId;
+    const requiresList = manifest.requires ?? [];
+    const optionalList = manifest.optional ?? [];
+    const incompatibleOptionalTokens = new Set<string>();
+
+    // -- Required dependencies -------------------------------------------------
+    for (const req of requiresList) {
+      const { tokenName, versionRange } = parseRequiresEntry(req);
+      const actualVersion = this.serviceRegistry.getVersion(tokenName);
+
+      if (!actualVersion) {
+        throw new SemverMismatchError(
+          pluginId, pluginName,
+          tokenName, versionRange ?? '*', 'unregistered'
+        );
+      }
+
+      if (!versionRange) continue; // No version range = accept any version
+
+      try {
+        if (!semver.satisfies(actualVersion, versionRange)) {
+          throw new SemverMismatchError(
+            pluginId, pluginName,
+            tokenName, versionRange, actualVersion
+          );
+        }
+      } catch (semverErr) {
+        if (semverErr instanceof SemverMismatchError) throw semverErr;
+        // Invalid version range string — wrap in SemverMismatchError
+        throw new SemverMismatchError(
+          pluginId, pluginName,
+          tokenName, versionRange, actualVersion
+        );
+      }
+    }
+
+    // -- Optional dependencies (D-12: collect, don't throw) --------------------
+    for (const opt of optionalList) {
+      const { tokenName, versionRange } = parseRequiresEntry(opt);
+      const actualVersion = this.serviceRegistry.getVersion(tokenName);
+
+      if (!actualVersion || (versionRange && !semver.satisfies(actualVersion, versionRange))) {
+        console.warn(
+          `[PluginHost] Optional dependency ${tokenName}${versionRange ? '@' + versionRange : ''} not satisfied ` +
+          `(host: ${actualVersion ?? 'unregistered'}) — skipping injection for plugin "${pluginId}" (${phase})`
+        );
+        incompatibleOptionalTokens.add(tokenName);
+        continue;
+      }
+    }
+
+    return incompatibleOptionalTokens;
   }
 
   // ── 状态机 ──────────────────────────────────────────────────────────────
@@ -283,6 +362,10 @@ export class PluginHost {
     // 2. 唯一性检查
     this.ensureUniqueManifestId(manifest.id);
 
+    // 2a. Phase 6: install-time SemVer pre-check
+    this.checkSemVerCompatibility(manifest, '(pending)', 'install');
+    // Return value discarded: no buildContext at install time
+
     // 3. 生成 pluginId
     const pluginId = uuidv7();
 
@@ -396,13 +479,17 @@ export class PluginHost {
       // 6. 校验 manifest schema
       manifestSchema.parse(manifest);
 
-      // 7. 构建安全的 PluginContext
+      // 6a. Phase 6: Token version compatibility check (D-05, D-12)
+      const skipTokens = this.checkSemVerCompatibility(manifest, pluginId, 'activate');
+
+      // 7. 构建安全的 PluginContext — skipTokens 中指定的可选服务 key 将被设为 null（D-12）
       const ctx = await buildContext(
         this.serviceRegistry,
         this.resourceTracker,
         pluginId,
         manifest,
         this.db,
+        skipTokens,  // NEW: Phase 6 — incompatible optional token names
       );
 
       // 8. 授予能力（T-04-19: 仅授予 manifest.capabilitiesProposed 中声明的能力）

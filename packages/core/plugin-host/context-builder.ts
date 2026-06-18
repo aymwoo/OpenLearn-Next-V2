@@ -366,6 +366,7 @@ export async function buildContext(
   pluginId: string,
   manifest: Manifest,
   db: any,
+  skipTokens?: Set<string>,  // Phase 6 (D-12): incompatible optional token names
 ): Promise<PluginContext> {
   // 1. 从 DI 容器解析 7 个 IService
   const commandBusService = await serviceRegistry.resolve(ICommandBusServiceToken);
@@ -404,6 +405,35 @@ export async function buildContext(
     storage: wrappedStorage,
     ai: wrappedAI,
   };
+
+  // === Phase 6: Null out incompatible optional service keys (D-12) =============
+  // skipTokens contains token names from checkSemVerCompatibility.
+  // Map token names (e.g. '@openlearn/core:ICommandBusService') to services
+  // object keys (e.g. 'commandBus') and null them before freeze.
+  // Plugin can check: if (ctx.services.thatService === null) { /* degrade */ }
+  if (skipTokens && skipTokens.size > 0) {
+    const TOKEN_TO_SERVICE_KEY: Record<string, keyof typeof services> = {
+      '@openlearn/core:ICommandBusService': 'commandBus',
+      '@openlearn/core:IEventBusService': 'eventBus',
+      '@openlearn/core:IActionRegistryService': 'actionRegistry',
+      '@openlearn/core:ICapabilityService': 'capability',
+      '@openlearn/core:IProcessService': 'processManager',
+      '@openlearn/core:IStorageService': 'storage',
+      '@openlearn/core:IAIService': 'ai',
+    };
+    for (const tokenName of skipTokens) {
+      const serviceKey = TOKEN_TO_SERVICE_KEY[tokenName];
+      if (serviceKey) {
+        // TypeScript: PluginContext.services types don't include null for each IService.
+        // Type assertion is acceptable -- the null is a runtime sentinel for plugin
+        // degradation checks (D-12). Plugin code checks with `=== null`.
+        services[serviceKey] = null as never;
+      } else {
+        console.warn(`[PluginHost] Cannot skip unknown token: ${tokenName}`);
+      }
+    }
+  }
+  // =============================================================================
 
   Object.freeze(services);
 
