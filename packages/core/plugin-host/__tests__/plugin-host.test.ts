@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ServiceRegistry } from '../../di/service-registry.js';
 import { EsmLoader } from '../../esm-loader/esm-loader.js';
 import type { PluginModule } from '../../esm-loader/esm-loader.js';
-import { PluginHost } from '../index.js';
+import { PluginHost, SemverMismatchError } from '../index.js';
 import { PluginState } from '../types.js';
 import {
   ICommandBusServiceToken,
@@ -640,5 +640,183 @@ describe('PluginHost — 完整生命周期', () => {
     // 无残留资源（listPlugins 返回空 — 取决于 DB 是否有其他记录，这里应无）
     const plugins = host.listPlugins();
     expect(plugins).toHaveLength(0);
+  });
+
+  // ── Phase 6: SemVer Compatibility Check ──────────────────────────────────
+
+  /**
+   * Helper: 创建带 requires/optional 的 PluginModule。
+   */
+  function makeModuleWithDeps(
+    manifestId: string,
+    manifestName: string,
+    requires?: string[],
+    optional?: string[],
+    activate?: (ctx: any) => Promise<void>,
+  ): PluginModule {
+    const m: Record<string, any> = {
+      id: manifestId,
+      name: manifestName,
+      version: '1.0.0',
+      main: 'index.ts',
+    };
+    if (requires) m.requires = requires;
+    if (optional) m.optional = optional;
+    const activateFn = activate ?? (async (ctx: any) => { ctx._activated = true; });
+    return {
+      default: { manifest: m, activate: activateFn },
+      manifest: m,
+      activate: activateFn,
+    };
+  }
+
+  describe('SemVer compatibility check (Phase 6)', () => {
+
+    it('Test 1: should pass when required Token version matches range', async () => {
+      const src = 'semver-pass-source';
+      const module = makeModuleWithDeps(
+        'semver-pass', 'SemVer Pass',
+        ['@openlearn/core:ICommandBusService@^1.0.0'],
+      );
+      loadMap.set(src, module);
+
+      // Install should succeed
+      const manifest = await host.installPlugin(src);
+      expect(manifest.id).toBe('semver-pass');
+
+      // Activate should succeed
+      const [installed] = db.prepare('SELECT id FROM plugins ORDER BY created_at DESC').all() as any[];
+      await host.activatePlugin(installed.id);
+      expect(host.getPluginState(installed.id)).toBe(PluginState.ACTIVE);
+    });
+
+    it('Test 2: should throw SemverMismatchError when required Token version is incompatible', async () => {
+      const src = 'semver-fail-source';
+      const module = makeModuleWithDeps(
+        'semver-fail', 'SemVer Fail',
+        ['@openlearn/core:ICommandBusService@^2.0.0'],
+      );
+      loadMap.set(src, module);
+
+      // installPlugin should throw because of install-time pre-check — no DB INSERT occurs
+      await expect(host.installPlugin(src)).rejects.toThrow(SemverMismatchError);
+
+      // No plugin was installed (pre-check blocked it)
+      const rows = db.prepare('SELECT * FROM plugins').all() as any[];
+      expect(rows).toHaveLength(0);
+    });
+
+    it('Test 3: should throw SemverMismatchError when required Token is not registered', async () => {
+      const src = 'semver-unreg-source';
+      const module = makeModuleWithDeps(
+        'semver-unreg', 'SemVer Unreg',
+        ['@openlearn/core:INonExistentService@^1.0.0'],
+      );
+      loadMap.set(src, module);
+
+      // installPlugin throws immediately — install-time pre-check blocks unregistered Token
+      await expect(host.installPlugin(src)).rejects.toThrow(SemverMismatchError);
+
+      // No plugin was installed
+      const rows = db.prepare('SELECT * FROM plugins').all() as any[];
+      expect(rows).toHaveLength(0);
+    });
+
+    it('Test 4: should pass when required Token has no version range', async () => {
+      const src = 'semver-norange-source';
+      const module = makeModuleWithDeps(
+        'semver-norange', 'SemVer NoRange',
+        ['@openlearn/core:ICommandBusService'],
+      );
+      loadMap.set(src, module);
+
+      await host.installPlugin(src);
+      const [installed] = db.prepare('SELECT id FROM plugins ORDER BY created_at DESC').all() as any[];
+
+      // Accept any version — should pass
+      await expect(host.activatePlugin(installed.id)).resolves.toBeUndefined();
+      expect(host.getPluginState(installed.id)).toBe(PluginState.ACTIVE);
+    });
+
+    it('Test 5: should not throw for optional dependency with incompatible version', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const src = 'semver-opt-source';
+      const module = makeModuleWithDeps(
+        'semver-opt', 'SemVer Opt',
+        undefined, // no requires
+        ['@openlearn/core:IAIService@^2.0.0'],  // incompatible with host 1.0.0
+      );
+      loadMap.set(src, module);
+
+      await host.installPlugin(src);
+      const [installed] = db.prepare('SELECT id FROM plugins ORDER BY created_at DESC').all() as any[];
+
+      // Should not throw — optional incompatibility is non-blocking
+      await expect(host.activatePlugin(installed.id)).resolves.toBeUndefined();
+      expect(host.getPluginState(installed.id)).toBe(PluginState.ACTIVE);
+
+      // console.warn should have been called
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('Test 6: should set ctx.services key to null for incompatible optional dependency (D-12)', async () => {
+      let capturedCtx: any = null;
+      const activateWithCapture = async (ctx: any) => {
+        capturedCtx = ctx;
+        ctx._activated = true;
+      };
+
+      const src = 'd12-inject-source';
+      const module: PluginModule = {
+        default: {
+          manifest: {
+            id: 'd12-inject', name: 'D12 Inject', version: '1.0.0', main: 'index.ts',
+            optional: ['@openlearn/core:IStorageService@^2.0.0'],
+          },
+          activate: activateWithCapture,
+        },
+        manifest: {
+          id: 'd12-inject', name: 'D12 Inject', version: '1.0.0', main: 'index.ts',
+          optional: ['@openlearn/core:IStorageService@^2.0.0'],
+        },
+        activate: activateWithCapture,
+      };
+      loadMap.set(src, module);
+
+      await host.installPlugin(src);
+      const [installed] = db.prepare('SELECT id FROM plugins ORDER BY created_at DESC').all() as any[];
+
+      await host.activatePlugin(installed.id);
+      expect(host.getPluginState(installed.id)).toBe(PluginState.ACTIVE);
+
+      // The activate function should have received ctx with storage === null
+      expect(capturedCtx).not.toBeNull();
+      expect(capturedCtx.services.storage).toBeNull();
+
+      // Other services should still be injected normally
+      expect(capturedCtx.services.commandBus).not.toBeNull();
+      expect(capturedCtx.services.eventBus).not.toBeNull();
+    });
+
+    it('Test 7: should reject installation when any required dependency fails (mixed compatibility)', async () => {
+      const src = 'semver-mixed-source';
+      const module = makeModuleWithDeps(
+        'semver-mixed', 'SemVer Mixed',
+        [
+          '@openlearn/core:ICommandBusService@^1.0.0',  // matches host 1.0.0
+          '@openlearn/core:IEventBusService@^2.0.0',    // incompatible with host 1.0.0
+        ],
+      );
+      loadMap.set(src, module);
+
+      // installPlugin throws because second required dep is incompatible
+      await expect(host.installPlugin(src)).rejects.toThrow(SemverMismatchError);
+
+      // No plugin was installed
+      const rows = db.prepare('SELECT * FROM plugins').all() as any[];
+      expect(rows).toHaveLength(0);
+    });
   });
 });
