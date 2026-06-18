@@ -427,18 +427,15 @@ describe('ServiceHost message dispatch routing', () => {
     warnSpy.mockRestore();
   });
 
-  it('should warn on unsubscribe without EventBus', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
+  it('should silently ignore unsubscribe without EventForwarder', async () => {
+    // Without an EventBus/EventForwarder, unsubscribe is a no-op
     await host.handleMessage(
       { type: 'unsubscribe', subId: 's1' },
       transport as any,
     );
 
-    expect(warnSpy).toHaveBeenCalled();
+    // Should not post any messages and should not throw
     expect(transport.postMessage).not.toHaveBeenCalled();
-
-    warnSpy.mockRestore();
   });
 
   it('should route invoke messages through handleInvoke', async () => {
