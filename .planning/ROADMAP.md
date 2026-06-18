@@ -177,7 +177,7 @@
 | 1. Token DI 内核 | 4/4 | Complete    | 2026-06-18 |
 | 2. 现有能力 Token 化 | 3/3 | Complete    | 2026-06-18 |
 | 3. ESM 加载 + 包格式 | 4/4 | Complete    | 2026-06-18 |
-| 4. PluginHost + 生命周期 | 4/4 | Complete   | 2026-06-18 |
+| 4. PluginHost + 生命周期 | 4/4 | Complete    | 2026-06-18 |
 | 5. Worker 隔离 + 双运行时 | 0/0 | Not started | - |
 | 6. EventBus 服务 + SemVer 兼容 | 0/0 | Not started | - |
 | 7. 热重载 + 中间件管道 | 0/0 | Not started | - |
