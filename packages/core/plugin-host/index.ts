@@ -42,7 +42,7 @@ import type { ICapabilityService } from '../di/interfaces.js';
  * 来源：04-RESEARCH.md lines 326-334
  */
 const VALID_TRANSITIONS: Record<PluginState, PluginState[]> = {
-  [PluginState.INSTALLED]: [PluginState.ACTIVATING],
+  [PluginState.INSTALLED]: [PluginState.ACTIVATING, PluginState.UNINSTALLED],
   [PluginState.ACTIVATING]: [PluginState.ACTIVE, PluginState.ERROR],
   [PluginState.ACTIVE]: [PluginState.DEACTIVATING],
   [PluginState.DEACTIVATING]: [PluginState.INACTIVE],
@@ -414,9 +414,9 @@ export class PluginHost {
    * @param pluginId - 插件标识符
    */
   async deactivatePlugin(pluginId: string): Promise<void> {
-    // 1. 获取当前状态 — UNINSTALLED 或未找到时静默返回
+    // 1. 获取当前状态 — UNINSTALLED、未找到、或非 ACTIVE 状态时静默返回
     const currentState = this.pluginStates.get(pluginId);
-    if (!currentState || currentState === PluginState.UNINSTALLED) {
+    if (!currentState || currentState === PluginState.UNINSTALLED || currentState !== PluginState.ACTIVE) {
       return;
     }
 
