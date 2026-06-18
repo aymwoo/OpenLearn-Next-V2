@@ -6,7 +6,7 @@
 
 ## Phases
 
-- [ ] **Phase 1: Token DI 内核** — Token 类实现 + ServiceRegistry 依赖注入容器
+- [x] **Phase 1: Token DI 内核** — Token 类实现 + ServiceRegistry 依赖注入容器 (completed 2026-06-18)
 - [ ] **Phase 2: 现有能力 Token 化** — IService 接口定义 + 现有子系统实现 Token 化接口并注册
 - [ ] **Phase 3: ESM 加载 + 包格式** — data:URL/Blob URL 双运行时加载策略 + ZIP 多文件插件包支持
 - [ ] **Phase 4: PluginHost + 生命周期** — 插件生命周期管理器 + activate/deactivate 标准接口
@@ -31,7 +31,7 @@
 **Plans**: 3 plans
   - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [x] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
-  - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
+  - [x] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
 **UI hint**: no
 
 ### Phase 2: 现有能力 Token 化
@@ -46,7 +46,7 @@
   5. Storage 和 AI 服务从现有 `plugin-runtime/index.ts` 中提取为独立的 IService 实现（`IStorageService`、`IAIService`），不再嵌入在 PluginRuntime 内部
 **Plans**: 3 plans
   - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
-  - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
+  - [x] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
 **UI hint**: no
 
@@ -61,7 +61,7 @@
   4. `manifest.json` 的结构定义（id、name、version、requires、optional、capabilitiesProposed）通过 zod schema 在加载时进行运行时校验，无效 manifest 在加载阶段即被拒绝
   5. 多文件插件（含 `import './utils.js'` 等相对导入）可以被预打包为单文件，在 Node.js data: URL 环境下正确加载执行
 **Plans**: 3 plans
-  - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
+  - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
 **UI hint**: no
@@ -166,7 +166,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Token DI 内核 | 2/3 | In Progress|  |
+| 1. Token DI 内核 | 3/3 | Complete   | 2026-06-18 |
 | 2. 现有能力 Token 化 | 0/0 | Not started | - |
 | 3. ESM 加载 + 包格式 | 0/0 | Not started | - |
 | 4. PluginHost + 生命周期 | 0/0 | Not started | - |
