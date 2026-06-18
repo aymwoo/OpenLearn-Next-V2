@@ -175,7 +175,7 @@
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Token DI 内核 | 4/4 | Complete    | 2026-06-18 |
-| 2. 现有能力 Token 化 | 3/3 | Complete   | 2026-06-18 |
+| 2. 现有能力 Token 化 | 3/3 | Complete    | 2026-06-18 |
 | 3. ESM 加载 + 包格式 | 0/0 | Not started | - |
 | 4. PluginHost + 生命周期 | 0/0 | Not started | - |
 | 5. Worker 隔离 + 双运行时 | 0/0 | Not started | - |
