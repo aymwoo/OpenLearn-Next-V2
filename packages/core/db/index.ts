@@ -63,13 +63,6 @@ db.exec(`
     created_at INTEGER NOT NULL
   );
 
-  // Phase 5: Worker isolation mode support — execution_mode column for plugins table
-  try {
-    db.exec(`ALTER TABLE plugins ADD COLUMN execution_mode TEXT DEFAULT 'inline'`);
-  } catch {
-    // Column already exists — ignore error
-  }
-
   CREATE TABLE IF NOT EXISTS plugin_storage (
     plugin_id TEXT NOT NULL,
     key TEXT NOT NULL,
@@ -321,6 +314,13 @@ db.exec(`
     extra_json TEXT
   );
 `);
+
+// Phase 5: Worker isolation mode support — execution_mode column for plugins table
+try {
+  db.exec(`ALTER TABLE plugins ADD COLUMN execution_mode TEXT DEFAULT 'inline'`);
+} catch {
+  // Column already exists — ignore error
+}
 
 try {
   db.prepare('ALTER TABLE classes ADD COLUMN lab_id TEXT').run();
