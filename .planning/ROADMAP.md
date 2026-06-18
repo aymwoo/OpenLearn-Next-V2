@@ -29,7 +29,7 @@
   4. ServiceRegistry 在检测到循环依赖时抛出明确的错误信息（包含参与循环的 Token 列表），而非栈溢出或静默挂起
   5. ServiceRegistry 支持 `unregister(token)` 注销服务，注销后 `resolve(token)` 抛出 "No provider" 错误
 **Plans**: 3 plans
-  - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
+  - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
 **UI hint**: no
@@ -166,7 +166,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Token DI 内核 | 0/0 | Not started | - |
+| 1. Token DI 内核 | 1/3 | In Progress|  |
 | 2. 现有能力 Token 化 | 0/0 | Not started | - |
 | 3. ESM 加载 + 包格式 | 0/0 | Not started | - |
 | 4. PluginHost + 生命周期 | 0/0 | Not started | - |
