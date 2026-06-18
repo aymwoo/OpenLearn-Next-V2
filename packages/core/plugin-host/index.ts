@@ -4,18 +4,35 @@
  * D-02: 构造函数接收 ServiceRegistry + EsmLoader + Database
  * D-03: 7 状态 PluginState 枚举 + VALID_TRANSITIONS 查找表
  *
- * Plans 03-04 将在此基础上构建完整的 activate/deactivate/install/uninstall 生命周期方法。
- * 本任务仅建立构造函数、状态机逻辑和内省方法。
+ * 完整生命周期方法（Plan 03）：
+ * - installPlugin(sourceCode) — 安装插件到 DB
+ * - activatePlugin(pluginId) — 激活插件（含超时 + 回滚）
+ * - deactivatePlugin(pluginId) — 停用插件（含超时 + 强制清理）
+ * - uninstallPlugin(pluginId) — 卸载并删除
+ * - installPluginFromZip(zipBuffer) — ZIP 插件包安装
+ * - restoreActivePlugins() — 从 DB 恢复 active 插件
  */
 
+import { v7 as uuidv7 } from 'uuid';
 import type { Database } from 'better-sqlite3';
 import { ServiceRegistry } from '../di/service-registry.js';
 import { EsmLoader } from '../esm-loader/esm-loader.js';
+import type { PluginModule } from '../esm-loader/esm-loader.js';
+import { EsmLoadTimeoutError, EsmActivationError } from '../esm-loader/errors.js';
+import { manifestSchema } from '../esm-loader/manifest-schema.js';
+import type { Manifest } from '../esm-loader/manifest-schema.js';
+import { validateAndBundleZip } from '../esm-loader/install-utils.js';
 import { ResourceTracker } from './resource-tracker.js';
 import { buildContext } from './context-builder.js';
 import { PluginState } from './types.js';
-import type { PluginContext, PluginInfo, Manifest } from './types.js';
-import { IllegalStateTransitionError } from './errors.js';
+import type { PluginContext, PluginInfo } from './types.js';
+import {
+  IllegalStateTransitionError,
+  PluginActivateError,
+  PluginDeactivateTimeoutError,
+} from './errors.js';
+import { ICapabilityServiceToken } from '../di/interfaces.js';
+import type { ICapabilityService } from '../di/interfaces.js';
 
 // ── VALID_TRANSITIONS ──────────────────────────────────────────────────────
 
@@ -25,7 +42,7 @@ import { IllegalStateTransitionError } from './errors.js';
  * 来源：04-RESEARCH.md lines 326-334
  */
 const VALID_TRANSITIONS: Record<PluginState, PluginState[]> = {
-  [PluginState.INSTALLED]: [PluginState.ACTIVATING],
+  [PluginState.INSTALLED]: [PluginState.ACTIVATING, PluginState.UNINSTALLED],
   [PluginState.ACTIVATING]: [PluginState.ACTIVE, PluginState.ERROR],
   [PluginState.ACTIVE]: [PluginState.DEACTIVATING],
   [PluginState.DEACTIVATING]: [PluginState.INACTIVE],
@@ -33,6 +50,12 @@ const VALID_TRANSITIONS: Record<PluginState, PluginState[]> = {
   [PluginState.ERROR]: [PluginState.ACTIVATING, PluginState.UNINSTALLED],
   [PluginState.UNINSTALLED]: [],
 };
+
+// ── Constants ──────────────────────────────────────────────────────────────
+
+/** 激活/停用超时阈值（毫秒） */
+const ACTIVATION_TIMEOUT_MS = 5000;
+const DEACTIVATION_TIMEOUT_MS = 5000;
 
 // ── PluginHost ─────────────────────────────────────────────────────────────
 
@@ -122,5 +145,498 @@ export class PluginHost {
    */
   getPluginState(pluginId: string): PluginState | undefined {
     return this.pluginStates.get(pluginId);
+  }
+
+  // ── 私有辅助方法 ────────────────────────────────────────────────────────
+
+  /**
+   * 检查 manifest id 唯一性，防止重复注册。
+   *
+   * 直接迁移自 PluginRuntime lines 192-203，将 this.kernel.db 替换为 this.db。
+   *
+   * @param manifestId - 要检查的 manifest.id
+   * @throws Error 如果 manifest id 已存在
+   */
+  private ensureUniqueManifestId(manifestId: string): void {
+    const existing = this.db
+      .prepare('SELECT id, manifest FROM plugins')
+      .all() as Array<{ id: string; manifest: string }>;
+    for (const plugin of existing) {
+      try {
+        const manifest = JSON.parse(plugin.manifest);
+        if (manifest.id === manifestId) {
+          throw new Error(`Plugin manifest id "${manifestId}" is already installed.`);
+        }
+      } catch (err: any) {
+        if (err.message?.includes('already installed')) throw err;
+      }
+    }
+  }
+
+  /**
+   * 从插件源代码中微加载提取 manifest。
+   *
+   * 用于 installPlugin 在 DB 插入前获取 manifest.id 进行唯一性检查。
+   * 使用 EsmLoader.load() 加载源码，从模块导出中提取 manifest。
+   *
+   * @param sourceCode - 插件源代码
+   * @returns 解析出的 manifest
+   */
+  private async extractManifest(sourceCode: string): Promise<Manifest> {
+    const mod = await this.esmLoader.load(sourceCode);
+    const plugin = mod.default ?? mod;
+    const rawManifest = plugin.manifest ?? (mod as any).manifest;
+
+    if (!rawManifest) {
+      throw new Error('[PluginHost] Plugin source code has no manifest export');
+    }
+
+    return manifestSchema.parse(rawManifest);
+  }
+
+  // ── 生命周期方法 ────────────────────────────────────────────────────────
+
+  /**
+   * 安装插件到数据库。
+   *
+   * 方法 1: installPlugin(sourceCode: string): Promise<Manifest>
+   *
+   * 从 PluginRuntime lines 45-59 迁移，适配 PluginHost 架构：
+   * - 先通过 EsmLoader 微加载提取 manifest
+   * - 调用 ensureUniqueManifestId 检查唯一性
+   * - 生成 uuidv7() 作为 pluginId
+   * - INSERT 到 DB（loader_version = 'esm', status = 'installed'）
+   * - 设置状态为 INSTALLED
+   * - 失败时回滚 DB 条目和状态
+   *
+   * @param sourceCode - 插件源代码字符串
+   * @returns 解析后的 manifest
+   */
+  async installPlugin(sourceCode: string): Promise<Manifest> {
+    // 1. 微加载提取 manifest（用于唯一性检查和 name 字段）
+    const manifest = await this.extractManifest(sourceCode);
+
+    // 2. 唯一性检查
+    this.ensureUniqueManifestId(manifest.id);
+
+    // 3. 生成 pluginId
+    const pluginId = uuidv7();
+
+    try {
+      // 4. INSERT 到 DB
+      const stmt = this.db.prepare(
+        'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      );
+      stmt.run(
+        pluginId,
+        manifest.name,
+        JSON.stringify(manifest),
+        sourceCode,
+        'installed',
+        Date.now(),
+        'esm',
+      );
+
+      // 5. 设置状态为 INSTALLED
+      this.pluginStates.set(pluginId, PluginState.INSTALLED);
+
+      console.log(`[PluginHost] Plugin "${manifest.id}" installed (${pluginId})`);
+      return manifest;
+    } catch (err) {
+      // 回滚：删除可能的 DB 条目 + 清理状态
+      try {
+        this.db.prepare('DELETE FROM plugins WHERE id = ?').run(pluginId);
+      } catch {
+        // 静默清理
+      }
+      this.pluginStates.delete(pluginId);
+      throw err;
+    }
+  }
+
+  /**
+   * 激活插件。
+   *
+   * 方法 2: activatePlugin(pluginId: string): Promise<void>
+   *
+   * D-10, D-11, D-12：完整激活流程，含超时保护和失败回滚。
+   *
+   * 遵循 RESEARCH.md lines 446-514 的精确数据流：
+   * 1. 验证状态转换 INSTALLED/INACTIVE/ERROR → ACTIVATING
+   * 2. 设置状态为 ACTIVATING
+   * 3. 从 DB 加载插件源码
+   * 4. EsmLoader.load() 获取模块导出
+   * 5. 提取 manifest、activate（支持 default export 和具名导出）
+   * 6. manifestSchema.parse() 校验 schema
+   * 7. buildContext() 构建 PluginContext
+   * 8. capabilityService.grant() 授予能力
+   * 9. Promise.race([activate(ctx), timeout]) 5 秒超时
+   * 10. 成功：状态 → ACTIVE，存储实例，DB UPDATE
+   * 11. 失败（D-12）：状态 → ERROR，disposeAll 回滚，revokeAll 撤销能力，重新抛出错误
+   *
+   * @param pluginId - 插件标识符
+   * @throws PluginActivateError / EsmActivationError / IllegalStateTransitionError
+   */
+  async activatePlugin(pluginId: string): Promise<void> {
+    // 1. 获取当前状态并验证转换
+    const currentState = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
+    this.validateTransition(pluginId, currentState, PluginState.ACTIVATING);
+
+    // 2. 设置状态为 ACTIVATING
+    this.pluginStates.set(pluginId, PluginState.ACTIVATING);
+
+    // 3. 从 DB 加载插件
+    const row = this.db
+      .prepare('SELECT source_code, manifest FROM plugins WHERE id = ?')
+      .get(pluginId) as { source_code: string; manifest: string } | undefined;
+    if (!row) {
+      this.pluginStates.set(pluginId, currentState); // 回滚状态
+      throw new PluginActivateError(pluginId, 'plugin not found in database');
+    }
+
+    // 解析已存储的 manifest（用于 actorId 和能力撤销）
+    let storedManifest: Manifest;
+    try {
+      storedManifest = JSON.parse(row.manifest);
+    } catch {
+      this.pluginStates.set(pluginId, currentState);
+      throw new PluginActivateError(pluginId, 'invalid manifest JSON in database');
+    }
+
+    const actorId = `plugin:${storedManifest.id}`;
+
+    try {
+      // 4. 加载模块
+      const mod: PluginModule = await this.esmLoader.load(row.source_code);
+
+      // 5. 提取 manifest 和 activate（支持两种导出格式）
+      const plugin = mod.default ?? mod;
+      const manifest = plugin.manifest ?? (mod as any).manifest;
+      const activate = plugin.activate ?? (mod as any).activate;
+      const deactivate = plugin.deactivate ?? (mod as any).deactivate;
+
+      if (!manifest || !activate) {
+        throw new EsmActivationError(pluginId, 'missing manifest or activate function');
+      }
+
+      if (typeof activate !== 'function') {
+        throw new EsmActivationError(pluginId, 'activate must be a function');
+      }
+
+      // 6. 校验 manifest schema
+      manifestSchema.parse(manifest);
+
+      // 7. 构建安全的 PluginContext
+      const ctx = await buildContext(
+        this.serviceRegistry,
+        this.resourceTracker,
+        pluginId,
+        manifest,
+        this.db,
+      );
+
+      // 8. 授予能力（T-04-19: 仅授予 manifest.capabilitiesProposed 中声明的能力）
+      try {
+        const capService = await this.serviceRegistry.resolve<ICapabilityService>(
+          ICapabilityServiceToken,
+        );
+        const caps = manifest.capabilitiesProposed ?? [];
+        for (const cap of caps) {
+          await capService.grant(actorId, cap);
+        }
+      } catch (capErr) {
+        console.error(`[PluginHost] Failed to grant capabilities for "${pluginId}":`, capErr);
+        throw capErr;
+      }
+
+      // 9. 激活带 5 秒超时（D-11, T-04-17）
+      await Promise.race([
+        activate(ctx),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => {
+            reject(new EsmLoadTimeoutError(ACTIVATION_TIMEOUT_MS));
+          }, ACTIVATION_TIMEOUT_MS),
+        ),
+      ]);
+
+      // 10. 成功
+      this.pluginStates.set(pluginId, PluginState.ACTIVE);
+      this.pluginInstances.set(pluginId, {
+        manifest,
+        activate,
+        deactivate: typeof deactivate === 'function' ? deactivate : undefined,
+      });
+      this.db
+        .prepare('UPDATE plugins SET status = ? WHERE id = ?')
+        .run('active', pluginId);
+
+      console.log(`[PluginHost] Plugin "${manifest.id}" activated (${pluginId})`);
+    } catch (err) {
+      // 11. D-12: 失败回滚
+      this.pluginStates.set(pluginId, PluginState.ERROR);
+      this.resourceTracker.disposeAll(pluginId);
+      this.pluginInstances.delete(pluginId);
+
+      // 撤销能力（T-04-19: 即使激活失败也撤销）
+      try {
+        const capService = await this.serviceRegistry.resolve<ICapabilityService>(
+          ICapabilityServiceToken,
+        );
+        await capService.revokeAll(actorId);
+      } catch {
+        // revokeAll 静默失败
+      }
+
+      console.error(`[PluginHost] Plugin "${pluginId}" activate failed:`, err);
+      throw err;
+    }
+  }
+
+  /**
+   * 停用插件。
+   *
+   * 方法 3: deactivatePlugin(pluginId: string): Promise<void>
+   *
+   * D-09, D-11：带超时保护的停用流程，无论成功或失败均强制清理资源。
+   *
+   * 遵循 RESEARCH.md lines 522-548 的精确数据流：
+   * 1. 如果 UNINSTALLED 或未找到，静默返回
+   * 2. 验证状态转换 ACTIVE → DEACTIVATING
+   * 3. 设置状态为 DEACTIVATING
+   * 4. 获取 plugin 实例
+   * 5. 如果有 deactivate 函数：Promise.race([deactivate(), timeout])
+   * 6. finally 块（D-09）：无论成功/超时/错误 — 始终执行：
+   *    - resourceTracker.disposeAll(pluginId)
+   *    - 状态 → INACTIVE
+   *    - DB UPDATE status='inactive'
+   *    - capabilityService.revokeAll 撤销能力
+   *
+   * @param pluginId - 插件标识符
+   */
+  async deactivatePlugin(pluginId: string): Promise<void> {
+    // 1. 获取当前状态 — UNINSTALLED、未找到、或非 ACTIVE 状态时静默返回
+    const currentState = this.pluginStates.get(pluginId);
+    if (!currentState || currentState === PluginState.UNINSTALLED || currentState !== PluginState.ACTIVE) {
+      return;
+    }
+
+    // 2. 验证状态转换
+    this.validateTransition(pluginId, currentState, PluginState.DEACTIVATING);
+
+    // 3. 设置状态为 DEACTIVATING
+    this.pluginStates.set(pluginId, PluginState.DEACTIVATING);
+
+    // 4. 获取实例
+    const instance = this.pluginInstances.get(pluginId);
+
+    // 获取 actorId 用于能力撤销
+    let actorId: string | undefined;
+    if (instance) {
+      actorId = `plugin:${instance.manifest.id}`;
+    }
+
+    try {
+      // 5. 如果有 deactivate，带超时调用
+      if (instance?.deactivate) {
+        try {
+          await Promise.race([
+            instance.deactivate(),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => {
+                reject(new PluginDeactivateTimeoutError(pluginId, DEACTIVATION_TIMEOUT_MS));
+              }, DEACTIVATION_TIMEOUT_MS),
+            ),
+          ]);
+        } catch (deactivateErr) {
+          // D-11: deactivate 超时或错误 — 记录警告，不重新抛出
+          console.error(
+            `[PluginHost] Plugin "${pluginId}" deactivate error (continuing forced cleanup):`,
+            deactivateErr,
+          );
+        }
+      }
+    } finally {
+      // 6. D-09: finally 块 — 无论成功/失败/超时，强制清理 (T-04-18)
+      this.resourceTracker.disposeAll(pluginId);
+      this.pluginStates.set(pluginId, PluginState.INACTIVE);
+      this.pluginInstances.delete(pluginId);
+
+      // DB UPDATE
+      this.db
+        .prepare('UPDATE plugins SET status = ? WHERE id = ?')
+        .run('inactive', pluginId);
+
+      // 撤销能力（T-04-20: finally 中强制撤销）
+      if (actorId) {
+        try {
+          const capService = await this.serviceRegistry.resolve<ICapabilityService>(
+            ICapabilityServiceToken,
+          );
+          await capService.revokeAll(actorId);
+        } catch (capErr) {
+          console.error(
+            `[PluginHost] Failed to revoke capabilities for "${pluginId}":`,
+            capErr,
+          );
+        }
+      }
+
+      console.log(`[PluginHost] Plugin "${pluginId}" deactivated`);
+    }
+  }
+
+  /**
+   * 卸载插件。
+   *
+   * 方法 4: uninstallPlugin(pluginId: string): Promise<void>
+   *
+   * 流程：
+   * 1. 如果 ACTIVE，先调用 deactivatePlugin()
+   * 2. 验证状态转换 INACTIVE/ERROR/INSTALLED → UNINSTALLED
+   * 3. 从 DB DELETE（plugins + plugin_storage）
+   * 4. 清理内存状态
+   *
+   * @param pluginId - 插件标识符
+   */
+  async uninstallPlugin(pluginId: string): Promise<void> {
+    const currentState = this.pluginStates.get(pluginId);
+
+    // 1. 如果当前是 ACTIVE，先停用
+    if (currentState === PluginState.ACTIVE) {
+      await this.deactivatePlugin(pluginId);
+    }
+
+    // 2. 获取当前状态（可能已被 deactivatePlugin 修改）
+    const state = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
+
+    // 验证状态转换
+    this.validateTransition(pluginId, state, PluginState.UNINSTALLED);
+
+    // 3. 从 DB 删除
+    // 先查询 manifest 以获取 manifest.id 用于 plugin_storage 删除
+    const row = this.db
+      .prepare('SELECT manifest FROM plugins WHERE id = ?')
+      .get(pluginId) as { manifest: string } | undefined;
+    const manifestId = (() => {
+      if (!row) return pluginId;
+      try {
+        const m = JSON.parse(row.manifest);
+        return m.id ?? pluginId;
+      } catch {
+        return pluginId;
+      }
+    })();
+
+    this.db.prepare('DELETE FROM plugins WHERE id = ?').run(pluginId);
+    this.db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ?').run(manifestId);
+
+    // 4. 清理内存
+    this.pluginStates.set(pluginId, PluginState.UNINSTALLED);
+    this.pluginInstances.delete(pluginId);
+
+    console.log(`[PluginHost] Plugin "${pluginId}" uninstalled`);
+  }
+
+  /**
+   * 从 ZIP Buffer 安装插件。
+   *
+   * 方法 5: installPluginFromZip(zipBuffer: Buffer): Promise<Manifest>
+   *
+   * 从 PluginRuntime lines 69-107 迁移，适配 PluginHost 架构：
+   * - 调用 validateAndBundleZip() 进行 ZIP 验证和 esbuild 打包
+   * - 生成 uuidv7() 作为 id
+   * - 唯一性检查
+   * - INSERT 到 DB（含 zip_package BLOB, loader_version='esm'）
+   * - 设置状态为 INSTALLED
+   * - 失败时清理 DB 条目
+   *
+   * 注意：与 PluginRuntime 不同，PluginHost 不在安装时自动激活 —
+   * 调用方需显式调用 activatePlugin()。
+   *
+   * @param zipBuffer - ZIP 文件的原始字节
+   * @returns manifest
+   */
+  async installPluginFromZip(zipBuffer: Buffer): Promise<Manifest> {
+    if (!this.esmLoader) {
+      throw new Error('Cannot install ZIP plugin: no esmLoader injected');
+    }
+
+    // 1. 验证并打包 ZIP
+    const { manifest, bundledCode } = await validateAndBundleZip(zipBuffer);
+
+    // 2. 唯一性检查
+    this.ensureUniqueManifestId(manifest.id);
+
+    // 3. 生成 ID
+    const pluginId = uuidv7();
+
+    try {
+      // 4. INSERT 到 DB
+      const stmt = this.db.prepare(
+        'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version, zip_package) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      );
+      stmt.run(
+        pluginId,
+        manifest.name,
+        JSON.stringify(manifest),
+        bundledCode,
+        'installed',
+        Date.now(),
+        'esm',
+        zipBuffer,
+      );
+
+      // 5. 设置状态
+      this.pluginStates.set(pluginId, PluginState.INSTALLED);
+
+      console.log(`[PluginHost] Plugin "${manifest.id}" installed from ZIP (${pluginId})`);
+      return manifest;
+    } catch (err) {
+      // 失败时清理 DB 条目
+      try {
+        this.db.prepare('DELETE FROM plugins WHERE id = ?').run(pluginId);
+      } catch {
+        // 静默清理
+      }
+      this.pluginStates.delete(pluginId);
+      throw err;
+    }
+  }
+
+  /**
+   * 从 DB 恢复所有 active 状态的 ESM 插件。
+   *
+   * 方法 6: restoreActivePlugins(): Promise<void>
+   *
+   * 从 PluginRuntime.loadFromDB 迁移：
+   * - 查询 SELECT * FROM plugins WHERE status = 'active' AND loader_version = 'esm'
+   * - 对每个插件调用 activatePlugin()
+   * - 单个插件激活失败不影响其他插件（D-10）
+   * - loader_version='vm' 的插件不可恢复（PluginHost 仅处理 ESM 插件）
+   *
+   * 在服务器重启时调用，恢复之前运行中的插件。
+   */
+  async restoreActivePlugins(): Promise<void> {
+    const plugins = this.db
+      .prepare("SELECT * FROM plugins WHERE status = 'active' AND loader_version = 'esm'")
+      .all() as Array<{ id: string; name: string; [key: string]: unknown }>;
+
+    console.log(
+      `[PluginHost] Restoring ${plugins.length} active ESM plugin(s) from database`,
+    );
+
+    for (const p of plugins) {
+      try {
+        await this.activatePlugin(p.id);
+      } catch (err) {
+        // D-10: 单个插件激活失败不影响其他插件
+        console.error(
+          `[PluginHost] Failed to restore plugin "${p.name}" (${p.id}):`,
+          err,
+        );
+      }
+    }
+
+    console.log('[PluginHost] Plugin restoration complete');
   }
 }
