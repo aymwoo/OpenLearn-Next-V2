@@ -17,7 +17,7 @@ export class PluginRuntime {
   private activePluginRegistrations = new Map<string, PluginRegistration>();
 
   constructor(private kernel: Kernel) {}
-  
+
   public get loadedPlugins() {
     return this.kernel.db.prepare('SELECT id, name, manifest, status, created_at FROM plugins ORDER BY created_at DESC').all();
   }
@@ -39,10 +39,10 @@ export class PluginRuntime {
        const pluginObj = await this.evaluateAndActivate(sourceCode, id);
        const manifest = pluginObj.manifest;
        this.ensureUniqueManifestId(manifest.id);
-       
+
        const stmt = this.kernel.db.prepare('INSERT INTO plugins (id, name, manifest, source_code, status, created_at) VALUES (?, ?, ?, ?, ?, ?)');
        stmt.run(id, manifest.name, JSON.stringify(manifest), sourceCode, 'active', Date.now());
-       
+
        return manifest;
      } catch (err) {
        this.deactivatePlugin(id);
@@ -53,7 +53,7 @@ export class PluginRuntime {
   public async togglePlugin(id: string) {
      const plugin = this.kernel.db.prepare('SELECT * FROM plugins WHERE id = ?').get(id) as any;
      if (!plugin) throw new Error('Plugin not found');
-     
+
      const newStatus = plugin.status === 'active' ? 'disabled' : 'active';
      if (newStatus === 'disabled') {
        this.deactivatePlugin(plugin.id);
@@ -323,7 +323,7 @@ export class PluginRuntime {
        debug: createSafeFunction((...args: any[]) => console.debug(`[Plugin:${manifest.id}]`, ...args)),
      };
 
-     // Wrap Storage (Key-Value persistence)
+     // Wrap Storage (Key-Value persistence) — 保持不变，per-plugin 隔离使用 manifest.id
      const wrappedStorage = {
        get: createSafeFunction(async (key: string) => {
          try {
@@ -361,77 +361,11 @@ export class PluginRuntime {
        })
      };
 
-     // Wrap AI Services
+     // Wrap AI Services — 委托给独立的 AIService 实例（D-07: 保留安全包装）
      const wrappedAI = {
        generateText: createSafeFunction(async (prompt: string, options?: { systemInstruction?: string; temperature?: number }) => {
          try {
-           // 1. Check if there is a configured third-party AI provider in db with a valid key
-           const provider = this.kernel.db.prepare(
-             'SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != \'\' LIMIT 1'
-           ).get() as any;
-
-           if (provider) {
-             let cleanUrl = provider.api_url.trim();
-             if (!cleanUrl.endsWith('/chat/completions')) {
-               cleanUrl = cleanUrl.endsWith('/') ? cleanUrl + 'chat/completions' : cleanUrl + '/chat/completions';
-             }
-
-             const headers: Record<string, string> = {
-               'Content-Type': 'application/json',
-               'Authorization': `Bearer ${provider.api_key.trim()}`
-             };
-
-             const messages: any[] = [];
-             if (options?.systemInstruction) {
-               messages.push({ role: 'system', content: options.systemInstruction });
-             }
-             messages.push({ role: 'user', content: prompt });
-
-             const response = await fetch(cleanUrl, {
-               method: 'POST',
-               headers,
-               body: JSON.stringify({
-                 model: provider.model_name,
-                 messages,
-                 temperature: options?.temperature ?? 0.2
-               })
-             });
-
-             if (!response.ok) {
-               const errorText = await response.text();
-               throw new Error(`AI provider request failed (${response.status}): ${errorText || response.statusText}`);
-             }
-
-             const data = await response.json();
-             const content = data.choices?.[0]?.message?.content;
-             if (typeof content !== 'string') {
-               throw new Error('AI provider returned no text content');
-             }
-             return content.trim();
-           }
-
-           // 2. Fallback to Gemini using GoogleGenAI SDK
-           const geminiKey = process.env.GEMINI_API_KEY;
-           if (geminiKey) {
-             const { GoogleGenAI } = await import('@google/genai');
-             const ai = new GoogleGenAI({ apiKey: geminiKey });
-             
-             const response = await ai.models.generateContent({
-               model: 'gemini-3.5-flash',
-               contents: [{ role: 'user', parts: [{ text: prompt }] }],
-               config: {
-                 systemInstruction: options?.systemInstruction,
-                 temperature: options?.temperature ?? 0.2
-               }
-             });
-
-             if (!response.text) {
-               throw new Error('Gemini API returned no text content');
-             }
-             return response.text.trim();
-           }
-
-           throw new Error('No AI providers or Gemini API key configured in the system.');
+           return await this.kernel.aiService.generateText(prompt, options);
          } catch (e: any) {
            console.error(`[Plugin:${manifest.id}] Error in generateText:`, e);
            throw e;
@@ -471,24 +405,24 @@ export class PluginRuntime {
 
      try {
        vm.createContext(context);
-       
+
        const script = new vm.Script(`
           ${sourceCode};
           exports.default = exports.default || exports;
        `);
 
        script.runInContext(context, { timeout: 1000 });
-       
+
        const plugin = context.exports.default;
-       
+
        // Timeout-protected activation call (5 seconds max)
        const activatePromise = plugin.activate(context.ctx);
-       const timeoutPromise = new Promise((_, reject) => 
+       const timeoutPromise = new Promise((_, reject) =>
          setTimeout(() => reject(new Error(`Plugin ${manifest.name} activation timed out after 5s`)), 5000)
        );
-       
+
        await Promise.race([activatePromise, timeoutPromise]);
-       
+
        this.activePluginRegistrations.set(pluginId, registration);
        return plugin;
      } catch (err) {
