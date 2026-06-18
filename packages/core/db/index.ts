@@ -407,6 +407,18 @@ try {
 }
 
 try {
+  db.prepare("ALTER TABLE plugins ADD COLUMN loader_version TEXT DEFAULT 'vm'").run();
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.prepare('ALTER TABLE plugins ADD COLUMN zip_package BLOB').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
   const countObj = db.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number };
   if (countObj && countObj.cnt === 0) {
     console.log('Seeding default users (admin & teacher)...');

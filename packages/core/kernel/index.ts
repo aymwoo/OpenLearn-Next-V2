@@ -4,6 +4,7 @@ import { ActionRegistry } from '../registry/index.js';
 import { CapabilityGuard } from '../capability-system/index.js';
 import { PluginRuntime } from '../plugin-runtime/index.js';
 import { ProcessManager } from '../process-manager/index.js';
+import { NodeEsmLoader } from '../esm-loader/index.js';
 import { db } from '../db/index.js';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -14,15 +15,26 @@ export class Kernel {
   public readonly capabilityGuard: CapabilityGuard;
   public readonly pluginRuntime: PluginRuntime;
   public readonly processManager: ProcessManager;
+  public readonly esmLoader: NodeEsmLoader;
   public readonly db = db;
 
   constructor() {
+    // Layer 0 — 无依赖
     this.eventBus = new EventBus();
+    this.capabilityGuard = new CapabilityGuard();
+
+    // Layer 1 — 依赖 Layer 0
     this.commandBus = new CommandBus(this.eventBus);
     this.actionRegistry = new ActionRegistry();
-    this.capabilityGuard = new CapabilityGuard();
-    this.pluginRuntime = new PluginRuntime(this);
+
+    // Layer 2 — 依赖 Kernel/db
     this.processManager = new ProcessManager(this);
+
+    // EsmLoader — Layer 0（无依赖），用于 PluginRuntime 的 ESM 加载分支
+    this.esmLoader = new NodeEsmLoader();
+
+    // PluginRuntime 在所有子系统创建之后初始化，接收 EsmLoader 用于 ESM 加载分支
+    this.pluginRuntime = new PluginRuntime(this, this.esmLoader);
 
     // Capability check interceptor
     this.commandBus.setInterceptor(async (command) => {
