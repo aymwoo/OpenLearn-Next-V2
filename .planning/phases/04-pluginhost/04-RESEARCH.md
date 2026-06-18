@@ -571,7 +571,7 @@ async deactivatePlugin(pluginId: string): Promise<void> {
 | A4 | Creating a new `PluginHost` instance does not break the existing `kernelContainer.pluginRuntime` API contract | Architecture Patterns | MEDIUM -- The facade pattern depends on exact signature matching; any mismatch will cause server.ts compilation errors |
 | A5 | ResourceTracker does not need to track capabilities (capabilities are managed separately by CapabilityGuard.revokeAll) | Common Pitfalls | LOW -- existing deactivatePlugin already separates capability cleanup from resource cleanup |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **loadFromDB() 恢复策略：是否只恢复 status='active' 的插件？**
    - What we know: 现有 PluginRuntime.loadFromDB() 只恢复 status='active' 的插件。D-13 要求 PluginRuntime 保持兼容，但 CONTEXT.md 未明确规定 PluginHost 自身的恢复行为
