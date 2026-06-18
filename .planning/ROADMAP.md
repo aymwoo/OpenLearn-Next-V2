@@ -30,7 +30,7 @@
   5. ServiceRegistry 支持 `unregister(token)` 注销服务，注销后 `resolve(token)` 抛出 "No provider" 错误
 **Plans**: 3 plans
   - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
-  - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
+  - [x] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
 **UI hint**: no
 
@@ -45,7 +45,7 @@
   4. 现有代码通过 `kernelContainer.commandBus` 直接访问子系统的方式继续可用，新的插件代码通过 `serviceRegistry.resolve(token)` 访问服务
   5. Storage 和 AI 服务从现有 `plugin-runtime/index.ts` 中提取为独立的 IService 实现（`IStorageService`、`IAIService`），不再嵌入在 PluginRuntime 内部
 **Plans**: 3 plans
-  - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
+  - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
 **UI hint**: no
@@ -166,7 +166,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Token DI 内核 | 1/3 | In Progress|  |
+| 1. Token DI 内核 | 2/3 | In Progress|  |
 | 2. 现有能力 Token 化 | 0/0 | Not started | - |
 | 3. ESM 加载 + 包格式 | 0/0 | Not started | - |
 | 4. PluginHost + 生命周期 | 0/0 | Not started | - |
