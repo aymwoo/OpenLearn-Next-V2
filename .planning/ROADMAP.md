@@ -79,10 +79,10 @@
   4. PluginHost 支持通过 `installPlugin(manifest, sourceCode)` 安装、`activatePlugin(pluginId)` 激活、`deactivatePlugin(pluginId)` 停用、`uninstallPlugin(pluginId)` 卸载的完整生命周期
   5. 插件停用时，所有在 activate 中创建的资源（命令处理器、事件订阅、定时器）被自动追踪并清理，不会残留
 **Plans**: 4 plans
-  - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
-  - [x] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
-  - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
-  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
+  - [ ] 04-01-PLAN.md -- 基础类型层：types.ts（Disposable、PluginState、PluginContext、PluginInfo）+ errors.ts（4 个错误类）+ resource-tracker.ts + 单元测试
+  - [ ] 04-02-PLAN.md -- ContextBuilder（从 PluginRuntime 迁移 wrapped* 安全包装器）+ PluginHost 类骨架（构造函数、状态机、内省方法）+ 单元测试
+  - [ ] 04-03-PLAN.md -- PluginHost 完整生命周期方法（installPlugin/activatePlugin/deactivatePlugin/uninstallPlugin/installPluginFromZip/restoreActivePlugins）+ 完整集成测试
+  - [ ] 04-04-PLAN.md -- PluginRuntime facade 层 + Kernel 集成 PluginHost + 状态机单元测试 + 最终验证
 **UI hint**: no
 
 ### Phase 5: Worker 隔离 + 双运行时
