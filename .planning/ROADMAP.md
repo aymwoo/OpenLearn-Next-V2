@@ -10,7 +10,7 @@
 - [x] **Phase 2: 现有能力 Token 化** — IService 接口定义 + 现有子系统实现 Token 化接口并注册 (completed 2026-06-18)
 - [x] **Phase 3: ESM 加载 + 包格式** — data:URL/Blob URL 双运行时加载策略 + ZIP 多文件插件包支持 (completed 2026-06-18)
 - [x] **Phase 4: PluginHost + 生命周期** — 插件生命周期管理器 + activate/deactivate 标准接口 (completed 2026-06-18)
-- [ ] **Phase 5: Worker 隔离 + 双运行时** — Worker Thread/Web Worker 沙箱 + RPC 服务代理 + 内联/Worker 双模式
+- [x] **Phase 5: Worker 隔离 + 双运行时** — Worker Thread/Web Worker 沙箱 + RPC 服务代理 + 内联/Worker 双模式 (completed 2026-06-18)
 - [ ] **Phase 6: EventBus 服务 + SemVer 兼容** — 全局 IEventBusService 统一事件 + Token 语义化版本兼容检查
 - [ ] **Phase 7: 热重载 + 中间件管道** — 开发模式插件热重载 + 生命周期中间件管道
 - [ ] **Phase 8: 现有插件迁移** — 内置插件（Quiz、Rollcall 等）以新插件格式重写
@@ -99,7 +99,7 @@
   - [x] 05-01-PLAN.md -- Transport foundation: message protocol types, error hierarchy, NodeWorkerTransport + BrowserWorkerTransport stub
   - [x] 05-02-PLAN.md -- ServiceProxy RPC layer + CapGuard: Worker-side Proxy, main-thread ServiceHost with capability enforcement
   - [x] 05-03-PLAN.md -- Worker lifecycle + PluginHost dual-mode + Kernel/DB: WorkerManager, inline/worker mode, execution_mode column
-  - [ ] 05-04-PLAN.md -- Event forwarding + integration tests: EventForwarder, EventBusProxy, full test suite
+  - [x] 05-04-PLAN.md -- Event forwarding + integration tests: EventForwarder, EventBusProxy, full test suite
 **UI hint**: no
 
 ### Phase 6: EventBus 服务 + SemVer 兼容
@@ -178,7 +178,7 @@
 | 2. 现有能力 Token 化 | 3/3 | Complete    | 2026-06-18 |
 | 3. ESM 加载 + 包格式 | 4/4 | Complete    | 2026-06-18 |
 | 4. PluginHost + 生命周期 | 4/4 | Complete    | 2026-06-18 |
-| 5. Worker 隔离 + 双运行时 | 3/4 | In Progress|  |
+| 5. Worker 隔离 + 双运行时 | 4/4 | Complete   | 2026-06-18 |
 | 6. EventBus 服务 + SemVer 兼容 | 0/0 | Not started | - |
 | 7. 热重载 + 中间件管道 | 0/0 | Not started | - |
 | 8. 现有插件迁移 | 0/0 | Not started | - |
