@@ -113,8 +113,8 @@
   4. Token 版本匹配通过 Token Registry 模式实现——插件通过字符串 key 查询 Token 而非直接 import Token 对象，避免不同 bundle 的 Token 对象引用不同（`===` 比较失败）导致的"幻影"不匹配
   5. 安装插件时即检查 Token 版本兼容性，不兼容则在安装阶段拒绝，避免"安装成功但无法激活"的用户困惑
 **Plans**: 3 plans
-  - [ ] 06-01-PLAN.md -- Token 版本 + ServiceRegistry 版本追踪 + 错误类 + semver
-  - [ ] 06-02-PLAN.md -- Manifest schema @version 扩展 + parseRequiresEntry 工具
+  - [x] 06-01-PLAN.md -- Token 版本 + ServiceRegistry 版本追踪 + 错误类 + semver
+  - [x] 06-02-PLAN.md -- Manifest schema @version 扩展 + parseRequiresEntry 工具
   - [ ] 06-03-PLAN.md -- PluginHost/PluginRuntime SemVer 双重检查集成
 **UI hint**: no
 
