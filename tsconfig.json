@@ -24,7 +24,7 @@
     "noEmit": true,
     "plugins": [
       {
-        "name": "tsc-strict",
+        "name": "typescript-strict-plugin",
         "paths": [
           "./packages/core/di"
         ]
