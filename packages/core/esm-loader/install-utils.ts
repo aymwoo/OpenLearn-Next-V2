@@ -58,6 +58,32 @@ export async function bundlePlugin(
     platform: 'neutral',
     target: 'es2022',
     external: ['@openlearn/*'],
+    plugins: [
+      {
+        name: 'openlearn-token-enforcer',
+        setup(build) {
+          // 拦截所有非相对路径的导入解析
+          build.onResolve({ filter: /.*/ }, (args) => {
+            // 相对路径和绝对路径由 esbuild 正常解析
+            if (args.path.startsWith('.') || args.path.startsWith('/')) {
+              return undefined; // 让 esbuild 自行处理
+            }
+            // @openlearn Token 导入 — 标记为 external 保留
+            if (args.path.startsWith('@openlearn')) {
+              return { external: true, path: args.path };
+            }
+            // 其他裸 specifier（如 lodash）— 拒绝打包
+            return {
+              errors: [
+                {
+                  text: `Import of "${args.path}" is not allowed. Plugins may only use relative imports or @openlearn/* Token services.`,
+                },
+              ],
+            };
+          });
+        },
+      },
+    ],
   });
 
   return result.outputFiles[0].text;

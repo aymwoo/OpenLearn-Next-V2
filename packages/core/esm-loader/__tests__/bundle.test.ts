@@ -56,8 +56,10 @@ describe('bundlePlugin', () => {
 
   // Test 2: @openlearn/* Token import 保留为 external
   it('should preserve @openlearn/* Token imports as external', async () => {
+    // Token 必须在代码中被使用，否则 esbuild tree-shaking 会移除它
     const code = `import { Token } from "@openlearn/core:ITest";
-export const x = 1;`;
+const t = new Token();
+export const x = t ? 1 : 0;`;
     const result = await bundlePlugin(code, resolveDir);
 
     // Token import 应被保留（未被内联）
@@ -66,8 +68,11 @@ export const x = 1;`;
 
   // Test 3: 拒绝非法 npm import
   it('should reject non-relative, non-Token imports', async () => {
-    const code = 'import lodash from "lodash"; export const x = 1;';
-    // esbuild 无法解析 lodash，应抛出错误
+    // lodash 必须在代码中被使用，否则 esbuild tree-shaking 会移除整个 import
+    const code = `import lodash from "lodash";
+const result = lodash.map([1,2,3], x => x * 2);
+export { result };`;
+    // esbuild 无法解析 lodash 裸 specifier，应通过 onResolve plugin 抛出错误
     await expect(bundlePlugin(code, resolveDir)).rejects.toThrow();
   });
 });
