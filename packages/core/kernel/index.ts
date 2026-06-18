@@ -4,6 +4,7 @@ import { ActionRegistry } from '../registry/index.js';
 import { CapabilityGuard } from '../capability-system/index.js';
 import { PluginRuntime } from '../plugin-runtime/index.js';
 import { ProcessManager } from '../process-manager/index.js';
+import { ServiceRegistry } from '../di/index.js';
 import { db } from '../db/index.js';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -14,9 +15,11 @@ export class Kernel {
   public readonly capabilityGuard: CapabilityGuard;
   public readonly pluginRuntime: PluginRuntime;
   public readonly processManager: ProcessManager;
+  public readonly serviceRegistry: ServiceRegistry;
   public readonly db = db;
 
   constructor() {
+    this.serviceRegistry = new ServiceRegistry();
     this.eventBus = new EventBus();
     this.commandBus = new CommandBus(this.eventBus);
     this.actionRegistry = new ActionRegistry();

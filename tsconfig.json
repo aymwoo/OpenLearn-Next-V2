@@ -21,6 +21,14 @@
       ]
     },
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    "plugins": [
+      {
+        "name": "tsc-strict",
+        "paths": [
+          "./packages/core/di"
+        ]
+      }
+    ]
   }
 }
