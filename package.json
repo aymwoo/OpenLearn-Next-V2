@@ -34,6 +34,7 @@
     "react-markdown": "^10.1.0",
     "recharts": "^3.8.1",
     "reveal.js": "^6.0.1",
+    "semver": "^7.8.4",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "uuid": "^14.0.0",
