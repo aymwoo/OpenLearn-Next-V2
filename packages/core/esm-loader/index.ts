@@ -14,8 +14,9 @@ export { EsmLoader } from './esm-loader.js';
 export type { PluginModule } from './esm-loader.js';
 export { NodeEsmLoader } from './node-loader.js';
 export { BrowserEsmLoader } from './browser-loader.js';
-export { manifestSchema } from './manifest-schema.js';
-export type { Manifest } from './manifest-schema.js';
+export { manifestSchema, manifestSchemaV3 } from './manifest-schema.js';
+export type { Manifest, ManifestV3 } from './manifest-schema.js';
+export { parseRequiresEntry } from './manifest-utils.js';
 export {
   EsmLoaderError,
   EsmSyntaxError,

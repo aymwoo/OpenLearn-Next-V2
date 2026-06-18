@@ -9,7 +9,7 @@
  * - Type inference via z.infer
  */
 import { describe, it, expect } from 'vitest';
-import { manifestSchema } from '../manifest-schema.js';
+import { manifestSchema, manifestSchemaV3 } from '../manifest-schema.js';
 
 describe('manifestSchema', () => {
   // --- 合法 manifest 通过 ------------------------------------------------
@@ -95,5 +95,144 @@ describe('manifestSchema', () => {
   it('should reject manifest-invalid.json fixture (missing name/version/main)', () => {
     const invalidData = { id: 'test' };
     expect(() => manifestSchema.parse(invalidData)).toThrow();
+  });
+});
+
+describe('manifestSchema — Phase 6 @version regex', () => {
+  it('should accept requires with @^version suffix', () => {
+    const manifest = {
+      id: 'ext-quiz',
+      name: 'Quiz Generator',
+      version: '1.0.0',
+      main: 'index.js',
+      requires: ['@openlearn/core:ICommandBusService@^1.0.0'],
+    };
+    expect(() => manifestSchema.parse(manifest)).not.toThrow();
+  });
+
+  it('should accept requires with @~version suffix', () => {
+    const manifest = {
+      id: 'ext-quiz',
+      name: 'Quiz Generator',
+      version: '1.0.0',
+      main: 'index.js',
+      requires: ['@openlearn/core:IEventBusService@~1.2.0'],
+    };
+    expect(() => manifestSchema.parse(manifest)).not.toThrow();
+  });
+
+  it('should accept requires with exact version (no prefix)', () => {
+    const manifest = {
+      id: 'ext-quiz',
+      name: 'Quiz Generator',
+      version: '1.0.0',
+      main: 'index.js',
+      requires: ['@openlearn/core:IStorageService@1.0.0'],
+    };
+    expect(() => manifestSchema.parse(manifest)).not.toThrow();
+  });
+
+  it('should accept requires with pre-release version', () => {
+    const manifest = {
+      id: 'ext-quiz',
+      name: 'Quiz Generator',
+      version: '1.0.0',
+      main: 'index.js',
+      requires: ['@openlearn/core:IAIService@^1.0.0-beta.1'],
+    };
+    expect(() => manifestSchema.parse(manifest)).not.toThrow();
+  });
+
+  it('should accept requires without @version (backward compatible)', () => {
+    const manifest = {
+      id: 'ext-quiz',
+      name: 'Quiz Generator',
+      version: '1.0.0',
+      main: 'index.js',
+      requires: ['@openlearn/core:ICommandBusService'],
+    };
+    expect(() => manifestSchema.parse(manifest)).not.toThrow();
+  });
+
+  it('should reject requires with invalid format', () => {
+    const manifest = {
+      id: 'ext-quiz',
+      name: 'Quiz Generator',
+      version: '1.0.0',
+      main: 'index.js',
+      requires: ['invalid-format'],
+    };
+    expect(() => manifestSchema.parse(manifest)).toThrow();
+  });
+
+  it('should reject requires with incomplete version (missing patch)', () => {
+    const manifest = {
+      id: 'ext-quiz',
+      name: 'Quiz Generator',
+      version: '1.0.0',
+      main: 'index.js',
+      requires: ['@openlearn/core:ICommandBusService@^1.0'],
+    };
+    // ^1.0 is not a valid semver — should be ^1.0.0
+    expect(() => manifestSchema.parse(manifest)).toThrow();
+  });
+
+  // optional field also supports @version
+  it('should accept optional with @^version suffix', () => {
+    const manifest = {
+      id: 'ext-quiz',
+      name: 'Quiz Generator',
+      version: '1.0.0',
+      main: 'index.js',
+      optional: ['@openlearn/core:IAIService@^2.0.0'],
+    };
+    expect(() => manifestSchema.parse(manifest)).not.toThrow();
+  });
+});
+
+describe('manifestSchemaV3 — Phase 3 backward compatibility', () => {
+  it('should accept requires without @version', () => {
+    const manifest = {
+      id: 'ext-quiz',
+      name: 'Quiz Generator',
+      version: '1.0.0',
+      main: 'index.js',
+      requires: ['@openlearn/core:ICommandBusService'],
+    };
+    expect(() => manifestSchemaV3.parse(manifest)).not.toThrow();
+  });
+
+  it('should reject requires with @version suffix', () => {
+    const manifest = {
+      id: 'ext-quiz',
+      name: 'Quiz Generator',
+      version: '1.0.0',
+      main: 'index.js',
+      requires: ['@openlearn/core:ICommandBusService@^1.0.0'],
+    };
+    expect(() => manifestSchemaV3.parse(manifest)).toThrow();
+  });
+
+  it('should accept optional without @version', () => {
+    const manifest = {
+      id: 'ext-quiz',
+      name: 'Quiz Generator',
+      version: '1.0.0',
+      main: 'index.js',
+      optional: ['@openlearn/core:IAIService'],
+    };
+    expect(() => manifestSchemaV3.parse(manifest)).not.toThrow();
+  });
+
+  it('should accept empty requires/optional', () => {
+    const manifest = {
+      id: 'ext-quiz',
+      name: 'Quiz Generator',
+      version: '1.0.0',
+      main: 'index.js',
+      requires: [],
+      optional: [],
+    };
+    expect(() => manifestSchemaV3.parse(manifest)).not.toThrow();
   });
 });
