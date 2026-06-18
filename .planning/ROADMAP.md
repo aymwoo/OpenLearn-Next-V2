@@ -45,11 +45,10 @@
   3. 现有子系统（CommandBus、EventBus 等）实现对应的 IService 接口，并在 Kernel 启动时注册到 ServiceRegistry
   4. 现有代码通过 `kernelContainer.commandBus` 直接访问子系统的方式继续可用，新的插件代码通过 `serviceRegistry.resolve(token)` 访问服务
   5. Storage 和 AI 服务从现有 `plugin-runtime/index.ts` 中提取为独立的 IService 实现（`IStorageService`、`IAIService`），不再嵌入在 PluginRuntime 内部
-**Plans**: 4 plans
-  - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
-  - [x] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
-  - [x] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
-  - [x] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
+**Plans**: 3 plans
+  - [ ] 02-01-PLAN.md -- IService 接口 + Token 实例 + StorageService/AIService 类定义 + barrel 导出
+  - [ ] 02-02-PLAN.md -- Kernel 注册 7 个 IService + PluginRuntime wrappedAI 引用切换
+  - [ ] 02-03-PLAN.md -- vitest 测试（Token 命名格式 + Kernel 注册流程 + StorageService/AIService 单元测试）
 **UI hint**: no
 
 ### Phase 3: ESM 加载 + 包格式
@@ -176,7 +175,7 @@
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Token DI 内核 | 4/4 | Complete    | 2026-06-18 |
-| 2. 现有能力 Token 化 | 0/0 | Not started | - |
+| 2. 现有能力 Token 化 | 0/3 | Not started | - |
 | 3. ESM 加载 + 包格式 | 0/0 | Not started | - |
 | 4. PluginHost + 生命周期 | 0/0 | Not started | - |
 | 5. Worker 隔离 + 双运行时 | 0/0 | Not started | - |
