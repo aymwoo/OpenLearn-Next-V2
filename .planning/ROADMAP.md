@@ -62,7 +62,7 @@
   4. `manifest.json` 的结构定义（id、name、version、requires、optional、capabilitiesProposed）通过 zod schema 在加载时进行运行时校验，无效 manifest 在加载阶段即被拒绝
   5. 多文件插件（含 `import './utils.js'` 等相对导入）可以被预打包为单文件，在 Node.js data: URL 环境下正确加载执行
 **Plans**: 4 plans
-  - [ ] 03-01-PLAN.md -- EsmLoader 抽象基类 + PluginModule 接口 + 结构化错误类层次 + manifest-schema zod 校验 + 单元测试
+  - [x] 03-01-PLAN.md -- EsmLoader 抽象基类 + PluginModule 接口 + 结构化错误类层次 + manifest-schema zod 校验 + 单元测试
   - [ ] 03-02-PLAN.md -- NodeEsmLoader (data: URL) + BrowserEsmLoader (Blob URL) 平台实现 + 测试 fixtures + 完整单元测试
   - [ ] 03-03-PLAN.md -- EsmLoader barrel 导出 + 全量 vitest 测试验证
   - [ ] 03-04-PLAN.md -- esbuild 打包 + ZIP 解压 + DB schema 扩展 + PluginRuntime ESM 分支 + Kernel DI 注入 + 集成测试
@@ -176,7 +176,7 @@
 |-------|----------------|--------|-----------|
 | 1. Token DI 内核 | 4/4 | Complete    | 2026-06-18 |
 | 2. 现有能力 Token 化 | 3/3 | Complete    | 2026-06-18 |
-| 3. ESM 加载 + 包格式 | 0/0 | Not started | - |
+| 3. ESM 加载 + 包格式 | 1/4 | In Progress|  |
 | 4. PluginHost + 生命周期 | 0/0 | Not started | - |
 | 5. Worker 隔离 + 双运行时 | 0/0 | Not started | - |
 | 6. EventBus 服务 + SemVer 兼容 | 0/0 | Not started | - |
