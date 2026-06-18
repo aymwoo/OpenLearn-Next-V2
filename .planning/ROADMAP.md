@@ -7,7 +7,7 @@
 ## Phases
 
 - [x] **Phase 1: Token DI 内核** — Token 类实现 + ServiceRegistry 依赖注入容器 (completed 2026-06-18)
-- [ ] **Phase 2: 现有能力 Token 化** — IService 接口定义 + 现有子系统实现 Token 化接口并注册
+- [x] **Phase 2: 现有能力 Token 化** — IService 接口定义 + 现有子系统实现 Token 化接口并注册 (completed 2026-06-18)
 - [ ] **Phase 3: ESM 加载 + 包格式** — data:URL/Blob URL 双运行时加载策略 + ZIP 多文件插件包支持
 - [ ] **Phase 4: PluginHost + 生命周期** — 插件生命周期管理器 + activate/deactivate 标准接口
 - [ ] **Phase 5: Worker 隔离 + 双运行时** — Worker Thread/Web Worker 沙箱 + RPC 服务代理 + 内联/Worker 双模式
@@ -46,9 +46,9 @@
   4. 现有代码通过 `kernelContainer.commandBus` 直接访问子系统的方式继续可用，新的插件代码通过 `serviceRegistry.resolve(token)` 访问服务
   5. Storage 和 AI 服务从现有 `plugin-runtime/index.ts` 中提取为独立的 IService 实现（`IStorageService`、`IAIService`），不再嵌入在 PluginRuntime 内部
 **Plans**: 3 plans
-  - [ ] 02-01-PLAN.md -- IService 接口 + Token 实例 + StorageService/AIService 类定义 + barrel 导出
-  - [ ] 02-02-PLAN.md -- Kernel 注册 7 个 IService + PluginRuntime wrappedAI 引用切换
-  - [ ] 02-03-PLAN.md -- vitest 测试（Token 命名格式 + Kernel 注册流程 + StorageService/AIService 单元测试）
+  - [x] 02-01-PLAN.md -- IService 接口 + Token 实例 + StorageService/AIService 类定义 + barrel 导出
+  - [x] 02-02-PLAN.md -- Kernel 注册 7 个 IService + PluginRuntime wrappedAI 引用切换
+  - [x] 02-03-PLAN.md -- vitest 测试（Token 命名格式 + Kernel 注册流程 + StorageService/AIService 单元测试）
 **UI hint**: no
 
 ### Phase 3: ESM 加载 + 包格式
@@ -175,7 +175,7 @@
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Token DI 内核 | 4/4 | Complete    | 2026-06-18 |
-| 2. 现有能力 Token 化 | 0/3 | Not started | - |
+| 2. 现有能力 Token 化 | 3/3 | Complete   | 2026-06-18 |
 | 3. ESM 加载 + 包格式 | 0/0 | Not started | - |
 | 4. PluginHost + 生命周期 | 0/0 | Not started | - |
 | 5. Worker 隔离 + 双运行时 | 0/0 | Not started | - |
