@@ -33,13 +33,21 @@ export class BrowserEsmLoader extends EsmLoader {
     const url = URL.createObjectURL(blob);
 
     try {
-      const mod = await import(url);
+      const mod = await this.doImport(url);
       return mod;
     } catch (err: unknown) {
       throw this.classifyError(err);
     } finally {
       URL.revokeObjectURL(url);
     }
+  }
+
+  /**
+   * 执行实际的 import() 调用。
+   * 提取为 protected 方法以便在测试中 mock（jsdom 不支持 Blob URL 的 import()）。
+   */
+  protected async doImport(url: string): Promise<PluginModule> {
+    return await import(url);
   }
 
   /**

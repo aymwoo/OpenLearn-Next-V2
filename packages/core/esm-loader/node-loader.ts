@@ -26,9 +26,14 @@ export class NodeEsmLoader extends EsmLoader {
    * @param code - ESM 源代码字符串（应为 esbuild 预打包的单 bundle）
    * @returns import() 返回的模块命名空间对象，符合 PluginModule 接口
    */
+  // 每次 load() 使用唯一时间戳 fragment，避免 Node.js ESM loader 缓存相同 data: URL
+  // D-15 要求的缓存隔离：同一代码多次 load() 应返回独立模块实例
+  private loadCounter = 0;
+
   async load(code: string): Promise<PluginModule> {
     const base64 = Buffer.from(code, 'utf-8').toString('base64');
-    const dataUrl = `data:text/javascript;base64,${base64}`;
+    // 附加唯一 fragment 以绕过 Node.js ESM 缓存（fragment 不影响 data: URL 内容解析）
+    const dataUrl = `data:text/javascript;base64,${base64}#${++this.loadCounter}`;
 
     try {
       return await import(dataUrl);
@@ -53,7 +58,11 @@ export class NodeEsmLoader extends EsmLoader {
           ? String((err as { message: unknown }).message)
           : String(err);
 
-    if (msg.includes('Unexpected token') || msg.includes('SyntaxError')) {
+    if (
+      msg.includes('Unexpected token') ||
+      msg.includes('Unexpected end of input') ||
+      msg.includes('SyntaxError')
+    ) {
       return new EsmSyntaxError(msg, {
         cause: err instanceof Error ? err : undefined,
       });
