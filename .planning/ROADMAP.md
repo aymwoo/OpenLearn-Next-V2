@@ -9,7 +9,7 @@
 - [x] **Phase 1: Token DI 内核** — Token 类实现 + ServiceRegistry 依赖注入容器 (completed 2026-06-18)
 - [x] **Phase 2: 现有能力 Token 化** — IService 接口定义 + 现有子系统实现 Token 化接口并注册 (completed 2026-06-18)
 - [x] **Phase 3: ESM 加载 + 包格式** — data:URL/Blob URL 双运行时加载策略 + ZIP 多文件插件包支持 (completed 2026-06-18)
-- [ ] **Phase 4: PluginHost + 生命周期** — 插件生命周期管理器 + activate/deactivate 标准接口
+- [x] **Phase 4: PluginHost + 生命周期** — 插件生命周期管理器 + activate/deactivate 标准接口 (completed 2026-06-18)
 - [ ] **Phase 5: Worker 隔离 + 双运行时** — Worker Thread/Web Worker 沙箱 + RPC 服务代理 + 内联/Worker 双模式
 - [ ] **Phase 6: EventBus 服务 + SemVer 兼容** — 全局 IEventBusService 统一事件 + Token 语义化版本兼容检查
 - [ ] **Phase 7: 热重载 + 中间件管道** — 开发模式插件热重载 + 生命周期中间件管道
@@ -82,7 +82,7 @@
   - [x] 04-01-PLAN.md -- 基础类型层：types.ts（Disposable、PluginState、PluginContext、PluginInfo）+ errors.ts（4 个错误类）+ resource-tracker.ts + 单元测试
   - [x] 04-02-PLAN.md -- ContextBuilder（从 PluginRuntime 迁移 wrapped* 安全包装器）+ PluginHost 类骨架（构造函数、状态机、内省方法）+ 单元测试
   - [x] 04-03-PLAN.md -- PluginHost 完整生命周期方法（installPlugin/activatePlugin/deactivatePlugin/uninstallPlugin/installPluginFromZip/restoreActivePlugins）+ 完整集成测试
-  - [ ] 04-04-PLAN.md -- PluginRuntime facade 层 + Kernel 集成 PluginHost + 状态机单元测试 + 最终验证
+  - [x] 04-04-PLAN.md -- PluginRuntime facade 层 + Kernel 集成 PluginHost + 状态机单元测试 + 最终验证
 **UI hint**: no
 
 ### Phase 5: Worker 隔离 + 双运行时
@@ -177,7 +177,7 @@
 | 1. Token DI 内核 | 4/4 | Complete    | 2026-06-18 |
 | 2. 现有能力 Token 化 | 3/3 | Complete    | 2026-06-18 |
 | 3. ESM 加载 + 包格式 | 4/4 | Complete    | 2026-06-18 |
-| 4. PluginHost + 生命周期 | 3/4 | In Progress|  |
+| 4. PluginHost + 生命周期 | 4/4 | Complete   | 2026-06-18 |
 | 5. Worker 隔离 + 双运行时 | 0/0 | Not started | - |
 | 6. EventBus 服务 + SemVer 兼容 | 0/0 | Not started | - |
 | 7. 热重载 + 中间件管道 | 0/0 | Not started | - |
