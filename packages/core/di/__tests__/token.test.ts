@@ -50,8 +50,7 @@ describe('Token<T>', () => {
   });
 
   it('should throw TokenError for a non-string name (undefined passed as any)', () => {
-    // @ts-expect-error — testing runtime guard against non-string
-    expect(() => new Token(undefined)).toThrow(TokenError);
+    expect(() => new Token(undefined as any)).toThrow(TokenError);
   });
 
   // --- Invalid format ---------------------------------------------------
