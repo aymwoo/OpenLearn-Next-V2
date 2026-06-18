@@ -28,10 +28,11 @@
   3. ServiceRegistry 在解析具有 `requires` 依赖的服务时，按拓扑排序自动解析并注入所有直接和间接依赖
   4. ServiceRegistry 在检测到循环依赖时抛出明确的错误信息（包含参与循环的 Token 列表），而非栈溢出或静默挂起
   5. ServiceRegistry 支持 `unregister(token)` 注销服务，注销后 `resolve(token)` 抛出 "No provider" 错误
-**Plans**: 3 plans
+**Plans**: 4 plans
   - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [x] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [x] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
+  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
 **UI hint**: no
 
 ### Phase 2: 现有能力 Token 化
@@ -44,10 +45,11 @@
   3. 现有子系统（CommandBus、EventBus 等）实现对应的 IService 接口，并在 Kernel 启动时注册到 ServiceRegistry
   4. 现有代码通过 `kernelContainer.commandBus` 直接访问子系统的方式继续可用，新的插件代码通过 `serviceRegistry.resolve(token)` 访问服务
   5. Storage 和 AI 服务从现有 `plugin-runtime/index.ts` 中提取为独立的 IService 实现（`IStorageService`、`IAIService`），不再嵌入在 PluginRuntime 内部
-**Plans**: 3 plans
+**Plans**: 4 plans
   - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [x] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
+  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
 **UI hint**: no
 
 ### Phase 3: ESM 加载 + 包格式
@@ -60,10 +62,11 @@
   3. ZIP 插件包（包含 `manifest.json` + 入口 `.js` 文件 + 可选资源文件）可以被解压、校验，并提取出插件入口代码字符串供 ESM 加载器使用
   4. `manifest.json` 的结构定义（id、name、version、requires、optional、capabilitiesProposed）通过 zod schema 在加载时进行运行时校验，无效 manifest 在加载阶段即被拒绝
   5. 多文件插件（含 `import './utils.js'` 等相对导入）可以被预打包为单文件，在 Node.js data: URL 环境下正确加载执行
-**Plans**: 3 plans
+**Plans**: 4 plans
   - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
+  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
 **UI hint**: no
 
 ### Phase 4: PluginHost + 生命周期
@@ -76,10 +79,11 @@
   3. 单个插件 activate 失败（抛异常或超时）不影响其他已激活插件和基座运行，错误被捕获并记录详细错误链
   4. PluginHost 支持通过 `installPlugin(manifest, sourceCode)` 安装、`activatePlugin(pluginId)` 激活、`deactivatePlugin(pluginId)` 停用、`uninstallPlugin(pluginId)` 卸载的完整生命周期
   5. 插件停用时，所有在 activate 中创建的资源（命令处理器、事件订阅、定时器）被自动追踪并清理，不会残留
-**Plans**: 3 plans
+**Plans**: 4 plans
   - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
+  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
 **UI hint**: no
 
 ### Phase 5: Worker 隔离 + 双运行时
@@ -92,10 +96,11 @@
   3. 事件订阅在 Worker 隔离模式下自动转换为消息转发——Worker 中的 `eventBus.subscribe('lesson.created', handler)` 在主线程触发事件时正确通知到 Worker 中的 handler
   4. 所有跨 Worker 边界的 RPC 调用在主线程端通过 CapabilityGuard 进行能力检查，Worker 无法越过 manifest 声明的能力范围
   5. Worker 生命周期与插件生命周期绑定：插件 activate 时创建 Worker，deactivate 时 terminate Worker；Worker 资源泄漏被全局 Worker Registry 追踪和预防
-**Plans**: 3 plans
+**Plans**: 4 plans
   - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
+  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
 **UI hint**: no
 
 ### Phase 6: EventBus 服务 + SemVer 兼容
@@ -108,10 +113,11 @@
   3. 版本不兼容时（如插件要求 `^2.0` 但基座提供 `1.5.0`），激活被明确拒绝并报告具体的版本不匹配信息，而非静默失败或运行时异常
   4. Token 版本匹配通过 Token Registry 模式实现——插件通过字符串 key 查询 Token 而非直接 import Token 对象，避免不同 bundle 的 Token 对象引用不同（`===` 比较失败）导致的"幻影"不匹配
   5. 安装插件时即检查 Token 版本兼容性，不兼容则在安装阶段拒绝，避免"安装成功但无法激活"的用户困惑
-**Plans**: 3 plans
+**Plans**: 4 plans
   - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
+  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
 **UI hint**: no
 
 ### Phase 7: 热重载 + 中间件管道
@@ -124,10 +130,11 @@
   3. 热重载时旧插件的副作用（setInterval、事件监听器、打开的资源）被 `dispose` 钩子上报的副作用追踪器自动清理，连续热重载 10 次无内存/CPU 增长
   4. 中间件可以在插件生命周期的关键节点（激活前/后、停用前/后、命令执行前/后）注册拦截函数，实现审计、日志、限流等横切关注点
   5. 中间件管道采用洋葱模型——多个中间件按注册顺序依次执行，每个中间件可以决定是否调用下一个或提前终止
-**Plans**: 3 plans
+**Plans**: 4 plans
   - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
+  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
 **UI hint**: no
 
 ### Phase 8: 现有插件迁移
@@ -140,10 +147,11 @@
   3. 所有现有功能（课程管理、白板、文件系统、进程管理、考勤、作业批改等）在新插件系统中行为与旧系统完全一致
   4. 旧插件格式的代码（`packages/plugins/*.ts` 中直接 import kernelContainer 的 bootstrap 模式）通过适配器代理转换为新接口，不再直接耦合 Kernel 单例
   5. 插件迁移后，旧的 `plugin-runtime/index.ts`（vm 相关代码）可以被完全移除，无遗留依赖
-**Plans**: 3 plans
+**Plans**: 4 plans
   - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
+  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
 **UI hint**: no
 
 ### Phase 9: 前端集成 + 过渡期
@@ -156,10 +164,11 @@
   3. 新旧插件系统过渡期间，同一命令类型不会被执行两次——命令路由器优先使用 modern handler，仅在无 modern handler 时回退到 legacy handler
   4. 开发者在插件中心 UI 上传新格式（ZIP + manifest.json）的插件包后，插件被安装到新系统，旧格式（单一 JS 字符串）插件保持可用但标记为 legacy
   5. 旧格式插件的用户收到迁移提示（UI 中显示黄色标记），安装新格式版本后可安全卸载旧格式版本
-**Plans**: 3 plans
+**Plans**: 4 plans
   - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
   - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
   - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
+  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
 **UI hint**: yes
 
 ## Progress
