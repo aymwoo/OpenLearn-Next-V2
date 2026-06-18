@@ -1,6 +1,12 @@
 /**
  * Unit tests for Token<T> class (DI container service identifier).
  *
+ * Phase 6 additions:
+ * - Token.version default value
+ * - Token.version custom value
+ * - Pre-release version strings
+ * - Version does not affect existing name validation
+ *
  * Covers:
  * - Basic creation and name access
  * - Generic type inference (compile-time check)
@@ -90,5 +96,31 @@ describe('Token<T>', () => {
     // At runtime the Token objects are distinct references.
     expect(t1).not.toBe(t2);
     expect(t1.name).not.toBe(t2.name);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 6: Token.version semantic versioning
+// ---------------------------------------------------------------------------
+
+describe('Token.version (Phase 6)', () => {
+  it('should default to 1.0.0 when no version provided', () => {
+    const t = new Token('@openlearn/core:IServiceA');
+    expect(t.version).toBe('1.0.0');
+  });
+
+  it('should accept custom version string', () => {
+    const t = new Token('@openlearn/core:IServiceA', '2.0.0');
+    expect(t.version).toBe('2.0.0');
+  });
+
+  it('should accept pre-release version strings', () => {
+    const t = new Token('@openlearn/core:IServiceA', '1.0.0-beta.1');
+    expect(t.version).toBe('1.0.0-beta.1');
+  });
+
+  it('should not affect existing name validation', () => {
+    expect(() => new Token('')).toThrow(TokenError);
+    expect(() => new Token('@openlearn/core:IServiceA', '1.0.0')).not.toThrow();
   });
 });

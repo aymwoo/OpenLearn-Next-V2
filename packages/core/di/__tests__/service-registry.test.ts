@@ -394,3 +394,47 @@ describe('ServiceRegistry — optional dependencies', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 9. Phase 6: Version tracking + resolveByName
+// ---------------------------------------------------------------------------
+
+describe('ServiceRegistry — version tracking + resolveByName (Phase 6)', () => {
+  it('should store version from Token on register', async () => {
+    const registry = new ServiceRegistry();
+    const token = new Token<IServiceA>('@openlearn/core:IServiceVersioned', '2.0.0');
+    await registry.register(token, makeService('v2'));
+
+    expect(registry.getVersion('@openlearn/core:IServiceVersioned')).toBe('2.0.0');
+  });
+
+  it('should store default version (1.0.0) when Token has no explicit version', async () => {
+    const registry = new ServiceRegistry();
+    const token = new Token<IServiceA>('@openlearn/core:IServiceDefault');
+    await registry.register(token, makeService('default'));
+
+    expect(registry.getVersion('@openlearn/core:IServiceDefault')).toBe('1.0.0');
+  });
+
+  it('should return undefined for unregistered token name', () => {
+    const registry = new ServiceRegistry();
+    expect(registry.getVersion('@openlearn/core:IDoesNotExist')).toBeUndefined();
+  });
+
+  it('should resolve service by string name (Token Registry pattern)', async () => {
+    const registry = new ServiceRegistry();
+    const token = new Token<IServiceA>('@openlearn/core:IServiceByName');
+    const instance = makeService('byName');
+    await registry.register(token, instance);
+
+    const resolved = await registry.resolveByName('@openlearn/core:IServiceByName');
+    expect(resolved).toBe(instance);
+  });
+
+  it('should throw "No provider" for resolveByName with unregistered name', async () => {
+    const registry = new ServiceRegistry();
+    await expect(
+      registry.resolveByName('@openlearn/core:INonExistent')
+    ).rejects.toThrow(/No provider registered for token name/);
+  });
+});
