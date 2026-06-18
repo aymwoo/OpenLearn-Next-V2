@@ -39,7 +39,10 @@ export class Token<T> {
   /** The string identifier, e.g. `@openlearn/core:ICommandBusService`. */
   public readonly name: string;
 
-  constructor(name: string) {
+  /** 语义化版本号（semver），默认 '1.0.0'。 */
+  public readonly version: string;
+
+  constructor(name: string, version: string = '1.0.0') {
     if (!name || typeof name !== 'string') {
       throw new TokenError(
         `Token name must be a non-empty string, got: ${String(name)}`
@@ -54,5 +57,6 @@ export class Token<T> {
     }
 
     this.name = name;
+    this.version = version;
   }
 }
