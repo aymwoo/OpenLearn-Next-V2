@@ -33,6 +33,9 @@ import {
 } from './errors.js';
 import { ICapabilityServiceToken } from '../di/interfaces.js';
 import type { ICapabilityService } from '../di/interfaces.js';
+import { WorkerManager } from '../worker-runtime/worker-manager.js';
+import type { IWorkerTransport } from '../worker-runtime/types.js';
+import type { ServiceHost } from '../worker-runtime/service-host.js';
 
 // ── VALID_TRANSITIONS ──────────────────────────────────────────────────────
 
@@ -91,7 +94,12 @@ export class PluginHost {
   // 活跃插件实例引用（manifest + activate/deactivate 函数）
   private pluginInstances = new Map<
     string,
-    { manifest: Manifest; activate: (ctx: PluginContext) => Promise<void>; deactivate?: () => Promise<void> }
+    {
+      manifest: Manifest;
+      activate: ((ctx: PluginContext) => Promise<void>) | undefined;
+      deactivate?: (() => Promise<void>) | undefined;
+      workerRef?: { transport: IWorkerTransport; serviceHost: ServiceHost };
+    }
   >();
 
   /**
@@ -106,6 +114,42 @@ export class PluginHost {
     private esmLoader: EsmLoader,
     private db: Database,
   ) {}
+
+  // ── Phase 5: WorkerManager wiring (circular dependency fix) ────────────
+
+  private _workerManager: WorkerManager | null = null;
+
+  /**
+   * Set the WorkerManager instance (Phase 5).
+   * Called by Kernel after both PluginHost and WorkerManager are constructed,
+   * avoiding circular dependency between the two.
+   */
+  setWorkerManager(wm: WorkerManager): void {
+    this._workerManager = wm;
+  }
+
+  /** Internal getter — throws if WorkerManager was not set. */
+  private get workerManager(): WorkerManager {
+    if (!this._workerManager) {
+      throw new Error('[PluginHost] WorkerManager not set — call setWorkerManager before activating worker-mode plugins');
+    }
+    return this._workerManager;
+  }
+
+  /**
+   * Read execution_mode from DB (added in Phase 5 for Worker isolation).
+   * Returns 'inline' as default for backward compatibility.
+   */
+  private getExecutionMode(pluginId: string): string {
+    try {
+      const row = this.db.prepare('SELECT execution_mode FROM plugins WHERE id = ?')
+        .get(pluginId) as { execution_mode: string } | undefined;
+      return row?.execution_mode ?? 'inline';
+    } catch {
+      // Column may not exist yet in test databases — fall back to 'inline'
+      return 'inline';
+    }
+  }
 
   // ── 状态机 ──────────────────────────────────────────────────────────────
 
@@ -296,7 +340,13 @@ export class PluginHost {
    * @param pluginId - 插件标识符
    * @throws PluginActivateError / EsmActivationError / IllegalStateTransitionError
    */
-  async activatePlugin(pluginId: string): Promise<void> {
+  async activatePlugin(pluginId: string, options?: { mode?: 'inline' | 'worker' }): Promise<void> {
+    // Phase 5: Dual-mode activation — check if worker mode is requested
+    const mode = options?.mode ?? this.getExecutionMode(pluginId) ?? 'inline';
+    if (mode === 'worker') {
+      return this.activateWorker(pluginId);
+    }
+
     // 1. 获取当前状态并验证转换
     const currentState = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
     this.validateTransition(pluginId, currentState, PluginState.ACTIVATING);
@@ -411,7 +461,69 @@ export class PluginHost {
     }
   }
 
+  // ── Phase 5: Worker-mode activation ─────────────────────────────────────
+
   /**
+   * Worker 模式激活插件。
+   *
+   * 通过 WorkerManager.createWorker() 创建一个隔离的 Worker 线程，
+   * 在 Worker 中加载并激活插件。激活失败时回滚状态。
+   */
+  private async activateWorker(pluginId: string): Promise<void> {
+    const currentState = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
+    this.validateTransition(pluginId, currentState, PluginState.ACTIVATING);
+    this.pluginStates.set(pluginId, PluginState.ACTIVATING);
+
+    const row = this.db
+      .prepare('SELECT source_code, manifest FROM plugins WHERE id = ?')
+      .get(pluginId) as { source_code: string; manifest: string } | undefined;
+    if (!row) {
+      this.pluginStates.set(pluginId, currentState);
+      throw new PluginActivateError(pluginId, 'plugin not found in database');
+    }
+
+    const manifest: Manifest = JSON.parse(row.manifest);
+    const actorId = `plugin:${manifest.id}`;
+
+    try {
+      const { transport, serviceHost } = await this.workerManager.createWorker(
+        pluginId,
+        manifest,
+        row.source_code,
+        (await import('../worker-runtime/worker-manager.js')).ALL_SERVICE_TOKENS,
+      );
+
+      this.pluginStates.set(pluginId, PluginState.ACTIVE);
+      this.pluginInstances.set(pluginId, {
+        manifest,
+        activate: undefined,
+        deactivate: undefined,
+        workerRef: { transport, serviceHost },
+      });
+      this.db
+        .prepare('UPDATE plugins SET status = ? WHERE id = ?')
+        .run('active', pluginId);
+      console.log(
+        `[PluginHost] Plugin "${manifest.id}" activated in WORKER mode (${pluginId})`,
+      );
+    } catch (err) {
+      this.pluginStates.set(pluginId, PluginState.ERROR);
+      this.resourceTracker.disposeAll(pluginId);
+      this.pluginInstances.delete(pluginId);
+      try {
+        const capService = await this.serviceRegistry.resolve<ICapabilityService>(
+          ICapabilityServiceToken,
+        );
+        await capService.revokeAll(actorId);
+      } catch {
+        // revokeAll 静默失败
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * 停用插件。
    * 停用插件。
    *
    * 方法 3: deactivatePlugin(pluginId: string): Promise<void>
@@ -444,6 +556,12 @@ export class PluginHost {
 
     // 3. 设置状态为 DEACTIVATING
     this.pluginStates.set(pluginId, PluginState.DEACTIVATING);
+
+    // Phase 5: Check if this is a worker-mode plugin
+    const mode = this.getExecutionMode(pluginId);
+    if (mode === 'worker') {
+      return this.deactivateWorker(pluginId);
+    }
 
     // 4. 获取实例
     const instance = this.pluginInstances.get(pluginId);
@@ -504,6 +622,52 @@ export class PluginHost {
     }
   }
 
+  // ── Phase 5: Worker-mode deactivation ───────────────────────────────────
+
+  /**
+   * Worker 模式停用插件。
+   *
+   * 委托给 WorkerManager.terminateWorker()。
+   * 无论停用成功或失败，finally 块保证清理状态和 DB 记录。
+   */
+  private async deactivateWorker(pluginId: string): Promise<void> {
+    const currentState = this.pluginStates.get(pluginId);
+    if (!currentState || currentState === PluginState.UNINSTALLED || currentState !== PluginState.ACTIVE) return;
+    this.validateTransition(pluginId, currentState, PluginState.DEACTIVATING);
+    this.pluginStates.set(pluginId, PluginState.DEACTIVATING);
+
+    let actorId: string | undefined;
+    const instance = this.pluginInstances.get(pluginId);
+    if (instance?.manifest?.id) {
+      actorId = `plugin:${instance.manifest.id}`;
+    }
+
+    try {
+      await this.workerManager.terminateWorker(pluginId);
+    } catch (termErr) {
+      console.error(`[PluginHost] Worker termination error for "${pluginId}":`, termErr);
+    } finally {
+      this.pluginStates.set(pluginId, PluginState.INACTIVE);
+      this.pluginInstances.delete(pluginId);
+      this.db
+        .prepare('UPDATE plugins SET status = ? WHERE id = ?')
+        .run('inactive', pluginId);
+
+      if (actorId) {
+        try {
+          const capService = await this.serviceRegistry.resolve<ICapabilityService>(
+            ICapabilityServiceToken,
+          );
+          await capService.revokeAll(actorId);
+        } catch (capErr) {
+          console.error(`[PluginHost] Failed to revoke capabilities for "${pluginId}":`, capErr);
+        }
+      }
+
+      console.log(`[PluginHost] Plugin "${pluginId}" deactivated (worker mode)`);
+    }
+  }
+
   /**
    * 卸载插件。
    *
@@ -520,9 +684,15 @@ export class PluginHost {
   async uninstallPlugin(pluginId: string): Promise<void> {
     const currentState = this.pluginStates.get(pluginId);
 
-    // 1. 如果当前是 ACTIVE，先停用
+    // 1. 如果当前是 ACTIVE，先停用（deactivatePlugin 自动检测 worker/inline 模式）
     if (currentState === PluginState.ACTIVE) {
-      await this.deactivatePlugin(pluginId);
+      // Phase 5: If worker-mode, ensure Worker is terminated before DB deletion
+      const execMode = this.getExecutionMode(pluginId);
+      if (execMode === 'worker') {
+        await this.deactivateWorker(pluginId);
+      } else {
+        await this.deactivatePlugin(pluginId);
+      }
     }
 
     // 2. 获取当前状态（可能已被 deactivatePlugin 修改）
@@ -638,7 +808,7 @@ export class PluginHost {
   async restoreActivePlugins(): Promise<void> {
     const plugins = this.db
       .prepare("SELECT * FROM plugins WHERE status = 'active' AND loader_version = 'esm'")
-      .all() as Array<{ id: string; name: string; [key: string]: unknown }>;
+      .all() as Array<{ id: string; name?: string; execution_mode?: string; [key: string]: unknown }>;
 
     console.log(
       `[PluginHost] Restoring ${plugins.length} active ESM plugin(s) from database`,
@@ -646,11 +816,12 @@ export class PluginHost {
 
     for (const p of plugins) {
       try {
-        await this.activatePlugin(p.id);
+        const mode = (p.execution_mode ?? 'inline') as 'inline' | 'worker';
+        await this.activatePlugin(p.id, { mode });
       } catch (err) {
         // D-10: 单个插件激活失败不影响其他插件
         console.error(
-          `[PluginHost] Failed to restore plugin "${p.name}" (${p.id}):`,
+          `[PluginHost] Failed to restore plugin "${p.name ?? p.id}" (${p.id}):`,
           err,
         );
       }

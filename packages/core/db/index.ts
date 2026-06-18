@@ -315,6 +315,13 @@ db.exec(`
   );
 `);
 
+// Phase 5: Worker isolation mode support — execution_mode column for plugins table
+try {
+  db.exec(`ALTER TABLE plugins ADD COLUMN execution_mode TEXT DEFAULT 'inline'`);
+} catch {
+  // Column already exists — ignore error
+}
+
 try {
   db.prepare('ALTER TABLE classes ADD COLUMN lab_id TEXT').run();
 } catch (e) {

@@ -112,6 +112,18 @@ export class ServiceRegistry {
   }
 
   /**
+   * Resolve a registered service instance by token name string.
+   * Added in Phase 5 for Worker RPC — Worker sends token as string, not Token<T> object.
+   */
+  async resolveByName(name: string): Promise<unknown> {
+    const entry = this.registry.get(name);
+    if (!entry) {
+      throw new Error(`No provider registered for token name: ${name}`);
+    }
+    return entry.instance;
+  }
+
+  /**
    * Unregister a service (and clean up its dependency edges).
    *
    * - Throws `HasDependentError` if other registered services depend on this one (D-09)
