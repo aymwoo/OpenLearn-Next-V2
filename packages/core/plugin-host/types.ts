@@ -1,0 +1,84 @@
+/**
+ * PluginHost 子系统基础类型定义。
+ *
+ * 为 PluginHost 生命周期管理器、ContextBuilder 和资源追踪器提供共享的类型契约。
+ *
+ * D-03: PluginState 枚举 — 7 个值定义完整的插件生命周期状态机
+ * D-04/D-05: PluginContext — 7 个 IService 属性供插件访问内核能力
+ */
+
+import type { IActionRegistryService } from '../di/interfaces.js';
+import type { ICommandBusService } from '../di/interfaces.js';
+import type { IEventBusService } from '../di/interfaces.js';
+import type { ICapabilityService } from '../di/interfaces.js';
+import type { IProcessService } from '../di/interfaces.js';
+import type { IStorageService } from '../di/interfaces.js';
+import type { IAIService } from '../di/interfaces.js';
+import type { Manifest } from '../esm-loader/manifest-schema.js';
+
+/**
+ * Disposable — 可清理资源的统一接口。
+ *
+ * 任何需要生命周期清理的资源（命令处理器、事件订阅、定时器、
+ * 进程等）都实现此接口，使 ResourceTracker 能够统一管理。
+ */
+export interface Disposable {
+  dispose(): void;
+}
+
+/**
+ * PluginState — 插件生命周期状态机枚举。
+ *
+ * 状态转换图（D-03）：
+ *   INSTALLED → ACTIVATING → ACTIVE → DEACTIVATING → INACTIVE
+ *                                          ↓
+ *                                        ERROR
+ *   INACTIVE → ACTIVATING（重新激活）或 UNINSTALLED
+ *   ERROR → ACTIVATING（重试激活）或 UNINSTALLED
+ *
+ * ACTIVATING 和 DEACTIVATING 是瞬态（transient），不应长时间停留。
+ */
+export enum PluginState {
+  INSTALLED = 'installed',
+  ACTIVATING = 'activating',
+  ACTIVE = 'active',
+  DEACTIVATING = 'deactivating',
+  INACTIVE = 'inactive',
+  ERROR = 'error',
+  UNINSTALLED = 'uninstalled',
+}
+
+/**
+ * PluginContext — 插件激活时接收的上下文对象。
+ *
+ * 包含 7 个内核服务接口 + 插件标识信息 + manifest 元数据。
+ * ContextBuilder（Plan 03）负责构建此对象并进行安全包装。
+ */
+export interface PluginContext {
+  /** 7 个内核服务，通过 Token DI 获取的接口代理 */
+  services: {
+    commandBus: ICommandBusService;
+    eventBus: IEventBusService;
+    actionRegistry: IActionRegistryService;
+    capability: ICapabilityService;
+    processManager: IProcessService;
+    storage: IStorageService;
+    ai: IAIService;
+  };
+  /** 插件唯一标识符（manifest.id） */
+  pluginId: string;
+  /** 插件 manifest 元数据 */
+  manifest: Manifest;
+}
+
+/**
+ * PluginInfo — 插件基本信息摘要。
+ *
+ * 用于 UI 展示和状态查询，不包含运行时上下文。
+ */
+export interface PluginInfo {
+  id: string;
+  name: string;
+  version: string;
+  state: PluginState;
+}

@@ -5,6 +5,7 @@ export default defineConfig({
     include: [
       'packages/core/di/__tests__/**/*.test.ts',
       'packages/core/esm-loader/__tests__/**/*.test.ts',
+      'packages/core/plugin-host/__tests__/**/*.test.ts',
     ],
     environment: 'node',
   },
