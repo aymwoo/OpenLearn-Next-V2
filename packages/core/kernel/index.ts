@@ -9,6 +9,7 @@ import { db } from '../db/index.js';
 import { v7 as uuidv7 } from 'uuid';
 import { ServiceRegistry } from '../di/service-registry.js';
 import { PluginHost } from '../plugin-host/index.js';
+import { WorkerManager } from '../worker-runtime/worker-manager.js';
 
 export class Kernel {
   public readonly eventBus: EventBus;
@@ -21,6 +22,7 @@ export class Kernel {
   public readonly db = db;
   public readonly serviceRegistry: ServiceRegistry;
   public readonly pluginHost: PluginHost;
+  public readonly workerManager: WorkerManager;
 
   constructor() {
     // Layer 0 — 无依赖
@@ -42,6 +44,11 @@ export class Kernel {
 
     // PluginHost — 依赖 ServiceRegistry + EsmLoader + db
     this.pluginHost = new PluginHost(this.serviceRegistry, this.esmLoader, this.db);
+
+    // Layer 3 — WorkerManager (depends on ServiceRegistry + CapabilityGuard)
+    this.workerManager = new WorkerManager(this.serviceRegistry, this.capabilityGuard, this.db);
+    // Wire WorkerManager into PluginHost via setter (avoids circular dependency)
+    this.pluginHost.setWorkerManager(this.workerManager);
 
     // PluginRuntime — 接收 PluginHost 作为 facade 委托
     this.pluginRuntime = new PluginRuntime(this, this.esmLoader, this.pluginHost);
