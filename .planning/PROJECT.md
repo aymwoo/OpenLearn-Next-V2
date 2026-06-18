@@ -30,6 +30,7 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - ✓ 实时通信（Socket.IO 事件广播）— 现有
 - ✓ 中英文国际化（i18n.ts）— 现有
 - ✓ 学期成绩报告与分析图表— 现有
+- ✓ **PLUG-04**：Token 依赖注入系统（Token<T> 泛型类 + ServiceRegistry DI 容器 + tsc-strict 类型检查）— 验证于 Phase 01: token-di
 
 ### Active
 
@@ -38,7 +39,6 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - [ ] **PLUG-01**：插件加载机制从 `vm.createContext` + `vm.Script.runInContext` 迁移到 `Blob` → `URL.createObjectURL()` → `import(url)` 动态 ESM 导入
 - [ ] **PLUG-02**：支持多文件插件包格式（ZIP/目录），包含 `manifest.json` + 入口文件 + 可选依赖
 - [ ] **PLUG-03**：双运行时支持——Node.js 端通过 Worker Thread 隔离执行插件，浏览器端通过 Web Worker 隔离执行插件
-- [ ] **PLUG-04**：Token 依赖注入系统——插件通过 `requires`/`optional` 声明对其他服务的依赖，基座在激活时解析并注入
 - [ ] **PLUG-05**：生命周期钩子——每个插件实现 `activate(ctx)` 和 `deactivate()` 标准接口
 - [ ] **PLUG-06**：扩展点注册模式——将现有 `classroomTools`、`actionRegistry`、`commandBus` 等能力统一抽象为 Token 标识的 Service，插件通过 Token 获取服务实例
 - [ ] **PLUG-07**：全局事件总线服务 `IEventBusService`——插件通过此服务订阅/发布事件，无需单独注册扩展点
@@ -133,4 +133,4 @@ This document evolves at phase transitions and milestone boundaries.
 | PLUG-12 | Phase 8 — 现有插件迁移 | Pending |
 
 ---
-*Last updated: 2026-06-17 after roadmap creation*
+*Last updated: 2026-06-18 after Phase 01 (token-di) completion*
