@@ -30,6 +30,7 @@ import {
   IllegalStateTransitionError,
   PluginActivateError,
   PluginDeactivateTimeoutError,
+  SemverMismatchError,
 } from './errors.js';
 import { ICapabilityServiceToken } from '../di/interfaces.js';
 import type { ICapabilityService } from '../di/interfaces.js';
@@ -830,3 +831,7 @@ export class PluginHost {
     console.log('[PluginHost] Plugin restoration complete');
   }
 }
+
+// ── Re-exports ───────────────────────────────────────────────────────────────
+
+export { SemverMismatchError } from './errors.js';

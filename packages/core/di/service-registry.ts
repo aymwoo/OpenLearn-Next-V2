@@ -80,8 +80,8 @@ export class ServiceRegistry {
       throw new MissingDependencyError(name, missingDeps);
     }
 
-    // Store the entry
-    this.registry.set(name, { instance, options: options ?? {} });
+    // Store the entry (Phase 6: store version from Token)
+    this.registry.set(name, { instance, options: options ?? {}, version: token.version });
 
     // Build / extend dependency graph
     const edge: DepEdge = { requires, dependents: new Set() };
@@ -113,7 +113,12 @@ export class ServiceRegistry {
 
   /**
    * Resolve a registered service instance by token name string.
-   * Added in Phase 5 for Worker RPC — Worker sends token as string, not Token<T> object.
+   *
+   * Phase 5: Added for Worker RPC — Worker sends token as string, not Token<T> object.
+   * Phase 6: Token Registry pattern entry point — allows plugins to query
+   *          services by string name without importing the Token class.
+   *
+   * Throws a plain Error when the token name is not registered.
    */
   async resolveByName(name: string): Promise<unknown> {
     const entry = this.registry.get(name);
@@ -121,6 +126,20 @@ export class ServiceRegistry {
       throw new Error(`No provider registered for token name: ${name}`);
     }
     return entry.instance;
+  }
+
+  /**
+   * 获取已注册 Token 的版本号。
+   *
+   * Phase 6: Token 语义化版本兼容系统的方法。
+   * 由 PluginHost.activatePlugin() 在版本检查时调用。
+   *
+   * @param tokenName - Token 标识符字符串（如 '@openlearn/core:ICommandBusService'）
+   * @returns 版本号字符串（如 '1.0.0'），或 undefined 当 Token 未注册时
+   */
+  getVersion(tokenName: string): string | undefined {
+    const entry = this.registry.get(tokenName);
+    return entry?.version;
   }
 
   /**

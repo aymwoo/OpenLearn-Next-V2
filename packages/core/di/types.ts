@@ -20,6 +20,8 @@ export interface RegisterOptions {
 export interface ServiceEntry {
   instance: unknown;
   options: RegisterOptions;
+  /** 语义化版本号（semver），如 '1.0.0'。由 ServiceRegistry.register() 自动从 Token 读取。 */
+  version: string;
 }
 
 /**

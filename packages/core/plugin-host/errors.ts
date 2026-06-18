@@ -74,3 +74,27 @@ export class IllegalStateTransitionError extends PluginHostError {
     this.name = 'IllegalStateTransitionError';
   }
 }
+
+/**
+ * SemverMismatchError — Token 版本不兼容时抛出。
+ *
+ * 携带结构化字段供 UI 解析 + 人类可读 message 用于日志。
+ * 包含插件 id/名称、冲突 Token 名称、要求范围、实际版本。
+ * 在 PluginHost.activatePlugin() 和 PluginHost.installPlugin() 中抛出。
+ */
+export class SemverMismatchError extends PluginHostError {
+  constructor(
+    public readonly pluginId: string,
+    public readonly pluginName: string,
+    public readonly tokenName: string,
+    public readonly requiredRange: string,
+    public readonly actualVersion: string,
+  ) {
+    super(
+      `Plugin "${pluginName}" (${pluginId}) requires ${tokenName}@${requiredRange}, ` +
+      `but host provides ${actualVersion}. ` +
+      `Please upgrade the host or use a compatible plugin version.`
+    );
+    this.name = 'SemverMismatchError';
+  }
+}
