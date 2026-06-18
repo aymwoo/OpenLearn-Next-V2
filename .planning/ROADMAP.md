@@ -115,7 +115,7 @@
 **Plans**: 3 plans
   - [x] 06-01-PLAN.md -- Token 版本 + ServiceRegistry 版本追踪 + 错误类 + semver
   - [x] 06-02-PLAN.md -- Manifest schema @version 扩展 + parseRequiresEntry 工具
-  - [ ] 06-03-PLAN.md -- PluginHost/PluginRuntime SemVer 双重检查集成
+  - [x] 06-03-PLAN.md -- PluginHost/PluginRuntime SemVer 双重检查集成
 **UI hint**: no
 
 ### Phase 7: 热重载 + 中间件管道
