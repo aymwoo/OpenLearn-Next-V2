@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready_to_plan
-last_updated: 2026-06-18T12:48:01.472Z
-last_activity: 2026-06-18 -- Phase 04 execution started
+status: executing
+stopped_at: Phase 05 planning complete — 4 plans created
+last_updated: "2026-06-18T13:59:01.910Z"
+last_activity: 2026-06-18 -- Phase 5 planning complete
 progress:
   total_phases: 9
-  completed_phases: 3
-  total_plans: 15
+  completed_phases: 4
+  total_plans: 19
   completed_plans: 15
-  percent: 33
-stopped_at: Phase 04 complete (4/4) — ready to discuss Phase 5
+  percent: 79
 ---
 
 # Project State
@@ -21,16 +21,16 @@ stopped_at: Phase 04 complete (4/4) — ready to discuss Phase 5
 See: .planning/PROJECT.md (updated 2026-06-17)
 
 **Core value:** 一个类型安全、跨运行时（浏览器/Node.js）、支持依赖注入和热重载的插件执行环境
-**Current focus:** Phase 5 — worker 隔离 + 双运行时
+**Current focus:** Phase 5 — Worker 隔离 + 双运行时
 
 ## Current Position
 
 Phase: 5
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-06-18
+Plan: 05-01 (Wave 1)
+Status: Ready to execute
+Last activity: 2026-06-18 -- Phase 5 planning complete
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [████░░░░░░] 40% (planned)
 
 ## Performance Metrics
 
@@ -48,10 +48,11 @@ Progress: [░░░░░░░░░░] 0%
 | 02 | 3 | - | - |
 | 03 | 4 | - | - |
 | 04 | 4 | - | - |
+| 05 | 4 | - | - |
 
 **Recent Trend:**
 
-- N/A（尚未开始执行）
+- Phase 5 planning completed. 4 plans created across 4 waves.
 
 *Updated after each plan completion*
 
@@ -66,6 +67,11 @@ Recent decisions:
 - Phase 1: DI 内核独立实施，不碰插件执行方式，降低风险
 - Phase 3: Node.js 端使用 data: URL，浏览器端使用 Blob URL（双运行时分层策略）
 - Phase 5: 所有跨 Worker 边界的 Service 方法明确标注 async
+- Phase 5: ServiceProxy 使用 JavaScript Proxy + Reflect 实现，而非 comlink 库
+- Phase 5: 插件 execution_mode 默认 'inline'，DB ALTER TABLE 为 idempotent try/catch
+- Phase 5: Worker bootstrap 代码内联在 WorkerManager.createWorker() 中（data URL），而非独立文件
+- Phase 5: BrowserWorkerTransport 暂为 stub，浏览器实现在 Phase 9
+- Phase 5: EventForwarder 仅在 Worker 主动 subscribe 时创建（延迟初始化）
 
 ### Pending Todos
 
@@ -85,6 +91,15 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-06-18T11:34:32.419Z
-Stopped at: context exhaustion at 86% (2026-06-18)
+Last session: 2026-06-18T21:38:00.000Z
+Stopped at: Phase 05 planning complete — 4 plans created
 Resume file: None
+
+## Phase 5 Plans
+
+| Plan | Objective | Wave | Depends On | Files |
+|------|-----------|------|------------|-------|
+| 05-01 | Transport foundation: types, errors, transports | 1 | -- | types.ts, errors.ts, transport.ts, index.ts |
+| 05-02 | ServiceProxy RPC layer + CapGuard | 2 | 05-01 | service-proxy.ts, service-host.ts |
+| 05-03 | Worker lifecycle + PluginHost dual-mode + Kernel/DB | 3 | 05-02 | worker-manager.ts, plugin-host/index.ts, kernel/index.ts, db/index.ts, service-registry.ts |
+| 05-04 | Event forwarding + integration tests | 4 | 05-03 | event-forwarder.ts, service-proxy.ts, service-host.ts, worker-manager.ts, index.ts, vitest.config.ts |

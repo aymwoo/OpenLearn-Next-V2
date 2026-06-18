@@ -90,16 +90,16 @@
 **Depends on**: Phase 4
 **Requirements**: PLUG-03
 **Success Criteria** (what must be TRUE):
-  1. 第三方插件在独立 Worker Thread（Node.js）或 Web Worker（浏览器）中执行，Worker 崩溃不影响主线程和其他插件
+  1. 第三方插件在独立 Worker Thread（Node.js）中执行（浏览器 Web Worker 为 stub，Phase 9 完整实现），Worker 崩溃不影响主线程和其他插件
   2. Worker 中的插件通过 `ctx.services.commandBus.execute(cmd)` 调用主线程服务时，调用被透明代理（基于 token + method + args 通用 invoke 协议），调用方感知不到跨边界差异
   3. 事件订阅在 Worker 隔离模式下自动转换为消息转发——Worker 中的 `eventBus.subscribe('lesson.created', handler)` 在主线程触发事件时正确通知到 Worker 中的 handler
   4. 所有跨 Worker 边界的 RPC 调用在主线程端通过 CapabilityGuard 进行能力检查，Worker 无法越过 manifest 声明的能力范围
   5. Worker 生命周期与插件生命周期绑定：插件 activate 时创建 Worker，deactivate 时 terminate Worker；Worker 资源泄漏被全局 Worker Registry 追踪和预防
 **Plans**: 4 plans
-  - [x] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
-  - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
-  - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
-  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
+  - [ ] 05-01-PLAN.md -- Transport foundation: message protocol types, error hierarchy, NodeWorkerTransport + BrowserWorkerTransport stub
+  - [ ] 05-02-PLAN.md -- ServiceProxy RPC layer + CapGuard: Worker-side Proxy, main-thread ServiceHost with capability enforcement
+  - [ ] 05-03-PLAN.md -- Worker lifecycle + PluginHost dual-mode + Kernel/DB: WorkerManager, inline/worker mode, execution_mode column
+  - [ ] 05-04-PLAN.md -- Event forwarding + integration tests: EventForwarder, EventBusProxy, full test suite
 **UI hint**: no
 
 ### Phase 6: EventBus 服务 + SemVer 兼容
@@ -113,10 +113,10 @@
   4. Token 版本匹配通过 Token Registry 模式实现——插件通过字符串 key 查询 Token 而非直接 import Token 对象，避免不同 bundle 的 Token 对象引用不同（`===` 比较失败）导致的"幻影"不匹配
   5. 安装插件时即检查 Token 版本兼容性，不兼容则在安装阶段拒绝，避免"安装成功但无法激活"的用户困惑
 **Plans**: 4 plans
-  - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
-  - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
-  - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
-  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
+  - [ ] 06-01-PLAN.md -- (要规划)
+  - [ ] 06-02-PLAN.md -- (要规划)
+  - [ ] 06-03-PLAN.md -- (要规划)
+  - [ ] 06-04-PLAN.md -- (要规划)
 **UI hint**: no
 
 ### Phase 7: 热重载 + 中间件管道
@@ -130,10 +130,10 @@
   4. 中间件可以在插件生命周期的关键节点（激活前/后、停用前/后、命令执行前/后）注册拦截函数，实现审计、日志、限流等横切关注点
   5. 中间件管道采用洋葱模型——多个中间件按注册顺序依次执行，每个中间件可以决定是否调用下一个或提前终止
 **Plans**: 4 plans
-  - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
-  - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
-  - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
-  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
+  - [ ] 07-01-PLAN.md -- (要规划)
+  - [ ] 07-02-PLAN.md -- (要规划)
+  - [ ] 07-03-PLAN.md -- (要规划)
+  - [ ] 07-04-PLAN.md -- (要规划)
 **UI hint**: no
 
 ### Phase 8: 现有插件迁移
@@ -147,10 +147,10 @@
   4. 旧插件格式的代码（`packages/plugins/*.ts` 中直接 import kernelContainer 的 bootstrap 模式）通过适配器代理转换为新接口，不再直接耦合 Kernel 单例
   5. 插件迁移后，旧的 `plugin-runtime/index.ts`（vm 相关代码）可以被完全移除，无遗留依赖
 **Plans**: 4 plans
-  - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
-  - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
-  - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
-  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
+  - [ ] 08-01-PLAN.md -- (要规划)
+  - [ ] 08-02-PLAN.md -- (要规划)
+  - [ ] 08-03-PLAN.md -- (要规划)
+  - [ ] 08-04-PLAN.md -- (要规划)
 **UI hint**: no
 
 ### Phase 9: 前端集成 + 过渡期
@@ -164,10 +164,10 @@
   4. 开发者在插件中心 UI 上传新格式（ZIP + manifest.json）的插件包后，插件被安装到新系统，旧格式（单一 JS 字符串）插件保持可用但标记为 legacy
   5. 旧格式插件的用户收到迁移提示（UI 中显示黄色标记），安装新格式版本后可安全卸载旧格式版本
 **Plans**: 4 plans
-  - [ ] 01-01-PLAN.md -- 安装 vitest + Token 类实现 + 错误类 + Token 单元测试
-  - [ ] 01-02-PLAN.md -- ServiceRegistry 容器（register/resolve/unregister + 拓扑排序 + 循环检测）+ 完整单元测试
-  - [ ] 01-03-PLAN.md -- Kernel 集成 ServiceRegistry + barrel 导出 + tsc-strict CI 配置
-  - [ ] 01-04-PLAN.md -- 修复 tsc-strict plugin name 配置不匹配（关闭 VERIFICATION G-001 差距）
+  - [ ] 09-01-PLAN.md -- (要规划)
+  - [ ] 09-02-PLAN.md -- (要规划)
+  - [ ] 09-03-PLAN.md -- (要规划)
+  - [ ] 09-04-PLAN.md -- (要规划)
 **UI hint**: yes
 
 ## Progress
@@ -178,7 +178,7 @@
 | 2. 现有能力 Token 化 | 3/3 | Complete    | 2026-06-18 |
 | 3. ESM 加载 + 包格式 | 4/4 | Complete    | 2026-06-18 |
 | 4. PluginHost + 生命周期 | 4/4 | Complete    | 2026-06-18 |
-| 5. Worker 隔离 + 双运行时 | 0/0 | Not started | - |
+| 5. Worker 隔离 + 双运行时 | 0/4 | In planning | - |
 | 6. EventBus 服务 + SemVer 兼容 | 0/0 | Not started | - |
 | 7. 热重载 + 中间件管道 | 0/0 | Not started | - |
 | 8. 现有插件迁移 | 0/0 | Not started | - |

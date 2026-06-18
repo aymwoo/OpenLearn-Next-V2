@@ -123,9 +123,9 @@ node -e "console.log(typeof Proxy)"     # 'function' [CONFIRMED]
 │  │  ┌─────────────────┐    │       │  │ Plugin Code (ESM)   │   │         │
 │  │  │ WorkerRegistry   │    │       │  │                     │   │         │
 │  │  │ Map<pluginId,    │    │       │  │ activate(ctx) {    │   │         │
-│  │  │   { worker,      │    │postMsg│  │   ctx.services.    │   │         │
-│  │  │     transport,   │◄───┼───────┼───┤     commandBus.   │   │         │
-│  │  │     proxy }>     │    │       │  │       execute(cmd) │   │         │
+│  │  │   { worker,      │    │       │  │   ctx.services.    │   │         │
+│  │  │     transport,   │    │postMsg│  │     commandBus.   │   │         │
+│  │  │     proxy }>     │◄───┼───────┼───┤       execute(cmd) │   │         │
 │  │  └─────────────────┘    │       │  │   ctx.eventBus.    │   │         │
 │  │                          │       │  │     subscribe(...) │   │         │
 │  │  ServiceHost             │       │  │ }                  │   │         │
@@ -1015,32 +1015,17 @@ structuredClone(new (class Foo {})());                           // ❌ Class in
 | A4 | CapabilityGuard `check()` can be called synchronously during invoke handling (currently sync in CapabilityGuard but wrapped as async in ICapabilityService) | ServiceHost Architecture | LOW -- ServiceHost resolves ICapabilityService via ServiceRegistry which returns the async wrapper. The check call itself is sync but the interface says async. `await capService.check()` works. |
 | A5 | Worker's `parentPort.on('message', handler)` can be the sole message channel for all RPC + event forwarding | Transport Architecture | MEDIUM -- Using a single message channel multiplexes invoke responses, subscription events, and lifecycle messages. Need a message type discriminator (`msg.type`) to route correctly. The protocol design handles this. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **ServiceRegistry.resolveByName() -- do we add this or change ServiceHost?**
-   - What we know: Worker sends token as string (`'@openlearn/core:ICommandBusService'`). `ServiceRegistry.resolve()` takes `Token<T>`, not string. The current registry internally maps token.name → entry, where token.name is `'@openlearn/core:ICommandBusService'`.
-   - What's unclear: Should we add `resolveByName(name: string)` to ServiceRegistry, or should ServiceHost maintain its own Map<tokenName, resolved service>?
-   - Recommendation: Add `resolveByName(name: string)` to ServiceRegistry (it's a trivial lookup: `this.registry.get(name)?.instance`). This avoids duplicating the registry and keeps ServiceHost stateless regarding service resolution.
+1. **ServiceRegistry.resolveByName() -- do we add this or change ServiceHost?** -- RESOLVED: Add `resolveByName(name: string)` to ServiceRegistry. It's a trivial lookup (`this.registry.get(name)?.instance`) that avoids duplicating the registry and keeps ServiceHost stateless regarding service resolution. Implemented in Plan 03 Task 1B.
 
-2. **How to handle synchronous service methods that are wrapped as async in IService interface?**
-   - What we know: All IService methods return `Promise<T>` (D-10 from Phase 2). But some underlying implementations (CapabilityGuard.check, StorageService.get) are actually synchronous.
-   - What's unclear: Does the async wrapper affect RPC? The RPC protocol is inherently async anyway (postMessage roundtrip), so the async return type is correct for the Worker side.
-   - Recommendation: No special handling needed. The Worker-side Proxy always returns a Promise (it must wait for the roundtrip). The async IService signatures are exactly right for RPC mode.
+2. **How to handle synchronous service methods that are wrapped as async in IService interface?** -- RESOLVED: No special handling needed. The Worker-side Proxy always returns a Promise (it must wait for the roundtrip). The async IService signatures are exactly right for RPC mode. The `await` in plugin code works identically whether the underlying implementation is sync or async.
 
-3. **Plugin execution_mode detection -- how does PluginHost know which mode to use?**
-   - What we know: New `execution_mode` column in `plugins` table. But what determines the initial value? User choice? Automatic detection?
-   - What's unclear: The criteria for assigning `'worker'` vs `'inline'` mode.
-   - Recommendation: Initially ALL plugins default to `'inline'` (backward compatible). The mode is set at install time: `installPlugin(sourceCode, { mode: 'worker' })`. The plugin center UI can add a toggle later. Built-in plugins (loaded via restoreActivePlugins) always use `'inline'` mode. This follows the progressive migration constraint.
+3. **Plugin execution_mode detection -- how does PluginHost know which mode to use?** -- RESOLVED: New `execution_mode` column in `plugins` table. All plugins default to `'inline'` (backward compatible). Mode is set at install time. Built-in plugins always use `'inline'`. Follows the progressive migration constraint per CONTEXT.md.
 
-4. **Should the worker bootstrap code be a separate file or inline data URL?**
-   - What we know: Node.js `Worker` can take a filename or data URL. The bootstrap code is ~50 lines of setup logic.
-   - What's unclear: Separate file means file system dependency; inline data URL means escaping/encoding management.
-   - Recommendation: Inline data URL, generated in `WorkerManager.createWorker()`. The bootstrap code is small (~50 lines) and tightly coupled to the ServiceProxy protocol. A separate file would need dynamic code generation anyway to pass pluginId, token list, etc.
+4. **Should the worker bootstrap code be a separate file or inline data URL?** -- RESOLVED: Inline data URL generated in `WorkerManager.createWorker()`. The bootstrap code is ~50 lines and tightly coupled to the ServiceProxy protocol. A separate file would need dynamic code generation anyway. Matches Phase 3 data: URL pattern.
 
-5. **Browser Web Worker -- implement now or stub for Phase 9?**
-   - What we know: The abstract `IWorkerTransport` interface can be shared. Browser Web Worker uses the same `postMessage` + structured clone API. But the bootstrap and environment differ (no `require('worker_threads')`, uses `self` instead of `parentPort`).
-   - What's unclear: Whether Phase 5 should include the browser transport implementation or just the abstract interface + Node implementation.
-   - Recommendation: Implement the abstract `IWorkerTransport` interface + `NodeWorkerTransport` in Phase 5. Create a stub `BrowserWorkerTransport` that throws `NotImplementedError`. The actual browser implementation is in Phase 9 (frontend integration). This keeps Phase 5 focused and testable.
+5. **Browser Web Worker -- implement now or stub for Phase 9?** -- RESOLVED: Implement abstract `IWorkerTransport` interface + `NodeWorkerTransport` in Phase 5. Create `BrowserWorkerTransport` stub throwing `WorkerNotSupportedError`. Full browser implementation deferred to Phase 9. The stub satisfies the architectural interface and is documented in Phase 5 PLAN scope notes. ROADMAP SC1 reflects stub-only in Phase 5.
 
 ## Environment Availability
 
@@ -1063,26 +1048,31 @@ structuredClone(new (class Foo {})());                           // ❌ Class in
 | Property | Value |
 |----------|-------|
 | Framework | vitest 4.1.9 |
-| Config file | `vitest.config.ts` (needs update to include worker-runtime tests) |
+| Config file | `vitest.config.ts` (updated in Phase 5 Plan 01 to include worker-runtime tests) |
 | Quick run command | `npx vitest run packages/core/worker-runtime/__tests__/` |
 | Full suite command | `npm test` (vitest run) |
 
 ### Phase Requirements → Test Map
-| Req ID | Behavior | Test Type | Automated Command | File Exists? |
-|--------|----------|-----------|-------------------|-------------|
-| PLUG-03-SC1 | Worker 隔离执行，崩溃不影响主线程和其他插件 | integration | `npx vitest run packages/core/worker-runtime/__tests__/integration.test.ts` | No -- Wave 0 |
-| PLUG-03-SC2 | Proxy-based 透明 RPC 调用主线程服务 | unit | `npx vitest run packages/core/worker-runtime/__tests__/service-proxy.test.ts` | No -- Wave 0 |
-| PLUG-03-SC3 | 事件订阅跨 Worker 边界自动转发 | unit | `npx vitest run packages/core/worker-runtime/__tests__/event-forwarder.test.ts` | No -- Wave 0 |
-| PLUG-03-SC4 | CapabilityGuard 在 RPC 消息路径中执行检查 | unit | `npx vitest run packages/core/worker-runtime/__tests__/service-host.test.ts` | No -- Wave 0 |
-| PLUG-03-SC5 | Worker 生命周期与插件生命周期绑定 | unit | `npx vitest run packages/core/worker-runtime/__tests__/worker-manager.test.ts` | No -- Wave 0 |
+| Req ID | Behavior | Test Type | Automated Command | Created In |
+|--------|----------|-----------|-------------------|------------|
+| PLUG-03-SC1 | Worker 隔离执行，崩溃不影响主线程和其他插件 | integration | `npx vitest run packages/core/worker-runtime/__tests__/integration.test.ts` | Plan 04 Task 3 |
+| PLUG-03-SC2 | Proxy-based 透明 RPC 调用主线程服务 | unit | `npx vitest run packages/core/worker-runtime/__tests__/service-proxy.test.ts` | Plan 02 Task 1 |
+| PLUG-03-SC3 | 事件订阅跨 Worker 边界自动转发 | unit | `npx vitest run packages/core/worker-runtime/__tests__/event-forwarder.test.ts` | Plan 04 Task 1 |
+| PLUG-03-SC4 | CapabilityGuard 在 RPC 消息路径中执行检查 | unit | `npx vitest run packages/core/worker-runtime/__tests__/service-host.test.ts` | Plan 02 Task 2 |
+| PLUG-03-SC5 | Worker 生命周期与插件生命周期绑定 | unit | `npx vitest run packages/core/worker-runtime/__tests__/worker-manager.test.ts` | Plan 03 Task 2 |
+| PLUG-03-all | Full integration: create Worker → activate → RPC → deactivate → crash isolation | integration | `npx vitest run packages/core/worker-runtime/__tests__/integration.test.ts` | Plan 04 Task 3 |
 
-### Wave 0 Gaps
-- [ ] `packages/core/worker-runtime/__tests__/service-proxy.test.ts` -- covers SC-2 (Proxy traps, invoke serialization, response matching, error propagation)
-- [ ] `packages/core/worker-runtime/__tests__/service-host.test.ts` -- covers SC-4 (invoke handling, CapabilityGuard check, error serialization, ServiceRegistry resolution)
-- [ ] `packages/core/worker-runtime/__tests__/worker-manager.test.ts` -- covers SC-5 (create/terminate/registry/leak detection/crash recovery)
-- [ ] `packages/core/worker-runtime/__tests__/event-forwarder.test.ts` -- covers SC-3 (subscribe/unsubscribe/forward/cleanup)
-- [ ] `packages/core/worker-runtime/__tests__/integration.test.ts` -- covers SC-1 (full lifecycle: create Worker → activate plugin → invoke RPC → deactivate → crash isolation)
-- [ ] `vitest.config.ts` update -- add `packages/core/worker-runtime/__tests__/**/*.test.ts` to include patterns
+### Verified Test Files Created in Phase 5
+
+| Test File | Created In | Verifies |
+|-----------|------------|----------|
+| `__tests__/transport.test.ts` | Plan 01 Task 0 | NodeWorkerTransport, message protocol types |
+| `__tests__/service-proxy.test.ts` | Plan 02 Task 1 | createMethodProxy, createServicesProxy, pendingCalls, timeout |
+| `__tests__/service-host.test.ts` | Plan 02 Task 2 | ServiceHost handleInvoke, CapGuard enforcement, error serialization |
+| `__tests__/worker-manager.test.ts` | Plan 03 Task 2 | WorkerManager create/terminate, WorkerRegistry crash detection |
+| `__tests__/event-forwarder.test.ts` | Plan 04 Task 1 | EventForwarder subscribe/unsubscribe/forward/cleanup |
+| `__tests__/integration.test.ts` | Plan 04 Task 3 | Full lifecycle integration test |
+| `vitest.config.ts update` | Plan 01 Task 0 | Include worker-runtime test patterns in vitest |
 
 ### Sampling Rate
 - **Per task commit:** `npx vitest run packages/core/worker-runtime/__tests__/` (quick, focused on Worker runtime)
