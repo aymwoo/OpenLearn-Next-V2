@@ -98,7 +98,7 @@
 **Plans**: 4 plans
   - [x] 05-01-PLAN.md -- Transport foundation: message protocol types, error hierarchy, NodeWorkerTransport + BrowserWorkerTransport stub
   - [x] 05-02-PLAN.md -- ServiceProxy RPC layer + CapGuard: Worker-side Proxy, main-thread ServiceHost with capability enforcement
-  - [ ] 05-03-PLAN.md -- Worker lifecycle + PluginHost dual-mode + Kernel/DB: WorkerManager, inline/worker mode, execution_mode column
+  - [x] 05-03-PLAN.md -- Worker lifecycle + PluginHost dual-mode + Kernel/DB: WorkerManager, inline/worker mode, execution_mode column
   - [ ] 05-04-PLAN.md -- Event forwarding + integration tests: EventForwarder, EventBusProxy, full test suite
 **UI hint**: no
 
@@ -178,7 +178,7 @@
 | 2. 现有能力 Token 化 | 3/3 | Complete    | 2026-06-18 |
 | 3. ESM 加载 + 包格式 | 4/4 | Complete    | 2026-06-18 |
 | 4. PluginHost + 生命周期 | 4/4 | Complete    | 2026-06-18 |
-| 5. Worker 隔离 + 双运行时 | 2/4 | In Progress|  |
+| 5. Worker 隔离 + 双运行时 | 3/4 | In Progress|  |
 | 6. EventBus 服务 + SemVer 兼容 | 0/0 | Not started | - |
 | 7. 热重载 + 中间件管道 | 0/0 | Not started | - |
 | 8. 现有插件迁移 | 0/0 | Not started | - |
