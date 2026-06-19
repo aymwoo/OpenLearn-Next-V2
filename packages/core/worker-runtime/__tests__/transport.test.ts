@@ -179,26 +179,54 @@ describe('NodeWorkerTransport onExit', () => {
   });
 });
 
-// ── BrowserWorkerTransport stub ─────────────────────────────────────────
+// ── BrowserWorkerTransport (Phase 9 real implementation) ─────────────────
 
-describe('BrowserWorkerTransport stub', () => {
-  it('throws WorkerNotSupportedError for postMessage', () => {
-    const transport = new BrowserWorkerTransport(null);
-    expect(() => transport.postMessage({})).toThrow(WorkerNotSupportedError);
+describe('BrowserWorkerTransport', () => {
+  function createMockWorker(): Worker {
+    const listeners: Record<string, ((e: any) => void)[]> = {};
+    return {
+      postMessage: vi.fn(),
+      terminate: vi.fn(),
+      addEventListener: vi.fn((type: string, fn: any) => {
+        if (!listeners[type]) listeners[type] = [];
+        listeners[type].push(fn);
+      }),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      onmessage: null,
+      onerror: null,
+      onmessageerror: null,
+    } as unknown as Worker;
+  }
+
+  it('creates a transport with unique id', () => {
+    const worker = createMockWorker();
+    const transport = new BrowserWorkerTransport(worker);
+    expect(transport.id).toMatch(/^browser-worker:\d+$/);
   });
 
-  it('throws WorkerNotSupportedError for onMessage', () => {
-    const transport = new BrowserWorkerTransport(null);
-    expect(() => transport.onMessage(() => {})).toThrow(WorkerNotSupportedError);
+  it('postMessage delegates to worker.postMessage', () => {
+    const worker = createMockWorker();
+    const transport = new BrowserWorkerTransport(worker);
+    transport.postMessage({ type: 'test', payload: 'hello' });
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'test', payload: 'hello' });
   });
 
-  it('throws WorkerNotSupportedError for terminate', () => {
-    const transport = new BrowserWorkerTransport(null);
-    expect(() => transport.terminate()).toThrow(WorkerNotSupportedError);
+  it('onMessage registers handler that receives worker messages', () => {
+    const worker = createMockWorker();
+    const transport = new BrowserWorkerTransport(worker);
+    const handler = vi.fn();
+    transport.onMessage(handler);
+
+    // Simulate worker message
+    worker.onmessage!({ data: { type: 'response', result: 'ok' } } as MessageEvent);
+    expect(handler).toHaveBeenCalledWith({ type: 'response', result: 'ok' });
   });
 
-  it('returns stub id', () => {
-    const transport = new BrowserWorkerTransport(null);
-    expect(transport.id).toBe('browser-worker:stub');
+  it('terminate calls worker.terminate', async () => {
+    const worker = createMockWorker();
+    const transport = new BrowserWorkerTransport(worker);
+    await transport.terminate();
+    expect(worker.terminate).toHaveBeenCalled();
   });
 });
