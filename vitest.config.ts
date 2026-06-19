@@ -12,6 +12,6 @@ export default defineConfig({
       'src/plugin-host/__tests__/**/*.test.{ts,tsx}',
       'src/mfe/__tests__/**/*.test.{ts,tsx}',
     ],
-    environment: 'node',
+    environment: 'jsdom',
   },
 });

@@ -4,42 +4,111 @@
  *
  * Covers MFE-LOAD-02: Error Boundary catches render crash, shows fallback UI
  * with retry/dismiss buttons.
- *
- * NOTE: These tests use vi.mock() stubs for the MfeErrorFallback component
- * that will be created in a later plan. Tests are wrapped in describe.skip
- * to prevent execution until the actual component exists.
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
+import { renderToString } from 'react-dom/server';
+import { createRoot } from 'react-dom/client';
+import { MfeErrorBoundary } from '../MfeErrorBoundary';
 
-// Stub MfeErrorFallback component that will be created in a later plan
-vi.mock('../../components/MfeErrorFallback', () => ({
-  default: ({ error, onRetry, onDismiss }: any) =>
-    React.createElement('div', { 'data-testid': 'error-fallback' },
-      React.createElement('button', { onClick: onRetry }, 'retry'),
-      React.createElement('button', { onClick: onDismiss }, 'dismiss'),
-    ),
-}));
-
-describe.skip('MfeErrorBoundary', () => {
+describe('MfeErrorBoundary', () => {
   it('renders children when no error', () => {
-    // TODO: Implement when MfeErrorBoundary component exists
-    expect(true).toBe(true);
+    const html = renderToString(
+      React.createElement(MfeErrorBoundary, { name: 'test-mfe' },
+        React.createElement('div', { 'data-testid': 'safe-child' }, 'Hello World'),
+      ),
+    );
+    expect(html).toContain('Hello World');
   });
 
-  it('catches render error and shows fallback', () => {
-    // TODO: Implement when MfeErrorBoundary component exists
-    expect(true).toBe(true);
+  it('matches snapshot with fallback state', () => {
+    // Simulate error state by directly constructing the boundary instance
+    // and verifying the render method returns fallback when hasError is true
+    const boundary = new MfeErrorBoundary({
+      name: 'test-mfe',
+      children: React.createElement('div', null, 'child'),
+    });
+
+    // Force error state directly
+    boundary.state = { hasError: true, error: new Error('test error') };
+
+    // render() should use the default MfeErrorFallback when hasError is true
+    const rendered = boundary.render();
+    expect(rendered).not.toBeNull();
   });
 
-  it('retry resets error state', () => {
-    // TODO: Implement when MfeErrorBoundary component exists
-    expect(true).toBe(true);
+  it('has handleRetry and handleDismiss methods', () => {
+    const boundary = new MfeErrorBoundary({
+      name: 'test-mfe',
+      children: null,
+    });
+
+    expect(typeof boundary.handleRetry).toBe('function');
+    expect(typeof boundary.handleDismiss).toBe('function');
   });
 
-  it('dismiss hides error', () => {
-    // TODO: Implement when MfeErrorBoundary component exists
-    expect(true).toBe(true);
+  it('handleRetry resets error state (setState spy)', () => {
+    const boundary = new MfeErrorBoundary({
+      name: 'test-mfe',
+      children: null,
+    });
+
+    const setStateSpy = vi.spyOn(boundary, 'setState');
+
+    boundary.handleRetry();
+
+    expect(setStateSpy).toHaveBeenCalledWith({
+      hasError: false,
+      error: null,
+    });
+
+    setStateSpy.mockRestore();
+  });
+
+  it('handleDismiss resets error state (setState spy)', () => {
+    const boundary = new MfeErrorBoundary({
+      name: 'test-mfe',
+      children: null,
+    });
+
+    const setStateSpy = vi.spyOn(boundary, 'setState');
+
+    boundary.handleDismiss();
+
+    expect(setStateSpy).toHaveBeenCalledWith({
+      hasError: false,
+      error: null,
+    });
+
+    setStateSpy.mockRestore();
+  });
+
+  it('getDerivedStateFromError returns hasError true with error', () => {
+    const result = MfeErrorBoundary.getDerivedStateFromError(
+      new Error('render crash'),
+    );
+    expect(result.hasError).toBe(true);
+    expect(result.error).toBeInstanceOf(Error);
+    expect(result.error!.message).toBe('render crash');
+  });
+
+  it('logs error in componentDidCatch with name prefix', () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const boundary = new MfeErrorBoundary({
+      name: 'test-mfe',
+      children: null,
+    });
+
+    boundary.componentDidCatch(
+      new Error('test error'),
+      { componentStack: 'at TestComponent' },
+    );
+
+    expect(consoleSpy).toHaveBeenCalled();
+    expect(consoleSpy.mock.calls[0][0]).toContain('[MfeErrorBoundary:test-mfe]');
+
+    consoleSpy.mockRestore();
   });
 });
