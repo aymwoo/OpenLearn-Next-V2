@@ -26,8 +26,9 @@ import { ResourceTracker } from './resource-tracker.js';
 import { buildContext } from './context-builder.js';
 import semver from 'semver';
 import { parseRequiresEntry } from '../esm-loader/manifest-utils.js';
+import { compose } from './middleware.js';
 import { PluginState } from './types.js';
-import type { PluginContext, PluginInfo } from './types.js';
+import type { PluginContext, PluginInfo, LifecyclePhase, Middleware, MiddlewareContext } from './types.js';
 import {
   IllegalStateTransitionError,
   PluginActivateError,
@@ -96,6 +97,9 @@ export class PluginHost {
   // D-07: 资源追踪器 — 按 pluginId 管理 Disposable 资源
   private resourceTracker = new ResourceTracker();
 
+  // Phase 7: 中间件注册表 — 按生命周期阶段分组
+  private middlewareRegistry = new Map<LifecyclePhase, Middleware[]>();
+
   // 活跃插件实例引用（manifest + activate/deactivate 函数）
   private pluginInstances = new Map<
     string,
@@ -139,6 +143,40 @@ export class PluginHost {
       throw new Error('[PluginHost] WorkerManager not set — call setWorkerManager before activating worker-mode plugins');
     }
     return this._workerManager;
+  }
+
+  // ── Phase 7: Middleware Registration ─────────────────────────────────────
+
+  /**
+   * Phase 7: 注册生命周期中间件。
+   *
+   * 中间件在下次 activate/deactivate 时生效，不影响已激活插件。
+   * 按注册顺序执行（洋葱模型）。
+   *
+   * @param phase - 挂载的生命周期阶段
+   * @param middleware - 中间件函数
+   */
+  registerMiddleware(phase: LifecyclePhase, middleware: Middleware): void {
+    const list = this.middlewareRegistry.get(phase);
+    if (list) {
+      list.push(middleware);
+    } else {
+      this.middlewareRegistry.set(phase, [middleware]);
+    }
+  }
+
+  /**
+   * 注销所有中间件（用于测试清理和热重载重置）。
+   */
+  clearMiddleware(): void {
+    this.middlewareRegistry.clear();
+  }
+
+  /**
+   * 获取指定阶段的中间件数组副本。
+   */
+  getMiddleware(phase: LifecyclePhase): Middleware[] {
+    return [...(this.middlewareRegistry.get(phase) ?? [])];
   }
 
   /**
@@ -508,28 +546,51 @@ export class PluginHost {
         throw capErr;
       }
 
-      // 9. 激活带 5 秒超时（D-11, T-04-17）
-      await Promise.race([
-        activate(ctx),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => {
-            reject(new EsmLoadTimeoutError(ACTIVATION_TIMEOUT_MS));
-          }, ACTIVATION_TIMEOUT_MS),
-        ),
+      // 9. Phase 7: 中间件管道包裹激活（洋葱模型: beforeActivate → activate → afterActivate）
+      const middlewareCtx: MiddlewareContext = {
+        pluginId,
+        manifest,
+        phase: 'beforeActivate',
+        timestamp: Date.now(),
+      };
+      const before = this.getMiddleware('beforeActivate');
+      const after = this.getMiddleware('afterActivate');
+
+      const activatePipeline = compose([
+        ...before,
+        async (_ctx, next) => {
+          await next(); // 执行实际激活
+          // 激活成功后执行 afterActivate 中间件
+          const afterCtx: MiddlewareContext = { ...middlewareCtx, phase: 'afterActivate' };
+          const afterPipeline = compose(after);
+          await afterPipeline(afterCtx, async () => {});
+        },
       ]);
 
-      // 10. 成功
-      this.pluginStates.set(pluginId, PluginState.ACTIVE);
-      this.pluginInstances.set(pluginId, {
-        manifest,
-        activate,
-        deactivate: typeof deactivate === 'function' ? deactivate : undefined,
-      });
-      this.db
-        .prepare('UPDATE plugins SET status = ? WHERE id = ?')
-        .run('active', pluginId);
+      await activatePipeline(middlewareCtx, async () => {
+        // 10. 激活带 5 秒超时（D-11, T-04-17）
+        await Promise.race([
+          activate(ctx),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => {
+              reject(new EsmLoadTimeoutError(ACTIVATION_TIMEOUT_MS));
+            }, ACTIVATION_TIMEOUT_MS),
+          ),
+        ]);
 
-      console.log(`[PluginHost] Plugin "${manifest.id}" activated (${pluginId})`);
+        // 11. 成功
+        this.pluginStates.set(pluginId, PluginState.ACTIVE);
+        this.pluginInstances.set(pluginId, {
+          manifest,
+          activate,
+          deactivate: typeof deactivate === 'function' ? deactivate : undefined,
+        });
+        this.db
+          .prepare('UPDATE plugins SET status = ? WHERE id = ?')
+          .run('active', pluginId);
+
+        console.log(`[PluginHost] Plugin "${manifest.id}" activated (${pluginId})`);
+      });
     } catch (err) {
       // 11. D-12: 失败回滚
       this.pluginStates.set(pluginId, PluginState.ERROR);
@@ -662,54 +723,77 @@ export class PluginHost {
       actorId = `plugin:${instance.manifest.id}`;
     }
 
-    try {
-      // 5. 如果有 deactivate，带超时调用
-      if (instance?.deactivate) {
-        try {
-          await Promise.race([
-            instance.deactivate(),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => {
-                reject(new PluginDeactivateTimeoutError(pluginId, DEACTIVATION_TIMEOUT_MS));
-              }, DEACTIVATION_TIMEOUT_MS),
-            ),
-          ]);
-        } catch (deactivateErr) {
-          // D-11: deactivate 超时或错误 — 记录警告，不重新抛出
-          console.error(
-            `[PluginHost] Plugin "${pluginId}" deactivate error (continuing forced cleanup):`,
-            deactivateErr,
+    // Phase 7: 中间件管道包裹停用（洋葱模型: beforeDeactivate → deactivate → afterDeactivate）
+    const deactManifest = instance?.manifest ?? { id: pluginId, name: pluginId, version: '0.0.0' };
+    const deactMiddlewareCtx: MiddlewareContext = {
+      pluginId,
+      manifest: deactManifest as Manifest,
+      phase: 'beforeDeactivate',
+      timestamp: Date.now(),
+    };
+    const beforeDeact = this.getMiddleware('beforeDeactivate');
+    const afterDeact = this.getMiddleware('afterDeactivate');
+
+    const deactivatePipeline = compose([
+      ...beforeDeact,
+      async (_ctx, next) => {
+        await next(); // 执行实际停用
+        const afterCtx: MiddlewareContext = { ...deactMiddlewareCtx, phase: 'afterDeactivate' };
+        const afterPipeline = compose(afterDeact);
+        await afterPipeline(afterCtx, async () => {});
+      },
+    ]);
+
+    await deactivatePipeline(deactMiddlewareCtx, async () => {
+      try {
+        // 5. 如果有 deactivate，带超时调用
+        if (instance?.deactivate) {
+          try {
+            await Promise.race([
+              instance.deactivate(),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => {
+                  reject(new PluginDeactivateTimeoutError(pluginId, DEACTIVATION_TIMEOUT_MS));
+                }, DEACTIVATION_TIMEOUT_MS),
+              ),
+            ]);
+          } catch (deactivateErr) {
+            // D-11: deactivate 超时或错误 — 记录警告，不重新抛出
+            console.error(
+              `[PluginHost] Plugin "${pluginId}" deactivate error (continuing forced cleanup):`,
+              deactivateErr,
+            );
+          }
+        }
+      } finally {
+        // 6. D-09: finally 块 — 无论成功/失败/超时，强制清理 (T-04-18)
+        this.resourceTracker.disposeAll(pluginId);
+        this.pluginStates.set(pluginId, PluginState.INACTIVE);
+        this.pluginInstances.delete(pluginId);
+
+        // DB UPDATE
+        this.db
+          .prepare('UPDATE plugins SET status = ? WHERE id = ?')
+          .run('inactive', pluginId);
+
+        // 撤销能力（T-04-20: finally 中强制撤销）
+        if (actorId) {
+          try {
+            const capService = await this.serviceRegistry.resolve<ICapabilityService>(
+              ICapabilityServiceToken,
+            );
+            await capService.revokeAll(actorId);
+          } catch (capErr) {
+            console.error(
+              `[PluginHost] Failed to revoke capabilities for "${pluginId}":`,
+              capErr,
           );
         }
       }
-    } finally {
-      // 6. D-09: finally 块 — 无论成功/失败/超时，强制清理 (T-04-18)
-      this.resourceTracker.disposeAll(pluginId);
-      this.pluginStates.set(pluginId, PluginState.INACTIVE);
-      this.pluginInstances.delete(pluginId);
-
-      // DB UPDATE
-      this.db
-        .prepare('UPDATE plugins SET status = ? WHERE id = ?')
-        .run('inactive', pluginId);
-
-      // 撤销能力（T-04-20: finally 中强制撤销）
-      if (actorId) {
-        try {
-          const capService = await this.serviceRegistry.resolve<ICapabilityService>(
-            ICapabilityServiceToken,
-          );
-          await capService.revokeAll(actorId);
-        } catch (capErr) {
-          console.error(
-            `[PluginHost] Failed to revoke capabilities for "${pluginId}":`,
-            capErr,
-          );
-        }
       }
 
       console.log(`[PluginHost] Plugin "${pluginId}" deactivated`);
-    }
+    });
   }
 
   // ── Phase 5: Worker-mode deactivation ───────────────────────────────────
