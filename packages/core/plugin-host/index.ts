@@ -738,11 +738,26 @@ export class PluginHost {
     const actorId = `plugin:${manifest.id}`;
 
     try {
+      // Grant capabilities (same as inline mode activation)
+      const capService = await this.serviceRegistry.resolve<ICapabilityService>(
+        ICapabilityServiceToken,
+      );
+      const caps = manifest.capabilitiesProposed ?? [];
+      for (const cap of caps) {
+        await capService.grant(actorId, cap);
+      }
+
+      // Resolve EventBus for event forwarding to Worker
+      const eventBus = await this.serviceRegistry.resolve<IEventBusService>(
+        IEventBusServiceToken,
+      ) as unknown as import('../event-bus/index.js').EventBus;
+
       const { transport, serviceHost } = await this.workerManager.createWorker(
         pluginId,
         manifest,
         row.source_code,
         (await import('../worker-runtime/worker-manager.js')).ALL_SERVICE_TOKENS,
+        eventBus,
       );
 
       this.pluginStates.set(pluginId, PluginState.ACTIVE);
