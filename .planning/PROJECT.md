@@ -10,6 +10,17 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 
 **一个类型安全、跨运行时（浏览器/Node.js）、支持依赖注入和热重载的插件执行环境**，使第三方开发者能像写 ESM 模块一样自然地为平台编写插件。
 
+## Current Milestone: v2.0 微前端架构改造
+
+**Goal:** 将前端庞大的 App.tsx 拆分为独立的微前端模块，并在前端集成 Vite Module Federation 以支持更灵活的插件渲染。
+
+**Target features:**
+- 前端核心宿主容器（Shell App）拆分与状态共享。
+- 微前端加载器（Loader）集成 Vite Module Federation 动态导入。
+- 微前端子应用生命周期挂载规范（bootstrap, mount, unmount）的定义与挂载。
+- App.tsx 核心路由与组件解耦，移入独立的微前端模块。
+- 确保微前端视图层与现有后台 PluginHost 的无缝通信。
+
 ## Requirements
 
 ### Validated
@@ -34,9 +45,13 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 
 ### Active
 
-<!-- Phase 9 要构建的需求 -->
+<!-- v2.0 要构建的需求 -->
 
-- [ ] **PLUG-13**：前端 PluginHost — 浏览器端 ServiceRegistry + WebWorker 管理 + 前端 Extension Points 渲染
+- [ ] **MFE-01**：Vite Module Federation 集成与配置 — 支持 Vite 6 的 Module Federation 基础架构，配置共享依赖
+- [ ] **MFE-02**：Shell App 与动态微应用加载器 — Shell 容器能动态发现并加载远程/本地微应用
+- [ ] **MFE-03**：微应用生命周期挂载规范 — 实现 bootstrap, mount, unmount 标准接口，支持视图销毁与重建
+- [ ] **MFE-04**：宿主状态与上下文共享 — 共享宿主的应用状态（Zustand）、通信总线（EventBus）与 DI 容器服务到子应用
+- [ ] **MFE-05**：App.tsx 路由解耦与模块拆分 — 将原 App.tsx 的核心视图 and 路由解耦并抽离为微应用模块
 
 ### Validated by Phase
 
@@ -54,12 +69,12 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - ✓ **PLUG-10**：插件热重载（chokidar + 原子替换策略）— Phase 7
 - ✓ **PLUG-11**：保留现有所有内置能力作为 Token 化 Service — Phase 2
 - ✓ **PLUG-12**：现有 6 个内置 + 2 个第三方插件以新格式重写，plugin-runtime 已删除 — Phase 8
+- ✓ **PLUG-13**：前端 PluginHost — 浏览器端 ServiceRegistry + WebWorker 管理 + 前端 Extension Points 渲染 — Phase 9
 
 ### Out of Scope
 
 - 插件市场/商店（Plugin Marketplace）— 后续阶段
 - 插件沙箱之外的系统安全审计 — 后续阶段
-- 前端 App.tsx 拆分为微前端架构 — 独立阶段
 - 数据库迁移系统正规化 — 独立阶段
 - 现有 REST API 的 GraphQL/TRPC 改造 — 独立阶段
 
@@ -122,7 +137,7 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-19 after Phase 8 (migration) completion*
+*Last updated: 2026-06-19 after Milestone v2.0 initialization*
 
 ## Traceability
 
@@ -140,7 +155,13 @@ This document evolves at phase transitions and milestone boundaries.
 | PLUG-10 | Phase 7 — 热重载 + 中间件管道 | ✓ Validated |
 | PLUG-11 | Phase 2 — 现有能力 Token 化 | ✓ Validated |
 | PLUG-12 | Phase 8 — 现有插件迁移 | ✓ Validated |
-| PLUG-13 | Phase 9 — 前端集成 + 过渡期 | Active |
+| PLUG-13 | Phase 9 — 前端集成 + 过渡期 | ✓ Validated |
+| MFE-01 | TBD | Active |
+| MFE-02 | TBD | Active |
+| MFE-03 | TBD | Active |
+| MFE-04 | TBD | Active |
+| MFE-05 | TBD | Active |
 
 ---
-*Last updated: 2026-06-18 after Phase 01 (token-di) completion*
+
+*Last updated: 2026-06-19 after Phase 9 (frontend) completion*

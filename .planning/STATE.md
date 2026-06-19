@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: completed
-stopped_at: Phase 9 context gathered
-last_updated: "2026-06-19T10:40:37.436Z"
+milestone: v2.0
+milestone_name: 微前端架构改造
+status: planning
+last_updated: "2026-06-19T11:43:12.615Z"
 last_activity: 2026-06-19
 progress:
-  total_phases: 9
-  completed_phases: 9
-  total_plans: 34
-  completed_plans: 35
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,12 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 09
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-06-19
-
-Progress: [██████████] 78% (7/9 phases)
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-19 — Milestone v2.0 started
 
 ## Performance Metrics
 
@@ -89,7 +86,6 @@ None yet.
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
 | 插件市场/商店 | 需要 CDN、审计、付费等基础设施 | 明确 Out of Scope | 2026-06-17 |
-| 前端 App.tsx 拆分为微前端 | 与插件系统重构耦合适中，独立阶段 | 独立阶段 | 2026-06-17 |
 | 数据库迁移系统正规化 | 不影响插件系统重构核心目标 | 独立阶段 | 2026-06-17 |
 
 ## Session Continuity
