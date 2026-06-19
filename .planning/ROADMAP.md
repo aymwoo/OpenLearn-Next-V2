@@ -12,7 +12,7 @@
 - [x] **Phase 4: PluginHost + 生命周期** — 插件生命周期管理器 + activate/deactivate 标准接口 (completed 2026-06-18)
 - [x] **Phase 5: Worker 隔离 + 双运行时** — Worker Thread/Web Worker 沙箱 + RPC 服务代理 + 内联/Worker 双模式 (completed 2026-06-18)
 - [ ] **Phase 6: EventBus 服务 + SemVer 兼容** — 全局 IEventBusService 统一事件 + Token 语义化版本兼容检查
-- [ ] **Phase 7: 热重载 + 中间件管道** — 开发模式插件热重载 + 生命周期中间件管道
+- [x] **Phase 7: 热重载 + 中间件管道** — 开发模式插件热重载 + 生命周期中间件管道 (completed 2026-06-19)
 - [ ] **Phase 8: 现有插件迁移** — 内置插件（Quiz、Rollcall 等）以新插件格式重写
 - [ ] **Phase 9: 前端集成 + 过渡期** — 前端 PluginHost + WebWorker + Extension Points + 新旧系统并行过渡
 
@@ -179,6 +179,6 @@
 | 4. PluginHost + 生命周期 | 4/4 | Complete    | 2026-06-18 |
 | 5. Worker 隔离 + 双运行时 | 4/4 | Complete    | 2026-06-18 |
 | 6. EventBus 服务 + SemVer 兼容 | 3/3 | Complete    | 2026-06-19 |
-| 7. 热重载 + 中间件管道 | 4/4 | Planned    | - |
+| 7. 热重载 + 中间件管道 | 4/4 | Complete    | 2026-06-19 |
 | 8. 现有插件迁移 | 0/0 | Not started | - |
 | 9. 前端集成 + 过渡期 | 0/0 | Not started | - |
