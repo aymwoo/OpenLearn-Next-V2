@@ -24,9 +24,12 @@ import {
   Eye,
   Users,
   Database,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import { LegacyPluginBadge } from './LegacyPluginBadge';
 import type { Language } from '../i18n';
+import JSZip from 'jszip';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -36,6 +39,7 @@ export interface PluginType {
   status: string;
   created_at: number;
   manifest: string;
+  execution_mode?: string;
 }
 
 interface ParsedManifest {
@@ -240,6 +244,13 @@ export function PluginCenter({
   onToggle,
   onDelete,
 }: PluginCenterProps) {
+  // ── Local state ──────────────────────────────────────────────────────────
+
+  const [dismissMigration, setDismissMigration] = React.useState(false);
+  const [zipPreview, setZipPreview] = React.useState<{ name: string; id: string; version: string } | null>(null);
+  const [zipProcessing, setZipProcessing] = React.useState(false);
+  const [zipError, setZipError] = React.useState<string | null>(null);
+
   // ── ZIP drop zone handler ─────────────────────────────────────────────────
 
   const handleZipDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -247,16 +258,87 @@ export function PluginCenter({
     e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50/50');
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      const input = document.getElementById('zip-plugin-uploader') as HTMLInputElement;
-      if (input) {
-        // Synthesize a change event for the hidden file input
-        const dt = new DataTransfer();
-        dt.items.add(files[0]);
-        input.files = dt.files;
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-      }
+      handleZipFileForPreview(files[0]);
     }
   };
+
+  // ── ZIP manifest preview with jszip ──────────────────────────────────────
+
+  const handleZipFileForPreview = async (file: File) => {
+    setZipProcessing(true);
+    setZipError(null);
+    setZipPreview(null);
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const manifestFile = zip.file('manifest.json');
+      if (!manifestFile) {
+        setZipError(lang === 'zh' ? 'ZIP 文件中未找到 manifest.json' : 'No manifest.json found in ZIP');
+        setZipProcessing(false);
+        return;
+      }
+      const content = await manifestFile.async('string');
+      const manifest = JSON.parse(content);
+      if (!manifest.id || !manifest.name) {
+        setZipError(lang === 'zh' ? 'manifest.json 缺少 id 或 name 字段' : 'manifest.json missing id or name');
+        setZipProcessing(false);
+        return;
+      }
+      setZipPreview({ name: manifest.name, id: manifest.id, version: manifest.version || '1.0.0' });
+      setZipProcessing(false);
+    } catch (err: any) {
+      setZipError(lang === 'zh' ? 'ZIP 文件解析失败，请确认文件包含有效的 manifest.json' : 'Failed to parse ZIP file. Ensure the package contains a valid manifest.json.');
+      setZipProcessing(false);
+    }
+  };
+
+  // ── ZIP upload change handler with preview ───────────────────────────────
+
+  const handleZipInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleZipFileForPreview(file);
+    }
+    // Pass through to parent's onZipUpload
+    onZipUpload(e);
+  };
+
+  // ── MigrationPrompt component ────────────────────────────────────────────
+
+  const hasLegacyPlugins = plugins.some(p => p.execution_mode === 'legacy');
+
+  function MigrationPromptBanner() {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start justify-between mb-4">
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={20} className="text-amber-500 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-sm font-bold text-amber-800">
+              {lang === 'zh' ? '发现可迁移的旧格式插件' : 'Legacy Plugin Detected'}
+            </h4>
+            <p className="text-xs text-amber-700 mt-1">
+              {lang === 'zh'
+                ? '该插件使用旧格式运行。上传新格式 ZIP 包以完成迁移，迁移后旧版本可安全卸载。'
+                : 'This plugin runs in legacy mode. Upload a new-format ZIP package to migrate. The old version can be safely uninstalled afterwards.'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => document.getElementById('zip-plugin-uploader')?.click()}
+            className="bg-amber-600 text-white hover:bg-amber-700 rounded-lg text-sm font-medium px-4 py-2 transition-colors"
+          >
+            {lang === 'zh' ? '迁移到新格式' : 'Migrate to New Format'}
+          </button>
+          <button
+            onClick={() => setDismissMigration(true)}
+            className="text-amber-500 hover:text-amber-700 p-1"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -371,6 +453,15 @@ export function PluginCenter({
                         >
                           {lang === 'zh' ? '删除' : 'Delete'}
                         </button>
+                        {plugin.execution_mode === 'legacy' && (
+                          <button
+                            onClick={() => document.getElementById('zip-plugin-uploader')?.click()}
+                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                            title={lang === 'zh' ? '上传新格式 ZIP 包以完成迁移' : 'Upload new-format ZIP package to migrate'}
+                          >
+                            {lang === 'zh' ? '迁移' : 'Migrate'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -433,11 +524,19 @@ export function PluginCenter({
                   accept=".zip"
                   id="zip-plugin-uploader"
                   className="hidden"
-                  onChange={onZipUpload}
+                  onChange={handleZipInputChange}
                 />
-                {/* Phase 9: Enhanced ZIP drop zone replacing the simple button */}
+                {/* Phase 9: Enhanced ZIP drop zone with processing/preview states */}
                 <div
-                  className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/50 transition-colors"
+                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors relative ${
+                    zipError
+                      ? 'border-red-400 bg-red-50/10'
+                      : zipPreview
+                        ? 'border-emerald-400 bg-emerald-50/10'
+                        : zipProcessing
+                          ? 'border-indigo-400 bg-indigo-50/20'
+                          : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/50'
+                  }`}
                   onDragOver={(e) => {
                     e.preventDefault();
                     e.currentTarget.classList.add('border-indigo-400', 'bg-indigo-50/50');
@@ -446,19 +545,49 @@ export function PluginCenter({
                     e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50/50');
                   }}
                   onDrop={handleZipDrop}
-                  onClick={() =>
-                    document.getElementById('zip-plugin-uploader')?.click()
-                  }
+                  onClick={() => {
+                    setZipError(null);
+                    setZipPreview(null);
+                    document.getElementById('zip-plugin-uploader')?.click();
+                  }}
                 >
-                  <Upload size={32} className="mx-auto text-gray-400 mb-2" />
-                  <p className="text-sm text-gray-500">
-                    {lang === 'zh' ? '拖拽 ZIP 文件到此处' : 'Drop ZIP file here'}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {lang === 'zh'
-                      ? '仅支持 .zip 格式的插件包'
-                      : '.zip plugin packages only'}
-                  </p>
+                  {zipProcessing ? (
+                    <div className="text-center">
+                      <Loader2 size={32} className="mx-auto text-indigo-400 mb-2 animate-spin" />
+                      <p className="text-sm text-gray-400">
+                        {lang === 'zh' ? '分析中...' : 'Analyzing...'}
+                      </p>
+                    </div>
+                  ) : zipPreview ? (
+                    <div className="text-center">
+                      <CheckCircle2 size={32} className="mx-auto text-emerald-400 mb-2" />
+                      <p className="text-sm text-emerald-400 font-semibold mb-1">{zipPreview.name}</p>
+                      <p className="text-xs text-gray-500 font-mono">{zipPreview.id} <span className="text-gray-600">v{zipPreview.version}</span></p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {lang === 'zh' ? '点击选择其他文件' : 'Click to select another file'}
+                      </p>
+                    </div>
+                  ) : zipError ? (
+                    <div className="text-center">
+                      <ShieldAlert size={32} className="mx-auto text-red-400 mb-2" />
+                      <p className="text-sm text-red-400">{zipError}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {lang === 'zh' ? '点击重新选择' : 'Click to retry'}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload size={32} className="mx-auto text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-500">
+                        {lang === 'zh' ? '拖拽 ZIP 文件到此处' : 'Drop ZIP file here'}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {lang === 'zh'
+                          ? '仅支持 .zip 格式的插件包'
+                          : '.zip plugin packages only'}
+                      </p>
+                    </>
+                  )}
                 </div>
                 <button
                   onClick={() => setPluginCode(DEFAULT_PLUGIN)}
@@ -568,6 +697,13 @@ export function PluginCenter({
                 </button>
               </div>
             </div>
+
+            {/* MigrationPrompt banner — shown when legacy plugins exist */}
+            {hasLegacyPlugins && !dismissMigration && (
+              <div className="px-4 pt-4 bg-gray-950">
+                <MigrationPromptBanner />
+              </div>
+            )}
 
             {/* Split layout */}
             <div className="flex-1 flex overflow-hidden min-h-0 bg-gray-950">
