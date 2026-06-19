@@ -68,7 +68,7 @@ type AIProvider = {
 };
 const AGENT_PROVIDER_STORAGE_KEY = 'openlearnv2.agentProviderId';
 type WhiteboardElement = { id: string; type: string; data: string };
-type PluginType = { id: string; name: string; status: string; created_at: number; manifest: string };
+type PluginType = { id: string; name: string; status: string; created_at: number; manifest: string; execution_mode?: string };
 type VFSNode = { id: string; parent_id: string | null; type: 'file' | 'dir'; name: string; content?: string };
 type ProcessType = { id: string; name: string; status: string; created_at: number; updated_at: number };
 type ClassType = { id: string; name: string; description: string; class_passcode?: string | null; created_at: number };

@@ -321,8 +321,8 @@ export class PluginHost {
    */
   listPlugins(): PluginInfo[] {
     const rows = this.db
-      .prepare('SELECT id, manifest FROM plugins')
-      .all() as Array<{ id: string; manifest: string }>;
+      .prepare('SELECT id, manifest, execution_mode FROM plugins')
+      .all() as Array<{ id: string; manifest: string; execution_mode: string }>;
 
     return rows.map((row) => {
       let parsed: { name?: string; version?: string } = {};
@@ -337,6 +337,7 @@ export class PluginHost {
         name: parsed.name ?? row.id,
         version: parsed.version ?? 'unknown',
         state: this.pluginStates.get(row.id) ?? PluginState.INSTALLED,
+        execution_mode: row.execution_mode,
       };
     });
   }

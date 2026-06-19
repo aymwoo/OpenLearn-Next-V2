@@ -48,7 +48,8 @@ function createTestDb(): Database.Database {
       status TEXT,
       created_at INTEGER,
       loader_version TEXT,
-      zip_package BLOB
+      zip_package BLOB,
+      execution_mode TEXT DEFAULT 'inline'
     );
     CREATE TABLE IF NOT EXISTS plugin_storage (
       plugin_id TEXT,
