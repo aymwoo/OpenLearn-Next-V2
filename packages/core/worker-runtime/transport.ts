@@ -110,28 +110,61 @@ export class NodeWorkerTransport implements IWorkerTransport {
 // ── BrowserWorkerTransport ────────────────────────────────────────────────────
 
 /**
- * BrowserWorkerTransport — 浏览器端 Web Worker 运输层桩实现。
+ * BrowserWorkerTransport — 浏览器端 Web Worker 运输层实现。
  *
- * Phase 5 中，浏览器 Web Worker 支持暂为 stub 状态。
- * 所有方法调用抛出 WorkerNotSupportedError。
- * 完全实现在 Phase 9（前端集成阶段）。
+ * Phase 9: 替换 Phase 5 的 stub 实现。使用 Web Worker API 的
+ * postMessage/onmessage/terminate 实现 IWorkerTransport 接口。
+ *
+ * ## 错误处理
+ * - postMessage 在 Worker 已终止时抛出 WorkerTransportError
+ * - onMessage 注册单监听者（后续调用 replace 上次注册的 handler）
+ * - terminate 委托给 Worker.terminate()
+ * - worker.onerror 记录 Worker 错误但不阻止后续通信
  */
 export class BrowserWorkerTransport implements IWorkerTransport {
-  constructor(private readonly _worker: unknown) {}
+  private messageHandler: ((msg: any) => void) | null = null;
+  readonly id: string;
 
-  postMessage(_msg: unknown): void {
-    throw new WorkerNotSupportedError('BrowserWorkerTransport.postMessage');
+  constructor(private readonly worker: Worker) {
+    this.id = `browser-worker:${Date.now()}`;
+    this.worker.onmessage = (event: MessageEvent) => {
+      if (this.messageHandler) {
+        this.messageHandler(event.data);
+      }
+    };
+    this.worker.onerror = (event: ErrorEvent) => {
+      console.error(`[BrowserWorkerTransport] Worker error:`, event.error);
+    };
   }
 
-  onMessage(_handler: (msg: any) => void): void {
-    throw new WorkerNotSupportedError('BrowserWorkerTransport.onMessage');
+  /**
+   * 通过 Worker.postMessage() 发送消息到 Worker。
+   * 消息必须为 structured clone 兼容类型。
+   */
+  postMessage(msg: unknown): void {
+    try {
+      this.worker.postMessage(msg);
+    } catch (err) {
+      throw new WorkerTransportError(
+        `Failed to postMessage: ${err instanceof Error ? err.message : String(err)}`,
+        { cause: err instanceof Error ? err : undefined },
+      );
+    }
   }
 
-  terminate(): Promise<void> {
-    throw new WorkerNotSupportedError('BrowserWorkerTransport.terminate');
+  /**
+   * 注册消息处理器接收来自 Worker 的消息。
+   * 单监听者模式：每次调用 replace 上次注册的 handler。
+   */
+  onMessage(handler: (msg: any) => void): void {
+    this.messageHandler = handler;
   }
 
-  get id(): string {
-    return 'browser-worker:stub';
+  /**
+   * 终止 Worker。
+   * 委托给 Worker.terminate() 并返回 Promise<void>。
+   */
+  async terminate(): Promise<void> {
+    this.worker.terminate();
   }
 }
