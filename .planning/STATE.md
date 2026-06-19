@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: 微前端架构改造
 status: planning
-last_updated: "2026-06-19T11:43:12.615Z"
+last_updated: "2026-06-19T20:27:03.000Z"
 last_activity: 2026-06-19
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -19,21 +19,21 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-06-17)
 
-**Core value:** 一个类型安全、跨运行时（浏览器/Node.js）、支持依赖注入和热重载的插件执行环境
-**Current focus:** Phase 09 — frontend
+**Core value:** 将前端庞大的 App.tsx 拆分为独立的微前端模块，并在前端集成 Vite Module Federation 以支持更灵活的插件渲染。
+**Current focus:** Phase 10 — 基础设施配置与工程集成
 
 ## Current Position
 
 Phase: Not started (defining requirements)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-19 — Milestone v2.0 started
+Status: Planning
+Last activity: 2026-06-19 — Milestone v2.0 roadmap created
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 27
+- Total plans completed: 34
 - Average duration: N/A
 - Total execution time: 0h
 
@@ -46,13 +46,18 @@ Last activity: 2026-06-19 — Milestone v2.0 started
 | 03 | 4 | - | - |
 | 04 | 4 | - | - |
 | 05 | 4 | - | - |
-| 5 | 4 | - | - |
+| 06 | 3 | - | - |
+| 07 | 4 | - | - |
 | 08 | 4 | - | - |
 | 09 | 4 | - | - |
+| 10 | 0 | - | - |
+| 11 | 0 | - | - |
+| 12 | 0 | - | - |
+| 13 | 0 | - | - |
 
 **Recent Trend:**
 
-- Phase 5 planning completed. 4 plans created across 4 waves.
+- Milestone v2.0 roadmap created. 4 phases mapped (Phase 10 - Phase 13).
 
 *Updated after each plan completion*
 
@@ -66,12 +71,13 @@ Recent decisions:
 
 - Phase 1: DI 内核独立实施，不碰插件执行方式，降低风险
 - Phase 3: Node.js 端使用 data: URL，浏览器端使用 Blob URL（双运行时分层策略）
-- Phase 5: 所有跨 Worker 边界的 Service 方法明确标注 async
+- Phase 5: 所有跨 Worker 边界 of Service 方法明确标注 async
 - Phase 5: ServiceProxy 使用 JavaScript Proxy + Reflect 实现，而非 comlink 库
 - Phase 5: 插件 execution_mode 默认 'inline'，DB ALTER TABLE 为 idempotent try/catch
 - Phase 5: Worker bootstrap 代码内联在 WorkerManager.createWorker() 中（data URL），而非独立文件
 - Phase 5: BrowserWorkerTransport 暂为 stub，浏览器实现在 Phase 9
 - Phase 5: EventForwarder 仅在 Worker 主动 subscribe 时创建（延迟初始化）
+- Phase 9: 使用官方 `@module-federation/vite` 与 `@module-federation/runtime` 替换社区旧版插件以支持 Vite 6 和 React 19，确保共享依赖（React, React DOM, Zustand）强单例（`singleton: true`）配置。
 
 ### Pending Todos
 
@@ -87,35 +93,12 @@ None yet.
 |----------|------|--------|-------------|
 | 插件市场/商店 | 需要 CDN、审计、付费等基础设施 | 明确 Out of Scope | 2026-06-17 |
 | 数据库迁移系统正规化 | 不影响插件系统重构核心目标 | 独立阶段 | 2026-06-17 |
+| Shadow DOM style injection inside MfeLoader | Deferred for simpler CSS module/prefix isolation | Out of Scope | 2026-06-19 |
+| Unverified third-party iframe containment | Focus on internal first-party view refactoring | Out of Scope | 2026-06-19 |
+| Dynamic remote version mismatch auto-downgrade | Simple fail-safe error boundaries are sufficient | Out of Scope | 2026-06-19 |
 
 ## Session Continuity
 
-Last session: 2026-06-19T06:59:35.131Z
-Stopped at: Phase 9 context gathered
-Resume file: .planning/phases/09-frontend/09-CONTEXT.md
-
-## Phase 7 Plans
-
-| Plan | Objective | Wave | Depends On | Files |
-|------|-----------|------|------------|-------|
-| 07-01 | File Watcher + Hot Reload Infrastructure | 1 | Phase 6 | hot-reload.ts, types.ts, errors.ts, kernel/index.ts |
-| 07-02 | Atomic Hot Reload Strategy | 2 | 07-01 | plugin-host/index.ts, resource-tracker.ts |
-| 07-03 | Lifecycle Middleware Pipeline | 1 | Phase 6 | middleware.ts, plugin-host/index.ts, command-bus/index.ts |
-| 07-04 | Integration Tests + Kernel Wire-up | 3 | 07-01, 07-02, 07-03 | hot-reload.test.ts, plugin-host.test.ts, middleware.test.ts |
-
-## Phase 6 Plans
-
-| Plan | Objective | Wave | Depends On | Files |
-|------|-----------|------|------------|-------|
-| 06-01 | Token version + ServiceRegistry version tracking + SemverMismatchError | 1 | Phase 5 | token.ts, service-registry.ts, types.ts, errors.ts |
-| 06-02 | Manifest schema @version regex + parseRequiresEntry utility | 1 | 06-01 | manifest-schema.ts, manifest-utils.ts |
-| 06-03 | PluginHost SemVer compatibility check + D-12 null injection | 2 | 06-01, 06-02 | plugin-host/index.ts, context-builder.ts |
-
-## Phase 5 Plans
-
-| Plan | Objective | Wave | Depends On | Files |
-|------|-----------|------|------------|-------|
-| 05-01 | Transport foundation: types, errors, transports | 1 | -- | types.ts, errors.ts, transport.ts, index.ts |
-| 05-02 | ServiceProxy RPC layer + CapGuard | 2 | 05-01 | service-proxy.ts, service-host.ts |
-| 05-03 | Worker lifecycle + PluginHost dual-mode + Kernel/DB | 3 | 05-02 | worker-manager.ts, plugin-host/index.ts, kernel/index.ts, db/index.ts, service-registry.ts |
-| 05-04 | Event forwarding + integration tests | 4 | 05-03 | event-forwarder.ts, service-proxy.ts, service-host.ts, worker-manager.ts, index.ts, vitest.config.ts |
+Last session: 2026-06-19T20:27:03Z
+Stopped at: Milestone v2.0 roadmap created
+Resume file: .planning/ROADMAP.md
