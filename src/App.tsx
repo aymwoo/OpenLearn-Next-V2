@@ -27,6 +27,14 @@ import { motion, AnimatePresence, animate } from 'motion/react';
 import { io } from 'socket.io-client';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { ExtensionPointRenderer } from './plugin-host/extension-point-renderer';
+import { usePluginHost } from './plugin-host/plugin-host-context';
+import { PluginCenter } from './components/PluginCenter';
+import { LegacyPluginBadge } from './components/LegacyPluginBadge';
+import { FrontendAPIService } from './services/frontend-api';
+import { SocketService } from './services/socket-service';
+import { UIService } from './services/ui-service';
+import { StorageService } from './services/storage-service';
 
 interface AnimatedCounterProps {
   value: number;
@@ -1507,6 +1515,7 @@ export default function App() {
   const [liveClassAcknowledgedMap, setLiveClassAcknowledgedMap] = useState<Map<string, boolean>>(new Map());
 
   const socketRef = useRef<any>(null);
+  const host = usePluginHost();
   const [onlineStudentIds, setOnlineStudentIds] = useState<string[]>([]);
   const [activeStudentLessons, setActiveStudentLessons] = useState<Record<string, string>>({});
   const [liveClassStudentProgress, setLiveClassStudentProgress] = useState<any[]>([]);
@@ -1700,7 +1709,7 @@ export default function App() {
     checkSession();
   }, []);
 
-  const [teacherTab, setTeacherTab] = useState<'dashboard' | 'courses' | 'classes' | 'plugins' | 'settings' | 'lesson_editor' | 'help' | 'computer_labs' | 'admin_directory' | 'timetable' | 'live_class'>('dashboard');
+  const [teacherTab, setTeacherTab] = useState<string>('dashboard');
   const [isApprovalsCollapsed, setIsApprovalsCollapsed] = useState(false);
   const [isProcessesCollapsed, setIsProcessesCollapsed] = useState(false);
 
@@ -3347,15 +3356,27 @@ export default function App() {
   const activeStudentIdRef = useRef(activeStudentId);
   const langRef = useRef(lang);
   const studentsRef = useRef(students);
+  const addToastRef = useRef(addToast);
 
   useEffect(() => { activeRoleRef.current = activeRole; }, [activeRole]);
   useEffect(() => { activeStudentIdRef.current = activeStudentId; }, [activeStudentId]);
   useEffect(() => { langRef.current = lang; }, [lang]);
   useEffect(() => { studentsRef.current = students; }, [students]);
+  useEffect(() => { addToastRef.current = addToast; }, [addToast]);
 
   useEffect(() => {
     const socket = io();
     socketRef.current = socket;
+
+    // Phase 9: Initialize frontend PluginHost services after socket connection
+    if (!host.isInitialized()) {
+      host.initialize(
+        new FrontendAPIService(),
+        new SocketService(socket),
+        new UIService(addToastRef.current),
+        new StorageService('__app__')
+      );
+    }
 
     // Register student presence
     if (activeRoleRef.current === 'student' && activeStudentIdRef.current) {
@@ -5498,7 +5519,10 @@ export default function App() {
                  </button>
               </div>
 
-               {/* Today's Schedules Sidebar Widget */}
+              {/* Phase 9: Dynamic plugin-registered tab buttons */}
+              <ExtensionPointRenderer slot="teacher.tab" />
+
+              {/* Today's Schedules Sidebar Widget */}
                {(() => {
                  const isScheduleUpcoming = (sch: any) => {
                    if (sch.status === 'cancelled' || sch.status === 'holiday') return false;
@@ -5549,6 +5573,12 @@ export default function App() {
             </div>
 
             <div className="flex-1 p-6 overflow-hidden flex gap-6 relative">
+
+            {/* Phase 9: Dynamic plugin tab content — catch-all for non-hardcoded tabs */}
+            {['dashboard', 'lesson_editor', 'live_class', 'plugins', 'courses', 'classes',
+              'timetable', 'admin_directory', 'settings', 'help', 'computer_labs'].includes(teacherTab) ? null : (
+              <ExtensionPointRenderer slot="teacher.tab" />
+            )}
 
             {teacherTab === 'dashboard' ? (
               <>
