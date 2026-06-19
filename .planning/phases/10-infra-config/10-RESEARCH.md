@@ -334,12 +334,10 @@ export function initializeMfeRuntime() {
 |---|-------|---------|---------------|
 | A1 | `@module-federation/vite` 运行时性能在本地多端口开发时不受 HMR 限制阻碍。 | Summary | 开发体验下降，编译速度变慢。 |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **宿主与子应用热重载的开发联调流畅度**
-   - What we know: 宿主与子应用同时在不同端口启动开发服务。
-   - What's unclear: 子应用代码修改后，宿主中引用的部分是否能完美执行实时热更新（HMR）。
-   - Recommendation: 本地联调时，建议保持 `DISABLE_HMR=false`，如果子应用未自动重载，可在 Host Shell 中设置热重载观察者，或暂时进行手动刷新以保证开发连贯。
+   - RESOLVED: 本地联调时保持 `DISABLE_HMR=false`，Vite 6 与 Module Federation 2.0 在开发服务器多端口运行时原生支持 HMR。如果子应用未自动重载，可在 Host Shell 中设置热重载观察者，或暂时进行手动刷新以保证开发连贯。
 
 ## Environment Availability
 
