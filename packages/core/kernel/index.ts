@@ -8,6 +8,17 @@ import { NodeEsmLoader } from '../esm-loader/index.js';
 import { db } from '../db/index.js';
 import { v7 as uuidv7 } from 'uuid';
 import { ServiceRegistry } from '../di/service-registry.js';
+import {
+  ICommandBusServiceToken,
+  IEventBusServiceToken,
+  IActionRegistryServiceToken,
+  ICapabilityServiceToken,
+  IProcessServiceToken,
+  IStorageServiceToken,
+  IAIServiceToken,
+} from '../di/interfaces.js';
+import { StorageService } from '../di/storage-service.js';
+import { AIService } from '../di/ai-service.js';
 import { PluginHost } from '../plugin-host/index.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 
@@ -21,6 +32,8 @@ export class Kernel {
   public readonly esmLoader: NodeEsmLoader;
   public readonly db = db;
   public readonly serviceRegistry: ServiceRegistry;
+  public readonly storageService: StorageService;
+  public readonly aiService: AIService;
   public readonly pluginHost: PluginHost;
   public readonly workerManager: WorkerManager;
 
@@ -31,6 +44,10 @@ export class Kernel {
 
     // ServiceRegistry — Layer 0（无依赖）
     this.serviceRegistry = new ServiceRegistry();
+
+    // StorageService + AIService — Layer 0（无依赖）
+    this.storageService = new StorageService(this.db);
+    this.aiService = new AIService(this.db);
 
     // Layer 1 — 依赖 Layer 0
     this.commandBus = new CommandBus(this.eventBus);
@@ -52,6 +69,16 @@ export class Kernel {
 
     // PluginRuntime — 接收 PluginHost 作为 facade 委托
     this.pluginRuntime = new PluginRuntime(this, this.esmLoader, this.pluginHost);
+
+    // Register all IService instances into ServiceRegistry (D-14)
+    // Must happen after all subsystems are created, before the interceptor
+    this.serviceRegistry.register(IEventBusServiceToken, this.eventBus as any);
+    this.serviceRegistry.register(ICapabilityServiceToken, this.capabilityGuard as any);
+    this.serviceRegistry.register(IStorageServiceToken, this.storageService);
+    this.serviceRegistry.register(ICommandBusServiceToken, this.commandBus as any);
+    this.serviceRegistry.register(IActionRegistryServiceToken, this.actionRegistry as any);
+    this.serviceRegistry.register(IProcessServiceToken, this.processManager as any);
+    this.serviceRegistry.register(IAIServiceToken, this.aiService);
 
     // Capability check interceptor
     this.commandBus.setInterceptor(async (command) => {
