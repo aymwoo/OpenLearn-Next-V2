@@ -37,8 +37,8 @@ import {
   HotReloadError,
   HotReloadActivationError,
 } from './errors.js';
-import { ICapabilityServiceToken } from '../di/interfaces.js';
-import type { ICapabilityService } from '../di/interfaces.js';
+import { ICapabilityServiceToken, IEventBusServiceToken } from '../di/interfaces.js';
+import type { ICapabilityService, IEventBusService } from '../di/interfaces.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import type { IWorkerTransport } from '../worker-runtime/types.js';
 import type { ServiceHost } from '../worker-runtime/service-host.js';
@@ -1056,7 +1056,7 @@ export class PluginHost {
 
     const oldManifest = oldInstance.manifest;
     const oldVersion = oldManifest.version ?? 'unknown';
-    const filePath = '(hot-reload)'; // Placeholder — real path comes from HotReloadController
+    const filePath = '(hot-reload)';
 
     // 2. 提取 manifest
     let newManifest: Manifest;
@@ -1079,18 +1079,28 @@ export class PluginHost {
     }
 
     // 2b. SemVer 兼容检查
-    this.checkSemVerCompatibility(newManifest, pluginId, 'activate');
+    const skipTokens = this.checkSemVerCompatibility(newManifest, pluginId, 'activate');
 
-    // 3. 构建新 Context
+    // 3. 快照旧资源 — 在构建新 Context 之前（防止 disposeAll 误伤新资源）
+    const oldDisposables = this.resourceTracker.snapshot(pluginId);
+
+    // 4. 构建新 Context（会注册新 disposables 到 ResourceTracker）
     const ctx = await buildContext(
+      this.serviceRegistry,
+      this.resourceTracker,
       pluginId,
       newManifest,
-      this.serviceRegistry,
       this.db,
-      this.resourceTracker,
+      skipTokens,
     );
 
-    // 4. ESM 加载 + 激活新版本
+    // 5. Phase 5: Worker-mode check — if worker-mode, delegate to workerManager
+    const mode = this.getExecutionMode(pluginId);
+    if (mode === 'worker') {
+      return this.reloadWorker(pluginId, newSourceCode, newManifest, oldInstance, oldDisposables, filePath, oldVersion);
+    }
+
+    // 6. ESM 加载 + 激活新版本（inline mode）
     let newInstance: {
       manifest: Manifest;
       activate: ((pluginCtx: PluginContext) => Promise<void>) | undefined;
@@ -1104,11 +1114,28 @@ export class PluginHost {
         activate: pluginModule.activate,
         deactivate: pluginModule.deactivate,
       };
-      if (newInstance.activate) {
-        await newInstance.activate(ctx);
-      }
+
+      // Phase 7: middleware wrapping for reload
+      const middlewareCtx: MiddlewareContext = {
+        pluginId, manifest: newManifest, phase: 'beforeActivate', timestamp: Date.now(),
+      };
+      const before = this.getMiddleware('beforeActivate');
+      const after = this.getMiddleware('afterActivate');
+      const pipeline = compose([
+        ...before,
+        async (_ctx, next) => {
+          await next();
+          const afterCtx: MiddlewareContext = { ...middlewareCtx, phase: 'afterActivate' };
+          await compose(after)(afterCtx, async () => {});
+        },
+      ]);
+      await pipeline(middlewareCtx, async () => {
+        if (newInstance.activate) {
+          await newInstance.activate(ctx);
+        }
+      });
     } catch (err) {
-      // 激活失败 — 清理可能已注册的临时 disposables
+      // 激活失败 — 清理新注册的临时 disposables，restore old manifest
       this.resourceTracker.disposeAll(pluginId);
       throw new HotReloadActivationError(
         pluginId, filePath,
@@ -1116,45 +1143,107 @@ export class PluginHost {
       );
     }
 
-    // 5. 激活成功 — 停用旧版本
+    // 7. 激活成功 — 停用旧版本
     try {
-      // 调用旧 deactivate
       if (oldInstance.deactivate) {
         const deactResult = oldInstance.deactivate();
         if (deactResult instanceof Promise) {
-          // 5 秒超时
           await Promise.race([
             deactResult,
             new Promise<void>((_, reject) =>
-              setTimeout(() => reject(new PluginDeactivateTimeoutError(pluginId, DEACTIVATION_TIMEOUT_MS)), DEACTIVATION_TIMEOUT_MS)
+              setTimeout(
+                () => reject(new PluginDeactivateTimeoutError(pluginId, DEACTIVATION_TIMEOUT_MS)),
+                DEACTIVATION_TIMEOUT_MS,
+              ),
             ),
           ]);
         }
       }
     } catch (deactErr) {
-      console.error(
-        `[PluginHost] Deactivation error during reload for "${pluginId}":`,
-        deactErr,
-      );
-      // 继续 — 旧版本停用失败不阻止新版本接管
+      console.error(`[PluginHost] Deactivation error during reload for "${pluginId}":`, deactErr);
     }
 
-    // 清理旧资源
-    this.resourceTracker.disposeAll(pluginId);
+    // 8. 精确清理旧资源（仅快照中的，不碰新注册的）
+    for (const d of oldDisposables) {
+      try { d.dispose(); } catch (e) {
+        console.error(`[PluginHost] Error disposing old resource for "${pluginId}":`, e);
+      }
+    }
+    this.resourceTracker.reap(pluginId, oldDisposables);
 
-    // 6. 替换实例引用
+    // 9. 替换实例引用
     this.pluginInstances.set(pluginId, newInstance);
-    // 状态保持 ACTIVE
 
-    // 7. 更新 DB
+    // 10. 更新 DB
     this.db.prepare(
       'UPDATE plugins SET source_code = ?, manifest = ?, updated_at = ? WHERE id = ?',
     ).run(newSourceCode, JSON.stringify(newManifest), Date.now(), pluginId);
 
     const newVersion = newManifest.version ?? 'unknown';
-    console.log(
-      `[PluginHost] Hot reload succeeded for "${pluginId}" — old: ${oldVersion} → new: ${newVersion}`,
-    );
+    console.log(`[PluginHost] Hot reload succeeded for "${pluginId}" — old: ${oldVersion} → new: ${newVersion}`);
+
+    // 11. Phase 7: publish reload event
+    try {
+      const eventBus = await this.serviceRegistry.resolve<IEventBusService>(IEventBusServiceToken);
+      eventBus.publish({
+        id: uuidv7(),
+        type: 'plugin.reloaded',
+        source: 'plugin-host',
+        payload: { pluginId, oldVersion, newVersion },
+        timestamp: Date.now(),
+      });
+    } catch {
+      // Event publishing failure is non-fatal
+    }
+  }
+
+  /**
+   * Phase 7: Worker-mode hot reload.
+   * Creates a new Worker for the updated source, terminates the old one on success.
+   */
+  private async reloadWorker(
+    pluginId: string,
+    newSourceCode: string,
+    _newManifest: Manifest,
+    _oldInstance: NonNullable<ReturnType<typeof this.pluginInstances.get>>,
+    _oldDisposables: import('./types.js').Disposable[],
+    filePath: string,
+    _oldVersion: string,
+  ): Promise<void> {
+    // 1. Save old source code for rollback
+    const oldRow = this.db.prepare('SELECT source_code FROM plugins WHERE id = ?').get(pluginId) as
+      | { source_code: string }
+      | undefined;
+    const oldSourceCode = oldRow?.source_code ?? '';
+
+    // 2. Terminate old worker
+    try {
+      await this.workerManager.terminateWorker(pluginId);
+    } catch {
+      // Old worker may already be gone — continue
+    }
+
+    // 3. Create new worker with updated source
+    try {
+      await this.workerManager.createWorker(pluginId, newSourceCode);
+      this.db.prepare(
+        'UPDATE plugins SET source_code = ?, updated_at = ? WHERE id = ?',
+      ).run(newSourceCode, Date.now(), pluginId);
+      console.log(`[PluginHost] Worker-mode reload succeeded for "${pluginId}"`);
+    } catch (err) {
+      // Failed — try to restore old worker
+      if (oldSourceCode) {
+        try {
+          await this.workerManager.createWorker(pluginId, oldSourceCode);
+        } catch {
+          console.error(`[PluginHost] Worker-mode reload: failed to restore old worker for "${pluginId}"`);
+        }
+      }
+      throw new HotReloadActivationError(
+        pluginId, filePath,
+        err instanceof Error ? err : new Error(String(err)),
+      );
+    }
   }
 }
 

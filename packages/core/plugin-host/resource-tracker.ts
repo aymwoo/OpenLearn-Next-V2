@@ -61,4 +61,43 @@ export class ResourceTracker {
 
     this.resources.delete(pluginId);
   }
+
+  /**
+   * Phase 7: 快照指定插件当前的 Disposable 列表。
+   *
+   * 返回浅拷贝数组，用于热重载时在激活新版本前保存旧资源引用。
+   * 如果 pluginId 不在 map 中，返回空数组。
+   *
+   * @param pluginId - 插件标识符
+   * @returns 当前追踪的 Disposable 数组的浅拷贝
+   */
+  snapshot(pluginId: string): Disposable[] {
+    const list = this.resources.get(pluginId);
+    return list ? [...list] : [];
+  }
+
+  /**
+   * Phase 7: 部分清理 — 从追踪列表中移除指定的 Disposable 对象。
+   *
+   * 用于热重载场景：清理由 snapshot() 捕获的旧资源，
+   * 但保留 ContextBuilder 在激活新版本时注册的新资源。
+   *
+   * 清理后如果列表为空，删除该 pluginId 条目。
+   *
+   * @param pluginId - 插件标识符
+   * @param disposables - 要移除的 Disposable 对象数组
+   */
+  reap(pluginId: string, disposables: Disposable[]): void {
+    const list = this.resources.get(pluginId);
+    if (!list || disposables.length === 0) return;
+
+    const toRemove = new Set(disposables);
+    const remaining = list.filter(d => !toRemove.has(d));
+
+    if (remaining.length > 0) {
+      this.resources.set(pluginId, remaining);
+    } else {
+      this.resources.delete(pluginId);
+    }
+  }
 }
