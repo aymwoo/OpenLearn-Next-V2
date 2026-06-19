@@ -50,7 +50,11 @@
   1. Users see a sleek loading skeleton/spinner while a remote component is being dynamically fetched and loaded via `MfeLoader`.
   2. If a remote component encounters a runtime crash, the rest of the host interface remains fully functional, displaying a friendly error fallback component with a reload option.
   3. Memory usage remains stable without leaks after opening, interacting, and closing a remote application repeatedly, verifying successful invocation of the standard `unmount` hook and React root unmounting.
-**Plans**: 0 plans
+**Plans**: 4 plans
+- [ ] 11-01-PLAN.md — Type contracts, DB schema, /api/mfe/remotes endpoint, client API, test scaffold
+- [ ] 11-02-PLAN.md — Context providers, preload/leak-detector utilities, MF runtime init in main.tsx
+- [ ] 11-03-PLAN.md — UI fallback components, Error Boundary, MfeLoaderCore, MfeLoader composition
+- [ ] 11-04-PLAN.md — createMfeApp lifecycle adoption in mfe-whiteboard and mfe-courseware
 **UI hint**: yes
 
 ### Phase 12: 宿主状态共享与 DI 桥接
@@ -89,7 +93,7 @@
 | 8. 现有插件迁移 | v1.0 | 4/4 | Complete | 2026-06-19 |
 | 9. 前端集成 + 过渡期 | v1.0 | 4/4 | Complete | 2026-06-19 |
 | 10. 基础设施配置与工程集成 | v2.0 | 2/2 | Complete   | 2026-06-19 |
-| 11. 动态加载器与宿主桥接 | v2.0 | 0/0 | Planning | - |
+| 11. 动态加载器与宿主桥接 | v2.0 | 0/4 | Planning | - |
 | 12. 宿主状态共享与 DI 桥接 | v2.0 | 0/0 | Planning | - |
 | 13. 业务模块解耦与样式沙箱化 | v2.0 | 0/0 | Planning | - |
 
