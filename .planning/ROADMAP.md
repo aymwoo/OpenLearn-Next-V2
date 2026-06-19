@@ -163,10 +163,10 @@
   4. 开发者在插件中心 UI 上传新格式（ZIP + manifest.json）的插件包后，插件被安装到新系统，旧格式（单一 JS 字符串）插件保持可用但标记为 legacy
   5. 旧格式插件的用户收到迁移提示（UI 中显示黄色标记），安装新格式版本后可安全卸载旧格式版本
 **Plans**: 4 plans
-  - [ ] 09-01-PLAN.md — Frontend ServiceRegistry + PluginHost foundation (DI container, zustand store, lifecycle, frontend services, React Context)
-  - [ ] 09-02-PLAN.md — Extension Points system + App.tsx integration (slot-based registry, React.lazy rendering, PluginCenter extraction, i18n)
-  - [ ] 09-03-PLAN.md — Browser Web Worker + ServiceProxy (BrowserWorkerTransport, ServiceHost, WorkerManager, ws-bootstrap, event forwarding)
-  - [ ] 09-04-PLAN.md — Transition + plugin management UI + E2E tests (command routing priority, MigrationPrompt, legacy badge, vitest config)
+  - [x] 09-01-PLAN.md — Frontend ServiceRegistry + PluginHost foundation (DI container, zustand store, lifecycle, frontend services, React Context)
+  - [x] 09-02-PLAN.md — Extension Points system + App.tsx integration (slot-based registry, React.lazy rendering, PluginCenter extraction, i18n)
+  - [x] 09-03-PLAN.md — Browser Web Worker + ServiceProxy (BrowserWorkerTransport, ServiceHost, WorkerManager, ws-bootstrap, event forwarding)
+  - [x] 09-04-PLAN.md — Transition + plugin management UI + E2E tests (command routing priority, MigrationPrompt, legacy badge, vitest config)
 **UI hint**: yes
 
 ## Progress
