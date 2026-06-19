@@ -22,7 +22,10 @@ export interface CommandHandler<C extends PlatformCommand = PlatformCommand> {
 }
 
 export class CommandBus {
+  /** Modern (new-format) handlers — take priority in execution */
   private handlers = new Map<string, CommandHandler>();
+  /** Legacy (old-format) handlers — used as fallback when no modern handler exists (D-11) */
+  private legacyHandlers = new Map<string, CommandHandler>();
   private interceptor?: (command: PlatformCommand) => Promise<void>;
 
   constructor(private eventBus: EventBus) {}
@@ -38,8 +41,20 @@ export class CommandBus {
     this.handlers.set(commandType, handler);
   }
 
+  /**
+   * D-11: Register a legacy (old-format) handler.
+   *
+   * Legacy handlers are stored separately from modern handlers.
+   * execute() prefers modern handlers; legacy handlers are only used
+   * as fallback when no modern handler exists for the command type.
+   */
+  public registerLegacyHandler(commandType: string, handler: CommandHandler) {
+    this.legacyHandlers.set(commandType, handler);
+  }
+
   public unregisterHandler(commandType: string) {
     this.handlers.delete(commandType);
+    this.legacyHandlers.delete(commandType);
   }
 
   public async execute<T extends PlatformCommand>(command: T): Promise<any> {
@@ -52,7 +67,9 @@ export class CommandBus {
       await this.interceptor(normalizedCommand);
     }
     
-    const handler = this.handlers.get(normalizedCommand.type);
+    // D-11: Priority routing — modern handler first, legacy fallback
+    const handler = this.handlers.get(normalizedCommand.type)
+      ?? this.legacyHandlers.get(normalizedCommand.type);
     if (!handler) {
       throw new Error(`No handler registered for command: ${normalizedCommand.type}`);
     }
