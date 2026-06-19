@@ -1,8 +1,8 @@
 ---
 phase: 10
 slug: infra-config
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-06-19
 ---
@@ -38,9 +38,10 @@ created: 2026-06-19
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 10-01-01 | 01 | 1 | MFE-INF-01 | — | N/A | unit | `pnpm test packages/core/__tests__/mfe-config.test.ts` | ❌ W0 | ⬜ pending |
-| 10-01-02 | 01 | 1 | MFE-INF-02 | — | N/A | integration | `pnpm test packages/core/__tests__/mfe-build.test.ts` | ❌ W0 | ⬜ pending |
-| 10-01-03 | 01 | 1 | MFE-INF-03 | — | N/A | integration | `pnpm test packages/core/__tests__/tailwind-scan.test.ts` | ❌ W0 | ⬜ pending |
+| 10-01-01 | 01 | 1 | MFE-INF-01 | T-10-03 | N/A | unit | `pnpm test packages/core/__tests__/mfe-config.test.ts` | ✅ | ⬜ pending |
+| 10-02-01 | 02 | 2 | MFE-INF-01 | T-10-SC | Verify packages legitimacy | checkpoint | N/A (human checkpoint) | ✅ | ⬜ pending |
+| 10-02-02 | 02 | 2 | MFE-INF-03 | — | N/A | integration | `pnpm test packages/core/__tests__/tailwind-scan.test.ts` | ✅ | ⬜ pending |
+| 10-02-03 | 02 | 2 | MFE-INF-02 | — | N/A | integration | `pnpm test packages/core/__tests__/mfe-config.test.ts && pnpm test packages/core/__tests__/mfe-build.test.ts` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -56,17 +57,17 @@ created: 2026-06-19
 
 ## Manual-Only Verifications
 
-All phase behaviors have automated verification.
+- Task 10-02-01: Verify npm packages legitimacy (Human blocking checkpoint).
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-06-19

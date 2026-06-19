@@ -37,8 +37,9 @@
   1. Developers can build host and remote projects targeting `esnext` and run the development servers with no console errors about dependency version mismatches.
   2. Dynamic path resolution enables asset assets to load correctly from remotes when hot-reloading or switching host environment configurations.
   3. UI styles authored in remotes are correctly scanned by the Host's Tailwind CSS compiler and rendered correctly without visual brokenness on load.
-**Plans**: 1 plan
-- [ ] 10-01-PLAN.md — 搭建微前端基础设施配置，完成宿主和子应用的 Module Federation 单例共享、编译 target/base 配置以及样式扫描规则
+**Plans**: 2 plans
+- [ ] 10-01-PLAN.md — 创建 Wave 0 测试骨架文件以校验依赖单例、构建目标与样式扫描配置
+- [ ] 10-02-PLAN.md — 搭建微前端基础设施配置，完成宿主和子应用的 Module Federation 单例共享、编译 target/base 配置以及样式扫描规则
 **UI hint**: yes
 
 ### Phase 11: 动态加载器与宿主桥接
@@ -87,7 +88,7 @@
 | 7. 热重载 + 中间件管道 | v1.0 | 4/4 | Complete | 2026-06-19 |
 | 8. 现有插件迁移 | v1.0 | 4/4 | Complete | 2026-06-19 |
 | 9. 前端集成 + 过渡期 | v1.0 | 4/4 | Complete | 2026-06-19 |
-| 10. 基础设施配置与工程集成 | v2.0 | 0/1 | Planning | - |
+| 10. 基础设施配置与工程集成 | v2.0 | 0/2 | Planning | - |
 | 11. 动态加载器与宿主桥接 | v2.0 | 0/0 | Planning | - |
 | 12. 宿主状态共享与 DI 桥接 | v2.0 | 0/0 | Planning | - |
 | 13. 业务模块解耦与样式沙箱化 | v2.0 | 0/0 | Planning | - |
