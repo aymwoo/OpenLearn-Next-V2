@@ -33,6 +33,8 @@ import {
   PluginActivateError,
   PluginDeactivateTimeoutError,
   SemverMismatchError,
+  HotReloadError,
+  HotReloadActivationError,
 } from './errors.js';
 import { ICapabilityServiceToken } from '../di/interfaces.js';
 import type { ICapabilityService } from '../di/interfaces.js';
@@ -916,6 +918,159 @@ export class PluginHost {
     }
 
     console.log('[PluginHost] Plugin restoration complete');
+  }
+
+  // ── Phase 7: Hot Reload ──────────────────────────────────────────────────
+
+  private _hotReloadController: import('./hot-reload.js').HotReloadController | null = null;
+
+  /**
+   * Phase 7: 设置 HotReloadController 引用（避免循环依赖）。
+   * 由 Kernel 在 dev 模式初始化 HotReloadController 后调用。
+   */
+  setHotReloadController(controller: import('./hot-reload.js').HotReloadController): void {
+    this._hotReloadController = controller;
+  }
+
+  /**
+   * 暴露 resourceTracker 给 reloadPlugin 和测试使用。
+   */
+  getResourceTracker(): ResourceTracker {
+    return this.resourceTracker;
+  }
+
+  /**
+   * Phase 7: 原子热重载插件。
+   *
+   * 策略（atomic new-before-old）：
+   * 1. 提取新 manifest，验证 ID 一致性
+   * 2. SemVer 兼容检查
+   * 3. 构建新 PluginContext
+   * 4. ESM 加载新源码 → 激活新版本
+   * 5. [成功] 停用旧版本 → 清理旧资源 → 替换实例引用 → 更新 DB
+   * 6. [失败] 保留旧版本运行，清理临时资源，抛出 HotReloadActivationError
+   *
+   * @param pluginId - 插件标识符
+   * @param newSourceCode - 新版本源码
+   */
+  async reloadPlugin(pluginId: string, newSourceCode: string): Promise<void> {
+    const currentState = this.pluginStates.get(pluginId);
+
+    // 1. 状态检查
+    if (currentState !== PluginState.ACTIVE) {
+      throw new IllegalStateTransitionError(
+        pluginId,
+        currentState ?? PluginState.UNINSTALLED,
+        PluginState.ACTIVE,
+      );
+    }
+
+    const oldInstance = this.pluginInstances.get(pluginId);
+    if (!oldInstance) {
+      throw new PluginActivateError(pluginId, 'No active instance found for reload');
+    }
+
+    const oldManifest = oldInstance.manifest;
+    const oldVersion = oldManifest.version ?? 'unknown';
+    const filePath = '(hot-reload)'; // Placeholder — real path comes from HotReloadController
+
+    // 2. 提取 manifest
+    let newManifest: Manifest;
+    try {
+      newManifest = await this.extractManifest(newSourceCode);
+    } catch (err) {
+      throw new HotReloadActivationError(
+        pluginId, filePath,
+        err instanceof Error ? err : new Error(String(err)),
+      );
+    }
+
+    // 2a. 验证 manifest.id 一致性
+    if (newManifest.id !== oldManifest.id) {
+      throw new HotReloadError(
+        `Manifest id mismatch: expected "${oldManifest.id}", got "${newManifest.id}"`,
+        pluginId,
+        filePath,
+      );
+    }
+
+    // 2b. SemVer 兼容检查
+    this.checkSemVerCompatibility(newManifest, pluginId, 'activate');
+
+    // 3. 构建新 Context
+    const ctx = await buildContext(
+      pluginId,
+      newManifest,
+      this.serviceRegistry,
+      this.db,
+      this.resourceTracker,
+    );
+
+    // 4. ESM 加载 + 激活新版本
+    let newInstance: {
+      manifest: Manifest;
+      activate: ((pluginCtx: PluginContext) => Promise<void>) | undefined;
+      deactivate?: (() => Promise<void>) | undefined;
+    };
+
+    try {
+      const pluginModule: PluginModule = await this.esmLoader.load(newSourceCode);
+      newInstance = {
+        manifest: newManifest,
+        activate: pluginModule.activate,
+        deactivate: pluginModule.deactivate,
+      };
+      if (newInstance.activate) {
+        await newInstance.activate(ctx);
+      }
+    } catch (err) {
+      // 激活失败 — 清理可能已注册的临时 disposables
+      this.resourceTracker.disposeAll(pluginId);
+      throw new HotReloadActivationError(
+        pluginId, filePath,
+        err instanceof Error ? err : new Error(String(err)),
+      );
+    }
+
+    // 5. 激活成功 — 停用旧版本
+    try {
+      // 调用旧 deactivate
+      if (oldInstance.deactivate) {
+        const deactResult = oldInstance.deactivate();
+        if (deactResult instanceof Promise) {
+          // 5 秒超时
+          await Promise.race([
+            deactResult,
+            new Promise<void>((_, reject) =>
+              setTimeout(() => reject(new PluginDeactivateTimeoutError(pluginId, DEACTIVATION_TIMEOUT_MS)), DEACTIVATION_TIMEOUT_MS)
+            ),
+          ]);
+        }
+      }
+    } catch (deactErr) {
+      console.error(
+        `[PluginHost] Deactivation error during reload for "${pluginId}":`,
+        deactErr,
+      );
+      // 继续 — 旧版本停用失败不阻止新版本接管
+    }
+
+    // 清理旧资源
+    this.resourceTracker.disposeAll(pluginId);
+
+    // 6. 替换实例引用
+    this.pluginInstances.set(pluginId, newInstance);
+    // 状态保持 ACTIVE
+
+    // 7. 更新 DB
+    this.db.prepare(
+      'UPDATE plugins SET source_code = ?, manifest = ?, updated_at = ? WHERE id = ?',
+    ).run(newSourceCode, JSON.stringify(newManifest), Date.now(), pluginId);
+
+    const newVersion = newManifest.version ?? 'unknown';
+    console.log(
+      `[PluginHost] Hot reload succeeded for "${pluginId}" — old: ${oldVersion} → new: ${newVersion}`,
+    );
   }
 }
 

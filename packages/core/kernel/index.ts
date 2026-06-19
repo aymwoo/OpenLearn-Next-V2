@@ -21,6 +21,8 @@ import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
 import { PluginHost } from '../plugin-host/index.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
+import { HotReloadController } from '../plugin-host/hot-reload.js';
+import path from 'path';
 
 export class Kernel {
   public readonly eventBus: EventBus;
@@ -90,11 +92,11 @@ export class Kernel {
             throw new Error(`[CapabilityGuard] Access Denied: Actor ${command.actorId} missing capability ${action.capabilityRequired} for ${command.type}`);
           }
         }
-        
+
         if (action.isHighRisk && command.metadata?.approved !== true) {
           const stmt = this.db.prepare('INSERT INTO pending_commands (id, command_type, payload, actor_id, created_at) VALUES (?, ?, ?, ?, ?)');
           stmt.run(command.id, command.type, JSON.stringify(command.payload), command.actorId, Date.now());
-          
+
           this.eventBus.publish({
             id: uuidv7(),
             type: 'approval.requested',
@@ -103,11 +105,25 @@ export class Kernel {
             timestamp: Date.now(),
             correlationId: command.id
           });
-          
+
           throw new Error(`[Security] Command ${command.type} requires human approval. It has been queued to pending actions.`);
         }
       }
     });
+
+    // Phase 7: 开发模式热重载
+    if (process.env.NODE_ENV === 'development') {
+      const watchDir = path.resolve(process.cwd(), 'plugins');
+      try {
+        const hotReload = new HotReloadController(this.pluginHost, watchDir);
+        this.pluginHost.setHotReloadController(hotReload);
+        hotReload.start().catch(err => {
+          console.warn('[Kernel] Hot reload initialization failed:', err.message);
+        });
+      } catch (err) {
+        console.warn('[Kernel] Hot reload initialization failed:', (err as Error).message);
+      }
+    }
   }
 
   // Subscribe to all events and log them to DB

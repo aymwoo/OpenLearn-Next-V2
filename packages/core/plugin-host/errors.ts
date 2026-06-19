@@ -98,3 +98,49 @@ export class SemverMismatchError extends PluginHostError {
     this.name = 'SemverMismatchError';
   }
 }
+
+// ── Phase 7: Hot Reload Errors ───────────────────────────────────────────
+
+/**
+ * HotReloadError — 热重载失败时抛出。
+ */
+export class HotReloadError extends PluginHostError {
+  constructor(
+    message: string,
+    public readonly pluginId: string,
+    public readonly filePath: string,
+  ) {
+    super(`Hot reload failed for "${pluginId}": ${message}`);
+    this.name = 'HotReloadError';
+  }
+}
+
+/**
+ * HotReloadActivationError — 热重载中新版本激活失败时抛出。
+ */
+export class HotReloadActivationError extends HotReloadError {
+  constructor(
+    pluginId: string,
+    filePath: string,
+    public readonly cause: Error,
+  ) {
+    super(`Activation of new version failed: ${cause.message}`, pluginId, filePath);
+    this.name = 'HotReloadActivationError';
+  }
+}
+
+// ── Phase 7: Middleware Errors ────────────────────────────────────────────
+
+/**
+ * MiddlewareError — 中间件执行异常（非致命，用于日志记录）。
+ */
+export class MiddlewareError extends PluginHostError {
+  constructor(
+    public readonly pluginId: string,
+    public readonly phase: string,
+    message: string,
+  ) {
+    super(`Middleware error in phase "${phase}" for "${pluginId}": ${message}`);
+    this.name = 'MiddlewareError';
+  }
+}

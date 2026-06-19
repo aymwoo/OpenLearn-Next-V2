@@ -82,3 +82,50 @@ export interface PluginInfo {
   version: string;
   state: PluginState;
 }
+
+// ── Phase 7: Hot Reload Types ─────────────────────────────────────────────
+
+/**
+ * HotReloadEvent — 文件变更触发的热重载事件。
+ */
+export interface HotReloadEvent {
+  pluginId: string;
+  filePath: string;
+  timestamp: number;
+}
+
+export type HotReloadCallback = (event: HotReloadEvent) => Promise<void>;
+
+// ── Phase 7: Middleware Types ─────────────────────────────────────────────
+
+/**
+ * LifecyclePhase — 中间件挂载的生命周期阶段。
+ */
+export type LifecyclePhase =
+  | 'beforeActivate'
+  | 'afterActivate'
+  | 'beforeDeactivate'
+  | 'afterDeactivate'
+  | 'beforeCommand'
+  | 'afterCommand';
+
+/**
+ * MiddlewareContext — 传递给每个中间件的不可变上下文。
+ */
+export interface MiddlewareContext {
+  readonly pluginId: string;
+  readonly manifest: Manifest;
+  readonly phase: LifecyclePhase;
+  readonly timestamp: number;
+}
+
+/**
+ * Middleware — 洋葱模型中间件函数。
+ *
+ * 在 next() 之前做预处理，next() 之后做后处理。
+ * 不调用 next() 则终止管道。
+ */
+export type Middleware = (
+  ctx: MiddlewareContext,
+  next: () => Promise<void>,
+) => Promise<void>;
