@@ -1,0 +1,24 @@
+{
+  "id": "ext-roll-call",
+  "name": "Random Student Picker (随机点名小工具)",
+  "version": "1.0.0",
+  "main": "index.js",
+  "requires": [
+    "@openlearn/core:ICommandBusService@^1.0.0",
+    "@openlearn/core:IActionRegistryService@^1.0.0"
+  ],
+  "capabilitiesProposed": ["whiteboard:write", "management:read"],
+  "classroomTools": [
+    {
+      "id": "tool-rollcall-pick",
+      "name": "随机学生抽问",
+      "icon": "Shuffle",
+      "description": "随机抽取一名学生进行课堂点名提问，并在白板和大屏上同步提示",
+      "commandType": "rollcall.pick",
+      "payload": {
+        "classId": "$classId",
+        "lessonId": "$lessonId"
+      }
+    }
+  ]
+}

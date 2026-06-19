@@ -1,0 +1,25 @@
+{
+  "id": "ext-quiz-generator",
+  "name": "Quiz Component Plugin",
+  "version": "1.0.0",
+  "main": "index.js",
+  "requires": [
+    "@openlearn/core:ICommandBusService@^1.0.0",
+    "@openlearn/core:IActionRegistryService@^1.0.0"
+  ],
+  "capabilitiesProposed": ["quiz:write"],
+  "classroomTools": [
+    {
+      "id": "tool-quiz-gen",
+      "name": "智能随堂测验",
+      "icon": "Puzzle",
+      "description": "在当前白板上快速生成一道选择题测验以检验听讲效果",
+      "commandType": "quiz.create",
+      "payload": {
+        "lessonId": "$lessonId",
+        "question": "课堂练习：请问以下哪一项是系统的核心运行架构？",
+        "options": ["事件驱动指令总线", "集中式轮询数据库", "多线程文件独占锁", "手动旁路轮叫调度"]
+      }
+    }
+  ]
+}
