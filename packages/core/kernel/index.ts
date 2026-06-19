@@ -2,7 +2,6 @@ import { EventBus } from '../event-bus/index.js';
 import { CommandBus } from '../command-bus/index.js';
 import { ActionRegistry } from '../registry/index.js';
 import { CapabilityGuard } from '../capability-system/index.js';
-import { PluginRuntime } from '../plugin-runtime/index.js';
 import { ProcessManager } from '../process-manager/index.js';
 import { NodeEsmLoader } from '../esm-loader/index.js';
 import { db } from '../db/index.js';
@@ -10,6 +9,12 @@ import { v7 as uuidv7 } from 'uuid';
 import { ServiceRegistry } from '../di/service-registry.js';
 import { VfsPlugin } from '../../plugins/vfs.js';
 import { ProcessPlugin } from '../../plugins/process.js';
+import { ManagementPlugin } from '../../plugins/management.js';
+import { BuiltinPlugin } from '../../plugins/builtin.js';
+import { AiPlannerPlugin } from '../../plugins/ai-planner.js';
+import { AiSubmitInjectorPlugin } from '../../plugins/ai-submit-injector.js';
+import fs from 'fs';
+
 import {
   ICommandBusServiceToken,
   IEventBusServiceToken,
@@ -19,6 +24,7 @@ import {
   IStorageServiceToken,
   IAIServiceToken,
   IDatabaseToken,
+  IPluginHostToken,
 } from '../di/interfaces.js';
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
@@ -32,7 +38,6 @@ export class Kernel {
   public readonly commandBus: CommandBus;
   public readonly actionRegistry: ActionRegistry;
   public readonly capabilityGuard: CapabilityGuard;
-  public readonly pluginRuntime: PluginRuntime;
   public readonly processManager: ProcessManager;
   public readonly esmLoader: NodeEsmLoader;
   public readonly db = db;
@@ -73,8 +78,7 @@ export class Kernel {
     // Wire WorkerManager into PluginHost via setter (avoids circular dependency)
     this.pluginHost.setWorkerManager(this.workerManager);
 
-    // PluginRuntime — 接收 PluginHost 作为 facade 委托
-    this.pluginRuntime = new PluginRuntime(this, this.esmLoader, this.pluginHost);
+    // No more pluginRuntime (Phase 8 cleanup)
 
     // Register all IService instances into ServiceRegistry (D-14)
     // Must happen after all subsystems are created, before the interceptor
@@ -86,6 +90,7 @@ export class Kernel {
     this.serviceRegistry.register(IProcessServiceToken, this.processManager as any);
     this.serviceRegistry.register(IAIServiceToken, this.aiService);
     this.serviceRegistry.register(IDatabaseToken, this.db as any);
+    this.serviceRegistry.register(IPluginHostToken, this.pluginHost);
 
     // Capability check interceptor
     this.commandBus.setInterceptor(async (command) => {
@@ -139,8 +144,12 @@ export class Kernel {
 
   private async bootstrapSystemPlugins() {
     const systemPlugins = [
-      { id: '@openlearn/plugin-vfs', mod: VfsPlugin, name: 'Virtual File System Plugin' },
-      { id: '@openlearn/plugin-process', mod: ProcessPlugin, name: 'Background Process Plugin' }
+      { id: '@openlearn/plugin-vfs', mod: VfsPlugin, name: 'Virtual File System Plugin', critical: true },
+      { id: '@openlearn/plugin-process', mod: ProcessPlugin, name: 'Background Process Plugin', critical: true },
+      { id: '@openlearn/plugin-management', mod: ManagementPlugin, name: 'LMS Management Plugin', critical: true },
+      { id: '@openlearn/plugin-builtin', mod: BuiltinPlugin, name: 'Classroom Builtin Plugin', critical: true },
+      { id: '@openlearn/plugin-ai-planner', mod: AiPlannerPlugin, name: 'AI Planner Plugin', critical: false },
+      { id: '@openlearn/plugin-ai-submit-injector', mod: AiSubmitInjectorPlugin, name: 'AI Submit Injector Plugin', critical: false }
     ];
 
     for (const plugin of systemPlugins) {
@@ -169,8 +178,100 @@ export class Kernel {
         // Activate plugin
         await this.pluginHost.activatePlugin(plugin.id);
       } catch (err) {
-        console.error(`[Kernel] Failed to bootstrap critical system plugin ${plugin.name}:`, err);
-        throw err;
+        if (plugin.critical) {
+          console.error(`[Kernel] Failed to bootstrap critical system plugin ${plugin.name}:`, err);
+          throw err;
+        } else {
+          console.warn(`[Kernel] Soft-fail: Failed to bootstrap AI system plugin ${plugin.name}:`, err);
+        }
+      }
+    }
+
+    // Seeding external ZIP plugins - Wave 4 (Phase 8)
+    const extPluginsDir = path.resolve(process.cwd(), 'dist', 'plugins');
+    if (fs.existsSync(extPluginsDir)) {
+      const files = fs.readdirSync(extPluginsDir).filter(f => f.endsWith('.zip'));
+      for (const file of files) {
+        try {
+          const zipBuffer = fs.readFileSync(path.join(extPluginsDir, file));
+          const JSZip = (await import('jszip')).default;
+          const zip = await JSZip.loadAsync(zipBuffer);
+          const manifestFile = zip.file('manifest.json');
+          if (!manifestFile) continue;
+          const manifestContent = await manifestFile.async('text');
+          const manifest = JSON.parse(manifestContent);
+          
+          // Check if already exists in DB
+          const rows = this.db.prepare('SELECT id, manifest FROM plugins').all() as Array<{ id: string; manifest: string }>;
+          let existingRow = rows.find(row => {
+            try {
+              const m = JSON.parse(row.manifest);
+              return m.id === manifest.id;
+            } catch {
+              return false;
+            }
+          });
+
+          // Clean up legacy ext plugins (CommonJS strings) in DB
+          if (existingRow) {
+            let isLegacy = false;
+            try {
+              const hasZip = this.db.prepare('SELECT zip_package FROM plugins WHERE id = ?').get(existingRow.id) as any;
+              if (!hasZip || !hasZip.zip_package) {
+                isLegacy = true;
+              }
+            } catch {
+              isLegacy = true;
+            }
+            if (isLegacy) {
+              this.db.prepare('DELETE FROM plugins WHERE id = ?').run(existingRow.id);
+              existingRow = undefined;
+            }
+          }
+          
+          let dbPluginId = existingRow?.id;
+          
+          if (!existingRow) {
+            // Install new
+            const installedManifest = await this.pluginHost.installPluginFromZip(zipBuffer);
+            const newRows = this.db.prepare('SELECT id, manifest FROM plugins').all() as Array<{ id: string; manifest: string }>;
+            const newRow = newRows.find(row => {
+              try {
+                return JSON.parse(row.manifest).id === manifest.id;
+              } catch {
+                return false;
+              }
+            });
+            dbPluginId = newRow?.id;
+          } else {
+            const m = JSON.parse(existingRow.manifest);
+            if (m.version !== manifest.version) {
+              // Version mismatch: uninstall and reinstall
+              await this.pluginHost.uninstallPlugin(existingRow.id);
+              const installedManifest = await this.pluginHost.installPluginFromZip(zipBuffer);
+              const newRows = this.db.prepare('SELECT id, manifest FROM plugins').all() as Array<{ id: string; manifest: string }>;
+              const newRow = newRows.find(row => {
+                try {
+                  return JSON.parse(row.manifest).id === manifest.id;
+                } catch {
+                  return false;
+                }
+              });
+              dbPluginId = newRow?.id;
+            }
+          }
+          
+          if (dbPluginId) {
+            // Update DB status to active and execution_mode to worker
+            this.db.prepare('UPDATE plugins SET execution_mode = ?, status = ? WHERE id = ?')
+              .run('worker', 'active', dbPluginId);
+            
+            // Activate plugin
+            await this.pluginHost.activatePlugin(dbPluginId);
+          }
+        } catch (err) {
+          console.warn(`[Kernel] Soft-fail: Failed to seed external plugin ${file}:`, err);
+        }
       }
     }
   }

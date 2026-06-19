@@ -19,11 +19,6 @@ import { createServer as createViteServer } from 'vite';
 import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
 import { kernelContainer } from './packages/core/kernel/index.js';
-import { bootstrapBuiltinPlugins } from './packages/plugins/builtin.js';
-import { bootstrapVFSPlugins } from './packages/plugins/vfs.js';
-import { bootstrapProcessPlugins } from './packages/plugins/process.js';
-import { bootstrapManagementPlugins } from './packages/plugins/management.js';
-import { bootstrapAIPlannerPlugins } from './packages/plugins/ai-planner.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import crypto from 'crypto';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './packages/plugins/ai-submit-injector.js';
@@ -53,11 +48,6 @@ type StoredAIProvider = {
 };
 
 // Initialize core OS tools
-bootstrapBuiltinPlugins();
-bootstrapVFSPlugins();
-bootstrapProcessPlugins();
-bootstrapManagementPlugins();
-bootstrapAIPlannerPlugins();
 
 
 const buildAgentSystemInstruction = (lang: 'zh' | 'en', currentLessonId?: string | null) => {
@@ -409,184 +399,7 @@ async function startServer() {
     console.error('Error creating student_rollcalls table:', e);
   }
 
-  await kernelContainer.pluginRuntime.loadFromDB();
-  
-  if (kernelContainer.pluginRuntime.loadedPlugins.length === 0) {
-    console.log('No plugins found, auto-installing default Quiz plugin...');
-    const DEFAULT_PLUGIN = `exports.default = {
-      manifest: {
-        id: "ext-quiz-generator",
-        name: "Quiz Component Plugin",
-        version: "1.0.0",
-        capabilitiesProposed: ["quiz:write"],
-        classroomTools: [
-          {
-            id: "tool-quiz-gen",
-            name: "智能随堂测验",
-            icon: "Puzzle",
-            description: "在当前白板上快速生成一道选择题测验以检验听讲效果",
-            commandType: "quiz.create",
-            payload: {
-              lessonId: "$lessonId",
-              question: "课堂练习：请问以下哪一项是系统的核心运行架构？",
-              options: ["事件驱动指令总线", "集中式轮询数据库", "多线程文件独占锁", "手动旁路轮叫调度"]
-            }
-          }
-        ]
-      },
-      activate: async (ctx) => {
-        ctx.actionRegistry.register({
-          id: 'ext-quiz-create',
-          commandType: 'quiz.create',
-          description: 'Create a multiple-choice quiz on the whiteboard for a lesson',
-          capabilityRequired: 'whiteboard:write',
-          inputSchema: {
-            type: 'OBJECT',
-            properties: {
-              lessonId: { type: 'STRING' },
-              question: { type: 'STRING' },
-              options: { type: 'ARRAY', items: { type: 'STRING' } }
-            },
-            required: ['lessonId', 'question', 'options']
-          }
-        });
-
-        ctx.commandBus.registerHandler('quiz.create', {
-          execute: async (command) => {
-            const payload = command.payload;
-            const result = await ctx.commandBus.execute({
-              id: Math.random().toString(36).slice(2),
-              type: 'whiteboard.draw',
-              actorId: command.actorId || 'agent-system-0',
-              payload: {
-                lessonId: payload.lessonId,
-                type: 'quiz',
-                data: JSON.stringify({ question: payload.question, options: payload.options })
-              }
-            });
-            return { elementId: result.elementId };
-          }
-        });
-      }
-    };`;
-    await kernelContainer.pluginRuntime.installPlugin(DEFAULT_PLUGIN);
-  }
-
-  // Install Rollcall Plugin if not present
-  const rollCallPlugin = kernelContainer.db.prepare("SELECT count(*) as count FROM plugins WHERE name = ?").get("Random Student Picker (随机点名小工具)") as any;
-  if (!rollCallPlugin || rollCallPlugin.count === 0) {
-    console.log('Installing Random Student Picker (随机点名小工具) plugin...');
-    const ROLLCALL_PLUGIN = `exports.default = {
-      manifest: {
-        id: "ext-roll-call",
-        name: "Random Student Picker (随机点名小工具)",
-        version: "1.0.0",
-        capabilitiesProposed: ["whiteboard:write", "management:read"],
-        classroomTools: [
-          {
-            id: "tool-rollcall-pick",
-            name: "随机学生抽问",
-            icon: "Shuffle",
-            description: "随机抽取一名学生进行课堂点名提问，并在白板和大屏上同步提示",
-            commandType: "rollcall.pick",
-            payload: {
-              classId: "$classId",
-              lessonId: "$lessonId"
-            }
-          }
-        ]
-      },
-      activate: async (ctx) => {
-        ctx.actionRegistry.register({
-          id: 'ext-rollcall-pick',
-          commandType: 'rollcall.pick',
-          description: '从班级中随机抽取一名学生进行课堂提问/点名，并投射到交互画板上',
-          capabilityRequired: 'management:read',
-          inputSchema: {
-            type: 'OBJECT',
-            properties: {
-              classId: { type: 'STRING', description: '班级 ID (必传，提取名册)' },
-              lessonId: { type: 'STRING', description: '关联课时 ID (传入后将点名效果同步投射到该课时白板上)' }
-            },
-            required: ['classId']
-          }
-        });
-
-        ctx.commandBus.registerHandler('rollcall.pick', {
-          execute: async (command) => {
-            const payload = command.payload;
-            const classId = payload.classId;
-            const lessonId = payload.lessonId;
-
-            let students = [];
-            try {
-              const res = await ctx.commandBus.execute({
-                id: 'int_' + Math.random().toString(36).slice(2),
-                type: 'class.get_students',
-                actorId: command.actorId || 'plugin-rollcall',
-                payload: { classId }
-              });
-              if (res && res.students) {
-                students = res.students;
-              }
-            } catch (e) {
-              console.error("Failed to fetch students via class.get_students", e);
-            }
-
-            if (students.length === 0) {
-              students = [
-                { id: "mock-s-1", name: "张明", email: "zhangming@edu-os.org" },
-                { id: "mock-s-2", name: "李华", email: "lihua@edu-os.org" },
-                { id: "mock-s-3", name: "王超", email: "wangchao@edu-os.org" },
-                { id: "mock-s-4", name: "赵丽", email: "zhaoli@edu-os.org" },
-                { id: "mock-s-5", name: "钱科", email: "qianke@edu-os.org" },
-                { id: "mock-s-6", name: "孙雪", email: "sunxue@edu-os.org" }
-              ];
-            }
-
-            const randomIndex = Math.floor(Math.random() * students.length);
-            const selectedStudent = students[randomIndex];
-
-            let elementId = null;
-            if (lessonId && lessonId !== "auto-id" && lessonId.trim() !== "") {
-              try {
-                const drawRes = await ctx.commandBus.execute({
-                  id: 'int_' + Math.random().toString(36).slice(2),
-                  type: 'whiteboard.draw',
-                  actorId: command.actorId || 'plugin-rollcall',
-                  payload: {
-                    lessonId: lessonId,
-                    type: 'rollcall',
-                    data: JSON.stringify({
-                      classId,
-                      selectedStudent,
-                      allStudents: students,
-                      pickedTime: new Date().toISOString(),
-                      status: 'picked'
-                    })
-                  }
-                });
-                if (drawRes && drawRes.elementId) {
-                  elementId = drawRes.elementId;
-                }
-              } catch (e) {
-                console.error("Failed to drop rollcall element on whiteboard", e);
-              }
-            }
-
-            return {
-              success: true,
-              selectedStudent,
-              allStudentsCount: students.length,
-              elementId,
-              message: "已从学员名单中随机提问抽选得主：" + selectedStudent.name
-            };
-          }
-        });
-      }
-    };`;
-    await kernelContainer.pluginRuntime.installPlugin(ROLLCALL_PLUGIN);
-  }
+  await kernelContainer.ready;
 
   const app = express();
   const PORT = 9000;
@@ -4632,7 +4445,7 @@ ${examsText}
 
   // Plugin APIs
   app.get('/api/plugins', (req, res) => {
-    res.json(kernelContainer.pluginRuntime.loadedPlugins);
+    res.json(kernelContainer.pluginHost.listPlugins());
   });
 
   app.post('/api/plugins/:id/toggle', async (req, res) => {
