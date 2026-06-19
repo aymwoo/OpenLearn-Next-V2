@@ -16,6 +16,7 @@
  */
 
 import { FrontendServiceRegistry } from './service-registry';
+import { BrowserWorkerManager } from './browser-worker-manager';
 import { usePluginHostStore } from './plugin-host-store';
 import {
   PluginState,
@@ -59,6 +60,14 @@ export interface PluginModule {
   deactivate?: () => Promise<void>;
 }
 
+/** All frontend service tokens available for Worker plugin RPC. */
+const FRONTEND_SERVICE_TOKENS = [
+  '@openlearn/frontend:IFrontendAPI',
+  '@openlearn/frontend:ISocketService',
+  '@openlearn/frontend:IUIService',
+  '@openlearn/frontend:IStorageService',
+];
+
 // ── FrontendPluginHost ───────────────────────────────────────────────────
 
 export class FrontendPluginHost {
@@ -67,9 +76,20 @@ export class FrontendPluginHost {
   private sourceCodes = new Map<string, string>();
   private pluginModules = new Map<string, PluginModule>();
   private moduleLoader: ModuleLoader;
+  /** BrowserWorkerManager for worker-mode plugin execution. */
+  private workerManager: BrowserWorkerManager | null = null;
 
   constructor(options?: { moduleLoader?: ModuleLoader }) {
     this.moduleLoader = options?.moduleLoader ?? this.defaultModuleLoader;
+  }
+
+  /**
+   * Set the BrowserWorkerManager for worker-mode plugin execution.
+   * Mirrors backend PluginHost.setWorkerManager pattern.
+   * Must be called before activating any worker-mode plugins.
+   */
+  setWorkerManager(wm: BrowserWorkerManager): void {
+    this.workerManager = wm;
   }
 
   // ── Initialization ───────────────────────────────────────────────────
@@ -142,6 +162,10 @@ export class FrontendPluginHost {
       throw new Error(`Plugin not found: ${pluginId}`);
     }
 
+    if (pluginInfo.executionMode === 'worker') {
+      return this.activateWorkerPlugin(pluginId, pluginInfo);
+    }
+
     if (pluginInfo.executionMode !== 'inline') {
       throw new Error(`Unsupported execution mode for activation: ${pluginInfo.executionMode}`);
     }
@@ -199,6 +223,75 @@ export class FrontendPluginHost {
         manifest,
         activate,
         deactivate: typeof deactivate === 'function' ? deactivate : undefined,
+      });
+
+      store.updatePluginState(pluginId, PluginState.ACTIVE);
+    } catch (err) {
+      store.updatePluginState(pluginId, PluginState.ERROR);
+      store.unregisterPluginExtensionPoints(pluginId);
+      throw err;
+    }
+  }
+
+  /**
+   * Activate a plugin in worker execution mode via BrowserWorkerManager.
+   *
+   * Creates a Web Worker, loads the plugin inside it, and sets up
+   * the ServiceProxy RPC channel.
+   */
+  private async activateWorkerPlugin(
+    pluginId: string,
+    pluginInfo: FrontendPluginInfo,
+  ): Promise<void> {
+    if (!this.workerManager) {
+      throw new Error(
+        `Cannot activate plugin "${pluginId}" in worker mode: BrowserWorkerManager not set. ` +
+          'Call setWorkerManager() first.',
+      );
+    }
+
+    const store = usePluginHostStore.getState();
+    const sourceCode = this.sourceCodes.get(pluginId);
+    if (!sourceCode) {
+      throw new Error(`No source code found for plugin: ${pluginId}`);
+    }
+
+    // Build manifest from source or stored data
+    const manifest: FrontendPluginManifest = {
+      id: pluginId,
+      name: pluginInfo.name,
+      version: pluginInfo.version,
+    };
+
+    store.updatePluginState(pluginId, PluginState.ACTIVATING);
+
+    try {
+      // Resolve ISocketService for event forwarding if available
+      let socketService: ISocketService | undefined;
+      if (this.registry) {
+        try {
+          socketService = await this.registry.resolve<ISocketService>(
+            '@openlearn/frontend:ISocketService',
+          );
+        } catch {
+          // No socket service registered — event forwarding disabled
+        }
+      }
+
+      const { serviceHost } = await this.workerManager.createWorker(
+        pluginId,
+        manifest,
+        sourceCode,
+        FRONTEND_SERVICE_TOKENS,
+        socketService,
+      );
+
+      this.pluginModules.set(pluginId, {
+        manifest,
+        activate: async () => {}, // Already activated via Worker bootstrap
+        deactivate: async () => {
+          await this.workerManager!.terminateWorker(pluginId);
+        },
       });
 
       store.updatePluginState(pluginId, PluginState.ACTIVE);
