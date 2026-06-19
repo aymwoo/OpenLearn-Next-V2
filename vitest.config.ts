@@ -10,6 +10,7 @@ export default defineConfig({
       'packages/plugins/__tests__/**/*.test.ts',
       'packages/core/__tests__/**/*.test.ts',
       'src/plugin-host/__tests__/**/*.test.{ts,tsx}',
+      'src/mfe/__tests__/**/*.test.{ts,tsx}',
     ],
     environment: 'node',
   },

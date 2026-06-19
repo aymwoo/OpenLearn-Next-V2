@@ -313,6 +313,14 @@ db.exec(`
     completion REAL,
     extra_json TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS mfe_remotes (
+    name TEXT PRIMARY KEY,
+    entry TEXT NOT NULL,
+    meta TEXT DEFAULT '{}',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Phase 5: Worker isolation mode support — execution_mode column for plugins table

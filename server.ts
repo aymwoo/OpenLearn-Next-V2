@@ -47,6 +47,10 @@ type StoredAIProvider = {
   model_name: string;
 };
 
+// ── MFE Remote Entry Cache ──────────────────────────────────────────────────
+/** In-memory cache for MFE remote entry URLs (D-24: cache-first strategy) */
+const MF_REMOTE_CACHE = new Map<string, { entry: string; meta: Record<string, any> }>();
+
 // Initialize core OS tools
 
 
@@ -2107,6 +2111,51 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       res.status(500).json({ error: e.message });
     }
   });
+
+    // ── MFE Remote Entries ─────────────────────────────────────────────────
+    app.get('/api/mfe/remotes', (req, res) => {
+      try {
+        const name = req.query.name as string | undefined;
+
+        if (!name) {
+          // Return all registered remotes
+          const rows = kernelContainer.db.prepare(
+            'SELECT name, entry, meta FROM mfe_remotes',
+          ).all() as Array<{ name: string; entry: string; meta: string }>;
+          return res.json({ success: true, result: rows });
+        }
+
+        // Cache-first strategy (D-24)
+        const cached = MF_REMOTE_CACHE.get(name);
+        if (cached) {
+          return res.json({ success: true, result: cached });
+        }
+
+        // Cache miss: query database
+        const row = kernelContainer.db.prepare(
+          'SELECT name, entry, meta FROM mfe_remotes WHERE name = ?',
+        ).get(name) as { name: string; entry: string; meta: string } | undefined;
+
+        if (!row) {
+          return res.status(404).json({
+            success: false,
+            error: `Remote "${name}" not registered`,
+          });
+        }
+
+        const result = {
+          entry: row.entry,
+          meta: JSON.parse(row.meta || '{}'),
+        };
+
+        // Populate cache (D-24)
+        MF_REMOTE_CACHE.set(name, result);
+
+        res.json({ success: true, result });
+      } catch (e: any) {
+        res.status(500).json({ success: false, error: e.message });
+      }
+    });
 
   // VFS APIs
   app.get('/api/vfs', (req, res) => {
