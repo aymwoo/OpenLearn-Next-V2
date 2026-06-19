@@ -34,19 +34,26 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 
 ### Active
 
-<!-- 当前阶段要构建的需求 -->
+<!-- Phase 9 要构建的需求 -->
 
-- [ ] **PLUG-01**：插件加载机制从 `vm.createContext` + `vm.Script.runInContext` 迁移到 `Blob` → `URL.createObjectURL()` → `import(url)` 动态 ESM 导入
-- [ ] **PLUG-02**：支持多文件插件包格式（ZIP/目录），包含 `manifest.json` + 入口文件 + 可选依赖
-- [ ] **PLUG-03**：双运行时支持——Node.js 端通过 Worker Thread 隔离执行插件，浏览器端通过 Web Worker 隔离执行插件
-- [ ] **PLUG-05**：生命周期钩子——每个插件实现 `activate(ctx)` 和 `deactivate()` 标准接口
-- [ ] **PLUG-06**：扩展点注册模式——将现有 `classroomTools`、`actionRegistry`、`commandBus` 等能力统一抽象为 Token 标识的 Service，插件通过 Token 获取服务实例
-- [ ] **PLUG-07**：全局事件总线服务 `IEventBusService`——插件通过此服务订阅/发布事件，无需单独注册扩展点
-- [ ] **PLUG-08**：Kernel 生命周期中间件管道——支持插件注册拦截器/中间件，在命令执行、事件发布等关键节点插入自定义逻辑
-- [ ] **PLUG-09**：Token 语义化版本兼容——插件声明依赖 Token 的版本范围（如 `ICommandBusService@^1.0`），基座在激活时检查版本兼容性
-- [ ] **PLUG-10**：插件热重载——开发模式下修改插件源码后自动重新加载和激活
-- [ ] **PLUG-11**：保留现有所有内置能力（action 注册、command handler、event 订阅、process handler、storage KV 持久化、AI 文本生成）作为 Token 化的 Service
-- [ ] **PLUG-12**：现有内置插件（Quiz Component Plugin、Random Student Picker）以新插件格式重写
+- [ ] **PLUG-13**：前端 PluginHost — 浏览器端 ServiceRegistry + WebWorker 管理 + 前端 Extension Points 渲染
+
+### Validated by Phase
+
+<!-- 已通过阶段验证的 PLUG 需求 -->
+
+- ✓ **PLUG-01**：ESM 动态加载（data: URL / Blob URL）— Phase 3
+- ✓ **PLUG-02**：多文件 ZIP 插件包格式 + manifest.json — Phase 3
+- ✓ **PLUG-03**：双运行时 Worker 隔离（Node.js Worker Thread / 浏览器 Web Worker stub）— Phase 5
+- ✓ **PLUG-04**：Token<T> 泛型类 + ServiceRegistry DI 容器 — Phase 1
+- ✓ **PLUG-05**：activate(ctx) / deactivate() 标准生命周期接口 — Phase 4
+- ✓ **PLUG-06**：扩展点 Token 化注册模式 — Phase 2
+- ✓ **PLUG-07**：全局事件总线服务 IEventBusService — Phase 6
+- ✓ **PLUG-08**：Kernel 生命周期中间件管道（洋葱模型）— Phase 7
+- ✓ **PLUG-09**：Token SemVer 版本兼容检查 — Phase 6
+- ✓ **PLUG-10**：插件热重载（chokidar + 原子替换策略）— Phase 7
+- ✓ **PLUG-11**：保留现有所有内置能力作为 Token 化 Service — Phase 2
+- ✓ **PLUG-12**：现有 6 个内置 + 2 个第三方插件以新格式重写，plugin-runtime 已删除 — Phase 8
 
 ### Out of Scope
 
@@ -60,8 +67,9 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 
 **技术环境：**
 - 当前运行时：Node.js + Express + SQLite（better-sqlite3），前端 React 19 + Vite 6
-- 当前插件系统：`packages/core/plugin-runtime/index.ts`，使用 `vm.createContext` + `vm.Script.runInContext`，单一 JS 字符串存在 SQLite `plugins` 表中
-- 现有插件 API 包装器：`wrappedCommandBus`、`wrappedEventBus`、`wrappedActionRegistry`、`wrappedProcessManager`、`wrappedStorage`、`wrappedAI`——均需重构为 Token 化 Service
+- 当前插件系统：PluginHost（esm-loader + Token DI + Worker Thread 隔离），插件存储于 SQLite `plugins` 表 + `dist/plugins/*.zip`
+- 当前插件 API：Token DI（7 个 IService Token）+ ServiceProxy RPC（跨 Worker 边界）
+- 已删除：`packages/core/plugin-runtime/index.ts`（旧 vm.createContext 沙箱）— Phase 8
 - 现有能力守卫：`CapabilityGuard` 基于字符串能力控制（如 `lesson:write`）
 - Node.js 20+ 已支持 `import()` 动态导入、`Worker Threads`、`Blob`
 
@@ -70,9 +78,10 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - VSCode Extension API：`activate`/`deactivate` 生命周期、`ExtensionContext` 传递能力
 
 **已知问题：**
-- 当前 `vm` 模块在 Node.js 文档中被标记为"仅用于可信代码"，且存在原型链逃逸风险
-- `plugin-runtime/index.ts` 已有大量安全包装代码（冻结原型链、超时保护、构造函数阻断），这些逻辑分散且难以维护
-- 无插件开发时的热重载能力，修改插件需手动重新安装
+- ~~`vm` 模块原型链逃逸风险~~ → 已解决：Worker Thread 隔离 + ServiceProxy RPC（Phase 5）
+- ~~`plugin-runtime/index.ts` 安全包装代码~~ → 已删除：PluginHost 替代（Phase 4 + Phase 8）
+- ~~无热重载~~ → 已解决：chokidar + 原子替换策略（Phase 7）
+- 浏览器端 Web Worker 支持为 stub → Phase 9 完整实现
 
 ## Constraints
 
@@ -87,13 +96,13 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| 使用 Blob URL + `import()` 替代 `vm` 模块 | 跨运行时兼容（浏览器/Node.js），原生 ESM 互引用 | — Pending |
-| Token DI 而非手动 ctx 注入 | JupyterLab 验证过的成熟模式，类型安全，可测试 | — Pending |
-| Worker Thread 隔离 | 补偿 `import()` 无沙箱的安全损失 | — Pending |
-| 多文件插件包 | 支持复杂插件（含资源文件、多模块、类型定义） | — Pending |
-| 全局 IEventBusService 统一事件 | 精简扩展点，降低插件开发学习曲线 | — Pending |
-| 语义化版本兼容 | 防止插件与基座版本不匹配导致的隐蔽 bug | — Pending |
-| 热重载 | 改善插件开发体验，减少迭代周期 | — Pending |
+| 使用 Blob URL + `import()` 替代 `vm` 模块 | 跨运行时兼容（浏览器/Node.js），原生 ESM 互引用 | ✓ Delivered — Phase 3 (ESM loader), Phase 4 (PluginHost) |
+| Token DI 而非手动 ctx 注入 | JupyterLab 验证过的成熟模式，类型安全，可测试 | ✓ Delivered — Phase 1 (Token/Registry), Phase 2 (7 IService Tokens) |
+| Worker Thread 隔离 | 补偿 `import()` 无沙箱的安全损失 | ✓ Delivered — Phase 5 (Worker lifecycle + ServiceProxy RPC) |
+| 多文件插件包 | 支持复杂插件（含资源文件、多模块、类型定义） | ✓ Delivered — Phase 3 (ZIP + manifest.json), Phase 8 (build-plugins.mjs) |
+| 全局 IEventBusService 统一事件 | 精简扩展点，降低插件开发学习曲线 | ✓ Delivered — Phase 6 |
+| 语义化版本兼容 | 防止插件与基座版本不匹配导致的隐蔽 bug | ✓ Delivered — Phase 6 (SemVer check + Token Registry) |
+| 热重载 | 改善插件开发体验，减少迭代周期 | ✓ Delivered — Phase 7 (chokidar + atomic replace) |
 
 ## Evolution
 
@@ -113,24 +122,25 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-17 after initialization*
+*Last updated: 2026-06-19 after Phase 8 (migration) completion*
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLUG-01 | Phase 3 — ESM 加载 + 包格式 | Pending |
-| PLUG-02 | Phase 3 — ESM 加载 + 包格式 | Pending |
-| PLUG-03 | Phase 5 — Worker 隔离 + 双运行时 | Pending |
-| PLUG-04 | Phase 1 — Token DI 内核 | Pending |
-| PLUG-05 | Phase 4 — PluginHost + 生命周期 | Pending |
-| PLUG-06 | Phase 2 — 现有能力 Token 化 | Pending |
-| PLUG-07 | Phase 6 — EventBus 服务 + SemVer 兼容 | Pending |
-| PLUG-08 | Phase 7 — 热重载 + 中间件管道 | Pending |
-| PLUG-09 | Phase 6 — EventBus 服务 + SemVer 兼容 | Pending |
-| PLUG-10 | Phase 7 — 热重载 + 中间件管道 | Pending |
-| PLUG-11 | Phase 2 — 现有能力 Token 化 | Pending |
-| PLUG-12 | Phase 8 — 现有插件迁移 | Pending |
+| PLUG-01 | Phase 3 — ESM 加载 + 包格式 | ✓ Validated |
+| PLUG-02 | Phase 3 — ESM 加载 + 包格式 | ✓ Validated |
+| PLUG-03 | Phase 5 — Worker 隔离 + 双运行时 | ✓ Validated |
+| PLUG-04 | Phase 1 — Token DI 内核 | ✓ Validated |
+| PLUG-05 | Phase 4 — PluginHost + 生命周期 | ✓ Validated |
+| PLUG-06 | Phase 2 — 现有能力 Token 化 | ✓ Validated |
+| PLUG-07 | Phase 6 — EventBus 服务 + SemVer 兼容 | ✓ Validated |
+| PLUG-08 | Phase 7 — 热重载 + 中间件管道 | ✓ Validated |
+| PLUG-09 | Phase 6 — EventBus 服务 + SemVer 兼容 | ✓ Validated |
+| PLUG-10 | Phase 7 — 热重载 + 中间件管道 | ✓ Validated |
+| PLUG-11 | Phase 2 — 现有能力 Token 化 | ✓ Validated |
+| PLUG-12 | Phase 8 — 现有插件迁移 | ✓ Validated |
+| PLUG-13 | Phase 9 — 前端集成 + 过渡期 | Active |
 
 ---
 *Last updated: 2026-06-18 after Phase 01 (token-di) completion*
