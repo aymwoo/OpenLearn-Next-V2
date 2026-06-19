@@ -8,6 +8,8 @@ import { NodeEsmLoader } from '../esm-loader/index.js';
 import { db } from '../db/index.js';
 import { v7 as uuidv7 } from 'uuid';
 import { ServiceRegistry } from '../di/service-registry.js';
+import { VfsPlugin } from '../../plugins/vfs.js';
+import { ProcessPlugin } from '../../plugins/process.js';
 import {
   ICommandBusServiceToken,
   IEventBusServiceToken,
@@ -16,6 +18,7 @@ import {
   IProcessServiceToken,
   IStorageServiceToken,
   IAIServiceToken,
+  IDatabaseToken,
 } from '../di/interfaces.js';
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
@@ -38,6 +41,7 @@ export class Kernel {
   public readonly aiService: AIService;
   public readonly pluginHost: PluginHost;
   public readonly workerManager: WorkerManager;
+  public readonly ready: Promise<void>;
 
   constructor() {
     // Layer 0 — 无依赖
@@ -81,6 +85,7 @@ export class Kernel {
     this.serviceRegistry.register(IActionRegistryServiceToken, this.actionRegistry as any);
     this.serviceRegistry.register(IProcessServiceToken, this.processManager as any);
     this.serviceRegistry.register(IAIServiceToken, this.aiService);
+    this.serviceRegistry.register(IDatabaseToken, this.db as any);
 
     // Capability check interceptor
     this.commandBus.setInterceptor(async (command) => {
@@ -111,6 +116,12 @@ export class Kernel {
       }
     });
 
+    // Auto-bootstrap system critical plugins (VFS, Process) - Wave 1 (Phase 8)
+    this.ready = this.bootstrapSystemPlugins().catch(err => {
+      console.error('[Kernel] Critical system plugin bootstrap failed:', err);
+      process.exit(1); // Hard crash
+    });
+
     // Phase 7: 开发模式热重载
     if (process.env.NODE_ENV === 'development') {
       const watchDir = path.resolve(process.cwd(), 'plugins');
@@ -122,6 +133,44 @@ export class Kernel {
         });
       } catch (err) {
         console.warn('[Kernel] Hot reload initialization failed:', (err as Error).message);
+      }
+    }
+  }
+
+  private async bootstrapSystemPlugins() {
+    const systemPlugins = [
+      { id: '@openlearn/plugin-vfs', mod: VfsPlugin, name: 'Virtual File System Plugin' },
+      { id: '@openlearn/plugin-process', mod: ProcessPlugin, name: 'Background Process Plugin' }
+    ];
+
+    for (const plugin of systemPlugins) {
+      try {
+        let row = this.db.prepare('SELECT id FROM plugins WHERE id = ?')
+          .get(plugin.id) as { id: string } | undefined;
+        
+        if (!row) {
+          this.db.prepare(
+            'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version, execution_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          ).run(
+            plugin.id,
+            plugin.name,
+            JSON.stringify(plugin.mod.manifest),
+            `// System built-in inline plugin: ${plugin.name}`,
+            'installed',
+            Date.now(),
+            'esm',
+            'inline'
+          );
+        }
+
+        // Register in PluginHost's preloadedPlugins map
+        this.pluginHost.registerPreloadedPlugin(plugin.id, plugin.mod);
+
+        // Activate plugin
+        await this.pluginHost.activatePlugin(plugin.id);
+      } catch (err) {
+        console.error(`[Kernel] Failed to bootstrap critical system plugin ${plugin.name}:`, err);
+        throw err;
       }
     }
   }

@@ -146,10 +146,10 @@
   4. 旧插件格式的代码（`packages/plugins/*.ts` 中直接 import kernelContainer 的 bootstrap 模式）通过适配器代理转换为新接口，不再直接耦合 Kernel 单例
   5. 插件迁移后，旧的 `plugin-runtime/index.ts`（vm 相关代码）可以被完全移除，无遗留依赖
 **Plans**: 4 plans
-  - [ ] 08-01-PLAN.md -- (要规划)
-  - [ ] 08-02-PLAN.md -- (要规划)
-  - [ ] 08-03-PLAN.md -- (要规划)
-  - [ ] 08-04-PLAN.md -- (要规划)
+  - [x] 08-01-PLAN.md — 系统核心级内置插件迁移 (vfs, process, IDatabaseToken, Kernel loader) (completed 2026-06-19)
+  - [ ] 08-02-PLAN.md — 业务逻辑内置插件迁移 (management, builtin, server.ts cleanup)
+  - [ ] 08-03-PLAN.md — AI 辅助插件迁移与旧系统删除 (ai-planner, ai-submit-injector, plugin-runtime deletion)
+  - [ ] 08-04-PLAN.md — 第三方插件打包构建与 Worker 沙箱测试 (Quiz, Rollcall TS, build-plugins.mjs, E2E RPC test)
 **UI hint**: no
 
 ### Phase 9: 前端集成 + 过渡期
@@ -180,5 +180,5 @@
 | 5. Worker 隔离 + 双运行时 | 4/4 | Complete    | 2026-06-18 |
 | 6. EventBus 服务 + SemVer 兼容 | 3/3 | Complete    | 2026-06-19 |
 | 7. 热重载 + 中间件管道 | 4/4 | Complete    | 2026-06-19 |
-| 8. 现有插件迁移 | 0/0 | Not started | - |
+| 8. 现有插件迁移 | 1/4 | In progress | 2026-06-19 |
 | 9. 前端集成 + 过渡期 | 0/0 | Not started | - |

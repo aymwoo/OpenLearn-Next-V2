@@ -315,3 +315,12 @@ export const IStorageServiceToken = new Token<IStorageService>(
 export const IAIServiceToken = new Token<IAIService>(
   '@openlearn/core:IAIService',
 );
+
+/**
+ * Token for Database.
+ * Identifier: @openlearn/core:IDatabase
+ */
+export const IDatabaseToken = new Token<import('better-sqlite3').Database>(
+  '@openlearn/core:IDatabase',
+);
+

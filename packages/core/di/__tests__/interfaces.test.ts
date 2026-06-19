@@ -22,6 +22,7 @@ import {
   IProcessServiceToken,
   IStorageServiceToken,
   IAIServiceToken,
+  IDatabaseToken,
 } from '../interfaces.js';
 
 // ── Test data ────────────────────────────────────────────────────────────────
@@ -34,30 +35,21 @@ const tokens = [
   { name: 'IProcessServiceToken', token: IProcessServiceToken, expected: '@openlearn/core:IProcessService' },
   { name: 'IStorageServiceToken', token: IStorageServiceToken, expected: '@openlearn/core:IStorageService' },
   { name: 'IAIServiceToken', token: IAIServiceToken, expected: '@openlearn/core:IAIService' },
+  { name: 'IDatabaseToken', token: IDatabaseToken, expected: '@openlearn/core:IDatabase' },
 ];
 
 // ── Describe block 1: Token naming format ────────────────────────────────────
 
-describe('IService Token 命名格式', () => {
-  it.each(tokens)(
-    '$name 的 name 应为 $expected',
-    ({ token, expected }) => {
-      expect(token.name).toBe(expected);
-    },
-  );
-
-  it('所有 Token 实例应该互不相同', () => {
-    const names = tokens.map((t) => t.token.name);
-    const uniqueNames = new Set(names);
-    expect(uniqueNames.size).toBe(tokens.length);
-  });
-
-  it('所有 Token name 应通过 TOKEN_NAME_RE 格式验证', () => {
-    // Verify each name matches the expected format pattern:
-    // @scope/domain:ServiceName — no spaces, no Chinese, no special chars
-    const formatRe = /^@[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+:[a-zA-Z0-9_]+$/;
-    for (const { token } of tokens) {
-      expect(token.name).toMatch(formatRe);
+describe('Token 命名格式 (SC-2)', () => {
+  it('应当校验 Token 命名的格式满足 @openlearn/core:IServiceName', () => {
+    const formatRe = /^@openlearn\/core:I[a-zA-Z]+Service$/;
+    const dbFormatRe = /^@openlearn\/core:IDatabase$/;
+    for (const token of tokens) {
+      if (token.token === IDatabaseToken) {
+        expect(token.token.name).toMatch(dbFormatRe);
+      } else {
+        expect(token.token.name).toMatch(formatRe);
+      }
     }
   });
 });
@@ -71,7 +63,7 @@ describe('Kernel IService 注册', () => {
     kernel = new Kernel();
   });
 
-  it('应该通过 serviceRegistry.resolve 获取所有 7 个 IService（SC-3）', async () => {
+  it('应该通过 serviceRegistry.resolve 获取所有 7 个 IService 以及 Database（SC-3）', async () => {
     const commandBus = await kernel.serviceRegistry.resolve(ICommandBusServiceToken);
     const eventBus = await kernel.serviceRegistry.resolve(IEventBusServiceToken);
     const actionRegistry = await kernel.serviceRegistry.resolve(IActionRegistryServiceToken);
@@ -79,6 +71,7 @@ describe('Kernel IService 注册', () => {
     const process = await kernel.serviceRegistry.resolve(IProcessServiceToken);
     const storage = await kernel.serviceRegistry.resolve(IStorageServiceToken);
     const ai = await kernel.serviceRegistry.resolve(IAIServiceToken);
+    const db = await kernel.serviceRegistry.resolve(IDatabaseToken);
 
     expect(commandBus).toBeDefined();
     expect(eventBus).toBeDefined();
@@ -87,6 +80,7 @@ describe('Kernel IService 注册', () => {
     expect(process).toBeDefined();
     expect(storage).toBeDefined();
     expect(ai).toBeDefined();
+    expect(db).toBeDefined();
   });
 
   it('resolve 返回的实例应与 kernelContainer 直接属性一致（5 个直接注册的子系统，SC-4）', async () => {

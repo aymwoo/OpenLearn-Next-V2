@@ -15,6 +15,7 @@ import type { IProcessService } from '../di/interfaces.js';
 import type { IStorageService } from '../di/interfaces.js';
 import type { IAIService } from '../di/interfaces.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
+import type { Token } from '../di/token.js';
 
 /**
  * Disposable — 可清理资源的统一接口。
@@ -51,7 +52,7 @@ export enum PluginState {
 /**
  * PluginContext — 插件激活时接收的上下文对象。
  *
- * 包含 7 个内核服务接口 + 插件标识信息 + manifest 元数据。
+ * 包含 7 个内核服务接口 + 插件标识信息 + manifest 元数据 + resolve 辅助函数。
  * ContextBuilder（Plan 03）负责构建此对象并进行安全包装。
  */
 export interface PluginContext {
@@ -69,6 +70,8 @@ export interface PluginContext {
   pluginId: string;
   /** 插件 manifest 元数据 */
   manifest: Manifest;
+  /** 解析依赖注入容器中的服务 */
+  resolve<T>(token: Token<T>): Promise<T>;
 }
 
 /**

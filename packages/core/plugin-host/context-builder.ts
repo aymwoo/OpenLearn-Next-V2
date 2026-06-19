@@ -15,6 +15,7 @@ import type { CommandHandler } from '../command-bus/index.js';
 import type { ActionDescriptor } from '../registry/index.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import type { PluginContext } from './types.js';
+import type { Token } from '../di/token.js';
 import type { ResourceTracker } from './resource-tracker.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
 import {
@@ -84,10 +85,10 @@ function wrapCommandBus(
           }
         },
       };
-      return commandBus.registerHandler(commandType, safeHandler).then(() => {
+      return Promise.resolve(commandBus.registerHandler(commandType, safeHandler)).then(() => {
         tracker.track(pluginId, {
           dispose: () => {
-            commandBus.unregisterHandler(commandType).catch(() => {});
+            Promise.resolve(commandBus.unregisterHandler(commandType)).catch(() => {});
           },
         });
       });
@@ -125,10 +126,10 @@ function wrapEventBus(
           console.error(`[Plugin:${pluginId}] Error in event subscriber for ${eventType}:`, e);
         }
       };
-      return eventBus.subscribe(eventType, safeSubscriber).then(() => {
+      return Promise.resolve(eventBus.subscribe(eventType, safeSubscriber)).then(() => {
         tracker.track(pluginId, {
           dispose: () => {
-            eventBus.unsubscribe(eventType, safeSubscriber).catch(() => {});
+            Promise.resolve(eventBus.unsubscribe(eventType, safeSubscriber)).catch(() => {});
           },
         });
       });
@@ -172,10 +173,10 @@ function wrapProcessManager(
           throw e;
         }
       };
-      return processService.registerHandler(taskType, safeHandler).then(() => {
+      return Promise.resolve(processService.registerHandler(taskType, safeHandler)).then(() => {
         tracker.track(pluginId, {
           dispose: () => {
-            processService.unregisterHandler(taskType).catch(() => {});
+            Promise.resolve(processService.unregisterHandler(taskType)).catch(() => {});
           },
         });
       });
@@ -227,16 +228,16 @@ function wrapActionRegistry(
 ): IActionRegistryService {
   return {
     register: createSafeFunction((descriptor: ActionDescriptor) => {
-      return actionRegistry.register(descriptor).then(() => {
+      return Promise.resolve(actionRegistry.register(descriptor)).then(() => {
         tracker.track(pluginId, {
           dispose: () => {
-            actionRegistry.unregister(descriptor.id).catch(() => {});
+            Promise.resolve(actionRegistry.unregister(descriptor.id)).catch(() => {});
           },
         });
       });
     }),
     unregister: createSafeFunction((id: string) => {
-      return actionRegistry.unregister(id);
+      return Promise.resolve(actionRegistry.unregister(id));
     }),
     getAllActions: createSafeFunction(() => {
       return actionRegistry.getAllActions();
@@ -442,5 +443,8 @@ export async function buildContext(
     services,
     pluginId,
     manifest,
+    resolve: <T>(token: Token<T>): Promise<T> => {
+      return serviceRegistry.resolve(token);
+    },
   };
 }

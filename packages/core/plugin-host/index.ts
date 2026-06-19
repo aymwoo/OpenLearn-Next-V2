@@ -100,6 +100,16 @@ export class PluginHost {
   // Phase 7: 中间件注册表 — 按生命周期阶段分组
   private middlewareRegistry = new Map<LifecyclePhase, Middleware[]>();
 
+  // Preloaded plugins map for built-in plugins running in inline mode (Phase 8)
+  private preloadedPlugins = new Map<
+    string,
+    {
+      manifest: any;
+      activate: (ctx: PluginContext) => Promise<void>;
+      deactivate?: () => Promise<void>;
+    }
+  >();
+
   // 活跃插件实例引用（manifest + activate/deactivate 函数）
   private pluginInstances = new Map<
     string,
@@ -110,6 +120,16 @@ export class PluginHost {
       workerRef?: { transport: IWorkerTransport; serviceHost: ServiceHost };
     }
   >();
+
+  /**
+   * Register a preloaded built-in plugin directly into memory (Phase 8).
+   */
+  registerPreloadedPlugin(
+    pluginId: string,
+    plugin: { manifest: any; activate: (ctx: PluginContext) => Promise<void>; deactivate?: () => Promise<void> }
+  ): void {
+    this.preloadedPlugins.set(pluginId, plugin);
+  }
 
   /**
    * D-02: 构造函数 — 接收 3 个核心依赖。
@@ -477,6 +497,87 @@ export class PluginHost {
 
     // 2. 设置状态为 ACTIVATING
     this.pluginStates.set(pluginId, PluginState.ACTIVATING);
+
+    // Phase 8: Check if this is a preloaded inline plugin
+    const preloaded = this.preloadedPlugins.get(pluginId);
+    if (preloaded) {
+      const manifest = preloaded.manifest;
+      const activate = preloaded.activate;
+      const deactivate = preloaded.deactivate;
+      const actorId = `plugin:${manifest.id}`;
+
+      try {
+        manifestSchema.parse(manifest);
+        const skipTokens = this.checkSemVerCompatibility(manifest, pluginId, 'activate');
+        const ctx = await buildContext(
+          this.serviceRegistry,
+          this.resourceTracker,
+          pluginId,
+          manifest,
+          this.db,
+          skipTokens,
+        );
+
+        const capService = await this.serviceRegistry.resolve<ICapabilityService>(
+          ICapabilityServiceToken,
+        );
+        const caps = manifest.capabilitiesProposed ?? [];
+        for (const cap of caps) {
+          await capService.grant(actorId, cap);
+        }
+
+        const middlewareCtx: MiddlewareContext = {
+          pluginId,
+          manifest,
+          phase: 'beforeActivate',
+          timestamp: Date.now(),
+        };
+
+        const before = this.getMiddleware('beforeActivate');
+        const after = this.getMiddleware('afterActivate');
+
+        const activatePipeline = compose([
+          ...before,
+          async (_ctx, next) => {
+            await next(); // 执行实际激活
+            const afterCtx: MiddlewareContext = { ...middlewareCtx, phase: 'afterActivate' };
+            const afterPipeline = compose(after);
+            await afterPipeline(afterCtx, async () => {});
+          },
+        ]);
+
+        await activatePipeline(middlewareCtx, async () => {
+          // 激活带 5 秒超时
+          await Promise.race([
+            activate(ctx),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => {
+                reject(new EsmLoadTimeoutError(ACTIVATION_TIMEOUT_MS));
+              }, ACTIVATION_TIMEOUT_MS),
+            ),
+          ]);
+        });
+
+        this.pluginInstances.set(pluginId, { manifest, activate, deactivate });
+        this.pluginStates.set(pluginId, PluginState.ACTIVE);
+
+        this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('active', pluginId);
+      } catch (err: any) {
+        console.error('[PluginHost] Preloaded plugin activation error stack:', err.stack);
+        this.pluginStates.set(pluginId, PluginState.ERROR);
+        this.resourceTracker.disposeAll(pluginId);
+        try {
+          const capService = await this.serviceRegistry.resolve<ICapabilityService>(
+            ICapabilityServiceToken,
+          );
+          await capService.revokeAll(actorId);
+        } catch {
+          // ignore
+        }
+        throw new EsmActivationError(pluginId, err.message);
+      }
+      return;
+    }
 
     // 3. 从 DB 加载插件
     const row = this.db

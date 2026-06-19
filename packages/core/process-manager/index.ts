@@ -1,5 +1,4 @@
 import { v7 as uuidv7 } from 'uuid';
-import { db } from '../db/index.js';
 import { Kernel } from '../kernel/index.js';
 
 export type ProcessHandler = (
@@ -25,7 +24,7 @@ export class ProcessManager {
   }
 
   public restore() {
-    const runnings = db.prepare('SELECT * FROM processes WHERE status = ?').all('running') as any[];
+    const runnings = this.kernel.db.prepare('SELECT * FROM processes WHERE status = ?').all('running') as any[];
     for (const p of runnings) {
       if (p.task_type) {
         this.resume(p.id, p.task_type, p.payload ? JSON.parse(p.payload) : {}, p.state ? JSON.parse(p.state) : null);
@@ -36,7 +35,7 @@ export class ProcessManager {
   public spawn(name: string, taskType: string, payload: any): string {
     const processId = uuidv7();
     
-    db.prepare('INSERT INTO processes (id, name, status, task_type, payload, state, logs, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    this.kernel.db.prepare('INSERT INTO processes (id, name, status, task_type, payload, state, logs, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(processId, name, 'running', taskType, JSON.stringify(payload), null, '', Date.now(), Date.now());
 
     this.kernel.eventBus.publish({
@@ -60,24 +59,24 @@ export class ProcessManager {
 
     let currentState = initialState;
     const logger = (msg: string) => {
-      const p = db.prepare('SELECT logs FROM processes WHERE id = ?').get(processId) as any;
+      const p = this.kernel.db.prepare('SELECT logs FROM processes WHERE id = ?').get(processId) as any;
       if (p) {
         const newLogs = (p.logs || '') + msg + '\n';
-        db.prepare('UPDATE processes SET logs = ?, updated_at = ? WHERE id = ?').run(newLogs, Date.now(), processId);
+        this.kernel.db.prepare('UPDATE processes SET logs = ?, updated_at = ? WHERE id = ?').run(newLogs, Date.now(), processId);
       }
     };
 
     const updateState = (newState: any) => {
       currentState = newState;
-      db.prepare('UPDATE processes SET state = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(newState), Date.now(), processId);
+      this.kernel.db.prepare('UPDATE processes SET state = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(newState), Date.now(), processId);
     };
 
     Promise.resolve().then(async () => {
       try {
         await handler(processId, payload, currentState, logger, updateState);
-        const p = db.prepare('SELECT status FROM processes WHERE id = ?').get(processId) as any;
+        const p = this.kernel.db.prepare('SELECT status FROM processes WHERE id = ?').get(processId) as any;
         if (p && p.status !== 'killed') {
-          db.prepare('UPDATE processes SET status = ?, updated_at = ? WHERE id = ?').run('completed', Date.now(), processId);
+          this.kernel.db.prepare('UPDATE processes SET status = ?, updated_at = ? WHERE id = ?').run('completed', Date.now(), processId);
           this.kernel.eventBus.publish({
             id: uuidv7(),
             type: 'process.completed',
@@ -94,7 +93,7 @@ export class ProcessManager {
   }
 
   private failProcess(processId: string, errorMsg: string) {
-    db.prepare('UPDATE processes SET status = ?, updated_at = ? WHERE id = ?').run('failed', Date.now(), processId);
+    this.kernel.db.prepare('UPDATE processes SET status = ?, updated_at = ? WHERE id = ?').run('failed', Date.now(), processId);
     this.kernel.eventBus.publish({
       id: uuidv7(),
       type: 'process.failed',
@@ -107,7 +106,7 @@ export class ProcessManager {
   public registerInterval(name: string, intervalMs: number, tickFn: (log: (msg: string) => void) => void): string {
     const processId = uuidv7();
     
-    db.prepare('INSERT INTO processes (id, name, status, task_type, logs, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    this.kernel.db.prepare('INSERT INTO processes (id, name, status, task_type, logs, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(processId, name, 'running', 'interval', '', Date.now(), Date.now());
 
     this.kernel.eventBus.publish({
@@ -119,10 +118,10 @@ export class ProcessManager {
     });
 
     const logger = (msg: string) => {
-      const p = db.prepare('SELECT logs FROM processes WHERE id = ?').get(processId) as any;
+      const p = this.kernel.db.prepare('SELECT logs FROM processes WHERE id = ?').get(processId) as any;
       if (p) {
         const newLogs = (p.logs || '') + msg + '\n';
-        db.prepare('UPDATE processes SET logs = ?, updated_at = ? WHERE id = ?').run(newLogs, Date.now(), processId);
+        this.kernel.db.prepare('UPDATE processes SET logs = ?, updated_at = ? WHERE id = ?').run(newLogs, Date.now(), processId);
       }
     };
 
@@ -145,7 +144,7 @@ export class ProcessManager {
       this.activeTasks.delete(processId);
     }
     
-    db.prepare('UPDATE processes SET status = ?, updated_at = ? WHERE id = ?').run('killed', Date.now(), processId);
+    this.kernel.db.prepare('UPDATE processes SET status = ?, updated_at = ? WHERE id = ?').run('killed', Date.now(), processId);
     
     this.kernel.eventBus.publish({
       id: uuidv7(),
