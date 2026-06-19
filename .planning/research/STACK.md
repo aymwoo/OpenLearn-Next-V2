@@ -1,155 +1,197 @@
-# Stack Research
+# 微前端选型研究：Vite Module Federation (Vite 6 + React 19)
 
-**Domain:** 插件系统重构 — JupyterLab 风格 Token DI + ESM 动态加载 + Worker Thread 隔离
-**Researched:** 2026-06-17
-**Confidence:** HIGH
-
-## Recommended Stack
-
-### Core Technologies
-
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| TypeScript | ~5.8 | 类型安全的 Token<Service> 接口定义 | 项目已在使用；Token 泛型的类型推导依赖严格的 ts 泛型支持 |
-| Node.js | >=20 | 服务端运行时 | 已固化的基础设施；`import()`、`worker_threads`、`Blob` 三个关键 API 在 Node 20 LTS 中均已稳定 |
-| React | ^19.0 | 前端 UI 框架 | 已在使用；浏览器端的插件容器需要将 React 组件作为扩展点暴露 |
-| Vite | ^6.2 | 前端构建/HMR + 浏览器端 Blob 插件打包 | 已在使用；HMR 能力可直接复用于插件源码变更检测与重载 |
-
-### 自定义 Token DI 容器（不自备框架，自行实现）
-
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| 自定义 `Token<T>` + `PluginRegistry` | — | 类型安全的依赖注入核心 | JupyterLab 的 `@lumino/coreutils` Token 类（v2.2.2）设计优秀但引入完整的 lumino 依赖链太重。核心逻辑仅 ~50 行：`Token<T>(name)` + `PluginRegistry` Map + 拓扑排序激活。**自建远优于引入 Awilix/TSyringe/Inversify**（见下文"不使用哪些"） |
-| `zod` | ^4.4 | Runtime 类型验证（manifest schema、plugin API 参数校验） | v4 已经发布，性能大幅提升（高于 v3 3-5 倍），提供 `z.coerce`、`z.string().brand()` 等高级特性；用于插件 manifest 校验和 RPC 调用的参数/返回值验证 |
-| `semver` | ^7.8 | 语义化版本范围检查（`ICommandBusService@^1.0` 匹配） | 事实标准库，npm 自用；`semver.satisfies()` 一行搞定 `requires`/`optional` 中的 `^1.0`、`>=2.0 <3.0` 等版本范围匹配 |
-| `tiny-invariant` | ^1.3 | 运行时断言语义（`manifest.id` 非空、`activate` 是函数等） | 零依赖，~217B gzipped；TypeScript 类型收窄（`T | null` -> `T`），比手写 `if (!x) throw` 干净得多 |
-
-### 插件加载：Blob URL + import() 双运行时桥接
-
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| `import-module-string` | ^2.0 | 跨运行时 ESM 字符串执行（data: URL / Blob URL） | Zach Leatherman 维护，MIT 协议；v2.0 已移除 adapter 选项，API 简化；使用 `acorn` 解析（轻量级 ESM 解析器）。**核心价值**：同一套 `importModuleString(pluginCode)` 调用在浏览器（Blob URL）和 Node.js（data: URL）均可工作，自动处理运行时差异 |
-| 自定义 `ZipPluginLoader` | — | 多文件 ZIP 插件包的解压、入口定位、manifest 读取 | 利用现有 `jszip`（^3.10）解压 ZIP，读取 `manifest.json`，找到入口文件，构建带有依赖映射的 import map，打包为 Blob URL 供 `import()` 加载 |
-
-### Worker Thread 隔离
-
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| `web-worker` | ^1.5 | 浏览器 `Worker` API 在 Node.js `worker_threads` 上的 polyfill | Jason Miller（Preact 作者）维护，Apache-2.0 协议，~760k 周下载量；提供 `new Worker(url, { type: 'module' })` 的统一 API，支持 `onmessage`、`addEventListener`、`postMessage` DOM 风格 API。**核心价值**：让 Worker Thread 隔离的插件宿主代码在 Node.js 和浏览器间完全一致 |
-| `worker.postMessage` + `MessageChannel` | 内置 | Worker RPC 通信主干 | Node.js `worker_threads` 和浏览器 `Worker` 均支持。使用 `MessageChannel` 建立主线程与 Worker 之间的双工通信管道，通过 Promise-per-call（callId 映射）模式实现异步 RPC |
-
-### SQLite 数据层（不变动）
-
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| `better-sqlite3` | ^12.10 | 插件元数据 + KV 持久化存储 | 已在用；Worker Thread 隔离架构下，**每个 Worker 不能直接访问主线程的 DB 连接**。正确模式：主线程持有唯一 DB 连接，Worker 通过 RPC（`postMessage`）请求数据库操作，主线程代理执行后返回结果。better-sqlite3 使用 SQLite 多线程模式，多连接安全但不共享连接对象 |
-
-### 热重载支持
-
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| `chokidar` | ^5.0 | 文件系统监听（Node.js 端插件源码变更检测） | 事实标准文件监控库；v5 全新架构，性能大幅优化；监控 `plugins/` 目录，检测 `.ts/.js/.json` 变更后触发重载 |
-| Vite `import.meta.hot` | 内置 | 浏览器端 HMR 插件重载 | Vite 6 内置；开发模式下插件源码变更自动触发热更新 |
-
-### 插件打包与分发
-
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| `jszip` | ^3.10 | ZIP 插件包创建/读取 | 已在用；插件以 ZIP 包（manifest.json + 入口 .js + 可选资源）形式分发，运行时解压读取 |
-| `glob` | ^13.0 | 插件目录内文件发现（多文件插件的文件清单） | 轻量级，用于扫描插件目录中所有 `.ts/.js` 文件，构建 Blob URL 加载所需的 import map |
-
-### Development Tools
-
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| TypeScript `noEmit: true` | 仅类型检查 | 保持现有 tsconfig 配置 |
-| `tsx` ^4.21 | 开发时 TypeScript 直接运行 | 保持现有 |
-| `esbuild` ^0.25 | 生产构建（server.ts -> dist/server.cjs） | 保持现有；插件 Worker 脚本也可用 esbuild 打包为单文件 ESM |
-| Vite HMR | 前端热更新 | 保持现有，可复用为插件浏览器端热重载 |
-
-## Installation
-
-```bash
-# 新增核心依赖
-pnpm add zod@^4.4 semver@^7.8 tiny-invariant@^1.3 import-module-string@^2.0 web-worker@^1.5 chokidar@^5.0 glob@^13.0
-
-# 现有依赖不变
-# pnpm add jszip@^3.10  # 已有
-# pnpm add better-sqlite3@^12.10  # 已有
-```
-
-## Alternatives Considered
-
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| 自定义 Token<T> + PluginRegistry | Awilix（^13.0） | 如果需要装饰器风格注册、请求级作用域容器、配置对象注入等完整 IoC 功能，Awilix 是首选。但插件系统需要的是**轻量 Token 注册 + 拓扑排序激活**，不是通用 IoC |
-| 自定义 Token<T> + PluginRegistry | TSyringe（Microsoft） | 如果团队习惯装饰器 DI 且需要反射注入。但 TSyringe 不支持异步激活（`await container.resolve()` 不可用），而插件激活必然是异步的（Worker 通信、DB 访问） |
-| 自定义 Token<T> + PluginRegistry | Inversify | 功能最全但最重（~30KB min+gzip），需要 `reflect-metadata` + `experimentalDecorators`。插件系统不需要其复杂绑定规则，杀鸡用牛刀 |
-| import-module-string ^2.0 | `vm.Module`（Node.js） | 如果**仅** Node.js 运行时，`vm.Module` 有更好的隔离性。但需要双运行时，`vm.Module` 浏览器不可用 |
-| import-module-string ^2.0 | 手写 `import(data:...)` | 如果是简单场景不介意自行处理 URL 编码和错误映射。但 `import-module-string` 处理了 `import.meta.url` 模拟、相对路径导入、acorn 解析等边缘情况，省去大量细节 |
-| web-worker ^1.5 | 手写 `worker_threads` + `Worker` 桥接层 | 如果包体积极度敏感且愿意自行处理两种 API 的差异（DOM 事件 vs 原生回调、`parentPort` vs `self`）。本项目"双运行时"是核心需求，`web-worker` 的抽象是必要投资 |
-| chokidar ^5.0 | `fs.watch` | 如果不需要递归监控。但插件目录嵌套复杂，`fs.watch` 在不同平台上的行为不一致，chokidar 是标准解 |
-| semver ^7.8 | 手写 `satisfies()` 逻辑 | 如果只需简单 `>=` 比较。但语义化版本范围匹配（`^1.0`、`~2.0.0`、`>=3.0 <4.0`）有大量边缘情况，semver 是 npm 生态的基础设施 |
-| zod ^4.4 | 手写类型守卫 | 如果 schema 简单且不需要 JSON Schema 导出。但插件 manifest、RPC 调用参数、服务接口等需要可序列化的 Schema 定义，zod 可兼做运行时验证和类型推导 |
-
-## What NOT to Use
-
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| `@lumino/coreutils`（完整引入） | Token 类本身极简（~15 行），但引入整个 `@lumino/*` 生态链（application、widgets、commands 等）依赖爆炸。我们只需要 `Token<T>` 和 PluginRegistry 模式，不是整个 JupyterLab 前端框架 | 自定义 `Token<T>`（~20 行） + `PluginRegistry`（自建容器） |
-| `vm.createContext` + `vm.Script.runInContext` | **这是我们要替换掉的**。Node.js 官方标记为"仅用于可信代码"，原型链逃逸风险高，浏览器不可用 | `import-module-string`（ESM import）+ Worker Thread 隔离 |
-| `eval()` / `new Function()` | 无 ESM 支持（没有 `export`/`import`），无法加载模块化插件代码；无法限制全局作用域污染 | `import('data:...')` / `import('blob:...')` |
-| `async_hooks` / `domain` | Node.js 废弃 API，与 Worker Threads 体系不兼容 | Worker Thread 隔离 + MessageChannel RPC |
-| `Reflect.metadata` + 装饰器 DI | 需要 `experimentalDecorators` + `emitDecoratorMetadata`，与项目现有 `moduleResolution: bundler` 可能有冲突；异步激活不可用（装饰器不可异步） | 自定义 `Token<T>` + 手动注册模式，完全显式，零魔法 |
-| 每个 Worker 持有独立 `better-sqlite3` 连接 | `better-sqlite3` 使用 WAL 模式 + 多线程模式是安全的，但**多个 Worker 写同一个数据库文件**会导致 `SQLITE_BUSY` 或锁升级。项目不需要多 Worker 并行写 | 主线程持有唯一 DB 连接，Worker 通过 RPC 代理访问 |
-| `@cloudpss/worker` / `threadop` 等高级 Worker 池 | 插件系统每个插件一个 Worker 实例，生命周期明确（activate/ deactivate），不需要动态线程池和自动伸缩 | `web-worker` 的一对一 Worker 模型足够 |
-
-## Stack Patterns by Variant
-
-**如果 Worker 线程需要调用插件 API（AI 生成、存储读写）：**
-- 使用 `MessageChannel` RPC 模式，主线程暴露 `{ storage, ai, db, eventBus }` 等 Tokenized Service 的代理
-- 每个 RPC 调用带有唯一 `callId`，Worker 端 `await` 等待主线程执行完成并返回
-- 主线程端对所有 RPC 调用执行能力检查（`CapabilityGuard`）
-
-**如果插件不需要 Worker 隔离（内置信任插件）：**
-- 直接在主线程通过 `import-module-string` 加载
-- Token DI 解析和激活在主线程执行
-- 跳过 `postMessage` 序列化开销
-
-**如果浏览器端（前端插件，后续阶段）：**
-- 使用 `import-module-string` 的 Blob URL 路径（浏览器原生支持）
-- Web Worker 替代 Worker Thread
-- `web-worker` 提供统一 API，无需改代码
-
-## Version Compatibility
-
-| Package A | Compatible With | Notes |
-|-----------|-----------------|-------|
-| zod@^4.4 | TypeScript>=5.0 | Zod v4 需要 TS 5.0+，项目满足 |
-| web-worker@^1.5 | Node.js>=12.8（module workers） | Node 20 完全支持，无兼容性问题 |
-| import-module-string@^2.0 | Node>=18, Chromium>=80, Firefox>=67, Safari>=15 | v2.0 移除了 adapter 选项，更简洁 |
-| chokidar@^5.0 | Node>=18 | 项目 Node 20，满足 |
-| semver@^7.8 | 无特殊要求 | 纯 JS，零 System 依赖 |
-| tiny-invariant@^1.3 | 无特殊要求 | 纯 JS，~200B gzipped |
-| jszip@^3.10 | 已在使用 | 不变动 |
-
-## Sources
-
-- [import-module-string npm page](https://www.npmjs.com/package/import-module-string) — v2.0.3 最新版本，NPM registry API 查询确认
-- [web-worker npm page](https://www.npmjs.com/package/web-worker) — v1.5.0 最新版本，NPM registry API 查询确认
-- [@lumino/coreutils npm page](https://www.npmjs.com/package/@lumino/coreutils) — v2.2.2 最新版本，NPM registry API 查询确认
-- [semver npm registry](https://www.npmjs.com/package/semver) — v7.8.4 最新版本，NPM registry API 查询确认
-- [zod npm registry](https://www.npmjs.com/package/zod) — v4.4.3 最新版本，NPM registry API 查询确认
-- [tiny-invariant npm page](https://www.npmjs.com/package/tiny-invariant) — v1.3.3 最新版本，NPM registry API 查询确认
-- [awilix npm registry](https://www.npmjs.com/package/awilix) — v13.0.5 最新版本，NPM registry API 查询确认
-- [chokidar npm registry](https://www.npmjs.com/package/chokidar) — v5.0.0 最新版本，NPM registry API 查询确认
-- [glob npm registry](https://www.npmjs.com/package/glob) — v13.0.6 最新版本，NPM registry API 查询确认
-- [better-sqlite3 thread safety issue #1138](https://github.com/WiseLibs/better-sqlite3/issues/1138) — 确认多线程模式合理使用方式（MEDIUM confidence）
-- [Node.js worker_threads 官方文档](https://nodejs.org/api/worker_threads.html) — MessageChannel、Worker options（HIGH confidence）
-- [JupyterLab Plugin System DeepWiki](https://deepwiki.com/jupyterlab/jupyterlab/3.2-plugin-system) — Token 模式、requires/optional/provides、拓扑排序（MEDIUM confidence，第三方 Wiki 但直接引用源码）
-- [npm-compare: awilix vs inversify vs tsyringe](https://npm-compare.com/awilix,inversify,tsyringe) — DI 库对比（LOW confidence，聚合站点，但多个独立源一致）
-- [zod v4 announcement](https://www.infoq.com/news/2025/08/zod-v4-available/) — Zod v4 特性与性能提升（LOW confidence，新闻网站，但引用了官方 changelog）
+本篇文档针对 **OpenLearnV2** 的微前端架构（将庞大的 `App.tsx` 拆分为独立的微应用模块并基于前端集成 Vite Module Federation）进行技术栈选型研究，为后续的路线图制定（Roadmap Creation）提供详细、确切的决策支持。
 
 ---
-*Stack research for: 插件系统重构 — JupyterLab 风格 Token DI + ESM 动态加载 + Worker Thread 隔离*
-*Researched: 2026-06-17*
+
+## 1. 核心依赖选型与版本
+
+经过对现代微前端生态及构建工具链的充分调研与对比，OpenLearnV2 的微前端改造**必须使用且仅使用**以下依赖项：
+
+| 依赖包名称 | 推荐版本范围 | 安装位置 | 选型理由 |
+| :--- | :--- | :--- | :--- |
+| **`@module-federation/vite`** | `^1.16.8` | `devDependencies` (基座与子应用) | **Module Federation 2.0 (MF2)** 官方维护的 Vite 插件。支持跨构建工具联邦（如 Webpack/Rspack/Vite 混合使用），并具备第一方类型共享 (Type Sharing) 和基于 Manifest 的动态发现能力，深度适配 Vite 6 架构。 |
+| **`@module-federation/runtime`** | `^1.16.8` | `dependencies` (动态加载器 / 宿主壳) | 官方的轻量级运行时包。在宿主壳 (Shell App) 需要进行完全动态的 Remote 加载、注册与错误处理（如 circuit breaker / 降级策略）时，由运行时 API 提供第一方底层支持。 |
+
+### 🚫 严禁引入/弃用的插件与库
+
+1. **`@originjs/vite-plugin-federation` (彻底弃用)**：
+   * **原因**：该插件长期疏于维护，缺少对 Vite 6 的 Environment API 的原生支持。在 React 19 环境下会导致 HMR (热重载) 崩溃、虚拟模块解析错误以及 top-level await 编译失效，因此**严禁在本项目中使用**。
+2. **`jskits/vite-plugin-federation` (不推荐)**：
+   * **原因**：虽然该插件修复了 originjs 的部分 Vite 6 兼容性问题，但其并非 Module Federation 2.0 官方标准规范，无法享受官方 MF2 提供的统一运行时优化、热模块替换和跨构建工具（Webpack/Rspack）的互操作特性。
+
+---
+
+## 2. React 19 / Zustand 5 的单例共享规范
+
+React 19 在浏览器端要求**强单例运行时**。如果基座 (Host) 和子应用 (Remote) 加载了两个不同实例的 React 核心库，会导致 Hook 上下文丢失、渲染树断裂以及致命运行时崩溃。同时，基座的状态管理 (Zustand 5) 必须穿透共享给子应用。
+
+因此，两端的 `@module-federation/vite` 配置文件中必须严格配置如下 `shared` 字段：
+
+```typescript
+// module-federation.config.ts 或 vite.config.ts
+shared: {
+  react: {
+    singleton: true,
+    requiredVersion: '^19.0.1',
+    strictVersion: true, // 强制版本匹配，若不匹配在控制台报错并中断
+  },
+  'react-dom': {
+    singleton: true,
+    requiredVersion: '^19.0.1',
+    strictVersion: true,
+  },
+  zustand: {
+    singleton: true,
+    requiredVersion: '^5.0.14',
+    strictVersion: false, // 允许小版本范围兼容
+  }
+}
+```
+
+---
+
+## 3. Tailwind CSS v4 样式集成与编译管道
+
+OpenLearnV2 当前的技术栈已升级至 Tailwind CSS v4 (`@tailwindcss/vite: ^4.1.14`)。Tailwind v4 取消了传统的 `tailwind.config.js`，完全采用 **CSS-First** 配置模式。
+
+### 核心问题
+由于 Host (Shell App) 和 Remote (子应用) 是独立构建的，Host 的构建过程在默认情况下**完全无法感知** Remote 中所编写的 HTML/TypeScript 类名。如果两端各自打包一份 Tailwind 样式，会导致：
+1. 重复注入 Tailwind 基础样式（Reset CSS/Preflight），造成页面样式混乱和极大的带宽浪费。
+2. 远程组件在 Host 中渲染时，因 Host 构建时扫描不到该组件源码，导致 Remote 独有的 Tailwind 工具类样式完全缺失。
+
+### 推荐解决手段 (CSS 编译指令)
+为了将整个微前端生态的样式打通，Host (壳应用) 必须在其全局样式文件（如 `src/index.css`）中，使用 v4 引入的 `@source` 指令显式包含所有子应用的源文件目录。
+
+```css
+/* packages/shell/src/index.css (或主入口 css) */
+@import "tailwindcss";
+
+/* 1. 包含当前 Host 的扫描路径 */
+@source "./src";
+
+/* 2. 包含本地开发的远程插件/微前端模块源码路径，使 Host 的 Tailwind 编译器能提取所有类名 */
+@source "../../packages/plugins/*/src";
+@source "../../src/plugins/*/src";
+```
+
+而在 Remote 子应用打包时，**不应该**在子应用的 CSS 产物中包含完整的 Tailwind 基础规则，仅打包其自定义样式，从而确保样式是由 Host 统一管理、扫描并最终合并输出，消除样式膨胀。
+
+---
+
+## 4. Vite 6 编译目标与宿主环境集成配置
+
+为了支持 Module Federation 运行时动态加载 ESM 模块，Host 与 Remote 在 Vite 6 下的编译目标必须支持 Top-level await。
+
+### Host (基座 / Shell App) 配置示例
+```typescript
+// vite.config.ts (Host App)
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { federation } from '@module-federation/vite';
+import path from 'path';
+
+export default defineConfig(() => {
+  return {
+    plugins: [
+      react(),
+      tailwindcss(),
+      federation({
+        name: 'shell_app',
+        remotes: {
+          // 静态注册的 Remote (此处可为空，以便后续动态注册)
+        },
+        shared: {
+          react: { singleton: true, requiredVersion: '^19.0.1' },
+          'react-dom': { singleton: true, requiredVersion: '^19.0.1' },
+          zustand: { singleton: true, requiredVersion: '^5.0.14' },
+        },
+      }),
+    ],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      },
+    },
+    build: {
+      target: 'esnext', // 必须设为 esnext，以允许构建产物使用原生 top-level await 异步动态导入
+      minify: 'esbuild',
+      cssCodeSplit: true,
+    },
+  };
+});
+```
+
+### Remote (子应用 / 插件) 配置示例
+```typescript
+// packages/plugins/my-plugin/vite.config.ts (Remote App)
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { federation } from '@module-federation/vite';
+import path from 'path';
+
+export default defineConfig({
+  plugins: [
+    react(),
+    tailwindcss(),
+    federation({
+      name: 'remote_my_plugin',
+      filename: 'remoteEntry.js',
+      exposes: {
+        // 暴露子应用的挂载入口或生命周期方法
+        './PluginEntry': './src/PluginEntry.tsx',
+      },
+      shared: {
+        react: { singleton: true, requiredVersion: '^19.0.1' },
+        'react-dom': { singleton: true, requiredVersion: '^19.0.1' },
+        zustand: { singleton: true, requiredVersion: '^5.0.14' },
+      },
+    }),
+  ],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+  build: {
+    target: 'esnext',
+  },
+});
+```
+
+---
+
+## 5. 微前端运行时与动态加载器设计建议 (MFE-02)
+
+为了对接 Phase 2.0 中定义的 **MFE-02 (Shell App 与动态微应用加载器)**，推荐使用 `@module-federation/runtime` 的原生 API。在运行时，Shell App 可以根据数据库（SQLite `plugins` 表）中的插件注册地址，动态加载 Remote 应用：
+
+```typescript
+import { init, loadRemote } from '@module-federation/runtime';
+
+// 1. 初始化 Module Federation 运行时，动态发现注册的服务
+init({
+  name: 'shell_app',
+  remotes: [
+    {
+      name: 'remote_my_plugin',
+      entry: 'http://localhost:5001/remoteEntry.js', // 可从 API 动态获取
+    },
+  ],
+});
+
+// 2. 在路由或插件生命周期节点动态导入
+async function mountRemotePlugin(pluginName: string) {
+  try {
+    const module = await loadRemote(`${pluginName}/PluginEntry`);
+    // 执行微应用标准挂载生命周期 (bootstrap, mount)
+    return module;
+  } catch (error) {
+    console.error(`Failed to load remote plugin: ${pluginName}`, error);
+    // 回退到安全降级 UI
+  }
+}
+```
+
+该方案完美兼容现有的 `PluginHost` 类型安全和 SemVer 版本控制机制，为后续宿主状态共享（MFE-04）以及路由解耦抽离（MFE-05）打下了可靠的底层架构基础。

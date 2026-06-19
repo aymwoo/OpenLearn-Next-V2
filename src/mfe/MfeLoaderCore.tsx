@@ -26,7 +26,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
-import { loadRemote } from '@module-federation/runtime';
+import { loadRemote, registerRemotes } from '@module-federation/runtime';
 import MfeLoadingFallback from '../components/MfeLoadingFallback';
 import MfeErrorFallback from '../components/MfeErrorFallback';
 import { fetchRemoteEntry } from './api';
@@ -206,12 +206,21 @@ export function MfeLoaderCore({
       try {
         // ── 1. Resolve entry URL ──────────────────────────────────────
         // D-23, D-24: Use entry prop or fetch via API with cache
-        if (!entry) {
+        let resolvedEntry = entry;
+        if (!resolvedEntry) {
           const cached = cacheGet(name);
-          if (!cached) {
+          if (cached) {
+            resolvedEntry = cached.entry;
+          } else {
             const remoteEntry = await fetchRemoteEntry(name);
             cacheSet(name, { entry: remoteEntry.entry, meta: remoteEntry.meta });
+            resolvedEntry = remoteEntry.entry;
           }
+        }
+
+        // Register the remote with the MF runtime so loadRemote can resolve it
+        if (resolvedEntry) {
+          registerRemotes([{ name, entry: resolvedEntry }]);
         }
 
         // ── 2. Load remote module ─────────────────────────────────────
@@ -297,9 +306,9 @@ export function MfeLoaderCore({
 
   // ── Rendering ──────────────────────────────────────────────────────
 
-  // On error: render null (parent MfeErrorBoundary handles error display)
-  if (state === 'error') {
-    return null;
+  // On error: throw to parent MfeErrorBoundary so it renders error fallback
+  if (state === 'error' && error) {
+    throw error;
   }
 
   // On loading: render fallback or default MfeLoadingFallback

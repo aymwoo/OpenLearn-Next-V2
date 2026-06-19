@@ -75,6 +75,12 @@ export class ServiceHost {
    *                   subscriptions on the real EventBus. When absent, subscribe/unsubscribe
    *                   emit a warning.
    */
+  private readonly pendingCommandExecutes = new Map<
+    string,
+    { resolve: (val: unknown) => void; reject: (err: Error) => void }
+  >();
+  private readonly registeredCommandTypes = new Set<string>();
+
   constructor(
     private readonly serviceRegistry: ServiceRegistry,
     private readonly capabilityGuard: CapabilityGuard,
@@ -133,6 +139,28 @@ export class ServiceHost {
         case 'unsubscribe':
           this.handleUnsubscribe(msg as UnsubscribeMessage);
           break;
+
+        case 'commandResult': {
+          const rMsg = msg as { invokeId: string; value: unknown };
+          const pending = this.pendingCommandExecutes.get(rMsg.invokeId);
+          if (pending) {
+            this.pendingCommandExecutes.delete(rMsg.invokeId);
+            pending.resolve(rMsg.value);
+          }
+          break;
+        }
+
+        case 'commandError': {
+          const eMsg = msg as { invokeId: string; message: string; stack?: string };
+          const pending = this.pendingCommandExecutes.get(eMsg.invokeId);
+          if (pending) {
+            this.pendingCommandExecutes.delete(eMsg.invokeId);
+            const err = new Error(eMsg.message);
+            err.stack = eMsg.stack;
+            pending.reject(err);
+          }
+          break;
+        }
 
         case 'activated':
         case 'deactivated':
@@ -211,6 +239,41 @@ export class ServiceHost {
     this.eventForwarder = undefined;
   }
 
+  /**
+   * Dispose all resources held by this ServiceHost (EventForwarder and registered command handlers).
+   * Called by WorkerManager when the worker is terminated.
+   */
+  async dispose(): Promise<void> {
+    this.disposeEventForwarder();
+
+    // Clean up registered command handlers
+    if (this.registeredCommandTypes.size > 0) {
+      try {
+        const commandBus = (await this.resolveService(
+          '@openlearn/core:ICommandBusService',
+        )) as any;
+        if (commandBus) {
+          for (const commandType of this.registeredCommandTypes) {
+            try {
+              commandBus.unregisterHandler(commandType);
+            } catch (err) {
+              console.error(
+                `[ServiceHost] Failed to unregister command handler "${commandType}" on dispose:`,
+                err,
+              );
+            }
+          }
+        }
+      } catch (err) {
+        console.error(
+          `[ServiceHost] Failed to resolve commandBus on dispose:`,
+          err,
+        );
+      }
+      this.registeredCommandTypes.clear();
+    }
+  }
+
   // ── Invoke handling (core RPC logic) ───────────────────────────────────
 
   /**
@@ -247,6 +310,70 @@ export class ServiceHost {
 
       // ── Resolve service by token name ──────────────────────────────
       const service = await this.resolveService(msg.token);
+
+      // ── Intercept IDatabase RPC helper methods ──────────────────────
+      if (msg.token === '@openlearn/core:IDatabase') {
+        const db = service as import('better-sqlite3').Database;
+        let result: unknown;
+        if (msg.method === 'prepareAndRun') {
+          const [sql, args] = msg.args as [string, unknown[]];
+          result = db.prepare(sql).run(...args);
+        } else if (msg.method === 'prepareAndGet') {
+          const [sql, args] = msg.args as [string, unknown[]];
+          result = db.prepare(sql).get(...args);
+        } else if (msg.method === 'prepareAndAll') {
+          const [sql, args] = msg.args as [string, unknown[]];
+          result = db.prepare(sql).all(...args);
+        } else {
+          throw new Error(`Method "${msg.method}" not supported on IDatabase RPC`);
+        }
+
+        transport.postMessage({
+          type: 'result',
+          invokeId: msg.invokeId,
+          value: result,
+        });
+        return;
+      }
+
+      // ── Intercept ICommandBusService helper methods ─────────────────
+      if (msg.token === '@openlearn/core:ICommandBusService') {
+        const commandBus = service as import('../command-bus/index.js').CommandBus;
+        if (msg.method === 'registerHandler') {
+          const [commandType] = msg.args as [string];
+          commandBus.registerHandler(commandType, {
+            execute: async (command) => {
+              const rpcId = globalThis.crypto.randomUUID();
+              return new Promise((resolve, reject) => {
+                this.pendingCommandExecutes.set(rpcId, { resolve, reject });
+                transport.postMessage({
+                  type: 'executeCommand',
+                  invokeId: rpcId,
+                  commandType,
+                  command,
+                });
+              });
+            },
+          });
+          this.registeredCommandTypes.add(commandType);
+          transport.postMessage({
+            type: 'result',
+            invokeId: msg.invokeId,
+            value: undefined,
+          });
+          return;
+        } else if (msg.method === 'unregisterHandler') {
+          const [commandType] = msg.args as [string];
+          commandBus.unregisterHandler(commandType);
+          this.registeredCommandTypes.delete(commandType);
+          transport.postMessage({
+            type: 'result',
+            invokeId: msg.invokeId,
+            value: undefined,
+          });
+          return;
+        }
+      }
 
       // ── Get the method from the service instance ───────────────────
       const method = (service as Record<string, unknown>)[msg.method];

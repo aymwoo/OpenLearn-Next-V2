@@ -1,214 +1,185 @@
-# Feature Research
+# Feature Research — Micro-frontends & Vite Module Federation
 
-**Domain:** JupyterLab-style 插件系统（教育 OS / LMS 平台）
-**Researched:** 2026-06-17
-**Confidence:** HIGH
+**Domain:** Vite Module Federation 微前端架构（教育 OS / LMS 平台 OpenLearnV2）  
+**Researched:** 2026-06-19  
+**Confidence:** HIGH  
 
-## Feature Landscape
+---
+
+## 1. Domain Ecosystem Overview
+
+在插拔式 LMS（学习管理系统）或教育操作系统中，微前端（Micro-frontends, MFE）的核心价值在于**将庞大单体前端解耦，使第三方或内置教学工具（如交互白板、拼图游戏、考勤工具）能够以独立的、版本化的微应用形式动态加载到主界面（Shell App）中，且共享统一的协作上下文。**
+
+本项目的生态架构由以下核心部分组成：
+1. **宿主应用 (Shell App)**：负责基础框架、全局布局（Header/Sidebar）、用户认证、路由配置及公共状态。它提供一个全局 of `ServiceRegistry` (依赖注入容器) 和全局事件总线。
+2. **动态加载器 (MFE Loader)**：集成 `@module-federation/enhanced/runtime`，在运行时通过读取插件元数据中的 `mf-manifest.json`，动态注册并导入远程 Entry 模块。
+3. **扩展插槽 (UI Slots)**：通过插槽模式将动态加载的 MFE 渲染到特定位置（例如 `classroom.tool`、`student.view`、`teacher.tab`）。
+4. **子应用 (Remote MFE)**：解耦后的独立微前端应用，实现平台规范的生命周期接口，并通过宿主传递的上下文获取 API 请求、实时通信及状态共享能力。
+
+---
+
+## 2. Feature Landscape
 
 ### Table Stakes（用户预期必需）
 
-插件系统的基础能力，缺失任何一个都会让人觉得系统不完整。
+这些是保障微前端系统能在 LMS 场景正常运行的基础能力，缺失任何一项都会导致协作状态断开或系统崩溃。
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Token 依赖注入（DI） | JupyterLab 的核心解耦机制，插件通过 `requires`/`optional` 声明依赖，由基座自动解析和注入 | HIGH | 需要实现 Token 注册表、拓扑排序激活、循环依赖检测。参考 Lumino `Token` 类的泛型设计 |
-| `activate(ctx)` / `deactivate()` 生命周期 | 插件的标准入口和出口，`activate` 接收注入的依赖并初始化，`deactivate` 做清理（注销命令、取消事件订阅、释放资源） | MEDIUM | 当前系统已有隐式的 activate/deactivate 逻辑，但无标准接口契约 |
-| 扩展点注册模式（Extension Points） | 将基座能力（CommandBus、EventBus、ActionRegistry、Storage、AI）抽象为 Token 标识的 Service，插件通过 Token 获取服务实例 | MEDIUM | 当前 `wrappedXxx` 模式本质是手动 DI，Token 化使其类型安全且可测试 |
-| 命令注册与执行（CommandBus） | 插件注册命名空间命令处理器（如 `lesson.create`），基座路由命令到对应处理器执行 | LOW | 现有 CommandBus 已完整实现，只需 Token 化接口 |
-| 事件发布/订阅（EventBus） | 插件订阅系统事件（如 `lesson.created`）并做出响应，支持通配符订阅 | LOW | 现有 EventBus 已完整实现，只需 Token 化接口 |
-| 插件安装/卸载/启停 | 用户通过 UI 或 API 管理插件生命周期 | MEDIUM | 现有 `installPlugin`/`uninstallPlugin`/`togglePlugin` 已实现，需适配新加载机制 |
-| 插件元数据（manifest） | `manifest.json` 声明 id、name、version、capabilities、依赖 | LOW | 当前嵌入在插件源码中，需独立为 manifest 文件 |
-| 多文件插件包（ZIP） | 支持复杂插件（含资源文件、多模块、类型定义）以 ZIP 格式分发 | MEDIUM | 当前仅支持单 JS 字符串，需扩展包格式 |
-| 持久化存储（Storage） | 插件可读写持久化的 KV 数据，数据与插件生命周期绑定 | LOW | 现有 `plugin_storage` 表已实现，Token 化即可 |
-| 错误隔离 | 单个插件的激活失败或运行时错误不应影响其他插件或基座 | HIGH | 当前 vm 沙箱部分实现，Worker 隔离后更彻底 |
+| Feature | Detailed Specification & Rationale | Complexity | Integration Details |
+| :--- | :--- | :--- | :--- |
+| **运行时动态 MFE 加载** | **必须使用 `@module-federation/enhanced/runtime` 的 `init()` 与 `loadRemote()` 进行动态注册。** 绝不能在 `vite.config.ts` 中硬编码 remotes 静态地址。因为插件系统中的微前端远程地址（来自开发者本地或动态安装的 ZIP 包解压后的静态服务器）是在运行时动态生成的。 | MEDIUM | 启动时及插件状态改变（启用/禁用）时，动态更新 Federation 注册表。 |
+| **MFE 生命周期挂载规范** | **子应用必须导出标准生命周期对象**：`bootstrap(ctx)`、`mount(container, props)`、`unmount(container)`。在 `unmount` 中必须显式调用 React 19 的 `root.unmount()`。这是为了确保在多课件/多房间切换时，彻底销毁 Canvas、WebGL 上下文、定时器以及事件绑定，杜绝内存泄漏。 | MEDIUM | 包装 `ExtensionPointRenderer` 适配器，在 DOM 挂载点执行子生命周期。 |
+| **宿主状态与上下文共享** | **宿主必须将 Zustand 状态 store (教室 session、当前班级、用户信息) 和依赖注入实例 (DI Registry) 传给子应用。** 绝不能让子应用独立创建 Socket.io 链接或独立获取 API 上下文。这保证了协作课堂中的状态强一致，并大幅减少连接损耗。 | HIGH | 通过 `bootstrap(ctx)` 将宿主的 `IFrontendAPI`、`ISocketService` 等 Token 代理服务注入子应用。 |
+| **插槽式动态 UI 路由解耦** | **核心路由与组件必须脱离原 App.tsx 的单体控制，统一注册到宿主的 `ExtensionPointRegistry` 中。** 宿主基于 Slot（插槽）渲染对应组件，使前端完全插件化。 | MEDIUM | 扩展现有的 `ExtensionPointRegistry`，使之支持由加载器动态拉取的组件。 |
+| **白板与课件微前端化解耦** | **必须将 App.tsx 中庞大的 React Whiteboard 交互逻辑和 HTML 课件播放器彻底剥离为独立的 MFE 模块。** 这样既能实现单体瘦身（App.tsx 减负），又能支持白板、课件的独立开发迭代。 | HIGH | 涉及将 Canvas SVG 渲染逻辑、Socket.io 白板笔迹广播通道与 App.tsx 剥离。 |
+
+---
 
 ### Differentiators（竞争优势）
 
-这些能力让本插件系统区别于简单的脚本执行环境，给插件开发者带来更好的体验。
+这些特性提升了开发者的体验，保障了微应用之间的样式与依赖隔离，使得 OpenLearnV2 的插件化体验极其 premium。
 
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| 双运行时（Node.js + Browser） | 同一套插件 API 在服务端（Worker Thread）和浏览器端（Web Worker）均可运行，真正跨平台 | HIGH | 这是本轮重构的核心差异点。需要抽象跨运行时通信层（RPC proxy） |
-| 热重载（Hot Reload） | 开发模式下修改插件源码后自动重新加载和激活，无需手动重装或重启服务 | HIGH | JupyterLab 本身也不支持（需整页刷新），这是超出 JupyterLab 的能力。需要文件监控 + 缓存失效 + 自动重激活 |
-| 全局事件总线服务 `IEventBusService` | 统一的异步事件通道，插件无需单独注册扩展点即可订阅/发布事件。降低插件开发学习曲线 | MEDIUM | 相比 JupyterLab 需要了解多个 Token（ILabShell, INotebookTracker, IStateDB...），统一事件总线更简洁 |
-| 语义化版本兼容（SemVer Token） | 插件声明依赖 Token 的版本范围（如 `ICommandBusService@^1.0`），基座在激活时检查版本兼容性 | HIGH | JupyterLab 无此特性。需要 semver 库 + Token 版本注册表 + 激活时匹配检查 |
-| Worker 线程隔离执行 | 每个插件在独立 Worker 中运行，真正的进程级隔离而非 vm 沙箱（vm 已被 Node.js 标记为不安全） | HIGH | 补偿 Blob URL + import() 无沙箱的安全损失。需要 RPC proxy 模式 |
-| Blob URL + `import()` ESM 加载 | 利用浏览器和 Node.js 原生 ESM 导入机制加载插件模块，支持标准的 `import`/`export` 语法 | MEDIUM | 取代当前 `vm.createContext` + `vm.Script.runInContext`，更安全且跨运行时兼容 |
-| 激活中间件管道（Kernel Middleware） | 插件可注册拦截器/中间件，在命令执行、事件发布等关键节点插入自定义逻辑（类似 Express 中间件模式） | HIGH | JupyterLab 无此能力。可支持审计、日志、限流、权限检查等横切关注点 |
-| TypeScript 泛型 Token 类型推导 | Token 携带完整类型信息：`Token<IService>` → `requires: [IMyService]` 自动推导参数类型 | MEDIUM | JupyterLab 的 Lumino Token 已有此设计，本项目可参考并改进（如更好的 API 命名） |
+| Feature | Value Proposition & Rationale | Complexity | Implementation Strategy |
+| :--- | :--- | :--- | :--- |
+| **样式隔离与沙箱保护 (CSS Isolation)** | **使用 CSS Modules 或 Shadow DOM 对微应用进行样式沙箱包装。** 保证微应用内样式的修改绝对不会穿透并污染宿主样式（反之亦然），避免 Tailwind 冲突导致的排版崩塌。 | MEDIUM | 在 `mount` 时可选择将子应用渲染到宿主 DOM 下的 Shadow Root 中，或使用特定的 CSS 命名空间。 |
+| **共享依赖版本与 Fallback 策略** | **配置共享 React 19、React DOM、Zustand、lucide-react。** 强约束 singleton: true 以确保宿主与子应用使用同一个 React 实例（防止 React Context 失效）；若其他辅助库版本冲突，则自动回退下载子应用自带版本，保持灵活度。 | MEDIUM | 在 Vite Federation 插件中精确配置 `shared` 字段。 |
+| **微前端嵌套路由动态桥接** | **宿主路由表（React Router）向微前端开放 API，支持动态注入深层路由。** 例如白板应用能注册路由 `/lessons/:id/whiteboard`，使用户在直接访问 URL 时可直接定位，提供原生应用级路由体验。 | HIGH | 宿主路由包含通配符占位符，匹配后由子应用内接管路由解析。 |
+| **开发者本地 HMR 调试桥接** | **在开发模式下，宿主能无刷新热重载正在编写的子应用。** 通过文件监控 manifest 变动，自动注销、重新下载并重新 mount 子应用。 | HIGH | 基于 Vite 的 HMR Socket 通道，向宿主广播变动，触发 `unmount` 与重新 `mount` 流程。 |
+
+---
 
 ### Anti-Features（主动不构建的能力）
 
-这些看似有用的能力会带来复杂度和维护负担。
+为了控制复杂度，确保系统安全、高内聚和极致的网络性能，以下能力被明确排除：
 
 | Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| 插件市场/商店（Plugin Marketplace） | 用户希望一键发现和安装插件 | 需要额外的服务端、CDN、审计、付费系统、恶意软件扫描等基础设施。当前阶段用户量不足以支撑 | 明确划为 Out of Scope。先用 ZIP 文件上传 + 手动安装满足需求 |
-| 插件沙箱文件系统访问 | 插件想要直接读写服务器文件系统 | 安全灾难——恶意插件可读写任意文件、访问环境变量、窃取密钥 | 通过 Token 化的 Storage Service 提供受控的 KV 持久化；通过 CommandBus 执行受限的文件操作 |
-| 跨插件同步通信（Shared State） | 插件希望直接修改其他插件的内部状态 | 破坏隔离性，使 deactivate 无法干净清理，导致内存泄漏和状态污染 | 所有跨插件通信通过 EventBus（异步通知）和 Token Service（方法调用）完成 |
-| `autoStart: true` 的全默认激活 | 所有插件都希望自动激活 | JupyterLab 中大量插件注册 `autoStart`，导致启动时全量激活，拖慢启动时间 | 默认使用懒激活（lazy activation），仅在被其他插件依赖或显式调用时才激活 |
-| 插件执行用户传入的任意代码 | "让插件变成一个 IDE" | 等同于 eval() 的无限权限——这是 `vm` 模块正在被解决的问题 | Worker 隔离 + 能力守卫（CapabilityGuard）+ 命令审批队列 |
-| 运行时动态注册新 Token（插件定义自己的 Token） | 插件想要暴露新的扩展点给其他插件 | 导致复杂的依赖图、Token 冲突、激活顺序不确定性。JupyterLab 本身也面临这个问题 | Token 由基座定义和导出，插件只能消费不能注册新 Token。未来可在 V2 中考虑 |
-| CSS/UI 主题扩展 | 插件想自定义平台外观 | 与当前前端架构（App.tsx 单体 11000+ 行）耦合太深，需要微前端拆分先行 | 划为独立阶段。前端重构后再考虑 |
-
-## Feature Dependencies
-
-```
-Token 依赖注入（DI）
-    ├──requires──> activate(ctx) / deactivate() 生命周期
-    │                 ├──requires──> 扩展点注册模式
-    │                 │                 ├──requires──> 命令注册与执行（CommandBus）
-    │                 │                 ├──requires──> 事件发布/订阅（EventBus）
-    │                 │                 └──requires──> 持久化存储（Storage）
-    │                 └──requires──> 错误隔离
-    └──enhances──> TypeScript 泛型 Token 类型推导
-
-Worker 线程隔离执行
-    ├──requires──> Blob URL + import() ESM 加载
-    │                 └──requires──> 多文件插件包（ZIP）
-    └──enables──> 双运行时（Node.js + Browser）
-
-全局事件总线服务 IEventBusService
-    └──uses──> 事件发布/订阅（EventBus Token）
-
-激活中间件管道
-    └──extends──> 命令注册与执行（CommandBus）
-
-语义化版本兼容
-    └──extends──> Token 依赖注入（DI）
-
-热重载
-    ├──requires──> Blob URL + import() ESM 加载
-    ├──requires──> activate/deactivate 生命周期
-    └──requires──> 文件变更检测（chokidar/fs.watch）
-
-插件安装/卸载/启停
-    ├──requires──> activate/deactivate 生命周期
-    └──requires──> 多文件插件包（ZIP）
-```
-
-### Dependency Notes
-
-- **Token DI 是整个架构的基石**：所有其他能力（扩展点、生命周期、语义化版本）都依赖 Token DI 先建立
-- **Blob URL ESM 加载是运行时迁移的关键路径**：从 vm 迁移到 ESM，必须先完成 ZIP 包格式支持和 ESM 加载器
-- **Worker 隔离不是 DI 的前提**：DI 可以先在主线程实现然后包装到 Worker 中；反过来 Worker 必须先有 DI 才能注入代理服务
-- **热重载是最上层能力**：依赖 ESM 加载、生命周期、文件监控三个子系统就绪
-- **中间件管道是 CommandBus 的增强层**：底层命令执行不变，只是在执行链中插入中间件节点
-
-## MVP Definition
-
-### Phase 1：DI 内核 + 基础能力（v1）
-
-最小可行插件系统——用新架构复现当前所有功能。
-
-- [x] **Token 依赖注入系统** — 定义 Token、注册表、拓扑排序、循环依赖检测
-- [x] **`activate(ctx)` / `deactivate()` 标准接口** — 插件必须实现的契约
-- [x] **扩展点 Token 化** — 将现有 CommandBus、EventBus、ActionRegistry、Storage、ProcessManager、AI 封装为 Token Service
-- [x] **命令注册与执行** — 通过 Token 化 CommandBus 使用
-- [x] **事件发布/订阅** — 通过 Token 化 EventBus 使用
-- [x] **持久化存储** — 通过 Token 化 Storage 使用
-- [x] **错误隔离** — 插件激活失败不影响其他插件
-- [x] **插件安装/卸载/启停** — 适配新加载机制
-
-### Phase 2： ESM 加载 + Worker 隔离（v1.1）
-
-从 vm 沙箱迁移到 ESM 模块加载，实现真正的线程隔离。
-
-- [x] **多文件 ZIP 插件包支持** — manifest.json + 入口文件 + 资源文件
-- [x] **Blob URL + `import()` 动态 ESM 加载** — 替代 vm.createContext
-- [x] **Worker 线程隔离（Node.js Worker Thread）** — RPC proxy 模式
-- [x] **浏览器端 Web Worker 隔离** — Comlink 或自研 RPC 层
-- [x] **双运行时兼容** — 抽象统一的服务代理层
-
-### Phase 3： 扩展能力（v1.2）
-
-提升插件开发体验和系统可观测性。
-
-- [x] **全局事件总线服务 `IEventBusService`** — 统一事件 API
-- [x] **TypeScript 泛型 Token 类型推导** — 完整类型安全
-- [x] **语义化版本兼容检查** — Token 版本范围匹配
-- [x] **热重载** — 文件监控 + 自动重激活
-
-### Phase 4：高级能力（v2）
-
-锦上添花，需要在 Phase 1-3 稳定后构建。
-
-- [x] **激活中间件管道** — 在 CommandBus 执行链中插入中间件
-- [x] **插件性能/资源监控** — 每个 Worker 的 CPU/内存/网络使用报告
-- [x] **现有内置插件迁移** — Quiz Component、Random Student Picker 等用新格式重写
-
-## Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| Token 依赖注入（DI） | HIGH | HIGH | P1 |
-| activate/deactivate 生命周期 | HIGH | MEDIUM | P1 |
-| 扩展点注册模式（Token 化） | HIGH | MEDIUM | P1 |
-| 命令注册与执行（CommandBus） | HIGH | LOW | P1 |
-| 事件发布/订阅（EventBus） | HIGH | LOW | P1 |
-| 持久化存储（Storage） | HIGH | LOW | P1 |
-| 错误隔离 | HIGH | HIGH | P1 |
-| 插件安装/卸载/启停 | HIGH | MEDIUM | P1 |
-| 多文件 ZIP 插件包 | MEDIUM | MEDIUM | P2 |
-| Blob URL + import() ESM 加载 | HIGH | MEDIUM | P2 |
-| Worker 线程隔离 | HIGH | HIGH | P2 |
-| 双运行时兼容 | HIGH | HIGH | P2 |
-| 全局事件总线服务 | MEDIUM | MEDIUM | P3 |
-| TypeScript 泛型类型推导 | MEDIUM | MEDIUM | P3 |
-| 语义化版本兼容 | MEDIUM | HIGH | P3 |
-| 热重载 | MEDIUM | HIGH | P3 |
-| 激活中间件管道 | LOW | HIGH | P4 |
-| 插件性能监控 | LOW | MEDIUM | P4 |
-
-## Competitor Feature Analysis
-
-| Feature | JupyterLab (Lumino) | VSCode Extension | 我们的插件系统 |
-|---------|---------------------|-----------------|--------------|
-| Token DI | Token-based, `requires`/`optional`/`provides` | 无 DI, ExtensionContext 传递 | 同 JupyterLab，增加版本语义兼容 |
-| 生命周期 | `activate(app)`, deactivate 提案中 | `activate(ctx)`, `deactivate()` (可选) | `activate(ctx)`, `deactivate()` (必需) |
-| 扩展点 | 多 Token 注册（50+ 核心Token） | `package.json` `contributes` 声明 | Token Service 注册 + 统一 EventBus |
-| 运行时隔离 | 单线程（浏览器） | 独立 Extension Host 进程 | Worker Thread / Web Worker |
-| 热重载 | 不支持（需整页刷新） | 部分支持（调试模式） | 完整支持 |
-| 插件格式 | npm 包 | .vsix | ZIP + manifest.json |
-| 跨平台 | 浏览器 only | 桌面 only | Node.js + Browser |
-| 中间件管道 | 无 | 无 | 支持（差异化能力） |
-| 语义化版本 | 无 | 引擎版本声明（`engines.vscode`） | Token 级版本范围匹配 |
-| 类型安全 | 通过泛型 Token | 通过 VS Code API 类型定义 | 通过泛型 Token（同 JupyterLab） |
-
-## 现有系统能力对照
-
-将当前 `plugin-runtime/index.ts` 中的能力映射到新系统。
-
-| 当前能力 | 现状 | 目标 |
-|---------|------|------|
-| `wrappedCommandBus` | 手动创建安全包装函数，vm 沙箱内注入 | Token 化 `ICommandBusService` |
-| `wrappedEventBus` | 手动创建安全包装，auto-source prefix | Token 化 `IEventBusService` |
-| `wrappedActionRegistry` | 手动创建安全包装 | Token 化 `IActionRegistryService` |
-| `wrappedProcessManager` | 手动创建安全包装 | Token 化 `IProcessManagerService` |
-| `wrappedStorage` | 手动创建安全包装，SQLite KV | Token 化 `IStorageService` |
-| `wrappedAI` | 手动创建安全包装，含 provider 选择逻辑 | Token 化 `IAIService` |
-| `safeConsole` | 手动创建带前缀的 console proxy | 内置在插件宿主中 |
-| `createSafeFunction` | 手动冻结原型链 | Worker 隔离自然消除此需求 |
-| `CapabilityGuard` | 基于字符串的能力控制 | 保持不变，Token 化 `ICapabilityGuardService` |
-| `deactivatePlugin` 清理 | 手动管理 registration list | `deactivate()` 标准接口 + 自动追踪 |
-| 激活超时（5s） | `Promise.race` 实现 | `AbortSignal` + Worker `terminate()` |
-| 插件元数据校验 | 手动检查 `manifest.id`/`manifest.name` | JSON Schema 校验 |
-
-## Sources
-
-- [JupyterLab Extension Developer Guide](https://jupyterlab.readthedocs.io/en/stable/extension/extension_dev.html) — 插件系统架构、Token DI、activate 签名
-- [JupyterLab Common Extension Points](https://jupyterlab.readthedocs.io/en/4.4.x/extension/extension_points.html) — 命令面板、上下文菜单、状态栏、Launcher、设置、StateDB
-- [Lumino IPlugin Interface](https://lumino.readthedocs.io/en/1.x/api/application/interfaces/iplugin.html) — `activate`/`deactivate`/`autoStart`/`requires`/`optional`/`provides`
-- [Dynamic Extensions Reloading (Lumino #278)](https://github.com/jupyterlab/lumino/issues/278) — deactivate 生命周期提案、依赖图 DAG 处理
-- [JupyterLab Plugin Manager (4.1+)](https://deepwiki.com/jupyterlab/jupyterlab/4.2-installing-and-managing-extensions) — 运行时插件的启用/禁用/锁定
-- [VSCode Extension API](https://code.visualstudio.com/api) — 激活事件、贡献点、命令、菜单、视图、WebView、Disposable 模式
-- [Comlink (Google Chrome Labs)](https://github.com/GoogleChromeLabs/comlink) — RPC over postMessage for Web Workers
-- [es-module-shims](https://github.com/guybedford/es-module-shims) — Blob URL ESM 加载、CSP 兼容性
-- [npm semver](https://www.npmjs.com/package/semver) — 语义化版本范围匹配 (`^1.0`/`~1.0`)
-- 项目源码：`packages/core/plugin-runtime/index.ts`、`packages/core/kernel/index.ts` — 现有插件系统实现
-- PROJECT.md — 已确认的 PLUG-01 到 PLUG-12 需求列表
+| :--- | :--- | :--- | :--- |
+| **服务端渲染 (MFE SSR)** | 减少首屏加载时间，提高加载速度。 | LMS 是强交互协作系统（实时白板、命令终端、AI 助手），核心逻辑都在浏览器内。MFE SSR 会极大增加 Node 服务端部署复杂性，带来沙箱安全风险。 | **全客户端渲染 (SPA)**，通过合理的 HTTP 缓存与 CDN 分包提升首屏加载。 |
+| **子前端直接访问数据库或 VFS** | 子前端为了追求速度，希望直接读取 SQLite 或 Node VFS。 | 破坏前后端隔离。安全灾难——任何恶意的微前端都可以随意修改或窃取其他班级、学生的数据。 | **必须通过 `IFrontendAPI` (或 DI Token 代理服务)** 向后端 PluginHost 发起受控的 command/query，并受限于 CapabilityGuard。 |
+| **多框架混合渲染 (Vue/Angular)** | 开发者想用自己熟悉的框架开发微应用。 | 在弱网教学环境下，多框架会导致基础 bundle 大量膨胀。状态管理、依赖注入和事件总线的多框架桥接会让维护成本失控。 | **强制统一规范：** 所有微前端必须使用 React 19 或原生 JavaScript (Web Components) 编写。 |
+| **微应用全局状态直接互改** | MFE A 直接修改 MFE B 的 Zustand store 状态。 | 极高的耦合度，会导致其中一个应用 deactivate 时发生内存泄漏或状态脏化，极难排查。 | **所有跨应用通信必须通过 `IEventBusService` 异步进行**，发送标准 namespace 事件（如 `whiteboard:update`）。 |
 
 ---
-*Feature research for: OpenLearnV2 插件系统重构*
-*Researched: 2026-06-17*
+
+## 3. Feature Dependencies
+
+以下展示了微前端特征、核心宿主以及现有业务（白板与课件）之间的深层依赖关系。
+
+```mermaid
+graph TD
+    subgraph "Host Core Foundation"
+        DI[ServiceRegistry / DI Container]
+        Zustand[Zustand Global State]
+        Loader[Dynamic MFE Loader <br/> @module-federation/runtime]
+        SlotRegistry[ExtensionPointRegistry]
+    end
+
+    subgraph "MFE Infrastructure"
+        Lifecycle[MFE Lifecycle Specification <br/> bootstrap/mount/unmount]
+        StyleIso[Shadow DOM / CSS Modules <br/> Style Isolation]
+        DI_Bridge[DI & State Propagation Bridge]
+    end
+
+    subgraph "Existing Core Modules (Decoupling Targets)"
+        WB[React Whiteboard Module]
+        CW[HTML Courseware Viewer]
+    end
+
+    %% Dependencies
+    Loader -->|resolves remotes| Lifecycle
+    Lifecycle -->|needs container DOM| SlotRegistry
+    
+    DI_Bridge -->|injects host services| DI
+    DI_Bridge -->|injects global state| Zustand
+    
+    Lifecycle -->|provides ctx & state| DI_Bridge
+
+    %% Decouplings
+    WB -->|depends on| Lifecycle
+    WB -->|depends on| DI_Bridge
+    WB -->|requires cleanup on| Lifecycle
+    
+    CW -->|wrapped inside| Lifecycle
+    CW -->|API requests via| DI_Bridge
+```
+
+### Dependency & Complexity Analysis
+
+1. **生命周期对宿主插槽的依赖**：
+   - 动态加载的微应用必须在指定的 DOM 挂载点被 `mount`。因此，`ExtensionPointRenderer` 扮演了“生命周期执行器”的角色。当宿主决定销毁某个 Slot 视图时，它必须触发子应用的 `unmount`。
+2. **白板 (Whiteboard) 的生命周期与清理复杂度（HIGH）**：
+   - 白板不仅仅是简单的 UI 组件，它拥有大量的**持久副作用**：Canvas 的画布对象、画布大小 Resize 监听器、WebSocket (Socket.io) 笔迹广播监听通道。
+   - 依赖关系：白板 MFE 必须从 `bootstrap(ctx)` 获取宿主的 `ISocketService` 实例，以在教室内同步绘图动作。
+   - 复杂度细节：在 `unmount(container)` 执行时，必须显式调用自定义的清理函数，退订当前 lesson 的 whiteboard 房间通道、注销 canvas DOM 事件、重置全局画布缓存，否则用户再次打开白板时会出现多重事件触发、画布大小错乱、甚至不同班级笔迹串线的问题。
+3. **课件 (Courseware) 的沙箱与 API 桥接（MEDIUM）**：
+   - 现有的 HTML 课件文件存储于宿主的 VFS（虚拟文件系统）中，并在前端通过 iframe 承载以实现基础的 DOM 隔离。
+   - 依赖关系：课件 MFE 必须在初始化时获得宿主注入的 `attemptId` 与接口 Token，以便课件页面通过 PostMessage 向宿主（进而向后端 `/api/courseware/attempts/...`）提交学生的答题成绩与日志。
+   - 复杂度细节：微前端化后，课件 MFE 本身将作为 Iframe 的容器，对宿主屏蔽底层 Iframe 的 postMessage 事件细节，向上仅提供 `onSubmit` 等 React 事件回调，实现数据与展现的优雅解耦。
+
+---
+
+## 4. MVP Definition (v2.0 Milestone Phases)
+
+根据 `v2.0` 微前端架构改造需求，我们将微前端特性的构建分为三个渐进式阶段：
+
+### Phase 1: 宿主容器拆分与运行时 Federation（MFE-01, MFE-02）
+*构建基础的加载与依赖共享环境。*
+- [ ] **集成 `@module-federation/vite` 与运行时加载器**：配置宿主的 shared 依赖（`react@19`、`react-dom@19`、`zustand`），并确保支持 Vite 6 的 ESM 构建。
+- [ ] **设计 Dynamic Remote 发现机制**：Shell App 提供 `/api/mfe/remotes` 接口，动态获取可用的微应用 Entry manifest 列表。
+- [ ] **实现 Shell App UI 插槽加载器**：编写 `ExtensionPointRenderer` 以动态 `loadRemote` 并借助 `React.lazy` 进行渲染。
+
+### Phase 2: 生命周期对接与状态透传（MFE-03, MFE-04）
+*解决状态一致性与生命周期安全销毁。*
+- [ ] **微应用生命周期挂载规范落地**：定义 TypeScript 接口 `IMicroFrontendApp`（包含 `bootstrap`、`mount`、`unmount`），编写宿主端的 AppWrapper 执行生命周期。
+- [ ] **Zustand 状态与 DI 服务注入**：在 `bootstrap` 阶段将宿主的全局 `ServiceRegistry`、`EventBus`、`Socket.io` 实例封包传入子应用。
+- [ ] **CSS 命名空间隔离**：配置编译插件，为微应用的主 DOM 节点自动添加专属类名（如 `mfe-remote-app`），防止全局样式冲突。
+
+### Phase 3: 核心路由解耦与白板/课件拆分（MFE-05）
+*庞大单体 App.tsx 解耦，彻底微前端化。*
+- [ ] **路由动态注册支持**：重构宿主路由，将原 App.tsx 的 `/lessons/:id/whiteboard` 路由逻辑独立抽离到 `whiteboard` MFE 模块中，并支持宿主动态发现该路由。
+- [ ] **白板组件拆分**：将 Canvas 笔迹同步、历史恢复等复杂逻辑封装进 `whiteboard` 微应用中，确保在 `unmount` 时能够干净退订 Socket.io 房间。
+- [ ] **课件组件拆分**：将 iframe 课件播放器与成绩上报逻辑封装进 `courseware` 微应用中。
+
+---
+
+## 5. Feature Prioritization Matrix
+
+我们基于对 **LMS 场景下的教学核心价值** 以及 **开发复杂度** 两个维度对特性进行了优先级排序：
+
+| Feature | User Value | Implementation Cost | Priority |
+| :--- | :--- | :--- | :--- |
+| **运行时动态 MFE 加载** | HIGH | MEDIUM | **P1 (必需)** |
+| **MFE 生命周期挂载规范** | HIGH | MEDIUM | **P1 (必需)** |
+| **宿主状态与上下文共享** | HIGH | HIGH | **P1 (必需)** |
+| **白板微前端化解耦 (带 Socket 清理)** | HIGH | HIGH | **P1 (必需)** |
+| **课件微前端化解耦 (带 Attempt 同步)** | HIGH | MEDIUM | **P1 (必需)** |
+| **样式隔离与沙箱保护** | MEDIUM | MEDIUM | **P2 (推荐)** |
+| **共享依赖版本与 Fallback** | MEDIUM | MEDIUM | **P2 (推荐)** |
+| **微前端嵌套路由动态桥接** | MEDIUM | HIGH | **P3 (可选)** |
+| **开发者本地 HMR 调试桥接** | LOW | HIGH | **P3 (可选)** |
+
+---
+
+## 6. Competitor Feature Analysis
+
+对比主流的插件/扩展开发平台，分析 OpenLearnV2 在微前端上的技术选型优势：
+
+| Feature / Dimension | JupyterLab (Lumino) | VSCode Extension | OpenLearnV2 MFE |
+| :--- | :--- | :--- | :--- |
+| **技术栈绑定** | 强绑定 Lumino 视图库，开发门槛高。 | UI 仅支持 WebView / 预置贡献点。 | **绑定 React 19 / ESM**。开发门槛极低，可重用丰富 React 生态。 |
+| **渲染沙箱隔离** | 无，全在主线程运行，容易受到恶意组件 DOM 劫持。 | Webview 独立 iframe 执行，绝对安全但交互与通信极慢。 | **单进程 Module Federation 渲染 + Shadow DOM 样式隔离**。性能极佳，交互灵敏。 |
+| **宿主服务集成** | 通过 Token 依赖注入。 | 通过 `vscode` 导出 API 对象。 | **通过 ServiceRegistry (DI) 传递已鉴权的服务代理**。 |
+| **生命周期清理** | 缺乏显式 `unmount` 标准，容易引发内存泄漏。 | 完备的 `deactivate()` 与 `Disposable` 机制。 | **完备的 `unmount()` 机制**，专门解决 Canvas、WebSocket 监听清理。 |
+
+---
+
+## 7. Sources
+
+- [Vite 6 Module Federation Guide](https://github.com/module-federation/universe) — 官方推荐的 Vite 6 模块联邦插件与运行时集成文档。
+- [React 19 Core Hydration & Unmount Specs](https://react.dev/reference/react-dom/client/createRoot) — React 19 的新挂载与卸载最佳实践（`root.unmount()` 的安全边界）。
+- [JupyterLab Architecture Reference](https://jupyterlab.readthedocs.io/en/stable/extension/extension_dev.html) — 宿主向插件提供 API 注入与 Slot 注册的设计思想。
+- 项目文件：`.planning/PROJECT.md` — 关于 v2.0 微前端架构改造的目标与 active 需求。
+- 项目源码：`src/components/InteractiveCoursewareViewer.tsx` 与 `src/App.tsx` 中的 whiteboard 逻辑 — 白板同步及课件 iframe postMessage 现行实现。
+
+---
+*Feature research for OpenLearnV2 v2.0 Micro-frontends*  
+*Prepared by GSD Project Researcher*  

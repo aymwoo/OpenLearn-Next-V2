@@ -50,6 +50,8 @@ export const ALL_SERVICE_TOKENS = [
   '@openlearn/core:IProcessService',
   '@openlearn/core:IStorageService',
   '@openlearn/core:IAIService',
+  '@openlearn/core:IDatabase',
+  '@openlearn/core:IPluginHost',
 ];
 
 /** 最大并行 Worker 数（T-05-09: DoS 缓解）。 */
@@ -327,11 +329,41 @@ function createServiceProxies(serviceTokens) {
 // ── 单消息处理器 ──
 
 var eventBusProxy = null;
+var registeredCommandHandlers = new Map();
 
 parentPort.on('message', async function(msg) {
   // 1. 转发的平台事件分发
   if (msg && msg.type === 'event' && eventBusProxy) {
     eventBusProxy.handleEvent(msg.subId, msg.event);
+    return;
+  }
+
+  // 1b. Intercept command execution request from host
+  if (msg && msg.type === 'executeCommand') {
+    var handler = registeredCommandHandlers.get(msg.commandType);
+    if (!handler) {
+      parentPort.postMessage({
+        type: 'commandError',
+        invokeId: msg.invokeId,
+        message: 'No handler registered for command ' + msg.commandType + ' in worker'
+      });
+      return;
+    }
+    try {
+      var result = await handler.execute(msg.command);
+      parentPort.postMessage({
+        type: 'commandResult',
+        invokeId: msg.invokeId,
+        value: result
+      });
+    } catch (err) {
+      parentPort.postMessage({
+        type: 'commandError',
+        invokeId: msg.invokeId,
+        message: (err && err.message) ? err.message : String(err),
+        stack: (err && err.stack) || ''
+      });
+    }
     return;
   }
 
@@ -353,8 +385,64 @@ parentPort.on('message', async function(msg) {
   // 3. 激活消息
   if (msg.type === 'activate') {
     try {
-      var services = createServiceProxies(workerData.serviceTokens);
+      var rawServices = createServiceProxies(workerData.serviceTokens);
+      var TOKEN_TO_SHORT_NAME = {
+        '@openlearn/core:ICommandBusService': 'commandBus',
+        '@openlearn/core:IEventBusService': 'eventBus',
+        '@openlearn/core:IActionRegistryService': 'actionRegistry',
+        '@openlearn/core:ICapabilityService': 'capability',
+        '@openlearn/core:IProcessService': 'processManager',
+        '@openlearn/core:IStorageService': 'storage',
+        '@openlearn/core:IAIService': 'ai'
+      };
+
       eventBusProxy = createEventBusProxy(parentPort);
+      var rawCommandBus = rawServices['@openlearn/core:ICommandBusService'];
+      var commandBus = rawCommandBus ? {
+        execute: function(cmd) { return rawCommandBus.execute(cmd); },
+        registerHandler: function(commandType, handler) {
+          registeredCommandHandlers.set(commandType, handler);
+          return rawCommandBus.registerHandler(commandType);
+        },
+        unregisterHandler: function(commandType) {
+          registeredCommandHandlers.delete(commandType);
+          return rawCommandBus.unregisterHandler(commandType);
+        },
+        createCommand: function(type, payload, actorId, metadata) {
+          return rawCommandBus.createCommand(type, payload, actorId, metadata);
+        },
+        setInterceptor: function(interceptor) {
+          return rawCommandBus.setInterceptor(interceptor);
+        }
+      } : undefined;
+
+      var rawEventBus = rawServices['@openlearn/core:IEventBusService'];
+      var eventBus = rawEventBus ? {
+        subscribe: function(type, handler) { return eventBusProxy.subscribe(type, handler); },
+        unsubscribe: function(type, handler) { eventBusProxy.unsubscribe(type, handler); },
+        publish: function(event) { return rawEventBus.publish(event); }
+      } : undefined;
+
+      var services = {};
+      for (var token in rawServices) {
+        if (token === '@openlearn/core:ICommandBusService') {
+          services[token] = commandBus;
+        } else if (token === '@openlearn/core:IEventBusService') {
+          services[token] = eventBus;
+        } else {
+          services[token] = rawServices[token];
+        }
+        var shortName = TOKEN_TO_SHORT_NAME[token];
+        if (shortName) {
+          if (shortName === 'commandBus') {
+            services[shortName] = commandBus;
+          } else if (shortName === 'eventBus') {
+            services[shortName] = eventBus;
+          } else {
+            services[shortName] = rawServices[token];
+          }
+        }
+      }
 
       // 通过 data URL 加载插件代码
       var encoded = Buffer.from(msg.pluginCode, 'utf-8').toString('base64');
@@ -371,6 +459,33 @@ parentPort.on('message', async function(msg) {
         services: services,
         pluginId: workerData.pluginId,
         manifest: msg.manifest,
+        resolve: async function(token) {
+          var tokenName = typeof token === 'string' ? token : (token && token.name);
+          if (!tokenName) throw new Error('Invalid token');
+          var svc = services[tokenName];
+          if (!svc) throw new Error('No provider registered for token: ' + tokenName);
+          if (tokenName === '@openlearn/core:IDatabase') {
+            return {
+              prepare: function(sql) {
+                return {
+                  run: function() {
+                    var args = Array.prototype.slice.call(arguments);
+                    return svc.prepareAndRun(sql, args);
+                  },
+                  get: function() {
+                    var args = Array.prototype.slice.call(arguments);
+                    return svc.prepareAndGet(sql, args);
+                  },
+                  all: function() {
+                    var args = Array.prototype.slice.call(arguments);
+                    return svc.prepareAndAll(sql, args);
+                  }
+                };
+              }
+            };
+          }
+          return svc;
+        },
         eventBus: {
           subscribe: function(type, handler) { return eventBusProxy.subscribe(type, handler); },
           unsubscribe: function(type, handler) { eventBusProxy.unsubscribe(type, handler); },
@@ -548,8 +663,32 @@ export class WorkerManager {
       serviceHost,
     });
 
-    // 8. 设置 transport 消息路由 → ServiceHost
+    // 8. 设置 transport 消息路由 → ServiceHost 及生命周期拦截
+    let activationResolve: (() => void) | null = null;
+    let activationReject: ((err: Error) => void) | null = null;
+
     transport.onMessage((msg: unknown) => {
+      const typed = msg as { type?: string };
+      if (typed.type === 'activated') {
+        if (activationResolve) {
+          activationResolve();
+          activationResolve = null;
+          activationReject = null;
+        }
+      } else if (typed.type === 'error') {
+        if (activationReject) {
+          activationReject(
+            new WorkerActivateError(
+              pluginId,
+              (msg as { message?: string }).message ?? 'Unknown error',
+            ),
+          );
+          activationResolve = null;
+          activationReject = null;
+        }
+      }
+      
+      // 总是路由到 serviceHost，以处理其它 RPC/事件消息
       serviceHost.handleMessage(msg, transport);
     });
 
@@ -565,21 +704,8 @@ export class WorkerManager {
     try {
       await Promise.race([
         new Promise<void>((resolve, reject) => {
-          // 监听 activated/error 消息
-          const onMsg = (msg: unknown) => {
-            const typed = msg as { type?: string };
-            if (typed.type === 'activated') {
-              resolve();
-            } else if (typed.type === 'error') {
-              reject(
-                new WorkerActivateError(
-                  pluginId,
-                  (msg as { message?: string }).message ?? 'Unknown error',
-                ),
-              );
-            }
-          };
-          transport.onMessage(onMsg);
+          activationResolve = resolve;
+          activationReject = reject;
         }),
         new Promise<never>((_, reject) =>
           setTimeout(
@@ -590,6 +716,9 @@ export class WorkerManager {
       ]);
     } catch (err) {
       // 激活失败 — 清理 Worker
+      try {
+        await serviceHost.dispose();
+      } catch {}
       try {
         await worker.terminate();
       } catch {
@@ -613,7 +742,7 @@ export class WorkerManager {
   async terminateWorker(pluginId: string): Promise<void> {
     const instance = this.registry.get(pluginId);
     if (instance) {
-      instance.serviceHost.disposeEventForwarder();
+      await instance.serviceHost.dispose();
     }
     await this.registry.terminate(pluginId);
   }
