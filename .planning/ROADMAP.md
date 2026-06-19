@@ -129,10 +129,10 @@
   4. 中间件可以在插件生命周期的关键节点（激活前/后、停用前/后、命令执行前/后）注册拦截函数，实现审计、日志、限流等横切关注点
   5. 中间件管道采用洋葱模型——多个中间件按注册顺序依次执行，每个中间件可以决定是否调用下一个或提前终止
 **Plans**: 4 plans
-  - [ ] 07-01-PLAN.md -- (要规划)
-  - [ ] 07-02-PLAN.md -- (要规划)
-  - [ ] 07-03-PLAN.md -- (要规划)
-  - [ ] 07-04-PLAN.md -- (要规划)
+  - [x] 07-01-PLAN.md — File Watcher + Hot Reload Infrastructure (chokidar, FileWatcher, HotReloadController, dev mode gating)
+  - [x] 07-02-PLAN.md — Atomic Hot Reload Strategy (new-before-old, rollback, ResourceTracker snapshot/reap, middleware integration)
+  - [x] 07-03-PLAN.md — Lifecycle Middleware Pipeline (onion model compose, 6 hook points, CommandBus integration)
+  - [x] 07-04-PLAN.md — Integration Tests + Kernel Wire-up (E2E, middleware interaction, 10-cycle stress test)
 **UI hint**: no
 
 ### Phase 8: 现有插件迁移
@@ -179,6 +179,6 @@
 | 4. PluginHost + 生命周期 | 4/4 | Complete    | 2026-06-18 |
 | 5. Worker 隔离 + 双运行时 | 4/4 | Complete    | 2026-06-18 |
 | 6. EventBus 服务 + SemVer 兼容 | 3/3 | Complete    | 2026-06-19 |
-| 7. 热重载 + 中间件管道 | 0/0 | Not started | - |
+| 7. 热重载 + 中间件管道 | 4/4 | Planned    | - |
 | 8. 现有插件迁移 | 0/0 | Not started | - |
 | 9. 前端集成 + 过渡期 | 0/0 | Not started | - |
