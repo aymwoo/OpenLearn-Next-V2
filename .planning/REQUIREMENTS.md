@@ -13,10 +13,10 @@
 
 ### Dynamic Loading & Lifecycle
 
-- [ ] **MFE-LOAD-01**: Implement `MfeLoader` container component supporting dynamic remote entry resolution via `@module-federation/runtime`.
-- [ ] **MFE-LOAD-02**: Implement React Error Boundaries and Loading fallbacks in `MfeLoader` to prevent remote crashes from bringing down the host.
-- [ ] **MFE-LOAD-03**: Standardize Remote application export contract with `bootstrap`, `mount`, and `unmount` hooks.
-- [ ] **MFE-LOAD-04**: Ensure complete React 19 root unmounting (`root.unmount()`) on remote destruction to avoid memory leaks.
+- [x] **MFE-LOAD-01**: Implement `MfeLoader` container component supporting dynamic remote entry resolution via `@module-federation/runtime`.
+- [x] **MFE-LOAD-02**: Implement React Error Boundaries and Loading fallbacks in `MfeLoader` to prevent remote crashes from bringing down the host.
+- [x] **MFE-LOAD-03**: Standardize Remote application export contract with `bootstrap`, `mount`, and `unmount` hooks.
+- [x] **MFE-LOAD-04**: Ensure complete React 19 root unmounting (`root.unmount()`) on remote destruction to avoid memory leaks.
 
 ### State Sharing & Services Injection
 
@@ -47,10 +47,10 @@
 | MFE-INF-01 | Phase 10 | Complete |
 | MFE-INF-02 | Phase 10 | Complete |
 | MFE-INF-03 | Phase 10 | Complete |
-| MFE-LOAD-01 | Phase 11 | Pending |
-| MFE-LOAD-02 | Phase 11 | Pending |
-| MFE-LOAD-03 | Phase 11 | Pending |
-| MFE-LOAD-04 | Phase 11 | Pending |
+| MFE-LOAD-01 | Phase 11 | Complete |
+| MFE-LOAD-02 | Phase 11 | Complete |
+| MFE-LOAD-03 | Phase 11 | Complete |
+| MFE-LOAD-04 | Phase 11 | Complete |
 | MFE-BRIDGE-01 | Phase 12 | Pending |
 | MFE-BRIDGE-02 | Phase 12 | Pending |
 | MFE-BRIDGE-03 | Phase 12 | Pending |
