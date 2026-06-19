@@ -324,3 +324,13 @@ export const IDatabaseToken = new Token<import('better-sqlite3').Database>(
   '@openlearn/core:IDatabase',
 );
 
+import type { PluginHost } from '../plugin-host/index.js';
+
+/**
+ * Token for PluginHost.
+ * Identifier: @openlearn/core:IPluginHost
+ */
+export const IPluginHostToken = new Token<PluginHost>(
+  '@openlearn/core:IPluginHost',
+);
+

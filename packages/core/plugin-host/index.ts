@@ -944,6 +944,31 @@ export class PluginHost {
   }
 
   /**
+   * 切换插件激活/停用状态。
+   *
+   * @param pluginId - 插件标识符
+   * @returns 切换后的状态：'active' 或 'disabled'
+   */
+  async togglePlugin(pluginId: string): Promise<string> {
+    const row = this.db.prepare('SELECT status FROM plugins WHERE id = ?').get(pluginId) as { status: string } | undefined;
+    if (!row) {
+      throw new Error(`Plugin not found: ${pluginId}`);
+    }
+
+    const currentStatus = row.status;
+    const newStatus = currentStatus === 'active' ? 'disabled' : 'active';
+
+    if (newStatus === 'disabled') {
+      await this.deactivatePlugin(pluginId);
+    } else {
+      await this.activatePlugin(pluginId);
+    }
+
+    this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run(newStatus, pluginId);
+    return newStatus;
+  }
+
+  /**
    * 卸载插件。
    *
    * 方法 4: uninstallPlugin(pluginId: string): Promise<void>

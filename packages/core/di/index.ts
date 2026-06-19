@@ -43,6 +43,7 @@ export {
   IProcessServiceToken,
   IStorageServiceToken,
   IAIServiceToken,
+  IPluginHostToken,
 } from './interfaces.js';
 
 // ── Service implementation class exports ────────────────────────────────
