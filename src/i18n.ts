@@ -2,6 +2,24 @@ export type Language = 'zh' | 'en';
 
 export const translations = {
   zh: {
+    // Phase 9: Extension Points & Plugin Migration
+    migratableBadge: '可迁移',
+    migrateToFormat: '迁移到新格式',
+    migrationPromptHeading: '发现可迁移的旧格式插件',
+    migrationPromptBody: '该插件使用旧格式运行。上传新格式 ZIP 包以完成迁移，迁移后旧版本可安全卸载。',
+    zipParseError: 'ZIP 文件解析失败，请确认文件包含有效的 manifest.json',
+    workerActivationError: '插件在 Worker 环境中激活失败，请检查插件代码与浏览器兼容性',
+    extensionLoadError: '扩展组件加载失败',
+    retry: '重新加载',
+    noExtensionPoints: '暂无已注册的扩展组件',
+    dropZipHere: '拖拽 ZIP 文件到此处',
+    zipFileHint: '仅支持 .zip 格式的插件包',
+    analyzing: '分析中...',
+    dragActive: '释放以上传',
+    legacyTooltip: '该插件使用旧执行格式运行。新格式版本可能可用。',
+    ready: '就绪',
+    uploadZipPlugin: '上传并安装 ZIP 插件',
+
     agentTitle: '内核助手',
     agentSubtitle: '自主 Shell 控制器',
     agentIntro: '你好！我是你的教育系统 OS 内核助手。你可以让我“创建一节物理课并在白板上画一个圆”，我将通过底层总线为你构建。',
@@ -44,6 +62,24 @@ export const translations = {
     noStudents: '暂无学生',
   },
   en: {
+    // Phase 9: Extension Points & Plugin Migration
+    migratableBadge: 'Migratable',
+    migrateToFormat: 'Migrate to New Format',
+    migrationPromptHeading: 'Legacy Plugin Detected',
+    migrationPromptBody: 'This plugin runs in legacy mode. Upload a new-format ZIP package to migrate. The old version can be safely uninstalled afterwards.',
+    zipParseError: 'Failed to parse ZIP file. Ensure the package contains a valid manifest.json.',
+    workerActivationError: 'Plugin activation in Worker environment failed. Check plugin code and browser compatibility.',
+    extensionLoadError: 'Extension failed to load',
+    retry: 'Retry Load',
+    noExtensionPoints: 'No extension points registered',
+    dropZipHere: 'Drop ZIP file here',
+    zipFileHint: '.zip plugin packages only',
+    analyzing: 'Analyzing...',
+    dragActive: 'Release to upload',
+    legacyTooltip: 'This plugin uses the old execution format. A new-format version may be available.',
+    ready: 'Ready',
+    uploadZipPlugin: 'Upload & Install ZIP Plugin',
+
     agentTitle: 'Kernel Agent',
     agentSubtitle: 'Autonomous Shell Controller',
     agentIntro: 'Hello! I am your Educational OS Kernel Agent. You can ask me to "create a physics lesson and draw a circle on its whiteboard" and I will use the Command Bus to build it.',
