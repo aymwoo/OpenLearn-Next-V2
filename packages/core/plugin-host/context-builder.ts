@@ -104,6 +104,9 @@ function wrapCommandBus(
     setInterceptor: createSafeFunction((interceptor: any) => {
       return commandBus.setInterceptor(interceptor);
     }),
+    unregisterHandler: createSafeFunction((commandType: string) => {
+      return commandBus.unregisterHandler(commandType);
+    }),
   } as ICommandBusService;
 }
 

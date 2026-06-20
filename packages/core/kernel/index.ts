@@ -13,6 +13,7 @@ import { ManagementPlugin } from '../../plugins/management.js';
 import { BuiltinPlugin } from '../../plugins/builtin.js';
 import { AiPlannerPlugin } from '../../plugins/ai-planner.js';
 import { AiSubmitInjectorPlugin } from '../../plugins/ai-submit-injector.js';
+import { AssignmentEvalPlugin } from '../../plugins/assignment-eval.js';
 import fs from 'fs';
 
 import {
@@ -152,7 +153,8 @@ export class Kernel {
       { id: '@openlearn/plugin-management', mod: ManagementPlugin, name: 'LMS Management Plugin', critical: true },
       { id: '@openlearn/plugin-builtin', mod: BuiltinPlugin, name: 'Classroom Builtin Plugin', critical: true },
       { id: '@openlearn/plugin-ai-planner', mod: AiPlannerPlugin, name: 'AI Planner Plugin', critical: false },
-      { id: '@openlearn/plugin-ai-submit-injector', mod: AiSubmitInjectorPlugin, name: 'AI Submit Injector Plugin', critical: false }
+      { id: '@openlearn/plugin-ai-submit-injector', mod: AiSubmitInjectorPlugin, name: 'AI Submit Injector Plugin', critical: false },
+      { id: '@openlearn/plugin-assignment-eval', mod: AssignmentEvalPlugin, name: 'Assignment Evaluation and Peer Review Plugin', critical: false }
     ];
 
     for (const plugin of systemPlugins) {

@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: 作业提交与学生互评插件
-status: planning
-last_updated: "2026-06-20T11:49:15.000Z"
+status: executing
+last_updated: "2026-06-20T20:00:00.000Z"
 last_activity: 2026-06-20
 progress:
   total_phases: 3
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 1
+  percent: 33
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-20)
 
 **Core value:** 以独立 ESM 插件（及微前端桥接）的方式，为授课流程增加学生作业文件上传、公开自由互评、教师评分及平时成绩自动核算和学期成绩对接。
-**Current focus:** Phase 14 — 数据库结构设计与后端 DI 成绩对接服务
+**Current focus:** Phase 15 — 学生端上传文件及互评系统
 
 ## Current Position
 
-Phase: Phase 14
+Phase: Phase 15
 Plan: —
-Status: Researching
-Last activity: 2026-06-20 — Phase 14 started, researching database & grade service integration.
+Status: Planning
+Last activity: 2026-06-20 — Phase 14 completed with 100% green tests. Starting Phase 15.
 
 ## Performance Metrics
 
