@@ -17,6 +17,7 @@ export const FRONTEND_API_TOKEN = '@openlearn/frontend:IFrontendAPI';
 export const SOCKET_SERVICE_TOKEN = '@openlearn/frontend:ISocketService';
 export const UI_SERVICE_TOKEN = '@openlearn/frontend:IUIService';
 export const STORAGE_SERVICE_TOKEN = '@openlearn/frontend:IStorageService';
+export const SEMESTER_GRADE_SERVICE_TOKEN = '@openlearn/frontend:ISemesterGradeService';
 
 // ── Core types ───────────────────────────────────────────────────────────
 
@@ -104,6 +105,10 @@ export interface IStorageService {
   set(key: string, value: string): void;
   delete(key: string): void;
   clear(): void;
+}
+
+export interface ISemesterGradeService {
+  saveSemesterGrade(lessonId: string, studentId: string, grade: number): Promise<void>;
 }
 
 // ── Frontend Plugin Context ──────────────────────────────────────────────

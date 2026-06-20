@@ -61,7 +61,8 @@ export const DI_WHITELIST = [
   '@openlearn/frontend:IFrontendAPI',
   '@openlearn/frontend:ISocketService',
   '@openlearn/frontend:IUIService',
-  '@openlearn/frontend:IStorageService'
+  '@openlearn/frontend:IStorageService',
+  '@openlearn/frontend:ISemesterGradeService'
 ];
 
 export class MfeServiceRegistryProxy {

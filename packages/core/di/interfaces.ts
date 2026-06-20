@@ -334,3 +334,25 @@ export const IPluginHostToken = new Token<PluginHost>(
   '@openlearn/core:IPluginHost',
 );
 
+/**
+ * Interface for SemesterGradeService.
+ * Handles syncing final calculated regular scores into the host's semester grades system.
+ */
+export interface ISemesterGradeService {
+  /**
+   * Sync calculated regular score to host database structures.
+   * Internal implementation handles mapping lessonId -> classId, ensuring the
+   * representative assignment exists, and inserting/updating assignment_submissions.
+   */
+  saveSemesterGrade(lessonId: string, studentId: string, grade: number): Promise<void>;
+}
+
+/**
+ * Token for ISemesterGradeService.
+ * Identifier: @openlearn/core:ISemesterGradeService
+ */
+export const ISemesterGradeServiceToken = new Token<ISemesterGradeService>(
+  '@openlearn/core:ISemesterGradeService'
+);
+
+
