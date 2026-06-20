@@ -229,7 +229,7 @@ export function MfeLoaderCore({
 
         // Register the remote with the MF runtime so loadRemote can resolve it
         if (resolvedEntry) {
-          registerRemotes([{ name, entry: resolvedEntry }]);
+          registerRemotes([{ name, entry: resolvedEntry, type: 'module' }]);
         }
 
         // ── 2. Load remote module ─────────────────────────────────────
@@ -246,7 +246,9 @@ export function MfeLoaderCore({
 
         if (mod.createMfeApp) {
           // D-08: createMfeApp factory — single init
-          const socketService = infra.serviceRegistry?.get('@openlearn/frontend:ISocketService');
+          const socketService = infra.serviceRegistry
+            ? await infra.serviceRegistry.resolve<any>('@openlearn/frontend:ISocketService')
+            : undefined;
           const socketBridge = new SocketBridge(socketService, infra.eventBus);
           const eventBusWrapper = new MfeEventBusWrapper(
             name,
