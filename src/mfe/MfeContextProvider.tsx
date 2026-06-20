@@ -65,15 +65,35 @@ export const DI_WHITELIST = [
 ];
 
 export class MfeServiceRegistryProxy {
-  constructor(serviceRegistry: any) {}
-  async resolve<T>(token: string): Promise<T> {
-    return {} as any;
+  private serviceRegistry: any;
+
+  constructor(serviceRegistry: any) {
+    this.serviceRegistry = serviceRegistry;
   }
+
+  private verifyWhitelist(token: string) {
+    if (!DI_WHITELIST.includes(token)) {
+      throw new Error(`Access Denied: Service token "${token}" is private to the Host Shell and cannot be resolved by Remote Micro Frontends.`);
+    }
+  }
+
+  async resolve<T>(token: string): Promise<T> {
+    this.verifyWhitelist(token);
+    return this.serviceRegistry.resolve(token);
+  }
+
   get<T>(token: string): T | undefined {
+    this.verifyWhitelist(token);
+    const servicesMap = (this.serviceRegistry as any).services;
+    if (servicesMap && servicesMap.has(token)) {
+      return servicesMap.get(token) as T;
+    }
     return undefined;
   }
+
   has(token: string): boolean {
-    return false;
+    this.verifyWhitelist(token);
+    return this.serviceRegistry.has(token);
   }
 }
 
