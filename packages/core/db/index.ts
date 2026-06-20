@@ -458,4 +458,16 @@ try {
   console.error('Failed to seed default AI Providers:', e);
 }
 
+try {
+  const countObj = db.prepare('SELECT COUNT(*) as cnt FROM mfe_remotes').get() as { cnt: number };
+  if (countObj && countObj.cnt === 0) {
+    console.log('Seeding default MFE Remotes...');
+    const insertStmt = db.prepare('INSERT INTO mfe_remotes (name, entry) VALUES (?, ?)');
+    insertStmt.run('mfe_whiteboard', 'http://localhost:5174/remoteEntry.js');
+    insertStmt.run('mfe_courseware', 'http://localhost:5175/remoteEntry.js');
+  }
+} catch (e) {
+  console.error('Failed to seed default MFE Remotes:', e);
+}
+
 console.log('Database initialized at', dbPath);
