@@ -3,14 +3,14 @@
 ## Milestones
 
 - ✅ **v1.0 插件系统重构** — Phases 1-9 (shipped 2026-06-19)
-- 🚀 **v2.0 微前端架构改造** — Phases 10-13 (planning)
+- ✅ **v2.0 微前端架构改造** — Phases 10-13 (shipped 2026-06-20)
 
 ## Phases
 
-- [ ] **Phase 10: 基础设施配置与工程集成** — 搭建 Vite 6 + Module Federation 2.0 基础构建与编译环境，确立核心依赖单例共享机制，配置 Tailwind CSS 扫描及 esnext 编译目标。
-- [ ] **Phase 11: 动态加载器与宿主桥接** — 实现通用的 React 高阶容器组件 `MfeLoader`、错误边界与加载 Fallback，并定义及实施远程微应用标准生命周期接口。
+- [x] **Phase 10: 基础设施配置与工程集成** — 搭建 Vite 6 + Module Federation 2.0 基础构建与编译环境，确立核心依赖单例共享机制，配置 Tailwind CSS 扫描及 esnext 编译目标。
+- [x] **Phase 11: 动态加载器与宿主桥接** — 实现通用的 React 高阶容器组件 `MfeLoader`、错误边界与加载 Fallback，并定义及实施远程微应用标准生命周期接口。
 - [x] **Phase 12: 宿主状态共享与 DI 桥接** — 建立宿主与子应用的上下文桥接通道（MfeContext），支持远程组件共享宿主的 Zustand 状态订阅与 DI 服务注入，并通过 EventBus 订阅 and 发布实时事件。
-- [ ] **Phase 13: 业务模块解耦与样式沙箱化** — 解耦原单体 App.tsx，将白板与课件视图抽离为独立的微前端子应用，实现 CSS 隔离与宿主数据库动态注册插件渲染。
+- [x] **Phase 13: 业务模块解耦与样式沙箱化** — 解耦原单体 App.tsx，将白板与课件视图抽离为独立的微前端子应用，实现 CSS 隔离与宿主数据库动态注册插件渲染。
 
 <details>
 <summary>✅ v1.0 插件系统重构 (Phases 1-9) — SHIPPED 2026-06-19</summary>
@@ -96,7 +96,7 @@
 | 10. 基础设施配置与工程集成 | v2.0 | 2/2 | Complete   | 2026-06-19 |
 | 11. 动态加载器与宿主桥接 | v2.0 | 4/4 | Complete    | 2026-06-19 |
 | 12. 宿主状态共享与 DI 桥接 | v2.0 | 1/1 | Complete | 2026-06-20 |
-| 13. 业务模块解耦与样式沙箱化 | v2.0 | 0/0 | Planning | - |
+| 13. 业务模块解耦与样式沙箱化 | v2.0 | 1/1 | Complete   | 2026-06-20 |
 
 ---
 
