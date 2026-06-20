@@ -22,6 +22,7 @@ import { LoginPage } from './components/LoginPage';
 import { AdminPanel } from './components/AdminPanel';
 import { TimetableManager } from './components/TimetableManager';
 import { SemesterGradeManager } from './components/SemesterGradeManager';
+import { StudentAssignmentEvalPanel } from './components/StudentAssignmentEvalPanel';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion, AnimatePresence, animate } from 'motion/react';
 import { io } from 'socket.io-client';
@@ -1746,7 +1747,7 @@ export default function App() {
     }, 6000);
   };
   const [studentViewStatus, setStudentViewStatus] = useState<'dashboard' | 'lesson' | 'assignment'>('dashboard');
-  const [studentLessonTab, setStudentLessonTab] = useState<'whiteboard' | 'courseware'>('whiteboard');
+  const [studentLessonTab, setStudentLessonTab] = useState<'whiteboard' | 'courseware' | 'assignment'>('whiteboard');
   const [studentSelectedCourseware, setStudentSelectedCourseware] = useState<string | null>(null);
   const [selectedAssignment, setSelectedAssignment] = useState<any | null>(null);
   const [isLessonPreviewVisible, setIsLessonPreviewVisible] = useState(false);
@@ -4741,6 +4742,7 @@ export default function App() {
                          </button>
                          <button onClick={() => setStudentLessonTab('whiteboard')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'whiteboard' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>Interactive Whiteboard</button>
                          <button onClick={() => setStudentLessonTab('courseware')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'courseware' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>Interactive Courseware Viewer</button>
+                          <button onClick={() => setStudentLessonTab('assignment')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'assignment' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>{lang === 'zh' ? '作业提交与互评' : 'Assignments & Peer Reviews'}</button>
                       </div>
                       
                       <button
@@ -4761,7 +4763,7 @@ export default function App() {
                         )}
                       </button>
                     </div>
-                    {studentLessonTab === 'whiteboard' ? (
+                    {studentLessonTab === 'whiteboard' && (
                        <MfeLoader
                          name="mfe_whiteboard"
                          props={{
@@ -4783,7 +4785,8 @@ export default function App() {
                            onRefresh: () => fetchElements(selectedLesson)
                          }}
                        />
-                    ) : (
+                    )}
+                    {studentLessonTab === 'courseware' && (
                        <div className="flex-1 flex gap-4 min-h-0">
                          {/* Courseware Selector Sidebar */}
                          <div className="w-48 flex-shrink-0 bg-gray-50 border border-gray-200 rounded-lg p-3 flex flex-col min-h-0">
@@ -4819,14 +4822,22 @@ export default function App() {
                                         <span className="truncate">{node.name}</span>
                                      </button>
                                   ))
-                               )}
-                            </div>
-                            <div className="mt-2 text-[10px] text-gray-400 leading-tight">Note: Showing HTML courseware from current OS drive directory. Ask agent to generate courseware.</div>
-                         </div>
-                         <div className="flex-1 relative bg-white min-h-0">
-                            <MfeLoader name="mfe_courseware" props={{ coursewareId: studentSelectedCourseware, onClose: () => setStudentSelectedCourseware(null) }} />
-                         </div>
+                                )}
+                             </div>
+                             <div className="mt-2 text-[10px] text-gray-400 leading-tight">Note: Showing HTML courseware from current OS drive directory. Ask agent to generate courseware.</div>
+                          </div>
+                          <div className="flex-1 relative bg-white min-h-0">
+                             <MfeLoader name="mfe_courseware" props={{ coursewareId: studentSelectedCourseware, onClose: () => setStudentSelectedCourseware(null) }} />
+                          </div>
                        </div>
+                    )}
+                    {studentLessonTab === 'assignment' && (
+                       <StudentAssignmentEvalPanel
+                         lessonId={selectedLesson}
+                         studentId={activeStudentId}
+                         lang={lang}
+                         addToast={addToast}
+                       />
                     )}
                   </div>
                 </div>

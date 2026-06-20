@@ -7,10 +7,10 @@ last_updated: "2026-06-20T20:00:00.000Z"
 last_activity: 2026-06-20
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 3
-  completed_plans: 1
-  percent: 33
+  completed_plans: 2
+  percent: 67
 ---
 
 # Project State
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-20)
 
 **Core value:** 以独立 ESM 插件（及微前端桥接）的方式，为授课流程增加学生作业文件上传、公开自由互评、教师评分及平时成绩自动核算和学期成绩对接。
-**Current focus:** Phase 15 — 学生端上传文件及互评系统
+**Current focus:** Phase 16 — 教师打分、权重折算与成绩同步
 
 ## Current Position
 
-Phase: Phase 15
+Phase: Phase 16
 Plan: —
 Status: Planning
-Last activity: 2026-06-20 — Phase 14 completed with 100% green tests. Starting Phase 15.
+Last activity: 2026-06-20 — Phase 15 completed with 100% green tests. Starting Phase 16.
 
 ## Performance Metrics
 

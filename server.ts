@@ -1739,6 +1739,79 @@ async function startServer() {
     res.json(lessons);
   });
 
+  // ── 作业上传与互评插件 API ──────────────────────────────────────────────
+  app.get('/api/lessons/:lessonId/eval-submissions', (req, res) => {
+    try {
+      const { lessonId } = req.params;
+      const rows = kernelContainer.db.prepare(`
+        SELECT ps.*, s.name as student_name
+        FROM plugin_submissions ps
+        LEFT JOIN students s ON ps.student_id = s.id
+        WHERE ps.lesson_id = ?
+      `).all(lessonId);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/eval-submissions/:submissionId/reviews', (req, res) => {
+    try {
+      const { submissionId } = req.params;
+      const rows = kernelContainer.db.prepare(`
+        SELECT pr.*, s.name as reviewer_name
+        FROM plugin_peer_reviews pr
+        LEFT JOIN students s ON pr.reviewer_id = s.id
+        WHERE pr.submission_id = ?
+      `).all(submissionId);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/lessons/:lessonId/students/:studentId/eval-status', (req, res) => {
+    try {
+      const { lessonId, studentId } = req.params;
+      const submission = kernelContainer.db.prepare(`
+        SELECT * FROM plugin_submissions WHERE lesson_id = ? AND student_id = ?
+      `).get(lessonId, studentId) as any;
+
+      let reviewsWritten = [];
+      let grade = null;
+
+      if (submission) {
+        reviewsWritten = kernelContainer.db.prepare(`
+          SELECT pr.*, s.name as student_name 
+          FROM plugin_peer_reviews pr
+          LEFT JOIN plugin_submissions ps ON pr.submission_id = ps.id
+          LEFT JOIN students s ON ps.student_id = s.id
+          WHERE pr.reviewer_id = ? AND ps.lesson_id = ?
+        `).all(studentId, lessonId);
+
+        grade = kernelContainer.db.prepare(`
+          SELECT * FROM plugin_grades WHERE submission_id = ?
+        `).get(submission.id) as any;
+      } else {
+        reviewsWritten = kernelContainer.db.prepare(`
+          SELECT pr.*, s.name as student_name 
+          FROM plugin_peer_reviews pr
+          LEFT JOIN plugin_submissions ps ON pr.submission_id = ps.id
+          LEFT JOIN students s ON ps.student_id = s.id
+          WHERE pr.reviewer_id = ? AND ps.lesson_id = ?
+        `).all(studentId, lessonId);
+      }
+
+      res.json({
+        submission,
+        reviewsWritten,
+        grade
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post('/api/lessons', async (req, res) => {
     try {
       const { title, content } = req.body;

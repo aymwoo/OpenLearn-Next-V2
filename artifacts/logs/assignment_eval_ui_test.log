@@ -1,0 +1,53 @@
+
+ RUN  v4.1.9 /home/wuxf/Develop/openlearnv2
+
+stderr | src/mfe/__tests__/assignment-eval-ui.test.tsx > StudentAssignmentEvalPanel UI Component (Phase 15) > renders student submission info, grade, and classmate reviews
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/assignment-eval-ui.test.tsx > StudentAssignmentEvalPanel UI Component (Phase 15) > renders student submission info, grade, and classmate reviews
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/assignment-eval-ui.test.tsx > StudentAssignmentEvalPanel UI Component (Phase 15) > renders student submission info, grade, and classmate reviews
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/assignment-eval-ui.test.tsx > StudentAssignmentEvalPanel UI Component (Phase 15) > renders student submission info, grade, and classmate reviews
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/assignment-eval-ui.test.tsx > StudentAssignmentEvalPanel UI Component (Phase 15) > supports submit file form action by calling API commands
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/assignment-eval-ui.test.tsx > StudentAssignmentEvalPanel UI Component (Phase 15) > supports submit file form action by calling API commands
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/assignment-eval-ui.test.tsx > StudentAssignmentEvalPanel UI Component (Phase 15) > supports submit file form action by calling API commands
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/assignment-eval-ui.test.tsx > StudentAssignmentEvalPanel UI Component (Phase 15) > supports submit file form action by calling API commands
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/assignment-eval-ui.test.tsx > StudentAssignmentEvalPanel UI Component (Phase 15) > supports submit file form action by calling API commands
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/assignment-eval-ui.test.tsx > StudentAssignmentEvalPanel UI Component (Phase 15) > supports submit file form action by calling API commands
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/assignment-eval-ui.test.tsx > StudentAssignmentEvalPanel UI Component (Phase 15) > supports submit file form action by calling API commands
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/assignment-eval-ui.test.tsx > StudentAssignmentEvalPanel UI Component (Phase 15) > supports submit file form action by calling API commands
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ✓ src/mfe/__tests__/assignment-eval-ui.test.tsx (2 tests) 188ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  20:05:55
+   Duration  937ms (transform 71ms, setup 0ms, import 148ms, tests 188ms, environment 498ms)
+
