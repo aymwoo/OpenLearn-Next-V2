@@ -1,0 +1,5 @@
+
+> react-example@0.0.0 lint
+> tsc --noEmit
+
+packages/core/esm-loader/__tests__/fixtures/syntax-error.js(1,10): error TS1109: Expression expected.
