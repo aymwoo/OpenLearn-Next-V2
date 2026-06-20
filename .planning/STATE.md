@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: 作业提交与学生互评插件
 status: planning
-last_updated: "2026-06-20T11:40:15.272Z"
+last_updated: "2026-06-20T11:49:15.000Z"
 last_activity: 2026-06-20
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +17,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-17)
+See: .planning/PROJECT.md (updated 2026-06-20)
 
-**Core value:** 将前端庞大的 App.tsx 拆分为独立的微前端模块，并在前端集成 Vite Module Federation 以支持更灵活的插件渲染。
-**Current focus:** Phase 11 — 动态加载器与宿主桥接
+**Core value:** 以独立 ESM 插件（及微前端桥接）的方式，为授课流程增加学生作业文件上传、公开自由互评、教师评分及平时成绩自动核算和学期成绩对接。
+**Current focus:** Phase 14 — 数据库结构设计与后端 DI 成绩对接服务
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Phase 14
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-20 — Milestone v3.0 started
+Status: Researching
+Last activity: 2026-06-20 — Phase 14 started, researching database & grade service integration.
 
 ## Performance Metrics
 
