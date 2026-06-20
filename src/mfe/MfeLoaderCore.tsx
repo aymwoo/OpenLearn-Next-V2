@@ -336,19 +336,21 @@ export function MfeLoaderCore({
     throw error;
   }
 
-  // On loading: render fallback or default MfeLoadingFallback
-  if (state === 'loading') {
-    const LoadingFallback = LoadingFallbackOverride || MfeLoadingFallback;
-    return <LoadingFallback />;
-  }
+  const LoadingFallback = LoadingFallbackOverride || MfeLoadingFallback;
 
-  // On loaded: render the container div where remote mounts
   return (
-    <div
-      ref={containerRef}
-      data-mfe-name={name}
-      style={{ width: '100%', minHeight: '100%' }}
-    />
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {state === 'loading' && (
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, background: 'var(--bg-default, #fff)' }}>
+          <LoadingFallback />
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        data-mfe-name={name}
+        style={{ width: '100%', height: '100%' }}
+      />
+    </div>
   );
 }
 
