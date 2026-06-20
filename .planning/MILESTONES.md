@@ -1,5 +1,21 @@
 # Milestones
 
+## v2.0 微前端架构改造 (Shipped: 2026-06-20)
+
+**Phases completed:** 4 phases, 8 plans, 24 tasks
+
+**Key accomplishments:**
+
+- 创建 Phase 10 微前端基础设施配置与样式扫描的 Wave 0 测试骨架文件，为后续的配置开发提供 TDD 式的自动化校验。
+- 完成 OpenLearnV2 微前端基础设施的搭建与工程配置，集成 Vite 6 与 Module Federation 2.0，配置共享依赖单例与 Tailwind CSS v4 样式扫描机制。
+- MFE type contracts, backend remote entry resolution (DB + REST + cache + client), and test scaffold for four MFE loading requirements
+- Plan:
+- Date:
+- Zustand host state sharing, whitelist-restricted DI Proxy, and reference-counted EventBus-Socket.IO network bridge.
+- 执行时间:
+
+---
+
 ## v1.0 插件系统重构 (Shipped: 2026-06-19)
 
 **Phases completed:** 9 phases, 34 plans | **Tests:** 358 passed, 41 test files | **Commits:** 206
