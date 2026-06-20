@@ -34,6 +34,7 @@ import { get as cacheGet, set as cacheSet } from './cache';
 import { createLeakDetector } from './leak-detector';
 import type { MfeControllerRef, MfeAppLifecycle } from './types';
 import type { MfeErrorFallbackProps } from '../components/MfeErrorFallback';
+import type { PlatformEvent } from '../../packages/core/event-bus';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -328,9 +329,63 @@ export function MfeLoaderCore({
 }
 
 export class MfeEventBusWrapper {
-  constructor(mfeName: string, hostEventBus: any, socketBridge: any, socketService: any) {}
-  subscribe(event: string, handler: any) { return () => {}; }
-  async publish(event: any) {}
-  cleanup() {}
+  private mfeName: string;
+  private hostEventBus: any;
+  private socketBridge: any;
+  private socketService: any;
+  private activeSubscriptions: Array<{ event: string; handler: any; unsubscribe: () => void }> = [];
+
+  constructor(mfeName: string, hostEventBus: any, socketBridge: any, socketService: any) {
+    this.mfeName = mfeName;
+    this.hostEventBus = hostEventBus;
+    this.socketBridge = socketBridge;
+    this.socketService = socketService;
+  }
+
+  subscribe(event: string, handler: (event: PlatformEvent) => void): () => void {
+    let hostUnsubscribe: () => void;
+
+    if (event.startsWith('server:')) {
+      this.socketBridge.register(event);
+      this.hostEventBus.subscribe(event, handler);
+      hostUnsubscribe = () => {
+        this.hostEventBus.unsubscribe(event, handler);
+        this.socketBridge.unregister(event);
+      };
+    } else {
+      this.hostEventBus.subscribe(event, handler);
+      hostUnsubscribe = () => {
+        this.hostEventBus.unsubscribe(event, handler);
+      };
+    }
+
+    const subRecord = { event, handler, unsubscribe: hostUnsubscribe };
+    this.activeSubscriptions.push(subRecord);
+
+    return () => {
+      hostUnsubscribe();
+      this.activeSubscriptions = this.activeSubscriptions.filter((s) => s !== subRecord);
+    };
+  }
+
+  async publish(event: PlatformEvent): Promise<void> {
+    if (event.type.startsWith('server:')) {
+      const socketEvent = event.type.replace(/^server:/, '');
+      this.socketService.emit(socketEvent, event.payload);
+    } else {
+      const completeEvent: PlatformEvent = {
+        ...event,
+        source: this.mfeName,
+        id: event.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2)),
+        timestamp: event.timestamp || Date.now(),
+      };
+      await this.hostEventBus.publish(completeEvent);
+    }
+  }
+
+  cleanup() {
+    this.activeSubscriptions.forEach((sub) => sub.unsubscribe());
+    this.activeSubscriptions = [];
+  }
 }
 

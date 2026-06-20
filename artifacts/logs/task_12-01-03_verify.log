@@ -1,0 +1,10 @@
+
+ RUN  v4.1.9 /home/wuxf/Develop/openlearnv2
+
+ ✓ src/mfe/__tests__/bridge.test.tsx (6 tests | 3 skipped) 5ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 3 skipped (6)
+   Start at  09:41:01
+   Duration  760ms (transform 74ms, setup 0ms, import 181ms, tests 5ms, environment 480ms)
+

@@ -19,6 +19,7 @@
 
 import React, { createContext, useContext } from 'react';
 import type { MfeContext } from './types';
+import type { PlatformEvent } from '../../packages/core/event-bus';
 
 
 const MfeContext = createContext<MfeContext | null>(null);
@@ -77,8 +78,52 @@ export class MfeServiceRegistryProxy {
 }
 
 export class SocketBridge {
-  constructor(socketService: any, hostEventBus: any) {}
-  register(eventType: string) {}
-  unregister(eventType: string) {}
+  private socketService: any;
+  private hostEventBus: any;
+  private counts = new Map<string, number>();
+  private handlers = new Map<string, (payload: any) => void>();
+
+  constructor(socketService: any, hostEventBus: any) {
+    this.socketService = socketService;
+    this.hostEventBus = hostEventBus;
+  }
+
+  register(eventType: string) {
+    const socketEvent = eventType.replace(/^server:/, '');
+    const currentCount = this.counts.get(eventType) ?? 0;
+    this.counts.set(eventType, currentCount + 1);
+
+    if (currentCount === 0) {
+      const handler = (payload: any) => {
+        const event: PlatformEvent = {
+          id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+          type: eventType,
+          source: 'server',
+          payload,
+          timestamp: Date.now(),
+        };
+        this.hostEventBus.publish(event);
+      };
+      this.handlers.set(eventType, handler);
+      this.socketService.on(socketEvent, handler);
+    }
+  }
+
+  unregister(eventType: string) {
+    const currentCount = this.counts.get(eventType) ?? 0;
+    if (currentCount <= 0) return;
+
+    if (currentCount === 1) {
+      const handler = this.handlers.get(eventType);
+      if (handler) {
+        const socketEvent = eventType.replace(/^server:/, '');
+        this.socketService.off(socketEvent, handler);
+        this.handlers.delete(eventType);
+      }
+      this.counts.delete(eventType);
+    } else {
+      this.counts.set(eventType, currentCount - 1);
+    }
+  }
 }
 
