@@ -18,33 +18,8 @@
  */
 
 import React, { createContext, useContext } from 'react';
+import type { MfeContext } from './types';
 
-/**
- * Platform infrastructure context provided to remote MFE components.
- *
- * References to host services (EventBus, ServiceRegistry, Store)
- * are injected here so remote components can consume platform
- * capabilities without prop drilling.
- */
-export interface MfeContext {
-  /** Host event bus for pub/sub communication */
-  eventBus?: {
-    on: (event: string, handler: (...args: any[]) => void) => void;
-    off: (event: string, handler: (...args: any[]) => void) => void;
-    emit: (event: string, ...args: any[]) => void;
-  };
-  /** Host service registry for DI */
-  serviceRegistry?: {
-    get: <T>(token: string) => T | undefined;
-    getAll: () => Map<string, any>;
-  };
-  /** Host state management store */
-  store?: {
-    getState: () => Record<string, any>;
-    setState: (partial: Record<string, any>) => void;
-    subscribe: (listener: (state: Record<string, any>) => void) => () => void;
-  };
-}
 
 const MfeContext = createContext<MfeContext | null>(null);
 
@@ -80,3 +55,30 @@ export function useMfeInfraContext(): MfeContext {
   }
   return ctx;
 }
+
+export const DI_WHITELIST = [
+  '@openlearn/frontend:IFrontendAPI',
+  '@openlearn/frontend:ISocketService',
+  '@openlearn/frontend:IUIService',
+  '@openlearn/frontend:IStorageService'
+];
+
+export class MfeServiceRegistryProxy {
+  constructor(serviceRegistry: any) {}
+  async resolve<T>(token: string): Promise<T> {
+    return {} as any;
+  }
+  get<T>(token: string): T | undefined {
+    return undefined;
+  }
+  has(token: string): boolean {
+    return false;
+  }
+}
+
+export class SocketBridge {
+  constructor(socketService: any, hostEventBus: any) {}
+  register(eventType: string) {}
+  unregister(eventType: string) {}
+}
+

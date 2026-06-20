@@ -1,0 +1,107 @@
+
+ RUN  v4.1.9 /home/wuxf/Develop/openlearnv2
+
+ ❯ src/mfe/__tests__/bridge.test.tsx (6 tests | 5 failed) 11ms
+       ✓ syncs state updates between host store and subscribers 2ms
+       × allows whitelisted service resolution 5ms
+       × denies access to non-whitelisted private services 1ms
+       × completes event metadata and publishes locally 1ms
+       × intercepts and emits server events to WebSocket 1ms
+       × bridges server subscriptions with reference-counting 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/mfe/__tests__/bridge.test.tsx > Phase 12 DI & Context Bridging > DI Proxy Whitelisting > allows whitelisted service resolution
+AssertionError: expected {} to be { get: [Function Mock] } // Object.is equality
+
+- Expected
++ Received
+
+- {
+-   "get": [Function Mock],
+- }
++ {}
+
+ ❯ src/mfe/__tests__/bridge.test.tsx:35:24
+     33|       const proxy = new MfeServiceRegistryProxy(registry);
+     34|       const resolved = await proxy.resolve('@openlearn/frontend:IFront…
+     35|       expect(resolved).toBe(mockApi);
+       |                        ^
+     36|     });
+     37|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/mfe/__tests__/bridge.test.tsx > Phase 12 DI & Context Bridging > DI Proxy Whitelisting > denies access to non-whitelisted private services
+AssertionError: promise resolved "{}" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
+- }
++ {}
+
+ ❯ src/mfe/__tests__/bridge.test.tsx:43:52
+     41|
+     42|       const proxy = new MfeServiceRegistryProxy(registry);
+     43|       await expect(proxy.resolve('private-service')).rejects.toThrow('…
+       |                                                    ^
+     44|     });
+     45|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/mfe/__tests__/bridge.test.tsx > Phase 12 DI & Context Bridging > EventBus Wrapper & Socket Bridge > completes event metadata and publishes locally
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/mfe/__tests__/bridge.test.tsx:58:22
+     56|
+     57|       await wrapper.publish({ id: '', type: 'test-event', source: '', …
+     58|       expect(events).toHaveLength(1);
+       |                      ^
+     59|       expect(events[0].source).toBe('test-mfe');
+     60|       expect(events[0].payload).toEqual({ ok: true });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/mfe/__tests__/bridge.test.tsx > Phase 12 DI & Context Bridging > EventBus Wrapper & Socket Bridge > intercepts and emits server events to WebSocket
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'test-msg', 'hello' ]
+
+Number of calls: 0
+
+ ❯ src/mfe/__tests__/bridge.test.tsx:70:31
+     68|
+     69|       await wrapper.publish({ id: '1', type: 'server:test-msg', source…
+     70|       expect(mockSocket.emit).toHaveBeenCalledWith('test-msg', 'hello'…
+       |                               ^
+     71|     });
+     72|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/mfe/__tests__/bridge.test.tsx > Phase 12 DI & Context Bridging > EventBus Wrapper & Socket Bridge > bridges server subscriptions with reference-counting
+AssertionError: expected "vi.fn()" to be called 1 times, but got 0 times
+ ❯ src/mfe/__tests__/bridge.test.tsx:81:29
+     79|
+     80|       const unsub1 = wrapper1.subscribe('server:chat', vi.fn());
+     81|       expect(mockSocket.on).toHaveBeenCalledTimes(1);
+       |                             ^
+     82|
+     83|       const unsub2 = wrapper2.subscribe('server:chat', vi.fn());
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 1 passed (6)
+   Start at  09:39:05
+   Duration  790ms (transform 68ms, setup 0ms, import 181ms, tests 11ms, environment 499ms)
+

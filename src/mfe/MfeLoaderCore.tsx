@@ -326,3 +326,11 @@ export function MfeLoaderCore({
     />
   );
 }
+
+export class MfeEventBusWrapper {
+  constructor(mfeName: string, hostEventBus: any, socketBridge: any, socketService: any) {}
+  subscribe(event: string, handler: any) { return () => {}; }
+  async publish(event: any) {}
+  cleanup() {}
+}
+

@@ -14,6 +14,7 @@
  */
 
 import type React from 'react';
+import type { PlatformEvent } from '../../packages/core/event-bus';
 
 // ── Remote Config ──────────────────────────────────────────────────────
 
@@ -60,14 +61,18 @@ export interface RemoteConfig {
  * D-07: ctx provides eventBus, serviceRegistry, and store references
  */
 export interface MfeContext {
-  /** Event bus for pub/sub communication (D-07) */
+  /** Strongly-typed EventBus according to D-12 */
   eventBus?: {
-    subscribe: (event: string, handler: Function) => () => void;
-    publish: (event: string, payload?: any) => void;
+    subscribe: (event: string, handler: (event: PlatformEvent) => void) => () => void;
+    publish: (event: PlatformEvent) => Promise<void>;
   };
-  /** Generic service registry map (DI container services) */
-  serviceRegistry?: Record<string, any>;
-  /** Generic store reference (Zustand, Redux, etc.) */
+  /** Only read/resolve operations allowed (D-15) */
+  serviceRegistry?: {
+    resolve: <T>(token: string) => Promise<T>;
+    get: <T>(token: string) => T | undefined;
+    has: (token: string) => boolean;
+  };
+  /** Zustand Vanilla Store instance */
   store?: Record<string, any>;
 }
 
