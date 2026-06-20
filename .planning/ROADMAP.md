@@ -4,8 +4,18 @@
 
 - ✅ **v1.0 插件系统重构** — Phases 1-9 (shipped 2026-06-19)
 - ✅ **v2.0 微前端架构改造** — Phases 10-13 (shipped 2026-06-20)
+- ⬜ **v3.0 作业提交与学生互评插件** — Phases 14-16 (defining requirements)
 
 ## Phases
+
+<details>
+<summary>⬜ v3.0 作业提交与学生互评插件 (Phases 14-16) — PLANNING</summary>
+
+- [ ] Phase 14: 数据库结构设计与后端 DI 成绩对接服务 — pending
+- [ ] Phase 15: 学生端上传文件及互评系统 — pending
+- [ ] Phase 16: 教师打分、权重折算与成绩同步 — pending
+
+</details>
 
 <details>
 <summary>✅ v2.0 微前端架构改造 (Phases 10-13) — SHIPPED 2026-06-20</summary>
@@ -85,6 +95,39 @@
 **Plans**: 0 plans
 **UI hint**: yes
 
+### Phase 14: 数据库结构设计与后端 DI 成绩对接服务
+**Goal**: 设计 SQLite 数据库模型，建立成绩主表及插件业务相关的数据表（作业提交、互评、评分表）；在核心和宿主端定义并实现 `ISemesterGradeService` 服务并注册在 DI 容器中；实现插件后端的作业命令处理器。
+**Depends on**: Phase 13
+**Requirements**: PLUG-EVAL-01, PLUG-EVAL-02, PLUG-EVAL-03, PLUG-EVAL-04
+**Success Criteria**:
+  1. Database migrations/initialization correctly creates `assignment_submissions`, `assignment_peer_reviews`, and `assignment_grades` tables without errors.
+  2. The `ISemesterGradeService` interface is defined, implemented in the backend, and exposed via `@openlearn/frontend:ISemesterGradeService` token in the DI container.
+  3. Unit tests verify the database operations (inserting a submission, recording peer reviews, updating teacher grades) and resolving the semester grade service.
+**Plans**: 0 plans
+**UI hint**: no
+
+### Phase 15: 学生端上传文件及互评系统
+**Goal**: 扩展学生课堂页面，提供“作业上传与互评”插件面板；实现学生选择本地文件上传并多次覆盖的逻辑，保存到 VFS 虚拟文件系统；实现学生自由浏览并对同学作业进行互评分数与评语评价。
+**Depends on**: Phase 14
+**Requirements**: PLUG-EVAL-01, PLUG-EVAL-02
+**Success Criteria**:
+  1. Students can upload local assignment files within the lesson view; physical files are stored in VFS path `/lessons/{lessonId}/submissions/{studentId}/`.
+  2. Subsequent uploads automatically overwrite the old file, increment the database `version`, and update the submission timestamp.
+  3. Students can view other students' submissions and submit peer reviews (0-100 score and text comments). Submitting a new review for the same student overrides the previous one.
+**Plans**: 0 plans
+**UI hint**: yes
+
+### Phase 16: 教师打分、权重折算与成绩同步
+**Goal**: 在教师课堂页面开发“成绩评定与权重折算”管理面板，支持配置平时成绩计算权重（教师评分 + 学生互评平均分）并自动核算最终得分；在教师确认打分后通过 DI 解析 `ISemesterGradeService` 写入宿主学期成绩库。
+**Depends on**: Phase 15
+**Requirements**: PLUG-EVAL-03, PLUG-EVAL-04
+**Success Criteria**:
+  1. Teachers can input scores and comments for each student's submission and adjust weight ratios (e.g. 70% teacher, 30% peer-review) to instantly calculate the final score.
+  2. Clicking "Confirm & Sync Grade" locks edits, updates the submission status to 'confirmed', and successfully invokes `ISemesterGradeService` to save the final score into the host semester grade system.
+  3. Integrated end-to-end tests cover the complete workflow: submission -> peer review -> teacher grade -> weight calculation -> grade confirm -> semester DB sync.
+**Plans**: 0 plans
+**UI hint**: yes
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -102,6 +145,9 @@
 | 11. 动态加载器与宿主桥接 | v2.0 | 4/4 | Complete    | 2026-06-19 |
 | 12. 宿主状态共享与 DI 桥接 | v2.0 | 1/1 | Complete | 2026-06-20 |
 | 13. 业务模块解耦与样式沙箱化 | v2.0 | 1/1 | Complete   | 2026-06-20 |
+| 14. 数据库结构设计与后端 DI 成绩对接服务 | v3.0 | 0/0 | Pending | — |
+| 15. 学生端上传文件及互评系统 | v3.0 | 0/0 | Pending | — |
+| 16. 教师打分、权重折算与成绩同步 | v3.0 | 0/0 | Pending | — |
 
 ---
 
