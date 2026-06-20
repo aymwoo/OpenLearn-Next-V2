@@ -1,0 +1,38 @@
+
+ RUN  v4.1.9 /home/wuxf/Develop/openlearnv2
+
+ ✓ src/mfe/__tests__/lifecycle.test.ts > createMfeApp lifecycle contract > createMfeApp returns { mount, unmount, update, styles } 2ms
+ ✓ src/mfe/__tests__/lifecycle.test.ts > createMfeApp lifecycle contract > mount returns { unmount, update } 1ms
+ ✓ src/mfe/__tests__/lifecycle.test.ts > createMfeApp lifecycle contract > mount calls createRoot 7ms
+ ✓ src/mfe/__tests__/lifecycle.test.ts > createMfeApp lifecycle contract > unmount calls root.unmount 2ms
+ ✓ src/mfe/__tests__/lifecycle.test.ts > createMfeApp lifecycle contract > styles array is optional 0ms
+ ✓ src/mfe/__tests__/lifecycle.test.ts > createMfeApp lifecycle contract > backward compat: default export wrapped as mount/unmount 0ms
+ ✓ src/mfe/__tests__/memory.test.ts > memory management > unmount calls root.unmount() 11ms
+stderr | src/mfe/__tests__/MfeErrorBoundary.test.tsx > MfeErrorBoundary > handleRetry resets error state (setState spy)
+Can't call setState on a component that is not yet mounted. This is a no-op, but it might indicate a bug in your application. Instead, assign to `this.state` directly or define a `state = {};` class property with the desired state in the MfeErrorBoundary component.
+
+ ✓ src/mfe/__tests__/MfeErrorBoundary.test.tsx > MfeErrorBoundary > renders children when no error 6ms
+ ✓ src/mfe/__tests__/MfeErrorBoundary.test.tsx > MfeErrorBoundary > matches snapshot with fallback state 0ms
+ ✓ src/mfe/__tests__/MfeErrorBoundary.test.tsx > MfeErrorBoundary > has handleRetry and handleDismiss methods 0ms
+ ✓ src/mfe/__tests__/MfeErrorBoundary.test.tsx > MfeErrorBoundary > handleRetry resets error state (setState spy) 3ms
+ ✓ src/mfe/__tests__/MfeErrorBoundary.test.tsx > MfeErrorBoundary > handleDismiss resets error state (setState spy) 0ms
+ ✓ src/mfe/__tests__/MfeErrorBoundary.test.tsx > MfeErrorBoundary > getDerivedStateFromError returns hasError true with error 0ms
+ ✓ src/mfe/__tests__/MfeErrorBoundary.test.tsx > MfeErrorBoundary > logs error in componentDidCatch with name prefix 0ms
+ ✓ src/mfe/__tests__/memory.test.ts > memory management > unmount timeout forces cleanup 104ms
+ ✓ src/mfe/__tests__/memory.test.ts > memory management > leak detector tracks intervals/listeners/observers 1ms
+ ✓ src/mfe/__tests__/memory.test.ts > memory management > leak detector cleanup clears all tracked resources 1ms
+ ✓ src/mfe/__tests__/MfeLoader.test.tsx > MfeLoader > renders within MfeConfigProvider 8ms
+ ✓ src/mfe/__tests__/MfeLoader.test.tsx > MfeLoader > passes name prop to MfeLoaderCore 1ms
+ ✓ src/mfe/__tests__/MfeLoader.test.tsx > MfeLoader > passes timeout from MfeConfigProvider default 1ms
+ ✓ src/mfe/__tests__/bridge.test.tsx > Phase 12 DI & Context Bridging > Zustand State Sync > syncs state updates between host store and subscribers 2ms
+ ✓ src/mfe/__tests__/bridge.test.tsx > Phase 12 DI & Context Bridging > DI Proxy Whitelisting > allows whitelisted service resolution 1ms
+ ✓ src/mfe/__tests__/bridge.test.tsx > Phase 12 DI & Context Bridging > DI Proxy Whitelisting > denies access to non-whitelisted private services 1ms
+ ✓ src/mfe/__tests__/bridge.test.tsx > Phase 12 DI & Context Bridging > EventBus Wrapper & Socket Bridge > completes event metadata and publishes locally 1ms
+ ✓ src/mfe/__tests__/bridge.test.tsx > Phase 12 DI & Context Bridging > EventBus Wrapper & Socket Bridge > intercepts and emits server events to WebSocket 1ms
+ ✓ src/mfe/__tests__/bridge.test.tsx > Phase 12 DI & Context Bridging > EventBus Wrapper & Socket Bridge > bridges server subscriptions with reference-counting 1ms
+
+ Test Files  5 passed (5)
+      Tests  26 passed (26)
+   Start at  09:42:05
+   Duration  1.02s (transform 340ms, setup 0ms, import 920ms, tests 164ms, environment 3.16s)
+

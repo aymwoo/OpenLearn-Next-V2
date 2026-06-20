@@ -13,7 +13,14 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MfeLoader } from '../MfeLoader';
 import { MfeConfigProvider } from '../MfeConfigProvider';
+import { MfeContextProvider } from '../MfeContextProvider';
 import * as MfeLoaderCoreModule from '../MfeLoaderCore';
+
+const mockInfra = {
+  eventBus: { subscribe: vi.fn(), publish: vi.fn() },
+  serviceRegistry: { resolve: vi.fn(), get: vi.fn(), has: vi.fn() },
+  store: {}
+};
 
 // Mock module-federation runtime so loadRemote doesn't actually fetch
 vi.mock('@module-federation/runtime', () => ({
@@ -38,7 +45,9 @@ describe('MfeLoader', () => {
 
     const html = renderToString(
       React.createElement(MfeConfigProvider, null,
-        React.createElement(MfeLoader, { name: 'mfe_whiteboard' }),
+        React.createElement(MfeContextProvider, { value: mockInfra },
+          React.createElement(MfeLoader, { name: 'mfe_whiteboard' }),
+        )
       ),
     );
     // Should render something (not an empty string)
@@ -51,7 +60,9 @@ describe('MfeLoader', () => {
 
     renderToString(
       React.createElement(MfeConfigProvider, null,
-        React.createElement(MfeLoader, { name: 'test_remote' }),
+        React.createElement(MfeContextProvider, { value: mockInfra },
+          React.createElement(MfeLoader, { name: 'test_remote' }),
+        )
       ),
     );
 
@@ -66,7 +77,9 @@ describe('MfeLoader', () => {
 
     renderToString(
       React.createElement(MfeConfigProvider, null,
-        React.createElement(MfeLoader, { name: 'test_remote' }),
+        React.createElement(MfeContextProvider, { value: mockInfra },
+          React.createElement(MfeLoader, { name: 'test_remote' }),
+        )
       ),
     );
 

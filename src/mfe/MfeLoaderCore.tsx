@@ -35,6 +35,7 @@ import { createLeakDetector } from './leak-detector';
 import type { MfeControllerRef, MfeAppLifecycle } from './types';
 import type { MfeErrorFallbackProps } from '../components/MfeErrorFallback';
 import type { PlatformEvent } from '../../packages/core/event-bus';
+import { useMfeInfraContext, MfeServiceRegistryProxy, SocketBridge } from './MfeContextProvider';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -109,6 +110,8 @@ export function MfeLoaderCore({
   const [state, setState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [error, setError] = useState<Error | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const infra = useMfeInfraContext();
+  const eventBusWrapperRef = useRef<MfeEventBusWrapper | null>(null);
   const mountRef = useRef<Awaited<ReturnType<MfeAppLifecycle['mount']>> | null>(null);
   const lifecycleRef = useRef<MfeAppLifecycle | null>(null);
   const mountedStylesRef = useRef<string[]>([]);
@@ -177,6 +180,11 @@ export function MfeLoaderCore({
     // D-20: Leak detector check
     leakDetector.cleanup();
 
+    if (eventBusWrapperRef.current) {
+      eventBusWrapperRef.current.cleanup();
+      eventBusWrapperRef.current = null;
+    }
+
     // Clear refs
     mountRef.current = null;
     lifecycleRef.current = null;
@@ -238,7 +246,21 @@ export function MfeLoaderCore({
 
         if (mod.createMfeApp) {
           // D-08: createMfeApp factory — single init
-          const mfeContext = {}; // D-02: placeholder — full bridging in Phase 12
+          const socketService = infra.serviceRegistry?.get('@openlearn/frontend:ISocketService');
+          const socketBridge = new SocketBridge(socketService, infra.eventBus);
+          const eventBusWrapper = new MfeEventBusWrapper(
+            name,
+            infra.eventBus,
+            socketBridge,
+            socketService
+          );
+          const serviceRegistryProxy = new MfeServiceRegistryProxy(infra.serviceRegistry);
+          const mfeContext = {
+            eventBus: eventBusWrapper,
+            serviceRegistry: serviceRegistryProxy,
+            store: infra.store,
+          };
+          eventBusWrapperRef.current = eventBusWrapper;
           lifecycle = mod.createMfeApp(mfeContext) as MfeAppLifecycle;
         } else if (mod.default) {
           // D-12: Backward compat — auto-wrap default React component
