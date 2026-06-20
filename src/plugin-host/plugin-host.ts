@@ -24,6 +24,7 @@ import {
   SOCKET_SERVICE_TOKEN,
   UI_SERVICE_TOKEN,
   STORAGE_SERVICE_TOKEN,
+  SEMESTER_GRADE_SERVICE_TOKEN,
 } from './types';
 import type {
   FrontendPluginManifest,
@@ -34,6 +35,7 @@ import type {
   ISocketService,
   IUIService,
   IStorageService,
+  ISemesterGradeService,
 } from './types';
 
 // ── Module Loader type ───────────────────────────────────────────────────
@@ -66,6 +68,7 @@ const FRONTEND_SERVICE_TOKENS = [
   '@openlearn/frontend:ISocketService',
   '@openlearn/frontend:IUIService',
   '@openlearn/frontend:IStorageService',
+  '@openlearn/frontend:ISemesterGradeService',
 ];
 
 // ── FrontendPluginHost ───────────────────────────────────────────────────
@@ -111,6 +114,7 @@ export class FrontendPluginHost {
     await registry.register(SOCKET_SERVICE_TOKEN, socketServiceImpl);
     await registry.register(UI_SERVICE_TOKEN, uiServiceImpl);
     await registry.register(STORAGE_SERVICE_TOKEN, storageServiceImpl);
+    await registry.register(SEMESTER_GRADE_SERVICE_TOKEN, new SemesterGradeServiceProxy(frontendApiImpl));
     this.registry = registry;
     this.initialized = true;
     usePluginHostStore.getState().initialize(registry);
@@ -431,5 +435,18 @@ export class FrontendPluginHost {
         },
       },
     };
+  }
+}
+
+class SemesterGradeServiceProxy implements ISemesterGradeService {
+  private frontendApi: IFrontendAPI;
+  constructor(frontendApi: IFrontendAPI) {
+    this.frontendApi = frontendApi;
+  }
+  async saveSemesterGrade(lessonId: string, studentId: string, grade: number): Promise<void> {
+    const res = await this.frontendApi.post('/api/grade-sync', { lessonId, studentId, grade });
+    if (!res.success) {
+      throw new Error(res.error || 'Failed to sync semester grade');
+    }
   }
 }

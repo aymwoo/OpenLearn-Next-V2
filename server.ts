@@ -19,6 +19,7 @@ import { createServer as createViteServer } from 'vite';
 import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
 import { kernelContainer } from './packages/core/kernel/index.js';
+import { ISemesterGradeServiceToken } from './packages/core/di/interfaces.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import crypto from 'crypto';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './packages/plugins/ai-submit-injector.js';
@@ -4219,6 +4220,26 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       res.json({ success: true, weights, students: result });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/grade-sync', async (req, res) => {
+    try {
+      if (!checkIsTeacherOrAdmin(req)) {
+        return res.status(403).json({ success: false, error: 'Access Denied: Teachers or Administrators only' });
+      }
+
+      const { lessonId, studentId, grade } = req.body;
+      if (!lessonId || !studentId || grade === undefined) {
+        return res.status(400).json({ success: false, error: 'lessonId, studentId, and grade are required' });
+      }
+
+      const gradeService = await kernelContainer.registry.resolve(ISemesterGradeServiceToken);
+      await gradeService.saveSemesterGrade(lessonId, studentId, Math.round(Number(grade)));
+
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
     }
   });
 

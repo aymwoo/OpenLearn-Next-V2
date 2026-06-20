@@ -25,9 +25,11 @@ import {
   IAIServiceToken,
   IDatabaseToken,
   IPluginHostToken,
+  ISemesterGradeServiceToken,
 } from '../di/interfaces.js';
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
+import { SemesterGradeService } from '../di/semester-grade-service.js';
 import { PluginHost } from '../plugin-host/index.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import { HotReloadController } from '../plugin-host/hot-reload.js';
@@ -91,6 +93,7 @@ export class Kernel {
     this.serviceRegistry.register(IAIServiceToken, this.aiService);
     this.serviceRegistry.register(IDatabaseToken, this.db as any);
     this.serviceRegistry.register(IPluginHostToken, this.pluginHost);
+    this.serviceRegistry.register(ISemesterGradeServiceToken, new SemesterGradeService(this.db as any));
 
     // Capability check interceptor
     this.commandBus.setInterceptor(async (command) => {

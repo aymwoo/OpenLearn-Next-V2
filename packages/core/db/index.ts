@@ -321,6 +321,39 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS plugin_submissions (
+    id TEXT PRIMARY KEY,
+    lesson_id TEXT NOT NULL,
+    student_id TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE(lesson_id, student_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS plugin_peer_reviews (
+    id TEXT PRIMARY KEY,
+    submission_id TEXT NOT NULL,
+    reviewer_id TEXT NOT NULL,
+    score INTEGER NOT NULL,
+    comment TEXT,
+    created_at INTEGER NOT NULL,
+    UNIQUE(submission_id, reviewer_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS plugin_grades (
+    id TEXT PRIMARY KEY,
+    submission_id TEXT NOT NULL UNIQUE,
+    teacher_score INTEGER,
+    teacher_comment TEXT,
+    teacher_weight REAL NOT NULL DEFAULT 0.6,
+    peer_weight REAL NOT NULL DEFAULT 0.4,
+    calculated_final_score INTEGER,
+    status TEXT NOT NULL DEFAULT 'draft',
+    graded_at INTEGER
+  );
 `);
 
 // Phase 5: Worker isolation mode support — execution_mode column for plugins table
