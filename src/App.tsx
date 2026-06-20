@@ -2,10 +2,10 @@ import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, Globe, Cod
 import React, { useState, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import { translations, Language } from './i18n';
-import { InteractiveWhiteboard } from './components/InteractiveWhiteboard';
+import { MfeLoader } from './mfe/MfeLoader';
 import { LiveClassroomView } from './components/LiveClassroomView';
 import { ChevronLeft, Menu } from 'lucide-react';
-import { InteractiveCoursewareViewer } from './components/InteractiveCoursewareViewer';
+// InteractiveCoursewareViewer: now loaded via MfeLoader (Phase 13 decoupling)
 import { QuickActionsMenu } from './components/QuickActionsMenu';
 import { CountdownTimer } from './components/CountdownTimer';
 import { StudentGradedTimeline } from './components/StudentGradedTimeline';
@@ -4762,25 +4762,26 @@ export default function App() {
                       </button>
                     </div>
                     {studentLessonTab === 'whiteboard' ? (
-                       <InteractiveWhiteboard
-                         lessonId={selectedLesson}
-                         elements={elements}
-                         userRole={activeRole}
-                         activeSegmentId={activeSegmentId} onSegmentSync={(segId) => setActiveSegmentId(segId)} onElementUpdate={async () => { /* readonly or sync */ }}
-                         onElementDelete={async (elementId) => {
-                            await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                              method: 'DELETE'
-                            });
-                            fetchElements(selectedLesson);
+                       <MfeLoader
+                         name="mfe_whiteboard"
+                         props={{
+                           lessonId: selectedLesson,
+                           elements: elements,
+                           userRole: activeRole,
+                           activeSegmentId: activeSegmentId,
+                           onSegmentSync: (segId: string) => setActiveSegmentId(segId),
+                           onElementUpdate: async () => { /* readonly or sync */ },
+                           onElementDelete: async (elementId: string) => {
+                             await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, { method: 'DELETE' });
+                             fetchElements(selectedLesson);
+                           },
+                           onClearBoard: async () => {
+                             await fetch(`/api/lessons/${selectedLesson}/whiteboard`, { method: 'DELETE' });
+                             fetchElements(selectedLesson);
+                           },
+                           onElementAdd: async () => { /* readonly or sync */ },
+                           onRefresh: () => fetchElements(selectedLesson)
                          }}
-                         onClearBoard={async () => {
-                            await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                              method: 'DELETE'
-                            });
-                            fetchElements(selectedLesson);
-                         }}
-                         onElementAdd={async () => { /* readonly or sync */ }}
-                         onRefresh={() => fetchElements(selectedLesson)}
                        />
                     ) : (
                        <div className="flex-1 flex gap-4 min-h-0">
@@ -4823,7 +4824,7 @@ export default function App() {
                             <div className="mt-2 text-[10px] text-gray-400 leading-tight">Note: Showing HTML courseware from current OS drive directory. Ask agent to generate courseware.</div>
                          </div>
                          <div className="flex-1 relative bg-white min-h-0">
-                            <InteractiveCoursewareViewer coursewareId={studentSelectedCourseware} onClose={() => setStudentSelectedCourseware(null)} />
+                            <MfeLoader name="mfe_courseware" props={{ coursewareId: studentSelectedCourseware, onClose: () => setStudentSelectedCourseware(null) }} />
                          </div>
                        </div>
                     )}
@@ -5046,40 +5047,43 @@ export default function App() {
                             </div>
                           ) : (
                             <div className={`flex-1 min-h-0 flex flex-col ${selectedAssignment.submission_status ? 'opacity-90 pointer-events-none filter grayscale-[0.2]' : ''}`}>
-                              <InteractiveWhiteboard
-                                lessonId={`assignment-${selectedAssignment.id}-student-${activeStudentId}`}
-                                elements={elements}
-                                userRole={activeRole}
-                                enableAutoAI={activeRole === 'student' && !selectedAssignment.submission_status}
-                                onElementAdd={async (type, data) => {
-                                   await fetch(`/api/lessons/assignment-${selectedAssignment.id}-student-${activeStudentId}/whiteboard`, {
-                                     method: 'POST',
-                                     headers: { 'Content-Type': 'application/json' },
-                                     body: JSON.stringify({ type, data })
-                                   });
-                                   fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`);
+                              <MfeLoader
+                                name="mfe_whiteboard"
+                                props={{
+                                  lessonId: `assignment-${selectedAssignment.id}-student-${activeStudentId}`,
+                                  elements: elements,
+                                  userRole: activeRole,
+                                  enableAutoAI: activeRole === 'student' && !selectedAssignment.submission_status,
+                                  onElementAdd: async (type: string, data: any) => {
+                                    await fetch(`/api/lessons/assignment-${selectedAssignment.id}-student-${activeStudentId}/whiteboard`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ type, data })
+                                    });
+                                    fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`);
+                                  },
+                                  onElementUpdate: async (elementId: string, data: any) => {
+                                    await fetch(`/api/lessons/assignment-${selectedAssignment.id}-student-${activeStudentId}/whiteboard/${elementId}`, {
+                                      method: 'PUT',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ data })
+                                    });
+                                    fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`);
+                                  },
+                                  onElementDelete: async (elementId: string) => {
+                                    await fetch(`/api/lessons/assignment-${selectedAssignment.id}-student-${activeStudentId}/whiteboard/${elementId}`, {
+                                      method: 'DELETE'
+                                    });
+                                    fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`);
+                                  },
+                                  onClearBoard: async () => {
+                                    await fetch(`/api/lessons/assignment-${selectedAssignment.id}-student-${activeStudentId}/whiteboard`, {
+                                      method: 'DELETE'
+                                    });
+                                    fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`);
+                                  },
+                                  onRefresh: () => fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`)
                                 }}
-                                onElementUpdate={async (elementId, data) => {
-                                   await fetch(`/api/lessons/assignment-${selectedAssignment.id}-student-${activeStudentId}/whiteboard/${elementId}`, {
-                                     method: 'PUT',
-                                     headers: { 'Content-Type': 'application/json' },
-                                     body: JSON.stringify({ data })
-                                   });
-                                   fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`);
-                                }}
-                                onElementDelete={async (elementId) => {
-                                   await fetch(`/api/lessons/assignment-${selectedAssignment.id}-student-${activeStudentId}/whiteboard/${elementId}`, {
-                                     method: 'DELETE'
-                                   });
-                                   fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`);
-                                }}
-                                onClearBoard={async () => {
-                                   await fetch(`/api/lessons/assignment-${selectedAssignment.id}-student-${activeStudentId}/whiteboard`, {
-                                     method: 'DELETE'
-                                   });
-                                   fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`);
-                                }}
-                                onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`)}
                               />
                             </div>
                           )}
@@ -6198,32 +6202,34 @@ export default function App() {
                           </div>
                         </div>
                      ) : (
-                        <InteractiveWhiteboard
-                          lessonId={selectedLesson}
-                          userRole={activeRole}
-                          elements={elements}
-                          activeSegmentId={activeSegmentId}
-                          onSegmentSync={(segId) => setActiveSegmentId(segId)}
-                          onElementAdd={async (type, data) => {
-                             setEditorSaveStatus('saving');
-                             try {
-                               const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                                 method: 'POST',
-                                 headers: { 'Content-Type': 'application/json' },
-                                 body: JSON.stringify({ type, data })
-                               });
-                               if (response.ok) {
-                                 setEditorSaveStatus('saved');
-                                 setEditorLastSavedTime(new Date());
-                                 fetchElements(selectedLesson);
-                               } else {
-                                 setEditorSaveStatus('error');
-                               }
-                             } catch (err) {
-                               setEditorSaveStatus('error');
-                             }
-                          }}
-                          onElementUpdate={async (elementId, data) => {
+                        <MfeLoader
+                          name="mfe_whiteboard"
+                          props={{
+                            lessonId: selectedLesson,
+                            userRole: activeRole,
+                            elements: elements,
+                            activeSegmentId: activeSegmentId,
+                            onSegmentSync: (segId: string) => setActiveSegmentId(segId),
+                            onElementAdd: async (type: string, data: any) => {
+                              setEditorSaveStatus('saving');
+                              try {
+                                const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ type, data })
+                                });
+                                if (response.ok) {
+                                  setEditorSaveStatus('saved');
+                                  setEditorLastSavedTime(new Date());
+                                  fetchElements(selectedLesson);
+                                } else {
+                                  setEditorSaveStatus('error');
+                                }
+                              } catch (err) {
+                                setEditorSaveStatus('error');
+                              }
+                            },
+                            onElementUpdate: async (elementId: string, data: any) => {
                               setEditorSaveStatus('saving');
                               try {
                                 const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
@@ -6241,8 +6247,8 @@ export default function App() {
                               } catch (err) {
                                 setEditorSaveStatus('error');
                               }
-                           }}
-                          onElementDelete={async (elementId) => {
+                            },
+                            onElementDelete: async (elementId: string) => {
                               setEditorSaveStatus('saving');
                               try {
                                 const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
@@ -6258,8 +6264,8 @@ export default function App() {
                               } catch (err) {
                                 setEditorSaveStatus('error');
                               }
-                           }}
-                          onClearBoard={async () => {
+                            },
+                            onClearBoard: async () => {
                               setEditorSaveStatus('saving');
                               try {
                                 const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
@@ -6275,8 +6281,9 @@ export default function App() {
                               } catch (err) {
                                 setEditorSaveStatus('error');
                               }
-                           }}
-                          onRefresh={() => fetchElements(selectedLesson)}
+                            },
+                            onRefresh: () => fetchElements(selectedLesson)
+                          }}
                         />
                      )}
                    </div>
@@ -9837,41 +9844,44 @@ export default function App() {
                 <div className="flex-grow flex-1 min-h-0 flex flex-col h-full relative">
                   {previewLessonTab === 'whiteboard' ? (
                     <div className="flex-grow flex-1 min-h-0 w-full h-full relative rounded-lg overflow-hidden border border-gray-100 flex flex-col">
-                      <InteractiveWhiteboard
-                        lessonId={selectedLesson}
-                        userRole={activeRole}
-                        elements={elements}
-                        activeSegmentId={activeSegmentId}
-                        onSegmentSync={(segId) => setActiveSegmentId(segId)}
-                        onElementAdd={async (type, data) => {
-                          await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ type, data })
-                          });
-                          fetchElements(selectedLesson);
+                      <MfeLoader
+                        name="mfe_whiteboard"
+                        props={{
+                          lessonId: selectedLesson,
+                          userRole: activeRole,
+                          elements: elements,
+                          activeSegmentId: activeSegmentId,
+                          onSegmentSync: (segId: string) => setActiveSegmentId(segId),
+                          onElementAdd: async (type: string, data: any) => {
+                            await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ type, data })
+                            });
+                            fetchElements(selectedLesson);
+                          },
+                          onElementUpdate: async (elementId: string, data: any) => {
+                            await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ data })
+                            });
+                            fetchElements(selectedLesson);
+                          },
+                          onElementDelete: async (elementId: string) => {
+                            await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                              method: 'DELETE'
+                            });
+                            fetchElements(selectedLesson);
+                          },
+                          onClearBoard: async () => {
+                            await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                              method: 'DELETE'
+                            });
+                            fetchElements(selectedLesson);
+                          },
+                          onRefresh: () => fetchElements(selectedLesson)
                         }}
-                        onElementUpdate={async (elementId, data) => {
-                          await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ data })
-                          });
-                          fetchElements(selectedLesson);
-                        }}
-                        onElementDelete={async (elementId) => {
-                          await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                            method: 'DELETE'
-                          });
-                          fetchElements(selectedLesson);
-                        }}
-                        onClearBoard={async () => {
-                          await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                            method: 'DELETE'
-                          });
-                          fetchElements(selectedLesson);
-                        }}
-                        onRefresh={() => fetchElements(selectedLesson)}
                       />
                     </div>
                   ) : (
@@ -9928,10 +9938,7 @@ export default function App() {
 
                       {/* Embed Viewer */}
                       <div className="flex-1 relative bg-white border border-gray-100 rounded-xl overflow-hidden min-h-0 h-full shadow-inner flex flex-col">
-                        <InteractiveCoursewareViewer 
-                          coursewareId={previewSelectedCourseware} 
-                          onClose={() => setPreviewSelectedCourseware(null)} 
-                        />
+                        <MfeLoader name="mfe_courseware" props={{ coursewareId: previewSelectedCourseware, onClose: () => setPreviewSelectedCourseware(null) }} />
                       </div>
                     </div>
                   )}
@@ -10014,7 +10021,7 @@ export default function App() {
                         </div>
                         {cloudDrivePreviewNode.name.endsWith('.html') || cloudDrivePreviewNode.name.endsWith('.htm') || cloudDrivePreviewNode.content?.includes('<html') ? (
                            <div className="flex-1 relative bg-gray-50">
-                             <InteractiveCoursewareViewer coursewareId={cloudDrivePreviewNode.id} />
+                             <MfeLoader name="mfe_courseware" props={{ coursewareId: cloudDrivePreviewNode.id }} />
                            </div>
                         ) : (
                            <div className="flex-1 overflow-y-auto p-6 bg-white prose prose-sm max-w-none">
