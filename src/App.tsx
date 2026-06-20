@@ -35,6 +35,9 @@ import { FrontendAPIService } from './services/frontend-api';
 import { SocketService } from './services/socket-service';
 import { UIService } from './services/ui-service';
 import { StorageService } from './services/storage-service';
+import { useAppStore, appStore } from './store/appStore';
+import { MfeContextProvider } from './mfe/MfeContextProvider';
+import { EventBus } from '../packages/core/event-bus';
 
 interface AnimatedCounterProps {
   value: number;
@@ -1503,13 +1506,18 @@ const generateTemplateContent = (title: string, category: string): string => {
   }
 };
 
+const hostEventBus = new EventBus();
+
 export default function App() {
-  const [lang, setLang] = useState<Language>('zh');
+  const lang = useAppStore((s) => s.lang);
+  const setLang = useAppStore((s) => s.setLang);
   const t = translations[lang];
 
   const [mainNavCollapsed, setMainNavCollapsed] = useState(false);
-  const [liveClassSelectedClassId, setLiveClassSelectedClassId] = useState<string | null>(null);
-  const [liveClassIsActive, setLiveClassIsActive] = useState(false);
+  const liveClassSelectedClassId = useAppStore((s) => s.liveClassSelectedClassId);
+  const setLiveClassSelectedClassId = useAppStore((s) => s.setLiveClassSelectedClassId);
+  const liveClassIsActive = useAppStore((s) => s.liveClassIsActive);
+  const setLiveClassIsActive = useAppStore((s) => s.setLiveClassIsActive);
   const [liveClassTimeRemaining, setLiveClassTimeRemaining] = useState(0);
   const [liveClassFeed, setLiveClassFeed] = useState<any[]>([]);
   const [liveClassAcknowledgedMap, setLiveClassAcknowledgedMap] = useState<Map<string, boolean>>(new Map());
@@ -1550,7 +1558,8 @@ export default function App() {
     }
   }, [isSystemResourceLibraryOpen]);
 
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const lessons = useAppStore((s) => s.lessons);
+  const setLessons = useAppStore((s) => s.setLessons);
   const [lessonsSearchQuery, setLessonsSearchQuery] = useState('');
   const [lessonsSortOrder, setLessonsSortOrder] = useState<'recent' | 'alphabetical' | 'enrollment'>('recent');
 
@@ -1584,8 +1593,10 @@ export default function App() {
   const [providerApiKey, setProviderApiKey] = useState('');
   const [providerModelName, setProviderModelName] = useState('');
   const [testingProviderId, setTestingProviderId] = useState<string | null>(null);
-  const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
-  const [elements, setElements] = useState<WhiteboardElement[]>([]);
+  const selectedLesson = useAppStore((s) => s.selectedLesson);
+  const setSelectedLesson = useAppStore((s) => s.setSelectedLesson);
+  const elements = useAppStore((s) => s.elements);
+  const setElements = useAppStore((s) => s.setElements);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPluginModal, setShowPluginModal] = useState(false);
@@ -1640,9 +1651,11 @@ export default function App() {
   const [processes, setProcesses] = useState<ProcessType[]>([]);
   const [showProcessLogs, setShowProcessLogs] = useState<string | null>(null);
   const [processLogsContent, setProcessLogsContent] = useState('');
-  const [classes, setClasses] = useState<ClassType[]>([]);
+  const classes = useAppStore((s) => s.classes);
+  const setClasses = useAppStore((s) => s.setClasses);
   const [todaySchedules, setTodaySchedules] = useState<any[]>([]);
-  const [students, setStudents] = useState<StudentType[]>([]);
+  const students = useAppStore((s) => s.students);
+  const setStudents = useAppStore((s) => s.setStudents);
   const [expandedClassId, _setExpandedClassId] = useState<string | null>(null);
   const expandedClassIdRef = useRef<string | null>(null);
   const setExpandedClassId = (id: string | null) => {
@@ -1653,15 +1666,8 @@ export default function App() {
   const [expandedStudentId, _setExpandedStudentId] = useState<string | null>(null);
   
   // Role & Student View
-  const [session, setSession] = useState<{
-    role: 'teacher' | 'student';
-    userId?: string;
-    username?: string;
-    subRole?: 'administrator' | 'teacher';
-    name: string;
-    studentId?: string;
-    email?: string;
-  } | null>(null);
+  const session = useAppStore((s) => s.session);
+  const setSession = useAppStore((s) => s.setSession);
 
   const [activeRole, setActiveRole] = useState<'teacher' | 'student'>('teacher');
   const [sessionLoading, setSessionLoading] = useState(true);
@@ -4388,7 +4394,8 @@ export default function App() {
   const unreadNotifications = studentNotifications.filter(n => !readNotifications.has(n.id));
 
   return (
-    <div className="flex h-screen bg-gray-50 text-gray-900 font-sans">
+    <MfeContextProvider value={{ store: appStore, eventBus: hostEventBus, serviceRegistry: host.getRegistry() }}>
+      <div className="flex h-screen bg-gray-50 text-gray-900 font-sans">
       
       {/* Main Content Area: App Shell representing the Plugin Views */}
       <div className="flex-1 flex flex-col bg-gray-50 h-full overflow-hidden">
@@ -10735,6 +10742,7 @@ export default function App() {
         </AnimatePresence>
       </div>
 
-    </div>
+      </div>
+    </MfeContextProvider>
   );
 }
