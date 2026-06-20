@@ -1,0 +1,105 @@
+
+ RUN  v4.1.9 /home/wuxf/Develop/openlearnv2
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > renders student submissions list, peer reviews, and grading states correctly
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > renders student submissions list, peer reviews, and grading states correctly
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > renders student submissions list, peer reviews, and grading states correctly
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > allows editing teacher score and updates preview calculation dynamically
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > allows editing teacher score and updates preview calculation dynamically
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > allows editing teacher score and updates preview calculation dynamically
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > allows editing teacher score and updates preview calculation dynamically
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > calls POST /api/commands with status draft when save draft is clicked
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > calls POST /api/commands with status draft when save draft is clicked
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > calls POST /api/commands with status draft when save draft is clicked
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > calls POST /api/commands with status draft when save draft is clicked
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > calls POST /api/commands with status draft when save draft is clicked
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > calls POST /api/commands with status draft when save draft is clicked
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > calls POST /api/commands with status confirmed when confirm and sync grade is clicked
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > calls POST /api/commands with status confirmed when confirm and sync grade is clicked
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > calls POST /api/commands with status confirmed when confirm and sync grade is clicked
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > calls POST /api/commands with status confirmed when confirm and sync grade is clicked
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > calls POST /api/commands with status confirmed when confirm and sync grade is clicked
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/mfe/__tests__/teacher-grade-ui.test.tsx > TeacherAssignmentGradePanel Component (Phase 16) > calls POST /api/commands with status confirmed when confirm and sync grade is clicked
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+ ✓ src/mfe/__tests__/teacher-grade-ui.test.tsx (4 tests) 509ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  20:42:29
+   Duration  1.29s (transform 76ms, setup 0ms, import 166ms, tests 509ms, environment 517ms)
+

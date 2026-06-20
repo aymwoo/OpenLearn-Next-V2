@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Play, Square, Pause, Users, Presentation, Clock, Shuffle, CheckCircle2, XCircle, Shield, ShieldAlert, Check, RefreshCw, Send, HelpCircle, Activity, ChevronLeft, ChevronRight, Eye, FileText, Database, Award, Search } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { InteractiveWhiteboard } from './InteractiveWhiteboard';
+import { TeacherAssignmentGradePanel } from './TeacherAssignmentGradePanel';
 import { io } from 'socket.io-client';
 
 // Dynamic Icon component to render Lucide icons by name string
@@ -88,7 +89,7 @@ export function LiveClassroomView({
   });
 
   // Interactive courseware submission states
-  const [middleTab, setMiddleTab] = useState<'whiteboard' | 'submissions'>('whiteboard');
+  const [middleTab, setMiddleTab] = useState<'whiteboard' | 'submissions' | 'assignment'>('whiteboard');
   const [attempts, setAttempts] = useState<any[]>([]);
   const [loadingAttempts, setLoadingAttempts] = useState(false);
   const [selectedAttempt, setSelectedAttempt] = useState<any | null>(null);
@@ -712,6 +713,17 @@ export function LiveClassroomView({
                     >
                       {lang === 'zh' ? '📊 学生提交数据' : '📊 Student Submissions'}
                     </button>
+                    <button
+                      id="teacher_assignment_eval_tab_btn"
+                      onClick={() => setMiddleTab('assignment')}
+                      className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                        middleTab === 'assignment'
+                          ? 'bg-white text-indigo-700 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {lang === 'zh' ? '🎓 作业成绩评定' : '🎓 Assignment Grades'}
+                    </button>
                   </div>
                 </div>
                 <span className="text-indigo-655 font-mono tracking-widest animate-pulse flex items-center gap-1">
@@ -793,7 +805,7 @@ export function LiveClassroomView({
                     )}
                   </div>
                 </>
-              ) : (
+              ) : middleTab === 'submissions' ? (
                 <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-slate-200 shadow-md bg-white flex flex-col p-4">
                   {/* Submissions list view */}
                   <div className="flex justify-between items-center mb-4 gap-3 shrink-0">
@@ -971,6 +983,12 @@ export function LiveClassroomView({
                     })()}
                   </div>
                 </div>
+              ) : (
+                <TeacherAssignmentGradePanel
+                  lessonId={selectedLesson || ''}
+                  lang={lang === 'zh' ? 'zh' : 'en'}
+                  addToast={addToast}
+                />
               )}
             </div>
           ) : (

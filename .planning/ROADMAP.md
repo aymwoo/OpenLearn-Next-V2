@@ -4,16 +4,16 @@
 
 - ✅ **v1.0 插件系统重构** — Phases 1-9 (shipped 2026-06-19)
 - ✅ **v2.0 微前端架构改造** — Phases 10-13 (shipped 2026-06-20)
-- ⬜ **v3.0 作业提交与学生互评插件** — Phases 14-16 (defining requirements)
+- ✅ **v3.0 作业提交与学生互评插件** — Phases 14-16 (shipped 2026-06-20)
 
 ## Phases
 
 <details>
-<summary>⬜ v3.0 作业提交与学生互评插件 (Phases 14-16) — PLANNING</summary>
+<summary>✅ v3.0 作业提交与学生互评插件 (Phases 14-16) — SHIPPED 2026-06-20</summary>
 
 - [x] Phase 14: 数据库结构设计与后端 DI 成绩对接服务 (1/1 plan) — completed 2026-06-20
 - [x] Phase 15: 学生端上传文件及互评系统 (1/1 plan) — completed 2026-06-20
-- [ ] Phase 16: 教师打分、权重折算与成绩同步 — pending
+- [x] Phase 16: 教师打分、权重折算与成绩同步 (1/1 plan) — completed 2026-06-20
 
 </details>
 
@@ -147,7 +147,7 @@
 | 13. 业务模块解耦与样式沙箱化 | v2.0 | 1/1 | Complete   | 2026-06-20 |
 | 14. 数据库结构设计与后端 DI 成绩对接服务 | v3.0 | 1/1 | Complete | 2026-06-20 |
 | 15. 学生端上传文件及互评系统 | v3.0 | 1/1 | Complete | 2026-06-20 |
-| 16. 教师打分、权重折算与成绩同步 | v3.0 | 0/0 | Pending | — |
+| 16. 教师打分、权重折算与成绩同步 | v3.0 | 1/1 | Complete | 2026-06-20 |
 
 ---
 

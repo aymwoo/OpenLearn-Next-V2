@@ -1755,6 +1755,58 @@ async function startServer() {
     }
   });
 
+  app.get('/api/lessons/:lessonId/eval-grades', (req, res) => {
+    try {
+      const { lessonId } = req.params;
+      const submissions = kernelContainer.db.prepare(`
+        SELECT ps.*, s.name as student_name
+        FROM plugin_submissions ps
+        LEFT JOIN students s ON ps.student_id = s.id
+        WHERE ps.lesson_id = ?
+      `).all(lessonId) as any[];
+
+      const result = [];
+      for (const sub of submissions) {
+        // Query peer reviews with reviewer names
+        const reviews = kernelContainer.db.prepare(`
+          SELECT pr.*, s.name as reviewer_name
+          FROM plugin_peer_reviews pr
+          LEFT JOIN students s ON pr.reviewer_id = s.id
+          WHERE pr.submission_id = ?
+        `).all(sub.id) as any[];
+
+        let peerAverageScore = 0;
+        if (reviews.length > 0) {
+          const sum = reviews.reduce((acc, r) => acc + r.score, 0);
+          peerAverageScore = Math.round(sum / reviews.length);
+        }
+
+        // Query grade details
+        const grade = kernelContainer.db.prepare(`
+          SELECT * FROM plugin_grades WHERE submission_id = ?
+        `).get(sub.id) as any;
+
+        result.push({
+          id: sub.id,
+          lessonId: sub.lesson_id,
+          studentId: sub.student_id,
+          studentName: sub.student_name,
+          filePath: sub.file_path,
+          version: sub.version,
+          createdAt: sub.created_at,
+          updatedAt: sub.updated_at,
+          peerReviews: reviews,
+          peerAverageScore,
+          grade: grade || null
+        });
+      }
+
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get('/api/eval-submissions/:submissionId/reviews', (req, res) => {
     try {
       const { submissionId } = req.params;
