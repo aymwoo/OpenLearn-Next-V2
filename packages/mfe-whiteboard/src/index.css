@@ -1,0 +1,9 @@
+@layer theme, utilities;
+
+/* Import theme tokens and utilities only — preflight disabled */
+@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/utilities" prefix(wb) layer(utilities);
+
+.mfe-whiteboard-root {
+  box-sizing: border-box;
+}
