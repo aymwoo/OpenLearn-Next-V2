@@ -18,3 +18,19 @@
 
 **Tech stack:** TypeScript 5.8, React 19, Vite 6, Express 4, SQLite (better-sqlite3), vitest 4, Socket.IO 4
 **Deferred items at close:** 0 (all artifacts clear)
+
+---
+
+## v2.0 微前端架构改造 (Shipped: 2026-06-20)
+
+**Phases completed:** 4 phases, 8 plans | **Tests:** 60 passed, 6 test files | **Commits:** 22
+
+**Key accomplishments:**
+
+1. **工程配置与工程集成** (Phase 10) — 建立 Vite 6 + Module Federation 2.0 构建编译与按需加载体系，实现 React/Zustand 强单例共享配置，并为 Tailwind v4 配置样式编译扫描。
+2. **动态加载器与宿主桥接** (Phase 11) — 编写 React 异步加载组件 `MfeLoader`，集成 React Error Boundary 提供优雅下线与故障容灾降级占位；在子应用 App 中定义标准 `createMfeApp` 周期钩子契约。
+3. **状态共享与 DI 桥接** (Phase 12) — 实现 `MfeContext` 并结合 whitelisted `MfeServiceRegistryProxy` 对子应用共享指定 DI 服务（限制直接网络操作与安全威胁）；设计引用计数 `SocketBridge` 实现本地事件高频穿透。
+4. **业务模块解耦与样式沙箱** (Phase 13) — 从单体 App 中物理拆分“白板”与“课件”到独立 subprojects (`packages/mfe-whiteboard` 和 `packages/mfe-courseware`)；通过 Tailwind v4 `:wb` / `:cw` 前缀与禁用 Preflight 以及自定义 CSS Modules 实现完美的样式沙箱隔离。
+
+**Tech stack:** Vite Module Federation 2.0, Tailwind CSS v4, Zustand 5, SQLite
+**Deferred items at close:** 0 (all artifacts clear)
