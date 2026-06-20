@@ -10,16 +10,15 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 
 **一个类型安全、跨运行时（浏览器/Node.js）、支持依赖注入和热重载的插件执行环境**，使第三方开发者能像写 ESM 模块一样自然地为平台编写插件。
 
-## Current Milestone: v2.0 微前端架构改造
+## Current Milestone: v3.0 作业提交与学生互评插件
 
-**Goal:** 将前端庞大的 App.tsx 拆分为独立的微前端模块，并在前端集成 Vite Module Federation 以支持更灵活的插件渲染。
+**Goal:** 以独立 ESM 插件的方式，为授课流程增加学生作业文件上传、公开自由互评、教师打分以及宿主成绩系统对接的完整业务流。
 
 **Target features:**
-- 前端核心宿主容器（Shell App）拆分与状态共享。
-- 微前端加载器（Loader）集成 Vite Module Federation 动态导入。
-- 微前端子应用生命周期挂载规范（bootstrap, mount, unmount）的定义与挂载。
-- App.tsx 核心路由与组件解耦，移入独立的微前端模块。
-- 确保微前端视图层与现有后台 PluginHost 的无缝通信。
+- 学生作业上传：支持学生在课中提交文件作品，并支持多次更新替换。
+- 自由浏览与公开互评：学生端可以列表形式浏览所有已提交的同学作品，并能给出分数及评语。
+- 教师打分与可配置权重：教师可打分，并且系统支持配置教师打分与学生互评的权重占比，自动计算最终平时分。
+- 学期成绩对接：插件最终调用宿主经由 DI 注入的 ISemesterGradeService 将计算出的最终分数保存到宿主核心成绩系统。
 
 ## Requirements
 
@@ -42,16 +41,20 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - ✓ 中英文国际化（i18n.ts）— 现有
 - ✓ 学期成绩报告与分析图表— 现有
 - ✓ **PLUG-04**：Token 依赖注入系统（Token<T> 泛型类 + ServiceRegistry DI 容器 + tsc-strict 类型检查）— 验证于 Phase 01: token-di
+- ✓ **MFE-01**：Vite Module Federation 集成与配置 — 验证于 Phase 10
+- ✓ **MFE-02**：Shell App 与动态微应用加载器 — 验证于 Phase 11
+- ✓ **MFE-03**：微应用生命周期挂载规范 — 验证于 Phase 11
+- ✓ **MFE-04**：宿主状态与上下文共享 — 验证于 Phase 12
+- ✓ **MFE-05**：App.tsx 路由解耦与模块拆分 — 验证于 Phase 13
 
 ### Active
 
-<!-- v2.0 要构建的需求 -->
+<!-- v3.0 要构建的需求 -->
 
-- [ ] **MFE-01**：Vite Module Federation 集成与配置 — 支持 Vite 6 的 Module Federation 基础架构，配置共享依赖
-- [ ] **MFE-02**：Shell App 与动态微应用加载器 — Shell 容器能动态发现并加载远程/本地微应用
-- [ ] **MFE-03**：微应用生命周期挂载规范 — 实现 bootstrap, mount, unmount 标准接口，支持视图销毁与重建
-- [ ] **MFE-04**：宿主状态与上下文共享 — 共享宿主的应用状态（Zustand）、通信总线（EventBus）与 DI 容器服务到子应用
-- [ ] **MFE-05**：App.tsx 路由解耦与模块拆分 — 将原 App.tsx 的核心视图 and 路由解耦并抽离为微应用模块
+- [ ] **PLUG-EVAL-01**：学生作业上传与版本管理 — 学生能在课堂内上传自己的作业/作品，并支持多次更新覆盖。
+- [ ] **PLUG-EVAL-02**：自由浏览与互评系统 — 学生可查看所有已提交同学的作业列表，浏览具体内容，并提交分数与评语。
+- [ ] **PLUG-EVAL-03**：教师评分与权重计算 — 教师能为作业评分，且可动态设置教师与学生互评的分数权重，自动核算平时分数。
+- [ ] **PLUG-EVAL-04**：ISemesterGradeService DI 对接 — 插件通过 DI 安全解析 `ISemesterGradeService`，在评分确认后直连并写入宿主数据库的主学期成绩。
 
 ### Validated by Phase
 
@@ -156,12 +159,16 @@ This document evolves at phase transitions and milestone boundaries.
 | PLUG-11 | Phase 2 — 现有能力 Token 化 | ✓ Validated |
 | PLUG-12 | Phase 8 — 现有插件迁移 | ✓ Validated |
 | PLUG-13 | Phase 9 — 前端集成 + 过渡期 | ✓ Validated |
-| MFE-01 | TBD | Active |
-| MFE-02 | TBD | Active |
-| MFE-03 | TBD | Active |
-| MFE-04 | TBD | Active |
-| MFE-05 | TBD | Active |
+| MFE-01 | Phase 10 — 基础设施配置与工程集成 | ✓ Validated |
+| MFE-02 | Phase 11 — 动态加载器与宿主桥接 | ✓ Validated |
+| MFE-03 | Phase 11 — 动态加载器与宿主桥接 | ✓ Validated |
+| MFE-04 | Phase 12 — 宿主状态共享与 DI 桥接 | ✓ Validated |
+| MFE-05 | Phase 13 — 业务模块解耦与样式沙箱化 | ✓ Validated |
+| PLUG-EVAL-01 | TBD | Active |
+| PLUG-EVAL-02 | TBD | Active |
+| PLUG-EVAL-03 | TBD | Active |
+| PLUG-EVAL-04 | TBD | Active |
 
 ---
 
-*Last updated: 2026-06-19 after Phase 9 (frontend) completion*
+*Last updated: 2026-06-20 after Milestone v3.0 initialization*

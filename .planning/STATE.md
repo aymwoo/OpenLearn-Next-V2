@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: 微前端架构改造
+milestone: v3.0
+milestone_name: 作业提交与学生互评插件
 status: planning
-stopped_at: Phase 13 completed
-last_updated: "2026-06-20T11:33:19.536Z"
+last_updated: "2026-06-20T11:40:15.272Z"
 last_activity: 2026-06-20
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-17)
 
 ## Current Position
 
-Phase: 12
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-06-20
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-20 — Milestone v3.0 started
 
 ## Performance Metrics
 
