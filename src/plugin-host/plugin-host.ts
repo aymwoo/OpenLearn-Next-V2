@@ -120,6 +120,11 @@ export class FrontendPluginHost {
     usePluginHostStore.getState().initialize(registry);
   }
 
+  /** Returns the FrontendServiceRegistry instance. */
+  getRegistry(): FrontendServiceRegistry | null {
+    return this.registry;
+  }
+
   /** Returns true if initialize() has been called. */
   isInitialized(): boolean {
     return this.initialized;

@@ -10,7 +10,7 @@ import type { PluginContext } from '../core/plugin-host/types.js';
 export const ManagementPlugin = {
   manifest: {
     id: '@openlearn/plugin-management',
-    name: 'LMS Management Plugin',
+    name: '教务管理插件',
     version: '1.0.0',
     main: 'index.js',
     requires: [
@@ -50,13 +50,13 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-class-create',
       commandType: classCreateCmd,
-      description: 'Create a new class for the online learning system.',
+      description: '在在线学习系统中创建新班级',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          name: { type: 'STRING', description: 'Name of the class' },
-          description: { type: 'STRING', description: 'Description of the class' }
+          name: { type: 'STRING', description: '班级名称' },
+          description: { type: 'STRING', description: '班级描述' }
         },
         required: ['name']
       }
@@ -78,7 +78,7 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-class-list',
       commandType: classListCmd,
-      description: 'List all classes.',
+      description: '列出所有班级',
       capabilityRequired: 'management:read',
       inputSchema: {
         type: 'OBJECT',
@@ -98,14 +98,14 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-student-create',
       commandType: studentCreateCmd,
-      description: 'Create a new student.',
+      description: '创建新学生',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          name: { type: 'STRING', description: 'Name of the student' },
-          email: { type: 'STRING', description: 'Email of the student' },
-          student_number: { type: 'STRING', description: 'Student ID number (optional, used as username)' }
+          name: { type: 'STRING', description: '学生姓名' },
+          email: { type: 'STRING', description: '学生邮箱' },
+          student_number: { type: 'STRING', description: '学生学号（可选，用作登录用户名）' }
         },
         required: ['name']
       }
@@ -131,7 +131,7 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-student-list',
       commandType: studentListCmd,
-      description: 'List all students.',
+      description: '列出所有学生',
       capabilityRequired: 'management:read',
       inputSchema: {
         type: 'OBJECT',
@@ -151,13 +151,13 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-class-add-student',
       commandType: classAddStudentCmd,
-      description: 'Add a student to a class.',
+      description: '将学生添加到班级',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          classId: { type: 'STRING', description: 'ID of the class' },
-          studentId: { type: 'STRING', description: 'ID of the student' }
+          classId: { type: 'STRING', description: '班级 ID' },
+          studentId: { type: 'STRING', description: '学生 ID' }
         },
         required: ['classId', 'studentId']
       }
@@ -184,14 +184,14 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-class-update',
       commandType: classUpdateCmd,
-      description: 'Update a class details.',
+      description: '更新班级信息',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
           classId: { type: 'STRING', description: 'ID of the class' },
-          name: { type: 'STRING', description: 'Name of the class' },
-          description: { type: 'STRING', description: 'Description of the class' }
+          name: { type: 'STRING', description: '班级名称' },
+          description: { type: 'STRING', description: '班级描述' }
         },
         required: ['classId']
       }
@@ -215,7 +215,7 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-class-delete',
       commandType: classDeleteCmd,
-      description: 'Delete a class.',
+      description: '删除班级',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
@@ -281,7 +281,7 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-class-get-students',
       commandType: classGetStudentsCmd,
-      description: 'Get all students enrolled in a specific class.',
+      description: '获取指定班级中所有已注册的学生',
       capabilityRequired: 'management:read',
       inputSchema: {
         type: 'OBJECT',
@@ -311,15 +311,15 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-student-update',
       commandType: studentUpdateCmd,
-      description: 'Update a student details.',
+      description: '更新学生信息',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
           studentId: { type: 'STRING', description: 'ID of the student' },
-          name: { type: 'STRING', description: 'Name of the student' },
-          email: { type: 'STRING', description: 'Email of the student' },
-          student_number: { type: 'STRING', description: 'Student ID number' }
+          name: { type: 'STRING', description: '学生姓名' },
+          email: { type: 'STRING', description: '学生邮箱' },
+          student_number: { type: 'STRING', description: '学生学号' }
         },
         required: ['studentId']
       }
@@ -346,7 +346,7 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-student-delete',
       commandType: studentDeleteCmd,
-      description: 'Delete a student.',
+      description: '删除学生',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
@@ -371,13 +371,13 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-class-remove-student',
       commandType: classRemoveStudentCmd,
-      description: 'Remove a student from a class.',
+      description: '将学生从班级中移除',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          classId: { type: 'STRING', description: 'ID of the class' },
-          studentId: { type: 'STRING', description: 'ID of the student' }
+          classId: { type: 'STRING', description: '班级 ID' },
+          studentId: { type: 'STRING', description: '学生 ID' }
         },
         required: ['classId', 'studentId']
       }
@@ -396,7 +396,7 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-class-template-download',
       commandType: classTemplateDownloadCmd,
-      description: 'Generate and save a Class and Student Roster CSV import template under VFS root as "/class_import_template.csv".',
+      description: '生成并保存班级与学生名册 CSV 导入模板到虚拟文件系统根目录 "/class_import_template.csv"',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
@@ -429,7 +429,7 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-student-template-download',
       commandType: studentTemplateDownloadCmd,
-      description: 'Generate and save a Student CSV import template under VFS root as "/student_import_template.csv".',
+      description: '生成并保存学生 CSV 导入模板到虚拟文件系统根目录 "/student_import_template.csv"',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
@@ -462,14 +462,14 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-student-add-note',
       commandType: studentAddNoteCmd,
-      description: 'Add or update private observation note for a student (Academic/Behavioral/SpecialCare/General).',
+      description: '为学生添加或更新私密观察笔记（学业/行为/特殊关怀/综合）',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
           studentId: { type: 'STRING', description: 'ID of the student' },
-          category: { type: 'STRING', description: 'Category: Academic, Behavioral, SpecialCare, or General' },
-          notesHtml: { type: 'STRING', description: 'Notes body in HTML or rich text.' }
+          category: { type: 'STRING', description: '分类：Academic（学业）、Behavioral（行为）、SpecialCare（特殊关怀）或 General（综合）' },
+          notesHtml: { type: 'STRING', description: '笔记正文，支持 HTML 或富文本' }
         },
         required: ['studentId', 'category', 'notesHtml']
       }
@@ -489,15 +489,15 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-assignment-create',
       commandType: assignmentCreateCmd,
-      description: 'Create a course homework assignment for a specific class.',
+      description: '为指定班级创建课后作业',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          classId: { type: 'STRING', description: 'ID of the target class' },
-          title: { type: 'STRING', description: 'Title of the assignment' },
-          description: { type: 'STRING', description: 'Short summary or overview of the assignment' },
-          content: { type: 'STRING', description: 'Detailed instruction body or prompt requirements' }
+          classId: { type: 'STRING', description: '目标班级 ID' },
+          title: { type: 'STRING', description: '作业标题' },
+          description: { type: 'STRING', description: '作业的简短摘要或概述' },
+          content: { type: 'STRING', description: '详细的作业说明或要求' }
         },
         required: ['classId', 'title']
       }
@@ -518,14 +518,14 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-assignment-submit',
       commandType: assignmentSubmitCmd,
-      description: 'Submit completed homework text or documentation for an assignment on behalf of a student.',
+      description: '代表学生提交作业内容（文本、Markdown 或代码）',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          assignmentId: { type: 'STRING', description: 'ID of the assignment' },
-          studentId: { type: 'STRING', description: 'ID of the student' },
-          content: { type: 'STRING', description: 'Submission content body (text, markdown or code)' }
+          assignmentId: { type: 'STRING', description: '作业 ID' },
+          studentId: { type: 'STRING', description: '学生 ID' },
+          content: { type: 'STRING', description: '提交内容（文本、Markdown 或代码）' }
         },
         required: ['assignmentId', 'studentId', 'content']
       }
@@ -551,15 +551,15 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-assignment-grade',
       commandType: assignmentGradeCmd,
-      description: 'Grade a student submission with score points and feedback.',
+      description: '为学生作业打分并给出反馈意见',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
           assignmentId: { type: 'STRING', description: 'ID of the assignment' },
           studentId: { type: 'STRING', description: 'ID of the student' },
-          score: { type: 'INTEGER', description: 'Score out of 100 or maximum grade points' },
-          feedback: { type: 'STRING', description: 'Constructive feedback message text' }
+          score: { type: 'INTEGER', description: '满分 100 的得分' },
+          feedback: { type: 'STRING', description: '有建设性的反馈评语' }
         },
         required: ['assignmentId', 'studentId', 'score']
       }
@@ -601,17 +601,17 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-schedule-create',
       commandType: scheduleCreateCmd,
-      description: 'Schedule a lesson instance/class slot for a class on a specific date and time.',
+      description: '为班级在指定日期和时间安排一节课',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          classId: { type: 'STRING', description: 'ID of the class' },
-          lessonId: { type: 'STRING', description: 'ID of the lesson/course content' },
-          scheduledDate: { type: 'STRING', description: 'Date of the slot (YYYY-MM-DD)' },
-          timeSlot: { type: 'STRING', description: 'Time interval, format HH:MM-HH:MM (e.g., 09:00-10:30)' },
-          status: { type: 'STRING', description: 'Status of class: scheduled, cancelled, holiday, etc.' },
-          notes: { type: 'STRING', description: 'Additional instructions or schedule comments' }
+          classId: { type: 'STRING', description: '班级 ID' },
+          lessonId: { type: 'STRING', description: '课程/课件内容 ID' },
+          scheduledDate: { type: 'STRING', description: '上课日期（YYYY-MM-DD）' },
+          timeSlot: { type: 'STRING', description: '时间区间，格式 HH:MM-HH:MM（如 09:00-10:30）' },
+          status: { type: 'STRING', description: '课程状态：scheduled（已安排）、cancelled（已取消）、holiday（假期）等' },
+          notes: { type: 'STRING', description: '附加说明或备注' }
         },
         required: ['classId', 'lessonId', 'scheduledDate']
       }
@@ -654,14 +654,14 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-attendance-record',
       commandType: attendanceRecordCmd,
-      description: 'Record day-by-day attendance log for a specific class schedule.',
+      description: '为指定课表记录每日考勤日志',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          scheduleId: { type: 'STRING', description: 'ID of the schedule timetable' },
-          studentId: { type: 'STRING', description: 'ID of the student' },
-          status: { type: 'STRING', description: 'Attendance status: "Present", "Absent", "Late", or "Excused"' }
+          scheduleId: { type: 'STRING', description: '课表 ID' },
+          studentId: { type: 'STRING', description: '学生 ID' },
+          status: { type: 'STRING', description: '出勤状态："Present"（出席）、"Absent"（缺席）、"Late"（迟到）或 "Excused"（请假）' }
         },
         required: ['scheduleId', 'studentId', 'status']
       }
@@ -686,16 +686,16 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-student-set-progress',
       commandType: studentSetProgressCmd,
-      description: 'Record or update ongoing syllabus progress logs for an assigned student study stream.',
+      description: '记录或更新学生指定课程的学习进度',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
           studentId: { type: 'STRING', description: 'ID of the student' },
-          lessonId: { type: 'STRING', description: 'ID of the lesson key' },
-          completed: { type: 'BOOLEAN', description: 'Completion check flag' },
-          progressPercent: { type: 'INTEGER', description: 'Gradual score progress percentage completed (0-100)' },
-          completedSegments: { type: 'ARRAY', description: 'List of completed segment IDs' }
+          lessonId: { type: 'STRING', description: '课程 ID' },
+          completed: { type: 'BOOLEAN', description: '完成标记' },
+          progressPercent: { type: 'INTEGER', description: '已完成的进度百分比（0-100）' },
+          completedSegments: { type: 'ARRAY', description: '已完成的环节 ID 列表' }
         },
         required: ['studentId', 'lessonId', 'completed', 'progressPercent']
       }
@@ -725,14 +725,14 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-lab-create',
       commandType: labCreateCmd,
-      description: 'Create or configure a computer lab with designated room number, rows, and columns.',
+      description: '创建或配置计算机实验室，指定房间号、行列数',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          roomNumber: { type: 'STRING', description: 'The unique name or number of the computer lab' },
-          rows: { type: 'INTEGER', description: 'Number of rows in the seating arrangement' },
-          cols: { type: 'INTEGER', description: 'Number of columns in the seating arrangement' }
+          roomNumber: { type: 'STRING', description: '计算机实验室的唯一名称或编号' },
+          rows: { type: 'INTEGER', description: '座位布局的行数' },
+          cols: { type: 'INTEGER', description: '座位布局的列数' }
         },
         required: ['roomNumber', 'rows', 'cols']
       }
@@ -754,7 +754,7 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-lab-list',
       commandType: labListCmd,
-      description: 'List all computer labs.',
+      description: '列出所有计算机实验室',
       capabilityRequired: 'management:read',
       inputSchema: {
         type: 'OBJECT',
@@ -774,16 +774,16 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-lab-assign-seat',
       commandType: labAssignSeatCmd,
-      description: 'Assign a student to a specific seat index (row, column) in a computer lab for a class.',
+      description: '为班级学生在计算机实验室中分配指定座位（行列坐标）',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          classId: { type: 'STRING', description: 'ID of the class' },
-          studentId: { type: 'STRING', description: 'ID of the student' },
-          labId: { type: 'STRING', description: 'ID of the computer lab' },
-          rowIdx: { type: 'INTEGER', description: 'Zero-based row index' },
-          colIdx: { type: 'INTEGER', description: 'Zero-based column index' }
+          classId: { type: 'STRING', description: '班级 ID' },
+          studentId: { type: 'STRING', description: '学生 ID' },
+          labId: { type: 'STRING', description: '计算机实验室 ID' },
+          rowIdx: { type: 'INTEGER', description: '零基行索引' },
+          colIdx: { type: 'INTEGER', description: '零基列索引' }
         },
         required: ['classId', 'studentId', 'labId', 'rowIdx', 'colIdx']
       }
@@ -815,16 +815,16 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-schedule-cancel',
       commandType: scheduleCancelCmd,
-      description: 'Cancel, suspend, or adjust a schedule slot/holiday arrangement.',
+      description: '取消、暂停或调整课表/假期安排',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          scheduleId: { type: 'STRING', description: 'Specific schedule entry ID' },
-          classId: { type: 'STRING', description: 'Class ID to affect (optional if scheduleId provided)' },
-          scheduledDate: { type: 'STRING', description: 'Target date to suspend all schedules on (YYYY-MM-DD)' },
-          status: { type: 'STRING', description: 'New status: cancelled, holiday, scheduled' },
-          notes: { type: 'STRING', description: 'Cancellation reason (e.g., 国庆假期, 教师请假)' }
+          scheduleId: { type: 'STRING', description: '指定课表条目 ID' },
+          classId: { type: 'STRING', description: '要影响的班级 ID（如提供 scheduleId 则为可选）' },
+          scheduledDate: { type: 'STRING', description: '要暂停所有课表的目标日期（YYYY-MM-DD）' },
+          status: { type: 'STRING', description: '新状态：cancelled（取消）、holiday（假期）、scheduled（已安排）' },
+          notes: { type: 'STRING', description: '取消原因（如：国庆假期、教师请假）' }
         }
       }
     });
@@ -861,13 +861,13 @@ export const ManagementPlugin = {
     await actionRegistry.register({
       id: 'core-schedule-list',
       commandType: scheduleListCmd,
-      description: 'List scheduled classes or timetables with query filters.',
+      description: '列出排课或课程表，支持查询过滤',
       capabilityRequired: 'management:read',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          classId: { type: 'STRING', description: 'Filter by class ID' },
-          scheduledDate: { type: 'STRING', description: 'Filter by exact date (YYYY-MM-DD)' }
+          classId: { type: 'STRING', description: '按班级 ID 过滤' },
+          scheduledDate: { type: 'STRING', description: '按精确日期过滤（YYYY-MM-DD）' }
         }
       }
     });

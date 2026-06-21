@@ -18,23 +18,23 @@ trap cleanup INT TERM
 # ── 1. MFE Whiteboard (5174) ─────────────────────────────────
 echo "⏳ 启动 MFE Whiteboard (5174)..."
 cd "$ROOT/packages/mfe-whiteboard" || exit 1
-npm run dev &
+pnpm run dev &
 PID_WB=$!
 
 # ── 2. MFE Courseware (5175) ─────────────────────────────────
 echo "⏳ 启动 MFE Courseware (5175)..."
 cd "$ROOT/packages/mfe-courseware" || exit 1
-npm run dev &
+pnpm run dev &
 PID_CW=$!
 
 # ── 3. 主服务 (9000) ─────────────────────────────────────────
 echo "⏳ 启动主服务 (9000)..."
 cd "$ROOT" || exit 1
 sleep 2  # Give MFE services a moment to warm up
-npm run dev &
+pnpm run dev &
 PID_MAIN=$!
 
-sleep 3
+sleep 10
 
 # ── 健康检查 ──────────────────────────────────────────────────
 echo ""

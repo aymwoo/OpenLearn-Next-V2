@@ -3,24 +3,13 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 
-const getDbDirname = () => {
-  if (typeof __dirname !== 'undefined') {
-    return __dirname;
-  }
-  try {
-    const metaUrl = (new Function('return import.meta.url'))();
-    if (metaUrl) {
-      return path.dirname(fileURLToPath(metaUrl));
-    }
-  } catch (e) {
-    // Ignore error in environments where import.meta is not available
-  }
-  if (typeof module !== 'undefined' && (module as any).path) {
-    return (module as any).path;
-  }
-  return process.cwd();
-};
-const dbPath = path.join(getDbDirname(), 'educational_os.db');
+// Use import.meta.url directly — it's available at module scope in tsx ESM.
+// The old getDbDirname() heuristic (__dirname → new Function hack → cwd)
+// fell back to process.cwd() (project root), causing the DB to be created
+// in the wrong directory and the server to open a stale file descriptor.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const dbPath = path.join(__dirname, 'educational_os.db');
 
 export const db = new Database(dbPath);
 

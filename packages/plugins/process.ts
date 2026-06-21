@@ -10,7 +10,7 @@ import type { PluginContext } from '../core/plugin-host/types.js';
 export const ProcessPlugin = {
   manifest: {
     id: '@openlearn/plugin-process',
-    name: 'Background Process Plugin',
+    name: '后台进程管理插件',
     version: '1.0.0',
     main: 'index.js',
     requires: [
@@ -55,13 +55,13 @@ export const ProcessPlugin = {
     await actionRegistry.register({
       id: 'core-process-spawn',
       commandType: spawnCmdType,
-      description: 'Spawn a long-running background process (simulated) by providing a name and duration in seconds.',
+      description: '启动一个长时间运行的后台模拟进程，需要提供名称和时长（秒）',
       capabilityRequired: 'process:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          name: { type: 'STRING', description: 'Name/Title of the process' },
-          duration: { type: 'NUMBER', description: 'Simulated duration in seconds' }
+          name: { type: 'STRING', description: '进程名称/标题' },
+          duration: { type: 'NUMBER', description: '模拟运行时长（秒）' }
         },
         required: ['name', 'duration']
       }
@@ -84,12 +84,12 @@ export const ProcessPlugin = {
     await actionRegistry.register({
       id: 'core-process-kill',
       commandType: killCmdType,
-      description: 'Kill/terminate a running process by ID.',
+      description: '通过 ID 终止/结束正在运行的进程',
       capabilityRequired: 'process:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          processId: { type: 'STRING', description: 'ID of the process to kill' }
+          processId: { type: 'STRING', description: '要终止的进程 ID' }
         },
         required: ['processId']
       }
@@ -108,7 +108,7 @@ export const ProcessPlugin = {
     await actionRegistry.register({
       id: 'core-process-list',
       commandType: listCmdType,
-      description: 'List all running or completed processes.',
+      description: '列出所有正在运行或已完成的进程',
       capabilityRequired: 'process:read',
       inputSchema: {
         type: 'OBJECT',
@@ -128,12 +128,12 @@ export const ProcessPlugin = {
     await actionRegistry.register({
       id: 'core-process-logs',
       commandType: logCmdType,
-      description: 'View the logs of a specific process.',
+      description: '查看指定进程的日志',
       capabilityRequired: 'process:read',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          processId: { type: 'STRING', description: 'ID of the process' }
+          processId: { type: 'STRING', description: '进程 ID' }
         },
         required: ['processId']
       }

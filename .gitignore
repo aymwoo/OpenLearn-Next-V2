@@ -7,3 +7,7 @@ coverage/
 .env*
 !.env.example
 /packages/core/db/*.db
+.mf/
+.__mf__temp/
+.pnpmfile.cjs
+

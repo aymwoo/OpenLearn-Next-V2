@@ -15,6 +15,9 @@ export default defineConfig(() => {
       federation({
         name: 'host_shell',
         remotes: {},
+        dev: {
+          disableDynamicRemoteTypeHints: true,
+        },
         shared: {
           react: {
             singleton: true,
@@ -29,6 +32,21 @@ export default defineConfig(() => {
           zustand: {
             singleton: true,
             requiredVersion: pkg.dependencies['zustand'],
+            strictVersion: false,
+          },
+          konva: {
+            singleton: true,
+            requiredVersion: pkg.dependencies['konva'],
+            strictVersion: false,
+          },
+          'react-konva': {
+            singleton: true,
+            requiredVersion: pkg.dependencies['react-konva'],
+            strictVersion: false,
+          },
+          'react-konva-utils': {
+            singleton: true,
+            requiredVersion: pkg.dependencies['react-konva-utils'],
             strictVersion: false,
           },
         },

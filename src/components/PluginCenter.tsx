@@ -190,7 +190,7 @@ const parsePluginSource = (sourceCode: string) => {
 const DEFAULT_PLUGIN = `exports.default = {
   manifest: {
     id: "ext-quiz-generator",
-    name: "Quiz Component Plugin",
+    name: "测验组件插件",
     version: "1.0.0",
     capabilitiesProposed: ["quiz:write"]
   },
@@ -198,14 +198,14 @@ const DEFAULT_PLUGIN = `exports.default = {
     ctx.actionRegistry.register({
       id: 'ext-quiz-create',
       commandType: 'quiz.create',
-      description: 'Create a multiple-choice quiz on the whiteboard for a lesson',
+      description: '在课程白板上创建一个选择题测验',
       capabilityRequired: 'whiteboard:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING' },
-          question: { type: 'STRING' },
-          options: { type: 'ARRAY', items: { type: 'STRING' } }
+          lessonId: { type: 'STRING', description: '课程 ID' },
+          question: { type: 'STRING', description: '问题内容' },
+          options: { type: 'ARRAY', items: { type: 'STRING' }, description: '选项列表' }
         },
         required: ['lessonId', 'question', 'options']
       }
@@ -350,7 +350,7 @@ export function PluginCenter({
           <div className="flex items-center gap-6">
             <h2 className="font-bold text-gray-900 flex items-center gap-2 text-lg">
               <Puzzle size={20} className="text-indigo-600" />
-              Edu OS App Store
+              {lang === 'zh' ? 'Edu OS 插件中心' : 'Edu OS App Store'}
             </h2>
             <div className="flex bg-gray-200/50 p-1 rounded-lg">
               <button
@@ -361,7 +361,7 @@ export function PluginCenter({
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                Discover
+                {lang === 'zh' ? '发现' : 'Discover'}
               </button>
               <button
                 onClick={() => setStoreTab('dev')}
@@ -371,7 +371,7 @@ export function PluginCenter({
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <Code size={14} /> Developer
+                <Code size={14} /> {lang === 'zh' ? '开发者' : 'Developer'}
               </button>
             </div>
           </div>
@@ -382,7 +382,7 @@ export function PluginCenter({
             <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-4">
               {plugins.map((plugin) => {
                 let manifestInfo = {
-                  description: 'Custom plugin extending Edu OS capabilities.',
+                  description: '扩展 Edu OS 功能的自定义插件。',
                   author: 'Community',
                 };
                 try {
@@ -400,16 +400,31 @@ export function PluginCenter({
                       plugin.status !== 'active' ? 'opacity-80' : ''
                     }`}
                   >
-                    <div className="absolute top-0 right-0 p-3 flex items-center gap-1">
+                    <div className="absolute top-0 right-0 p-3 flex items-center gap-1.5">
+                      {/* Premium breathing LED status tag */}
                       <span
-                        className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${
+                        className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 border transition-all ${
                           plugin.status === 'active'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-600'
+                            ? 'bg-emerald-50 text-emerald-750 border-emerald-250'
+                            : 'bg-slate-100 text-slate-500 border-slate-200'
                         }`}
                       >
-                        {plugin.status}
+                        <span className={`w-1.5 h-1.5 rounded-full ${plugin.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                        <span>
+                          {plugin.status === 'active'
+                            ? (lang === 'zh' ? '已启用' : 'ACTIVE')
+                            : (lang === 'zh' ? '已停用' : 'INACTIVE')
+                          }
+                        </span>
                       </span>
+
+                      {/* ESM ZIP badge */}
+                      {plugin.execution_mode === 'esm' && (
+                        <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-150 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                          {lang === 'zh' ? 'ESM 插件' : 'ESM'}
+                        </span>
+                      )}
+
                       {/* Phase 9: Legacy badge */}
                       {(plugin as any).execution_mode === 'legacy' && (
                         <LegacyPluginBadge lang={lang} />
@@ -1028,6 +1043,61 @@ export function PluginCenter({
                       </div>
                     );
                   })()}
+                </div>
+
+                {/* Installed Plugins Management panel in Developer tools */}
+                <div className="mt-5 bg-gray-900 border border-gray-800 rounded-xl p-3.5 space-y-3 shrink-0">
+                  <h6 className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider pb-1.5 border-b border-gray-800 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Puzzle size={11} className="text-indigo-400 animate-pulse" />
+                      <span>{lang === 'zh' ? `已加载插件管理 (${plugins.length})` : `Active Plugins (${plugins.length})`}</span>
+                    </span>
+                    <button 
+                      onClick={() => setStoreTab('store')} 
+                      className="text-[9px] text-gray-500 hover:text-indigo-400 transition-colors uppercase tracking-wider font-semibold"
+                    >
+                      {lang === 'zh' ? '管理大图 ➔' : 'View Grid ➔'}
+                    </button>
+                  </h6>
+                  
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {plugins.length === 0 ? (
+                      <div className="text-[10px] text-gray-550 italic py-2 text-center">
+                        {lang === 'zh' ? '暂无安装的插件' : 'No plugins sideloaded.'}
+                      </div>
+                    ) : (
+                      plugins.map((plugin) => (
+                        <div key={plugin.id} className="p-2.5 bg-gray-950 border border-gray-900 rounded-lg flex items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-xs font-bold text-gray-200 truncate">{plugin.name}</span>
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${plugin.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-500'}`} />
+                            </div>
+                            <span className="text-[10px] text-gray-500 font-mono block truncate select-all">{plugin.id}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => onToggle(plugin.id)}
+                              className={`px-2.5 py-1 text-[10px] font-bold rounded transition-colors ${
+                                plugin.status === 'active'
+                                  ? 'bg-amber-950/60 border border-amber-900/50 text-amber-400 hover:bg-amber-900/80'
+                                  : 'bg-emerald-950/60 border border-emerald-900/50 text-emerald-400 hover:bg-emerald-900/80'
+                              }`}
+                            >
+                              {plugin.status === 'active' ? (lang === 'zh' ? '禁用' : 'Disable') : (lang === 'zh' ? '启用' : 'Enable')}
+                            </button>
+                            <button
+                              onClick={() => onDelete(plugin.id)}
+                              className="px-2 py-1 text-[10px] font-bold bg-red-950/60 border border-red-900/50 text-red-400 hover:bg-red-900/80 rounded transition-colors"
+                            >
+                              {lang === 'zh' ? '删除' : 'Delete'}
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

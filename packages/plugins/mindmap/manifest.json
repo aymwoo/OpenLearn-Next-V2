@@ -1,0 +1,14 @@
+{
+  "id": "ext-mindmap-assistant",
+  "name": "思维导图与画板卡片扩展 (Mindmap Generator)",
+  "version": "1.1.0",
+  "main": "index.js",
+  "requires": [
+    "@openlearn/core:ICommandBusService@^1.0.0",
+    "@openlearn/core:IActionRegistryService@^1.0.0"
+  ],
+  "capabilitiesProposed": [
+    "whiteboard:write",
+    "vfs:read"
+  ]
+}

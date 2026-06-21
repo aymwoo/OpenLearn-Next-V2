@@ -321,8 +321,8 @@ export class PluginHost {
    */
   listPlugins(): PluginInfo[] {
     const rows = this.db
-      .prepare('SELECT id, manifest, execution_mode FROM plugins')
-      .all() as Array<{ id: string; manifest: string; execution_mode: string }>;
+      .prepare('SELECT id, manifest, execution_mode, status FROM plugins')
+      .all() as Array<{ id: string; manifest: string; execution_mode: string; status: string }>;
 
     return rows.map((row) => {
       let parsed: { name?: string; version?: string } = {};
@@ -332,11 +332,13 @@ export class PluginHost {
         // 解析失败时使用默认值
       }
 
+      const state = this.pluginStates.get(row.id) ?? PluginState.INSTALLED;
       return {
         id: row.id,
         name: parsed.name ?? row.id,
         version: parsed.version ?? 'unknown',
-        state: this.pluginStates.get(row.id) ?? PluginState.INSTALLED,
+        state,
+        status: state === PluginState.ACTIVE ? 'active' : 'disabled',
         execution_mode: row.execution_mode,
       };
     });
@@ -861,56 +863,75 @@ export class PluginHost {
       },
     ]);
 
-    await deactivatePipeline(deactMiddlewareCtx, async () => {
-      try {
-        // 5. 如果有 deactivate，带超时调用
-        if (instance?.deactivate) {
-          try {
-            await Promise.race([
-              instance.deactivate(),
-              new Promise<never>((_, reject) =>
-                setTimeout(() => {
-                  reject(new PluginDeactivateTimeoutError(pluginId, DEACTIVATION_TIMEOUT_MS));
-                }, DEACTIVATION_TIMEOUT_MS),
-              ),
-            ]);
-          } catch (deactivateErr) {
-            // D-11: deactivate 超时或错误 — 记录警告，不重新抛出
-            console.error(
-              `[PluginHost] Plugin "${pluginId}" deactivate error (continuing forced cleanup):`,
-              deactivateErr,
-            );
+    try {
+      await deactivatePipeline(deactMiddlewareCtx, async () => {
+        try {
+          // 5. 如果有 deactivate，带超时调用
+          if (instance?.deactivate) {
+            try {
+              await Promise.race([
+                instance.deactivate(),
+                new Promise<never>((_, reject) =>
+                  setTimeout(() => {
+                    reject(new PluginDeactivateTimeoutError(pluginId, DEACTIVATION_TIMEOUT_MS));
+                  }, DEACTIVATION_TIMEOUT_MS),
+                ),
+              ]);
+            } catch (deactivateErr) {
+              // D-11: deactivate 超时或错误 — 记录警告，不重新抛出
+              console.error(
+                `[PluginHost] Plugin "${pluginId}" deactivate error (continuing forced cleanup):`,
+                deactivateErr,
+              );
+            }
+          }
+        } finally {
+          // 6. D-09: finally 块 — 无论成功/失败/超时，强制清理 (T-04-18)
+          this.resourceTracker.disposeAll(pluginId);
+          this.pluginStates.set(pluginId, PluginState.INACTIVE);
+          this.pluginInstances.delete(pluginId);
+
+          // DB UPDATE
+          this.db
+            .prepare('UPDATE plugins SET status = ? WHERE id = ?')
+            .run('inactive', pluginId);
+
+          // 撤销能力（T-04-20: finally 中强制撤销）
+          if (actorId) {
+            try {
+              const capService = await this.serviceRegistry.resolve<ICapabilityService>(
+                ICapabilityServiceToken,
+              );
+              await capService.revokeAll(actorId);
+            } catch (capErr) {
+              console.error(
+                `[PluginHost] Failed to revoke capabilities for "${pluginId}":`,
+                capErr,
+              );
+            }
           }
         }
-      } finally {
-        // 6. D-09: finally 块 — 无论成功/失败/超时，强制清理 (T-04-18)
-        this.resourceTracker.disposeAll(pluginId);
-        this.pluginStates.set(pluginId, PluginState.INACTIVE);
-        this.pluginInstances.delete(pluginId);
 
-        // DB UPDATE
-        this.db
-          .prepare('UPDATE plugins SET status = ? WHERE id = ?')
-          .run('inactive', pluginId);
-
-        // 撤销能力（T-04-20: finally 中强制撤销）
-        if (actorId) {
-          try {
-            const capService = await this.serviceRegistry.resolve<ICapabilityService>(
-              ICapabilityServiceToken,
-            );
-            await capService.revokeAll(actorId);
-          } catch (capErr) {
-            console.error(
-              `[PluginHost] Failed to revoke capabilities for "${pluginId}":`,
-              capErr,
+        console.log(`[PluginHost] Plugin "${pluginId}" deactivated`);
+      });
+    } catch (pipelineErr) {
+      console.warn(`[PluginHost] Onion deactivation pipeline crashed for "${pluginId}", executing safety fallback:`, pipelineErr);
+      this.resourceTracker.disposeAll(pluginId);
+      this.pluginStates.set(pluginId, PluginState.INACTIVE);
+      this.pluginInstances.delete(pluginId);
+      this.db
+        .prepare('UPDATE plugins SET status = ? WHERE id = ?')
+        .run('inactive', pluginId);
+      if (actorId) {
+        try {
+          const capService = await this.serviceRegistry.resolve<ICapabilityService>(
+            ICapabilityServiceToken,
           );
-        }
+          await capService.revokeAll(actorId);
+        } catch {}
       }
-      }
-
-      console.log(`[PluginHost] Plugin "${pluginId}" deactivated`);
-    });
+      throw pipelineErr;
+    }
   }
 
   // ── Phase 5: Worker-mode deactivation ───────────────────────────────────
@@ -923,9 +944,13 @@ export class PluginHost {
    */
   private async deactivateWorker(pluginId: string): Promise<void> {
     const currentState = this.pluginStates.get(pluginId);
-    if (!currentState || currentState === PluginState.UNINSTALLED || currentState !== PluginState.ACTIVE) return;
-    this.validateTransition(pluginId, currentState, PluginState.DEACTIVATING);
-    this.pluginStates.set(pluginId, PluginState.DEACTIVATING);
+    if (!currentState || currentState === PluginState.UNINSTALLED) return;
+    if (currentState !== PluginState.ACTIVE && currentState !== PluginState.DEACTIVATING) return;
+
+    if (currentState === PluginState.ACTIVE) {
+      this.validateTransition(pluginId, currentState, PluginState.DEACTIVATING);
+      this.pluginStates.set(pluginId, PluginState.DEACTIVATING);
+    }
 
     let actorId: string | undefined;
     const instance = this.pluginInstances.get(pluginId);

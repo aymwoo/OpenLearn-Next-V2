@@ -484,7 +484,7 @@ async function startServer() {
       const cmd = kernelContainer.commandBus.createCommand(
         commandType, 
         payload, 
-        'user-demo' // mock session user 
+        getActorId(req)
       );
       
       const result = await kernelContainer.commandBus.execute(cmd);
@@ -1944,6 +1944,23 @@ async function startServer() {
       return session.role === 'teacher' || session.role === 'administrator';
     } catch (e) {
       return false;
+    }
+  }
+
+  function getActorId(req: any): string {
+    const token = getCookieToken(req);
+    if (!token) return 'user-frontend';
+    try {
+      const sessionRow = kernelContainer.db.prepare('SELECT * FROM client_sessions WHERE id = ?').get(token) as any;
+      if (!sessionRow) return 'user-frontend';
+      const session = JSON.parse(sessionRow.session_data);
+      const role = session.subRole || session.role;
+      if (role) {
+        return `user:${session.userId || 'demo'}:${role}`;
+      }
+      return 'user-frontend';
+    } catch (e) {
+      return 'user-frontend';
     }
   }
 
@@ -4648,7 +4665,7 @@ ${examsText}
       const cmd = kernelContainer.commandBus.createCommand(
         'plugin.toggle',
         { pluginId: req.params.id },
-        'user-frontend'
+        getActorId(req)
       );
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
@@ -4662,7 +4679,7 @@ ${examsText}
       const cmd = kernelContainer.commandBus.createCommand(
         'plugin.uninstall',
         { pluginId: req.params.id },
-        'user-frontend'
+        getActorId(req)
       );
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
@@ -4677,7 +4694,7 @@ ${examsText}
       const cmd = kernelContainer.commandBus.createCommand(
         'plugin.install',
         { sourceCode },
-        'user-frontend'
+        getActorId(req)
       );
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
@@ -4693,7 +4710,7 @@ ${examsText}
       const cmd = kernelContainer.commandBus.createCommand(
         'plugin.install_zip',
         { base64Data, filename },
-        'user-frontend'
+        getActorId(req)
       );
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);

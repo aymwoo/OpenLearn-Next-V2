@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Square, Pause, Users, Presentation, Clock, Shuffle, CheckCircle2, XCircle, Shield, ShieldAlert, Check, RefreshCw, Send, HelpCircle, Activity, ChevronLeft, ChevronRight, Eye, FileText, Database, Award, Search } from 'lucide-react';
 import * as Icons from 'lucide-react';
-import { InteractiveWhiteboard } from './InteractiveWhiteboard';
+import { MfeLoader } from '../mfe/MfeLoader';
 import { TeacherAssignmentGradePanel } from './TeacherAssignmentGradePanel';
 import { io } from 'socket.io-client';
 
@@ -735,36 +735,39 @@ export function LiveClassroomView({
                 <>
                   {/* Whiteboard canvas wrapper */}
                   <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-slate-200 shadow-md bg-white flex flex-col">
-                    <InteractiveWhiteboard
-                      lessonId={selectedLesson}
-                      userRole="teacher"
-                      isEditMode={false}
-                      elements={elements}
-                      activeSegmentId={activeSegmentId}
-                      onSegmentSync={(segId) => setActiveSegmentId(segId)}
-                      onElementAdd={async (type, data) => {
-                        await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ type, data })
-                        });
-                        fetchElements(selectedLesson);
+                    <MfeLoader
+                      name="mfe_whiteboard"
+                      props={{
+                        lessonId: selectedLesson,
+                        userRole: 'teacher',
+                        isEditMode: false,
+                        elements,
+                        activeSegmentId,
+                        onSegmentSync: (segId: string) => setActiveSegmentId(segId),
+                        onElementAdd: async (type: string, data: any) => {
+                          await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ type, data })
+                          });
+                          fetchElements(selectedLesson);
+                        },
+                        onElementUpdate: async (elementId: string, data: any) => {
+                          await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ data })
+                          });
+                          fetchElements(selectedLesson);
+                        },
+                        onElementDelete: async (elementId: string) => {
+                          await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                            method: 'DELETE'
+                          });
+                          fetchElements(selectedLesson);
+                        },
+                        onRefresh: () => fetchElements(selectedLesson),
                       }}
-                      onElementUpdate={async (elementId, data) => {
-                        await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ data })
-                        });
-                        fetchElements(selectedLesson);
-                      }}
-                      onElementDelete={async (elementId) => {
-                        await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                          method: 'DELETE'
-                        });
-                        fetchElements(selectedLesson);
-                      }}
-                      onRefresh={() => fetchElements(selectedLesson)}
                     />
                   </div>
 

@@ -2,6 +2,11 @@ import { ICommandBusServiceToken, IActionRegistryServiceToken } from '../../core
 import type { PluginContext } from '../../core/plugin-host/types.js';
 
 export default {
+  manifest: {
+    id: "ext-roll-call",
+    name: "Random Student Picker (随机点名小工具)",
+    version: "1.0.0"
+  },
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;
     const actionRegistry = ctx.services.actionRegistry;

@@ -17,6 +17,9 @@ export default defineConfig({
       exposes: {
         './App': './src/App.tsx',
       },
+      dev: {
+        disableDynamicRemoteTypeHints: true,
+      },
       shared: {
         react: {
           singleton: true,
@@ -45,5 +48,5 @@ export default defineConfig({
     target: 'esnext',
     modulePreload: false,
   },
-  base: 'auto',
+  base: '/',
 });

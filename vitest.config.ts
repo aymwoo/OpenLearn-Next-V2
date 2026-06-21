@@ -13,5 +13,6 @@ export default defineConfig({
       'src/mfe/__tests__/**/*.test.{ts,tsx}',
     ],
     environment: 'jsdom',
+    setupFiles: ['./vitest.setup.ts'],
   },
 });

@@ -10,7 +10,7 @@ import type { PluginContext } from '../core/plugin-host/types.js';
 export const VfsPlugin = {
   manifest: {
     id: '@openlearn/plugin-vfs',
-    name: 'Virtual File System Plugin',
+    name: '虚拟文件系统插件',
     version: '1.0.0',
     main: 'index.js',
     requires: [
@@ -53,13 +53,13 @@ export const VfsPlugin = {
     await actionRegistry.register({
       id: 'core-vfs-write',
       commandType: vfsWriteCmdType,
-      description: 'Write a file to the Virtual File System using an absolute path.',
+      description: '使用绝对路径向虚拟文件系统写入文件',
       capabilityRequired: 'vfs:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          path: { type: 'STRING', description: 'Full absolute path (e.g. /Mathematics/formula.txt)' },
-          content: { type: 'STRING', description: 'Content of the file' }
+          path: { type: 'STRING', description: '完整绝对路径（如 /Mathematics/formula.txt）' },
+          content: { type: 'STRING', description: '文件内容' }
         },
         required: ['path', 'content']
       }
@@ -94,12 +94,12 @@ export const VfsPlugin = {
     await actionRegistry.register({
       id: 'core-vfs-read-path',
       commandType: vfsReadPathCmdType,
-      description: 'Read a file from the Virtual File System by absolute path.',
+      description: '通过绝对路径读取虚拟文件系统中的文件',
       capabilityRequired: 'vfs:read',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          path: { type: 'STRING', description: 'Full absolute path (e.g. /Mathematics/formula.txt)' }
+          path: { type: 'STRING', description: '完整绝对路径（如 /Mathematics/formula.txt）' }
         },
         required: ['path']
       }
@@ -120,12 +120,12 @@ export const VfsPlugin = {
     await actionRegistry.register({
       id: 'core-vfs-list-dir',
       commandType: vfsListDirCmdType,
-      description: 'List contents of a directory in the Virtual File System by absolute path.',
+      description: '通过绝对路径列出虚拟文件系统中的目录内容',
       capabilityRequired: 'vfs:read',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          path: { type: 'STRING', description: 'Full absolute directory path (e.g. /Mathematics or /)' }
+          path: { type: 'STRING', description: '完整绝对目录路径（如 /Mathematics 或 /）' }
         },
         required: ['path']
       }
@@ -153,12 +153,12 @@ export const VfsPlugin = {
     await actionRegistry.register({
       id: 'core-vfs-mkdir',
       commandType: vfsMkdirCmdType,
-      description: 'Create a directory in the Virtual File System.',
+      description: '在虚拟文件系统中创建目录',
       capabilityRequired: 'vfs:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          path: { type: 'STRING', description: 'Full absolute directory path (e.g. /Mathematics/Algebra)' }
+          path: { type: 'STRING', description: '完整绝对目录路径（如 /Mathematics/Algebra）' }
         },
         required: ['path']
       }

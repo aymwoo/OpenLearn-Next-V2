@@ -487,3 +487,63 @@ describe('ServiceHost accessors', () => {
     // After update, should allow mutations (verified in Group 2)
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Group 6: ActionRegistry tracking and cleanup
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('ServiceHost ActionRegistry tracking', () => {
+  let transport: MockTransport;
+  let serviceRegistry: ReturnType<typeof createMockServiceRegistry>;
+  let capGuard: ReturnType<typeof createMockCapGuard>;
+  let actionRegistry: { register: any; unregister: any };
+
+  beforeEach(() => {
+    transport = createMockTransport();
+    capGuard = createMockCapGuard(true);
+    actionRegistry = {
+      register: vi.fn(async () => {}),
+      unregister: vi.fn(async () => {}),
+    };
+    serviceRegistry = createMockServiceRegistry({
+      '@openlearn/core:IActionRegistryService': actionRegistry,
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should track registered action descriptors and unregister them on dispose', async () => {
+    const host = new ServiceHost(
+      serviceRegistry as any,
+      capGuard as any,
+      'plugin:test',
+      ['test:cap'],
+    );
+
+    // Call register
+    await host.handleInvoke(
+      {
+        type: 'invoke',
+        invokeId: 'inv-act-1',
+        token: '@openlearn/core:IActionRegistryService',
+        method: 'register',
+        args: [{ id: 'action-foo' }],
+      },
+      transport as any,
+    );
+
+    expect(actionRegistry.register).toHaveBeenCalledWith({ id: 'action-foo' });
+    expect(transport.messages[0]).toEqual({
+      type: 'result',
+      invokeId: 'inv-act-1',
+      value: undefined,
+    });
+
+    // Call dispose
+    await host.dispose();
+
+    expect(actionRegistry.unregister).toHaveBeenCalledWith('action-foo');
+  });
+});

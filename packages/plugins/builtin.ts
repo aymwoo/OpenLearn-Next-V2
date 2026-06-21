@@ -32,7 +32,7 @@ function copyFolderSync(src: string, dest: string) {
 export const BuiltinPlugin = {
   manifest: {
     id: '@openlearn/plugin-builtin',
-    name: 'Classroom Builtin Plugin',
+    name: '课堂核心插件',
     version: '1.0.0',
     main: 'index.js',
     requires: [
@@ -56,13 +56,13 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-lesson-create',
       commandType: createLessonCmdType,
-      description: 'Create a new lesson with title and optional initial content',
+      description: '创建新课程，输入标题和可选的初始内容',
       capabilityRequired: 'lesson:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          title: { type: 'STRING', description: 'Title of the lesson' },
-          content: { type: 'STRING', description: 'Initial markdown content of the lesson. Please generate a short introductory paragraph or syllabus.' }
+          title: { type: 'STRING', description: '课程标题' },
+          content: { type: 'STRING', description: '课程的初始 Markdown 内容，请生成一段简短的介绍或教学大纲' }
         },
         required: ['title', 'content']
       }
@@ -94,13 +94,13 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-lesson-update',
       commandType: updateLessonCmdType,
-      description: 'Update the content of an existing lesson',
+      description: '更新已有课程的内容',
       capabilityRequired: 'lesson:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING', description: 'ID of the lesson to update' },
-          content: { type: 'STRING', description: 'New markdown content of the lesson.' }
+          lessonId: { type: 'STRING', description: '要更新的课程 ID' },
+          content: { type: 'STRING', description: '课程的新 Markdown 内容' }
         },
         required: ['lessonId', 'content']
       }
@@ -130,13 +130,13 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-lesson-update-timeline',
       commandType: updateTimelineCmdType,
-      description: 'Set or update the complete timeline segment list of a lesson (环节表更新)',
+      description: '设置或更新课程的完整环节时间线列表',
       capabilityRequired: 'lesson:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING', description: 'ID of the lesson to update' },
-          timeline: { type: 'STRING', description: 'JSON string or array of timeline segments' }
+          lessonId: { type: 'STRING', description: '要更新的课程 ID' },
+          timeline: { type: 'STRING', description: '环节时间线的 JSON 字符串或数组' }
         },
         required: ['lessonId', 'timeline']
       }
@@ -175,18 +175,18 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-lesson-add-segment',
       commandType: addSegmentCmdType,
-      description: 'Add a single segment/phase to the lesson timeline (e.g. Lecture, Interactive Practice, Quiz, Break)',
+      description: '向课程时间线添加一个环节（如：讲授、互动练习、测验、休息）',
       capabilityRequired: 'lesson:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING', description: 'ID of the lesson to edit' },
-          title: { type: 'STRING', description: 'Title of this segment' },
-          duration: { type: 'STRING', description: 'Duration of this segment (e.g., 10m, 15m, 5m)' },
-          type: { type: 'STRING', description: 'Type of activity (lecture, practice, quiz, break)' },
-          notes: { type: 'STRING', description: 'Optional instruction guide, prompts or whiteboard directives for this Segment' },
-          color: { type: 'STRING', description: 'Optional Tailwind background border class or color name' },
-          index: { type: 'INTEGER', description: 'Insert index position (optional, defaults to adding at the end)' }
+          lessonId: { type: 'STRING', description: '要编辑的课程 ID' },
+          title: { type: 'STRING', description: '本环节的标题' },
+          duration: { type: 'STRING', description: '本环节的时长（如：10m、15m、5m）' },
+          type: { type: 'STRING', description: '活动类型（lecture、practice、quiz、break）' },
+          notes: { type: 'STRING', description: '可选的环节教学指导、提示或白板指令' },
+          color: { type: 'STRING', description: '可选的 Tailwind 背景边框类名或颜色名' },
+          index: { type: 'INTEGER', description: '插入的位置索引（可选，默认为末尾追加）' }
         },
         required: ['lessonId', 'title', 'duration', 'type']
       }
@@ -243,14 +243,14 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-lesson-remove-segment',
       commandType: removeSegmentCmdType,
-      description: 'Remove high-level timetable segments from a lesson timeline by ID or Index',
+      description: '通过 ID 或索引从课程时间线中删除环节',
       capabilityRequired: 'lesson:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING', description: 'ID of the lesson to edit' },
-          segmentId: { type: 'STRING', description: 'ID of the segment to remove (required if index is omitted)' },
-          index: { type: 'INTEGER', description: 'Index position of the segment to remove (required if segmentId is omitted)' }
+          lessonId: { type: 'STRING', description: '要编辑的课程 ID' },
+          segmentId: { type: 'STRING', description: '要删除的环节 ID（如未提供索引则必填）' },
+          index: { type: 'INTEGER', description: '要删除的环节位置索引（如未提供 segmentId 则必填）' }
         },
         required: ['lessonId']
       }
@@ -313,13 +313,13 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-lesson-delete',
       commandType: deleteLessonCmdType,
-      description: 'Delete a lesson. This is a high-risk operation.',
+      description: '删除课程。此为高风险操作。',
       capabilityRequired: 'lesson:delete',
       isHighRisk: true,
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING', description: 'ID of the lesson to delete' }
+          lessonId: { type: 'STRING', description: '要删除的课程 ID' }
         },
         required: ['lessonId']
       }
@@ -351,14 +351,14 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-whiteboard-draw',
       commandType: drawWhiteboardCmdType,
-      description: 'Draw an element (shape, text) on the whiteboard for a given lesson',
+      description: '在指定课程的白板上绘制元素（图形、文本）',
       capabilityRequired: 'whiteboard:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING', description: 'ID of the lesson to attach the drawing to' },
-          type: { type: 'STRING', description: 'Type of element: rectangle, circle, text' },
-          data: { type: 'STRING', description: 'JSON string of the element configuration (e.g. dimensions, color, text)' }
+          lessonId: { type: 'STRING', description: '要添加图形的课程 ID' },
+          type: { type: 'STRING', description: '元素类型：rectangle（矩形）、circle（圆形）、text（文本）' },
+          data: { type: 'STRING', description: '元素配置的 JSON 字符串（如尺寸、颜色、文本）' }
         },
         required: ['lessonId', 'type', 'data']
       }
@@ -390,14 +390,14 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-whiteboard-update',
       commandType: updateWhiteboardCmdType,
-      description: 'Update an existing element on the whiteboard',
+      description: '更新白板上已有的元素',
       capabilityRequired: 'whiteboard:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING', description: 'ID of the lesson' },
-          elementId: { type: 'STRING', description: 'ID of the element' },
-          data: { type: 'STRING', description: 'New JSON string of the element configuration' }
+          lessonId: { type: 'STRING', description: '课程 ID' },
+          elementId: { type: 'STRING', description: '元素 ID' },
+          data: { type: 'STRING', description: '元素配置的新 JSON 字符串' }
         },
         required: ['lessonId', 'elementId', 'data']
       }
@@ -427,7 +427,7 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-whiteboard-delete',
       commandType: deleteWhiteboardCmdType,
-      description: 'Delete an existing element from the whiteboard',
+      description: '从白板中删除已有元素',
       capabilityRequired: 'whiteboard:write',
       inputSchema: {
         type: 'OBJECT',
@@ -463,7 +463,7 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-whiteboard-clear',
       commandType: clearWhiteboardCmdType,
-      description: 'Clear all elements from the whiteboard for a given lesson',
+      description: '清空指定课程白板上的所有元素',
       capabilityRequired: 'whiteboard:write',
       inputSchema: {
         type: 'OBJECT',
@@ -498,13 +498,13 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-plugin-install',
       commandType: installPluginCmdType,
-      description: 'Install a custom JavaScript plugin source code. This is a high-risk operation.',
+      description: '安装自定义 JavaScript 插件源码。此为高风险操作。',
       capabilityRequired: 'plugin:write',
       isHighRisk: true,
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          sourceCode: { type: 'STRING', description: 'The complete JavaScript source code of the plugin.' }
+          sourceCode: { type: 'STRING', description: '插件的完整 JavaScript 源代码' }
         },
         required: ['sourceCode']
       }
@@ -523,14 +523,14 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-plugin-install-zip',
       commandType: installPluginZipCmdType,
-      description: 'Install a custom plugin from a ZIP file containing index.js (or plugin.js) and manifest.json.',
+      description: '通过包含 index.js（或 plugin.js）和 manifest.json 的 ZIP 文件安装自定义插件',
       capabilityRequired: 'plugin:write',
       isHighRisk: true,
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          base64Data: { type: 'STRING', description: 'Base64 representation of the ZIP file.' },
-          filename: { type: 'STRING', description: 'Name of the zip file (optional).' }
+          base64Data: { type: 'STRING', description: 'ZIP 文件的 Base64 编码数据' },
+          filename: { type: 'STRING', description: 'ZIP 文件名（可选）' }
         },
         required: ['base64Data']
       }
@@ -551,13 +551,13 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-plugin-toggle',
       commandType: togglePluginCmdType,
-      description: 'Toggle the status of an installed plugin between active and disabled. This is a high-risk operation.',
+      description: '切换已安装插件的状态（启用/禁用）。此为高风险操作。',
       capabilityRequired: 'plugin:write',
       isHighRisk: true,
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          pluginId: { type: 'STRING', description: 'The unique database ID of the plugin.' }
+          pluginId: { type: 'STRING', description: '插件的唯一数据库 ID' }
         },
         required: ['pluginId']
       }
@@ -576,13 +576,13 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-plugin-uninstall',
       commandType: uninstallPluginCmdType,
-      description: 'Uninstall and completely delete a plugin from the system. This is a high-risk operation.',
+      description: '从系统中卸载并彻底删除插件。此为高风险操作。',
       capabilityRequired: 'plugin:write',
       isHighRisk: true,
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          pluginId: { type: 'STRING', description: 'The unique database ID of the plugin.' }
+          pluginId: { type: 'STRING', description: '插件的唯一数据库 ID' }
         },
         required: ['pluginId']
       }
@@ -601,12 +601,12 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-user-list',
       commandType: listUsersCmdType,
-      description: 'List all registered teacher and administrator accounts',
+      description: '列出所有已注册的教师和管理员账户',
       capabilityRequired: 'management:read',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          role: { type: 'STRING', description: 'Filter by role: administrator or teacher (optional)' }
+          role: { type: 'STRING', description: '按角色筛选：administrator（管理员）或 teacher（教师）（可选）' }
         }
       }
     });
@@ -631,16 +631,16 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-user-create',
       commandType: createUserCmdType,
-      description: 'Create a new teacher or administrator account',
+      description: '创建新的教师或管理员账户',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          username: { type: 'STRING', description: 'Unique username for login' },
-          password: { type: 'STRING', description: 'Plaintext login password' },
-          role: { type: 'STRING', description: 'Role of the user: administrator or teacher' },
-          name: { type: 'STRING', description: 'Display name of the user' },
-          status: { type: 'STRING', description: 'Initial status: active or disabled (optional)' }
+          username: { type: 'STRING', description: '用于登录的唯一用户名' },
+          password: { type: 'STRING', description: '明文登录密码' },
+          role: { type: 'STRING', description: '用户角色：administrator 或 teacher' },
+          name: { type: 'STRING', description: '用户显示名称' },
+          status: { type: 'STRING', description: '初始状态：active（启用）或 disabled（禁用）（可选）' }
         },
         required: ['username', 'password', 'role', 'name']
       }
@@ -685,17 +685,17 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-user-update',
       commandType: updateUserCmdType,
-      description: 'Update an existing user account details',
+      description: '更新已有用户账户的信息',
       capabilityRequired: 'management:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          userId: { type: 'STRING', description: 'The unique ID of the user to update' },
-          username: { type: 'STRING', description: 'New username (optional)' },
-          password: { type: 'STRING', description: 'New plaintext password to update (optional)' },
-          role: { type: 'STRING', description: 'New role: administrator or teacher (optional)' },
-          name: { type: 'STRING', description: 'New display name (optional)' },
-          status: { type: 'STRING', description: 'New status: active or disabled (optional)' }
+          userId: { type: 'STRING', description: '要更新的用户唯一 ID' },
+          username: { type: 'STRING', description: '新用户名（可选）' },
+          password: { type: 'STRING', description: '新明文密码（可选）' },
+          role: { type: 'STRING', description: '新角色：administrator 或 teacher（可选）' },
+          name: { type: 'STRING', description: '新显示名称（可选）' },
+          status: { type: 'STRING', description: '新状态：active 或 disabled（可选）' }
         },
         required: ['userId']
       }
@@ -769,13 +769,13 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-user-delete',
       commandType: deleteUserCmdType,
-      description: 'Delete a user account. This is a high-risk operation.',
+      description: '删除用户账户。此为高风险操作。',
       capabilityRequired: 'management:write',
       isHighRisk: true,
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          userId: { type: 'STRING', description: 'The unique ID of the user to delete' }
+          userId: { type: 'STRING', description: '要删除的用户唯一 ID' }
         },
         required: ['userId']
       }
@@ -818,14 +818,14 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-courseware-upload',
       commandType: uploadCoursewareCmdType,
-      description: 'Upload a single HTML page or a ZIP package of interactive courseware',
+      description: '上传单个 HTML 页面或 ZIP 交互式课件包',
       capabilityRequired: 'lesson:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          name: { type: 'STRING', description: 'Name of the courseware' },
-          filename: { type: 'STRING', description: 'Filename of the uploaded file' },
-          base64Data: { type: 'STRING', description: 'Base64 data of the file (can start with data:URI prefix)' }
+          name: { type: 'STRING', description: '课件名称' },
+          filename: { type: 'STRING', description: '上传文件的文件名' },
+          base64Data: { type: 'STRING', description: '文件的 Base64 数据（可带 data:URI 前缀）' }
         },
         required: ['name', 'filename', 'base64Data']
       }
@@ -1026,14 +1026,14 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-courseware-confirm',
       commandType: confirmCoursewareCmdType,
-      description: 'Confirm selection of entry page for a ZIP courseware package',
+      description: '确认选择 ZIP 课件包的入口页面',
       capabilityRequired: 'lesson:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          uuid: { type: 'STRING', description: 'Generated UUID of the uploaded courseware' },
-          name: { type: 'STRING', description: 'Name of the courseware' },
-          entry: { type: 'STRING', description: 'Selected entry HTML file path' }
+          uuid: { type: 'STRING', description: '上传课件的已生成 UUID' },
+          name: { type: 'STRING', description: '课件名称' },
+          entry: { type: 'STRING', description: '选定的入口 HTML 文件路径' }
         },
         required: ['uuid', 'name', 'entry']
       }
@@ -1101,17 +1101,17 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-courseware-submit-attempt',
       commandType: submitAttemptCmdType,
-      description: 'Submit or record progress/results from a student courseware run',
+      description: '提交或记录学生课件运行的进度/结果',
       capabilityRequired: 'student:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          attemptId: { type: 'STRING', description: 'ID of the attempt' },
-          score: { type: 'NUMBER', description: 'Score out of 100' },
-          comment: { type: 'STRING', description: 'LMS or teacher comment' },
-          completion: { type: 'NUMBER', description: 'Completion status (0 to 1)' },
-          status: { type: 'STRING', description: 'Attempt status: active or completed' },
-          extra: { type: 'OBJECT', description: 'Extra parameters' }
+          attemptId: { type: 'STRING', description: '尝试 ID' },
+          score: { type: 'NUMBER', description: '分数（满分 100）' },
+          comment: { type: 'STRING', description: 'LMS 或教师评语' },
+          completion: { type: 'NUMBER', description: '完成状态（0 到 1）' },
+          status: { type: 'STRING', description: '尝试状态：active（进行中）或 completed（已完成）' },
+          extra: { type: 'OBJECT', description: '额外参数' }
         },
         required: ['attemptId']
       }

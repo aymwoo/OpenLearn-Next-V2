@@ -129,7 +129,7 @@ describe('MigrationPrompt banner visibility', () => {
     const html = renderToString(
       <PluginCenter {...defaultProps} lang="zh" plugins={[]} />,
     );
-    expect(html).toContain('Edu OS App Store');
+    expect(html).toContain('Edu OS 插件中心');
   });
 });
 

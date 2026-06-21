@@ -1,0 +1,23 @@
+{
+  "id": "ext-hello-world",
+  "name": "Hello World 示范插件",
+  "version": "1.0.1",
+  "main": "index.js",
+  "requires": [
+    "@openlearn/core:ICommandBusService@^1.0.0",
+    "@openlearn/core:IActionRegistryService@^1.0.0"
+  ],
+  "capabilitiesProposed": [
+    "whiteboard:write"
+  ],
+  "classroomTools": [
+    {
+      "id": "tool-hello-world",
+      "name": "问候插件",
+      "icon": "Sparkles",
+      "description": "在画板上输出 Hello World",
+      "commandType": "hello.say",
+      "payload": {}
+    }
+  ]
+}

@@ -80,6 +80,7 @@ export class ServiceHost {
     { resolve: (val: unknown) => void; reject: (err: Error) => void }
   >();
   private readonly registeredCommandTypes = new Set<string>();
+  private readonly registeredActionIds = new Set<string>();
 
   constructor(
     private readonly serviceRegistry: ServiceRegistry,
@@ -272,6 +273,33 @@ export class ServiceHost {
       }
       this.registeredCommandTypes.clear();
     }
+
+    // Clean up registered actions
+    if (this.registeredActionIds.size > 0) {
+      try {
+        const actionRegistry = (await this.resolveService(
+          '@openlearn/core:IActionRegistryService',
+        )) as any;
+        if (actionRegistry) {
+          for (const actionId of this.registeredActionIds) {
+            try {
+              await actionRegistry.unregister(actionId);
+            } catch (err) {
+              console.error(
+                `[ServiceHost] Failed to unregister action "${actionId}" on dispose:`,
+                err,
+              );
+            }
+          }
+        }
+      } catch (err) {
+        console.error(
+          `[ServiceHost] Failed to resolve actionRegistry on dispose:`,
+          err,
+        );
+      }
+      this.registeredActionIds.clear();
+    }
   }
 
   // ── Invoke handling (core RPC logic) ───────────────────────────────────
@@ -366,6 +394,32 @@ export class ServiceHost {
           const [commandType] = msg.args as [string];
           commandBus.unregisterHandler(commandType);
           this.registeredCommandTypes.delete(commandType);
+          transport.postMessage({
+            type: 'result',
+            invokeId: msg.invokeId,
+            value: undefined,
+          });
+          return;
+        }
+      }
+
+      // ── Intercept IActionRegistryService helper methods ──────────────
+      if (msg.token === '@openlearn/core:IActionRegistryService') {
+        const actionRegistry = service as any;
+        if (msg.method === 'register') {
+          const [descriptor] = msg.args as [any];
+          await actionRegistry.register(descriptor);
+          this.registeredActionIds.add(descriptor.id);
+          transport.postMessage({
+            type: 'result',
+            invokeId: msg.invokeId,
+            value: undefined,
+          });
+          return;
+        } else if (msg.method === 'unregister') {
+          const [actionId] = msg.args as [string];
+          await actionRegistry.unregister(actionId);
+          this.registeredActionIds.delete(actionId);
           transport.postMessage({
             type: 'result',
             invokeId: msg.invokeId,

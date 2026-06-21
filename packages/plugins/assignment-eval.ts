@@ -10,7 +10,7 @@ import type { PluginContext } from '../core/plugin-host/types.js';
 export const AssignmentEvalPlugin = {
   manifest: {
     id: '@openlearn/plugin-assignment-eval',
-    name: 'Assignment Evaluation and Peer Review Plugin',
+    name: '作业评测与互评插件',
     version: '1.0.0',
     main: 'index.js',
     requires: [

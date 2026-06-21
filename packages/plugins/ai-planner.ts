@@ -11,7 +11,7 @@ import type { PluginContext } from '../core/plugin-host/types.js';
 export const AiPlannerPlugin = {
   manifest: {
     id: '@openlearn/plugin-ai-planner',
-    name: 'AI Planner Plugin',
+    name: 'AI 规划器插件',
     version: '1.0.0',
     main: 'index.js',
     requires: [
@@ -76,15 +76,15 @@ export const AiPlannerPlugin = {
     await actionRegistry.register({
       id: 'ai-planner-generate',
       commandType: 'ai.start_generation',
-      description: 'Instruct AI Agent to automatically plan course schedule, assignments, or quizzes in the background. It returns a process ID. The AI will eventually propose the changes for teacher approval in the Approvals gateway.',
+      description: '指示 AI Agent 在后台自动规划课程表、作业或测验，返回进程 ID。AI 将生成方案并在审批网关中等待教师审批。',
       capabilityRequired: 'process:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          taskType: { type: 'STRING', description: 'Type of generation: "schedule", "quiz", or "lesson_material"' },
-          topic: { type: 'STRING', description: 'The subject/topic to generate' },
-          classId: { type: 'STRING', description: 'Class ID (if applicable)' },
-          duration: { type: 'NUMBER', description: 'Time it should take (in seconds)' }
+          taskType: { type: 'STRING', description: '生成类型："schedule"（排课）、"quiz"（测验）或 "lesson_material"（课程资料）' },
+          topic: { type: 'STRING', description: '要生成的主题/科目' },
+          classId: { type: 'STRING', description: '班级 ID（如适用）' },
+          duration: { type: 'NUMBER', description: '预计所需时间（秒）' }
         },
         required: ['taskType', 'topic', 'duration']
       }
@@ -106,7 +106,7 @@ export const AiPlannerPlugin = {
     await actionRegistry.register({
       id: 'ai-planner-apply',
       commandType: 'ai.apply_recommendation',
-      description: 'Apply the AI suggested teaching plan, quiz, or material. HIGH RISK - REQUIRES APPROVAL.',
+      description: '应用 AI 建议的教学计划、测验或课件。高风险操作 - 需要审批。',
       capabilityRequired: 'lesson:write',
       isHighRisk: true,
       inputSchema: {
@@ -163,7 +163,7 @@ export const AiPlannerPlugin = {
     await actionRegistry.register({
       id: 'ai-grade-apply',
       commandType: 'ai.apply_grade',
-      description: 'Apply AI generated grade for a student submission. HIGH RISK - REQUIRES APPROVAL. Teacher can modify score.',
+      description: '应用 AI 生成的学生作业成绩。高风险操作 - 需要审批，教师可修改分数。',
       capabilityRequired: 'assignment:write',
       isHighRisk: true,
       inputSchema: {

@@ -2,6 +2,11 @@ import { ICommandBusServiceToken, IActionRegistryServiceToken } from '../../core
 import type { PluginContext } from '../../core/plugin-host/types.js';
 
 export default {
+  manifest: {
+    id: "ext-quiz-generator",
+    name: "Quiz Component Plugin",
+    version: "1.0.0"
+  },
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;
     const actionRegistry = ctx.services.actionRegistry;

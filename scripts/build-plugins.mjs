@@ -13,6 +13,16 @@ const plugins = [
     entry: 'packages/plugins/rollcall/index.ts',
     manifest: 'packages/plugins/rollcall/manifest.json',
     zipName: 'ext-roll-call.zip'
+  },
+  {
+    entry: 'packages/plugins/mindmap/index.ts',
+    manifest: 'packages/plugins/mindmap/manifest.json',
+    zipName: 'ext-mindmap-assistant.zip'
+  },
+  {
+    entry: 'packages/plugins/hello-world/index.ts',
+    manifest: 'packages/plugins/hello-world/manifest.json',
+    zipName: 'ext-hello-world.zip'
   }
 ];
 

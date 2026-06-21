@@ -1,4 +1,4 @@
-import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, Globe, Code, Puzzle, Blocks, Download, Upload, Paperclip, Terminal, ChevronUp, ChevronDown, ChevronRight, FileText, Shield, ShieldAlert, Check, X, Folder, File as FileIcon, Activity, Users, BarChart2, ClipboardList, Send, FileBadge, PlayCircle, Loader2, Calendar as CalendarIcon, CheckCircle2, Bell, BookOpen, Settings, PanelRightClose, PanelRightOpen, Home, Presentation, HelpCircle, Search, Settings2, Percent, ListFilter, Clock, Sparkles, Eye, Maximize2, Minimize2, Database } from 'lucide-react';
+import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, Globe, Code, Puzzle, Blocks, Download, Upload, Paperclip, Terminal, ChevronUp, ChevronDown, ChevronRight, FileText, Shield, ShieldAlert, Check, X, Folder, File as FileIcon, Activity, Users, BarChart2, ClipboardList, Send, FileBadge, PlayCircle, Loader2, Calendar as CalendarIcon, CheckCircle2, Bell, BookOpen, Settings, PanelRightClose, PanelRightOpen, Home, Presentation, HelpCircle, Search, Settings2, Percent, ListFilter, Clock, Sparkles, Eye, Maximize2, Minimize2, Database, Shuffle } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import { translations, Language } from './i18n';
@@ -5964,59 +5964,99 @@ export default function App() {
                    </div>
                 </div>
                 <div className="flex-1 flex overflow-hidden">
-                   <div className="w-1/4 min-w-[200px] border-r border-gray-200 bg-gray-50 p-4 overflow-y-auto">
-                     <h3 className="font-semibold text-gray-800 mb-4 text-xs xl:text-sm uppercase tracking-wider">Drag to Whiteboard</h3>
-                     <div className="space-y-3">
-                       <div draggable onDragStart={(e) => { 
-                          const dataStr = JSON.stringify({ type: 'code-sandbox', code: "console.log('Hello Sandbox!');" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                          e.dataTransfer.setData('application/json', dataStr); 
-                          e.dataTransfer.setData('text/plain', dataStr);
-                       }} className="bg-white border text-center border-gray-200 p-4 rounded-xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all cursor-grab active:cursor-grabbing flex flex-col items-center gap-2" >
-                          <Terminal size={24} className="text-gray-500" />
-                          <span className="font-medium text-xs xl:text-sm text-gray-700">Code Editor</span>
-                       </div>
-                       <div draggable onDragStart={(e) => { 
-                          const dataStr = JSON.stringify({ type: 'math-graph', equation: "Math.sin(x)" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                          e.dataTransfer.setData('application/json', dataStr); 
-                          e.dataTransfer.setData('text/plain', dataStr);
-                       }} className="bg-white border text-center border-gray-200 p-4 rounded-xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all cursor-grab active:cursor-grabbing flex flex-col items-center gap-2" >
-                          <Activity size={24} className="text-gray-500" />
-                          <span className="font-medium text-xs xl:text-sm text-gray-700">Math Grapher</span>
-                       </div>
-                       <div draggable onDragStart={(e) => { 
-                          const dataStr = JSON.stringify({ type: 'presentation', markdown: "# Title Slide\n---\n## Slide 2" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                          e.dataTransfer.setData('application/json', dataStr); 
-                          e.dataTransfer.setData('text/plain', dataStr);
-                       }} className="bg-white border text-center border-gray-200 p-4 rounded-xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all cursor-grab active:cursor-grabbing flex flex-col items-center gap-2" >
-                          <Presentation size={24} className="text-gray-500" />
-                          <span className="font-medium text-xs xl:text-sm text-gray-700">Presentation Deck</span>
-                       </div>
-                       <div draggable onDragStart={(e) => { 
-                          const dataStr = JSON.stringify({ type: 'quiz', question: "New Quiz" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                          e.dataTransfer.setData('application/json', dataStr); 
-                          e.dataTransfer.setData('text/plain', dataStr);
-                       }} className="bg-white border text-center border-gray-200 p-4 rounded-xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all cursor-grab active:cursor-grabbing flex flex-col items-center gap-2" >
-                          <Puzzle size={24} className="text-gray-500" />
-                          <span className="font-medium text-xs xl:text-sm text-gray-700">Interactive Quiz</span>
-                       </div>
-                       <div draggable onDragStart={(e) => { 
-                          const dataStr = JSON.stringify({ type: 'html-applet', code: "<!-- Interactive Applet -->\n<div style='padding:20px; text-align:center;'>\n  <h2>Interactive Physics</h2>\n  <button onclick='alert(\"Simulating Gravity!\")'>Drop Ball</button>\n</div>" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                          e.dataTransfer.setData('application/json', dataStr); 
-                          e.dataTransfer.setData('text/plain', dataStr);
-                       }} className="bg-white border text-center border-gray-200 p-4 rounded-xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all cursor-grab active:cursor-grabbing flex flex-col items-center gap-2" >
-                          <Globe size={24} className="text-gray-500" />
-                          <span className="font-medium text-xs xl:text-sm text-gray-700">HTML Applet</span>
-                       </div>
-                       <div draggable onDragStart={(e) => { 
-                          const dataStr = JSON.stringify({ type: 'assignment', title: "New Assignment", description: "Upload your work here" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                          e.dataTransfer.setData('application/json', dataStr); 
-                          e.dataTransfer.setData('text/plain', dataStr);
-                        }} className="bg-white border text-center border-gray-200 p-4 rounded-xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all cursor-grab active:cursor-grabbing flex flex-col items-center gap-2" >
-                           <ClipboardList size={24} className="text-gray-500" />
-                           <span className="font-medium text-xs xl:text-sm text-gray-700">Assignment Drop</span>
+                    <div className="w-1/4 min-w-[210px] max-w-[260px] border-r border-gray-200 bg-slate-50/75 p-4 overflow-y-auto flex flex-col gap-4">
+                      <div>
+                        <h3 className="font-bold text-gray-800 text-xs xl:text-sm uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+                          <Blocks size={14} className="text-indigo-600" />
+                          {lang === 'zh' ? '备课画板组件' : 'Drag Components'}
+                        </h3>
+                        <p className="text-[10px] text-gray-500 leading-tight">
+                          {lang === 'zh' ? '拖拽下方教具组件到右侧画板中，可实时推送并同步给所有在线学生！' : 'Drag any component to the whiteboard on the right to sync instantly with students.'}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div draggable onDragStart={(e) => { 
+                           const dataStr = JSON.stringify({ type: 'code-sandbox', code: "console.log('Hello Sandbox!');" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
+                           e.dataTransfer.setData('application/json', dataStr); 
+                           e.dataTransfer.setData('text/plain', dataStr);
+                        }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
+                           <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
+                             <Terminal size={18} />
+                           </div>
+                           <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '代码沙箱' : 'Code Editor'}</span>
                         </div>
-                     </div>
-                   </div>
+                        <div draggable onDragStart={(e) => { 
+                           const dataStr = JSON.stringify({ type: 'math-graph', equation: "Math.sin(x)" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
+                           e.dataTransfer.setData('application/json', dataStr); 
+                           e.dataTransfer.setData('text/plain', dataStr);
+                        }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
+                           <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
+                             <Activity size={18} />
+                           </div>
+                           <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '数学函数' : 'Math Grapher'}</span>
+                        </div>
+                        <div draggable onDragStart={(e) => { 
+                           const dataStr = JSON.stringify({ type: 'presentation', markdown: "# Title Slide\n---\n## Slide 2" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
+                           e.dataTransfer.setData('application/json', dataStr); 
+                           e.dataTransfer.setData('text/plain', dataStr);
+                        }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
+                           <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
+                             <Presentation size={18} />
+                           </div>
+                           <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '课件演示' : 'Slides Deck'}</span>
+                        </div>
+                        <div draggable onDragStart={(e) => { 
+                           const dataStr = JSON.stringify({ type: 'quiz', question: "New Quiz" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
+                           e.dataTransfer.setData('application/json', dataStr); 
+                           e.dataTransfer.setData('text/plain', dataStr);
+                        }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
+                           <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
+                             <Puzzle size={18} />
+                           </div>
+                           <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '随堂测试' : 'Interactive Quiz'}</span>
+                        </div>
+                        <div draggable onDragStart={(e) => { 
+                           const dataStr = JSON.stringify({ type: 'html-applet', code: `<!-- Interactive Physics -->\n<div style='padding:20px; text-align:center;'>\n  <h2>Interactive Physics</h2>\n  <button onclick="alert('Simulating Gravity!')">Drop Ball</button>\n</div>` }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
+                           e.dataTransfer.setData('application/json', dataStr); 
+                           e.dataTransfer.setData('text/plain', dataStr);
+                        }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
+                           <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
+                             <Globe size={18} />
+                           </div>
+                           <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '交互实验' : 'HTML Applet'}</span>
+                        </div>
+                        <div draggable onDragStart={(e) => { 
+                           const dataStr = JSON.stringify({ type: 'assignment', title: "New Assignment", description: "Upload your work here" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
+                           e.dataTransfer.setData('application/json', dataStr); 
+                           e.dataTransfer.setData('text/plain', dataStr);
+                         }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
+                            <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
+                              <ClipboardList size={18} />
+                            </div>
+                            <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '作业提交' : 'Assignment'}</span>
+                         </div>
+                        <div draggable onDragStart={(e) => { 
+                           const dataStr = JSON.stringify({ type: 'rollcall', allStudents: [] }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
+                           e.dataTransfer.setData('application/json', dataStr); 
+                           e.dataTransfer.setData('text/plain', dataStr);
+                         }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
+                            <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
+                              <Shuffle size={18} />
+                            </div>
+                            <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '随机点名' : 'Random Picker'}</span>
+                         </div>
+                        <div draggable onDragStart={(e) => { 
+                           const dataStr = JSON.stringify({ type: 'hello-world' }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
+                           e.dataTransfer.setData('application/json', dataStr); 
+                           e.dataTransfer.setData('text/plain', dataStr);
+                         }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
+                            <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
+                              <Sparkles size={18} />
+                            </div>
+                            <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '问候插件' : 'Hello World'}</span>
+                         </div>
+                      </div>
+                    </div>
                    <div className="flex-1 relative bg-white flex flex-col min-w-0 min-h-0">
                      <div className="p-3 border-b border-gray-100 bg-white shrink-0 flex items-center overflow-x-auto gap-2">
                        <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mr-2 shrink-0">Lesson Timeline</div>

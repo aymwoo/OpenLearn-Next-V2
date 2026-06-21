@@ -84,6 +84,7 @@ export interface PluginInfo {
   name: string;
   version: string;
   state: PluginState;
+  status?: string;
   execution_mode?: string;
 }
 

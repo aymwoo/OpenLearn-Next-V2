@@ -105,7 +105,7 @@ ${htmlContent}
 export const AiSubmitInjectorPlugin = {
   manifest: {
     id: '@openlearn/plugin-ai-submit-injector',
-    name: 'AI Submit Injector Plugin',
+    name: 'AI 提交注入器插件',
     version: '1.0.0',
     main: 'index.js',
     requires: [

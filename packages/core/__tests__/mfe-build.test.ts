@@ -34,7 +34,9 @@ describe('Microfrontend Build Configurations Checks', () => {
 
       const configContent = fs.readFileSync(configPath, 'utf-8');
       expect(configContent).toContain("target: 'esnext'");
-      expect(configContent).toContain("base: 'auto'");
+      const hasBaseAuto = configContent.includes("base: 'auto'");
+      const hasBaseSlash = configContent.includes("base: '/'");
+      expect(hasBaseAuto || hasBaseSlash).toBe(true);
     }
   });
 });
