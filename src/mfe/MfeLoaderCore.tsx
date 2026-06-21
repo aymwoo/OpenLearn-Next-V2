@@ -74,7 +74,10 @@ function wrapReactComponent(Component: React.ComponentType<any>): MfeAppLifecycl
       const root = createRoot(container);
       root.render(React.createElement(Component, props));
       return {
-        unmount: async () => { root.unmount(); },
+        unmount: async () => {
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          root.unmount();
+        },
         update: async (newProps: Record<string, any>) => {
           root.render(React.createElement(Component, newProps));
         },
@@ -143,6 +146,11 @@ export function MfeLoaderCore({
     const mountInstance = mountRef.current;
     const lifecycle = lifecycleRef.current;
     const leakDetector = createLeakDetector(container ?? undefined);
+
+    // Defer the cleanup execution to the next event loop tick.
+    // This guarantees that the host React tree has fully finished its current render/unmount commit phase,
+    // avoiding the "Attempted to synchronously unmount a root while React was already rendering" error.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
     try {
       // D-22: Dual-path unmount with 5s timeout
