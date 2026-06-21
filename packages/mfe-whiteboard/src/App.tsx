@@ -8,7 +8,7 @@ import './index.css';
 
 export default function App(props: any & { mfeContext?: MfeContext }) {
   return (
-    <div className="mfe-whiteboard-root">
+    <div className="mfe-whiteboard-root" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <InteractiveWhiteboard {...props} />
     </div>
   );

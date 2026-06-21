@@ -117,12 +117,22 @@ export function MfeLoaderCore({
   const eventBusWrapperRef = useRef<MfeEventBusWrapper | null>(null);
   const mountRef = useRef<Awaited<ReturnType<MfeAppLifecycle['mount']>> | null>(null);
   const lifecycleRef = useRef<MfeAppLifecycle | null>(null);
+  const remotePropsRef = useRef<Record<string, any> | undefined>(remoteProps);
+  const onErrorRef = useRef<typeof onError>(onError);
+  const onLoadRef = useRef<typeof onLoad>(onLoad);
   const mountedStylesRef = useRef<string[]>([]);
+  const lastPropsKeyRef = useRef<string>('');
   const controllerRef = useRef<MfeControllerRef>({
     unmount: async () => {
       console.warn('[MfeLoaderCore] unmount called before mount completed');
     },
   });
+
+  useEffect(() => {
+    remotePropsRef.current = remoteProps;
+    onErrorRef.current = onError;
+    onLoadRef.current = onLoad;
+  }, [remoteProps, onError, onLoad]);
 
   // ── Sync mfeRef (D-19) ─────────────────────────────────────────────
 
@@ -202,7 +212,6 @@ export function MfeLoaderCore({
   useEffect(() => {
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    let resolveUnmountTimeout: (() => void) | undefined;
 
     const effectiveTimeout = timeoutProp ?? 30000;
 
@@ -286,21 +295,23 @@ export function MfeLoaderCore({
         const container = containerRef.current;
         if (!container) throw new Error('Mount container ref is null');
 
-        const mountInstance = await lifecycle.mount(container, remoteProps);
+        const mountInstance = await lifecycle.mount(container, remotePropsRef.current);
         mountRef.current = mountInstance;
 
         // ── 5. Handle styles (D-10) ──────────────────────────────────
         if (lifecycle.styles && lifecycle.styles.length > 0) {
+          const baseUrl = resolvedEntry ? resolvedEntry.substring(0, resolvedEntry.lastIndexOf('/')) : '';
           lifecycle.styles.forEach((href, index) => {
             const linkId = `mfe-style-${name}-${index}`;
+            const resolvedHref = href.startsWith('http') ? href : `${baseUrl}${href.startsWith('/') ? '' : '/'}${href}`;
             if (!document.getElementById(linkId)) {
               const link = document.createElement('link');
               link.id = linkId;
               link.rel = 'stylesheet';
-              link.href = href;
+              link.href = resolvedHref;
               document.head.appendChild(link);
             }
-            mountedStylesRef.current.push(href);
+            mountedStylesRef.current.push(resolvedHref);
           });
         }
 
@@ -315,14 +326,17 @@ export function MfeLoaderCore({
 
         // ── 7. Success ───────────────────────────────────────────────
         clearTimeout(timeoutId);
+        // Record the props used for mount so the update effect skips
+        // the initial post-mount update (same data already rendered).
+        lastPropsKeyRef.current = JSON.stringify(remotePropsRef.current ?? {});
         setState('loaded');
-        onLoad?.();
+        onLoadRef.current?.();
       } catch (err: any) {
         if (cancelled) return;
         clearTimeout(timeoutId);
         setState('error');
         setError(err);
-        onError?.(err);
+        onErrorRef.current?.(err);
       }
     }
 
@@ -334,7 +348,33 @@ export function MfeLoaderCore({
       clearTimeout(timeoutId);
       cleanup();
     };
-  }, [name, entry, remoteProps, timeoutProp, onError, onLoad, cleanup]);
+  }, [name, entry, timeoutProp, cleanup]);
+
+  useEffect(() => {
+    if (state !== 'loaded') return;
+    // Compute a stable key from serializable props only (JSON.stringify skips functions).
+    // This prevents spurious update() calls when parent re-renders with new callback refs
+    // but identical data — the root cause of Konva double-init and socket reconnect storms.
+    const propsKey = JSON.stringify(remoteProps ?? {});
+    if (propsKey === lastPropsKeyRef.current) return;
+    lastPropsKeyRef.current = propsKey;
+
+    const mountInstance = mountRef.current;
+    const lifecycle = lifecycleRef.current;
+    const update = mountInstance?.update ?? lifecycle?.update;
+    if (!update) return;
+
+    let cancelled = false;
+    Promise.resolve(update(remoteProps)).catch((err) => {
+      if (!cancelled) {
+        console.warn(`[MfeLoaderCore] update failed for "${name}"`, err);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [name, remoteProps, state]);
 
   // ── Rendering ──────────────────────────────────────────────────────
 
@@ -421,4 +461,3 @@ export class MfeEventBusWrapper {
     this.activeSubscriptions = [];
   }
 }
-

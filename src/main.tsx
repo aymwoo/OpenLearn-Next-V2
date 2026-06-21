@@ -4,27 +4,29 @@ import App from './App.tsx';
 import { PluginHostProvider } from './plugin-host/plugin-host-context';
 import { FrontendPluginHost } from './plugin-host/plugin-host';
 import { MfeConfigProvider } from './mfe/MfeConfigProvider';
-import { init } from '@module-federation/runtime';
+import { init, getInstance } from '@module-federation/runtime';
 import './index.css';
 
 const pluginHost = new FrontendPluginHost();
 
-// Initialize Module Federation runtime once at app startup (D-25).
-// Wrapped in try/catch because @module-federation/vite plugin may already
-// have initialized the runtime internally — double init causes duplicate
-// shared scope registrations.
-try {
-  init({
-    name: 'host_shell',
-    remotes: [],
-    shared: {
-      react: { singleton: true },
-      'react-dom': { singleton: true },
-      zustand: { singleton: true },
-    },
-  });
-} catch {
-  console.warn('[MF] Runtime already initialized by Vite plugin, skipping explicit init()');
+// Initialize Module Federation runtime only if not already initialized by the plugin (D-25).
+if (!getInstance()) {
+  try {
+    init({
+      name: 'host_shell',
+      remotes: [],
+      shared: {
+        react: { singleton: true },
+        'react-dom': { singleton: true },
+        zustand: { singleton: true },
+        konva: { singleton: true },
+        'react-konva': { singleton: true },
+        'react-konva-utils': { singleton: true },
+      },
+    });
+  } catch (e) {
+    console.error('[MF] Failed to initialize Module Federation runtime fallback:', e);
+  }
 }
 
 createRoot(document.getElementById('root')!).render(

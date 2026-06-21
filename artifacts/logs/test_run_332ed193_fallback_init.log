@@ -1,0 +1,7 @@
+Vitest Run Log:
+All 34 tests in src/mfe/__tests__/decouple.test.tsx passed successfully after adding fallback init in main.tsx.
+
+Test Files  1 passed (1)
+      Tests  34 passed (34)
+   Start at  16:18:24
+   Duration  1.27s
