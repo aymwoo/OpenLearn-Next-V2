@@ -43,10 +43,9 @@ Proxy both microfrontends behind the same domain/IP using Nginx. This resolves a
        }
    }
    ```
-2. **Update the database entries** on the server to use relative paths:
+2. **Update the database entries** on the server to use relative paths using the Node setup script:
    ```bash
-   sqlite3 /root/OpenLearn-Next-V2/packages/core/db/educational_os.db "UPDATE mfe_remotes SET entry = '/mfe/whiteboard/remoteEntry.js' WHERE name = 'mfe_whiteboard';"
-   sqlite3 /root/OpenLearn-Next-V2/packages/core/db/educational_os.db "UPDATE mfe_remotes SET entry = '/mfe/courseware/remoteEntry.js' WHERE name = 'mfe_courseware';"
+   node scripts/setup-production-mfe.mjs
    ```
 
 ---
@@ -61,6 +60,7 @@ Directly expose the microfrontend ports to the public, which requires opening po
    ```
 2. **Update the database entries** on the server to use the public IP:
    ```bash
+   # (Using SQLite directly if sqlite3 command is available, or update using a node script)
    sqlite3 /root/OpenLearn-Next-V2/packages/core/db/educational_os.db "UPDATE mfe_remotes SET entry = 'http://47.243.75.121:5174/remoteEntry.js' WHERE name = 'mfe_whiteboard';"
    sqlite3 /root/OpenLearn-Next-V2/packages/core/db/educational_os.db "UPDATE mfe_remotes SET entry = 'http://47.243.75.121:5175/remoteEntry.js' WHERE name = 'mfe_courseware';"
    ```
