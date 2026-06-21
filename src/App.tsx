@@ -589,6 +589,108 @@ exports.default = {
   }
 };`;
 
+  const pluginExamCode = `/**
+ * Edu-OS 智能考试与自测系统插件 (ZIP / ESM SDK 规范)
+ * 这是一个完整的"限时自测与白板试卷卡片插件"开发实例
+ */
+export default {
+  // 1. 插件基础声明 manifest
+  manifest: {
+    id: "ext-exam-system",
+    name: "智能考试与自测系统插件",
+    version: "1.0.1",
+    capabilitiesProposed: [
+      "exam:write",
+      "exam:read",
+      "whiteboard:write"
+    ]
+  },
+
+  // 2. 激活入口 activate
+  activate: async (ctx) => {
+    const commandBus = ctx.services.commandBus;
+    const actionRegistry = ctx.services.actionRegistry;
+    const db = await ctx.resolve('IDatabase'); // 解析底层数据库连接
+
+    // 初始化考试表结构
+    db.exec(\`
+      CREATE TABLE IF NOT EXISTS exams (
+        id TEXT PRIMARY KEY,
+        lesson_id TEXT,
+        title TEXT,
+        content TEXT,
+        duration_minutes INTEGER,
+        created_at INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS exam_submissions (
+        exam_id TEXT,
+        student_id TEXT,
+        answers TEXT,
+        score REAL,
+        graded_at INTEGER,
+        PRIMARY KEY (exam_id, student_id)
+      );
+    \`);
+
+    // 3. 注册 Action：创建试卷
+    ctx.actionRegistry.register({
+      id: 'ext-exam-create',
+      commandType: 'exam.create',
+      description: '为特定课时创建一份考试试卷',
+      capabilityRequired: 'exam:write',
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          lessonId: { type: 'STRING', description: '关联课时 ID' },
+          title: { type: 'STRING', description: '试卷标题' },
+          questions: { type: 'ARRAY', description: '题目列表（JSON）' },
+          durationMinutes: { type: 'INTEGER', description: '限时（分钟）' }
+        },
+        required: ['lessonId', 'title', 'questions']
+      }
+    });
+
+    // 4. 注册命令处理器：处理创建考试
+    commandBus.registerHandler('exam.create', {
+      execute: async (command) => {
+        const { lessonId, title, questions, durationMinutes } = command.payload;
+        const examId = 'ex_' + Math.random().toString(36).slice(2);
+        db.prepare(\`
+          INSERT INTO exams (id, lesson_id, title, content, duration_minutes, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        \`).run(examId, lessonId, title, JSON.stringify(questions), durationMinutes || 45, Date.now());
+        return { success: true, examId };
+      }
+    });
+
+    // 5. 注册命令处理器：下发考试到画板
+    commandBus.registerHandler('exam.publish', {
+      execute: async (command) => {
+        const { lessonId } = command.payload;
+        const exam = db.prepare('SELECT * FROM exams WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1').get(lessonId);
+        if (!exam) throw new Error('该课时下无试卷，请先创建。');
+
+        // 发送 whiteboard.draw 渲染试卷
+        await commandBus.execute({
+          id: 'int_' + Math.random().toString(36).slice(2),
+          type: 'whiteboard.draw',
+          payload: {
+            lessonId,
+            type: 'exam',
+            data: JSON.stringify({
+              examId: exam.id,
+              title: exam.title,
+              questions: JSON.parse(exam.content),
+              durationMinutes: exam.duration_minutes
+            })
+          }
+        });
+        return { success: true, examId: exam.id };
+      }
+    });
+  }
+};`;
+
   return (
     <div className="flex-1 flex flex-col h-full bg-white text-gray-900 border border-gray-200 rounded-2xl shadow-sm overflow-hidden m-1">
       {/* 灵活响应式的双通道渐变背景页头 */}
