@@ -161,11 +161,10 @@ export function MfeLoaderCore({
       console.warn('[MfeLoaderCore] unmount timed out or failed, forcing cleanup', e);
     }
 
-    // D-21: root.unmount()
+    // D-21: Clean up container DOM nodes safely
     if (container) {
       try {
-        const root = createRoot(container);
-        root.unmount();
+        container.innerHTML = '';
       } catch {
         // Container may already be unmounted
       }
