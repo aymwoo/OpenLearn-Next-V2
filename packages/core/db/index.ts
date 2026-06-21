@@ -7,9 +7,14 @@ import crypto from 'crypto';
 // The old getDbDirname() heuristic (__dirname → new Function hack → cwd)
 // fell back to process.cwd() (project root), causing the DB to be created
 // in the wrong directory and the server to open a stale file descriptor.
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const dbPath = path.join(__dirname, 'educational_os.db');
+let dbPath: string;
+if (typeof import.meta !== 'undefined' && import.meta.url) {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  dbPath = path.join(__dirname, 'educational_os.db');
+} else {
+  dbPath = path.join(__dirname, '../packages/core/db/educational_os.db');
+}
 
 export const db = new Database(dbPath);
 
