@@ -4363,11 +4363,21 @@ export default function App() {
   const handleTogglePlugin = async (id: string) => {
     try {
       const res = await fetch(`/api/plugins/${id}/toggle`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-         fetchPlugins();
+         await fetchPlugins();
+      } else {
+        const errMsg = data.error || 'Unknown error';
+        if (errMsg.includes('requires human approval') || errMsg.includes('queued')) {
+          alert(lang === 'zh' ? '该操作已加入“待审批高危操作”列表，请在右侧侧边栏中通过审批以生效。' : 'This action has been queued. Please approve it in the Pending Approvals list on the right side.');
+          await fetchApprovals();
+        } else {
+          alert((lang === 'zh' ? '切换插件状态失败: ' : 'Failed to toggle plugin: ') + errMsg);
+        }
       }
     } catch (e) {
       console.error('Failed to toggle plugin:', e);
+      alert(lang === 'zh' ? '网络错误，切换插件失败' : 'Network error, failed to toggle plugin');
     }
   };
 
@@ -4397,6 +4407,7 @@ export default function App() {
       if (data.success) {
         await fetchApprovals();
         await fetchLessons();
+        await fetchPlugins();
       } else {
         alert("Action failed: " + data.error);
       }
@@ -4409,6 +4420,7 @@ export default function App() {
     try {
       await fetch(`/api/approvals/${id}/reject`, { method: 'POST' });
       await fetchApprovals();
+      await fetchPlugins();
     } catch (e) {
       console.error(e);
     }

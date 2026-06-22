@@ -620,18 +620,24 @@ export class PluginHost {
         throw new EsmActivationError(pluginId, 'activate must be a function');
       }
 
+      // Merge stored package manifest (from DB) with code-level manifest to ensure all required fields (e.g. main, requires) are present
+      const mergedManifest = {
+        ...storedManifest,
+        ...manifest,
+      };
+
       // 6. 校验 manifest schema
-      manifestSchema.parse(manifest);
+      manifestSchema.parse(mergedManifest);
 
       // 6a. Phase 6: Token version compatibility check (D-05, D-12)
-      const skipTokens = this.checkSemVerCompatibility(manifest, pluginId, 'activate');
+      const skipTokens = this.checkSemVerCompatibility(mergedManifest, pluginId, 'activate');
 
       // 7. 构建安全的 PluginContext — skipTokens 中指定的可选服务 key 将被设为 null（D-12）
       const ctx = await buildContext(
         this.serviceRegistry,
         this.resourceTracker,
         pluginId,
-        manifest,
+        mergedManifest,
         this.db,
         skipTokens,  // NEW: Phase 6 — incompatible optional token names
       );
@@ -641,7 +647,7 @@ export class PluginHost {
         const capService = await this.serviceRegistry.resolve<ICapabilityService>(
           ICapabilityServiceToken,
         );
-        const caps = manifest.capabilitiesProposed ?? [];
+        const caps = mergedManifest.capabilitiesProposed ?? [];
         for (const cap of caps) {
           await capService.grant(actorId, cap);
         }
@@ -653,7 +659,7 @@ export class PluginHost {
       // 9. Phase 7: 中间件管道包裹激活（洋葱模型: beforeActivate → activate → afterActivate）
       const middlewareCtx: MiddlewareContext = {
         pluginId,
-        manifest,
+        manifest: mergedManifest,
         phase: 'beforeActivate',
         timestamp: Date.now(),
       };
@@ -685,7 +691,7 @@ export class PluginHost {
         // 11. 成功
         this.pluginStates.set(pluginId, PluginState.ACTIVE);
         this.pluginInstances.set(pluginId, {
-          manifest,
+          manifest: mergedManifest,
           activate,
           deactivate: typeof deactivate === 'function' ? deactivate : undefined,
         });
@@ -693,7 +699,7 @@ export class PluginHost {
           .prepare('UPDATE plugins SET status = ? WHERE id = ?')
           .run('active', pluginId);
 
-        console.log(`[PluginHost] Plugin "${manifest.id}" activated (${pluginId})`);
+        console.log(`[PluginHost] Plugin "${mergedManifest.id}" activated (${pluginId})`);
       });
     } catch (err) {
       // 11. D-12: 失败回滚

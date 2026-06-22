@@ -214,74 +214,79 @@ export class Kernel {
           const manifestContent = await manifestFile.async('text');
           const manifest = JSON.parse(manifestContent);
           
-          // Check if already exists in DB
-          const rows = this.db.prepare('SELECT id, manifest FROM plugins').all() as Array<{ id: string; manifest: string }>;
-          let existingRow = rows.find(row => {
-            try {
-              const m = JSON.parse(row.manifest);
-              return m.id === manifest.id;
-            } catch {
-              return false;
-            }
-          });
-
-          // Clean up legacy ext plugins (CommonJS strings) in DB
-          if (existingRow) {
-            let isLegacy = false;
-            try {
-              const hasZip = this.db.prepare('SELECT zip_package FROM plugins WHERE id = ?').get(existingRow.id) as any;
-              if (!hasZip || !hasZip.zip_package) {
-                isLegacy = true;
-              }
-            } catch {
-              isLegacy = true;
-            }
-            if (isLegacy) {
-              this.db.prepare('DELETE FROM plugins WHERE id = ?').run(existingRow.id);
-              existingRow = undefined;
-            }
-          }
-          
-          let dbPluginId = existingRow?.id;
-          
-          if (!existingRow) {
-            // Install new
-            const installedManifest = await this.pluginHost.installPluginFromZip(zipBuffer);
-            const newRows = this.db.prepare('SELECT id, manifest FROM plugins').all() as Array<{ id: string; manifest: string }>;
-            const newRow = newRows.find(row => {
-              try {
-                return JSON.parse(row.manifest).id === manifest.id;
-              } catch {
-                return false;
-              }
-            });
-            dbPluginId = newRow?.id;
-          } else {
-            const m = JSON.parse(existingRow.manifest);
-            if (m.version !== manifest.version) {
-              // Version mismatch: uninstall and reinstall
-              await this.pluginHost.uninstallPlugin(existingRow.id);
-              const installedManifest = await this.pluginHost.installPluginFromZip(zipBuffer);
-              const newRows = this.db.prepare('SELECT id, manifest FROM plugins').all() as Array<{ id: string; manifest: string }>;
-              const newRow = newRows.find(row => {
-                try {
-                  return JSON.parse(row.manifest).id === manifest.id;
-                } catch {
-                  return false;
-                }
-              });
-              dbPluginId = newRow?.id;
-            }
-          }
-          
-          if (dbPluginId) {
-            // Update DB status to active and execution_mode to worker
-            this.db.prepare('UPDATE plugins SET execution_mode = ?, status = ? WHERE id = ?')
-              .run('worker', 'active', dbPluginId);
-            
-            // Activate plugin
-            await this.pluginHost.activatePlugin(dbPluginId);
-          }
+           // Check if already exists in DB
+           const rows = this.db.prepare('SELECT id, manifest, status FROM plugins').all() as Array<{ id: string; manifest: string; status?: string }>;
+           let existingRow = rows.find(row => {
+             try {
+               const m = JSON.parse(row.manifest);
+               return m.id === manifest.id;
+             } catch {
+               return false;
+             }
+           });
+ 
+           // Clean up legacy ext plugins (CommonJS strings) in DB
+           if (existingRow) {
+             let isLegacy = false;
+             try {
+               const hasZip = this.db.prepare('SELECT zip_package FROM plugins WHERE id = ?').get(existingRow.id) as any;
+               if (!hasZip || !hasZip.zip_package) {
+                 isLegacy = true;
+               }
+             } catch {
+               isLegacy = true;
+             }
+             if (isLegacy) {
+               this.db.prepare('DELETE FROM plugins WHERE id = ?').run(existingRow.id);
+               existingRow = undefined;
+             }
+           }
+           
+           let dbPluginId = existingRow?.id;
+           
+           if (!existingRow) {
+             // Install new
+             const installedManifest = await this.pluginHost.installPluginFromZip(zipBuffer);
+             const newRows = this.db.prepare('SELECT id, manifest, status FROM plugins').all() as Array<{ id: string; manifest: string; status?: string }>;
+             const newRow = newRows.find(row => {
+               try {
+                 return JSON.parse(row.manifest).id === manifest.id;
+               } catch {
+                 return false;
+               }
+             });
+             dbPluginId = newRow?.id;
+           } else {
+             const m = JSON.parse(existingRow.manifest);
+             if (m.version !== manifest.version) {
+               // Version mismatch: uninstall and reinstall
+               await this.pluginHost.uninstallPlugin(existingRow.id);
+               const installedManifest = await this.pluginHost.installPluginFromZip(zipBuffer);
+               const newRows = this.db.prepare('SELECT id, manifest, status FROM plugins').all() as Array<{ id: string; manifest: string; status?: string }>;
+               const newRow = newRows.find(row => {
+                 try {
+                   return JSON.parse(row.manifest).id === manifest.id;
+                 } catch {
+                   return false;
+                 }
+               });
+               dbPluginId = newRow?.id;
+             }
+           }
+           
+           if (dbPluginId) {
+             // If the plugin already exists in DB, preserve its status instead of forcing 'active'
+             const currentStatus = existingRow ? (existingRow.status || 'active') : 'active';
+ 
+             // Update DB status and execution_mode to worker
+             this.db.prepare('UPDATE plugins SET execution_mode = ?, status = ? WHERE id = ?')
+               .run('worker', currentStatus, dbPluginId);
+             
+             // Activate plugin only if the status is active
+             if (currentStatus === 'active') {
+               await this.pluginHost.activatePlugin(dbPluginId);
+             }
+           }
         } catch (err) {
           console.warn(`[Kernel] Soft-fail: Failed to seed external plugin ${file}:`, err);
         }
@@ -307,6 +312,21 @@ export class Kernel {
   }
 }
 
-// Singleton export 
-export const kernelContainer = new Kernel();
-kernelContainer.initAuditLog();
+// Singleton export - Lazy evaluated via Proxy to prevent instant creation during test imports
+let _kernelContainer: Kernel | undefined;
+export const kernelContainer = new Proxy({} as Kernel, {
+  get(target, prop, receiver) {
+    if (!_kernelContainer) {
+      _kernelContainer = new Kernel();
+      _kernelContainer.initAuditLog();
+    }
+    return Reflect.get(_kernelContainer, prop, receiver);
+  },
+  set(target, prop, value, receiver) {
+    if (!_kernelContainer) {
+      _kernelContainer = new Kernel();
+      _kernelContainer.initAuditLog();
+    }
+    return Reflect.set(_kernelContainer, prop, value, receiver);
+  }
+});

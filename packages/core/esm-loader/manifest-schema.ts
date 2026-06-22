@@ -45,7 +45,7 @@ export const manifestSchema = z.object({
   requires: z.array(requiresItemSchema).optional(),
   optional: z.array(requiresItemSchema).optional(),
   capabilitiesProposed: z.array(z.string()).optional(),
-});
+}).passthrough();
 
 /**
  * Manifest 类型 — 由 manifestSchema 推导出的 TypeScript 类型。
@@ -83,7 +83,7 @@ export const manifestSchemaV3 = z.object({
   requires: z.array(requiresItemV3Schema).optional(),
   optional: z.array(requiresItemV3Schema).optional(),
   capabilitiesProposed: z.array(z.string()).optional(),
-});
+}).passthrough();
 
 /**
  * ManifestV3 类型 — 由 manifestSchemaV3 推导的类型，保留供引用。

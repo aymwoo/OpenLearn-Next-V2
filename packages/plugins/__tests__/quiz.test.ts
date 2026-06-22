@@ -17,12 +17,17 @@ describe('Quiz Plugin E2E Worker Mode', () => {
   });
 
   it('should seed, activate and execute quiz commands in worker mode', async () => {
+    // Clean database record for this plugin to avoid side effects from development state
+    const { db } = await import('../../core/db/index.js');
+    db.prepare('DELETE FROM plugins WHERE name = ?').run('Quiz Component Plugin');
+
     // Kernel auto-seeds ZIP plugins from dist/plugins/ during construction
     kernel = new Kernel();
     await kernel.ready;
 
     const plugins = kernel.pluginHost.listPlugins();
-    const quizPlugin = plugins.find(p => p.name.includes('Quiz'));
+    console.log('List of plugins in E2E test:', plugins.map(p => ({ id: p.id, name: p.name, state: p.state })));
+    const quizPlugin = plugins.find(p => p.name === 'Quiz Component Plugin');
     expect(quizPlugin).toBeDefined();
     expect(quizPlugin!.state).toBe('active');
 

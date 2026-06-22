@@ -115,6 +115,13 @@ export class WorkerRegistry {
     this.workerByThreadId.set(instance.worker.threadId, pluginId);
 
     // T-05-13: 自动崩溃检测 — 非零退出码且仍在追踪中时标记 crashed
+    instance.worker.on('error', (err) => {
+      console.error(
+        `[WorkerRegistry] Worker for "${pluginId}" encountered error:`,
+        err
+      );
+    });
+
     instance.worker.on('exit', (code) => {
       if (code !== 0 && this.workers.has(pluginId)) {
         const entry = this.workers.get(pluginId)!;
@@ -629,6 +636,14 @@ export class WorkerManager {
       worker = new Worker(new URL(bootstrapDataUrl), {
         workerData: { pluginId, serviceTokens },
         eval: false,
+        stdout: true,
+        stderr: true,
+      });
+      worker.stdout.on('data', (chunk) => {
+        console.log(`[Worker stdout - ${pluginId}]:`, chunk.toString().trim());
+      });
+      worker.stderr.on('data', (chunk) => {
+        console.error(`[Worker stderr - ${pluginId}]:`, chunk.toString().trim());
       });
     } catch (err) {
       throw new WorkerActivateError(
