@@ -1348,6 +1348,33 @@ export function InteractiveWhiteboard({
   const socketRef = useRef<ISocketService | null>(null);
   const [remoteDrawings, setRemoteDrawings] = useState<Record<string, any>>({});
   const [activeDragElement, setActiveDragElement] = useState<{ id: string; currentX: number; currentY: number; startPointerX: number; startPointerY: number; data: any } | null>(null);
+  const dragRef = useRef<{
+    id: string;
+    currentX: number;
+    currentY: number;
+    startPointerX: number;
+    startPointerY: number;
+    data: any;
+  } | null>(null);
+
+  const resizeRef = useRef<{
+    id: string;
+    corner: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+    startX: number;
+    startY: number;
+    initialX: number;
+    initialY: number;
+    initialWidth: number;
+    initialHeight: number;
+  } | null>(null);
+
+  const resizingStateRef = useRef<{
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const [selectedShapeId, _setSelectedShapeId] = useState<string | null>(null);
   const setSelectedShapeId = (id: string | null | ((prev: string | null) => string | null)) => {
     if (userRole === 'teacher') {
@@ -1717,51 +1744,24 @@ export function InteractiveWhiteboard({
     e.preventDefault();
     const initialX = elementData.x ?? 0;
     const initialY = elementData.y ?? 0;
-    setActiveDragElement({
+    const dragInfo = {
       id: elementId,
       currentX: initialX,
       currentY: initialY,
       startPointerX: e.clientX,
       startPointerY: e.clientY,
       data: elementData
-    });
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    };
+    dragRef.current = dragInfo;
+    setActiveDragElement(dragInfo);
   };
 
   const handleElementDragMove = (e: React.PointerEvent) => {
-    if (!activeDragElement) return;
-    const dx = e.clientX - activeDragElement.startPointerX;
-    const dy = e.clientY - activeDragElement.startPointerY;
-    const initialX = activeDragElement.data.x ?? 0;
-    const initialY = activeDragElement.data.y ?? 0;
-    
-    setActiveDragElement({
-      ...activeDragElement,
-      currentX: initialX + dx,
-      currentY: initialY + dy
-    });
+    // Handled by window event listener
   };
 
   const handleElementDragEnd = async (e: React.PointerEvent) => {
-    if (!activeDragElement) return;
-    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    
-    const finalX = activeDragElement.currentX;
-    const finalY = activeDragElement.currentY;
-    const elementId = activeDragElement.id;
-    const elementData = activeDragElement.data;
-    
-    setActiveDragElement(null);
-    
-    if (onElementUpdate) {
-      setIsSyncing(true);
-      try {
-        await onElementUpdate(elementId, { ...elementData, x: finalX, y: finalY });
-        socketRef.current?.emit('whiteboard-update', { roomId: lessonId, type: 'refresh' });
-      } finally {
-        setIsSyncing(false);
-      }
-    }
+    // Handled by window event listener
   };
 
   const handleResizeStart = (
@@ -1776,7 +1776,8 @@ export function InteractiveWhiteboard({
     if (userRole !== 'teacher') return;
     e.preventDefault();
     e.stopPropagation();
-    setActiveResizeElement({
+    
+    const resizeInfo = {
       id,
       corner,
       startX: e.clientX,
@@ -1785,106 +1786,173 @@ export function InteractiveWhiteboard({
       initialY: currentY,
       initialWidth: currentWidth,
       initialHeight: currentHeight
-    });
-    setResizingState({
+    };
+    const stateInfo = {
       id,
       x: currentX,
       y: currentY,
       width: currentWidth,
       height: currentHeight
-    });
-    try {
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    } catch (err) {
-      // Ignore setPointerCapture errors on unsupporting targets
-    }
+    };
+    
+    resizeRef.current = resizeInfo;
+    resizingStateRef.current = stateInfo;
+    setActiveResizeElement(resizeInfo);
+    setResizingState(stateInfo);
   };
 
   const handleResizeMove = (e: React.PointerEvent) => {
-    if (!activeResizeElement || !resizingState) return;
-    e.preventDefault();
-    e.stopPropagation();
-
-    const dx = e.clientX - activeResizeElement.startX;
-    const dy = e.clientY - activeResizeElement.startY;
-
-    let nextX = activeResizeElement.initialX;
-    let nextY = activeResizeElement.initialY;
-    let nextW = activeResizeElement.initialWidth;
-    let nextH = activeResizeElement.initialHeight;
-
-    const minWidth = 150;
-    const minHeight = 100;
-
-    const { corner } = activeResizeElement;
-
-    if (corner === 'bottom-right') {
-      nextW = Math.max(minWidth, activeResizeElement.initialWidth + dx);
-      nextH = Math.max(minHeight, activeResizeElement.initialHeight + dy);
-    } else if (corner === 'bottom-left') {
-      const pW = activeResizeElement.initialWidth - dx;
-      if (pW >= minWidth) {
-        nextW = pW;
-        nextX = activeResizeElement.initialX + dx;
-      }
-      nextH = Math.max(minHeight, activeResizeElement.initialHeight + dy);
-    } else if (corner === 'top-right') {
-      nextW = Math.max(minWidth, activeResizeElement.initialWidth + dx);
-      const pH = activeResizeElement.initialHeight - dy;
-      if (pH >= minHeight) {
-        nextH = pH;
-        nextY = activeResizeElement.initialY + dy;
-      }
-    } else if (corner === 'top-left') {
-      const pW = activeResizeElement.initialWidth - dx;
-      if (pW >= minWidth) {
-        nextW = pW;
-        nextX = activeResizeElement.initialX + dx;
-      }
-      const pH = activeResizeElement.initialHeight - dy;
-      if (pH >= minHeight) {
-        nextH = pH;
-        nextY = activeResizeElement.initialY + dy;
-      }
-    }
-
-    setResizingState({
-      id: activeResizeElement.id,
-      x: nextX,
-      y: nextY,
-      width: nextW,
-      height: nextH
-    });
+    // Handled by window event listener
   };
 
   const handleResizeEnd = async (e: React.PointerEvent) => {
-    if (!activeResizeElement || !resizingState) return;
-    try {
-      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch (err) {
-      // Ignored
-    }
-
-    const { id } = activeResizeElement;
-    const { x, y, width, height } = resizingState;
-
-    setActiveResizeElement(null);
-    setResizingState(null);
-
-    const targetEl = elements.find(el => el.id === id);
-    if (targetEl && onElementUpdate) {
-      try {
-        const currentData = JSON.parse(targetEl.data);
-        setIsSyncing(true);
-        await onElementUpdate(id, { ...currentData, x, y, width, height });
-        socketRef.current?.emit('whiteboard-update', { roomId: lessonId, type: 'refresh' });
-      } catch (err) {
-        console.error("Resize end update error:", err);
-      } finally {
-        setIsSyncing(false);
-      }
-    }
+    // Handled by window event listener
   };
+
+  // Window-level dragging event listeners
+  useEffect(() => {
+    if (!activeDragElement) return;
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragRef.current) return;
+      const dx = e.clientX - dragRef.current.startPointerX;
+      const dy = e.clientY - dragRef.current.startPointerY;
+      const initialX = dragRef.current.data.x ?? 0;
+      const initialY = dragRef.current.data.y ?? 0;
+      
+      dragRef.current.currentX = initialX + dx;
+      dragRef.current.currentY = initialY + dy;
+      
+      setActiveDragElement({
+        ...dragRef.current
+      });
+    };
+
+    const onPointerUp = async (e: PointerEvent) => {
+      if (!dragRef.current) return;
+      const finalX = dragRef.current.currentX;
+      const finalY = dragRef.current.currentY;
+      const elementId = dragRef.current.id;
+      const elementData = dragRef.current.data;
+      
+      dragRef.current = null;
+      setActiveDragElement(null);
+      
+      if (onElementUpdate) {
+        setIsSyncing(true);
+        try {
+          await onElementUpdate(elementId, { ...elementData, x: finalX, y: finalY });
+          socketRef.current?.emit('whiteboard-update', { roomId: lessonId, type: 'refresh' });
+        } catch (err) {
+          console.error("Drag end update error:", err);
+        } finally {
+          setIsSyncing(false);
+        }
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+  }, [activeDragElement, onElementUpdate, lessonId]);
+
+  // Window-level resizing event listeners
+  useEffect(() => {
+    if (!activeResizeElement || !resizingState) return;
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!resizeRef.current || !resizingStateRef.current) return;
+      const dx = e.clientX - resizeRef.current.startX;
+      const dy = e.clientY - resizeRef.current.startY;
+
+      let nextX = resizeRef.current.initialX;
+      let nextY = resizeRef.current.initialY;
+      let nextW = resizeRef.current.initialWidth;
+      let nextH = resizeRef.current.initialHeight;
+
+      const minWidth = 150;
+      const minHeight = 100;
+
+      const { corner } = resizeRef.current;
+
+      if (corner === 'bottom-right') {
+        nextW = Math.max(minWidth, resizeRef.current.initialWidth + dx);
+        nextH = Math.max(minHeight, resizeRef.current.initialHeight + dy);
+      } else if (corner === 'bottom-left') {
+        const pW = resizeRef.current.initialWidth - dx;
+        if (pW >= minWidth) {
+          nextW = pW;
+          nextX = resizeRef.current.initialX + dx;
+        }
+        nextH = Math.max(minHeight, resizeRef.current.initialHeight + dy);
+      } else if (corner === 'top-right') {
+        nextW = Math.max(minWidth, resizeRef.current.initialWidth + dx);
+        const pH = resizeRef.current.initialHeight - dy;
+        if (pH >= minHeight) {
+          nextH = pH;
+          nextY = resizeRef.current.initialY + dy;
+        }
+      } else if (corner === 'top-left') {
+        const pW = resizeRef.current.initialWidth - dx;
+        if (pW >= minWidth) {
+          nextW = pW;
+          nextX = resizeRef.current.initialX + dx;
+        }
+        const pH = resizeRef.current.initialHeight - dy;
+        if (pH >= minHeight) {
+          nextH = pH;
+          nextY = resizeRef.current.initialY + dy;
+        }
+      }
+
+      resizingStateRef.current = {
+        id: resizeRef.current.id,
+        x: nextX,
+        y: nextY,
+        width: nextW,
+        height: nextH
+      };
+
+      setResizingState({
+        ...resizingStateRef.current
+      });
+    };
+
+    const onPointerUp = async (e: PointerEvent) => {
+      if (!resizeRef.current || !resizingStateRef.current) return;
+      const { id } = resizeRef.current;
+      const { x, y, width, height } = resizingStateRef.current;
+
+      resizeRef.current = null;
+      resizingStateRef.current = null;
+      setActiveResizeElement(null);
+      setResizingState(null);
+
+      const targetEl = elements.find(el => el.id === id);
+      if (targetEl && onElementUpdate) {
+        try {
+          const currentData = JSON.parse(targetEl.data);
+          setIsSyncing(true);
+          await onElementUpdate(id, { ...currentData, x, y, width, height });
+          socketRef.current?.emit('whiteboard-update', { roomId: lessonId, type: 'refresh' });
+        } catch (err) {
+          console.error("Resize end update error:", err);
+        } finally {
+          setIsSyncing(false);
+        }
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+    };
+  }, [activeResizeElement, resizingState, elements, onElementUpdate, lessonId]);
 
   const handleElementDelete = (elementId: string) => {
     setDialog({

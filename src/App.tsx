@@ -1,5 +1,5 @@
 import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, Globe, Code, Puzzle, Blocks, Download, Upload, Paperclip, Terminal, ChevronUp, ChevronDown, ChevronRight, FileText, Shield, ShieldAlert, Check, X, Folder, File as FileIcon, Activity, Users, BarChart2, ClipboardList, Send, FileBadge, PlayCircle, Loader2, Calendar as CalendarIcon, CheckCircle2, Bell, BookOpen, Settings, PanelRightClose, PanelRightOpen, Home, Presentation, HelpCircle, Search, Settings2, Percent, ListFilter, Clock, Sparkles, Eye, Maximize2, Minimize2, Database, Shuffle } from 'lucide-react';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Markdown from 'react-markdown';
 import { translations, Language } from './i18n';
 import { MfeLoader } from './mfe/MfeLoader';
@@ -1734,6 +1734,7 @@ export default function App() {
   // Lesson Editor persistence tracking states
   const [editorSaveStatus, setEditorSaveStatus] = useState<'none' | 'saving' | 'saved' | 'error'>('none');
   const [editorLastSavedTime, setEditorLastSavedTime] = useState<Date | null>(null);
+  const [editorPanelsExpanded, setEditorPanelsExpanded] = useState(true);
   
   const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [rightSidebarTab, setRightSidebarTab] = useState<'agent' | 'shell'>('agent');
@@ -1777,6 +1778,7 @@ export default function App() {
   const [dbConnected, setDbConnected] = useState<boolean>(true);
 
   useEffect(() => {
+    if (!session) return;
     const checkDb = async () => {
       try {
         const res = await fetch('/api/db-status');
@@ -1792,7 +1794,7 @@ export default function App() {
     checkDb();
     const interval = setInterval(checkDb, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -3451,6 +3453,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!session) return;
     if (activeRole === 'student' && activeStudentId) {
       fetchStudentDashboard(activeStudentId);
       const student = students.find(s => s.id === activeStudentId);
@@ -3459,7 +3462,7 @@ export default function App() {
         setStudentViewStatus('lesson');
       }
     }
-  }, [activeRole, activeStudentId, students]);
+  }, [session, activeRole, activeStudentId, students]);
 
   const activeRoleRef = useRef(activeRole);
   const activeStudentIdRef = useRef(activeStudentId);
@@ -3474,6 +3477,7 @@ export default function App() {
   useEffect(() => { addToastRef.current = addToast; }, [addToast]);
 
   useEffect(() => {
+    if (!session) return;
     const socket = io();
     socketRef.current = socket;
 
@@ -3655,7 +3659,7 @@ export default function App() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [activeRole, activeStudentId]);
+  }, [session, activeRole, activeStudentId]);
 
   useEffect(() => {
     if (socketRef.current && activeRole === 'student' && activeStudentId) {
@@ -3768,6 +3772,7 @@ export default function App() {
   }, [selectedAssignment]);
 
   useEffect(() => {
+    if (!session) return;
     const handleLmsMessage = async (event: MessageEvent) => {
       const data = event.data;
       if (!data || typeof data !== 'object') return;
@@ -3867,7 +3872,7 @@ export default function App() {
     return () => {
       window.removeEventListener('message', handleLmsMessage);
     };
-  }, []);
+  }, [session]);
 
   const saveTimeline = async (lessonId: string, newSegments: any[]) => {
     setEditorSaveStatus('saving');
@@ -3932,6 +3937,7 @@ export default function App() {
   }, [selectedLesson, lessons]);
 
   useEffect(() => {
+    if (!session) return;
     fetchLessons();
     fetchPlugins();
     fetchRegisteredCommands();
@@ -3975,7 +3981,7 @@ export default function App() {
       }
     }, 2000);
     return () => clearInterval(inv);
-  }, [showProcessLogs, activeStudentId]);
+  }, [session, showProcessLogs, activeStudentId]);
 
   useEffect(() => {
     fetchVfs(currentVfsParent);
@@ -4458,7 +4464,7 @@ export default function App() {
     return notifs.sort((a, b) => b.date - a.date);
   }, [activeRole, studentDashboardData, lang]);
 
-  const handleLoginSuccess = (newSession: any) => {
+  const handleLoginSuccess = useCallback((newSession: any) => {
     setSession(newSession);
     if (newSession.role === 'teacher') {
       setActiveRole('teacher');
@@ -4468,7 +4474,7 @@ export default function App() {
       setActiveStudentId(newSession.studentId);
       fetchStudents();
     }
-  };
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -6076,7 +6082,7 @@ export default function App() {
                           {lang === 'zh' ? '拖拽下方教具组件到右侧画板中，可实时推送并同步给所有在线学生！' : 'Drag any component to the whiteboard on the right to sync instantly with students.'}
                         </p>
                       </div>
-                      <div className="grid grid-cols-2 gap-2.5">
+                      <div className="grid grid-cols-2 gap-2.5 overflow-y-auto">
                         <div draggable onDragStart={(e) => { 
                            const dataStr = JSON.stringify({ type: 'code-sandbox', code: "console.log('Hello Sandbox!');" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
                            e.dataTransfer.setData('application/json', dataStr); 
@@ -6159,8 +6165,9 @@ export default function App() {
                          </div>
                       </div>
                     </div>
-                   <div className="flex-1 relative bg-white flex flex-col min-w-0 min-h-0">
-                     <div className="p-3 border-b border-gray-100 bg-white shrink-0 flex items-center overflow-x-auto gap-2">
+                   <div className="flex-1 relative bg-white flex flex-col min-w-0 overflow-y-auto">
+                     <div className="p-3 border-b border-gray-100 bg-white shrink-0 flex items-center justify-between gap-4">
+                       <div className="flex items-center gap-2 flex-1 overflow-x-auto">
                        <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mr-2 shrink-0">Lesson Timeline</div>
                        <div className="flex items-center gap-2 flex-1 overflow-x-auto py-1">
                          {timelineSegments.map((seg, idx) => (
@@ -6223,9 +6230,17 @@ export default function App() {
                          )}
                        </div>
                      </div>
+                     <button
+                       onClick={() => setEditorPanelsExpanded(p => !p)}
+                       className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-gray-600 text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                     >
+                       <Settings2 size={12} className={editorPanelsExpanded ? "text-indigo-650" : "text-gray-500"} />
+                       <span>{editorPanelsExpanded ? (lang === 'zh' ? "隐藏设置" : "Hide Settings") : (lang === 'zh' ? "展开设置" : "Show Settings")}</span>
+                     </button>
+                    </div>
 
                      {/* Timeline Segment Editor Panel */}
-                     {selectedLesson && activeSegmentId && (
+                     {selectedLesson && activeSegmentId && editorPanelsExpanded && (
                        <div className="flex flex-col p-3 gap-2.5 bg-gray-50 border-b border-gray-100 text-xs text-gray-600 shrink-0">
                          <div className="flex flex-wrap items-center gap-2">
                            <span className="font-semibold text-gray-700 flex items-center gap-1">
@@ -6345,7 +6360,7 @@ export default function App() {
                        </div>
                      </div>
                      */}`
-                     <div className="flex-1 min-h-0 relative flex flex-col min-w-0">
+                     <div className="flex-1 min-h-[500px] relative flex flex-col min-w-0">
                      {!selectedLesson ? (
                         <div className="absolute inset-0 flex items-center justify-center text-gray-400 p-8 text-center bg-gray-50">
                           <div>

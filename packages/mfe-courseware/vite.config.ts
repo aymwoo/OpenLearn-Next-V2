@@ -43,7 +43,19 @@ export default defineConfig({
     port: 5175,
     host: '127.0.0.1',
     hmr: process.env.DISABLE_HMR !== 'true',
-    watch: process.env.DISABLE_HMR === 'true' ? null : {},
+    watch: process.env.DISABLE_HMR === 'true' ? null : {
+      ignored: [
+        '**/*.db',
+        '**/*.db-journal',
+        '**/*.db-wal',
+        '**/*.db-shm',
+        '**/packages/core/db/**',
+        '**/*.d.ts',
+        '**/.federation/**',
+        '**/.mf/**',
+        '**/.__mf__temp/**',
+      ]
+    },
   },
   build: {
     target: 'esnext',

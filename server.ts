@@ -1094,8 +1094,6 @@ async function startServer() {
       const logMsg = `[CLIENT DEBUG] ${msg} | URL: ${url} | Student: ${JSON.stringify(student)} | Courseware: ${JSON.stringify(courseware)}`;
       console.log(`\x1b[35m[CLIENT DEBUG]\x1b[0m ${msg}`);
       
-      const fs = require('fs');
-      const path = require('path');
       const logFile = path.join(process.cwd(), 'client_debug.log');
       fs.appendFileSync(logFile, `${new Date().toISOString()} - ${logMsg}\n`);
       

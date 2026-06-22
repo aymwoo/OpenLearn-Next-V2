@@ -21,7 +21,7 @@ interface LoginPageProps {
   lang: 'zh' | 'en';
 }
 
-export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
+export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
   const [activeTab, setActiveTab] = useState<'teacher' | 'student'>('teacher');
   
   // Teacher credentials state
@@ -315,4 +315,4 @@ export function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
       </div>
     </div>
   );
-}
+});
