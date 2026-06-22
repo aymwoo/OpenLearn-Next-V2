@@ -7,7 +7,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cleanup() {
     echo ""
     echo "正在关闭所有开发服务..."
-    kill $PID_WB $PID_CW $PID_MAIN 2>/dev/null
+    kill $PID_MAIN 2>/dev/null
     echo "已全部关闭"
     exit 0
 }
@@ -15,42 +15,35 @@ cleanup() {
 # Trap terminal signals to clean up background processes
 trap cleanup INT TERM
 
-# ── 1. MFE Whiteboard (5174) ─────────────────────────────────
-echo "⏳ 启动 MFE Whiteboard (5174)..."
-cd "$ROOT/packages/mfe-whiteboard" || exit 1
-pnpm run dev &
-PID_WB=$!
+# ── 1. 静态构建 MFE 子项目 (方案C) ───────────────────────────
+echo "⏳ 正在构建 MFE Whiteboard 与 Courseware 静态资源 (方案C)..."
+cd "$ROOT" || exit 1
+pnpm --filter mfe-whiteboard build || exit 1
+pnpm --filter mfe-courseware build || exit 1
 
-# ── 2. MFE Courseware (5175) ─────────────────────────────────
-echo "⏳ 启动 MFE Courseware (5175)..."
-cd "$ROOT/packages/mfe-courseware" || exit 1
-pnpm run dev &
-PID_CW=$!
-
-# ── 3. 主服务 (9000) ─────────────────────────────────────────
+# ── 2. 启动主服务 (9000) ───────────────────────────────────────
 echo "⏳ 启动主服务 (9000)..."
 cd "$ROOT" || exit 1
-sleep 2  # Give MFE services a moment to warm up
 pnpm run dev &
 PID_MAIN=$!
 
-sleep 10
+sleep 5
 
 # ── 健康检查 ──────────────────────────────────────────────────
 echo ""
 OK=true
 
-if curl -s -o /dev/null -w '' http://localhost:5174/remoteEntry.js 2>/dev/null; then
-    echo "✅ MFE Whiteboard   http://localhost:5174  就绪"
+if curl -s -o /dev/null -w '' http://localhost:9000/mfe/whiteboard/remoteEntry.js 2>/dev/null; then
+    echo "✅ MFE Whiteboard   http://localhost:9000/mfe/whiteboard/remoteEntry.js 就绪"
 else
-    echo "❌ MFE Whiteboard   http://localhost:5174  未响应"
+    echo "❌ MFE Whiteboard   http://localhost:9000/mfe/whiteboard/remoteEntry.js 未响应"
     OK=false
 fi
 
-if curl -s -o /dev/null -w '' http://localhost:5175/remoteEntry.js 2>/dev/null; then
-    echo "✅ MFE Courseware   http://localhost:5175  就绪"
+if curl -s -o /dev/null -w '' http://localhost:9000/mfe/courseware/remoteEntry.js 2>/dev/null; then
+    echo "✅ MFE Courseware   http://localhost:9000/mfe/courseware/remoteEntry.js 就绪"
 else
-    echo "❌ MFE Courseware   http://localhost:5175  未响应"
+    echo "❌ MFE Courseware   http://localhost:9000/mfe/courseware/remoteEntry.js 未响应"
     OK=false
 fi
 
@@ -64,9 +57,9 @@ fi
 echo ""
 
 if [ "$OK" = false ]; then
-    echo "⚠ 部分服务未能正常启动，请检查上方错误信息"
+    echo "⚠ 服务未能正常启动，请检查上方错误信息"
     cleanup
 fi
 
-echo "🚀 开发环境就绪！按 Ctrl+C 停止所有服务"
+echo "🚀 开发环境就绪！按 Ctrl+C 停止服务"
 wait

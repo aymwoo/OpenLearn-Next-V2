@@ -30,7 +30,7 @@ vi.mock('@module-federation/runtime', () => ({
 
 // Mock API to prevent actual network calls
 vi.mock('../api', () => ({
-  fetchRemoteEntry: vi.fn().mockResolvedValue({ entry: 'http://localhost:5174/remoteEntry.js', meta: {}, timestamp: Date.now() }),
+  fetchRemoteEntry: vi.fn().mockResolvedValue({ entry: '/mfe/whiteboard/remoteEntry.js', meta: {}, timestamp: Date.now() }),
 }));
 
 // Mock cache so we don't rely on actual cache state

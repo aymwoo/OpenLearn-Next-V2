@@ -486,13 +486,14 @@ try {
 }
 
 try {
-  const countObj = db.prepare('SELECT COUNT(*) as cnt FROM mfe_remotes').get() as { cnt: number };
-  if (countObj && countObj.cnt === 0) {
-    console.log('Seeding default MFE Remotes...');
-    const insertStmt = db.prepare('INSERT INTO mfe_remotes (name, entry) VALUES (?, ?)');
-    insertStmt.run('mfe_whiteboard', 'http://localhost:5174/remoteEntry.js');
-    insertStmt.run('mfe_courseware', 'http://localhost:5175/remoteEntry.js');
-  }
+  console.log('Seeding/Updating default MFE Remotes...');
+  const upsertStmt = db.prepare(`
+    INSERT INTO mfe_remotes (name, entry)
+    VALUES (?, ?)
+    ON CONFLICT(name) DO UPDATE SET entry=excluded.entry
+  `);
+  upsertStmt.run('mfe_whiteboard', '/mfe/whiteboard/remoteEntry.js');
+  upsertStmt.run('mfe_courseware', '/mfe/courseware/remoteEntry.js');
 } catch (e) {
   console.error('Failed to seed default MFE Remotes:', e);
 }

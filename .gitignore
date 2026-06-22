@@ -11,3 +11,4 @@ coverage/
 .__mf__temp/
 .pnpmfile.cjs
 
+/.codegraph

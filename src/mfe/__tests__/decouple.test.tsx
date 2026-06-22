@@ -192,22 +192,22 @@ describe('MFE Decoupling: Database seeding', () => {
   it('should define seed data for mfe_whiteboard remote', () => {
     const seedEntry = {
       name: 'mfe_whiteboard',
-      entry: 'http://localhost:5174/remoteEntry.js',
+      entry: '/mfe/whiteboard/remoteEntry.js',
     };
 
     expect(seedEntry.name).toBe('mfe_whiteboard');
-    expect(seedEntry.entry).toContain('5174');
+    expect(seedEntry.entry).toContain('/mfe/whiteboard/');
     expect(seedEntry.entry).toContain('remoteEntry.js');
   });
 
   it('should define seed data for mfe_courseware remote', () => {
     const seedEntry = {
       name: 'mfe_courseware',
-      entry: 'http://localhost:5175/remoteEntry.js',
+      entry: '/mfe/courseware/remoteEntry.js',
     };
 
     expect(seedEntry.name).toBe('mfe_courseware');
-    expect(seedEntry.entry).toContain('5175');
+    expect(seedEntry.entry).toContain('/mfe/courseware/');
     expect(seedEntry.entry).toContain('remoteEntry.js');
   });
 
@@ -219,8 +219,8 @@ describe('MFE Decoupling: Database seeding', () => {
 
     expect(dbContent).toContain('mfe_whiteboard');
     expect(dbContent).toContain('mfe_courseware');
-    expect(dbContent).toContain('http://localhost:5174/remoteEntry.js');
-    expect(dbContent).toContain('http://localhost:5175/remoteEntry.js');
+    expect(dbContent).toContain('/mfe/whiteboard/remoteEntry.js');
+    expect(dbContent).toContain('/mfe/courseware/remoteEntry.js');
     expect(dbContent).toContain('mfe_remotes');
   });
 
@@ -228,10 +228,11 @@ describe('MFE Decoupling: Database seeding', () => {
     const dbPath = path.resolve(__dirname, '../../../packages/core/db/index.ts');
     const dbContent = fs.readFileSync(dbPath, 'utf-8');
 
-    // Should use a conditional insert pattern (COUNT check or INSERT OR IGNORE)
+    // Should use a conditional insert pattern (COUNT check or INSERT OR IGNORE or ON CONFLICT)
     const hasCountCheck = dbContent.includes("SELECT COUNT(*) as cnt FROM mfe_remotes");
     const hasInsertOrIgnore = dbContent.includes("INSERT OR IGNORE INTO mfe_remotes");
-    expect(hasCountCheck || hasInsertOrIgnore).toBe(true);
+    const hasOnConflict = dbContent.includes("ON CONFLICT");
+    expect(hasCountCheck || hasInsertOrIgnore || hasOnConflict).toBe(true);
   });
 });
 

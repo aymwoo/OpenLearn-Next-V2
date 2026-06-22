@@ -36,7 +36,8 @@ describe('Microfrontend Build Configurations Checks', () => {
       expect(configContent).toContain("target: 'esnext'");
       const hasBaseAuto = configContent.includes("base: 'auto'");
       const hasBaseSlash = configContent.includes("base: '/'");
-      expect(hasBaseAuto || hasBaseSlash).toBe(true);
+      const hasBaseSub = configContent.includes("base: '/mfe/") || configContent.includes('base: "/mfe/');
+      expect(hasBaseAuto || hasBaseSlash || hasBaseSub).toBe(true);
     }
   });
 });

@@ -412,6 +412,8 @@ async function startServer() {
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+  app.use('/mfe/whiteboard', express.static(path.join(process.cwd(), 'packages/mfe-whiteboard/dist')));
+  app.use('/mfe/courseware', express.static(path.join(process.cwd(), 'packages/mfe-courseware/dist')));
 
   app.post('/api/upload', async (req, res) => {
     try {
