@@ -2451,86 +2451,194 @@ export function InteractiveWhiteboard({
       }
 
       if (el.type === 'quiz') {
+        const totalSubmissions = Object.keys(data.submissions || {}).length;
+        const optionCounts: Record<string, number> = {};
+        Object.values(data.submissions || {}).forEach((sub: any) => {
+          const ans = String(sub.answer).toUpperCase();
+          optionCounts[ans] = (optionCounts[ans] || 0) + 1;
+        });
+
+        const appState = mfeContext?.store?.getState?.();
+        const currentStudentId = appState?.session?.studentId || appState?.session?.userId || 'mock-student-id';
+        const hasSubmitted = !!data.submissions?.[currentStudentId];
+        const studentSubmission = data.submissions?.[currentStudentId];
+
+        const handleSubmitAnswer = async (ansLetter: string) => {
+          try {
+            const response = await fetch('/api/commands', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                commandType: 'quiz_pro.submit_answer',
+                payload: {
+                  lessonId,
+                  elementId: el.id,
+                  studentId: currentStudentId,
+                  answer: ansLetter
+                }
+              })
+            });
+            if (response.ok) {
+              socketRef.current?.emit('whiteboard-update', { roomId: lessonId, type: 'refresh' });
+              if (onRefresh) onRefresh();
+            }
+          } catch (err) {
+            console.error('Failed to submit answer:', err);
+          }
+        };
+
+        const isTeacherView = userRole === 'teacher';
+
         return (
           <Group key={el.id}>
             <Html
               divProps={{
-              style: {
-                position: 'absolute',
-                top: `${displayY}px`,
-                left: `${displayX}px`,
-                pointerEvents: 'none',
-                zIndex: isThisSelected ? 20 : 10
-              }
-            }}
-          >
-            <div 
-              onPointerDown={(e) => {
-                setSelectedShapeId(el.id);
-                e.stopPropagation();
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const containerRect = containerRef.current?.getBoundingClientRect();
-                if (containerRect) {
-                  setContextMenu({
-                    x: e.clientX - containerRect.left,
-                    y: e.clientY - containerRect.top,
-                    elementId: el.id
-                  });
+                style: {
+                  position: 'absolute',
+                  top: `${displayY}px`,
+                  left: `${displayX}px`,
+                  pointerEvents: 'none',
+                  zIndex: isThisSelected ? 20 : 10
                 }
               }}
-              className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative select-none" 
-              style={{ pointerEvents: 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
             >
               <div 
-                className="bg-indigo-50 text-indigo-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-indigo-100 cursor-move select-none shrink-0"
-                onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
-                onPointerMove={handleElementDragMove}
-                onPointerUp={handleElementDragEnd}
+                onPointerDown={(e) => {
+                  setSelectedShapeId(el.id);
+                  e.stopPropagation();
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const containerRect = containerRef.current?.getBoundingClientRect();
+                  if (containerRect) {
+                    setContextMenu({
+                      x: e.clientX - containerRect.left,
+                      y: e.clientY - containerRect.top,
+                      elementId: el.id
+                    });
+                  }
+                }}
+                className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden flex flex-col font-sans text-sm relative select-none" 
+                style={{ pointerEvents: 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
               >
-                <span>Interactive Quiz</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={async () => {
-                      if (onElementUpdate) {
-                        await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
-                        socketRef.current?.emit('whiteboard-update', { roomId: lessonId, type: 'refresh' });
-                      }
-                    }}
-                    onPointerDown={e => e.stopPropagation()}
-                    className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-600 hover:text-indigo-900 transition-colors cursor-pointer flex items-center justify-center"
-                    title={data.isMinimized ? "展开组件" : "收起组件"}
-                  >
-                    {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
-                  </button>
-                  <button 
-                    onClick={() => handleElementDelete(el.id)}
-                    onPointerDown={e => e.stopPropagation()}
-                    className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-600 hover:text-red-500 transition-colors cursor-pointer flex items-center justify-center"
-                    title="删除组件"
-                  >
-                    <Trash2 size={11} />
-                  </button>
-                </div>
-              </div>
-              {!data.isMinimized && (
-                <div className="p-3 text-gray-800 flex-1 overflow-y-auto">
-                  <p className="font-semibold mb-3 text-xs">{data.question}</p>
-                  <div className="flex flex-col gap-2">
-                    {(data.options || []).map((opt: string, i: number) => (
-                      <button key={i} className="px-3 py-2 text-left bg-gray-50 border border-gray-200 rounded text-xs hover:bg-gray-100 transition-colors cursor-pointer">
-                        {opt}
+                {/* Header with gradient */}
+                <div 
+                  className="bg-gradient-to-r from-indigo-650 to-violet-650 text-white px-3 py-2 flex justify-between items-center text-xs font-bold border-b border-indigo-700 cursor-move select-none shrink-0"
+                  onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
+                  onPointerMove={handleElementDragMove}
+                  onPointerUp={handleElementDragEnd}
+                >
+                  <span className="flex items-center gap-1">
+                    <Sparkles size={12} className="animate-pulse text-indigo-200" />
+                    <span>AI Quiz Pro (互动测验)</span>
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={async () => {
+                        if (onElementUpdate) {
+                          await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
+                          socketRef.current?.emit('whiteboard-update', { roomId: lessonId, type: 'refresh' });
+                        }
+                      }}
+                      onPointerDown={e => e.stopPropagation()}
+                      className="p-1 hover:bg-white/10 rounded-full text-white/80 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                      title={data.isMinimized ? "展开组件" : "收起组件"}
+                    >
+                      {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
+                    </button>
+                    {isTeacherView && (
+                      <button 
+                        onClick={() => handleElementDelete(el.id)}
+                        onPointerDown={e => e.stopPropagation()}
+                        className="p-1 hover:bg-white/10 rounded-full text-white/80 hover:text-red-300 transition-colors cursor-pointer flex items-center justify-center"
+                        title="删除组件"
+                      >
+                        <Trash2 size={11} />
                       </button>
-                    ))}
+                    )}
                   </div>
                 </div>
-              )}
-              {!data.isMinimized && renderResizeHandles()}
-            </div>
-          </Html>
-        </Group>
+                {!data.isMinimized && (
+                  <div className="p-3 text-slate-800 flex-1 overflow-y-auto flex flex-col justify-between">
+                    <div>
+                      <p className="font-bold text-xs text-slate-900 mb-2 leading-relaxed">{data.question}</p>
+                      
+                      {isTeacherView ? (
+                        /* Teacher's Statistics View */
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold mb-1">
+                            <span>实时提交统计:</span>
+                            <span className="text-indigo-600 font-bold">{totalSubmissions} 人已提交</span>
+                          </div>
+                          {(data.options || []).map((opt: string, i: number) => {
+                            const optLetter = opt.charAt(0).toUpperCase();
+                            const count = optionCounts[optLetter] || 0;
+                            const percent = totalSubmissions > 0 ? Math.round((count / totalSubmissions) * 100) : 0;
+                            const isCorrectAnswer = optLetter === String(data.correctAnswer).toUpperCase();
+
+                            return (
+                              <div key={i} className="relative h-7 bg-slate-50 border border-slate-150 rounded-lg overflow-hidden flex items-center px-3 justify-between shadow-sm">
+                                <div 
+                                  className={`absolute top-0 left-0 h-full transition-all duration-500 ${isCorrectAnswer ? 'bg-emerald-500/10' : 'bg-indigo-500/10'}`} 
+                                  style={{ width: `${percent}%` }} 
+                                />
+                                <div className="z-10 flex items-center gap-2 text-xs">
+                                  <span className={`font-semibold ${isCorrectAnswer ? 'text-emerald-700 font-bold' : 'text-slate-600'}`}>{opt}</span>
+                                  {isCorrectAnswer && (
+                                    <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded-sm">正确答案</span>
+                                  )}
+                                </div>
+                                <span className="z-10 text-[10px] font-bold text-slate-500">{count}人 ({percent}%)</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        /* Student's Answering View */
+                        hasSubmitted ? (
+                          /* Student submitted answer */
+                          studentSubmission.score === 100 ? (
+                            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 flex flex-col items-center justify-center text-center space-y-1.5 animate-in zoom-in-95">
+                              <span className="text-xl">🎉</span>
+                              <p className="font-bold text-xs">回答正确！</p>
+                              <p className="text-[9px] text-emerald-600">您的答案：{studentSubmission.answer} • 获得 100 分已计入学期成绩</p>
+                            </div>
+                          ) : (
+                            <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-3 flex flex-col items-center justify-center text-center space-y-1.5 animate-in zoom-in-95">
+                              <span className="text-xl">❌</span>
+                              <p className="font-bold text-xs">回答错误</p>
+                              <p className="text-[9px] text-red-500">您的答案：{studentSubmission.answer} (正确答案：{data.correctAnswer}) • 0分已计入学期成绩</p>
+                            </div>
+                          )
+                        ) : (
+                          /* Student yet to answer */
+                          <div className="flex flex-col gap-1.5">
+                            {(data.options || []).map((opt: string, i: number) => {
+                              const optLetter = opt.charAt(0).toUpperCase();
+                              return (
+                                <button 
+                                  key={i} 
+                                  onClick={() => handleSubmitAnswer(optLetter)}
+                                  className="w-full text-left px-3 py-2 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200 hover:border-indigo-300 rounded-lg text-xs font-semibold text-slate-700 transition-all active:scale-98 flex items-center gap-2 cursor-pointer shadow-sm"
+                                >
+                                  <div className="w-5 h-5 rounded bg-white border border-slate-300 flex items-center justify-center text-[10px] font-bold text-slate-500 shadow-sm shrink-0">
+                                    {optLetter}
+                                  </div>
+                                  <span>{opt.substring(2)}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+                )}
+                {!data.isMinimized && renderResizeHandles()}
+              </div>
+            </Html>
+          </Group>
         );
       }
       if (el.type === 'assignment') {

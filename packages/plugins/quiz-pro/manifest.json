@@ -1,0 +1,28 @@
+{
+  "id": "ext-ai-quiz-pro",
+  "name": "AI Quiz Pro",
+  "version": "1.0.0",
+  "main": "index.js",
+  "requires": [
+    "@openlearn/core:ICommandBusService@^1.0.0",
+    "@openlearn/core:IActionRegistryService@^1.0.0",
+    "@openlearn/core:IDatabase@^1.0.0",
+    "@openlearn/core:ISemesterGradeService@^1.0.0"
+  ],
+  "capabilitiesProposed": ["whiteboard:write", "grade:write"],
+  "classroomTools": [
+    {
+      "id": "tool-quiz-pro-gen",
+      "name": "AI 随堂测验 (专业版)",
+      "icon": "Sparkles",
+      "description": "在白板上快速生成一道选择题，支持学生端答题和成绩自动同步",
+      "commandType": "quiz_pro.create",
+      "payload": {
+        "lessonId": "$lessonId",
+        "question": "课堂练习：在以下系统架构模式中，哪一种最适合实现高并发异步通信机制？",
+        "options": ["A. 单体分层架构", "B. 事件驱动架构", "C. 共享数据库架构", "D. 客户端-服务器架构"],
+        "correctAnswer": "B"
+      }
+    }
+  ]
+}

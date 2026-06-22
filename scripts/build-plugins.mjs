@@ -5,6 +5,11 @@ import path from 'path';
 
 const plugins = [
   {
+    entry: 'packages/plugins/quiz-pro/index.ts',
+    manifest: 'packages/plugins/quiz-pro/manifest.json',
+    zipName: 'ext-ai-quiz-pro.zip'
+  },
+  {
     entry: 'packages/plugins/quiz/index.ts',
     manifest: 'packages/plugins/quiz/manifest.json',
     zipName: 'ext-quiz-generator.zip'
