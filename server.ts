@@ -4913,8 +4913,15 @@ ${examsText}
       if (payload.type === 'rollcall') {
         handleRollcallElement(payload.elementId);
       }
+      if (payload.lessonId) {
+        io.to(payload.lessonId).emit('whiteboard-sync', {
+          roomId: payload.lessonId,
+          type: 'refresh'
+        });
+        console.log(`[EventBus -> Socket.IO] Broadcast whiteboard refresh for lesson "${payload.lessonId}" (element: "${payload.elementId}", type: "${payload.type}")`);
+      }
     } catch (e) {
-      console.error('[EventBus -> Socket.IO] Error processing whiteboard.element_drawn for rollcall:', e);
+      console.error('[EventBus -> Socket.IO] Error processing whiteboard.element_drawn:', e);
     }
   });
 
