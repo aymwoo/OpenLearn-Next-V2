@@ -52,6 +52,10 @@ type StoredAIProvider = {
 /** In-memory cache for MFE remote entry URLs (D-24: cache-first strategy) */
 const MF_REMOTE_CACHE = new Map<string, { entry: string; meta: Record<string, any> }>();
 
+// ── Lesson Active Segments ──────────────────────────────────────────────────
+/** Active timeline segments for lessons, shared with agents to bind new items */
+const lessonActiveSegments = new Map<string, string>(); // lessonId -> activeSegmentId
+
 // Initialize core OS tools
 
 
@@ -135,7 +139,8 @@ const executeAgentToolCall = async (
   toolName: string,
   args: any,
   allExecutedTools: AgentToolExecution[],
-  callerRole?: string
+  callerRole?: string,
+  currentLessonId?: string | null
 ) => {
   const actionDesc = kernelContainer.actionRegistry.getActionByToolName(toolName);
   let actionResult: any;
@@ -154,9 +159,31 @@ const executeAgentToolCall = async (
       metadata
     );
     try {
-      const cmdResult = await kernelContainer.commandBus.execute(cmd);
+      const cmdResult = await kernelContainer.commandBus.execute(cmd) as any;
       actionResult = cmdResult;
       allExecutedTools.push({ callName: toolName, success: true, result: cmdResult });
+
+      // If a whiteboard element was successfully drawn, let's make sure it is associated 
+      // with the current active segment so it isn't filtered out by the frontend!
+      if (cmdResult && cmdResult.elementId && currentLessonId) {
+        const activeSeg = lessonActiveSegments.get(currentLessonId);
+        if (activeSeg) {
+          const row = kernelContainer.db.prepare('SELECT data FROM whiteboard_elements WHERE id = ?').get(cmdResult.elementId) as { data: string } | undefined;
+          if (row) {
+            try {
+              const dataObj = JSON.parse(row.data);
+              if (!dataObj.segmentId) {
+                dataObj.segmentId = activeSeg;
+                kernelContainer.db.prepare('UPDATE whiteboard_elements SET data = ? WHERE id = ?')
+                  .run(JSON.stringify(dataObj), cmdResult.elementId);
+                console.log(`[Agent Tool Sync] Injected active segment "${activeSeg}" into element "${cmdResult.elementId}"`);
+              }
+            } catch (e) {
+              console.error('[Agent Tool Sync] Failed to parse/update element data:', e);
+            }
+          }
+        }
+      }
     } catch (err: any) {
       actionResult = { error: err.message };
       allExecutedTools.push({ callName: toolName, success: false, error: err.message });
@@ -238,7 +265,7 @@ const runGeminiAgentChat = async (request: AgentChatRequest) => {
             }
           }
         }
-        const actionResult = await executeAgentToolCall(call.name, call.args, allExecutedTools, callerRole);
+        const actionResult = await executeAgentToolCall(call.name, call.args, allExecutedTools, callerRole, currentLessonId);
 
         toolParts.push({
           functionResponse: {
@@ -352,7 +379,7 @@ const runOpenAIAgentChat = async (provider: StoredAIProvider, request: AgentChat
           }
         }
       }
-      const actionResult = await executeAgentToolCall(toolName, parsedArgs, allExecutedTools, callerRole);
+      const actionResult = await executeAgentToolCall(toolName, parsedArgs, allExecutedTools, callerRole, currentLessonId);
       messages.push({
         role: 'tool',
         tool_call_id: call.id,
@@ -4903,7 +4930,6 @@ ${examsText}
   // In-memory status maps
   const onlineStudents = new Map<string, { socketId: string, name: string }>();
   const activeStudentLessons = new Map<string, string>(); // studentId -> lessonId
-  const lessonActiveSegments = new Map<string, string>(); // lessonId -> activeSegmentId
 
   const broadcastPresence = () => {
     io.emit('presence-update', {
