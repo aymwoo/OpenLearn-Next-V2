@@ -3354,12 +3354,11 @@ export function InteractiveWhiteboard({
               {elements.filter(el => {
                 try {
                   const data = JSON.parse(el.data);
-                  // 方案 A2：无 segmentId 且无 page 的元素视为"全局可见"，
-                  // 不参与分段/分页过滤。AI Agent 创建的元素（quiz、rollcall 等）
-                  // 通常不携带这两个字段，应始终可见。
-                  const hasSegment = data.segmentId !== undefined;
-                  const hasPage = data.page !== undefined;
-                  if (!hasSegment && !hasPage) return true;
+                  // 方案 A2（修正）：无 segmentId 的元素视为"全局可见"，
+                  // 不参与分段过滤。这样 AI Agent 创建的元素（quiz、rollcall 等）
+                  // 即使方案 C 为其补齐了 page 字段，也不会因缺少 segmentId 被隐藏。
+                  // page 过滤在无活跃分段时正常工作（默认 page 0）。
+                  if (activeSegmentId && data.segmentId === undefined) return true;
 
                   if (activeSegmentId) {
                     const elSegment = data.segmentId || 'seg-1';
