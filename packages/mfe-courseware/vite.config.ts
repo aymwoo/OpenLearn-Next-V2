@@ -14,6 +14,7 @@ export default defineConfig({
     federation({
       name: 'mfe_courseware',
       filename: 'remoteEntry.js',
+      dts: false,
       exposes: {
         './App': './src/App.tsx',
       },

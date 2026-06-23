@@ -14,6 +14,8 @@ export default defineConfig(() => {
       tailwindcss(),
       federation({
         name: 'host_shell',
+        // 禁用 DTS 插件，避免 fork 的 TypeScript worker 进程崩溃导致 EPIPE 错误
+        dts: false,
         remotes: {},
         dev: {
           disableDynamicRemoteTypeHints: true,
@@ -76,6 +78,12 @@ export default defineConfig(() => {
         ]
       },
     },
+    // optimizeDeps.exclude 会与 @module-federation/vite 的 optimizeDeps.include
+    // 虚拟模块冲突（esbuild 报 entry point cannot be marked as external）。
+    // React/React-DOM 通过 MF shared scope 共享，由 MF runtime 在浏览器端处理。
+    // 注意：如出现 dispatcher.getOwner is not a function 错误，
+    // 检查是否有多个 React 实例（Vite 预打包 + MF 共享作用域冲突），
+    // 可通过 resolve.dedupe 或 MF shared.eager 配置解决。
     build: {
       target: 'esnext',
       modulePreload: false,
