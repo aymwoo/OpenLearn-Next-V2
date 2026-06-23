@@ -4945,6 +4945,51 @@ ${examsText}
     }
   });
 
+  // P0-1：补齐 whiteboard.element_deleted、whiteboard.cleared 的 Socket.IO 转发
+  // 以及 P1-1：whiteboard.batch_drawn 批量事件的转发
+  kernelContainer.eventBus.subscribe('whiteboard.batch_drawn', (event) => {
+    try {
+      const payload = event.payload as any;
+      if (payload.lessonId) {
+        io.to(payload.lessonId).emit('whiteboard-sync', {
+          roomId: payload.lessonId,
+          type: 'refresh'
+        });
+        console.log(`[EventBus -> Socket.IO] Broadcast refresh after batch_draw (${payload.count} elements) for lesson "${payload.lessonId}"`);
+      }
+    } catch (e) {
+      console.error('[EventBus -> Socket.IO] Error processing whiteboard.batch_drawn:', e);
+    }
+  });
+
+  kernelContainer.eventBus.subscribe('whiteboard.element_deleted', (event) => {
+    try {
+      const payload = event.payload as any;
+      if (payload.lessonId) {
+        io.to(payload.lessonId).emit('whiteboard-sync', {
+          roomId: payload.lessonId,
+          type: 'refresh'
+        });
+      }
+    } catch (e) {
+      console.error('[EventBus -> Socket.IO] Error processing whiteboard.element_deleted:', e);
+    }
+  });
+
+  kernelContainer.eventBus.subscribe('whiteboard.cleared', (event) => {
+    try {
+      const payload = event.payload as any;
+      if (payload.lessonId) {
+        io.to(payload.lessonId).emit('whiteboard-sync', {
+          roomId: payload.lessonId,
+          type: 'refresh'
+        });
+      }
+    } catch (e) {
+      console.error('[EventBus -> Socket.IO] Error processing whiteboard.cleared:', e);
+    }
+  });
+
   // In-memory status maps
   const onlineStudents = new Map<string, { socketId: string, name: string }>();
   const activeStudentLessons = new Map<string, string>(); // studentId -> lessonId

@@ -354,7 +354,7 @@ export const BuiltinPlugin = {
       'pen', 'highlighter',          // 自由绘制
       'rectangle', 'circle',         // 几何形状
       'text',                        // 文本
-      'quiz', 'rollcall',            // 课堂互动（优先使用 quiz.create / quiz_pro.create）
+      'quiz', 'rollcall', 'timer',   // 课堂互动（timer 为倒计时组件）
       'assignment',                  // 作业
       'hello-world', 'html-applet', 'code-sandbox', 'math-graph', 'presentation', // 小组件
     ];
@@ -370,7 +370,7 @@ export const BuiltinPlugin = {
         type: 'OBJECT',
         properties: {
           lessonId: { type: 'STRING', description: '课程 ID' },
-          type: { type: 'STRING', description: '元素类型（仅基础图形/文本）。quiz/rollcall 请用专用工具：' + KNOWN_ELEMENT_TYPES.filter(t => !['quiz', 'rollcall', 'assignment'].includes(t)).join(', ') },
+          type: { type: 'STRING', description: '元素类型。基础图形/文本直接使用；quiz/rollcall 请用专用工具。已知：' + KNOWN_ELEMENT_TYPES.filter(t => !['quiz', 'rollcall', 'assignment'].includes(t)).join(', ') },
           data: { type: 'STRING', description: '元素配置的 JSON 字符串' },
           segmentId: { type: 'STRING', description: '关联的课堂环节 ID（可选）' },
           page: { type: 'NUMBER', description: '元素所属页码（可选，默认 0）' }
@@ -536,6 +536,231 @@ export const BuiltinPlugin = {
         });
 
         return { success: true };
+      }
+    });
+
+    // 4.5 WHITEBOARD QUERY HANDLER（P0-2）
+    const queryWhiteboardCmdType = 'whiteboard.query';
+    await actionRegistry.register({
+      id: 'core-whiteboard-query',
+      commandType: queryWhiteboardCmdType,
+      description: '查询白板上的元素列表，可按类型、分段、页码过滤。用于插件了解当前白板状态后再决策。',
+      capabilityRequired: 'whiteboard:read',
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          lessonId: { type: 'STRING', description: '课程 ID' },
+          filter: {
+            type: 'OBJECT',
+            description: '可选过滤条件',
+            properties: {
+              type: { type: 'STRING', description: '按元素类型过滤（如 quiz, text）' },
+              segmentId: { type: 'STRING', description: '按课堂环节过滤' },
+              page: { type: 'NUMBER', description: '按页码过滤' }
+            }
+          }
+        },
+        required: ['lessonId']
+      }
+    });
+
+    await commandBus.registerHandler(queryWhiteboardCmdType, {
+      async execute(command) {
+        const payload = command.payload as any;
+        const filter = payload.filter || {};
+
+        let sql = 'SELECT * FROM whiteboard_elements WHERE lesson_id = ?';
+        const params: any[] = [payload.lessonId];
+
+        if (filter.type) {
+          sql += ' AND type = ?';
+          params.push(filter.type);
+        }
+        // segmentId / page 存储在 data JSON 中，SQLite 不支持 JSON 查询，
+        // 这里先查全部再在 JS 中过滤。
+        const rows = db.prepare(sql).all(...params) as any[];
+
+        let results = rows;
+        if (filter.segmentId || filter.page !== undefined) {
+          results = rows.filter(row => {
+            try {
+              const data = JSON.parse(row.data);
+              if (filter.segmentId && data.segmentId !== filter.segmentId) return false;
+              if (filter.page !== undefined && (data.page ?? 0) !== filter.page) return false;
+              return true;
+            } catch { return false; }
+          });
+        }
+
+        return { elements: results, count: results.length };
+      }
+    });
+
+    // 4.6 WHITEBOARD GET ELEMENT HANDLER（P0-2）
+    const getElementCmdType = 'whiteboard.get_element';
+    await actionRegistry.register({
+      id: 'core-whiteboard-get-element',
+      commandType: getElementCmdType,
+      description: '获取白板上单个元素的详细信息',
+      capabilityRequired: 'whiteboard:read',
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          lessonId: { type: 'STRING', description: '课程 ID' },
+          elementId: { type: 'STRING', description: '元素 ID' }
+        },
+        required: ['lessonId', 'elementId']
+      }
+    });
+
+    await commandBus.registerHandler(getElementCmdType, {
+      async execute(command) {
+        const payload = command.payload as any;
+        const row = db.prepare(
+          'SELECT * FROM whiteboard_elements WHERE id = ? AND lesson_id = ?'
+        ).get(payload.elementId, payload.lessonId) as any;
+        if (!row) {
+          throw new Error(`Element not found: ${payload.elementId}`);
+        }
+        return { element: row };
+      }
+    });
+
+    // 4.7 WHITEBOARD BATCH DRAW HANDLER（P1-1）
+    const batchDrawCmdType = 'whiteboard.batch_draw';
+    await actionRegistry.register({
+      id: 'core-whiteboard-batch-draw',
+      commandType: batchDrawCmdType,
+      description: '批量在白板上创建多个元素。单次事务、单次事件通知。适合 AI 批量出题等场景。',
+      capabilityRequired: 'whiteboard:write',
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          lessonId: { type: 'STRING', description: '课程 ID' },
+          elements: {
+            type: 'ARRAY',
+            description: '要创建的元素列表',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                type: { type: 'STRING', description: `元素类型。已知类型：${KNOWN_ELEMENT_TYPES.join(', ')}` },
+                data: { type: 'STRING', description: '元素配置的 JSON 字符串' },
+                segmentId: { type: 'STRING', description: '关联的课堂环节 ID（可选）' },
+                page: { type: 'NUMBER', description: '元素所属页码（可选，默认 0）' }
+              },
+              required: ['type', 'data']
+            }
+          }
+        },
+        required: ['lessonId', 'elements']
+      }
+    });
+
+    await commandBus.registerHandler(batchDrawCmdType, {
+      async execute(command) {
+        const payload = command.payload as any;
+        const elements = payload.elements as any[];
+        if (!Array.isArray(elements) || elements.length === 0) {
+          throw new Error('elements 必须是非空数组');
+        }
+
+        const elementIds: string[] = [];
+        const insertStmt = db.prepare(
+          'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)'
+        );
+
+        // 单次事务批量插入
+        const batchInsert = db.transaction(() => {
+          for (const el of elements) {
+            if (!KNOWN_ELEMENT_TYPES.includes(el.type)) {
+              throw new Error(`不支持的元素类型 "${el.type}"。已知类型：${KNOWN_ELEMENT_TYPES.join(', ')}`);
+            }
+            const elementId = uuidv7();
+            let dataStr = el.data;
+            try {
+              const dataObj = JSON.parse(dataStr);
+              if (el.segmentId && !dataObj.segmentId) dataObj.segmentId = el.segmentId;
+              if (el.page !== undefined && dataObj.page === undefined) dataObj.page = el.page;
+              else if (dataObj.page === undefined) dataObj.page = 0;
+              dataStr = JSON.stringify(dataObj);
+            } catch { /* 保持原样 */ }
+            insertStmt.run(elementId, payload.lessonId, el.type, dataStr, Date.now());
+            elementIds.push(elementId);
+          }
+        });
+
+        batchInsert();
+
+        // 单次事件通知，避免事件风暴
+        await eventBus.publish({
+          id: uuidv7(),
+          type: 'whiteboard.batch_drawn',
+          source: 'builtin.whiteboard',
+          payload: { elementIds, lessonId: payload.lessonId, count: elementIds.length },
+          timestamp: Date.now(),
+          correlationId: command.id
+        });
+
+        return { elementIds, count: elementIds.length };
+      }
+    });
+
+    // 4.8 WHITEBOARD DUPLICATE HANDLER（P1-2）
+    const duplicateCmdType = 'whiteboard.duplicate';
+    await actionRegistry.register({
+      id: 'core-whiteboard-duplicate',
+      commandType: duplicateCmdType,
+      description: '复制白板上的一个元素到新位置（可指定偏移量）',
+      capabilityRequired: 'whiteboard:write',
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          lessonId: { type: 'STRING', description: '课程 ID' },
+          elementId: { type: 'STRING', description: '要复制的元素 ID' },
+          offsetX: { type: 'NUMBER', description: 'X 轴偏移（默认 30）' },
+          offsetY: { type: 'NUMBER', description: 'Y 轴偏移（默认 30）' }
+        },
+        required: ['lessonId', 'elementId']
+      }
+    });
+
+    await commandBus.registerHandler(duplicateCmdType, {
+      async execute(command) {
+        const payload = command.payload as any;
+        const row = db.prepare(
+          'SELECT * FROM whiteboard_elements WHERE id = ? AND lesson_id = ?'
+        ).get(payload.elementId, payload.lessonId) as any;
+        if (!row) {
+          throw new Error(`Element not found: ${payload.elementId}`);
+        }
+
+        const offsetX = payload.offsetX ?? 30;
+        const offsetY = payload.offsetY ?? 30;
+        const newId = uuidv7();
+
+        // 复制数据并偏移位置
+        let dataStr = row.data;
+        try {
+          const dataObj = JSON.parse(dataStr);
+          if (dataObj.x !== undefined) dataObj.x = (dataObj.x || 0) + offsetX;
+          if (dataObj.y !== undefined) dataObj.y = (dataObj.y || 0) + offsetY;
+          dataStr = JSON.stringify(dataObj);
+        } catch { /* 保持原样 */ }
+
+        db.prepare(
+          'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)'
+        ).run(newId, payload.lessonId, row.type, dataStr, Date.now());
+
+        await eventBus.publish({
+          id: uuidv7(),
+          type: 'whiteboard.element_drawn',
+          source: 'builtin.whiteboard',
+          payload: { elementId: newId, lessonId: payload.lessonId, type: row.type },
+          timestamp: Date.now(),
+          correlationId: command.id
+        });
+
+        return { elementId: newId };
       }
     });
 

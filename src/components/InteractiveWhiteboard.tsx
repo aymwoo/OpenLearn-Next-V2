@@ -2183,6 +2183,60 @@ export function InteractiveWhiteboard({
     ));
   };
 
+  // P1-3：TimerDisplay —— 倒计时显示组件
+  const TimerDisplay = ({ data, onElementUpdate, elementId, lessonId, socketRef }: {
+    data: any;
+    onElementUpdate?: (elementId: string, data: any) => Promise<void>;
+    elementId: string;
+    lessonId: string;
+    socketRef: any;
+  }) => {
+    const [display, setDisplay] = React.useState<string>('');
+    const duration = data.duration || 60;
+
+    React.useEffect(() => {
+      const tick = () => {
+        if (data.running && data.endTime) {
+          const remaining = Math.max(0, Math.ceil((data.endTime - Date.now()) / 1000));
+          const mins = Math.floor(remaining / 60);
+          const secs = remaining % 60;
+          const text = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+          setDisplay(text);
+
+          if (remaining <= 0 && onElementUpdate) {
+            onElementUpdate(elementId, { ...data, running: false, endTime: undefined, remaining: 0 })
+              .then(() => socketRef.current?.emit('whiteboard-update', { roomId: lessonId, type: 'refresh' }));
+          }
+        } else if (!data.running && data.remaining !== undefined) {
+          const mins = Math.floor(data.remaining / 60);
+          const secs = data.remaining % 60;
+          setDisplay(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+        } else {
+          const mins = Math.floor(duration / 60);
+          const secs = duration % 60;
+          setDisplay(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+        }
+      };
+      tick();
+      const interval = setInterval(tick, 250);
+      return () => clearInterval(interval);
+    }, [data.running, data.endTime, data.remaining, duration, elementId, onElementUpdate, lessonId, data]);
+
+    const isExpired = data.running && data.endTime && data.endTime <= Date.now();
+    const isPaused = !data.running && data.remaining !== undefined && data.remaining > 0;
+
+    return (
+      <div className={`text-center select-none ${isExpired ? 'animate-pulse' : ''}`}>
+        <div className={`text-4xl font-mono font-bold tracking-wider ${isExpired ? 'text-red-500' : isPaused ? 'text-orange-500' : data.running ? 'text-green-600' : 'text-gray-600'}`}>
+          {display}
+        </div>
+        {isExpired && <div className="text-xs text-red-500 mt-1 font-semibold">⏰ 时间到！</div>}
+        {isPaused && <div className="text-xs text-orange-400 mt-1">⏸ 已暂停</div>}
+        {!data.running && !isPaused && <div className="text-xs text-gray-400 mt-1">准备就绪</div>}
+      </div>
+    );
+  };
+
   // Render incoming elements
   const renderElement = (el: WhiteboardElement) => {
     try {
@@ -2194,6 +2248,7 @@ export function InteractiveWhiteboard({
 
       const getInitialWidth = (type: string) => {
         if (type === 'hello-world') return 160;
+        if (type === 'timer') return 220;
         if (type === 'quiz') return 300;
         if (type === 'rollcall') return 320;
         if (type === 'assignment') return 310;
@@ -2206,6 +2261,7 @@ export function InteractiveWhiteboard({
 
       const getInitialHeight = (type: string) => {
         if (type === 'hello-world') return 64;
+        if (type === 'timer') return 100;
         if (type === 'quiz') return 280;
         if (type === 'rollcall') return 310;
         if (type === 'assignment') return 250;
@@ -2345,6 +2401,114 @@ export function InteractiveWhiteboard({
             </div>
           </Html>
         </Group>
+        );
+      }
+
+      if (el.type === 'timer') {
+        return (
+          <Group key={el.id}>
+            <Html
+              divProps={{
+                style: {
+                  position: 'absolute',
+                  top: `${displayY}px`,
+                  left: `${displayX}px`,
+                  pointerEvents: 'none',
+                  zIndex: isThisSelected ? 20 : 10
+                }
+              }}
+            >
+              <div
+                onPointerDown={(e) => {
+                  setSelectedShapeId(el.id);
+                  e.stopPropagation();
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const containerRect = containerRef.current?.getBoundingClientRect();
+                  if (containerRect) {
+                    setContextMenu({
+                      x: e.clientX - containerRect.left,
+                      y: e.clientY - containerRect.top,
+                      elementId: el.id
+                    });
+                  }
+                }}
+                className="bg-white border border-gray-300 rounded-lg shadow-lg overflow-hidden flex flex-col font-sans select-none"
+                style={{ pointerEvents: 'auto', width: `${displayWidth}px` }}
+              >
+                <div
+                  className="bg-orange-50 text-orange-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-orange-100 cursor-move select-none shrink-0"
+                  onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
+                  onPointerMove={handleElementDragMove}
+                  onPointerUp={handleElementDragEnd}
+                >
+                  <span>⏱ 计时器</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={async () => {
+                        if (onElementUpdate) {
+                          const newData = {
+                            ...data,
+                            running: !data.running,
+                            // 如果正在运行则记录剩余时间
+                            ...(data.running && data.endTime ? {
+                              remaining: Math.max(0, Math.ceil((data.endTime - Date.now()) / 1000)),
+                              endTime: undefined,
+                              running: false
+                            } : {}),
+                            // 如果开始运行且是首次或重新开始
+                            ...(!data.running ? {
+                              endTime: Date.now() + ((data.remaining || data.duration || 60) * 1000),
+                              running: true
+                            } : {})
+                          };
+                          await onElementUpdate(el.id, newData);
+                          socketRef.current?.emit('whiteboard-update', { roomId: lessonId, type: 'refresh' });
+                        }
+                      }}
+                      onPointerDown={e => e.stopPropagation()}
+                      className="p-1 hover:bg-orange-200/50 rounded-full text-orange-600 hover:text-orange-900 transition-colors cursor-pointer flex items-center justify-center"
+                      title={data.running ? '暂停' : '开始'}
+                    >
+                      {data.running ? <Pause size={11} /> : <Play size={11} />}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (onElementUpdate) {
+                          await onElementUpdate(el.id, {
+                            ...data,
+                            remaining: data.duration || 60,
+                            running: false,
+                            endTime: undefined
+                          });
+                          socketRef.current?.emit('whiteboard-update', { roomId: lessonId, type: 'refresh' });
+                        }
+                      }}
+                      onPointerDown={e => e.stopPropagation()}
+                      className="p-1 hover:bg-orange-200/50 rounded-full text-orange-600 hover:text-orange-900 transition-colors cursor-pointer flex items-center justify-center"
+                      title="重置"
+                    >
+                      <RotateCcw size={11} />
+                    </button>
+                    <button
+                      onClick={() => handleElementDelete(el.id)}
+                      onPointerDown={e => e.stopPropagation()}
+                      className="p-1 hover:bg-orange-200/50 rounded-full text-orange-600 hover:text-red-500 transition-colors cursor-pointer flex items-center justify-center"
+                      title="删除"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                </div>
+                <div className="px-4 py-3 flex items-center justify-center gap-2">
+                  <TimerDisplay data={data} onElementUpdate={onElementUpdate} elementId={el.id} lessonId={lessonId} socketRef={socketRef} />
+                </div>
+                {renderResizeHandles()}
+              </div>
+            </Html>
+          </Group>
         );
       }
 
