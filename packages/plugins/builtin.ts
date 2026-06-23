@@ -351,14 +351,16 @@ export const BuiltinPlugin = {
     await actionRegistry.register({
       id: 'core-whiteboard-draw',
       commandType: drawWhiteboardCmdType,
-      description: '在指定课程的白板上绘制元素（图形、文本）',
+      description: '在指定课程的白板上绘制元素（图形、文本、quiz 等），支持可选的分段和页码关联',
       capabilityRequired: 'whiteboard:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
           lessonId: { type: 'STRING', description: '要添加图形的课程 ID' },
-          type: { type: 'STRING', description: '元素类型：rectangle（矩形）、circle（圆形）、text（文本）' },
-          data: { type: 'STRING', description: '元素配置的 JSON 字符串（如尺寸、颜色、文本）' }
+          type: { type: 'STRING', description: '元素类型：rectangle（矩形）、circle（圆形）、text（文本）、quiz（测验）' },
+          data: { type: 'STRING', description: '元素配置的 JSON 字符串（如尺寸、颜色、文本）' },
+          segmentId: { type: 'STRING', description: '关联的课堂环节 ID（可选，用于分段教学可见性控制）' },
+          page: { type: 'NUMBER', description: '元素所属页码（可选，默认 0）' }
         },
         required: ['lessonId', 'type', 'data']
       }
@@ -369,8 +371,29 @@ export const BuiltinPlugin = {
         const payload = command.payload as any;
         const elementId = uuidv7();
 
+        // 方案 C：在 whiteboard.draw 层面补齐 segmentId 和 page 元数据。
+        // 优先使用调用方显式传入的值，否则尝试从现有上下文中推导。
+        // 这确保所有元素——无论通过插件、前端还是 AI Agent 创建——都携带正确的上下文信息。
+        let dataStr = payload.data;
+        try {
+          const dataObj = JSON.parse(dataStr);
+          // segmentId: 调用方传入 > 已有 > 不设置（让前端回退到分段过滤或全局可见）
+          if (payload.segmentId && !dataObj.segmentId) {
+            dataObj.segmentId = payload.segmentId;
+          }
+          // page: 调用方传入 > 已有 > 默认 0
+          if (payload.page !== undefined && dataObj.page === undefined) {
+            dataObj.page = payload.page;
+          } else if (dataObj.page === undefined) {
+            dataObj.page = 0;
+          }
+          dataStr = JSON.stringify(dataObj);
+        } catch {
+          // 如果 data 不是合法 JSON，保持原样存入
+        }
+
         const stmt = db.prepare('INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)');
-        stmt.run(elementId, payload.lessonId, payload.type, payload.data, Date.now());
+        stmt.run(elementId, payload.lessonId, payload.type, dataStr, Date.now());
 
         await eventBus.publish({
           id: uuidv7(),
@@ -380,7 +403,7 @@ export const BuiltinPlugin = {
           timestamp: Date.now(),
           correlationId: command.id
         });
-        
+
         return { elementId };
       }
     });

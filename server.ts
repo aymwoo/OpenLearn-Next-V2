@@ -177,6 +177,17 @@ const executeAgentToolCall = async (
                 kernelContainer.db.prepare('UPDATE whiteboard_elements SET data = ? WHERE id = ?')
                   .run(JSON.stringify(dataObj), cmdResult.elementId);
                 console.log(`[Agent Tool Sync] Injected active segment "${activeSeg}" into element "${cmdResult.elementId}"`);
+
+                // 方案 A1：注入完成后发布二次事件，通知前端重新获取元素数据，
+                // 确保携带 segmentId 的元素能被正确渲染。
+                kernelContainer.eventBus.publish({
+                  id: crypto.randomUUID(),
+                  type: 'whiteboard.element_updated',
+                  source: 'agent-tool-sync',
+                  payload: { elementId: cmdResult.elementId, lessonId: currentLessonId },
+                  timestamp: Date.now(),
+                  correlationId: cmd.id
+                }).catch(e => console.error('[Agent Tool Sync] Failed to publish element_updated event:', e));
               }
             } catch (e) {
               console.error('[Agent Tool Sync] Failed to parse/update element data:', e);

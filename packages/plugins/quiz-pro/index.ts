@@ -67,6 +67,7 @@ export default {
               y: payload.y || 120,
               width: 320,
               height: 280,
+              page: payload.page ?? 0,
               isMinimized: false
             })
           }

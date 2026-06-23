@@ -37,7 +37,17 @@ export default {
           payload: {
             lessonId: payload.lessonId,
             type: 'quiz',
-            data: JSON.stringify({ question: payload.question, options: payload.options })
+            data: JSON.stringify({
+              question: payload.question,
+              options: payload.options,
+              // 方案 B：补齐位置、页码等元数据，避免完全依赖服务端注入和前端默认值
+              x: payload.x ?? 120,
+              y: payload.y ?? 120,
+              width: payload.width ?? 320,
+              height: payload.height ?? 280,
+              page: payload.page ?? 0,
+              isMinimized: false,
+            })
           }
         }) as any;
         return { elementId: result?.elementId };
