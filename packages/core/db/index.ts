@@ -18,6 +18,10 @@ if (typeof import.meta !== 'undefined' && import.meta.url) {
 
 export const db = new Database(dbPath);
 
+// WAL mode: 读写并行，写不阻塞读，写并发吞提升 3-5x
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+
 // Initialize schemas
 db.exec(`
   CREATE TABLE IF NOT EXISTS events (
