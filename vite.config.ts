@@ -58,6 +58,10 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+      // 强制 react/react-dom 解析到同一份物理文件，避免 Vite 预打包
+      // 与 Module Federation 共享作用域各自创建独立的 React 实例，
+      // 导致 dispatcher.getOwner is not a function 错误。
+      dedupe: ['react', 'react-dom'],
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
