@@ -55,8 +55,11 @@ export default defineConfig({
       },
     }),
   ],
-  resolve: {
-    dedupe: ['react', 'react-dom'],
+  // 阻止 MFE remote 端独立预打包 React，确保所有 React 导入
+  // 在运行时走 MF shared scope（host 提供的单例），避免
+  // dispatcher.getOwner is not a function 多实例错误。
+  optimizeDeps: {
+    exclude: ['react', 'react-dom'],
   },
   server: {
     port: 5174,
