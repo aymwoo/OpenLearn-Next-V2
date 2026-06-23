@@ -2484,17 +2484,12 @@ export function InteractiveWhiteboard({
           if (!selectedOption || quizSubmitting[el.id] || quizAnswers[el.id]) return;
           setQuizSubmitting(prev => ({ ...prev, [el.id]: true }));
           try {
-            const res = await fetch('/api/commands', {
+            const res = await fetch(`/api/lessons/${lessonId}/quiz-submit`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                commandType: 'quiz_pro.submit_answer',
-                payload: {
-                  lessonId,
-                  elementId: el.id,
-                  studentId: currentStudentId,
-                  answer: selectedOption
-                }
+                elementId: el.id,
+                answer: selectedOption
               })
             });
             if (res.ok) {
