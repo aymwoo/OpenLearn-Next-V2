@@ -348,18 +348,31 @@ export const BuiltinPlugin = {
 
     // 2. WHITEBOARD HANDLER
     const drawWhiteboardCmdType = 'whiteboard.draw';
+    // 前端 renderElement 支持的元素类型白名单。
+    // AI Agent 若使用不在列表中的 type，将被拒绝并引导至专用工具。
+    const KNOWN_ELEMENT_TYPES = [
+      'pen', 'highlighter',          // 自由绘制
+      'rectangle', 'circle',         // 几何形状
+      'text',                        // 文本
+      'quiz', 'rollcall',            // 课堂互动（优先使用 quiz.create / quiz_pro.create）
+      'assignment',                  // 作业
+      'hello-world', 'html-applet', 'code-sandbox', 'math-graph', 'presentation', // 小组件
+    ];
     await actionRegistry.register({
       id: 'core-whiteboard-draw',
       commandType: drawWhiteboardCmdType,
-      description: '在指定课程的白板上绘制元素（图形、文本、quiz 等），支持可选的分段和页码关联',
+      description: '在课程白板上绘制基础图形或文本。'
+        + ' 支持：rectangle, circle, text, pen, highlighter。'
+        + ' ⚠️ 创建测验请用 quiz.create 或 quiz_pro.create（自动处理题型格式）。'
+        + ' 创建点名请用 rollcall 相关工具。',
       capabilityRequired: 'whiteboard:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING', description: '要添加图形的课程 ID' },
-          type: { type: 'STRING', description: '元素类型：rectangle（矩形）、circle（圆形）、text（文本）、quiz（测验）' },
-          data: { type: 'STRING', description: '元素配置的 JSON 字符串（如尺寸、颜色、文本）' },
-          segmentId: { type: 'STRING', description: '关联的课堂环节 ID（可选，用于分段教学可见性控制）' },
+          lessonId: { type: 'STRING', description: '课程 ID' },
+          type: { type: 'STRING', description: '元素类型（仅基础图形/文本）。quiz/rollcall 请用专用工具：' + KNOWN_ELEMENT_TYPES.filter(t => !['quiz', 'rollcall', 'assignment'].includes(t)).join(', ') },
+          data: { type: 'STRING', description: '元素配置的 JSON 字符串' },
+          segmentId: { type: 'STRING', description: '关联的课堂环节 ID（可选）' },
           page: { type: 'NUMBER', description: '元素所属页码（可选，默认 0）' }
         },
         required: ['lessonId', 'type', 'data']
@@ -369,6 +382,16 @@ export const BuiltinPlugin = {
     await commandBus.registerHandler(drawWhiteboardCmdType, {
       async execute(command) {
         const payload = command.payload as any;
+
+        // 类型白名单校验：拒绝未知类型，引导调用方使用正确工具
+        if (!KNOWN_ELEMENT_TYPES.includes(payload.type)) {
+          const hint = payload.type === 'quiz' ? ''
+            : (payload.type && (payload.type.includes('quiz') || payload.type.includes('question'))
+              ? ` 提示：创建测验请使用 quiz.create 或 quiz_pro.create 工具。`
+              : ` 已知类型：${KNOWN_ELEMENT_TYPES.join(', ')}。`);
+          throw new Error(`不支持的元素类型 "${payload.type}"。${hint}`);
+        }
+
         const elementId = uuidv7();
 
         // 方案 C：在 whiteboard.draw 层面补齐 segmentId 和 page 元数据。

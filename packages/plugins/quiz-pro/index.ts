@@ -15,15 +15,18 @@ export default {
     await actionRegistry.register({
       id: 'ext-quiz-pro-create',
       commandType: 'quiz_pro.create',
-      description: 'Create an interactive quiz on the whiteboard (Pro)',
+      description: '【创建课堂选择题·Pro版】在白板上生成带正确答案的交互式选择题。'
+        + ' 支持学生提交答案并自动同步到学期成绩。'
+        + ' 自动处理题型格式、位置、尺寸。'
+        + ' 这是创建带评分测验的首选工具（优于直接调用 whiteboard.draw）。',
       capabilityRequired: 'whiteboard:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING' },
-          question: { type: 'STRING' },
-          options: { type: 'ARRAY', items: { type: 'STRING' } },
-          correctAnswer: { type: 'STRING', description: 'Standard answer option (e.g. "A" or the exact option text)' }
+          lessonId: { type: 'STRING', description: '课程 ID' },
+          question: { type: 'STRING', description: '题目文字' },
+          options: { type: 'ARRAY', items: { type: 'STRING' }, description: '选项列表，如 ["A. 答案1", "B. 答案2"]' },
+          correctAnswer: { type: 'STRING', description: '正确答案选项，如 "A" 或 "A. 答案1"' }
         },
         required: ['lessonId', 'question', 'options', 'correctAnswer']
       }

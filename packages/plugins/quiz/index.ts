@@ -14,14 +14,16 @@ export default {
     await actionRegistry.register({
       id: 'ext-quiz-create',
       commandType: 'quiz.create',
-      description: 'Create a multiple-choice quiz on the whiteboard for a lesson',
+      description: '【创建课堂选择题】在白板上生成一道交互式选择题。'
+        + ' 自动处理题型格式、位置、尺寸。'
+        + ' 这是创建测验题目的首选工具（优于直接调用 whiteboard.draw）。',
       capabilityRequired: 'whiteboard:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING' },
-          question: { type: 'STRING' },
-          options: { type: 'ARRAY', items: { type: 'STRING' } }
+          lessonId: { type: 'STRING', description: '课程 ID' },
+          question: { type: 'STRING', description: '题目文字' },
+          options: { type: 'ARRAY', items: { type: 'STRING' }, description: '选项列表，如 ["A. 答案1", "B. 答案2"]' }
         },
         required: ['lessonId', 'question', 'options']
       }
