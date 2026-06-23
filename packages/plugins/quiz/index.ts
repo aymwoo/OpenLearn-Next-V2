@@ -23,7 +23,8 @@ export default {
         properties: {
           lessonId: { type: 'STRING', description: '课程 ID' },
           question: { type: 'STRING', description: '题目文字' },
-          options: { type: 'ARRAY', items: { type: 'STRING' }, description: '选项列表，如 ["A. 答案1", "B. 答案2"]' }
+          options: { type: 'ARRAY', items: { type: 'STRING' }, description: '选项列表，如 ["A. 答案1", "B. 答案2"]' },
+          correctAnswer: { type: 'STRING', description: '正确答案，值应对应 options 中的某一项，如 "A. 答案1"' }
         },
         required: ['lessonId', 'question', 'options']
       }
@@ -42,7 +43,8 @@ export default {
             data: JSON.stringify({
               question: payload.question,
               options: payload.options,
-              // 方案 B：补齐位置、页码等元数据，避免完全依赖服务端注入和前端默认值
+              correctAnswer: payload.correctAnswer || null,
+              submissions: {},
               x: payload.x ?? 120,
               y: payload.y ?? 120,
               width: payload.width ?? 320,

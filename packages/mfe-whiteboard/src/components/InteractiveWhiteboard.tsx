@@ -1347,6 +1347,13 @@ export function InteractiveWhiteboard({
   const [isSyncing, setIsSyncing] = useState(false);
   const socketRef = useRef<ISocketService | null>(null);
   const [remoteDrawings, setRemoteDrawings] = useState<Record<string, any>>({});
+  // Quiz: elementId -> option student selected (not yet submitted)
+  const [quizSelection, setQuizSelection] = useState<Record<string, string>>({});
+  // Quiz submission result: elementId -> submitted answer + score
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, { option: string; score?: number; isCorrect?: boolean }>>({});
+  const [quizSubmitting, setQuizSubmitting] = useState<Record<string, boolean>>({});
+  // Fullscreen: when set, only this element is rendered full-viewport
+  const [fullscreenElementId, setFullscreenElementId] = useState<string | null>(null);
   const [activeDragElement, setActiveDragElement] = useState<{ id: string; currentX: number; currentY: number; startPointerX: number; startPointerY: number; data: any } | null>(null);
   const dragRef = useRef<{
     id: string;
@@ -2462,10 +2469,22 @@ export function InteractiveWhiteboard({
         const currentStudentId = appState?.session?.studentId || appState?.session?.userId || 'mock-student-id';
         const hasSubmitted = !!data.submissions?.[currentStudentId];
         const studentSubmission = data.submissions?.[currentStudentId];
+        const serverSubmitted = studentSubmission
+          ? { option: studentSubmission.answer, score: studentSubmission.score, isCorrect: studentSubmission.score === 100 }
+          : null;
 
-        const handleSubmitAnswer = async (ansLetter: string) => {
+        const isTeacherView = userRole === 'teacher';
+        // Determine student display state
+        const studentDone = hasSubmitted || !!serverSubmitted;
+        const localDone = !!quizAnswers[el.id];
+        const finalResult = studentDone ? serverSubmitted : localDone ? quizAnswers[el.id] : null;
+
+        const handleQuizSubmit = async () => {
+          const selectedOption = quizSelection[el.id];
+          if (!selectedOption || quizSubmitting[el.id] || quizAnswers[el.id]) return;
+          setQuizSubmitting(prev => ({ ...prev, [el.id]: true }));
           try {
-            const response = await fetch('/api/commands', {
+            const res = await fetch('/api/commands', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -2474,20 +2493,25 @@ export function InteractiveWhiteboard({
                   lessonId,
                   elementId: el.id,
                   studentId: currentStudentId,
-                  answer: ansLetter
+                  answer: selectedOption
                 }
               })
             });
-            if (response.ok) {
+            if (res.ok) {
+              const result = await res.json();
+              setQuizAnswers(prev => ({
+                ...prev,
+                [el.id]: { option: selectedOption, score: result?.score, isCorrect: result?.isCorrect }
+              }));
               socketRef.current?.emit('whiteboard-update', { roomId: lessonId, type: 'refresh' });
               if (onRefresh) onRefresh();
             }
           } catch (err) {
-            console.error('Failed to submit answer:', err);
+            console.error('Quiz submit failed:', err);
+          } finally {
+            setQuizSubmitting(prev => ({ ...prev, [el.id]: false }));
           }
         };
-
-        const isTeacherView = userRole === 'teacher';
 
         return (
           <Group key={el.id}>
@@ -2495,14 +2519,14 @@ export function InteractiveWhiteboard({
               divProps={{
                 style: {
                   position: 'absolute',
-                  top: `${displayY}px`,
-                  left: `${displayX}px`,
+                  top: displayY + 'px',
+                  left: displayX + 'px',
                   pointerEvents: 'none',
                   zIndex: isThisSelected ? 20 : 10
                 }
               }}
             >
-              <div 
+              <div
                 onPointerDown={(e) => {
                   setSelectedShapeId(el.id);
                   e.stopPropagation();
@@ -2519,11 +2543,10 @@ export function InteractiveWhiteboard({
                     });
                   }
                 }}
-                className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden flex flex-col font-sans text-sm relative select-none" 
-                style={{ pointerEvents: 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden flex flex-col font-sans text-sm relative select-none"
+                style={{ pointerEvents: 'auto', width: displayWidth + 'px', height: displayHeight + 'px' }}
               >
-                {/* Header with gradient */}
-                <div 
+                <div
                   className="bg-gradient-to-r from-indigo-650 to-violet-650 text-white px-3 py-2 flex justify-between items-center text-xs font-bold border-b border-indigo-700 cursor-move select-none shrink-0"
                   onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
                   onPointerMove={handleElementDragMove}
@@ -2531,9 +2554,17 @@ export function InteractiveWhiteboard({
                 >
                   <span className="flex items-center gap-1">
                     <Sparkles size={12} className="animate-pulse text-indigo-200" />
-                    <span>AI Quiz Pro (互动测验)</span>
+                    <span>📝 随堂测验</span>
                   </span>
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setFullscreenElementId(el.id)}
+                      onPointerDown={e => e.stopPropagation()}
+                      className="p-1 hover:bg-white/10 rounded-full text-white/80 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                      title="全屏"
+                    >
+                      <Maximize2 size={11} />
+                    </button>
                     <button
                       onClick={async () => {
                         if (onElementUpdate) {
@@ -2548,7 +2579,7 @@ export function InteractiveWhiteboard({
                       {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
                     </button>
                     {isTeacherView && (
-                      <button 
+                      <button
                         onClick={() => handleElementDelete(el.id)}
                         onPointerDown={e => e.stopPropagation()}
                         className="p-1 hover:bg-white/10 rounded-full text-white/80 hover:text-red-300 transition-colors cursor-pointer flex items-center justify-center"
@@ -2563,76 +2594,9 @@ export function InteractiveWhiteboard({
                   <div className="p-3 text-slate-800 flex-1 overflow-y-auto flex flex-col justify-between">
                     <div>
                       <p className="font-bold text-xs text-slate-900 mb-2 leading-relaxed">{data.question}</p>
-                      
-                      {isTeacherView ? (
-                        /* Teacher's Statistics View */
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold mb-1">
-                            <span>实时提交统计:</span>
-                            <span className="text-indigo-600 font-bold">{totalSubmissions} 人已提交</span>
-                          </div>
-                          {(data.options || []).map((opt: string, i: number) => {
-                            const optLetter = opt.charAt(0).toUpperCase();
-                            const count = optionCounts[optLetter] || 0;
-                            const percent = totalSubmissions > 0 ? Math.round((count / totalSubmissions) * 100) : 0;
-                            const isCorrectAnswer = optLetter === String(data.correctAnswer).toUpperCase();
-
-                            return (
-                              <div key={i} className="relative h-7 bg-slate-50 border border-slate-150 rounded-lg overflow-hidden flex items-center px-3 justify-between shadow-sm">
-                                <div 
-                                  className={`absolute top-0 left-0 h-full transition-all duration-500 ${isCorrectAnswer ? 'bg-emerald-500/10' : 'bg-indigo-500/10'}`} 
-                                  style={{ width: `${percent}%` }} 
-                                />
-                                <div className="z-10 flex items-center gap-2 text-xs">
-                                  <span className={`font-semibold ${isCorrectAnswer ? 'text-emerald-700 font-bold' : 'text-slate-600'}`}>{opt}</span>
-                                  {isCorrectAnswer && (
-                                    <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded-sm">正确答案</span>
-                                  )}
-                                </div>
-                                <span className="z-10 text-[10px] font-bold text-slate-500">{count}人 ({percent}%)</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        /* Student's Answering View */
-                        hasSubmitted ? (
-                          /* Student submitted answer */
-                          studentSubmission.score === 100 ? (
-                            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-3 flex flex-col items-center justify-center text-center space-y-1.5 animate-in zoom-in-95">
-                              <span className="text-xl">🎉</span>
-                              <p className="font-bold text-xs">回答正确！</p>
-                              <p className="text-[9px] text-emerald-600">您的答案：{studentSubmission.answer} • 获得 100 分已计入学期成绩</p>
-                            </div>
-                          ) : (
-                            <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-3 flex flex-col items-center justify-center text-center space-y-1.5 animate-in zoom-in-95">
-                              <span className="text-xl">❌</span>
-                              <p className="font-bold text-xs">回答错误</p>
-                              <p className="text-[9px] text-red-500">您的答案：{studentSubmission.answer} (正确答案：{data.correctAnswer}) • 0分已计入学期成绩</p>
-                            </div>
-                          )
-                        ) : (
-                          /* Student yet to answer */
-                          <div className="flex flex-col gap-1.5">
-                            {(data.options || []).map((opt: string, i: number) => {
-                              const optLetter = opt.charAt(0).toUpperCase();
-                              return (
-                                <button 
-                                  key={i} 
-                                  onClick={() => handleSubmitAnswer(optLetter)}
-                                  className="w-full text-left px-3 py-2 bg-slate-50 hover:bg-indigo-50/50 border border-slate-200 hover:border-indigo-300 rounded-lg text-xs font-semibold text-slate-700 transition-all active:scale-98 flex items-center gap-2 cursor-pointer shadow-sm"
-                                >
-                                  <div className="w-5 h-5 rounded bg-white border border-slate-300 flex items-center justify-center text-[10px] font-bold text-slate-500 shadow-sm shrink-0">
-                                    {optLetter}
-                                  </div>
-                                  <span>{opt.substring(2)}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )
-                      )}
+                      {isTeacherView ? renderTeacherStats() : renderStudentView()}
                     </div>
+                    {!isTeacherView && !studentDone && !localDone && renderSubmitButton()}
                   </div>
                 )}
                 {!data.isMinimized && renderResizeHandles()}
@@ -2640,6 +2604,79 @@ export function InteractiveWhiteboard({
             </Html>
           </Group>
         );
+
+        function renderTeacherStats() {
+          return (
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold mb-1">
+                <span>实时提交统计:</span>
+                <span className="text-indigo-600 font-bold">{totalSubmissions} 人已提交</span>
+              </div>
+              {(data.options || []).map((opt: string, i: number) => {
+                const optLetter = opt.charAt(0).toUpperCase();
+                const count = optionCounts[optLetter] || 0;
+                const percent = totalSubmissions > 0 ? Math.round((count / totalSubmissions) * 100) : 0;
+                const isCorrect = optLetter === String(data.correctAnswer).toUpperCase();
+                return (
+                  <div key={i} className="relative h-7 bg-slate-50 border border-slate-150 rounded-lg overflow-hidden flex items-center px-3 justify-between shadow-sm">
+                    <div className={`absolute top-0 left-0 h-full transition-all duration-500 ${isCorrect ? 'bg-emerald-500/10' : 'bg-indigo-500/10'}`} style={{ width: percent + '%' }} />
+                    <div className="z-10 flex items-center gap-2 text-xs">
+                      <span className={`font-semibold ${isCorrect ? 'text-emerald-700 font-bold' : 'text-slate-600'}`}>{opt}</span>
+                      {isCorrect && <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded-sm">正确答案</span>}
+                    </div>
+                    <span className="z-10 text-[10px] font-bold text-slate-500">{count}人 ({percent}%)</span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
+
+        function renderStudentView() {
+          if (finalResult) {
+            const ok = finalResult.isCorrect;
+            return (
+              <div className={`rounded-xl p-3 flex flex-col items-center justify-center text-center space-y-1.5 ${ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
+                <span className="text-xl">{ok ? '🎉' : '❌'}</span>
+                <p className="font-bold text-xs">{ok ? '回答正确！' : '回答错误'}</p>
+                {!ok && data.correctAnswer && <p className="text-[9px] opacity-70">正确答案：{data.correctAnswer}</p>}
+              </div>
+            );
+          }
+          return (
+            <div className="flex flex-col gap-1.5">
+              {(data.options || []).map((opt: string, i: number) => {
+                const selected = quizSelection[el.id];
+                const isPicked = selected === opt;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setQuizSelection(prev => ({ ...prev, [el.id]: prev[el.id] === opt ? '' : opt }))}
+                    className={`w-full text-left px-3 py-2 border rounded-lg text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer shadow-sm ${isPicked ? 'bg-indigo-50 border-indigo-400 text-indigo-800 ring-1 ring-indigo-400' : 'bg-slate-50 hover:bg-indigo-50/50 border-slate-200 hover:border-indigo-300 text-slate-700'}`}
+                  >
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold shrink-0 ${isPicked ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-300 bg-white text-slate-500'}`}>
+                      {isPicked ? '✓' : opt.charAt(0).toUpperCase()}
+                    </div>
+                    <span>{opt}</span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        }
+
+        function renderSubmitButton() {
+          const canSubmit = !!quizSelection[el.id] && !quizSubmitting[el.id];
+          return (
+            <button
+              onClick={() => handleQuizSubmit()}
+              disabled={!canSubmit}
+              className={`w-full mt-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${canSubmit ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+            >
+              {quizSubmitting[el.id] ? <span className="flex items-center justify-center gap-1"><Loader2 size={12} className="animate-spin" /> 提交中...</span> : '提交答案'}
+            </button>
+          );
+        }
       }
       if (el.type === 'assignment') {
         return (
@@ -2683,6 +2720,7 @@ export function InteractiveWhiteboard({
               >
                 <span>Assignment Upload Task</span>
                 <div className="flex items-center gap-1">
+                  <button onClick={() => setFullscreenElementId(el.id)} onPointerDown={e => e.stopPropagation()} className="p-1 hover:bg-slate-200/50 rounded-full text-orange-600 hover:text-orange-900 transition-colors cursor-pointer flex items-center justify-center" title="全屏"><Maximize2 size={11} /></button>
                   <button
                     onClick={async () => {
                       if (onElementUpdate) {
@@ -2773,6 +2811,7 @@ export function InteractiveWhiteboard({
               >
                 <span>Interactive Courseware</span>
                 <div className="flex items-center gap-1">
+                  <button onClick={() => setFullscreenElementId(el.id)} onPointerDown={e => e.stopPropagation()} className="p-1 hover:bg-slate-200/50 rounded-full text-gray-600 hover:text-gray-900 transition-colors cursor-pointer flex items-center justify-center" title="全屏"><Maximize2 size={11} /></button>
                   <button
                     onClick={async () => {
                       if (onElementUpdate) {
@@ -3161,6 +3200,7 @@ export function InteractiveWhiteboard({
               >
                 <span>Interactive Presentation</span>
                 <div className="flex items-center gap-1">
+                  <button onClick={() => setFullscreenElementId(el.id)} onPointerDown={e => e.stopPropagation()} className="p-1 hover:bg-slate-200/50 rounded-full text-purple-600 hover:text-purple-900 transition-colors cursor-pointer flex items-center justify-center" title="全屏"><Maximize2 size={11} /></button>
                   <button
                     onClick={async () => {
                       if (onElementUpdate) {
@@ -3526,6 +3566,95 @@ export function InteractiveWhiteboard({
       >
         <div className="absolute inset-0 w-full h-full overflow-hidden">
           {containerSize.width > 0 && containerSize.height > 0 && (
+            fullscreenElementId ? (
+              /* ── Fullscreen overlay ── */
+              (() => {
+                const fsEl = elements.find(e => e.id === fullscreenElementId);
+                if (!fsEl) { setFullscreenElementId(null); return null; }
+                let fsData: any = {};
+                try { fsData = JSON.parse(fsEl.data); } catch (_) {}
+                const pad = 16;
+                const fsW = containerSize.width - pad * 2;
+                const fsH = containerSize.height - pad * 2;
+                return (
+                  <div className="absolute inset-0 z-50 bg-black/60 flex items-center justify-center" style={{ pointerEvents: 'auto' }}>
+                    <div className="relative bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col" style={{ width: Math.max(400, fsW), height: Math.max(300, fsH) }}>
+                      <div className="bg-indigo-50 text-indigo-700 px-4 py-2 flex justify-between items-center text-sm font-semibold border-b border-indigo-100 shrink-0">
+                        <span>{fsEl.type === 'quiz' ? '📝 随堂测验' : fsEl.type === 'timer' ? '⏱ 计时器' : fsEl.type === 'assignment' ? '📋 作业' : fsEl.type === 'code-sandbox' ? '💻 代码沙箱' : fsEl.type === 'html-applet' ? '🌐 交互课件' : fsEl.type === 'rollcall' ? '🎲 随机点名' : fsEl.type}</span>
+                        <button
+                          onClick={() => setFullscreenElementId(null)}
+                          className="p-1.5 hover:bg-indigo-200/50 rounded-lg text-indigo-600 hover:text-indigo-900 transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                        >
+                          <Minimize2 size={14} /> 退出全屏
+                        </button>
+                      </div>
+                      <div className="flex-1 overflow-auto p-6">
+                        {fsEl.type === 'quiz' && (
+                          <div className="max-w-2xl mx-auto space-y-6">
+                            <h3 className="text-xl font-bold text-gray-800">{fsData.question}</h3>
+                            <div className="flex flex-col gap-3">
+                              {(fsData.options || []).map((opt: string, i: number) => (
+                                <button key={i} className="px-5 py-4 text-left bg-gray-50 border-2 border-gray-200 rounded-xl text-base hover:bg-gray-100 transition-colors">
+                                  <span className="font-bold text-indigo-600 mr-3">{'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i]}.</span>
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                            {fsData.submissions && Object.keys(fsData.submissions).length > 0 && (
+                              <div className="mt-4 p-4 bg-gray-50 rounded-xl">
+                                <p className="text-sm font-semibold text-gray-600">提交统计: {Object.keys(fsData.submissions).length} 人已作答</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {fsEl.type === 'timer' && (
+                          <div className="flex items-center justify-center h-full">
+                            <div className="text-center">
+                              <div className="text-8xl font-mono font-bold text-orange-600 mb-4">
+                                {String(Math.floor((fsData.remaining ?? fsData.duration ?? 60) / 60)).padStart(2, '0')}:{String((fsData.remaining ?? fsData.duration ?? 60) % 60).padStart(2, '0')}
+                              </div>
+                              <p className="text-lg text-gray-500">{fsData.label || '计时器'}</p>
+                            </div>
+                          </div>
+                        )}
+                        {fsEl.type === 'assignment' && (
+                          <div className="max-w-2xl mx-auto space-y-6">
+                            <h3 className="text-xl font-bold text-gray-800">{fsData.title}</h3>
+                            <p className="text-gray-600 text-base whitespace-pre-wrap">{fsData.description}</p>
+                            <button className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-3 rounded-xl transition-colors text-base shadow-sm cursor-pointer">Upload File</button>
+                          </div>
+                        )}
+                        {fsEl.type === 'code-sandbox' && (
+                          <div className="h-full flex flex-col gap-4">
+                            <textarea value={fsData.code || ''} readOnly className="flex-1 p-4 bg-gray-900 text-green-400 font-mono text-sm rounded-xl resize-none" />
+                          </div>
+                        )}
+                        {fsEl.type === 'html-applet' && (
+                          <div className="h-full flex items-center justify-center">
+                            <div className="text-center text-gray-500">
+                              <BookOpen size={64} className="mx-auto mb-4 text-indigo-300" />
+                              <p className="text-lg font-semibold">{fsData.title || '交互课件'}</p>
+                              {fsData.coursewareUuid && <iframe src={`/runtime/${fsData.coursewareUuid}/`} className="w-full h-[60vh] mt-4 rounded-xl border" />}
+                            </div>
+                          </div>
+                        )}
+                        {fsEl.type === 'rollcall' && (
+                          <div className="flex items-center justify-center h-full">
+                            <div className="text-center">
+                              <div className="text-6xl font-bold text-indigo-600 mb-4">{fsData.selectedStudent || '点击点名'}</div>
+                              <p className="text-lg text-gray-500">随机点名</p>
+                            </div>
+                          </div>
+                        )}
+                        {!['quiz', 'timer', 'assignment', 'code-sandbox', 'html-applet', 'rollcall'].includes(fsEl.type) && (
+                          <div className="flex items-center justify-center h-full text-gray-400 text-sm">此组件类型暂不支持全屏预览</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
             <Stage
             width={containerSize.width}
             height={containerSize.height}
@@ -3581,6 +3710,7 @@ export function InteractiveWhiteboard({
               {renderRemoteDrawings()}
             </Layer>
           </Stage>
+          )
         )}
 
         {/* Floating Context-sensitive Deletion Pill above selected shape */}
@@ -3978,10 +4108,10 @@ export function InteractiveWhiteboard({
               {selectedEl.type === 'quiz' && (
                 <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
                   <h4 className="font-bold text-slate-700 text-xs border-b border-slate-100 pb-1.5">
-                    测验内容配置
+                    随堂测验配置
                   </h4>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">测验题目问题 (Question)</label>
+                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">测验题目 (Question)</label>
                     <textarea
                       value={editingProperties.question || ''}
                       onChange={(e) => handleLocalPropChange('question', e.target.value)}
@@ -3990,7 +4120,36 @@ export function InteractiveWhiteboard({
                       placeholder="编写问题描述..."
                     />
                   </div>
-                  
+
+                  {/* Correct answer selector */}
+                  {(editingProperties.options || []).length > 0 && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                      <label className="block text-[10px] text-amber-700 font-bold mb-1.5">
+                        ⚠️ 正确答案 (Correct Answer)
+                      </label>
+                      <select
+                        value={editingProperties.correctAnswer || ''}
+                        onChange={(e) => {
+                          handleLocalPropChange('correctAnswer', e.target.value);
+                          handlePropBlur('correctAnswer', e.target.value);
+                        }}
+                        className={`w-full px-2 py-1.5 border rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer ${
+                          editingProperties.correctAnswer
+                            ? 'border-green-300 bg-green-50 text-green-800'
+                            : 'border-amber-300 bg-white text-amber-800'
+                        }`}
+                      >
+                        <option value="">-- 请选择正确答案 --</option>
+                        {(editingProperties.options || []).map((opt: string, idx: number) => (
+                          <option key={idx} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                      {!editingProperties.correctAnswer && (
+                        <p className="text-[9px] text-amber-600 mt-1">未设置正确答案将无法自动判分</p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <label className="block text-[10px] text-slate-400 font-semibold">
                       选项列表 (Options)

@@ -2243,6 +2243,97 @@ async function startServer() {
     }
   });
 
+  // ── Quiz submission (student) ──────────────────────────────────────────────
+  app.post('/api/lessons/:id/quiz-submit', async (req, res) => {
+    try {
+      const { id: lessonId } = req.params;
+      const { elementId, answer } = req.body;
+      if (!elementId || answer === undefined) {
+        return res.status(400).json({ error: 'Missing elementId or answer' });
+      }
+
+      // Get student info from session
+      const token = getCookieToken(req);
+      let studentId = 'guest';
+      if (token) {
+        const sessionRow = kernelContainer.db.prepare('SELECT * FROM client_sessions WHERE id = ?').get(token) as any;
+        if (sessionRow) {
+          const session = JSON.parse(sessionRow.session_data);
+          if (session.role === 'student') {
+            studentId = session.studentId || session.userId || 'guest';
+          }
+        }
+      }
+
+      // Retrieve the quiz element
+      const row = kernelContainer.db.prepare(
+        'SELECT data FROM whiteboard_elements WHERE id = ? AND lesson_id = ?'
+      ).get(elementId, lessonId) as { data: string } | undefined;
+      if (!row) {
+        return res.status(404).json({ error: 'Quiz element not found' });
+      }
+
+      const dataObj = JSON.parse(row.data);
+      const correctAnswer = dataObj.correctAnswer;
+
+      // Determine correctness
+      let isCorrect = false;
+      let score = 0;
+      if (correctAnswer) {
+        const normalize = (s: string) => String(s).trim().toLowerCase();
+        isCorrect = normalize(answer) === normalize(correctAnswer);
+        score = isCorrect ? 100 : 0;
+      }
+
+      // Record submission
+      if (!dataObj.submissions) dataObj.submissions = {};
+      dataObj.submissions[studentId] = { answer, score, time: Date.now() };
+
+      // Persist updated data
+      kernelContainer.db.prepare(
+        'UPDATE whiteboard_elements SET data = ? WHERE id = ?'
+      ).run(JSON.stringify(dataObj), elementId);
+
+      // Broadcast refresh to whiteboard room
+      io.to(`lesson-${lessonId}`).emit('whiteboard-sync', { type: 'element-updated', elementId });
+
+      res.json({ success: true, isCorrect, score, studentId });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Quiz submissions retrieval (teacher) ────────────────────────────────────
+  app.get('/api/lessons/:id/quiz-submissions', (req, res) => {
+    try {
+      const { id: lessonId } = req.params;
+      if (!checkIsTeacherOrAdmin(req)) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      const elements = kernelContainer.db.prepare(
+        'SELECT id, type, data FROM whiteboard_elements WHERE lesson_id = ? AND type = ?'
+      ).all(lessonId, 'quiz') as { id: string; type: string; data: string }[];
+
+      const quizzes = elements.map(el => {
+        let parsed: any = {};
+        try { parsed = JSON.parse(el.data); } catch (_) {}
+        return {
+          elementId: el.id,
+          question: parsed.question || '',
+          options: parsed.options || [],
+          correctAnswer: parsed.correctAnswer || null,
+          submissions: parsed.submissions || {},
+          submissionCount: Object.keys(parsed.submissions || {}).length
+        };
+      });
+
+      res.json({ success: true, quizzes });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post('/api/lessons/:id/ai-tutor', async (req, res) => {
     try {
       const { elements } = req.body;
