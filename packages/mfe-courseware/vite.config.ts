@@ -40,8 +40,8 @@ export default defineConfig({
       },
     }),
   ],
-  optimizeDeps: {
-    exclude: ['react', 'react-dom'],
+  resolve: {
+    dedupe: ['react', 'react-dom'],
   },
   server: {
     port: 5175,

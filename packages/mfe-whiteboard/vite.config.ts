@@ -55,11 +55,12 @@ export default defineConfig({
       },
     }),
   ],
-  // 阻止 MFE remote 端独立预打包 React，确保所有 React 导入
-  // 在运行时走 MF shared scope（host 提供的单例），避免
-  // dispatcher.getOwner is not a function 多实例错误。
-  optimizeDeps: {
-    exclude: ['react', 'react-dom'],
+  resolve: {
+    // MFE remote 端：去重 react/react-dom，确保 Vite 预打包时
+    // 所有 React 导入指向 node_modules 中的唯一物理副本。
+    // MFE remote 通过 MF shared.singleton 获取 host 的 React 单例，
+    // 此处防止 remote 自己的 Vite 创建第二份预打包副本。
+    dedupe: ['react', 'react-dom'],
   },
   server: {
     port: 5174,
