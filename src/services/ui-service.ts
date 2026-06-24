@@ -48,4 +48,17 @@ export class UIService implements IUIService {
   getModalState(): ModalState | null {
     return this.modalState;
   }
+
+  /** v5.1: 触发浏览器文件下载 */
+  downloadFile(data: Blob | string, filename: string, mimeType = 'application/octet-stream'): void {
+    const blob = typeof data === 'string' ? new Blob([data], { type: mimeType }) : data;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 }

@@ -55,6 +55,30 @@ export enum PluginState {
  * 包含 7 个内核服务接口 + 插件标识信息 + manifest 元数据 + resolve 辅助函数。
  * ContextBuilder（Plan 03）负责构建此对象并进行安全包装。
  */
+/** 插件可引用的主应用共享模块白名单 */
+export const PLUGIN_SHARED_MODULES = [
+  'recharts',
+  'react-markdown',
+  'jspdf',
+  'jspdf-autotable',
+  'xlsx',
+  'konva',
+  'react-konva',
+  'react-konva-utils',
+  'lucide-react',
+  'uuid',
+] as const;
+
+/** 插件自建表 API — 命名空间隔离的数据库操作 */
+export interface PluginDatabaseAPI {
+  /** 确保插件专用表存在（幂等），表名自动加前缀 plugin_{pluginId}_{tableName} */
+  ensureTable(tableName: string, schema: string): Promise<void>;
+  /** 获取带前缀的完整表名 */
+  table(tableName: string): string;
+  /** 删除插件创建的所有表（uninstall 时由 PluginHost 自动调用） */
+  dropAllTables(): Promise<void>;
+}
+
 export interface PluginContext {
   /** 7 个内核服务，通过 Token DI 获取的接口代理 */
   services: {
@@ -72,6 +96,13 @@ export interface PluginContext {
   manifest: Manifest;
   /** 解析依赖注入容器中的服务 */
   resolve<T>(token: Token<T>): Promise<T>;
+  /** 插件自建表 API（v5.1） */
+  db: PluginDatabaseAPI;
+  /**
+   * 引用主应用共享模块（v5.1）
+   * 仅白名单中的模块可被引用，非白名单模块抛出错误
+   */
+  require(moduleName: string): any;
 }
 
 /**

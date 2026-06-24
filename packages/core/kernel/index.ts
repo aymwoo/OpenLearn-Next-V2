@@ -133,6 +133,11 @@ export class Kernel {
       }
     });
 
+    // v5.1: 注册插件共享模块（ctx.require 白名单）
+    import('../plugin-host/context-builder.js').then(m => m.bootstrapSharedModules()).catch(err => {
+      console.warn('[Kernel] Failed to bootstrap shared modules:', err.message);
+    });
+
     // Auto-bootstrap system critical plugins (VFS, Process) - Wave 1 (Phase 8)
     this.ready = this.bootstrapSystemPlugins().catch(err => {
       console.error('[Kernel] Critical system plugin bootstrap failed:', err);

@@ -90,6 +90,8 @@ export interface ExtensionPointRendererProps {
   fallback?: React.ReactNode;
   /** Optional language code for internationalized error messages */
   lang?: string;
+  /** v5.1: 可选子路由，传递给插件组件 */
+  route?: string;
 }
 
 /**
@@ -104,9 +106,10 @@ export function ExtensionPointRenderer({
   slot,
   fallback,
   lang,
+  route,
 }: ExtensionPointRendererProps) {
   const host = usePluginHost();
-  const extensions = host.getExtensions(slot);
+  const extensions = host.getExtensions(slot as ExtensionSlot);
 
   if (extensions.length === 0) return null;
 
@@ -126,7 +129,10 @@ export function ExtensionPointRenderer({
           }
         >
           <Suspense fallback={fallback ?? <LoadingSkeleton />}>
-            {React.createElement(React.lazy(ext.component))}
+            {React.createElement(
+              React.lazy(ext.component),
+              { route: ext.route || route, ...ext.slotProps },
+            )}
           </Suspense>
         </ExtensionErrorBoundary>
       ))}

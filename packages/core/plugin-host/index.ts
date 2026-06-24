@@ -1066,6 +1066,22 @@ export class PluginHost {
     this.db.prepare('DELETE FROM plugins WHERE id = ?').run(pluginId);
     this.db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ?').run(manifestId);
 
+    // v5.1: 清理插件自建表
+    const tablePrefix = `plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`;
+    try {
+      const tables = this.db
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?`)
+        .all(tablePrefix + '%') as { name: string }[];
+      for (const t of tables) {
+        this.db.exec(`DROP TABLE IF EXISTS ${t.name}`);
+      }
+      if (tables.length > 0) {
+        console.log(`[PluginHost] Dropped ${tables.length} plugin tables for "${pluginId}"`);
+      }
+    } catch (e) {
+      console.warn(`[PluginHost] Failed to drop plugin tables for "${pluginId}":`, e);
+    }
+
     // 4. 清理内存
     this.pluginStates.set(pluginId, PluginState.UNINSTALLED);
     this.pluginInstances.delete(pluginId);

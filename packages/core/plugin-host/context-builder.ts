@@ -14,7 +14,8 @@
 import type { CommandHandler } from '../command-bus/index.js';
 import type { ActionDescriptor } from '../registry/index.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
-import type { PluginContext } from './types.js';
+import type { PluginContext, PluginDatabaseAPI } from './types.js';
+import { PLUGIN_SHARED_MODULES } from './types.js';
 import type { Token } from '../di/token.js';
 import type { ResourceTracker } from './resource-tracker.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
@@ -36,6 +37,37 @@ import type {
   IStorageService,
   IAIService,
 } from '../di/interfaces.js';
+
+// ── 共享模块注册表 ──────────────────────────────────────────────────────
+
+const sharedModules: Record<string, any> = {};
+
+export function registerSharedModule(name: string, mod: any): void {
+  sharedModules[name] = mod;
+}
+
+/** 注册所有白名单共享模块（由 Kernel 在启动时调用） */
+export async function bootstrapSharedModules(): Promise<void> {
+  const modules = await Promise.allSettled([
+    import('recharts').then(m => ({ name: 'recharts', mod: m })),
+    import('react-markdown').then(m => ({ name: 'react-markdown', mod: m })),
+    import('jspdf').then(m => ({ name: 'jspdf', mod: m })),
+    import('jspdf-autotable').then(m => ({ name: 'jspdf-autotable', mod: m })),
+    import('xlsx').then(m => ({ name: 'xlsx', mod: m })),
+    import('konva').then(m => ({ name: 'konva', mod: m })),
+    import('react-konva').then(m => ({ name: 'react-konva', mod: m })),
+    import('react-konva-utils').then(m => ({ name: 'react-konva-utils', mod: m })),
+    import('lucide-react').then(m => ({ name: 'lucide-react', mod: m })),
+    import('uuid').then(m => ({ name: 'uuid', mod: m })),
+  ]);
+  for (const result of modules) {
+    if (result.status === 'fulfilled') {
+      sharedModules[result.value.name] = result.value.mod;
+    } else {
+      console.warn(`[PluginHost] Failed to register shared module:`, result.reason?.message);
+    }
+  }
+}
 
 // ── createSafeFunction ──────────────────────────────────────────────────────
 
@@ -441,13 +473,47 @@ export async function buildContext(
 
   Object.freeze(services);
 
-  // 5. 构建完整的 PluginContext
+  // 5. 构建插件自建表 API（v5.1）
+  const tablePrefix = `plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`;
+
+  const dbApi: PluginDatabaseAPI = {
+    async ensureTable(tableName: string, schema: string) {
+      const fullName = tablePrefix + tableName;
+      db.exec(`CREATE TABLE IF NOT EXISTS ${fullName} (${schema})`);
+    },
+    table(tableName: string) {
+      return tablePrefix + tableName;
+    },
+    async dropAllTables() {
+      const tables = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?`)
+        .all(tablePrefix + '%') as { name: string }[];
+      for (const t of tables) {
+        db.exec(`DROP TABLE IF EXISTS ${t.name}`);
+      }
+    },
+  };
+
+  // 6. 构建完整的 PluginContext
   return {
     services,
     pluginId,
     manifest,
     resolve: <T>(token: Token<T>): Promise<T> => {
       return serviceRegistry.resolve(token);
+    },
+    db: dbApi,
+    require: (moduleName: string) => {
+      if (!PLUGIN_SHARED_MODULES.includes(moduleName as any)) {
+        throw new Error(
+          `Plugin "${pluginId}" cannot require "${moduleName}". ` +
+          `Allowed modules: ${PLUGIN_SHARED_MODULES.join(', ')}`,
+        );
+      }
+      if (!sharedModules[moduleName]) {
+        throw new Error(`Shared module "${moduleName}" is not registered.`);
+      }
+      return sharedModules[moduleName];
     },
   };
 }
