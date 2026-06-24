@@ -12,11 +12,26 @@
 import type { Socket } from 'socket.io-client';
 import type { ISocketService } from '../plugin-host/types';
 
+/** 模块级 Socket 单例引用，由 App.tsx 在创建 Socket 后设置 */
+let _socket: Socket | null = null;
+
+export function setSocketInstance(socket: Socket): void {
+  _socket = socket;
+}
+
+export function getSocketInstance(): Socket {
+  if (!_socket) {
+    throw new Error('Socket instance not initialized. Call setSocketInstance() first.');
+  }
+  return _socket;
+}
+
 export class SocketService implements ISocketService {
   private socket: Socket;
 
   constructor(socket: Socket) {
     this.socket = socket;
+    setSocketInstance(socket);
   }
 
   emit(event: string, ...args: any[]): void {

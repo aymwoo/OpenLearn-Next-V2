@@ -2,10 +2,11 @@ import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, Globe, Cod
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Markdown from 'react-markdown';
 import { translations, Language } from './i18n';
-import { MfeLoader } from './mfe/MfeLoader';
+import { LazyWhiteboard } from './components/LazyWhiteboard';
+import { LazyCourseware } from './components/LazyCourseware';
 import { LiveClassroomView } from './components/LiveClassroomView';
 import { ChevronLeft, Menu } from 'lucide-react';
-// InteractiveCoursewareViewer: now loaded via MfeLoader (Phase 13 decoupling)
+// InteractiveCoursewareViewer: loaded as local module (Phase 5 v5.0 refactoring)
 import { QuickActionsMenu } from './components/QuickActionsMenu';
 import { CountdownTimer } from './components/CountdownTimer';
 import { StudentGradedTimeline } from './components/StudentGradedTimeline';
@@ -37,7 +38,6 @@ import { SocketService } from './services/socket-service';
 import { UIService } from './services/ui-service';
 import { StorageService } from './services/storage-service';
 import { useAppStore, appStore } from './store/appStore';
-import { MfeContextProvider } from './mfe/MfeContextProvider';
 import { EventBus } from '../packages/core/event-bus';
 
 interface AnimatedCounterProps {
@@ -4515,7 +4515,7 @@ export default function App() {
   const unreadNotifications = studentNotifications.filter(n => !readNotifications.has(n.id));
 
   return (
-    <MfeContextProvider value={{ store: appStore, eventBus: hostEventBus, serviceRegistry: host.getRegistry() }}>
+    <>
       <div className="flex h-screen bg-gray-50 text-gray-900 font-sans">
       
       {/* Main Content Area: App Shell representing the Plugin Views */}
@@ -4884,27 +4884,24 @@ export default function App() {
                       </button>
                     </div>
                     {studentLessonTab === 'whiteboard' && (
-                       <MfeLoader
-                         name="mfe_whiteboard"
-                         props={{
-                           lessonId: selectedLesson,
-                           elements: elements,
-                           userRole: activeRole,
-                           activeSegmentId: activeSegmentId,
-                           onSegmentSync: (segId: string) => setActiveSegmentId(segId),
-                           onElementUpdate: async () => { /* readonly or sync */ },
-                           onElementDelete: async (elementId: string) => {
+                       <LazyWhiteboard
+lessonId={selectedLesson}
+elements={elements}
+userRole={activeRole}
+activeSegmentId={activeSegmentId}
+onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
+onElementUpdate={async () => { /* readonly or sync */ }}
+onElementDelete={async (elementId: string) => {
                              await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, { method: 'DELETE' });
                              fetchElements(selectedLesson);
-                           },
-                           onClearBoard: async () => {
+                           }}
+onClearBoard={async () => {
                              await fetch(`/api/lessons/${selectedLesson}/whiteboard`, { method: 'DELETE' });
                              fetchElements(selectedLesson);
-                           },
-                           onElementAdd: async () => { /* readonly or sync */ },
-                           onRefresh: () => fetchElements(selectedLesson)
-                         }}
-                       />
+                           }}
+onElementAdd={async () => { /* readonly or sync */ }}
+onRefresh={() => fetchElements(selectedLesson)}
+/>
                     )}
                     {studentLessonTab === 'courseware' && (
                        <div className="flex-1 flex gap-4 min-h-0">
@@ -4947,7 +4944,10 @@ export default function App() {
                              <div className="mt-2 text-[10px] text-gray-400 leading-tight">Note: Showing HTML courseware from current OS drive directory. Ask agent to generate courseware.</div>
                           </div>
                           <div className="flex-1 relative bg-white min-h-0">
-                             <MfeLoader name="mfe_courseware" props={{ coursewareId: studentSelectedCourseware, onClose: () => setStudentSelectedCourseware(null) }} />
+                             <LazyCourseware
+coursewareId={studentSelectedCourseware}
+onClose={() => setStudentSelectedCourseware(null)}
+/>
                           </div>
                        </div>
                     )}
@@ -5178,44 +5178,41 @@ export default function App() {
                             </div>
                           ) : (
                             <div className={`flex-1 min-h-0 flex flex-col ${selectedAssignment.submission_status ? 'opacity-90 pointer-events-none filter grayscale-[0.2]' : ''}`}>
-                              <MfeLoader
-                                name="mfe_whiteboard"
-                                props={{
-                                  lessonId: `assignment-${selectedAssignment.id}-student-${activeStudentId}`,
-                                  elements: elements,
-                                  userRole: activeRole,
-                                  enableAutoAI: activeRole === 'student' && !selectedAssignment.submission_status,
-                                  onElementAdd: async (type: string, data: any) => {
+                              <LazyWhiteboard
+lessonId={`assignment-${selectedAssignment.id}-student-${activeStudentId}`}
+elements={elements}
+userRole={activeRole}
+enableAutoAI={activeRole === 'student' && !selectedAssignment.submission_status}
+onElementAdd={async (type: string, data: any) => {
                                     await fetch(`/api/lessons/assignment-${selectedAssignment.id}-student-${activeStudentId}/whiteboard`, {
                                       method: 'POST',
                                       headers: { 'Content-Type': 'application/json' },
                                       body: JSON.stringify({ type, data })
                                     });
                                     fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`);
-                                  },
-                                  onElementUpdate: async (elementId: string, data: any) => {
+                                  }}
+onElementUpdate={async (elementId: string, data: any) => {
                                     await fetch(`/api/lessons/assignment-${selectedAssignment.id}-student-${activeStudentId}/whiteboard/${elementId}`, {
                                       method: 'PUT',
                                       headers: { 'Content-Type': 'application/json' },
                                       body: JSON.stringify({ data })
                                     });
                                     fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`);
-                                  },
-                                  onElementDelete: async (elementId: string) => {
+                                  }}
+onElementDelete={async (elementId: string) => {
                                     await fetch(`/api/lessons/assignment-${selectedAssignment.id}-student-${activeStudentId}/whiteboard/${elementId}`, {
                                       method: 'DELETE'
                                     });
                                     fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`);
-                                  },
-                                  onClearBoard: async () => {
+                                  }}
+onClearBoard={async () => {
                                     await fetch(`/api/lessons/assignment-${selectedAssignment.id}-student-${activeStudentId}/whiteboard`, {
                                       method: 'DELETE'
                                     });
                                     fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`);
-                                  },
-                                  onRefresh: () => fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`)
-                                }}
-                              />
+                                  }}
+onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${activeStudentId}`)}
+/>
                             </div>
                           )}
                         </>
@@ -6382,15 +6379,13 @@ export default function App() {
                           </div>
                         </div>
                      ) : (
-                        <MfeLoader
-                          name="mfe_whiteboard"
-                          props={{
-                            lessonId: selectedLesson,
-                            userRole: activeRole,
-                            elements: elements,
-                            activeSegmentId: activeSegmentId,
-                            onSegmentSync: (segId: string) => setActiveSegmentId(segId),
-                            onElementAdd: async (type: string, data: any) => {
+                        <LazyWhiteboard
+lessonId={selectedLesson}
+userRole={activeRole}
+elements={elements}
+activeSegmentId={activeSegmentId}
+onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
+onElementAdd={async (type: string, data: any) => {
                               setEditorSaveStatus('saving');
                               try {
                                 const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
@@ -6408,8 +6403,8 @@ export default function App() {
                               } catch (err) {
                                 setEditorSaveStatus('error');
                               }
-                            },
-                            onElementUpdate: async (elementId: string, data: any) => {
+                            }}
+onElementUpdate={async (elementId: string, data: any) => {
                               setEditorSaveStatus('saving');
                               try {
                                 const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
@@ -6427,8 +6422,8 @@ export default function App() {
                               } catch (err) {
                                 setEditorSaveStatus('error');
                               }
-                            },
-                            onElementDelete: async (elementId: string) => {
+                            }}
+onElementDelete={async (elementId: string) => {
                               setEditorSaveStatus('saving');
                               try {
                                 const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
@@ -6444,8 +6439,8 @@ export default function App() {
                               } catch (err) {
                                 setEditorSaveStatus('error');
                               }
-                            },
-                            onClearBoard: async () => {
+                            }}
+onClearBoard={async () => {
                               setEditorSaveStatus('saving');
                               try {
                                 const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
@@ -6461,10 +6456,9 @@ export default function App() {
                               } catch (err) {
                                 setEditorSaveStatus('error');
                               }
-                            },
-                            onRefresh: () => fetchElements(selectedLesson)
-                          }}
-                        />
+                            }}
+onRefresh={() => fetchElements(selectedLesson)}
+/>
                      )}
                    </div>
                    </div>
@@ -10024,45 +10018,42 @@ export default function App() {
                 <div className="flex-grow flex-1 min-h-0 flex flex-col h-full relative">
                   {previewLessonTab === 'whiteboard' ? (
                     <div className="flex-grow flex-1 min-h-0 w-full h-full relative rounded-lg overflow-hidden border border-gray-100 flex flex-col">
-                      <MfeLoader
-                        name="mfe_whiteboard"
-                        props={{
-                          lessonId: selectedLesson,
-                          userRole: activeRole,
-                          elements: elements,
-                          activeSegmentId: activeSegmentId,
-                          onSegmentSync: (segId: string) => setActiveSegmentId(segId),
-                          onElementAdd: async (type: string, data: any) => {
+                      <LazyWhiteboard
+lessonId={selectedLesson}
+userRole={activeRole}
+elements={elements}
+activeSegmentId={activeSegmentId}
+onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
+onElementAdd={async (type: string, data: any) => {
                             await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ type, data })
                             });
                             fetchElements(selectedLesson);
-                          },
-                          onElementUpdate: async (elementId: string, data: any) => {
+                          }}
+onElementUpdate={async (elementId: string, data: any) => {
                             await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
                               method: 'PUT',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ data })
                             });
                             fetchElements(selectedLesson);
-                          },
-                          onElementDelete: async (elementId: string) => {
+                          }}
+onElementDelete={async (elementId: string) => {
                             await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
                               method: 'DELETE'
                             });
                             fetchElements(selectedLesson);
-                          },
-                          onClearBoard: async () => {
+                          }}
+onClearBoard={async () => {
                             await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
                               method: 'DELETE'
                             });
                             fetchElements(selectedLesson);
-                          },
-                          onRefresh: () => fetchElements(selectedLesson)
-                        }}
-                      />
+                          }}
+onRefresh={() => fetchElements(selectedLesson)}
+/>
                     </div>
                   ) : (
                     <div className="flex-grow flex-1 flex gap-4 min-h-0 w-full h-full">
@@ -10118,7 +10109,10 @@ export default function App() {
 
                       {/* Embed Viewer */}
                       <div className="flex-1 relative bg-white border border-gray-100 rounded-xl overflow-hidden min-h-0 h-full shadow-inner flex flex-col">
-                        <MfeLoader name="mfe_courseware" props={{ coursewareId: previewSelectedCourseware, onClose: () => setPreviewSelectedCourseware(null) }} />
+                        <LazyCourseware
+coursewareId={previewSelectedCourseware}
+onClose={() => setPreviewSelectedCourseware(null)}
+/>
                       </div>
                     </div>
                   )}
@@ -10201,7 +10195,9 @@ export default function App() {
                         </div>
                         {cloudDrivePreviewNode.name.endsWith('.html') || cloudDrivePreviewNode.name.endsWith('.htm') || cloudDrivePreviewNode.content?.includes('<html') ? (
                            <div className="flex-1 relative bg-gray-50">
-                             <MfeLoader name="mfe_courseware" props={{ coursewareId: cloudDrivePreviewNode.id }} />
+                             <LazyCourseware
+coursewareId={cloudDrivePreviewNode.id}
+/>
                            </div>
                         ) : (
                            <div className="flex-1 overflow-y-auto p-6 bg-white prose prose-sm max-w-none">
@@ -10930,6 +10926,6 @@ export default function App() {
       </div>
 
       </div>
-    </MfeContextProvider>
+    </>
   );
 }

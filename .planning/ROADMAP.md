@@ -5,6 +5,8 @@
 - ✅ **v1.0 插件系统重构** — Phases 1-9 (shipped 2026-06-19)
 - ✅ **v2.0 微前端架构改造** — Phases 10-13 (shipped 2026-06-20)
 - ✅ **v3.0 作业提交与学生互评插件** — Phases 14-16 (shipped 2026-06-20)
+- ✅ **v4.0 质量基础与生产就绪** — Phases 17-22 (shipped 2026-06-24)
+- 🔴 **v5.0 核心教学闭环** — Phases 23-28 (planning 2026-06-24)
 
 ## Phases
 
@@ -151,5 +153,79 @@
 
 ---
 
+## v4.0 质量基础与生产就绪
+
+### Phase 17: 安全加固
+**Goal**: 修复所有已知安全漏洞（密码明文、弱哈希、session无过期、无频率限制、CORS通配符等），使系统达到基本安全基线。
+**Depends on**: Phase 16 (v3.0 complete)
+**Requirements**: SEC-AUTH-01~05, SEC-DATA-01~03, SEC-NET-01~04
+**Plans**: 待规划
+**UI hint**: yes (学生自助密码修改)
+
+### Phase 18: server.ts 模块化拆分
+**Goal**: 将 5000+ 行单体 `server.ts` 拆分为按领域组织的路由模块、中间件和工具函数。
+**Depends on**: Phase 17
+**Requirements**: ARCH-SPLIT-01~05
+**Plans**: 待规划
+**UI hint**: no
+
+### Phase 19: App.tsx 状态抽取与组件化
+**Goal**: 将 11159 行 `App.tsx` 的状态迁移到 Zustand stores，提取自定义 Hooks，拆分为独立页面组件。
+**Depends on**: Phase 18
+**Requirements**: FE-REFACTOR-01~04
+**Plans**: 待规划
+**UI hint**: no
+
+### Phase 20: 数据库迁移系统与备份
+**Goal**: 替代 try/catch ALTER TABLE 模式，建立版本化数据库迁移系统，实现自动备份和数据生命周期管理。
+**Depends on**: Phase 17
+**Requirements**: DB-MIG-01~04
+**Plans**: 待规划
+**UI hint**: no
+
+### Phase 21: 可观测性基础设施
+**Goal**: 建立结构化日志（pino）、健康检查端点、优雅关闭机制和错误追踪基础。
+**Depends on**: Phase 18
+**Requirements**: OBS-LOG-01~03, OBS-HEALTH-01, OBS-SHUTDOWN-01, OBS-ERROR-01
+**Plans**: 待规划
+**UI hint**: no
+
+### Phase 22: CI/CD 与代码规范 + 功能补全
+**Goal**: 建立 GitHub Actions CI 流水线、统一 ESLint/Prettier 代码规范、补全学生自助服务等缺失功能。
+**Depends on**: Phase 21
+**Requirements**: CI-CD-01~03, CODE-STD-01~02, FEAT-CMP-01~03
+**Plans**: 待规划
+**UI hint**: yes (学生个人中心)
+
+### Progress
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. Token DI 内核 | v1.0 | 4/4 | Complete | 2026-06-18 |
+| 2. 现有能力 Token 化 | v1.0 | 3/3 | Complete | 2026-06-18 |
+| 3. ESM 加载 + 包格式 | v1.0 | 4/4 | Complete | 2026-06-18 |
+| 4. PluginHost + 生命周期 | v1.0 | 4/4 | Complete | 2026-06-18 |
+| 5. Worker 隔离 + 双运行时 | v1.0 | 4/4 | Complete | 2026-06-18 |
+| 6. EventBus 服务 + SemVer | v1.0 | 3/3 | Complete | 2026-06-19 |
+| 7. 热重载 + 中间件管道 | v1.0 | 4/4 | Complete | 2026-06-19 |
+| 8. 现有插件迁移 | v1.0 | 4/4 | Complete | 2026-06-19 |
+| 9. 前端集成 + 过渡期 | v1.0 | 4/4 | Complete | 2026-06-19 |
+| 10. 基础设施配置与工程集成 | v2.0 | 2/2 | Complete | 2026-06-19 |
+| 11. 动态加载器与宿主桥接 | v2.0 | 4/4 | Complete | 2026-06-19 |
+| 12. 宿主状态共享与 DI 桥接 | v2.0 | 1/1 | Complete | 2026-06-20 |
+| 13. 业务模块解耦与样式沙箱化 | v2.0 | 1/1 | Complete | 2026-06-20 |
+| 14. 数据库结构设计与后端 DI 成绩对接服务 | v3.0 | 1/1 | Complete | 2026-06-20 |
+| 15. 学生端上传文件及互评系统 | v3.0 | 1/1 | Complete | 2026-06-20 |
+| 16. 教师打分、权重折算与成绩同步 | v3.0 | 1/1 | Complete | 2026-06-20 |
+| 17. 安全加固 | v4.0 | 0/0 | 🔴 Pending | — |
+| 18. server.ts 模块化拆分 | v4.0 | 0/0 | 🟡 Pending | — |
+| 19. App.tsx 状态抽取与组件化 | v4.0 | 0/0 | 🟡 Pending | — |
+| 20. 数据库迁移系统与备份 | v4.0 | 0/0 | 🟡 Pending | — |
+| 21. 可观测性基础设施 | v4.0 | 0/0 | 🟡 Pending | — |
+| 22. CI/CD 与代码规范 + 功能补全 | v4.0 | 0/0 | 🟢 Pending | — |
+
+---
+
 *See [.planning/milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for detailed Phase 1-9 information.*
+*See [.planning/milestones/v4.0-ROADMAP.md](milestones/v4.0-ROADMAP.md) for detailed v4.0 Phase 17-22 information.*
 *See [.planning/MILESTONES.md](MILESTONES.md) for milestone summary.*

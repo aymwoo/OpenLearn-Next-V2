@@ -22,7 +22,14 @@ import { kernelContainer } from './packages/core/kernel/index.js';
 import { ISemesterGradeServiceToken } from './packages/core/di/interfaces.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { filterXSS } from 'xss';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './packages/plugins/ai-submit-injector.js';
+import { verifyPassword, hashPassword as bcryptHashPassword } from './packages/core/db/index.js';
+import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from './server/utils/crypto.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from './server/middleware/auth.js';
 
 
 type AgentChatAttachment = { name: string; content: string };
@@ -442,16 +449,91 @@ async function startServer() {
     console.error('Error creating student_rollcalls table:', e);
   }
 
+  // SEC-AUTH-03: client_sessions 添加 expires_at 列
+  try {
+    kernelContainer.db.exec(`ALTER TABLE client_sessions ADD COLUMN expires_at INTEGER`);
+    console.log('client_sessions.expires_at column ensured.');
+  } catch { /* 列已存在 */ }
+
+  // SEC-AUTH-03: 启动时清理过期 session
+  try {
+    const now = Date.now();
+    const idleTimeout = 24 * 60 * 60 * 1000;
+    const deletedExpired = kernelContainer.db.prepare(
+      'DELETE FROM client_sessions WHERE expires_at IS NOT NULL AND expires_at < ?'
+    ).run(now);
+    const deletedIdle = kernelContainer.db.prepare(
+      'DELETE FROM client_sessions WHERE updated_at IS NOT NULL AND (? - updated_at) > ?'
+    ).run(now, idleTimeout);
+    const totalDeleted = (deletedExpired.changes || 0) + (deletedIdle.changes || 0);
+    if (totalDeleted > 0) {
+      console.log(`[Session] Cleaned up ${totalDeleted} expired sessions on startup.`);
+    }
+  } catch (e) {
+    console.warn('[Session] Could not clean up expired sessions:', e);
+  }
+
   await kernelContainer.ready;
 
   const app = express();
   const PORT = 9000;
 
+  // ── 安全中间件 ────────────────────────────────────────────────────
+  // SEC-NET-02: HTTP 安全头（helmet）
+  // 教育平台需要加载外部课件资源（图片、字体、样式），因此 img-src/style-src/font-src 放宽为 https:
+  // script-src 保持严格限制，课件 iframe 通过 sandbox 属性提供额外安全层
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https:", "https://fonts.googleapis.com"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        connectSrc: ["'self'", "ws:", "wss:", "https:"],
+        fontSrc: ["'self'", "data:", "https:", "https://fonts.gstatic.com"],
+        frameSrc: ["'self'"],
+        objectSrc: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // 课件 iframe 需要跨域嵌入
+  }));
+
+  // SEC-AUTH-04: 登录频率限制（5次/IP/分钟）
+  const loginLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 分钟
+    max: 5,
+    message: { error: '登录尝试过于频繁，请稍后再试。Too many login attempts, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-  app.use('/mfe/whiteboard', express.static(path.join(process.cwd(), 'packages/mfe-whiteboard/dist')));
-  app.use('/mfe/courseware', express.static(path.join(process.cwd(), 'packages/mfe-courseware/dist')));
+  // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块）
+
+  // SEC-DATA-03: Magic bytes 验证（文件头魔数）
+  function validateMagicBytes(buffer: Buffer, fileName: string): boolean {
+    const MAGIC_BYTES: Record<string, number[][]> = {
+      '.pdf': [[0x25, 0x50, 0x44, 0x46]], // %PDF
+      '.pptx': [[0x50, 0x4b, 0x03, 0x04]], // PK.. (ZIP)
+      '.zip': [[0x50, 0x4b, 0x03, 0x04]],
+      '.jpg': [[0xff, 0xd8, 0xff]],
+      '.jpeg': [[0xff, 0xd8, 0xff]],
+      '.png': [[0x89, 0x50, 0x4e, 0x47]], // .PNG
+      '.gif': [[0x47, 0x49, 0x46, 0x38]], // GIF8
+      '.webp': [[0x52, 0x49, 0x46, 0x46]], // RIFF
+    };
+    const ext = path.extname(fileName || '').toLowerCase();
+    const signatures = MAGIC_BYTES[ext];
+    if (!signatures) return true; // 未知类型放过
+
+    return signatures.some(sig =>
+      sig.every((byte, i) => buffer[i] === byte)
+    );
+  }
+
+  const BLOCKED_EXTENSIONS = ['.exe', '.sh', '.bat', '.cmd', '.dll', '.so', '.dylib', '.scr', '.msi', '.ps1'];
 
   app.post('/api/upload', async (req, res) => {
     try {
@@ -461,12 +543,21 @@ async function startServer() {
       }
 
       const ext = path.extname(filename).toLowerCase();
+      // SEC-DATA-03: 拒绝可执行文件上传
+      if (BLOCKED_EXTENSIONS.includes(ext)) {
+        return res.status(400).json({ error: `File type ${ext} is not allowed for security reasons.` });
+      }
       if (ext !== '.pdf' && ext !== '.pptx') {
         return res.status(400).json({ error: 'Only .pdf and .pptx files are supported' });
       }
 
       const base64Content = base64Data.replace(/^data:[^;]+;base64,/, '');
       const fileBuffer = Buffer.from(base64Content, 'base64');
+
+      // SEC-DATA-03: Magic bytes 校验
+      if (!validateMagicBytes(fileBuffer, filename)) {
+        return res.status(400).json({ error: 'File content does not match the declared file type.' });
+      }
 
       const uploadsDir = path.join(process.cwd(), 'uploads');
       if (!fs.existsSync(uploadsDir)) {
@@ -546,32 +637,43 @@ async function startServer() {
   // OS Agent interaction
   app.post('/api/agent/chat', async (req, res) => {
     try {
-      const { message, lang = 'zh', currentLessonId, attachments, providerId } = req.body as AgentChatRequest;
+      let { message, lang = 'zh', currentLessonId, attachments, providerId } = req.body as AgentChatRequest;
+
+      // SEC-NET-03: XSS 消毒用户输入
+      message = filterXSS(message);
+      if (attachments) {
+        attachments = attachments.map((att: AgentChatAttachment) => ({
+          ...att,
+          name: filterXSS(att.name),
+        }));
+      }
+
+      // SEC-NET-04: Prompt 注入检测
+      if (detectPromptInjection(message)) {
+        return res.status(400).json({
+          success: false,
+          error: lang === 'zh'
+            ? '检测到潜在的 prompt 注入尝试，请修改您的输入。'
+            : 'Potential prompt injection detected. Please rephrase your input.',
+        });
+      }
 
       // Determine the caller's role from the session cookie
       let callerRole: string | undefined;
-      const rc = req.headers.cookie;
-      if (rc) {
-        const parts = rc.split(';');
-        for (const part of parts) {
-          const trimmed = part.trim();
-          if (trimmed.startsWith('edu_os_token=')) {
-            const token = trimmed.substring('edu_os_token='.length);
-            try {
-              const sessionRow = kernelContainer.db.prepare('SELECT session_data FROM client_sessions WHERE id = ?').get(token) as any;
-              if (sessionRow) {
-                const session = JSON.parse(sessionRow.session_data);
-                callerRole = session.role;
-              }
-            } catch (_) {}
-            break;
-          }
+      const token = getCookieToken(req);
+      if (token) {
+        const session = getValidSession(token);
+        if (session) {
+          callerRole = session.role;
         }
       }
 
       const provider = providerId
         ? kernelContainer.db.prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?').get(providerId) as StoredAIProvider | undefined
         : undefined;
+
+      // SEC-DATA-01: 解密 API Key
+      if (provider?.api_key) provider.api_key = decryptApiKey(provider.api_key);
 
       const result = provider
         ? await runOpenAIAgentChat(provider, { message, lang, currentLessonId, attachments, callerRole })
@@ -1958,49 +2060,8 @@ async function startServer() {
     }
   });
   
-  function getCookieToken(req: any) {
-    const rc = req.headers.cookie;
-    if (rc) {
-      const parts = rc.split(';');
-      for (const part of parts) {
-        const trimmed = part.trim();
-        if (trimmed.startsWith('edu_os_token=')) {
-          return trimmed.substring('edu_os_token='.length);
-        }
-      }
-    }
-    return null;
-  }
-
-  function checkIsTeacherOrAdmin(req: any): boolean {
-    const token = getCookieToken(req);
-    if (!token) return false;
-    try {
-      const sessionRow = kernelContainer.db.prepare('SELECT * FROM client_sessions WHERE id = ?').get(token) as any;
-      if (!sessionRow) return false;
-      const session = JSON.parse(sessionRow.session_data);
-      return session.role === 'teacher' || session.role === 'administrator';
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function getActorId(req: any): string {
-    const token = getCookieToken(req);
-    if (!token) return 'user-frontend';
-    try {
-      const sessionRow = kernelContainer.db.prepare('SELECT * FROM client_sessions WHERE id = ?').get(token) as any;
-      if (!sessionRow) return 'user-frontend';
-      const session = JSON.parse(sessionRow.session_data);
-      const role = session.subRole || session.role;
-      if (role) {
-        return `user:${session.userId || 'demo'}:${role}`;
-      }
-      return 'user-frontend';
-    } catch (e) {
-      return 'user-frontend';
-    }
-  }
+  // Auth helper functions imported from server/middleware/auth.js
+  // (getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId are now module-level imports)
 
   function injectLmsSdk(htmlContent: string, req: any, cwInfo: { id: string, name: string, uuid: string }) {
     const token = getCookieToken(req);
@@ -2875,13 +2936,12 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       if (!token) {
         return res.json({ session: null });
       }
-      const sessionRow = kernelContainer.db.prepare('SELECT * FROM client_sessions WHERE id = ?').get(token) as any;
-      if (!sessionRow) {
+      // SEC-AUTH-03: 使用 getValidSession 自动检查过期
+      const session = getValidSession(token);
+      if (!session) {
         return res.json({ session: null });
       }
-      // Update updated_at timestamp to avoid expiration
-      kernelContainer.db.prepare('UPDATE client_sessions SET updated_at = ? WHERE id = ?').run(Date.now(), token);
-      res.json({ session: JSON.parse(sessionRow.session_data) });
+      res.json({ session });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -2893,14 +2953,87 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       if (token) {
         kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(token);
       }
-      res.setHeader('Set-Cookie', 'edu_os_token=; Path=/; HttpOnly; Max-Age=0; SameSite=Strict');
+      const isProduction = process.env.NODE_ENV === 'production';
+      const secureFlag = isProduction ? '; Secure' : '';
+      res.setHeader('Set-Cookie', `edu_os_token=; Path=/; HttpOnly; Max-Age=0; SameSite=Strict${secureFlag}`);
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
-  app.post('/api/auth/login', (req, res) => {
+  // SEC-AUTH-05: 学生自助密码修改
+  app.post('/api/auth/change-password', (req, res) => {
+    try {
+      const token = getCookieToken(req);
+      if (!token) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+      const session = getValidSession(token);
+      if (!session) {
+        return res.status(401).json({ error: 'Session expired' });
+      }
+      const { oldPassword, newPassword } = req.body;
+      if (!oldPassword || !newPassword) {
+        return res.status(400).json({ error: 'Both old and new passwords are required' });
+      }
+      // 密码强度验证
+      if (newPassword.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+      }
+      if (!/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+        return res.status(400).json({ error: 'Password must contain both letters and numbers' });
+      }
+
+      if (session.role === 'teacher' || session.role === 'administrator') {
+        const userObj = kernelContainer.db.prepare('SELECT * FROM users WHERE id = ?').get(session.userId) as any;
+        if (!userObj) {
+          return res.status(404).json({ error: 'User not found' });
+        }
+        const { valid } = verifyPassword(oldPassword, userObj.password_hash);
+        if (!valid) {
+          return res.status(401).json({ error: 'Incorrect old password' });
+        }
+        kernelContainer.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+          .run(bcryptHashPassword(newPassword), session.userId);
+        // 使该用户所有其他 session 失效
+        kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id != ? AND session_data LIKE ?')
+          .run(token, `%${session.userId}%`);
+        return res.json({ success: true, message: 'Password changed. All other devices have been logged out.' });
+      }
+
+      if (session.role === 'student') {
+        const studentObj = kernelContainer.db.prepare('SELECT * FROM students WHERE id = ?').get(session.studentId) as any;
+        if (!studentObj) {
+          return res.status(404).json({ error: 'Student not found' });
+        }
+        const storedPwd = studentObj.password || '';
+        let matches = false;
+        if (storedPwd.startsWith('$2')) {
+          matches = bcrypt.compareSync(oldPassword, storedPwd);
+        } else if (/^[a-f0-9]{64}$/.test(storedPwd)) {
+          matches = crypto.createHash('sha256').update(oldPassword).digest('hex') === storedPwd;
+        } else {
+          matches = storedPwd === oldPassword;
+        }
+        if (!matches) {
+          return res.status(401).json({ error: 'Incorrect old password' });
+        }
+        kernelContainer.db.prepare('UPDATE students SET password = ? WHERE id = ?')
+          .run(bcryptHashPassword(newPassword), session.studentId);
+        // 使该学生所有其他 session 失效
+        kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id != ? AND session_data LIKE ?')
+          .run(token, `%${session.studentId}%`);
+        return res.json({ success: true, message: 'Password changed. All other devices have been logged out.' });
+      }
+
+      res.status(400).json({ error: 'Unsupported role' });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/auth/login', loginLimiter, (req, res) => {
     try {
       const { entrance, username, password, studentId } = req.body;
       let sessionData: any = null;
@@ -2916,9 +3049,16 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         if (userObj.status === 'disabled') {
           return res.status(403).json({ error: 'Your account has been disabled. Please contact the administrator.' });
         }
-        const hash = crypto.createHash('sha256').update(password).digest('hex');
-        if (userObj.password_hash !== hash) {
+        // SEC-AUTH-02: bcrypt 验证 + 旧 SHA-256 自动升级
+        const { valid, needsUpgrade } = verifyPassword(password, userObj.password_hash);
+        if (!valid) {
           return res.status(401).json({ error: 'Incorrect password' });
+        }
+        if (needsUpgrade) {
+          const newHash = bcryptHashPassword(password);
+          kernelContainer.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+            .run(newHash, userObj.id);
+          console.log(`[Auth] Auto-upgraded password hash for user ${userObj.username}`);
         }
         sessionData = {
           role: 'teacher',
@@ -2941,24 +3081,51 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
           return res.status(400).json({ error: 'Password or Class Passcode is required' });
         }
 
-        // 1. Check student own password
-        const matchesOwnPassword = studentObj.password && studentObj.password.trim() === providedPassword;
+        // SEC-AUTH-01: bcrypt 验证 + 旧明文/旧哈希自动升级
+        let matchesOwnPassword = false;
+        const storedPwd = studentObj.password || '';
+
+        // bcrypt 哈希以 $2a$ / $2b$ / $2y$ 开头
+        if (storedPwd.startsWith('$2')) {
+          matchesOwnPassword = bcrypt.compareSync(providedPassword, storedPwd);
+        }
+        // 旧 SHA-256 哈希（64 位 hex）
+        else if (/^[a-f0-9]{64}$/.test(storedPwd)) {
+          const sha256Hash = crypto.createHash('sha256').update(providedPassword).digest('hex');
+          if (sha256Hash === storedPwd) {
+            matchesOwnPassword = true;
+            // 自动升级到 bcrypt
+            kernelContainer.db.prepare('UPDATE students SET password = ? WHERE id = ?')
+              .run(bcryptHashPassword(providedPassword), studentObj.id);
+            console.log(`[Auth] Auto-upgraded password hash for student ${studentObj.student_number || studentObj.id}`);
+          }
+        }
+        // 旧明文密码
+        else if (storedPwd === providedPassword) {
+          matchesOwnPassword = true;
+          // 自动升级到 bcrypt
+          kernelContainer.db.prepare('UPDATE students SET password = ? WHERE id = ?')
+            .run(bcryptHashPassword(providedPassword), studentObj.id);
+          console.log(`[Auth] Auto-upgraded plaintext password to bcrypt for student ${studentObj.student_number || studentObj.id}`);
+        }
 
         // 2. Check temporary class passcodes for classes the student is enrolled in
         let matchesClassPasscode = false;
-        try {
-          const enrolledClasses = kernelContainer.db.prepare(`
-            SELECT c.class_passcode 
-            FROM classes c
-            INNER JOIN class_students cs ON c.id = cs.class_id
-            WHERE cs.student_id = ?
-          `).all(studentObj.id) as any[];
+        if (!matchesOwnPassword) {
+          try {
+            const enrolledClasses = kernelContainer.db.prepare(`
+              SELECT c.class_passcode
+              FROM classes c
+              INNER JOIN class_students cs ON c.id = cs.class_id
+              WHERE cs.student_id = ?
+            `).all(studentObj.id) as any[];
 
-          matchesClassPasscode = enrolledClasses.some(cls => 
-            cls.class_passcode && cls.class_passcode.trim() === providedPassword
-          );
-        } catch (dbErr) {
-          console.error("Failed to query active class passcodes", dbErr);
+            matchesClassPasscode = enrolledClasses.some(cls =>
+              cls.class_passcode && cls.class_passcode.trim() === providedPassword
+            );
+          } catch (dbErr) {
+            console.error("Failed to query active class passcodes", dbErr);
+          }
         }
 
         if (!matchesOwnPassword && !matchesClassPasscode) {
@@ -2975,10 +3142,17 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
       if (sessionData) {
         const sessionToken = 'token_' + crypto.randomBytes(16).toString('hex');
-        kernelContainer.db.prepare('INSERT INTO client_sessions (id, session_data, updated_at) VALUES (?, ?, ?)')
-          .run(sessionToken, JSON.stringify(sessionData), Date.now());
+        // SEC-AUTH-03: session 添加 expires_at（24小时空闲 + 7天绝对）
+        const now = Date.now();
+        const expiresAt = now + 7 * 24 * 60 * 60 * 1000; // 7 天绝对过期
+        kernelContainer.db.prepare('INSERT INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)')
+          .run(sessionToken, JSON.stringify(sessionData), now, expiresAt);
 
-        res.setHeader('Set-Cookie', `edu_os_token=${sessionToken}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`);
+        // SEC-AUTH-03: Secure 标志（生产环境）
+        const isProduction = process.env.NODE_ENV === 'production';
+        const secureFlag = isProduction ? '; Secure' : '';
+        // Max-Age 24h 用于空闲超时
+        res.setHeader('Set-Cookie', `edu_os_token=${sessionToken}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400${secureFlag}`);
         return res.json({
           success: true,
           session: sessionData
@@ -3201,10 +3375,14 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         finalNum = generateStudentNumber(kernelContainer.db);
       }
 
+      // SEC-AUTH-01: 使用 bcrypt 哈希存储学生密码
+      const hashedPassword = password && password.trim() !== '' && password !== '123456'
+        ? bcryptHashPassword(password)
+        : bcryptHashPassword('123456');
       kernelContainer.db.prepare('INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-        studentId, finalNum, name, email || '', password || '123456', Date.now()
+        studentId, finalNum, name, email || '', hashedPassword, Date.now()
       );
-      res.json({ success: true, id: studentId, student_number: finalNum });
+      res.json({ success: true, id: studentId, student_number: finalNum, tempPassword: password || '123456' });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -3215,7 +3393,11 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       const { name, email, password, locked_lesson_id, private_notes, student_number } = req.body;
       if (name) kernelContainer.db.prepare('UPDATE students SET name = ? WHERE id = ?').run(name, req.params.id);
       if (email !== undefined) kernelContainer.db.prepare('UPDATE students SET email = ? WHERE id = ?').run(email, req.params.id);
-      if (password !== undefined) kernelContainer.db.prepare('UPDATE students SET password = ? WHERE id = ?').run(password, req.params.id);
+      if (password !== undefined) {
+        // SEC-AUTH-01: 更新时 bcrypt 哈希
+        const hashed = password.trim() !== '' ? bcryptHashPassword(password) : password;
+        kernelContainer.db.prepare('UPDATE students SET password = ? WHERE id = ?').run(hashed, req.params.id);
+      }
       if (locked_lesson_id !== undefined) kernelContainer.db.prepare('UPDATE students SET locked_lesson_id = ? WHERE id = ?').run(locked_lesson_id, req.params.id);
       if (private_notes !== undefined) kernelContainer.db.prepare('UPDATE students SET private_notes = ? WHERE id = ?').run(private_notes, req.params.id);
       if (student_number !== undefined) kernelContainer.db.prepare('UPDATE students SET student_number = ? WHERE id = ?').run(student_number, req.params.id);
@@ -3231,6 +3413,80 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       kernelContainer.db.prepare('DELETE FROM student_lesson_progress WHERE student_id = ?').run(req.params.id);
       kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(req.params.id);
       res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // SEC-DATA-02: GDPR 学生数据导出
+  app.get('/api/students/:id/export', (req, res) => {
+    try {
+      if (!checkIsTeacherOrAdmin(req)) {
+        return res.status(403).json({ error: 'Only teachers and administrators can export student data' });
+      }
+      const studentId = req.params.id;
+      const student = kernelContainer.db.prepare('SELECT * FROM students WHERE id = ?').get(studentId) as any;
+      if (!student) return res.status(404).json({ error: 'Student not found' });
+
+      const classEnrollments = kernelContainer.db.prepare(`
+        SELECT c.name as class_name FROM classes c
+        JOIN class_students cs ON c.id = cs.class_id WHERE cs.student_id = ?
+      `).all(studentId);
+      const progress = kernelContainer.db.prepare('SELECT * FROM student_lesson_progress WHERE student_id = ?').all(studentId);
+      const submissions = kernelContainer.db.prepare('SELECT * FROM assignment_submissions WHERE student_id = ?').all(studentId);
+      const attendance = kernelContainer.db.prepare('SELECT * FROM attendance WHERE student_id = ?').all(studentId);
+      const examScores = kernelContainer.db.prepare('SELECT * FROM exam_scores WHERE student_id = ?').all(studentId);
+      const semesterReports = kernelContainer.db.prepare('SELECT * FROM student_semester_reports WHERE student_id = ?').all(studentId);
+      const rollcalls = kernelContainer.db.prepare('SELECT * FROM student_rollcalls WHERE student_id = ?').all(studentId);
+      const pluginSubmissions = kernelContainer.db.prepare('SELECT * FROM plugin_submissions WHERE student_id = ?').all(studentId);
+      const peerReviews = kernelContainer.db.prepare('SELECT * FROM plugin_peer_reviews WHERE reviewer_id = ?').all(studentId);
+
+      res.json({
+        student: { ...student, password: '[REDACTED]' },
+        classes: classEnrollments,
+        progress,
+        assignmentSubmissions: submissions,
+        attendance,
+        examScores,
+        semesterReports,
+        rollcalls,
+        pluginSubmissions,
+        peerReviews,
+        exportedAt: new Date().toISOString(),
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // SEC-DATA-02: GDPR 完整数据删除（管理员专用，需二次确认）
+  app.delete('/api/students/:id/gdpr-delete', (req, res) => {
+    try {
+      if (!checkIsTeacherOrAdmin(req)) {
+        return res.status(403).json({ error: 'Only teachers and administrators can perform GDPR deletion' });
+      }
+      const studentId = req.params.id;
+      const { confirm } = req.body;
+      if (confirm !== true) {
+        return res.status(400).json({ error: 'Must explicitly confirm GDPR deletion with { confirm: true }' });
+      }
+
+      // 级联删除所有关联数据
+      kernelContainer.db.prepare('DELETE FROM class_students WHERE student_id = ?').run(studentId);
+      kernelContainer.db.prepare('DELETE FROM student_lesson_progress WHERE student_id = ?').run(studentId);
+      kernelContainer.db.prepare('DELETE FROM assignment_submissions WHERE student_id = ?').run(studentId);
+      kernelContainer.db.prepare('DELETE FROM attendance WHERE student_id = ?').run(studentId);
+      kernelContainer.db.prepare('DELETE FROM exam_scores WHERE student_id = ?').run(studentId);
+      kernelContainer.db.prepare('DELETE FROM student_semester_reports WHERE student_id = ?').run(studentId);
+      kernelContainer.db.prepare('DELETE FROM student_rollcalls WHERE student_id = ?').run(studentId);
+      kernelContainer.db.prepare('DELETE FROM plugin_submissions WHERE student_id = ?').run(studentId);
+      kernelContainer.db.prepare('DELETE FROM plugin_peer_reviews WHERE reviewer_id = ?').run(studentId);
+      kernelContainer.db.prepare('DELETE FROM student_seats WHERE student_id = ?').run(studentId);
+      kernelContainer.db.prepare('DELETE FROM student_read_notifications WHERE student_id = ?').run(studentId);
+      kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(studentId);
+
+      console.log(`[GDPR] Complete data deletion for student ${studentId}`);
+      res.json({ success: true, message: 'All student data has been permanently deleted.' });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -3895,6 +4151,8 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       const provider = providerId
         ? kernelContainer.db.prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?').get(providerId) as StoredAIProvider | undefined
         : undefined;
+
+      if (provider?.api_key) provider.api_key = decryptApiKey(provider.api_key);
 
       if (provider && provider.api_key && provider.api_key.trim()) {
         let chatUrl = provider.api_url.trim();
@@ -4635,6 +4893,8 @@ ${examsText}
         ? kernelContainer.db.prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?').get(providerId) as StoredAIProvider | undefined
         : kernelContainer.db.prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != "" LIMIT 1').get() as StoredAIProvider | undefined;
 
+      if (provider?.api_key) provider.api_key = decryptApiKey(provider.api_key);
+
       if (provider && provider.api_key && provider.api_key.trim()) {
         let chatUrl = provider.api_url.trim();
         if (!chatUrl.endsWith('/chat/completions')) {
@@ -4852,8 +5112,13 @@ ${examsText}
   // AI Provider Endpoints
   app.get('/api/ai-providers', (req, res) => {
     try {
-      const providers = kernelContainer.db.prepare('SELECT * FROM ai_providers ORDER BY created_at DESC').all();
-      res.json(providers);
+      const providers = kernelContainer.db.prepare('SELECT * FROM ai_providers ORDER BY created_at DESC').all() as any[];
+      // SEC-DATA-01: 掩码 API Key 后返回
+      const masked = providers.map(p => ({
+        ...p,
+        api_key: maskApiKey(decryptApiKey(p.api_key || '')),
+      }));
+      res.json(masked);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -4867,8 +5132,10 @@ ${examsText}
       }
       const id = 'prov_' + Date.now();
       const now = Date.now();
+      // SEC-DATA-01: 加密存储 API Key
+      const encryptedKey = api_key ? encryptApiKey(api_key) : '';
       kernelContainer.db.prepare('INSERT INTO ai_providers (id, name, api_url, api_key, model_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(id, name, api_url, api_key || '', model_name, now, now);
+        .run(id, name, api_url, encryptedKey, model_name, now, now);
       res.json({ success: true, id });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -4882,8 +5149,17 @@ ${examsText}
         return res.status(400).json({ error: 'Missing name, api_url or model_name' });
       }
       const now = Date.now();
+      // SEC-DATA-01: 仅当提供了新 api_key 时加密存储；空字符串保留原值
+      let finalKey: string;
+      if (api_key && api_key.trim() !== '') {
+        finalKey = encryptApiKey(api_key);
+      } else {
+        // 保留已有加密值
+        const existing = kernelContainer.db.prepare('SELECT api_key FROM ai_providers WHERE id = ?').get(req.params.id) as any;
+        finalKey = existing?.api_key || '';
+      }
       kernelContainer.db.prepare('UPDATE ai_providers SET name = ?, api_url = ?, api_key = ?, model_name = ?, updated_at = ? WHERE id = ?')
-        .run(name, api_url, api_key || '', model_name, now, req.params.id);
+        .run(name, api_url, finalKey, model_name, now, req.params.id);
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -4901,11 +5177,14 @@ ${examsText}
 
   app.post('/api/ai-providers/test', async (req, res) => {
     try {
-      const { api_url, api_key, model_name } = req.body;
+      const { api_url, api_key: providedKey, model_name } = req.body;
       if (!api_url || !model_name) {
         return res.status(400).json({ error: 'api_url and model_name are required' });
       }
-      
+
+      // SEC-DATA-01: 解密 API Key
+      const api_key = providedKey ? (providedKey.includes(':') ? decryptApiKey(providedKey) : providedKey) : '';
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
@@ -4941,8 +5220,20 @@ ${examsText}
   });
 
   const httpServer = createHttpServer(app);
+
+  // SEC-NET-01: CORS 白名单化
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : (process.env.NODE_ENV === 'production'
+      ? [] // 生产环境必须配置
+      : ['http://localhost:5173', 'http://localhost:9000', 'http://localhost:4173']);
+
   const io = new Server(httpServer, {
-    cors: { origin: '*' }
+    cors: {
+      origin: allowedOrigins.length > 0 ? allowedOrigins : '*',
+      methods: ['GET', 'POST'],
+      credentials: true,
+    }
   });
 
   kernelContainer.eventBus.subscribe('assignment.graded', (event) => {
@@ -5133,8 +5424,36 @@ ${examsText}
     });
 
     socket.on('whiteboard-update', (data: { roomId: string, type: string, payload: any }) => {
-      // Broadcast to other clients in the exact same room
+      // 实时绘制事件（temp-draw, temp-end, segment-change）：直接广播，不经过 EventBus
       socket.to(data.roomId).emit('whiteboard-sync', data);
+    });
+
+    // Step 4 (v5.0): 白板结构化事件 → 服务端 EventBus（审计日志 + 广播）
+    socket.on('whiteboard-event', (data: {
+      type: string;
+      payload: { lessonId: string; elementId?: string; elementType?: string; segmentId?: string };
+      id: string;
+      timestamp: number;
+    }) => {
+      // 1. 发布到服务端 EventBus → 自动写入 events 表（审计日志）
+      kernelContainer.eventBus.publish({
+        id: data.id,
+        type: data.type,
+        source: 'whiteboard',
+        payload: data.payload,
+        timestamp: data.timestamp,
+        correlationId: data.payload.lessonId,
+      });
+
+      // 2. 广播到课程房间的其他客户端
+      const lessonId = data.payload.lessonId;
+      if (lessonId) {
+        const roomName = lessonId.startsWith('assignment-') ? lessonId : `lesson-${lessonId}`;
+        socket.to(data.payload.lessonId).emit('whiteboard-sync', {
+          type: 'refresh',
+          sourceEvent: data.type,
+        });
+      }
     });
 
     socket.on('teacher-broadcast-segment', (data: { lessonId: string, activeSegmentId: string }) => {
@@ -5205,9 +5524,62 @@ ${examsText}
     }
   });
 
+  // ── 健康检查端点 (OBS-HEALTH-01) ──────────────────────────────────
+  const startTime = Date.now();
+  app.get('/health', (_req: any, res: any) => {
+    res.json({ status: 'ok', uptime: Math.floor((Date.now() - startTime) / 1000), version: '4.0.0' });
+  });
+
+  app.get('/health/ready', (_req: any, res: any) => {
+    try {
+      kernelContainer.db.prepare('SELECT 1').get();
+      const workerCount = kernelContainer.workerManager?.registry?.activeCount ?? 0;
+      res.json({ status: 'ready', db: 'connected', workers: workerCount });
+    } catch (e: any) {
+      res.status(503).json({ status: 'not_ready', error: e.message });
+    }
+  });
+
+  app.get('/metrics', (_req: any, res: any) => {
+    const mem = process.memoryUsage();
+    res.json({
+      uptime: Math.floor((Date.now() - startTime) / 1000),
+      memory: { rss: Math.round(mem.rss / 1024 / 1024) + 'MB', heapUsed: Math.round(mem.heapUsed / 1024 / 1024) + 'MB' },
+      nodeVersion: process.version,
+    });
+  });
+
   httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`Educational OS Kernel running on port ${PORT}`);
   });
 }
 
 startServer().catch(console.error);
+
+// ── 优雅关闭 (OBS-SHUTDOWN-01) ────────────────────────────────────
+let shuttingDown = false;
+const SHUTDOWN_TIMEOUT_MS = 30000;
+
+async function gracefulShutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[Server] Received ${signal}, starting graceful shutdown...`);
+
+  setTimeout(() => {
+    console.error('[Server] Forced shutdown after timeout');
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
+
+  try {
+    // 注意：这些操作在模块作用域无法直接访问 Express 的 httpServer
+    // 生产环境建议通过 startServer() 返回 cleanup 函数
+    console.log('[Server] Shutting down...');
+    process.exit(0);
+  } catch (e) {
+    console.error('[Server] Error during shutdown:', e);
+    process.exit(1);
+  }
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

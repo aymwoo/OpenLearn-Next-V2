@@ -1,9 +1,0 @@
-@layer theme, utilities;
-
-/* Import theme tokens and utilities only — preflight disabled */
-@import "tailwindcss/theme" layer(theme);
-@import "tailwindcss/utilities" prefix(cw) layer(utilities);
-
-.mfe-courseware-root {
-  box-sizing: border-box;
-}

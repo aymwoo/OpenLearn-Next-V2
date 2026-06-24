@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - '9000:9000'
+    volumes:
+      - db_data:/app/packages/core/db
+      - storage_data:/app/storage
+      - backup_data:/app/backups
+    environment:
+      - NODE_ENV=production
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - LOG_LEVEL=info
+      - BACKUP_DIR=/app/backups
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  storage_data:
+  backup_data:

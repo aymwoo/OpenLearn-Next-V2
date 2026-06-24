@@ -1,5 +1,67 @@
 # Milestones
 
+## v5.1 插件系统能力增强 (Planning: 2026-06-24)
+
+**Steps:** 6 | **Estimated:** ~310 行, ~2h | **Status:** 计划中
+
+**Scope:**
+- P0: 插件自主建表能力（PluginDatabaseAPI — 命名空间隔离 + 幂等建表）
+- P0: 前端 Extension Slot 扩展（新增 teacher.panel, student.fullscreen, global.setting）
+- P0: 插件共享依赖机制（ctx.require() 白名单 — recharts/jspdf/xlsx 等）
+- P1: 前端路由支持（ExtensionPointRenderer route prop 注入）
+- P1: 文件下载 API（IUIService.downloadFile）
+
+**目标：** 使第三方开发者能交付完整的考试/题库插件。
+
+See: [v5.1-PLUGIN-ENHANCEMENT.md](milestones/v5.1-PLUGIN-ENHANCEMENT.md)
+
+---
+
+## v5.0 核心教学闭环 (Planning: 2026-06-24)
+
+**Phases planned:** 6 phases (23-28) | **Requirements:** 29 | **Status:** 规划中
+
+**Scope:**
+- 🔴 Phase 23: 富文本课程编辑器（5项需求 — TipTap编辑器、多媒体嵌入、数学公式、模板系统、AI增强）
+- 🔴 Phase 24: 题库系统增强（6项需求 — 题库管理、7种题型、自动组卷、限时考试、结果分析、白板集成）
+- 🔴 Phase 25: 学习路径与解锁机制（4项需求 — 课程体系、前置条件、自适应推荐、任务管理）
+- 🟡 Phase 26: 学习进度仪表板（4项需求 — 学生仪表板、教师监控、行为分析、成绩预警）
+- 🟡 Phase 27: 课程讨论与通知（6项需求 — 讨论区、全局问答、通知系统、课程公告）
+- 🟡 Phase 28: 实时授课基础（4项需求 — WebRTC直播、屏幕共享、互动控制、录制回放）
+
+**后续展望：** v6.0 评价激励 → v7.0 教务管理 → v8.0 家校互通 → v9.0 生态开放
+
+See: [v5.0-ROADMAP.md](milestones/v5.0-ROADMAP.md) | [v5.0-REQUIREMENTS.md](milestones/v5.0-REQUIREMENTS.md)
+
+---
+
+## v4.0 质量基础与生产就绪 (Shipped: 2026-06-24)
+
+**Phases completed:** 6 | **Requirements:** 39/39 | **Status:** Shipped ✅
+
+**Scope:**
+- 🔴 Phase 17: 安全加固（12项需求 — 密码哈希、Session强化、频率限制、API Key加密、CORS白名单等）
+- 🟡 Phase 18: server.ts 模块化拆分（5项需求 — 路由提取、中间件抽象、AI服务独立）
+- 🟡 Phase 19: App.tsx 状态抽取与组件化（4项需求 — Zustand迁移、Hook提取、页面拆分）
+- 🟡 Phase 20: 数据库迁移系统与备份（4项需求 — 版本化迁移、自动清理、定期备份）
+- 🟡 Phase 21: 可观测性基础设施（6项需求 — 结构化日志、健康检查、优雅关闭）
+- 🟢 Phase 22: CI/CD + 代码规范 + 功能补全（8项需求 — ESLint/Prettier、GitHub Actions、Docker化）
+
+See: [v4.0-ROADMAP.md](milestones/v4.0-ROADMAP.md) | [v4.0-REQUIREMENTS.md](milestones/v4.0-REQUIREMENTS.md)
+
+---
+
+## v3.0 作业提交与学生互评插件 (Shipped: 2026-06-20)
+
+**Phases completed:** 3 phases, 3 plans | **Tests:** 100% pass
+
+**Key accomplishments:**
+- 数据库结构设计与 `ISemesterGradeService` DI 服务对接
+- 学生端文件上传（VFS 存储）、版本管理、自由互评系统
+- 教师打分、权重折算（教师60% + 互评40%）、学期成绩同步
+
+---
+
 ## v2.0 微前端架构改造 (Shipped: 2026-06-20)
 
 **Phases completed:** 4 phases, 8 plans, 24 tasks

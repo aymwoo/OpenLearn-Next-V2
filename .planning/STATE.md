@@ -1,35 +1,35 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.0
-milestone_name: 作业提交与学生互评插件
-status: completed
-stopped_at: context exhaustion at 75% (2026-06-20)
-last_updated: "2026-06-20T13:03:37.277Z"
-last_activity: 2026-06-20
-last_activity_desc: Phase 16 completed with 100% green tests. All features shipped.
+milestone: v5.0
+milestone_name: 核心教学闭环
+status: planning
+stopped_at: —
+last_updated: "2026-06-24T00:00:00.000Z"
+last_activity: 2026-06-24
+last_activity_desc: v5.0 roadmap and requirements documents created. 6 phases (23-28), 29 requirements defined.
 progress:
-  total_phases: 5
-  completed_phases: 4
-  total_plans: 9
-  completed_plans: 8
-  percent: 80
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-20)
+See: .planning/PROJECT.md (updated 2026-06-24)
 
-**Core value:** 以独立 ESM 插件（及微前端桥接）的方式，为授课流程增加学生作业文件上传、公开自由互评、教师评分及平时成绩自动核算和学期成绩对接。
-**Current focus:** Milestone v3.0 Shipped
+**Core value:** 补齐课程内容创作、题库测验、学习路径和进度管理四大核心教学能力，使平台从"功能框架"进化为"真正可教学的完整在线教育系统"。
+**Current focus:** 架构重构（v5.0 前置）— 将 MFE 子应用内聚到主应用，消除 Module Federation。
 
 ## Current Position
 
-Phase: —
-Plan: —
-Status: Completed
-Last activity: 2026-06-20 — Phase 16 completed with 100% green tests. All features shipped.
+Phase: 架构重构（v5.0-ARCHITECTURE）
+Plan: 6 步（A-F），详见 .planning/milestones/v5.0-ARCHITECTURE.md
+Status: 计划完成，等待确认后执行
+Last activity: 2026-06-24 — v5.0-ARCHITECTURE.md 实施计划文档完成.
 
 ## Performance Metrics
 

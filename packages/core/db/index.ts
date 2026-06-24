@@ -2,6 +2,28 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+
+const BCRYPT_ROUNDS = 10;
+
+/** 使用 bcrypt 哈希密码 */
+export function hashPassword(pwd: string): string {
+  return bcrypt.hashSync(pwd, BCRYPT_ROUNDS);
+}
+
+/** 验证密码（支持 bcrypt 和旧 SHA-256 双模式） */
+export function verifyPassword(pwd: string, storedHash: string): { valid: boolean; needsUpgrade: boolean } {
+  // bcrypt 哈希以 $2a$ / $2b$ / $2y$ 开头
+  if (storedHash.startsWith('$2')) {
+    return { valid: bcrypt.compareSync(pwd, storedHash), needsUpgrade: false };
+  }
+  // 旧 SHA-256 哈希
+  const sha256Hash = crypto.createHash('sha256').update(pwd).digest('hex');
+  if (sha256Hash === storedHash) {
+    return { valid: true, needsUpgrade: true };
+  }
+  return { valid: false, needsUpgrade: false };
+}
 
 // Use import.meta.url directly — it's available at module scope in tsx ESM.
 // The old getDbDirname() heuristic (__dirname → new Function hack → cwd)
@@ -467,9 +489,8 @@ try {
 try {
   const countObj = db.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number };
   if (countObj && countObj.cnt === 0) {
-    console.log('Seeding default users (admin & teacher)...');
+    console.log('Seeding default users (admin & teacher) with bcrypt...');
     const insertStmt = db.prepare('INSERT INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)');
-    const hashPassword = (pwd: string) => crypto.createHash('sha256').update(pwd).digest('hex');
     insertStmt.run('usr_admin', 'admin', hashPassword('admin'), 'administrator', 'System Admin', Date.now());
     insertStmt.run('usr_teacher', 'teacher', hashPassword('teacher'), 'teacher', 'Regular Teacher', Date.now());
   }
@@ -489,17 +510,6 @@ try {
   console.error('Failed to seed default AI Providers:', e);
 }
 
-try {
-  console.log('Seeding/Updating default MFE Remotes...');
-  const upsertStmt = db.prepare(`
-    INSERT INTO mfe_remotes (name, entry)
-    VALUES (?, ?)
-    ON CONFLICT(name) DO UPDATE SET entry=excluded.entry
-  `);
-  upsertStmt.run('mfe_whiteboard', '/mfe/whiteboard/remoteEntry.js');
-  upsertStmt.run('mfe_courseware', '/mfe/courseware/remoteEntry.js');
-} catch (e) {
-  console.error('Failed to seed default MFE Remotes:', e);
-}
+// MFE remotes 种子数据已移除（v5.0 架构重构：白板/课件内聚为本地模块）
 
 console.log('Database initialized at', dbPath);
