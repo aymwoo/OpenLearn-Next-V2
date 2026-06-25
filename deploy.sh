@@ -134,7 +134,11 @@ if command -v pm2 &> /dev/null; then
         echo "✅ ENCRYPTION_KEY 已写入 .env"
     fi
 
-    pm2 restart openlearnv2 2>/dev/null || pm2 start ecosystem.config.cjs
+    # 先尝试重启，失败则清理后重新启动
+    if ! pm2 restart openlearnv2 2>/dev/null; then
+        pm2 delete openlearnv2 2>/dev/null
+        pm2 start ecosystem.config.cjs
+    fi
     pm2 save
     echo "✅ PM2 已启动"
 else
