@@ -55,16 +55,17 @@ export enum PluginState {
  * 包含 7 个内核服务接口 + 插件标识信息 + manifest 元数据 + resolve 辅助函数。
  * ContextBuilder（Plan 03）负责构建此对象并进行安全包装。
  */
-/** 插件可引用的主应用共享模块白名单 */
+/**
+ * 插件可引用的主应用共享模块白名单（服务端）。
+ * 前端专属库（konva/react-konva/react-konva-utils）通过前端 FrontendPluginHost 单独注入，
+ * CJS bundle 无法加载纯 ESM 模块。
+ */
 export const PLUGIN_SHARED_MODULES = [
   'recharts',
   'react-markdown',
   'jspdf',
   'jspdf-autotable',
-  'xlsx',
-  'konva',
-  'react-konva',
-  'react-konva-utils',
+  'xlsx',            // 可选：需在 package.json dependencies 中
   'lucide-react',
   'uuid',
 ] as const;

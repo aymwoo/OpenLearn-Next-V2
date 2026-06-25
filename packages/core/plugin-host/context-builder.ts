@@ -48,22 +48,24 @@ export function registerSharedModule(name: string, mod: any): void {
 
 /** 注册所有白名单共享模块（由 Kernel 在启动时调用） */
 export async function bootstrapSharedModules(): Promise<void> {
+  // 服务端共享模块：排除前端专属库（konva/react-konva 是 Canvas 2D 库，CJS bundle 无法加载 ESM 模块）
   const modules = await Promise.allSettled([
     import('recharts').then(m => ({ name: 'recharts', mod: m })),
     import('react-markdown').then(m => ({ name: 'react-markdown', mod: m })),
     import('jspdf').then(m => ({ name: 'jspdf', mod: m })),
     import('jspdf-autotable').then(m => ({ name: 'jspdf-autotable', mod: m })),
-    import('xlsx').then(m => ({ name: 'xlsx', mod: m })),
-    import('konva').then(m => ({ name: 'konva', mod: m })),
-    import('react-konva').then(m => ({ name: 'react-konva', mod: m })),
-    import('react-konva-utils').then(m => ({ name: 'react-konva-utils', mod: m })),
     import('lucide-react').then(m => ({ name: 'lucide-react', mod: m })),
     import('uuid').then(m => ({ name: 'uuid', mod: m })),
+    // xlsx 按需可选，失败不阻塞
+    import('xlsx').then(m => ({ name: 'xlsx', mod: m })).catch(err => {
+      console.warn('[PluginHost] xlsx not available (optional):', err.message);
+      return null;
+    }),
   ]);
   for (const result of modules) {
-    if (result.status === 'fulfilled') {
+    if (result.status === 'fulfilled' && result.value !== null) {
       sharedModules[result.value.name] = result.value.mod;
-    } else {
+    } else if (result.status === 'rejected') {
       console.warn(`[PluginHost] Failed to register shared module:`, result.reason?.message);
     }
   }
