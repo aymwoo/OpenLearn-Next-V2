@@ -19,7 +19,7 @@ cd "$ROOT" || exit 1
 npx tsx --no-cache server.ts &
 PID_MAIN=$!
 
-sleep 3
+sleep 6
 
 if curl -s -o /dev/null -w '' http://localhost:9000/ 2>/dev/null; then
     echo "✅ 主服务 http://localhost:9000 就绪"
