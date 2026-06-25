@@ -101,7 +101,9 @@ echo "✅ 构建完成"
 
 # ── 3. 配置 Nginx ────────────────────────────────────────
 if command -v nginx &> /dev/null; then
-    sudo ln -sf "$APP_ROOT/nginx.generated.conf" /etc/nginx/sites-enabled/openlearnv2.conf
+    # 替换 default site，移除旧 openlearnv2.conf（v5.0 前残留）
+    sudo rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/openlearnv2.conf
+    sudo ln -sf "$APP_ROOT/nginx.generated.conf" /etc/nginx/sites-enabled/default
     sudo nginx -t && sudo nginx -s reload
     echo "✅ Nginx 已配置并重载"
 else
