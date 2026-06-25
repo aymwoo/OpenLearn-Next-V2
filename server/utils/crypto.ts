@@ -53,15 +53,22 @@ export function encryptApiKey(plaintext: string): string {
 
 export function decryptApiKey(encrypted: string): string {
   if (!encrypted) return '';
+  // 明文（未加密或旧数据）：直接返回
   const parts = encrypted.split(':');
-  if (parts.length !== 3) return encrypted; // backward compat: plaintext
-  const key = getEncryptionKey();
-  const iv = Buffer.from(parts[0], 'hex');
-  const authTag = Buffer.from(parts[1], 'hex');
-  const ciphertext = Buffer.from(parts[2], 'hex');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-  decipher.setAuthTag(authTag);
-  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf-8');
+  if (parts.length !== 3) return encrypted;
+  try {
+    const key = getEncryptionKey();
+    const iv = Buffer.from(parts[0], 'hex');
+    const authTag = Buffer.from(parts[1], 'hex');
+    const ciphertext = Buffer.from(parts[2], 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf-8');
+  } catch {
+    // 解密失败（ENCRYPTION_KEY 变更或数据损坏），按明文处理
+    console.warn('[Crypto] Failed to decrypt API key, treating as plaintext');
+    return encrypted;
+  }
 }
 
 export function maskApiKey(key: string): string {
