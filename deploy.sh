@@ -125,16 +125,26 @@ else
     echo "⚠ Nginx 未安装，跳过"
 fi
 
-# ── 4. PM2 启动/重启 ────────────────────────────────────
-if command -v pm2 &> /dev/null; then
-    if ! grep -q "ENCRYPTION_KEY" "$APP_ROOT/.env" 2>/dev/null; then
-        echo "⚠ 未检测到 ENCRYPTION_KEY，生成中..."
-        ENCRYPTION_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
-        echo "ENCRYPTION_KEY=$ENCRYPTION_KEY" >> "$APP_ROOT/.env"
-        echo "✅ ENCRYPTION_KEY 已写入 .env"
-    fi
+# ── 4. 环境变量 ──────────────────────────────────────────
+# 生成 ENCRYPTION_KEY（用于 AI Provider API Key AES-256 加密）
+if ! grep -q "^ENCRYPTION_KEY=." "$APP_ROOT/.env" 2>/dev/null; then
+    ENCRYPTION_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+    echo "ENCRYPTION_KEY=$ENCRYPTION_KEY" >> "$APP_ROOT/.env"
+    echo "✅ ENCRYPTION_KEY 已写入 .env"
+fi
 
-    # 先尝试重启，失败则清理后重新启动
+# 从 .env 读取值写入 ecosystem.config.cjs（PM2 env 块优先级 > dotenv）
+set -a; source "$APP_ROOT/.env" 2>/dev/null; set +a
+for key in ENCRYPTION_KEY GEMINI_API_KEY ALLOWED_ORIGINS; do
+    val="${!key}"
+    if [ -n "$val" ]; then
+        sed -i "s|${key}: ''|${key}: '${val}'|" "$APP_ROOT/ecosystem.config.cjs"
+    fi
+done
+echo "✅ 环境变量已注入 ecosystem.config.cjs"
+
+# ── 5. PM2 启动/重启 ────────────────────────────────────
+if command -v pm2 &> /dev/null; then
     if ! pm2 restart openlearnv2 2>/dev/null; then
         pm2 delete openlearnv2 2>/dev/null
         pm2 start ecosystem.config.cjs
