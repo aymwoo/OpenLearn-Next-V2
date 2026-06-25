@@ -5149,12 +5149,11 @@ ${examsText}
         return res.status(400).json({ error: 'Missing name, api_url or model_name' });
       }
       const now = Date.now();
-      // SEC-DATA-01: 仅当提供了新 api_key 时加密存储；空字符串保留原值
+      // SEC-DATA-01: 含 **** 的掩码密钥 → 保留原值；纯明文 → 加密存储
       let finalKey: string;
-      if (api_key && api_key.trim() !== '') {
+      if (api_key && api_key.trim() !== '' && !api_key.includes('****')) {
         finalKey = encryptApiKey(api_key);
       } else {
-        // 保留已有加密值
         const existing = kernelContainer.db.prepare('SELECT api_key FROM ai_providers WHERE id = ?').get(req.params.id) as any;
         finalKey = existing?.api_key || '';
       }
@@ -5182,8 +5181,17 @@ ${examsText}
         return res.status(400).json({ error: 'api_url and model_name are required' });
       }
 
-      // SEC-DATA-01: 解密 API Key
-      const api_key = providedKey ? (providedKey.includes(':') ? decryptApiKey(providedKey) : providedKey) : '';
+      // SEC-DATA-01: 解密 API Key（掩码密钥表示未修改，需从 DB 获取）
+      let api_key = '';
+      if (providedKey && providedKey.includes('****')) {
+        // 掩码密钥：用户未输入新 key，尝试从 DB 查询
+        const existing = kernelContainer.db.prepare(
+          'SELECT api_key FROM ai_providers WHERE api_url = ? AND model_name = ? LIMIT 1'
+        ).get(api_url, model_name) as { api_key: string } | undefined;
+        api_key = existing ? decryptApiKey(existing.api_key) : '';
+      } else if (providedKey) {
+        api_key = providedKey.includes(':') ? decryptApiKey(providedKey) : providedKey;
+      }
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
