@@ -16,7 +16,7 @@ trap cleanup INT TERM
 
 echo "⏳ 启动 OpenLearnV2 (9000)..."
 cd "$ROOT" || exit 1
-tsx --no-cache server.ts &
+npx tsx --no-cache server.ts &
 PID_MAIN=$!
 
 sleep 3
