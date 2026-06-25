@@ -7,9 +7,9 @@ APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "📁 项目路径: $APP_ROOT"
 
 # ── 1. 生成 nginx.conf（自动替换路径） ────────────────────────
-cat > "$APP_ROOT/nginx.generated.conf" << NGINX
+cat > "$APP_ROOT/nginx.generated.conf" << 'NGINX'
 # OpenLearnV2 — Production Nginx Configuration (auto-generated)
-# 项目路径: $APP_ROOT
+# 项目路径在 deploy.sh 中通过 sed 替换 $APP_ROOT 占位符
 
 upstream openlearn_backend {
     server 127.0.0.1:9000;
@@ -31,7 +31,7 @@ server {
     gzip_vary on;
 
     location / {
-        try_files \$uri \$uri/ /index.html;
+        try_files $uri $uri/ /index.html;
     }
 
     location /uploads/ {
@@ -45,22 +45,22 @@ server {
         proxy_pass http://openlearn_backend;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
     }
 
     location /socket.io/ {
         proxy_pass http://openlearn_backend;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "Upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_buffering off;
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
@@ -69,13 +69,13 @@ server {
     location /runtime/ {
         proxy_pass http://openlearn_backend;
         proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|otf)\$ {
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|otf)$ {
         expires 1y;
         add_header Cache-Control "public, no-transform";
         access_log off;
@@ -92,6 +92,9 @@ server {
     }
 }
 NGINX
+
+# 替换占位符为实际路径
+sed -i "s|\$APP_ROOT|$APP_ROOT|g" "$APP_ROOT/nginx.generated.conf"
 echo "✅ nginx.generated.conf 已生成"
 
 # ── 2. 构建 ──────────────────────────────────────────────
@@ -101,10 +104,22 @@ echo "✅ 构建完成"
 
 # ── 3. 配置 Nginx ────────────────────────────────────────
 if command -v nginx &> /dev/null; then
-    # 替换 default site，移除旧 openlearnv2.conf（v5.0 前残留）
+    NGINX_CONF="$APP_ROOT/nginx.generated.conf"
+
+    # 检查 nginx.conf 是否 include sites-enabled
+    if ! grep -q "sites-enabled" /etc/nginx/nginx.conf 2>/dev/null; then
+        echo "⚠ /etc/nginx/nginx.conf 未包含 sites-enabled，尝试添加..."
+        # 不自动修改，给出提示
+    fi
+
+    # 替换 default site
     sudo rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/openlearnv2.conf
-    sudo ln -sf "$APP_ROOT/nginx.generated.conf" /etc/nginx/sites-enabled/default
-    sudo nginx -t && sudo nginx -s reload
+    sudo ln -sf "$NGINX_CONF" /etc/nginx/sites-enabled/default
+
+    # 验证配置
+    echo "--- nginx -t ---"
+    sudo nginx -t
+    sudo nginx -s reload
     echo "✅ Nginx 已配置并重载"
 else
     echo "⚠ Nginx 未安装，跳过"
@@ -112,7 +127,6 @@ fi
 
 # ── 4. PM2 启动/重启 ────────────────────────────────────
 if command -v pm2 &> /dev/null; then
-    # 更新 ecosystem.config.cjs 中的 ENCRYPTION_KEY 提示
     if ! grep -q "ENCRYPTION_KEY" "$APP_ROOT/.env" 2>/dev/null; then
         echo "⚠ 未检测到 ENCRYPTION_KEY，生成中..."
         ENCRYPTION_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
