@@ -482,6 +482,7 @@ async function startServer() {
   // SEC-NET-02: HTTP 安全头（helmet）
   // 教育平台需要加载外部课件资源（图片、字体、样式），因此 img-src/style-src/font-src 放宽为 https:
   // script-src 保持严格限制，课件 iframe 通过 sandbox 属性提供额外安全层
+  // COOP/OAC/COEP 已禁用：HTML Applet 在 iframe 中运行时这些策略会导致跨域错误
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
@@ -495,7 +496,9 @@ async function startServer() {
         objectSrc: ["'none'"],
       },
     },
-    crossOriginEmbedderPolicy: false, // 课件 iframe 需要跨域嵌入
+    crossOriginOpenerPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    originAgentCluster: false,
   }));
 
   // SEC-AUTH-04: 登录频率限制（5次/IP/分钟）
