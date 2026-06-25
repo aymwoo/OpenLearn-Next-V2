@@ -2,15 +2,43 @@
  * 安全工具函数：API Key 加密/解密、密码验证、prompt 注入检测
  */
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 // ── API Key 加密 (AES-256-GCM) ─────────────────────────────────────
 
+let _encryptionKey: Buffer | null = null;
+
 function getEncryptionKey(): Buffer {
+  if (_encryptionKey) return _encryptionKey;
+
   const keyHex = process.env.ENCRYPTION_KEY;
-  if (!keyHex || keyHex.trim() === '') {
-    throw new Error('ENCRYPTION_KEY environment variable is required.');
+  if (keyHex && keyHex.trim() !== '') {
+    _encryptionKey = Buffer.from(keyHex.trim(), 'hex');
+    return _encryptionKey;
   }
-  return Buffer.from(keyHex.trim(), 'hex');
+
+  // 自动生成并持久化到 .env（首次启动或未配置时）
+  const newKey = crypto.randomBytes(32).toString('hex');
+  const envPath = path.resolve(process.cwd(), '.env');
+
+  try {
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf-8');
+      if (!content.includes('ENCRYPTION_KEY=')) {
+        fs.appendFileSync(envPath, `\nENCRYPTION_KEY=${newKey}\n`);
+        console.log('[Crypto] ENCRYPTION_KEY auto-generated and persisted to .env');
+      }
+    } else {
+      fs.writeFileSync(envPath, `ENCRYPTION_KEY=${newKey}\n`);
+      console.log('[Crypto] .env created with auto-generated ENCRYPTION_KEY');
+    }
+  } catch (e) {
+    console.warn('[Crypto] Could not persist ENCRYPTION_KEY, using in-memory fallback');
+  }
+
+  _encryptionKey = Buffer.from(newKey, 'hex');
+  return _encryptionKey;
 }
 
 export function encryptApiKey(plaintext: string): string {
