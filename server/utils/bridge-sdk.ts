@@ -217,17 +217,16 @@ export const BRIDGE_SDK_CODE = `(function() {
     // --- SMART DOM SCRAPER FOR GENERIC COURSEWARES ---
     function logToServer(msg, detail) {
       try {
-        const payload = {
+        var payload = JSON.stringify({
           msg: msg + (detail ? " | " + JSON.stringify(detail) : ""),
           url: window.location.href,
           student: window.__LMS_STUDENT__,
           courseware: window.__LMS_COURSEWARE__
-        };
-        fetch('/api/courseware/debug', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        }).catch(function() {});
+        });
+        // sendBeacon 为 fire-and-forget，浏览器不会对失败显示控制台错误
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/courseware/debug', new Blob([payload], {type: 'application/json'}));
+        }
       } catch (e) {}
     }
 
