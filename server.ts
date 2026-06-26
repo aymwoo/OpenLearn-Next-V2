@@ -478,6 +478,10 @@ async function startServer() {
   const app = express();
   const PORT = 9000;
 
+  // SEC-AUTH-03: 信任 Nginx 反向代理的 X-Forwarded-Proto 头
+  // 使 req.protocol / req.secure 能正确反映浏览器到 Nginx 的实际协议
+  app.set('trust proxy', 1);
+
   // ── 安全中间件 ────────────────────────────────────────────────────
   // SEC-NET-02: HTTP 安全头（helmet）
   // 教育平台需要加载外部课件资源（图片、字体、样式），因此 img-src/style-src/font-src 放宽为 https:
@@ -2956,8 +2960,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       if (token) {
         kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(token);
       }
-      const isProduction = process.env.NODE_ENV === 'production';
-      const secureFlag = isProduction ? '; Secure' : '';
+      const secureFlag = req.protocol === 'https' || req.secure ? '; Secure' : '';
       res.setHeader('Set-Cookie', `edu_os_token=; Path=/; HttpOnly; Max-Age=0; SameSite=Strict${secureFlag}`);
       res.json({ success: true });
     } catch (e: any) {
@@ -3151,11 +3154,10 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         kernelContainer.db.prepare('INSERT INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)')
           .run(sessionToken, JSON.stringify(sessionData), now, expiresAt);
 
-        // SEC-AUTH-03: Secure 标志（生产环境）
-        const isProduction = process.env.NODE_ENV === 'production';
-        const secureFlag = isProduction ? '; Secure' : '';
-        // Max-Age 24h 用于空闲超时
-        res.setHeader('Set-Cookie', `edu_os_token=${sessionToken}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400${secureFlag}`);
+        // SEC-AUTH-03: Secure 按实际协议判定；SameSite=Lax 兼容性好且保持 CSRF 防护
+        // Max-Age 30 天，仅登出时清除
+        const secureFlag = req.protocol === 'https' || req.secure ? '; Secure' : '';
+        res.setHeader('Set-Cookie', `edu_os_token=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secureFlag}`);
         return res.json({
           success: true,
           session: sessionData

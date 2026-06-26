@@ -235,7 +235,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS client_sessions (
     id TEXT PRIMARY KEY,
     session_data TEXT NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    expires_at INTEGER
   );
 
   CREATE TABLE IF NOT EXISTS student_read_notifications (
