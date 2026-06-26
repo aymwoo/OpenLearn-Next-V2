@@ -504,6 +504,7 @@ async function startServer() {
     crossOriginOpenerPolicy: false,
     crossOriginEmbedderPolicy: false,
     originAgentCluster: false,
+    strictTransportSecurity: false, // 纯 HTTP 部署，禁止 HSTS（否则浏览器缓存后强制 HTTPS，导致 ERR_CONNECTION_REFUSED）
   }));
 
   // SEC-AUTH-04: 登录频率限制（5次/IP/分钟）
