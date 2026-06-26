@@ -216,17 +216,9 @@ export const BRIDGE_SDK_CODE = `(function() {
 
     // --- SMART DOM SCRAPER FOR GENERIC COURSEWARES ---
     function logToServer(msg, detail) {
+      // 仅 console 输出；网络请求可能被浏览器 HTTPS 升级导致 ERR_CONNECTION_REFUSED
       try {
-        var payload = JSON.stringify({
-          msg: msg + (detail ? " | " + JSON.stringify(detail) : ""),
-          url: window.location.href,
-          student: window.__LMS_STUDENT__,
-          courseware: window.__LMS_COURSEWARE__
-        });
-        // sendBeacon 为 fire-and-forget，浏览器不会对失败显示控制台错误
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon('/api/courseware/debug', new Blob([payload], {type: 'application/json'}));
-        }
+        console.log('[LMS Debug]', msg, detail || '');
       } catch (e) {}
     }
 
