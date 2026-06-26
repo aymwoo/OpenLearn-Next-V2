@@ -2960,8 +2960,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       if (token) {
         kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(token);
       }
-      const secureFlag = req.protocol === 'https' || req.secure ? '; Secure' : '';
-      res.setHeader('Set-Cookie', `edu_os_token=; Path=/; HttpOnly; Max-Age=0; SameSite=Strict${secureFlag}`);
+      res.setHeader('Set-Cookie', `edu_os_token=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax`);
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -3154,10 +3153,8 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         kernelContainer.db.prepare('INSERT INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)')
           .run(sessionToken, JSON.stringify(sessionData), now, expiresAt);
 
-        // SEC-AUTH-03: Secure 按实际协议判定；SameSite=Lax 兼容性好且保持 CSRF 防护
-        // Max-Age 30 天，仅登出时清除
-        const secureFlag = req.protocol === 'https' || req.secure ? '; Secure' : '';
-        res.setHeader('Set-Cookie', `edu_os_token=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secureFlag}`);
+        // 生产环境纯 HTTP，不设 Secure 标志（否则浏览器拒绝存储）
+        res.setHeader('Set-Cookie', `edu_os_token=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
         return res.json({
           success: true,
           session: sessionData
