@@ -16,7 +16,7 @@ import { AcademicGrowthTrajectoryChart } from './components/AcademicGrowthTrajec
 import { ScheduledLessonsProgressChart } from './components/ScheduledLessonsProgressChart';
 import { StudentCompareGrowthChart } from './components/StudentCompareGrowthChart';
 import { ClassAttendanceSummaryChart } from './components/ClassAttendanceSummaryChart';
-import { RollCallHistoryStatsChart } from './components/RollCallHistoryStatsChart';
+
 import { StudentPrivateNotesEditor } from './components/StudentPrivateNotesEditor';
 import { ComputerLabManager } from './components/ComputerLabManager';
 import { LoginPage } from './components/LoginPage';
@@ -38,57 +38,31 @@ import { SocketService } from './services/socket-service';
 import { UIService } from './services/ui-service';
 import { StorageService } from './services/storage-service';
 import { useAppStore, appStore } from './store/appStore';
+import type {
+  Lesson, AIProvider, WhiteboardElement, PluginType, VFSNode, ProcessType,
+  ClassType, StudentType, AssignmentType, SubmissionType,
+  ScheduleType, AttendanceType, StudentProgressType,
+  Toast,
+} from './store/appStore';
 import { EventBus } from '../packages/core/event-bus';
+import { AnimatedCounter } from './components/AnimatedCounter';
+import { ToastContainer } from './features/shared/ToastContainer';
+import { NavigationSidebar } from './features/shared/NavigationSidebar';
+import { RightSidebar } from './features/shared/RightSidebar';
+import { ProcessLogsModal } from './features/modals/ProcessLogsModal';
+import { ImportModal } from './features/modals/ImportModal';
+import { CloudDriveModal } from './features/modals/CloudDriveModal';
+import { NotificationDetailModal } from './features/modals/NotificationDetailModal';
+import { HelpView } from './features/teacher/HelpView';
+import { TimetableView } from './features/teacher/TimetableView';
+import { ComputerLabView } from './features/teacher/ComputerLabView';
+import { AdminDirectoryView } from './features/teacher/AdminDirectoryView';
+import { PluginView } from './features/teacher/PluginView';
+import { SettingsView } from './features/teacher/SettingsView';
+import { CourseManagement } from './features/teacher/CourseManagement';
+import { Dashboard } from './features/teacher/Dashboard';
 
-interface AnimatedCounterProps {
-  value: number;
-  duration?: number;
-}
-
-export function AnimatedCounter({ value, duration = 1.0 }: AnimatedCounterProps) {
-  const [count, setCount] = React.useState(0);
-
-  React.useEffect(() => {
-    const controls = animate(count, value, {
-      duration,
-      ease: 'easeOut',
-      onUpdate: (latest) => setCount(Math.round(latest)),
-    });
-    return () => controls.stop();
-  }, [value, duration]);
-
-  return <>{count}</>;
-}
-
-type Lesson = { id: string; title: string; content: string; timeline?: string; created_at?: number; enrollment_count?: number };
-type AIProvider = {
-  id: string;
-  name: string;
-  api_url: string;
-  api_key: string;
-  model_name: string;
-  created_at: number;
-  updated_at: number;
-};
 const AGENT_PROVIDER_STORAGE_KEY = 'openlearnv2.agentProviderId';
-type WhiteboardElement = { id: string; type: string; data: string };
-type PluginType = { id: string; name: string; status: string; created_at: number; manifest: string; execution_mode?: string };
-type VFSNode = { id: string; parent_id: string | null; type: 'file' | 'dir'; name: string; content?: string };
-type ProcessType = { id: string; name: string; status: string; created_at: number; updated_at: number };
-type ClassType = { id: string; name: string; description: string; class_passcode?: string | null; created_at: number };
-type StudentType = { id: string; name: string; email: string; password?: string; locked_lesson_id?: string | null; private_notes?: string | null; created_at: number };
-type AssignmentType = { id: string; class_id: string; title: string; description: string; content: string; created_at: number };
-type SubmissionType = { assignment_id: string; student_id: string; student_name?: string; content: string; score: number | null; feedback: string | null; status: string };
-type ScheduleType = { id: string; class_id: string; lesson_id: string; lesson_title: string; scheduled_date: string; created_at: number };
-type AttendanceType = { schedule_id: string; student_id: string; student_name: string; status: string; recorded_at: number };
-type StudentProgressType = {
-  student_id: string;
-  lesson_id: string;
-  lesson_title: string;
-  completed: number;
-  progress_percent: number;
-  assigned_at: number;
-};
 
 const DEFAULT_PLUGIN = `exports.default = {
   manifest: {
@@ -331,1284 +305,6 @@ const parseCSV = (text: string): { name: string; email: string }[] => {
   return list;
 };
 
-function HelpTabContent({ registeredCommands, onRefresh }: { registeredCommands: any[], onRefresh: () => void }) {
-  const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'vfs' | 'edu' | 'mgmt' | 'proc' | 'ai' | 'plugin'>('all');
-  const [expandedCommandId, setExpandedCommandId] = useState<string | null>(null);
-  const [commandPayloads, setCommandPayloads] = useState<Record<string, string>>({});
-  const [executionResults, setExecutionResults] = useState<Record<string, { success: boolean; data?: any; error?: string; loading?: boolean }>>({});
-  
-  const [activeTab, setActiveTab] = useState<'commands' | 'sdk_guide' | 'user_guide'>('commands');
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  const handleCopy = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
-  };
-
-  const categories = [
-    { id: 'all', name: '全部命令', icon: Blocks },
-    { id: 'edu', name: '教学与画板', icon: BookOpen },
-    { id: 'mgmt', name: '班级与学生', icon: Users },
-    { id: 'vfs', name: '虚拟文件系统', icon: Folder },
-    { id: 'proc', name: '进程控制', icon: Terminal },
-    { id: 'ai', name: 'AI 规划生成', icon: Wand2 },
-    { id: 'plugin', name: '第三方插件', icon: Puzzle }
-  ];
-
-  const getCommandCategory = (commandType: string): string => {
-    if (commandType.startsWith('vfs.')) return 'vfs';
-    if (commandType.startsWith('lesson.') || commandType.startsWith('whiteboard.')) return 'edu';
-    if (commandType.startsWith('class.') || commandType.startsWith('student.') || commandType.startsWith('assignment.') || commandType.startsWith('attendance.') || commandType.startsWith('schedule.')) return 'mgmt';
-    if (commandType.startsWith('process.')) return 'proc';
-    if (commandType.startsWith('ai.')) return 'ai';
-    return 'plugin';
-  };
-
-  const generateInitialPayload = (schema: any): string => {
-    if (!schema || schema.type !== 'OBJECT') return '{}';
-    const payload: Record<string, any> = {};
-    if (schema.properties) {
-      Object.keys(schema.properties).forEach(key => {
-        const prop = schema.properties[key];
-        if (prop.type === 'ARRAY') {
-          payload[key] = prop.items?.type === 'STRING' ? ["选项 A", "选项 B", "选项 C"] : [];
-        } else if (prop.type === 'INTEGER' || prop.type === 'NUMBER') {
-          payload[key] = 100;
-        } else if (prop.type === 'BOOLEAN') {
-          payload[key] = true;
-        } else {
-          if (key.toLowerCase().includes('id')) {
-            payload[key] = 'auto-id-or-current';
-          } else if (key.toLowerCase().includes('name')) {
-            payload[key] = '测试名称';
-          } else if (key.toLowerCase().includes('content')) {
-            payload[key] = '# 初始内容\n这是一个通过命令创建的组件或段落。';
-          } else {
-            payload[key] = prop.description || '示例参数';
-          }
-        }
-      });
-    }
-    return JSON.stringify(payload, null, 2);
-  };
-
-  const handleExecute = async (cmdType: string, actionId: string) => {
-    const rawPayload = commandPayloads[actionId] || '{}';
-    let parsedPayload = {};
-    try {
-      parsedPayload = JSON.parse(rawPayload);
-    } catch (e: any) {
-      setExecutionResults(prev => ({
-        ...prev,
-        [actionId]: { success: false, error: `Invalid JSON Payload: ${e.message}` }
-      }));
-      return;
-    }
-
-    setExecutionResults(prev => ({
-      ...prev,
-      [actionId]: { loading: true, success: false }
-    }));
-
-    try {
-      const res = await fetch('/api/commands', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ commandType: cmdType, payload: parsedPayload })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setExecutionResults(prev => ({
-          ...prev,
-          [actionId]: { success: true, data: data.result }
-        }));
-      } else {
-        setExecutionResults(prev => ({
-          ...prev,
-          [actionId]: { success: false, error: data.error || 'Server execution failed' }
-        }));
-      }
-    } catch (err: any) {
-      setExecutionResults(prev => ({
-        ...prev,
-        [actionId]: { success: false, error: err.message || 'Fetch failed' }
-      }));
-    }
-  };
-
-  const filteredCommands = registeredCommands.filter(cmd => {
-    const matchesSearch = 
-      cmd.id.toLowerCase().includes(search.toLowerCase()) ||
-      cmd.commandType.toLowerCase().includes(search.toLowerCase()) ||
-      cmd.description.toLowerCase().includes(search.toLowerCase());
-    
-    const cat = getCommandCategory(cmd.commandType);
-    const matchesCategory = selectedCategory === 'all' || cat === selectedCategory;
-
-    return matchesSearch && matchesCategory;
-  });
-
-  const pluginBoilerplateCode = `/**
- * Edu-OS 第三方插件标准模版 (CommonJS 规范)
- * 这是一个完整的"思维导图与随堂卡片插件"开发实例
- */
-exports.default = {
-  // 1. 插件基础声明 manifest
-  manifest: {
-    id: "ext-mindmap-assistant",
-    name: "思维导图与画板卡片扩展",
-    version: "1.1.0",
-    capabilitiesProposed: [
-      "whiteboard:write", 
-      "vfs:read"
-    ]
-  },
-
-  // 2. 激活入口 activate
-  activate: async (ctx) => {
-    // 注册自定义指令元数据，这样指令就会出现在内核控制台及命令总线列表中
-    ctx.actionRegistry.register({
-      id: 'ext-mindmap-generate',
-      commandType: 'mindmap.create',
-      description: '为当前白板一键生成结构化的知识思维导图卡片',
-      capabilityRequired: 'whiteboard:write',
-      inputSchema: {
-        type: 'OBJECT',
-        properties: {
-          lessonId: { type: 'STRING', description: '关联的课堂课时 ID' },
-          topic: { type: 'STRING', description: '思维导图的中心主题名称' },
-          nodes: { 
-            type: 'ARRAY', 
-            items: { type: 'STRING' },
-            description: '脑图的子分支节点列表'
-          }
-        },
-        required: ['lessonId', 'topic', 'nodes']
-      }
-    });
-
-    // 注册该命令的处理器：当 CommandBus 调度 mindmap.create 时触发
-    ctx.commandBus.registerHandler('mindmap.create', {
-      execute: async (command) => {
-        const { lessonId, topic, nodes } = command.payload;
-        
-        // 调用内核白板 API 在交互画板上绘制思维导图卡片
-        const drawResult = await ctx.commandBus.execute({
-          id: 'internal_' + Math.random().toString(36).slice(2),
-          type: 'whiteboard.draw',
-          actorId: command.actorId || 'system-plugin',
-          payload: {
-            lessonId: lessonId,
-            type: 'mindmap',
-            data: JSON.stringify({
-              title: topic,
-              branches: nodes,
-              themeColor: '#6366f1',
-              createdAt: new Date().toISOString()
-            })
-          }
-        });
-
-        return { 
-          success: true, 
-          elementId: drawResult?.elementId || 'mock-elt-202',
-          message: \`已经成功在白板上完成主题【\\\${topic}】的脑图渲染！\` 
-        };
-      }
-    });
-  }
-};`;
-
-  const pluginInteractiveCode = `/**
- * Edu-OS 智能作业诊断反馈插件 (Assessing feedback plugin boilerplate)
- */
-exports.default = {
-  manifest: {
-    id: "ext-grading-assistant",
-    name: "智能随堂作业辅助批改插件",
-    version: "1.0.2",
-    capabilitiesProposed: ["assignment:write", "ai:assist"]
-  },
-  activate: async (ctx) => {
-    // 注册指令 
-    ctx.actionRegistry.register({
-      id: 'ext-assignment-auto-diagnose',
-      commandType: 'assignment.diagnose',
-      description: '针对某一学生的作业提交结果，进行自动诊断打分并提供评语反馈',
-      capabilityRequired: 'assignment:write',
-      inputSchema: {
-        type: 'OBJECT',
-        properties: {
-          assignmentId: { type: 'STRING', description: '作业 ID' },
-          studentId: { type: 'STRING', description: '学生 ID' },
-          scoreRatio: { type: 'NUMBER', description: '算法评定的拟合概率得分（0-100）' }
-        },
-        required: ['assignmentId', 'studentId', 'scoreRatio']
-      }
-    });
-
-    // 绑定总线处理器
-    ctx.commandBus.registerHandler('assignment.diagnose', {
-      execute: async (command) => {
-        const { assignmentId, studentId, scoreRatio } = command.payload;
-        
-        // 1. 获取基本提交数据并评估等级
-        let grade = 'C';
-        let feedback = '还需努力，请巩固课堂公式。';
-        if (scoreRatio >= 90) {
-          grade = 'A+';
-          feedback = '理解极佳！推导严密且格式十分规范！';
-        } else if (scoreRatio >= 75) {
-          grade = 'B';
-          feedback = '推导合理，但请注意个别运算符号。';
-        }
-
-        // 2. 调用内核微服务更新学生成绩
-        await ctx.commandBus.execute({
-          id: 'internal_' + Math.random().toString(36).slice(2),
-          type: 'assignment.grade_submission',
-          payload: {
-            assignmentId,
-            studentId,
-            grade,
-            feedback,
-            status: 'graded'
-          }
-        });
-
-        return {
-          success: true,
-          grade,
-          feedbackText: feedback,
-          timestamp: new Date().toISOString()
-        };
-      }
-    });
-  }
-};`;
-
-  const pluginExamCode = `/**
- * Edu-OS 智能考试与自测系统插件 (ZIP / ESM SDK 规范)
- * 这是一个完整的"限时自测与白板试卷卡片插件"开发实例
- */
-export default {
-  // 1. 插件基础声明 manifest
-  manifest: {
-    id: "ext-exam-system",
-    name: "智能考试与自测系统插件",
-    version: "1.0.1",
-    capabilitiesProposed: [
-      "exam:write",
-      "exam:read",
-      "whiteboard:write"
-    ]
-  },
-
-  // 2. 激活入口 activate
-  activate: async (ctx) => {
-    const commandBus = ctx.services.commandBus;
-    const actionRegistry = ctx.services.actionRegistry;
-    const db = await ctx.resolve('IDatabase'); // 解析底层数据库连接
-
-    // 初始化考试表结构
-    db.exec(\`
-      CREATE TABLE IF NOT EXISTS exams (
-        id TEXT PRIMARY KEY,
-        lesson_id TEXT,
-        title TEXT,
-        content TEXT,
-        duration_minutes INTEGER,
-        created_at INTEGER
-      );
-      CREATE TABLE IF NOT EXISTS exam_submissions (
-        exam_id TEXT,
-        student_id TEXT,
-        answers TEXT,
-        score REAL,
-        graded_at INTEGER,
-        PRIMARY KEY (exam_id, student_id)
-      );
-    \`);
-
-    // 3. 注册 Action：创建试卷
-    ctx.actionRegistry.register({
-      id: 'ext-exam-create',
-      commandType: 'exam.create',
-      description: '为特定课时创建一份考试试卷',
-      capabilityRequired: 'exam:write',
-      inputSchema: {
-        type: 'OBJECT',
-        properties: {
-          lessonId: { type: 'STRING', description: '关联课时 ID' },
-          title: { type: 'STRING', description: '试卷标题' },
-          questions: { type: 'ARRAY', description: '题目列表（JSON）' },
-          durationMinutes: { type: 'INTEGER', description: '限时（分钟）' }
-        },
-        required: ['lessonId', 'title', 'questions']
-      }
-    });
-
-    // 4. 注册命令处理器：处理创建考试
-    commandBus.registerHandler('exam.create', {
-      execute: async (command) => {
-        const { lessonId, title, questions, durationMinutes } = command.payload;
-        const examId = 'ex_' + Math.random().toString(36).slice(2);
-        db.prepare(\`
-          INSERT INTO exams (id, lesson_id, title, content, duration_minutes, created_at)
-          VALUES (?, ?, ?, ?, ?, ?)
-        \`).run(examId, lessonId, title, JSON.stringify(questions), durationMinutes || 45, Date.now());
-        return { success: true, examId };
-      }
-    });
-
-    // 5. 注册命令处理器：下发考试到画板
-    commandBus.registerHandler('exam.publish', {
-      execute: async (command) => {
-        const { lessonId } = command.payload;
-        const exam = db.prepare('SELECT * FROM exams WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1').get(lessonId);
-        if (!exam) throw new Error('该课时下无试卷，请先创建。');
-
-        // 发送 whiteboard.draw 渲染试卷
-        await commandBus.execute({
-          id: 'int_' + Math.random().toString(36).slice(2),
-          type: 'whiteboard.draw',
-          payload: {
-            lessonId,
-            type: 'exam',
-            data: JSON.stringify({
-              examId: exam.id,
-              title: exam.title,
-              questions: JSON.parse(exam.content),
-              durationMinutes: exam.duration_minutes
-            })
-          }
-        });
-        return { success: true, examId: exam.id };
-      }
-    });
-  }
-};`;
-
-  return (
-    <div className="flex-1 flex flex-col h-full bg-white text-gray-900 border border-gray-200 rounded-2xl shadow-sm overflow-hidden m-1">
-      {/* 灵活响应式的双通道渐变背景页头 */}
-      <div className="px-6 py-5 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50/20 shrink-0 border-b border-gray-150 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <HelpCircle className="text-indigo-600" size={24} />
-            教育实验操作系统：内核帮助与开发中心 (Edu-OS Reference Hub)
-          </h2>
-          <p className="text-xs text-gray-500 mt-1">
-            本页动态显示当前 Edu-OS 内核的可用动作指令，并向开发者提供完整的第三方插件开发指南与交互式代码范例。
-          </p>
-        </div>
-        
-        {/* 子标签页选项卡 */}
-        <div className="flex bg-neutral-100 p-0.5 rounded-xl border border-neutral-200 self-start md:self-center shrink-0 shadow-inner">
-          <button
-            onClick={() => setActiveTab('commands')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
-              activeTab === 'commands'
-                ? 'bg-white text-indigo-700 shadow-sm font-bold border border-neutral-200/50'
-                : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            <Terminal size={12} />
-            <span>指令总线调试 (Command Debugger)</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('sdk_guide')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
-              activeTab === 'sdk_guide'
-                ? 'bg-white text-indigo-700 shadow-sm font-bold border border-neutral-200/50'
-                : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            <Puzzle size={12} />
-            <span>插件开发指南 (Plugin SDK Guide)</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('user_guide')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
-              activeTab === 'user_guide'
-                ? 'bg-white text-indigo-700 shadow-sm font-bold border border-neutral-200/50'
-                : 'text-gray-500 hover:text-gray-800'
-            }`}
-          >
-            <BookOpen size={12} />
-            <span>系统使用教程 (User Guide)</span>
-          </button>
-        </div>
-      </div>
-
-      {activeTab === 'commands' ? (
-        <>
-          <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-4 shrink-0 col-span-1">
-            <div className="relative">
-              <Terminal className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input 
-                type="text"
-                placeholder="通过命令类型、描述或 Action ID 搜索活跃指令..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all shadow-sm"
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {categories.map(cat => {
-                const CatIcon = cat.icon;
-                const isActive = selectedCategory === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setSelectedCategory(cat.id as any)}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                      isActive 
-                        ? 'bg-indigo-600 text-white shadow shadow-indigo-200 scale-102 font-bold' 
-                        : 'bg-white text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <CatIcon size={13} />
-                    <span>{cat.name}</span>
-                    {cat.id === 'all' ? (
-                      <span className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-indigo-700/80 text-white' : 'bg-gray-100 text-gray-500'}`}>{registeredCommands.length}</span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
-            {filteredCommands.length === 0 ? (
-              <div className="flex flex-col items-center justify-center p-12 text-gray-400">
-                <ShieldAlert size={48} className="text-gray-300 mb-4 animate-pulse" />
-                <h3 className="font-semibold text-gray-700">没有找到匹配的指令</h3>
-                <p className="text-xs text-gray-500 mt-1">请尝试清空查询条件或检查当前的插件状态</p>
-              </div>
-            ) : (
-              <div className="space-y-4 max-w-5xl mx-auto">
-                {filteredCommands.map(cmd => {
-                  const isExpanded = expandedCommandId === cmd.id;
-                  const cat = getCommandCategory(cmd.commandType);
-                  const isHighRisk = cmd.isHighRisk;
-
-                  if (commandPayloads[cmd.id] === undefined) {
-                    commandPayloads[cmd.id] = generateInitialPayload(cmd.inputSchema);
-                  }
-
-                  const execResult = executionResults[cmd.id];
-
-                  return (
-                    <div 
-                      key={cmd.id}
-                      className={`bg-white rounded-xl border transition-all duration-200 overflow-hidden shadow-sm hover:shadow ${
-                        isExpanded ? 'border-indigo-400 ring-1 ring-indigo-100' : isHighRisk ? 'border-orange-200 hover:border-orange-300' : 'border-gray-200 hover:border-indigo-200'
-                      }`}
-                    >
-                      <div 
-                        onClick={() => {
-                          setExpandedCommandId(isExpanded ? null : cmd.id);
-                        }}
-                        className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-gray-50/30 transition-colors select-none"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`p-2 rounded-lg shrink-0 ${
-                            isHighRisk ? 'bg-orange-50 text-orange-600' : 'bg-indigo-50 text-indigo-600'
-                          }`}>
-                            {cat === 'vfs' ? <Folder size={18} /> : 
-                             cat === 'edu' ? <BookOpen size={18} /> :
-                             cat === 'mgmt' ? <Users size={18} /> :
-                             cat === 'proc' ? <Terminal size={18} /> :
-                             cat === 'ai' ? <Wand2 size={18} /> : <Puzzle size={18} />}
-                          </div>
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono font-bold text-sm bg-gray-100 text-gray-800 px-2 py-0.5 rounded border border-gray-200">
-                                {cmd.commandType}
-                              </span>
-                              {isHighRisk && (
-                                <span className="text-[10px] bg-red-100 text-red-700 border border-red-200 rounded font-extrabold px-1.5 py-0.5 uppercase tracking-wide flex items-center gap-0.5">
-                                  ⚠️ 高风险操作
-                                </span>
-                              )}
-                              <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full px-2 py-0.5">
-                                🔒 {cmd.capabilityRequired || '无公开权限'}
-                              </span>
-                            </div>
-                            <p className="text-gray-600 text-xs mt-1.5 font-medium line-clamp-1">{cmd.description}</p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-3 self-end sm:self-auto">
-                          <span className="text-[10px] text-gray-400 font-mono hidden md:inline">ID: {cmd.id}</span>
-                          <button 
-                            className={`text-xs px-3 py-1 bg-gray-100 text-gray-700 rounded-lg font-semibold border hover:bg-gray-200 transition-all flex items-center gap-1 ${
-                              isExpanded ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : ''
-                            }`}
-                          >
-                            {isExpanded ? '折叠面板' : '交互调试 Shell'}
-                            <ChevronRight size={12} className={`transform transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="border-t border-gray-100 bg-gray-50/50 p-5 space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-white rounded-lg border border-gray-200 p-4">
-                              <h4 className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-3 flex items-center gap-1.5 border-b border-gray-100 pb-2">
-                                <Activity size={12} className="text-gray-400" />
-                                入参规范 (JSON Schema Definition)
-                              </h4>
-                              
-                              {cmd.inputSchema?.properties ? (
-                                <div className="space-y-3 font-mono text-[11px]">
-                                  {Object.keys(cmd.inputSchema.properties).map(propName => {
-                                    const prop = cmd.inputSchema.properties[propName];
-                                    const isRequired = cmd.inputSchema.required?.includes(propName);
-                                    return (
-                                      <div key={propName} className="flex flex-col gap-1 border-b border-gray-50 last:border-b-0 pb-1.5">
-                                        <div className="flex items-baseline gap-1.5">
-                                          <span className="text-indigo-600 font-semibold">{propName}</span>
-                                          <span className="text-gray-400 text-[10px]">({prop.type})</span>
-                                          {isRequired && (
-                                            <span className="text-red-500 text-[9px] font-bold bg-red-50 border border-red-100 rounded px-1">REQUIRED</span>
-                                          )}
-                                        </div>
-                                        {prop.description && (
-                                          <span className="text-gray-500 font-sans leading-relaxed text-xs">{prop.description}</span>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              ) : (
-                                <p className="text-xs text-gray-400 italic">该命令不需要接收任何入参负载 (Payload)。</p>
-                              )}
-                            </div>
-
-                            <div className="bg-white rounded-lg border border-gray-200 p-4 flex flex-col">
-                              <h4 className="text-xs font-bold text-gray-700 uppercase tracking-widest mb-3 flex items-center gap-1.5 border-b border-gray-100 pb-2 justify-between">
-                                <span className="flex items-center gap-1.5">
-                                  <Terminal size={12} className="text-gray-400" />
-                                  Payload 调试区
-                                </span>
-                                <button 
-                                  onClick={() => {
-                                    setCommandPayloads(prev => ({
-                                      ...prev,
-                                      [cmd.id]: generateInitialPayload(cmd.inputSchema)
-                                    }));
-                                  }}
-                                  className="text-[9px] text-indigo-600 hover:underline hover:text-indigo-800 uppercase tracking-wider"
-                                >
-                                  恢复默认模版
-                                </button>
-                              </h4>
-
-                              <label className="text-[10px] font-semibold text-gray-400 block mb-1">Payload JSON:</label>
-                              <textarea
-                                value={commandPayloads[cmd.id] || ''}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setCommandPayloads(prev => ({ ...prev, [cmd.id]: val }));
-                                }}
-                                rows={6}
-                                className="w-full font-mono text-[11px] p-2.5 bg-gray-900 text-indigo-300 border border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none leading-relaxed flex-1 shadow-inner"
-                              />
-
-                              <div className="mt-3 flex justify-end">
-                                <button
-                                  onClick={() => handleExecute(cmd.commandType, cmd.id)}
-                                  disabled={execResult?.loading}
-                                  className={`px-4 py-2 text-xs font-bold font-sans text-white hover:shadow-md active:scale-95 transition-all flex items-center gap-1.5 rounded-lg ${
-                                    isHighRisk 
-                                      ? 'bg-red-600 hover:bg-red-700' 
-                                      : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500'
-                                  } disabled:opacity-50`}
-                                >
-                                  {execResult?.loading ? (
-                                    <>
-                                      <Loader2 size={13} className="animate-spin" />
-                                      <span>内核正在调度总线...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <PlayCircle size={13} />
-                                      <span>提交执行指令 (Deploy Command)</span>
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          {execResult && (
-                            <div className={`p-4 rounded-xl border flex flex-col font-mono text-[11px] leading-relaxed relative ${
-                              execResult.loading 
-                                ? 'bg-gray-50 border-gray-200' 
-                                : execResult.success 
-                                  ? 'bg-green-50/50 border-green-200 text-green-900' 
-                                  : 'bg-red-50/50 border-red-200 text-red-900'
-                            }`}>
-                              <div className="absolute top-2 right-3 uppercase text-[10px] font-bold text-gray-400">
-                                Console Output log
-                              </div>
-                              
-                              <div className="font-bold flex items-center gap-1.5 mb-1 bg-transparent border-0 p-0 text-xs text-neutral-800">
-                                {execResult.loading ? (
-                                  <span className="text-gray-500">⏳ COMMAND QUEUED...</span>
-                                ) : execResult.success ? (
-                                  <span className="text-green-700 flex items-center gap-1"><CheckCircle2 size={14} /> STATUS: 200 SUCCESS (Action Completed)</span>
-                                ) : (
-                                  <span className="text-red-700 flex items-center gap-1"><X size={14} /> STATUS: 500 INTERNAL_BUS_ERROR</span>
-                                )}
-                              </div>
-
-                              {!execResult.loading && (
-                                <pre className="mt-2 p-3 bg-gray-900/95 text-gray-200 rounded-lg overflow-x-auto border border-gray-800 shadow-inner max-h-56 select-all font-mono">
-                                  {execResult.success 
-                                    ? JSON.stringify(execResult.data, null, 2)
-                                    : execResult.error
-                                  }
-                                </pre>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </>
-      ) : activeTab === 'sdk_guide' ? (
-        /* 深度第三方插件开发向导与实例 (SDK Guide) */
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
-          <div className="max-w-5xl mx-auto space-y-6">
-            
-            {/* 顶部总揽卡片 */}
-            <div className="bg-white rounded-2xl border border-indigo-100 p-6 shadow-sm flex flex-col md:flex-row gap-5 items-start">
-              <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl shrink-0">
-                <Puzzle size={28} className="animate-spin-slow" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-base font-bold text-gray-900">Edu-OS 插件驱动生态系统说明</h3>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  Edu-OS 基于分布式微内核架构，利用集中式 <span className="font-semibold text-indigo-600">CommandBus (指令总线)</span> 控制核心服务与插件层。
-                  当第三方插件导入系统后，可以通过声明式的 API，向系统动态声明并注册全新的指令动作 (Action)，并绑定处理器逻辑。
-                  任何在前端、操作面板触发的非对称命令，最终都会被路由到您编写的处理器中执行。
-                </p>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full font-medium">✨ 微核心组件机制</span>
-                  <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full font-medium">🔒 权限清单沙箱隔离</span>
-                  <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full font-medium">⚡ 随插即用热重载</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 插件骨架原理精讲 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white p-5 rounded-xl border border-gray-200 space-y-2.5">
-                <div className="flex items-center gap-2 border-b border-gray-100 pb-2 text-indigo-600 font-bold">
-                  <FileText size={16} />
-                  <h4 className="text-xs uppercase tracking-wide">1. 插件清单 (Manifest)</h4>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  向系统注册基础元数据，包括名称、全局唯一 ID 以及插件运行所需的权限（例如申请白板写入或数据库存储能力）。
-                </p>
-                <div className="bg-gray-900 text-gray-300 p-3 rounded-lg text-[9.5px] font-mono leading-relaxed overflow-x-auto shadow-inner">
-                  manifest: {"{"} <br />
-                  &nbsp;&nbsp;id: <span className="text-emerald-400">"ext-my-plugin"</span>,<br />
-                  &nbsp;&nbsp;name: <span className="text-emerald-400">"演示插件"</span>,<br />
-                  &nbsp;&nbsp;version: <span className="text-emerald-400">"1.0.0"</span>,<br />
-                  &nbsp;&nbsp;capabilitiesProposed: [<br />
-                  &nbsp;&nbsp;&nbsp;&nbsp;<span className="text-emerald-400">"whiteboard:write"</span><br />
-                  &nbsp;&nbsp;]<br />
-                  {"}"}
-                </div>
-              </div>
-
-              <div className="bg-white p-5 rounded-xl border border-gray-200 space-y-2.5">
-                <div className="flex items-center gap-2 border-b border-gray-100 pb-2 text-emerald-600 font-bold">
-                  <Terminal size={16} />
-                  <h4 className="text-xs uppercase tracking-wide">2. 指令声明 (Actions)</h4>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  在 <code className="bg-gray-100 text-rose-600 px-1 rounded font-mono text-[10px]">activate</code> 中，利用 Schema 规范注册您的指令。内核可据此在前端动态渲染参数输入表单。
-                </p>
-                <div className="bg-gray-900 text-gray-300 p-3 rounded-lg text-[9.5px] font-mono leading-relaxed overflow-x-auto shadow-inner">
-                  ctx.actionRegistry.register({"{"}<br />
-                  &nbsp;&nbsp;id: <span className="text-emerald-400">'ext-my-draw'</span>,<br />
-                  &nbsp;&nbsp;commandType: <span className="text-emerald-400">'widget.draw'</span>,<br />
-                  &nbsp;&nbsp;inputSchema: {"{"}<br />
-                  &nbsp;&nbsp;&nbsp;&nbsp;type: <span className="text-emerald-400">'OBJECT'</span>,<br />
-                  &nbsp;&nbsp;&nbsp;&nbsp;properties: ...<br />
-                  &nbsp;&nbsp;{"}"}<br />
-                  {"}"});
-                </div>
-              </div>
-
-              <div className="bg-white p-5 rounded-xl border border-gray-200 space-y-2.5">
-                <div className="flex items-center gap-2 border-b border-gray-100 pb-2 text-amber-600 font-bold">
-                  <Database size={16} />
-                  <h4 className="text-xs uppercase tracking-wide">3. 处理器 (Handlers)</h4>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  绑定指令对应的实际代码函数。当有用户、AI代理或脚本派发该类型指令时，处理器就会被总线异步调用。
-                </p>
-                <div className="bg-gray-900 text-gray-300 p-3 rounded-lg text-[9.5px] font-mono leading-relaxed overflow-x-auto shadow-inner">
-                  ctx.commandBus.registerHandler(<br />
-                  &nbsp;&nbsp;<span className="text-emerald-400">'widget.draw'</span>, {"{"}<br />
-                  &nbsp;&nbsp;&nbsp;&nbsp;execute: <span className="text-blue-400">async</span> (command) =&gt; {"{"}<br />
-                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;const dat = command.payload;<br />
-                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span className="text-gray-400">// 执行逻辑，返回结果</span><br />
-                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return {"{ success: true };"}<br />
-                  &nbsp;&nbsp;&nbsp;&nbsp;{"}"}<br />
-                  &nbsp;&nbsp;{"}"}<br />
-                  );
-                </div>
-              </div>
-            </div>
-
-            {/* 实战完整范例 1 */}
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-              <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-start gap-2 max-w-2xl">
-                  <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded">
-                    <Code size={16} />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-gray-900">实战范例 1：白板课时思维脑图一键生成卡片插件 (CommonJS / Node SDK Demo)</h4>
-                    <p className="text-[10px] text-gray-500 mt-0.5">如何编写自定义 JSON Schema、挂载总线解析、调用内部原生画板服务绘制思维导图几何卡片元素。</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleCopy('tpl1', pluginBoilerplateCode)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm shrink-0 sm:self-center ${
-                    copiedId === 'tpl1' 
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-250 animate-pulse' 
-                      : 'bg-white text-indigo-600 border border-indigo-150 hover:bg-indigo-50'
-                  }`}
-                >
-                  {copiedId === 'tpl1' ? <Check size={12} /> : <FileText size={12} />}
-                  <span>{copiedId === 'tpl1' ? '已复制代码！' : '复制代码示例'}</span>
-                </button>
-              </div>
-              <pre className="text-xs font-mono p-5 bg-gray-950 text-gray-200 overflow-x-auto leading-relaxed max-h-[360px] shadow-inner select-all">
-                {pluginBoilerplateCode}
-              </pre>
-            </div>
-
-            {/* 实战完整范例 2 */}
-            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-              <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-start gap-2 max-w-2xl">
-                  <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded">
-                    <Code size={16} />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-gray-900">实战范例 2：一键智能作业诊断、学情成绩辅助批改插件</h4>
-                    <p className="text-[10px] text-gray-500 mt-0.5">如何绑定复合管道操作，直接与操作系统核心交互并自动更新底层 SQLite 数据库中的学生得分和总账状态。</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleCopy('tpl2', pluginInteractiveCode)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm shrink-0 sm:self-center ${
-                    copiedId === 'tpl2' 
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-250' 
-                      : 'bg-white text-emerald-600 border border-emerald-150 hover:bg-emerald-50'
-                  }`}
-                >
-                  {copiedId === 'tpl2' ? <Check size={12} /> : <FileText size={12} />}
-                  <span>{copiedId === 'tpl2' ? '已复制代码！' : '复制代码示例'}</span>
-                </button>
-              </div>
-              <pre className="text-xs font-mono p-5 bg-gray-950 text-gray-200 overflow-x-auto leading-relaxed max-h-[360px] shadow-inner select-all">
-                {pluginInteractiveCode}
-              </pre>
-            </div>
-
-            {/* 实装部署发布、部署流程步骤 */}
-            <div className="bg-gradient-to-br from-indigo-900 to-indigo-950 rounded-2xl p-6 text-white space-y-4 shadow-md">
-              <h4 className="text-xs font-bold tracking-wide flex items-center gap-2 text-indigo-200 uppercase">
-                <Sparkles size={14} /> 如何在 Edu-OS 中安装、测试并热重载您的全新插件？
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-1 text-xs leading-relaxed text-indigo-100">
-                <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/40 space-y-2">
-                  <div className="h-6 w-6 font-mono font-bold bg-indigo-500/25 border border-indigo-400 text-indigo-300 rounded-lg flex items-center justify-center">1</div>
-                  <h5 className="font-bold text-white text-xs">A. 本地开发与修改</h5>
-                  <p className="text-indigo-250 text-[11px] leading-relaxed">复制上方的完整标准 JavaScript 源码模版，将其中参数中的指令声明和元数据做出个性化调整（比如将指令换为自己的独立域名称）。</p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/40 space-y-2">
-                  <div className="h-6 w-6 font-mono font-bold bg-indigo-500/25 border border-indigo-400 text-indigo-300 rounded-lg flex items-center justify-center">2</div>
-                  <h5 className="font-bold text-white text-xs">B. 侧边栏插件热插拔导入</h5>
-                  <p className="text-indigo-250 text-[11px] leading-relaxed">在左上方侧边栏中切换进入 “第三方插件 (Plugins)” 管理仪表盘，点击 “导入新插件” 按钮，随后贴入编写好的一连串业务代码。系统底层会将这块 Javascript 代码自动存根在 SQLite 中。</p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/40 space-y-2">
-                  <div className="h-6 w-6 font-mono font-bold bg-indigo-500/25 border border-indigo-400 text-indigo-300 rounded-lg flex items-center justify-center">3</div>
-                  <h5 className="font-bold text-white text-xs">C. 总线指令池激活调试</h5>
-                  <p className="text-indigo-250 text-[11px] leading-relaxed">安装完毕后在列表中打开启用开关。接着回到本页选择 “一键刷新指令库”，您刚定义的新动作就会立即出现在上方的指令调试池中。您可当场模拟发送 Payload，直接观测总线的响应与状态更新！</p>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      ) : (
-        /* 系统使用教程 (User Guide) */
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
-          <div className="max-w-5xl mx-auto space-y-8">
-            
-            {/* Top welcome banner */}
-            <div className="bg-gradient-to-r from-indigo-900 to-indigo-950 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row gap-5 items-start">
-              <div className="p-4 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-2xl shrink-0">
-                <BookOpen size={32} />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  Edu-OS 核心系统主要特性使用教程
-                  <span className="text-[10px] bg-indigo-500/30 text-indigo-200 border border-indigo-500/50 px-2 py-0.5 rounded-full font-normal">v2.1.0 LTS</span>
-                </h3>
-                <p className="text-xs text-indigo-200 leading-relaxed">
-                  本指南为教育实验操作系统 (Edu-OS) 的深度使用手册。详细阐述如何使用内核指令管理班级与学生、基于大纲结构化推进课件时间轴、在互动白板中动态注入脑图和测验元素、启动全屏锁定与签到的教学控制流，以及编写并集成支持 AI 成绩回传的 HTML Applet 实验组件。
-                </p>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <span className="text-[10px] bg-indigo-800/40 text-indigo-150 border border-indigo-700/50 px-2 py-0.5 rounded-full font-medium">🏫 班级与学生指令集</span>
-                  <span className="text-[10px] bg-emerald-800/40 text-emerald-150 border border-emerald-700/50 px-2 py-0.5 rounded-full font-medium">📋 课程大纲时间轴同步</span>
-                  <span className="text-[10px] bg-amber-800/40 text-amber-150 border border-amber-700/50 px-2 py-0.5 rounded-full font-medium">🎨 协作白板指令渲染</span>
-                  <span className="text-[10px] bg-sky-800/40 text-sky-150 border border-sky-700/50 px-2 py-0.5 rounded-full font-medium">🚀 postMessage 成绩监听</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Bento Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Card 1: Commands for Class/Student Management */}
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4 hover:shadow-md transition-all flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center gap-3 border-b border-gray-100 pb-3 text-indigo-600 font-bold">
-                    <div className="p-2 bg-indigo-50 rounded-xl">
-                      <Users size={20} />
-                    </div>
-                    <div>
-                      <h4 className="text-sm text-gray-900">1. 使用核心指令管理班级与学生</h4>
-                      <p className="text-[11px] text-gray-400 font-normal mt-0.5">Administrative CLI & Capability Model</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-600 leading-relaxed mt-3">
-                    Edu-OS 采用权限隔离的<strong>能力安全模型 (Capability Model)</strong>。任何行政、学籍以及课表排期修改，底层最终都会被封装为非对称的内核指令，经由分布式指令总线进行安全校验与事务落库。
-                  </p>
-
-                  <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 text-[11px] text-indigo-900 space-y-1.5 mt-3">
-                    <span className="font-bold block">🔒 核心访问权限声明 (RBAC Capabilities):</span>
-                    <ul className="list-disc list-inside space-y-1 text-gray-600 text-[10.5px]">
-                      <li><code className="bg-white/80 px-1 rounded border border-indigo-150">class:write</code>：允许创建/删除行政班级。</li>
-                      <li><code className="bg-white/80 px-1 rounded border border-indigo-150">student:write</code>：允许注册学生、修改学籍或修改设备锁定状态。</li>
-                      <li><code className="bg-white/80 px-1 rounded border border-indigo-150">schedule:write</code>：允许编排课程，或临时将某一日期的课程替换为星期几的常规课表。</li>
-                    </ul>
-                  </div>
-                </div>
-                
-                <div className="space-y-3 font-mono text-[11px] mt-4">
-                  <div className="bg-gray-50 rounded-xl p-3 border border-gray-150 relative">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-indigo-600 font-bold">A. 创建班级 (class.create)</span>
-                      <button
-                        onClick={() => handleCopy('guide_cmd_class', '{\n  "name": "高三一班",\n  "description": "物理实验班"\n}')}
-                        className="text-[10px] text-indigo-600 hover:underline hover:text-indigo-800 font-sans"
-                      >
-                        {copiedId === 'guide_cmd_class' ? '已复制' : '复制参数'}
-                      </button>
-                    </div>
-                    <pre className="text-[10px] text-gray-500 overflow-x-auto whitespace-pre-wrap leading-relaxed">
-{`{
-  "name": "高三一班",
-  "description": "2026届物理实验班"
-}`}
-                    </pre>
-                  </div>
-
-                  <div className="bg-gray-50 rounded-xl p-3 border border-gray-150 relative">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-indigo-600 font-bold">B. 注册学生 (student.register)</span>
-                      <button
-                        onClick={() => handleCopy('guide_cmd_student', '{\n  "name": "李华",\n  "email": "lihua@openlearn.org",\n  "password": "mypassword123"\n}')}
-                        className="text-[10px] text-indigo-600 hover:underline hover:text-indigo-800 font-sans"
-                      >
-                        {copiedId === 'guide_cmd_student' ? '已复制' : '复制参数'}
-                      </button>
-                    </div>
-                    <pre className="text-[10px] text-gray-500 overflow-x-auto whitespace-pre-wrap leading-relaxed">
-{`{
-  "name": "李华",
-  "email": "lihua@openlearn.org",
-  "password": "mypassword123"
-}`}
-                    </pre>
-                  </div>
-
-                  <div className="bg-gray-50 rounded-xl p-3 border border-gray-150 relative">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-indigo-600 font-bold">C. 强制学生屏幕锁定 (student.lock_lesson)</span>
-                      <button
-                        onClick={() => handleCopy('guide_cmd_lock', '{\n  "studentId": "student-uuid-xxxx",\n  "lockedLessonId": "lesson-uuid-yyyy"\n}')}
-                        className="text-[10px] text-indigo-600 hover:underline hover:text-indigo-800 font-sans"
-                      >
-                        {copiedId === 'guide_cmd_lock' ? '已复制' : '复制参数'}
-                      </button>
-                    </div>
-                    <pre className="text-[10px] text-gray-500 overflow-x-auto whitespace-pre-wrap leading-relaxed">
-{`{
-  "studentId": "student-uuid-xxxx",
-  "lockedLessonId": "lesson-uuid-yyyy"
-}`}
-                    </pre>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: Course Editing & Timeline */}
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4 hover:shadow-md transition-all flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center gap-3 border-b border-gray-100 pb-3 text-emerald-600 font-bold">
-                    <div className="p-2 bg-emerald-50 rounded-xl">
-                      <LayoutTemplate size={20} />
-                    </div>
-                    <div>
-                      <h4 className="text-sm text-gray-900">2. 课程编辑与时间轴推进</h4>
-                      <p className="text-[11px] text-gray-400 font-normal mt-0.5">Structure Markdown & Timeline Sync</p>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-3 mt-3 text-xs text-gray-600 leading-relaxed">
-                    <p>
-                      在系统“课程管理”中，教师可以使用内置大纲结构化的 Markdown 工具编排课件，或选择数学、计算机科学、文学、物理、历史、艺术模板一键填充结构化实验教案。
-                    </p>
-                    
-                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-150 space-y-1 text-[11px] font-sans">
-                      <span className="font-bold text-gray-800 block">📝 大纲解析与进度切片规则：</span>
-                      <p className="text-gray-500">
-                        系统内核采用递归的 AST 语法分析器，提取文档中的一级标题 (<code className="font-mono text-rose-600 font-semibold bg-gray-100 px-0.5 rounded">#</code>) 与二级标题 (<code className="font-mono text-rose-600 font-semibold bg-gray-100 px-0.5 rounded">##</code>) 作为教学<b>时间轴切片 (Timeline Segments)</b>。
-                      </p>
-                    </div>
-
-                    <div className="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-2 text-[11px] text-emerald-800">
-                      <span className="font-bold flex items-center gap-1"><Sparkles size={12} /> 时间轴实时推进机制 (Sync Protocol)：</span>
-                      <ol className="list-decimal list-inside space-y-1 text-gray-600 leading-relaxed">
-                        <li>当教师在教学控制台选中大纲某个段落时，前端会通过 WebSocket 通信管道发送一个 <code className="font-mono bg-white text-emerald-700 px-1 rounded border border-emerald-150">sync_timeline</code> 广播包。</li>
-                        <li>学生终端捕获该消息包，解析出对应的锚点 DOM ID，并自动执行 DOM 的 <code className="font-mono bg-white text-emerald-700 px-1 rounded border border-emerald-150">.scrollIntoView({"{ behavior: 'smooth' }"})</code> 动画平滑定位。</li>
-                        <li>在此模式下，学生终端的大脑侧边滚轮处于<b>阻尼锁定状态</b>，禁止自行向上游或下游浏览，以保证全体学生始终与教师保持完全一致的视野。</li>
-                      </ol>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-gray-50 rounded-xl border border-gray-150 text-[10px] text-gray-500 leading-relaxed">
-                  💡 <span className="font-semibold text-gray-700">常规课表与临时调整：</span>如果需要将某一天的课程临时调换为星期几的常规安排（如将下周一临时指定为星期五课表），可在“课表看板”或使用 <code className="bg-gray-100 font-mono text-rose-600 px-1 rounded">schedule.update_date_mapping</code> 指令进行快速热重载，数据库将自动持久化这种临时的映射规则。
-                </div>
-              </div>
-
-              {/* Card 3: Interactive Whiteboard */}
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4 hover:shadow-md transition-all flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center gap-3 border-b border-gray-100 pb-3 text-amber-600 font-bold">
-                    <div className="p-2 bg-amber-50 rounded-xl">
-                      <PenTool size={20} />
-                    </div>
-                    <div>
-                      <h4 className="text-sm text-gray-900">3. 互动协作白板深度原理</h4>
-                      <p className="text-[11px] text-gray-400 font-normal mt-0.5">Whiteboard Drawing API & State Serialization</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-600 leading-relaxed mt-3">
-                    协作白板采用轻量级矢量序列化格式存储。每一笔涂鸦、矩形、圆形、文本或第三方卡片均被抽象为带有全局唯一 ID 的矢量节点模型，实时在 SQLite 数据库中持久化并在前端的 Canvas/SVG 容器中完成合并渲染。
-                  </p>
-
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-150 text-[10.5px] font-mono text-gray-500 space-y-1 mt-3">
-                    <span className="font-bold text-gray-700 block font-sans">💾 矢量节点序列化数据示例 (SQLite Schema):</span>
-                    <pre className="text-[9.5px] overflow-x-auto whitespace-pre-wrap">
-{`{
-  "id": "elt-90928a",
-  "type": "rect",
-  "data": "{\"x\":120,\"y\":80,\"w\":150,\"h\":60,\"stroke\":\"#6366f1\",\"fill\":\"#e0e7ff\"}"
-}`}
-                    </pre>
-                  </div>
-
-                  <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-100 text-[11px] text-amber-900 space-y-2 mt-3">
-                    <span className="font-bold block">💡 互动绘制指令说明 (whiteboard.draw):</span>
-                    <p className="text-gray-600 leading-relaxed">
-                      除了在画板上使用画笔绘图外，插件生态亦可通过向总线派发 <code className="bg-white text-amber-700 border border-amber-150 px-1 rounded font-mono">whiteboard.draw</code> 指令，动态在指定位置绘制结构化的几何内容或思维导图组件。
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-amber-50/50 rounded-xl p-3 border border-amber-100 text-xs text-amber-800 relative mt-4">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="font-bold">A. 动态绘制思维脑图参数示例</span>
-                    <button
-                      onClick={() => handleCopy('guide_cmd_draw_map', '{\n  "lessonId": "lesson-101",\n  "type": "mindmap",\n  "data": "{\\\"title\\\":\\\"光电效应\\\",\\\"branches\\\":[\\\"赫兹发现\\\",\\\"爱因斯坦解释\\\"]}"\n}')}
-                      className="text-[10px] text-amber-700 hover:underline font-sans font-bold"
-                    >
-                      {copiedId === 'guide_cmd_draw_map' ? '已复制' : '复制 Payload'}
-                    </button>
-                  </div>
-                  <pre className="font-mono text-[9px] text-amber-900/70 overflow-x-auto">
-{`{
-  "lessonId": "lesson-101",
-  "type": "mindmap",
-  "data": "{"title\","branches\":["赫兹发现\","爱因斯坦解释\"]}"
-}`}
-                  </pre>
-                </div>
-              </div>
-
-              {/* Card 4: Classroom Control & Teaching */}
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4 hover:shadow-md transition-all flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center gap-3 border-b border-gray-100 pb-3 text-sky-600 font-bold">
-                    <div className="p-2 bg-sky-50 rounded-xl">
-                      <PlayCircle size={20} />
-                    </div>
-                    <div>
-                      <h4 className="text-sm text-gray-900">4. 现场教学与课堂控制流程</h4>
-                      <p className="text-[11px] text-gray-400 font-normal mt-0.5">Live Classroom Lifecycle & WS Protocol</p>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-600 leading-relaxed mt-3">
-                    现场教学是 Edu-OS 实现教师端对全班学生端实时掌控、授课与互动的核心驱动模块。以下是系统推荐的标准课堂控制流：
-                  </p>
-
-                  {/* Flow Steps */}
-                  <div className="space-y-3 text-xs mt-3">
-                    <div className="flex gap-3 items-start">
-                      <div className="h-5 w-5 font-mono font-bold bg-sky-100 border border-sky-200 text-sky-700 rounded-lg flex items-center justify-center shrink-0 mt-0.5">1</div>
-                      <div>
-                        <span className="font-semibold text-gray-800">课堂通道初始化 (WebSocket Connect)</span>
-                        <p className="text-[11px] text-gray-500 mt-0.5">点击“开始上课”后，服务器将为该班级开辟独立的 Room 广播室。所有在该行政班级内的学生设备自动建立双向心跳长连接。</p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3 items-start">
-                      <div className="h-5 w-5 font-mono font-bold bg-sky-100 border border-sky-200 text-sky-700 rounded-lg flex items-center justify-center shrink-0 mt-0.5">2</div>
-                      <div>
-                        <span className="font-semibold text-gray-800">全屏课件与屏幕强控 (Class Lock)</span>
-                        <p className="text-[11px] text-gray-500 mt-0.5">教师启动教学视图后，系统会广播 `class_lock` 事件。学生终端界面被迫最小化非教学区，全屏强制渲染指定的课时 Markdown 文档，拦截一切其他的键盘路由跳转。</p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3 items-start">
-                      <div className="h-5 w-5 font-mono font-bold bg-sky-100 border border-sky-200 text-sky-700 rounded-lg flex items-center justify-center shrink-0 mt-0.5">3</div>
-                      <div>
-                        <span className="font-semibold text-gray-800">出勤签到统计 (Roll Call & Attendance)</span>
-                        <p className="text-[11px] text-gray-500 mt-0.5">教师一键下发签到令牌，学生端界面滑出覆盖式的签到组件。系统利用 WebSocket 增量计数，在教师端看板的考勤环形图中实时计算到课率、迟到率以及旷课名单。</p>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3 items-start">
-                      <div className="h-5 w-5 font-mono font-bold bg-sky-100 border border-sky-200 text-sky-700 rounded-lg flex items-center justify-center shrink-0 mt-0.5">4</div>
-                      <div>
-                        <span className="font-semibold text-gray-800">交互过程感知与动态审计 (Activity Auditing)</span>
-                        <p className="text-[11px] text-gray-500 mt-0.5">学生每一次提交的实验数据、成绩变动、签到时刻等操作，均以结构化日志格式推送并在教师端的动态操作审计终端上显示。</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-sky-50/50 rounded-xl border border-sky-100 text-[10.5px] text-sky-850 flex items-center gap-2 mt-4">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
-                  <span><strong>考勤数据存根：</strong>签到动作一经产生，将自动持久化至底层的 <code className="font-mono text-[10px] bg-white px-1 border border-sky-200 rounded">attendance</code> 表中，随时供导出 PDF 或生成学期报告。</span>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Bottom Row: HTML Applet Detailed Guide */}
-            <div className="bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-2xl p-6 space-y-6 shadow-md">
-              <div className="flex items-center gap-3 border-b border-slate-800 pb-3 text-indigo-400 font-bold">
-                <div className="p-2 bg-slate-800 rounded-xl">
-                  <Globe size={24} />
-                </div>
-                <div>
-                  <h4 className="text-base text-white">5. HTML Applet 的打包、分发与 AI 成绩监听注入机制</h4>
-                  <p className="text-[11px] text-slate-400 font-normal mt-0.5">HTML Applet Architecture & parent.postMessage Interface Spec</p>
-                </div>
-              </div>
-
-              {/* Architecture text */}
-              <div className="text-xs text-slate-300 leading-relaxed space-y-3">
-                <p>
-                  HTML Applet 是 Edu-OS 系统架构中用以承载高级虚拟物理实验、交互式小游戏、或第三方考试系统的微网页插件。Applet 被封装运行在宿主页面的 <code className="bg-slate-800 text-indigo-300 px-1 rounded font-mono">iframe</code> 沙箱容器中。
-                </p>
-                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2 text-[11px]">
-                  <span className="font-bold text-white flex items-center gap-1.5"><Sparkles size={12} className="text-indigo-400" /> 上下游双向通信流深度解析：</span>
-                  <ul className="list-disc list-inside space-y-1.5 text-slate-400">
-                    <li><strong>运行上下文注入：</strong>当 iframe 加载 Applet 时，Edu-OS 会通过 URL Search Parameters 自动向其传递运行时环境变量（如 <code className="font-mono text-emerald-400 bg-slate-900 px-1 rounded">?studentId=std_uuid&lessonId=les_uuid</code>），Applet 内部通过解析 URL 参数即可获知当前操作者的身份与课时信息。</li>
-                    <li><strong>成绩捕获与成绩监听器 (Grade Listener)：</strong>宿主窗口实时在全局挂载消息监听函数。一旦捕获到来自 iframe 内部抛出的成绩包后，会自动将该包封装为内核的 <code className="font-mono text-emerald-400 bg-slate-900 px-1 rounded">assignment.grade_submission</code> 指令动作，推送回 CommandBus 核心。</li>
-                    <li><strong>成绩总账更新：</strong>总线处理器解析入参，计算总分偏差并自动更新 SQLite 数据库中的成绩账本，从而驱动当前页面的“学期成绩趋势折线图”和“学情成长轨迹雷达图”实时重新渲染。</li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* Three-step details */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs leading-relaxed pt-2">
-                
-                {/* step 1 */}
-                <div className="space-y-2 p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
-                  <span className="text-indigo-400 font-bold uppercase tracking-wider block text-[10.5px]">A. 课件包打包与沙箱规范</span>
-                  <p className="text-slate-300 text-[11px] leading-relaxed">
-                    Applet 包必须保证包含一个 <code className="bg-slate-800 text-rose-400 px-1 rounded font-mono">index.html</code> 入口。所有引用的 Javascript、CSS、静态图片等资源必须使用相对路径引用。在 iframe 中运行时，页面自动获得受限的沙箱沙盒权限，防止恶意重定向。
-                  </p>
-                </div>
-
-                {/* step 2 */}
-                <div className="space-y-2 p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
-                  <span className="text-indigo-400 font-bold uppercase tracking-wider block text-[10.5px]">B. 写入 VFS (虚拟文件系统)</span>
-                  <p className="text-slate-300 text-[11px] leading-relaxed">
-                    您可通过总线的 <code className="bg-slate-800 text-rose-400 px-1 rounded font-mono">vfs.write_file</code> 指令，将编写好的 HTML 源码或二进制包热重载注入到 Edu-OS 虚拟系统中：
-                  </p>
-                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-[9px] font-mono text-emerald-400 overflow-x-auto relative mt-2">
-                    <button
-                      onClick={() => handleCopy('guide_cmd_vfs', '{\n  "path": "/applets/electric_lab.html",\n  "content": "<!DOCTYPE html><html><body><h1>模拟实验室</h1></body></html>"\n}')}
-                      className="absolute right-2 top-2 text-[8px] text-indigo-400 hover:underline font-sans"
-                    >
-                      {copiedId === 'guide_cmd_vfs' ? '已复制' : '复制命令'}
-                    </button>
-                    {`vfs.write_file:
-{
-  "path": "/applets/electric_lab.html",
-  "content": "<!DOCTYPE html><html>..."
-}`}
-                  </div>
-                </div>
-
-                {/* step 3 */}
-                <div className="space-y-2 p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 flex flex-col justify-between">
-                  <div>
-                    <span className="text-indigo-400 font-bold uppercase tracking-wider block text-[10.5px]">C. AI 监听回传工作流</span>
-                    <p className="text-slate-300 text-[11px] leading-relaxed">
-                      Edu-OS 宿主页面的监听函数会过滤不安全的跨源消息，仅捕获特定的成绩上报信包，将分数和学情评语即时解析，写入数据库。
-                    </p>
-                  </div>
-                  <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 text-[10px] text-indigo-250 flex items-center gap-1.5 mt-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
-                    <span>支持自动评级 (A+ 至 C) 及 AI 生成的随堂反馈语</span>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Code Box: Complete HTML Template Demo */}
-              <div className="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden mt-4">
-                <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex justify-between items-center text-xs">
-                  <span className="font-mono text-slate-300">完整的 Applet 单页交互及成绩上报模版 (Complete Template Source)</span>
-                  <button
-                    onClick={() => handleCopy('applet_full_code', `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="utf-8">\n  <title>Edu-OS 实验 Applet 模版</title>\n  <style>\n    body { font-family: sans-serif; padding: 20px; background: #fafafa; color: #333; }\n    .card { background: white; border: 1px solid #ddd; padding: 20px; border-radius: 12px; max-width: 400px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }\n    button { background: #6366f1; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; }\n  </style>\n</head>\n<body>\n  <div class="card">\n    <h3>物理虚拟实验室：凸透镜成像实验</h3>\n    <p id="env-info" style="font-size: 11px; color: #666;">正在加载上下文环境...</p>\n    <button onclick="submitExperimentScore()">提交实验成绩 (95分)</button>\n  </div>\n\n  <script>\n    // 1. 获取 URL 注入的上下文变量\n    const params = new URLSearchParams(window.location.search);\n    const studentId = params.get('studentId') || '未知学生';\n    const lessonId = params.get('lessonId') || '当前课时';\n    document.getElementById('env-info').innerText = '当前操作学生 ID: ' + studentId + ' | 关联课时: ' + lessonId;\n\n    // 2. 派发 postMessage 信包上报成绩到宿主内核\n    function submitExperimentScore() {\n      if (window.parent) {\n        window.parent.postMessage({\n          type: "grade_submission", // 信包头部\n          score: 95,                // 考核数值成绩 (0-100)\n          feedback: "光路调整正确，透镜成像倍率推导无误。" // 随堂评语\n        }, "*");\n        alert("成绩已通过 postMessage 成功投递回 Edu-OS 内核！");\n      }\n    }\n  </script>\n</body>\n</html>`)}
-                    className="text-[10px] text-indigo-400 hover:underline"
-                  >
-                    {copiedId === 'applet_full_code' ? '已复制' : '复制完整 HTML 示例'}
-                  </button>
-                </div>
-                <pre className="text-[10.5px] font-mono p-4 text-emerald-300 overflow-x-auto leading-relaxed select-all">
-{`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Edu-OS 实验 Applet 模版</title>
-  <style>
-    body { font-family: sans-serif; padding: 20px; background: #fafafa; color: #333; }
-    .card { background: white; border: 1px solid #ddd; padding: 20px; border-radius: 12px; max-width: 400px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-    button { background: #6366f1; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h3>物理虚拟实验室：凸透镜成像实验</h3>
-    <p id="env-info" style="font-size: 11px; color: #666;">正在加载上下文环境...</p>
-    <button onclick="submitExperimentScore()">提交实验成绩 (95分)</button>
-  </div>
-
-  <script>
-    // 1. 获取 URL 注入的上下文变量
-    const params = new URLSearchParams(window.location.search);
-    const studentId = params.get('studentId') || '未知学生';
-    const lessonId = params.get('lessonId') || '当前课时';
-    document.getElementById('env-info').innerText = '当前操作学生 ID: ' + studentId + ' | 关联课时: ' + lessonId;
-
-    // 2. 派发 postMessage 信包上报成绩到宿主内核
-    function submitExperimentScore() {
-      if (window.parent) {
-        window.parent.postMessage({
-          type: "grade_submission", // 信包头部
-          score: 95,                // 考核数值成绩 (0-100)
-          feedback: "光路调整正确，透镜成像倍率推导无误。" // 随堂评语
-        }, "*");
-        alert("成绩已通过 postMessage 成功投递回 Edu-OS 内核！");
-      }
-    }
-  </script>
-</body>
-</html>`}
-                </pre>
-              </div>
-
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      <div className="p-4 border-t border-gray-100 bg-gray-50/40 shrink-0 flex items-center justify-between text-xs text-gray-400">
-        <div className="flex items-center gap-2">
-          <span className="flex h-2 w-2 relative">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-          </span>
-          <span>ActionRegistry Core Driver Localhost : Online Syncing</span>
-        </div>
-        <div>
-          Total Registered Handlers: <span className="font-mono text-gray-600 font-semibold">{registeredCommands.length}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-const generateTemplateContent = (title: string, category: string): string => {
-  const normalizedTitle = title ? title.trim() : "New Course";
-  switch (category) {
-    case 'Mathematics':
-      return `# ${normalizedTitle}\n\n## 101 Course Core Foundations\nWelcome to our mathematics laboratory. This course is designed to break down abstract calculations into visual whiteboard proofs and real-world application models.\n\n### 📐 Key Theorems & Proof Matrix\n- **Formula A**: $E = mc^2$ or equivalent derivative parameters\n- **Core Axiom**: For every linear projection, a finite dimension defines its trace.\n\n### 实践演练随堂真题 Practice Problems\n1. Calculate the local optima for the function on the interactive workspace.\n2. Prove the uniqueness of the residual limit under Gaussian conditions.\n\n### 📥 Homework Assignment Task\nIdentify three real-world physical structures implementing these spatial principles and coordinate maps.`;
-    
-    case 'ComputerScience':
-      return `# ${normalizedTitle}\n\n## 💻 Technical Exploration & Engineering Lab\nThis session acts as an immersive sandbox exploring core algorithmic structures, optimization mechanics, and data abstractions.\n\n### ⚙️ Core Lecture Blueprint & Pseudocode\n\`\`\`python\ndef optimize_weights(data, factor=0.01):\n    # Initialize local metrics\n    scores = [x * factor for x in data]\n    return sum(scores) / len(scores)\n\`\`\`\n\n### ⚡ Laboratory Workspace Drill\n- **Objective**: Develop a linear hash-map with zero-collision distribution.\n- **Action**: Use the interactive canvas to sketch data pipelines.\n\n### 📝 Post-Class Evaluation\nWrite a 200-word critique analyzing memory-locality vs execution-speed trade-offs in low-level registers.`;
-    
-    case 'Literature':
-      return `# ${normalizedTitle}\n\n## ✍️ Literary Critical Analysis Seminar\nThis curriculum evaluates textual aesthetics, semantic patterns, subtextual symbols, and historical contexts across classic paradigms.\n\n### 🏛️ Classic Textual Excerpts\n> "Reality represents a state of constant translation between what is experienced and what is chronicled."\n\n### 💭 Critique Evaluation Metrics\n- **Theme Assessment**: Analyze structural ironies within contemporary essays.\n- **Author Intention**: Focus on pacing triggers and character foils.\n\n### 💬 Classroom Collaborative Debate Topics\nDoes digital notation diminish the biological connection to textual journaling? Discuss under 15 minutes framework.`;
-    
-    case 'Physics':
-      return `# ${normalizedTitle}\n\n## ⚡ Experimental Physics & Natural Science Sandbox\nIn this session, theoretical models undergo practical validation through interactive virtual whiteboard modeling and numerical measurements.\n\n### 🔬 Key Mechanical Principles & Constraints\n- **Axiom 1**: Momentum is conserved in closed coordinate vectors.\n- **Axiom 2**: Resistance is directly proportional to temperature factors.\n\n### 🛠️ Lab Step-by-Step Procedure\n1. Plot the force vectors acting on the balance coordinate vertices.\n2. Measure the velocity coefficients across three alternate trial loops.\n\n### 📝 Homework Assignment Evaluation\nCalculate energy loss ratios using standard mathematical integrals in your journal.`;
-    
-    case 'History':
-      return `# ${normalizedTitle}\n\n## 🏛️ Geopolitical Context Mapping & Historical Context\nThis course explores historical trends, decision frameworks, resource patterns, and socio-economic influences that shaped modern civilization.\n\n### 🗺️ Context Timeline Focus\n- **Phase A**: Resource migration patterns along major trade waterways.\n- **Phase B**: Strategic institutional reforms and cultural integration cycles.\n\n### 🔍 Primary Source Critique Work\nAnalyze the 18th-century legislative documents for bias, context gaps, and underlying socio-economic drivers.\n\n### 💬 Group Discussion Prompts\nHow did geography influence the longevity of ancient administrative models?`;
-    
-    case 'Art':
-      return `# ${normalizedTitle}\n\n## 🎨 Visual Composition & Creative Sketching Studio\nA workshop focusing on aesthetic principles, negative space ratios, visual balance, and dynamic typography models.\n\n### 🖌️ Design Principles\n- **Golden Spiral**: Align critical focal points with recursive visual arcs.\n- **Chiaroscuro**: Leverage deep high-contrast shading to establish three-dimensional form.\n\n### 🛠️ Whiteboard Practical Sandbox Project\nCollaborate on the dynamic canvas to draft a raw responsive layout using minimal monochromatic blocks.\n\n### 🎨 Portfolio Task\nSubmit three divergent conceptual drafts representing active space constraints.`;
-
-    default:
-      return `# ${normalizedTitle}\n\n## 🔮 Multidisciplinary Advanced Exploration & Research\nThis course integrates cross-subject paradigms, cognitive practices, and critical reasoning methods.\n\n### 📚 Course Syllabus Modules\n- **Module 1**: Core theoretical grounding and conceptual models.\n- **Module 2**: Practical exercises combining research and action.\n\n### 📝 Interactive Classroom Tasks\n1. Formulate 2 key research queries aligning with this lecture.\n2. Sketch the systemic flow diagram depicting interaction factors.\n\n### 📥 Assignment Brief\nDraft a 300-word integration proposal based on today's whiteboard exercises.`;
-  }
-};
-
 const hostEventBus = new EventBus();
 
 export default function App() {
@@ -1841,13 +537,11 @@ export default function App() {
   const [segmentToEdit, setSegmentToEdit] = useState<any | null>(null);
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
   const [studentDashboardData, setStudentDashboardData] = useState<any>(null);
-  const [toasts, setToasts] = useState<any[]>([]);
-
   const addToast = (title: string, message: string, type: 'info' | 'success' | 'warning' = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
-    setToasts(prev => [...prev, { id, title, message, type }]);
+    appStore.getState().addToast({ id, title, message, type });
     setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
+      appStore.getState().removeToast(id);
     }, 6000);
   };
   const [studentViewStatus, setStudentViewStatus] = useState<'dashboard' | 'lesson' | 'assignment'>('dashboard');
@@ -2274,7 +968,7 @@ export default function App() {
 
       addToast(
         lang === 'zh' ? '📄 PDF 报告下载成功' : '📄 PDF Report Downloaded',
-        lang === 'zh' ? `高阶班级统计及排名分步图已存入 “${fileName}”` : `Successfully prepared academic diagnostics for "${className}"`,
+        lang === 'zh' ? `高阶班级统计及排名分步图已存入 "${fileName}"` : `Successfully prepared academic diagnostics for "${className}"`,
         'success'
       );
     } catch (error: any) {
@@ -2483,7 +1177,6 @@ export default function App() {
   const [chatLog, setChatLog] = useState<{role: 'user'|'agent', content: string}[]>([
     { role: 'agent', content: t.agentIntro }
   ]);
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Update initial message when language changes if no other messages
   useEffect(() => {
@@ -3560,7 +2253,7 @@ export default function App() {
       if (activeRoleRef.current === 'student' && activeStudentIdRef.current && data.studentId === activeStudentIdRef.current) {
         const titleText = data.assignmentTitle || data.assignmentId;
         const msg = langRef.current === 'zh'
-          ? `您的作业“${titleText}”已完成评分！得分：${data.score}%。建议反馈已收到，快去查看。`
+          ? `您的作业"${titleText}"已完成评分！得分：${data.score}%。建议反馈已收到，快去查看。`
           : `Your assignment "${titleText}" was graded. Score: ${data.score}%. Tutoring feedback has been posted.`;
 
         addToast(
@@ -3993,9 +2686,6 @@ export default function App() {
     }
   }, [selectedLesson]);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatLog]);
 
   const handleChatFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -4369,7 +3059,7 @@ export default function App() {
       } else {
         const errMsg = data.error || 'Unknown error';
         if (errMsg.includes('requires human approval') || errMsg.includes('queued')) {
-          alert(lang === 'zh' ? '该操作已加入“待审批高危操作”列表，请在右侧侧边栏中通过审批以生效。' : 'This action has been queued. Please approve it in the Pending Approvals list on the right side.');
+          alert(lang === 'zh' ? '该操作已加入"待审批高危操作"列表，请在右侧侧边栏中通过审批以生效。' : 'This action has been queued. Please approve it in the Pending Approvals list on the right side.');
           await fetchApprovals();
         } else {
           alert((lang === 'zh' ? '切换插件状态失败: ' : 'Failed to toggle plugin: ') + errMsg);
@@ -4440,7 +3130,7 @@ export default function App() {
           id: `new-${a.id}`, 
           type: 'new_assignment', 
           title: lang === 'zh' ? '新发布作业' : 'New Assignment', 
-          message: lang === 'zh' ? `您有一项新作业：“${a.title}”` : `You have a new assignment: ${a.title}`, 
+          message: lang === 'zh' ? `您有一项新作业："${a.title}"` : `You have a new assignment: ${a.title}`, 
           date: a.created_at, 
           relatedId: a.id 
         });
@@ -4451,8 +3141,8 @@ export default function App() {
           type: 'graded', 
           title: hasFeedback ? (lang === 'zh' ? '收到新成绩与反馈' : 'Grade & Feedback Posted') : (lang === 'zh' ? '新成绩发布' : 'Assignment Graded'), 
           message: hasFeedback
-            ? (lang === 'zh' ? `您的作业“${a.title}”已评分，得分：${a.score}%。反馈：“${a.feedback}”` : `Your assignment "${a.title}" was graded. Score: ${a.score}%. Teacher feedback: "${a.feedback}"`)
-            : (lang === 'zh' ? `您的作业“${a.title}”已评分，得分：${a.score}%` : `Your assignment "${a.title}" was graded. Score: ${a.score}%`), 
+            ? (lang === 'zh' ? `您的作业"${a.title}"已评分，得分：${a.score}%。反馈："${a.feedback}"` : `Your assignment "${a.title}" was graded. Score: ${a.score}%. Teacher feedback: "${a.feedback}"`)
+            : (lang === 'zh' ? `您的作业"${a.title}"已评分，得分：${a.score}%` : `Your assignment "${a.title}" was graded. Score: ${a.score}%`), 
           date: a.submitted_at || a.created_at, 
           relatedId: a.id 
         });
@@ -4466,7 +3156,7 @@ export default function App() {
         type: 'rollcall_picked',
         title: lang === 'zh' ? '⚡️ 随机提问选中通知' : '⚡️ Random Pick Notification',
         message: lang === 'zh'
-          ? `您已被老师在课程“${r.lesson_title || '课堂'}”中随机选中提问！请立即确认您的出勤与注意。`
+          ? `您已被老师在课程"${r.lesson_title || '课堂'}"中随机选中提问！请立即确认您的出勤与注意。`
           : `You have been randomly picked by the teacher in lesson "${r.lesson_title || 'Class'}"! Please pay immediate attention.`,
         date: r.picked_time,
         relatedId: r.lesson_id
@@ -5262,7 +3952,7 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                                 </h3>
                                 <p className="text-yellow-50 text-sm mt-1 max-w-xl font-medium">
                                   {lang === 'zh'
-                                    ? `您刚才在课程“${r.lesson_title || '课堂'}”中被老师随机选中。大屏已同步闪烁您的姓名，请点击右侧按钮确认专注参与！`
+                                    ? `您刚才在课程"${r.lesson_title || '课堂'}"中被老师随机选中。大屏已同步闪烁您的姓名，请点击右侧按钮确认专注参与！`
                                     : `You have been randomly selected by the teacher in lesson "${r.lesson_title || 'Class'}". Please click the button to confirm your presence and active attention!`}
                                 </p>
                               </div>
@@ -5589,127 +4279,15 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
           </div>
         ) : (
           <div className="flex-1 overflow-hidden flex bg-gray-50">
-            {/* Teacher Sidebar Navigation */}
-            <div className={`${mainNavCollapsed ? 'w-16' : 'w-16 md:w-64'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300`}>
-              {/* Collapse/Expand Toggle Button */}
-              <div className={`p-2 flex border-b border-gray-150/60 ${mainNavCollapsed ? 'justify-center' : 'justify-between items-center px-4'} min-h-[48px] shrink-0`}>
-                {!mainNavCollapsed && (
-                  <span className="hidden md:inline text-[11px] font-black tracking-widest text-slate-400 uppercase select-none">
-                    {lang === 'zh' ? '系统导航' : 'NAVIGATION'}
-                  </span>
-                )}
-                <button 
-                  onClick={() => setMainNavCollapsed(!mainNavCollapsed)} 
-                  className="p-1.5 rounded-lg hover:bg-slate-100 text-gray-500 hover:text-indigo-600 transition-colors cursor-pointer flex items-center justify-center shrink-0"
-                  title={mainNavCollapsed ? (lang === 'zh' ? '展开导航' : 'Expand Sidebar') : (lang === 'zh' ? '折叠导航' : 'Collapse Sidebar')}
-                >
-                  {mainNavCollapsed ? <Menu size={18} /> : <ChevronLeft size={18} />}
-                </button>
-              </div>
-
-              <div className={`p-2 ${mainNavCollapsed ? 'md:p-2' : 'md:p-4'} flex flex-col gap-2 mt-2`}>
-                 <button onClick={() => setTeacherTab('dashboard')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'dashboard' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '系统总览' : 'Dashboard'}>
-                    <Home size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '系统总览' : 'Dashboard'}</span>
-                 </button>
-                 <button onClick={() => setTeacherTab('courses')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'courses' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '课程管理' : 'Courses'}>
-                    <BookOpen size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '课程管理' : 'Courses'}</span>
-                 </button>
-                 <button onClick={() => setTeacherTab('live_class')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'live_class' ? 'bg-indigo-50 text-indigo-700 shadow-sm font-bold border border-indigo-100' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '互动课堂' : 'Live Class'}>
-                    <Presentation size={20} className="shrink-0 text-indigo-550" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '互动课堂' : 'Live Class'}</span>
-                 </button>
-                 <button onClick={() => setTeacherTab('classes')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'classes' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '班级管理' : 'Classes & Students'}>
-                    <Users size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '班级管理' : 'Classes & Students'}</span>
-                 </button>
-                 <button id="teacher_timetable_nav_btn" onClick={() => setTeacherTab('timetable')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'timetable' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '课表管理' : 'Timetable Routine'}>
-                    <CalendarIcon size={20} className="shrink-0 text-pink-500 animate-pulse" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '课表管理' : 'Timetable Routine'}</span>
-                 </button>
-                 <button onClick={() => setTeacherTab('computer_labs')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'computer_labs' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '机房管理' : 'Computer Lab Seating'}>
-                    <LayoutTemplate size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '机房管理' : 'Computer Lab Seating'}</span>
-                 </button>
-                 <button onClick={() => setTeacherTab('plugins')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'plugins' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '插件中心' : 'App Store / Plugins'}>
-                    <Puzzle size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '插件中心' : 'App Store / Plugins'}</span>
-                 </button>
-                 {session?.subRole === 'administrator' && (
-                    <button onClick={() => setTeacherTab('admin_directory')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium text-indigo-700 hover:bg-indigo-50 border border-slate-200/50 rounded-xl ${teacherTab === 'admin_directory' ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50/50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '管理后台' : '⭐ Admin Center'}>
-                       <Shield size={20} className="shrink-0 text-indigo-600 animate-pulse" />
-                       <span className={mainNavCollapsed ? "hidden" : "hidden md:block font-bold text-indigo-850"}>{lang === 'zh' ? '管理后台' : '⭐ Admin Center'}</span>
-                    </button>
-                 )}
-                 <button onClick={() => {
-                   if (session?.subRole === 'administrator') {
-                     setTeacherTab('settings');
-                   } else {
-                     alert(lang === 'zh' ? '您没有访问系统设置的权限。' : 'You do not have permission to access system settings.');
-                   }
-                 }} onClickCapture={(e) => { setTeacherTab('settings'); e.stopPropagation(); }} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'settings' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '系统设置' : 'System Settings'}>
-                    <Settings size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '系统设置' : 'System Settings'}</span>
-                 </button>
-                 <button onClick={() => setTeacherTab('help')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'help' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '帮助文档' : 'System Commands / Help'}>
-                    <HelpCircle size={20} className="shrink-0" />
-                    <span className={mainNavCollapsed ? "hidden" : "hidden md:block"}>{lang === 'zh' ? '帮助文档' : 'System Commands / Help'}</span>
-                 </button>
-              </div>
-
-              {/* Phase 9: Dynamic plugin-registered tab buttons */}
-              <ExtensionPointRenderer slot="teacher.tab" />
-
-              {/* Today's Schedules Sidebar Widget */}
-               {(() => {
-                 const isScheduleUpcoming = (sch: any) => {
-                   if (sch.status === 'cancelled' || sch.status === 'holiday') return false;
-                   if (!sch.time_slot) return true;
-                   try {
-                     const parts = sch.time_slot.split('-');
-                     if (parts.length < 2) return true;
-                     const endTimeStr = parts[1].trim();
-                     const [endHour, endMin] = endTimeStr.split(':').map(Number);
-                     const now = new Date();
-                     const currentHour = now.getHours();
-                     const currentMin = now.getMinutes();
-                     if (currentHour > endHour) return false;
-                     if (currentHour === endHour && currentMin >= endMin) return false;
-                     return true;
-                   } catch (e) {
-                     return true;
-                   }
-                 };
-                 const upcoming = todaySchedules.filter(isScheduleUpcoming);
-                 const remaining = upcoming.length;
-                 if (mainNavCollapsed || todaySchedules.length === 0) return null;
-                 return (
-                   <div className="mt-auto p-3 m-3 bg-indigo-50/55 rounded-xl border border-indigo-105 hidden md:block select-none shadow-3xs" id="today_schedule_sidebar_panel">
-                     <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 mb-1.5">
-                       <Clock size={12} className="text-indigo-600 animate-pulse shrink-0" />
-                       {lang === 'zh' ? '本堂余课' : 'Classes Remaining'}
-                     </div>
-                     <div className="text-[11px] text-gray-500 mb-2">
-                       {lang === 'zh' ? `今天还有 ${remaining} 节课面授` : `${remaining} more classes left today`}
-                     </div>
-                     {upcoming.length > 0 && (
-                       <div className="max-h-[140px] overflow-y-auto space-y-1 pr-1">
-                         {upcoming.map((sch: any) => (
-                           <div key={sch.id} className="text-[10px] p-1.5 bg-white rounded border border-indigo-100/60 shadow-3xs hover:border-indigo-200 transition-colors">
-                             <div className="font-bold text-gray-750 truncate" title={sch.lesson_title}>{sch.lesson_title}</div>
-                             <div className="text-[9px] text-gray-450 truncate flex justify-between mt-0.5">
-                               <span className="font-medium text-slate-500 truncate max-w-[60px]">{sch.class_name}</span>
-                               <span className="font-mono text-indigo-700 font-semibold">{sch.time_slot}</span>
-                             </div>
-                           </div>
-                         ))}
-                       </div>
-                     )}
-                   </div>
-                 );
-               })()}
-            </div>
+            <NavigationSidebar
+              mainNavCollapsed={mainNavCollapsed}
+              setMainNavCollapsed={setMainNavCollapsed}
+              teacherTab={teacherTab}
+              setTeacherTab={setTeacherTab}
+              lang={lang}
+              session={session}
+              todaySchedules={todaySchedules}
+            />
 
             <div className="flex-1 p-6 overflow-hidden flex gap-6 relative">
 
@@ -5720,307 +4298,27 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
             )}
 
             {teacherTab === 'dashboard' ? (
-              <>
-                <div className="flex-1 flex flex-col gap-6 h-full overflow-y-auto pr-2">
-                  {/* Today's Timetable Flow Dashboard Banner */}
-                  {(() => {
-                    const isScheduleUpcoming = (sch: any) => {
-                      if (sch.status === 'cancelled' || sch.status === 'holiday') return false;
-                      if (!sch.time_slot) return true;
-                      try {
-                        const parts = sch.time_slot.split('-');
-                        if (parts.length < 2) return true;
-                        const endTimeStr = parts[1].trim();
-                        const [endHour, endMin] = endTimeStr.split(':').map(Number);
-                        const now = new Date();
-                        const currentHour = now.getHours();
-                        const currentMin = now.getMinutes();
-                        if (currentHour > endHour) return false;
-                        if (currentHour === endHour && currentMin >= endMin) return false;
-                        return true;
-                      } catch (e) {
-                        return true;
-                      }
-                    };
-                    const upcoming = todaySchedules.filter(isScheduleUpcoming);
-                    const finishedCount = todaySchedules.length - upcoming.length;
-                    const cancelledToday = todaySchedules.filter(s => s.status === 'cancelled' || s.status === 'holiday');
-                    
-                    const nextClass = upcoming[0];
-                    return (
-                      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 text-slate-800 shadow-sm flex flex-col md:flex-row justify-between items-stretch gap-6 transition-all duration-300">
-                        {/* Left Side: Next Class Prominent Card */}
-                        <div className="flex-1 flex flex-col justify-between bg-slate-50/50 rounded-xl p-4.5 border border-slate-200/60 min-h-[160px]">
-                          {nextClass ? (
-                            <div className="flex-1 flex flex-col justify-between">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="bg-amber-400 text-slate-950 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse shadow-xs">
-                                    {lang === 'zh' ? '下一堂面授课' : 'NEXT CLASS'}
-                                  </span>
-                                  <span className="font-mono text-xs text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100/30">
-                                    {nextClass.time_slot}
-                                  </span>
-                                </div>
-                                <h3 className="text-lg md:text-xl font-extrabold tracking-tight mt-3 text-slate-800 line-clamp-2" title={nextClass.lesson_title}>
-                                  {nextClass.lesson_title}
-                                </h3>
-                                <p className="text-xs text-slate-500 mt-2 font-medium">
-                                  📍 {nextClass.class_name} {nextClass.classroom && ` | 教室: ${nextClass.classroom}`} {nextClass.teacher_name && ` | 教师: ${nextClass.teacher_name}`}
-                                </p>
-                              </div>
-                              {nextClass.notes && (
-                                <div className="mt-3 text-xs italic text-indigo-700 bg-indigo-50/60 p-2 rounded-lg border border-indigo-100/40 truncate" title={nextClass.notes}>
-                                  * {nextClass.notes}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="flex-1 flex flex-col justify-center items-center text-center py-6 select-none">
-                              <span className="text-3xl animate-bounce">☕</span>
-                              <h3 className="text-base font-extrabold text-slate-850 mt-2">
-                                {lang === 'zh' ? '今日课程已全部结束' : 'All Classes Finished'}
-                              </h3>
-                              <p className="text-xs text-slate-455 mt-1 max-w-[280px]">
-                                {lang === 'zh' ? '接下来暂无排定课次，您可以休息调整。' : 'No remaining schedules today. Take a rest!'}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Right Side: Todays Schedule Text List */}
-                        <div className="w-full md:w-[300px] lg:w-[350px] flex flex-col gap-3">
-                          <div className="flex justify-between items-center border-b border-slate-200/80 pb-2">
-                            <span className="text-[11px] uppercase font-extrabold tracking-wider text-indigo-600 flex items-center gap-1.5">
-                              📅 {lang === 'zh' ? '今日面授排课流' : "TODAY'S SCHEDULES"}
-                            </span>
-                            <span className="text-[10px] text-slate-500 font-medium">
-                              {lang === 'zh' 
-                                ? `共 ${todaySchedules.length} 节 | 已下课 ${finishedCount} 节` 
-                                : `Total ${todaySchedules.length} | Done ${finishedCount}`}
-                            </span>
-                          </div>
-
-                          {todaySchedules.length === 0 ? (
-                            <div className="flex-1 flex items-center justify-center text-xs font-bold text-slate-450 py-6">
-                              ☕ {lang === 'zh' ? '今日暂无排定课次' : 'No schedules configured.'}
-                            </div>
-                          ) : (
-                            <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1">
-                              {todaySchedules.map((sch: any) => {
-                                const isNext = nextClass && sch.id === nextClass.id;
-                                const isFuture = upcoming.some(u => u.id === sch.id) && !isNext;
-                                const isCancel = sch.status === 'cancelled' || sch.status === 'holiday';
-                                const isFinished = !isNext && !isFuture && !isCancel;
-
-                                return (
-                                  <div key={sch.id} className={`flex items-center justify-between text-xs py-1 border-b border-slate-100 last:border-b-0 ${
-                                    isFinished ? 'opacity-50' : isCancel ? 'opacity-35 line-through' : ''
-                                  }`}>
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <span className="font-mono text-[10px] text-slate-500 shrink-0">{sch.time_slot}</span>
-                                      <span className={`font-bold truncate max-w-[120px] lg:max-w-[150px] ${isNext ? 'text-indigo-650' : 'text-slate-700'}`} title={sch.lesson_title}>
-                                        {sch.lesson_title}
-                                      </span>
-                                      <span className="text-[9px] text-slate-455 truncate max-w-[60px] lg:max-w-[80px]">({sch.class_name})</span>
-                                    </div>
-                                    <div className="shrink-0 ml-2">
-                                      {isNext && <span className="bg-amber-400 text-slate-950 font-extrabold text-[8px] px-1.5 py-0.5 rounded uppercase scale-90 inline-block animate-pulse shadow-xs">进行</span>}
-                                      {isFinished && <span className="bg-slate-100 text-slate-500 text-[8px] px-1.5 py-0.5 rounded font-bold">已完</span>}
-                                      {isFuture && <span className="bg-indigo-50 text-indigo-700 text-[8px] px-1.5 py-0.5 rounded font-medium border border-indigo-100/50">待上</span>}
-                                      {isCancel && <span className="bg-rose-50 text-rose-600 text-[8px] px-1.5 py-0.5 rounded font-bold border border-rose-100/50">停课</span>}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    {/* Course Stat */}
-                    <div className="bg-gradient-to-br from-indigo-50/60 to-indigo-100/10 border border-indigo-100/60 rounded-2xl p-5 shadow-xs flex items-center justify-between hover:shadow-sm hover:-translate-y-0.5 transition-all duration-300">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-xs font-bold text-indigo-655 uppercase tracking-wider">
-                          {lang === 'zh' ? '课程数量' : 'Total Courses'}
-                        </span>
-                        <span className="text-3xl font-extrabold text-slate-800 tracking-tight leading-none mt-1">
-                          {lessons.length}
-                        </span>
-                      </div>
-                      <div className="p-3 bg-indigo-500/10 text-indigo-600 rounded-xl">
-                        <BookOpen size={24} />
-                      </div>
-                    </div>
-
-                    {/* Class Stat */}
-                    <div className="bg-gradient-to-br from-pink-50/60 to-pink-100/10 border border-pink-100/60 rounded-2xl p-5 shadow-xs flex items-center justify-between hover:shadow-sm hover:-translate-y-0.5 transition-all duration-300">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-xs font-bold text-pink-600 uppercase tracking-wider">
-                          {lang === 'zh' ? '班级数量' : 'Total Classes'}
-                        </span>
-                        <span className="text-3xl font-extrabold text-slate-800 tracking-tight leading-none mt-1">
-                          {classes.length}
-                        </span>
-                      </div>
-                      <div className="p-3 bg-pink-500/10 text-pink-600 rounded-xl">
-                        <Folder size={24} />
-                      </div>
-                    </div>
-
-                    {/* Student Stat */}
-                    <div className="bg-gradient-to-br from-emerald-50/60 to-emerald-100/10 border border-emerald-100/60 rounded-2xl p-5 shadow-xs flex items-center justify-between hover:shadow-sm hover:-translate-y-0.5 transition-all duration-300">
-                      <div className="flex flex-col gap-1">
-                        <span className="text-xs font-bold text-emerald-650 uppercase tracking-wider">
-                          {lang === 'zh' ? '学生数量' : 'Total Students'}
-                        </span>
-                        <span className="text-3xl font-extrabold text-slate-800 tracking-tight leading-none mt-1">
-                          {students.length}
-                        </span>
-                      </div>
-                      <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-xl">
-                        <Users size={24} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                    {/* Approvals Module */}
-                    <div className="bg-white border border-rose-100 rounded-2xl shadow-sm flex flex-col transition-all duration-300">
-                      <div 
-                        onClick={() => setIsApprovalsCollapsed(!isApprovalsCollapsed)}
-                        className="p-4 border-b border-rose-50 flex items-center justify-between cursor-pointer select-none hover:bg-rose-50/20 rounded-t-2xl transition-colors"
-                      >
-                        <h3 className="font-extrabold text-sm md:text-base text-rose-700 flex items-center gap-2">
-                          <ShieldAlert size={18} />
-                          {t.approvals}
-                          {approvals.length > 0 && (
-                            <span className="bg-rose-100 text-rose-700 text-xs px-2 py-0.5 rounded-full font-bold ml-1">
-                              {approvals.length}
-                            </span>
-                          )}
-                        </h3>
-                        <div className="text-rose-400 hover:text-rose-600 transition-colors">
-                          {isApprovalsCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-                        </div>
-                      </div>
-                      
-                      {!isApprovalsCollapsed && (
-                        <div className="flex-1 overflow-y-auto p-3 max-h-[350px]">
-                          {approvals.length === 0 ? (
-                            <div className="text-center p-8 text-xs md:text-sm text-slate-400 font-medium">
-                              {t.noApprovals}
-                            </div>
-                          ) : (
-                            approvals.map(approval => {
-                              let payload: any = {};
-                              try { payload = JSON.parse(approval.payload || '{}'); } catch(e) {}
-                              const isGrade = approval.command_type === 'ai.apply_grade';
-                              const currentScore = scoreOverrides[approval.id] !== undefined ? scoreOverrides[approval.id] : (payload.score || 0);
-
-                              return (
-                                <div key={approval.id} className="w-full p-4 rounded-xl text-sm bg-slate-55 border border-slate-100 mb-3 shadow-3xs flex flex-col gap-3 hover:border-rose-150 transition-colors">
-                                  <div>
-                                    <div className="font-extrabold text-slate-800 mb-1">{approval.command_type === 'ai.apply_grade' ? '🎓 Evaluate Submission' : approval.command_type}</div>
-                                    <div className="text-xs text-slate-500 font-mono mb-2 line-clamp-2 bg-white border border-slate-100 p-2 rounded-lg" title={approval.payload}>
-                                      {isGrade ? `Feedback: ${payload.feedback}` : approval.payload}
-                                    </div>
-                                  </div>
-                                  {isGrade && (
-                                    <div className="bg-white border border-slate-150 p-2 rounded-xl flex items-center justify-between gap-3">
-                                      <label className="text-xs font-bold text-slate-700">Modify Score:</label>
-                                      <input 
-                                        type="number" 
-                                        className="w-20 border border-slate-200 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                        value={currentScore}
-                                        onChange={e => setScoreOverrides(prev => ({ ...prev, [approval.id]: parseInt(e.target.value) || 0 }))}
-                                      />
-                                    </div>
-                                  )}
-                                  <div className="flex gap-2 justify-end mt-1">
-                                    <button 
-                                      onClick={() => handleApprove(approval.id, isGrade && scoreOverrides[approval.id] !== undefined ? { score: scoreOverrides[approval.id] } : undefined)} 
-                                      className="p-1.5 px-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all animate-none"
-                                    >
-                                      <Check size={14} /> {t.approve}
-                                    </button>
-                                    <button 
-                                      onClick={() => handleReject(approval.id)} 
-                                      className="p-1.5 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-750 rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-3xs transition-all"
-                                    >
-                                      <X size={14} /> {t.reject}
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Process Manager Module */}
-                    <div className="bg-white border border-slate-200/60 rounded-2xl shadow-sm flex flex-col transition-all duration-300">
-                      <div 
-                        onClick={() => setIsProcessesCollapsed(!isProcessesCollapsed)}
-                        className="p-4 border-b border-slate-100 flex items-center justify-between cursor-pointer select-none hover:bg-slate-50/20 rounded-t-2xl transition-colors"
-                      >
-                        <h3 className="font-extrabold text-sm md:text-base text-slate-700 flex items-center gap-2">
-                          <Activity size={18} className="text-indigo-500" />
-                          {t.processes}
-                          {processes.length > 0 && (
-                            <span className="bg-indigo-50 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-bold ml-1">
-                              {processes.length}
-                            </span>
-                          )}
-                        </h3>
-                        <div className="text-slate-400 hover:text-slate-650 transition-colors">
-                          {isProcessesCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-                        </div>
-                      </div>
-                      
-                      {!isProcessesCollapsed && (
-                        <div className="flex-1 overflow-y-auto p-3 max-h-[350px]">
-                          {processes.length === 0 ? (
-                            <div className="text-center p-8 text-xs md:text-sm text-slate-400 font-medium">
-                              {t.noProcesses}
-                            </div>
-                          ) : (
-                            processes.map(proc => (
-                              <div key={proc.id} className="w-full p-4 rounded-xl text-sm bg-slate-50 border border-slate-100 mb-3 shadow-3xs flex flex-col gap-2.5 hover:border-indigo-150 transition-colors">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="font-extrabold text-slate-800 truncate" title={proc.name}>{proc.name}</span>
-                                  <span className={`text-[10px] uppercase px-2 py-0.5 rounded-full font-bold ${proc.status === 'running' ? 'bg-blue-100 text-blue-700' : proc.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : proc.status === 'failed' ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-700'}`}>
-                                    {proc.status}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between items-center mt-1">
-                                  <span className="text-[10px] text-slate-400 font-mono">PID: {proc.pid || 'N/A'}</span>
-                                  <button onClick={() => setShowProcessLogs(proc.id)} className="text-xs font-bold text-indigo-650 hover:text-indigo-850 transition-colors">
-                                    {t.processLogs}
-                                  </button>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <QuickActionsMenu
-                  classes={classes}
-                  lessons={lessons}
-                  lang={lang}
-                  onScheduleClass={handleQuickScheduleClass}
-                  onGenerateAssignment={handleQuickGenerateAssignment}
-                  onCreateLesson={handleQuickCreateLesson}
-                />
-              </>
+              <Dashboard
+                lang={lang} t={t}
+                lessons={lessons} classes={classes} students={students}
+                todaySchedules={todaySchedules}
+                approvals={approvals} processes={processes}
+                isApprovalsCollapsed={isApprovalsCollapsed}
+                setIsApprovalsCollapsed={setIsApprovalsCollapsed}
+                isProcessesCollapsed={isProcessesCollapsed}
+                setIsProcessesCollapsed={setIsProcessesCollapsed}
+                scoreOverrides={scoreOverrides} setScoreOverrides={setScoreOverrides}
+                handleApprove={handleApprove} handleReject={handleReject}
+                showLogs={showLogs} setShowLogs={setShowLogs}
+                processLogsContent={processLogsContent}
+                showProcessLogs={showProcessLogs}
+                fetchProcessLogs={fetchProcessLogs}
+                setShowProcessLogs={setShowProcessLogs}
+                addToast={addToast}
+                handleQuickScheduleClass={handleQuickScheduleClass}
+                handleQuickGenerateAssignment={handleQuickGenerateAssignment}
+                handleQuickCreateLesson={handleQuickCreateLesson}
+              />
             ) : teacherTab === 'lesson_editor' ? (
               <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="p-4 border-b border-gray-100 flex items-center justify-between shrink-0 bg-gray-50/50">
@@ -6324,7 +4622,7 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                                  alert('无法删除！课程必须包含至少一个环节。');
                                  return;
                                }
-                               if (window.confirm(`确定要删除环节“${timelineSegments.find(s => s.id === activeSegmentId)?.title}”吗？`)) {
+                               if (window.confirm(`确定要删除环节"${timelineSegments.find(s => s.id === activeSegmentId)?.title}"吗？`)) {
                                  const updated = timelineSegments.filter(s => s.id !== activeSegmentId);
                                  saveTimeline(selectedLesson, updated);
                                  setActiveSegmentId(updated[0]?.id || null);
@@ -6511,160 +4809,30 @@ onRefresh={() => fetchElements(selectedLesson)}
                 />
               </div>
             ) : teacherTab === 'plugins' ? (
-              <PluginCenter
-                plugins={plugins}
-                lang={lang}
-                storeTab={storeTab}
-                setStoreTab={setStoreTab}
-                pluginCode={pluginCode}
-                setPluginCode={setPluginCode}
+              <PluginView
+                plugins={plugins} lang={lang}
+                storeTab={storeTab} setStoreTab={setStoreTab}
+                pluginCode={pluginCode} setPluginCode={setPluginCode}
                 installingPlugin={installingPlugin}
-                onInstall={handleInstallPlugin}
-                onZipUpload={handleZipPluginUpload}
-                onToggle={handleTogglePlugin}
-                onDelete={handleDeletePlugin}
+                onInstall={handleInstallPlugin} onZipUpload={handleZipPluginUpload}
+                onToggle={handleTogglePlugin} onDelete={handleDeletePlugin}
               />
             ) : teacherTab === 'courses' ? (
-              <div className="flex-1 flex flex-col gap-6 h-full overflow-y-auto">
-                 <div className="flex-1 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col min-h-0">
-                    <div className="p-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-                       <h3 className="font-medium text-gray-700 flex items-center gap-2">
-                         <BookOpen size={16} className="text-gray-400" />
-                         {lang === 'zh' ? '课程与教学环节管理 (SQLite)' : 'Courses & Lessons Management'}
-                       </h3>
-                       <div className="flex items-center gap-2">
-                         <button
-                           id="import-lessons-csv-btn"
-                           onClick={() => {
-                             setImportStatus('idle');
-                             setImportProgress(0);
-                             setImportProgressTotal(0);
-                             setImportErrorMsg('');
-                             setPreviewImportData([]);
-                             setIsImportLessonsOpen(true);
-                           }}
-                           className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold rounded-lg shadow-3xs transition-all hover:shadow-xs hover:-translate-y-0.5 cursor-pointer"
-                         >
-                           <Upload size={14} />
-                           {lang === 'zh' ? '批量导入课程 (CSV)' : 'Import Lessons (CSV)'}
-                         </button>
-                         <button
-                           id="add-course-wizard-btn"
-                           onClick={() => {
-                             setWizardStep(1);
-                             setIsCourseWizardOpen(true);
-                           }}
-                           className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
-                         >
-                           <Plus size={14} />
-                           {lang === 'zh' ? '手动添加课程 (向导)' : 'Add Course Wizard'}
-                         </button>
-                       </div>
-                     </div>
-                     {lessons.length > 0 && (
-                      <div className="px-5 py-3.5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-                        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-                          <div className="relative w-full sm:w-64">
-                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
-                              <Search size={14} />
-                            </span>
-                            <input
-                              type="text"
-                              placeholder="Search courses by title..."
-                              value={lessonsSearchQuery}
-                              onChange={(e) => setLessonsSearchQuery(e.target.value)}
-                              className="w-full pl-9 pr-8 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800 shadow-sm"
-                            />
-                            {lessonsSearchQuery && (
-                              <button
-                                onClick={() => setLessonsSearchQuery('')}
-                                className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-400 hover:text-gray-600"
-                              >
-                                <X size={12} className="bg-gray-100 hover:bg-gray-200 rounded-full p-0.5" />
-                              </button>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">{lang === 'zh' ? '排序方式：' : 'Sort by:'}</span>
-                            <select
-                              value={lessonsSortOrder}
-                              onChange={(e) => setLessonsSortOrder(e.target.value as any)}
-                              className="bg-white border border-gray-200 text-xs text-gray-755 font-bold px-2.5 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
-                              id="courses-sort-select"
-                            >
-                              <option value="recent">{lang === 'zh' ? '最新创建' : 'Most Recent'}</option>
-                              <option value="alphabetical">{lang === 'zh' ? '按名称 (A-Z)' : 'Alphabetical (A-Z)'}</option>
-                              <option value="enrollment">{lang === 'zh' ? '学生选课人次' : 'Student Enrollment Count'}</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div className="text-xs font-semibold text-gray-500">
-                          Found <span className="text-indigo-650 font-bold">{
-                            filteredAndSortedLessons.length
-                          }</span> of <span className="text-gray-700 font-bold">{lessons.length}</span> course{lessons.length === 1 ? '' : 's'}
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex-1 overflow-y-auto p-4">
-                       {lessons.length === 0 ? (
-                         <div className="flex flex-col items-center justify-center h-full text-gray-400 min-h-[300px]">
-                           <BookOpen size={48} className="mb-4 opacity-30 text-indigo-500 animate-bounce" />
-                           <h3 className="text-lg font-bold text-gray-800">{lang === 'zh' ? '暂无可用课程' : 'No Courses Available'}</h3>
-                           <p className="mt-2 text-sm text-gray-500 text-center max-w-xs">{lang === 'zh' ? '系统中暂未部署任何课程。请通过下方按钮启动添加向导指南。' : 'There are no courses active in the system yet. Build your first curriculum!'}</p>
-                           <button
-                             id="empty-add-course-btn"
-                             onClick={() => {
-                               setWizardStep(1);
-                               setIsCourseWizardOpen(true);
-                             }}
-                             className="mt-5 flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all cursor-pointer"
-                           >
-                             <Plus size={16} />
-                             {lang === 'zh' ? '使用向导指南来创建新课程' : 'Create Course via Wizard'}
-                           </button>
-                         </div>
-                       ) : filteredAndSortedLessons.length === 0 ? (
-                         <div className="flex flex-col items-center justify-center h-full py-12 text-gray-450 text-center">
-                           <Search size={44} className="mb-3 opacity-30 text-gray-450 animate-pulse" />
-                           <h4 className="font-semibold text-gray-700 text-sm">No Courses Match "{lessonsSearchQuery}"</h4>
-                           <p className="text-xs text-gray-500 mt-1 max-w-xs">Double-check the spelling or try searching for another curriculum keyword.</p>
-                           <button
-                             onClick={() => setLessonsSearchQuery('')}
-                             className="mt-3 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                           >
-                             Clear Search Filter
-                           </button>
-                         </div>
-                       ) : (
-                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                           {filteredAndSortedLessons.map((lesson) => (
-                             <div key={lesson.id} className="border border-gray-200 hover:border-indigo-300 rounded-xl p-4 flex flex-col bg-gray-50/50 hover:shadow-md transition-all">
-                                <div className="flex items-center justify-between mb-2 gap-2">
-                                   <div className="font-semibold text-gray-800 text-lg truncate" title={lesson.title}>{lesson.title}</div>
-                                   <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 px-1.5 py-0.5 border border-indigo-100 rounded text-[10px] font-bold shrink-0">
-                                      <Users size={10} className="text-indigo-500" />
-                                      {lesson.enrollment_count || 0}
-                                    </span>
-                                 </div>
-                                  <div className="text-sm text-gray-500 line-clamp-3 mb-4 flex-1">
-                                     <Markdown>{lesson.content}</Markdown>
-                                  </div>
-                                  <div className="flex justify-between items-center mt-auto">
-                                    <div className="text-xs text-gray-400">ID: {lesson.id.substring(0, 8)}...</div>
-                                    <button onClick={() => {
-                                       setTeacherTab('lesson_editor');
-                                       setSelectedLesson(lesson.id);
-                                    }} className="text-xs font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2 py-1.5 rounded flex items-center gap-1 transition-colors">
-                                       <Wand2 size={12} /> View Interactive
-                                    </button>
-                                  </div>
-                               </div>
-                           ))}
-                         </div>
-                       )}
-                    </div>
-                 </div>
-              </div>
+              <CourseManagement
+                lang={lang}
+                lessons={lessons}
+                lessonsSearchQuery={lessonsSearchQuery}
+                setLessonsSearchQuery={setLessonsSearchQuery}
+                lessonsSortOrder={lessonsSortOrder}
+                setLessonsSortOrder={setLessonsSortOrder}
+                filteredLessons={filteredAndSortedLessons}
+                onOpenImportLessons={() => {
+                  setImportStatus('idle'); setImportProgress(0); setImportProgressTotal(0);
+                  setImportErrorMsg(''); setPreviewImportData([]); setIsImportLessonsOpen(true);
+                }}
+                onOpenCourseWizard={() => { setWizardStep(1); setIsCourseWizardOpen(true); }}
+                onViewCourse={(lessonId) => { setTeacherTab('lesson_editor'); setSelectedLesson(lessonId); }}
+              />
             ) : teacherTab === 'classes' ? (
               <div className="flex-1 flex flex-col gap-6 h-full overflow-y-auto relative p-1 pr-3">
 
@@ -7701,7 +5869,7 @@ onRefresh={() => fetchElements(selectedLesson)}
                                             const studentsToEnroll = parseCSV(text);
                                             if (studentsToEnroll.length === 0) {
                                               alert(lang === 'zh' 
-                                                ? '未能识别出有效的学生数据。请确保 CSV 文件包含 “学生姓名” (或 “name”) 和 “学生邮箱” (或 “email”) 字段。' 
+                                                ? '未能识别出有效的学生数据。请确保 CSV 文件包含 "学生姓名" (或 "name") 和 "学生邮箱" (或 "email") 字段。' 
                                                 : 'No valid student records found. Maintain at least a "name" column in your CSV.');
                                               return;
                                             }
@@ -8150,209 +6318,39 @@ onRefresh={() => fetchElements(selectedLesson)}
             
             </div>
             ) : teacherTab === 'timetable' ? (
-              <div className="flex-1 overflow-hidden flex flex-col bg-white" id="teacher_timetable_tab_panel">
-                <TimetableManager 
-                  classes={classes}
-                  lessons={lessons}
-                  lang={lang}
-                  onSchedulesUpdated={fetchTodaySchedules}
-                />
-              </div>
+              <TimetableView classes={classes} lessons={lessons} lang={lang} onSchedulesUpdated={fetchTodaySchedules} />
             ) : teacherTab === 'admin_directory' ? (
-              session?.subRole === 'administrator' ? (
-                <AdminPanel 
-                  currentUserId={session.userId || ''}
-                  currentUserRole={session.subRole}
-                  lang={lang}
-                  onLogout={handleLogout}
-                />
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-rose-500">
-                  <ShieldAlert size={48} className="mb-4 animate-bounce" />
-                  <h2 className="text-xl font-bold">Access Denied / 拒绝访问</h2>
-                  <p className="text-sm text-gray-550 mt-1">
-                    Only system administrators are granted entry to this node.
-                  </p>
-                </div>
-              )
+              <AdminDirectoryView session={session} lang={lang} onLogout={handleLogout} />
             ) : teacherTab === 'settings' ? (
-              <div className="flex-1 p-6 overflow-y-auto space-y-6 bg-slate-50/50 min-h-0 animate-fade-in text-gray-800">
-                {/* Settings Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-gray-100 gap-4">
-                  <div>
-                    <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                      <Settings className="text-indigo-600 animate-spin-slow" size={24} />
-                      {lang === 'zh' ? '全局系统设置' : 'Global System Settings'}
-                    </h1>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {lang === 'zh' ? '管理大语言模型 AI 服务商、全局接口及教育操作系统基础配置。' : 'Orchestrate LLM providers, API keys, and classroom OS variables.'}
-                    </p>
-                  </div>
-                  
-                  <button
-                    id="add-ai-provider-btn"
-                    onClick={() => {
-                      setEditingAIProvider(null);
-                      setProviderName('');
-                      setProviderApiUrl('');
-                      setProviderApiKey('');
-                      setProviderModelName('');
-                      setIsAIProviderModalOpen(true);
-                    }}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-all text-xs cursor-pointer"
-                  >
-                    <Plus size={14} />
-                    {lang === 'zh' ? '添加 AI 提供商' : 'Add AI Provider'}
-                  </button>
-                </div>
-
-                {/* AI Provider Settings List Card */}
-                <div className="bg-white border border-gray-200/85 rounded-2xl shadow-xs overflow-hidden">
-                  <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-slate-50/60">
-                    <div>
-                      <h3 className="font-bold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
-                        <Blocks className="text-indigo-500" size={18} />
-                        {lang === 'zh' ? 'OpenAI 兼容 / 自定义模型 AI 提供商列表 (SQLite)' : 'AI Providers List (SQLite)'}
-                      </h3>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {lang === 'zh' ? '配置好的端点，将可被测验生成器、讲座生成器和 AI Agent 助理进行热切调用。' : 'Connected third-party inference backends reachable by Whiteboard and Agent.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="p-4 sm:p-5">
-                    {aiProviders.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-gray-400 text-center">
-                        <Puzzle size={40} className="mb-3 opacity-30 text-indigo-500 animate-pulse" />
-                        <span className="font-semibold text-sm">{lang === 'zh' ? '暂未配置任何 AI 提供商' : 'No AI Providers Registered'}</span>
-                        <p className="text-xs text-gray-400 mt-1 max-w-xs">{lang === 'zh' ? '点击右上角“添加 AI 提供商”按钮新建。' : 'Configure custom gateways to route inference requests.'}</p>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto border border-gray-100 rounded-xl">
-                        <table className="w-full text-left border-collapse min-w-[700px]">
-                          <thead>
-                            <tr className="bg-slate-50/70 border-b border-gray-100 text-gray-500 font-bold text-xs uppercase tracking-wider">
-                              <th className="py-3.5 px-4">{lang === 'zh' ? '名称' : 'Name'}</th>
-                              <th className="py-3.5 px-4">{lang === 'zh' ? 'API 接口网络端点' : 'API endpoint URL'}</th>
-                              <th className="py-3.5 px-4">{lang === 'zh' ? '模型代号' : 'Model Identifier'}</th>
-                              <th className="py-3.5 px-4">{lang === 'zh' ? 'API 秘钥状态' : 'API Key'}</th>
-                              <th className="py-3.5 px-4 text-center">{lang === 'zh' ? '调试与管理' : 'Actions'}</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100 text-xs text-gray-700">
-                            {aiProviders.map((provider) => (
-                              <tr key={provider.id} className="hover:bg-slate-50/50 transition-colors">
-                                <td className="py-4 px-4">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                                    <span className="font-extrabold text-gray-800 text-sm">{provider.name}</span>
-                                    {['prov_deepseek', 'prov_minimax'].includes(provider.id) && (
-                                      <span className="bg-amber-100 text-amber-800 text-[9px] px-1.5 py-0.5 rounded-sm font-bold uppercase tracking-wider block">
-                                        Preset
-                                      </span>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="py-4 px-4 font-mono text-gray-550 truncate max-w-[220px]">
-                                  {provider.api_url}
-                                </td>
-                                <td className="py-4 px-4">
-                                  <span className="bg-slate-100 text-slate-800 font-bold px-2 py-1 rounded font-mono text-[11px] border border-slate-200">
-                                    {provider.model_name}
-                                  </span>
-                                </td>
-                                <td className="py-4 px-4">
-                                  {provider.api_key ? (
-                                    <span className="text-emerald-600 font-bold flex items-center gap-1 font-mono">
-                                      <Check size={12} /> Key Saved
-                                    </span>
-                                  ) : (
-                                    <span className="text-amber-500/90 font-mono italic">
-                                      Not Set / 空
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="py-4 px-4 text-center">
-                                  <div className="flex items-center justify-center gap-2">
-                                    <button
-                                      onClick={() => handleTestAIProvider(provider)}
-                                      disabled={testingProviderId !== null}
-                                      className={`px-2.5 py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 shadow-xs ${
-                                        testingProviderId === provider.id
-                                          ? 'bg-slate-100 border-slate-200 text-slate-400'
-                                          : 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                                      }`}
-                                      title={lang === 'zh' ? '测试网络连通性' : 'Test API Integration'}
-                                    >
-                                      {testingProviderId === provider.id ? (
-                                        <>
-                                          <Loader2 size={11} className="animate-spin" />
-                                          <span>{lang === 'zh' ? '测试中' : 'Testing'}</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Globe size={11} />
-                                          <span>{lang === 'zh' ? '测试' : 'Test'}</span>
-                                        </>
-                                      )}
-                                    </button>
-
-                                    <button
-                                      onClick={() => {
-                                        setEditingAIProvider(provider);
-                                        setProviderName(provider.name);
-                                        setProviderApiUrl(provider.api_url);
-                                        setProviderApiKey(provider.api_key || '');
-                                        setProviderModelName(provider.model_name);
-                                        setIsAIProviderModalOpen(true);
-                                      }}
-                                      className="px-2.5 py-1.5 text-indigo-600 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 rounded-lg bg-white cursor-pointer hover:font-bold font-semibold transition-all shadow-xs"
-                                      title={lang === 'zh' ? '修改配置' : 'Edit Configuration'}
-                                    >
-                                      {lang === 'zh' ? '编辑' : 'Edit'}
-                                    </button>
-
-                                    <button
-                                      onClick={() => handleDeleteAIProvider(provider.id, provider.name)}
-                                      className="px-2.5 py-1.5 text-rose-600 hover:bg-rose-50 border border-gray-200 hover:border-rose-200 rounded-lg bg-white cursor-pointer hover:font-bold font-semibold transition-all shadow-xs"
-                                      title={lang === 'zh' ? '物理清除提供商' : 'Delete Provider'}
-                                    >
-                                      {lang === 'zh' ? '删除' : 'Delete'}
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* System Specs Overview Box */}
-                <div className="bg-slate-100 border border-slate-200/60 rounded-xl p-5 block sm:flex sm:items-center justify-between text-left gap-4 space-y-3 sm:space-y-0">
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-wider">{lang === 'zh' ? '环境自检指标' : 'ENVIRONMENT DIAGNOSTICS'}</span>
-                    <h4 className="font-extrabold text-gray-800 text-sm">{lang === 'zh' ? 'SQLite 内核连接通过' : 'Core SQLite DB Connection Active'}</h4>
-                    <p className="text-xs text-gray-500">{lang === 'zh' ? '核心 educational_os.db 独立加载中，AI 提供服务商热切链路工作状态完美正常。' : 'Connected. Dynamic queries to active AI service providers are routed natively.'}</p>
-                  </div>
-                  <div className="shrink-0 flex items-center gap-2 bg-white rounded-lg px-3 py-1.5 border border-slate-200 shadow-xs">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping inline-block shrink-0" />
-                    <span className="text-xs font-mono font-bold text-gray-600">STATE: OPERATIONAL</span>
-                  </div>
-                </div>
-              </div>
-            ) : teacherTab === 'computer_labs' ? (
-              <ComputerLabManager 
-                computerLabs={computerLabs}
-                onRefresh={fetchLabs}
+              <SettingsView
                 lang={lang}
+                aiProviders={aiProviders}
+                testingProviderId={testingProviderId}
+                onAddProvider={() => {
+                  setEditingAIProvider(null);
+                  setProviderName('');
+                  setProviderApiUrl('');
+                  setProviderApiKey('');
+                  setProviderModelName('');
+                  setIsAIProviderModalOpen(true);
+                }}
+                onEditProvider={(provider) => {
+                  setEditingAIProvider(provider);
+                  setProviderName(provider.name);
+                  setProviderApiUrl(provider.api_url);
+                  setProviderApiKey(provider.api_key || '');
+                  setProviderModelName(provider.model_name);
+                  setIsAIProviderModalOpen(true);
+                }}
+                onTestProvider={handleTestAIProvider}
+                onDeleteProvider={handleDeleteAIProvider}
               />
+            ) : teacherTab === 'computer_labs' ? (
+              <ComputerLabView computerLabs={computerLabs} onRefresh={fetchLabs} lang={lang} />
             ) : teacherTab === 'help' ? (
-              <HelpTabContent 
-                registeredCommands={registeredCommands} 
-                onRefresh={fetchRegisteredCommands} 
+              <HelpView
+                registeredCommands={registeredCommands}
+                onRefresh={fetchRegisteredCommands}
               />
             ) : null}
 
@@ -8363,306 +6361,32 @@ onRefresh={() => fetchElements(selectedLesson)}
         )}
       </div>
 
-      {/* Right Sidebar: OS Agent & Shell Controller */}
-      <div className={`transition-all duration-300 bg-white border-l border-gray-200 flex flex-col shadow-xl relative z-30 shrink-0 ${showRightSidebar ? 'w-96' : 'w-12 items-center cursor-pointer hover:bg-gray-50'}`}>
-        {showRightSidebar ? (
-          <>
-            <div className="flex bg-gray-100 p-1 m-4 rounded-lg shrink-0">
-               <button 
-                 onClick={() => setRightSidebarTab('agent')}
-                 className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${rightSidebarTab === 'agent' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-               >
-                 <Wand2 size={14} /> Agent
-               </button>
-               <button 
-                 onClick={() => setRightSidebarTab('shell')}
-                 className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center gap-1 ${rightSidebarTab === 'shell' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-               >
-                 <Terminal size={14} /> Shell
-               </button>
-               <button onClick={() => setShowRightSidebar(false)} className="ml-1 p-1.5 text-gray-400 hover:text-gray-600 rounded-md">
-                 <PanelRightClose size={14} />
-               </button>
-            </div>
-            
-            {rightSidebarTab === 'agent' ? (
-              <div className="flex-1 flex flex-col min-h-0">
-                <div className="p-4 border-b border-gray-100 shrink-0">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
-                        <Wand2 size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <h2 className="font-semibold text-gray-900 text-sm">{t.agentTitle}</h2>
-                        <p className="text-[10px] text-gray-500">{t.agentSubtitle}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-1.5 min-w-[150px] max-w-[50%]">
-                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
-                        {lang === 'zh' ? 'AI 提供商' : 'AI Provider'}
-                      </span>
-                      <div className="relative w-full">
-                        <select
-                          value={effectiveAgentProviderId}
-                          onChange={(e) => setAgentProviderId(e.target.value)}
-                          className="w-full appearance-none rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50 px-3 py-2 pr-9 text-[11px] font-medium text-gray-700 shadow-sm outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-                        >
-                          <option value="system">
-                            {lang === 'zh' ? '系统默认（Gemini）' : 'System Default (Gemini)'}
-                          </option>
-                          {aiProviders.map((provider) => (
-                            <option key={provider.id} value={provider.id}>
-                              {provider.name}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown size={12} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                      </div>
-                      <div className="text-[10px] text-gray-400 truncate w-full text-right" title={effectiveAgentProviderId === 'system' ? (lang === 'zh' ? '使用内置 Gemini 系统模型' : 'Using the built-in Gemini system model') : selectedAgentProvider?.model_name || ''}>
-                        {effectiveAgentProviderId === 'system'
-                          ? (lang === 'zh' ? '内置系统模型' : 'Built-in system model')
-                          : `${selectedAgentProvider?.name || (lang === 'zh' ? '已选提供商' : 'Selected provider')}`}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {chatLog.map((msg, i) => (
-                    <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                      <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] text-xs whitespace-pre-wrap ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-gray-100 text-gray-800 rounded-bl-none'}`}>
-                        {msg.content}
-                      </div>
-                    </div>
-                  ))}
-                  {loading && (
-                    <div className="flex items-start">
-                      <div className="px-4 py-2.5 rounded-2xl max-w-[85%] text-xs bg-gray-100 text-gray-500 rounded-bl-none flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce"></span>
-                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{animationDelay: '0.1s'}}></span>
-                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{animationDelay: '0.2s'}}></span>
-                      </div>
-                    </div>
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
-
-                <form 
-                  onSubmit={handleSend} 
-                  className="p-3 border-t border-gray-100 bg-white shrink-0 font-sans"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={handleChatDrop}
-                >
-                  {/* Attachments preview */}
-                  {chatAttachments.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-2 px-1">
-                      {chatAttachments.map((f, i) => (
-                        <div key={i} className="flex items-center gap-1 bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-[10px]">
-                          <FileText size={10} className="shrink-0" />
-                          <span className="truncate max-w-[100px]" title={f.name}>{f.name}</span>
-                          <button 
-                            type="button" 
-                            onClick={() => setChatAttachments(prev => prev.filter((_, idx) => idx !== i))}
-                            className="hover:bg-indigo-200 rounded-full p-0.5 cursor-pointer ml-0.5 transition-colors text-indigo-400 hover:text-indigo-600"
-                          >
-                            <X size={10} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-1.5">
-                    <label className="p-1 px-1.5 text-gray-500 hover:text-indigo-600 rounded-full hover:bg-gray-100 cursor-pointer transition-colors shrink-0">
-                      <Paperclip size={14} />
-                      <input 
-                        type="file" 
-                        multiple 
-                        className="hidden" 
-                        onChange={handleChatFileChange} 
-                        accept=".csv,.txt,.json,.md"
-                      />
-                    </label>
-
-                    <div className="relative flex-1">
-                      <input 
-                        type="text" 
-                        value={input}
-                        onChange={e => setInput(e.target.value)}
-                        placeholder={t.placeholder}
-                        className="w-full bg-gray-50 border border-gray-200 rounded-full pl-4 pr-10 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                      />
-                      <button 
-                        type="submit" 
-                        disabled={loading || !input.trim()}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                      >
-                        <MessageSquare size={10} />
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col bg-black text-green-400 font-mono text-[10px] min-h-0 mx-4 mb-4 rounded-xl shadow-inner border border-gray-800 overflow-hidden">
-                <div className="p-3 border-b border-gray-800 flex items-center justify-between shrink-0 bg-gray-900">
-                  <div className="flex items-center gap-2 text-gray-300 font-sans tracking-wide">
-                    <Terminal size={14} />
-                    <span className="text-xs">{t.eventStream}</span>
-                  </div>
-                </div>
-                
-                <div className="p-3 overflow-y-auto flex-1 flex flex-col gap-1 select-text">
-                  {events.length === 0 ? (
-                     <div className="text-gray-600 italic">Waiting for events...</div>
-                  ) : (
-                     events.map((ev, i) => (
-                       <div key={i} className="flex flex-col gap-1 hover:bg-gray-800/50 p-2 rounded mb-1">
-                         <div className="flex items-center gap-2 justify-between">
-                           <span className="text-gray-500 shrink-0 text-[9px]">[{new Date(ev.timestamp).toLocaleTimeString()}]</span>
-                           <span className="text-blue-400 shrink-0 truncate text-[9px]" title={ev.source}>{ev.source}</span>
-                         </div>
-                         <div className="text-green-300 font-bold">{ev.type}</div>
-                         <div className="text-gray-400 break-words mt-1 leading-tight">{ev.payload}</div>
-                       </div>
-                     ))
-                  )}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="flex flex-col items-center py-6 h-full text-gray-400 w-full" onClick={() => setShowRightSidebar(true)}>
-             <Wand2 size={18} className="mb-6 hover:text-indigo-500" />
-             <Terminal size={18} className="hover:text-indigo-500" />
-             <div className="mt-8 flex-1 flex flex-col justify-end pb-8">
-               <div className="uppercase tracking-widest text-[9px] rotate-180" style={{ writingMode: 'vertical-rl' }}>OS Core Options</div>
-             </div>
-          </div>
-        )}
-      </div>
+      <RightSidebar
+        showRightSidebar={showRightSidebar}
+        setShowRightSidebar={setShowRightSidebar}
+        rightSidebarTab={rightSidebarTab}
+        setRightSidebarTab={setRightSidebarTab}
+        effectiveAgentProviderId={effectiveAgentProviderId}
+        agentProviderId={agentProviderId}
+        setAgentProviderId={setAgentProviderId}
+        aiProviders={aiProviders}
+        selectedAgentProvider={selectedAgentProvider}
+        chatLog={chatLog}
+        loading={loading}
+        input={input}
+        setInput={setInput}
+        handleSend={handleSend}
+        chatAttachments={chatAttachments}
+        setChatAttachments={setChatAttachments}
+        handleChatFileChange={handleChatFileChange}
+        handleChatDrop={handleChatDrop}
+        events={events}
+        lang={lang}
+        t={t}
+      />
 
       {/* Manual Import Classes & Students Modal */}
-      {showImportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 font-sans text-gray-800">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg flex flex-col p-6 relative">
-            <button 
-              type="button"
-              onClick={() => setShowImportModal(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-medium cursor-pointer"
-            >
-              &times;
-            </button>
-
-            <h3 className="text-base font-semibold text-gray-900 mb-1 flex items-center gap-2">
-              <Upload size={18} className="text-indigo-600" />
-              {lang === 'zh' ? '手动批量导入数据' : 'Manual Bulk Import'}
-            </h3>
-            <p className="text-xs text-gray-500 mb-4 font-sans text-left">
-              {lang === 'zh' 
-                ? '支持导入 CSV 或 JSON 文件。CSV 文件需包含标题行，建议格式如下（支持中英文标题）：' 
-                : 'Supports CSV or JSON files. CSV requires a header line with names like:'}
-            </p>
-
-            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-[10px] font-mono text-gray-600 mb-4 whitespace-nowrap overflow-x-auto select-all text-left">
-              班级名称, 班级描述, 学生姓名, 学生邮箱<br />
-              高一A班, 基础英语课程, 李明, liming@example.com<br />
-              高一A班, 基础英语课程, 王华, wanghua@example.com
-            </div>
-
-            {/* Template Files Download */}
-            <div className="mb-4 flex flex-col gap-2 p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg text-left select-none">
-              <span className="text-xs font-semibold text-indigo-900 flex items-center gap-1">
-                <Download size={13} className="text-indigo-600" />
-                {lang === 'zh' ? '下载导入数据模板文件：' : 'Download Import Templates:'}
-              </span>
-              <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                <button
-                  type="button"
-                  onClick={() => downloadCSVTemplate('class')}
-                  className="flex-1 flex items-center justify-center gap-1.5 text-xs px-2.5 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors shadow-sm font-medium cursor-pointer"
-                >
-                  <FileIcon size={12} className="text-emerald-600" />
-                  {lang === 'zh' ? '下载班级与学生模板' : 'Class & Students Template'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => downloadCSVTemplate('student')}
-                  className="flex-1 flex items-center justify-center gap-1.5 text-xs px-2.5 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 transition-colors shadow-sm font-medium cursor-pointer"
-                >
-                  <FileIcon size={12} className="text-emerald-600" />
-                  {lang === 'zh' ? '下载独立学生模板' : 'Independent Students Template'}
-                </button>
-              </div>
-            </div>
-
-            {/* Drag & Drop Upload Zone */}
-            <div 
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
-                const file = e.dataTransfer.files[0];
-                handleImportFile(file);
-              }}
-              className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-indigo-500 hover:bg-indigo-50/20 transition-all mb-4"
-              onClick={() => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = '.csv,.json';
-                input.onchange = (e: any) => {
-                  if (e.target.files && e.target.files.length > 0) {
-                    handleImportFile(e.target.files[0]);
-                  }
-                };
-                input.click();
-              }}
-            >
-              <Upload className="mx-auto text-gray-400 mb-2" size={24} />
-              <p className="text-xs font-semibold text-gray-700">
-                {lang === 'zh' ? '点击选择文件 或 拖拽文件到这里' : 'Click to select file or drag it here'}
-              </p>
-              <p className="text-[10px] text-gray-400 mt-1">CSV or JSON (max 5MB)</p>
-            </div>
-
-            {/* Error Feedback Message */}
-            {importError && (
-              <div className="p-3 bg-red-50 border border-red-100 text-red-700 text-xs rounded-lg mb-4 flex items-start gap-2 max-h-32 overflow-y-auto">
-                <span className="font-bold shrink-0">✕</span>
-                <span className="font-sans text-left leading-tight break-all">{importError}</span>
-              </div>
-            )}
-
-            {/* Success Feedback Message */}
-            {importSuccess && (
-              <div className="p-3 bg-green-50 border border-green-105 text-green-700 text-xs rounded-lg mb-4 flex items-start gap-2">
-                <Check size={14} className="shrink-0 mt-0.5" />
-                <span className="font-sans text-left leading-tight">{importSuccess}</span>
-              </div>
-            )}
-
-            {/* Loader animation helper */}
-            {isImporting && (
-              <div className="flex items-center justify-center gap-2 text-indigo-600 text-xs py-2">
-                <Loader2 size={16} className="animate-spin" />
-                <span>{lang === 'zh' ? '正在分析数据并导入系统数据库...' : 'Validating data and transferring records...'}</span>
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2 mt-2">
-              <button
-                type="button"
-                onClick={() => setShowImportModal(false)}
-                className="px-4 py-2 text-xs font-medium border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-              >
-                {lang === 'zh' ? '关闭' : 'Close'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ImportModal show={showImportModal} onClose={() => setShowImportModal(false)} lang={lang} handleImportFile={handleImportFile} importError={importError} importSuccess={importSuccess} isImporting={isImporting} downloadCSVTemplate={downloadCSVTemplate} />
 
       {/* Handheld Interactive Manual Course Creation Wizard Modal */}
       {isCourseWizardOpen && (
@@ -9361,7 +7085,7 @@ onRefresh={() => fetchElements(selectedLesson)}
                     <span className="text-base leading-none">⚠️</span>
                     <p className="leading-relaxed">
                       {lang === 'zh' 
-                        ? '请确认课程名称没有与系统已有的课程同名。确认无误后点击下方“开始导入”写入 SQLite。' 
+                        ? '请确认课程名称没有与系统已有的课程同名。确认无误后点击下方"开始导入"写入 SQLite。' 
                         : 'Please ensure column details are accurate. Clicking Import will instantly commit all parsed courses into the server SQLite backend.'}
                     </p>
                   </div>
@@ -10124,119 +7848,10 @@ onClose={() => setPreviewSelectedCourseware(null)}
       )}
 
       {/* Process Logs Modal */}
-      {showProcessLogs && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
-              <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-                 <h2 className="font-semibold text-gray-800 flex items-center gap-2">
-                   <Terminal size={18} className="text-gray-600" />
-                   {(t as any).processLogsTitle || 'Process Logs'}
-                 </h2>
-                 <button onClick={() => setShowProcessLogs(null)} className="text-gray-400 hover:text-gray-600 font-bold px-2">&times;</button>
-              </div>
-              <div className="p-4 flex-1 overflow-auto bg-gray-900 m-4 rounded flex flex-col">
-                 <pre className="font-mono text-xs text-green-400 whitespace-pre-wrap">{processLogsContent || 'No logs generated.'}</pre>
-              </div>
-           </div>
-        </div>
-      )}
+      <ProcessLogsModal showProcessLogs={showProcessLogs} setShowProcessLogs={setShowProcessLogs} processLogsContent={processLogsContent} t={t} />
 
       {/* Cloud Drive Modal */}
-      {isCloudDriveOpen && (
-        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-           <div className="bg-white border text-gray-900 border-gray-200 rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden">
-              <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80">
-                 <div className="flex items-center gap-3">
-                   <Folder size={20} className="text-indigo-600" />
-                   <h2 className="font-semibold text-gray-800 text-lg">Cloud Course Resource Browser</h2>
-                 </div>
-                 <button onClick={() => setIsCloudDriveOpen(false)} className="text-gray-400 hover:text-gray-600 font-bold p-1 hover:bg-gray-200 rounded transition-colors">&times;</button>
-              </div>
-              <div className="flex-1 flex overflow-hidden">
-                 {/* Sidebar (Directories) */}
-                 <div className="w-64 border-r border-gray-100 flex flex-col bg-gray-50">
-                    <div className="p-3 border-b border-gray-200 flex items-center gap-2">
-                       <button 
-                         onClick={() => { setCurrentVfsParent(null); setCloudDrivePreviewNode(null); }}
-                         className={`text-sm font-medium w-full text-left flex items-center gap-2 p-2 rounded ${currentVfsParent === null ? 'bg-indigo-100 text-indigo-800' : 'text-gray-600 hover:bg-gray-200'}`}
-                       >
-                         <Folder size={16} /> Data Root
-                       </button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-2">
-                      {currentVfsParent && (
-                        <button onClick={() => setCurrentVfsParent(null)} className="flex items-center gap-2 p-2 text-xs text-indigo-600 w-full hover:bg-gray-200 rounded mb-2 font-medium">
-                          <ChevronRight className="rotate-180" size={14} /> Back to Root
-                        </button>
-                      )}
-                      <div className="text-xs uppercase font-semibold text-gray-400 px-2 py-1 mb-1">Current Path Nodes</div>
-                      {vfsNodes.filter(n => n.type === 'dir').map(node => (
-                        <button
-                          key={node.id}
-                          onClick={() => { setCurrentVfsParent(node.id); setCloudDrivePreviewNode(null); }}
-                          className="w-full text-left p-2 rounded text-sm text-gray-700 hover:bg-gray-200 flex items-center gap-2 group mb-1"
-                        >
-                          <Folder size={14} className="text-indigo-400 group-hover:text-indigo-600" />
-                          <span className="truncate">{node.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                 </div>
-                 
-                 {/* Main Content Area */}
-                 <div className="flex-1 flex flex-col bg-white">
-                   {cloudDrivePreviewNode ? (
-                      <div className="flex-1 flex flex-col h-full min-h-0">
-                        <div className="p-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2 shrink-0">
-                           <button onClick={() => setCloudDrivePreviewNode(null)} className="text-gray-500 hover:text-gray-700">
-                             <X size={16} />
-                           </button>
-                           <span className="text-sm font-medium text-gray-700">Previewing: {cloudDrivePreviewNode.name}</span>
-                        </div>
-                        {cloudDrivePreviewNode.name.endsWith('.html') || cloudDrivePreviewNode.name.endsWith('.htm') || cloudDrivePreviewNode.content?.includes('<html') ? (
-                           <div className="flex-1 relative bg-gray-50">
-                             <LazyCourseware
-coursewareId={cloudDrivePreviewNode.id}
-/>
-                           </div>
-                        ) : (
-                           <div className="flex-1 overflow-y-auto p-6 bg-white prose prose-sm max-w-none">
-                              <Markdown>{cloudDrivePreviewNode.content}</Markdown>
-                           </div>
-                        )}
-                      </div>
-                   ) : (
-                     <div className="flex-1 p-6 overflow-y-auto">
-                        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                           {vfsNodes.length === 0 && (
-                             <div className="col-span-full h-32 flex items-center justify-center text-sm text-gray-400 italic">This directory is empty.</div>
-                           )}
-                           {vfsNodes.map(node => (
-                             <div 
-                               key={node.id}
-                               onClick={() => {
-                                 if (node.type === 'dir') {
-                                    setCurrentVfsParent(node.id);
-                                 } else {
-                                    setCloudDrivePreviewNode({ id: node.id, name: node.name, content: node.content || '*(Empty file)*' });
-                                 }
-                               }}
-                               className="border border-gray-200 hover:border-indigo-300 hover:shadow-md cursor-pointer rounded-xl p-4 flex flex-col gap-3 transition-all bg-white"
-                             >
-                                <div className="p-3 rounded-xl w-12 h-12 flex items-center justify-center shrink-0 shadow-sm bg-gray-50 border border-gray-100">
-                                   {node.type === 'dir' ? <Folder size={24} className="text-indigo-500" /> : <FileIcon size={24} className="text-gray-500" />}
-                                </div>
-                                <div className="text-sm font-medium text-gray-800 break-words">{node.name}</div>
-                             </div>
-                           ))}
-                        </div>
-                     </div>
-                   )}
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
+      <CloudDriveModal isOpen={isCloudDriveOpen} onClose={() => setIsCloudDriveOpen(false)} vfsNodes={vfsNodes} currentVfsParent={currentVfsParent} setCurrentVfsParent={setCurrentVfsParent} cloudDrivePreviewNode={cloudDrivePreviewNode} setCloudDrivePreviewNode={setCloudDrivePreviewNode} />
 
       {/* System Resource Library Modal (系统资源管理系统) */}
       {isSystemResourceLibraryOpen && (
@@ -10766,164 +8381,20 @@ coursewareId={cloudDrivePreviewNode.id}
         </div>
       )}
 
-      {/* Notification Detail Modal */}
-      {selectedNotificationForModal && (
-        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-white border text-gray-900 border-gray-200 rounded-2xl shadow-2xl w-full max-w-xl flex flex-col overflow-hidden max-h-[85vh] font-sans"
-          >
-            {/* Modal Header */}
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80 shrink-0">
-              <div className="flex items-center gap-3">
-                <Bell className="text-indigo-600 animate-bounce font-sans shrink-0" size={20} />
-                <h2 className="font-bold text-gray-800 text-base font-sans truncate">
-                  {selectedNotificationForModal.title}
-                </h2>
-              </div>
-              <button 
-                onClick={() => setSelectedNotificationForModal(null)} 
-                className="text-gray-400 hover:text-gray-600 font-bold p-1 hover:bg-gray-200 rounded transition-colors text-lg"
-              >
-                &times;
-              </button>
-            </div>
-
-            {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 text-sm text-gray-700 leading-relaxed font-sans">
-                {selectedNotificationForModal.message}
-              </div>
-
-              {selectedNotificationForModal.assignment && (
-                <div className="space-y-4 font-sans">
-                  <div className="border border-gray-150 rounded-xl p-4 bg-gray-50/50 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-400 uppercase tracking-wider font-semibold font-sans">
-                        {lang === 'zh' ? '关联作业' : 'Associated Assignment'}
-                      </span>
-                      {selectedNotificationForModal.assignment.submission_status === 'graded' && (
-                        <span className="bg-green-100 border border-green-200 text-green-800 text-xs font-bold px-2.5 py-1 rounded-full shadow-sm font-mono">
-                          {lang === 'zh' ? `得分：${selectedNotificationForModal.assignment.score}%` : `Score: ${selectedNotificationForModal.assignment.score}%`}
-                        </span>
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-base text-indigo-900 font-sans">
-                        {selectedNotificationForModal.assignment.title}
-                      </h4>
-                      <p className="text-xs text-gray-500 mt-1 font-sans">
-                        {selectedNotificationForModal.assignment.class_name}
-                      </p>
-                    </div>
-
-                    {selectedNotificationForModal.assignment.feedback && (
-                      <div className="mt-3 bg-white p-3 rounded-lg border border-gray-150 space-y-1 font-sans">
-                        <div className="text-xs font-bold text-green-700 flex items-center justify-between gap-2 font-sans">
-                          <div className="flex items-center gap-1">
-                            <CheckCircle2 size={14} className="font-sans" />
-                            <span>{lang === 'zh' ? '教师评审意见与反馈' : 'Teacher Feedback & Recommendations'}</span>
-                          </div>
-                          {selectedNotificationForModal.assignment.graded_at && (
-                            <div className="text-[10px] text-gray-400 font-mono flex items-center gap-1 font-normal select-none">
-                              <Clock size={11} className="text-neutral-400" />
-                              <span>
-                                {new Date(selectedNotificationForModal.assignment.graded_at).toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-xs text-gray-600 italic bg-green-50/30 p-2 rounded border border-green-50 mt-1 leading-relaxed whitespace-pre-wrap font-sans">
-                          {selectedNotificationForModal.assignment.feedback}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {selectedNotificationForModal.assignment.submission_content && (
-                    <div className="space-y-1.5 font-sans">
-                      <div className="text-xs text-gray-400 font-bold uppercase tracking-wider font-sans">
-                        {lang === 'zh' ? '我提交的内容' : 'My Submission Content'}
-                      </div>
-                      <div className="bg-gray-900 text-gray-100 p-4 rounded-xl border border-gray-800 overflow-x-auto max-h-40 overflow-y-auto text-xs font-mono leading-relaxed whitespace-pre-wrap">
-                        {selectedNotificationForModal.assignment.submission_content}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-gray-100 bg-gray-50/85 flex justify-end gap-2.5 shrink-0 font-sans">
-              <button
-                type="button"
-                onClick={() => setSelectedNotificationForModal(null)}
-                className="px-4 py-2 text-xs font-semibold border border-gray-200 text-gray-700 bg-white rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-              >
-                {lang === 'zh' ? '关闭' : 'Close'}
-              </button>
-              {selectedNotificationForModal.assignment && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedAssignment(selectedNotificationForModal.assignment);
-                    setStudentViewStatus('assignment');
-                    setQuizStudentAnswers({});
-                    setSubAssignmentTab('quiz');
-                    setSelectedNotificationForModal(null);
-                  }}
-                  className="px-4 py-2 text-xs font-bold bg-indigo-600 text-white border border-indigo-700 rounded-lg hover:bg-indigo-700 hover:shadow shadow-sm transition-all cursor-pointer flex items-center gap-1.5 font-sans"
-                >
-                  <PenTool size={14} className="font-sans" />
-                  {lang === 'zh' ? '打开画布 / 查看详情' : 'Open Workspace Canvas'}
-                </button>
-              )}
-            </div>
-          </motion.div>
-        </div>
-      )}
+      <NotificationDetailModal
+        notification={selectedNotificationForModal}
+        onClose={() => setSelectedNotificationForModal(null)}
+        lang={lang}
+        onOpenWorkspace={(assignment) => {
+          setSelectedAssignment(assignment);
+          setStudentViewStatus('assignment');
+          setQuizStudentAnswers({});
+          setSubAssignmentTab('quiz');
+        }}
+      />
 
       {/* Real-time Toast Notifications */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 min-w-[320px] max-w-sm pointer-events-none">
-        <AnimatePresence>
-          {toasts.map(toast => (
-            <motion.div
-              key={toast.id}
-              initial={{ opacity: 0, y: 50, x: 50, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.2 } }}
-              transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-              className="pointer-events-auto w-full bg-white ring-1 ring-black/5 shadow-2xl rounded-xl p-4 flex gap-3 border-l-4 border-emerald-500 overflow-hidden"
-              id={`toast-${toast.id}`}
-            >
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="p-1 rounded-full bg-emerald-50 text-emerald-600">
-                     <FileBadge size={16} />
-                  </span>
-                  <p className="font-semibold text-gray-900 text-sm font-sans">{toast.title}</p>
-                </div>
-                <p className="text-xs text-gray-500 mt-2 leading-relaxed font-sans">{toast.message}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
-                className="text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded p-1 h-fit transition-colors shrink-0 cursor-pointer"
-              >
-                <X size={14} />
-              </button>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+      <ToastContainer />
 
       </div>
     </>
