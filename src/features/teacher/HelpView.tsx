@@ -931,6 +931,197 @@ export default {
               </div>
             </div>
 
+            {/* ═══════════ ActionDescriptor 类型参考 ═══════════ */}
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+              <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                <Search size={14} className="text-purple-500" />
+                <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide">ActionDescriptor — 完整字段参考</h4>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100 text-left">
+                      <th className="px-4 py-2 font-semibold text-gray-600 w-36">字段</th>
+                      <th className="px-4 py-2 font-semibold text-gray-600 w-20">类型</th>
+                      <th className="px-4 py-2 font-semibold text-gray-600 w-16">必需</th>
+                      <th className="px-4 py-2 font-semibold text-gray-600">说明</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    <tr className="hover:bg-gray-50/50">
+                      <td className="px-4 py-2 font-mono text-purple-600 font-semibold">id</td>
+                      <td className="px-4 py-2 text-gray-500">string</td>
+                      <td className="px-4 py-2"><span className="bg-red-50 text-red-600 border border-red-100 rounded px-1.5 text-[10px] font-bold">必需</span></td>
+                      <td className="px-4 py-2 text-gray-600">全局唯一 Action ID。约定前缀 <code className="bg-gray-100 px-1 rounded text-[10px]">ext-&lt;plugin&gt;-</code>，如 <code className="bg-gray-100 px-1 rounded text-[10px]">ext-quiz-create</code></td>
+                    </tr>
+                    <tr className="hover:bg-gray-50/50">
+                      <td className="px-4 py-2 font-mono text-purple-600 font-semibold">commandType</td>
+                      <td className="px-4 py-2 text-gray-500">string</td>
+                      <td className="px-4 py-2"><span className="bg-red-50 text-red-600 border border-red-100 rounded px-1.5 text-[10px] font-bold">必需</span></td>
+                      <td className="px-4 py-2 text-gray-600">命令类型标识符，命名空间格式。如 <code className="bg-gray-100 px-1 rounded text-[10px]">quiz.create</code>、<code className="bg-gray-100 px-1 rounded text-[10px]">exam.publish</code></td>
+                    </tr>
+                    <tr className="hover:bg-gray-50/50">
+                      <td className="px-4 py-2 font-mono text-purple-600 font-semibold">description</td>
+                      <td className="px-4 py-2 text-gray-500">string</td>
+                      <td className="px-4 py-2"><span className="bg-red-50 text-red-600 border border-red-100 rounded px-1.5 text-[10px] font-bold">必需</span></td>
+                      <td className="px-4 py-2 text-gray-600">AI Agent 可见的功能描述。用自然语言说明何时使用。如 <code className="bg-gray-100 px-1 rounded text-[10px]">为指定课时创建限时考试试卷</code></td>
+                    </tr>
+                    <tr className="hover:bg-gray-50/50">
+                      <td className="px-4 py-2 font-mono text-purple-600 font-semibold">inputSchema</td>
+                      <td className="px-4 py-2 text-gray-500">object</td>
+                      <td className="px-4 py-2"><span className="bg-red-50 text-red-600 border border-red-100 rounded px-1.5 text-[10px] font-bold">必需</span></td>
+                      <td className="px-4 py-2 text-gray-600">JSON Schema 参数定义（见下方详细说明）。顶层 type 必须为 <code className="bg-gray-100 px-1 rounded text-[10px]">OBJECT</code></td>
+                    </tr>
+                    <tr className="hover:bg-gray-50/50">
+                      <td className="px-4 py-2 font-mono text-purple-600 font-semibold">capabilityRequired</td>
+                      <td className="px-4 py-2 text-gray-500">string</td>
+                      <td className="px-4 py-2"><span className="bg-red-50 text-red-600 border border-red-100 rounded px-1.5 text-[10px] font-bold">必需</span></td>
+                      <td className="px-4 py-2 text-gray-600">执行此 Action 所需的能力字符串。如 <code className="bg-gray-100 px-1 rounded text-[10px]">whiteboard:write</code>。传空字符串表示无权限要求</td>
+                    </tr>
+                    <tr className="hover:bg-gray-50/50">
+                      <td className="px-4 py-2 font-mono text-purple-600 font-semibold">isHighRisk</td>
+                      <td className="px-4 py-2 text-gray-500">boolean</td>
+                      <td className="px-4 py-2"><span className="bg-gray-100 text-gray-500 border border-gray-200 rounded px-1.5 text-[10px]">可选</span></td>
+                      <td className="px-4 py-2 text-gray-600">标记为高风险操作。AI Agent 调用时将进入审批队列，需教师人工确认。默认 false</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              {/* inputSchema 详细说明 */}
+              <div className="p-4 border-t border-gray-100 space-y-3 text-xs">
+                <h5 className="font-bold text-gray-700">inputSchema JSON Schema 类型详解</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                  {[
+                    {type:'STRING', desc:'字符串。用于文本、ID、URL 等', example:'"title": { "type": "STRING", "description": "课程标题" }'},
+                    {type:'INTEGER', desc:'整数。用于计数、索引、分钟数', example:'"count": { "type": "INTEGER", "description": "题目数量" }'},
+                    {type:'NUMBER', desc:'浮点数。用于分数、百分比、坐标', example:'"score": { "type": "NUMBER", "description": "得分 (0-100)" }'},
+                    {type:'BOOLEAN', desc:'布尔值。用于开关、是否标记', example:'"isPublished": { "type": "BOOLEAN", "description": "是否发布" }'},
+                    {type:'ARRAY', desc:'数组。需配合 items 指定元素类型', example:'"tags": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "标签列表" }'},
+                    {type:'OBJECT', desc:'嵌套对象。用于复杂结构', example:'"filter": { "type": "OBJECT", "properties": {...}, "description": "过滤条件" }'},
+                  ].map(item => (
+                    <div key={item.type} className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <code className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-bold">{item.type}</code>
+                        <span className="font-semibold text-gray-700">{item.desc}</span>
+                      </div>
+                      <pre className="text-[9.5px] font-mono text-gray-500 bg-white p-1.5 rounded border border-gray-100 overflow-x-auto">{item.example}</pre>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-indigo-50 rounded-lg p-3 border border-indigo-100 text-[11px] text-indigo-800">
+                  <span className="font-bold">required 数组：</span>列出必须提供的参数名。前端根据此数组在字段旁显示 REQUIRED 标记，AI Agent 也会被引导填充这些字段。
+                </div>
+              </div>
+            </div>
+
+            {/* ═══════════ PlatformCommand & PlatformEvent 信封 ═══════════ */}
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+              <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                <Database size={14} className="text-slate-600" />
+                <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide">核心数据结构：PlatformCommand & PlatformEvent</h4>
+              </div>
+              <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                {/* PlatformCommand */}
+                <div className="border border-indigo-100 rounded-xl p-4 bg-indigo-50/10 space-y-2">
+                  <h5 className="font-bold text-indigo-700">PlatformCommand&lt;T&gt;</h5>
+                  <p className="text-[11px] text-gray-500">命令总线中传递的标准命令信封，由 <code className="bg-gray-100 px-1 rounded text-[10px]">createCommand()</code> 或手动构造。</p>
+                  <table className="w-full text-[10px]">
+                    <thead><tr className="text-left text-gray-400"><th className="py-1 pr-2">字段</th><th className="py-1 pr-2">类型</th><th className="py-1">说明</th></tr></thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {[
+                        ['id','string','唯一命令 ID（uuid v7）'],
+                        ['type','string','命令类型，如 "lesson.create"'],
+                        ['actorId','string','执行者标识，如 "plugin:ext-quiz"'],
+                        ['payload','T','命令负载数据，类型由 handler 定义'],
+                        ['timestamp','number','Unix 毫秒时间戳'],
+                        ['metadata?','object','可选元数据：correlationId, agentDelegated, undoable'],
+                      ].map(([f,t,d]) => (
+                        <tr key={f}><td className="py-1 pr-2 font-mono text-indigo-600">{f}</td><td className="py-1 pr-2 text-gray-500">{t}</td><td className="py-1 text-gray-600">{d}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* PlatformEvent */}
+                <div className="border border-emerald-100 rounded-xl p-4 bg-emerald-50/10 space-y-2">
+                  <h5 className="font-bold text-emerald-700">PlatformEvent</h5>
+                  <p className="text-[11px] text-gray-500">事件总线中传递的标准事件信封，由 <code className="bg-gray-100 px-1 rounded text-[10px]">eventBus.publish()</code> 发布。</p>
+                  <table className="w-full text-[10px]">
+                    <thead><tr className="text-left text-gray-400"><th className="py-1 pr-2">字段</th><th className="py-1 pr-2">类型</th><th className="py-1">说明</th></tr></thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {[
+                        ['id','string','唯一事件 ID（uuid v7）'],
+                        ['type','string','事件类型（过去式），如 "lesson.created"'],
+                        ['source','string','事件来源。插件自动加 "plugin:" 前缀'],
+                        ['payload','any','事件负载数据'],
+                        ['timestamp','number','Unix 毫秒时间戳'],
+                        ['correlationId?','string','关联的命令 ID，用于追踪命令→事件链'],
+                      ].map(([f,t,d]) => (
+                        <tr key={f}><td className="py-1 pr-2 font-mono text-emerald-600">{f}</td><td className="py-1 pr-2 text-gray-500">{t}</td><td className="py-1 text-gray-600">{d}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* ═══════════ ctx.db PluginDatabaseAPI + ctx.require ═══════════ */}
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+              <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                <Database size={14} className="text-teal-500" />
+                <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide">ctx.db — 插件自建表 API & ctx.require — 共享模块</h4>
+              </div>
+              <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                {/* ctx.db */}
+                <div className="border border-teal-100 rounded-xl p-4 bg-teal-50/10 space-y-2">
+                  <h5 className="font-bold text-teal-700">PluginDatabaseAPI</h5>
+                  <p className="text-[11px] text-gray-500">命名空间隔离的 SQLite 操作。表名自动加 <code className="bg-gray-100 px-1 rounded text-[10px]">plugin_{'{pluginId}'}_</code> 前缀。</p>
+                  <div className="space-y-2 text-[11px]">
+                    <div>
+                      <code className="font-mono text-teal-600 font-semibold">ensureTable(name, schema)</code>
+                      <p className="text-gray-500 mt-0.5">幂等建表。schema 为 SQL 列定义字符串。</p>
+                      <pre className="text-[9.5px] bg-gray-900 text-green-400 p-1.5 rounded mt-1 overflow-x-auto">{`await ctx.db.ensureTable('scores',
+  'id TEXT PRIMARY KEY, student_id TEXT, score REAL')`}</pre>
+                    </div>
+                    <div>
+                      <code className="font-mono text-teal-600 font-semibold">table(name)</code>
+                      <p className="text-gray-500 mt-0.5">返回带前缀的完整表名，用于手写 SQL。</p>
+                      <pre className="text-[9.5px] bg-gray-900 text-green-400 p-1.5 rounded mt-1 overflow-x-auto">{`const fullName = ctx.db.table('scores');
+// => "plugin_ext-quiz_scores"
+db.prepare(\`SELECT * FROM \${fullName}\`).all()`}</pre>
+                    </div>
+                    <div>
+                      <code className="font-mono text-teal-600 font-semibold">dropAllTables()</code>
+                      <p className="text-gray-500 mt-0.5">删除该插件创建的所有表。卸载时由 PluginHost 自动调用。</p>
+                    </div>
+                  </div>
+                </div>
+                {/* ctx.require */}
+                <div className="border border-violet-100 rounded-xl p-4 bg-violet-50/10 space-y-2">
+                  <h5 className="font-bold text-violet-700">ctx.require(moduleName)</h5>
+                  <p className="text-[11px] text-gray-500">引用主应用共享模块。仅白名单中的模块可被加载。</p>
+                  <table className="w-full text-[10px]">
+                    <thead><tr className="text-left text-gray-400"><th className="py-1 pr-2">模块名</th><th className="py-1">用途</th></tr></thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {[
+                        ['uuid','生成唯一 ID（uuid v4/v7）'],
+                        ['recharts','图表库（BarChart, LineChart 等）'],
+                        ['react-markdown','Markdown 渲染'],
+                        ['jspdf','PDF 生成'],
+                        ['jspdf-autotable','PDF 表格插件'],
+                        ['lucide-react','图标库'],
+                        ['xlsx','Excel 读写（可选）'],
+                      ].map(([m,d]) => (
+                        <tr key={m}><td className="py-1 pr-2 font-mono text-violet-600">{m}</td><td className="py-1 text-gray-600">{d}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="bg-amber-50 rounded-lg p-2 border border-amber-100 text-[10px] text-amber-800 mt-2">
+                    非白名单模块调用将抛出 Error。前端插件通过 FrontendPluginHost 单独注入 konva/react-konva 等纯 ESM 库。
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* ═══════════ DI Token 参考 ═══════════ */}
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
               <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
@@ -1058,6 +1249,151 @@ export default {
                 <div className="bg-amber-50 rounded-lg p-3 border border-amber-100 text-[11px]">
                   <span className="font-bold text-amber-800">⚠️ ERROR 状态</span>
                   <p className="text-amber-700 mt-0.5">激活过程中抛出异常 → 状态变为 ERROR。PluginHost 自动回滚所有已注册资源。可通过重新激活恢复（重试从 INSTALLED 态开始）。</p>
+                </div>
+              </div>
+            </div>
+
+            {/* ═══════════ 能力（Capability）参考 ═══════════ */}
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+              <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                <Shield size={14} className="text-orange-500" />
+                <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide">能力（Capability）权限字符串完整列表</h4>
+              </div>
+              <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                {[
+                  {domain:'课程 (Lesson)', items:['lesson:read','lesson:write','lesson:delete']},
+                  {domain:'白板 (Whiteboard)', items:['whiteboard:read','whiteboard:write']},
+                  {domain:'班级 (Class)', items:['class:read','class:write','class:delete']},
+                  {domain:'学生 (Student)', items:['student:read','student:write','student:delete']},
+                  {domain:'作业 (Assignment)', items:['assignment:read','assignment:write']},
+                  {domain:'排课 (Schedule)', items:['schedule:read','schedule:write']},
+                  {domain:'考勤 (Attendance)', items:['attendance:read','attendance:write']},
+                  {domain:'考试 (Exam)', items:['exam:read','exam:write']},
+                  {domain:'虚拟文件系统 (VFS)', items:['vfs:read','vfs:write']},
+                  {domain:'AI 辅助', items:['ai:assist','ai:generate']},
+                  {domain:'插件管理', items:['plugin:install','plugin:manage']},
+                  {domain:'全局管理', items:['management:read','management:write']},
+                ].map(group => (
+                  <div key={group.domain} className="bg-gray-50 rounded-lg p-2.5 border border-gray-100">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1.5">{group.domain}</span>
+                    <div className="flex flex-wrap gap-1">
+                      {group.items.map(cap => (
+                        <code key={cap} className="bg-white text-gray-700 px-1.5 py-0.5 rounded text-[10px] font-mono border border-gray-150">{cap}</code>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="px-4 pb-4 text-[10px] text-gray-400">
+                通配符支持：<code className="bg-gray-100 px-1 rounded">lesson:*</code> 匹配所有 lesson 子权限。admin 角色自动拥有所有权限。
+              </div>
+            </div>
+
+            {/* ═══════════ 常见模式 / Recipes ═══════════ */}
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+              <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
+                <Code size={14} className="text-rose-500" />
+                <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wide">常见开发模式 / Recipes</h4>
+              </div>
+              <div className="p-4 space-y-4 text-xs">
+                {/* Recipe 1 */}
+                <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
+                  <h5 className="font-bold text-gray-800 mb-2">🔄 调用其他插件/内核的命令（命令编排）</h5>
+                  <pre className="text-[10px] font-mono bg-gray-900 text-green-400 p-3 rounded-lg overflow-x-auto">
+{`// 方式 1: 使用 createCommand + execute（推荐）
+const cmd = commandBus.createCommand('whiteboard.draw', {
+  lessonId: 'lesson-123',
+  type: 'text',
+  data: JSON.stringify({ text: 'Hello', x: 100, y: 100 })
+}, command.actorId);
+const result = await commandBus.execute(cmd);
+
+// 方式 2: 手动构造命令信封
+const result = await commandBus.execute({
+  id: crypto.randomUUID(),
+  type: 'whiteboard.draw',
+  actorId: \`plugin:\${ctx.manifest.id}\`,
+  payload: { lessonId: 'lesson-123', type: 'text', data: '...' },
+  timestamp: Date.now()
+});`}</pre>
+                </div>
+                {/* Recipe 2 */}
+                <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
+                  <h5 className="font-bold text-gray-800 mb-2">📡 监听系统事件并响应</h5>
+                  <pre className="text-[10px] font-mono bg-gray-900 text-green-400 p-3 rounded-lg overflow-x-auto">
+{`// 订阅课程创建事件，自动触发后续操作
+await eventBus.subscribe('lesson.created', async (event) => {
+  const { id, title } = event.payload;
+  console.log(\`新课程: \${title} (\${id})\`);
+  // 例如：自动为该课程创建关联测验
+  await commandBus.execute(commandBus.createCommand(
+    'quiz.create', { lessonId: id, topic: title }, event.source
+  ));
+});
+// 订阅所有白板操作（通配符暂不支持，需逐个订阅）`}</pre>
+                </div>
+                {/* Recipe 3 */}
+                <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
+                  <h5 className="font-bold text-gray-800 mb-2">💾 插件持久化数据</h5>
+                  <pre className="text-[10px] font-mono bg-gray-900 text-green-400 p-3 rounded-lg overflow-x-auto">
+{`// 简单 KV 存储 — 适合配置、缓存、少量数据
+await ctx.services.storage.set('lastRun', Date.now());
+await ctx.services.storage.set('config', { theme: 'dark', autoApprove: true });
+const config = await ctx.services.storage.get('config'); // 自动 JSON.parse
+
+// 自建表 — 适合大量结构化数据、需要查询的场景
+await ctx.db.ensureTable('results', \`
+  id TEXT PRIMARY KEY, student_id TEXT NOT NULL,
+  score REAL, feedback TEXT, created_at INTEGER
+\`);
+const db = await ctx.resolve('@openlearn/core:IDatabase');
+const rows = db.prepare(
+  \`SELECT * FROM \${ctx.db.table('results')} WHERE score > ?\`
+).all(80);`}</pre>
+                </div>
+                {/* Recipe 4 */}
+                <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
+                  <h5 className="font-bold text-gray-800 mb-2">🤖 调用 AI 服务</h5>
+                  <pre className="text-[10px] font-mono bg-gray-900 text-green-400 p-3 rounded-lg overflow-x-auto">
+{`// 基础文本生成
+const reply = await ctx.services.ai.generateText(
+  '请用中文写一段鼓励学生的话',
+  { temperature: 0.7 }
+);
+
+// 带 system instruction
+const result = await ctx.services.ai.generateText(
+  '分析以下学生提交的编程作业质量',
+  { systemInstruction: '你是编程教师，请给出1-10的评分和一句评语', temperature: 0.3 }
+);
+// AI 服务自动回退：第三方API → Gemini SDK`}</pre>
+                </div>
+                {/* Recipe 5 */}
+                <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
+                  <h5 className="font-bold text-gray-800 mb-2">⏱ 后台定时任务</h5>
+                  <pre className="text-[10px] font-mono bg-gray-900 text-green-400 p-3 rounded-lg overflow-x-auto">
+{`// 每 30 分钟自动检查过期作业
+await ctx.services.processManager.registerInterval(
+  'auto-grade-check', 30 * 60 * 1000,
+  async (log) => {
+    log('开始检查过期作业...');
+    // 执行检查逻辑...
+    log('检查完成');
+  }
+);
+// registerHandler 注册后台任务类型，然后 spawn 启动实例
+await ctx.services.processManager.registerHandler('batch-grade',
+  async (processId, payload, state, log, updateState) => {
+    for (const item of payload.items) {
+      await processItem(item);
+      updateState({ processed: (state.processed||0) + 1 });
+    }
+    log('批量处理完成');
+  }
+);
+const pid = await ctx.services.processManager.spawn(
+  '期末批改', 'batch-grade', { items: [...] }
+);`}</pre>
                 </div>
               </div>
             </div>
