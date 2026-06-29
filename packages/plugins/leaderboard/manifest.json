@@ -1,0 +1,80 @@
+{
+  "id": "ext-classroom-leaderboard",
+  "name": "课堂积分排行榜",
+  "version": "1.0.0",
+  "main": "index.js",
+  "description": "课堂学生积分管理系统，支持积分加减、实时白板排行榜、个人/小组排行模式、积分历史查询、学期重置与备份。教师可通过 AI Agent 或课堂工具栏快速操作。",
+  "author": "Edu-OS 插件生态社区",
+  "requires": [
+    "@openlearn/core:ICommandBusService@^1.0.0",
+    "@openlearn/core:IActionRegistryService@^1.0.0",
+    "@openlearn/core:IEventBusService@^1.0.0",
+    "@openlearn/core:IDatabase@^1.0.0",
+    "@openlearn/core:IStorageService@^1.0.0",
+    "@openlearn/core:IProcessService@^1.0.0"
+  ],
+  "capabilitiesProposed": [
+    "whiteboard:write",
+    "management:read"
+  ],
+  "classroomTools": [
+    {
+      "id": "tool-leaderboard-add-5",
+      "name": "回答问题 +5",
+      "icon": "ThumbsUp",
+      "description": "给选中学生加 5 分（主动回答问题）",
+      "commandType": "leaderboard.add_points",
+      "payload": {
+        "studentId": "$studentId",
+        "studentName": "$studentName",
+        "classId": "$classId",
+        "points": 5,
+        "reason": "主动回答问题",
+        "category": "课堂互动"
+      }
+    },
+    {
+      "id": "tool-leaderboard-add-3",
+      "name": "积极发言 +3",
+      "icon": "MessageSquare",
+      "description": "给选中学生加 3 分（课堂积极发言）",
+      "commandType": "leaderboard.add_points",
+      "payload": {
+        "studentId": "$studentId",
+        "studentName": "$studentName",
+        "classId": "$classId",
+        "points": 3,
+        "reason": "课堂积极发言",
+        "category": "课堂互动"
+      }
+    },
+    {
+      "id": "tool-leaderboard-minus-2",
+      "name": "迟到 -2",
+      "icon": "Clock",
+      "description": "给选中学生扣 2 分（上课迟到）",
+      "commandType": "leaderboard.add_points",
+      "payload": {
+        "studentId": "$studentId",
+        "studentName": "$studentName",
+        "classId": "$classId",
+        "points": -2,
+        "reason": "上课迟到",
+        "category": "纪律考勤"
+      }
+    },
+    {
+      "id": "tool-leaderboard-show",
+      "name": "排行榜展示",
+      "icon": "Trophy",
+      "description": "在互动白板上展示当前班级的积分排行榜",
+      "commandType": "leaderboard.show_board",
+      "payload": {
+        "lessonId": "$lessonId",
+        "classId": "$classId",
+        "mode": "personal",
+        "topN": 10
+      }
+    }
+  ]
+}
