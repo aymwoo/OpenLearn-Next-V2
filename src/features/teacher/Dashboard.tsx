@@ -29,6 +29,7 @@ export function Dashboard(props: DashboardProps) {
     scoreOverrides,setScoreOverrides,handleApprove,handleReject,
     showLogs,setShowLogs,processLogsContent,showProcessLogs,fetchProcessLogs,setShowProcessLogs,
     addToast,handleQuickScheduleClass,handleQuickGenerateAssignment,handleQuickCreateLesson}=props;
+    return (
               <>
                 <div className="flex-1 flex flex-col gap-6 h-full overflow-y-auto pr-2">
                   {/* Today's Timetable Flow Dashboard Banner */}
@@ -330,4 +331,5 @@ export function Dashboard(props: DashboardProps) {
                   onCreateLesson={handleQuickCreateLesson}
                 />
               </>
+    );
 }
