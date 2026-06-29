@@ -15,6 +15,8 @@
 
 import { v7 as uuidv7 } from 'uuid';
 import type { Database } from 'better-sqlite3';
+import fs from 'fs';
+import path from 'path';
 import { ServiceRegistry } from '../di/service-registry.js';
 import { EsmLoader } from '../esm-loader/esm-loader.js';
 import type { PluginModule } from '../esm-loader/esm-loader.js';
@@ -138,11 +140,34 @@ export class PluginHost {
    * @param esmLoader - ESM 动态加载器（Node.js / 浏览器实现）
    * @param db - SQLite 数据库实例
    */
+  /** 插件文件系统存储目录 */
+  private pluginsDir: string;
+
   constructor(
     private serviceRegistry: ServiceRegistry,
     private esmLoader: EsmLoader,
     private db: Database,
-  ) {}
+    pluginsDir?: string,
+  ) {
+    this.pluginsDir = pluginsDir ?? path.resolve(process.cwd(), 'plugins');
+  }
+
+  // ── 文件系统路径辅助方法 ──────────────────────────────────────────
+
+  /** 获取插件的文件系统目录路径 */
+  getPluginDir(pluginId: string): string {
+    return path.join(this.pluginsDir, pluginId);
+  }
+
+  /** 获取插件入口 JS 文件路径 */
+  getPluginFilePath(pluginId: string): string {
+    return path.join(this.getPluginDir(pluginId), 'index.js');
+  }
+
+  /** 获取插件 manifest.json 文件路径 */
+  getPluginManifestPath(pluginId: string): string {
+    return path.join(this.getPluginDir(pluginId), 'manifest.json');
+  }
 
   // ── Phase 5: WorkerManager wiring (circular dependency fix) ────────────
 
@@ -397,7 +422,13 @@ export class PluginHost {
       throw new Error('[PluginHost] Plugin source code has no manifest export');
     }
 
-    return manifestSchema.parse(rawManifest);
+    // 内联安装补全默认值：main 字段在 ZIP 安装时必需，内联安装默认 index.js
+    const withDefaults = {
+      main: 'index.js',
+      ...rawManifest,
+    };
+
+    return manifestSchema.parse(withDefaults);
   }
 
   // ── 生命周期方法 ────────────────────────────────────────────────────────
@@ -420,7 +451,13 @@ export class PluginHost {
    */
   async installPlugin(sourceCode: string): Promise<Manifest> {
     // 1. 微加载提取 manifest（用于唯一性检查和 name 字段）
-    const manifest = await this.extractManifest(sourceCode);
+    const rawManifest = await this.extractManifest(sourceCode);
+
+    // 1a. 内联安装补充默认 main（manifest Schema 要求 main 字段）
+    const manifest: Manifest = {
+      ...rawManifest,
+      main: rawManifest.main ?? 'index.js',
+    };
 
     // 2. 唯一性检查
     this.ensureUniqueManifestId(manifest.id);
@@ -431,31 +468,45 @@ export class PluginHost {
 
     // 3. 生成 pluginId
     const pluginId = uuidv7();
+    const pluginDir = this.getPluginDir(pluginId);
+    const filePath = this.getPluginFilePath(pluginId);
+    const manifestPath = this.getPluginManifestPath(pluginId);
 
     try {
-      // 4. INSERT 到 DB
+      // 4. 写入文件系统
+      fs.mkdirSync(pluginDir, { recursive: true });
+      fs.writeFileSync(filePath, sourceCode, 'utf-8');
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+
+      // 5. INSERT 到 DB（source_code 留空，源码已迁移到文件系统）
       const stmt = this.db.prepare(
-        'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       );
       stmt.run(
         pluginId,
         manifest.name,
         JSON.stringify(manifest),
-        sourceCode,
+        '',
+        filePath,
         'installed',
         Date.now(),
         'esm',
       );
 
-      // 5. 设置状态为 INSTALLED
+      // 6. 设置状态为 INSTALLED
       this.pluginStates.set(pluginId, PluginState.INSTALLED);
 
-      console.log(`[PluginHost] Plugin "${manifest.id}" installed (${pluginId})`);
+      console.log(`[PluginHost] Plugin "${manifest.id}" installed to ${filePath} (${pluginId})`);
       return manifest;
     } catch (err) {
-      // 回滚：删除可能的 DB 条目 + 清理状态
+      // 回滚：删除 DB 条目 + 清理文件系统 + 状态
       try {
         this.db.prepare('DELETE FROM plugins WHERE id = ?').run(pluginId);
+      } catch {
+        // 静默清理
+      }
+      try {
+        fs.rmSync(pluginDir, { recursive: true, force: true });
       } catch {
         // 静默清理
       }
@@ -584,8 +635,8 @@ export class PluginHost {
 
     // 3. 从 DB 加载插件
     const row = this.db
-      .prepare('SELECT source_code, manifest FROM plugins WHERE id = ?')
-      .get(pluginId) as { source_code: string; manifest: string } | undefined;
+      .prepare('SELECT file_path, source_code, manifest FROM plugins WHERE id = ?')
+      .get(pluginId) as { file_path?: string; source_code: string; manifest: string } | undefined;
     if (!row) {
       this.pluginStates.set(pluginId, currentState); // 回滚状态
       throw new PluginActivateError(pluginId, 'plugin not found in database');
@@ -603,8 +654,16 @@ export class PluginHost {
     const actorId = `plugin:${storedManifest.id}`;
 
     try {
-      // 4. 加载模块
-      const mod: PluginModule = await this.esmLoader.load(row.source_code);
+      // 4. 加载源码 — 优先从文件系统读取，fallback 到 DB source_code（向后兼容）
+      let sourceCode: string;
+      if (row.file_path && fs.existsSync(row.file_path)) {
+        sourceCode = fs.readFileSync(row.file_path, 'utf-8');
+      } else if (row.source_code) {
+        sourceCode = row.source_code;
+      } else {
+        throw new PluginActivateError(pluginId, 'no source code available (file_path or source_code required)');
+      }
+      const mod: PluginModule = await this.esmLoader.load(sourceCode);
 
       // 5. 提取 manifest 和 activate（支持两种导出格式）
       const plugin = mod.default ?? mod;
@@ -699,6 +758,15 @@ export class PluginHost {
           .prepare('UPDATE plugins SET status = ? WHERE id = ?')
           .run('active', pluginId);
 
+        // 热重载接线：注册到 FileWatcher
+        if (this._hotReloadController) {
+          const filePath = this.getPluginFilePath(pluginId);
+          if (fs.existsSync(filePath)) {
+            this._hotReloadController.registerPlugin(pluginId, filePath);
+            console.log(`[PluginHost] Hot reload registered for "${pluginId}"`);
+          }
+        }
+
         console.log(`[PluginHost] Plugin "${mergedManifest.id}" activated (${pluginId})`);
       });
     } catch (err) {
@@ -736,12 +804,17 @@ export class PluginHost {
     this.pluginStates.set(pluginId, PluginState.ACTIVATING);
 
     const row = this.db
-      .prepare('SELECT source_code, manifest FROM plugins WHERE id = ?')
-      .get(pluginId) as { source_code: string; manifest: string } | undefined;
+      .prepare('SELECT file_path, source_code, manifest FROM plugins WHERE id = ?')
+      .get(pluginId) as { file_path?: string; source_code: string; manifest: string } | undefined;
     if (!row) {
       this.pluginStates.set(pluginId, currentState);
       throw new PluginActivateError(pluginId, 'plugin not found in database');
     }
+
+    // 读取源码 — 优先文件系统，fallback DB
+    const sourceCode: string = (row.file_path && fs.existsSync(row.file_path))
+      ? fs.readFileSync(row.file_path, 'utf-8')
+      : row.source_code;
 
     const manifest: Manifest = JSON.parse(row.manifest);
     const actorId = `plugin:${manifest.id}`;
@@ -764,7 +837,7 @@ export class PluginHost {
       const { transport, serviceHost } = await this.workerManager.createWorker(
         pluginId,
         manifest,
-        row.source_code,
+        sourceCode,
         (await import('../worker-runtime/worker-manager.js')).ALL_SERVICE_TOKENS,
         eventBus,
       );
@@ -896,6 +969,11 @@ export class PluginHost {
           this.resourceTracker.disposeAll(pluginId);
           this.pluginStates.set(pluginId, PluginState.INACTIVE);
           this.pluginInstances.delete(pluginId);
+
+          // 热重载注销
+          if (this._hotReloadController) {
+            this._hotReloadController.unregisterPlugin(pluginId);
+          }
 
           // DB UPDATE
           this.db
@@ -1048,11 +1126,10 @@ export class PluginHost {
     // 验证状态转换
     this.validateTransition(pluginId, state, PluginState.UNINSTALLED);
 
-    // 3. 从 DB 删除
-    // 先查询 manifest 以获取 manifest.id 用于 plugin_storage 删除
+    // 3. 查询 file_path 和 manifest（DELETE 之前必须获取）
     const row = this.db
-      .prepare('SELECT manifest FROM plugins WHERE id = ?')
-      .get(pluginId) as { manifest: string } | undefined;
+      .prepare('SELECT manifest, file_path FROM plugins WHERE id = ?')
+      .get(pluginId) as { manifest: string; file_path?: string } | undefined;
     const manifestId = (() => {
       if (!row) return pluginId;
       try {
@@ -1062,7 +1139,11 @@ export class PluginHost {
         return pluginId;
       }
     })();
+    const pluginDir = row?.file_path
+      ? this.getPluginDir(pluginId)
+      : null;
 
+    // 4. 从 DB 删除
     this.db.prepare('DELETE FROM plugins WHERE id = ?').run(pluginId);
     this.db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ?').run(manifestId);
 
@@ -1082,7 +1163,17 @@ export class PluginHost {
       console.warn(`[PluginHost] Failed to drop plugin tables for "${pluginId}":`, e);
     }
 
-    // 4. 清理内存
+    // 5. 清理文件系统
+    if (pluginDir && fs.existsSync(pluginDir)) {
+      try {
+        fs.rmSync(pluginDir, { recursive: true, force: true });
+        console.log(`[PluginHost] Removed plugin directory: ${pluginDir}`);
+      } catch (e) {
+        console.warn(`[PluginHost] Failed to remove plugin directory "${pluginDir}":`, e);
+      }
+    }
+
+    // 6. 清理内存
     this.pluginStates.set(pluginId, PluginState.UNINSTALLED);
     this.pluginInstances.delete(pluginId);
 
@@ -1121,32 +1212,47 @@ export class PluginHost {
 
     // 3. 生成 ID
     const pluginId = uuidv7();
+    const pluginDir = this.getPluginDir(pluginId);
+    const filePath = this.getPluginFilePath(pluginId);
+    const manifestPath = this.getPluginManifestPath(pluginId);
+    const zipFilePath = path.join(pluginDir, 'package.zip');
 
     try {
-      // 4. INSERT 到 DB
+      // 4. 写入文件系统
+      fs.mkdirSync(pluginDir, { recursive: true });
+      fs.writeFileSync(filePath, bundledCode, 'utf-8');
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+      fs.writeFileSync(zipFilePath, zipBuffer);
+
+      // 5. INSERT 到 DB（源码和 ZIP 已迁移到文件系统，DB 仅存元数据）
       const stmt = this.db.prepare(
-        'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version, zip_package) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       );
       stmt.run(
         pluginId,
         manifest.name,
         JSON.stringify(manifest),
-        bundledCode,
+        '',
+        filePath,
         'installed',
         Date.now(),
         'esm',
-        zipBuffer,
       );
 
-      // 5. 设置状态
+      // 6. 设置状态
       this.pluginStates.set(pluginId, PluginState.INSTALLED);
 
-      console.log(`[PluginHost] Plugin "${manifest.id}" installed from ZIP (${pluginId})`);
+      console.log(`[PluginHost] Plugin "${manifest.id}" installed from ZIP to ${filePath} (${pluginId})`);
       return manifest;
     } catch (err) {
-      // 失败时清理 DB 条目
+      // 失败时清理 DB 条目 + 文件系统
       try {
         this.db.prepare('DELETE FROM plugins WHERE id = ?').run(pluginId);
+      } catch {
+        // 静默清理
+      }
+      try {
+        fs.rmSync(pluginDir, { recursive: true, force: true });
       } catch {
         // 静默清理
       }

@@ -74,7 +74,9 @@ export class Kernel {
     this.esmLoader = new NodeEsmLoader();
 
     // PluginHost — 依赖 ServiceRegistry + EsmLoader + db
-    this.pluginHost = new PluginHost(this.serviceRegistry, this.esmLoader, this.db);
+    const pluginsDir = path.resolve(process.cwd(), 'plugins');
+    fs.mkdirSync(pluginsDir, { recursive: true });
+    this.pluginHost = new PluginHost(this.serviceRegistry, this.esmLoader, this.db, pluginsDir);
 
     // Layer 3 — WorkerManager (depends on ServiceRegistry + CapabilityGuard)
     this.workerManager = new WorkerManager(this.serviceRegistry, this.capabilityGuard, this.db);
@@ -160,6 +162,9 @@ export class Kernel {
   }
 
   private async bootstrapSystemPlugins() {
+    // 0. 迁移 DB 中的旧插件到文件系统（幂等）— Phase 7
+    await this.migratePluginsToFilesystem();
+
     const systemPlugins = [
       { id: '@openlearn/plugin-vfs', mod: VfsPlugin, name: 'Virtual File System Plugin', critical: true },
       { id: '@openlearn/plugin-process', mod: ProcessPlugin, name: 'Background Process Plugin', critical: true },
@@ -177,12 +182,13 @@ export class Kernel {
         
         if (!row) {
           this.db.prepare(
-            'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version, execution_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
           ).run(
             plugin.id,
             plugin.name,
             JSON.stringify(plugin.mod.manifest),
-            `// System built-in inline plugin: ${plugin.name}`,
+            '',    // source_code: system plugins are preloaded in-memory
+            null,  // file_path: system plugins have no file
             'installed',
             Date.now(),
             'esm',
@@ -230,19 +236,22 @@ export class Kernel {
              }
            });
  
-           // Clean up legacy ext plugins (CommonJS strings) in DB
+           // Clean up legacy ext plugins in DB (no file_path, vm loader)
            if (existingRow) {
              let isLegacy = false;
              try {
-               const hasZip = this.db.prepare('SELECT zip_package FROM plugins WHERE id = ?').get(existingRow.id) as any;
-               if (!hasZip || !hasZip.zip_package) {
+               const row = this.db.prepare(
+                 'SELECT file_path, loader_version, execution_mode FROM plugins WHERE id = ?'
+               ).get(existingRow.id) as any;
+               // Legacy: no file_path AND loader_version is old 'vm' format
+               if (!row?.file_path && row?.loader_version === 'vm') {
                  isLegacy = true;
                }
              } catch {
                isLegacy = true;
              }
              if (isLegacy) {
-               this.db.prepare('DELETE FROM plugins WHERE id = ?').run(existingRow.id);
+               await this.pluginHost.uninstallPlugin(existingRow.id);
                existingRow = undefined;
              }
            }
@@ -297,6 +306,48 @@ export class Kernel {
         }
       }
     }
+  }
+
+  /**
+   * Phase 7: 将 DB 中存有 source_code 的旧插件迁移到文件系统（幂等）
+   */
+  private async migratePluginsToFilesystem(): Promise<void> {
+    const plugins = this.db.prepare(
+      "SELECT id, source_code, manifest FROM plugins WHERE source_code != '' AND source_code IS NOT NULL",
+    ).all() as Array<{ id: string; source_code: string; manifest: string }>;
+
+    if (plugins.length === 0) return;
+
+    console.log(`[Migration] Found ${plugins.length} plugin(s) to migrate to filesystem`);
+
+    const pluginsDir = path.resolve(process.cwd(), 'plugins');
+    for (const p of plugins) {
+      const pluginDir = path.join(pluginsDir, p.id);
+      const indexPath = path.join(pluginDir, 'index.js');
+      const manifestPath = path.join(pluginDir, 'manifest.json');
+
+      // 跳过已迁移的（文件已存在）
+      if (fs.existsSync(indexPath)) {
+        this.db.prepare('UPDATE plugins SET source_code = ?, file_path = ? WHERE id = ?')
+          .run('', indexPath, p.id);
+        continue;
+      }
+
+      try {
+        fs.mkdirSync(pluginDir, { recursive: true });
+        fs.writeFileSync(indexPath, p.source_code, 'utf-8');
+        if (!fs.existsSync(manifestPath)) {
+          fs.writeFileSync(manifestPath, p.manifest, 'utf-8');
+        }
+        this.db.prepare('UPDATE plugins SET source_code = ?, file_path = ? WHERE id = ?')
+          .run('', indexPath, p.id);
+        console.log(`[Migration] Plugin "${p.id}" migrated to ${indexPath}`);
+      } catch (err) {
+        console.error(`[Migration] Failed to migrate plugin "${p.id}":`, err);
+      }
+    }
+
+    console.log('[Migration] Plugin migration complete');
   }
 
   // Subscribe to all events and log them to DB

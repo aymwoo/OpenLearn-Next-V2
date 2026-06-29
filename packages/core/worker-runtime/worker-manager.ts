@@ -30,6 +30,7 @@
 
 import { Worker } from 'node:worker_threads';
 import type { Database } from 'better-sqlite3';
+import fs from 'fs';
 import { ServiceRegistry } from '../di/service-registry.js';
 import { CapabilityGuard } from '../capability-system/index.js';
 import type { EventBus } from '../event-bus/index.js';
@@ -772,21 +773,26 @@ export class WorkerManager {
   async restoreWorkers(): Promise<void> {
     const plugins = this.db
       .prepare(
-        "SELECT id, manifest, source_code FROM plugins WHERE status = 'active' AND execution_mode = 'worker'",
+        "SELECT id, manifest, file_path, source_code FROM plugins WHERE status = 'active' AND execution_mode = 'worker'",
       )
       .all() as Array<{
       id: string;
       manifest: string;
+      file_path?: string;
       source_code: string;
     }>;
 
     for (const row of plugins) {
       try {
         const manifest: Manifest = JSON.parse(row.manifest);
+        // 优先从文件系统读取，fallback 到 DB source_code
+        const code = (row.file_path && fs.existsSync(row.file_path))
+          ? fs.readFileSync(row.file_path, 'utf-8')
+          : row.source_code;
         await this.createWorker(
           row.id,
           manifest,
-          row.source_code,
+          code,
           ALL_SERVICE_TOKENS,
         );
         console.log(

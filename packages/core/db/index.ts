@@ -488,6 +488,12 @@ try {
 }
 
 try {
+  db.prepare('ALTER TABLE plugins ADD COLUMN file_path TEXT DEFAULT NULL').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
   const countObj = db.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number };
   if (countObj && countObj.cnt === 0) {
     console.log('Seeding default users (admin & teacher) with bcrypt...');
