@@ -503,6 +503,7 @@ async function startServer() {
     },
     crossOriginOpenerPolicy: false,
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" }, // 允许沙箱 iframe（opaque origin）加载静态资源
     originAgentCluster: false,
     strictTransportSecurity: false, // 纯 HTTP 部署，禁止 HSTS（否则浏览器缓存后强制 HTTPS，导致 ERR_CONNECTION_REFUSED）
   }));
