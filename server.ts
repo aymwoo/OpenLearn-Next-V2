@@ -521,6 +521,24 @@ async function startServer() {
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块）
 
+  // SEC-NET-01: CORS 中间件 — 允许沙箱 iframe（origin: null）和同源请求
+  // 背景：iframe sandbox 去掉 allow-same-origin 后，浏览器给 iframe 分配 opaque origin，
+  // 导致其中的 fetch()/XHR 变成跨域请求。本中间件使这些请求正常工作。
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    // 沙箱 iframe 的请求带有 Origin: null；同源请求通常不带 Origin 头
+    if (origin === 'null' || origin === undefined) {
+      res.setHeader('Access-Control-Allow-Origin', origin ?? '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      res.setHeader('Access-Control-Max-Age', '86400'); // 预检缓存 24h
+    }
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    next();
+  });
+
   // SEC-DATA-03: Magic bytes 验证（文件头魔数）
   function validateMagicBytes(buffer: Buffer, fileName: string): boolean {
     const MAGIC_BYTES: Record<string, number[][]> = {

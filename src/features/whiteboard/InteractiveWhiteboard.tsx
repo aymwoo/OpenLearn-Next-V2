@@ -2937,7 +2937,7 @@ export function InteractiveWhiteboard({
                     className="w-full h-full border-none"
                     src={data.coursewareUuid ? `/runtime/${data.coursewareUuid}/` : (data.resourceId ? `/api/resources/${data.resourceId}/` : undefined)}
                     srcDoc={data.coursewareUuid || data.resourceId ? undefined : wrapSrcDocWithBridge(data.code, lessonId)}
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+                    sandbox="allow-scripts allow-forms allow-downloads"
                   />
                 </div>
               )}

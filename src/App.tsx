@@ -8087,7 +8087,7 @@ onClose={() => setPreviewSelectedCourseware(null)}
                     <div className="flex-1 relative bg-slate-100/50">
                       <iframe
                         src={`/api/resources/${selectedLibraryResourceId}/`}
-                        sandbox="allow-scripts allow-same-origin"
+                        sandbox="allow-scripts"
                         className="w-full h-full border-none bg-white font-sans"
                         title="Interactive Resource Preview"
                       />
