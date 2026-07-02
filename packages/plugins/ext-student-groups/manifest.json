@@ -2,7 +2,7 @@
   "id": "ext-student-groups",
   "name": "学生分组管理",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "index.ts",
   "description": "学生小组分组管理系统，支持学生自行创建/加入小组、教师手动分配/自动随机分配、任命组长。提供课堂工具栏快速操作入口，AI Agent 可直接调用分组命令。",
   "author": "Edu-OS 插件生态社区",
   "requires": [
