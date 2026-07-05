@@ -14,8 +14,10 @@
 import type { CommandHandler } from '../command-bus/index.js';
 import type { ActionDescriptor } from '../registry/index.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
-import type { PluginContext, PluginDatabaseAPI } from './types.js';
+import type { PluginContext, PluginDatabaseAPI, IPluginLogger, ContributionAccessor } from './types.js';
 import { PLUGIN_SHARED_MODULES } from './types.js';
+import type { ContributionRegistry } from './contribution-registry.js';
+import { ConfigService } from './config-service.js';
 import type { Token } from '../di/token.js';
 import type { ResourceTracker } from './resource-tracker.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
@@ -107,39 +109,71 @@ function wrapCommandBus(
   tracker: ResourceTracker,
   pluginId: string,
 ): ICommandBusService {
+  // V3.0: non-kernel plugins get auto-prefixed commands. Kernel plugins
+  // (@openlearn/*) keep global namespace for backward compatibility.
+  const isKernelPlugin = pluginId.startsWith('@openlearn/');
+
+  /** Auto-prefix a command type with pluginId if not already prefixed. */
+  const resolveType = (commandType: string): string => {
+    if (isKernelPlugin) return commandType;
+    if (commandType.startsWith(pluginId + '.')) return commandType;
+    return `${pluginId}.${commandType}`;
+  };
+
   return {
     registerHandler: createSafeFunction((commandType: string, handler: CommandHandler) => {
+      const prefixed = resolveType(commandType);
+
+      // ponytail: reject cross-plugin command registrations to prevent spoofing
+      if (!isKernelPlugin && commandType.includes('.') && !commandType.startsWith(pluginId + '.')) {
+        throw new Error(
+          `[PluginHost] Plugin "${pluginId}" attempted to register command "${commandType}" ` +
+          `which belongs to another plugin's namespace. Use "${pluginId}.<name>" instead.`,
+        );
+      }
+
       const safeHandler: CommandHandler = {
         execute: async (command) => {
           try {
             return await handler.execute(command);
           } catch (e) {
-            console.error(`[Plugin:${pluginId}] Error executing command ${commandType}:`, e);
+            console.error(`[Plugin:${pluginId}] Error executing command ${prefixed}:`, e);
             throw e;
           }
         },
       };
-      return Promise.resolve(commandBus.registerHandler(commandType, safeHandler)).then(() => {
+      return Promise.resolve(commandBus.registerHandler(prefixed, safeHandler)).then(() => {
         tracker.track(pluginId, {
           dispose: () => {
-            Promise.resolve(commandBus.unregisterHandler(commandType)).catch(() => {});
+            Promise.resolve(commandBus.unregisterHandler(prefixed)).catch(() => {});
           },
         });
       });
     }),
     createCommand: createSafeFunction(
       (type: string, payload: any, actorId: string, metadata?: any) => {
-        return commandBus.createCommand(type, payload, actorId, metadata);
+        return commandBus.createCommand(resolveType(type), payload, actorId, metadata);
       },
     ),
     execute: createSafeFunction(async (command: any) => {
-      return commandBus.execute(command);
+      // ponytail: try prefixed first, fall back to original for kernel commands
+      const prefixedCmd = { ...command, type: resolveType(command.type) };
+      try {
+        return await commandBus.execute(prefixedCmd);
+      } catch (e: any) {
+        // If the prefixed type doesn't exist, try the original type
+        // (e.g. kernel commands like whiteboard.draw that plugins call directly)
+        if (e.message?.includes('No handler registered') || e.message?.includes('handler')) {
+          return commandBus.execute(command);
+        }
+        throw e;
+      }
     }),
     setInterceptor: createSafeFunction((interceptor: any) => {
       return commandBus.setInterceptor(interceptor);
     }),
     unregisterHandler: createSafeFunction((commandType: string) => {
-      return commandBus.unregisterHandler(commandType);
+      return commandBus.unregisterHandler(resolveType(commandType));
     }),
   } as ICommandBusService;
 }
@@ -405,6 +439,7 @@ export async function buildContext(
   manifest: Manifest,
   db: any,
   skipTokens?: Set<string>,  // Phase 6 (D-12): incompatible optional token names
+  contributionRegistry?: ContributionRegistry,  // V3.0: 贡献点注册表引用
 ): Promise<PluginContext> {
   // 1. 从 DI 容器解析 7 个 IService
   const commandBusService = await serviceRegistry.resolve(ICommandBusServiceToken);
@@ -505,6 +540,47 @@ export async function buildContext(
     },
   };
 
+  // 5.5. 构建插件日志器（V2.5）
+  // ponytail: console with [Plugin:id] prefix — same pattern as rest of codebase,
+  // pino child logger would add no value for plugin-scoped logging.
+  const pluginLog: IPluginLogger = {
+    debug(message, meta) {
+      console.debug(`[Plugin:${pluginId}] ${message}`, meta ?? '');
+    },
+    info(message, meta) {
+      console.log(`[Plugin:${pluginId}] ${message}`, meta ?? '');
+    },
+    warn(message, meta) {
+      console.warn(`[Plugin:${pluginId}] ${message}`, meta ?? '');
+    },
+    error(message, meta) {
+      console.error(`[Plugin:${pluginId}] ${message}`, meta ?? '');
+    },
+  };
+
+  // 5.6. V3.0: 配置服务
+  const configService = new ConfigService(db, manifest);
+  configService.loadFromDB();
+
+  // 5.7. 构建贡献点访问器（V3.0）
+  const contributionsAccessor: ContributionAccessor = {
+    list() {
+      if (contributionRegistry) {
+        return contributionRegistry.summary(manifest.id);
+      }
+      // Fallback: 从 manifest 直接构建（无 registry 时，如测试环境）
+      const contributes = (manifest as any).contributes as Record<string, any[]> | undefined;
+      if (!contributes) return [];
+      return Object.entries(contributes)
+        .filter(([, configs]) => configs && configs.length > 0)
+        .map(([slot, configs]) => ({
+          slot,
+          count: configs.length,
+          items: configs.map((c: any) => ({ id: c.id, label: c.label ?? c.name ?? c.id })),
+        }));
+    },
+  };
+
   // 6. 构建完整的 PluginContext
   return {
     services,
@@ -513,7 +589,31 @@ export async function buildContext(
     resolve: <T>(token: Token<T>): Promise<T> => {
       return serviceRegistry.resolve(token);
     },
+    // V3.0: 插件向 DI 容器提供服务（对应 manifest.provides）
+    provide: async (tokenName: string, instance: unknown): Promise<void> => {
+      // 验证 tokenName 在 manifest.provides 中声明
+      const declared = (manifest as any).provides as string[] | undefined;
+      if (!declared || !declared.includes(tokenName)) {
+        throw new Error(
+          `[PluginHost] Plugin "${pluginId}" attempted to provide "${tokenName}" ` +
+          `which is not declared in manifest.provides. ` +
+          `Add it to manifest.provides: [${declared?.join(', ') ?? ''}]`,
+        );
+      }
+      // 构造临时 Token 并注册（tokenName 格式为 "ext-xxx:IServiceName"）
+      const token: Token<unknown> = { name: tokenName, version: '1.0.0' } as Token<unknown>;
+      await serviceRegistry.register(token, instance);
+      // 跟踪清理
+      tracker.track(pluginId, {
+        dispose: () => {
+          serviceRegistry.unregister(token).catch(() => {});
+        },
+      });
+    },
     db: dbApi,
+    log: pluginLog,
+    config: configService,
+    contributions: contributionsAccessor,
     require: (moduleName: string) => {
       if (!PLUGIN_SHARED_MODULES.includes(moduleName as any)) {
         throw new Error(

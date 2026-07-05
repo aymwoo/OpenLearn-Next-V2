@@ -16,6 +16,16 @@ import type { IStorageService } from '../di/interfaces.js';
 import type { IAIService } from '../di/interfaces.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import type { Token } from '../di/token.js';
+import type { ContributionSummary } from './contribution-registry.js';
+import type { IConfigService } from './config-service.js';
+
+/**
+ * ContributionAccessor — 插件可在运行时内省自己在 manifest 中声明的贡献点（V3.0）。
+ */
+export interface ContributionAccessor {
+  /** 列出该插件在所有 slot 上的贡献点摘要 */
+  list(): ContributionSummary[];
+}
 
 /**
  * Disposable — 可清理资源的统一接口。
@@ -70,6 +80,19 @@ export const PLUGIN_SHARED_MODULES = [
   'uuid',
 ] as const;
 
+/**
+ * IPluginLogger — 插件结构化日志接口。
+ *
+ * 替代 system.log 命令，提供 4 级日志 + 自动注入 pluginId 和 timestamp。
+ * V2.5 新增，V3.0 将移除 system.log 命令。
+ */
+export interface IPluginLogger {
+  debug(message: string, meta?: Record<string, unknown>): void;
+  info(message: string, meta?: Record<string, unknown>): void;
+  warn(message: string, meta?: Record<string, unknown>): void;
+  error(message: string, meta?: Record<string, unknown>): void;
+}
+
 /** 插件自建表 API — 命名空间隔离的数据库操作 */
 export interface PluginDatabaseAPI {
   /** 确保插件专用表存在（幂等），表名自动加前缀 plugin_{pluginId}_{tableName} */
@@ -99,8 +122,25 @@ export interface PluginContext {
   manifest: Manifest;
   /** 解析依赖注入容器中的服务 */
   resolve<T>(token: Token<T>): Promise<T>;
+  /**
+   * V3.0: 向 DI 容器注册一个由插件提供的服务（对应 manifest.provides）。
+   * 其他插件可通过 ctx.resolve({ name: tokenName }) 消费。
+   */
+  provide(tokenName: string, instance: unknown): Promise<void>;
   /** 插件自建表 API（v5.1） */
   db: PluginDatabaseAPI;
+  /** 结构化日志接口（V2.5），自动注入 pluginId 和 timestamp */
+  log: IPluginLogger;
+  /**
+   * 声明式贡献点只读视图（V3.0）。
+   * 允许插件在运行时内省自己在 manifest 中声明的贡献点。
+   */
+  contributions: ContributionAccessor;
+  /**
+   * 类型安全的配置服务（V3.0）。
+   * 读取 manifest.configuration 中声明的设置项，自动应用默认值和校验。
+   */
+  config: IConfigService;
   /**
    * 引用主应用共享模块（v5.1）
    * 仅白名单中的模块可被引用，非白名单模块抛出错误

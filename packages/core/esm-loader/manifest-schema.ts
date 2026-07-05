@@ -13,6 +13,44 @@
  */
 import { z } from 'zod';
 
+// ── V3.0: Contribution schemas ───────────────────────────────────────────
+
+const classroomToolSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  icon: z.string().optional(),
+  description: z.string().optional(),
+  commandType: z.string().min(1),
+  payload: z.record(z.unknown()).optional(),
+});
+
+const contributesSchema = z.object({
+  'classroom.tool': z.array(classroomToolSchema).optional(),
+  'teacher.tab': z.array(z.object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    icon: z.string().optional(),
+    position: z.number().int().optional(),
+  })).optional(),
+  'teacher.dashboard.widget': z.array(z.object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    icon: z.string().optional(),
+    position: z.number().int().optional(),
+  })).optional(),
+  'student.view': z.array(z.object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    icon: z.string().optional(),
+    route: z.string().optional(),
+  })).optional(),
+  'student.lesson.tool': z.array(z.object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    icon: z.string().optional(),
+  })).optional(),
+}).optional();
+
 // ── Version 4 schema (Phase 6+) ──────────────────────────────────────────
 
 /**
@@ -45,6 +83,22 @@ export const manifestSchema = z.object({
   requires: z.array(requiresItemSchema).optional(),
   optional: z.array(requiresItemSchema).optional(),
   capabilitiesProposed: z.array(z.string()).optional(),
+  engines: z.object({
+    openlearn: z.string().min(1),
+  }).optional(),
+  pluginDependencies: z.array(z.string().min(1)).optional(),
+  provides: z.array(z.string().min(1)).optional(),
+  configuration: z.object({
+    properties: z.record(z.object({
+      type: z.enum(['string', 'number', 'boolean', 'integer']),
+      default: z.unknown().optional(),
+      description: z.string().optional(),
+      enum: z.array(z.unknown()).optional(),
+      minimum: z.number().optional(),
+      maximum: z.number().optional(),
+    })).optional(),
+  }).optional(),
+  contributes: contributesSchema,
 }).passthrough();
 
 /**

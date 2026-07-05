@@ -26,6 +26,9 @@ import type { Manifest } from '../esm-loader/manifest-schema.js';
 import { validateAndBundleZip } from '../esm-loader/install-utils.js';
 import { ResourceTracker } from './resource-tracker.js';
 import { buildContext } from './context-builder.js';
+import { ContributionRegistry } from './contribution-registry.js';
+import type { ContributionSummary } from './contribution-registry.js';
+import { checkMissingDeps, topologicalSort, buildDepGraph } from './dependency-resolver.js';
 import semver from 'semver';
 import { parseRequiresEntry } from '../esm-loader/manifest-utils.js';
 import { compose } from './middleware.js';
@@ -90,6 +93,9 @@ export function validatePluginStateTransition(
 const ACTIVATION_TIMEOUT_MS = 5000;
 const DEACTIVATION_TIMEOUT_MS = 5000;
 
+/** 平台版本号 — 用于 engines.openlearn 兼容性检查 */
+export const OPENLEARN_VERSION = '2.5.0';
+
 // ── PluginHost ─────────────────────────────────────────────────────────────
 
 export class PluginHost {
@@ -98,6 +104,9 @@ export class PluginHost {
 
   // D-07: 资源追踪器 — 按 pluginId 管理 Disposable 资源
   private resourceTracker = new ResourceTracker();
+
+  // V3.0: 贡献注册表 — 声明式 UI 贡献点存储
+  private contributionRegistry = new ContributionRegistry();
 
   // Phase 7: 中间件注册表 — 按生命周期阶段分组
   private middlewareRegistry = new Map<LifecyclePhase, Middleware[]>();
@@ -257,6 +266,54 @@ export class PluginHost {
    * @param pluginId - 插件 DB id
    * @param phase - 检查阶段标识（'install' 或 'activate'），仅用于日志
    */
+
+  /**
+   * V3.0: 检查插件的 pluginDependencies 是否全部已安装且处于 ACTIVE 状态。
+   *
+   * 返回 null 表示所有依赖满足；返回错误消息字符串表示依赖缺失或不可用。
+   * 遵循 VS Code 模型：仅 ID 匹配，无版本范围约束。
+   */
+  private checkPluginDependencies(manifest: Manifest): string | null {
+    const deps = manifest.pluginDependencies;
+    if (!deps || deps.length === 0) return null;
+
+    const activePluginIds = new Set<string>();
+    for (const [id, state] of this.pluginStates) {
+      if (state === PluginState.ACTIVE) {
+        // Resolve to manifest.id
+        const row = this.db
+          .prepare('SELECT manifest FROM plugins WHERE id = ?')
+          .get(id) as { manifest: string } | undefined;
+        if (row) {
+          try {
+            const m = JSON.parse(row.manifest);
+            activePluginIds.add(m.id ?? id);
+          } catch {
+            activePluginIds.add(id);
+          }
+        }
+      }
+    }
+
+    const missing: string[] = [];
+    for (const dep of deps) {
+      if (!activePluginIds.has(dep)) {
+        // Check if installed at all
+        const allInstalled = new Set(this.listInstalledPluginIds());
+        if (!allInstalled.has(dep)) {
+          missing.push(`${dep} (not installed)`);
+        } else {
+          missing.push(`${dep} (installed but not active)`);
+        }
+      }
+    }
+
+    if (missing.length > 0) {
+      return `Plugin "${manifest.id}" requires: ${missing.join(', ')}`;
+    }
+    return null;
+  }
+
   private checkSemVerCompatibility(
     manifest: { id?: string; name?: string; requires?: string[]; optional?: string[] },
     pluginId: string,
@@ -379,6 +436,38 @@ export class PluginHost {
     return this.pluginStates.get(pluginId);
   }
 
+  /**
+   * V3.0: 查询插件声明的贡献点摘要。
+   *
+   * 无需激活插件即可枚举。用于管理后台预览插件将添加哪些 UI 元素。
+   * 若未指定 pluginId，返回所有插件的贡献摘要。
+   */
+  listContributions(pluginId?: string): ContributionSummary[] | Array<{ pluginId: string; contributions: ContributionSummary[] }> {
+    if (pluginId) {
+      const resolved = this.resolvePluginUuid(pluginId);
+      return this.contributionRegistry.summary(resolved);
+    }
+    return this.contributionRegistry.allSummaries();
+  }
+
+  /**
+   * 返回所有已安装插件的 manifest.id 列表。
+   * V3.0: 用于插件依赖解析。
+   */
+  listInstalledPluginIds(): string[] {
+    const rows = this.db
+      .prepare('SELECT manifest FROM plugins')
+      .all() as Array<{ manifest: string }>;
+    return rows.map((row) => {
+      try {
+        const m = JSON.parse(row.manifest);
+        return m.id as string;
+      } catch {
+        return '';
+      }
+    }).filter(Boolean);
+  }
+
   // ── 私有辅助方法 ────────────────────────────────────────────────────────
 
   /**
@@ -491,6 +580,35 @@ export class PluginHost {
     this.checkSemVerCompatibility(manifest, '(pending)', 'install');
     // Return value discarded: no buildContext at install time
 
+    // 2b. engines.openlearn 平台版本兼容性检查
+    if (manifest.engines?.openlearn) {
+      if (!semver.satisfies(OPENLEARN_VERSION, manifest.engines.openlearn)) {
+        throw new Error(
+          `[PluginHost] Plugin "${manifest.id}" requires OpenLearn ${manifest.engines.openlearn}, ` +
+          `but host is running ${OPENLEARN_VERSION}.`,
+        );
+      }
+    }
+
+    // 2c. V3.0: 注册声明式贡献点（classroomTools → contributes 自动桥接）
+    if (manifest.contributes) {
+      this.contributionRegistry.register(manifest.id, manifest.contributes);
+    } else if (manifest.classroomTools && manifest.classroomTools.length > 0) {
+      this.contributionRegistry.registerClassroomTools(manifest.id, manifest.classroomTools as any);
+    }
+
+    // 2d. V3.0: 检查插件依赖是否已安装（仅警告，不阻止安装）
+    if (manifest.pluginDependencies && manifest.pluginDependencies.length > 0) {
+      const installedIds = new Set(this.listInstalledPluginIds());
+      const missing = checkMissingDeps(manifest.pluginDependencies, installedIds);
+      if (missing.length > 0) {
+        console.warn(
+          `[PluginHost] Plugin "${manifest.id}" depends on: ${missing.join(', ')}, ` +
+          `which are not installed. The plugin will fail to activate until dependencies are satisfied.`,
+        );
+      }
+    }
+
     // 3. 生成 pluginId
     const pluginId = uuidv7();
     const pluginDir = this.getPluginDir(pluginId);
@@ -588,6 +706,13 @@ export class PluginHost {
 
       try {
         manifestSchema.parse(manifest);
+
+        // V3.0: 检查插件依赖是否满足（缺失 → ERROR）
+        const depCheck = this.checkPluginDependencies(manifest);
+        if (depCheck) {
+          throw new PluginActivateError(pluginId, depCheck);
+        }
+
         const skipTokens = this.checkSemVerCompatibility(manifest, pluginId, 'activate');
         const ctx = await buildContext(
           this.serviceRegistry,
@@ -596,6 +721,7 @@ export class PluginHost {
           manifest,
           this.db,
           skipTokens,
+          this.contributionRegistry,
         );
 
         const capService = await this.serviceRegistry.resolve<ICapabilityService>(
@@ -714,6 +840,13 @@ export class PluginHost {
       // 6. 校验 manifest schema
       manifestSchema.parse(mergedManifest);
 
+      // V3.0: 检查插件依赖是否满足（缺失 → ERROR）
+      const depCheck = this.checkPluginDependencies(mergedManifest);
+      if (depCheck) {
+        this.pluginStates.set(pluginId, PluginState.ERROR);
+        throw new PluginActivateError(pluginId, depCheck);
+      }
+
       // 6a. Phase 6: Token version compatibility check (D-05, D-12)
       const skipTokens = this.checkSemVerCompatibility(mergedManifest, pluginId, 'activate');
 
@@ -725,6 +858,7 @@ export class PluginHost {
         mergedManifest,
         this.db,
         skipTokens,  // NEW: Phase 6 — incompatible optional token names
+        this.contributionRegistry,
       );
 
       // 8. 授予能力（T-04-19: 仅授予 manifest.capabilitiesProposed 中声明的能力）
@@ -1207,6 +1341,9 @@ export class PluginHost {
     this.pluginStates.set(pluginId, PluginState.UNINSTALLED);
     this.pluginInstances.delete(pluginId);
 
+    // 6a. V3.0: 清理贡献注册
+    this.contributionRegistry.unregister(manifestId);
+
     console.log(`[PluginHost] Plugin "${pluginId}" uninstalled`);
   }
 
@@ -1239,6 +1376,35 @@ export class PluginHost {
 
     // 2. 唯一性检查
     this.ensureUniqueManifestId(manifest.id);
+
+    // 2a. engines.openlearn 平台版本兼容性检查
+    if (manifest.engines?.openlearn) {
+      if (!semver.satisfies(OPENLEARN_VERSION, manifest.engines.openlearn)) {
+        throw new Error(
+          `[PluginHost] Plugin "${manifest.id}" requires OpenLearn ${manifest.engines.openlearn}, ` +
+          `but host is running ${OPENLEARN_VERSION}.`,
+        );
+      }
+    }
+
+    // 2b. V3.0: 注册声明式贡献点（classroomTools → contributes 自动桥接）
+    if (manifest.contributes) {
+      this.contributionRegistry.register(manifest.id, manifest.contributes);
+    } else if (manifest.classroomTools && manifest.classroomTools.length > 0) {
+      this.contributionRegistry.registerClassroomTools(manifest.id, manifest.classroomTools as any);
+    }
+
+    // 2c. V3.0: 检查插件依赖（仅警告）
+    if (manifest.pluginDependencies && manifest.pluginDependencies.length > 0) {
+      const installedIds = new Set(this.listInstalledPluginIds());
+      const missing = checkMissingDeps(manifest.pluginDependencies, installedIds);
+      if (missing.length > 0) {
+        console.warn(
+          `[PluginHost] Plugin "${manifest.id}" depends on: ${missing.join(', ')}, ` +
+          `which are not installed.`,
+        );
+      }
+    }
 
     // 3. 生成 ID
     const pluginId = uuidv7();
@@ -1339,7 +1505,48 @@ export class PluginHost {
       `[PluginHost] Restoring ${plugins.length} active ESM plugin(s) from database`,
     );
 
+    // V3.0: 按拓扑序激活（依赖优先）
+    const manifests = new Map<string, Manifest>();
     for (const p of plugins) {
+      try {
+        const row = this.db
+          .prepare('SELECT manifest FROM plugins WHERE id = ?')
+          .get(p.id) as { manifest: string } | undefined;
+        if (row) {
+          manifests.set(p.id, JSON.parse(row.manifest));
+        }
+      } catch {
+        // Skip malformed manifests
+      }
+    }
+
+    const graph = buildDepGraph(manifests);
+    const installedIds = Array.from(manifests.keys());
+    const { sorted, blocked, cycles } = topologicalSort(graph, installedIds);
+
+    if (cycles.length > 0) {
+      console.warn(`[PluginHost] Dependency cycles detected during restore:`,
+        cycles.map((c) => c.join(' → ')).join(', '));
+      console.warn(`[PluginHost] Cyclic plugins will be activated without ordering guarantees.`);
+    }
+
+    if (blocked.length > 0) {
+      for (const b of blocked) {
+        console.warn(
+          `[PluginHost] Plugin "${b.pluginId}" blocked during restore: ` +
+          `missing dependencies: ${b.missingDeps.join(', ')}`,
+        );
+      }
+    }
+
+    // Activate sorted plugins first, then any remaining (blocked + cyclic) with best-effort
+    const orderedIds = [...sorted];
+    for (const b of blocked) orderedIds.push(b.pluginId);
+    for (const cycle of cycles) orderedIds.push(...cycle);
+
+    for (const id of orderedIds) {
+      const p = plugins.find((pl) => pl.id === id);
+      if (!p) continue;
       try {
         const mode = (p.execution_mode ?? 'inline') as 'inline' | 'worker';
         await this.activatePlugin(p.id, { mode });
@@ -1444,6 +1651,7 @@ export class PluginHost {
       newManifest,
       this.db,
       skipTokens,
+      this.contributionRegistry,
     );
 
     // 5. Phase 5: Worker-mode check — if worker-mode, delegate to workerManager
