@@ -253,8 +253,12 @@ export class WorkerRegistry {
  * 3. type === 'deactivate-request' → 停用、清理
  */
 function generateBootstrapCode(): string {
+  const rootPath = process.cwd().replace(/\\/g, '/');
+  const requirePath = `${rootPath}/package.json`;
   return `
 import { parentPort, workerData } from 'node:worker_threads';
+import { createRequire } from 'node:module';
+const requireFn = createRequire('${requirePath}');
 
 // ── 内联 RPC Proxy 实现（在 Worker 隔离上下文中运行） ──
 
@@ -462,6 +466,27 @@ parentPort.on('message', async function(msg) {
         return;
       }
 
+      // 构建插件自建表 API (dbApi)
+      var tablePrefix = 'plugin_' + workerData.pluginId.replace(/[^a-zA-Z0-9_]/g, '_') + '_';
+      var dbService = rawServices['@openlearn/core:IDatabase'];
+      var dbApi = dbService ? {
+        ensureTable: function(tableName, schema) {
+          var fullName = tablePrefix + tableName;
+          return dbService.prepareAndRun('CREATE TABLE IF NOT EXISTS ' + fullName + ' (' + schema + ')', []);
+        },
+        table: function(tableName) {
+          return tablePrefix + tableName;
+        },
+        dropAllTables: async function() {
+          var tables = await dbService.prepareAndAll("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?", [tablePrefix + '%']);
+          for (var i = 0; i < tables.length; i++) {
+            await dbService.prepareAndRun('DROP TABLE IF EXISTS ' + tables[i].name, []);
+          }
+        }
+      } : undefined;
+
+      var PLUGIN_SHARED_MODULES = ['recharts', 'react-markdown', 'jspdf', 'jspdf-autotable', 'xlsx', 'lucide-react', 'uuid'];
+
       // 构建 PluginContext（带事件代理）
       var ctx = {
         services: services,
@@ -499,6 +524,17 @@ parentPort.on('message', async function(msg) {
           unsubscribe: function(type, handler) { eventBusProxy.unsubscribe(type, handler); },
           publish: async function() {
             throw new Error('publish not supported from Worker');
+          }
+        },
+        db: dbApi,
+        require: function(moduleName) {
+          if (PLUGIN_SHARED_MODULES.indexOf(moduleName) === -1) {
+            throw new Error('Plugin cannot require non-shared module: ' + moduleName);
+          }
+          try {
+            return requireFn(moduleName);
+          } catch (err) {
+            throw new Error('Shared module "' + moduleName + '" is not available in worker: ' + err.message);
           }
         }
       };

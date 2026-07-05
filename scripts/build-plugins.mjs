@@ -33,6 +33,11 @@ const plugins = [
     entry: 'packages/plugins/memo/index.ts',
     manifest: 'packages/plugins/memo/manifest.json',
     zipName: 'ext-memo.zip'
+  },
+  {
+    entry: 'packages/plugins/raffle-vote/index.ts',
+    manifest: 'packages/plugins/raffle-vote/manifest.json',
+    zipName: 'ext-raffle-vote.zip'
   }
 ];
 
