@@ -20,8 +20,8 @@
  * - processManager         → 定时任务（学期自动汇总）
  */
 
-import type { PluginContext } from '../../core/plugin-host/types.js';
-import { IDatabaseToken } from '../../core/di/interfaces.js';
+import type { PluginContext } from '@openlearn/plugin-sdk';
+import { IDatabaseToken } from '@openlearn/plugin-sdk';
 
 // ── 积分原因预设模板 ──────────────────────────────────────────────
 const POINT_PRESETS = {

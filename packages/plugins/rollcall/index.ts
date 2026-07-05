@@ -1,11 +1,11 @@
-import { ICommandBusServiceToken, IActionRegistryServiceToken } from '../../core/di/interfaces.js';
-import type { PluginContext } from '../../core/plugin-host/types.js';
+import type { PluginContext } from '@openlearn/plugin-sdk';
 
 export default {
   manifest: {
     id: "ext-roll-call",
     name: "Random Student Picker (随机点名小工具)",
-    version: "1.0.0"
+    version: "1.0.0",
+    engines: { openlearn: '^2.5.0' },
   },
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;

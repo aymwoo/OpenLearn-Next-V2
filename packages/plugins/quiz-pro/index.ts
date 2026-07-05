@@ -1,11 +1,12 @@
-import { ICommandBusServiceToken, IActionRegistryServiceToken, ISemesterGradeServiceToken, IDatabaseToken } from '../../core/di/interfaces.js';
-import type { PluginContext } from '../../core/plugin-host/types.js';
+import type { PluginContext } from '@openlearn/plugin-sdk';
+import { ISemesterGradeServiceToken, IDatabaseToken } from '@openlearn/plugin-sdk';
 
 export default {
   manifest: {
     id: "ext-ai-quiz-pro",
     name: "AI Quiz Pro",
-    version: "1.0.0"
+    version: "1.0.0",
+    engines: { openlearn: '^2.5.0' },
   },
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;

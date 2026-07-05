@@ -1,4 +1,4 @@
-import type { PluginContext } from '../../core/plugin-host/types.js';
+import type { PluginContext } from '@openlearn/plugin-sdk';
 
 export default {
   // 插件元数据声明，满足 ESM 激活时的 manifest 属性检查

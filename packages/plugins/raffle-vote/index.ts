@@ -1,5 +1,5 @@
-import { IDatabaseToken } from '../../core/di/interfaces.js';
-import type { PluginContext } from '../../core/plugin-host/types.js';
+import { IDatabaseToken } from '@openlearn/plugin-sdk';
+import type { PluginContext } from '@openlearn/plugin-sdk';
 
 export default {
   manifest: {

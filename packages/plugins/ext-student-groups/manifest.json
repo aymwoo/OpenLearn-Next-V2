@@ -16,40 +16,45 @@
     "management:read",
     "management:write"
   ],
-  "classroomTools": [
-    {
-      "id": "tool-group-create",
-      "name": "创建小组",
-      "icon": "Users",
-      "description": "在当前班级中手动创建一个新的学生小组",
-      "commandType": "group.create",
-      "payload": {
-        "classId": "$classId",
-        "name": "",
-        "description": "教师手动创建"
+  "engines": {
+    "openlearn": "^2.5.0"
+  },
+  "contributes": {
+    "classroom.tool": [
+      {
+        "id": "tool-group-create",
+        "name": "创建小组",
+        "icon": "Users",
+        "description": "在当前班级中手动创建一个新的学生小组",
+        "commandType": "group.create",
+        "payload": {
+          "classId": "$classId",
+          "name": "",
+          "description": "教师手动创建"
+        }
+      },
+      {
+        "id": "tool-group-auto-assign",
+        "name": "自动分组",
+        "icon": "Shuffle",
+        "description": "将当前班级学生随机自动分配到小组",
+        "commandType": "group.auto_assign",
+        "payload": {
+          "classId": "$classId",
+          "groupCount": 4,
+          "strategy": "random"
+        }
+      },
+      {
+        "id": "tool-group-list",
+        "name": "查看分组",
+        "icon": "List",
+        "description": "查看当前班级所有小组及成员",
+        "commandType": "group.list",
+        "payload": {
+          "classId": "$classId"
+        }
       }
-    },
-    {
-      "id": "tool-group-auto-assign",
-      "name": "自动分组",
-      "icon": "Shuffle",
-      "description": "将当前班级学生随机自动分配到小组",
-      "commandType": "group.auto_assign",
-      "payload": {
-        "classId": "$classId",
-        "groupCount": 4,
-        "strategy": "random"
-      }
-    },
-    {
-      "id": "tool-group-list",
-      "name": "查看分组",
-      "icon": "List",
-      "description": "查看当前班级所有小组及成员",
-      "commandType": "group.list",
-      "payload": {
-        "classId": "$classId"
-      }
-    }
-  ]
+    ]
+  }
 }

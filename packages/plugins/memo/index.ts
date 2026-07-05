@@ -1,4 +1,4 @@
-import type { PluginContext } from '../../core/plugin-host/types.js';
+import type { PluginContext } from '@openlearn/plugin-sdk';
 
 export default {
   manifest: {

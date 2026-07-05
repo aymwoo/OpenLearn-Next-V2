@@ -10,14 +10,19 @@
   "capabilitiesProposed": [
     "whiteboard:write"
   ],
-  "classroomTools": [
-    {
-      "id": "tool-hello-world",
-      "name": "问候插件",
-      "icon": "Sparkles",
-      "description": "在画板上输出 Hello World",
-      "commandType": "hello.say",
-      "payload": {}
-    }
-  ]
+  "engines": {
+    "openlearn": "^2.5.0"
+  },
+  "contributes": {
+    "classroom.tool": [
+      {
+        "id": "tool-hello-world",
+        "name": "问候插件",
+        "icon": "Sparkles",
+        "description": "在画板上输出 Hello World",
+        "commandType": "hello.say",
+        "payload": {}
+      }
+    ]
+  }
 }

@@ -1,11 +1,11 @@
-import type { PluginContext } from '../../core/plugin-host/types.js';
+import type { PluginContext } from '@openlearn/plugin-sdk';
 
 export default {
-  // 1. 导出插件元数据信息，满足新版 ESM 插件宿主的激活时校验
   manifest: {
     id: "ext-hello-world",
     name: "Hello World 示范插件",
-    version: "1.0.0"
+    version: "1.0.1",
+    engines: { openlearn: '^2.5.0' },
   },
 
   // 2. 插件的主激活函数
@@ -14,7 +14,7 @@ export default {
     const commandBus = ctx.services.commandBus;
     const actionRegistry = ctx.services.actionRegistry;
 
-    console.log(`[Hello World Plugin] Activating plugin "${ctx.pluginId}"...`);
+    ctx.log.info(`Activating plugin "${ctx.pluginId}"...`);
 
     // 3. 注册自定义 Action (指令元数据声明)
     // 注册后，该指令可以在系统的指令调试池、API 甚至 AI Agent 中被检索和识别
@@ -41,7 +41,7 @@ export default {
         const payload = command.payload as any;
         const { lessonId, username, shout } = payload;
         
-        console.log(`[Hello World Plugin] Command hello.say received! Greeting: ${username}`);
+        ctx.log.info(`Command hello.say received! Greeting: ${username}`);
 
         let elementId = null;
 
@@ -69,7 +69,7 @@ export default {
               elementId = drawRes.elementId;
             }
           } catch (err) {
-            console.error('[Hello World Plugin] Failed to draw text on whiteboard:', err);
+            ctx.log.error('Failed to draw text on whiteboard:', err);
           }
         }
 
@@ -86,6 +86,6 @@ export default {
 
   // 5. 插件注销函数 (可选)
   deactivate: async () => {
-    console.log('[Hello World Plugin] Deactivating hello-world plugin...');
+    ctx.log.info('Deactivating hello-world plugin...');
   }
 };

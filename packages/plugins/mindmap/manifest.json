@@ -10,5 +10,8 @@
   "capabilitiesProposed": [
     "whiteboard:write",
     "vfs:read"
-  ]
+  ],
+  "engines": {
+    "openlearn": "^2.5.0"
+  }
 }
