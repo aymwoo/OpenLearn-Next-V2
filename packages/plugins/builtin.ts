@@ -828,7 +828,7 @@ export const BuiltinPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          pluginId: { type: 'STRING', description: '插件的唯一数据库 ID' }
+          pluginId: { type: 'STRING', description: '插件的数据库 UUID 或 manifest.id 别名（如 ext-my-plugin），两者均可识别' }
         },
         required: ['pluginId']
       }
@@ -853,7 +853,7 @@ export const BuiltinPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          pluginId: { type: 'STRING', description: '插件的唯一数据库 ID' }
+          pluginId: { type: 'STRING', description: '插件的数据库 UUID 或 manifest.id 别名（如 ext-my-plugin），两者均可识别' }
         },
         required: ['pluginId']
       }
@@ -864,6 +864,46 @@ export const BuiltinPlugin = {
         const payload = command.payload as any;
         await pluginHost.uninstallPlugin(payload.pluginId);
         return { success: true };
+      }
+    });
+
+    // 7.8. PLUGIN INFO HANDLER — 通过 UUID 或 manifest.id 别名查询插件详情
+    const pluginInfoCmdType = 'plugin.info';
+    await actionRegistry.register({
+      id: 'core-plugin-info',
+      commandType: pluginInfoCmdType,
+      description: '查询指定插件的详细信息，支持通过数据库 UUID 或 manifest.id 别名（如 ext-my-plugin）进行查找',
+      capabilityRequired: 'plugin:read',
+      isHighRisk: false,
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          pluginId: { type: 'STRING', description: '插件的数据库 UUID 或 manifest.id 别名' }
+        },
+        required: ['pluginId']
+      }
+    });
+
+    await commandBus.registerHandler(pluginInfoCmdType, {
+      async execute(command) {
+        const payload = command.payload as any;
+        const rawId: string = payload.pluginId;
+        // Resolve manifest ID alias → DB UUID (resolvePluginUuid is now public)
+        const resolvedId = pluginHost.resolvePluginUuid(rawId);
+        const row = db.prepare(
+          "SELECT id, name, status, created_at, loader_version, execution_mode, json_extract(manifest, '$.id') as manifest_id, json_extract(manifest, '$.version') as version FROM plugins WHERE id = ?"
+        ).get(resolvedId) as any;
+        if (!row) throw new Error(`Plugin not found: ${rawId}`);
+        return {
+          id: row.id,
+          manifestId: row.manifest_id,
+          name: row.name,
+          version: row.version,
+          status: row.status,
+          executionMode: row.execution_mode,
+          loaderVersion: row.loader_version,
+          createdAt: row.created_at,
+        };
       }
     });
 

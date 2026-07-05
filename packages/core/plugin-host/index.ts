@@ -383,33 +383,25 @@ export class PluginHost {
 
   /**
    * 将插件的标识符（可以是数据库 UUID 也可以是 manifest.id 别名）解析为数据库真实 UUID。
+   * 优先直接匹配 DB 主键（O(1)），其次通过 SQLite json_extract 直接查询 manifest.id 列（O(1) 索引友好）。
    */
-  private resolvePluginUuid(idOrManifestId: string): string {
-    // 1. 尝试直接作为 UUID 查询数据库中 id
+  /** @public 将插件标识符（DB UUID 或 manifest.id 别名）解析为数据库真实 UUID。供外部命令处理器使用。 */
+  resolvePluginUuid(idOrManifestId: string): string {
     try {
-      const row = this.db
+      // 1. 优先：直接作为 DB 主键查找（最常见路径）
+      const byId = this.db
         .prepare('SELECT id FROM plugins WHERE id = ?')
         .get(idOrManifestId) as { id: string } | undefined;
-      if (row) {
-        return row.id;
-      }
+      if (byId) return byId.id;
+
+      // 2. 回退：通过 SQLite json_extract 匹配 manifest.id 别名（无需全表 JSON 解析）
+      const byManifestId = this.db
+        .prepare("SELECT id FROM plugins WHERE json_extract(manifest, '$.id') = ?")
+        .get(idOrManifestId) as { id: string } | undefined;
+      if (byManifestId) return byManifestId.id;
     } catch {}
 
-    // 2. 如果没找到，遍历所有插件条目，匹配 manifest.id
-    try {
-      const rows = this.db
-        .prepare('SELECT id, manifest FROM plugins')
-        .all() as Array<{ id: string; manifest: string }>;
-      for (const row of rows) {
-        try {
-          const manifest = JSON.parse(row.manifest);
-          if (manifest && manifest.id === idOrManifestId) {
-            return row.id;
-          }
-        } catch {}
-      }
-    } catch {}
-
+    // 3. 原样返回，让调用方自行处理"找不到"
     return idOrManifestId;
   }
 
@@ -1397,6 +1389,7 @@ export class PluginHost {
    * @param newSourceCode - 新版本源码
    */
   async reloadPlugin(pluginId: string, newSourceCode: string): Promise<void> {
+    pluginId = this.resolvePluginUuid(pluginId);
     const currentState = this.pluginStates.get(pluginId);
 
     // 1. 状态检查

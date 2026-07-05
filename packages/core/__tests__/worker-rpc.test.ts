@@ -16,6 +16,7 @@ describe('Worker RPC and Event Forwarding', () => {
       kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-worker-rpc%'").run();
       kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-dynamic-dep%'").run();
       kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-state-inherit%'").run();
+      kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-alias-resolve%'").run();
     } catch (e) {
       console.error("beforeEach cleanup error:", e);
     }
@@ -302,4 +303,62 @@ export default {
     }) as any;
     expect(result2.count).toBe(15);
   }, 40000);
+
+  it('应该支持通过 manifest.id 别名解析为真实 DB UUID (resolvePluginUuid)', async () => {
+    await kernel.ready;
+
+    // Install a minimal inline plugin directly via pluginHost (bypasses capability guard — testing alias logic, not security)
+    const manifestId = 'ext-test-alias-resolve';
+    const sourceCode = `
+export default {
+  manifest: {
+    id: '${manifestId}',
+    name: 'Alias Resolve Test',
+    version: '1.0.0',
+    main: 'index.js',
+    requires: [],
+    capabilitiesProposed: []
+  },
+  activate: async (ctx) => {},
+  deactivate: async () => {}
+};`;
+    await kernel.pluginHost.installPlugin(sourceCode);
+
+    // Resolve from manifest ID immediately after install to get the DB UUID
+    const dbUuid = kernel.pluginHost.resolvePluginUuid(manifestId);
+    expect(dbUuid).toBeTruthy();
+    // Must not equal the manifest ID itself (i.e. actually resolved to a UUID)
+    expect(dbUuid).not.toBe(manifestId);
+
+    // 1. resolvePluginUuid by manifest ID should return the DB UUID
+    const resolved = kernel.pluginHost.resolvePluginUuid(manifestId);
+    expect(resolved).toBe(dbUuid);
+
+    // 2. resolvePluginUuid by DB UUID should round-trip correctly
+    const resolvedFromUuid = kernel.pluginHost.resolvePluginUuid(dbUuid);
+    expect(resolvedFromUuid).toBe(dbUuid);
+
+    // 3. plugin.info command should work with manifest ID alias
+    //    (plugin:read is open to all authenticated actors, so no capability grant needed)
+    const infoResult = await kernel.commandBus.execute({
+      id: 'cmd-alias-info',
+      type: 'plugin.info',
+      actorId: 'agent-system-0',
+      payload: { pluginId: manifestId }
+    }) as any;
+    expect(infoResult.id).toBe(dbUuid);
+    expect(infoResult.manifestId).toBe(manifestId);
+
+    // 4. plugin.info command should also work with DB UUID
+    const infoByUuid = await kernel.commandBus.execute({
+      id: 'cmd-uuid-info',
+      type: 'plugin.info',
+      actorId: 'agent-system-0',
+      payload: { pluginId: dbUuid }
+    }) as any;
+    expect(infoByUuid.manifestId).toBe(manifestId);
+
+    // Cleanup
+    kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-alias-resolve%'").run();
+  }, 20000);
 });

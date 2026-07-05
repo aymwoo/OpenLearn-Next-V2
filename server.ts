@@ -4641,6 +4641,21 @@ ${examsText}
     res.json(kernelContainer.pluginHost.listPlugins());
   });
 
+  // GET single plugin by UUID or manifest.id alias
+  app.get('/api/plugins/:id', async (req, res) => {
+    try {
+      const cmd = kernelContainer.commandBus.createCommand(
+        'plugin.info',
+        { pluginId: req.params.id },
+        getActorId(req)
+      );
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
+    } catch (err: any) {
+      res.status(404).json({ success: false, error: err.message });
+    }
+  });
+
   app.post('/api/plugins/:id/toggle', async (req, res) => {
     try {
       const cmd = kernelContainer.commandBus.createCommand(
