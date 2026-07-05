@@ -346,6 +346,13 @@ const htmlContent = `
         <li>如果插件申请了不存在于系统白名单中的未知特权，激活流程将<b>立即阻断报错</b>（抛出 <code>InvalidCapabilityError</code>），插件状态会被标记为 <code>error</code> 且拒绝执行，以确保宿主安全。</li>
     </ul>
 
+    <h2>3. 第三方 NPM 依赖动态隔离安装与加载</h2>
+    <p>为避免插件包打包过于臃肿，系统自 <code>v2.0</code> 引入了动态依赖隔离管理。如果在 <code>manifest.json</code> 中声明了 <code>dependencies</code>（如 <code>"dependencies": { "cookie": "^0.5.0" }</code>）：</p>
+    <ul>
+        <li><b>自动物理隔离安装：</b>在插件解压安装时，<code>PluginHost</code> 会自动生成 <code>package.json</code> 并执行 <code>npm install --production --registry=https://registry.npmmirror.com</code>，将所需 NPM 包以独立物理沙箱形式装载在插件自身的 <code>node_modules</code> 中。</li>
+        <li><b>运行时 Require 寻路重定向：</b>当 Worker 插件运行时调用 <code>ctx.require('cookie')</code>，沙箱中介拦截器通过 Node.js <code>module.createRequire</code> 寻路定位至该插件物理目录下的独立 NPM 包，既保证了隔离安全，又极大缩减了打包体积。</li>
+    </ul>
+
     <!-- 四、 内核服务接口参考与注入对象说明 -->
     <div class="page-break"></div>
     <h1>四、 内核服务接口参考与注入对象说明</h1>
@@ -566,25 +573,21 @@ const htmlContent = `
     <p>物理表名由系统自动加上插件 UUID 作为前缀并规范重映射，保证完全杜绝 SQL 注入与其他插件的越权访问：</p>
     <pre><code>物理表名 = plugin_&lt;pluginId_to_underscores&gt;_&lt;tableName&gt;</code></pre>
 
-    <h2>2. 数据迁移策略 (Database Schema Migrations)</h2>
-    <p>当插件从 <code>v1.0.0</code> 升级至 <code>v2.0.0</code> 时，若有新增数据列需求，由于 <code>ensureTable</code> 无法自动变更已存在的表结构，开发者必须在 <code>activate</code> 周期中手动进行 SQLite 兼容迁移：</p>
-    <pre><code class="language-typescript">// 数据库结构手动增列迁移示例
+    <h2>2. 声明式数据迁移 (ctx.db.migrate)</h2>
+    <p>为降低维护表结构演进的复杂度，系统提供了内置声明式迁移机制 <code>ctx.db.migrate(version, migrateFn)</code>。该方法底层在 SQLite 中维护一个 <code>plugin_migrations</code> 表来跟踪迁移进度，确保幂等执行保障：</p>
+    <pre><code class="language-typescript">// 数据库内置声明式迁移 API 示例
 activate: async (ctx) => {
-  const db = await ctx.resolve&lt;any&gt;(IDatabaseToken);
-  const tblVotes = ctx.db.table('votes');
-  
-  // 1. 确保基础表存在
-  await ctx.db.ensureTable('votes', 'id TEXT PRIMARY KEY, lesson_id TEXT, title TEXT');
-  
-  // 2. 检测字段是否存在，动态执行 ALTER TABLE
-  const tableInfo = await db.prepare("PRAGMA table_info(" + tblVotes + ")").all();
-  const hasElementIds = tableInfo.some((col: any) => col.name === 'element_ids');
-  
-  if (!hasElementIds) {
-    // 动态添加新列
+  // 1. 创建基础表 (版本 1)
+  await ctx.db.migrate(1, async () => {
+    await ctx.db.ensureTable('votes', 'id TEXT PRIMARY KEY, lesson_id TEXT, title TEXT');
+  });
+
+  // 2. 升级表结构添加新列 (版本 2)
+  await ctx.db.migrate(2, async () => {
+    const db = await ctx.resolve&lt;any&gt;('@openlearn/core:IDatabase');
+    const tblVotes = ctx.db.table('votes');
     await db.prepare("ALTER TABLE " + tblVotes + " ADD COLUMN element_ids TEXT").run();
-    console.log("[Migration] Successfully added column 'element_ids' to " + tblVotes);
-  }
+  });
 }</code></pre>
 
     <h2>3. 插件卸载时的数据回收机制</h2>
@@ -941,38 +944,45 @@ describe('Raffle & Vote Plugin Test', () => {
     <h2>1. 生产审核与状态流转机制</h2>
     <p>当管理员在上架面板上传打包后的 <code>.zip</code> 插件包时，系统会将其注册并置为 <code>installed</code> 状态。激活操作由内核调度的 <code>ready</code> 流水线管理，在成功注入授权及启动 Worker 实例后转为 <code>active</code> 状态。遇到崩溃或加载失败则进入 <code>error</code> 挂起状态并写入事件流通知。</p>
 
-    <h2>2. 无停机热更新机制 (Hot Swapping)</h2>
-    <p>内核对处于 Worker 隔离状态下的插件支持热交换热更新：</p>
+    <h2>2. 无停机热更新与运行状态继承 (Hot Swapping & State Inheritance)</h2>
+    <p>内核对处于 Worker 隔离状态下的插件支持热交换与零停机状态交接升级：</p>
     <ol>
-        <li>上传新版 <code>.zip</code> 文件后，主线程通过 <code>WorkerManager</code> 派生一个新的独立 Worker 实例加载新代码。</li>
-        <li>新 Worker 实例初始化并加载成功（状态转为 <code>active</code>）。</li>
-        <li>主线程路由器将后续的所有 Action 指令路由重定向至新 Worker。</li>
-        <li>旧 Worker 中的存量待处理指令处理完毕后，系统通过 <code>deactivate</code> 清除其关联事件总线订阅并销毁线程，实现零停机平滑过度。</li>
+        <li>当发起热重载指令时，主线程通过 RPC 向旧 Worker 线程发出 <code>deactivate-request</code> 停用请求。</li>
+        <li>旧 Worker 线程执行其 <code>deactivate()</code> 生命周期方法，将需要继承的内存状态（任意可序列化对象）作为返回值返回给宿主主线程。</li>
+        <li>主线程接收该状态对象（作为 <code>prevState</code>），然后调用旧 Worker 线程 of <code>terminate()</code> 保证其彻底退出。</li>
+        <li>主线程创建并启动新版本的 Worker 线程，通过 <code>activate</code> 消息将 <code>prevState</code> 传递给新 Worker。</li>
+        <li>新 Worker 线程在 <code>activate(ctx, prevState)</code> 周期中接收此状态并还原其内存运行数据，重新挂载指令处理器，完成完美的平滑升级。</li>
     </ol>
 
-    <h2>3. 系统待开发功能清单 (Feature Backlog)</h2>
-    <p>为了让该插件生态系统更加完备，开发团队已将以下生产级特性列入后续迭代的 <b>Backlog 待办列表</b>。欢迎社区开发者共同贡献：</p>
+    <h2>3. 系统特性状态与待开发功能清单 (Feature Backlog)</h2>
+    <p>为了让该插件生态系统更加完备，开发团队已将相关特性的状态及后续迭代的 <b>Backlog 待办列表</b> 整理如下：</p>
     <table>
         <thead>
             <tr>
-                <th>优先级</th>
+                <th>优先级/状态</th>
                 <th>功能模块</th>
                 <th>功能描述</th>
-                <th>设计草案与预留 API 接口</th>
+                <th>设计与实现细节</th>
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <td><b>P1</b></td>
+            <tr style="background-color: #f0fdf4;">
+                <td><b style="color: #16a34a;">已实现 (v2.0)</b></td>
                 <td>内置数据库迁移 API</td>
-                <td>提供统一的高级表变更接口，无需开发者在 <code>activate</code> 里手写 SQLite 变更检测语句。</td>
-                <td>设计提供 <code>ctx.db.migrate(version, (db) => { ... })</code> 以进行安全结构版本递增管理。</td>
+                <td>提供统一的 <code>ctx.db.migrate(version, fn)</code> 声明式迁移，自动记录版本追踪。</td>
+                <td>内置 <code>plugin_migrations</code> 表，幂等处理表结构升级与 DDL 变更。</td>
             </tr>
-            <tr>
-                <td><b>P1</b></td>
-                <td>微前端热更状态继承</td>
-                <td>热替换升级插件时，允许新旧 Worker 传递并交接内存缓存中的运行状态，防止断线或重置。</td>
-                <td>设计在 <code>deactivate(state)</code> 导出序列化状态，并在新 Worker 激活时由 <code>activate(ctx, state)</code> 还原。</td>
+            <tr style="background-color: #f0fdf4;">
+                <td><b style="color: #16a34a;">已实现 (v2.0)</b></td>
+                <td>沙箱热更状态继承</td>
+                <td>热替换升级插件时，允许新旧 Worker 传递并交接内存缓存中的运行状态。</td>
+                <td>通过生命周期 <code>deactivate()</code> 返回状态，并由新 Worker 的 <code>activate(ctx, prevState)</code> 还原。</td>
+            </tr>
+            <tr style="background-color: #f0fdf4;">
+                <td><b style="color: #16a34a;">已实现 (v2.0)</b></td>
+                <td>动态依赖加载与沙箱隔离</td>
+                <td>允许插件在 <code>manifest.json</code> 中声明第三方 NPM 依赖包并自动安装与加载。</td>
+                <td>解压时自动执行 <code>npm install</code> 安装到隔离目录，并在 Worker 中通过 <code>createRequire</code> 重定向 require 寻路。</td>
             </tr>
             <tr>
                 <td><b>P2</b></td>
