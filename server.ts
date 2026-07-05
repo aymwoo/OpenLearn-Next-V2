@@ -4636,12 +4636,22 @@ ${examsText}
     }
   });
 
-  // Plugin APIs
-  app.get('/api/plugins', (req, res) => {
-    res.json(kernelContainer.pluginHost.listPlugins());
-  });
+// Plugin APIs
+app.get('/api/plugins', (req, res) => {
+  res.json(kernelContainer.pluginHost.listPlugins());
+});
 
-  // GET single plugin by UUID or manifest.id alias
+// V3.0: 查询插件贡献点摘要
+app.get('/api/plugins/:id/contributions', (req, res) => {
+  try {
+    const summary = kernelContainer.pluginHost.listContributions(req.params.id);
+    res.json({ success: true, result: summary });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// GET single plugin by UUID or manifest.id alias
   app.get('/api/plugins/:id', async (req, res) => {
     try {
       const cmd = kernelContainer.commandBus.createCommand(

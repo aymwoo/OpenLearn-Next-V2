@@ -385,10 +385,17 @@ export function PluginCenter({
                   description: '扩展 Edu OS 功能的自定义插件。',
                   author: 'Community',
                 };
+                let toolCount = 0;
                 try {
                   const parsed = JSON.parse(plugin.manifest);
                   if (parsed.description) manifestInfo.description = parsed.description;
                   if (parsed.author) manifestInfo.author = parsed.author;
+                  // V3.0: 统计贡献点数量（classroomTools 或 contributes）
+                  if (parsed.contributes?.['classroom.tool']) {
+                    toolCount = parsed.contributes['classroom.tool'].length;
+                  } else if (parsed.classroomTools) {
+                    toolCount = parsed.classroomTools.length;
+                  }
                 } catch (e) {
                   // ignore parse error
                 }
@@ -437,9 +444,18 @@ export function PluginCenter({
                       <h4 className="font-semibold text-gray-900 mb-1 line-clamp-1">
                         {plugin.name}
                       </h4>
-                      <p className="text-sm text-gray-500 mb-4 line-clamp-2">
+                      <p className="text-sm text-gray-500 mb-2 line-clamp-2">
                         {manifestInfo.description}
                       </p>
+                      {/* V3.0: 声明式贡献点提示 */}
+                      {toolCount > 0 && (
+                        <p className="text-xs text-indigo-600 mb-3 flex items-center gap-1">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                          {lang === 'zh'
+                            ? `${toolCount} 个课堂工具`
+                            : `${toolCount} classroom tool${toolCount > 1 ? 's' : ''}`}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center justify-between shrink-0">
                       <span className="text-xs font-medium text-gray-400">
