@@ -15,7 +15,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
     alias: {
-      'xlsx': '/home/wuxf/Develop/openlearnv2/scratch/xlsx-stub.ts'
+      'xlsx': '/home/wuxf/Develop/openlearnv2/packages/core/__mocks__/xlsx.ts'
     }
   },
 });

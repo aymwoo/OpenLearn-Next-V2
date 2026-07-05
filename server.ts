@@ -4636,66 +4636,65 @@ ${examsText}
     }
   });
 
-// Plugin APIs
-app.get('/api/plugins', (req, res) => {
-  res.json(kernelContainer.pluginHost.listPlugins());
-});
+  // Plugin APIs
+  app.get('/api/plugins', (req, res) => {
+    res.json(kernelContainer.pluginHost.listPlugins());
+  });
 
-// V3.0: 查询插件贡献点摘要
-app.get('/api/plugins/:id/contributions', (req, res) => {
-  try {
-    const summary = kernelContainer.pluginHost.listContributions(req.params.id);
-    res.json({ success: true, result: summary });
-  } catch (e: any) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
+  // V3.0: 查询插件贡献点摘要
+  app.get('/api/plugins/:id/contributions', (req, res) => {
+    try {
+      const summary = kernelContainer.pluginHost.listContributions(req.params.id);
+      res.json({ success: true, result: summary });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
 
-// V3.1: 读取插件配置（schema + 当前值）
-app.get('/api/plugins/:id/config', (req, res) => {
-  try {
-    const pluginId = kernelContainer.pluginHost.resolvePluginUuid(req.params.id);
-    const row = kernelContainer.db
-      .prepare('SELECT manifest FROM plugins WHERE id = ?')
-      .get(pluginId) as { manifest: string } | undefined;
-    if (!row) {
-      return res.status(404).json({ success: false, error: 'Plugin not found' });
+  // V3.1: 读取插件配置（schema + 当前值）
+  app.get('/api/plugins/:id/config', (req, res) => {
+    try {
+      const pluginId = kernelContainer.pluginHost.resolvePluginUuid(req.params.id);
+      const row = kernelContainer.db
+        .prepare('SELECT manifest FROM plugins WHERE id = ?')
+        .get(pluginId) as { manifest: string } | undefined;
+      if (!row) {
+        return res.status(404).json({ success: false, error: 'Plugin not found' });
+      }
+      const manifest = JSON.parse(row.manifest);
+      res.json({
+        success: true,
+        result: {
+          schema: manifest.configuration?.properties ?? {},
+          values: kernelContainer.pluginHost.getPluginConfig(pluginId, manifest),
+        },
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
     }
-    const manifest = JSON.parse(row.manifest);
-    // Return schema + current values
-    res.json({
-      success: true,
-      result: {
-        schema: manifest.configuration?.properties ?? {},
-        values: kernelContainer.pluginHost.getPluginConfig(pluginId, manifest),
-      },
-    });
-  } catch (e: any) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
+  });
 
-// V3.1: 更新插件配置
-app.post('/api/plugins/:id/config', (req, res) => {
-  try {
-    const pluginId = kernelContainer.pluginHost.resolvePluginUuid(req.params.id);
-    const updates = req.body;
-    if (!updates || typeof updates !== 'object') {
-      return res.status(400).json({ success: false, error: 'Body must be an object of key-value pairs' });
+  // V3.1: 更新插件配置
+  app.post('/api/plugins/:id/config', (req, res) => {
+    try {
+      const pluginId = kernelContainer.pluginHost.resolvePluginUuid(req.params.id);
+      const updates = req.body;
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ success: false, error: 'Body must be an object of key-value pairs' });
+      }
+      const row = kernelContainer.db
+        .prepare('SELECT manifest FROM plugins WHERE id = ?')
+        .get(pluginId) as { manifest: string } | undefined;
+      if (!row) {
+        return res.status(404).json({ success: false, error: 'Plugin not found' });
+      }
+      const manifest = JSON.parse(row.manifest);
+      kernelContainer.pluginHost.setPluginConfig(pluginId, manifest, updates);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
     }
-    const row = kernelContainer.db
-      .prepare('SELECT manifest FROM plugins WHERE id = ?')
-      .get(pluginId) as { manifest: string } | undefined;
-    if (!row) {
-      return res.status(404).json({ success: false, error: 'Plugin not found' });
-    }
-    const manifest = JSON.parse(row.manifest);
-    kernelContainer.pluginHost.setPluginConfig(pluginId, manifest, updates);
-    res.json({ success: true });
-  } catch (e: any) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
+  });
 
 // GET single plugin by UUID or manifest.id alias
   app.get('/api/plugins/:id', async (req, res) => {
