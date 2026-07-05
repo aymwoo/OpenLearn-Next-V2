@@ -15,6 +15,7 @@ describe('Worker RPC and Event Forwarding', () => {
       kernel.db.prepare("DELETE FROM classes WHERE name = 'Class from Worker RPC'").run();
       kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-worker-rpc%'").run();
       kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-dynamic-dep%'").run();
+      kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-state-inherit%'").run();
     } catch (e) {
       console.error("beforeEach cleanup error:", e);
     }
@@ -191,4 +192,114 @@ export default {
     expect(fileResult).toBeDefined();
     expect(fileResult!.content).toBe('Parsed foo=bar');
   }, 120000);
+
+  it('应该支持 Worker 模式插件在热重载时成功传递并继承内存运行状态', async () => {
+    const zip = new JSZip();
+    const manifest = {
+      id: 'ext-test-state-inherit',
+      name: 'Test State Inheritance',
+      version: '1.0.0',
+      description: 'Tests memory state inheritance during worker hot reload',
+      main: 'index.js',
+      requires: [
+        '@openlearn/core:ICommandBusService@^1.0.0'
+      ],
+      capabilitiesProposed: ['vfs:write']
+    };
+
+    const pluginCodeV1 = `
+export default {
+  manifest: {
+    id: "ext-test-state-inherit",
+    name: "Test State Inheritance",
+    version: "1.0.0",
+    main: "index.js",
+    capabilitiesProposed: ["vfs:write"]
+  },
+  activate: async (ctx, prevState) => {
+    globalThis.count = prevState ? prevState.count : 0;
+    const commandBus = ctx.services.commandBus;
+    await commandBus.registerHandler('test.increment', {
+      execute: async () => {
+        globalThis.count += 10;
+        return { count: globalThis.count };
+      }
+    });
+  },
+  deactivate: async () => {
+    return { count: globalThis.count };
+  }
+};
+    `;
+
+    zip.file('manifest.json', JSON.stringify(manifest));
+    zip.file('index.js', pluginCodeV1);
+
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+    // Install zip
+    await kernel.pluginHost.installPluginFromZip(zipBuffer);
+
+    // Find the UUID of the installed plugin
+    const list = kernel.pluginHost.listPlugins();
+    const testPlugin = list.find(p => p.name === 'Test State Inheritance');
+    expect(testPlugin).toBeDefined();
+
+    // Set execution mode to worker and activate
+    kernel.db.prepare('UPDATE plugins SET execution_mode = ? WHERE id = ?').run('worker', testPlugin!.id);
+    await kernel.pluginHost.activatePlugin(testPlugin!.id);
+
+    // Verify it is active
+    expect(kernel.pluginHost.getPluginState(testPlugin!.id)).toBe('active');
+
+    // Run increment command to modify the count state in Worker (0 -> 10)
+    const result1 = await kernel.commandBus.execute({
+      id: 'cmd-inc-1',
+      type: 'test.increment',
+      actorId: 'user-teacher',
+      payload: {}
+    }) as any;
+    expect(result1.count).toBe(10);
+
+    // Prepare updated source code (version 2.0.0)
+    const pluginCodeV2 = `
+export default {
+  manifest: {
+    id: "ext-test-state-inherit",
+    name: "Test State Inheritance",
+    version: "2.0.0",
+    main: "index.js",
+    capabilitiesProposed: ["vfs:write"]
+  },
+  activate: async (ctx, prevState) => {
+    globalThis.count = prevState ? prevState.count : 0;
+    const commandBus = ctx.services.commandBus;
+    await commandBus.registerHandler('test.increment', {
+      execute: async () => {
+        globalThis.count += 5; // V2 increments by 5
+        return { count: globalThis.count };
+      }
+    });
+  },
+  deactivate: async () => {
+    return { count: globalThis.count };
+  }
+};
+    `;
+
+    // Run hot reload on worker-mode plugin
+    await kernel.pluginHost.reloadPlugin(testPlugin!.id, pluginCodeV2);
+
+    // Wait a little bit for the new worker thread to boot and register its handler
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Run increment command again on the reloaded worker (should increment from 10 to 15)
+    const result2 = await kernel.commandBus.execute({
+      id: 'cmd-inc-2',
+      type: 'test.increment',
+      actorId: 'user-teacher',
+      payload: {}
+    }) as any;
+    expect(result2.count).toBe(15);
+  }, 40000);
 });

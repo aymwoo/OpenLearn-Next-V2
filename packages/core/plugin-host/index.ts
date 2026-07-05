@@ -1576,8 +1576,9 @@ export class PluginHost {
     const oldSourceCode = oldRow?.source_code ?? '';
 
     // 2. Terminate old worker
+    let prevState: any = undefined;
     try {
-      await this.workerManager.terminateWorker(pluginId);
+      prevState = await this.workerManager.terminateWorker(pluginId);
     } catch {
       // Old worker may already be gone — continue
     }
@@ -1591,6 +1592,7 @@ export class PluginHost {
         (await import('../worker-runtime/worker-manager.js')).ALL_SERVICE_TOKENS,
         undefined,
         this.getPluginDir(pluginId),
+        prevState,
       );
       this.db.prepare(
         'UPDATE plugins SET source_code = ?, updated_at = ? WHERE id = ?',

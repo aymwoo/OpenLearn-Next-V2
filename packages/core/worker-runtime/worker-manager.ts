@@ -157,27 +157,28 @@ export class WorkerRegistry {
    * @param pluginId - 插件标识符
    * @param timeoutMs - deactivate 等待超时（默认 3000ms）
    */
-  async terminate(pluginId: string, timeoutMs = 3000): Promise<void> {
+  async terminate(pluginId: string, timeoutMs = 3000): Promise<any> {
     const instance = this.workers.get(pluginId);
     if (!instance) return;
 
     instance.status = 'terminating';
+    let state: any = undefined;
 
     try {
       // 发送 deactivate-request，等待 deactivated 响应或超时
       instance.transport.postMessage({ type: 'deactivate-request' });
 
-      await Promise.race([
-        new Promise<void>((resolve, reject) => {
+      state = await Promise.race([
+        new Promise<any>((resolve, reject) => {
           // 注册一次性消息处理器等待 deactivated 响应
           const originalHandler = (
             instance.transport as unknown as { messageHandler?: (msg: unknown) => void }
           ).messageHandler;
 
           instance.transport.onMessage((msg: unknown) => {
-            const typed = msg as { type?: string };
+            const typed = msg as { type?: string; state?: any };
             if (typed.type === 'deactivated') {
-              resolve();
+              resolve(typed.state);
             } else if (typed.type === 'error') {
               // Worker 报告错误 — 记录但继续等待 deactivated
               console.error(
@@ -210,6 +211,7 @@ export class WorkerRegistry {
       }
       this.cleanup(pluginId);
     }
+    return state;
   }
 
   /**
@@ -575,7 +577,7 @@ parentPort.on('message', async function(msg) {
       };
 
       // 调用 activate
-      await plugin.activate(ctx);
+      await plugin.activate(ctx, msg.prevState);
 
       parentPort.postMessage({ type: 'activated' });
 
@@ -583,9 +585,10 @@ parentPort.on('message', async function(msg) {
       parentPort.on('message', async function handleDeactivate(dmsg) {
         if (dmsg.type === 'deactivate-request') {
           parentPort.removeListener('message', handleDeactivate);
+          var state = undefined;
           try {
             if (typeof plugin.deactivate === 'function') {
-              await plugin.deactivate();
+              state = await plugin.deactivate();
             }
           } finally {
             // 清理 pending calls 和事件代理
@@ -594,7 +597,7 @@ parentPort.on('message', async function(msg) {
               eventBusProxy.disposeAll();
               eventBusProxy = null;
             }
-            parentPort.postMessage({ type: 'deactivated' });
+            parentPort.postMessage({ type: 'deactivated', state: state });
           }
         }
       });
@@ -683,6 +686,7 @@ export class WorkerManager {
     serviceTokens: string[],
     eventBus?: EventBus,
     pluginDir?: string,
+    prevState?: any,
   ): Promise<{ transport: IWorkerTransport; serviceHost: ServiceHost }> {
     // 1. 检查重复
     if (this.registry.get(pluginId)) {
@@ -786,6 +790,7 @@ export class WorkerManager {
       pluginCode: sourceCode,
       manifest,
       serviceTokens,
+      prevState,
     });
 
     // 10. 等待 'activated' 响应（10s 超时）
@@ -827,12 +832,12 @@ export class WorkerManager {
    *
    * @param pluginId - 插件标识符
    */
-  async terminateWorker(pluginId: string): Promise<void> {
+  async terminateWorker(pluginId: string): Promise<any> {
     const instance = this.registry.get(pluginId);
     if (instance) {
       await instance.serviceHost.dispose();
     }
-    await this.registry.terminate(pluginId);
+    return await this.registry.terminate(pluginId);
   }
 
   /**
