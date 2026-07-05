@@ -1,16 +1,43 @@
 {
   "name": "@openlearn/plugin-sdk",
-  "version": "2.5.0",
-  "description": "TypeScript type definitions for OpenLearn plugin development",
+  "version": "3.1.0",
+  "description": "TypeScript type definitions and DI tokens for OpenLearn plugin development",
   "type": "module",
-  "main": "./index.ts",
-  "types": "./index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "prepublishOnly": "node build.mjs"
   },
   "peerDependencies": {
     "zod": ">=4"
   },
-  "keywords": ["openlearn", "plugin", "sdk", "types"],
-  "license": "MIT"
+  "keywords": [
+    "openlearn",
+    "plugin",
+    "sdk",
+    "types",
+    "educational",
+    "lms"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openlearn/openlearnv2",
+    "directory": "packages/plugin-sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

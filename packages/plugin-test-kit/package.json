@@ -1,6 +1,6 @@
 {
   "name": "@openlearn/plugin-test-kit",
-  "version": "2.5.0",
+  "version": "3.1.0",
   "description": "Mock-based test utilities for OpenLearn plugin unit testing",
   "type": "module",
   "main": "./index.ts",
@@ -14,6 +14,14 @@
   "peerDependencies": {
     "better-sqlite3": ">=12"
   },
-  "keywords": ["openlearn", "plugin", "test", "mock"],
-  "license": "MIT"
+  "keywords": ["openlearn", "plugin", "test", "mock", "testing"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openlearn/openlearnv2",
+    "directory": "packages/plugin-test-kit"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }
