@@ -7,8 +7,8 @@ import {
   IEventBusServiceToken,
   IDatabaseToken,
   IAIServiceToken,
-} from '../core/di/interfaces.js';
-import type { PluginContext } from '../core/plugin-host/types.js';
+} from '@openlearn/plugin-sdk';
+import type { PluginContext } from '@openlearn/plugin-sdk';
 
 interface StoredAIProvider {
   id: string;
@@ -114,6 +114,7 @@ export const AiSubmitInjectorPlugin = {
       '@openlearn/core:IAIService@^1.0.0',
     ],
     capabilitiesProposed: [],
+    engines: { openlearn: '^2.5.0' },
   },
   activate: async (ctx: PluginContext) => {
     const eventBus = ctx.services.eventBus;

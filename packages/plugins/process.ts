@@ -4,8 +4,8 @@ import {
   IActionRegistryServiceToken,
   IProcessServiceToken,
   IDatabaseToken,
-} from '../core/di/interfaces.js';
-import type { PluginContext } from '../core/plugin-host/types.js';
+} from '@openlearn/plugin-sdk';
+import type { PluginContext } from '@openlearn/plugin-sdk';
 
 export const ProcessPlugin = {
   manifest: {
@@ -20,6 +20,7 @@ export const ProcessPlugin = {
       '@openlearn/core:IDatabase@^1.0.0',
     ],
     capabilitiesProposed: ['process:read', 'process:write'],
+    engines: { openlearn: '^2.5.0' },
   },
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;

@@ -4,8 +4,8 @@ import {
   IActionRegistryServiceToken,
   IDatabaseToken,
   ISemesterGradeServiceToken
-} from '../core/di/interfaces.js';
-import type { PluginContext } from '../core/plugin-host/types.js';
+} from '@openlearn/plugin-sdk';
+import type { PluginContext } from '@openlearn/plugin-sdk';
 
 export const AssignmentEvalPlugin = {
   manifest: {
@@ -19,7 +19,8 @@ export const AssignmentEvalPlugin = {
       '@openlearn/core:IDatabase@^1.0.0',
       '@openlearn/core:ISemesterGradeService@^1.0.0'
     ],
-    capabilitiesProposed: ['lesson:read', 'lesson:write']
+    capabilitiesProposed: ['lesson:read', 'lesson:write'],
+    engines: { openlearn: '^2.5.0' },
   },
 
   activate: async (ctx: PluginContext) => {

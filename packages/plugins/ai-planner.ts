@@ -5,8 +5,8 @@ import {
   IProcessServiceToken,
   IDatabaseToken,
   IEventBusServiceToken,
-} from '../core/di/interfaces.js';
-import type { PluginContext } from '../core/plugin-host/types.js';
+} from '@openlearn/plugin-sdk';
+import type { PluginContext } from '@openlearn/plugin-sdk';
 
 export const AiPlannerPlugin = {
   manifest: {
@@ -22,6 +22,7 @@ export const AiPlannerPlugin = {
       '@openlearn/core:IEventBusService@^1.0.0',
     ],
     capabilitiesProposed: ['process:write', 'lesson:write', 'assignment:write'],
+    engines: { openlearn: '^2.5.0' },
   },
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;

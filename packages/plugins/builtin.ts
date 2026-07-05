@@ -8,8 +8,8 @@ import {
   IEventBusServiceToken,
   IDatabaseToken,
   IPluginHostToken,
-} from '../core/di/interfaces.js';
-import type { PluginContext } from '../core/plugin-host/types.js';
+} from '@openlearn/plugin-sdk';
+import type { PluginContext } from '@openlearn/plugin-sdk';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './ai-submit-injector.js';
 
 function copyFolderSync(src: string, dest: string) {
@@ -43,6 +43,7 @@ export const BuiltinPlugin = {
       '@openlearn/core:IPluginHost@^1.0.0',
     ],
     capabilitiesProposed: ['lesson:read', 'lesson:write', 'whiteboard:read', 'whiteboard:write'],
+    engines: { openlearn: '^2.5.0' },
   },
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;

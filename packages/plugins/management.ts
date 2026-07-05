@@ -4,8 +4,8 @@ import {
   IActionRegistryServiceToken,
   IEventBusServiceToken,
   IDatabaseToken,
-} from '../core/di/interfaces.js';
-import type { PluginContext } from '../core/plugin-host/types.js';
+} from '@openlearn/plugin-sdk';
+import type { PluginContext } from '@openlearn/plugin-sdk';
 
 export const ManagementPlugin = {
   manifest: {
@@ -20,6 +20,7 @@ export const ManagementPlugin = {
       '@openlearn/core:IDatabase@^1.0.0',
     ],
     capabilitiesProposed: ['class:read', 'class:write', 'student:read', 'student:write'],
+    engines: { openlearn: '^2.5.0' },
   },
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;
