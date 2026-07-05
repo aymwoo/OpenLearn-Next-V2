@@ -76,25 +76,79 @@ npm run clean
 2. **CommandBus** — 命令执行管线。注册 handler → 执行命令。内置拦截器做权限检查和高危操作审批
 3. **ActionRegistry** — 注册可被 AI Agent 调用的工具。每个 action 有 commandType、description、inputSchema
 4. **CapabilityGuard** — 基于字符串能力的权限控制（如 `lesson:write`, `management:read`）
-5. **PluginRuntime** — 使用 Node.js `vm` 模块在沙箱中加载第三方插件。插件通过包装器访问内核 API
+5. **PluginRuntime** — 插件运行时：Worker Thread 隔离 + ESM 动态导入。插件通过包装器访问内核 API
 6. **ProcessManager** — 管理后台进程和定时任务
 
-### 插件系统
+### 插件系统（V3.0）
 
-插件是 JavaScript 字符串，存储在 SQLite 的 `plugins` 表中。格式：
+插件是 ESM 模块，源码存储在文件系统（`plugins/{uuid}/index.js`），元数据在 SQLite 的 `plugins` 表中。格式：
 
-```js
-exports.default = {
-  manifest: { id, name, version, capabilitiesProposed, classroomTools },
-  activate: async (ctx) => {
-    // ctx 包含安全包装的：commandBus, eventBus, actionRegistry, processManager, storage, ai, console
-    ctx.actionRegistry.register({ ... });
-    ctx.commandBus.registerHandler('command.type', { execute: async (cmd) => { ... } });
+```typescript
+// packages/plugins/my-plugin/index.ts
+import type { PluginContext } from '@openlearn/plugin-sdk';
+import { IDatabaseToken } from '@openlearn/plugin-sdk';
+
+export default {
+  manifest: {
+    id: 'ext-my-plugin',
+    name: 'My Plugin',
+    version: '1.0.0',
+    main: 'index.js',
+    engines: { openlearn: '^2.5.0' },           // V2.5: 平台版本兼容
+    capabilitiesProposed: ['lesson:read', 'whiteboard:write'],
+    requires: ['@openlearn/core:ICommandBusService@^1.0.0'],
+    pluginDependencies: ['ext-grade-calculator'], // V3.0: 插件依赖
+    provides: ['ext-my-plugin:IMyService'],       // V3.0: 对外提供服务
+    configuration: {                               // V3.0: 声明式配置
+      properties: {
+        maxQuestions: { type: 'number', default: 50, description: '最大题目数' },
+      },
+    },
+    contributes: {                                 // V3.0: 声明式 UI 贡献
+      'classroom.tool': [{ id: 'tool-1', name: 'My Tool', icon: 'Sparkles', commandType: 'my.tool' }],
+      'teacher.tab': [{ id: 'tab-1', label: 'My Tab', position: 10 }],
+    },
+  },
+
+  activate: async (ctx: PluginContext) => {
+    // ctx 包含 7 个内核服务 + V2.5/V3.0 新增 API
+    ctx.log.info('Plugin activated');              // V2.5: 结构化日志
+    ctx.log.error('Something went wrong', { detail: 'more info' });
+
+    const limit = ctx.config.get<number>('maxQuestions'); // V3.0: 类型安全配置
+    await ctx.config.set('maxQuestions', 100);
+
+    ctx.contributions.list();                      // V3.0: 查询声明的贡献点
+
+    ctx.actionRegistry.register({ id: '...', commandType: 'my.tool', ... });
+    ctx.commandBus.registerHandler('my.tool', { execute: async (cmd) => { ... } });
+
+    // V3.0: 向 DI 容器注册服务（供其他插件 resolve）
+    await ctx.provide('ext-my-plugin:IMyService', myServiceImpl);
+  },
+
+  deactivate: async () => {
+    // ResourceTracker 自动清理 registerHandler/subscribe/interval/provide
+  },
+};
+```
+
+### 插件 SDK 与测试工具
+
+- **`@openlearn/plugin-sdk`** — 插件开发的类型定义包，re-export 所有公开 API 类型和 Token
+- **`@openlearn/plugin-test-kit`** — mock 工具包，提供 `createMockContext()` 一键创建测试上下文
+
+```typescript
+import { createMockContext, MockCommandBus } from '@openlearn/plugin-test-kit';
+const ctx = createMockContext({ pluginId: 'ext-test', capabilities: ['lesson:read'] });
+await myPlugin.activate(ctx);
+expect((ctx.services.commandBus as MockCommandBus).handlers.has('my.command')).toBe(true);
+```
   }
 }
 ```
 
-插件通过 `vm.createContext` 沙箱执行，所有内核 API 都经过包装器保护（冻结原型链、超时限制、演员身份绑定）。
+插件通过 Worker Thread（Node.js）或 inline ESM import（浏览器）隔离执行，内核 API 通过 Proxy 包装保护（冻结原型链、超时限制、Token 版本检查）。
 
 ### AI Agent 流程
 
@@ -364,7 +418,7 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - Monolithic kernel singleton (`kernelContainer`) centralizes all subsystem access
 - Commands are namespaced strings (e.g., `lesson.create`, `vfs.write_file`) routed through CommandBus
 - All commands pass through a single kernel-level interceptor for capability check + high-risk approval gating
-- Plugins are stored as JavaScript source strings in SQLite, executed in `vm.createContext` sandbox
+- Plugins are stored as source files on disk (`plugins/{uuid}/index.js`) with metadata in SQLite, executed via Worker Thread or inline ESM import
 - AI Agent (Gemini/OpenAI) acts as autonomous Shell, calling tools via CommandBus
 - Frontend is a monolith `App.tsx` with conditional rendering of 11 teacher tabs and 3 student views
 ## Layers
@@ -437,7 +491,7 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - **Single-threaded event loop:** Node.js default model. Long-running tasks use `ProcessManager` (simulated with `setTimeout`, not real workers)
 - **Global state:** `kernelContainer` is a module-level singleton instantiated at import time in `packages/core/kernel/index.ts:77`. All subsystems in memory. Server restart wipes all registrations and must re-bootstrap.
 - **No database migrations:** Schema evolves through `CREATE TABLE IF NOT EXISTS` and incremental `ALTER TABLE ADD COLUMN` in `db/index.ts`. No migration framework — all schema changes are manual and additive.
-- **Plugin sandboxing:** Uses Node.js `vm.createContext` with timeout (5s activation, 1s pre-evaluation). API wrappers freeze prototype chains. Not a full process-isolation security boundary.
+- **Plugin sandboxing:** Worker Thread isolation for external plugins, inline ESM import for built-in plugins. API wrappers freeze prototype chains with 5s activation timeout. Plugin commands are auto-namespaced (V3.0).
 - **Monolithic server:** `server.ts` (5008 lines) contains all Express routes, Socket.IO handlers, AI agent logic, courseware runtime, LMS SDK injection, and plugin management — all in a single file with no sub-routers.
 - **Monolithic frontend:** `App.tsx` (11159 lines) contains all business logic, API calls, state management, and UI rendering. Component extraction is partial (components/ for sub-widgets only).
 - **No formal API versioning:** All routes under `/api/` with no version prefix.
