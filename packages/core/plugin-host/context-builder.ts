@@ -494,6 +494,15 @@ export async function buildContext(
         db.exec(`DROP TABLE IF EXISTS ${t.name}`);
       }
     },
+    async migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | void) {
+      db.exec(`CREATE TABLE IF NOT EXISTS plugin_migrations (plugin_id TEXT PRIMARY KEY, version INTEGER NOT NULL)`);
+      const row = db.prepare(`SELECT version FROM plugin_migrations WHERE plugin_id = ?`).get(pluginId) as { version: number } | undefined;
+      const currentVersion = row ? row.version : 0;
+      if (currentVersion < targetVersion) {
+        await upgradeFn(db);
+        db.prepare(`INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)`).run(pluginId, targetVersion);
+      }
+    },
   };
 
   // 6. 构建完整的 PluginContext

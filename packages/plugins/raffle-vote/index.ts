@@ -14,9 +14,11 @@ export default {
 
     console.log(`[Raffle & Vote Plugin] Activating plugin "${ctx.pluginId}"...`);
 
-    // 1. 创建隔离的数据表（投票与投票详情）
-    await ctx.db.ensureTable('votes', 'id TEXT PRIMARY KEY, lesson_id TEXT, title TEXT, options TEXT, element_ids TEXT, created_at INTEGER');
-    await ctx.db.ensureTable('votes_cast', 'vote_id TEXT, option_index INTEGER, voter_id TEXT, timestamp INTEGER');
+    // 1. 使用内置数据库迁移 API 构建隔离表
+    await ctx.db.migrate(1, async () => {
+      await ctx.db.ensureTable('votes', 'id TEXT PRIMARY KEY, lesson_id TEXT, title TEXT, options TEXT, element_ids TEXT, created_at INTEGER');
+      await ctx.db.ensureTable('votes_cast', 'vote_id TEXT, option_index INTEGER, voter_id TEXT, timestamp INTEGER');
+    });
 
     // 2. 注册开始投票 Action (vote.create)
     await actionRegistry.register({

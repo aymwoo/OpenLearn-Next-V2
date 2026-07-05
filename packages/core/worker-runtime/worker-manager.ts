@@ -482,6 +482,33 @@ parentPort.on('message', async function(msg) {
           for (var i = 0; i < tables.length; i++) {
             await dbService.prepareAndRun('DROP TABLE IF EXISTS ' + tables[i].name, []);
           }
+        },
+        migrate: async function(targetVersion, upgradeFn) {
+          await dbService.prepareAndRun('CREATE TABLE IF NOT EXISTS plugin_migrations (plugin_id TEXT PRIMARY KEY, version INTEGER NOT NULL)', []);
+          var row = await dbService.prepareAndGet('SELECT version FROM plugin_migrations WHERE plugin_id = ?', [workerData.pluginId]);
+          var currentVersion = row ? row.version : 0;
+          if (currentVersion < targetVersion) {
+            var dbWrapper = {
+              prepare: function(sql) {
+                return {
+                  run: function() {
+                    var args = Array.prototype.slice.call(arguments);
+                    return dbService.prepareAndRun(sql, args);
+                  },
+                  get: function() {
+                    var args = Array.prototype.slice.call(arguments);
+                    return dbService.prepareAndGet(sql, args);
+                  },
+                  all: function() {
+                    var args = Array.prototype.slice.call(arguments);
+                    return dbService.prepareAndAll(sql, args);
+                  }
+                };
+              }
+            };
+            await upgradeFn(dbWrapper);
+            await dbService.prepareAndRun('INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)', [workerData.pluginId, targetVersion]);
+          }
         }
       } : undefined;
 

@@ -78,6 +78,8 @@ export interface PluginDatabaseAPI {
   table(tableName: string): string;
   /** 删除插件创建的所有表（uninstall 时由 PluginHost 自动调用） */
   dropAllTables(): Promise<void>;
+  /** 执行声明式的数据库迁移，参数 version 表示目标版本号，若当前版本低于目标版本则执行 upgradeFn */
+  migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | void): Promise<void>;
 }
 
 export interface PluginContext {
