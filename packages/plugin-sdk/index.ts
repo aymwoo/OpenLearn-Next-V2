@@ -1,0 +1,85 @@
+/**
+ * @openlearn/plugin-sdk — 插件开发类型定义包（V2.5）
+ *
+ * 为 OpenLearn 插件开发者提供类型安全的 API 契约。
+ * 仅包含类型 + Token 值，不包含运行时代码。
+ *
+ * 用法：
+ *   import type { PluginContext, Manifest } from '@openlearn/plugin-sdk';
+ *   import { ICommandBusServiceToken } from '@openlearn/plugin-sdk';
+ */
+
+// ── Plugin Context & Lifecycle ──────────────────────────────────────────
+
+export type {
+  PluginContext,
+  PluginDatabaseAPI,
+  PluginInfo,
+  PluginState,
+  Disposable,
+  IPluginLogger,
+  ContributionAccessor,
+} from '../core/plugin-host/types.js';
+
+// ── Configuration Service (V3.0) ────────────────────────────────────────
+
+export type {
+  IConfigService,
+  ConfigProperty,
+  ConfigDeclaration,
+} from '../core/plugin-host/config-service.js';
+
+// ── Contribution Registry (V3.0) ────────────────────────────────────────
+
+export type {
+  ContributionSummary,
+  ClassroomToolConfig,
+  TeacherTabConfig,
+  DashboardWidgetConfig,
+  StudentViewConfig,
+  StudentLessonToolConfig,
+  ContributionConfig,
+} from '../core/plugin-host/contribution-registry.js';
+
+// ── Manifest ────────────────────────────────────────────────────────────
+
+export type { Manifest, ManifestV3 } from '../core/esm-loader/manifest-schema.js';
+
+// ── DI / Tokens ─────────────────────────────────────────────────────────
+
+export type { Token } from '../core/di/token.js';
+
+export type {
+  ICommandBusService,
+  IEventBusService,
+  IActionRegistryService,
+  ICapabilityService,
+  IProcessService,
+  IStorageService,
+  IAIService,
+  CommandHandler,
+  CommandMetadata,
+  EventSubscriber,
+} from '../core/di/interfaces.js';
+
+export {
+  ICommandBusServiceToken,
+  IEventBusServiceToken,
+  IActionRegistryServiceToken,
+  ICapabilityServiceToken,
+  IProcessServiceToken,
+  IStorageServiceToken,
+  IAIServiceToken,
+  IDatabaseToken,
+  IPluginHostToken,
+  ISemesterGradeServiceToken,
+} from '../core/di/interfaces.js';
+
+// ── Command & Event ─────────────────────────────────────────────────────
+
+export type { PlatformCommand } from '../core/command-bus/index.js';
+export type { PlatformEvent } from '../core/event-bus/index.js';
+
+// ── Action Registry ─────────────────────────────────────────────────────
+
+export type { ActionDescriptor } from '../core/registry/index.js';

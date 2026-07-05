@@ -4,6 +4,8 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+pnpmfileChecksum: sha256-EH+j60HJldx8qQ0/fkrucO4mLLF9oDRSlu5BzFX3sNc=
+
 importers:
 
   .:
@@ -11,6 +13,9 @@ importers:
       '@google/genai':
         specifier: ^2.4.0
         version: 2.8.0
+      '@openlearn/plugin-sdk':
+        specifier: workspace:*
+        version: link:packages/plugin-sdk
       '@tailwindcss/vite':
         specifier: ^4.1.14
         version: 4.3.0(vite@6.4.3(@types/node@22.19.20)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))
@@ -177,6 +182,21 @@ importers:
       vitest:
         specifier: ^4.1.9
         version: 4.1.9(@types/node@22.19.20)(jsdom@29.1.1)(vite@6.4.3(@types/node@22.19.20)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4))
+
+  packages/plugin-sdk:
+    dependencies:
+      zod:
+        specifier: '>=4'
+        version: 4.4.3
+
+  packages/plugin-test-kit:
+    dependencies:
+      '@openlearn/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+      better-sqlite3:
+        specifier: '>=12'
+        version: 12.11.1
 
 packages:
 
@@ -3288,6 +3308,7 @@ snapshots:
       debug: 4.4.3
       gensync: 1.0.0-beta.2
       json5: 2.2.3
+      lru-cache: 5.1.1
       semver: 6.3.1
     transitivePeerDependencies:
       - supports-color

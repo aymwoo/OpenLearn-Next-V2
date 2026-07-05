@@ -1,0 +1,19 @@
+{
+  "name": "@openlearn/plugin-test-kit",
+  "version": "2.5.0",
+  "description": "Mock-based test utilities for OpenLearn plugin unit testing",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@openlearn/plugin-sdk": "workspace:*"
+  },
+  "peerDependencies": {
+    "better-sqlite3": ">=12"
+  },
+  "keywords": ["openlearn", "plugin", "test", "mock"],
+  "license": "MIT"
+}

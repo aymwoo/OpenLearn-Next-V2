@@ -1,0 +1,16 @@
+{
+  "name": "@openlearn/plugin-sdk",
+  "version": "2.5.0",
+  "description": "TypeScript type definitions for OpenLearn plugin development",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "peerDependencies": {
+    "zod": ">=4"
+  },
+  "keywords": ["openlearn", "plugin", "sdk", "types"],
+  "license": "MIT"
+}
