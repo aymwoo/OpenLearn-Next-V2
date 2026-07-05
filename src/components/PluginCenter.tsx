@@ -26,10 +26,12 @@ import {
   Database,
   AlertTriangle,
   X,
+  Settings,
 } from 'lucide-react';
 import { LegacyPluginBadge } from './LegacyPluginBadge';
 import type { Language } from '../i18n';
 import JSZip from 'jszip';
+import { PluginSettingsModal } from './PluginSettingsModal';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -251,6 +253,9 @@ export function PluginCenter({
   const [zipProcessing, setZipProcessing] = React.useState(false);
   const [zipError, setZipError] = React.useState<string | null>(null);
 
+  // V3.1: Settings modal state
+  const [settingsPlugin, setSettingsPlugin] = React.useState<{ id: string; name: string; manifest: string } | null>(null);
+
   // ── ZIP drop zone handler ─────────────────────────────────────────────────
 
   const handleZipDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -343,7 +348,8 @@ export function PluginCenter({
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto">
+    <>
+      <div className="flex-1 flex flex-col h-full overflow-y-auto">
       {/* App Store Module */}
       <div className="bg-white border text-gray-900 border-gray-200 rounded-2xl shadow flex flex-col overflow-hidden h-full">
         <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100 bg-gray-50/50 shrink-0">
@@ -386,6 +392,7 @@ export function PluginCenter({
                   author: 'Community',
                 };
                 let toolCount = 0;
+                let hasConfig = false;
                 try {
                   const parsed = JSON.parse(plugin.manifest);
                   if (parsed.description) manifestInfo.description = parsed.description;
@@ -395,6 +402,11 @@ export function PluginCenter({
                     toolCount = parsed.contributes['classroom.tool'].length;
                   } else if (parsed.classroomTools) {
                     toolCount = parsed.classroomTools.length;
+                  }
+                  // V3.1: 检查是否有配置项
+                  const props = parsed.configuration?.properties;
+                  if (props && Object.keys(props).length > 0) {
+                    hasConfig = true;
                   }
                 } catch (e) {
                   // ignore parse error
@@ -478,6 +490,15 @@ export function PluginCenter({
                               ? '启用'
                               : 'Enable'}
                         </button>
+                        {hasConfig && (
+                          <button
+                            onClick={() => setSettingsPlugin({ id: plugin.id, name: plugin.name, manifest: plugin.manifest })}
+                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors flex items-center gap-1"
+                          >
+                            <Settings size={12} />
+                            {lang === 'zh' ? '设置' : 'Settings'}
+                          </button>
+                        )}
                         <button
                           onClick={() => onDelete(plugin.id)}
                           className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
@@ -1153,5 +1174,17 @@ export function PluginCenter({
         )}
       </div>
     </div>
+
+    {/* V3.1: Plugin Settings Modal */}
+    {settingsPlugin && (
+      <PluginSettingsModal
+        pluginId={settingsPlugin.id}
+        pluginName={settingsPlugin.name}
+        manifestStr={settingsPlugin.manifest}
+        lang={lang}
+        onClose={() => setSettingsPlugin(null)}
+      />
+    )}
+  </>
   );
 }

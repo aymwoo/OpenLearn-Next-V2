@@ -175,6 +175,13 @@ export class ConfigService implements IConfigService {
   // ── Mutation ──────────────────────────────────────────────────────────
 
   async set(key: string, value: unknown): Promise<void> {
+    this.setSync(key, value);
+  }
+
+  /**
+   * Synchronous version of set(), for use in sync REST handlers.
+   */
+  setSync(key: string, value: unknown): void {
     this.validate(key, value);
 
     const oldValue = this.values.get(key);

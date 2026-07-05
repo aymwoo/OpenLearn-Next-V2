@@ -28,6 +28,7 @@ import { ResourceTracker } from './resource-tracker.js';
 import { buildContext } from './context-builder.js';
 import { ContributionRegistry } from './contribution-registry.js';
 import type { ContributionSummary } from './contribution-registry.js';
+import { ConfigService } from './config-service.js';
 import { checkMissingDeps, topologicalSort, buildDepGraph } from './dependency-resolver.js';
 import semver from 'semver';
 import { parseRequiresEntry } from '../esm-loader/manifest-utils.js';
@@ -466,6 +467,36 @@ export class PluginHost {
         return '';
       }
     }).filter(Boolean);
+  }
+
+  /**
+   * V3.1: 读取插件的配置值（供 REST API 使用）。
+   * 创建临时 ConfigService 实例加载 schema + DB 值，不保持内存引用。
+   */
+  getPluginConfig(pluginId: string, manifest?: Record<string, any>): Record<string, unknown> {
+    let m = manifest;
+    if (!m) {
+      const row = this.db
+        .prepare('SELECT manifest FROM plugins WHERE id = ?')
+        .get(pluginId) as { manifest: string } | undefined;
+      if (!row) return {};
+      m = JSON.parse(row.manifest);
+    }
+    const svc = new ConfigService(this.db, m as any);
+    svc.loadFromDB();
+    return svc.getAll();
+  }
+
+  /**
+   * V3.1: 更新插件的配置值（供 REST API 使用）。
+   * 逐个调用 set()，schema 校验由 ConfigService 内部完成。
+   */
+  setPluginConfig(pluginId: string, manifest: Record<string, any>, updates: Record<string, unknown>): void {
+    const svc = new ConfigService(this.db, manifest as any);
+    svc.loadFromDB();
+    for (const [key, value] of Object.entries(updates)) {
+      svc.setSync(key, value);
+    }
   }
 
   // ── 私有辅助方法 ────────────────────────────────────────────────────────
