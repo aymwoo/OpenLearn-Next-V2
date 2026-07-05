@@ -183,14 +183,14 @@ describe('buildContext', () => {
 
     // 调用 registerHandler — 应自动 registerHandler + tracker.track()
     const handler = { execute: vi.fn().mockResolvedValue(undefined) };
-    await ctx.services.commandBus.registerHandler('test.command', handler);
+    await ctx.services.commandBus.registerHandler('plugin-id-123.testcommand', handler);
 
     // 验证原始 registerHandler 被调用
     expect(rawCommandBus.registerHandler).toHaveBeenCalled();
 
     // 验证 disposeAll 会调用 unregisterHandler
     tracker.disposeAll('plugin-id-123');
-    expect(rawCommandBus.unregisterHandler).toHaveBeenCalledWith('test.command');
+    expect(rawCommandBus.unregisterHandler).toHaveBeenCalledWith('plugin-id-123.testcommand');
   });
 
   // ── Test 5 ──────────────────────────────────────────────────────────
