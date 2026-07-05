@@ -555,14 +555,22 @@ parentPort.on('message', async function(msg) {
         },
         db: dbApi,
         require: function(moduleName) {
-          if (PLUGIN_SHARED_MODULES.indexOf(moduleName) === -1) {
-            throw new Error('Plugin cannot require non-shared module: ' + moduleName);
+          if (PLUGIN_SHARED_MODULES.indexOf(moduleName) !== -1) {
+            try {
+              return requireFn(moduleName);
+            } catch (err) {
+              throw new Error('Shared module "' + moduleName + '" is not available in worker: ' + err.message);
+            }
           }
-          try {
-            return requireFn(moduleName);
-          } catch (err) {
-            throw new Error('Shared module "' + moduleName + '" is not available in worker: ' + err.message);
+          if (workerData.pluginDir) {
+            try {
+              var localRequire = createRequire(workerData.pluginDir + '/index.js');
+              return localRequire(moduleName);
+            } catch (err) {
+              throw new Error('Failed to load local dependency "' + moduleName + '": ' + err.message);
+            }
           }
+          throw new Error('Plugin cannot require non-shared module: ' + moduleName);
         }
       };
 
@@ -674,6 +682,7 @@ export class WorkerManager {
     sourceCode: string,
     serviceTokens: string[],
     eventBus?: EventBus,
+    pluginDir?: string,
   ): Promise<{ transport: IWorkerTransport; serviceHost: ServiceHost }> {
     // 1. 检查重复
     if (this.registry.get(pluginId)) {
@@ -698,7 +707,7 @@ export class WorkerManager {
     let worker: Worker;
     try {
       worker = new Worker(new URL(bootstrapDataUrl), {
-        workerData: { pluginId, serviceTokens },
+        workerData: { pluginId, serviceTokens, pluginDir },
         eval: false,
         stdout: true,
         stderr: true,

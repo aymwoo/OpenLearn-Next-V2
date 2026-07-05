@@ -11,8 +11,10 @@ describe('Worker RPC and Event Forwarding', () => {
     // Clean up test nodes/classes and old test plugins if any
     try {
       kernel.db.prepare("DELETE FROM vfs_nodes WHERE id = 'node-rpc-test-id'").run();
+      kernel.db.prepare("DELETE FROM vfs_nodes WHERE name = 'cookie_test_result.txt'").run();
       kernel.db.prepare("DELETE FROM classes WHERE name = 'Class from Worker RPC'").run();
       kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-worker-rpc%'").run();
+      kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-dynamic-dep%'").run();
     } catch (e) {
       console.error("beforeEach cleanup error:", e);
     }
@@ -117,4 +119,76 @@ export default {
     expect(classes.length).toBeGreaterThan(0);
     expect(classes[0].description).toBe('Created by worker thread plugin via RPC proxy');
   });
+
+  it('应该支持插件通过 manifest.json 声明 dependencies 并在沙箱中成功 require 动态加载它们', async () => {
+    const zip = new JSZip();
+    const manifest = {
+      id: 'ext-test-dynamic-dep',
+      name: 'Test Dynamic Dependency',
+      version: '1.0.0',
+      description: 'Tests dynamic npm dependencies auto-installation and loading inside Worker sandbox',
+      main: 'index.js',
+      requires: [
+        '@openlearn/core:ICommandBusService@^1.0.0'
+      ],
+      capabilitiesProposed: ['vfs:write'],
+      dependencies: {
+        'cookie': '^0.5.0'
+      }
+    };
+
+    const pluginCode = `
+export default {
+  activate: async (ctx) => {
+    console.log('[Test Worker] Activating with dynamic dependency test...');
+    try {
+      const cookie = ctx.require('cookie');
+      const parsed = cookie.parse('foo=bar');
+      console.log('[Test Worker] Successfully required and called cookie:', JSON.stringify(parsed));
+      
+      const commandBus = ctx.services.commandBus;
+      await commandBus.execute({
+        id: 'cmd-write-cookie-success',
+        type: 'vfs.write_file',
+        actorId: 'plugin:ext-test-dynamic-dep',
+        payload: {
+          path: '/cookie_test_result.txt',
+          content: 'Parsed foo=' + parsed.foo
+        }
+      });
+    } catch (err) {
+      console.error('[Test Worker] Failed to load dependency:', err.message);
+    }
+  }
+};
+    `;
+
+    zip.file('manifest.json', JSON.stringify(manifest));
+    zip.file('index.js', pluginCode);
+
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+    // Install zip (this will trigger npm install in the pluginDir)
+    await kernel.pluginHost.installPluginFromZip(zipBuffer);
+
+    // Find the UUID of the installed plugin
+    const list = kernel.pluginHost.listPlugins();
+    const testPlugin = list.find(p => p.name === 'Test Dynamic Dependency');
+    expect(testPlugin).toBeDefined();
+
+    // Set execution mode to worker and activate
+    kernel.db.prepare('UPDATE plugins SET execution_mode = ? WHERE id = ?').run('worker', testPlugin!.id);
+    await kernel.pluginHost.activatePlugin(testPlugin!.id);
+
+    // Verify it is active
+    expect(kernel.pluginHost.getPluginState(testPlugin!.id)).toBe('active');
+
+    // Wait a little bit for worker thread to process and write to VFS
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Verify that the file was written to VFS with the expected content
+    const fileResult = kernel.db.prepare("SELECT content FROM vfs_nodes WHERE name = 'cookie_test_result.txt'").get() as { content: string } | undefined;
+    expect(fileResult).toBeDefined();
+    expect(fileResult!.content).toBe('Parsed foo=bar');
+  }, 120000);
 });

@@ -874,6 +874,7 @@ export class PluginHost {
         sourceCode,
         (await import('../worker-runtime/worker-manager.js')).ALL_SERVICE_TOKENS,
         eventBus,
+        this.getPluginDir(pluginId),
       );
 
       this.pluginStates.set(pluginId, PluginState.ACTIVE);
@@ -1261,6 +1262,29 @@ export class PluginHost {
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
       fs.writeFileSync(zipFilePath, zipBuffer);
 
+      // 4b. Auto-install declared dependencies if present
+      if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
+        console.log(`[PluginHost] Installing dependencies for plugin "${manifest.id}" in ${pluginDir}...`);
+        try {
+          const pkgJsonPath = path.join(pluginDir, 'package.json');
+          const pkgJson = {
+            name: manifest.id,
+            version: manifest.version,
+            dependencies: manifest.dependencies,
+          };
+          fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2), 'utf-8');
+
+          const { execSync } = await import('node:child_process');
+          execSync('npm install --production --no-audit --no-fund --legacy-peer-deps --registry=https://registry.npmmirror.com', {
+            cwd: pluginDir,
+            stdio: 'ignore',
+          });
+          console.log(`[PluginHost] Dependencies successfully installed for plugin "${manifest.id}"`);
+        } catch (installErr) {
+          console.error(`[PluginHost] Failed to install dependencies for plugin "${manifest.id}":`, installErr);
+        }
+      }
+
       // 5. INSERT 到 DB（源码和 ZIP 已迁移到文件系统，DB 仅存元数据）
       const stmt = this.db.prepare(
         'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -1560,7 +1584,14 @@ export class PluginHost {
 
     // 3. Create new worker with updated source
     try {
-      await this.workerManager.createWorker(pluginId, newSourceCode);
+      await this.workerManager.createWorker(
+        pluginId,
+        _newManifest,
+        newSourceCode,
+        (await import('../worker-runtime/worker-manager.js')).ALL_SERVICE_TOKENS,
+        undefined,
+        this.getPluginDir(pluginId),
+      );
       this.db.prepare(
         'UPDATE plugins SET source_code = ?, updated_at = ? WHERE id = ?',
       ).run(newSourceCode, Date.now(), pluginId);
@@ -1569,7 +1600,14 @@ export class PluginHost {
       // Failed — try to restore old worker
       if (oldSourceCode) {
         try {
-          await this.workerManager.createWorker(pluginId, oldSourceCode);
+          await this.workerManager.createWorker(
+            pluginId,
+            _newManifest,
+            oldSourceCode,
+            (await import('../worker-runtime/worker-manager.js')).ALL_SERVICE_TOKENS,
+            undefined,
+            this.getPluginDir(pluginId),
+          );
         } catch {
           console.error(`[PluginHost] Worker-mode reload: failed to restore old worker for "${pluginId}"`);
         }
