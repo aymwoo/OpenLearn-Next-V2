@@ -32,7 +32,7 @@ function createTestDb(): Database.Database {
   db.exec(`
     CREATE TABLE IF NOT EXISTS plugins (
       id TEXT PRIMARY KEY, name TEXT, manifest TEXT, source_code TEXT,
-      status TEXT, created_at INTEGER, updated_at INTEGER,
+      file_path TEXT, status TEXT, created_at INTEGER, updated_at INTEGER,
       loader_version TEXT, execution_mode TEXT DEFAULT 'inline',
       zip_package BLOB
     );

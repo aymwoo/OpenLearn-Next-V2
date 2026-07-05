@@ -64,6 +64,18 @@ export async function bundlePlugin(
         setup(build) {
           // 拦截所有非相对路径的导入解析
           build.onResolve({ filter: /.*/ }, (args) => {
+            // 特殊情况：如果相对导入指向 core/di/interfaces，解析为 monorepo 的绝对路径以支持打包
+            if (args.path.includes('core/di/interfaces')) {
+              const tsPath = path.resolve(process.cwd(), 'packages/core/di/interfaces.ts');
+              if (fs.existsSync(tsPath)) {
+                return { path: tsPath };
+              }
+              const jsPath = path.resolve(process.cwd(), 'packages/core/di/interfaces.js');
+              if (fs.existsSync(jsPath)) {
+                return { path: jsPath };
+              }
+            }
+
             // 相对路径和绝对路径由 esbuild 正常解析
             if (args.path.startsWith('.') || args.path.startsWith('/')) {
               return undefined; // 让 esbuild 自行处理

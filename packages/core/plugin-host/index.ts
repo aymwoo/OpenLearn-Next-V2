@@ -375,10 +375,43 @@ export class PluginHost {
    * 若插件未被追踪，返回 undefined。
    */
   getPluginState(pluginId: string): PluginState | undefined {
+    pluginId = this.resolvePluginUuid(pluginId);
     return this.pluginStates.get(pluginId);
   }
 
   // ── 私有辅助方法 ────────────────────────────────────────────────────────
+
+  /**
+   * 将插件的标识符（可以是数据库 UUID 也可以是 manifest.id 别名）解析为数据库真实 UUID。
+   */
+  private resolvePluginUuid(idOrManifestId: string): string {
+    // 1. 尝试直接作为 UUID 查询数据库中 id
+    try {
+      const row = this.db
+        .prepare('SELECT id FROM plugins WHERE id = ?')
+        .get(idOrManifestId) as { id: string } | undefined;
+      if (row) {
+        return row.id;
+      }
+    } catch {}
+
+    // 2. 如果没找到，遍历所有插件条目，匹配 manifest.id
+    try {
+      const rows = this.db
+        .prepare('SELECT id, manifest FROM plugins')
+        .all() as Array<{ id: string; manifest: string }>;
+      for (const row of rows) {
+        try {
+          const manifest = JSON.parse(row.manifest);
+          if (manifest && manifest.id === idOrManifestId) {
+            return row.id;
+          }
+        } catch {}
+      }
+    } catch {}
+
+    return idOrManifestId;
+  }
 
   /**
    * 检查 manifest id 唯一性，防止重复注册。
@@ -539,6 +572,7 @@ export class PluginHost {
    * @throws PluginActivateError / EsmActivationError / IllegalStateTransitionError
    */
   async activatePlugin(pluginId: string, options?: { mode?: 'inline' | 'worker' }): Promise<void> {
+    pluginId = this.resolvePluginUuid(pluginId);
     // Phase 5: Dual-mode activation — check if worker mode is requested
     const mode = options?.mode ?? this.getExecutionMode(pluginId) ?? 'inline';
     if (mode === 'worker') {
@@ -894,6 +928,7 @@ export class PluginHost {
    * @param pluginId - 插件标识符
    */
   async deactivatePlugin(pluginId: string): Promise<void> {
+    pluginId = this.resolvePluginUuid(pluginId);
     // 1. 获取当前状态 — UNINSTALLED、未找到、或非 ACTIVE 状态时静默返回
     const currentState = this.pluginStates.get(pluginId);
     if (!currentState || currentState === PluginState.UNINSTALLED || currentState !== PluginState.ACTIVE) {
@@ -1075,6 +1110,7 @@ export class PluginHost {
    * @returns 切换后的状态：'active' 或 'disabled'
    */
   async togglePlugin(pluginId: string): Promise<string> {
+    pluginId = this.resolvePluginUuid(pluginId);
     const row = this.db.prepare('SELECT status FROM plugins WHERE id = ?').get(pluginId) as { status: string } | undefined;
     if (!row) {
       throw new Error(`Plugin not found: ${pluginId}`);
@@ -1107,6 +1143,7 @@ export class PluginHost {
    * @param pluginId - 插件标识符
    */
   async uninstallPlugin(pluginId: string): Promise<void> {
+    pluginId = this.resolvePluginUuid(pluginId);
     const currentState = this.pluginStates.get(pluginId);
 
     // 1. 如果当前是 ACTIVE，先停用（deactivatePlugin 自动检测 worker/inline 模式）
@@ -1243,7 +1280,10 @@ export class PluginHost {
       this.pluginStates.set(pluginId, PluginState.INSTALLED);
 
       console.log(`[PluginHost] Plugin "${manifest.id}" installed from ZIP to ${filePath} (${pluginId})`);
-      return manifest;
+      return {
+        ...manifest,
+        pluginId,
+      };
     } catch (err) {
       // 失败时清理 DB 条目 + 文件系统
       try {

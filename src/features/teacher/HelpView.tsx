@@ -683,6 +683,8 @@ export default {
                   <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full font-medium">🔒 能力安全模型</span>
                   <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full font-medium">⚡ 热重载 + Worker 隔离</span>
                   <span className="text-[10px] bg-rose-50 text-rose-700 border border-rose-100 px-2 py-0.5 rounded-full font-medium">📦 ESM + CommonJS 双格式</span>
+                  <span className="text-[10px] bg-sky-50 text-sky-700 border border-sky-100 px-2 py-0.5 rounded-full font-medium">🆔 别名生命周期 (Alias Lifecycle)</span>
+                  <span className="text-[10px] bg-teal-50 text-teal-700 border border-teal-100 px-2 py-0.5 rounded-full font-medium">🛡️ Worker Storage 安全隔离</span>
                 </div>
               </div>
             </div>
@@ -708,7 +710,7 @@ export default {
                       <td className="px-4 py-2 font-mono text-indigo-600 font-semibold">id</td>
                       <td className="px-4 py-2 text-gray-500">string</td>
                       <td className="px-4 py-2"><span className="bg-red-50 text-red-600 border border-red-100 rounded px-1.5 text-[10px] font-bold">必需</span></td>
-                      <td className="px-4 py-2 text-gray-600">全局唯一插件标识。约定格式：<code className="bg-gray-100 px-1 rounded text-[10px]">ext-&lt;name&gt;</code>，如 ext-hello-world</td>
+                      <td className="px-4 py-2 text-gray-600">全局唯一插件标识。约定格式：<code className="bg-gray-100 px-1 rounded text-[10px]">ext-&lt;name&gt;</code>，如 ext-hello-world。<b>支持作为生命周期管理（启用、禁用、切换、卸载）指令的字符串别名。</b></td>
                     </tr>
                     <tr className="hover:bg-gray-50/50">
                       <td className="px-4 py-2 font-mono text-indigo-600 font-semibold">name</td>
@@ -786,7 +788,7 @@ export default {
                   <tbody className="divide-y divide-gray-50">
                     <tr className="hover:bg-gray-50/50">
                       <td className="px-4 py-2 font-mono text-indigo-600 font-semibold">ctx.pluginId</td>
-                      <td className="px-4 py-2 text-gray-600"><span className="text-gray-400">string</span> — 当前插件 ID（manifest.id）</td>
+                      <td className="px-4 py-2 text-gray-600"><span className="text-gray-400">string</span> — 当前插件的数据库 UUID 标识符。对于 Manifest ID，请使用 ctx.manifest.id</td>
                     </tr>
                     <tr className="hover:bg-gray-50/50">
                       <td className="px-4 py-2 font-mono text-indigo-600 font-semibold">ctx.manifest</td>
@@ -806,7 +808,7 @@ export default {
                     </tr>
                     <tr className="hover:bg-gray-50/50">
                       <td className="px-4 py-2 font-mono text-indigo-600 font-semibold">ctx.db</td>
-                      <td className="px-4 py-2 text-gray-600"><span className="text-gray-400">PluginDatabaseAPI</span> — 插件自建表 API（命名空间隔离），包含 ensureTable(), table(), dropAllTables()</td>
+                      <td className="px-4 py-2 text-gray-600"><span className="text-gray-400">PluginDatabaseAPI</span> — 插件自建表 API（命名空间隔离），包含 ensureTable(), table(), dropAllTables()。卸载插件时会自动清理关联表。</td>
                     </tr>
                   </tbody>
                 </table>
@@ -914,6 +916,9 @@ export default {
                     <div className="flex gap-2"><span className="font-mono text-rose-600 shrink-0 w-48">get(key)</span><span className="text-gray-500">读取键值。自动 JSON.parse。不存在返回 null。命名空间按 pluginId 隔离</span></div>
                     <div className="flex gap-2"><span className="font-mono text-rose-600 shrink-0 w-48">set(key, value)</span><span className="text-gray-500">写入键值。自动 JSON.stringify。底层 SQLite plugin_storage 表</span></div>
                     <div className="flex gap-2"><span className="font-mono text-rose-600 shrink-0 w-48">delete(key)</span><span className="text-gray-500">删除键值。键不存在时不报错</span></div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-rose-150 text-[10px] text-rose-800 leading-normal">
+                    🛡️ <b>存储安全隔离加固</b>：无论是内联模式还是 Worker 隔离线程模式下，所有的键值存取都会被系统自动拦截并限制在以该插件 manifest.id 为隔离前缀的专属子空间中，杜绝不同插件相互篡改或越权访问内核 (__kernel__) 存储空间的风险。
                   </div>
                 </div>
 
@@ -1337,6 +1342,7 @@ await eventBus.subscribe('lesson.created', async (event) => {
                   <h5 className="font-bold text-gray-800 mb-2">💾 插件持久化数据</h5>
                   <pre className="text-[10px] font-mono bg-gray-900 text-green-400 p-3 rounded-lg overflow-x-auto">
 {`// 简单 KV 存储 — 适合配置、缓存、少量数据
+// 提示：所有的 key 读写操作在底层已被自动做隔离前缀绑定，无论是 Inline 还是 Worker 模式均可安全使用。
 await ctx.services.storage.set('lastRun', Date.now());
 await ctx.services.storage.set('config', { theme: 'dark', autoApprove: true });
 const config = await ctx.services.storage.get('config'); // 自动 JSON.parse
@@ -1412,12 +1418,12 @@ const pid = await ctx.services.processManager.spawn(
                 <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/40 space-y-2">
                   <div className="h-6 w-6 font-mono font-bold bg-indigo-500/25 border border-indigo-400 text-indigo-300 rounded-lg flex items-center justify-center">2</div>
                   <h5 className="font-bold text-white text-xs">{lang === 'zh' ? 'ZIP 打包发布' : 'ZIP Packaging'}</h5>
-                  <p className="text-indigo-250 text-[11px] leading-relaxed">{lang === 'zh' ? 'manifest.json + index.js 打包为 ZIP。manifest 中指定 main: index.js。通过上传 ZIP 安装，支持 esbuild 预处理。' : 'Bundle manifest.json + index.js as ZIP. Set "main": "index.js" in manifest. Upload ZIP to install with esbuild pre-processing.'}</p>
+                  <p className="text-indigo-250 text-[11px] leading-relaxed">{lang === 'zh' ? 'manifest.json + index.js 打包为 ZIP。manifest 中指定 main: index.js。通过上传 ZIP 安装，成功后接口将返回生成的 pluginId（数据库 UUID）。' : 'Bundle manifest.json + index.js as ZIP. Set "main": "index.js" in manifest. Upload ZIP to install. The response returns the generated pluginId (DB UUID) directly.'}</p>
                 </div>
                 <div className="p-4 rounded-xl bg-indigo-950/40 border border-indigo-800/40 space-y-2">
                   <div className="h-6 w-6 font-mono font-bold bg-indigo-500/25 border border-indigo-400 text-indigo-300 rounded-lg flex items-center justify-center">3</div>
                   <h5 className="font-bold text-white text-xs">{lang === 'zh' ? '调试 & 热重载' : 'Debug & Hot Reload'}</h5>
-                  <p className="text-indigo-250 text-[11px] leading-relaxed">{lang === 'zh' ? '激活插件后回到本页顶部「指令总线调试」点击刷新，新注册的 Action 立即可见。输入 payload 直接执行，观察返回结果和事件日志。' : 'After activation, return to Command Debugger tab and refresh. New Actions appear immediately. Test with payload execution and observe results.'}</p>
+                  <p className="text-indigo-250 text-[11px] leading-relaxed">{lang === 'zh' ? '激活插件后在顶部「指令调试」调试。输入 payload 直接执行。所有的启用、停用、卸载等状态变更指令均已支持直接使用 manifest.id 别名（如 ext-memo）进行操作。' : 'Activate and test. All lifecycle commands (toggle, activate, deactivate, uninstall) now fully support using manifest.id string aliases (e.g. ext-memo) directly.'}</p>
                 </div>
               </div>
             </div>

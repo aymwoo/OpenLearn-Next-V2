@@ -45,6 +45,7 @@ function createTestDb(): Database.Database {
       name TEXT,
       manifest TEXT,
       source_code TEXT,
+      file_path TEXT,
       status TEXT,
       created_at INTEGER,
       loader_version TEXT,

@@ -1733,6 +1733,12 @@ async function startServer() {
 `;
 
     let html = htmlContent;
+    // Strip out the external frog-sdk.js and init-frog.js scripts that crash inside strict sandboxed iframe
+    html = html.replace(/<script[^>]*src="[^"]*frog-sdk\.js"[^>]*><\/script>/gi, '<!-- Removed frog-sdk.js to prevent sandboxed iframe crash -->');
+    html = html.replace(/<script[^>]*src='[^']*frog-sdk\.js'[^>]*><\/script>/gi, '<!-- Removed frog-sdk.js to prevent sandboxed iframe crash -->');
+    html = html.replace(/<script[^>]*src="[^"]*init-frog\.js"[^>]*><\/script>/gi, '<!-- Removed init-frog.js to prevent sandboxed iframe crash -->');
+    html = html.replace(/<script[^>]*src='[^']*init-frog\.js'[^>]*><\/script>/gi, '<!-- Removed init-frog.js to prevent sandboxed iframe crash -->');
+
     if (html.toLowerCase().includes('<head>')) {
       html = html.replace(/<head>/i, `<head>${injection}`);
     } else if (html.toLowerCase().includes('<html>')) {

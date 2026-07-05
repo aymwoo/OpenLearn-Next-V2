@@ -1,18 +1,18 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.0
-milestone_name: 核心教学闭环
-status: planning
+milestone: v5.1
+milestone_name: 插件系统加固与优化
+status: completed
 stopped_at: —
-last_updated: "2026-06-24T00:00:00.000Z"
-last_activity: 2026-06-24
-last_activity_desc: v5.0 roadmap and requirements documents created. 6 phases (23-28), 29 requirements defined.
+last_updated: "2026-07-05T07:28:00.000Z"
+last_activity: 2026-07-05
+last_activity_desc: Phase 29 executed and verified successfully. All 375 tests passed.
 progress:
-  total_phases: 6
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 1
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
+  percent: 100
 ---
 
 # Project State
@@ -21,15 +21,15 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-06-24)
 
-**Core value:** 补齐课程内容创作、题库测验、学习路径和进度管理四大核心教学能力，使平台从"功能框架"进化为"真正可教学的完整在线教育系统"。
-**Current focus:** 架构重构（v5.0 前置）— 将 MFE 子应用内聚到主应用，消除 Module Federation。
+**Core value:** 加固插件系统安全防护，优化第三方插件开发与使用体验。
+**Current focus:** 插件 UUID/别名双向映射、Worker 模式 Storage 隔离。
 
 ## Current Position
 
-Phase: 架构重构（v5.0-ARCHITECTURE）
-Plan: 6 步（A-F），详见 .planning/milestones/v5.0-ARCHITECTURE.md
-Status: 计划完成，等待确认后执行
-Last activity: 2026-06-24 — v5.0-ARCHITECTURE.md 实施计划文档完成.
+Phase: Phase 29: 插件系统加固与优化
+Plan: 29-01-PLAN.md
+Status: 已完成
+Last activity: 2026-07-05 — Phase 29 顺利执行完成，并通过全部测试用例。
 
 ## Performance Metrics
 

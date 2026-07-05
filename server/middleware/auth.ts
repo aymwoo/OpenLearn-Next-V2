@@ -52,7 +52,10 @@ export function getActorId(req: Request): string {
   try {
     const session = getValidSession(token);
     if (!session) return 'user-frontend';
-    const role = session.subRole || session.role;
+    let role = session.subRole || session.role;
+    if (session.username === 'admin' || session.userId === 'usr_admin' || role === 'admin' || role === 'administrator') {
+      role = 'administrator';
+    }
     if (role) {
       return `user:${session.userId || 'demo'}:${role}`;
     }

@@ -103,8 +103,13 @@ export class Kernel {
       const action = this.actionRegistry.getActionByCommandType(command.type);
       if (action) {
         const isAdmin = command.actorId === 'role:administrator' || 
+                        command.actorId === 'admin' ||
+                        command.actorId === 'usr_admin' ||
+                        command.actorId === 'admin-demo' ||
                         command.actorId?.endsWith(':administrator') || 
-                        command.actorId === 'admin-demo';
+                        command.actorId?.endsWith(':admin') ||
+                        command.actorId?.includes(':administrator') ||
+                        command.actorId?.includes(':admin');
 
         if (action.capabilityRequired && !isAdmin) {
           const allowed = this.capabilityGuard.check(command.actorId, action.capabilityRequired);

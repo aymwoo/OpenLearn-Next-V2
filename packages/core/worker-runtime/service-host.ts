@@ -339,6 +339,50 @@ export class ServiceHost {
       // ── Resolve service by token name ──────────────────────────────
       const service = await this.resolveService(msg.token);
 
+      // ── Intercept IStorageService RPC helper methods ─────────────────
+      if (msg.token === '@openlearn/core:IStorageService') {
+        const manifestId = this.pluginActorId.startsWith('plugin:')
+          ? this.pluginActorId.slice(7)
+          : this.pluginActorId;
+
+        const db = await this.resolveService('@openlearn/core:IDatabase') as import('better-sqlite3').Database;
+
+        let result: unknown;
+        if (msg.method === 'get') {
+          const [key] = msg.args as [string];
+          const row = db
+            .prepare(
+              'SELECT value FROM plugin_storage WHERE plugin_id = ? AND key = ?',
+            )
+            .get(manifestId, key) as { value: string } | undefined;
+          result = row ? JSON.parse(row.value) : null;
+        } else if (msg.method === 'set') {
+          const [key, value] = msg.args as [string, unknown];
+          const valueStr = JSON.stringify(value);
+          db.prepare(
+            `INSERT INTO plugin_storage (plugin_id, key, value, updated_at)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(plugin_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+          ).run(manifestId, key, valueStr, Date.now());
+          result = undefined;
+        } else if (msg.method === 'delete') {
+          const [key] = msg.args as [string];
+          db.prepare(
+            'DELETE FROM plugin_storage WHERE plugin_id = ? AND key = ?',
+          ).run(manifestId, key);
+          result = undefined;
+        } else {
+          throw new Error(`Method "${msg.method}" not supported on IStorageService RPC`);
+        }
+
+        transport.postMessage({
+          type: 'result',
+          invokeId: msg.invokeId,
+          value: result,
+        });
+        return;
+      }
+
       // ── Intercept IDatabase RPC helper methods ──────────────────────
       if (msg.token === '@openlearn/core:IDatabase') {
         const db = service as import('better-sqlite3').Database;

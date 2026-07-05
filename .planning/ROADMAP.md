@@ -7,6 +7,7 @@
 - ✅ **v3.0 作业提交与学生互评插件** — Phases 14-16 (shipped 2026-06-20)
 - ✅ **v4.0 质量基础与生产就绪** — Phases 17-22 (shipped 2026-06-24)
 - 🔴 **v5.0 核心教学闭环** — Phases 23-28 (planning 2026-06-24)
+- 🟡 **v5.1 插件系统加固与优化** — Phase 29 (active 2026-07-05)
 
 ## Phases
 
@@ -223,9 +224,11 @@
 | 20. 数据库迁移系统与备份 | v4.0 | 0/0 | 🟡 Pending | — |
 | 21. 可观测性基础设施 | v4.0 | 0/0 | 🟡 Pending | — |
 | 22. CI/CD 与代码规范 + 功能补全 | v4.0 | 0/0 | 🟢 Pending | — |
+| 29. 插件系统加固与优化 | v5.1 | 1/1 | Complete | 2026-07-05 |
 
 ---
 
 *See [.planning/milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md) for detailed Phase 1-9 information.*
 *See [.planning/milestones/v4.0-ROADMAP.md](milestones/v4.0-ROADMAP.md) for detailed v4.0 Phase 17-22 information.*
+*See [.planning/milestones/v5.1-PLUGIN-ENHANCEMENT.md](milestones/v5.1-PLUGIN-ENHANCEMENT.md) for Phase 29 details.*
 *See [.planning/MILESTONES.md](MILESTONES.md) for milestone summary.*

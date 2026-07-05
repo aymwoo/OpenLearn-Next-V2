@@ -75,6 +75,17 @@ export { result };`;
     // esbuild 无法解析 lodash 裸 specifier，应通过 onResolve plugin 抛出错误
     await expect(bundlePlugin(code, resolveDir)).rejects.toThrow();
   });
+
+  // Test: 支持对 core/di/interfaces 的相对导入解析为 monorepo 绝对路径以进行正常打包
+  it('should resolve relative imports targeting core/di/interfaces.js', async () => {
+    const code = `import { IDatabaseToken } from "../../core/di/interfaces.js";
+export const token = IDatabaseToken;`;
+    const result = await bundlePlugin(code, resolveDir);
+
+    expect(typeof result).toBe('string');
+    expect(result).not.toContain('../../core/di/interfaces.js');
+    expect(result).toContain('@openlearn/core:IDatabase');
+  });
 });
 
 describe('validateAndBundleZip', () => {

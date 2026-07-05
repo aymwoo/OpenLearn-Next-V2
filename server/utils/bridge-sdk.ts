@@ -5,7 +5,24 @@
  * 前端白板：wrapSrcDocWithBridge() 中通过 <script src="/bridge.js"> 引用。
  */
 export const BRIDGE_SDK_CODE = `(function() {
-  // Proxy postMessage calls to enrich them with attempt_id and uuid
+  // Mock document.cookie to prevent SecurityError in sandboxed iframes lacking 'allow-same-origin'
+  try {
+    Object.defineProperty(document, 'cookie', {
+      get: function() { return ""; },
+      set: function(val) {},
+      configurable: true
+    });
+  } catch (e) {
+    try {
+      Object.defineProperty(Document.prototype, 'cookie', {
+        get: function() { return ""; },
+        set: function(val) {},
+        configurable: true
+      });
+    } catch (err) {}
+  }
+
+  // Proxy postMessage calls to enrich them with attempt_id/uuid and normalize targetOrigin
   try {
     const originalPostMessage = window.postMessage;
     window.postMessage = function(message, targetOrigin, transfer) {
@@ -19,7 +36,19 @@ export const BRIDGE_SDK_CODE = `(function() {
           }
         }
       } catch (e) {}
-      return originalPostMessage.apply(this, arguments);
+      
+      let origin = targetOrigin;
+      if (origin === 'null') {
+        origin = '*';
+      }
+      try {
+        return originalPostMessage.call(this, message, origin, transfer);
+      } catch (err) {
+        if (err.name === 'SyntaxError' && origin !== '*') {
+          return originalPostMessage.call(this, message, '*', transfer);
+        }
+        throw err;
+      }
     };
 
     if (window.parent && window.parent !== window) {
@@ -36,7 +65,19 @@ export const BRIDGE_SDK_CODE = `(function() {
               }
             }
           } catch (e) {}
-          return parentPostMessage.apply(this, arguments);
+          
+          let origin = targetOrigin;
+          if (origin === 'null') {
+            origin = '*';
+          }
+          try {
+            return parentPostMessage.call(window.parent, message, origin, transfer);
+          } catch (err) {
+            if (err.name === 'SyntaxError' && origin !== '*') {
+              return parentPostMessage.call(window.parent, message, '*', transfer);
+            }
+            throw err;
+          }
         };
       } catch (e) {}
     }

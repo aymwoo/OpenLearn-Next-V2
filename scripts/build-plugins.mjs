@@ -28,6 +28,11 @@ const plugins = [
     entry: 'packages/plugins/hello-world/index.ts',
     manifest: 'packages/plugins/hello-world/manifest.json',
     zipName: 'ext-hello-world.zip'
+  },
+  {
+    entry: 'packages/plugins/memo/index.ts',
+    manifest: 'packages/plugins/memo/manifest.json',
+    zipName: 'ext-memo.zip'
   }
 ];
 

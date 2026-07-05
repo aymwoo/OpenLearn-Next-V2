@@ -184,7 +184,7 @@ describe('BuiltinPlugin', () => {
       actorId,
       payload: {
         lessonId,
-        type: 'line',
+        type: 'rectangle',
         data: JSON.stringify({ points: [0, 0, 100, 100] })
       },
       timestamp: Date.now()
