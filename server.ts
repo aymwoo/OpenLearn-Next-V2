@@ -4636,6 +4636,20 @@ ${examsText}
     }
   });
 
+  // Docs APIs
+  app.get('/api/docs/plugin-guide', (req, res) => {
+    try {
+      const docPath = path.join(process.cwd(), 'docs_plugin_guide.md');
+      if (!fs.existsSync(docPath)) {
+        return res.status(404).json({ success: false, error: 'Document not found' });
+      }
+      const content = fs.readFileSync(docPath, 'utf-8');
+      res.json({ success: true, content });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
   // Plugin APIs
   app.get('/api/plugins', (req, res) => {
     res.json(kernelContainer.pluginHost.listPlugins());

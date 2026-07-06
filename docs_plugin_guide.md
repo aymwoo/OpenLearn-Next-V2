@@ -1,4 +1,4 @@
-# OpenLearn Next V2 插件系统官方开发与架构设计参考手册 (v2.4)
+# OpenLearn Next V2 插件系统官方开发与架构设计参考手册 (v2.5)
 
 ---
 
@@ -1293,16 +1293,21 @@ stateDiagram-v2
 | **`name`** | String | 是 | - | 用户界面上展示的插件易读名称。长度不能少于 1 个字符。 |
 | **`version`** | String | 是 | - | 严格符合 SemVer 2.0.0 规范的版本号（如 `"1.0.2"`）。 |
 | **`main`** | String | 是 | - | 插件运行的主入口源文件相对路径（如 `"dist/bundle.js"`）。旧版本曾使用 `entry`，在 v2.4 强制规范为 `main`。 |
-| **`requires`** | String[] | 否 | `[]` | 插件激活前强依赖的内核服务 Token 列表。条目支持 `@scope:IServiceName@^version` 的格式。 |
+| **`requires`** | String[] | 否 | `[]` | 插件激活前强依赖的内核服务 Token 列表。条目支持 `@scope:IServiceName@^version` 的格式（如 `"@openlearn/core:ICommandBusService@^1.0.0"`）。 |
 | **`optional`** | String[] | 否 | `[]` | 插件运行时可选注入的内核服务。格式与 `requires` 完全一致。 |
 | **`capabilitiesProposed`** | String[] | 否 | `[]` | 插件拟向宿主系统申请授权的特权能力（如 `["whiteboard:write"]`）。 |
+| **`engines`** | Object | 否 | - | 平台版本约束。包含 `openlearn` 字段（如 `">=2.5.0"`），在安装时校验。若当前宿主版本低于要求，插件将拒绝激活并抛出 `SemverMismatchError`。*(v2.5 新增)* |
+| **`pluginDependencies`** | String[] | 否 | - | 本插件依赖的其他插件 ID 列表。在激活时校验依赖是否已安装。宿主会按拓扑排序顺序依次激活插件。*(v2.5 新增)* |
+| **`provides`** | String[] | 否 | - | 本插件拟通过 `ctx.provide()` 注册到 DI 容器的 Token 名称列表。未在此声明的 Token 不允许注册。*(v2.5 新增)* |
+| **`configuration`** | Object | 否 | - | 插件可配置项的 JSON Schema 声明。包含 `properties` 字典，每项支持 `type`（`string`/`number`/`boolean`/`integer`）、`default`、`description`、`enum` , `minimum`/`maximum` 约束。*(v2.5 新增)* |
+| **`contributes`** | Object | 否 | - | 声明式 UI 贡献点注册表。支持 5 种插槽类型：`classroom.tool`、`teacher.tab`、`teacher.dashboard.widget`、`student.view`、`student.lesson.tool`。详见 [4.16 贡献点访问器参考手册](#416-贡献点访问器参考手册-contributionaccessor-reference)。*(v2.5 新增)* |
 
 ---
 
 ## 4.2 插件上下文参考手册 (PluginContext Reference)
 
 #### Summary
-`PluginContext` 是插件在沙箱 Worker 中激活时接收的专用运行期上下文对象。包含 7 个预注入服务字典、唯一 ID、沙箱数据库控制器和主应用共享模块载入能力。
+`PluginContext` 是插件在沙箱 Worker 中激活时接收的专用运行期上下文对象。包含 7 个预注入服务字典、唯一 ID、沙箱数据库控制器、结构化日志器、配置服务、声明式贡献点访问器、服务提供能力和主应用共享模块载入能力。
 
 #### Syntax
 ```typescript
@@ -1319,13 +1324,24 @@ interface PluginContext {
   pluginId: string;
   manifest: Manifest;
   resolve<T>(token: Token<T>): Promise<T>;
+  provide(tokenName: string, instance: unknown): Promise<void>;  // v2.5 新增
   db: PluginDatabaseAPI;
+  log: IPluginLogger;                                            // v2.5 新增
+  config: IConfigService;                                        // v2.5 新增
+  contributions: ContributionAccessor;                           // v2.5 新增
   require(moduleName: string): any;
 }
 ```
 
 #### Parameters
 * **`ctx`**: 由 `PluginHost` 的 `ContextBuilder` 动态实例化并传递给 `activate` 钩子的上下文实例。
+
+#### 新增属性详解 *(v2.5)*
+
+* **`provide(tokenName, instance)`**: 允许插件将自身提供的服务注册到 DI 容器中，供其他插件通过 `ctx.resolve()` 消费。需要在 `manifest.json` 的 `provides` 字段中声明拟注册的 Token 名称。
+* **`log: IPluginLogger`**: 一级结构化日志 API，替代旧的 `commandBus.execute({ type: 'system.log' })` 模式。自动注入 `pluginId` 和时间戳。详见 [4.7 日志工具参考手册 (Logger Reference)](#47-日志工具参考手册-logger-reference)。
+* **`config: IConfigService`**: 类型安全的配置读写服务。配置值基于 `manifest.json` 的 `configuration` 字段声明的 JSON Schema 进行校验。详见 [4.15 配置服务参考手册 (ConfigService Reference)](#415-配置服务参考手册-configservice-reference)。
+* **`contributions: ContributionAccessor`**: 只读视图，用于在运行时内省插件在清单中声明的贡献点（UI 插槽注册项）。详见 [4.16 贡献点访问器参考手册 (ContributionAccessor Reference)](#416-贡献点访问器参考手册-contributionaccessor-reference)。
 
 #### Return Value
 返回 `PluginContext` 属性包装，服务成员及 API 均已被宿主执行防篡改冻结（`Object.freeze`）。
@@ -1345,20 +1361,30 @@ interface PluginContext {
 * 线程安全。每个插件的 Worker 沙箱独享一个不可变的上下文实例。
 
 #### Since
-* v2.0.0 引入；v2.4.0 增加了 `db.migrate` 及 `require` 白名单保护。
+* v2.0.0 引入；v2.4.0 增加了 `db.migrate` 及 `require` 白名单保护；v2.5.0 增加了 `log`、`provide`、`config`、`contributions` 属性。
 
 #### Deprecated
 * 无。
 
 #### Related APIs
-* `ICommandBusService`, `IEventBusService`, `PluginDatabaseAPI`
+* `ICommandBusService`, `IEventBusService`, `PluginDatabaseAPI`, `IPluginLogger`, `IConfigService`, `ContributionAccessor`
 
 #### Example
 ```typescript
 export default {
   activate: async (ctx: PluginContext) => {
     const myId = ctx.pluginId;
-    console.log(`Plugin context activated: ${myId}`);
+    ctx.log.info(`插件已激活`, { pluginId: myId });
+
+    // 使用配置服务读取设置
+    const maxRetries = ctx.config.get<number>('maxRetries');
+
+    // 查看已声明的贡献点
+    const slots = ctx.contributions.list();
+    ctx.log.debug(`已注册 ${slots.length} 个贡献插槽`);
+
+    // 注册插件提供的服务（需要在 manifest.provides 中声明）
+    await ctx.provide('my-custom-service', { hello: () => 'world' });
   }
 }
 ```
@@ -1366,9 +1392,11 @@ export default {
 #### Best Practices
 * 绝不在全局变量中长期缓存 `PluginContext` 的局部接口指针，除非它们是插件生命周期方法内的局部闭包引用。
 * 在调用 `ctx.resolve` 时，始终使用 TypeScript 类型断言指定预期的接口，以防止类型滑向 `any`。
+* 优先使用 `ctx.log` 进行结构化日志记录，而不是 `console.log` 或旧的 `system.log` Command 模式。
 
 #### Common Mistakes
 * 误以为 `ctx.pluginId` 就是 `manifest.json` 中的 `id`。实际上，`pluginId` 是运行时由内核分配的 36 位唯一 UUID（例如 `019f319b-3fe8-7399-a97c-6ae1bf954f81`），用于确保同一插件装载多个实例时不发生命名空间冲突。
+* 调用 `ctx.provide()` 注册服务  ，但未在 `manifest.json` 的 `provides` 字段中声明对应的 Token 名称，将导致注册被拒绝。
 
 ---
 
@@ -1625,49 +1653,59 @@ const realTableName = ctx.db.table('students');
 ## 4.7 日志工具参考手册 (Logger Reference)
 
 #### Summary
-通过 `ctx.services.commandBus` 分发的 `system.log` 服务，以统一的格式往系统的物理日志存储和管理控制台输出跟踪日志。
+`IPluginLogger`（位于 `ctx.log`）是 v2.5 新增的一级结构化日志接口，替代了旧的通过 `commandBus.execute({ type: 'system.log' })` 进行日志记录的模式。日志自动注入 `pluginId` 和时间戳，以统一的格式往系统的物理日志存储和管理控制台输出跟踪日志。
 
 #### Syntax
 ```typescript
-// 包装在 system.log 命令之下执行：
-{
-  type: 'system.log',
-  payload: {
-    level: 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR',
-    pluginId: string,
-    traceId?: string,
-    message: string,
-    meta?: string
-  }
+export interface IPluginLogger {
+  debug(message: string, meta?: Record<string, unknown>): void;
+  info(message: string, meta?: Record<string, unknown>): void;
+  warn(message: string, meta?: Record<string, unknown>): void;
+  error(message: string, meta?: Record<string, unknown>): void;
 }
 ```
 
 #### Parameters
-* **`level`**: 标示事件等级。
-* **`traceId`**: 关联特定请求链的链条标识，用于做分布式追溯。
+* **`message`**: 日志消息正文。
+* **`meta`**: 可选的结构化元数据键值对，用于附加上下文信息（如 `traceId` 等）。
 
 #### Return Value
-* `Promise<void>`。
+* `void`。日志写入是同步的非阻塞操作。
 
 #### Required Capability
-* 无特权限制，所有沙箱中执行的代码均能以此方法向宿主输出控制台信息。
+* 无特权限制，所有沙箱中执行的代码均能通过此接口向宿主输出控制台信息。
 
 #### Since
-* v2.1.0
+* v2.5.0（`ctx.log` 一级 API）；v2.1.0（旧 `system.log` Command 模式）。
 
 #### Related APIs
-* `ICommandBusService`
+* `ICommandBusService`（旧模式兼容）
 
 #### Example
 ```typescript
+// 推荐方式 (v2.5+): 使用 ctx.log 一级 API
+ctx.log.info('插件已成功激活', { traceId: 'trace-001' });
+ctx.log.debug('调试信息', { key: 'value' });
+ctx.log.warn('配额即将用尽', { usedMb: 120, limitMb: 128 });
+ctx.log.error('处理失败', { error: err.message });
+```
+
+<details>
+<summary>旧模式（仍兼容但不推荐）</summary>
+
+```typescript
+// 旧方式: 通过 CommandBus 发送 system.log 命令
 await ctx.services.commandBus.execute({
   type: 'system.log',
   payload: { level: 'INFO', pluginId: ctx.pluginId, message: '测试结构化日志输出' }
 } as any);
 ```
 
+</details>
+
 #### Best Practices
-* 在逻辑调用深处主动附加 `traceId`，这能让你在主日志大盘中一键筛选出本次运行的所有调用流。
+* 优先使用 `ctx.log` 一级 API 代替旧的 `system.log` Command 模式，以获得更好的性能和类型安全。
+* 在逻辑调用深处主动在 `meta` 中附加 `traceId`，这能让你在主日志大盘中一键筛选出本次运行的所有调用流。
 
 #### Common Mistakes
 * 频繁地在循环中发送大容量调试数据包，这会导致 Worker-to-Host RPC 的通道拥堵，从而导致主系统被日志垃圾淹没。
@@ -1903,6 +1941,8 @@ export default {
 | :--- | :--- | :--- | :--- |
 | **`PLUGIN_001`** | `PluginActivationTimeout` | 插件 `activate` 阻塞时间超过了系统所设置的 10 秒硬超时限制。 | 优化激活代码；将长周期的耗时数据拉取工作移入 `activate` 完成后的异步子线程或 Command 请求中。 |
 | **`PLUGIN_002`** | `PluginMemoryLimitExceeded` | 插件沙箱在内存中占用的堆空间超过了默认的 128 MB。 | 检查内存泄漏；避免在大循环中大量载入全表 SQLite 数据；利用物理分页查询。 |
+| **`PLUGIN_003`** | `SemverMismatchError` | 插件强依赖的 Token 版本或宿主平台版本（基于 `engines` 约束）与当前宿主提供的实际版本不匹配。 | 升级宿主内核系统，或使用兼容当前宿主版本的插件版本。 |
+| **`PLUGIN_004`** | `HotReloadError` | 开发模式下热重载新实例激活失败，可能由于新版代码语法错误或 `prevState` 兼容问题。 | 检查热更新代码语法与初始化逻辑，排查状态交接结构。 |
 | **`DB_001`** | `DatabaseTableAccessDenied` | 插件试图对未申请隔离映射的物理表格，或者是对主应用的物理数据库进行直接 SQL 操作。 | 永远使用 `ctx.db.table('name')` 获取隔离混淆后的表名。 |
 | **`CAPABILITY_001`** | `CapabilityGuardInterception` | 调用特权服务接口时，因清单的 `capabilitiesProposed` 缺少对应权限申明而遭拦截。 | 在 `manifest.json` 中配置并补充拟使用的特权标志（如 `"whiteboard:write"`）。 |
 | **`RPC_001`** | `MessagePortConnectionLoss` | 沙箱子进程与主进程 RPC 通信的 IPC MessagePort 发生断线或意外终止。 | 检查子进程是否因 OOM 被内核强杀，并确认心跳连接健康。 |
@@ -1965,3 +2005,103 @@ export default {
    *Planner 选择 Action 依赖于 Action 注册时的 description。请检查描述语义是否足够清晰与聚焦。*
 10. **如何获取当前激活的所有插件的详细列表？**
     *调用内置指令 `plugin.list` 或是通过宿主的 `/api/plugins` HTTP 端口读取。*
+
+---
+
+## 4.15 配置服务参考手册 (ConfigService Reference)
+
+#### Summary
+`IConfigService`（位于 `ctx.config`）提供了类型安全的插件运行时配置参数读写与变更通知监听。
+
+#### Syntax
+```typescript
+export interface IConfigService {
+  get<T = unknown>(key: string): T;
+  getAll(): Record<string, unknown>;
+  set(key: string, value: unknown): Promise<void>;
+  onChange(callback: (key: string, newValue: unknown, oldValue: unknown) => void): () => void;
+}
+```
+
+#### Parameters
+* **`key`**: 配置项的唯一键名，必须是 `manifest.json` 中 `configuration.properties` 声明的键。
+* **`callback`**: 监听配置值改变的回调函数，返回注销监听器的函数（dispose）。
+
+#### Return Value
+* `get` 返回经类型转换和 schema 校验后的配置值。
+* `getAll` 返回当前插件全部配置项的 Key-Value 映射字典。
+* `onChange` 返回注销监听器的闭包函数。
+
+#### Since
+* v3.0.0 (在 v3.1.0 引入基于配置模式的自动生成配置 UI)
+
+---
+
+## 4.16 贡献点访问器参考手册 (ContributionAccessor Reference)
+
+#### Summary
+`ContributionAccessor`（位于 `ctx.contributions`）允许插件在运行时只读性地内省其在 `manifest.json` 中 `contributes` 段声明的所有声明式 UI 扩展点。
+
+#### Syntax
+```typescript
+export interface ContributionAccessor {
+  list(): ContributionSummary[];
+}
+
+export interface ContributionSummary {
+  slot: string;
+  count: number;
+  items: Array<{ id: string; label: string }>;
+}
+```
+
+#### Return Value
+* 返回当前插件已向系统注册并生效的各个布局插槽（Slot）的扩展汇总列表。
+
+#### Since
+* v3.0.0
+
+---
+
+## 5.10 插件生命周期中间件系统 (Middleware System)
+
+#### 5.10.1 设计思想与架构
+PluginHost 内置了洋葱模型中间件管道（Koa-like Onion Model），支持在插件生命周期的 6 个关键切面（Phases）注入横切关注点（如：日志安全审查、资源限额监测、性能时延度量）：
+* `beforeActivate` / `afterActivate`
+* `beforeDeactivate` / `afterDeactivate`
+* `beforeCommand` / `afterCommand`
+
+#### 5.10.2 中间件上下文与类型声明
+```typescript
+export interface MiddlewareContext {
+  readonly pluginId: string;
+  readonly manifest: Manifest;
+  readonly phase: LifecyclePhase;
+  readonly timestamp: number;
+}
+
+export type Middleware = (
+  ctx: MiddlewareContext,
+  next: () => Promise<void>
+) => Promise<void>;
+```
+
+#### 5.10.3 注册与执行拦截
+主程序中可调用 `pluginHost.registerMiddleware(phase, middleware)` 将中间件注入相应切面。如果中间件在 `next()` 被执行前抛出异常或未调用 `next()`，生命周期/指令链将被挂起或拒绝。
+
+---
+
+## 5.11 开发模式下的代码热重载 (Hot Reload)
+
+#### 5.11.1 触发机制
+在 `NODE_ENV=development` 环境下，PluginHost 会启动基于 Chokidar 的 `FileWatcher` 文件变化监视控制器。当检测到 `plugins/` 目录下的源文件包被重新编译写入时，自动触发原子级的**热替换重载（Atomic Hot Reload）**。
+
+#### 5.11.2 原子级无缝交接逻辑
+为了在更新过程中保持在线课堂的用户业务连续性，热重载采用 **先激活新实例，再停用旧实例 (New-Before-Old)** 的策略：
+1. **构建与预加载**：编译并加载新版插件的 Worker Sandbox 实例。
+2. **提取状态**：在停用旧实例前，触发其 `deactivate()` 并捕获返回值作为 `prevState`。
+3. **状态注入与激活**：将 `prevState` 注入到新实例的 `activate(ctx, prevState)` 钩子中运行，完成业务状态 of 无缝交接。
+4. **清理注销**：注销旧版实例底层的全部拦截器、事件监听器和物理 Worker 句柄，以彻底释放宿主内存。
+5. **事件广播**：热重载完成后，系统向 EventBus 广播 `plugin.reloaded` 事件。
+
+---

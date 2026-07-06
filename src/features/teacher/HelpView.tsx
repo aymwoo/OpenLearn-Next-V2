@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, Globe, Code, Puzzle, Blocks, Download, Upload, Paperclip, Terminal, ChevronUp, ChevronDown, ChevronRight, FileText, Shield, ShieldAlert, Check, X, Folder, File as FileIcon, Activity, Users, BarChart2, ClipboardList, Send, FileBadge, PlayCircle, Loader2, Calendar as CalendarIcon, CheckCircle2, Bell, BookOpen, Settings, PanelRightClose, PanelRightOpen, Home, Presentation, HelpCircle, Search, Settings2, Percent, ListFilter, Clock, Sparkles, Eye, Maximize2, Minimize2, Database, Shuffle } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { translations } from '../../i18n';
-import { Markdown } from 'react-markdown';
+import Markdown from 'react-markdown';
 
 interface HelpViewProps {
   registeredCommands: any[];
@@ -17,8 +17,32 @@ export function HelpView({ registeredCommands, onRefresh }: HelpViewProps) {
   const [commandPayloads, setCommandPayloads] = useState<Record<string, string>>({});
   const [executionResults, setExecutionResults] = useState<Record<string, { success: boolean; data?: any; error?: string; loading?: boolean }>>({});
   
-  const [activeTab, setActiveTab] = useState<'commands' | 'sdk_guide' | 'user_guide'>('commands');
+  const [activeTab, setActiveTab] = useState<'commands' | 'sdk_guide' | 'user_guide' | 'plugin_ref'>('commands');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const [pluginGuideMd, setPluginGuideMd] = useState<string>('');
+  const [loadingMd, setLoadingMd] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (activeTab === 'plugin_ref' && !pluginGuideMd) {
+      setLoadingMd(true);
+      fetch('/api/docs/plugin-guide')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setPluginGuideMd(data.content);
+          } else {
+            setPluginGuideMd('加载失败: ' + (data.error || '未知错误'));
+          }
+        })
+        .catch(err => {
+          setPluginGuideMd('加载出错: ' + err.message);
+        })
+        .finally(() => {
+          setLoadingMd(false);
+        });
+    }
+  }, [activeTab, pluginGuideMd]);
 
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -401,6 +425,17 @@ export default {
           >
             <Puzzle size={12} />
             <span>插件开发指南 (Plugin SDK Guide)</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('plugin_ref')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
+              activeTab === 'plugin_ref'
+                ? 'bg-white text-indigo-700 shadow-sm font-bold border border-neutral-200/50'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <FileBadge size={12} />
+            <span>插件系统参考手册 (Plugin Reference)</span>
           </button>
           <button
             onClick={() => setActiveTab('user_guide')}
@@ -1428,6 +1463,20 @@ const pid = await ctx.services.processManager.spawn(
               </div>
             </div>
 
+          </div>
+        </div>
+      ) : activeTab === 'plugin_ref' ? (
+        /* 插件系统参考手册 (Plugin Reference) */
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+          <div className="max-w-5xl mx-auto bg-white rounded-2xl border border-gray-200 p-8 shadow-sm prose prose-sm prose-indigo max-w-none">
+            {loadingMd ? (
+              <div className="flex items-center justify-center p-12 text-gray-500 font-medium">
+                <Loader2 className="animate-spin text-indigo-600 mr-2" size={20} />
+                <span>正在加载参考手册文档...</span>
+              </div>
+            ) : (
+              <Markdown>{pluginGuideMd}</Markdown>
+            )}
           </div>
         </div>
       ) : (
