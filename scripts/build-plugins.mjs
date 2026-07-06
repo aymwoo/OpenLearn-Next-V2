@@ -2,6 +2,16 @@ import esbuild from 'esbuild';
 import JSZip from 'jszip';
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
+
+// Ensure @openlearn/plugin-sdk is built — needed for esbuild to resolve
+// plugin imports.  On servers using npm (not pnpm), the workspace link
+// doesn't exist, so we resolve directly from the local dist.
+const sdkDist = path.resolve('packages/plugin-sdk/dist/index.js');
+if (!fs.existsSync(sdkDist)) {
+  console.log('Building @openlearn/plugin-sdk...');
+  execSync('node packages/plugin-sdk/build.mjs', { stdio: 'inherit' });
+}
 
 const plugins = [
   {
@@ -50,14 +60,22 @@ async function build() {
       console.log(`Building plugin from ${plugin.entry}...`);
       
       // 1. esbuild bundle in memory
-      const result = esbuild.buildSync({
+      const result = await esbuild.build({
         entryPoints: [plugin.entry],
         bundle: true,
         write: false,
         format: 'esm',
         platform: 'node',
         sourcemap: 'inline',
-        target: 'node18'
+        target: 'node18',
+        plugins: [{
+          name: 'resolve-plugin-sdk',
+          setup(build) {
+            build.onResolve({ filter: /^@openlearn\/plugin-sdk$/ }, () => ({
+              path: sdkDist,
+            }));
+          },
+        }],
       });
 
       if (!result.outputFiles || result.outputFiles.length === 0) {
