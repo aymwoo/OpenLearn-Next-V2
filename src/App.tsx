@@ -58,7 +58,7 @@ import { TimetableView } from './features/teacher/TimetableView';
 import { ComputerLabView } from './features/teacher/ComputerLabView';
 import { AdminDirectoryView } from './features/teacher/AdminDirectoryView';
 import { PluginView } from './features/teacher/PluginView';
-import { SettingsView } from './features/teacher/SettingsView';
+
 import { CourseManagement } from './features/teacher/CourseManagement';
 import { Dashboard } from './features/teacher/Dashboard';
 
@@ -1444,10 +1444,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (teacherTab === 'settings' || rightSidebarTab === 'agent') {
+    if (rightSidebarTab === 'agent') {
       fetchAIProviders();
     }
-  }, [teacherTab, rightSidebarTab]);
+  }, [rightSidebarTab]);
 
   const downloadCsvTemplate = () => {
     const csvContent = "title,content\n" +
@@ -4293,7 +4293,7 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
 
             {/* Phase 9: Dynamic plugin tab content — catch-all for non-hardcoded tabs */}
             {['dashboard', 'lesson_editor', 'live_class', 'plugins', 'courses', 'classes',
-              'timetable', 'admin_directory', 'settings', 'help', 'computer_labs'].includes(teacherTab) ? null : (
+              'timetable', 'admin_directory', 'help', 'computer_labs'].includes(teacherTab) ? null : (
               <ExtensionPointRenderer slot="teacher.tab" />
             )}
 
@@ -6320,30 +6320,13 @@ onRefresh={() => fetchElements(selectedLesson)}
             ) : teacherTab === 'timetable' ? (
               <TimetableView classes={classes} lessons={lessons} lang={lang} onSchedulesUpdated={fetchTodaySchedules} />
             ) : teacherTab === 'admin_directory' ? (
-              <AdminDirectoryView session={session} lang={lang} onLogout={handleLogout} />
-            ) : teacherTab === 'settings' ? (
-              <SettingsView
+              <AdminDirectoryView
+                session={session}
                 lang={lang}
+                onLogout={handleLogout}
                 aiProviders={aiProviders}
                 testingProviderId={testingProviderId}
-                onAddProvider={() => {
-                  setEditingAIProvider(null);
-                  setProviderName('');
-                  setProviderApiUrl('');
-                  setProviderApiKey('');
-                  setProviderModelName('');
-                  setIsAIProviderModalOpen(true);
-                }}
-                onEditProvider={(provider) => {
-                  setEditingAIProvider(provider);
-                  setProviderName(provider.name);
-                  setProviderApiUrl(provider.api_url);
-                  setProviderApiKey(provider.api_key || '');
-                  setProviderModelName(provider.model_name);
-                  setIsAIProviderModalOpen(true);
-                }}
-                onTestProvider={handleTestAIProvider}
-                onDeleteProvider={handleDeleteAIProvider}
+                onAIProvidersChanged={fetchAIProviders}
               />
             ) : teacherTab === 'computer_labs' ? (
               <ComputerLabView computerLabs={computerLabs} onRefresh={fetchLabs} lang={lang} />
@@ -7226,115 +7209,6 @@ onRefresh={() => fetchElements(selectedLesson)}
               </div>
             )}
 
-          </motion.div>
-        </div>
-      )}
-
-      {/* AI Provider Add/Edit Modal */}
-      {isAIProviderModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-2xl shadow-xl border border-gray-200/60 w-full max-w-md overflow-hidden text-gray-800 text-left"
-          >
-            <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-slate-50/70">
-              <h3 className="font-extrabold text-sm sm:text-base text-gray-800 flex items-center gap-2">
-                <Settings2 className="text-indigo-600" size={18} />
-                {editingAIProvider
-                  ? (lang === 'zh' ? '编辑 AI 提供商配置' : 'Edit AI Provider')
-                  : (lang === 'zh' ? '添加全新 AI 提供商' : 'Add New AI Provider')}
-              </h3>
-              <button
-                onClick={() => {
-                  setIsAIProviderModalOpen(false);
-                  setEditingAIProvider(null);
-                }}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors"
-                title={lang === 'zh' ? '关闭' : 'Close'}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveAIProvider} className="p-5 space-y-4 text-left">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left">
-                  {lang === 'zh' ? '服务商名称 *' : 'Provider Name *'}
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Deepseek, Minimax"
-                  value={providerName}
-                  onChange={(e) => setProviderName(e.target.value)}
-                  className="w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left">
-                  {lang === 'zh' ? 'API 网络请求端点URL *' : 'API Request URL (Endpoint) *'}
-                </label>
-                <input
-                  type="url"
-                  required
-                  placeholder="https://api.deepseek.com/v1"
-                  value={providerApiUrl}
-                  onChange={(e) => setProviderApiUrl(e.target.value)}
-                  className="w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
-                />
-                <span className="text-[10px] text-gray-400 mt-1 block">
-                  {lang === 'zh' ? '符合 OpenAI 规范的标准 API 的统一基准 URL。' : 'OpenAI-compatible URL prefix (e.g. /v1).'}
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left">
-                  {lang === 'zh' ? '模型代号 Identifier *' : 'Model Name / Identifier *'}
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. deepseek-chat, abab6.5-chat"
-                  value={providerModelName}
-                  onChange={(e) => setProviderModelName(e.target.value)}
-                  className="w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 text-left">
-                  {lang === 'zh' ? '验证授权密钥 API Key (可选)' : 'Authentication API Key (Optional)'}
-                </label>
-                <input
-                  type="password"
-                  placeholder={lang === 'zh' ? '不修改请留空或输入对应Bearer安全密钥' : 'Leave empty to preserve existing key or enter Bearer token'}
-                  value={providerApiKey}
-                  onChange={(e) => setProviderApiKey(e.target.value)}
-                  className="w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAIProviderModalOpen(false);
-                    setEditingAIProvider(null);
-                  }}
-                  className="px-4 py-2 text-xs font-bold text-gray-500 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer transition-colors"
-                >
-                  {lang === 'zh' ? '取消' : 'Cancel'}
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all cursor-pointer"
-                >
-                  {lang === 'zh' ? '保存至数据库' : 'Save Connection'}
-                </button>
-              </div>
-            </form>
           </motion.div>
         </div>
       )}

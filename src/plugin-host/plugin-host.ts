@@ -439,6 +439,16 @@ export class FrontendPluginHost {
           usePluginHostStore.getState().unregisterExtensionPoint(slot, id);
         },
       },
+      invokeCommand: async <T = any>(type: string, payload?: any): Promise<T> => {
+        // 自动添加插件命名空间前缀，使前端无需关心 UUID
+        const prefixedType = type.includes('.') ? type : `${pluginId}.${type}`;
+        const res = await frontendApi.post<T>('/api/plugins/execute-command', {
+          type: prefixedType,
+          payload,
+        });
+        if (res.success && res.result !== undefined) return res.result;
+        throw new Error(res.error || 'Command execution failed');
+      },
     };
   }
 }

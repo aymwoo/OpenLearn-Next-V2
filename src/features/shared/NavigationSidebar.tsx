@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, BookOpen, Presentation, Users, Calendar as CalendarIcon, LayoutTemplate, Puzzle, Shield, Settings, HelpCircle, Menu, ChevronLeft, Clock } from 'lucide-react';
+import { Home, BookOpen, Presentation, Users, Calendar as CalendarIcon, LayoutTemplate, Puzzle, Shield, HelpCircle, Menu, ChevronLeft, Clock } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import type { SessionType, ScheduleType } from '../../store/appStore';
 
@@ -70,22 +70,6 @@ export function NavigationSidebar({
             <span className={mainNavCollapsed ? 'hidden' : 'hidden md:block font-bold text-indigo-850'}>{lang === 'zh' ? '管理后台' : '⭐ Admin Center'}</span>
           </button>
         )}
-
-        <button
-          onClick={() => {
-            if (session?.subRole === 'administrator') {
-              setTeacherTab('settings');
-            } else {
-              alert(lang === 'zh' ? '您没有访问系统设置的权限。' : 'You do not have permission to access system settings.');
-            }
-          }}
-          onClickCapture={(e) => { setTeacherTab('settings'); e.stopPropagation(); }}
-          className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${teacherTab === 'settings' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`}
-          title={lang === 'zh' ? '系统设置' : 'System Settings'}
-        >
-          <Settings size={20} className="shrink-0" />
-          <span className={mainNavCollapsed ? 'hidden' : 'hidden md:block'}>{lang === 'zh' ? '系统设置' : 'System Settings'}</span>
-        </button>
 
         <NavButton icon={HelpCircle} label={lang === 'zh' ? '帮助文档' : 'System Commands / Help'} tab="help" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
       </div>

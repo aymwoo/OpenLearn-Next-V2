@@ -17,6 +17,7 @@ import { v7 as uuidv7 } from 'uuid';
 import type { Database } from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
+import { pathToFileURL } from 'node:url';
 import { ServiceRegistry } from '../di/service-registry.js';
 import { EsmLoader } from '../esm-loader/esm-loader.js';
 import type { PluginModule } from '../esm-loader/esm-loader.js';
@@ -837,16 +838,19 @@ export class PluginHost {
     const actorId = `plugin:${storedManifest.id}`;
 
     try {
-      // 4. 加载源码 — 优先从文件系统读取，fallback 到 DB source_code（向后兼容）
-      let sourceCode: string;
+      // 4. 加载源码 — 优先从文件系统 file:// URL 导入（使 Node.js 能解析 @openlearn/* 等裸模块），
+      //    fallback 到 DB source_code 的 data: URL 加载（向后兼容旧格式插件）
+      let mod: PluginModule;
       if (row.file_path && fs.existsSync(row.file_path)) {
-        sourceCode = fs.readFileSync(row.file_path, 'utf-8');
+        // 使用 file:// URL 直接导入，Node.js 会基于文件所在目录解析裸模块 specifier
+        // 附加 ?t= 查询参数绕过 ESM 缓存，确保重新激活时加载最新代码
+        const fileUrl = pathToFileURL(row.file_path);
+        mod = await import(`${fileUrl.href}?t=${Date.now()}`);
       } else if (row.source_code) {
-        sourceCode = row.source_code;
+        mod = await this.esmLoader.load(row.source_code);
       } else {
         throw new PluginActivateError(pluginId, 'no source code available (file_path or source_code required)');
       }
-      const mod: PluginModule = await this.esmLoader.load(sourceCode);
 
       // 5. 提取 manifest 和 activate（支持两种导出格式）
       const plugin = mod.default ?? mod;

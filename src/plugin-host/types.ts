@@ -138,4 +138,6 @@ export interface FrontendPluginContext {
     registerExtensionPoint(slot: ExtensionSlot, config: ExtensionPointConfig): void;
     unregisterExtensionPoint(slot: ExtensionSlot, id: string): void;
   };
+  /** 调用后端已注册的 Command Handler，自动添加插件命名空间前缀 */
+  invokeCommand<T = any>(type: string, payload?: any): Promise<T>;
 }

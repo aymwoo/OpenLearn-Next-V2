@@ -4785,6 +4785,26 @@ ${examsText}
     }
   });
 
+  // Plugin command execution endpoint (V3.0: frontend invokeCommand bridge)
+  app.post('/api/plugins/execute-command', async (req, res) => {
+    try {
+      const { type, payload } = req.body;
+      if (!type) {
+        return res.status(400).json({ success: false, error: 'Missing command type' });
+      }
+      const cmd = await kernelContainer.commandBus.createCommand(
+        type,
+        payload ?? {},
+        getActorId(req),
+      );
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json({ success: true, result });
+    } catch (err: any) {
+      console.error('[execute-command]', err.message);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // AI Provider Endpoints
   app.get('/api/ai-providers', (req, res) => {
     try {
