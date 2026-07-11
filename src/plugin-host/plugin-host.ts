@@ -164,6 +164,49 @@ export class FrontendPluginHost {
    * 8. Success: set state to ACTIVE
    * 9. Error: set state to ERROR, unroll extension points
    */
+  /**
+   * Activate a remote plugin by fetching and executing its frontend.js script.
+   */
+  async activateRemotePlugin(
+    pluginId: string,
+    manifest: FrontendPluginManifest,
+  ): Promise<void> {
+    const store = usePluginHostStore.getState();
+    store.updatePluginState(pluginId, PluginState.ACTIVATING);
+
+    try {
+      const url = `/plugins/${pluginId}/frontend.js`;
+      const mod = await import(/* @vite-ignore */ url);
+      const plugin = mod.default ?? mod;
+
+      if (typeof plugin.activate !== 'function') {
+        throw new Error('Invalid remote frontend plugin: missing activate function');
+      }
+
+      const ctx = await this.buildContext(pluginId, manifest);
+
+      // 5s activation timeout
+      await Promise.race([
+        plugin.activate(ctx),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Activation timeout (5000ms)')), 5000),
+        ),
+      ]);
+
+      this.pluginModules.set(pluginId, {
+        manifest,
+        activate: plugin.activate,
+        deactivate: typeof plugin.deactivate === 'function' ? plugin.deactivate : undefined,
+      });
+
+      store.updatePluginState(pluginId, PluginState.ACTIVE);
+    } catch (err) {
+      store.updatePluginState(pluginId, PluginState.ERROR);
+      store.unregisterPluginExtensionPoints(pluginId);
+      throw err;
+    }
+  }
+
   async activatePlugin(pluginId: string): Promise<void> {
     const store = usePluginHostStore.getState();
     const pluginInfo = store.activePlugins.find((p) => p.id === pluginId);

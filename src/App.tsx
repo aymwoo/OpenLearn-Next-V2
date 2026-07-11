@@ -31,6 +31,8 @@ import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { ExtensionPointRenderer } from './plugin-host/extension-point-renderer';
 import { usePluginHost } from './plugin-host/plugin-host-context';
+import { usePluginHostStore } from './plugin-host/plugin-host-store';
+import { PluginState } from './plugin-host/types';
 import { PluginCenter } from './components/PluginCenter';
 import { LegacyPluginBadge } from './components/LegacyPluginBadge';
 import { FrontendAPIService } from './services/frontend-api';
@@ -2168,6 +2170,49 @@ export default function App() {
   useEffect(() => { langRef.current = lang; }, [lang]);
   useEffect(() => { studentsRef.current = students; }, [students]);
   useEffect(() => { addToastRef.current = addToast; }, [addToast]);
+
+  // Synchronize backend active plugins to frontend PluginHost
+  useEffect(() => {
+    if (!host.isInitialized() || plugins.length === 0) return;
+
+    const store = usePluginHostStore.getState();
+
+    // 1. Activate active plugins
+    const activePluginsFromServer = plugins.filter((p) => p.status === 'active');
+    for (const plugin of activePluginsFromServer) {
+      const localPlugin = store.activePlugins.find((p) => p.id === plugin.id);
+      if (!localPlugin || localPlugin.state !== PluginState.ACTIVE) {
+        if (!localPlugin) {
+          store.addPlugin({
+            id: plugin.id,
+            name: plugin.name,
+            version: plugin.version,
+            state: PluginState.INSTALLED,
+            executionMode: 'inline',
+          });
+        }
+        try {
+          const manifest = JSON.parse(plugin.manifest);
+          host.activateRemotePlugin(plugin.id, manifest).catch((err) => {
+            console.error(`[App] Failed to activate remote plugin "${plugin.name}":`, err);
+          });
+        } catch (e) {
+          console.error(`[App] Failed to parse manifest for plugin "${plugin.name}":`, e);
+        }
+      }
+    }
+
+    // 2. Deactivate deactivated plugins
+    const deactivatedPluginsFromServer = plugins.filter((p) => p.status !== 'active');
+    for (const plugin of deactivatedPluginsFromServer) {
+      const localPlugin = store.activePlugins.find((p) => p.id === plugin.id);
+      if (localPlugin && localPlugin.state === PluginState.ACTIVE) {
+        host.deactivatePlugin(plugin.id).catch((err) => {
+          console.error(`[App] Failed to deactivate remote plugin "${plugin.name}":`, err);
+        });
+      }
+    }
+  }, [plugins, host]);
 
   useEffect(() => {
     if (!session) return;

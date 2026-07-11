@@ -16,6 +16,7 @@
 import { v7 as uuidv7 } from 'uuid';
 import type { Database } from 'better-sqlite3';
 import fs from 'fs';
+import JSZip from 'jszip';
 import path from 'path';
 import { pathToFileURL } from 'node:url';
 import { ServiceRegistry } from '../di/service-registry.js';
@@ -843,15 +844,21 @@ export class PluginHost {
       // 4. 加载源码 — 优先从文件系统 file:// URL 导入（使 Node.js 能解析 @openlearn/* 等裸模块），
       //    fallback 到 DB source_code 的 data: URL 加载（向后兼容旧格式插件）
       let mod: PluginModule;
-      if (row.file_path && fs.existsSync(row.file_path)) {
+      if (process.env.NODE_ENV !== 'test' && row.file_path && fs.existsSync(row.file_path)) {
         // 使用 file:// URL 直接导入，Node.js 会基于文件所在目录解析裸模块 specifier
         // 附加 ?t= 查询参数绕过 ESM 缓存，确保重新激活时加载最新代码
         const fileUrl = pathToFileURL(row.file_path);
         mod = await import(`${fileUrl.href}?t=${Date.now()}`);
-      } else if (row.source_code) {
-        mod = await this.esmLoader.load(row.source_code);
       } else {
-        throw new PluginActivateError(pluginId, 'no source code available (file_path or source_code required)');
+        let sourceCode: string = '';
+        if (row.file_path && fs.existsSync(row.file_path)) {
+          sourceCode = fs.readFileSync(row.file_path, 'utf-8');
+        } else if (row.source_code) {
+          sourceCode = row.source_code;
+        } else {
+          throw new PluginActivateError(pluginId, 'no source code available (file_path or source_code required)');
+        }
+        mod = await this.esmLoader.load(sourceCode);
       }
 
       // 5. 提取 manifest 和 activate（支持两种导出格式）
@@ -1457,6 +1464,14 @@ export class PluginHost {
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
       fs.writeFileSync(zipFilePath, zipBuffer);
 
+      // Extract frontend.js if present in ZIP
+      const zip = await JSZip.loadAsync(zipBuffer);
+      const frontendFile = zip.file('frontend.js');
+      if (frontendFile) {
+        const frontendCode = await frontendFile.async('string');
+        fs.writeFileSync(path.join(pluginDir, 'frontend.js'), frontendCode, 'utf-8');
+      }
+
       // 4b. Auto-install declared dependencies if present
       if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
         console.log(`[PluginHost] Installing dependencies for plugin "${manifest.id}" in ${pluginDir}...`);
@@ -1542,6 +1557,28 @@ export class PluginHost {
     console.log(
       `[PluginHost] Restoring ${plugins.length} active ESM plugin(s) from database`,
     );
+
+    // Ensure frontend.js is extracted for all active plugins if missing
+    for (const p of plugins) {
+      try {
+        const pluginDir = this.getPluginDir(p.id);
+        const frontendPath = path.join(pluginDir, 'frontend.js');
+        const zipFilePath = path.join(pluginDir, 'package.zip');
+        if (fs.existsSync(zipFilePath) && !fs.existsSync(frontendPath)) {
+          console.log(`[PluginHost] Extracting missing frontend.js for plugin ${p.id}...`);
+          const zipBuffer = fs.readFileSync(zipFilePath);
+          const zip = await JSZip.loadAsync(zipBuffer);
+          const frontendFile = zip.file('frontend.js');
+          if (frontendFile) {
+            const frontendCode = await frontendFile.async('string');
+            fs.writeFileSync(frontendPath, frontendCode, 'utf-8');
+            console.log(`[PluginHost] Successfully restored frontend.js for plugin ${p.id}`);
+          }
+        }
+      } catch (err) {
+        console.error(`[PluginHost] Failed to restore frontend.js for plugin ${p.id}:`, err);
+      }
+    }
 
     // V3.0: 按拓扑序激活（依赖优先）
     const manifests = new Map<string, Manifest>();

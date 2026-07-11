@@ -520,6 +520,7 @@ async function startServer() {
   app.use(express.json({ limit: '100mb' }));
   app.use(express.urlencoded({ limit: '100mb', extended: true }));
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+  app.use('/plugins', express.static(path.join(process.cwd(), 'plugins')));
   // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块）
 
   // SEC-NET-01: CORS 中间件 — 允许沙箱 iframe（origin: null）和同源请求
