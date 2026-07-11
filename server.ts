@@ -4650,6 +4650,61 @@ ${examsText}
     }
   });
 
+  // Get recent system logs (for admin/developer console)
+  app.get('/api/admin/logs', (req, res) => {
+    if (!checkIsTeacherOrAdmin(req)) {
+      return res.status(403).json({ success: false, error: 'Access denied: teachers or admins only' });
+    }
+    try {
+      const limit = parseInt(req.query.limit as string) || 200;
+      const component = req.query.component as string | undefined;
+      const levelFilter = req.query.level as string | undefined;
+
+      const logFile = path.resolve(process.cwd(), 'logs', 'openlearn.log');
+      if (!fs.existsSync(logFile)) {
+        return res.json({ success: true, logs: [] });
+      }
+
+      const content = fs.readFileSync(logFile, 'utf-8');
+      const lines = content.split('\n').filter(Boolean);
+      
+      let parsedLogs = lines.map(line => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return { time: Date.now(), level: 30, msg: line };
+        }
+      });
+
+      const PINO_LEVELS: Record<number, string> = {
+        10: 'trace',
+        20: 'debug',
+        30: 'info',
+        40: 'warn',
+        50: 'error',
+        60: 'fatal'
+      };
+
+      parsedLogs = parsedLogs.map(log => ({
+        ...log,
+        level: typeof log.level === 'number' ? (PINO_LEVELS[log.level] || 'info') : (log.level || 'info'),
+        time: log.time ? new Date(log.time).toISOString() : new Date().toISOString()
+      }));
+
+      if (component) {
+        parsedLogs = parsedLogs.filter(log => log.component === component || (log.component && log.component.includes(component)));
+      }
+      if (levelFilter) {
+        parsedLogs = parsedLogs.filter(log => log.level === levelFilter);
+      }
+
+      const sliceStart = Math.max(0, parsedLogs.length - limit);
+      res.json({ success: true, logs: parsedLogs.slice(sliceStart) });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
   // Plugin APIs
   app.get('/api/plugins', (req, res) => {
     res.json(kernelContainer.pluginHost.listPlugins());

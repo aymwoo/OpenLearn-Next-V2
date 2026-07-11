@@ -38,6 +38,7 @@ import { NodeWorkerTransport } from './transport.js';
 import type { IWorkerTransport } from './types.js';
 import { ServiceHost } from './service-host.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
+import { createLogger } from '../../../server/utils/logger.js';
 import { WorkerActivateError, WorkerTimeoutError } from './errors.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -729,11 +730,12 @@ export class WorkerManager {
         stdout: true,
         stderr: true,
       });
+      const pluginLogger = createLogger(`Plugin:${manifest.id || pluginId}`);
       worker.stdout.on('data', (chunk) => {
-        console.log(`[Worker stdout - ${pluginId}]:`, chunk.toString().trim());
+        pluginLogger.info(chunk.toString().trim());
       });
       worker.stderr.on('data', (chunk) => {
-        console.error(`[Worker stderr - ${pluginId}]:`, chunk.toString().trim());
+        pluginLogger.error(chunk.toString().trim());
       });
     } catch (err) {
       throw new WorkerActivateError(

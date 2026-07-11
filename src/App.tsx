@@ -399,7 +399,7 @@ export default function App() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPluginModal, setShowPluginModal] = useState(false);
-  const [storeTab, setStoreTab] = useState<'store' | 'widgets' | 'dev'>('store');
+  const [storeTab, setStoreTab] = useState<'store' | 'widgets' | 'dev' | 'logs'>('store');
   const [pluginCode, setPluginCode] = useState(DEFAULT_PLUGIN);
   const [installingPlugin, setInstallingPlugin] = useState(false);
 

@@ -21,6 +21,7 @@ import { ConfigService } from './config-service.js';
 import type { Token } from '../di/token.js';
 import type { ResourceTracker } from './resource-tracker.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
+import { createLogger } from '../../../server/utils/logger.js';
 import {
   ICommandBusServiceToken,
   IEventBusServiceToken,
@@ -540,21 +541,19 @@ export async function buildContext(
     },
   };
 
-  // 5.5. 构建插件日志器（V2.5）
-  // ponytail: console with [Plugin:id] prefix — same pattern as rest of codebase,
-  // pino child logger would add no value for plugin-scoped logging.
+  const pluginLogger = createLogger(`Plugin:${manifest.id || pluginId}`);
   const pluginLog: IPluginLogger = {
     debug(message, meta) {
-      console.debug(`[Plugin:${pluginId}] ${message}`, meta ?? '');
+      pluginLogger.debug({ meta }, message);
     },
     info(message, meta) {
-      console.log(`[Plugin:${pluginId}] ${message}`, meta ?? '');
+      pluginLogger.info({ meta }, message);
     },
     warn(message, meta) {
-      console.warn(`[Plugin:${pluginId}] ${message}`, meta ?? '');
+      pluginLogger.warn({ meta }, message);
     },
     error(message, meta) {
-      console.error(`[Plugin:${pluginId}] ${message}`, meta ?? '');
+      pluginLogger.error({ meta }, message);
     },
   };
 
