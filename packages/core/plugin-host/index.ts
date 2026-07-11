@@ -1287,8 +1287,8 @@ export class PluginHost {
       throw new Error(`Plugin not found: ${pluginId}`);
     }
 
-    const currentStatus = row.status;
-    const newStatus = currentStatus === 'active' ? 'disabled' : 'active';
+    const currentState = this.getPluginState(pluginId);
+    const newStatus = currentState === PluginState.ACTIVE ? 'disabled' : 'active';
 
     if (newStatus === 'disabled') {
       await this.deactivatePlugin(pluginId);
