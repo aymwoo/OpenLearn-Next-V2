@@ -476,7 +476,10 @@ export class FrontendPluginHost {
       manifest,
       ui: {
         registerExtensionPoint: (slot: ExtensionSlot, config: ExtensionPointConfig) => {
-          usePluginHostStore.getState().registerExtensionPoint(slot, config);
+          usePluginHostStore.getState().registerExtensionPoint(slot, {
+            ...config,
+            pluginId,
+          });
         },
         unregisterExtensionPoint: (slot: ExtensionSlot, id: string) => {
           usePluginHostStore.getState().unregisterExtensionPoint(slot, id);
