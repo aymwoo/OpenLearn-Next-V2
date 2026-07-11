@@ -3,6 +3,7 @@ import { QuickActionsMenu } from "../../components/QuickActionsMenu";
 import Markdown from "react-markdown";
 import { Activity, Clock, BookOpen, Users, BarChart2, ShieldAlert, Check, X, Loader2, Search, Wand2, ChevronDown, ChevronUp, Folder } from "lucide-react";
 import type { Lesson, ClassType, StudentType, ScheduleType, ProcessType } from "../../store/appStore";
+import { ExtensionPointRenderer } from "../../plugin-host/extension-point-renderer";
 
 interface DashboardProps {
   lang: string; t: Record<string,string>;
@@ -149,6 +150,9 @@ export function Dashboard(props: DashboardProps) {
                       </div>
                     );
                   })()}
+
+                  {/* Dynamic plugin-registered teacher dashboard widgets */}
+                  <ExtensionPointRenderer slot="teacher.dashboard.widget" />
 
                   {/* Stats Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-5">

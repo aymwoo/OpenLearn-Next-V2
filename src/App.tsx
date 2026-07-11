@@ -4273,6 +4273,8 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                     </div>
                   </div>
                   
+                  {/* Dynamic plugin-registered student dashboard views */}
+                  <ExtensionPointRenderer slot="student.view" />
                 </div>
               </div>
             )}

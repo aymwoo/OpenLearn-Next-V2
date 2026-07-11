@@ -405,8 +405,8 @@ export class PluginHost {
    */
   listPlugins(): PluginInfo[] {
     const rows = this.db
-      .prepare('SELECT id, manifest, execution_mode, status FROM plugins')
-      .all() as Array<{ id: string; manifest: string; execution_mode: string; status: string }>;
+      .prepare('SELECT id, manifest, execution_mode, status, loader_version, created_at FROM plugins')
+      .all() as Array<{ id: string; manifest: string; execution_mode: string; status: string; loader_version: string; created_at: number }>;
 
     return rows.map((row) => {
       let parsed: { name?: string; version?: string } = {};
@@ -423,7 +423,9 @@ export class PluginHost {
         version: parsed.version ?? 'unknown',
         state,
         status: state === PluginState.ACTIVE ? 'active' : 'disabled',
-        execution_mode: row.execution_mode,
+        execution_mode: row.loader_version === 'vm' ? 'legacy' : 'esm',
+        manifest: row.manifest,
+        created_at: row.created_at,
       };
     });
   }
@@ -1480,7 +1482,7 @@ export class PluginHost {
 
       // 5. INSERT 到 DB（源码和 ZIP 已迁移到文件系统，DB 仅存元数据）
       const stmt = this.db.prepare(
-        'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       );
       stmt.run(
         pluginId,
@@ -1491,6 +1493,7 @@ export class PluginHost {
         'installed',
         Date.now(),
         'esm',
+        'worker',
       );
 
       // 6. 设置状态
@@ -1580,8 +1583,15 @@ export class PluginHost {
     for (const cycle of cycles) orderedIds.push(...cycle);
 
     for (const id of orderedIds) {
-      const p = plugins.find((pl) => pl.id === id);
+      const resolvedId = this.resolvePluginUuid(id);
+      const p = plugins.find((pl) => pl.id === resolvedId);
       if (!p) continue;
+
+      const runtimeState = this.getPluginState(p.id);
+      if (runtimeState === PluginState.ACTIVE) {
+        continue;
+      }
+
       try {
         const mode = (p.execution_mode ?? 'inline') as 'inline' | 'worker';
         await this.activatePlugin(p.id, { mode });

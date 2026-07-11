@@ -458,9 +458,22 @@ parentPort.on('message', async function(msg) {
         }
       }
 
-      // 通过 data URL 加载插件代码
-      var encoded = Buffer.from(msg.pluginCode, 'utf-8').toString('base64');
-      var mod = await import('data:text/javascript;base64,' + encoded);
+      // 通过 file URL 或 data URL 加载插件代码
+      var mod;
+      if (workerData.pluginDir) {
+        try {
+          var urlModule = requireFn('node:url');
+          var fileUrl = urlModule.pathToFileURL(workerData.pluginDir + '/index.js').href;
+          mod = await import(fileUrl);
+        } catch (importErr) {
+          console.error('[Worker] Failed to import from pluginDir file URL, falling back to data URL:', importErr);
+          var encoded = Buffer.from(msg.pluginCode, 'utf-8').toString('base64');
+          mod = await import('data:text/javascript;base64,' + encoded);
+        }
+      } else {
+        var encoded = Buffer.from(msg.pluginCode, 'utf-8').toString('base64');
+        mod = await import('data:text/javascript;base64,' + encoded);
+      }
       var plugin = (mod && mod.default) ? mod.default : (mod || {});
 
       if (typeof plugin.activate !== 'function') {

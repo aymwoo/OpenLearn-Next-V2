@@ -311,6 +311,13 @@ export class Kernel {
         }
       }
     }
+
+    // Restore all other active ESM plugins from database
+    try {
+      await this.pluginHost.restoreActivePlugins();
+    } catch (err) {
+      console.error('[Kernel] Failed to restore active plugins:', err);
+    }
   }
 
   /**

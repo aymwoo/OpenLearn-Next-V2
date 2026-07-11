@@ -160,6 +160,8 @@ export interface PluginInfo {
   state: PluginState;
   status?: string;
   execution_mode?: string;
+  manifest?: string;
+  created_at?: number;
 }
 
 // ── Phase 7: Hot Reload Types ─────────────────────────────────────────────

@@ -2105,3 +2105,41 @@ export type Middleware = (
 5. **事件广播**：热重载完成后，系统向 EventBus 广播 `plugin.reloaded` 事件。
 
 ---
+
+## 5.12 常见排错与故障排查 (Troubleshooting & Common Pitfalls)
+
+### 5.12.1 Worker 沙箱模式下 `@openlearn/plugin-sdk` 无法解析
+* **问题现象**  
+  插件在 `WORKER` 模式下激活时触发错误：
+  `WorkerActivateError: [WorkerRuntime] Plugin "..." activation failed in Worker: Failed to resolve module specifier "@openlearn/plugin-sdk" from "data:text/javascript;base64,..."`
+* **故障根源**  
+  在默认工作线程中加载插件源码时，由于使用 base64 编码的 `data:` URL 作为 ESM 模块加载媒介，Node.js 在该虚拟上下文中缺少物理根目录，因而无法利用标准 node_modules 解析链来匹配 `@openlearn/plugin-sdk` 或其它宿主共享包。
+* **解决与架构升级**  
+  宿主内核已在 `worker-manager.ts` 中升级了加载通道。对凡是从 ZIP 解压到本地或存放在物理目录（由 `workerData.pluginDir` 传入）的插件，一律采用 `file://` 协议的绝对路径直接 import `index.js`，而非走 base64 内存载入。此改进使得插件模块可以完全遵循 Node.js 标准的层级模块解析规范。
+* **最佳实践建议**  
+  第三方库在编译时建议配置构建工具（如 `esbuild`）进行全内联打包，仅保留像 `@openlearn/*` 等 Token 接口为 External。
+
+### 5.12.2 前端贡献点面板注册不生效/不显示
+* **问题现象**  
+  编写了 `frontend.js` 并在 `frontendCtx.registerPanel` 中挂载了组件，但主应用（教师或学生界面）对应的卡片/标签页中完全不显示。
+* **排查点一：注册 ID 与 contributes 声明 ID 必须严格匹配**  
+  确保在 `manifest.json` 的 `contributes` 数组里声明的 ID 和运行时 `frontendCtx.registerPanel` 传递的 `id` 字段值完全一致。
+  * *正确示例*：
+    `manifest.json`: `"teacher.dashboard.widget": [{ "id": "homework-teacher-widget", ... }]`  
+    `frontend.js`: `frontendCtx.registerPanel({ slot: 'teacher.dashboard.widget', id: 'homework-teacher-widget', ... })`
+* **排查点二：挂载插槽是否已在主界面实例化**  
+  要让面板真正挂载，前端组件树必须包含对应的 `<ExtensionPointRenderer slot="xxx" />` 声明。目前，主应用已在教师主仪表盘（Banner 下方）集成 `teacher.dashboard.widget`，在学生主仪表盘（列表底部）集成 `student.view`。
+
+### 5.12.3 后台服务器重启后，已激活的第三方插件被重置为未激活
+* **问题现象**  
+  用户在后台上传并开启了某款插件，但后台 Node.js 进程重启后，该插件无法自动恢复运行，或者后台控制台打印 `IllegalStateTransitionError`。
+* **故障根源**  
+  1. 插件宿主在还原阶段进行拓扑依赖排序时，输出结果为 manifest 中的字符串 ID，而在最终定位 DB 行数据时却直接用该 ID 去比对物理 UUID 主键，导致逻辑判断落空。
+  2. 宿主在遍历还原数据库中处于 `active` 状态的插件时，包含了由内核底层早已在 Wave 1/2 中预加载完毕的系统插件（如 `plugin-management` 等），造成二次激活并诱发状态机冲突。
+* **设计升级与修复**  
+  1. `restoreActivePlugins` 方法在查找阶段通过 `resolvePluginUuid(id)` 将排序后的 Manifest ID 预先映射为 UUID 主键。
+  2. 增加了 `runtimeState` 的过滤检测：若当前插件在内存中的运行时状态已为 `PluginState.ACTIVE`，则自动静默跳过，避免重复激活。
+  3. 在 [packages/core/kernel/index.ts](file:///home/wuxf/Develop/openlearnv2/packages/core/kernel/index.ts) 的系统引导流程最后加入该恢复钩子，实现了服务器断电/重启后所有第三方插件按需自动、平滑复活。
+
+
+---
