@@ -89,6 +89,7 @@ export class ServiceHost {
     private manifestCapabilities: string[],
     private readonly eventBus?: EventBus,
     private eventForwarder?: EventForwarder,
+    private readonly pluginId?: string,
   ) {}
 
   // ── Public accessors ───────────────────────────────────────────────────
@@ -413,7 +414,8 @@ export class ServiceHost {
         const commandBus = service as import('../command-bus/index.js').CommandBus;
         if (msg.method === 'registerHandler') {
           let [commandType] = msg.args as [string];
-          const prefix = this.pluginId + '.';
+          const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
+          const prefix = pluginId + '.';
           if (!commandType.startsWith(prefix)) {
             commandType = prefix + commandType;
           }
@@ -441,7 +443,8 @@ export class ServiceHost {
           return;
         } else if (msg.method === 'unregisterHandler') {
           let [commandType] = msg.args as [string];
-          const prefix = this.pluginId + '.';
+          const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
+          const prefix = pluginId + '.';
           if (!commandType.startsWith(prefix)) {
             commandType = prefix + commandType;
           }

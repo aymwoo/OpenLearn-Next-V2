@@ -220,7 +220,7 @@ export default {
   activate: async (ctx, prevState) => {
     globalThis.count = prevState ? prevState.count : 0;
     const commandBus = ctx.services.commandBus;
-    await commandBus.registerHandler('test.increment', {
+    await commandBus.registerHandler('increment', {
       execute: async () => {
         globalThis.count += 10;
         return { count: globalThis.count };
@@ -256,7 +256,7 @@ export default {
     // Run increment command to modify the count state in Worker (0 -> 10)
     const result1 = await kernel.commandBus.execute({
       id: 'cmd-inc-1',
-      type: 'test.increment',
+      type: `${testPlugin!.id}.increment`,
       actorId: 'user-teacher',
       payload: {}
     }) as any;
@@ -275,7 +275,7 @@ export default {
   activate: async (ctx, prevState) => {
     globalThis.count = prevState ? prevState.count : 0;
     const commandBus = ctx.services.commandBus;
-    await commandBus.registerHandler('test.increment', {
+    await commandBus.registerHandler('increment', {
       execute: async () => {
         globalThis.count += 5; // V2 increments by 5
         return { count: globalThis.count };
@@ -297,7 +297,7 @@ export default {
     // Run increment command again on the reloaded worker (should increment from 10 to 15)
     const result2 = await kernel.commandBus.execute({
       id: 'cmd-inc-2',
-      type: 'test.increment',
+      type: `${testPlugin!.id}.increment`,
       actorId: 'user-teacher',
       payload: {}
     }) as any;

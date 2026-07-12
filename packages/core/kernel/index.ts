@@ -15,6 +15,7 @@ import { AiPlannerPlugin } from '../../plugins/ai-planner.js';
 import { AiSubmitInjectorPlugin } from '../../plugins/ai-submit-injector.js';
 import { AssignmentEvalPlugin } from '../../plugins/assignment-eval.js';
 import fs from 'fs';
+import crypto from 'node:crypto';
 
 import {
   ICommandBusServiceToken,
@@ -102,6 +103,13 @@ export class Kernel {
     this.commandBus.setInterceptor(async (command) => {
       const action = this.actionRegistry.getActionByCommandType(command.type);
       if (action) {
+        // Validate payload using inputSchema if available
+        if (action.inputSchema) {
+          const errors = validateJsonSchema(command.payload, action.inputSchema);
+          if (errors.length > 0) {
+            throw new Error(`[PayloadValidationError] Invalid command payload for ${command.type}: ${errors.join('; ')}`);
+          }
+        }
         const isAdmin = command.actorId === 'role:administrator' || 
                         command.actorId === 'admin' ||
                         command.actorId === 'usr_admin' ||
@@ -230,8 +238,8 @@ export class Kernel {
           const manifestContent = await manifestFile.async('text');
           const manifest = JSON.parse(manifestContent);
           
-           // Check if already exists in DB
-           const rows = this.db.prepare('SELECT id, manifest, status FROM plugins').all() as Array<{ id: string; manifest: string; status?: string }>;
+           // Check if already exists in DB (fetch zip_package to compute hash)
+           const rows = this.db.prepare('SELECT id, manifest, status, zip_package FROM plugins').all() as Array<{ id: string; manifest: string; status?: string; zip_package?: Buffer }>;
            let existingRow = rows.find(row => {
              try {
                const m = JSON.parse(row.manifest);
@@ -277,8 +285,18 @@ export class Kernel {
              dbPluginId = newRow?.id;
            } else {
              const m = JSON.parse(existingRow.manifest);
-             if (m.version !== manifest.version) {
-               // Version mismatch: uninstall and reinstall
+             // Calculate SHA-256 hash of local zip buffer
+             const localHash = crypto.createHash('sha256').update(zipBuffer).digest('hex');
+             // Calculate SHA-256 hash of database stored zip_package
+             const dbHash = existingRow.zip_package ? crypto.createHash('sha256').update(existingRow.zip_package).digest('hex') : '';
+             
+             if (m.version !== manifest.version || dbHash !== localHash) {
+               if (dbHash !== localHash) {
+                 console.log(`[Kernel] Seeded plugin "${manifest.name}" content hash mismatch (DB: ${dbHash.slice(0, 8)} vs Disk: ${localHash.slice(0, 8)}). Upgrading...`);
+               } else {
+                 console.log(`[Kernel] Seeded plugin "${manifest.name}" version mismatch (DB: ${m.version} vs Disk: ${manifest.version}). Upgrading...`);
+               }
+               // Uninstall and reinstall
                await this.pluginHost.uninstallPlugin(existingRow.id);
                const installedManifest = await this.pluginHost.installPluginFromZip(zipBuffer);
                const newRows = this.db.prepare('SELECT id, manifest, status FROM plugins').all() as Array<{ id: string; manifest: string; status?: string }>;
@@ -398,3 +416,66 @@ export const kernelContainer = new Proxy({} as Kernel, {
     return Reflect.set(_kernelContainer, prop, value, receiver);
   }
 });
+
+// Recursive JSON Schema Validator Helper
+function validateJsonSchema(data: any, schema: any): string[] {
+  if (!schema) return [];
+  const errors: string[] = [];
+
+  const type = schema.type;
+  if (type === 'OBJECT') {
+    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+      errors.push(`Expected object, got ${typeof data}`);
+      return errors;
+    }
+    
+    // Check required properties
+    if (schema.required && Array.isArray(schema.required)) {
+      for (const req of schema.required) {
+        if (!(req in data) || data[req] === undefined) {
+          errors.push(`Missing required property "${req}"`);
+        }
+      }
+    }
+    
+    // Check properties
+    if (schema.properties && typeof schema.properties === 'object') {
+      for (const key in schema.properties) {
+        const hasProp = key in data && data[key] !== undefined;
+        if (hasProp) {
+          const subErrors = validateJsonSchema(data[key], schema.properties[key]);
+          for (const err of subErrors) {
+            errors.push(`property "${key}": ${err}`);
+          }
+        }
+      }
+    }
+  } else if (type === 'ARRAY') {
+    if (!Array.isArray(data)) {
+      errors.push(`Expected array, got ${typeof data}`);
+      return errors;
+    }
+    if (schema.items) {
+      for (let i = 0; i < data.length; i++) {
+        const subErrors = validateJsonSchema(data[i], schema.items);
+        for (const err of subErrors) {
+          errors.push(`item at index ${i}: ${err}`);
+        }
+      }
+    }
+  } else if (type === 'STRING') {
+    if (typeof data !== 'string') {
+      errors.push(`Expected string, got ${typeof data}`);
+    }
+  } else if (type === 'NUMBER') {
+    if (typeof data !== 'number' || isNaN(data)) {
+      errors.push(`Expected number, got ${typeof data}`);
+    }
+  } else if (type === 'BOOLEAN') {
+    if (typeof data !== 'boolean') {
+      errors.push(`Expected boolean, got ${typeof data}`);
+    }
+  }
+  
+  return errors;
+}

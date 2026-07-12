@@ -761,6 +761,8 @@ export class WorkerManager {
       actorId,
       manifestCaps,
       eventBus,  // optional: enables event forwarding
+      undefined,
+      pluginId,
     );
 
     // 7. 注册到 WorkerRegistry（含 crash 检测）

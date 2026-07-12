@@ -1873,8 +1873,13 @@ export class PluginHost {
       // Old worker may already be gone — continue
     }
 
-    // 3. Create new worker with updated source
+    // 3. Write new source code to disk and create new worker with updated source
     try {
+      const pluginDir = this.getPluginDir(pluginId);
+      if (fs.existsSync(pluginDir)) {
+        fs.writeFileSync(path.join(pluginDir, 'index.js'), newSourceCode);
+      }
+
       await this.workerManager.createWorker(
         pluginId,
         _newManifest,
