@@ -412,7 +412,12 @@ export class ServiceHost {
       if (msg.token === '@openlearn/core:ICommandBusService') {
         const commandBus = service as import('../command-bus/index.js').CommandBus;
         if (msg.method === 'registerHandler') {
-          const [commandType] = msg.args as [string];
+          let [commandType] = msg.args as [string];
+          const prefix = this.pluginId + '.';
+          if (!commandType.startsWith(prefix)) {
+            commandType = prefix + commandType;
+          }
+          
           commandBus.registerHandler(commandType, {
             execute: async (command) => {
               const rpcId = globalThis.crypto.randomUUID();
@@ -435,7 +440,12 @@ export class ServiceHost {
           });
           return;
         } else if (msg.method === 'unregisterHandler') {
-          const [commandType] = msg.args as [string];
+          let [commandType] = msg.args as [string];
+          const prefix = this.pluginId + '.';
+          if (!commandType.startsWith(prefix)) {
+            commandType = prefix + commandType;
+          }
+          
           commandBus.unregisterHandler(commandType);
           this.registeredCommandTypes.delete(commandType);
           transport.postMessage({

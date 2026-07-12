@@ -416,12 +416,16 @@ parentPort.on('message', async function(msg) {
       var commandBus = rawCommandBus ? {
         execute: function(cmd) { return rawCommandBus.execute(cmd); },
         registerHandler: function(commandType, handler) {
-          registeredCommandHandlers.set(commandType, handler);
-          return rawCommandBus.registerHandler(commandType);
+          var prefix = workerData.pluginId + '.';
+          var prefixed = (commandType.indexOf('.') !== -1 && commandType.startsWith(prefix)) ? commandType : prefix + commandType;
+          registeredCommandHandlers.set(prefixed, handler);
+          return rawCommandBus.registerHandler(prefixed);
         },
         unregisterHandler: function(commandType) {
-          registeredCommandHandlers.delete(commandType);
-          return rawCommandBus.unregisterHandler(commandType);
+          var prefix = workerData.pluginId + '.';
+          var prefixed = (commandType.indexOf('.') !== -1 && commandType.startsWith(prefix)) ? commandType : prefix + commandType;
+          registeredCommandHandlers.delete(prefixed);
+          return rawCommandBus.unregisterHandler(prefixed);
         },
         createCommand: function(type, payload, actorId, metadata) {
           return rawCommandBus.createCommand(type, payload, actorId, metadata);
