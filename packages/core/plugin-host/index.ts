@@ -1315,6 +1315,9 @@ export class PluginHost {
    */
   async uninstallPlugin(pluginId: string): Promise<void> {
     pluginId = this.resolvePluginUuid(pluginId);
+    if (pluginId.startsWith('@openlearn/') || this.preloadedPlugins.has(pluginId)) {
+      throw new Error(`Cannot uninstall system plugin: ${pluginId}`);
+    }
     const currentState = this.pluginStates.get(pluginId);
 
     // 1. 如果当前是 ACTIVE，先停用（deactivatePlugin 自动检测 worker/inline 模式）

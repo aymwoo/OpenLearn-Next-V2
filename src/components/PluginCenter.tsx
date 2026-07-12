@@ -675,12 +675,14 @@ export function PluginCenter({
                             {lang === 'zh' ? '设置' : 'Settings'}
                           </button>
                         )}
-                        <button
-                          onClick={() => onDelete(plugin.id)}
-                          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                        >
-                          {lang === 'zh' ? '删除' : 'Delete'}
-                        </button>
+                        {!plugin.id.startsWith('@openlearn/') && (
+                          <button
+                            onClick={() => onDelete(plugin.id)}
+                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                          >
+                            {lang === 'zh' ? '删除' : 'Delete'}
+                          </button>
+                        )}
                         {plugin.execution_mode === 'legacy' && (
                           <button
                             onClick={() => document.getElementById('zip-plugin-uploader')?.click()}
@@ -1302,12 +1304,14 @@ export function PluginCenter({
                             >
                               {plugin.status === 'active' ? (lang === 'zh' ? '禁用' : 'Disable') : (lang === 'zh' ? '启用' : 'Enable')}
                             </button>
-                            <button
-                              onClick={() => onDelete(plugin.id)}
-                              className="px-2 py-1 text-[10px] font-bold bg-red-950/60 border border-red-900/50 text-red-400 hover:bg-red-900/80 rounded transition-colors"
-                            >
-                              {lang === 'zh' ? '删除' : 'Delete'}
-                            </button>
+                            {!plugin.id.startsWith('@openlearn/') && (
+                              <button
+                                onClick={() => onDelete(plugin.id)}
+                                className="px-2 py-1 text-[10px] font-bold bg-red-950/60 border border-red-900/50 text-red-400 hover:bg-red-900/80 rounded transition-colors"
+                              >
+                                {lang === 'zh' ? '删除' : 'Delete'}
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))

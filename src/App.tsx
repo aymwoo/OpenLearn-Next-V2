@@ -3125,9 +3125,13 @@ export default function App() {
       if (res.ok) {
          await fetchPlugins();
          setChatLog(prev => [...prev, { role: 'agent', content: `[System] Plugin uninstalled and deleted.` }]);
+      } else {
+         const data = await res.json().catch(() => ({}));
+         alert(data.error || (lang === 'zh' ? '删除插件失败' : 'Failed to delete plugin'));
       }
     } catch (e) {
       console.error('Failed to delete plugin:', e);
+      alert(lang === 'zh' ? '删除插件失败' : 'Failed to delete plugin');
     }
   };
 
