@@ -375,6 +375,8 @@ stateDiagram-v2
 ### 2.6.2 指令总线发送 (CommandBus)
 所有的具体业务逻辑应该封装成特定的 Command 派发。宿主主线程通过统一的拦截器对 Command 执行人进行身份审计，并实现操作流的撤销/恢复以及教师端的审批同步拦截。
 
+在沙箱 Worker 或 ESM 在体加载运行环境下，任何非系统插件通过 `commandBus.registerHandler(type, handler)` 注册的命令，其底层代理与宿主拦截器会自动为该命令补充以其插件 UUID 命名的命名空间前缀（例如：`019f3bd3-901c-77e3-a8be-70a4c5c95983.my_command`）。这一设计能够完全隔离各插件的指令域，消除同名命令冲突，并从根本上防御了跨插件命名空间伪造或恶意篡改的安全风险。
+
 ---
 
 ## 2.7 事件发布与订阅流设计 (EventBus Architecture)
@@ -403,7 +405,9 @@ stateDiagram-v2
 ## 2.10 前端 UI 扩展与微前端插槽 (Micro-frontend Slots)
 
 微前端（MFE）框架提供给插件在浏览器端注入自定义交互面板的能力。
-* **布局插槽**：`teacher.panel`（教师侧操作卡）、`classroom.tool`（浮动快捷工具箱）、`student.panel`（学生侧展示卡）。
+* **双轨插槽声明与桥接**：互动工具栏不仅兼容旧有的 `manifest.classroomTools` 配置，还支持在插件清单中通过统一声明式 `contributes['classroom.tool']` 注册其专属的课堂教具。
+* **旧版 API 兼容设计（Shims）**：微前端平台暴露给插件的上下文环境内置了 `registerPanel`、`registerMenu` 和 `registerToolbarButton` 等兼容性 API 垫片（Shims）。在旧版 UI 插件调用它们时，系统会悄无声息地将这些调用透明转换为最新的声明式 `registerExtensionPoint` 注册信息，以达到 100% 零改动向后兼容。
+* **通用白板插件投射（Generic Canvas Widgets）**：白板引擎提供了对通用 `'plugin'` 类型画板元素的深度支持。通过 `whiteboard.draw` 投射类型为 `'plugin'` 的绘图元素时，白板层面的 `PluginCardRenderer` 会动态解析插槽配置和权限，采用 React 懒加载（对 React 组件）或挂载 DOM 生命周期（对 DOM 节点）的方式在白板画板中实时实例化和显示该插件，并在白板上提供了完整的拖动、改变尺寸、全屏、最小化和销毁的统一窗口控制器。
 * **跨端交互**：前端页面通过微前端上下文发布事件通知，后端沙箱通过监听 EventBus 来执行相应计算，并在计算完成后向前端派发状态。
 
 ---
