@@ -495,6 +495,27 @@ export class FrontendPluginHost {
         if (res.success && res.result !== undefined) return res.result;
         throw new Error(res.error || 'Command execution failed');
       },
+      // Backward compatibility shims
+      registerPanel: (config: any) => {
+        const slot = config.slot || 'teacher.dashboard.widget';
+        usePluginHostStore.getState().registerExtensionPoint(slot, {
+          ...config,
+          pluginId,
+        });
+      },
+      registerMenu: (config: any) => {
+        const slot = config.slot || 'teacher.panel';
+        usePluginHostStore.getState().registerExtensionPoint(slot, {
+          ...config,
+          pluginId,
+        });
+      },
+      registerToolbarButton: (config: any) => {
+        usePluginHostStore.getState().registerExtensionPoint('classroom.tool', {
+          ...config,
+          pluginId,
+        });
+      },
     };
   }
 }

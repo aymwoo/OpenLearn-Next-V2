@@ -418,6 +418,9 @@ export class PluginHost {
       }
 
       const state = this.pluginStates.get(row.id) ?? PluginState.INSTALLED;
+      const pluginDir = this.getPluginDir(row.id);
+      const has_frontend = fs.existsSync(path.join(pluginDir, 'frontend.js'));
+
       return {
         id: row.id,
         name: parsed.name ?? row.id,
@@ -427,6 +430,7 @@ export class PluginHost {
         execution_mode: row.loader_version === 'vm' ? 'legacy' : 'esm',
         manifest: row.manifest,
         created_at: row.created_at,
+        has_frontend,
       };
     });
   }

@@ -2180,6 +2180,9 @@ export default function App() {
     // 1. Activate active plugins
     const activePluginsFromServer = plugins.filter((p) => p.status === 'active');
     for (const plugin of activePluginsFromServer) {
+      if (!plugin.has_frontend) {
+        continue;
+      }
       const localPlugin = store.activePlugins.find((p) => p.id === plugin.id);
       if (!localPlugin || localPlugin.state !== PluginState.ACTIVE) {
         if (!localPlugin) {
@@ -2205,6 +2208,9 @@ export default function App() {
     // 2. Deactivate deactivated plugins
     const deactivatedPluginsFromServer = plugins.filter((p) => p.status !== 'active');
     for (const plugin of deactivatedPluginsFromServer) {
+      if (!plugin.has_frontend) {
+        continue;
+      }
       const localPlugin = store.activePlugins.find((p) => p.id === plugin.id);
       if (localPlugin && localPlugin.state === PluginState.ACTIVE) {
         host.deactivatePlugin(plugin.id).catch((err) => {

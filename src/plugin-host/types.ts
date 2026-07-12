@@ -140,4 +140,9 @@ export interface FrontendPluginContext {
   };
   /** 调用后端已注册的 Command Handler，自动添加插件命名空间前缀 */
   invokeCommand<T = any>(type: string, payload?: any): Promise<T>;
+  
+  // Backward compatibility shims
+  registerPanel?(config: any): void;
+  registerMenu?(config: any): void;
+  registerToolbarButton?(config: any): void;
 }
