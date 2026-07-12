@@ -194,12 +194,19 @@ export function LiveClassroomView({
   const isClassLocked = !!(liveClassSelectedClassId && students
     .filter(s => s.locked_lesson_id === selectedLesson).length > 0);
 
-  // Extract classroomTools from active plugins
+  // Extract classroomTools from active plugins (supporting legacy and modern contributes['classroom.tool'])
   const activePlugins = plugins.filter(p => p.status === 'active');
   const classroomTools = activePlugins.flatMap(p => {
     try {
       const manifestObj = typeof p.manifest === 'string' ? JSON.parse(p.manifest) : p.manifest;
-      return (manifestObj.classroomTools || []).map((t: any) => ({
+      const legacyTools = manifestObj.classroomTools || [];
+      const modernTools = manifestObj.contributes?.['classroom.tool'] || [];
+      const allTools = [...legacyTools, ...modernTools];
+      
+      // Deduplicate by ID
+      const uniqueTools = Array.from(new Map(allTools.map(t => [t.id, t])).values());
+
+      return uniqueTools.map((t: any) => ({
         ...t,
         pluginId: p.id
       }));

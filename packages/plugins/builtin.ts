@@ -357,7 +357,7 @@ export const BuiltinPlugin = {
       'text',                        // 文本
       'quiz', 'rollcall', 'timer',   // 课堂互动（timer 为倒计时组件）
       'assignment',                  // 作业
-      'hello-world', 'html-applet', 'code-sandbox', 'math-graph', 'presentation', // 小组件
+      'hello-world', 'html-applet', 'code-sandbox', 'math-graph', 'presentation', 'plugin', // 小组件
     ];
     await actionRegistry.register({
       id: 'core-whiteboard-draw',

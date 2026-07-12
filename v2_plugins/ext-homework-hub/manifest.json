@@ -1,0 +1,56 @@
+{
+  "id": "ext-homework-hub",
+  "name": "作业中心",
+  "version": "1.0.0",
+  "main": "index.js",
+  "capabilitiesProposed": [
+    "ui:panel",
+    "plugin:read",
+    "vfs:write",
+    "event:publish"
+  ],
+  "contributes": {
+    "teacher.dashboard.widget": [
+      {
+        "id": "homework-teacher-widget",
+        "label": "作业中心",
+        "icon": "lucide-react:ClipboardCheck"
+      }
+    ],
+    "student.view": [
+      {
+        "id": "homework-student-view",
+        "label": "我的作业",
+        "icon": "lucide-react:BookOpen"
+      }
+    ],
+    "classroom.tool": [
+      {
+        "id": "tool-homework-hub",
+        "name": "作业中心",
+        "icon": "ClipboardCheck",
+        "description": "在课堂白板上投射作业中心面板",
+        "commandType": "whiteboard.draw",
+        "payload": {
+          "lessonId": "$lessonId",
+          "type": "plugin",
+          "data": "{\"pluginId\":\"ext-homework-hub\",\"title\":\"作业中心\",\"teacherWidgetId\":\"homework-teacher-widget\",\"studentWidgetId\":\"homework-student-view\",\"width\":800,\"height\":550}"
+        }
+      }
+    ]
+  },
+  "configuration": {
+    "properties": {
+      "maxFileSizeMB": {
+        "type": "integer",
+        "default": 10,
+        "description": "单个作业文件上传大小上限（MB）"
+      },
+      "allowedFileTypes": {
+        "type": "string",
+        "default": "*",
+        "description": "允许上传的文件类型，* 表示不限制，多个类型用逗号分隔，如 pdf,docx,zip"
+      }
+    }
+  }
+}

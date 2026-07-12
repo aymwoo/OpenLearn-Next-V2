@@ -13,6 +13,52 @@ import Markdown from 'react-markdown';
 import { getSocketInstance } from '../../services/socket-service';
 import { frontendEventBus } from '../../services/event-bus';
 import { appStore } from '../../store/appStore';
+import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
+
+function PluginCardRenderer({ pluginId, slot, widgetId, elementId, lessonId }: { 
+  pluginId: string; 
+  slot: string; 
+  widgetId: string; 
+  elementId: string;
+  lessonId: string;
+}) {
+  const extensionPoints = usePluginHostStore(state => state.extensionPoints);
+  const extensions = extensionPoints.get(slot as any) || [];
+  
+  // Find the specific extension by pluginId and id (widgetId)
+  const ext = extensions.find(e => e.pluginId === pluginId && e.id === widgetId);
+  
+  if (!ext) {
+    return (
+      <div className="text-center py-6 text-xs text-gray-400 italic flex flex-col justify-center items-center h-full">
+        <Loader2 size={16} className="animate-spin mb-1" />
+        <span>组件 [{widgetId}] 正在加载或未启用...</span>
+      </div>
+    );
+  }
+
+  // Create container ref and use useEffect to call render
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.innerHTML = '';
+      if (!ext.component && (ext as any).render) {
+        // If it is a DOM render function
+        Promise.resolve((ext as any).render(containerRef.current)).catch(console.error);
+      }
+    }
+  }, [ext, pluginId, widgetId]);
+
+  if (ext.component) {
+    return React.createElement(
+      React.lazy(ext.component),
+      { elementId, lessonId }
+    );
+  }
+
+  return <div ref={containerRef} className="w-full h-full min-h-0" />;
+}
 
 function RollCallWrapper({
   elementId,
@@ -2375,6 +2421,7 @@ export function InteractiveWhiteboard({
       const displayY = isResizingThis ? resizingState.y : (isDraggingThis ? activeDragElement.currentY : (data.y ?? 0));
 
       const getInitialWidth = (type: string) => {
+        if (type === 'plugin') return data.width || 500;
         if (type === 'hello-world') return 160;
         if (type === 'quiz') return 300;
         if (type === 'rollcall') return 320;
@@ -2387,6 +2434,7 @@ export function InteractiveWhiteboard({
       };
 
       const getInitialHeight = (type: string) => {
+        if (type === 'plugin') return data.height || 400;
         if (type === 'hello-world') return 64;
         if (type === 'quiz') return 280;
         if (type === 'rollcall') return 310;
@@ -2440,6 +2488,81 @@ export function InteractiveWhiteboard({
           </>
         );
       };
+
+      if (el.type === 'plugin') {
+        const isTeacherView = userRole === 'teacher';
+        const widgetId = isTeacherView ? data.teacherWidgetId : data.studentWidgetId;
+        const slot = isTeacherView ? 'teacher.dashboard.widget' : 'student.view';
+
+        return (
+          <Group key={el.id}>
+            <Html
+              divProps={{
+                style: {
+                  position: 'absolute',
+                  top: `${displayY}px`,
+                  left: `${displayX}px`,
+                  pointerEvents: 'none',
+                  zIndex: isThisSelected ? 20 : 10
+                }
+              }}
+            >
+              <div 
+                onPointerDown={(e) => {
+                  setSelectedShapeId(el.id);
+                  e.stopPropagation();
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const containerRect = containerRef.current?.getBoundingClientRect();
+                  if (containerRect) {
+                    setContextMenu({
+                      x: e.clientX - containerRect.left,
+                      y: e.clientY - containerRect.top,
+                      elementId: el.id
+                    });
+                  }
+                }}
+                className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative" 
+                style={{ pointerEvents: 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+              >
+                <div 
+                  className="bg-indigo-50 text-indigo-750 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-indigo-150 cursor-move select-none shrink-0"
+                  onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
+                  onPointerMove={handleElementDragMove}
+                  onPointerUp={handleElementDragEnd}
+                >
+                  <span>{data.title || 'Plugin Component'}</span>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setFullscreenElementId(el.id)} onPointerDown={e => e.stopPropagation()} className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-650 hover:text-indigo-900 transition-colors cursor-pointer flex items-center justify-center" title="全屏"><Maximize2 size={11} /></button>
+                    <button 
+                      onClick={() => handleElementDelete(el.id)}
+                      onPointerDown={e => e.stopPropagation()}
+                      className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-600 hover:text-red-500 transition-colors cursor-pointer flex items-center justify-center"
+                      title="删除组件"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                </div>
+                {!data.isMinimized && (
+                  <div className="flex-grow bg-white overflow-auto relative min-h-0 p-2">
+                    <PluginCardRenderer 
+                      pluginId={data.pluginId} 
+                      slot={slot} 
+                      widgetId={widgetId} 
+                      elementId={el.id}
+                      lessonId={lessonId}
+                    />
+                  </div>
+                )}
+                {!data.isMinimized && renderResizeHandles()}
+              </div>
+            </Html>
+          </Group>
+        );
+      }
 
       if (el.type === 'hello-world') {
         return (
