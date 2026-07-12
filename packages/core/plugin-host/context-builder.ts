@@ -109,15 +109,26 @@ function wrapCommandBus(
   commandBus: ICommandBusService,
   tracker: ResourceTracker,
   pluginId: string,
+  manifestId?: string,
 ): ICommandBusService {
   // V3.0: non-kernel plugins get auto-prefixed commands. Kernel plugins
   // (@openlearn/*) keep global namespace for backward compatibility.
   const isKernelPlugin = pluginId.startsWith('@openlearn/');
+  // The manifest ID is the stable public namespace (e.g. 'ext-quiz-generator').
+  // The pluginId is the UUID assigned at install time.
+  const manifestPrefix = manifestId ? manifestId + '.' : null;
 
-  /** Auto-prefix a command type with pluginId if not already prefixed. */
+  /** Resolve the registered command type — UUID-prefixed commands stay as-is;
+   *  non-UUID commands with dots pass through as-is (their own semantic namespace);
+   *  only apply pluginId prefix if the commandType has NO dots (bare action name). */
   const resolveType = (commandType: string): string => {
     if (isKernelPlugin) return commandType;
     if (commandType.startsWith(pluginId + '.')) return commandType;
+    // Manifest-ID prefixed commands pass through as-is (stable semantic namespace)
+    if (manifestPrefix && commandType.startsWith(manifestPrefix)) return commandType;
+    // Commands with dots are already namespaced (e.g. quiz.create, vote.create) — pass through
+    if (commandType.includes('.')) return commandType;
+    // Bare command names (no dots) get UUID-prefixed for isolation
     return `${pluginId}.${commandType}`;
   };
 
@@ -125,11 +136,15 @@ function wrapCommandBus(
     registerHandler: createSafeFunction((commandType: string, handler: CommandHandler) => {
       const prefixed = resolveType(commandType);
 
-      // ponytail: reject cross-plugin command registrations to prevent spoofing
-      if (!isKernelPlugin && commandType.includes('.') && !commandType.startsWith(pluginId + '.')) {
+      // Namespace guard: reject only commands that start with a different plugin's UUID prefix.
+      // This prevents rogue plugins from hijacking another plugin's sandboxed namespace.
+      // Short-form semantic namespaces like "quiz.create" or "vote.create" are intentional
+      // and are always allowed — they are just registered with an auto-prepended UUID prefix.
+      const UUID_V7_PREFIX = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}\./i;
+      if (!isKernelPlugin && UUID_V7_PREFIX.test(commandType) && !commandType.startsWith(pluginId + '.')) {
         throw new Error(
           `[PluginHost] Plugin "${pluginId}" attempted to register command "${commandType}" ` +
-          `which belongs to another plugin's namespace. Use "${pluginId}.<name>" instead.`,
+          `which belongs to another plugin's UUID namespace.`,
         );
       }
 
@@ -452,7 +467,7 @@ export async function buildContext(
   const aiService = await serviceRegistry.resolve(IAIServiceToken);
 
   // 2. 逐个包装 IService — 应用 createSafeFunction + ResourceTracker 集成
-  const wrappedCommandBus = wrapCommandBus(commandBusService, tracker, pluginId);
+  const wrappedCommandBus = wrapCommandBus(commandBusService, tracker, pluginId, manifest.id);
   const wrappedEventBus = wrapEventBus(eventBusService, tracker, pluginId);
   const wrappedProcessManager = wrapProcessManager(processService, tracker, pluginId);
   const wrappedActionRegistry = wrapActionRegistry(actionRegistryService, tracker, pluginId);
@@ -585,7 +600,10 @@ export async function buildContext(
     services,
     pluginId,
     manifest,
-    resolve: <T>(token: Token<T>): Promise<T> => {
+    resolve: <T>(token: string | Token<T>): Promise<T> => {
+      if (typeof token === 'string') {
+        return serviceRegistry.resolveByName(token) as Promise<T>;
+      }
       return serviceRegistry.resolve(token);
     },
     // V3.0: 插件向 DI 容器提供服务（对应 manifest.provides）

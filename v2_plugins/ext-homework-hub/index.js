@@ -1,5 +1,5 @@
-// index.ts
-import { IDatabaseToken } from "@openlearn/plugin-sdk";
+// v2_plugins/ext-homework-hub/index.ts
+var IDatabaseToken = { name: "@openlearn/core:IDatabase", version: "1.0.0" };
 var index_default = {
   manifest: {
     id: "ext-homework-hub",

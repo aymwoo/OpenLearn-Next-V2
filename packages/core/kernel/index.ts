@@ -272,8 +272,18 @@ export class Kernel {
            let dbPluginId = existingRow?.id;
            
            if (!existingRow) {
-             // Install new
-             const installedManifest = await this.pluginHost.installPluginFromZip(zipBuffer);
+             // Install new — but guard against concurrent-kernel race where another
+             // process installed this plugin between our check and this install attempt.
+             try {
+               const installedManifest = await this.pluginHost.installPluginFromZip(zipBuffer);
+             } catch (installErr: any) {
+               // If the failure is an "already exists" conflict (concurrent install), that's OK.
+               // We'll fall through and find the existing row below.
+               if (!installErr?.message?.includes('already exists') && !installErr?.message?.includes('unique')) {
+                 throw installErr; // Re-throw real errors
+               }
+               console.log(`[Kernel] Concurrent install detected for "${manifest.name}", using existing row.`);
+             }
              const newRows = this.db.prepare('SELECT id, manifest, status FROM plugins').all() as Array<{ id: string; manifest: string; status?: string }>;
              const newRow = newRows.find(row => {
                try {
@@ -312,12 +322,20 @@ export class Kernel {
            }
            
            if (dbPluginId) {
-             // If the plugin already exists in DB, preserve its status instead of forcing 'active'
-             const currentStatus = existingRow ? (existingRow.status || 'active') : 'active';
+             // Determine activation intent from the existing DB row.
+             // 'disabled' = user explicitly disabled → skip activation.
+             // 'installed' = freshly seeded (possibly by a concurrent kernel) → treat as active.
+             // null/undefined → default to active.
+             const rawStatus = existingRow ? (existingRow.status || 'active') : 'active';
+             const currentStatus = (rawStatus === 'installed') ? 'active' : rawStatus;
  
-             // Update DB status and execution_mode to worker
+             // Respect the manifest's declared executionMode — plugins opt-in to worker isolation
+             // by setting executionMode: 'worker' in their manifest.json
+             const pluginExecutionMode = (manifest as any).executionMode === 'worker' ? 'worker' : 'inline';
+
+             // Update DB status and execution_mode
              this.db.prepare('UPDATE plugins SET execution_mode = ?, status = ? WHERE id = ?')
-               .run('worker', currentStatus, dbPluginId);
+               .run(pluginExecutionMode, currentStatus, dbPluginId);
              
              // Activate plugin only if the status is active
              if (currentStatus === 'active') {

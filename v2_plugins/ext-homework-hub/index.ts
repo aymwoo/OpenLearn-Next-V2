@@ -1,5 +1,5 @@
 import type { PluginContext } from '@openlearn/plugin-sdk';
-import { IDatabaseToken } from '@openlearn/plugin-sdk';
+const IDatabaseToken = { name: '@openlearn/core:IDatabase', version: '1.0.0' } as any;
 
 export default {
   manifest: {

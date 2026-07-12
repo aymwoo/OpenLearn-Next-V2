@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Kernel } from '../kernel/index.js';
 import JSZip from 'jszip';
+import { IEventBusServiceToken } from '../di/index.js';
 
 describe('Worker RPC and Event Forwarding', () => {
   let kernel: Kernel;
@@ -17,6 +18,7 @@ describe('Worker RPC and Event Forwarding', () => {
       kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-dynamic-dep%'").run();
       kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-state-inherit%'").run();
       kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-alias-resolve%'").run();
+      kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-watchdog%'").run();
     } catch (e) {
       console.error("beforeEach cleanup error:", e);
     }
@@ -361,4 +363,175 @@ export default {
     // Cleanup
     kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-alias-resolve%'").run();
   }, 20000);
+
+  it('应该支持 Worker 沙箱崩溃时的看门狗自动拉起以及触发熔断器 (Watchdog & Circuit Breaker)', async () => {
+    await kernel.ready;
+
+    // Create a worker plugin that can crash on demand via a command
+    const zip = new JSZip();
+    const manifest = {
+      id: 'ext-test-watchdog',
+      name: 'Test Watchdog Supervisor',
+      version: '1.0.0',
+      description: 'Tests worker automatic crash recovery and circuit breaker',
+      main: 'index.js',
+      requires: [
+        '@openlearn/core:ICommandBusService@^1.0.0'
+      ],
+      capabilitiesProposed: ['vfs:write']
+    };
+
+    const pluginCode = `
+export default {
+  manifest: {
+    id: "ext-test-watchdog",
+    name: "Test Watchdog Supervisor",
+    version: "1.0.0",
+    main: "index.js",
+    capabilitiesProposed: ["vfs:write"]
+  },
+  activate: async (ctx, prevState) => {
+    globalThis.runCount = 1;
+    const commandBus = ctx.services.commandBus;
+    await commandBus.registerHandler('get_run_status', {
+      execute: async () => {
+        return { status: "ok" };
+      }
+    });
+    await commandBus.registerHandler('crash_now', {
+      execute: async () => {
+        setTimeout(() => {
+          throw new Error('Simulated Crash');
+        }, 10);
+        return { success: true };
+      }
+    });
+  },
+  deactivate: async () => {
+    return {};
+  }
+};
+    `;
+
+    zip.file('manifest.json', JSON.stringify(manifest));
+    zip.file('index.js', pluginCode);
+
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+    // Install zip
+    await kernel.pluginHost.installPluginFromZip(zipBuffer);
+
+    // Find the UUID of the installed plugin
+    const list = kernel.pluginHost.listPlugins();
+    const testPlugin = list.find(p => p.name === 'Test Watchdog Supervisor');
+    expect(testPlugin).toBeDefined();
+
+    // Set execution mode to worker and activate
+    kernel.db.prepare('UPDATE plugins SET execution_mode = ? WHERE id = ?').run('worker', testPlugin!.id);
+    await kernel.pluginHost.activatePlugin(testPlugin!.id);
+
+    // Verify it is active
+    expect(kernel.pluginHost.getPluginState(testPlugin!.id)).toBe('active');
+
+    // Query status
+    const res1 = await kernel.commandBus.execute({
+      id: 'cmd-watchdog-rc1',
+      type: `${testPlugin!.id}.get_run_status`,
+      actorId: 'user-teacher',
+      payload: {}
+    }) as any;
+    expect(res1.status).toBe('ok');
+
+    // Register event listener for plugin.crashed
+    let crashedEventReceived = false;
+    const eventBus = await kernel.serviceRegistry.resolve(IEventBusServiceToken);
+    const subscriber = async (event: any) => {
+      if (event.payload.pluginId === testPlugin!.id) {
+        crashedEventReceived = true;
+      }
+    };
+    eventBus.subscribe('plugin.crashed', subscriber);
+
+    // Trigger crash 1
+    await kernel.commandBus.execute({
+      id: 'cmd-watchdog-crash1',
+      type: `${testPlugin!.id}.crash_now`,
+      actorId: 'user-teacher',
+      payload: {}
+    });
+
+    // Wait for watchdog to auto-recover it (first crash has 1000ms delay + buffer)
+    await new Promise(resolve => setTimeout(resolve, 2500));
+
+    // Verify it recovered and registered handlers again!
+    const res2 = await kernel.commandBus.execute({
+      id: 'cmd-watchdog-rc2',
+      type: `${testPlugin!.id}.get_run_status`,
+      actorId: 'user-teacher',
+      payload: {}
+    }) as any;
+    expect(res2.status).toBe('ok');
+
+    // Trigger crash 2
+    await kernel.commandBus.execute({
+      id: 'cmd-watchdog-crash2',
+      type: `${testPlugin!.id}.crash_now`,
+      actorId: 'user-teacher',
+      payload: {}
+    });
+
+    // Wait for watchdog (2nd crash has 2000ms delay + buffer)
+    await new Promise(resolve => setTimeout(resolve, 3500));
+
+    // Verify it recovered again
+    const res3 = await kernel.commandBus.execute({
+      id: 'cmd-watchdog-rc3',
+      type: `${testPlugin!.id}.get_run_status`,
+      actorId: 'user-teacher',
+      payload: {}
+    }) as any;
+    expect(res3.status).toBe('ok');
+
+    // Trigger crash 3
+    await kernel.commandBus.execute({
+      id: 'cmd-watchdog-crash3',
+      type: `${testPlugin!.id}.crash_now`,
+      actorId: 'user-teacher',
+      payload: {}
+    });
+
+    // Wait for watchdog (3rd crash has 4000ms delay + buffer)
+    await new Promise(resolve => setTimeout(resolve, 5500));
+
+    // Verify it recovered again
+    const res4 = await kernel.commandBus.execute({
+      id: 'cmd-watchdog-rc4',
+      type: `${testPlugin!.id}.get_run_status`,
+      actorId: 'user-teacher',
+      payload: {}
+    }) as any;
+    expect(res4.status).toBe('ok');
+
+    // Trigger crash 4 (this should trigger the circuit breaker since count is 4 > 3)
+    await kernel.commandBus.execute({
+      id: 'cmd-watchdog-crash4',
+      type: `${testPlugin!.id}.crash_now`,
+      actorId: 'user-teacher',
+      payload: {}
+    });
+
+    // Wait for breaker (circuit breaker fires immediately)
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Verify plugin is now marked as 'error' state in DB
+    const finalRow = kernel.db.prepare("SELECT status FROM plugins WHERE id = ?").get(testPlugin!.id) as { status: string };
+    expect(finalRow.status).toBe('error');
+
+    // Verify that the eventBus received the crashed event!
+    expect(crashedEventReceived).toBe(true);
+
+    // Cleanup
+    eventBus.unsubscribe('plugin.crashed', subscriber);
+    kernel.db.prepare("DELETE FROM plugins WHERE id = ?").run(testPlugin!.id);
+  }, 40000);
 });

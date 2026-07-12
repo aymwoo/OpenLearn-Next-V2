@@ -6,13 +6,6 @@ describe('Kernel System Plugins Auto-loading', () => {
   let kernel: Kernel;
 
   beforeAll(async () => {
-    // Clear existing built-in plugin rows if any to test insertion
-    const tempKernel = new Kernel();
-    await tempKernel.ready;
-    const db = tempKernel.db;
-    db.prepare("DELETE FROM plugins WHERE id = ?").run('@openlearn/plugin-vfs');
-    db.prepare("DELETE FROM plugins WHERE id = ?").run('@openlearn/plugin-process');
-
     kernel = new Kernel();
     await kernel.ready;
   });

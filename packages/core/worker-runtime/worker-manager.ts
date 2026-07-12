@@ -40,6 +40,8 @@ import { ServiceHost } from './service-host.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import { createLogger } from '../../../server/utils/logger.js';
 import { WorkerActivateError, WorkerTimeoutError } from './errors.js';
+import { v7 as uuidv7 } from 'uuid';
+import { IEventBusServiceToken } from '../di/index.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -77,6 +79,11 @@ interface WorkerInstance {
   status: 'running' | 'terminating' | 'crashed';
   transport: IWorkerTransport;
   serviceHost: ServiceHost;
+  manifest?: Manifest;
+  sourceCode?: string;
+  serviceTokens?: string[];
+  eventBus?: EventBus;
+  pluginDir?: string;
 }
 
 // ── WorkerRegistry ───────────────────────────────────────────────────────────
@@ -87,9 +94,7 @@ interface WorkerInstance {
  * 职责：
  * - 按 pluginId 追踪活跃 Worker
  * - 通过 threadId → pluginId 反向映射
- * - 'exit' 事件监听器自动检测 Worker 崩溃（T-05-13）
- * - finally 块保证停用后清理（T-05-11）
- * - activeCount 上限控制（T-05-09）
+ * - 'exit' 事件监听器自动检测 Worker 崩溃并触发自动拉起监控
  */
 export class WorkerRegistry {
   /** pluginId → WorkerInstance */
@@ -97,6 +102,20 @@ export class WorkerRegistry {
 
   /** threadId → pluginId 反向映射（用于崩溃检测） */
   private workerByThreadId = new Map<number, string>();
+
+  /** pluginId → { count: number, lastTime: number } */
+  private crashStats = new Map<string, { count: number; lastTime: number }>();
+
+  public recreateWorkerCallback?: (
+    pluginId: string,
+    manifest: Manifest,
+    sourceCode: string,
+    serviceTokens: string[],
+    eventBus?: EventBus,
+    pluginDir?: string
+  ) => Promise<any>;
+
+  public onCircuitBreakerTriggered?: (pluginId: string) => void;
 
   /**
    * 注册一个 WorkerInstance。
@@ -131,7 +150,62 @@ export class WorkerRegistry {
         console.error(
           `[WorkerRegistry] Worker for "${pluginId}" exited with code ${code}`,
         );
+
+        const manifest = entry.manifest;
+        const sourceCode = entry.sourceCode;
+        const serviceTokens = entry.serviceTokens;
+        const eventBus = entry.eventBus;
+        const pluginDir = entry.pluginDir;
+
+        // Clean up registered commands and resources on the host side
+        if (entry.serviceHost && typeof entry.serviceHost.dispose === 'function') {
+          entry.serviceHost.dispose().catch(err => {
+            console.error(`[WorkerRegistry] Failed to dispose serviceHost on crash for "${pluginId}":`, err);
+          });
+        }
+
         this.cleanup(pluginId);
+
+        if (manifest && sourceCode && serviceTokens) {
+          let stats = this.crashStats.get(pluginId) || { count: 0, lastTime: 0 };
+          const now = Date.now();
+          if (now - stats.lastTime > 300000) {
+            stats.count = 0;
+          }
+          stats.count += 1;
+          stats.lastTime = now;
+          this.crashStats.set(pluginId, stats);
+
+          if (stats.count <= 3) {
+            const delay = Math.pow(2, stats.count - 1) * 1000;
+            console.warn(
+              `[WorkerRegistry] Worker for "${pluginId}" crashed. Watchdog restarting (attempt ${stats.count}/3) in ${delay}ms...`
+            );
+            setTimeout(async () => {
+              try {
+                if (this.recreateWorkerCallback) {
+                  await this.recreateWorkerCallback(
+                    pluginId,
+                    manifest,
+                    sourceCode,
+                    serviceTokens,
+                    eventBus,
+                    pluginDir
+                  );
+                }
+              } catch (err) {
+                console.error(`[WorkerRegistry] Watchdog recovery failed for "${pluginId}":`, err);
+              }
+            }, delay);
+          } else {
+            console.error(
+              `[WorkerRegistry] Worker for "${pluginId}" crashed ${stats.count} times in 5 mins. Circuit breaker triggered.`
+            );
+            if (this.onCircuitBreakerTriggered) {
+              this.onCircuitBreakerTriggered(pluginId);
+            }
+          }
+        }
       }
     });
   }
@@ -162,6 +236,7 @@ export class WorkerRegistry {
     const instance = this.workers.get(pluginId);
     if (!instance) return;
 
+    this.crashStats.delete(pluginId);
     instance.status = 'terminating';
     let state: any = undefined;
 
@@ -534,11 +609,19 @@ parentPort.on('message', async function(msg) {
 
       var PLUGIN_SHARED_MODULES = ['recharts', 'react-markdown', 'jspdf', 'jspdf-autotable', 'xlsx', 'lucide-react', 'uuid'];
 
+      var pluginLog = {
+        info: function() { console.log.apply(console, arguments); },
+        warn: function() { console.warn.apply(console, arguments); },
+        error: function() { console.error.apply(console, arguments); },
+        debug: function() { (console.debug || console.log).apply(console, arguments); }
+      };
+
       // 构建 PluginContext（带事件代理）
       var ctx = {
         services: services,
         pluginId: workerData.pluginId,
         manifest: msg.manifest,
+        log: pluginLog,
         resolve: async function(token) {
           var tokenName = typeof token === 'string' ? token : (token && token.name);
           if (!tokenName) throw new Error('Invalid token');
@@ -668,6 +751,47 @@ export class WorkerManager {
     this.serviceRegistry = serviceRegistry;
     this.capabilityGuard = capabilityGuard;
     this.db = db;
+
+    // Set up supervisor watchdog callbacks for auto-recovery
+    this.registry.recreateWorkerCallback = async (
+      pluginId,
+      manifest,
+      sourceCode,
+      serviceTokens,
+      eventBus,
+      pluginDir,
+    ) => {
+      console.log(`[WorkerManager] Watchdog supervisor restarting worker for plugin "${pluginId}"`);
+      await this.createWorker(
+        pluginId,
+        manifest,
+        sourceCode,
+        serviceTokens,
+        eventBus,
+        pluginDir,
+      );
+    };
+
+    this.registry.onCircuitBreakerTriggered = async (pluginId) => {
+      // Set plugin status to ERROR in database
+      this.db.prepare("UPDATE plugins SET status = ? WHERE id = ?").run('error', pluginId);
+      
+      // Also publish plugin.crashed event to the EventBus
+      try {
+        const eventBusService = await this.serviceRegistry.resolve(IEventBusServiceToken);
+        if (eventBusService) {
+          eventBusService.publish({
+            id: uuidv7(),
+            type: 'plugin.crashed',
+            source: 'worker-registry',
+            payload: { pluginId },
+            timestamp: Date.now(),
+          });
+        }
+      } catch (err) {
+        console.error('[WorkerManager] Failed to publish plugin.crashed event:', err);
+      }
+    };
   }
 
   /**
@@ -774,6 +898,11 @@ export class WorkerManager {
       status: 'running',
       transport,
       serviceHost,
+      manifest,
+      sourceCode,
+      serviceTokens,
+      eventBus,
+      pluginDir,
     });
 
     // 8. 设置 transport 消息路由 → ServiceHost 及生命周期拦截

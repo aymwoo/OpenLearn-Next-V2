@@ -817,6 +817,35 @@ interface IUIService {
 | `classroom.tool` | 课堂工具 |
 | `global.setting` | 全局设置页扩展（v5.1） |
 
+### 6.4 宿主依赖共享网关 (HostSharedDeps)
+
+为了避免每个第三方插件前端重复打包庞大的基础库（如 React、ReactDOM、Recharts、LucideReact 等），OpenLearnV2 提供了 **宿主依赖共享网关 (HostSharedDeps)**。
+
+在加载插件的 `frontend.js` 时，基座程序会自动将导入指向全局共享对象。
+
+#### 6.4.1 全局暴露的依赖
+宿主环境在全局 `window.HostSharedDeps` 暴露了以下对象：
+- `React` (对应 NPM 包 `react`)
+- `ReactDOM` (对应 NPM 包 `react-dom`)
+- `Recharts` (对应 NPM 包 `recharts`)
+- `LucideReact` (对应 NPM 包 `lucide-react`)
+
+#### 6.4.2 插件编译配置
+当你在编写插件的前端代码（如 `frontend.ts`）并使用构建工具（如 `esbuild` 或 `vite`）进行打包时，请务必将上述库配置为 **external**。这样打包出的 `frontend.js` 将仅有数十 KB 的大小。
+
+**esbuild 示例：**
+```javascript
+import esbuild from 'esbuild';
+
+esbuild.build({
+  entryPoints: ['src/frontend.tsx'],
+  bundle: true,
+  outfile: 'dist/frontend.js',
+  external: ['react', 'react-dom', 'recharts', 'lucide-react'],
+  format: 'esm',
+});
+```
+
 ---
 
 ## 7. 安全与权限
@@ -851,6 +880,20 @@ await actionRegistry.register({
 - 教师/管理员在安装时可审查权限
 - 运行时通过 CapabilityGuard 拦截检查
 - 支持通配符匹配（如 `lesson:*` 匹配所有课程操作）
+
+### 7.3 指令隔离与命名空间保护 (Command Namespace Isolation)
+
+为防止第三方插件恶意冒充、拦截或篡改内核及其他插件的敏感指令，OpenLearnV2 实施了 **命名空间防欺骗保护** 机制：
+
+#### 7.3.1 命令解析规则 (Command Resolving Rules)
+当插件通过 `ctx.services.commandBus.registerHandler` 注册或调用命令时：
+1. **系统及内核插件**（命名空间以 `@openlearn/` 开头）：拥有全局命名空间访问权，可以直接使用任何简短指令名称。
+2. **点号命名空间指令**（名称包含 `.`，如 `quiz.create` 或 `vote.cast`）：视为插件自有的语义命名空间，将直接以原名在全局注册，保证旧版组件调用与协同工具无感工作。
+3. **裸字符指令**（名称不含 `.`，如 `get_run_status`）：系统会自动在注册时为其添加 `[pluginId].` 前缀（例如 `019f545a-xxxx.get_run_status`），以实现强沙箱隔离。
+
+#### 7.3.2 防越权劫持限制
+- 内核在命令注册阶段自动执行 **UUID 强检查**。
+- 如果第三方插件企图注册以 **其他非本插件的 UUID 格式** 作为前缀的指令（例如插件 A 试图注册以插件 B 的 UUID `019f5509-xxxx` 为前缀的指令），注册拦截器将抛出异常并阻止激活，彻底防范命名空间劫持与越权调用。
 
 ---
 
