@@ -375,7 +375,10 @@ stateDiagram-v2
 ### 2.6.2 指令总线发送 (CommandBus)
 所有的具体业务逻辑应该封装成特定的 Command 派发。宿主主线程通过统一的拦截器对 Command 执行人进行身份审计，并实现操作流的撤销/恢复以及教师端的审批同步拦截。
 
-在沙箱 Worker 或 ESM 在体加载运行环境下，任何非系统插件通过 `commandBus.registerHandler(type, handler)` 注册的命令，其底层代理与宿主拦截器会自动为该命令补充以其插件 UUID 命名的命名空间前缀（例如：`019f3bd3-901c-77e3-a8be-70a4c5c95983.my_command`）。这一设计能够完全隔离各插件的指令域，消除同名命令冲突，并从根本上防御了跨插件命名空间伪造或恶意篡改的安全风险。
+在沙箱 Worker 或 ESM 在体加载运行环境下，系统采用以下指令隔离规则：
+1. **语义命名空间指令**：如果注册的命令名称包含点号 `.`（如 `quiz.create`、`vote.cast`），系统会视其为语义化的专属命名空间，直接在全局注册，保证跨组件指令调用的语义连续性。
+2. **普通裸指令**：如果不包含点号 `.`，系统底层代理会自动将其重映射为以该插件 UUID 为前缀的专属命令（例如 `019f3bd3-901c-77e3-a8be-70a4c5c95983.my_command`），防止命名冲突并隔离指令作用域。
+3. **命名空间越权防护**：注册拦截器对所有 UUID 前缀进行严格审查，如果第三方插件企图伪造或注册以其他插件的 UUID 为前缀的命令，系统将触发 `NamespaceViolationError` 并阻断激活，确保命名空间安全性。
 
 ---
 
@@ -416,6 +419,12 @@ stateDiagram-v2
 
 为了避免每个 ZIP 插件都重复打包体积庞大的第三方包，系统支持依赖隔离动态寻路。
 * **重定向解析**：沙箱底层拦截 require 命令，通过 Node 的 `module.createRequire` 重定向到当前插件本级 node_modules 目录寻址，确保三方库版本互不干扰且保证沙箱隔离纯净。详细可引用的共享模块请参阅 [4.12 共享模块参考手册 (Shared Modules Reference)](#412-共享模块参考手册-shared-modules-reference)。
+
+### 2.11.2 前端宿主依赖共享网关 (HostSharedDeps)
+为了支持前端微前端插件的高效轻量化，系统在主浏览器进程中引入了 **HostSharedDeps 依赖共享网关**：
+- **全局依赖共享**：主程序在 `window.HostSharedDeps` 中暴露了 `React`、`ReactDOM`、`Recharts` 与 `LucideReact` 实例。
+- **模块加载拦截器 (Import Map)**：在 `index.html` 中配置了原生的 ES Module Import Map，当浏览器动态加载三方插件的 `frontend.js` 时，如果遇到裸导入（如 `import React from 'react'`），会通过 inline `data:` URL 模块透明重定向至 `window.HostSharedDeps` 中暴露的宿主单例。
+- **打体精简效果**：插件开发者在编写前端代码时，在构建配置（如 `vite.config` 或 `esbuild` 插件）中将上述库配置为 `external`，使插件 ZIP 安装包的大小减少 90% 以上（直接缩减至数 KB 至数十 KB 级别），实现极速投影和低网络加载延迟。
 
 ---
 
