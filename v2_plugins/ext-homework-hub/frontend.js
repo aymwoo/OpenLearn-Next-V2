@@ -307,14 +307,125 @@ function buildAssignmentCard(asgn, frontendCtx, msgBox, role, listContainer) {
       card.appendChild(fb);
     }
 
-    if (!submitted) {
-      // 文件上传区域
-      const uploadArea = el('div', { style: { marginTop: '10px' } });
+    // 构造通用的文件上传 UI 区域
+    const createUploadArea = (isReSubmit = false, onCancel = null) => {
+      const uploadArea = el('div', {
+        style: {
+          marginTop: '12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px'
+        }
+      });
+
       const fileInput = el('input', {
         type: 'file',
-        id: `file-${asgn.id}`,
-        style: { fontSize: '13px' }
+        id: `file-${asgn.id}-${isReSubmit ? 're' : 'init'}`,
+        style: { display: 'none' }
       });
+
+      const dropZone = el('div', {
+        style: {
+          border: `2px dashed ${STYLE.borderColor}`,
+          borderRadius: '8px',
+          padding: '20px 24px',
+          textAlign: 'center',
+          backgroundColor: '#fafafa',
+          cursor: 'pointer',
+          transition: 'all 0.2s ease',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px'
+        },
+        onDragOver: (e) => {
+          e.preventDefault();
+          dropZone.style.borderColor = STYLE.primaryColor;
+          dropZone.style.backgroundColor = '#eff6ff';
+        },
+        onDragLeave: () => {
+          dropZone.style.borderColor = STYLE.borderColor;
+          dropZone.style.backgroundColor = '#fafafa';
+        },
+        onDrop: (e) => {
+          e.preventDefault();
+          dropZone.style.borderColor = STYLE.borderColor;
+          dropZone.style.backgroundColor = '#fafafa';
+          const files = e.dataTransfer?.files;
+          if (files && files.length > 0) {
+            fileInput.files = files;
+            fileInput.dispatchEvent(new Event('change'));
+          }
+        },
+        onClick: () => {
+          fileInput.click();
+        }
+      });
+
+      dropZone.addEventListener('mouseenter', () => {
+        if (!fileInput.files?.length) {
+          dropZone.style.borderColor = STYLE.primaryColor;
+          dropZone.style.backgroundColor = '#f3f4f6';
+        }
+      });
+      dropZone.addEventListener('mouseleave', () => {
+        if (!fileInput.files?.length) {
+          dropZone.style.borderColor = STYLE.borderColor;
+          dropZone.style.backgroundColor = '#fafafa';
+        }
+      });
+
+      const icon = el('span', { style: { fontSize: '28px' } }, '📁');
+      const text = el('div', { style: { fontSize: '13px', color: STYLE.textSecondary, fontWeight: '500' } }, '点击或将作业文件拖拽到此处选择');
+      const subText = el('div', { style: { fontSize: '11px', color: '#9ca3af' } }, '支持任意文件格式');
+
+      dropZone.appendChild(icon);
+      dropZone.appendChild(text);
+      dropZone.appendChild(subText);
+
+      const fileInfoRow = el('div', {
+        style: {
+          display: 'none',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '10px 14px',
+          backgroundColor: '#f3f4f6',
+          borderRadius: '6px',
+          border: `1px solid ${STYLE.borderColor}`,
+          fontSize: '13px'
+        }
+      });
+
+      const fileNameSpan = el('span', { style: { fontWeight: '500', color: STYLE.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '8px' } });
+      const clearBtn = el('button', {
+        style: {
+          background: 'none',
+          border: 'none',
+          color: STYLE.dangerColor,
+          cursor: 'pointer',
+          fontSize: '14px',
+          padding: '2px 6px'
+        },
+        onClick: (e) => {
+          e.stopPropagation();
+          fileInput.value = '';
+          fileInput.dispatchEvent(new Event('change'));
+        }
+      }, '❌');
+
+      fileInfoRow.appendChild(fileNameSpan);
+      fileInfoRow.appendChild(clearBtn);
+
+      const actionRow = el('div', {
+        style: {
+          display: 'none',
+          gap: '8px',
+          alignItems: 'center',
+          marginTop: '4px'
+        }
+      });
+
       const uploadBtn = el('button', {
         style: btnStyle(STYLE.primaryColor),
         onClick: async () => {
@@ -325,9 +436,8 @@ function buildAssignmentCard(asgn, frontendCtx, msgBox, role, listContainer) {
           }
 
           try {
-            // 读取文件为 base64
             const base64 = await readFileAsBase64(file);
-            const base64Content = base64.split(',')[1]; // 去掉 data:*/*;base64, 前缀
+            const base64Content = base64.split(',')[1];
 
             showMessage(msgBox, '正在提交...', 'info');
             await frontendCtx.invokeCommand('submit', {
@@ -336,24 +446,79 @@ function buildAssignmentCard(asgn, frontendCtx, msgBox, role, listContainer) {
               fileContentBase64: base64Content
             });
             showMessage(msgBox, '✅ 提交成功！', 'success');
-            // 重新加载列表
             setTimeout(() => loadAssignmentList(listContainer, frontendCtx, msgBox, 'student'), 800);
           } catch (err) {
             showMessage(msgBox, `提交失败: ${err.message}`, 'error');
           }
         }
-      }, '📤 提交作业');
+      }, '📤 确认提交作业');
+
+      actionRow.appendChild(uploadBtn);
+
+      if (isReSubmit && onCancel) {
+        const cancelBtn = el('button', {
+          style: btnStyle('#fff', STYLE.borderColor, STYLE.textSecondary),
+          onClick: onCancel
+        }, '取消');
+        actionRow.appendChild(cancelBtn);
+      }
+
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files?.[0];
+        if (file) {
+          fileNameSpan.textContent = `📄 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+          fileInfoRow.style.display = 'flex';
+          dropZone.style.display = 'none';
+          actionRow.style.display = 'flex';
+        } else {
+          fileInfoRow.style.display = 'none';
+          dropZone.style.display = 'flex';
+          actionRow.style.display = 'none';
+        }
+      });
 
       uploadArea.appendChild(fileInput);
-      uploadArea.appendChild(uploadBtn);
-      card.appendChild(uploadArea);
+      uploadArea.appendChild(dropZone);
+      uploadArea.appendChild(fileInfoRow);
+      uploadArea.appendChild(actionRow);
+
+      return uploadArea;
+    };
+
+    if (!submitted) {
+      card.appendChild(createUploadArea(false));
     } else if (!graded) {
-      // 已提交待批改
-      const pending = el('div', {
-        style: { marginTop: '8px', padding: '8px', backgroundColor: '#eff6ff', borderRadius: '6px', fontSize: '13px', color: '#1e40af' }
+      const pendingArea = el('div', {
+        style: { marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }
       });
-      pending.textContent = `📎 ${asgn.submission.filename || '已提交'} — 等待教师批改中...`;
-      card.appendChild(pending);
+
+      const pendingStatus = el('div', {
+        style: { padding: '10px', backgroundColor: '#eff6ff', borderRadius: '6px', fontSize: '13px', color: '#1e40af', border: '1px solid #bfdbfe', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
+      });
+      pendingStatus.innerHTML = `
+        <span style="font-weight:500;">📎 已交: ${escapeHtml(asgn.submission.filename || '已提交')}</span>
+        <span style="font-size:11px;color:#6b7280;margin-left:auto;margin-right:10px;">🕐 ${formatDate(asgn.submission.submittedAt)}</span>
+      `;
+
+      let reUploadArea = null;
+      const reSubmitBtn = el('button', {
+        style: btnStyle('#fff', STYLE.primaryColor, STYLE.primaryColor),
+        onClick: () => {
+          pendingStatus.style.display = 'none';
+          reSubmitBtn.style.display = 'none';
+          
+          reUploadArea = createUploadArea(true, () => {
+            reUploadArea.remove();
+            pendingStatus.style.display = 'flex';
+            reSubmitBtn.style.display = 'block';
+          });
+          pendingArea.appendChild(reUploadArea);
+        }
+      }, '🔄 重新提交');
+
+      pendingArea.appendChild(pendingStatus);
+      pendingArea.appendChild(reSubmitBtn);
+      card.appendChild(pendingArea);
     }
   }
 
