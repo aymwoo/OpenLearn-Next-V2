@@ -786,37 +786,6 @@ export function PluginCenter({
                   </div>
                 );
               })}
-              {/* Add static placeholders to fill grid */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group flex flex-col justify-between">
-                <div className="absolute top-0 right-0 p-3">
-                  <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">
-                    Featured
-                  </span>
-                </div>
-                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center mb-4 border border-blue-100 group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0">
-                  <Puzzle size={24} />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-semibold text-gray-900 mb-1">
-                    Quiz Component
-                  </h4>
-                  <p className="text-sm text-gray-500 mb-4 line-clamp-2">
-                    Drop a multiple-choice quiz onto the whiteboard. Agent
-                    supported capabilities.
-                  </p>
-                </div>
-                <div className="flex items-center justify-between shrink-0">
-                  <span className="text-xs font-medium text-gray-400">
-                    Community
-                  </span>
-                  <button
-                    onClick={() => setStoreTab('dev')}
-                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 hover:shadow-sm transition-all focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-                  >
-                    Add via Dev
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         ) : storeTab === 'logs' ? (
