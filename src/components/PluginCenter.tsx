@@ -563,40 +563,68 @@ export function PluginCenter({
           <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
             <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-4">
               {plugins.map((plugin) => {
-                let manifestInfo = {
+                let manifestInfo: {
+                  description: string;
+                  author: string;
+                  version: string;
+                  manifestId: string;
+                  capabilities: string[];
+                  toolCount: number;
+                  studentViewCount: number;
+                  teacherWidgetCount: number;
+                  hasConfig: boolean;
+                } = {
                   description: '扩展 Edu OS 功能的自定义插件。',
                   author: 'Community',
+                  version: '',
+                  manifestId: '',
+                  capabilities: [],
+                  toolCount: 0,
+                  studentViewCount: 0,
+                  teacherWidgetCount: 0,
+                  hasConfig: false,
                 };
-                let toolCount = 0;
-                let hasConfig = false;
                 try {
                   const parsed = JSON.parse(plugin.manifest);
                   if (parsed.description) manifestInfo.description = parsed.description;
                   if (parsed.author) manifestInfo.author = parsed.author;
-                  // V3.0: 统计贡献点数量（classroomTools 或 contributes）
+                  if (parsed.version) manifestInfo.version = parsed.version;
+                  if (parsed.id) manifestInfo.manifestId = parsed.id;
+                  if (parsed.capabilitiesProposed) manifestInfo.capabilities = parsed.capabilitiesProposed;
                   if (parsed.contributes?.['classroom.tool']) {
-                    toolCount = parsed.contributes['classroom.tool'].length;
+                    manifestInfo.toolCount = parsed.contributes['classroom.tool'].length;
                   } else if (parsed.classroomTools) {
-                    toolCount = parsed.classroomTools.length;
+                    manifestInfo.toolCount = parsed.classroomTools.length;
                   }
-                  // V3.1: 检查是否有配置项
+                  if (parsed.contributes?.['student.view']) {
+                    manifestInfo.studentViewCount = parsed.contributes['student.view'].length;
+                  }
+                  if (parsed.contributes?.['teacher.dashboard.widget']) {
+                    manifestInfo.teacherWidgetCount = parsed.contributes['teacher.dashboard.widget'].length;
+                  }
                   const props = parsed.configuration?.properties;
                   if (props && Object.keys(props).length > 0) {
-                    hasConfig = true;
+                    manifestInfo.hasConfig = true;
                   }
                 } catch (e) {
                   // ignore parse error
                 }
 
+                const installDate = plugin.created_at
+                  ? new Date(plugin.created_at).toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                  : '—';
+
+                const isSystem = plugin.id.startsWith('@openlearn/');
+
                 return (
                   <div
                     key={plugin.id}
-                    className={`bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group flex flex-col justify-between ${
-                      plugin.status !== 'active' ? 'opacity-80' : ''
+                    className={`bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden group flex flex-col gap-3 ${
+                      plugin.status !== 'active' ? 'opacity-75' : ''
                     }`}
                   >
+                    {/* Status & type badges */}
                     <div className="absolute top-0 right-0 p-3 flex items-center gap-1.5">
-                      {/* Premium breathing LED status tag */}
                       <span
                         className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 border transition-all ${
                           plugin.status === 'active'
@@ -612,87 +640,130 @@ export function PluginCenter({
                           }
                         </span>
                       </span>
-
-                      {/* ESM ZIP badge */}
                       {plugin.execution_mode === 'esm' && (
                         <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-150 px-1.5 py-0.5 rounded uppercase tracking-wider">
-                          {lang === 'zh' ? 'ESM 插件' : 'ESM'}
+                          ESM
                         </span>
                       )}
-
-                      {/* Phase 9: Legacy badge */}
                       {(plugin as any).execution_mode === 'legacy' && (
                         <LegacyPluginBadge lang={lang} />
                       )}
-                    </div>
-                    <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center mb-4 border border-indigo-100 group-hover:bg-indigo-600 group-hover:text-white transition-colors shrink-0">
-                      <Blocks size={24} />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-900 mb-1 line-clamp-1">
-                        {plugin.name}
-                      </h4>
-                      <p className="text-sm text-gray-500 mb-2 line-clamp-2">
-                        {manifestInfo.description}
-                      </p>
-                      {/* V3.0: 声明式贡献点提示 */}
-                      {toolCount > 0 && (
-                        <p className="text-xs text-indigo-600 mb-3 flex items-center gap-1">
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400" />
-                          {lang === 'zh'
-                            ? `${toolCount} 个课堂工具`
-                            : `${toolCount} classroom tool${toolCount > 1 ? 's' : ''}`}
-                        </p>
+                      {isSystem && (
+                        <span className="text-[10px] font-bold bg-violet-50 text-violet-700 border border-violet-200 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                          {lang === 'zh' ? '系统' : 'SYSTEM'}
+                        </span>
                       )}
                     </div>
-                    <div className="flex items-center justify-between shrink-0">
-                      <span className="text-xs font-medium text-gray-400">
-                        By {manifestInfo.author}
-                      </span>
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => onToggle(plugin.id)}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                            plugin.status === 'active'
-                              ? 'bg-amber-50 text-amber-600 hover:bg-amber-100'
-                              : 'bg-green-50 text-green-600 hover:bg-green-100'
-                          }`}
-                        >
-                          {plugin.status === 'active'
-                            ? lang === 'zh'
-                              ? '禁用'
-                              : 'Disable'
-                            : lang === 'zh'
-                              ? '启用'
-                              : 'Enable'}
-                        </button>
-                        {hasConfig && (
-                          <button
-                            onClick={() => setSettingsPlugin({ id: plugin.id, name: plugin.name, manifest: plugin.manifest })}
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors flex items-center gap-1"
-                          >
-                            <Settings size={12} />
-                            {lang === 'zh' ? '设置' : 'Settings'}
-                          </button>
-                        )}
-                        {!plugin.id.startsWith('@openlearn/') && (
-                          <button
-                            onClick={() => onDelete(plugin.id)}
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                          >
-                            {lang === 'zh' ? '删除' : 'Delete'}
-                          </button>
-                        )}
-                        {plugin.execution_mode === 'legacy' && (
-                          <button
-                            onClick={() => document.getElementById('zip-plugin-uploader')?.click()}
-                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors"
-                            title={lang === 'zh' ? '上传新格式 ZIP 包以完成迁移' : 'Upload new-format ZIP package to migrate'}
-                          >
-                            {lang === 'zh' ? '迁移' : 'Migrate'}
-                          </button>
+
+                    {/* Icon + name */}
+                    <div className="flex items-start gap-3 pr-24">
+                      <div className="w-11 h-11 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center border border-indigo-100 group-hover:bg-indigo-600 group-hover:text-white transition-colors shrink-0">
+                        <Blocks size={22} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-semibold text-gray-900 line-clamp-1">{plugin.name}</h4>
+                          {manifestInfo.version && (
+                            <span className="text-[10px] font-mono font-bold bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded shrink-0">
+                              v{manifestInfo.version}
+                            </span>
+                          )}
+                        </div>
+                        {manifestInfo.manifestId && (
+                          <p className="text-[10px] text-gray-400 font-mono truncate mt-0.5" title={manifestInfo.manifestId}>
+                            {manifestInfo.manifestId}
+                          </p>
                         )}
                       </div>
+                    </div>
+
+                    {/* Description */}
+                    <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">
+                      {manifestInfo.description}
+                    </p>
+
+                    {/* Contribution points */}
+                    {(manifestInfo.toolCount > 0 || manifestInfo.studentViewCount > 0 || manifestInfo.teacherWidgetCount > 0) && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {manifestInfo.toolCount > 0 && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-0.5 rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                            {lang === 'zh' ? `${manifestInfo.toolCount} 个课堂工具` : `${manifestInfo.toolCount} classroom tool${manifestInfo.toolCount > 1 ? 's' : ''}`}
+                          </span>
+                        )}
+                        {manifestInfo.studentViewCount > 0 && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-sky-50 text-sky-600 border border-sky-100 px-2 py-0.5 rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                            {lang === 'zh' ? `${manifestInfo.studentViewCount} 个学生视图` : `${manifestInfo.studentViewCount} student view${manifestInfo.studentViewCount > 1 ? 's' : ''}`}
+                          </span>
+                        )}
+                        {manifestInfo.teacherWidgetCount > 0 && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-amber-50 text-amber-600 border border-amber-100 px-2 py-0.5 rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                            {lang === 'zh' ? `${manifestInfo.teacherWidgetCount} 个教师组件` : `${manifestInfo.teacherWidgetCount} teacher widget${manifestInfo.teacherWidgetCount > 1 ? 's' : ''}`}
+                          </span>
+                        )}
+                        {manifestInfo.capabilities.length > 0 && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded-full">
+                            <Shield size={9} />
+                            {lang === 'zh' ? `${manifestInfo.capabilities.length} 项权限` : `${manifestInfo.capabilities.length} permission${manifestInfo.capabilities.length > 1 ? 's' : ''}`}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Metadata strip: author + install date */}
+                    <div className="flex items-center justify-between text-[10px] text-gray-400 border-t border-gray-100 pt-2">
+                      <span className="flex items-center gap-1">
+                        <Users size={10} />
+                        <span>{manifestInfo.author}</span>
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span>{lang === 'zh' ? '安装于' : 'Installed'}</span>
+                        <span className="font-mono">{installDate}</span>
+                      </span>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        onClick={() => onToggle(plugin.id)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                          plugin.status === 'active'
+                            ? 'bg-amber-50 text-amber-600 hover:bg-amber-100'
+                            : 'bg-green-50 text-green-600 hover:bg-green-100'
+                        }`}
+                      >
+                        {plugin.status === 'active'
+                          ? lang === 'zh' ? '禁用' : 'Disable'
+                          : lang === 'zh' ? '启用' : 'Enable'}
+                      </button>
+                      {manifestInfo.hasConfig && (
+                        <button
+                          onClick={() => setSettingsPlugin({ id: plugin.id, name: plugin.name, manifest: plugin.manifest })}
+                          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors flex items-center gap-1"
+                        >
+                          <Settings size={12} />
+                          {lang === 'zh' ? '设置' : 'Settings'}
+                        </button>
+                      )}
+                      {!isSystem && (
+                        <button
+                          onClick={() => onDelete(plugin.id)}
+                          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                        >
+                          {lang === 'zh' ? '删除' : 'Delete'}
+                        </button>
+                      )}
+                      {plugin.execution_mode === 'legacy' && (
+                        <button
+                          onClick={() => document.getElementById('zip-plugin-uploader')?.click()}
+                          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                          title={lang === 'zh' ? '上传新格式 ZIP 包以完成迁移' : 'Upload new-format ZIP package to migrate'}
+                        >
+                          {lang === 'zh' ? '迁移' : 'Migrate'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
