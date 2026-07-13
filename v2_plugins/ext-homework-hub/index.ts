@@ -50,7 +50,7 @@ export default {
         const id = `asgn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const createdAt = new Date().toISOString();
 
-        db.prepare(
+        await db.prepare(
           `INSERT INTO ${tbl} (id, title, description, deadline, created_at, teacher_id) VALUES (?, ?, ?, ?, ?, ?)`
         ).run(id, title, description || '', deadline || '', createdAt, teacherId);
 
@@ -77,31 +77,33 @@ export default {
         const subTbl = ctx.db.table('submissions');
         const actorId = command.actorId;
 
-        const rows = db.prepare(
+        const rows = (await db.prepare(
           `SELECT * FROM ${tbl} ORDER BY created_at DESC`
-        ).all() as Array<Record<string, unknown>>;
+        ).all()) as Array<Record<string, unknown>>;
 
         // 同时查询当前用户的提交状态
-        const assignments = rows.map((row) => {
-          const submission = db.prepare(
-            `SELECT id, submitted_at, score, feedback FROM ${subTbl} WHERE assignment_id = ? AND student_id = ?`
-          ).get(row.id, actorId) as Record<string, unknown> | undefined;
+        const assignments = await Promise.all(
+          rows.map(async (row) => {
+            const submission = (await db.prepare(
+              `SELECT id, submitted_at, score, feedback FROM ${subTbl} WHERE assignment_id = ? AND student_id = ?`
+            ).get(row.id, actorId)) as Record<string, unknown> | undefined;
 
-          return {
-            id: row.id,
-            title: row.title,
-            description: row.description,
-            deadline: row.deadline,
-            createdAt: row.created_at,
-            teacherId: row.teacher_id,
-            submission: submission ? {
-              id: submission.id,
-              submittedAt: submission.submitted_at,
-              score: submission.score,
-              feedback: submission.feedback
-            } : null
-          };
-        });
+            return {
+              id: row.id,
+              title: row.title,
+              description: row.description,
+              deadline: row.deadline,
+              createdAt: row.created_at,
+              teacherId: row.teacher_id,
+              submission: submission ? {
+                id: submission.id,
+                submittedAt: submission.submitted_at,
+                score: submission.score,
+                feedback: submission.feedback
+              } : null
+            };
+          })
+        );
 
         return { assignments };
       }
@@ -134,7 +136,7 @@ export default {
         const submissionId = `${assignmentId}_${studentId}`;
         const submittedAt = new Date().toISOString();
 
-        db.prepare(
+        await db.prepare(
           `INSERT OR REPLACE INTO ${tbl} (id, assignment_id, student_id, filename, file_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?)`
         ).run(submissionId, assignmentId, studentId, filename, destPath, submittedAt);
 
@@ -154,9 +156,9 @@ export default {
         const db = await ctx.resolve<any>(IDatabaseToken);
         const tbl = ctx.db.table('submissions');
 
-        const rows = db.prepare(
+        const rows = (await db.prepare(
           `SELECT * FROM ${tbl} WHERE assignment_id = ? ORDER BY submitted_at DESC`
-        ).all(assignmentId) as Array<Record<string, unknown>>;
+        ).all(assignmentId)) as Array<Record<string, unknown>>;
 
         return {
           assignmentId,
@@ -183,9 +185,9 @@ export default {
         const db = await ctx.resolve<any>(IDatabaseToken);
         const tbl = ctx.db.table('submissions');
 
-        const submission = db.prepare(
+        const submission = (await db.prepare(
           `SELECT * FROM ${tbl} WHERE id = ?`
-        ).get(submissionId) as Record<string, unknown> | undefined;
+        ).get(submissionId)) as Record<string, unknown> | undefined;
 
         if (!submission) {
           throw new Error(`未找到提交记录: ${submissionId}`);
@@ -210,9 +212,9 @@ export default {
         const db = await ctx.resolve<any>(IDatabaseToken);
         const tbl = ctx.db.table('submissions');
 
-        const rows = db.prepare(
+        const rows = (await db.prepare(
           `SELECT id, student_id, filename, file_path FROM ${tbl} WHERE assignment_id = ?`
-        ).all(assignmentId) as Array<Record<string, unknown>>;
+        ).all(assignmentId)) as Array<Record<string, unknown>>;
 
         return {
           assignmentId,
@@ -235,9 +237,9 @@ export default {
         const db = await ctx.resolve<any>(IDatabaseToken);
         const tbl = ctx.db.table('submissions');
 
-        const result = db.prepare(
+        const result = (await db.prepare(
           `UPDATE ${tbl} SET score = ?, feedback = ? WHERE id = ?`
-        ).run(score, feedback || '', submissionId);
+        ).run(score, feedback || '', submissionId)) as any;
 
         if (result.changes === 0) {
           throw new Error(`未找到提交记录: ${submissionId}`);
@@ -262,18 +264,18 @@ export default {
         const subTbl = ctx.db.table('submissions');
 
         // 获取作业信息
-        const assignment = db.prepare(
+        const assignment = (await db.prepare(
           `SELECT title FROM ${asgnTbl} WHERE id = ?`
-        ).get(assignmentId) as Record<string, unknown> | undefined;
+        ).get(assignmentId)) as Record<string, unknown> | undefined;
 
         if (!assignment) {
           throw new Error(`未找到作业: ${assignmentId}`);
         }
 
         // 获取所有提交记录
-        const rows = db.prepare(
+        const rows = (await db.prepare(
           `SELECT student_id, filename, submitted_at, score, feedback FROM ${subTbl} WHERE assignment_id = ? ORDER BY student_id`
-        ).all(assignmentId) as Array<Record<string, unknown>>;
+        ).all(assignmentId)) as Array<Record<string, unknown>>;
 
         // 构建 Excel 数据
         const sheetData = rows.map((row) => ({
@@ -322,17 +324,17 @@ export default {
         const db = await ctx.resolve<any>(IDatabaseToken);
         const subTbl = ctx.db.table('submissions');
 
-        const submissions = db.prepare(
+        const submissions = (await db.prepare(
           `SELECT COUNT(*) as total FROM ${subTbl} WHERE assignment_id = ?`
-        ).get(assignmentId) as { total: number };
+        ).get(assignmentId)) as { total: number };
 
-        const graded = db.prepare(
+        const graded = (await db.prepare(
           `SELECT COUNT(*) as total FROM ${subTbl} WHERE assignment_id = ? AND score >= 0`
-        ).get(assignmentId) as { total: number };
+        ).get(assignmentId)) as { total: number };
 
-        const avgScore = db.prepare(
+        const avgScore = (await db.prepare(
           `SELECT AVG(score) as avg FROM ${subTbl} WHERE assignment_id = ? AND score >= 0`
-        ).get(assignmentId) as { avg: number | null };
+        ).get(assignmentId)) as { avg: number | null };
 
         return {
           assignmentId,

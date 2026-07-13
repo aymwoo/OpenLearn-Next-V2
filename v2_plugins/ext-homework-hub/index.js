@@ -1,4 +1,4 @@
-// v2_plugins/ext-homework-hub/index.ts
+// index.ts
 var IDatabaseToken = { name: "@openlearn/core:IDatabase", version: "1.0.0" };
 var index_default = {
   manifest: {
@@ -27,7 +27,7 @@ var index_default = {
         const tbl = ctx.db.table("assignments");
         const id = `asgn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const createdAt = (/* @__PURE__ */ new Date()).toISOString();
-        db.prepare(
+        await db.prepare(
           `INSERT INTO ${tbl} (id, title, description, deadline, created_at, teacher_id) VALUES (?, ?, ?, ?, ?, ?)`
         ).run(id, title, description || "", deadline || "", createdAt, teacherId);
         ctx.log?.info("\u4F5C\u4E1A\u521B\u5EFA\u6210\u529F", { assignmentId: id, title, teacherId }) ?? console.log(`[HomeworkHub] \u4F5C\u4E1A\u521B\u5EFA\u6210\u529F: ${id}`);
@@ -44,28 +44,30 @@ var index_default = {
         const tbl = ctx.db.table("assignments");
         const subTbl = ctx.db.table("submissions");
         const actorId = command.actorId;
-        const rows = db.prepare(
+        const rows = await db.prepare(
           `SELECT * FROM ${tbl} ORDER BY created_at DESC`
         ).all();
-        const assignments = rows.map((row) => {
-          const submission = db.prepare(
-            `SELECT id, submitted_at, score, feedback FROM ${subTbl} WHERE assignment_id = ? AND student_id = ?`
-          ).get(row.id, actorId);
-          return {
-            id: row.id,
-            title: row.title,
-            description: row.description,
-            deadline: row.deadline,
-            createdAt: row.created_at,
-            teacherId: row.teacher_id,
-            submission: submission ? {
-              id: submission.id,
-              submittedAt: submission.submitted_at,
-              score: submission.score,
-              feedback: submission.feedback
-            } : null
-          };
-        });
+        const assignments = await Promise.all(
+          rows.map(async (row) => {
+            const submission = await db.prepare(
+              `SELECT id, submitted_at, score, feedback FROM ${subTbl} WHERE assignment_id = ? AND student_id = ?`
+            ).get(row.id, actorId);
+            return {
+              id: row.id,
+              title: row.title,
+              description: row.description,
+              deadline: row.deadline,
+              createdAt: row.created_at,
+              teacherId: row.teacher_id,
+              submission: submission ? {
+                id: submission.id,
+                submittedAt: submission.submitted_at,
+                score: submission.score,
+                feedback: submission.feedback
+              } : null
+            };
+          })
+        );
         return { assignments };
       }
     });
@@ -87,7 +89,7 @@ var index_default = {
         });
         const submissionId = `${assignmentId}_${studentId}`;
         const submittedAt = (/* @__PURE__ */ new Date()).toISOString();
-        db.prepare(
+        await db.prepare(
           `INSERT OR REPLACE INTO ${tbl} (id, assignment_id, student_id, filename, file_path, submitted_at) VALUES (?, ?, ?, ?, ?, ?)`
         ).run(submissionId, assignmentId, studentId, filename, destPath, submittedAt);
         ctx.log?.info("\u4F5C\u4E1A\u63D0\u4EA4\u6210\u529F", { submissionId, assignmentId, studentId, filename }) ?? console.log(`[HomeworkHub] \u4F5C\u4E1A\u63D0\u4EA4\u6210\u529F: ${submissionId}`);
@@ -99,7 +101,7 @@ var index_default = {
         const { assignmentId } = command.payload;
         const db = await ctx.resolve(IDatabaseToken);
         const tbl = ctx.db.table("submissions");
-        const rows = db.prepare(
+        const rows = await db.prepare(
           `SELECT * FROM ${tbl} WHERE assignment_id = ? ORDER BY submitted_at DESC`
         ).all(assignmentId);
         return {
@@ -122,7 +124,7 @@ var index_default = {
         const { submissionId } = command.payload;
         const db = await ctx.resolve(IDatabaseToken);
         const tbl = ctx.db.table("submissions");
-        const submission = db.prepare(
+        const submission = await db.prepare(
           `SELECT * FROM ${tbl} WHERE id = ?`
         ).get(submissionId);
         if (!submission) {
@@ -142,7 +144,7 @@ var index_default = {
         const { assignmentId } = command.payload;
         const db = await ctx.resolve(IDatabaseToken);
         const tbl = ctx.db.table("submissions");
-        const rows = db.prepare(
+        const rows = await db.prepare(
           `SELECT id, student_id, filename, file_path FROM ${tbl} WHERE assignment_id = ?`
         ).all(assignmentId);
         return {
@@ -161,7 +163,7 @@ var index_default = {
         const { submissionId, score, feedback } = command.payload;
         const db = await ctx.resolve(IDatabaseToken);
         const tbl = ctx.db.table("submissions");
-        const result = db.prepare(
+        const result = await db.prepare(
           `UPDATE ${tbl} SET score = ?, feedback = ? WHERE id = ?`
         ).run(score, feedback || "", submissionId);
         if (result.changes === 0) {
@@ -178,13 +180,13 @@ var index_default = {
         const db = await ctx.resolve(IDatabaseToken);
         const asgnTbl = ctx.db.table("assignments");
         const subTbl = ctx.db.table("submissions");
-        const assignment = db.prepare(
+        const assignment = await db.prepare(
           `SELECT title FROM ${asgnTbl} WHERE id = ?`
         ).get(assignmentId);
         if (!assignment) {
           throw new Error(`\u672A\u627E\u5230\u4F5C\u4E1A: ${assignmentId}`);
         }
-        const rows = db.prepare(
+        const rows = await db.prepare(
           `SELECT student_id, filename, submitted_at, score, feedback FROM ${subTbl} WHERE assignment_id = ? ORDER BY student_id`
         ).all(assignmentId);
         const sheetData = rows.map((row) => ({
@@ -222,13 +224,13 @@ var index_default = {
         const { assignmentId } = command.payload;
         const db = await ctx.resolve(IDatabaseToken);
         const subTbl = ctx.db.table("submissions");
-        const submissions = db.prepare(
+        const submissions = await db.prepare(
           `SELECT COUNT(*) as total FROM ${subTbl} WHERE assignment_id = ?`
         ).get(assignmentId);
-        const graded = db.prepare(
+        const graded = await db.prepare(
           `SELECT COUNT(*) as total FROM ${subTbl} WHERE assignment_id = ? AND score >= 0`
         ).get(assignmentId);
-        const avgScore = db.prepare(
+        const avgScore = await db.prepare(
           `SELECT AVG(score) as avg FROM ${subTbl} WHERE assignment_id = ? AND score >= 0`
         ).get(assignmentId);
         return {

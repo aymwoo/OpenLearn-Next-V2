@@ -20,6 +20,30 @@ export function HelpView({ registeredCommands, onRefresh }: HelpViewProps) {
   const [activeTab, setActiveTab] = useState<'commands' | 'sdk_guide' | 'user_guide'>('commands');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  const [pluginGuideMd, setPluginGuideMd] = useState<string>('');
+  const [loadingMd, setLoadingMd] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (activeTab === 'sdk_guide' && !pluginGuideMd) {
+      setLoadingMd(true);
+      fetch('/api/docs/plugin-guide')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setPluginGuideMd(data.content);
+          } else {
+            setPluginGuideMd('加载失败: ' + (data.error || '未知错误'));
+          }
+        })
+        .catch(err => {
+          setPluginGuideMd('加载出错: ' + err.message);
+        })
+        .finally(() => {
+          setLoadingMd(false);
+        });
+    }
+  }, [activeTab, pluginGuideMd]);
+
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
