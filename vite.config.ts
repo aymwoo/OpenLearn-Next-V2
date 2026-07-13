@@ -23,6 +23,8 @@ export default defineConfig({
               '**/*.db-shm',
               '**/packages/core/db/**',
               '**/*.d.ts',
+              '**/storage/**',
+              '**/uploads/**',
             ],
           },
   },

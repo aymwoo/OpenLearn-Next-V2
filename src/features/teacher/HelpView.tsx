@@ -20,6 +20,7 @@ export function HelpView({ registeredCommands, onRefresh }: HelpViewProps) {
   const [activeTab, setActiveTab] = useState<'commands' | 'sdk_guide' | 'user_guide'>('commands');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 1500);
@@ -342,7 +343,6 @@ db.prepare(\`INSERT INTO \${tableName} ...\`).run(...);
             <Puzzle size={12} />
             <span>插件开发指南 (Plugin SDK Guide)</span>
           </button>
-          <button
           <button
             onClick={() => setActiveTab('user_guide')}
             className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${
