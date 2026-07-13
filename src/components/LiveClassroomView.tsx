@@ -398,6 +398,17 @@ export function LiveClassroomView({
           .replace(/\$lessonId/g, selectedLesson || '')
       );
 
+      // Auto-append active segment ID into plugin elements
+      if (resolvedPayload.type === 'plugin' && resolvedPayload.data) {
+        try {
+          const dataObj = JSON.parse(resolvedPayload.data);
+          if (!dataObj.segmentId && activeSegmentId) {
+            dataObj.segmentId = activeSegmentId;
+            resolvedPayload.data = JSON.stringify(dataObj);
+          }
+        } catch {}
+      }
+
       const res = await fetch('/api/commands', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

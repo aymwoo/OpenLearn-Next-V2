@@ -4015,7 +4015,8 @@ export function InteractiveWhiteboard({
                 try {
                   const data = JSON.parse(el.data);
                   if (activeSegmentId) {
-                    const elSegment = data.segmentId || 'seg-1';
+                    const elSegment = data.segmentId;
+                    if (!elSegment) return true; // Elements without explicit segmentId are visible in all segments
                     return elSegment === activeSegmentId;
                   } else {
                     const elPage = data.page ?? 0;
