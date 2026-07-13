@@ -11,6 +11,34 @@
 
 ## 快速开始
 
+### 通过 npm 安装运行
+
+```bash
+# 全局安装
+npm install -g openlearn-next
+
+# 启动
+openlearn-next
+
+# 更新到最新版
+npm update -g openlearn-next
+```
+
+#### 或通过 npx 一键启动
+```bash
+# 首次会自动下载安装，无需 clone 项目
+export GEMINI_API_KEY=你的密钥
+npx openlearn-next
+
+# 可选参数
+npx openlearn-next -p 3000              # 自定义端口（默认 9000）
+OPENLEARN_DB_PATH=./my.db npx openlearn-next  # 自定义数据库路径（默认 ~/openlearn-next/data.db）
+```
+
+默认账号：`admin` / `admin`（管理员），`teacher` / `teacher`（教师）。
+
+### 本地开发
+
 ```bash
 # 安装依赖
 npm install
@@ -135,6 +163,9 @@ ext-exam.zip
 
 | 命令 | 说明 |
 |------|------|
+| `npm install -g openlearn-next` | 全局安装 |
+| `npx openlearn-next` | 一键运行（免安装） |
+| `npm update -g openlearn-next` | 更新到最新版 |
 | `npm run dev` | 启动开发服务 |
 | `npm run build` | 生产构建（Vite + esbuild） |
 | `npm start` | 运行生产构建 |
@@ -146,6 +177,8 @@ ext-exam.zip
 | 变量 | 必需 | 说明 |
 |------|:--:|------|
 | `GEMINI_API_KEY` | ✅ | 默认 AI 服务密钥（也可在管理面板配置第三方 AI） |
+| `PORT` | — | 服务端口，默认 9000 |
+| `OPENLEARN_DB_PATH` | — | SQLite 数据库路径（npx 默认 ~/openlearn-next/data.db，本地开发默认项目目录） |
 | `ENCRYPTION_KEY` | ✅ | 64 位 hex，AI Provider API Key 加密密钥（`deploy.sh` 自动生成） |
 | `LOG_LEVEL` | — | 日志级别（debug / info / warn / error），默认 info |
 | `ALLOWED_ORIGINS` | — | CORS 白名单，逗号分隔 |

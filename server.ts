@@ -477,7 +477,7 @@ async function startServer() {
   await kernelContainer.ready;
 
   const app = express();
-  const PORT = 9000;
+  const PORT = parseInt(process.env.PORT || '9000', 10);
 
   // SEC-AUTH-03: 信任 Nginx 反向代理的 X-Forwarded-Proto 头
   // 使 req.protocol / req.secure 能正确反映浏览器到 Nginx 的实际协议
@@ -5365,7 +5365,13 @@ ${examsText}
   });
 }
 
-startServer().catch(console.error);
+// Export for CLI / programmatic usage
+export { startServer };
+
+// Auto-start only when run directly (not imported by CLI)
+if (process.argv[1]?.endsWith('server.cjs') || process.argv[1]?.endsWith('server.ts')) {
+  startServer().catch(console.error);
+}
 
 // ── 优雅关闭 (OBS-SHUTDOWN-01) ────────────────────────────────────
 let shuttingDown = false;

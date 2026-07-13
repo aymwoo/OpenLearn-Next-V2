@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import { mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -30,12 +31,17 @@ export function verifyPassword(pwd: string, storedHash: string): { valid: boolea
 // fell back to process.cwd() (project root), causing the DB to be created
 // in the wrong directory and the server to open a stale file descriptor.
 let dbPath: string;
-if (typeof import.meta !== 'undefined' && import.meta.url) {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
-  dbPath = path.join(__dirname, 'educational_os.db');
+if (process.env.OPENLEARN_DB_PATH) {
+  dbPath = process.env.OPENLEARN_DB_PATH;
+  mkdirSync(path.dirname(dbPath), { recursive: true });
 } else {
-  dbPath = path.join(__dirname, '../packages/core/db/educational_os.db');
+  if (typeof import.meta !== 'undefined' && import.meta.url) {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    dbPath = path.join(__dirname, 'educational_os.db');
+  } else {
+    dbPath = path.join(__dirname, '../packages/core/db/educational_os.db');
+  }
 }
 
 export const db = new Database(dbPath);
