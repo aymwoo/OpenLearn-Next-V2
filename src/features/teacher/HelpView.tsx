@@ -1369,9 +1369,6 @@ const pid = await ctx.services.processManager.spawn(
               </div>
             </div>
 
-          </div>
-        </div>
-
             {/* 参考手册 */}
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
               <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
@@ -1392,6 +1389,8 @@ const pid = await ctx.services.processManager.spawn(
 
           </div>
         </div>
+
+
       ) : (
         /* 系统使用教程 (User Guide) */
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
