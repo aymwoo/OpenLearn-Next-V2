@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import bcrypt from 'bcryptjs';
 
 const dbPath = path.resolve('/home/wuxf/Develop/openlearnv2/packages/core/db/educational_os.db');
 
@@ -24,7 +25,7 @@ async function main() {
   ]);
 
   for (const table of allTables) {
-    // 自动 DROP 插件自建 of 业务表
+    // 自动 DROP 插件自建的业务表
     if (table.startsWith('plugin_') && table !== 'plugin_storage') {
       console.log(`- Dropping plugin physical table: ${table}`);
       try {
@@ -55,8 +56,8 @@ async function main() {
   console.log('\nSeeding initial clean data...');
 
   // 2. 插入唯一的管理员账号 (usr_admin)
-  // 密码哈希对应明文 "admin" (bcrypt)
-  const initialAdminPasswordHash = '$2b$10$wN9vA7N0T3B39C/9C1z4eu8J8R3J/mP7G6/H7eT7/n.k3C87/C8P6';
+  // 密码哈希对应明文 "admin"，使用内置的 bcrypt 库动态实时哈希，保证 100% 正确！
+  const initialAdminPasswordHash = bcrypt.hashSync('admin', 10);
   db.prepare(`
     INSERT INTO users (id, username, password_hash, role, name, status, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
