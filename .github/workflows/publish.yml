@@ -1,0 +1,60 @@
+name: Publish to NPM
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Step 1: Publish plugin-sdk (no internal deps)
+      - name: Publish @openlearn/plugin-sdk
+        run: cd packages/plugin-sdk && npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Step 2: Publish plugin-test-kit (depends on @openlearn/plugin-sdk)
+      - name: Publish @openlearn/plugin-test-kit
+        run: |
+          SDK_VER=$(node -p "require('./packages/plugin-sdk/package.json').version")
+          sed -i 's|"@openlearn/plugin-sdk": "workspace:\*"|"@openlearn/plugin-sdk": "^'"$SDK_VER"'"|' packages/plugin-test-kit/package.json
+          cd packages/plugin-test-kit && npm publish
+          git checkout -- packages/plugin-test-kit/package.json
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Step 3: Build and publish openlearn-next (main app, depends on @openlearn/plugin-sdk)
+      - name: Publish openlearn-next
+        run: |
+          pnpm build
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Sync to npmmirror (Chinese mirror)
+      - name: Sync to npmmirror
+        run: |
+          curl -fsSL -X GET "https://registry.npmmirror.com/@openlearn/plugin-sdk/sync?sync_upstream=true" || true
+          curl -fsSL -X GET "https://registry.npmmirror.com/@openlearn/plugin-test-kit/sync?sync_upstream=true" || true
+          curl -fsSL -X GET "https://registry.npmmirror.com/openlearn-next/sync?sync_upstream=true" || true

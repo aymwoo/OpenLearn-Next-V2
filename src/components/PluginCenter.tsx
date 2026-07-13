@@ -419,6 +419,11 @@ export function PluginCenter({
   const [dismissMigration, setDismissMigration] = React.useState(false);
   const [selectedZipFile, setSelectedZipFile] = React.useState<File | null>(null);
 
+  // ZIP upload state (error messages, preview metadata, processing indicator)
+  const [zipError, setZipError] = React.useState<string | null>(null);
+  const [zipPreview, setZipPreview] = React.useState<{ name: string; id: string; version: string } | null>(null);
+  const [zipProcessing, setZipProcessing] = React.useState(false);
+
   // V3.1: Settings modal state
   const [settingsPlugin, setSettingsPlugin] = React.useState<{ id: string; name: string; manifest: string } | null>(null);
 
