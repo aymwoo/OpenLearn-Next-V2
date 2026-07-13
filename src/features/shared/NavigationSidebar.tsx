@@ -38,7 +38,7 @@ export function NavigationSidebar({
   lang, session, todaySchedules,
 }: NavigationSidebarProps) {
   return (
-    <div className={`${mainNavCollapsed ? 'w-16' : 'w-16 md:w-64'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300`}>
+    <div id="navigation_sidebar" className={`${mainNavCollapsed ? 'w-16' : 'w-16 md:w-64'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300`}>
       {/* Collapse/Expand Toggle */}
       <div className={`p-2 flex border-b border-gray-150/60 ${mainNavCollapsed ? 'justify-center' : 'justify-between items-center px-4'} min-h-[48px] shrink-0`}>
         {!mainNavCollapsed && (
@@ -65,7 +65,7 @@ export function NavigationSidebar({
         <NavButton icon={Puzzle} label={lang === 'zh' ? '插件中心' : 'App Store / Plugins'} tab="plugins" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
 
         {session?.subRole === 'administrator' && (
-          <button onClick={() => setTeacherTab('admin_directory')} className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium text-indigo-700 hover:bg-indigo-50 border border-slate-200/50 rounded-xl ${teacherTab === 'admin_directory' ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50/50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '管理后台' : '⭐ Admin Center'}>
+      <button onClick={() => setTeacherTab('admin_directory')} id="nav_btn_admin_directory" className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium text-indigo-700 hover:bg-indigo-50 border border-slate-200/50 rounded-xl ${teacherTab === 'admin_directory' ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50/50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '管理后台' : '⭐ Admin Center'}>
             <Shield size={20} className="shrink-0 text-indigo-600 animate-pulse" />
             <span className={mainNavCollapsed ? 'hidden' : 'hidden md:block font-bold text-indigo-850'}>{lang === 'zh' ? '管理后台' : '⭐ Admin Center'}</span>
           </button>
@@ -130,6 +130,7 @@ function NavButton({
   return (
     <button
       onClick={() => setTeacherTab(tab)}
+      id={`nav_btn_${tab}`}
       className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${
         isActive
           ? 'bg-indigo-50 text-indigo-700 font-bold' + (highlight ? ' shadow-sm border border-indigo-100' : '')

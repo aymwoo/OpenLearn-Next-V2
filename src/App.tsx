@@ -21,6 +21,7 @@ import { StudentPrivateNotesEditor } from './components/StudentPrivateNotesEdito
 import { ComputerLabManager } from './components/ComputerLabManager';
 import { LoginPage } from './components/LoginPage';
 import { AdminPanel } from './components/AdminPanel';
+import { HelpTour } from './components/HelpTour';
 import { TimetableManager } from './components/TimetableManager';
 import { SemesterGradeManager } from './components/SemesterGradeManager';
 import { StudentAssignmentEvalPanel } from './components/StudentAssignmentEvalPanel';
@@ -520,8 +521,36 @@ export default function App() {
   }, []);
 
   const [teacherTab, setTeacherTab] = useState<string>('dashboard');
+  const [isTourOpen, setIsTourOpen] = useState(false);
   const [isApprovalsCollapsed, setIsApprovalsCollapsed] = useState(false);
   const [isProcessesCollapsed, setIsProcessesCollapsed] = useState(false);
+
+  // Auto trigger help tour guide for new admin users
+  useEffect(() => {
+    if (session?.subRole === 'administrator' && localStorage.getItem('edu_os_tour_completed') !== 'true') {
+      setIsTourOpen(true);
+    }
+  }, [session]);
+
+  const handleSeedSuccess = async (data: { classId: string; scheduleId: string; lessonId: string }) => {
+    // 1. Refresh academic data
+    await fetchClasses();
+    await fetchLessons();
+    await fetchTodaySchedules().catch(() => {});
+
+    // 2. Select seeded course and trigger classroom
+    setLiveClassSelectedClassId(data.classId);
+    setSelectedLesson(data.lessonId);
+    setLiveClassIsActive(true); // Active the class session directly
+
+    addToast(
+      lang === 'zh' ? '示范课堂准备就绪' : 'Demo Classroom Ready',
+      lang === 'zh'
+        ? '示范班级与课件已加载，已自动开启授课状态！'
+        : 'Demo class & courseware loaded. Live class session is now active!',
+      'success'
+    );
+  };
 
   // Automatically collapse system navigation when entering interactive classroom
   useEffect(() => {
@@ -6419,6 +6448,7 @@ onRefresh={() => fetchElements(selectedLesson)}
                 aiProviders={aiProviders}
                 testingProviderId={testingProviderId}
                 onAIProvidersChanged={fetchAIProviders}
+                onTriggerTour={() => setIsTourOpen(true)}
               />
             ) : teacherTab === 'computer_labs' ? (
               <ComputerLabView computerLabs={computerLabs} onRefresh={fetchLabs} lang={lang} />
@@ -8361,6 +8391,15 @@ onClose={() => setPreviewSelectedCourseware(null)}
 
       {/* Real-time Toast Notifications */}
       <ToastContainer />
+
+      {/* Help Tour Wizard */}
+      <HelpTour
+        isOpen={isTourOpen}
+        onClose={() => setIsTourOpen(false)}
+        lang={lang as 'zh' | 'en'}
+        onSeedSuccess={handleSeedSuccess}
+        onJumpTab={(tab) => setTeacherTab(tab)}
+      />
 
       </div>
     </>

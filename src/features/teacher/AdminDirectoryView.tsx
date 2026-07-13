@@ -10,9 +10,10 @@ interface AdminDirectoryViewProps {
   aiProviders: AIProvider[];
   testingProviderId: string | null;
   onAIProvidersChanged: () => void;
+  onTriggerTour?: () => void;
 }
 
-export function AdminDirectoryView({ session, lang, onLogout, aiProviders, testingProviderId, onAIProvidersChanged }: AdminDirectoryViewProps) {
+export function AdminDirectoryView({ session, lang, onLogout, aiProviders, testingProviderId, onAIProvidersChanged, onTriggerTour }: AdminDirectoryViewProps) {
   if (session?.subRole !== 'administrator') {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-rose-500">
@@ -31,6 +32,7 @@ export function AdminDirectoryView({ session, lang, onLogout, aiProviders, testi
       aiProviders={aiProviders}
       testingProviderId={testingProviderId}
       onAIProvidersChanged={onAIProvidersChanged}
+      onTriggerTour={onTriggerTour}
     />
   );
 }

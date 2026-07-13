@@ -2216,6 +2216,55 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
     }
   });
 
+  // Seed example demo data for the Help Tour wizard
+  app.post('/api/admin/seed-demo', (req, res) => {
+    try {
+      // 1. Create a demo class
+      const classId = 'demo-class-' + Math.random().toString(36).slice(2, 6);
+      kernelContainer.db.prepare('INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)').run(
+        classId, '人工智能与创意编程示范班', '这是系统初始化的示例课程班级，用于教学体验。', Date.now()
+      );
+
+      // 2. Create 5 demo students
+      const demoStudents = [
+        { id: 's1-' + Math.random().toString(36).slice(2, 6), name: '小明', num: 'S001' },
+        { id: 's2-' + Math.random().toString(36).slice(2, 6), name: '小红', num: 'S002' },
+        { id: 's3-' + Math.random().toString(36).slice(2, 6), name: '小华', num: 'S003' },
+        { id: 's4-' + Math.random().toString(36).slice(2, 6), name: '小丽', num: 'S004' },
+        { id: 's5-' + Math.random().toString(36).slice(2, 6), name: '小强', num: 'S005' },
+      ];
+
+      for (const s of demoStudents) {
+        kernelContainer.db.prepare('INSERT INTO students (id, name, student_number, created_at) VALUES (?, ?, ?, ?)').run(
+          s.id, s.name, s.num, Date.now()
+        );
+        kernelContainer.db.prepare('INSERT INTO class_students (class_id, student_id, created_at) VALUES (?, ?, ?)').run(
+          classId, s.id, Date.now()
+        );
+      }
+
+      // 3. Find or Create a demo lesson courseware
+      let lesson = kernelContainer.db.prepare("SELECT id FROM lessons WHERE type = 'whiteboard' LIMIT 1").get() as any;
+      let lessonId = lesson?.id;
+      if (!lessonId) {
+        lessonId = 'demo-lesson-' + Math.random().toString(36).slice(2, 6);
+        kernelContainer.db.prepare('INSERT INTO lessons (id, name, type, content, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+          lessonId, '初识 Python：智能白板创意编程', 'whiteboard', JSON.stringify({ elements: [] }), 'admin', Date.now()
+        );
+      }
+
+      // 4. Create scheduled session
+      const scheduleId = 'demo-sched-' + Math.random().toString(36).slice(2, 6);
+      kernelContainer.db.prepare('INSERT INTO schedules (id, class_id, lesson_id, schedule_time, status, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+        scheduleId, classId, lessonId, new Date().toISOString().split('T')[0] + ' 09:00:00', 'scheduled', Date.now()
+      );
+
+      res.json({ success: true, classId, scheduleId, lessonId });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Helper functions for student number auto-generation (S001 style)
   const generateStudentNumber = (db: any): string => {
     const rows = db.prepare('SELECT student_number FROM students WHERE student_number LIKE "S%"').all() as { student_number: string }[];

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Users, Shield, Settings, Database, Plus, Trash2, Edit2,
   Search, CheckCircle, RefreshCw, Cpu, Activity, AlertTriangle, X,
-  Blocks, Puzzle, Globe, Loader2, Settings2, Server, Check, Terminal, Layers
+  Blocks, Puzzle, Globe, Loader2, Settings2, Server, Check, Terminal, Layers, HelpCircle
 } from 'lucide-react';
 
 interface TeacherUser {
@@ -32,9 +32,10 @@ interface AdminPanelProps {
   aiProviders: AIProvider[];
   testingProviderId: string | null;
   onAIProvidersChanged: () => void;
+  onTriggerTour?: () => void;
 }
 
-export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiProviders, testingProviderId, onAIProvidersChanged }: AdminPanelProps) {
+export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiProviders, testingProviderId, onAIProvidersChanged, onTriggerTour }: AdminPanelProps) {
   const [users, setUsers] = useState<TeacherUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -357,6 +358,15 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiP
         </div>
         
         <div className="flex items-center gap-2">
+          {onTriggerTour && (
+            <button
+              onClick={onTriggerTour}
+              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-all cursor-pointer shadow-3xs"
+            >
+              <HelpCircle size={14} className="animate-bounce" />
+              {lang === 'zh' ? '开启新手引导' : 'Start Help Tour'}
+            </button>
+          )}
           <button
             onClick={() => setRefreshStatsCount(prev => prev + 1)}
             className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-gray-150 rounded-xl transition-all cursor-pointer border border-gray-200"
