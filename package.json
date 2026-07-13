@@ -1,7 +1,7 @@
 {
   "name": "openlearn-next",
   "private": false,
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "scripts": {
     "dev": "npx tsx --no-cache server.ts",
@@ -50,7 +50,8 @@
     "xlsx": "^0.18.5",
     "xss": "^1.0.15",
     "zod": "^4.4.3",
-    "zustand": "^5.0.14"
+    "zustand": "^5.0.14",
+    "vite": "^6.2.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -72,7 +73,6 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3",
     "vitest": "^4.1.9",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4"
@@ -86,7 +86,6 @@
     "dist/assets/",
     "dist/plugins/",
     "cli.mjs",
-    
     "package.json",
     "README.md"
   ],
