@@ -2199,7 +2199,8 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
   // Processes APIs
   app.get('/api/processes', (req, res) => {
     try {
-      const list = kernelContainer.db.prepare('SELECT id, name, status, created_at, updated_at FROM processes ORDER BY created_at DESC').all();
+      // Only return currently active running processes to ensure real-time accuracy
+      const list = kernelContainer.db.prepare("SELECT id, name, status, created_at, updated_at FROM processes WHERE status = 'running' ORDER BY created_at DESC").all();
       res.json(list);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
