@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 // Load environment variables from .env file
 dotenv.config();
 
+declare var __dirname: string | undefined;
 // Auto-fallback NODE_ENV to production if executing the bundled output
 if (!process.env.NODE_ENV) {
   const isCjs = typeof __filename !== 'undefined' && __filename.endsWith('.cjs');
@@ -5314,7 +5315,7 @@ ${examsText}
     app.use(vite.middlewares);
   } else {
     // Production static file serving
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = __dirname || path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
@@ -5361,7 +5362,14 @@ ${examsText}
   });
 
   httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`Educational OS Kernel running on port ${PORT}`);
+    const url = `http://localhost:${PORT}`;
+    const OSC = '\x1b]8;;';
+    const ST = '\x1b\\';
+    const reset = '\x1b[0m';
+    const bold = '\x1b[1m';
+    const green = '\x1b[32m';
+    const cyan = '\x1b[36m';
+    console.log(`\n  ${bold}${green}Educational OS Kernel${reset} ready at ${bold}${cyan}${OSC}${url}${ST}http://localhost:${PORT}${OSC}${ST}${reset}\n`);
   });
 }
 
