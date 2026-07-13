@@ -3134,35 +3134,52 @@ export default function App() {
     }
   };
 
-  const handleZipPluginUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const base64 = event.target?.result as string;
-      setInstallingPlugin(true);
-      try {
-        const res = await fetch('/api/plugins/upload-zip', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ base64Data: base64, filename: file.name })
-        });
-        const data = await res.json();
-        if (data.success) {
-          await fetchPlugins();
-          alert(`Plugin "${data.manifest.name}" installed successfully!`);
-          setChatLog(prev => [...prev, { role: 'agent', content: `[System] Plugin "${data.manifest.name}" installed successfully from ZIP file.` }]);
-        } else {
-          alert("Plugin installation failed: " + data.error);
+  const handleZipPluginUpload = async (file: File, executionMode: 'worker' | 'inline') => {
+    return new Promise<void>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64 = event.target?.result as string;
+        setInstallingPlugin(true);
+        try {
+          const res = await fetch('/api/plugins/upload-zip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ base64Data: base64, filename: file.name, executionMode })
+          });
+          const data = await res.json();
+          if (data.success) {
+            await fetchPlugins();
+            addToast(
+              lang === 'zh' ? '插件安装成功' : 'Plugin Installed',
+              lang === 'zh'
+                ? `三方插件 "${data.manifest.name}" 已成功上传并以 [${executionMode === 'worker' ? 'Worker 隔离' : 'VM 嵌入'}] 模式激活运行！`
+                : `Plugin "${data.manifest.name}" installed and activated in [${executionMode}] mode!`,
+              'success'
+            );
+            setChatLog(prev => [...prev, { role: 'agent', content: `[System] Plugin "${data.manifest.name}" installed successfully from ZIP file.` }]);
+            resolve();
+          } else {
+            addToast(
+              lang === 'zh' ? '安装失败' : 'Installation Failed',
+              data.error || 'Unknown error',
+              'error'
+            );
+            reject(new Error(data.error));
+          }
+        } catch (err: any) {
+          addToast(
+            lang === 'zh' ? '网络错误' : 'Network Error',
+            err.message,
+            'error'
+          );
+          reject(err);
+        } finally {
+          setInstallingPlugin(false);
         }
-      } catch (err: any) {
-        alert("Error: " + err.message);
-      } finally {
-        setInstallingPlugin(false);
-      }
-    };
-    reader.readAsDataURL(file);
+      };
+      reader.onerror = () => reject(new Error('File reading failed'));
+      reader.readAsDataURL(file);
+    });
   };
 
   const handleTogglePlugin = async (id: string) => {

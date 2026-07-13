@@ -4877,10 +4877,10 @@ ${examsText}
 
   app.post('/api/plugins/upload-zip', async (req, res) => {
     try {
-      const { base64Data, filename } = req.body;
+      const { base64Data, filename, executionMode } = req.body;
       const cmd = kernelContainer.commandBus.createCommand(
         'plugin.install_zip',
-        { base64Data, filename },
+        { base64Data, filename, executionMode },
         getActorId(req)
       );
       const result = await kernelContainer.commandBus.execute(cmd);

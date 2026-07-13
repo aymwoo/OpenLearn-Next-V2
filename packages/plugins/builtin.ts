@@ -813,7 +813,7 @@ export const BuiltinPlugin = {
         const payload = command.payload as any;
         const base64Content = payload.base64Data.replace(/^data:[^;]+;base64,/, '');
         const fileBuffer = Buffer.from(base64Content, 'base64');
-        const manifest = await pluginHost.installPluginFromZip(fileBuffer);
+        const manifest = await pluginHost.installPluginFromZip(fileBuffer, payload.executionMode);
         return { success: true, manifest };
       }
     });

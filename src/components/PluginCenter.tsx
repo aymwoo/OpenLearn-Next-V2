@@ -32,6 +32,7 @@ import { LegacyPluginBadge } from './LegacyPluginBadge';
 import type { Language } from '../i18n';
 import JSZip from 'jszip';
 import { PluginSettingsModal } from './PluginSettingsModal';
+import { PluginInstallWizard } from './PluginInstallWizard';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ export interface PluginCenterProps {
   setPluginCode: (code: string) => void;
   installingPlugin: boolean;
   onInstall: () => void;
-  onZipUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onZipUpload: (file: File, executionMode: 'worker' | 'inline') => Promise<void>;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
 }
@@ -416,9 +417,7 @@ export function PluginCenter({
 
   const [showSystemPlugins, setShowSystemPlugins] = React.useState(false);
   const [dismissMigration, setDismissMigration] = React.useState(false);
-  const [zipPreview, setZipPreview] = React.useState<{ name: string; id: string; version: string } | null>(null);
-  const [zipProcessing, setZipProcessing] = React.useState(false);
-  const [zipError, setZipError] = React.useState<string | null>(null);
+  const [selectedZipFile, setSelectedZipFile] = React.useState<File | null>(null);
 
   // V3.1: Settings modal state
   const [settingsPlugin, setSettingsPlugin] = React.useState<{ id: string; name: string; manifest: string } | null>(null);
@@ -430,36 +429,7 @@ export function PluginCenter({
     e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50/50');
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      handleZipFileForPreview(files[0]);
-    }
-  };
-
-  // ── ZIP manifest preview with jszip ──────────────────────────────────────
-
-  const handleZipFileForPreview = async (file: File) => {
-    setZipProcessing(true);
-    setZipError(null);
-    setZipPreview(null);
-    try {
-      const zip = await JSZip.loadAsync(file);
-      const manifestFile = zip.file('manifest.json');
-      if (!manifestFile) {
-        setZipError(lang === 'zh' ? 'ZIP 文件中未找到 manifest.json' : 'No manifest.json found in ZIP');
-        setZipProcessing(false);
-        return;
-      }
-      const content = await manifestFile.async('string');
-      const manifest = JSON.parse(content);
-      if (!manifest.id || !manifest.name) {
-        setZipError(lang === 'zh' ? 'manifest.json 缺少 id 或 name 字段' : 'manifest.json missing id or name');
-        setZipProcessing(false);
-        return;
-      }
-      setZipPreview({ name: manifest.name, id: manifest.id, version: manifest.version || '1.0.0' });
-      setZipProcessing(false);
-    } catch (err: any) {
-      setZipError(lang === 'zh' ? 'ZIP 文件解析失败，请确认文件包含有效的 manifest.json' : 'Failed to parse ZIP file. Ensure the package contains a valid manifest.json.');
-      setZipProcessing(false);
+      setSelectedZipFile(files[0]);
     }
   };
 
@@ -468,10 +438,8 @@ export function PluginCenter({
   const handleZipInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      handleZipFileForPreview(file);
+      setSelectedZipFile(file);
     }
-    // Pass through to parent's onZipUpload
-    onZipUpload(e);
   };
 
   // ── MigrationPrompt component ────────────────────────────────────────────
@@ -1425,6 +1393,15 @@ export function PluginCenter({
         onClose={() => setSettingsPlugin(null)}
       />
     )}
+
+    {/* V3.2: Plugin Install Wizard */}
+    <PluginInstallWizard
+      isOpen={!!selectedZipFile}
+      onClose={() => setSelectedZipFile(null)}
+      lang={lang}
+      file={selectedZipFile}
+      onConfirmInstall={onZipUpload}
+    />
   </>
   );
 }

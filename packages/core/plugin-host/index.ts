@@ -1417,7 +1417,7 @@ export class PluginHost {
    * @param zipBuffer - ZIP 文件的原始字节
    * @returns manifest
    */
-  async installPluginFromZip(zipBuffer: Buffer): Promise<Manifest> {
+  async installPluginFromZip(zipBuffer: Buffer, overrideExecutionMode?: 'worker' | 'inline'): Promise<Manifest> {
     if (!this.esmLoader) {
       throw new Error('Cannot install ZIP plugin: no esmLoader injected');
     }
@@ -1503,9 +1503,8 @@ export class PluginHost {
       }
 
       // 5. INSERT 到 DB（源码和 ZIP 已迁移到文件系统，DB 仅存元数据）
-      // Read executionMode from manifest (default: 'inline'). Plugins can declare
-      // executionMode: 'worker' in their manifest.json to opt into sandboxed worker isolation.
-      const executionMode = (manifest as any).executionMode === 'worker' ? 'worker' : 'inline';
+      // Read executionMode from manifest (default: 'inline'), override if administrator specifies
+      const executionMode = overrideExecutionMode ?? ((manifest as any).executionMode === 'worker' ? 'worker' : 'inline');
       const stmt = this.db.prepare(
         'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       );
