@@ -1,0 +1,22 @@
+{
+  "name": "openlearn-plugin-{{name}}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "{{description}}",
+  "scripts": {
+    "build": "openlearn-plugin-sdk build",
+    "dev": "openlearn-plugin-sdk build --watch"
+  },
+  "dependencies": {
+    "@openlearn/plugin-sdk": "^{{sdkVersion}}"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.0",
+    "@types/react": "^19.0.0"
+  },
+  "peerDependencies": {
+    "react": ">=17",
+    "react-dom": ">=17"
+  }
+}
