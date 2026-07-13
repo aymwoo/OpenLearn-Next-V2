@@ -153,240 +153,181 @@ export function HelpView({ registeredCommands, onRefresh }: HelpViewProps) {
     return matchesSearch && matchesCategory;
   });
 
-  const pluginBoilerplateCode = `/**
- * Edu-OS 插件开发完整示例 (ESM 规范)
- * 思维导图与随堂卡片插件 — 演示完整的插件开发流程
- */
+  const pluginBoilerplateCode = `# 快速开始：3 分钟创建插件
+
+使用 \`@openlearn/plugin-sdk\` CLI 脚手架，一键生成完整项目：
+
+\`\`\`bash
+# 创建插件项目
+npx @openlearn/plugin-sdk init --name hello-world
+
+# 进入项目并构建
+cd hello-world
+npm install
+npx @openlearn/plugin-sdk build
+
+# 产物：hello-world.zip → 上传到插件中心
+\`\`\`
+
+## 三种模板
+
+| 模板 | 说明 | 适用 |
+|------|------|------|
+| \`server-only\` | 纯后端（AI 工具 + 命令） | 数据处理 |
+| \`full-stack\` | 后端 + React 前端 | 完整应用 |
+| \`frontend-only\` | 纯 UI 扩展 | 白板工具 |
+
+## 交互式创建
+
+\`\`\`bash
+npx @openlearn/plugin-sdk init
+# CLI 逐步询问：名称 → 描述 → 作者 → 模板
+\`\`\`
+
+## 项目结构
+
+\`\`\`
+my-plugin/
+├── src/index.ts      # 服务端入口（export default { manifest, activate }）
+├── src/frontend.tsx   # 前端组件（可选）
+└── package.json
+\`\`\`
+`;
+
+  const pluginInteractiveCode = `# 完整插件示例（server-only 模板）
+
+\`\`\`typescript
+import type { PluginContext } from '@openlearn/plugin-sdk';
+import {
+  ICommandBusServiceToken,
+  IActionRegistryServiceToken,
+  IEventBusServiceToken,
+  IDatabaseToken,
+} from '@openlearn/plugin-sdk';
+
 export default {
-  // 1. 插件基础声明 manifest（同步导出，用于安装时校验）
   manifest: {
-    id: "ext-mindmap-assistant",
-    name: "思维导图与画板卡片扩展",
-    version: "1.1.0",
-    capabilitiesProposed: [
-      "whiteboard:write",
-      "vfs:read"
-    ]
+    id: '@myorg/hello-plugin',
+    name: '问候插件',
+    version: '0.1.0',
+    requires: [
+      '@openlearn/core:ICommandBusService@^1.0.0',
+      '@openlearn/core:IActionRegistryService@^1.0.0',
+      '@openlearn/core:IEventBusService@^1.0.0',
+      '@openlearn/core:IDatabase@^1.0.0',
+    ],
+    capabilitiesProposed: ['lesson:read'],
+    engines: { openlearn: '>=5.0.0' },
   },
 
-  // 2. 激活入口 activate — 接收 PluginContext，可访问全部内核服务
-  activate: async (ctx) => {
-    // 从 ctx.services 解构需用的内核服务
-    const { commandBus, actionRegistry, eventBus } = ctx.services;
+  async activate(ctx: PluginContext) {
+    const commandBus = ctx.services.commandBus;
+    const actionRegistry = ctx.services.actionRegistry;
+    const eventBus = ctx.services.eventBus;
 
-    // ── 注册 Action（AI Agent 可发现的工具声明）──
+    // 1. 注册 AI 工具
     await actionRegistry.register({
-      id: 'ext-mindmap-generate',
-      commandType: 'mindmap.create',
-      description: '为当前白板一键生成结构化的知识思维导图卡片',
-      capabilityRequired: 'whiteboard:write',
+      id: 'hello-greet',
+      commandType: 'hello.greet',
+      description: '向指定的人打招呼，返回问候语',
+      capabilityRequired: 'lesson:read',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING', description: '关联的课堂课时 ID' },
-          topic:    { type: 'STRING', description: '思维导图的中心主题名称' },
-          nodes:    { type: 'ARRAY', items: { type: 'STRING' }, description: '脑图的子分支节点列表' }
+          name: { type: 'STRING', description: '姓名' },
         },
-        required: ['lessonId', 'topic', 'nodes']
-      }
+        required: ['name'],
+      },
     });
 
-    // ── 注册命令处理器 ──
-    await commandBus.registerHandler('mindmap.create', {
-      execute: async (command) => {
-        const { lessonId, topic, nodes } = command.payload;
+    // 2. 注册命令处理器
+    await commandBus.registerHandler('hello.greet', {
+      async execute(command) {
+        const payload = command.payload as any;
+        const message = \`Hello, \${payload.name}!\`;
 
-        // 调用内核 whiteboard.draw 在画板上绘制思维导图
-        const drawCmd = commandBus.createCommand(
-          'whiteboard.draw',
-          { lessonId, type: 'text', data: JSON.stringify({
-              text: \`📊 \${topic}\\n\${nodes.map((n,i) => \`\${i+1}. \${n}\`).join('\\n')}\`,
-              x: 200, y: 120, fontSize: 18, fill: '#4f46e5'
-            }) },
-          command.actorId
-        );
-        const drawResult = await commandBus.execute(drawCmd);
-
-        // 发布事件通知前端刷新
+        // 3. 发布事件通知
         await eventBus.publish({
-          id: crypto.randomUUID?.() ?? 'evt_' + Date.now(),
-          type: 'mindmap.created',
-          source: 'ext-mindmap',
-          payload: { lessonId, topic },
-          timestamp: Date.now()
+          id: crypto.randomUUID(),
+          type: 'hello.greeted',
+          source: 'plugin.hello',
+          payload: { message },
+          timestamp: Date.now(),
+          correlationId: command.id,
         });
 
-        return { success: true, elementId: drawResult?.elementId, topic };
-      }
+        return { message };
+      },
     });
+
+    ctx.log.info('问候插件已激活');
   },
+};
+\`\`\`
 
-  // 3. 可选：停用清理
-  deactivate: async () => {
-    console.log('[Mindmap] Plugin deactivated, resources auto-cleaned by PluginHost');
-  }
-};`;
+## 核心概念：Action → Command → Event
 
-  const pluginInteractiveCode = `/**
- * Edu-OS 智能作业批改插件 — 演示 AI + 事件订阅 + 数据库操作
- */
-export default {
-  manifest: {
-    id: "ext-grading-assistant",
-    name: "智能随堂作业辅助批改插件",
-    version: "1.0.2",
-    capabilitiesProposed: ["assignment:write", "ai:assist"]
-  },
-  activate: async (ctx) => {
-    const { commandBus, actionRegistry, eventBus, ai } = ctx.services;
-    // 通过 DI 解析数据库和存储服务
-    const db = await ctx.resolve('@openlearn/core:IDatabase');
-    const storage = ctx.services.storage;
+\`\`\`
+AI Agent 调用 Action → CommandBus 执行 Handler → EventBus 广播事件
+\`\`\`
 
-    // ── 注册 Action ──
-    await actionRegistry.register({
-      id: 'ext-assignment-auto-diagnose',
-      commandType: 'assignment.diagnose',
-      description: '针对学生作业提交进行 AI 自动诊断打分并生成评语',
-      capabilityRequired: 'assignment:write',
-      inputSchema: {
-        type: 'OBJECT',
-        properties: {
-          assignmentId: { type: 'STRING', description: '作业 ID' },
-          studentId:    { type: 'STRING', description: '学生 ID' },
-          scoreRatio:   { type: 'NUMBER', description: '算法评定分数（0-100）' }
-        },
-        required: ['assignmentId', 'studentId', 'scoreRatio']
-      }
-    });
+1. **Action** — 用 \`actionRegistry.register()\` 注册 AI 工具，\`description\` 是 AI 理解的关键
+2. **Command** — 用 \`commandBus.registerHandler()\` 执行业务逻辑
+3. **Event** — 用 \`eventBus.publish()\` 通知其他系统
+`;
 
-    // ── 注册命令处理器 ──
-    await commandBus.registerHandler('assignment.diagnose', {
-      execute: async (command) => {
-        const { assignmentId, studentId, scoreRatio } = command.payload;
+  const pluginExamCode = `# 构建与发布
 
-        // 1. 使用 AI 服务生成评语
-        const aiFeedback = await ai.generateText(
-          \`学生得分 \${scoreRatio}/100，请用中文写一句鼓励性评语（20字以内）\`,
-          { temperature: 0.7 }
-        );
+\`\`\`bash
+# 开发模式（watch 自动重构建）
+npx @openlearn/plugin-sdk build --watch
 
-        // 2. 调用内核 grading 命令
-        await commandBus.execute(
-          commandBus.createCommand('assignment.grade_submission', {
-            assignmentId, studentId,
-            grade: scoreRatio >= 90 ? 'A+' : scoreRatio >= 75 ? 'B' : 'C',
-            feedback: aiFeedback || '继续加油！',
-            status: 'graded'
-          }, command.actorId)
-        );
+# 生产构建
+npx @openlearn/plugin-sdk build
 
-        // 3. 持久化诊断记录
-        await storage.set(\`diagnosis:\${assignmentId}:\${studentId}\`, {
-          scoreRatio, aiFeedback, timestamp: Date.now()
-        });
+# 产物
+dist/
+├── index.js        # 服务端 bundle
+├── frontend.js     # 前端 bundle（如有）
+└── my-plugin.zip   # ★ 可上传到插件中心
+\`\`\`
 
-        return { success: true, feedback: aiFeedback };
-      }
-    });
+## 插件数据库
 
-    // ── 订阅事件：自动监听新提交 ──
-    await eventBus.subscribe('courseware.attempt_submitted', async (event) => {
-      console.log('[Grading] New submission:', event.payload);
-      // 可在此自动触发 AI 批改...
-    });
-  }
-};`;
+每个插件有独立的命名空间：
 
-  const pluginExamCode = `/**
- * Edu-OS 智能考试系统插件 — 演示自建表 + ctx.db + 完整 CRUD
- */
-export default {
-  manifest: {
-    id: "ext-exam-system",
-    name: "智能考试与自测系统插件",
-    version: "1.0.1",
-    capabilitiesProposed: ["exam:write", "exam:read", "whiteboard:write"]
-  },
+\`\`\`typescript
+// 创建表
+await ctx.db.ensureTable('polls', \`
+  id TEXT PRIMARY KEY,
+  question TEXT NOT NULL
+\`);
 
-  activate: async (ctx) => {
-    const { commandBus, actionRegistry } = ctx.services;
-    const db = ctx.db;  // 插件自建表 API（命名空间隔离）
+// 获取带命名空间的表名
+const tableName = ctx.db.table('polls');
+// → plugin_@myorg_hello-plugin_polls
 
-    // ── 初始化插件专用表（幂等）──
-    await db.ensureTable('exams', \`
-      id TEXT PRIMARY KEY,
-      lesson_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      content TEXT,
-      duration_minutes INTEGER DEFAULT 45,
-      created_at INTEGER
-    \`);
-    await db.ensureTable('submissions', \`
-      exam_id TEXT NOT NULL,
-      student_id TEXT NOT NULL,
-      answers TEXT,
-      score REAL,
-      graded_at INTEGER,
-      PRIMARY KEY (exam_id, student_id)
-    \`);
+// 通过 DI 拿到 raw better-sqlite3
+const db = await ctx.resolve(IDatabaseToken);
+db.prepare(\`INSERT INTO \${tableName} ...\`).run(...);
+\`\`\`
 
-    // ── 注册 Action：创建考试 ──
-    await actionRegistry.register({
-      id: 'ext-exam-create',
-      commandType: 'exam.create',
-      description: '为指定课时创建一份限时考试试卷',
-      capabilityRequired: 'exam:write',
-      inputSchema: {
-        type: 'OBJECT',
-        properties: {
-          lessonId:        { type: 'STRING',  description: '关联课时 ID' },
-          title:           { type: 'STRING',  description: '试卷标题' },
-          questions:       { type: 'ARRAY',   description: '题目列表（JSON 数组）' },
-          durationMinutes: { type: 'INTEGER', description: '考试限时（分钟，默认 45）' }
-        },
-        required: ['lessonId', 'title', 'questions']
-      }
-    });
+## 可用的 9 个 DI Token
 
-    // ── 注册处理器：exam.create ──
-    await commandBus.registerHandler('exam.create', {
-      execute: async (command) => {
-        const { lessonId, title, questions, durationMinutes } = command.payload;
-        const examId = 'ex_' + Math.random().toString(36).slice(2, 10);
-        // 使用带前缀的表名写入
-        const stmt = (await ctx.resolve('@openlearn/core:IDatabase'))
-          .prepare(\`INSERT INTO \${db.table('exams')} (id, lesson_id, title, content, duration_minutes, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?)\`);
-        stmt.run(examId, lessonId, title, JSON.stringify(questions), durationMinutes || 45, Date.now());
-        return { success: true, examId };
-      }
-    });
+通过 \`ctx.services\` 或 \`ctx.resolve(token)\` 访问：
 
-    // ── 注册处理器：exam.publish（发布到白板）──
-    await commandBus.registerHandler('exam.publish', {
-      execute: async (command) => {
-        const { lessonId } = command.payload;
-        const coreDb = await ctx.resolve('@openlearn/core:IDatabase');
-        const exam = coreDb.prepare(
-          \`SELECT * FROM \${db.table('exams')} WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1\`
-        ).get(lessonId) as any;
-        if (!exam) throw new Error('该课时下无试卷，请先 exam.create');
-
-        await commandBus.execute(commandBus.createCommand('whiteboard.draw', {
-          lessonId, type: 'html-applet',
-          data: JSON.stringify({ examId: exam.id, title: exam.title, questions: JSON.parse(exam.content), durationMinutes: exam.duration_minutes })
-        }, command.actorId));
-
-        return { success: true, examId: exam.id };
-      }
-    });
-  },
-
-  deactivate: async () => {
-    console.log('[Exam System] Deactivated — tables preserved for data safety');
-  }
-};`;
+| Token | 服务 |
+|-------|------|
+| ICommandBusServiceToken | 命令总线 |
+| IEventBusServiceToken | 事件总线 |
+| IActionRegistryServiceToken | AI 工具注册 |
+| ICapabilityServiceToken | 权限守卫 |
+| IProcessServiceToken | 后台进程 |
+| IStorageServiceToken | K-V 存储 |
+| IAIServiceToken | AI 文本生成 |
+| IDatabaseToken | SQLite 数据库 |
+| IPluginHostToken | 插件主机管理 |
+`;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-white text-gray-900 border border-gray-200 rounded-2xl shadow-sm overflow-hidden m-1">
@@ -398,7 +339,7 @@ export default {
             教育实验操作系统：内核帮助与开发中心 (Edu-OS Reference Hub)
           </h2>
           <p className="text-xs text-gray-500 mt-1">
-            本页动态显示当前 Edu-OS 内核的可用动作指令，并向开发者提供完整的第三方插件开发指南与交互式代码范例。
+            本页提供 OpenLearn 插件开发的快速入口：脚手架工具、交互式代码范例、完整的 API 参考文档。
           </p>
         </div>
         
