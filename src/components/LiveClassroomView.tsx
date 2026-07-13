@@ -1239,8 +1239,8 @@ onRefresh={() => fetchElements(selectedLesson)}
                   <div className="grid grid-cols-2 gap-1.5 text-[9.5px] leading-tight shrink-0">
                     <div className="flex flex-col gap-0.5 bg-white p-1 rounded-lg border border-slate-150">
                       <span className="text-slate-400 font-bold">随堂测验</span>
-                      <span className={`font-bold font-mono text-[10px] ${studentProg?.quiz_score !== null ? 'text-indigo-600' : 'text-slate-400'}`}>
-                        {studentProg?.quiz_score !== null ? `${studentProg.quiz_score} / 100` : '未提交'}
+                      <span className={`font-bold font-mono text-[10px] ${studentProg != null && studentProg.quiz_score !== null ? 'text-indigo-600' : 'text-slate-400'}`}>
+                        {studentProg != null && studentProg.quiz_score !== null ? `${studentProg.quiz_score} / 100` : '未提交'}
                       </span>
                     </div>
                     
