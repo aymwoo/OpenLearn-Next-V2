@@ -359,6 +359,7 @@ export default function App() {
     }
   }, [isSystemResourceLibraryOpen]);
 
+
   const lessons = useAppStore((s) => s.lessons);
   const setLessons = useAppStore((s) => s.setLessons);
   const [lessonsSearchQuery, setLessonsSearchQuery] = useState('');

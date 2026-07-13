@@ -411,6 +411,8 @@ stateDiagram-v2
 * **双轨插槽声明与桥接**：互动工具栏不仅兼容旧有的 `manifest.classroomTools` 配置，还支持在插件清单中通过统一声明式 `contributes['classroom.tool']` 注册其专属的课堂教具。
 * **旧版 API 兼容设计（Shims）**：微前端平台暴露给插件的上下文环境内置了 `registerPanel`、`registerMenu` 和 `registerToolbarButton` 等兼容性 API 垫片（Shims）。在旧版 UI 插件调用它们时，系统会悄无声息地将这些调用透明转换为最新的声明式 `registerExtensionPoint` 注册信息，以达到 100% 零改动向后兼容。
 * **通用白板插件投射（Generic Canvas Widgets）**：白板引擎提供了对通用 `'plugin'` 类型画板元素的深度支持。通过 `whiteboard.draw` 投射类型为 `'plugin'` 的绘图元素时，白板层面的 `PluginCardRenderer` 会动态解析插槽配置和权限，采用 React 懒加载（对 React 组件）或挂载 DOM 生命周期（对 DOM 节点）的方式在白板画板中实时实例化和显示该插件，并在白板上提供了完整的拖动、改变尺寸、全屏、最小化和销毁的统一窗口控制器。
+* **白板插件投射的环节生命周期（Segment-free / Global Visibility）**：在通过 `whiteboard.draw` 绘制插件元素时，如果其 `data` 负载中未显式指定 `segmentId`，系统默认将其视为**全局可见组件**。这类组件将不受具体授课环节（如环节切换）的过滤限制，在所有环节下都保持可见和交互状态。如果需要将插件仅绑定到特定的授课环节，可在 `data` 中明确指定 `segmentId`。
+* **微前端组件幂等覆盖注册（Idempotent Widget Registration）**：为适配前端模块的热重载（Hot Reload）以及多次激活场景，微前端扩展点注册（如 `registerPanel`、`registerExtensionPoint` 等）采用幂等覆盖策略。当插件以相同的组件 ID / 扩展点 ID 多次重复注册时，系统会自动用最新的渲染定义覆盖历史注册，而不会引发崩溃或重复注册冲突。
 * **跨端交互**：前端页面通过微前端上下文发布事件通知，后端沙箱通过监听 EventBus 来执行相应计算，并在计算完成后向前端派发状态。
 
 ---
