@@ -414,6 +414,7 @@ export function PluginCenter({
 }: PluginCenterProps) {
   // ── Local state ──────────────────────────────────────────────────────────
 
+  const [showSystemPlugins, setShowSystemPlugins] = React.useState(false);
   const [dismissMigration, setDismissMigration] = React.useState(false);
   const [zipPreview, setZipPreview] = React.useState<{ name: string; id: string; version: string } | null>(null);
   const [zipProcessing, setZipProcessing] = React.useState(false);
@@ -557,12 +558,29 @@ export function PluginCenter({
               </button>
             </div>
           </div>
+          {/* Toggle show system plugins */}
+          {storeTab === 'store' && (
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-500 hover:text-gray-900 select-none transition-colors border border-gray-200 rounded-lg px-3 py-1.5 bg-gray-50/50 shadow-sm">
+              <input
+                type="checkbox"
+                checked={showSystemPlugins}
+                onChange={(e) => setShowSystemPlugins(e.target.checked)}
+                className="w-3.5 h-3.5 rounded text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer"
+              />
+              <span>{lang === 'zh' ? '显示系统核心插件' : 'Show System Core Plugins'}</span>
+            </label>
+          )}
         </div>
 
         {storeTab === 'store' ? (
           <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
             <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-4">
-              {plugins.map((plugin) => {
+              {plugins
+                .filter((p) => {
+                  const isSystem = p.id.startsWith('@openlearn/');
+                  return showSystemPlugins ? true : !isSystem;
+                })
+                .map((plugin) => {
                 let manifestInfo: {
                   description: string;
                   author: string;
