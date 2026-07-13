@@ -2682,6 +2682,18 @@ export function InteractiveWhiteboard({
         const handleQuizSubmit = async () => {
           const selectedOption = quizSelection[el.id];
           if (!selectedOption || quizSubmitting[el.id] || quizAnswers[el.id]) return;
+          
+          // Extract a clean uppercase letter (A, B, C, D) for the database to match correctAnswer
+          const options = data.options || [];
+          const optIndex = options.indexOf(selectedOption);
+          let cleanAnswer = selectedOption;
+          const matchLetter = selectedOption.match(/^[A-G](?:\.|\s|、|\b)/i);
+          if (matchLetter) {
+            cleanAnswer = matchLetter[0].charAt(0).toUpperCase();
+          } else if (optIndex !== -1) {
+            cleanAnswer = String.fromCharCode(65 + optIndex); // 0 -> A, 1 -> B, etc.
+          }
+
           setQuizSubmitting(prev => ({ ...prev, [el.id]: true }));
           try {
             const res = await fetch(`/api/lessons/${lessonId}/quiz-submit`, {
@@ -2689,7 +2701,7 @@ export function InteractiveWhiteboard({
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 elementId: el.id,
-                answer: selectedOption
+                answer: cleanAnswer
               })
             });
             if (res.ok) {
@@ -2699,13 +2711,13 @@ export function InteractiveWhiteboard({
                 [el.id]: { option: selectedOption, score: result?.score, isCorrect: result?.isCorrect }
               }));
               frontendEventBus.publish({
-      id: uuidv7(),
-      type: 'whiteboard.element_updated',
-      source: 'whiteboard',
-      payload: { lessonId },
-      timestamp: Date.now(),
-      correlationId: lessonId,
-    });
+                id: uuidv7(),
+                type: 'whiteboard.element_updated',
+                source: 'whiteboard',
+                payload: { lessonId },
+                timestamp: Date.now(),
+                correlationId: lessonId,
+              });
               if (onRefresh) onRefresh();
             }
           } catch (err) {
@@ -2822,10 +2834,31 @@ export function InteractiveWhiteboard({
                 <span className="text-indigo-600 font-bold">{totalSubmissions} 人已提交</span>
               </div>
               {(data.options || []).map((opt: string, i: number) => {
+                const optClean = opt.trim().toUpperCase();
                 const optLetter = opt.charAt(0).toUpperCase();
-                const count = optionCounts[optLetter] || 0;
+                const defaultLetter = String.fromCharCode(65 + i); // 0 -> A, 1 -> B
+
+                // Accumulate counts supporting letter-match, fallback default letter, and full-text match
+                let count = 0;
+                const hasLetterPrefix = /^[A-G](?:\.|\s|、|\b)/i.test(optClean);
+
+                if (hasLetterPrefix && optionCounts[optLetter] !== undefined) {
+                  count += optionCounts[optLetter];
+                }
+                if (!hasLetterPrefix && optionCounts[defaultLetter] !== undefined) {
+                  count += optionCounts[defaultLetter];
+                }
+                if (optionCounts[optClean] !== undefined) {
+                  count += optionCounts[optClean];
+                }
+
                 const percent = totalSubmissions > 0 ? Math.round((count / totalSubmissions) * 100) : 0;
-                const isCorrect = optLetter === String(data.correctAnswer).toUpperCase();
+                
+                // Resolve correctness highlight
+                const isCorrect = (hasLetterPrefix && optLetter === String(data.correctAnswer).toUpperCase())
+                  || (!hasLetterPrefix && defaultLetter === String(data.correctAnswer).toUpperCase())
+                  || optClean === String(data.correctAnswer).trim().toUpperCase();
+
                 return (
                   <div key={i} className="relative h-7 bg-slate-50 border border-slate-150 rounded-lg overflow-hidden flex items-center px-3 justify-between shadow-sm">
                     <div className={`absolute top-0 left-0 h-full transition-all duration-500 ${isCorrect ? 'bg-emerald-500/10' : 'bg-indigo-500/10'}`} style={{ width: percent + '%' }} />
