@@ -5067,10 +5067,11 @@ ${examsText}
         handleRollcallElement(payload.elementId);
       }
       if (payload.lessonId) {
-        io.to(payload.lessonId).emit('whiteboard-sync', {
-          roomId: payload.lessonId,
-          type: 'refresh'
-        });
+        const syncMsg = { roomId: payload.lessonId, type: 'refresh' };
+        // Broadcast to the lesson-specific room (for clients already joined)
+        io.to(payload.lessonId).emit('whiteboard-sync', syncMsg);
+        // Also broadcast globally so clients not yet in the lesson room can react
+        io.to('whiteboard-broadcast').emit('whiteboard-sync', syncMsg);
         console.log(`[EventBus -> Socket.IO] Broadcast whiteboard refresh for lesson "${payload.lessonId}" (element: "${payload.elementId}", type: "${payload.type}")`);
       }
     } catch (e) {

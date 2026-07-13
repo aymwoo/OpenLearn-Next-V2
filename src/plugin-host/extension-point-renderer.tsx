@@ -115,7 +115,7 @@ export function ExtensionPointRenderer({
 
   return (
     <>
-      {extensions.map((ext) => (
+      {extensions.filter((ext) => typeof ext.component === 'function').map((ext) => (
         <ExtensionErrorBoundary
           key={ext.id}
           fallback={

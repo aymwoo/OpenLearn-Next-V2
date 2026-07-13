@@ -196,24 +196,23 @@ export function LiveClassroomView({
 
   // Extract classroomTools from active plugins (supporting legacy and modern contributes['classroom.tool'])
   const activePlugins = plugins.filter(p => p.status === 'active');
-  const classroomTools = activePlugins.flatMap(p => {
-    try {
-      const manifestObj = typeof p.manifest === 'string' ? JSON.parse(p.manifest) : p.manifest;
-      const legacyTools = manifestObj.classroomTools || [];
-      const modernTools = manifestObj.contributes?.['classroom.tool'] || [];
-      const allTools = [...legacyTools, ...modernTools];
-      
-      // Deduplicate by ID
-      const uniqueTools = Array.from(new Map(allTools.map(t => [t.id, t])).values());
-
-      return uniqueTools.map((t: any) => ({
-        ...t,
-        pluginId: p.id
-      }));
-    } catch (e) {
-      return [];
-    }
-  });
+  const classroomTools = Array.from(
+    new Map(
+      activePlugins.flatMap(p => {
+        try {
+          const manifestObj = typeof p.manifest === 'string' ? JSON.parse(p.manifest) : p.manifest;
+          const legacyTools = manifestObj.classroomTools || [];
+          const modernTools = manifestObj.contributes?.['classroom.tool'] || [];
+          return [...legacyTools, ...modernTools].map((t: any) => ({
+            ...t,
+            pluginId: p.id
+          }));
+        } catch (e) {
+          return [];
+        }
+      }).map(t => [t.id, t])  // last-wins dedup by tool id across all plugins
+    ).values()
+  );
 
   // Countdown timer effect
   useEffect(() => {

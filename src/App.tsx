@@ -2164,6 +2164,7 @@ export default function App() {
   const langRef = useRef(lang);
   const studentsRef = useRef(students);
   const addToastRef = useRef(addToast);
+  const activatingPluginsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => { activeRoleRef.current = activeRole; }, [activeRole]);
   useEffect(() => { activeStudentIdRef.current = activeStudentId; }, [activeStudentId]);
@@ -2183,8 +2184,12 @@ export default function App() {
       if (!plugin.has_frontend) {
         continue;
       }
+      if (activatingPluginsRef.current.has(plugin.id)) {
+        continue;
+      }
       const localPlugin = store.activePlugins.find((p) => p.id === plugin.id);
-      if (!localPlugin || localPlugin.state !== PluginState.ACTIVE) {
+      if (!localPlugin || (localPlugin.state !== PluginState.ACTIVE && localPlugin.state !== PluginState.ACTIVATING)) {
+        activatingPluginsRef.current.add(plugin.id);
         if (!localPlugin) {
           store.addPlugin({
             id: plugin.id,
@@ -2196,10 +2201,15 @@ export default function App() {
         }
         try {
           const manifest = JSON.parse(plugin.manifest);
-          host.activateRemotePlugin(plugin.id, manifest).catch((err) => {
-            console.error(`[App] Failed to activate remote plugin "${plugin.name}":`, err);
-          });
+          host.activateRemotePlugin(plugin.id, manifest)
+            .catch((err) => {
+              console.error(`[App] Failed to activate remote plugin "${plugin.name}":`, err);
+            })
+            .finally(() => {
+              activatingPluginsRef.current.delete(plugin.id);
+            });
         } catch (e) {
+          activatingPluginsRef.current.delete(plugin.id);
           console.error(`[App] Failed to parse manifest for plugin "${plugin.name}":`, e);
         }
       }
@@ -2242,6 +2252,10 @@ export default function App() {
         name: studentsRef.current.find(s => s.id === activeStudentIdRef.current)?.name || activeStudentIdRef.current
       });
     }
+
+    // Join global whiteboard broadcast room so we receive whiteboard-sync events
+    // even before joining a specific lesson room.
+    socket.emit('join-room', 'whiteboard-broadcast');
 
     socket.on('presence-update', (data: { onlineStudentIds: string[], activeStudentLessons: Record<string, string> }) => {
       console.log('[Socket] presence-update received:', data);
@@ -2396,6 +2410,26 @@ export default function App() {
         fetchStudentDashboard(activeStudentIdRef.current);
       } else {
         fetchStudents();
+      }
+    });
+
+    // Global whiteboard-sync listener at App level.
+    // InteractiveWhiteboard also listens inside its own component, but that requires
+    // the whiteboard to already be mounted (which needs selectedLesson to be set).
+    // This handler ensures students receive whiteboard push updates even before
+    // they have joined a lesson — e.g. when a teacher dispatches a plugin card.
+    socket.on('whiteboard-sync', (data: any) => {
+      const { roomId, type } = data || {};
+      if (type === 'refresh' && roomId) {
+        // Fetch the new elements immediately
+        fetchElements(roomId);
+        // If the student has no lesson selected yet, auto-navigate to it
+        if (!selectedLessonRef.current && activeRoleRef.current === 'student') {
+          setSelectedLesson(roomId);
+          setStudentViewStatus('lesson');
+        }
+        // Join the socket room for subsequent updates (idempotent)
+        socket.emit('join-room', roomId);
       }
     });
 

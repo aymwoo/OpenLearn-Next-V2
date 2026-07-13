@@ -172,6 +172,17 @@ export class FrontendPluginHost {
     manifest: FrontendPluginManifest,
   ): Promise<void> {
     const store = usePluginHostStore.getState();
+
+    // Idempotency guard: if plugin is already activating or active, skip
+    const existingPlugin = store.activePlugins.find((p) => p.id === pluginId);
+    if (
+      existingPlugin &&
+      (existingPlugin.state === PluginState.ACTIVE ||
+        existingPlugin.state === PluginState.ACTIVATING)
+    ) {
+      return;
+    }
+
     store.updatePluginState(pluginId, PluginState.ACTIVATING);
 
     try {

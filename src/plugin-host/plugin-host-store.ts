@@ -95,9 +95,12 @@ export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreA
         const existing = state.extensionPoints.get(slot) ?? [];
         const dup = existing.find((e) => e.id === config.id);
         if (dup) {
-          throw new Error(
-            `Extension point already registered for slot "${slot}" with id "${config.id}"`,
-          );
+          // Widget IDs are globally unique per slot by convention.
+          // Always overwrite on duplicate to handle re-registration after
+          // server restart (new DB UUID) or HMR without crashing.
+          const updated = new Map(state.extensionPoints);
+          updated.set(slot, existing.map(e => e.id === config.id ? config : e));
+          return { extensionPoints: updated };
         }
         const updated = new Map(state.extensionPoints);
         updated.set(slot, [...existing, config]);
