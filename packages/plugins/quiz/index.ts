@@ -39,17 +39,19 @@ export default {
           actorId: command.actorId || 'agent-system-0',
           payload: {
             lessonId: payload.lessonId,
-            type: 'quiz',
+            type: 'plugin',
             data: JSON.stringify({
+              pluginId: 'ext-quiz-generator',
+              title: '随堂测验',
+              teacherWidgetId: 'quiz-teacher-widget',
+              studentWidgetId: 'quiz-student-view',
+              width: payload.width ?? 350,
+              height: payload.height ?? 300,
+              page: payload.page ?? 0,
               question: payload.question,
               options: payload.options,
-              correctAnswer: payload.correctAnswer || null,
+              correctAnswer: payload.correctAnswer || 'A',
               submissions: {},
-              x: payload.x ?? 120,
-              y: payload.y ?? 120,
-              width: payload.width ?? 320,
-              height: payload.height ?? 280,
-              page: payload.page ?? 0,
               isMinimized: false,
             })
           }

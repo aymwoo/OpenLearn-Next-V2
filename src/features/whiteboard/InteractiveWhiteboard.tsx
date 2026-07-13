@@ -48,11 +48,11 @@ function PluginCardRenderer({ pluginId, slot, widgetId, elementId, lessonId }: {
     if (containerRef.current) {
       containerRef.current.innerHTML = '';
       if (!ext.component && (ext as any).render) {
-        // If it is a DOM render function
-        Promise.resolve((ext as any).render(containerRef.current)).catch(console.error);
+        // If it is a DOM render function, pass elementId and lessonId context
+        Promise.resolve((ext as any).render(containerRef.current, { elementId, lessonId })).catch(console.error);
       }
     }
-  }, [ext, pluginId, widgetId]);
+  }, [ext, pluginId, widgetId, elementId, lessonId]);
 
   if (ext.component) {
     return React.createElement(
@@ -2658,75 +2658,7 @@ export function InteractiveWhiteboard({
       }
 
       if (el.type === 'quiz') {
-        const totalSubmissions = Object.keys(data.submissions || {}).length;
-        const optionCounts: Record<string, number> = {};
-        Object.values(data.submissions || {}).forEach((sub: any) => {
-          const ans = String(sub.answer).toUpperCase();
-          optionCounts[ans] = (optionCounts[ans] || 0) + 1;
-        });
-
-        const session = appStore.getState().session;
-        const currentStudentId = session?.studentId || session?.userId || 'mock-student-id';
-        const hasSubmitted = !!data.submissions?.[currentStudentId];
-        const studentSubmission = data.submissions?.[currentStudentId];
-        const serverSubmitted = studentSubmission
-          ? { option: studentSubmission.answer, score: studentSubmission.score, isCorrect: studentSubmission.score === 100 }
-          : null;
-
         const isTeacherView = userRole === 'teacher';
-        // Determine student display state
-        const studentDone = hasSubmitted || !!serverSubmitted;
-        const localDone = !!quizAnswers[el.id];
-        const finalResult = studentDone ? serverSubmitted : localDone ? quizAnswers[el.id] : null;
-
-        const handleQuizSubmit = async () => {
-          const selectedOption = quizSelection[el.id];
-          if (!selectedOption || quizSubmitting[el.id] || quizAnswers[el.id]) return;
-          
-          // Extract a clean uppercase letter (A, B, C, D) for the database to match correctAnswer
-          const options = data.options || [];
-          const optIndex = options.indexOf(selectedOption);
-          let cleanAnswer = selectedOption;
-          const matchLetter = selectedOption.match(/^[A-G](?:\.|\s|、|\b)/i);
-          if (matchLetter) {
-            cleanAnswer = matchLetter[0].charAt(0).toUpperCase();
-          } else if (optIndex !== -1) {
-            cleanAnswer = String.fromCharCode(65 + optIndex); // 0 -> A, 1 -> B, etc.
-          }
-
-          setQuizSubmitting(prev => ({ ...prev, [el.id]: true }));
-          try {
-            const res = await fetch(`/api/lessons/${lessonId}/quiz-submit`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                elementId: el.id,
-                answer: cleanAnswer
-              })
-            });
-            if (res.ok) {
-              const result = await res.json();
-              setQuizAnswers(prev => ({
-                ...prev,
-                [el.id]: { option: selectedOption, score: result?.score, isCorrect: result?.isCorrect }
-              }));
-              frontendEventBus.publish({
-                id: uuidv7(),
-                type: 'whiteboard.element_updated',
-                source: 'whiteboard',
-                payload: { lessonId },
-                timestamp: Date.now(),
-                correlationId: lessonId,
-              });
-              if (onRefresh) onRefresh();
-            }
-          } catch (err) {
-            console.error('Quiz submit failed:', err);
-          } finally {
-            setQuizSubmitting(prev => ({ ...prev, [el.id]: false }));
-          }
-        };
-
         return (
           <Group key={el.id}>
             <Html
@@ -2768,7 +2700,7 @@ export function InteractiveWhiteboard({
                 >
                   <span className="flex items-center gap-1">
                     <Sparkles size={12} className="animate-pulse text-indigo-200" />
-                    <span>📝 随堂测验</span>
+                    <span>📝 随堂测验 (插件托管)</span>
                   </span>
                   <div className="flex items-center gap-1">
                     <button
@@ -2778,26 +2710,6 @@ export function InteractiveWhiteboard({
                       title="全屏"
                     >
                       <Maximize2 size={11} />
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (onElementUpdate) {
-                          await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
-                          frontendEventBus.publish({
-      id: uuidv7(),
-      type: 'whiteboard.element_updated',
-      source: 'whiteboard',
-      payload: { lessonId },
-      timestamp: Date.now(),
-      correlationId: lessonId,
-    });
-                        }
-                      }}
-                      onPointerDown={e => e.stopPropagation()}
-                      className="p-1 hover:bg-white/10 rounded-full text-white/80 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
-                      title={data.isMinimized ? "展开组件" : "收起组件"}
-                    >
-                      {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
                     </button>
                     {isTeacherView && (
                       <button
@@ -2812,12 +2724,14 @@ export function InteractiveWhiteboard({
                   </div>
                 </div>
                 {!data.isMinimized && (
-                  <div className="p-3 text-slate-800 flex-1 overflow-y-auto flex flex-col justify-between">
-                    <div>
-                      <p className="font-bold text-xs text-slate-900 mb-2 leading-relaxed">{data.question}</p>
-                      {isTeacherView ? renderTeacherStats() : renderStudentView()}
-                    </div>
-                    {!isTeacherView && !studentDone && !localDone && renderSubmitButton()}
+                  <div className="flex-grow bg-white overflow-auto relative min-h-0">
+                    <PluginCardRenderer 
+                      pluginId="ext-quiz-generator" 
+                      slot={isTeacherView ? 'teacher.dashboard.widget' : 'student.view'} 
+                      widgetId={isTeacherView ? 'quiz-teacher-widget' : 'quiz-student-view'} 
+                      elementId={el.id}
+                      lessonId={lessonId}
+                    />
                   </div>
                 )}
                 {!data.isMinimized && renderResizeHandles()}
@@ -2825,100 +2739,6 @@ export function InteractiveWhiteboard({
             </Html>
           </Group>
         );
-
-        function renderTeacherStats() {
-          return (
-            <div className="space-y-2">
-              <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold mb-1">
-                <span>实时提交统计:</span>
-                <span className="text-indigo-600 font-bold">{totalSubmissions} 人已提交</span>
-              </div>
-              {(data.options || []).map((opt: string, i: number) => {
-                const optClean = opt.trim().toUpperCase();
-                const optLetter = opt.charAt(0).toUpperCase();
-                const defaultLetter = String.fromCharCode(65 + i); // 0 -> A, 1 -> B
-
-                // Accumulate counts supporting letter-match, fallback default letter, and full-text match
-                let count = 0;
-                const hasLetterPrefix = /^[A-G](?:\.|\s|、|\b)/i.test(optClean);
-
-                if (hasLetterPrefix && optionCounts[optLetter] !== undefined) {
-                  count += optionCounts[optLetter];
-                }
-                if (!hasLetterPrefix && optionCounts[defaultLetter] !== undefined) {
-                  count += optionCounts[defaultLetter];
-                }
-                if (optionCounts[optClean] !== undefined) {
-                  count += optionCounts[optClean];
-                }
-
-                const percent = totalSubmissions > 0 ? Math.round((count / totalSubmissions) * 100) : 0;
-                
-                // Resolve correctness highlight
-                const isCorrect = (hasLetterPrefix && optLetter === String(data.correctAnswer).toUpperCase())
-                  || (!hasLetterPrefix && defaultLetter === String(data.correctAnswer).toUpperCase())
-                  || optClean === String(data.correctAnswer).trim().toUpperCase();
-
-                return (
-                  <div key={i} className="relative h-7 bg-slate-50 border border-slate-150 rounded-lg overflow-hidden flex items-center px-3 justify-between shadow-sm">
-                    <div className={`absolute top-0 left-0 h-full transition-all duration-500 ${isCorrect ? 'bg-emerald-500/10' : 'bg-indigo-500/10'}`} style={{ width: percent + '%' }} />
-                    <div className="z-10 flex items-center gap-2 text-xs">
-                      <span className={`font-semibold ${isCorrect ? 'text-emerald-700 font-bold' : 'text-slate-600'}`}>{opt}</span>
-                      {isCorrect && <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1 rounded-sm">正确答案</span>}
-                    </div>
-                    <span className="z-10 text-[10px] font-bold text-slate-500">{count}人 ({percent}%)</span>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        }
-
-        function renderStudentView() {
-          if (finalResult) {
-            const ok = finalResult.isCorrect;
-            return (
-              <div className={`rounded-xl p-3 flex flex-col items-center justify-center text-center space-y-1.5 ${ok ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
-                <span className="text-xl">{ok ? '🎉' : '❌'}</span>
-                <p className="font-bold text-xs">{ok ? '回答正确！' : '回答错误'}</p>
-                {!ok && data.correctAnswer && <p className="text-[9px] opacity-70">正确答案：{data.correctAnswer}</p>}
-              </div>
-            );
-          }
-          return (
-            <div className="flex flex-col gap-1.5">
-              {(data.options || []).map((opt: string, i: number) => {
-                const selected = quizSelection[el.id];
-                const isPicked = selected === opt;
-                return (
-                  <button
-                    key={i}
-                    onClick={() => setQuizSelection(prev => ({ ...prev, [el.id]: prev[el.id] === opt ? '' : opt }))}
-                    className={`w-full text-left px-3 py-2 border rounded-lg text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer shadow-sm ${isPicked ? 'bg-indigo-50 border-indigo-400 text-indigo-800 ring-1 ring-indigo-400' : 'bg-slate-50 hover:bg-indigo-50/50 border-slate-200 hover:border-indigo-300 text-slate-700'}`}
-                  >
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[9px] font-bold shrink-0 ${isPicked ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-300 bg-white text-slate-500'}`}>
-                      {isPicked ? '✓' : opt.charAt(0).toUpperCase()}
-                    </div>
-                    <span>{opt}</span>
-                  </button>
-                );
-              })}
-            </div>
-          );
-        }
-
-        function renderSubmitButton() {
-          const canSubmit = !!quizSelection[el.id] && !quizSubmitting[el.id];
-          return (
-            <button
-              onClick={() => handleQuizSubmit()}
-              disabled={!canSubmit}
-              className={`w-full mt-3 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${canSubmit ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
-            >
-              {quizSubmitting[el.id] ? <span className="flex items-center justify-center gap-1"><Loader2 size={12} className="animate-spin" /> 提交中...</span> : '提交答案'}
-            </button>
-          );
-        }
       }
       if (el.type === 'assignment') {
         return (

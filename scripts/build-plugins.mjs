@@ -21,6 +21,7 @@ const plugins = [
   },
   {
     entry: 'packages/plugins/quiz/index.ts',
+    frontendEntry: 'packages/plugins/quiz/frontend.ts',
     manifest: 'packages/plugins/quiz/manifest.json',
     zipName: 'ext-quiz-generator.zip'
   },
@@ -59,7 +60,7 @@ async function build() {
     try {
       console.log(`Building plugin from ${plugin.entry}...`);
       
-      // 1. esbuild bundle in memory
+      // 1. esbuild bundle backend in memory
       const result = await esbuild.build({
         entryPoints: [plugin.entry],
         bundle: true,
@@ -83,12 +84,35 @@ async function build() {
       }
 
       const jsCode = result.outputFiles[0].text;
+
+      // 1b. esbuild bundle frontend in memory if frontendEntry exists
+      let frontendJsCode = null;
+      if (plugin.frontendEntry) {
+        console.log(`Building plugin frontend from ${plugin.frontendEntry}...`);
+        const feResult = await esbuild.build({
+          entryPoints: [plugin.frontendEntry],
+          bundle: true,
+          write: false,
+          format: 'esm',
+          sourcemap: 'inline',
+          target: 'es2020',
+          external: ['react', 'react-dom'],
+        });
+        if (!feResult.outputFiles || feResult.outputFiles.length === 0) {
+          throw new Error(`Esbuild output empty for ${plugin.frontendEntry}`);
+        }
+        frontendJsCode = feResult.outputFiles[0].text;
+      }
+
       const manifestContent = fs.readFileSync(path.resolve(plugin.manifest), 'utf8');
 
       // 2. zip packaging
       const zip = new JSZip();
       zip.file('index.js', jsCode);
       zip.file('manifest.json', manifestContent);
+      if (frontendJsCode) {
+        zip.file('frontend.js', frontendJsCode);
+      }
 
       const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
       const destPath = path.join(outDir, plugin.zipName);
