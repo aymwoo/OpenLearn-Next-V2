@@ -437,6 +437,83 @@ stateDiagram-v2
 
 ---
 
+## 2.13 班级平时分与教务核心命令交互 (Classroom Metrics & LMS Commands)
+
+系统班级管理模块所显示的 **考勤分**、**进度分**、**作业分** 和 **测验分** 是依据底层核心数据库对应的记录实时统计得出的。三方插件在获得对应能力授权后，可以通过直接读写数据库或向系统指令总线派发核心 Command 的方式来干预和操作这些分数指标。
+
+### 2.13.1 平时分计算规则与数据源
+
+| 指标维度 | 底层数据表 | 平时分统计口径与算法 |
+| :--- | :--- | :--- |
+| **考勤分** | `attendance` | 查询该班级所有排课计划（Schedules）的签到记录。出勤（`present`）与请假（`excused`）记 100 分，迟到（`late`）与早退（`leave_early`）记 80 分，缺勤（`absent`）记 0 分。计算所有历史记录的**算术平均值**。 |
+| **进度分** | `student_lesson_progress` | 查询该学生在班级已排课节中所有课件的学习进度百分比，计算所有课节进度的**算术平均值** (0 - 100)。 |
+| **作业分** | `assignment_submissions` | 查询该学生提交的所有作业，计算处于已评分（`graded`）状态作业的得分**算术平均值** (0 - 100)。 |
+| **测验分** | `exam_scores` | 查询该学生参加的随堂测验或期末考试，折算为百分制（`(得分 / 满分) * 100`）后，计算所有成绩记录的**算术平均值**。 |
+
+### 2.13.2 插件操作接口
+
+若要在插件中直接写入或变更这些核心教务数据，有以下两种规范方式：
+
+#### 方式一：调用教务系统内置 Command（推荐）
+插件必须在 `manifest.json` 的 `capabilitiesProposed` 权限申请中声明 **`management:write`** 能力，然后通过指令总线服务 `ctx.services.commandBus.execute` 派发系统命令：
+
+1. **登记学生考勤 (`attendance.record`)**：
+   ```typescript
+   await ctx.services.commandBus.execute({
+     id: 'att_' + Date.now(),
+     type: 'attendance.record',
+     payload: {
+       scheduleId: "排课计划UUID",
+       studentId: "学生账户UUID",
+       status: "present" // 可选: present | absent | late | leave_early | excused
+     }
+   } as any);
+   ```
+
+2. **设置学习进度 (`student.set_progress`)**：
+   ```typescript
+   await ctx.services.commandBus.execute({
+     id: 'prog_' + Date.now(),
+     type: 'student.set_progress',
+     payload: {
+       lessonId: "课节课件UUID",
+       studentId: "学生账户UUID",
+       progressPercent: 85 // 0 到 100 整数
+     }
+   } as any);
+   ```
+
+3. **登记或评定作业分数 (`assignment.grade`)**：
+   ```typescript
+   await ctx.services.commandBus.execute({
+     id: 'grade_' + Date.now(),
+     type: 'assignment.grade',
+     payload: {
+       submissionId: "作业提交UUID",
+       score: 95,          // 作业评分 (0-100)
+       feedback: "解答思路清晰，继续保持！" // 可选评语
+     }
+   } as any);
+   ```
+
+#### 方式二：直接操作教务底层数据表
+在高风险或需要大批量导入分数的场景下，插件若在 `manifest.json` 声明了 **`management:write`** 权限，可以通过获取物理数据库实例来执行原生 SQL 读写：
+
+```typescript
+import { IDatabaseToken } from '../../core/di/interfaces.js';
+
+// 在 activate 钩子中解析宿主物理 SQLite 数据库连接
+const db = await ctx.resolve<any>(IDatabaseToken);
+
+// 写入随堂测验/考试分数
+db.prepare(`
+  INSERT OR REPLACE INTO exam_scores (exam_id, student_id, score, graded_at) 
+  VALUES (?, ?, ?, ?)
+`).run('exam-id-uuid', 'student-id-uuid', 98.5, Date.now());
+```
+
+---
+
 # Part III: Cookbook (教案与实战)
 
 ## 3.1 经典 "Hello World" (基础入门)
