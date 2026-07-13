@@ -27,10 +27,7 @@ npm update -g openlearn-next
 #### 或通过 npx 一键启动
 ```bash
 # 首次会自动下载安装，无需 clone 项目
-export GEMINI_API_KEY=你的密钥
-npx openlearn-next
 
-# 可选参数
 npx openlearn-next -p 3000              # 自定义端口（默认 9000）
 OPENLEARN_DB_PATH=./my.db npx openlearn-next  # 自定义数据库路径（默认 ~/openlearn-next/data.db）
 ```
