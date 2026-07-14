@@ -512,6 +512,7 @@ export class FrontendPluginHost {
         }
       },
       invokeCommand: async <T = any>(type: string, payload?: any): Promise<T> => {
+        if (!frontendApi) throw new Error(`Plugin "${pluginId}" cannot invoke command: frontendApi is not available. Has FrontendPluginHost initialized?`);
         // 自动添加插件命名空间前缀，使前端无需关心 UUID
         const prefixedType = type.includes('.') ? type : `${pluginId}.${type}`;
         const res = await frontendApi.post<T>('/api/plugins/execute-command', {
