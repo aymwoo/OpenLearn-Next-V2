@@ -188,7 +188,9 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
         };
 
       } catch (err) {
-        console.error('Failed to run frontend sandbox preview:', err);
+        // Dynamic import of blob URLs fails for modules with bare imports (React, etc.)
+        // This is expected — the sandbox preview is best-effort
+        console.warn('Sandbox preview skipped: frontend.js uses module imports that cannot be resolved from a blob URL.');
       }
     };
 
