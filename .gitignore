@@ -7,7 +7,8 @@ coverage/
 *.log
 .env*
 !.env.example
-/packages/core/db/*.db
+/packages/core/db/educational_os.db*
+!/packages/core/db/index.ts
 .mf/
 .__mf__temp/
 .pnpmfile.cjs
