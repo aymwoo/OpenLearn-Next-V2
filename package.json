@@ -47,7 +47,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "migrate-passwords": "node -e \"console.log('Run this script to batch-upgrade password hashes. See server/utils/migrate-passwords.ts')\"",
-    "db:backup": "node -e \"const db = require('./packages/core/db/index.js'); db.db.exec('VACUUM INTO \\'backup_'+Date.now()+'.db\\'');\""
+    "db:backup": "node -e \"const db = require('./packages/core/db/index.js'); db.db.exec('VACUUM INTO \\'backup_'+Date.now()+'.db\\'');\"",
+    "db:reset": "rm -f packages/core/db/educational_os.db* && echo \"✓ Database deleted. Run pnpm dev to regenerate.\""
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
