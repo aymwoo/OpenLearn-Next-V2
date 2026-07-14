@@ -547,6 +547,48 @@ export function PluginCenter({
 
         {storeTab === 'store' ? (
           <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
+            {/* ZIP 拖放安装区域 — 发现页快速安装 */}
+            <div className="mb-4">
+              <div
+                className={`border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-colors ${selectedZipFile ? "border-emerald-400 bg-emerald-50" : "border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/50"}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.classList.add("border-indigo-400", "bg-indigo-50/50");
+                }}
+                onDragLeave={(e) => {
+                  e.currentTarget.classList.remove("border-indigo-400", "bg-indigo-50/50");
+                }}
+                onDrop={handleZipDrop}
+                onClick={() => {
+                  setZipError(null);
+                  setZipPreview(null);
+                  document.getElementById("zip-plugin-uploader")?.click();
+                }}
+              >
+                {selectedZipFile ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <CheckCircle2 size={16} className="text-emerald-500" />
+                    <span className="text-sm font-medium text-emerald-700">{selectedZipFile.name}</span>
+                    <span className="text-xs text-gray-400">{lang === "zh" ? "点击更换文件" : "Click to change"}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2">
+                    <Upload size={14} className="text-gray-400" />
+                    <span className="text-xs text-gray-500">{lang === "zh" ? "拖拽 ZIP 文件到此处安装插件，或点击选择" : "Drop ZIP file here to install plugin, or click to select"}</span>
+                  </div>
+                )}
+              </div>
+              {selectedZipFile && (
+                <button
+                  onClick={async () => {
+                    if (!selectedZipFile) return;
+                    await onZipUpload(selectedZipFile, "inline");
+                    setSelectedZipFile(null);
+                  }}
+                  className="mt-2 w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md transition-colors"
+                >{lang === "zh" ? "安装 ZIP 插件" : "Install ZIP Plugin"}</button>
+              )}
+            </div>
             <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-4">
               {plugins
                 .filter((p) => {

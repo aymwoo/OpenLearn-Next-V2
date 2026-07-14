@@ -2310,14 +2310,12 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       let lessonId = lesson?.id;
       if (!lessonId) {
         lessonId = 'demo-lesson-' + Math.random().toString(36).slice(2, 6);
-        kernelContainer.db.prepare('INSERT INTO lessons (id, name, type, content, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-          lessonId, '初识 Python：智能白板创意编程', 'whiteboard', JSON.stringify({ elements: [] }), 'admin', Date.now()
+        kernelContainer.db.prepare('INSERT INTO lessons (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
+          lessonId, '初识 Python：智能白板创意编程', JSON.stringify({ elements: [] }), Date.now(), Date.now()
         );
       }
-
       // 4. Create scheduled session
-      const scheduleId = 'demo-sched-' + Math.random().toString(36).slice(2, 6);
-      kernelContainer.db.prepare('INSERT INTO schedules (id, class_id, lesson_id, schedule_time, status, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+      kernelContainer.db.prepare('INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, status, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
         scheduleId, classId, lessonId, new Date().toISOString().split('T')[0] + ' 09:00:00', 'scheduled', Date.now()
       );
 

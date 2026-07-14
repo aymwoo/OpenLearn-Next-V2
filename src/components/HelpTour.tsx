@@ -12,6 +12,7 @@ interface HelpTourProps {
 export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: HelpTourProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [seeding, setSeeding] = useState(false);
+  const [errorFeedback, setErrorFeedback] = useState<string | null>(null);
   const [seedResult, setSeedResult] = useState<{ classId: string; className: string } | null>(null);
   const [highlightStyle, setHighlightStyle] = useState<React.CSSProperties>({ display: 'none' });
   const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({ display: 'none' });
@@ -68,9 +69,13 @@ export function HelpTour({ isOpen, onClose, lang, onSeedSuccess, onJumpTab }: He
             setCurrentStep(2);
           }, 1500);
         }
+      } else {
+        const err = await res.json().catch(() => ({ error: '未知错误' }));
+        setErrorFeedback(lang === 'zh' ? `初始化失败：${err.error || '请检查服务器日志'}` : `Failed: ${err.error || 'Check server logs'}`);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to seed demo data:', e);
+      setErrorFeedback(lang === 'zh' ? `网络错误：${e.message || '请检查服务器是否运行'}` : `Network error: ${e.message || 'Check if server is running'}`);
     } finally {
       setSeeding(false);
     }
