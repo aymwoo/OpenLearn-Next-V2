@@ -409,6 +409,30 @@ export class ServiceHost {
         return;
       }
 
+      // ── Intercept IEventBusService helper methods ───────────────────
+      if (msg.token === '@openlearn/core:IEventBusService') {
+        const eventBus = service as any;
+        if (msg.method === 'publish') {
+          const [event] = msg.args as [any];
+          const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
+          const enrichedEvent = {
+            id: event.id || `evt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+            timestamp: event.timestamp || Date.now(),
+            ...event,
+            source: event.source 
+              ? `plugin:${pluginId}.${event.source}` 
+              : `plugin:${pluginId}`,
+          };
+          const result = await eventBus.publish(enrichedEvent);
+          transport.postMessage({
+            type: 'result',
+            invokeId: msg.invokeId,
+            value: result,
+          });
+          return;
+        }
+      }
+
       // ── Intercept ICommandBusService helper methods ─────────────────
       if (msg.token === '@openlearn/core:ICommandBusService') {
         const commandBus = service as import('../command-bus/index.js').CommandBus;
