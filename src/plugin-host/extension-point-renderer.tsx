@@ -92,6 +92,24 @@ export interface ExtensionPointRendererProps {
   lang?: string;
   /** v5.1: 可选子路由，传递给插件组件 */
   route?: string;
+  /** v5.1: 额外传递给插件的渲染属性 (如 renderType) */
+  slotProps?: Record<string, any>;
+}
+
+/**
+ * Wrapper component to support plugins using traditional DOM render function.
+ */
+function DOMExtensionWrapper({ ext, route, slotProps }: { ext: any; route?: string; slotProps?: any }) {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  
+  React.useEffect(() => {
+    if (containerRef.current && typeof ext.render === 'function') {
+      containerRef.current.innerHTML = '';
+      Promise.resolve(ext.render(containerRef.current, { route, ...slotProps })).catch(console.error);
+    }
+  }, [ext, route, slotProps]);
+
+  return <div ref={containerRef} className="w-full h-full min-h-0" />;
 }
 
 /**
@@ -107,6 +125,7 @@ export function ExtensionPointRenderer({
   fallback,
   lang,
   route,
+  slotProps,
 }: ExtensionPointRendererProps) {
   const host = usePluginHost();
   const extensions = host.getExtensions(slot as ExtensionSlot);
@@ -115,27 +134,41 @@ export function ExtensionPointRenderer({
 
   return (
     <>
-      {extensions.filter((ext) => typeof ext.component === 'function').map((ext) => (
-        <ExtensionErrorBoundary
-          key={ext.id}
-          fallback={
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-              <p>
-                {lang === 'zh'
-                  ? '扩展组件加载失败'
-                  : 'Extension failed to load'}
-              </p>
-            </div>
-          }
-        >
-          <Suspense fallback={fallback ?? <LoadingSkeleton />}>
-            {React.createElement(
-              React.lazy(ext.component),
-              { route: ext.route || route, ...ext.slotProps },
-            )}
-          </Suspense>
-        </ExtensionErrorBoundary>
-      ))}
+      {extensions.map((ext) => {
+        const isReact = typeof ext.component === 'function';
+        const isDOM = typeof ext.render === 'function';
+        if (!isReact && !isDOM) return null;
+
+        return (
+          <ExtensionErrorBoundary
+            key={ext.id}
+            fallback={
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+                <p>
+                  {lang === 'zh'
+                    ? '扩展组件加载失败'
+                    : 'Extension failed to load'}
+                </p>
+              </div>
+            }
+          >
+            <Suspense fallback={fallback ?? <LoadingSkeleton />}>
+              {isReact ? (
+                React.createElement(
+                  React.lazy(ext.component),
+                  { route: ext.route || route, ...ext.slotProps, ...slotProps },
+                )
+              ) : (
+                <DOMExtensionWrapper
+                  ext={ext}
+                  route={ext.route || route}
+                  slotProps={{ ...ext.slotProps, ...slotProps }}
+                />
+              )}
+            </Suspense>
+          </ExtensionErrorBoundary>
+        );
+      })}
     </>
   );
 }

@@ -520,7 +520,8 @@ export default function App() {
     checkSession();
   }, []);
 
-  const [teacherTab, setTeacherTab] = useState<string>('dashboard');
+  const teacherTab = useAppStore(state => state.teacherTab);
+  const setTeacherTab = useAppStore(state => state.setTeacherTab);
   const [isTourOpen, setIsTourOpen] = useState(false);
   const [isApprovalsCollapsed, setIsApprovalsCollapsed] = useState(false);
   const [isProcessesCollapsed, setIsProcessesCollapsed] = useState(false);
@@ -4432,7 +4433,7 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
             {/* Phase 9: Dynamic plugin tab content — catch-all for non-hardcoded tabs */}
             {['dashboard', 'lesson_editor', 'live_class', 'plugins', 'courses', 'classes',
               'timetable', 'admin_directory', 'help', 'computer_labs'].includes(teacherTab) ? null : (
-              <ExtensionPointRenderer slot="teacher.tab" />
+              <ExtensionPointRenderer slot="teacher.tab" slotProps={{ renderType: 'panel' }} />
             )}
 
             {teacherTab === 'dashboard' ? (

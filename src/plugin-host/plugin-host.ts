@@ -18,6 +18,7 @@
 import { FrontendServiceRegistry } from './service-registry';
 import { BrowserWorkerManager } from './browser-worker-manager';
 import { usePluginHostStore } from './plugin-host-store';
+import { useAppStore } from '../store/appStore';
 import {
   PluginState,
   FRONTEND_API_TOKEN,
@@ -495,6 +496,13 @@ export class FrontendPluginHost {
         unregisterExtensionPoint: (slot: ExtensionSlot, id: string) => {
           usePluginHostStore.getState().unregisterExtensionPoint(slot, id);
         },
+      },
+      navigation: {
+        getTeacherTab: () => useAppStore.getState().teacherTab,
+        setTeacherTab: (tab: string) => useAppStore.getState().setTeacherTab(tab),
+        subscribeTeacherTab: (callback: (tab: string) => void) => {
+          return useAppStore.subscribe((state) => state.teacherTab, callback);
+        }
       },
       invokeCommand: async <T = any>(type: string, payload?: any): Promise<T> => {
         // 自动添加插件命名空间前缀，使前端无需关心 UUID

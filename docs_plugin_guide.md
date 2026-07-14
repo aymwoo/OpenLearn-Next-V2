@@ -445,6 +445,70 @@ ctx.ui.registerExtensionPoint('teacher.tab', {
 });
 ```
 
+### 7.3 侧边栏 Tab 扩展 (`teacher.tab`) 的特殊处理
+在 OpenLearn 系统中，`teacher.tab` 槽位是一个双重渲染插槽。它既会在系统侧边导航栏（`NavigationSidebar`）中作为入口按钮进行渲染，也会在主体展示区（`App.tsx`）中作为面板内容页进行渲染。
+
+为了帮助组件识别当前所在的渲染场景，系统会通过 React props（或 DOM 渲染函数的上下文参数）向插件注入 `slotProps.renderType`：
+* `renderType === 'button'`：处于侧边栏导航按钮渲染状态，此时应展示轻量级的 Tab 页签按钮，并绑定点击跳转。
+* `renderType === 'panel'`：处于主体内容大屏面板渲染状态，此时应展示完整的后台管理、图表统计、打分筛选等功能页面。
+
+此外，前端上下文 `frontendCtx` 提供了 `navigation` 对象用来读取和切换系统当前选中的 Tab：
+* `frontendCtx.navigation.getTeacherTab()`：获取当前活动的 Tab ID。
+* `frontendCtx.navigation.setTeacherTab(tabId)`：跳转到指定的 Tab ID，激活对应的面板页。
+* `frontendCtx.navigation.subscribeTeacherTab((activeTab) => void)`：订阅激活 Tab 的状态变更，常用于高亮选中态的实时更新。
+
+#### 纯 JavaScript DOM 插件的 `teacher.tab` 完整适配示例：
+```javascript
+export default {
+  activate: async (frontendCtx) => {
+    frontendCtx.registerPanel({
+      slot: 'teacher.tab',
+      id: 'homework-tab-view',
+      title: '作业大屏',
+      render: async (domNode, context) => {
+        const { renderType } = context;
+
+        if (renderType === 'button') {
+          // 1. 渲染侧边栏导航入口
+          domNode.innerHTML = `
+            <div id="btn-homework-tab" style="padding: 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background-color 0.2s;">
+              <span style="font-size: 16px;">📝</span>
+              <span style="font-size: 14px; font-weight: 500; color: #475569;">作业中心</span>
+            </div>
+          `;
+          
+          const btn = domNode.querySelector('#btn-homework-tab');
+          
+          // 2. 点击时触发全局 Tab 导航切换
+          btn.addEventListener('click', () => {
+            frontendCtx.navigation.setTeacherTab('homework-tab-view');
+          });
+
+          // 3. 监听 Tab 状态更新按钮选中高亮态
+          frontendCtx.navigation.subscribeTeacherTab((activeTab) => {
+            if (activeTab === 'homework-tab-view') {
+              btn.style.backgroundColor = '#e0e7ff';
+              btn.querySelector('span:last-child').style.color = '#4f46e5';
+            } else {
+              btn.style.backgroundColor = 'transparent';
+              btn.querySelector('span:last-child').style.color = '#475569';
+            }
+          });
+        } else {
+          // 4. 渲染完整的大屏内容管理及打分面板
+          domNode.innerHTML = `
+            <div style="padding: 24px; font-family: sans-serif; display: flex; flex-direction: column; gap: 20px;">
+              <h2>📝 作业管理与打分中心</h2>
+              <!-- 放置作业列表筛选展示、打分管理、统计图表等具体业务 UI -->
+            </div>
+          `;
+        }
+      }
+    });
+  }
+}
+```
+
 ---
 
 ## 8. 完整的全栈插件开发范例

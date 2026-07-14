@@ -28,6 +28,7 @@ export interface AppState {
   students: StudentType[];
   liveClassSelectedClassId: string | null;
   liveClassIsActive: boolean;
+  teacherTab: string;
 
   // Shared API data (Phase 1 additions)
   aiProviders: AIProvider[];
@@ -82,6 +83,7 @@ export interface AppState {
   setStudents: (students: StudentType[]) => void;
   setLiveClassSelectedClassId: (id: string | null) => void;
   setLiveClassIsActive: (isActive: boolean) => void;
+  setTeacherTab: (tab: string) => void;
 
   // Shared data setters
   setAiProviders: (providers: AIProvider[]) => void;
@@ -140,6 +142,7 @@ export const appStore = createStore<AppState>((set) => ({
   students: [],
   liveClassSelectedClassId: null,
   liveClassIsActive: false,
+  teacherTab: 'dashboard',
 
   // Shared data defaults
   aiProviders: [],
@@ -193,6 +196,7 @@ export const appStore = createStore<AppState>((set) => ({
   setStudents: (students) => set({ students }),
   setLiveClassSelectedClassId: (liveClassSelectedClassId) => set({ liveClassSelectedClassId }),
   setLiveClassIsActive: (liveClassIsActive) => set({ liveClassIsActive }),
+  setTeacherTab: (teacherTab) => set({ teacherTab }),
 
   // ── Shared data setters ───────────────────────────────────────────────
 
