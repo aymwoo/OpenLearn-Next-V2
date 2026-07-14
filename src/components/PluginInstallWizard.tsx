@@ -101,6 +101,7 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
     const originalFetch = window.fetch;
 
     const setupPreviewSandbox = async () => {
+      let blobUrl = '';
       try {
         const frontendJsFile = zipObj.file('frontend.js');
         if (!frontendJsFile) return;
