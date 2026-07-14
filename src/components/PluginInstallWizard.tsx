@@ -101,9 +101,11 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
     const originalFetch = window.fetch;
 
     const setupPreviewSandbox = async () => {
+      let blobUrl = '';
       try {
         const frontendJsFile = zipObj.file('frontend.js');
         if (!frontendJsFile) return;
+        if (cancelled) return;
 
         const jsContent = await frontendJsFile.async('string');
         const blob = new Blob([jsContent], { type: 'application/javascript' });
@@ -193,8 +195,9 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
     setupPreviewSandbox();
 
     return () => {
+      cancelled = true;
       window.fetch = originalFetch;
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
+      // blobUrl is now managed inside setupPreviewSandbox
     };
   }, [step, zipObj, hasFrontend, mockData]);
 
