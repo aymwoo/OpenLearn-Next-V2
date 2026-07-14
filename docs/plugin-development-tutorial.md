@@ -31,7 +31,8 @@ OpenLearnV2 采用 **插件驱动的命令-事件总线架构**（Plugin-Driven 
 │                         │ 自然语言 → functionCall             │
 │  ┌──────────────────────▼───────────────────────────────┐   │
 │  │                  Command Bus (内核管线)               │   │
-│  │    interceptor → capability check → high-risk gate    │   │
+│  │  interceptor → JSON Schema校验 → CapabilityGuard →  │   │
+│  │  高危审批闸门 → beforeCommand → Handler → afterCmd   │   │
 │  └──┬──────────┬──────────┬──────────┬──────────┬───────┘   │
 │     │          │          │          │          │            │
 │  ┌──▼──┐  ┌───▼──┐  ┌───▼──┐  ┌───▼──┐  ┌───▼──────┐      │
@@ -45,7 +46,7 @@ OpenLearnV2 采用 **插件驱动的命令-事件总线架构**（Plugin-Driven 
 │  └──────────────────────┬───────────────────────────┘      │
 │                         │                                   │
 │  ┌──────────────────────▼───────────────────────────┐      │
-│  │              SQLite Database (30+ 表)              │      │
+│  │     SQLite Database (30+ 表) + ServiceRegistry    │      │
 │  └───────────────────────────────────────────────────┘      │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -54,27 +55,32 @@ OpenLearnV2 采用 **插件驱动的命令-事件总线架构**（Plugin-Driven 
 
 | 子系统 | 文件 | 职责 |
 |--------|------|------|
-| **Kernel** | `packages/core/kernel/index.ts` | 全局单例容器，组装所有子系统 |
-| **CommandBus** | `packages/core/command-bus/index.ts` | 命令执行管线：注册 handler → 拦截器链 → 执行 |
-| **EventBus** | `packages/core/event-bus/index.ts` | 发布/订阅事件，支持通配符 `*` |
+| **Kernel** | `packages/core/kernel/index.ts` | 全局单例容器，分层组装所有子系统（Layer 0-3），引导系统插件启动 |
+| **CommandBus** | `packages/core/command-bus/index.ts` | 命令执行管线：注册 handler → 拦截器链（JSON Schema校验→CapabilityGuard→高危审批）→ 执行 |
+| **EventBus** | `packages/core/event-bus/index.ts` | 发布/订阅事件，支持通配符 `*`，异步并行通知 |
 | **ActionRegistry** | `packages/core/registry/index.ts` | 注册 AI Agent 可发现的工具 |
 | **CapabilityGuard** | `packages/core/capability-system/index.ts` | 基于字符串的 RBAC 权限控制 |
 | **ProcessManager** | `packages/core/process-manager/index.ts` | 后台进程和定时任务管理 |
-| **PluginHost** | `packages/core/plugin-host/index.ts` | 插件生命周期管理：安装/激活/停用/卸载/热重载 |
-| **ServiceRegistry** | `packages/core/di/service-registry.ts` | 依赖注入容器，Token 驱动 |
+| **PluginHost** | `packages/core/plugin-host/index.ts` | 插件生命周期：安装/激活/停用/卸载/热重载，中间件管道 |
+| **ServiceRegistry** | `packages/core/di/service-registry.ts` | 依赖注入容器，Token 驱动，依赖图验证 |
+| **ResourceTracker** | `packages/core/plugin-host/resource-tracker.ts` | 按 pluginId 管理 Disposable 资源，保证精确清理 |
+| **WorkerManager** | `packages/core/worker-manager/index.ts` | Worker Thread 隔离模式管理 |
+| **FrontendPluginHost** | `src/plugin-host/plugin-host.ts` | 前端插件生命周期管理，支持 inline/worker 模式 |
 
 ### 1.3 数据流
 
 ```
 用户发送消息 → POST /api/agent/chat
   → AI 模型返回 functionCall（如 lesson.create）
-  → executeAgentToolCall() 通过 ActionRegistry 查找对应 action
-  → CommandBus.execute() 执行拦截器管线
-    → CapabilityGuard 权限检查
-    → 高危操作 → 写入审批网关（pending_commands 表）
-  → Handler 执行业务逻辑
-  → EventBus.publish() 发布事件
+  → executeAgentToolCall() 通过 ActionRegistry.getActionByToolName() 查找 action
+  → CommandBus.execute() 执行拦截器管线:
+    ├─ JSON Schema payload 校验（基于 action.inputSchema）
+    ├─ CapabilityGuard 权限检查（非 admin actor）
+    └─ 高危操作 → 写入 pending_commands 审批表 + 抛出异常中断
+  → beforeCommand 中间件 → Handler 执行业务逻辑 → afterCommand 中间件
+  → EventBus.publish() 发布事件（异步并行通知所有订阅者）
   → Socket.IO 推送给在线客户端
+  → 返回结果给 AI Agent（继续对话或结束）
 ```
 
 ---
@@ -99,13 +105,14 @@ export default {
 ```
 ┌─ 服务端（Node.js） ─────────────────────┐
 │  PluginHost → inline/worker 执行模式     │
-│  • inline: 直接在同一进程中运行          │
-│  • worker: 独立 Worker Thread 隔离运行   │
-│  • legacy: 旧的 vm 沙箱模式（废弃中）    │
+│  • inline: 直接在同一进程中运行           │
+│  • worker: 独立 Worker Thread 隔离运行    │
 └─────────────────────────────────────────┘
 
 ┌─ 前端（浏览器） ────────────────────────┐
-│  FrontendPluginHost → import() 动态加载  │
+│  FrontendPluginHost → 双模式执行         │
+│  • inline: 直接 import() 动态加载         │
+│  • worker: BrowserWorkerManager 隔离     │
 │  • 扩展点注册（UI 面板/工具/视图）       │
 │  • 浏览器 API 服务注入                   │
 └─────────────────────────────────────────┘
@@ -116,43 +123,87 @@ export default {
 插件通过 **Token** 声明依赖，由 ServiceRegistry 自动解析注入：
 
 ```typescript
-import {
-  ICommandBusServiceToken,
-  IDatabaseToken,
-} from '../core/di/interfaces.js';
+import { ICommandBusServiceToken, IDatabaseToken } from '@openlearn/plugin-sdk';
 
 // 在 activate 中解析依赖
 const commandBus = await ctx.resolve(ICommandBusServiceToken);
 const db = await ctx.resolve(IDatabaseToken);
+
+// 也可以通过 ctx.services 直接访问 7 个内核服务
+const eventBus = ctx.services.eventBus;
+const ai = ctx.services.ai;
 ```
 
-可用的服务 Token 列表见 [§5.2](#52-服务-token-依赖注入)。
+**V3.0 新增**：插件可通过 `ctx.provide()` 向 DI 容器注册自定义服务给其他插件消费：
 
-### 2.4 生命周期状态机
+```typescript
+// 插件 A：注册自定义服务
+await ctx.provide('@my-scope/IQuestionBankService', myQuestionBank);
+
+// 插件 B：消费该服务
+const qb = await ctx.resolve({ name: '@my-scope/IQuestionBankService' } as any);
+```
+
+### 2.4 PluginContext 完整接口
+
+```typescript
+interface PluginContext {
+  // 7 个内核服务接口（直接访问）
+  services: {
+    commandBus: ICommandBusService;       // 命令执行、注册
+    eventBus: IEventBusService;           // 事件发布/订阅
+    actionRegistry: IActionRegistryService; // AI 工具注册
+    capability: ICapabilityService;       // 权限管理
+    processManager: IProcessService;       // 后台进程
+    storage: IStorageService;             // K-V 存储
+    ai: IAIService;                       // AI 文本生成
+  };
+  pluginId: string;           // 插件 ID
+  manifest: Manifest;         // 插件 manifest
+
+  // 依赖注入
+  resolve<T>(token: Token<T>): Promise<T>;                    // 从 ServiceRegistry 解析服务
+  provide(tokenName: string, instance: unknown): Promise<void>; // V3.0: 注册自定义服务
+
+  // 插件专用数据库
+  db: PluginDatabaseAPI;      // 命名空间隔离的 SQLite 操作（含 migrate() 迁移）
+
+  // V2.5 结构化日志（自动注入 pluginId 和 timestamp）
+  log: IPluginLogger;         // 支持 debug/info/warn/error 四级
+
+  // V3.0: 类型安全的配置服务
+  config: IConfigService;     // 读取 manifest.configuration 中声明的设置项
+
+  // V3.0: 声明式贡献点只读视图
+  contributions: ContributionAccessor; // list(): 内省插件在 manifest 中声明的贡献点
+
+  // V5.1: 主应用共享模块引用（白名单控制）
+  require(moduleName: string): any;
+}
+```
+
+### 2.5 生命周期状态机
 
 ```
 INSTALLED ──→ ACTIVATING ──→ ACTIVE ──→ DEACTIVATING ──→ INACTIVE
                                   │                           │
                                   └──── ERROR ←───────────────┘
                                                         │
-INACTIVE ──→ ACTIVATING (重新激活)                      │
-ERROR ──→ ACTIVATING (重试)          UNINSTALLED ←──────┘
+INACTIVE ──→ ACTIVATING（重新激活）                      │
+ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←──────┘
 ```
 
-状态说明：
-
-- **INSTALLED**：源码已存入数据库，尚未激活
-- **ACTIVATING**：正在执行 `activate()` 函数（瞬态）
+- **INSTALLED**：源码已持久化，尚未激活
+- **ACTIVATING**：正在执行 `activate()`（瞬态，不超过 10 秒）
 - **ACTIVE**：正常运行中
 - **INACTIVE**：已停用，可通过 toggle 重新激活
 - **ERROR**：激活失败，可重试或卸载
-- **UNINSTALLED**：已从数据库删除
 
 ---
 
 ## 3. 插件结构详解
 
-### 3.1 Manifest 规范
+### 3.1 Manifest 完整规范
 
 ```typescript
 interface Manifest {
@@ -162,54 +213,56 @@ interface Manifest {
   main?: string;                 // 入口文件名，默认 "index.js"
   description?: string;          // 描述
   author?: string;               // 作者
+  engines?: {                    // 引擎版本约束
+    openlearn?: string;          // 如 "^2.5.0"
+  };
   requires: string[];            // 依赖的服务 Token（格式 @openlearn/core:TokenName@^1.0.0）
   optional?: string[];           // 可选依赖
   capabilitiesProposed: string[]; // 申请的权限（如 "lesson:write", "vfs:read"）
   classroomTools?: ClassroomTool[]; // 前端课堂工具声明
+  provides?: string[];           // V3.0: 插件对外提供的自定义服务 Token 名称
+  configuration?: {              // V3.0: 声明式配置 schema
+    properties: Record<string, ConfigProperty>;
+  };
+}
+
+interface ConfigProperty {
+  type: 'string' | 'number' | 'boolean' | 'integer';
+  default?: unknown;
+  description?: string;
+  enum?: string[];
+  minimum?: number;
+  maximum?: number;
 }
 
 interface ClassroomTool {
-  id: string;        // 工具 ID
-  name: string;      // 工具名称
-  icon: string;      // 图标 emoji 或 lucide icon name
+  id: string;         // 工具 ID
+  name: string;       // 工具名称
+  icon: string;       // 图标（使用 lucide-react icon name，如 "BarChart3"）
   commandType: string; // 关联的命令类型
-  payload?: any;     // 默认 payload
+  payload?: any;      // 默认 payload
 }
 ```
 
 ### 3.2 PluginContext — 插件上下文的完整 API
 
-插件通过 `activate(ctx)` 接收上下文对象，包含以下能力：
+插件通过 `activate(ctx)` 接收上下文对象。`ctx.services` 直接提供 7 个内核服务，无需 DI 解析：
+
+| 服务 | 访问方式 | 用途 |
+|------|---------|------|
+| CommandBus | `ctx.services.commandBus` | 注册/执行命令 |
+| EventBus | `ctx.services.eventBus` | 发布/订阅事件 |
+| ActionRegistry | `ctx.services.actionRegistry` | 注册 AI 工具 |
+| Capability | `ctx.services.capability` | 权限管理 |
+| Process | `ctx.services.processManager` | 后台进程 |
+| Storage | `ctx.services.storage` | K-V 存储 |
+| AI | `ctx.services.ai` | 文本生成 |
+
+通过 DI 解析更多服务（`IDatabaseToken`、`IPluginHostToken` 等）：
 
 ```typescript
-interface PluginContext {
-  // 7 个内核服务接口
-  services: {
-    commandBus: ICommandBusService;       // 命令总线
-    eventBus: IEventBusService;           // 事件总线
-    actionRegistry: IActionRegistryService; // Action 注册表
-    capability: ICapabilityService;       // 权限管理
-    processManager: IProcessService;       // 后台进程
-    storage: IStorageService;             // Key-Value 存储
-    ai: IAIService;                       // AI 文本生成
-  };
-
-  pluginId: string;           // 插件 ID（manifest.id）
-  manifest: Manifest;         // 插件 manifest
-
-  // 依赖注入：从 ServiceRegistry 解析服务
-  resolve<T>(token: Token<T>): Promise<T>;
-
-  // 插件专用数据库 API（v5.1）：命名空间隔离的 SQLite 操作
-  db: {
-    ensureTable(tableName: string, schema: string): Promise<void>;
-    table(tableName: string): string;          // 返回 plugin_{pluginId}_{tableName}
-    dropAllTables(): Promise<void>;
-  };
-
-  // 引用主应用共享模块（v5.1）
-  require(moduleName: string): any;
-}
+import { IDatabaseToken } from '@openlearn/plugin-sdk';
+const db = await ctx.resolve(IDatabaseToken);
 ```
 
 ### 3.3 命令-事件-Action 三件套
@@ -220,12 +273,12 @@ interface PluginContext {
 
 ```typescript
 await actionRegistry.register({
-  id: 'my-plugin-action',         // 唯一 ID
-  commandType: 'myplugin.action',  // 对应的命令类型
+  id: 'my-plugin-action',          // 唯一 ID
+  commandType: 'myplugin.action',   // 对应的命令类型
   description: '用中文描述此工具的功能和参数',
   capabilityRequired: 'myplugin:write',  // 所需权限
-  isHighRisk: false,              // 是否高危（需教师审批）
-  inputSchema: {                  // JSON Schema（Google GenAI 格式）
+  isHighRisk: false,               // 是否高危（需教师审批）
+  inputSchema: {                   // JSON Schema（Google GenAI 格式）
     type: 'OBJECT',
     properties: {
       param1: { type: 'STRING', description: '参数说明' },
@@ -249,7 +302,7 @@ await commandBus.registerHandler('myplugin.action', {
 
     // 发布事件通知其他模块
     await eventBus.publish({
-      id: generateId(),
+      id: crypto.randomUUID(),
       type: 'myplugin.action_done',    // 过去式命名
       source: 'plugin.myplugin',        // 来源标识
       payload: { param1, result },
@@ -297,6 +350,7 @@ export default {
     main: 'index.js',
     description: '在课堂上创建实时投票，收集学生回答',
     author: 'Your Name',
+    engines: { openlearn: '^2.5.0' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',
@@ -322,7 +376,7 @@ export default {
     const eventBus = ctx.services.eventBus;
 
     // DI 解析数据库访问
-    const { IDatabaseToken } = await import('../core/di/interfaces.js');
+    const { IDatabaseToken } = await import('@openlearn/plugin-sdk');
     const db = await ctx.resolve(IDatabaseToken);
 
     // ── 1. 创建投票表 ──
@@ -387,7 +441,7 @@ export default {
           correlationId: command.id,
         });
 
-        return { pollId, message: `投票「${payload.title}」已创建` };
+        return { pollId, message: '投票「${payload.title}」已创建' };
       },
     });
 
@@ -407,7 +461,6 @@ export default {
       },
     });
 
-    // ── 5. Handler: 学生投票 ──
     await commandBus.registerHandler('poll.vote', {
       async execute(command) {
         const payload = command.payload as any;
@@ -418,7 +471,6 @@ export default {
                     VALUES (?, ?, ?, ?, ?)`)
           .run(voteId, payload.pollId, command.actorId, payload.choice, Date.now());
 
-        // 查询实时统计
         const stats = db.prepare(`
           SELECT choice, COUNT(*) as count
           FROM ${votesTable}
@@ -439,7 +491,7 @@ export default {
       },
     });
 
-    // ── 6. Action: 查询投票结果 ──
+    // ── 5. Action: 查询投票结果 ──
     await actionRegistry.register({
       id: 'poll-results',
       commandType: 'poll.get_results',
@@ -479,41 +531,8 @@ export default {
       },
     });
 
-    // ── 7. Action: 关闭投票 ──
-    await actionRegistry.register({
-      id: 'poll-close',
-      commandType: 'poll.close',
-      description: '教师关闭投票，不再接受新选票',
-      capabilityRequired: 'poll:write',
-      inputSchema: {
-        type: 'OBJECT',
-        properties: {
-          pollId: { type: 'STRING', description: '投票 ID' },
-        },
-        required: ['pollId'],
-      },
-    });
-
-    await commandBus.registerHandler('poll.close', {
-      async execute(command) {
-        const payload = command.payload as any;
-        db.prepare(`UPDATE ${pollsTable} SET is_active = 0 WHERE id = ?`)
-          .run(payload.pollId);
-
-        await eventBus.publish({
-          id: crypto.randomUUID(),
-          type: 'poll.closed',
-          source: 'plugin.poll',
-          payload: { pollId: payload.pollId },
-          timestamp: Date.now(),
-          correlationId: command.id,
-        });
-
-        return { success: true, message: '投票已关闭' };
-      },
-    });
-
-    console.log('[Poll Plugin] Activated successfully');
+    // ── 6. 使用结构化日志 ──
+    ctx.log.info('Poll plugin activated successfully', { pollTable: pollsTable });
   },
 
   deactivate: async () => {
@@ -578,12 +597,13 @@ interface PlatformCommand<T = unknown> {
 | `IAIServiceToken` | `@openlearn/core:IAIService` | `IAIService` | AI 文本生成 |
 | `IDatabaseToken` | `@openlearn/core:IDatabase` | `Database` (better-sqlite3) | 直接 SQL 访问 |
 | `IPluginHostToken` | `@openlearn/core:IPluginHost` | `PluginHost` | 插件主机管理 |
+| `ISemesterGradeServiceToken` | `@openlearn/core:ISemesterGradeService` | `ISemesterGradeService` | 学期成绩管理 |
 
 在 `manifest.requires` 中使用格式：`@openlearn/core:TokenName@^1.0.0`
 
 在代码中解析：
 ```typescript
-import { IDatabaseToken } from '../core/di/interfaces.js';
+import { IDatabaseToken } from '@openlearn/plugin-sdk';
 const db = await ctx.resolve(IDatabaseToken);
 ```
 
@@ -688,19 +708,68 @@ interface IStorageService {
 
 底层使用 SQLite `plugin_storage` 表，自动按插件 namespace 隔离。
 
-### 5.9 PluginDatabaseAPI（v5.1）
+### 5.9 PluginDatabaseAPI
 
 ```typescript
 interface PluginDatabaseAPI {
   ensureTable(tableName: string, schema: string): Promise<void>;
-  table(tableName: string): string;     // 返回完整表名
+  table(tableName: string): string;                      // 返回完整表名
   dropAllTables(): Promise<void>;
+  migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | void): Promise<void>;
 }
 ```
 
+**新增 `migrate()` 方法**：支持声明式数据库版本迁移，参数 `version` 表示目标版本号，若当前版本低于目标版本则执行 `upgradeFn`。
+
 示例：`ctx.db.table('polls')` 返回 `plugin_@openlearn/plugin-poll_polls`。
 
-### 5.10 共享模块 require（v5.1）
+### 5.10 IPluginLogger（V2.5 新增）
+
+```typescript
+interface IPluginLogger {
+  debug(message: string, meta?: Record<string, unknown>): void;
+  info(message: string, meta?: Record<string, unknown>): void;
+  warn(message: string, meta?: Record<string, unknown>): void;
+  error(message: string, meta?: Record<string, unknown>): void;
+}
+```
+
+自动注入 `pluginId` 和 `timestamp`，替代传统 `console.log`。示例：
+
+```typescript
+ctx.log.info('Activation completed', { handlerCount: 5 });
+ctx.log.error('DB migration failed', { error: err.message });
+```
+
+### 5.11 IConfigService（V3.0 新增）
+
+```typescript
+interface IConfigService {
+  get<T = unknown>(key: string): T;
+  getAll(): Record<string, unknown>;
+  set(key: string, value: unknown): Promise<void>;
+  onChange(callback: (key: string, newValue: unknown, oldValue: unknown) => void): () => void;
+}
+```
+
+配合 `manifest.configuration` 声明使用，自动应用默认值。示例：
+
+```typescript
+// manifest 中声明：
+// configuration: {
+//   properties: {
+//     maxOptions: { type: 'number', default: 10, description: '最大选项数' },
+//     enableAnonVoting: { type: 'boolean', default: false },
+//   }
+// }
+
+const maxOptions = ctx.config.get<number>('maxOptions'); // 10
+ctx.config.onChange('maxOptions', (newVal, oldVal) => {
+  ctx.log.info('Config changed', { key: 'maxOptions', oldVal, newVal });
+});
+```
+
+### 5.12 共享模块 require（V5.1）
 
 插件可通过 `ctx.require()` 引用白名单中的 npm 包，无需自行打包：
 
@@ -713,7 +782,7 @@ const icons = ctx.require('lucide-react');
 const uuid = ctx.require('uuid');
 ```
 
-### 5.11 权限字符串规范
+### 5.13 权限字符串规范
 
 ```
 格式: {resource}:{action}
@@ -739,7 +808,7 @@ const uuid = ctx.require('uuid');
 
 ### 6.1 FrontendPluginHost
 
-前端插件运行在浏览器中，通过动态 `import()` 加载 ESM 模块：
+前端插件运行在浏览器中，通过动态 `import()` 加载 ESM 模块，支持 inline 和 worker 两种执行模式：
 
 ```typescript
 // 前端插件结构
@@ -766,7 +835,6 @@ export default {
     // ctx.services.socketService  — WebSocket 通信
     // ctx.services.uiService      — Toast/Modal UI
     // ctx.services.storageService  — localStorage
-    // ctx.ui.registerExtensionPoint() — 注册 UI 扩展
 
     ctx.ui.registerExtensionPoint('teacher.tab', {
       id: 'my-tab',
@@ -780,7 +848,27 @@ export default {
 };
 ```
 
-### 6.2 前端服务接口
+### 6.2 FrontendPluginContext
+
+```typescript
+interface FrontendPluginContext {
+  services: {
+    frontendApi: IFrontendAPI;        // HTTP API 调用
+    socketService: ISocketService;    // WebSocket 通信
+    uiService: IUIService;            // Toast/Modal/文件下载
+    storageService: IStorageService;  // localStorage
+  };
+  pluginId: string;
+  manifest: FrontendPluginManifest;
+  ui: {
+    registerExtensionPoint(slot: ExtensionSlot, config: ExtensionPointConfig): void;
+    unregisterExtensionPoint(slot: ExtensionSlot, id: string): void;
+  };
+  invokeCommand<T = any>(type: string, payload?: any): Promise<T>; // V5.1: 调用后端 Command Handler
+}
+```
+
+### 6.3 前端服务接口
 
 ```typescript
 interface IFrontendAPI {
@@ -804,36 +892,40 @@ interface IUIService {
 }
 ```
 
-### 6.3 可用的 UI 扩展槽位
+### 6.4 可用的 UI 扩展槽位
 
 | Slot | 用途 |
 |------|------|
 | `teacher.tab` | 教师标签页 |
-| `teacher.panel` | 教师独立管理面板（v5.1） |
+| `teacher.panel` | 教师独立全宽管理面板（v5.1） |
 | `teacher.dashboard.widget` | 教师仪表盘小部件 |
 | `student.view` | 学生视图 |
-| `student.fullscreen` | 学生全屏视图（v5.1） |
+| `student.fullscreen` | 学生全屏视图/考试模式（v5.1） |
 | `student.lesson.tool` | 学生学习工具 |
 | `classroom.tool` | 课堂工具 |
 | `global.setting` | 全局设置页扩展（v5.1） |
 
-### 6.4 宿主依赖共享网关 (HostSharedDeps)
+### 6.5 invokeCommand（V5.1 新增）
 
-为了避免每个第三方插件前端重复打包庞大的基础库（如 React、ReactDOM、Recharts、LucideReact 等），OpenLearnV2 提供了 **宿主依赖共享网关 (HostSharedDeps)**。
+前端插件可以通过 `ctx.invokeCommand()` 调用后端已注册的 Command Handler：
 
-在加载插件的 `frontend.js` 时，基座程序会自动将导入指向全局共享对象。
+```typescript
+// 前端插件中调用后端命令
+const result = await ctx.invokeCommand('poll.get_results', { pollId: 'xxx' });
+// 命令类型会自动添加插件命名空间前缀
+```
 
-#### 6.4.1 全局暴露的依赖
-宿主环境在全局 `window.HostSharedDeps` 暴露了以下对象：
-- `React` (对应 NPM 包 `react`)
-- `ReactDOM` (对应 NPM 包 `react-dom`)
-- `Recharts` (对应 NPM 包 `recharts`)
-- `LucideReact` (对应 NPM 包 `lucide-react`)
+### 6.6 宿主依赖共享网关 (HostSharedDeps)
 
-#### 6.4.2 插件编译配置
-当你在编写插件的前端代码（如 `frontend.ts`）并使用构建工具（如 `esbuild` 或 `vite`）进行打包时，请务必将上述库配置为 **external**。这样打包出的 `frontend.js` 将仅有数十 KB 的大小。
+为避免每个第三方插件前端重复打包庞大的基础库，OpenLearnV2 提供了 **宿主依赖共享网关 (HostSharedDeps)**。全局 `window.HostSharedDeps` 暴露以下对象：
 
-**esbuild 示例：**
+- `React` (npm: react)
+- `ReactDOM` (npm: react-dom)
+- `Recharts` (npm: recharts)
+- `LucideReact` (npm: lucide-react)
+
+插件前端构建时需将这些库配置为 external：
+
 ```javascript
 import esbuild from 'esbuild';
 
@@ -881,19 +973,18 @@ await actionRegistry.register({
 - 运行时通过 CapabilityGuard 拦截检查
 - 支持通配符匹配（如 `lesson:*` 匹配所有课程操作）
 
-### 7.3 指令隔离与命名空间保护 (Command Namespace Isolation)
+### 7.3 指令隔离与命名空间保护
 
-为防止第三方插件恶意冒充、拦截或篡改内核及其他插件的敏感指令，OpenLearnV2 实施了 **命名空间防欺骗保护** 机制：
+为防止第三方插件恶意冒充、拦截或篡改内核及其他插件的敏感指令，OpenLearnV2 实施了 **命名空间防欺骗保护**：
 
-#### 7.3.1 命令解析规则 (Command Resolving Rules)
-当插件通过 `ctx.services.commandBus.registerHandler` 注册或调用命令时：
-1. **系统及内核插件**（命名空间以 `@openlearn/` 开头）：拥有全局命名空间访问权，可以直接使用任何简短指令名称。
-2. **点号命名空间指令**（名称包含 `.`，如 `quiz.create` 或 `vote.cast`）：视为插件自有的语义命名空间，将直接以原名在全局注册，保证旧版组件调用与协同工具无感工作。
-3. **裸字符指令**（名称不含 `.`，如 `get_run_status`）：系统会自动在注册时为其添加 `[pluginId].` 前缀（例如 `019f545a-xxxx.get_run_status`），以实现强沙箱隔离。
+**命令解析规则**：
+1. **系统和内核插件**（`@openlearn/` 前缀）：全局命名空间访问权，直接使用短指令名称
+2. **点号命名空间指令**（如 `quiz.create`、`vote.cast`）：直接以原名全局注册，保证协同工具无感工作
+3. **裸字符指令**（不含 `.`）：自动添加 `{pluginId}.` 前缀，实现强沙箱隔离
 
-#### 7.3.2 防越权劫持限制
-- 内核在命令注册阶段自动执行 **UUID 强检查**。
-- 如果第三方插件企图注册以 **其他非本插件的 UUID 格式** 作为前缀的指令（例如插件 A 试图注册以插件 B 的 UUID `019f5509-xxxx` 为前缀的指令），注册拦截器将抛出异常并阻止激活，彻底防范命名空间劫持与越权调用。
+**防越权劫持**：
+- 内核在命令注册阶段自动执行 UUID 强检查
+- 第三方插件企图注册以其他非本插件 UUID 格式为前缀的指令时，注册拦截器抛出异常并阻止激活
 
 ---
 
@@ -910,20 +1001,44 @@ db.prepare("UPDATE plugins SET execution_mode = 'worker' WHERE id = ?").run(plug
 
 Worker 模式的特点：
 - 独立线程隔离，崩溃不影响主进程
-- 通过 RPC 代理访问内核服务
+- 通过 RPC 代理访问内核服务（MethodProxy + EventBusProxy）
 - 10 秒激活超时
-- 崩溃后自动清理
+- 崩溃后自动清理（dispose 强制回收）
 
-### 8.2 热重载（开发模式）
+**结构化错误类**（`packages/core/worker-runtime/errors.ts`）：
+- `WorkerActivateError` — 插件在 Worker 内激活失败
+- `WorkerTimeoutError` — RPC 调用或激活/停用超时
+- `WorkerTransportError` — postMessage 通信层失败
+- `WorkerCapabilityError` — 跨边界能力检查拒绝
+- `WorkerNotSupportedError` — 运行时不支持的功能
+
+### 8.2 前端 Worker 模式
+
+前端同样支持 Worker 隔离，通过 `BrowserWorkerManager` 将插件运行在 Web Worker 中，与后端一致的隔离保证。插件需在安装时指定 `executionMode: 'worker'`。
+
+### 8.3 热重载（开发模式）
 
 在 `NODE_ENV=development` 时，PluginHost 自动启用文件监听：
 
-1. 修改插件源文件
-2. PluginHost 检测文件变更（debounce 300ms）
-3. 自动停用旧版本 → 激活新版本
+1. `HotReloadController` 通过 chokidar 监听 `plugins/` 目录
+2. 检测文件变更（debounce 300ms）
+3. 自动停用旧版本 → 清除中间件 → 激活新版本
 4. 无需重启服务器
 
-### 8.3 异步后台任务
+### 8.4 生命周期中间件
+
+PluginHost 支持在 6 个生命周期阶段注册中间件（洋葱模型）：
+
+```typescript
+pluginHost.registerMiddleware('beforeActivate', async (ctx, next) => {
+  console.log(`[Auth] 检查插件 ${ctx.pluginId} 的激活权限`);
+  await next();  // 继续执行
+});
+```
+
+可用阶段：`beforeActivate`、`afterActivate`、`beforeDeactivate`、`afterDeactivate`、`beforeCommand`、`afterCommand`。
+
+### 8.5 异步后台任务
 
 ```typescript
 // 注册任务处理器
@@ -952,30 +1067,54 @@ eventBus.subscribe('process.completed', (event) => {
 });
 ```
 
-### 8.4 生命周期中间件
+### 8.6 声明式数据库迁移
 
-PluginHost 支持在生命周期各阶段插入中间件（洋葱模型）：
+使用 `ctx.db.migrate()` 进行插件数据库版本管理：
 
 ```typescript
-pluginHost.registerMiddleware('beforeActivate', async (ctx, next) => {
-  console.log(`[Auth] 检查插件 ${ctx.pluginId} 的激活权限`);
-  await next();  // 继续执行
+// 首次激活时调用（idempotent）
+await ctx.db.migrate(1, async (sqliteDb) => {
+  sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS my_table (
+      id TEXT PRIMARY KEY,
+      data TEXT
+    );
+  `);
+});
+
+// 后续版本升级
+await ctx.db.migrate(2, async (sqliteDb) => {
+  sqliteDb.exec(`ALTER TABLE my_table ADD COLUMN extra TEXT DEFAULT ''`);
 });
 ```
 
-可用阶段：`beforeActivate`、`afterActivate`、`beforeDeactivate`、`afterDeactivate`、`beforeCommand`、`afterCommand`。
+### 8.7 自定义服务注册（V3.0）
+
+插件可以向 DI 容器注册自定义服务，供其他插件消费：
+
+```typescript
+// 插件 A：注册服务
+await ctx.provide('@my-scope/IQuestionBank', questionBankService);
+
+// 插件 B：manifest.optional 中声明依赖
+// optional: ['@my-scope:IQuestionBank@>=1.0.0']
+
+// 插件 B：运行时消费
+const qb = await ctx.resolve({ name: '@my-scope:IQuestionBank' } as any);
+```
 
 ---
 
 ## 9. 测试与调试
 
-### 9.1 日志输出
+### 9.1 结构化日志
 
-插件激活时日志自动带 `[Plugin:<id>]` 前缀：
+使用 `ctx.log` 替代 `console.log`，自动注入 `pluginId` 和 `timestamp`：
 
 ```typescript
-console.log('[MyPlugin] 初始化完成');
-console.error('[MyPlugin] 数据库连接失败:', error);
+ctx.log.info('Handler registered', { commandType: 'poll.create' });
+ctx.log.error('Database connection failed', { error: error.message });
+ctx.log.debug('Request processed', { latency: 23, payload: data });
 ```
 
 ### 9.2 查看进程状态
@@ -993,29 +1132,71 @@ curl http://localhost:9000/api/plugins
 所有事件自动写入 SQLite `events` 表：
 
 ```sql
-SELECT * FROM events WHERE type LIKE 'poll.%' ORDER BY created_at DESC;
+SELECT * FROM events WHERE type LIKE 'poll.%' ORDER BY timestamp DESC;
+```
+
+### 9.4 插件测试
+
+使用 `@openlearn/plugin-test-kit` 进行单元测试：
+
+```bash
+npm install --save-dev @openlearn/plugin-test-kit vitest
+```
+
+```typescript
+// __tests__/index.test.ts
+import { describe, it, expect } from 'vitest';
+import { createMockContext } from '@openlearn/plugin-test-kit';
+import plugin from '../src/index';
+
+describe('my-plugin', () => {
+  it('should activate and register handler', async () => {
+    const ctx = createMockContext();
+    await plugin.activate(ctx);
+
+    const handlers = ctx.services.commandBus._getHandlers();
+    expect(handlers).toContain('myplugin.hello');
+  });
+});
 ```
 
 ---
 
 ## 10. 发布与分发
 
-### 10.1 打包为 ZIP
+### 10.1 使用 CLI 脚手架
 
-插件源码可以打包为 ZIP 文件分发：
+OpenLearnV2 提供 `@openlearn/plugin-sdk` CLI 工具快速创建项目：
+
+```bash
+# 脚手架创建
+npx @openlearn/plugin-sdk init --name my-plugin
+
+# 安装依赖
+cd my-plugin && npm install
+
+# 构建 ZIP
+npx @openlearn/plugin-sdk build
+
+# 产物位于 my-plugin.zip，上传到插件中心即可安装
+```
+
+支持三种模板：`server-only`、`full-stack`、`frontend-only`。
+
+### 10.2 手动打包为 ZIP
 
 ```bash
 # 插件目录结构
 my-plugin/
   index.js          # 入口（export default { manifest, activate }）
-  package.json      # 可选：声明依赖
+  package.json      # 可选
   README.md         # 文档
 
 # 打包
 zip -r my-plugin.zip my-plugin/
 ```
 
-### 10.2 安装 ZIP 插件
+### 10.3 安装 ZIP 插件
 
 在「系统设置」→「插件中心」上传 ZIP 文件，系统自动：
 1. 解压 ZIP
@@ -1025,7 +1206,7 @@ zip -r my-plugin.zip my-plugin/
 5. 存入数据库
 6. 可选：立即激活
 
-### 10.3 版本兼容性
+### 10.4 版本兼容性
 
 插件依赖声明支持 SemVer 范围：
 - `^1.0.0` — 兼容 1.x.x
@@ -1040,7 +1221,7 @@ zip -r my-plugin.zip my-plugin/
 
 ```typescript
 // 复制此模板开始开发你的插件
-import { v7 as uuidv7 } from 'uuid';
+import type { PluginContext } from '@openlearn/plugin-sdk';
 import {
   ICommandBusServiceToken,
   IActionRegistryServiceToken,
@@ -1049,8 +1230,7 @@ import {
   IProcessServiceToken,
   IStorageServiceToken,
   IAIServiceToken,
-} from '../core/di/interfaces.js';
-import type { PluginContext } from '../core/plugin-host/types.js';
+} from '@openlearn/plugin-sdk';
 
 export default {
   manifest: {
@@ -1060,6 +1240,7 @@ export default {
     main: 'index.js',
     description: '插件描述',
     author: '作者名',
+    engines: { openlearn: '^2.5.0' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',
@@ -1077,7 +1258,7 @@ export default {
 
     // TODO: 注册 Actions 和 Handlers
 
-    console.log(`[Plugin:${ctx.manifest.id}] 已激活`);
+    ctx.log.info('Plugin activated');
   },
 
   deactivate: async () => {
@@ -1094,10 +1275,10 @@ export default {
 | 虚拟文件系统 | `packages/plugins/vfs.ts` | `vfs.write_file`, `vfs.read_file`, `vfs.list_dir` |
 | 管理插件 | `packages/plugins/management.ts` | `class.create`, `student.enroll`, `assignment.create` |
 | AI 规划器 | `packages/plugins/ai-planner.ts` | `ai.start_generation`, `ai.apply_recommendation` |
+| 作业评估 | `packages/plugins/assignment-eval.ts` | `assignment.evaluate`, `peer_review.create` |
 | 进程管理 | `packages/plugins/process.ts` | `process.spawn`, `process.kill`, `process.list` |
 
 ---
 
-> 本文档基于 OpenLearnV2 当前代码库（`main` 分支）自动生成。
-> 分析工具：Codegraph 知识图谱。
-> 最后更新：2026-06-26
+> 本文档基于 OpenLearnV2 最新代码库（`main` 分支），通过 Codegraph 知识图谱分析生成。
+> 最后更新：2026-07-14
