@@ -140,7 +140,8 @@ const ai = ctx.services.ai;
 
 ```typescript
 // 插件 A：注册自定义服务
-await ctx.provide('@my-scope/IQuestionBankService', myQuestionBank);
+// V3.2: use Token instead of string
+await ctx.provide(QuestionBankToken, myQuestionBank);
 
 // 插件 B：消费该服务
 const qb = await ctx.resolve({ name: '@my-scope/IQuestionBankService' } as any);
@@ -165,7 +166,7 @@ interface PluginContext {
 
   // 依赖注入
   resolve<T>(token: Token<T>): Promise<T>;                    // 从 ServiceRegistry 解析服务
-  provide(tokenName: string, instance: unknown): Promise<void>; // V3.2: 注册自定义服务
+  provide<T>(token: Token<T>, instance: T): Promise<void>; // V3.2: 注册自定义服务
 
   // 插件专用数据库
   db: PluginDatabaseAPI;      // 命名空间隔离的 SQLite 操作（含 migrate() 迁移）
