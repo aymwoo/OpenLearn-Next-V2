@@ -902,6 +902,19 @@ interface IUIService {
 | `student.view` | 学生视图 |
 | `student.fullscreen` | 学生全屏视图/考试模式（v5.1） |
 | `student.lesson.tool` | 学生学习工具 |
+
+**学生端插件获取当前学生 ID**：宿主在渲染学生端扩展点（`student.view`、`student.fullscreen`）时，自动通过 `slotProps` 注入当前登录学生 ID。插件组件通过 props 接收：
+
+```tsx
+// 前端插件入口 frontend.tsx
+export default function MyStudentPlugin(props: { studentId?: string }) {
+  const studentId = props.studentId;
+  if (!studentId) return <div>请先登录学生账号</div>;
+  
+  // 使用 studentId 获取该学生的个人数据
+  return <div>当前学生 ID: {studentId}</div>;
+}
+```
 | `classroom.tool` | 课堂工具 |
 | `global.setting` | 全局设置页扩展（v5.1） |
 

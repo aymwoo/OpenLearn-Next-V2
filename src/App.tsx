@@ -4411,7 +4411,7 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                   </div>
                   
                   {/* Dynamic plugin-registered student dashboard views */}
-                  <ExtensionPointRenderer slot="student.view" />
+                  <ExtensionPointRenderer slot="student.view" slotProps={{ studentId: activeStudentId }} />
                 </div>
               </div>
             )}
