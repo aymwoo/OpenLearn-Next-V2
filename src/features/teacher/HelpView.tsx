@@ -1366,6 +1366,43 @@ const pid = await ctx.services.processManager.spawn(
   '期末批改', 'batch-grade', { items: [...] }
 );`}</pre>
                 </div>
+                {/* Recipe 6 */}
+                <div className="border border-red-100 rounded-xl p-4 bg-red-50/30">
+                  <h5 className="font-bold text-red-800 mb-2 flex items-center gap-1.5">
+                    <ShieldAlert size={14} className="text-red-500" />
+                    ⚠️ ZIP 上传常见错误：裸模块导入被拒绝
+                  </h5>
+                  <p className="text-[11px] text-red-700 mb-3 leading-relaxed">
+                    系统在接收插件 ZIP 后会用 <code className="bg-red-100 px-1 rounded">openlearn-token-enforcer</code> 对 <code className="bg-red-100 px-1 rounded">index.js</code> 进行安全扫描。
+                    <strong>只允许相对路径导入</strong>和 <code className="bg-red-100 px-1 rounded">@openlearn/*</code> Token 服务。
+                    Node.js 内置模块（<code className="bg-red-100 px-1 rounded">crypto</code>、<code className="bg-red-100 px-1 rounded">fs</code>、<code className="bg-red-100 px-1 rounded">path</code>）及其他裸 npm 包导入都会导致上传 500 报错。
+                  </p>
+                  <pre className="text-[10px] font-mono bg-gray-900 text-green-400 p-3 rounded-lg overflow-x-auto mb-3">
+{`// ❌ 错误：会被 token-enforcer 拦截，导致上传失败
+import { randomUUID } from 'crypto';  // ← 触发报错
+import { readFileSync } from 'fs';    // ← 触发报错
+import _ from 'lodash';               // ← 触发报错
+
+// ✅ 替换 crypto.randomUUID()
+//    全局 Web Crypto API 在 Node.js 20+ 和浏览器中均内置，无需任何 import
+const id = crypto.randomUUID();
+const id = globalThis.crypto.randomUUID();
+
+// ✅ 替换时间戳 ID（适合非安全场景）
+const id = \`\${Date.now()}_\${Math.random().toString(36).slice(2, 8)}\`;
+
+// ✅ 替换 path 操作：改用原生字符串
+const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+
+// ✅ 白名单包通过 ctx.require() 使用（无需 import）
+const XLSX   = ctx.require('xlsx');
+const uuidv4 = ctx.require('uuid').v4;
+const jsPDF  = ctx.require('jspdf').jsPDF;`}</pre>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[10px] text-amber-800 font-medium">
+                    💡 上传前自检：<code className="font-mono bg-amber-100 px-1 rounded ml-1">grep -E {`'^import .+ from "[^@\\./]'`} dist/index.js</code>
+                    <span className="ml-1 font-normal">— 无输出则安全，有输出则需修复。</span>
+                  </div>
+                </div>
               </div>
             </div>
 

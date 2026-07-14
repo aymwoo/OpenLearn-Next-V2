@@ -1215,11 +1215,112 @@ zip -r my-plugin.zip my-plugin/
 1. 解压 ZIP
 2. 提取 index.js 作为入口
 3. 解析 manifest
-4. 验证依赖（SemVer 兼容性检查）
-5. 存入数据库
-6. 可选：立即激活
+4. **使用 esbuild 的 `openlearn-token-enforcer` 插件进行二次扫描**（见 10.4）
+5. 验证依赖（SemVer 兼容性检查）
+6. 存入数据库
+7. 可选：立即激活
 
-### 10.4 版本兼容性
+### 10.4 常见打包错误与排查 ⚠️
+
+#### 错误：`Import of "<module>" is not allowed`
+
+**错误信息示例：**
+```
+Build failed with 1 error:
+<stdin>:6:27: ERROR: [plugin: openlearn-token-enforcer]
+Import of "crypto" is not allowed.
+Plugins may only use relative imports or @openlearn/* Token services.
+```
+
+**原因：** OpenLearn 在接收到上传的 ZIP 后，会使用内置的 esbuild `openlearn-token-enforcer` 插件对入口文件（`index.js`）进行安全扫描。该扫描器**只允许两类导入**：
+
+| 允许 | 示例 |
+|------|------|
+| 相对路径导入 | `import foo from './utils'` |
+| `@openlearn/*` Token 服务 | `import { IDatabaseToken } from '@openlearn/plugin-sdk'` |
+
+所有其他**裸 specifier 导入**（包括 Node.js 内置模块）都会被拒绝：
+
+```typescript
+// ❌ 禁止 — 会触发 token-enforcer 报错
+import { randomUUID } from 'crypto';
+import { readFileSync } from 'fs';
+import path from 'path';
+import _ from 'lodash';
+```
+
+**解决方案：**
+
+**① 替换 `crypto.randomUUID()`（最常见）**
+
+```typescript
+// ❌ 错误写法
+import { randomUUID } from 'crypto';
+const id = randomUUID();
+
+// ✅ 正确写法 — 使用全局 Web Crypto API，Node.js 20+ 和现代浏览器均可用，无需 import
+const id = globalThis.crypto.randomUUID();
+// 或更简短（全局 crypto 在 Node.js 20+ 中与 globalThis.crypto 等价）
+const id = crypto.randomUUID();
+```
+
+**② 替换时间戳 ID（更简单）**
+
+```typescript
+// 对于不需要密码学安全性的 ID，可以用时间戳 + 随机数组合
+const id = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+```
+
+**③ 替换 `fs`（文件操作）**
+
+插件不应直接使用 `fs` 模块，应通过 VFS 服务（需在 manifest 中声明 `vfs:read`/`vfs:write` 权限）：
+
+```typescript
+// ❌ 错误写法
+import { readFileSync } from 'fs';
+
+// ✅ 正确写法 — 通过 VFS 服务
+const { IStorageServiceToken } = await import('@openlearn/plugin-sdk');
+const storage = await ctx.resolve(IStorageServiceToken);
+await ctx.services.commandBus.execute(
+  ctx.services.commandBus.createCommand('vfs.read_file', { path: '/my/file.txt' }, ctx.pluginId)
+);
+```
+
+**④ 替换 `path`（路径操作）**
+
+```typescript
+// ❌ 错误写法
+import path from 'path';
+
+// ✅ 正确写法 — 使用原生字符串操作
+const filename = filePath.split('/').pop() ?? '';
+const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+```
+
+**⑤ 替换第三方 npm 包**
+
+部分常用包已通过 `ctx.require()` 白名单共享（无需 import）：
+
+| 包名 | 使用方式 |
+|------|----------|
+| `uuid` | `const { v4: uuidv4 } = ctx.require('uuid')` |
+| `xlsx` | `const XLSX = ctx.require('xlsx')` |
+| `recharts` | `const { LineChart } = ctx.require('recharts')` |
+| `jspdf` | `const { jsPDF } = ctx.require('jspdf')` |
+| `lucide-react` | `const { BookOpen } = ctx.require('lucide-react')` |
+
+对于其他第三方包，需在构建阶段将其完整代码内联到 `index.js` 中（esbuild bundle），避免在产物中残留裸 specifier 导入语句。
+
+**自检方法（上传前验证）：**
+
+```bash
+# 检查产物 index.js 中是否有不在白名单内的裸导入
+grep -E '^import .+ from "[^@\./]' dist/index.js
+# 有输出 = 有问题；无输出 = 通过
+```
+
+### 10.5 版本兼容性
 
 插件依赖声明支持 SemVer 范围：
 - `^1.0.0` — 兼容 1.x.x

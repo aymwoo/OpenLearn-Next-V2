@@ -522,6 +522,32 @@ npm install --save-dev esbuild jszip
 
 使用 `ctx.db.ensureTable()` 和 `ctx.db.table()`，系统会自动添加 `plugin_{pluginId}_` 前缀。不要手动拼接表名。
 
+### Q: 上传 ZIP 报错 `Import of "crypto" is not allowed` ⚠️
+
+**这是最常见的打包错误。** OpenLearn 在接收 ZIP 后会用 `openlearn-token-enforcer` 对产物 `index.js` 进行安全扫描，**只允许相对路径导入和 `@openlearn/*` Token 服务**，所有 Node.js 内置模块（`crypto`、`fs`、`path`）和第三方 npm 包的裸 specifier 导入都会被拒绝。
+
+**原因**：构建脚本（如 `esbuild`）在打包时没有把这些模块 inline 进 `index.js`，而是保留了裸导入语句。
+
+**最常见修复（`crypto.randomUUID`）：**
+
+```typescript
+// ❌ 错误 — 保留了 Node.js 裸导入
+import { randomUUID } from 'crypto';
+
+// ✅ 正确 — 使用全局 Web Crypto API（Node.js 20+ 和浏览器均内置，无需任何 import）
+const id = crypto.randomUUID();
+```
+
+**上传前自检：**
+
+```bash
+# 检查 dist/index.js 中是否有不在白名单内的裸导入
+grep -E '^import .+ from "[^@\./]' dist/index.js
+# 有输出 = 有问题；无输出 = 通过
+```
+
+完整替换方案见 [插件开发完全指南 §10.4](./plugin-development-tutorial.md)。
+
 ---
 
 > 本文档基于 OpenLearnV2 plugin-sdk v3.2.0 CLI 工具。
