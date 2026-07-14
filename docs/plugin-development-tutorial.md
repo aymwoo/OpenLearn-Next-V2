@@ -213,7 +213,7 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 | `ctx.config` | 3.0 | 类型安全的配置读取，配合 manifest.configuration 声明 |
 | `ctx.provide()` | 3.0 | 向 DI 容器注册自定义服务供其他插件消费 |
 | `ctx.require()` | 5.1 | 引用主应用白名单共享模块（recharts、jspdf 等） |
-| `ctx.invokeCommand()`（前端） | 5.1 | 前端直接调用后端 CommandBus |
+| `ctx.invokeCommand()`（前端） | 2.5 | 前端直接调用后端 CommandBus |
 | `teacher.panel` 扩展槽位 | 5.1 | 教师独立全宽管理面板 |
 | `student.fullscreen` 扩展槽位 | 5.1 | 学生全屏视图/考试模式 |
 | `global.setting` 扩展槽位 | 5.1 | 全局设置页扩展 |
@@ -936,7 +936,7 @@ interface FrontendPluginContext {
     registerExtensionPoint(slot: ExtensionSlot, config: ExtensionPointConfig): void;
     unregisterExtensionPoint(slot: ExtensionSlot, id: string): void;
   };
-  invokeCommand<T = any>(type: string, payload?: any): Promise<T>; // V5.1: 调用后端 Command Handler
+  invokeCommand<T = any>(type: string, payload?: any): Promise<T>; // V2.5: 调用后端 Command Handler
 }
 ```
 
@@ -990,7 +990,7 @@ export default function MyStudentPlugin(props: { studentId?: string }) {
 | `classroom.tool` | 课堂工具 |
 | `global.setting` | 全局设置页扩展（v5.1） |
 
-### 6.5 invokeCommand（V5.1 新增）
+### 6.5 invokeCommand（自 V2.5 起可用）
 
 前端插件可以通过 `ctx.invokeCommand()` 调用后端已注册的 Command Handler：
 
@@ -1092,6 +1092,76 @@ esbuild.build({
 | `Failed to resolve module specifier "react/jsx-runtime"` | `tsconfig.json` 中 `jsx` 为 `"react-jsx"` | 改为 `"react"` |
 | `React is not defined` | 前端未声明 `react` 为 `peerDependency` 或 `external` | 在构建配置中添加 `external: ['react']` |
 | `process is not defined` | 构建 `platform` 未设为 `browser` | 设置 `platform: 'browser'` |
+
+### 6.8 前端组件如何获取通信能力（完整示例）
+
+前端插件的组件通过**模块级变量**拿到 `invokeCommand` 和扩展点注册能力。关键点：
+
+- `registerExtensionPoint` 的 `component` 必须用**普通函数**声明（`function MyPanel() {}`），不要用箭头函数（esbuild 打包后闭包可能出问题）
+- 组件通过模块级变量拿 `ctx`，因为扩展点组件不是由你的组件树渲染，props 不可控
+- `default export` 是 `{ activate, deactivate }` 对象，不是组件本身
+
+**完整示例：**
+
+```typescript
+// src/frontend.tsx
+
+let ctx: any = null;
+
+// ① 组件必须用普通 function 声明（不要用箭头函数）
+function MyPanel() {
+  const [data, setData] = React.useState([]);
+
+  React.useEffect(() => {
+    // 通过模块级变量拿到 invokeCommand
+    ctx.invokeCommand('myplugin.list').then(setData);
+  }, []);
+
+  return React.createElement('div', null,
+    data.map((item: any) =>
+      React.createElement('div', { key: item.id }, item.name)
+    )
+  );
+}
+
+function MyWidget() {
+  return React.createElement('div', null, '仪表盘卡片');
+}
+
+// ② activate 接收 host 传入的 FrontendPluginContext，存到模块变量
+async function activate(hostCtx: any) {
+  ctx = hostCtx;  // ← 关键：hostCtx 自带 invokeCommand、ui.registerExtensionPoint 等
+
+  hostCtx.ui.registerExtensionPoint('teacher.tab', {
+    id: 'my-tab',
+    label: '我的面板',
+    icon: 'Layout',
+    component: MyPanel,     // ← 普通函数引用，不是 () => <MyPanel/>
+    position: 10,
+  });
+
+  hostCtx.ui.registerExtensionPoint('teacher.dashboard.widget', {
+    id: 'my-widget',
+    label: '我的卡片',
+    icon: 'BarChart3',
+    component: MyWidget,
+    position: 0,
+  });
+}
+
+function deactivate() {}
+
+// ③ default export 必须是 { activate, deactivate } 对象
+export default { activate, deactivate };
+```
+
+**为什么 component 不能用箭头函数？**
+
+esbuild 在打包箭头函数时可能改变其闭包作用域，导致 `React.createElement` 引用丢失。使用 `function` 声明可保证构建后的函数引用稳定。
+
+**为什么通过模块级变量拿 ctx 而不是 props？**
+
+扩展点组件由宿主渲染，props 由宿主控制。宿主向扩展点组件传递的 props 是宿主定义的（如 `studentId`、`lessonId` 等业务数据），不包含 `invokeCommand`。因此 API 调用能力必须通过模块级闭包变量传递。
 
 ---
 
