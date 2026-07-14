@@ -163,6 +163,7 @@ export async function validateAndBundleZip(
   const rawManifest = JSON.parse(manifestJson);
 
   // Step 5: D-10 — zod 运行时校验
+  rawManifest.main ||= 'index.js';
   const manifest = manifestSchema.parse(rawManifest);
 
   // Step 6: 读取入口文件
