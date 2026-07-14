@@ -53,6 +53,44 @@ import { WorkerTimeoutError, WorkerTransportError } from './errors.js';
  * @param timeoutMs - Per-call timeout in ms (0 = no timeout, default 30000)
  * @returns A Proxy-wrapped object where property access returns callable functions
  */
+// ── Callback serialization registry (Worker side) ─────────────────────
+// Maps invokeId -> Map<cbId, callback function>. Callbacks are stored
+// when an RPC call passes function-typed values in its arguments.
+const cbRegistry = new Map<string, Map<number, (...a: unknown[]) => unknown>>();
+
+/** Recursively walk args, replace function values with { __rpc_cb: N } markers. */
+function serializeCallbacks(
+  args: unknown[],
+  invokeId: string,
+): void {
+  let nextCbId = 1;
+  const cbMap = new Map<number, (...a: unknown[]) => unknown>();
+
+  function walk(val: unknown): unknown {
+    if (typeof val === 'function') {
+      const id = nextCbId++;
+      cbMap.set(id, val as (...a: unknown[]) => unknown);
+      return { __rpc_cb: id };
+    }
+    if (Array.isArray(val)) return val.map(walk);
+    if (val && typeof val === 'object' && !(val as any).__rpc_cb) {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+        out[k] = walk(v);
+      }
+      return out;
+    }
+    return val;
+  }
+
+  for (let i = 0; i < args.length; i++) {
+    args[i] = walk(args[i]);
+  }
+  if (cbMap.size > 0) {
+    cbRegistry.set(invokeId, cbMap);
+  }
+}
+
 export function createMethodProxy(
   transport: IWorkerTransport,
   token: string,
@@ -86,6 +124,8 @@ export function createMethodProxy(
             reject: wrappedReject,
           });
 
+          // Serialize nested callback functions in arguments
+          serializeCallbacks(args, invokeId);
           // Send the invoke message
           transport.postMessage({
             type: 'invoke',
@@ -289,6 +329,17 @@ export function createServicesProxy(
       return;
     }
 
+    // Handle callback invocations from main thread
+    if (typed.type === 'invoke-cb') {
+      const cbMsg = msg as { invokeId: string; cbId: number; args: unknown[] };
+      const cbMap = cbRegistry.get(cbMsg.invokeId);
+      const cb = cbMap?.get(cbMsg.cbId);
+      if (cb) {
+        try { cb(...(cbMsg.args || [])); } catch (e) { console.error('[RPC] cb error:', e); }
+      }
+      return;
+    }
+
     const invokeId = typed?.invokeId;
     if (!invokeId) return;
 
@@ -305,6 +356,8 @@ export function createServicesProxy(
       pending.reject(err);
     } else if (typed.type === 'result') {
       pending.resolve((msg as { value?: unknown }).value);
+      // Clean up callback registry for this invoke
+      cbRegistry.delete(invokeId);
     }
   });
 
