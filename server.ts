@@ -2315,6 +2315,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         );
       }
       // 4. Create scheduled session
+      const scheduleId = 'demo-schedule-' + Math.random().toString(36).slice(2, 6);
       kernelContainer.db.prepare('INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, status, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
         scheduleId, classId, lessonId, new Date().toISOString().split('T')[0] + ' 09:00:00', 'scheduled', Date.now()
       );
