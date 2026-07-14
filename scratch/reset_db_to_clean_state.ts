@@ -72,6 +72,22 @@ async function main() {
   );
   console.log('+ Seeded 1 Administrator (admin / admin)');
 
+  // 2.5 插入唯一的教师账号 (usr_teacher)
+  const initialTeacherPasswordHash = bcrypt.hashSync('teacher', 10);
+  db.prepare(`
+    INSERT INTO users (id, username, password_hash, role, name, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    'usr_teacher',
+    'teacher',
+    initialTeacherPasswordHash,
+    'teacher',
+    'Regular Teacher',
+    'active',
+    Date.now()
+  );
+  console.log('+ Seeded 1 Teacher (teacher / teacher)');
+
   // 3. 插入 1 个测试班级
   const classId = 'class_test';
   db.prepare(`
