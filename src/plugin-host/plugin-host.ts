@@ -18,7 +18,7 @@
 import { FrontendServiceRegistry } from './service-registry';
 import { BrowserWorkerManager } from './browser-worker-manager';
 import { usePluginHostStore } from './plugin-host-store';
-import { useAppStore } from '../store/appStore';
+import { useAppStore, appStore } from '../store/appStore';
 import {
   PluginState,
   FRONTEND_API_TOKEN,
@@ -498,10 +498,17 @@ export class FrontendPluginHost {
         },
       },
       navigation: {
-        getTeacherTab: () => useAppStore.getState().teacherTab,
-        setTeacherTab: (tab: string) => useAppStore.getState().setTeacherTab(tab),
+        getTeacherTab: () => appStore.getState().teacherTab,
+        setTeacherTab: (tab: string) => appStore.getState().setTeacherTab(tab),
         subscribeTeacherTab: (callback: (tab: string) => void) => {
-          return useAppStore.subscribe((state) => state.teacherTab, callback);
+          let prevTab = appStore.getState().teacherTab;
+          return appStore.subscribe((state) => {
+            const nextTab = state.teacherTab;
+            if (nextTab !== prevTab) {
+              prevTab = nextTab;
+              callback(nextTab);
+            }
+          });
         }
       },
       invokeCommand: async <T = any>(type: string, payload?: any): Promise<T> => {
