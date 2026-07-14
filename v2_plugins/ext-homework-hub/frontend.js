@@ -40,8 +40,13 @@ function el(tag, attrs = {}, ...children) {
 // ============================================================
 async function renderTeacherPanel(domNode, frontendCtx) {
   domNode.innerHTML = '';
-  domNode.style.padding = '16px';
+  domNode.style.padding = '20px';
   domNode.style.fontFamily = 'system-ui, sans-serif';
+  domNode.style.backgroundColor = '#fff';
+  domNode.style.border = `1px solid ${STYLE.borderColor}`;
+  domNode.style.borderRadius = '16px';
+  domNode.style.boxShadow = '0 1px 3px 0 rgba(0, 0, 0, 0.05)';
+  domNode.style.boxSizing = 'border-box';
 
   // ---------- 头部 ----------
   const header = el('div', {

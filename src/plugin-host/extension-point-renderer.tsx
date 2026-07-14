@@ -113,9 +113,9 @@ function DOMExtensionWrapper({ ext, route, slotProps, slot }: { ext: any; route?
   // If slot is dashboard widget, use h-auto to prevent vertical overlaps,
   // otherwise use h-full for full-page panels.
   const isWidget = slot === 'teacher.dashboard.widget';
-  const heightClass = isWidget ? 'h-auto' : 'h-full';
+  const heightClass = isWidget ? 'h-auto' : 'h-full min-h-0';
 
-  return <div ref={containerRef} className={`w-full min-h-0 ${heightClass}`} />;
+  return <div ref={containerRef} className={`w-full ${heightClass}`} />;
 }
 
 /**
