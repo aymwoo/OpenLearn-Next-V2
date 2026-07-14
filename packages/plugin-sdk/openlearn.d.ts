@@ -1,5 +1,5 @@
 /**
- * @openlearn/plugin-sdk — standalone type declarations (V3.1).
+ * @openlearn/plugin-sdk — standalone type declarations (V3.2).
  *
  * Self-contained `.d.ts` for npm publishing. No re-exports from monorepo internals.
  * This is the public API contract for OpenLearn plugin development.
@@ -246,12 +246,20 @@ interface StudentLessonToolConfig {
   icon?: string;
 }
 
+
+interface HelpDocConfig {
+  id: string;
+  title: string;
+  description?: string;
+  markdownUrl?: string;
+}
 type ContributionConfig =
   | ClassroomToolConfig
   | TeacherTabConfig
   | DashboardWidgetConfig
   | StudentViewConfig
-  | StudentLessonToolConfig;
+  | StudentLessonToolConfig
+  | HelpDocConfig;
 
 // ── Plugin Context ───────────────────────────────────────────────────────
 
@@ -268,7 +276,7 @@ interface PluginContext {
   pluginId: string;
   manifest: Manifest;
   resolve<T>(token: Token<T>): Promise<T>;
-  provide(tokenName: string, instance: unknown): Promise<void>;
+  provide<T>(token: Token<T>, instance: T): Promise<void>;
   db: PluginDatabaseAPI;
   log: IPluginLogger;
   config: IConfigService;

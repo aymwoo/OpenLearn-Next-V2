@@ -124,9 +124,9 @@ export interface PluginContext {
   resolve<T>(token: Token<T>): Promise<T>;
   /**
    * V3.0: 向 DI 容器注册一个由插件提供的服务（对应 manifest.provides）。
-   * 其他插件可通过 ctx.resolve({ name: tokenName }) 消费。
+   * 其他插件可通过 ctx.resolve(token) 消费。
    */
-  provide(tokenName: string, instance: unknown): Promise<void>;
+  provide<T>(token: Token<T>, instance: T): Promise<void>;
   /** 插件自建表 API（v5.1） */
   db: PluginDatabaseAPI;
   /** 结构化日志接口（V2.5），自动注入 pluginId 和 timestamp */

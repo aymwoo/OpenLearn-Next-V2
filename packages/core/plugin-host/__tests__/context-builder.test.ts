@@ -25,6 +25,7 @@ import {
   IStorageServiceToken,
   IAIServiceToken,
 } from '../../di/interfaces.js';
+import { Token } from "../../di/token.js";
 import type { Manifest } from '../../esm-loader/manifest-schema.js';
 import type { PluginContext } from '../types.js';
 
@@ -320,5 +321,120 @@ describe('buildContext', () => {
     // 验证 capability 方法不注册 dispose（disposeAll 不应有副作用）
     // 不应抛出错误 — capability 不注册资源
     expect(() => tracker.disposeAll('plugin-id-123')).not.toThrow();
+  });
+
+  // ── Test 9 ──────────────────────────────────────────────────────────
+
+  it('Test 9: ctx.provide(token, instance) 使用 Token.version 注册服务并验证 manifest.provides', async () => {
+    const tracker = new ResourceTracker();
+    const registry = await setupRegistry();
+
+    // 创建声明 provides 的 manifest
+    const manifestWithProvides: Manifest = {
+      id: 'ext-quiz-generator',
+      name: 'Quiz Generator',
+      version: '1.0.0',
+      main: 'index.js',
+      provides: ['ext-quiz-generator:IQuizEngineService'],
+    };
+
+    const ctx = await setupContext({ registry, tracker, manifest: manifestWithProvides });
+
+    // 定义接口和 Token（模拟插件 contracts/ 中的定义）
+    interface IQuizEngineService {
+      score(answers: unknown[]): number;
+    }
+    const QuizEngineToken = new Token<IQuizEngineService>(
+      'ext-quiz-generator:IQuizEngineService',
+      '2.3.1',
+    );
+
+    const instance: IQuizEngineService = { score: () => 42 };
+
+    // 调用 ctx.provide(token, instance)
+    await ctx.provide(QuizEngineToken, instance);
+
+    // 验证 ServiceRegistry 中有注册，且版本为 2.3.1（非硬编码 1.0.0）
+    const resolved = await registry.resolve(QuizEngineToken);
+    expect(resolved).toBe(instance);
+
+    // 验证版本号
+    const storedVersion = registry.getVersion('ext-quiz-generator:IQuizEngineService');
+    expect(storedVersion).toBe('2.3.1');
+
+    // 验证 dispose 清理
+    tracker.disposeAll('ext-quiz-generator');
+
+    // 清理后不应再能 resolve
+    await expect(registry.resolve(QuizEngineToken)).rejects.toThrow(
+      'No provider registered for token: ext-quiz-generator:IQuizEngineService',
+    );
+  });
+
+  it('Test 9b: ctx.provide 拒绝未在 manifest.provides 中声明的 token', async () => {
+    const tracker = new ResourceTracker();
+    const registry = await setupRegistry();
+
+    // manifest 没有 provides 字段
+    const ctx = await setupContext({ registry, tracker });
+
+    interface IMyService {
+      doWork(): void;
+    }
+    const MyToken = new Token<IMyService>('ext-something:IMyService', '1.0.0');
+    const instance: IMyService = { doWork: () => {} };
+
+    await expect(ctx.provide(MyToken, instance)).rejects.toThrow(
+      'not declared in manifest.provides',
+    );
+  });
+
+  // ── Test 10 ──────────────────────────────────────────────────────────
+
+  it('Test 10: 跨插件服务 provide → resolve 闭环（V3.2 E2E）', async () => {
+    // 模拟提供方插件
+    const providerTracker = new ResourceTracker();
+    const registry = await setupRegistry();
+
+    interface IScoringService {
+      getScore(): number;
+    }
+    const ScoringToken = new Token<IScoringService>('ext-provider:IScoringService', '1.0.0');
+
+    const providerManifest: Manifest = {
+      id: 'ext-provider',
+      name: 'Provider Plugin',
+      version: '1.0.0',
+      main: 'index.js',
+      provides: ['ext-provider:IScoringService'],
+    };
+
+    const ctxProvider = await buildContext(registry, providerTracker, 'ext-provider', providerManifest, mockDb());
+
+    const scoringInstance: IScoringService = { getScore: () => 95 };
+    await ctxProvider.provide(ScoringToken, scoringInstance);
+
+    // 模拟消费方插件
+    const consumerTracker = new ResourceTracker();
+    const ctxConsumer = await buildContext(registry, consumerTracker, 'ext-consumer', testManifest, mockDb());
+
+    // V3.2: 类型安全的 resolve
+    const resolved = await ctxConsumer.resolve(ScoringToken);
+    // 类型推断：resolved 类型为 IScoringService
+    const score: number = resolved.getScore();
+    expect(score).toBe(95);
+    expect(resolved).toBe(scoringInstance); // 同一个实例
+
+    // 验证版本号正确存储
+    const version = registry.getVersion('ext-provider:IScoringService');
+    expect(version).toBe('1.0.0');
+
+    // 清理
+    providerTracker.disposeAll('ext-provider');
+
+    // 提供方卸载后，消费方应无法解析
+    await expect(ctxConsumer.resolve(ScoringToken)).rejects.toThrow(
+      'No provider registered for token: ext-provider:IScoringService',
+    );
   });
 });

@@ -1,4 +1,34 @@
 import type { PluginContext } from '@openlearn/plugin-sdk';
+import { QuizStatsServiceToken } from './contracts/index.js';
+import type { IQuizStatsService, QuizSubmission, QuizStats } from './contracts/index.js';
+
+// ── QuizStatsServiceImpl ──────────────────────────────────────────────────
+
+class QuizStatsServiceImpl implements IQuizStatsService {
+  private submissions: QuizSubmission[] = [];
+
+  recordSubmission(submission: QuizSubmission): void {
+    this.submissions.push(submission);
+  }
+
+  getStats(lessonId: string): QuizStats {
+    const lessonSubmissions = this.submissions.filter(s => s.lessonId === lessonId);
+    const correctCount = lessonSubmissions.filter(s => s.correct).length;
+    return {
+      totalSubmissions: lessonSubmissions.length,
+      correctCount,
+      accuracy: lessonSubmissions.length > 0
+        ? Math.round((correctCount / lessonSubmissions.length) * 100)
+        : 0,
+    };
+  }
+
+  getAllSubmissions(): QuizSubmission[] {
+    return [...this.submissions];
+  }
+}
+
+// ── Plugin ────────────────────────────────────────────────────────────────
 
 export default {
   manifest: {
@@ -10,6 +40,10 @@ export default {
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;
     const actionRegistry = ctx.services.actionRegistry;
+
+    // V3.2: 向 DI 容器注册评分服务（类型安全，版本从 Token 读取）
+    const statsService = new QuizStatsServiceImpl();
+    await ctx.provide(QuizStatsServiceToken, statsService);
 
     await actionRegistry.register({
       id: 'ext-quiz-create',

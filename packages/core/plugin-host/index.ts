@@ -31,7 +31,7 @@ import { buildContext } from './context-builder.js';
 import { ContributionRegistry } from './contribution-registry.js';
 import type { ContributionSummary } from './contribution-registry.js';
 import { ConfigService } from './config-service.js';
-import { checkMissingDeps, topologicalSort, buildDepGraph } from './dependency-resolver.js';
+import { checkMissingDeps, topologicalSort, buildDepGraph, parseServiceRequirement, CrossPluginServiceCheck } from './dependency-resolver.js';
 import semver from 'semver';
 import { parseRequiresEntry } from '../esm-loader/manifest-utils.js';
 import { compose } from './middleware.js';
@@ -315,6 +315,53 @@ export class PluginHost {
       return `Plugin "${manifest.id}" requires: ${missing.join(', ')}`;
     }
     return null;
+  }
+
+  /**
+   * V3.2: 检查 manifest.requires 中的跨插件服务需求是否能在提供方 manifest.provides 中找到声明。
+   *
+   * 安装时调用（warn），激活时调用（block）。
+   *
+   * @returns 未满足的跨插件服务需求列表，空数组表示全部满足
+   */
+  private checkCrossPluginServices(manifest: Manifest): CrossPluginServiceCheck | null {
+    const reqs = manifest.requires;
+    if (!reqs || reqs.length === 0) return null;
+
+    const unsatisfied: Array<{ required: string; providerId: string }> = [];
+
+    for (const req of reqs) {
+      const parsed = parseServiceRequirement(req);
+      if (!parsed) continue;
+
+      const providerRow = this.db
+        .prepare('SELECT id FROM plugins WHERE manifest LIKE ?')
+        .get(`%"id":"${parsed.pluginId}"%`) as { id: string } | undefined;
+      if (!providerRow) {
+        unsatisfied.push({ required: req, providerId: parsed.pluginId });
+        continue;
+      }
+
+      const mRow = this.db
+        .prepare('SELECT manifest FROM plugins WHERE id = ?')
+        .get(providerRow.id) as { manifest: string } | undefined;
+      if (!mRow) {
+        unsatisfied.push({ required: req, providerId: parsed.pluginId });
+        continue;
+      }
+
+      try {
+        const providerManifest = JSON.parse(mRow.manifest);
+        const provides: string[] = providerManifest.provides ?? [];
+        if (!provides.includes(parsed.tokenName)) {
+          unsatisfied.push({ required: req, providerId: parsed.pluginId });
+        }
+      } catch {
+        unsatisfied.push({ required: req, providerId: parsed.pluginId });
+      }
+    }
+
+    return unsatisfied.length > 0 ? { consumerId: manifest.id, unsatisfied } : null;
   }
 
   private checkSemVerCompatibility(
@@ -648,6 +695,17 @@ export class PluginHost {
       }
     }
 
+
+    // 2e. V3.2: 检查跨插件服务依赖（warn，不阻塞安装）
+    const serviceCheck = this.checkCrossPluginServices(manifest);
+    if (serviceCheck) {
+      for (const u of serviceCheck.unsatisfied) {
+        console.warn(
+          `[PluginHost] Plugin "${manifest.id}" requires service "${u.required}" from "${u.providerId}", ` +
+          `but the provider has not declared it in manifest.provides. The plugin will fail to activate.`,
+        );
+      }
+    }
     // 3. 生成 pluginId
     const pluginId = uuidv7();
     const pluginDir = this.getPluginDir(pluginId);
@@ -752,6 +810,13 @@ export class PluginHost {
           throw new PluginActivateError(pluginId, depCheck);
         }
 
+
+        // V3.2: 检查跨插件服务依赖（阻塞激活）
+        const serviceCheck = this.checkCrossPluginServices(manifest);
+        if (serviceCheck) {
+          const items = serviceCheck.unsatisfied.map(u => `"${u.required}" from ${u.providerId}`).join(", ");
+          throw new PluginActivateError(pluginId, `Plugin "${manifest.id}" requires cross-plugin services: ${items} (not provided)`);
+        }
         const skipTokens = this.checkSemVerCompatibility(manifest, pluginId, 'activate');
         const ctx = await buildContext(
           this.serviceRegistry,
@@ -896,6 +961,13 @@ export class PluginHost {
       }
 
       // 6a. Phase 6: Token version compatibility check (D-05, D-12)
+
+      // V3.2: 检查跨插件服务依赖（阻塞激活）
+      const serviceCheck = this.checkCrossPluginServices(mergedManifest);
+      if (serviceCheck) {
+        const items = serviceCheck.unsatisfied.map(u => `"${u.required}" from ${u.providerId}`).join(", ");
+        throw new PluginActivateError(pluginId, `Plugin "${mergedManifest.id}" requires cross-plugin services: ${items} (not provided)`);
+      }
       const skipTokens = this.checkSemVerCompatibility(mergedManifest, pluginId, 'activate');
 
       // 7. 构建安全的 PluginContext — skipTokens 中指定的可选服务 key 将被设为 null（D-12）

@@ -606,19 +606,18 @@ export async function buildContext(
       }
       return serviceRegistry.resolve(token);
     },
-    // V3.0: 插件向 DI 容器提供服务（对应 manifest.provides）
-    provide: async (tokenName: string, instance: unknown): Promise<void> => {
-      // 验证 tokenName 在 manifest.provides 中声明
+    // V3.2: 插件向 DI 容器提供服务（对应 manifest.provides）
+    provide: async <T>(token: Token<T>, instance: T): Promise<void> => {
+      // 验证 token.name 在 manifest.provides 中声明
       const declared = (manifest as any).provides as string[] | undefined;
-      if (!declared || !declared.includes(tokenName)) {
+      if (!declared || !declared.includes(token.name)) {
         throw new Error(
-          `[PluginHost] Plugin "${pluginId}" attempted to provide "${tokenName}" ` +
+          `[PluginHost] Plugin "${pluginId}" attempted to provide "${token.name}" ` +
           `which is not declared in manifest.provides. ` +
           `Add it to manifest.provides: [${declared?.join(', ') ?? ''}]`,
         );
       }
-      // 构造临时 Token 并注册（tokenName 格式为 "ext-xxx:IServiceName"）
-      const token: Token<unknown> = { name: tokenName, version: '1.0.0' } as Token<unknown>;
+      // V3.2: 使用插件传入的 Token（含 version），不再硬编码 '1.0.0'
       await serviceRegistry.register(token, instance);
       // 跟踪清理
       tracker.track(pluginId, {

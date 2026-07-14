@@ -136,7 +136,7 @@ const eventBus = ctx.services.eventBus;
 const ai = ctx.services.ai;
 ```
 
-**V3.0 新增**：插件可通过 `ctx.provide()` 向 DI 容器注册自定义服务给其他插件消费：
+**V3.2 新增**：插件可通过 `ctx.provide()` 向 DI 容器注册自定义服务给其他插件消费：
 
 ```typescript
 // 插件 A：注册自定义服务
@@ -165,7 +165,7 @@ interface PluginContext {
 
   // 依赖注入
   resolve<T>(token: Token<T>): Promise<T>;                    // 从 ServiceRegistry 解析服务
-  provide(tokenName: string, instance: unknown): Promise<void>; // V3.0: 注册自定义服务
+  provide(tokenName: string, instance: unknown): Promise<void>; // V3.2: 注册自定义服务
 
   // 插件专用数据库
   db: PluginDatabaseAPI;      // 命名空间隔离的 SQLite 操作（含 migrate() 迁移）
@@ -173,10 +173,10 @@ interface PluginContext {
   // V2.5 结构化日志（自动注入 pluginId 和 timestamp）
   log: IPluginLogger;         // 支持 debug/info/warn/error 四级
 
-  // V3.0: 类型安全的配置服务
+  // V3.2: 类型安全的配置服务
   config: IConfigService;     // 读取 manifest.configuration 中声明的设置项
 
-  // V3.0: 声明式贡献点只读视图
+  // V3.2: 声明式贡献点只读视图
   contributions: ContributionAccessor; // list(): 内省插件在 manifest 中声明的贡献点
 
   // V5.1: 主应用共享模块引用（白名单控制）
@@ -254,8 +254,8 @@ interface Manifest {
   optional?: string[];           // 可选依赖
   capabilitiesProposed: string[]; // 申请的权限（如 "lesson:write", "vfs:read"）
   classroomTools?: ClassroomTool[]; // 前端课堂工具声明
-  provides?: string[];           // V3.0: 插件对外提供的自定义服务 Token 名称
-  configuration?: {              // V3.0: 声明式配置 schema
+  provides?: string[];           // V3.2: 插件对外提供的自定义服务 Token 名称
+  configuration?: {              // V3.2: 声明式配置 schema
     properties: Record<string, ConfigProperty>;
   };
 }
@@ -813,7 +813,7 @@ ctx.log.info('Activation completed', { handlerCount: 5 });
 ctx.log.error('DB migration failed', { error: err.message });
 ```
 
-### 5.11 IConfigService（V3.0 新增）
+### 5.11 IConfigService（V3.2 新增）
 
 ```typescript
 interface IConfigService {
@@ -969,10 +969,10 @@ interface IUIService {
 | Slot | 用途 |
 |------|------|
 | `teacher.tab` | 教师标签页 |
-| `teacher.panel` | 教师独立全宽管理面板（v5.1） |
+| `teacher.panel` | 教师独立全宽管理面板（v3.2） |
 | `teacher.dashboard.widget` | 教师仪表盘小部件 |
 | `student.view` | 学生视图 |
-| `student.fullscreen` | 学生全屏视图/考试模式（v5.1） |
+| `student.fullscreen` | 学生全屏视图/考试模式（v3.2） |
 | `student.lesson.tool` | 学生学习工具 |
 
 **学生端插件获取当前学生 ID**：宿主在渲染学生端扩展点（`student.view`、`student.fullscreen`）时，自动通过 `slotProps` 注入当前登录学生 ID。插件组件通过 props 接收：
@@ -988,7 +988,7 @@ export default function MyStudentPlugin(props: { studentId?: string }) {
 }
 ```
 | `classroom.tool` | 课堂工具 |
-| `global.setting` | 全局设置页扩展（v5.1） |
+| `global.setting` | 全局设置页扩展（v3.2） |
 
 ### 6.5 invokeCommand（自 V2.5 起可用）
 
@@ -1313,7 +1313,7 @@ await ctx.db.migrate(2, async (sqliteDb) => {
 });
 ```
 
-### 8.7 自定义服务注册（V3.0）
+### 8.7 自定义服务注册（V3.2）
 
 插件可以向 DI 容器注册自定义服务，供其他插件消费：
 
@@ -1325,6 +1325,69 @@ await ctx.provide('@my-scope/IQuestionBank', questionBankService);
 // optional: ['@my-scope:IQuestionBank@>=1.0.0']
 
 // 插件 B：运行时消费
+
+### 8.5 跨插件服务共享（V3.2）
+
+多个插件可以通过类型安全的 DI Token 互相分享服务。
+
+**提供方插件** 将接口定义为 Token + Type 对，放在 `src/contracts/` 目录中：
+
+```typescript
+// ext-quiz-generator/src/contracts/index.ts
+import { Token } from '@openlearn/plugin-sdk';
+
+export interface IQuizEngineService {
+  score(answers: Answer[]): number;
+  generateQuestion(topic: string): Question;
+}
+
+export const QuizEngineToken = new Token<IQuizEngineService>(
+  'ext-quiz-generator:IQuizEngineService',
+  '1.0.0'
+);
+```
+
+在 `manifest.json` 中声明：
+
+```json
+{
+  "provides": ["ext-quiz-generator:IQuizEngineService"]
+}
+```
+
+在 `activate` 中提供实例：
+
+```typescript
+ctx.provide(QuizEngineToken, new QuizEngine());
+```
+
+**消费方插件** 在编译期导入类型，运行时通过 Token 解析：
+
+```typescript
+import type { IQuizEngineService } from 'ext-quiz-generator/contracts';
+import { QuizEngineToken } from 'ext-quiz-generator/contracts';
+
+const engine = await ctx.resolve(QuizEngineToken);
+// engine 类型为 IQuizEngineService，有完整的 IDE 补全
+const score = engine.score(answers);
+```
+
+在 `manifest.json` 中声明依赖：
+
+```json
+{
+  "requires": [
+    "@openlearn/core:ICommandBusService@^1.0.0",
+    "ext-quiz-generator:IQuizEngineService"
+  ]
+}
+```
+
+**校验机制**：
+- 安装时：检查提供方 `manifest.provides` 是否声明了 token → warn
+- 激活时：检查提供方是否已激活并提供服务 → 阻塞
+- 激活顺序：`ext-quiz-generator:IQuizEngineService` 自动推导为对 `ext-quiz-generator` 的依赖，提供方先激活
+
 const qb = await ctx.resolve({ name: '@my-scope:IQuestionBank' } as any);
 ```
 

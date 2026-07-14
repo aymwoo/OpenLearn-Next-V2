@@ -167,3 +167,90 @@ describe('computeActivationOrder', () => {
     expect(sorted).toEqual(['ext-a', 'ext-b', 'ext-c']);
   });
 });
+
+// ── V3.2: Cross-plugin Service Dependencies ──────────────────────────────
+
+function makeManifestWithRequires(
+  id: string,
+  opts?: { deps?: string[]; requires?: string[]; provides?: string[] }
+): Manifest {
+  return {
+    id,
+    name: `Plugin ${id}`,
+    version: '1.0.0',
+    main: 'index.js',
+    pluginDependencies: opts?.deps,
+    requires: opts?.requires,
+    provides: opts?.provides,
+  };
+}
+
+describe('parseServiceRequirement', () => {
+  const { parseServiceRequirement } = require('../dependency-resolver.js');
+
+  it('kernel token → 返回 null', () => {
+    expect(parseServiceRequirement('@openlearn/core:ICommandBusService')).toBeNull();
+    expect(parseServiceRequirement('@openlearn/core:ICommandBusService@^1.0.0')).toBeNull();
+  });
+
+  it('跨插件服务 token → 解析 pluginId 和 tokenName', () => {
+    const result = parseServiceRequirement('ext-quiz-generator:IQuizEngineService');
+    expect(result).not.toBeNull();
+    expect(result!.pluginId).toBe('ext-quiz-generator');
+    expect(result!.tokenName).toBe('ext-quiz-generator:IQuizEngineService');
+  });
+
+  it('无冒号的普通字符串 → 返回 null', () => {
+    expect(parseServiceRequirement('someRandomString')).toBeNull();
+  });
+
+  it('tokenName 缺少冒号的格式 → 返回 null', () => {
+    expect(parseServiceRequirement('provider:bareName')).toBeNull();
+  });
+});
+
+describe('buildDepGraph with service dependencies', () => {
+  it('从 manifest.requires 推导跨插件服务依赖并合并到图中', () => {
+    const manifests = new Map<string, Manifest>();
+    manifests.set(
+      'ext-quiz-pro',
+      makeManifestWithRequires('ext-quiz-pro', {
+        requires: [
+          '@openlearn/core:ICommandBusService@^1.0.0',
+          'ext-quiz-generator:IQuizEngineService',
+        ],
+      }),
+    );
+    manifests.set('ext-quiz-generator', makeManifest('ext-quiz-generator'));
+
+    const graph = buildDepGraph(manifests);
+    // ext-quiz-pro 的依赖应包含从 requires 推导出的 ext-quiz-generator
+    const deps = graph.get('ext-quiz-pro')!;
+    expect(deps).toContain('ext-quiz-generator');
+  });
+
+  it('空 requires → 不添加额外依赖', () => {
+    const manifests = new Map<string, Manifest>();
+    manifests.set('ext-standalone', makeManifest('ext-standalone'));
+
+    const graph = buildDepGraph(manifests);
+    expect(graph.get('ext-standalone')).toEqual([]);
+  });
+
+  it('显式 pluginDependencies 和推导的 service deps 合并去重', () => {
+    const manifests = new Map<string, Manifest>();
+    manifests.set(
+      'ext-consumer',
+      makeManifestWithRequires('ext-consumer', {
+        deps: ['ext-provider'], // 显式声明
+        requires: ['ext-provider:IQuizEngineService'], // 推导出同一个 provider
+      }),
+    );
+    manifests.set('ext-provider', makeManifest('ext-provider'));
+
+    const graph = buildDepGraph(manifests);
+    const deps = graph.get('ext-consumer')!;
+    // 去重后 ext-provider 只出现一次
+    expect(deps.filter(d => d === 'ext-provider')).toHaveLength(1);
+  });
+});

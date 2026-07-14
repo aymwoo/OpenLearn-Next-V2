@@ -160,7 +160,7 @@ PluginHost 是插件生命周期的核心管理者，负责插件的安装、激
 |------|------|
 | `pluginStates` | Map<pluginId, PluginState> 状态追踪 |
 | `resourceTracker` | 按 pluginId 管理 Disposable 资源，保证精确清理 |
-| `contributionRegistry` | V3.0 声明式 UI 贡献点存储 |
+| `contributionRegistry` | V3.2 声明式 UI 贡献点存储 |
 | `middlewareRegistry` | 按生命周期阶段分组的洋葱模型中间件管道 |
 | `preloadedPlugins` | 内置插件内存预加载映射（跳过文件系统加载） |
 | `pluginInstances` | 活跃实例引用（manifest + activate/deactivate + workerRef） |
@@ -374,13 +374,13 @@ WorkerRuntimeError            // 基类
 | Slot | 用途 |
 |------|------|
 | `teacher.tab` | 教师导航标签页 |
-| `teacher.panel` | 教师独立全宽管理面板（v5.1） |
+| `teacher.panel` | 教师独立全宽管理面板（v3.2） |
 | `teacher.dashboard.widget` | 教师仪表盘小部件 |
 | `student.view` | 学生视图 |
-| `student.fullscreen` | 学生全屏视图/考试模式（v5.1） |
+| `student.fullscreen` | 学生全屏视图/考试模式（v3.2） |
 | `student.lesson.tool` | 学生学习工具 |
 | `classroom.tool` | 课堂工具 |
-| `global.setting` | 全局设置页扩展（v5.1） |
+| `global.setting` | 全局设置页扩展（v3.2） |
 
 **学生端 `slotProps` 注入**：宿主渲染 `student.view` 扩展点时，自动通过 `slotProps` 注入当前登录学生 ID：
 

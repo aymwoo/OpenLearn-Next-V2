@@ -21,7 +21,7 @@ export type {
   ContributionAccessor,
 } from '../core/plugin-host/types.js';
 
-// ── Configuration Service (V3.0) ────────────────────────────────────────
+// ── Configuration Service (V3.2) ────────────────────────────────────────
 
 export type {
   IConfigService,
@@ -29,7 +29,7 @@ export type {
   ConfigDeclaration,
 } from '../core/plugin-host/config-service.js';
 
-// ── Contribution Registry (V3.0) ────────────────────────────────────────
+// ── Contribution Registry (V3.2) ────────────────────────────────────────
 
 export type {
   ContributionSummary,
@@ -38,6 +38,7 @@ export type {
   DashboardWidgetConfig,
   StudentViewConfig,
   StudentLessonToolConfig,
+  HelpDocConfig,
   ContributionConfig,
 } from '../core/plugin-host/contribution-registry.js';
 
@@ -47,7 +48,8 @@ export type { Manifest, ManifestV3 } from '../core/esm-loader/manifest-schema.js
 
 // ── DI / Tokens ─────────────────────────────────────────────────────────
 
-export type { Token } from '../core/di/token.js';
+// V3.2: Token class export for plugin DI provide/consume
+export { Token } from '../core/di/token.js';
 
 export type {
   ICommandBusService,

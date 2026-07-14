@@ -23,6 +23,22 @@ import type { Manifest } from '../esm-loader/manifest-schema.js';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
+/** 跨插件服务需求解析结果。kernel Token（@openlearn/*）返回 null。 */
+export interface ServiceRequirement {
+  /** 提供方插件的 manifest.id */
+  pluginId: string;
+  /** 服务 Token 名称（如 ext-quiz-generator:IQuizEngineService） */
+  tokenName: string;
+}
+
+/**
+ * 声明期校验结果：消费方依赖的跨插件服务 token 是否在提供方 manifest.provides 中声明。
+ */
+export interface CrossPluginServiceCheck {
+  consumerId: string;
+  unsatisfied: Array<{ required: string; providerId: string }>;
+}
+
 export interface DepEdge {
   pluginId: string;
   dependencies: string[];
@@ -39,6 +55,30 @@ export interface DepResult {
 
 // ── Graph Builder ────────────────────────────────────────────────────────
 
+// Kernel token 前缀，用于区分内核服务和跨插件服务
+const KERNEL_TOKEN_PREFIX = '@openlearn/';
+
+/**
+ * V3.2: 解析 manifest.requires 中的跨插件服务需求条目。
+ *
+ * - 以 @openlearn/ 开头的内核 Token 返回 null
+ * - 格式 ext-quiz-generator:IQuizEngineService 解析为 { pluginId, tokenName }
+ * - 不识别的格式返回 null
+ */
+export function parseServiceRequirement(req: string): ServiceRequirement | null {
+  if (req.startsWith(KERNEL_TOKEN_PREFIX)) return null;
+
+  // 格式: pluginId:TokenName，pluginId 不含空格和冒号，TokenName 为有效的 Token 名
+  const match = req.match(/^([a-zA-Z0-9_-]+):([a-zA-Z0-9_:]+)$/);
+  if (!match) return null;
+
+  const [, pluginId, tokenName] = match;
+  // tokenName 必须包含至少一个冒号（格式为 pluginId:IServiceName）
+  if (!tokenName.includes(':')) return null;
+
+  return { pluginId, tokenName };
+}
+
 /**
  * Build a dependency graph from installed plugin manifests.
  *
@@ -53,7 +93,21 @@ export function buildDepGraph(
 
   for (const [pluginId, manifest] of manifests) {
     const deps = manifest.pluginDependencies ?? [];
-    graph.set(pluginId, deps);
+
+    // V3.2: 从 manifest.requires 中推导跨插件服务依赖
+    const serviceDeps: string[] = [];
+    if (manifest.requires) {
+      for (const req of manifest.requires) {
+        const parsed = parseServiceRequirement(req);
+        if (parsed && parsed.pluginId !== pluginId) {
+          serviceDeps.push(parsed.pluginId);
+        }
+      }
+    }
+
+    // 合并显式 pluginDependencies 和推导出的服务依赖（去重）
+    const allDeps = [...new Set([...deps, ...serviceDeps])];
+    graph.set(pluginId, allDeps);
   }
 
   return graph;

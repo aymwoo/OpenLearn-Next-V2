@@ -10,6 +10,9 @@
   "capabilitiesProposed": [
     "quiz:write"
   ],
+  "provides": [
+    "ext-quiz-generator:IQuizStatsService"
+  ],
   "engines": {
     "openlearn": "^2.5.0"
   },
@@ -45,6 +48,13 @@
             "手动旁路轮叫调度"
           ]
         }
+      }
+    ],
+    "help.plugin_docs": [
+      {
+        "id": "quiz-api-docs",
+        "title": "随堂测验插件 API 文档",
+        "description": "IQuizStatsService 接口说明与使用示例"
       }
     ]
   }

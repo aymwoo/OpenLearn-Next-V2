@@ -53,6 +53,15 @@ export interface StudentViewConfig {
 
 /** A contribution to the student.lesson.tool slot (lesson-scoped student tool). */
 export interface StudentLessonToolConfig {
+
+/** V3.2: A contribution to the help.plugin_docs slot (plugin documentation in help page). */
+export interface HelpDocConfig {
+  id: string;
+  title: string;
+  description?: string;
+  /** URL to markdown documentation content */
+  markdownUrl?: string;
+}
   id: string;
   label: string;
   icon?: string;
@@ -64,7 +73,8 @@ export type ContributionConfig =
   | TeacherTabConfig
   | DashboardWidgetConfig
   | StudentViewConfig
-  | StudentLessonToolConfig;
+  | StudentLessonToolConfig
+  | HelpDocConfig;
 
 /** A human-readable summary of what a plugin contributes. */
 export interface ContributionSummary {

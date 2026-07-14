@@ -3,6 +3,7 @@ import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, Globe, Cod
 import { useAppStore } from '../../store/appStore';
 import { translations } from '../../i18n';
 import Markdown from 'react-markdown';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 interface HelpViewProps {
   registeredCommands: any[];
@@ -17,7 +18,7 @@ export function HelpView({ registeredCommands, onRefresh }: HelpViewProps) {
   const [commandPayloads, setCommandPayloads] = useState<Record<string, string>>({});
   const [executionResults, setExecutionResults] = useState<Record<string, { success: boolean; data?: any; error?: string; loading?: boolean }>>({});
   
-  const [activeTab, setActiveTab] = useState<'commands' | 'sdk_guide' | 'user_guide'>('commands');
+  const [activeTab, setActiveTab] = useState<'commands' | 'sdk_guide' | 'user_guide' | 'plugin_docs'>('commands');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const [pluginGuideMd, setPluginGuideMd] = useState<string>('');
@@ -379,6 +380,13 @@ db.prepare(\`INSERT INTO \${tableName} ...\`).run(...);
             <span>系统使用教程 (User Guide)</span>
           </button>
         </div>
+          <button
+            onClick={() => setActiveTab('plugin_docs')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 ${activeTab === 'plugin_docs' ? 'bg-white text-indigo-700 shadow-sm font-bold border border-neutral-200/50' : 'text-gray-500 hover:text-gray-800'}`}
+          >
+            <FileText size={12} />
+            <span>插件文档 (Plugin Docs)</span>
+          </button>
       </div>
 
       {activeTab === 'commands' ? (
@@ -1856,6 +1864,24 @@ const jsPDF  = ctx.require('jspdf').jsPDF;`}</pre>
           </div>
         </div>
       )}
+      {activeTab === 'plugin_docs' ? (
+        <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
+          <div className="max-w-5xl mx-auto space-y-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                  <FileText size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">已安装插件的使用文档</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">插件开发者可在 manifest.contributes 中声明 help.plugin_docs 贡献项，或通过扩展点注册文档组件。</p>
+                </div>
+              </div>
+              <ExtensionPointRenderer slot="help.plugin_docs" />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="p-4 border-t border-gray-100 bg-gray-50/40 shrink-0 flex items-center justify-between text-xs text-gray-400">
         <div className="flex items-center gap-2">
