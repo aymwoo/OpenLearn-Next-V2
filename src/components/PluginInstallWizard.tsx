@@ -111,36 +111,53 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
 
         // Preprocess JSX module: resolve bare imports via window.HostSharedDeps
         const processedJs = jsContent
-          // react/jsx-runtime (JSX compiled output)
-          .replace(/import\s*\{\s*jsx\s*\}\s*from\s*['"]react\/jsx-runtime['"]/g,
-            'const jsx = (t,p,k) => { if(k!==void 0 && p) p.key=k; return window.HostSharedDeps.React.createElement(t,p); }')
-          .replace(/import\s*\{\s*jsxs\s*\}\s*from\s*['"]react\/jsx-runtime['"]/g,
-            'const jsxs = (t,p,k) => { if(k!==void 0 && p) p.key=k; return window.HostSharedDeps.React.createElement(t,p); }')
-          .replace(/import\s*\{\s*Fragment\s*\}\s*from\s*['"]react\/jsx-runtime['"]/g,
-            'const Fragment = window.HostSharedDeps.React.Fragment')
-          // react named imports
-          .replace(/import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]react['"]/g, (_, names) =>
-            names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.React.${n.trim()}`).join('; '))
-          // react default import
-          .replace(/import\s+(\w+)\s+from\s*['"]react['"]/g, 'const $1 = window.HostSharedDeps.React')
-          // react-dom named imports
-          .replace(/import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]react-dom['"]/g, (_, names) =>
-            names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.ReactDOM.${n.trim()}`).join('; '))
-          // react-dom default import  
-          .replace(/import\s+(\w+)\s+from\s*['"]react-dom['"]/g, 'const $1 = window.HostSharedDeps.ReactDOM')
-          // react-dom/client
-          .replace(/import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]react-dom\/client['"]/g, (_, names) =>
-            names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.ReactDOM.${n.trim()}`).join('; '))
-          // recharts
-          .replace(/import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]recharts['"]/g, (_, names) =>
-            names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.Recharts.${n.trim()}`).join('; '))
-          .replace(/import\s+(\w+)\s+from\s*['"]recharts['"]/g, 'const $1 = window.HostSharedDeps.Recharts')
-          // lucide-react
-          .replace(/import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]lucide-react['"]/g, (_, names) =>
-            names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.LucideReact.${n.trim()}`).join('; '))
-          .replace(/import\s+(\w+)\s+from\s*['"]lucide-react['"]/g, 'const $1 = window.HostSharedDeps.LucideReact')
-          // Handle export default -> assign to a variable
-          .replace(/export\s+default\s+function\s+(\w+)/g, 'function $1');
+          // react/jsx-runtime: single or combined imports
+          .replace(/import\s*\{([^}]+)\}\s*from\s*['\"]react\/jsx-runtime['\"]/g, (_, names) => {
+            return names.split(',').map(n => {
+              const name = n.trim();
+              if (name === 'jsx') return 'const jsx = (t,p,k) => { if(k!==void 0 && p) p.key=k; return window.HostSharedDeps.React.createElement(t,p); }';
+              if (name === 'jsxs') return 'const jsxs = (t,p,k) => { if(k!==void 0 && p) p.key=k; return window.HostSharedDeps.React.createElement(t,p); }';
+              if (name === 'Fragment') return 'const Fragment = window.HostSharedDeps.React.Fragment';
+              return `const ${name} = void 0`;
+            }).join('; ');
+          })
+          // react, react-dom, recharts, lucide-react: combined default+named
+          .replace(/import\s+(\w+)\s*,\s*\{([^}]+)\}\s*from\s*['\"](react|react-dom|react-dom\/client|recharts|lucide-react)['\"]/g,
+            (_, def, names, pkg) => {
+              const m = {react:'React','react-dom':'ReactDOM','react-dom/client':'ReactDOM',recharts:'Recharts','lucide-react':'LucideReact'}[pkg]||pkg;
+              return `const ${def} = window.HostSharedDeps.${m}; ` + names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.${m}.${n.trim()}`).join('; ');
+            })
+          // named imports from known packages
+          .replace(/import\s*\{([^}]+)\}\s*from\s*['\"](react|react-dom|react-dom\/client|recharts|lucide-react)['\"]/g,
+            (_, names, pkg) => {
+              const m = {react:'React','react-dom':'ReactDOM','react-dom/client':'ReactDOM',recharts:'Recharts','lucide-react':'LucideReact'}[pkg]||pkg;
+              return names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.${m}.${n.trim()}`).join('; ');
+            })
+          // default imports from known packages
+          .replace(/import\s+(\w+)\s+from\s*['\"](react|react-dom|react-dom\/client|recharts|lucide-react)['\"]/g,
+            (_, name, pkg) => {
+              const m = {react:'React','react-dom':'ReactDOM','react-dom/client':'ReactDOM',recharts:'Recharts','lucide-react':'LucideReact'}[pkg]||pkg;
+              return `const ${name} = window.HostSharedDeps.${m}`;
+            })
+          // namespace imports
+          .replace(/import\s+\*\s+as\s+(\w+)\s+from\s*['\"]([^'\"]+)['\"]/g,
+            (_, name, pkg) => {
+              const m = {react:'React','react-dom':'ReactDOM','react-dom/client':'ReactDOM',recharts:'Recharts','lucide-react':'LucideReact'}[pkg];
+              if (m) return `const ${name} = window.HostSharedDeps.${m}`;
+              return `/* import * as ${name} from '${pkg}' — stripped */`;
+            })
+          // re-exports: export { X } from 'pkg'
+          .replace(/export\s*\{([^}]+)\}\s*from\s*['\"]([^'\"]+)['\"]/g, (_, names, pkg) => {
+              const m = {react:'React','react-dom':'ReactDOM','react-dom/client':'ReactDOM','react/jsx-runtime':'React',recharts:'Recharts','lucide-react':'LucideReact'}[pkg];
+              if (!m) return `/* export {${names}} from '${pkg}' — stripped */`;
+              return names.split(',').map(n => { const parts = n.trim().split(/\s+as\s+/); const name = parts[0].trim(); return `const ${parts[parts.length-1].trim()} = window.HostSharedDeps.${m}.${name}`; }).join('; ');
+            })
+          // export default function/class
+          .replace(/export\s+default\s+(function|class)\s+(\w+)/g, '$1 $2')
+          .replace(/export\s+default\s+/g, 'const _default = ')
+          // catch-all: strip any remaining bare import (module not starting with / . ..)
+          .replace(/import\s+[^;]+\s+from\s*['\"](?!\/|\.)([^'\"]+)['\"]\s*;?/g, "/* stripped import from '$1' */")
+          .replace(/import\s*['\"](?!\/|\.)([^'\"]+)['\"]\s*;?/g, "/* stripped side-effect import '$1' */");
 
         const blob = new Blob([processedJs], { type: 'application/javascript' });
         blobUrl = URL.createObjectURL(blob);
@@ -224,7 +241,7 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
       } catch (err) {
         // Dynamic import of blob URLs fails for modules with bare imports (React, etc.)
         // This is expected — the sandbox preview is best-effort
-        console.warn('Sandbox preview skipped: frontend.js uses module imports that cannot be resolved from a blob URL.');
+        console.warn('Sandbox preview skipped: ', (err as Error).message || String(err));
       }
     };
 
