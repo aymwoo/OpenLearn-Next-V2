@@ -315,8 +315,22 @@ function buildAssignmentCard(asgn, frontendCtx, msgBox, role, listContainer) {
           <span style="font-size:12px;color:${STYLE.textSecondary};">${formatDate(asgn.submission.submittedAt)}</span>
         </div>
         ${asgn.submission.feedback ? `<p style="margin:6px 0 0 0;font-size:13px;color:#374151;">💬 教师反馈: ${escapeHtml(asgn.submission.feedback)}</p>` : ''}
+        <div style="margin-top:8px;padding-top:8px;border-top:1px dashed #bbf7d0;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:${STYLE.textSecondary};">
+          <span>📎 提交的文件: ${escapeHtml(asgn.submission.filename || '已提交')}</span>
+          <div style="display:flex;gap:6px;">
+            <button class="btn-preview-stu" style="${inlineBtnStyle(STYLE.primaryColor, 'transparent')}">👁️ 预览</button>
+            <button class="btn-dl-stu" style="${inlineBtnStyle(STYLE.primaryColor, 'transparent')}">📥 下载</button>
+          </div>
+        </div>
       `;
       card.appendChild(fb);
+
+      fb.querySelector('.btn-preview-stu').addEventListener('click', () => {
+        openFilePreview(asgn.submission.filename, asgn.submission.filePath, frontendCtx);
+      });
+      fb.querySelector('.btn-dl-stu').addEventListener('click', () => {
+        window.open(`/files${asgn.submission.filePath}`, '_blank');
+      });
     }
 
     // 构造通用的文件上传 UI 区域
@@ -515,7 +529,11 @@ function buildAssignmentCard(asgn, frontendCtx, msgBox, role, listContainer) {
       });
       pendingStatus.innerHTML = `
         <span style="font-weight:500;">📎 已交: ${escapeHtml(asgn.submission.filename || '已提交')}</span>
-        <span style="font-size:11px;color:#6b7280;margin-left:auto;margin-right:10px;">🕐 ${formatDate(asgn.submission.submittedAt)}</span>
+        <div style="display:flex;gap:6px;align-items:center;margin-left:auto;margin-right:10px;">
+          <button class="btn-preview-stu-pending" style="${inlineBtnStyle('#1e40af', 'transparent')}">👁️ 预览</button>
+          <button class="btn-dl-stu-pending" style="${inlineBtnStyle('#1e40af', 'transparent')}">📥 下载</button>
+        </div>
+        <span style="font-size:11px;color:#6b7280;">🕐 ${formatDate(asgn.submission.submittedAt)}</span>
       `;
 
       let reUploadArea = null;
@@ -537,6 +555,13 @@ function buildAssignmentCard(asgn, frontendCtx, msgBox, role, listContainer) {
       pendingArea.appendChild(pendingStatus);
       pendingArea.appendChild(reSubmitBtn);
       card.appendChild(pendingArea);
+
+      pendingStatus.querySelector('.btn-preview-stu-pending').addEventListener('click', () => {
+        openFilePreview(asgn.submission.filename, asgn.submission.filePath, frontendCtx);
+      });
+      pendingStatus.querySelector('.btn-dl-stu-pending').addEventListener('click', () => {
+        window.open(`/files${asgn.submission.filePath}`, '_blank');
+      });
     }
   }
 
@@ -597,6 +622,7 @@ async function toggleSubmissionList(card, assignmentId, frontendCtx, msgBox) {
             ${isGraded ? `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:12px;margin-left:8px;">${sub.score}分</span>` : '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:12px;margin-left:8px;">待批改</span>'}
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn-preview" style="${inlineBtnStyle(STYLE.primaryColor)}">👁️ 预览</button>
             <button class="btn-dl" data-url="/files${encodeURIComponent(sub.filePath)}" style="${inlineBtnStyle(STYLE.primaryColor)}">📥 下载</button>
             <button class="btn-grade-toggle" style="${inlineBtnStyle(isGraded ? '#fff' : STYLE.warningColor, isGraded ? STYLE.borderColor : STYLE.warningColor)}">${isGraded ? '✏️ 修改评分' : '📝 评分'}</button>
           </div>
@@ -617,6 +643,11 @@ async function toggleSubmissionList(card, assignmentId, frontendCtx, msgBox) {
         </div>
       `;
       row.appendChild(gradeForm);
+
+      // 预览按钮事件
+      row.querySelector('.btn-preview').addEventListener('click', () => {
+        openFilePreview(sub.filename, sub.filePath, frontendCtx);
+      });
 
       // 下载按钮事件
       row.querySelector('.btn-dl').addEventListener('click', () => {
@@ -673,6 +704,291 @@ function showMessage(msgBox, text, type) {
   };
   msgBox.innerHTML = `<div style="padding:8px 12px;border-radius:6px;font-size:13px;color:#fff;background-color:${colors[type] || colors.info};margin-bottom:8px;">${text}</div>`;
   setTimeout(() => { msgBox.innerHTML = ''; }, 4000);
+}
+
+// 动态加载本地脚本
+function loadLocalScript(url) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${url}"]`)) {
+      resolve();
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = url;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(`加载依赖库失败: ${url}`));
+    document.head.appendChild(script);
+  });
+}
+
+// 在线文件预览主逻辑
+async function openFilePreview(filename, filePath, frontendCtx) {
+  const ext = filename.split('.').pop().toLowerCase();
+  const fileUrl = `/files${filePath}`;
+  
+  // 1. 创建全屏 Modal Overlay
+  const overlay = el('div', {
+    id: 'preview-modal-overlay',
+    style: {
+      position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
+      backgroundColor: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)',
+      zIndex: '9999', display: 'flex', justifyContent: 'center', alignItems: 'center',
+      fontFamily: 'system-ui, sans-serif'
+    }
+  });
+
+  const modal = el('div', {
+    style: {
+      width: '90vw', height: '90vh', backgroundColor: '#fff', borderRadius: '12px',
+      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+      display: 'flex', flexDirection: 'column', overflow: 'hidden', border: '1px solid #334155'
+    }
+  });
+
+  const header = el('div', {
+    style: {
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      padding: '16px 24px', backgroundColor: '#1e293b', color: '#fff',
+      borderBottom: '1px solid #334155', userSelect: 'none'
+    }
+  });
+
+  const titleArea = el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } });
+  titleArea.innerHTML = `<span style="font-size: 18px; font-weight: 600;">👁️ 预览: ${escapeHtml(filename)}</span>`;
+
+  const actionsArea = el('div', { style: { display: 'flex', gap: '10px' } });
+  
+  const dlBtn = el('button', {
+    style: {
+      padding: '6px 14px', backgroundColor: STYLE.primaryColor, border: 'none',
+      color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500'
+    },
+    onClick: () => window.open(fileUrl, '_blank')
+  }, '📥 下载');
+
+  const closeBtn = el('button', {
+    style: {
+      padding: '6px 14px', backgroundColor: '#475569', border: 'none',
+      color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500'
+    },
+    onClick: () => overlay.remove()
+  }, '关闭');
+
+  actionsArea.appendChild(dlBtn);
+  actionsArea.appendChild(closeBtn);
+  header.appendChild(titleArea);
+  header.appendChild(actionsArea);
+  modal.appendChild(header);
+
+  const body = el('div', {
+    style: { flex: '1', overflow: 'auto', padding: '24px', backgroundColor: '#f8fafc', position: 'relative' }
+  });
+  modal.appendChild(body);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // 2. 显示 Loading 状态
+  const spinner = el('div', {
+    style: {
+      position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px'
+    }
+  });
+  spinner.innerHTML = `
+    <div style="width:40px;height:40px;border:4px solid #e2e8f0;border-top-color:${STYLE.primaryColor};border-radius:50%;animation:spin 1s linear infinite;"></div>
+    <span style="color:#64748b;font-size:14px;font-weight:500;">正在加载文件内容...</span>
+    <style>
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  `;
+  body.appendChild(spinner);
+
+  try {
+    const pluginDir = `/plugins/${frontendCtx.pluginId}`;
+
+    // 3. 根据类型拉取数据并渲染
+    if (ext === 'pdf') {
+      spinner.remove();
+      const iframe = el('iframe', {
+        src: fileUrl,
+        style: { width: '100%', height: '100%', border: 'none', borderRadius: '8px', backgroundColor: '#fff' }
+      });
+      body.appendChild(iframe);
+      
+    } else if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext)) {
+      spinner.remove();
+      const imgContainer = el('div', {
+        style: {
+          display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100%',
+          backgroundImage: 'radial-gradient(#cbd5e1 20%, transparent 20%), radial-gradient(#cbd5e1 20%, transparent 20%)',
+          backgroundPosition: '0 0, 8px 8px', backgroundSize: '16px 16px', backgroundColor: '#e2e8f0',
+          borderRadius: '8px', padding: '20px'
+        }
+      });
+      const img = el('img', {
+        src: fileUrl,
+        style: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '4px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }
+      });
+      imgContainer.appendChild(img);
+      body.appendChild(imgContainer);
+
+    } else {
+      const response = await fetch(fileUrl);
+      if (!response.ok) throw new Error(`拉取文件数据失败: ${response.statusText}`);
+
+      if (ext === 'py') {
+        const text = await response.text();
+        spinner.remove();
+        
+        const escaped = escapeHtml(text);
+        const codeLines = escaped.split('\n').map((line, idx) => `
+          <div style="display:flex;line-height:1.6;font-family:'Fira Code','JetBrains Mono',monospace;font-size:14px;">
+            <span style="width:50px;color:#94a3b8;text-align:right;padding-right:16px;user-select:none;border-right:1px solid #e2e8f0;margin-right:16px;">${idx+1}</span>
+            <span style="white-space:pre-wrap;color:#334155;">${line || ' '}</span>
+          </div>
+        `).join('');
+
+        body.innerHTML = `
+          <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:20px;overflow-x:auto;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+            ${codeLines}
+          </div>
+        `;
+
+      } else if (ext === 'docx') {
+        const arrayBuffer = await response.arrayBuffer();
+        await loadLocalScript(`${pluginDir}/libs/mammoth.browser.min.js`);
+        spinner.remove();
+
+        const result = await window.mammoth.convertToHtml({ arrayBuffer });
+        body.innerHTML = `
+          <div class="docx-preview-container" style="background:#fff;max-width:850px;margin:0 auto;padding:48px 60px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-radius:8px;border:1px solid #e2e8f0;font-family:'Microsoft YaHei',SimSun,serif;line-height:1.8;color:#1e293b;">
+            ${result.value || '<p style="color:#94a3b8;text-align:center;">暂无可见文本内容</p>'}
+          </div>
+          <style>
+            .docx-preview-container p { margin-bottom: 1.2em; font-size: 15px; }
+            .docx-preview-container h1, .docx-preview-container h2, .docx-preview-container h3 { margin-top: 1.5em; margin-bottom: 0.5em; color: #0f172a; font-weight: 700; }
+            .docx-preview-container h1 { font-size: 24px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
+            .docx-preview-container h2 { font-size: 20px; }
+            .docx-preview-container h3 { font-size: 17px; }
+            .docx-preview-container table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+            .docx-preview-container th, .docx-preview-container td { border: 1px solid #cbd5e1; padding: 8px 12px; font-size: 14px; }
+            .docx-preview-container tr:nth-child(even) { background-color: #f8fafc; }
+            .docx-preview-container th { background-color: #f1f5f9; font-weight: 600; }
+            .docx-preview-container ul, .docx-preview-container ol { padding-left: 20px; margin-bottom: 1.2em; }
+          </style>
+        `;
+
+      } else if (ext === 'xlsx' || ext === 'xls') {
+        const arrayBuffer = await response.arrayBuffer();
+        await loadLocalScript(`${pluginDir}/libs/xlsx.full.min.js`);
+        spinner.remove();
+
+        const workbook = window.XLSX.read(arrayBuffer, { type: 'array' });
+        
+        let tabsHtml = '';
+        let sheetsHtml = '';
+        
+        workbook.SheetNames.forEach((sheetName, idx) => {
+          const isActive = idx === 0;
+          tabsHtml += `
+            <button class="sheet-tab-btn" data-sheet="${idx}" style="padding:10px 20px;border:none;background:${isActive ? '#fff' : '#f1f5f9'};color:${isActive ? STYLE.primaryColor : '#64748b'};font-weight:${isActive ? '600' : '500'};border-bottom:${isActive ? '3px solid ' + STYLE.primaryColor : 'none'};cursor:pointer;font-size:14px;border-top-left-radius:6px;border-top-right-radius:6px;transition:all 0.2s;">
+              📊 ${escapeHtml(sheetName)}
+            </button>
+          `;
+          const sheet = workbook.Sheets[sheetName];
+          const htmlTable = window.XLSX.utils.sheet_to_html(sheet);
+          sheetsHtml += `
+            <div class="sheet-content" id="sheet-content-${idx}" style="display:${isActive ? 'block' : 'none'};overflow:auto;padding:20px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;height:calc(100% - 60px);box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+              ${htmlTable}
+            </div>
+          `;
+        });
+
+        body.style.display = 'flex';
+        body.style.flexDirection = 'column';
+        body.style.gap = '12px';
+        body.style.height = '100%';
+        body.style.boxSizing = 'border-box';
+
+        body.innerHTML = `
+          <div class="sheet-tab-bar" style="display:flex;gap:4px;border-bottom:1px solid #e2e8f0;padding-left:10px;">
+            ${tabsHtml}
+          </div>
+          <div style="flex:1;position:relative;height:100%;">
+            ${sheetsHtml}
+          </div>
+          <style>
+            .sheet-content table { border-collapse: collapse; min-width: 100%; font-size: 13px; color: #334155; }
+            .sheet-content th, .sheet-content td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; }
+            .sheet-content tr:nth-child(even) { background-color: #f8fafc; }
+            .sheet-content th { background-color: #f1f5f9; font-weight: bold; color: #0f172a; }
+          </style>
+        `;
+
+        const tabBtns = body.querySelectorAll('.sheet-tab-btn');
+        tabBtns.forEach(btn => {
+          btn.addEventListener('click', () => {
+            const sheetIdx = btn.getAttribute('data-sheet');
+            tabBtns.forEach(b => {
+              b.style.background = '#f1f5f9';
+              b.style.color = '#64748b';
+              b.style.borderBottom = 'none';
+              b.style.fontWeight = '500';
+            });
+            btn.style.background = '#fff';
+            btn.style.color = STYLE.primaryColor;
+            btn.style.borderBottom = `3px solid ${STYLE.primaryColor}`;
+            btn.style.fontWeight = '600';
+
+            body.querySelectorAll('.sheet-content').forEach(content => {
+              content.style.display = 'none';
+            });
+            const activeContent = body.querySelector(`#sheet-content-${sheetIdx}`);
+            if (activeContent) activeContent.style.display = 'block';
+          });
+        });
+
+      } else if (ext === 'md') {
+        const text = await response.text();
+        spinner.remove();
+        await loadLocalScript(`${pluginDir}/libs/marked.min.js`);
+
+        const parsedHtml = window.marked.parse(text);
+        body.innerHTML = `
+          <div class="md-preview-container" style="background:#fff;max-width:850px;margin:0 auto;padding:40px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);border-radius:8px;border:1px solid #e2e8f0;font-family:system-ui,sans-serif;line-height:1.6;color:#1e293b;">
+            ${parsedHtml}
+          </div>
+          <style>
+            .md-preview-container p { margin-bottom: 1em; font-size: 15px; }
+            .md-preview-container h1, .md-preview-container h2, .md-preview-container h3 { margin-top: 1.5em; margin-bottom: 0.5em; color: #0f172a; font-weight: 700; }
+            .md-preview-container h1 { font-size: 24px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
+            .md-preview-container h2 { font-size: 20px; }
+            .md-preview-container h3 { font-size: 17px; }
+            .md-preview-container pre { background-color: #f1f5f9; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: monospace; }
+            .md-preview-container code { background-color: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 90%; }
+            .md-preview-container pre code { padding: 0; background-color: transparent; }
+            .md-preview-container table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+            .md-preview-container th, .md-preview-container td { border: 1px solid #cbd5e1; padding: 8px 12px; font-size: 14px; }
+            .md-preview-container tr:nth-child(even) { background-color: #f8fafc; }
+            .md-preview-container th { background-color: #f1f5f9; font-weight: 600; }
+            .md-preview-container blockquote { border-left: 4px solid #cbd5e1; padding-left: 16px; margin: 0 0 16px 0; color: #64748b; }
+          </style>
+        `;
+      } else {
+        throw new Error(`暂不支持文件类型: .${ext}`);
+      }
+    }
+  } catch (err) {
+    spinner.remove();
+    body.innerHTML = `
+      <div style="text-align:center;padding:48px;color:${STYLE.dangerColor};">
+        <span style="font-size: 48px; display: block; margin-bottom: 16px;">⚠️</span>
+        <span style="font-size: 16px; font-weight: 600;">预览失败</span>
+        <p style="color:#64748b;font-size:14px;margin-top:8px;">${escapeHtml(err.message)}</p>
+      </div>
+    `;
+  }
 }
 
 function formatDate(isoStr) {
@@ -1125,6 +1441,10 @@ async function renderTeacherTabPanel(domNode, frontendCtx) {
               : el('span', { style: { backgroundColor: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '600' } }, '待批改')
           ),
           el('div', { style: { display: 'flex', gap: '8px' } },
+            el('button', {
+              style: { padding: '4px 10px', backgroundColor: STYLE.primaryColor, border: 'none', color: '#fff', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '500' },
+              onClick: () => openFilePreview(sub.filename, sub.filePath, frontendCtx)
+            }, '👁️ 预览文件'),
             el('button', {
               style: { padding: '4px 10px', backgroundColor: '#fff', border: '1px solid ' + STYLE.borderColor, borderRadius: '4px', cursor: 'pointer', fontSize: '12px', color: STYLE.textPrimary },
               onClick: () => window.open(`/files${sub.filePath}`, '_blank')

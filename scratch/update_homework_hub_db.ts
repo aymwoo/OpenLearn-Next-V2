@@ -91,6 +91,23 @@ async function main() {
       path.join(pluginTargetDir, 'frontend.js')
     );
     
+    // Copy libs/ directory recursively
+    const sourceLibsDir = path.join(pluginSourceDir, 'libs');
+    const targetLibsDir = path.join(pluginTargetDir, 'libs');
+    if (fs.existsSync(sourceLibsDir)) {
+      if (!fs.existsSync(targetLibsDir)) {
+        fs.mkdirSync(targetLibsDir, { recursive: true });
+      }
+      const files = fs.readdirSync(sourceLibsDir);
+      for (const file of files) {
+        fs.copyFileSync(
+          path.join(sourceLibsDir, file),
+          path.join(targetLibsDir, file)
+        );
+      }
+      console.log(`Copied ${files.length} library files to active plugin directory`);
+    }
+    
     console.log('Update complete!');
   } finally {
     db.close();

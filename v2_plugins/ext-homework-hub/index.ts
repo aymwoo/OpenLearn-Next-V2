@@ -85,7 +85,7 @@ export default {
         const assignments = await Promise.all(
           rows.map(async (row) => {
             const submission = (await db.prepare(
-              `SELECT id, submitted_at, score, feedback FROM ${subTbl} WHERE assignment_id = ? AND student_id = ?`
+              `SELECT id, filename, file_path, submitted_at, score, feedback FROM ${subTbl} WHERE assignment_id = ? AND student_id = ?`
             ).get(row.id, actorId)) as Record<string, unknown> | undefined;
 
             return {
@@ -97,6 +97,8 @@ export default {
               teacherId: row.teacher_id,
               submission: submission ? {
                 id: submission.id,
+                filename: submission.filename,
+                filePath: submission.file_path,
                 submittedAt: submission.submitted_at,
                 score: submission.score,
                 feedback: submission.feedback
