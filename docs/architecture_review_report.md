@@ -382,6 +382,15 @@ WorkerRuntimeError            // 基类
 | `classroom.tool` | 课堂工具 |
 | `global.setting` | 全局设置页扩展（v5.1） |
 
+**学生端 `slotProps` 注入**：宿主渲染 `student.view` 扩展点时，自动通过 `slotProps` 注入当前登录学生 ID：
+
+```tsx
+// 插件前端组件直接通过 props 获取
+export default function MyPlugin({ studentId }: { studentId?: string }) {
+  // studentId 由宿主自动注入，无需额外请求
+}
+```
+
 `ExtensionPointRenderer` 是宿主渲染扩展点的统一入口——`App`、`NavigationSidebar`、`Dashboard` 等宿主组件通过它按 slot 动态渲染所有已注册扩展，每个扩展被独立包裹在 `ExtensionErrorBoundary` 中隔离崩溃。
 
 ### 8.4 宿主依赖共享网关
