@@ -108,10 +108,44 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
         if (cancelled) return;
 
         const jsContent = await frontendJsFile.async('string');
-        const blob = new Blob([jsContent], { type: 'application/javascript' });
+
+        // Preprocess JSX module: resolve bare imports via window.HostSharedDeps
+        const processedJs = jsContent
+          // react/jsx-runtime (JSX compiled output)
+          .replace(/import\s*\{\s*jsx\s*\}\s*from\s*['"]react\/jsx-runtime['"]/g,
+            'const jsx = (t,p,k) => { if(k!==void 0 && p) p.key=k; return window.HostSharedDeps.React.createElement(t,p); }')
+          .replace(/import\s*\{\s*jsxs\s*\}\s*from\s*['"]react\/jsx-runtime['"]/g,
+            'const jsxs = (t,p,k) => { if(k!==void 0 && p) p.key=k; return window.HostSharedDeps.React.createElement(t,p); }')
+          .replace(/import\s*\{\s*Fragment\s*\}\s*from\s*['"]react\/jsx-runtime['"]/g,
+            'const Fragment = window.HostSharedDeps.React.Fragment')
+          // react named imports
+          .replace(/import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]react['"]/g, (_, names) =>
+            names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.React.${n.trim()}`).join('; '))
+          // react default import
+          .replace(/import\s+(\w+)\s+from\s*['"]react['"]/g, 'const $1 = window.HostSharedDeps.React')
+          // react-dom named imports
+          .replace(/import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]react-dom['"]/g, (_, names) =>
+            names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.ReactDOM.${n.trim()}`).join('; '))
+          // react-dom default import  
+          .replace(/import\s+(\w+)\s+from\s*['"]react-dom['"]/g, 'const $1 = window.HostSharedDeps.ReactDOM')
+          // react-dom/client
+          .replace(/import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]react-dom\/client['"]/g, (_, names) =>
+            names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.ReactDOM.${n.trim()}`).join('; '))
+          // recharts
+          .replace(/import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]recharts['"]/g, (_, names) =>
+            names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.Recharts.${n.trim()}`).join('; '))
+          .replace(/import\s+(\w+)\s+from\s*['"]recharts['"]/g, 'const $1 = window.HostSharedDeps.Recharts')
+          // lucide-react
+          .replace(/import\s*\{\s*([^}]+)\s*\}\s*from\s*['"]lucide-react['"]/g, (_, names) =>
+            names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.LucideReact.${n.trim()}`).join('; '))
+          .replace(/import\s+(\w+)\s+from\s*['"]lucide-react['"]/g, 'const $1 = window.HostSharedDeps.LucideReact')
+          // Handle export default -> assign to a variable
+          .replace(/export\s+default\s+function\s+(\w+)/g, 'function $1');
+
+        const blob = new Blob([processedJs], { type: 'application/javascript' });
         blobUrl = URL.createObjectURL(blob);
 
-        // Dynamically import ESM module
+        // Dynamically import ESM module (bare imports resolved via HostSharedDeps)
         const module = await import(/* @vite-ignore */ blobUrl);
         const panelsList: any[] = [];
 
