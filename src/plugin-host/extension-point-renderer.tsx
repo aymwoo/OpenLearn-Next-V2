@@ -161,7 +161,7 @@ export function ExtensionPointRenderer({
             <Suspense fallback={fallback ?? <LoadingSkeleton />}>
               {isReact ? (
                 React.createElement(
-                  (() => { const probe = ext.component(); return typeof probe?.then === 'function' ? React.lazy(ext.component) : probe; })(),
+                  (() => { const probe = ext.component(); return typeof probe?.then === 'function' ? React.lazy(ext.component) : ext.component; })(),
                   { route: ext.route || route, ...ext.slotProps, ...slotProps },
                 )
               ) : (
