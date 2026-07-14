@@ -13,3 +13,7 @@ coverage/
 .pnpmfile.cjs
 
 /.codegraph
+
+# Python virtual environment and Sphinx build artifacts
+.venv/
+docs/_build/
