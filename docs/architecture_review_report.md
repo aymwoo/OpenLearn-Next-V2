@@ -404,6 +404,8 @@ export default function MyPlugin({ studentId }: { studentId?: string }) {
 | `HostSharedDeps.Recharts` | recharts |
 | `HostSharedDeps.LucideReact` | lucide-react |
 
+> **⚠️ JSX 运行时**：HostSharedDeps 仅提供经典 React 运行时，不包含 `react/jsx-runtime`。插件前端必须使用 `"jsx": "react"`（经典模式），不能使用 `"jsx": "react-jsx"`（automatic runtime）。
+
 ---
 
 ## 9. 安全与权限模型

@@ -129,6 +129,7 @@ import { ICommandBusServiceToken, IDatabaseToken } from '@openlearn/plugin-sdk';
 const commandBus = await ctx.resolve(ICommandBusServiceToken);
 const db = await ctx.resolve(IDatabaseToken);
 
+
 // 也可以通过 ctx.services 直接访问 7 个内核服务
 const eventBus = ctx.services.eventBus;
 const ai = ctx.services.ai;
@@ -263,6 +264,7 @@ interface ClassroomTool {
 ```typescript
 import { IDatabaseToken } from '@openlearn/plugin-sdk';
 const db = await ctx.resolve(IDatabaseToken);
+
 ```
 
 ### 3.3 命令-事件-Action 三件套
@@ -378,6 +380,7 @@ export default {
     // DI 解析数据库访问
     const { IDatabaseToken } = await import('@openlearn/plugin-sdk');
     const db = await ctx.resolve(IDatabaseToken);
+
 
     // ── 1. 创建投票表 ──
     await ctx.db.ensureTable('polls', `
@@ -596,6 +599,8 @@ interface PlatformCommand<T = unknown> {
 | `IStorageServiceToken` | `@openlearn/core:IStorageService` | `IStorageService` | K-V 存储 |
 | `IAIServiceToken` | `@openlearn/core:IAIService` | `IAIService` | AI 文本生成 |
 | `IDatabaseToken` | `@openlearn/core:IDatabase` | `Database` (better-sqlite3) | 直接 SQL 访问 |
+
+> **⚠️ better-sqlite3 版本差异**：`ctx.resolve(IDatabaseToken)` 返回宿主进程的 `better-sqlite3` `Database` 实例。可用 API 取决于宿主安装版本，`exec()` 仅 v9.0+ 可用，建议优先使用 `prepare().run()` / `.get()` / `.all()`。
 | `IPluginHostToken` | `@openlearn/core:IPluginHost` | `PluginHost` | 插件主机管理 |
 | `ISemesterGradeServiceToken` | `@openlearn/core:ISemesterGradeService` | `ISemesterGradeService` | 学期成绩管理 |
 
@@ -605,6 +610,7 @@ interface PlatformCommand<T = unknown> {
 ```typescript
 import { IDatabaseToken } from '@openlearn/plugin-sdk';
 const db = await ctx.resolve(IDatabaseToken);
+
 ```
 
 ### 5.3 ICommandBusService
@@ -929,6 +935,22 @@ const result = await ctx.invokeCommand('poll.get_results', { pollId: 'xxx' });
 ```
 
 ### 6.6 宿主依赖共享网关 (HostSharedDeps)
+
+> **⚠️ JSX 运行时限制**：`HostSharedDeps` 仅提供 `React` 和 `ReactDOM` 经典运行时，**不包含 `react/jsx-runtime`**。插件前端代码必须使用经典 JSX 转换（`"jsx": "react-jsx"` 不可用）：
+> 
+> ```json
+> // tsconfig.json — 插件项目
+> { "compilerOptions": { "jsx": "react" } }  // 经典模式，不是 "react-jsx"
+> ```
+> 
+> 或 esbuild 配置：
+> ```javascript
+> esbuild.build({
+>   jsxFactory: "React.createElement",
+>   jsxFragment: "React.Fragment",
+>   external: ["react", "react-dom", "recharts", "lucide-react"],
+> });
+> ```
 
 为避免每个第三方插件前端重复打包庞大的基础库，OpenLearnV2 提供了 **宿主依赖共享网关 (HostSharedDeps)**。全局 `window.HostSharedDeps` 暴露以下对象：
 
@@ -1369,6 +1391,7 @@ export default {
     const actionRegistry = ctx.services.actionRegistry;
     const eventBus = ctx.services.eventBus;
     const db = await ctx.resolve(IDatabaseToken);
+
 
     // TODO: 注册 Actions 和 Handlers
 
