@@ -11,7 +11,8 @@
 7. [安全与权限](#7-安全与权限)
 8. [高级特性](#8-高级特性)
 9. [测试与调试](#9-测试与调试)
-10. [发布与分发](#10-发布与分发)
+10. [发布前自检清单](#10-发布前自检清单)
+11. [发布与分发](#11-发布与分发)
 
 ---
 
@@ -200,6 +201,38 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 - **INACTIVE**：已停用，可通过 toggle 重新激活
 - **ERROR**：激活失败，可重试或卸载
 
+### 2.6 版本兼容性速查表
+
+开发插件前，先确认目标 OpenLearn 版本。以下特性按版本分组，选择适合你的目标版本。
+
+**API 特性版本要求：**
+
+| 特性 | 最低版本 | 说明 |
+|------|----------|------|
+| `ctx.log` | 2.5 | 结构化日志（debug/info/warn/error），自动注入 pluginId 和 timestamp |
+| `ctx.config` | 3.0 | 类型安全的配置读取，配合 manifest.configuration 声明 |
+| `ctx.provide()` | 3.0 | 向 DI 容器注册自定义服务供其他插件消费 |
+| `ctx.require()` | 5.1 | 引用主应用白名单共享模块（recharts、jspdf 等） |
+| `ctx.invokeCommand()`（前端） | 5.1 | 前端直接调用后端 CommandBus |
+| `teacher.panel` 扩展槽位 | 5.1 | 教师独立全宽管理面板 |
+| `student.fullscreen` 扩展槽位 | 5.1 | 学生全屏视图/考试模式 |
+| `global.setting` 扩展槽位 | 5.1 | 全局设置页扩展 |
+
+**扩展槽位版本可用性一览：**
+
+| 槽位 | 最低版本 | 适用角色 |
+|------|----------|----------|
+| `teacher.tab` | 1.0 | 教师 |
+| `teacher.dashboard.widget` | 1.0 | 教师 |
+| `student.view` | 1.0 | 学生 |
+| `student.lesson.tool` | 1.0 | 学生 |
+| `classroom.tool` | 1.0 | 课堂教学 |
+| `teacher.panel` | 5.1 | 教师 |
+| `student.fullscreen` | 5.1 | 学生 |
+| `global.setting` | 5.1 | 管理员 |
+
+> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^5.1.0"`。安装时 PluginHost 自动检查兼容性。
+
 ---
 
 ## 3. 插件结构详解
@@ -329,6 +362,20 @@ await eventBus.publish({
   payload: { /* 业务数据 */ },
   timestamp: Date.now(),
   correlationId: command.id,  // 关联原始命令
+});
+```
+
+**⚠️ classroomTools 必须注册 Handler：**
+
+`classroomTools[].commandType` 声明了教师点击工具按钮时执行的命令。**必须**在服务端 `activate()` 中用 `commandBus.registerHandler()` 注册对应的处理器，否则系统会报 `No handler registered for command: xxx`。
+
+即使命令不执行实际业务逻辑（仅用于触发前端面板打开），也需注册一个空 handler：
+
+```typescript
+await commandBus.registerHandler('myplugin.open_panel', {
+  async execute() {
+    return { panel: 'teacher' };
+  },
 });
 ```
 
@@ -729,6 +776,25 @@ interface PluginDatabaseAPI {
 
 示例：`ctx.db.table('polls')` 返回 `plugin_@openlearn/plugin-poll_polls`。
 
+**从 DI 获取原始 Database 实例的方法限制：**
+
+`ctx.resolve(IDatabaseToken)` 返回宿主编译的 `better-sqlite3` `Database` 实例。由于宿主可能在较老版本的 better-sqlite3 上运行，建议只使用以下兼容方法：
+
+| 方法 | better-sqlite3 版本要求 | 说明 |
+|------|------------------------|------|
+| `prepare().run()` | 全版本 | 执行单条 SQL |
+| `prepare().get()` | 全版本 | 查询单行 |
+| `prepare().all()` | 全版本 | 查询多行 |
+| `exec()` | >= 9.0.0 | 批量执行多条 SQL（**可能不可用**） |
+| `pragma()` | >= 4.0.0 | PRAGMA 语句 |
+| `transaction()` | 全版本 | 事务包装 |
+
+**最佳实践：**
+
+- 使用 `prepare().run()` 逐条执行，代替 `exec()` 批量执行
+- 使用 `ctx.db.ensureTable()` + `ctx.db.table()` 管理表名，不要手动拼接
+- 数据库操作优先使用 `ctx.db` PluginDatabaseAPI 封装，仅在需要精细控制时直接操作 Database 实例
+
 ### 5.10 IPluginLogger（V2.5 新增）
 
 ```typescript
@@ -973,6 +1039,60 @@ esbuild.build({
 });
 ```
 
+### 6.7 前端 JSX 转换配置（重要）
+
+宿主通过 `window.HostSharedDeps` 提供的基础库：
+
+| 共享对象 | NPM 包 | 提供的内容 |
+|----------|--------|-----------|
+| `HostSharedDeps.React` | `react` | React 对象（包含 `createElement`） |
+| `HostSharedDeps.ReactDOM` | `react-dom` | ReactDOM 对象 |
+| `HostSharedDeps.Recharts` | `recharts` | Recharts 组件库 |
+| `HostSharedDeps.LucideReact` | `lucide-react` | Lucide 图标库 |
+
+**宿主不提供** `react/jsx-runtime` 子路径。因此构建前端时**必须使用经典 JSX 转换**（`React.createElement`），不能使用自动 JSX 运行时。
+
+**tsconfig.json 配置：**
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react"
+  }
+}
+```
+
+> `"jsx"` 必须是 `"react"`，不能是 `"react-jsx"`。
+
+**esbuild 构建注意事项：**
+
+esbuild 默认读取项目根目录的 `tsconfig.json`。如果 tsconfig 中 `"jsx"` 设为 `"react-jsx"`，无论 build API 中如何设置 `jsx: 'transform'` 或 `jsxFactory`，都会被 tsconfig 覆盖，最终产物仍会包含 `import ... from "react/jsx-runtime"` 导致运行时错误。
+
+**推荐 esbuild 构建配置：**
+
+```javascript
+import esbuild from 'esbuild';
+
+esbuild.build({
+  entryPoints: ['src/frontend.tsx'],
+  bundle: true,
+  outfile: 'dist/frontend.js',
+  external: ['react', 'react-dom', 'recharts', 'lucide-react'],
+  format: 'esm',
+  platform: 'browser',
+  jsxFactory: 'React.createElement',
+  jsxFragment: 'React.Fragment',
+});
+```
+
+**常见错误排查：**
+
+| 错误信息 | 原因 | 解决方法 |
+|----------|------|----------|
+| `Failed to resolve module specifier "react/jsx-runtime"` | `tsconfig.json` 中 `jsx` 为 `"react-jsx"` | 改为 `"react"` |
+| `React is not defined` | 前端未声明 `react` 为 `peerDependency` 或 `external` | 在构建配置中添加 `external: ['react']` |
+| `process is not defined` | 构建 `platform` 未设为 `browser` | 设置 `platform: 'browser'` |
+
 ---
 
 ## 7. 安全与权限
@@ -1197,9 +1317,45 @@ describe('my-plugin', () => {
 
 ---
 
-## 10. 发布与分发
+## 10. 发布前自检清单
 
-### 10.1 使用 CLI 脚手架
+在打包插件 ZIP 前，逐项检查以下内容以避免常见问题：
+
+### Manifest 检查
+
+- [ ] `id` 格式为 `@scope/name`，全局唯一
+- [ ] `engines.openlearn` 版本号**不高于**目标系统的实际版本
+- [ ] `requires` 中所有服务 Token 的版本前缀正确
+- [ ] `classroomTools` 中每个 `commandType` 都有对应的 `registerHandler`
+
+### 服务端检查
+
+- [ ] 每个 Action（`actionRegistry.register`）都有对应的 Command Handler（`commandBus.registerHandler`）
+- [ ] `ctx.db.ensureTable` 创建的每个表都有注释说明用途
+- [ ] 数据库操作只使用 `prepare().run()` / `.get()` / `.all()`，避免 `exec()`、`pragma()` 等新版本方法
+- [ ] 跨插件调用（如 VFS）在 `capabilitiesProposed` 中声明了对应权限
+- [ ] `activate()` 中所有可能出现异常的操作包裹了 `try/catch`
+
+### 前端检查
+
+- [ ] `tsconfig.json` 中 `jsx` 为 `"react"`（非 `"react-jsx"`）
+- [ ] `react` / `react-dom` / `recharts` / `lucide-react` 标记为 `external`（由 HostSharedDeps 提供）
+- [ ] 不直接 import React hooks 之外的 React 子路径（如 `react/jsx-runtime`）
+- [ ] 使用的扩展点槽位在目标系统版本中存在（参考 [2.6 版本兼容性速查表](#26-版本兼容性速查表)）
+- [ ] 前端调用的命令在服务端有对应的 handler
+
+### 构建检查
+
+- [ ] `npx @openlearn/plugin-sdk build` 无报错
+- [ ] ZIP 产物包含 `manifest.json` + `index.js` +（可选）`frontend.js`
+- [ ] 解压 ZIP 后检查 `index.js` 不包含禁用的裸导入（参考 [11.4 常见打包错误与排查](#114-常见打包错误与排查)）
+- [ ] 解压 ZIP 后检查 `frontend.js` 不包含 `import ... from "react/jsx-runtime"`
+
+---
+
+## 11. 发布与分发
+
+### 11.1 使用 CLI 脚手架
 
 OpenLearnV2 提供 `@openlearn/plugin-sdk` CLI 工具快速创建项目：
 
@@ -1218,7 +1374,7 @@ npx @openlearn/plugin-sdk build
 
 支持三种模板：`server-only`、`full-stack`、`frontend-only`。
 
-### 10.2 手动打包为 ZIP
+### 11.2 手动打包为 ZIP
 
 ```bash
 # 插件目录结构
@@ -1231,18 +1387,18 @@ my-plugin/
 zip -r my-plugin.zip my-plugin/
 ```
 
-### 10.3 安装 ZIP 插件
+### 11.3 安装 ZIP 插件
 
 在「系统设置」→「插件中心」上传 ZIP 文件，系统自动：
 1. 解压 ZIP
 2. 提取 index.js 作为入口
 3. 解析 manifest
-4. **使用 esbuild 的 `openlearn-token-enforcer` 插件进行二次扫描**（见 10.4）
+4. **使用 esbuild 的 `openlearn-token-enforcer` 插件进行二次扫描**（见 11.4）
 5. 验证依赖（SemVer 兼容性检查）
 6. 存入数据库
 7. 可选：立即激活
 
-### 10.4 常见打包错误与排查 ⚠️
+### 11.4 常见打包错误与排查
 
 #### 错误：`Import of "<module>" is not allowed`
 
@@ -1342,7 +1498,7 @@ grep -E '^import .+ from "[^@\./]' dist/index.js
 # 有输出 = 有问题；无输出 = 通过
 ```
 
-### 10.5 版本兼容性
+### 11.5 版本兼容性
 
 插件依赖声明支持 SemVer 范围：
 - `^1.0.0` — 兼容 1.x.x
