@@ -2131,6 +2131,67 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       res.status(500).json({ error: e.message });
     }
   });
+  
+  // VFS File Download Router (V5.1+)
+  app.get('/files/*', (req, res) => {
+    try {
+      let filePath = req.params[0] || '';
+      if (!filePath.startsWith('/')) {
+        filePath = '/' + filePath;
+      }
+
+      const parts = filePath.split('/').filter(Boolean);
+      if (parts.length === 0) {
+        return res.status(400).send('Invalid file path');
+      }
+
+      let currentParentId: string | null = null;
+      let foundNode: any = null;
+
+      for (let i = 0; i < parts.length; i++) {
+        const name = parts[i];
+        const isLast = i === parts.length - 1;
+        const type = isLast ? 'file' : 'dir';
+        
+        const node = kernelContainer.db.prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?')
+          .get(currentParentId, name, type) as any;
+          
+        if (!node) {
+          return res.status(404).send(`File not found: ${filePath}`);
+        }
+        
+        if (isLast) {
+          foundNode = node;
+        } else {
+          currentParentId = node.id;
+        }
+      }
+
+      if (!foundNode) {
+        return res.status(404).send(`File not found: ${filePath}`);
+      }
+
+      const filename = parts[parts.length - 1];
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+
+      const ext = path.extname(filename).toLowerCase();
+      const binaryExtensions = ['.pdf', '.xlsx', '.xls', '.zip', '.png', '.jpg', '.jpeg', '.gif', '.mp4', '.mp3'];
+      
+      const content = foundNode.content || '';
+      if (binaryExtensions.includes(ext)) {
+        try {
+          const buffer = Buffer.from(content, 'base64');
+          return res.send(buffer);
+        } catch (e) {
+          // fallback
+        }
+      }
+
+      res.send(content);
+    } catch (e: any) {
+      res.status(500).send(e.message);
+    }
+  });
 
   app.get('/api/courseware/:id', (req, res) => {
     try {

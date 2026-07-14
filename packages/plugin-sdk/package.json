@@ -2,6 +2,28 @@
   "name": "@openlearn/plugin-sdk",
   "version": "3.2.0",
   "description": "TypeScript types, DI tokens, CLI scaffolding & build tool for OpenLearn plugin development",
+  "keywords": [
+    "educational",
+    "lms",
+    "openlearn",
+    "plugin",
+    "sdk",
+    "types"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aymwoo/OpenLearn-Next-V2",
+    "directory": "packages/plugin-sdk"
+  },
+  "bin": {
+    "openlearn-plugin-sdk": "cli.mjs"
+  },
+  "files": [
+    "dist/",
+    "cli.mjs",
+    "scaffold/"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,40 +34,19 @@
       "default": "./dist/index.js"
     }
   },
-  "files": [
-    "dist/",
-    "cli.mjs",
-    "scaffold/"
-  ],
-  "peerDependencies": {
-    "zod": ">=4"
-  },
-  "keywords": [
-    "openlearn",
-    "plugin",
-    "sdk",
-    "types",
-    "educational",
-    "lms"
-  ],
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/openlearn/openlearnv2",
-    "directory": "packages/plugin-sdk"
-  },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
-  "bin": {
-    "openlearn-plugin-sdk": "cli.mjs"
+  "scripts": {
+    "build": "node build.mjs",
+    "prepublishOnly": "node build.mjs"
   },
   "dependencies": {
     "esbuild": "^0.25.0",
     "jszip": "^3.10.1"
   },
-  "scripts": {
-    "build": "node build.mjs",
-    "prepublishOnly": "node build.mjs"
+  "peerDependencies": {
+    "zod": ">=4"
   }
 }

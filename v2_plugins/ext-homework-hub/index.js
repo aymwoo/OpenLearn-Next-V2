@@ -1,4 +1,4 @@
-// index.ts
+// v2_plugins/ext-homework-hub/index.ts
 var IDatabaseToken = { name: "@openlearn/core:IDatabase", version: "1.0.0" };
 var index_default = {
   manifest: {
@@ -78,13 +78,12 @@ var index_default = {
         const db = await ctx.resolve(IDatabaseToken);
         const tbl = ctx.db.table("submissions");
         const destPath = `/homework/${assignmentId}/${studentId}/${filename}`;
-        const buffer = Buffer.from(fileContentBase64, "base64");
         await ctx.services.commandBus.execute({
           id: `vfs_${Date.now()}`,
           type: "vfs.write_file",
           payload: {
             path: destPath,
-            content: buffer
+            content: fileContentBase64
           }
         });
         const submissionId = `${assignmentId}_${studentId}`;
@@ -207,7 +206,7 @@ var index_default = {
           type: "vfs.write_file",
           payload: {
             path: downloadPath,
-            content: buf
+            content: buf.toString("base64")
           }
         });
         ctx.log?.info("\u6210\u7EE9\u5355\u5BFC\u51FA\u5B8C\u6210", { assignmentId, fileName: downloadFileName }) ?? console.log(`[HomeworkHub] \u6210\u7EE9\u5355\u5BFC\u51FA\u5B8C\u6210: ${downloadFileName}`);

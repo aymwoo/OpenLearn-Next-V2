@@ -121,14 +121,13 @@ export default {
 
         // 将文件写入 VFS
         const destPath = `/homework/${assignmentId}/${studentId}/${filename}`;
-        const buffer = Buffer.from(fileContentBase64, 'base64');
 
         await ctx.services.commandBus.execute({
           id: `vfs_${Date.now()}`,
           type: 'vfs.write_file',
           payload: {
             path: destPath,
-            content: buffer
+            content: fileContentBase64
           }
         } as any);
 
@@ -299,7 +298,7 @@ export default {
           type: 'vfs.write_file',
           payload: {
             path: downloadPath,
-            content: buf
+            content: buf.toString('base64')
           }
         } as any);
 

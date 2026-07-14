@@ -110,7 +110,9 @@ async function renderTeacherPanel(domNode, frontendCtx) {
   });
 
   // 创建作业
-  domNode.querySelector('#btn-submit-create').addEventListener('click', async () => {
+  const submitBtn = domNode.querySelector('#btn-submit-create');
+  submitBtn.addEventListener('click', async () => {
+    if (submitBtn.disabled) return;
     const title = domNode.querySelector('#input-title').value.trim();
     const description = domNode.querySelector('#input-desc').value.trim();
     const deadline = domNode.querySelector('#input-deadline').value;
@@ -120,6 +122,8 @@ async function renderTeacherPanel(domNode, frontendCtx) {
       return;
     }
 
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ 发布中...';
     try {
       await frontendCtx.invokeCommand('create_assignment', { title, description, deadline });
       showMessage(msgBox, `作业「${title}」发布成功！`, 'success');
@@ -130,6 +134,9 @@ async function renderTeacherPanel(domNode, frontendCtx) {
       await loadAssignmentList(listContainer, frontendCtx, msgBox, 'teacher');
     } catch (err) {
       showMessage(msgBox, `创建失败: ${err.message}`, 'error');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '✅ 发布作业';
     }
   });
 
@@ -429,12 +436,15 @@ function buildAssignmentCard(asgn, frontendCtx, msgBox, role, listContainer) {
       const uploadBtn = el('button', {
         style: btnStyle(STYLE.primaryColor),
         onClick: async () => {
+          if (uploadBtn.disabled) return;
           const file = fileInput.files?.[0];
           if (!file) {
             showMessage(msgBox, '请先选择文件', 'warn');
             return;
           }
 
+          uploadBtn.disabled = true;
+          uploadBtn.textContent = '⏳ 提交中...';
           try {
             const base64 = await readFileAsBase64(file);
             const base64Content = base64.split(',')[1];
@@ -449,6 +459,9 @@ function buildAssignmentCard(asgn, frontendCtx, msgBox, role, listContainer) {
             setTimeout(() => loadAssignmentList(listContainer, frontendCtx, msgBox, 'student'), 800);
           } catch (err) {
             showMessage(msgBox, `提交失败: ${err.message}`, 'error');
+          } finally {
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = '📤 确认提交作业';
           }
         }
       }, '📤 确认提交作业');
