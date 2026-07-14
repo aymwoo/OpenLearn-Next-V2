@@ -101,13 +101,14 @@ export interface ExtensionPointRendererProps {
  */
 function DOMExtensionWrapper({ ext, route, slotProps }: { ext: any; route?: string; slotProps?: any }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const serializedProps = JSON.stringify(slotProps || {});
   
   React.useEffect(() => {
     if (containerRef.current && typeof ext.render === 'function') {
       containerRef.current.innerHTML = '';
       Promise.resolve(ext.render(containerRef.current, { route, ...slotProps })).catch(console.error);
     }
-  }, [ext, route, slotProps]);
+  }, [ext, route, serializedProps]);
 
   return <div ref={containerRef} className="w-full h-full min-h-0" />;
 }
