@@ -147,7 +147,7 @@ export function ExtensionPointRenderer({
 
         return (
           <ExtensionErrorBoundary
-            key={ext.id}
+            key={`${ext.pluginId}/${ext.id}`}
             fallback={
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
                 <p>
@@ -161,7 +161,7 @@ export function ExtensionPointRenderer({
             <Suspense fallback={fallback ?? <LoadingSkeleton />}>
               {isReact ? (
                 React.createElement(
-                  React.lazy(ext.component),
+                  React.lazy(() => { const r = ext.component(); return typeof r?.then === 'function' ? r : Promise.resolve({ default: r }); }),
                   { route: ext.route || route, ...ext.slotProps, ...slotProps },
                 )
               ) : (
