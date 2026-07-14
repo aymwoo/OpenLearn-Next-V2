@@ -146,6 +146,10 @@ export class WorkerRegistry {
     instance.worker.on('exit', (code) => {
       if (code !== 0 && this.workers.has(pluginId)) {
         const entry = this.workers.get(pluginId)!;
+        if (entry.status === 'terminating') {
+          // Intentionally terminated, not a crash!
+          return;
+        }
         entry.status = 'crashed';
         console.error(
           `[WorkerRegistry] Worker for "${pluginId}" exited with code ${code}`,
