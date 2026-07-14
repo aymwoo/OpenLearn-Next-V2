@@ -97,11 +97,10 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
   useEffect(() => {
     if (step !== 3 || !zipObj || !hasFrontend) return;
 
-    let blobUrl = '';
+    let cancelled = false;
     const originalFetch = window.fetch;
 
     const setupPreviewSandbox = async () => {
-      let blobUrl = '';
       try {
         const frontendJsFile = zipObj.file('frontend.js');
         if (!frontendJsFile) return;
