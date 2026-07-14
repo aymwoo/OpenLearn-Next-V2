@@ -14,6 +14,7 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
   const [step, setStep] = useState(0);
   const [manifest, setManifest] = useState<any>(null);
   const [capabilities, setCapabilities] = useState<string[]>([]);
+  const [zipFiles, setZipFiles] = useState<Array<{name:string;size:number}>>([]);
   const [contributes, setContributes] = useState<any>(null);
   const [hasFrontend, setHasFrontend] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -28,20 +29,6 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
   const [registeredPanels, setRegisteredPanels] = useState<any[]>([]);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
-  // Mock database element data for the Live UI Preview
-  const [mockData, setMockData] = useState<any>({
-    question: '这是一道用于 UI 预览的选择题，你觉得这个向导如何？',
-    options: ['A. 极具科技感，惊艳', 'B. 流程清晰，安全有保障', 'C. 能够实时预览，非常赞', 'D. 都是'],
-    quiz_score: {
-      'A. 极具科技感，惊艳': 5,
-      'B. 流程清晰，安全有保障': 3,
-      'C. 能够实时预览，非常赞': 4,
-      'D. 都是': 3
-    },
-    quiz_submitting_users: ['s1', 's2', 's3', 's4']
-  });
-
-  // Reset wizard state when opening a new file
   useEffect(() => {
     if (isOpen && file) {
       setStep(0);
@@ -53,7 +40,7 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
       setExecutionMode('worker');
       setZipObj(null);
       setError(null);
-      setRegisteredPanels([]);
+      setRegisteredPanels([]); setZipFiles([]);
       parseZip(file);
     }
   }, [isOpen, file]);
@@ -93,188 +80,48 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
     }
   };
 
-  // Run the frontend.js inside a mock micro-frontend sandbox for UI previewing
+  // Show ZIP file listing as static preview (dynamic sandbox execution skipped)
   useEffect(() => {
     if (step !== 3 || !zipObj || !hasFrontend) return;
 
-    let cancelled = false;
-    const originalFetch = window.fetch;
-
-    const setupPreviewSandbox = async () => {
-      let blobUrl = '';
+    (async () => {
       try {
         const frontendJsFile = zipObj.file('frontend.js');
-        if (!frontendJsFile) return;
-        if (cancelled) return;
+        const frontendSize = frontendJsFile ? (await frontendJsFile.async('string')).length : 0;
 
-        const jsContent = await frontendJsFile.async('string');
-
-        // Preprocess JSX module: resolve bare imports via window.HostSharedDeps
-        const processedJs = jsContent
-          // react/jsx-runtime: single or combined imports
-          .replace(/import\s*\{([^}]+)\}\s*from\s*['\"]react\/jsx-runtime['\"]/g, (_, names) => {
-            return names.split(',').map(n => {
-              const name = n.trim();
-              if (name === 'jsx') return 'const jsx = (t,p,k) => { if(k!==void 0 && p) p.key=k; return window.HostSharedDeps.React.createElement(t,p); }';
-              if (name === 'jsxs') return 'const jsxs = (t,p,k) => { if(k!==void 0 && p) p.key=k; return window.HostSharedDeps.React.createElement(t,p); }';
-              if (name === 'Fragment') return 'const Fragment = window.HostSharedDeps.React.Fragment';
-              return `const ${name} = void 0`;
-            }).join('; ');
-          })
-          // react, react-dom, recharts, lucide-react: combined default+named
-          .replace(/import\s+(\w+)\s*,\s*\{([^}]+)\}\s*from\s*['\"](react|react-dom|react-dom\/client|recharts|lucide-react)['\"]/g,
-            (_, def, names, pkg) => {
-              const m = {react:'React','react-dom':'ReactDOM','react-dom/client':'ReactDOM',recharts:'Recharts','lucide-react':'LucideReact'}[pkg]||pkg;
-              return `const ${def} = window.HostSharedDeps.${m}; ` + names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.${m}.${n.trim()}`).join('; ');
-            })
-          // named imports from known packages
-          .replace(/import\s*\{([^}]+)\}\s*from\s*['\"](react|react-dom|react-dom\/client|recharts|lucide-react)['\"]/g,
-            (_, names, pkg) => {
-              const m = {react:'React','react-dom':'ReactDOM','react-dom/client':'ReactDOM',recharts:'Recharts','lucide-react':'LucideReact'}[pkg]||pkg;
-              return names.split(',').map(n => `const ${n.trim()} = window.HostSharedDeps.${m}.${n.trim()}`).join('; ');
-            })
-          // default imports from known packages
-          .replace(/import\s+(\w+)\s+from\s*['\"](react|react-dom|react-dom\/client|recharts|lucide-react)['\"]/g,
-            (_, name, pkg) => {
-              const m = {react:'React','react-dom':'ReactDOM','react-dom/client':'ReactDOM',recharts:'Recharts','lucide-react':'LucideReact'}[pkg]||pkg;
-              return `const ${name} = window.HostSharedDeps.${m}`;
-            })
-          // namespace imports
-          .replace(/import\s+\*\s+as\s+(\w+)\s+from\s*['\"]([^'\"]+)['\"]/g,
-            (_, name, pkg) => {
-              const m = {react:'React','react-dom':'ReactDOM','react-dom/client':'ReactDOM',recharts:'Recharts','lucide-react':'LucideReact'}[pkg];
-              if (m) return `const ${name} = window.HostSharedDeps.${m}`;
-              return `/* import * as ${name} from '${pkg}' — stripped */`;
-            })
-          // re-exports: export { X } from 'pkg'
-          .replace(/export\s*\{([^}]+)\}\s*from\s*['\"]([^'\"]+)['\"]/g, (_, names, pkg) => {
-              const m = {react:'React','react-dom':'ReactDOM','react-dom/client':'ReactDOM','react/jsx-runtime':'React',recharts:'Recharts','lucide-react':'LucideReact'}[pkg];
-              if (!m) return `/* export {${names}} from '${pkg}' — stripped */`;
-              return names.split(',').map(n => { const parts = n.trim().split(/\s+as\s+/); const name = parts[0].trim(); return `const ${parts[parts.length-1].trim()} = window.HostSharedDeps.${m}.${name}`; }).join('; ');
-            })
-          // export default function/class
-          .replace(/export\s+default\s+(function|class)\s+(\w+)/g, '$1 $2')
-          .replace(/export\s+default\s+/g, 'const _default = ')
-          // catch-all: strip any remaining bare import (module not starting with / . ..)
-          .replace(/import\s+[^;]+\s+from\s*['\"](?!\/|\.)([^'\"]+)['\"]\s*;?/g, "/* stripped import from '$1' */")
-          .replace(/import\s*['\"](?!\/|\.)([^'\"]+)['\"]\s*;?/g, "/* stripped side-effect import '$1' */");
-
-        const blob = new Blob([processedJs], { type: 'application/javascript' });
-        blobUrl = URL.createObjectURL(blob);
-
-        // Dynamically import ESM module (bare imports resolved via HostSharedDeps)
-        const module = await import(/* @vite-ignore */ blobUrl);
-        const panelsList: any[] = [];
-
-        // Mock Frontend Context Registry
-        const mockCtx = {
-          registerPanel: (config: any) => {
-            panelsList.push(config);
-          },
-          services: {
-            commandBus: {
-              execute: async (cmd: any) => {
-                alert(lang === 'zh' 
-                  ? `[模拟指令派发成功]\n类型: ${cmd.type}\n负载: ${JSON.stringify(cmd.payload, null, 2)}`
-                  : `[Mock Command Executed]\nType: ${cmd.type}\nPayload: ${JSON.stringify(cmd.payload, null, 2)}`
-                );
-                return { success: true };
-              }
-            }
-          }
-        };
-
-        // Activate the plugin frontend ESM script
-        if (module.default && typeof module.default.activate === 'function') {
-          await module.default.activate(mockCtx);
+        // Extract panel registration info via static analysis
+        const jsContent = frontendJsFile ? await frontendJsFile.async('string') : '';
+        const panels: any[] = [];
+        // Match registerExtensionPoint('slot', { id: '...', label: '...' })
+        const epRegex = /registerExtensionPoint\s*\(\s*['"]([^'"]+)['"]\s*,\s*\{([^}]+)\}/g;
+        let match;
+        while ((match = epRegex.exec(jsContent)) !== null) {
+          const slot = match[1];
+          const configStr = match[2];
+          const idMatch = configStr.match(/id\s*:\s*['"]([^'"]+)['"]/);
+          const labelMatch = configStr.match(/label\s*:\s*['"]([^'"]+)['"]/);
+          panels.push({ slot, id: idMatch?.[1] || '?', label: labelMatch?.[1] || slot });
         }
-        setRegisteredPanels(panelsList);
+        setRegisteredPanels(panels);
 
-        // Mock Network Interceptor
-        window.fetch = async (input, init) => {
-          const url = typeof input === 'string' ? input : input.url;
-
-          // Hijack whiteboard elements fetch
-          if (url.includes('/api/lessons/mock-lesson/whiteboard')) {
-            return new Response(JSON.stringify({
-              success: true,
-              elements: [{
-                id: 'mock-el',
-                type: 'plugin',
-                data: mockData
-              }]
-            }), {
-              status: 200,
-              headers: { 'Content-Type': 'application/json' }
-            });
-          }
-
-          // Hijack student submit quiz answer
-          if (url.includes('/api/lessons/mock-lesson/quiz-submit')) {
-            const body = JSON.parse((init as any).body);
-            const ansLetter = body.answer;
-
-            setMockData((prev: any) => {
-              const nextScore = { ...prev.quiz_score };
-              const matchingOpt = prev.options.find((o: string) => o.startsWith(ansLetter) || o === ansLetter);
-              if (matchingOpt) {
-                nextScore[matchingOpt] = (nextScore[matchingOpt] || 0) + 1;
-              } else {
-                nextScore[ansLetter] = (nextScore[ansLetter] || 0) + 1;
-              }
-              return {
-                ...prev,
-                quiz_score: nextScore,
-                quiz_submitting_users: [...prev.quiz_submitting_users, 's_mock_user']
-              };
-            });
-
-            return new Response(JSON.stringify({ success: true }), {
-              status: 200,
-              headers: { 'Content-Type': 'application/json' }
-            });
-          }
-
-          return originalFetch(input, init);
-        };
-
-      } catch (err) {
-        // Dynamic import of blob URLs fails for modules with bare imports (React, etc.)
-        // This is expected — the sandbox preview is best-effort
-        console.warn('Sandbox preview skipped: ', (err as Error).message || String(err));
+        setZipFiles([
+          { name: 'index.js', size: zipObj.file('index.js') ? (await zipObj.file('index.js')!.async('string')).length : 0 },
+          { name: 'frontend.js', size: frontendSize },
+          { name: 'manifest.json', size: zipObj.file('manifest.json') ? (await zipObj.file('manifest.json')!.async('string')).length : 0 },
+        ]);
+      } catch (e) {
+        console.warn('File listing failed:', e);
       }
-    };
-
-    setupPreviewSandbox();
-
-    return () => {
-      cancelled = true;
-      window.fetch = originalFetch;
-      // blobUrl is now managed inside setupPreviewSandbox
-    };
-  }, [step, zipObj, hasFrontend, mockData]);
+    })();
+  }, [step, zipObj, hasFrontend]);
 
   // Mount/render the UI when the preview DOM container becomes ready or previewRole shifts
+  // Show extracted extension points
   useEffect(() => {
-    if (step !== 3 || registeredPanels.length === 0 || !previewContainerRef.current) return;
-
-    previewContainerRef.current.innerHTML = '';
-    
-    // Find matching panel based on role switcher
-    const slot = previewRole === 'teacher' ? 'teacher.dashboard.widget' : 'student.view';
-    const panel = registeredPanels.find(p => p.slot === slot);
-
-    if (panel && typeof panel.render === 'function') {
-      Promise.resolve(
-        panel.render(previewContainerRef.current, {
-          elementId: 'mock-el',
-          lessonId: 'mock-lesson'
-        })
-      ).catch(console.error);
-    } else {
-      previewContainerRef.current.innerHTML = `<div class="text-center p-8 text-xs text-gray-400 italic">${lang === 'zh' ? '此角色下该插件未声明任何 UI 扩展槽位' : 'This plugin does not contribute UI for this role'}</div>`;
-    }
-  }, [step, registeredPanels, previewRole]);
+    if (step !== 3 || !previewContainerRef.current) return;
+    const slots = registeredPanels.map(p => `${p.label || p.id} (${p.slot})`).join(', ');
+    previewContainerRef.current.innerHTML = `<div class="text-center p-4 text-xs text-gray-500">${lang === 'zh' ? '检测到扩展点：' : 'Detected extension points: '}${slots || (lang === 'zh' ? '无' : 'none')}</div>`;
+  }, [step, registeredPanels, previewRole, lang]);
 
   const handleInstall = async () => {
     if (!file) return;
