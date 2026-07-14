@@ -712,11 +712,509 @@ function inlineBtnStyle(bgColor, borderColor) {
 }
 
 // ============================================================
-// 主入口：注册教师面板和学生面板
+// 教师大屏页面 (teacher.tab)
+// ============================================================
+async function renderTeacherTab(domNode, frontendCtx, context) {
+  const { renderType, mainNavCollapsed } = context;
+
+  if (renderType === 'button') {
+    domNode.innerHTML = '';
+    const isSelected = frontendCtx.navigation.getTeacherTab() === 'homework-tab-view';
+    
+    const btn = el('button', {
+      id: 'sidebar-nav-btn-homework',
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        padding: '12px',
+        width: '100%',
+        border: 'none',
+        borderRadius: STYLE.radius,
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        backgroundColor: isSelected ? STYLE.primaryColor : 'transparent',
+        color: isSelected ? '#fff' : '#475569',
+        fontWeight: isSelected ? '600' : '500',
+        justifyContent: mainNavCollapsed ? 'center' : 'flex-start',
+        boxShadow: isSelected ? '0 4px 6px -1px rgba(37, 99, 235, 0.2)' : 'none',
+        marginBottom: '4px'
+      }
+    });
+
+    const iconSpan = el('span', { style: { fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '📝');
+    btn.appendChild(iconSpan);
+
+    if (!mainNavCollapsed) {
+      const textSpan = el('span', { style: { fontSize: '14px', fontFamily: 'sans-serif' } }, '作业大屏');
+      btn.appendChild(textSpan);
+    }
+
+    btn.addEventListener('click', () => {
+      frontendCtx.navigation.setTeacherTab('homework-tab-view');
+    });
+
+    frontendCtx.navigation.subscribeTeacherTab((activeTab) => {
+      const isSelectedNow = activeTab === 'homework-tab-view';
+      const button = domNode.querySelector('#sidebar-nav-btn-homework');
+      if (button) {
+        button.style.backgroundColor = isSelectedNow ? STYLE.primaryColor : 'transparent';
+        button.style.color = isSelectedNow ? '#fff' : '#475569';
+        button.style.fontWeight = isSelectedNow ? '600' : '500';
+        button.style.boxShadow = isSelectedNow ? '0 4px 6px -1px rgba(37, 99, 235, 0.2)' : 'none';
+      }
+    });
+
+    domNode.appendChild(btn);
+  } else {
+    await renderTeacherTabPanel(domNode, frontendCtx);
+  }
+}
+
+async function renderTeacherTabPanel(domNode, frontendCtx) {
+  domNode.innerHTML = '';
+  domNode.style.padding = '24px';
+  domNode.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+  domNode.style.display = 'flex';
+  domNode.style.flexDirection = 'column';
+  domNode.style.gap = '20px';
+  domNode.style.height = '100%';
+  domNode.style.overflowY = 'auto';
+  domNode.style.backgroundColor = '#f8fafc';
+
+  const msgBox = el('div', { style: { padding: '8px', display: 'none', borderRadius: STYLE.radius, fontSize: '13px' } });
+  
+  // Header row
+  const header = el('div', {
+    style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: '0' }
+  },
+    el('h1', { style: { margin: '0', fontSize: '24px', fontWeight: '700', color: STYLE.textPrimary, display: 'flex', alignItems: 'center', gap: '8px' } }, '📝 作业管理与打分中心'),
+    el('button', {
+      id: 'btn-show-create-modal',
+      style: {
+        padding: '10px 18px',
+        backgroundColor: STYLE.primaryColor,
+        color: '#fff',
+        border: 'none',
+        borderRadius: STYLE.radius,
+        cursor: 'pointer',
+        fontSize: '14px',
+        fontWeight: '600',
+        boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.2)'
+      },
+      onClick: () => {
+        const modal = domNode.querySelector('#create-asgn-modal');
+        if (modal) modal.style.display = 'flex';
+      }
+    }, '➕ 发布新作业')
+  );
+  domNode.appendChild(header);
+  domNode.appendChild(msgBox);
+
+  // Modal for creating assignments
+  const createModal = el('div', {
+    id: 'create-asgn-modal',
+    style: {
+      position: 'fixed',
+      top: '0', left: '0', width: '100%', height: '100%',
+      backgroundColor: 'rgba(0, 0, 0, 0.4)',
+      display: 'none',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: '1000'
+    }
+  });
+
+  const modalContent = el('div', {
+    style: {
+      backgroundColor: '#fff',
+      padding: '24px',
+      borderRadius: '12px',
+      width: '450px',
+      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '16px'
+    }
+  },
+    el('h3', { style: { margin: '0', fontSize: '18px', fontWeight: '700', color: STYLE.textPrimary } }, '📋 发布新作业'),
+    el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+      el('label', { style: { fontSize: '13px', fontWeight: '500', color: STYLE.textSecondary } }, '作业标题 *'),
+      el('input', { id: 'modal-input-title', type: 'text', placeholder: '例如：课后作业三 - 浮力计算', style: { padding: '8px 12px', border: '1px solid ' + STYLE.borderColor, borderRadius: '6px', fontSize: '13px' } })
+    ),
+    el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+      el('label', { style: { fontSize: '13px', fontWeight: '500', color: STYLE.textSecondary } }, '作业要求/描述'),
+      el('textarea', { id: 'modal-input-desc', placeholder: '写明具体作业要求、提交格式...', rows: '3', style: { padding: '8px 12px', border: '1px solid ' + STYLE.borderColor, borderRadius: '6px', fontSize: '13px', resize: 'vertical' } })
+    ),
+    el('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
+      el('label', { style: { fontSize: '13px', fontWeight: '500', color: STYLE.textSecondary } }, '截止日期'),
+      el('input', { id: 'modal-input-deadline', type: 'datetime-local', style: { padding: '8px 12px', border: '1px solid ' + STYLE.borderColor, borderRadius: '6px', fontSize: '13px' } })
+    ),
+    el('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' } },
+      el('button', {
+        style: btnStyle('#fff', STYLE.borderColor, STYLE.textSecondary),
+        onClick: () => { createModal.style.display = 'none'; }
+      }, '取消'),
+      el('button', {
+        id: 'modal-btn-submit',
+        style: btnStyle(STYLE.successColor),
+        onClick: async () => {
+          const submitBtn = createModal.querySelector('#modal-btn-submit');
+          if (submitBtn.disabled) return;
+          const title = createModal.querySelector('#modal-input-title').value.trim();
+          const description = createModal.querySelector('#modal-input-desc').value.trim();
+          const deadline = createModal.querySelector('#modal-input-deadline').value;
+
+          if (!title) {
+            alert('请输入作业标题');
+            return;
+          }
+
+          submitBtn.disabled = true;
+          submitBtn.textContent = '⏳ 发布中...';
+          try {
+            await frontendCtx.invokeCommand('create_assignment', { title, description, deadline });
+            createModal.style.display = 'none';
+            // Clear fields
+            createModal.querySelector('#modal-input-title').value = '';
+            createModal.querySelector('#modal-input-desc').value = '';
+            createModal.querySelector('#modal-input-deadline').value = '';
+            // Refresh
+            await loadStatistics();
+          } catch (err) {
+            alert('发布失败: ' + err.message);
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = '✅ 确认发布';
+          }
+        }
+      }, '✅ 确认发布')
+    )
+  );
+
+  createModal.appendChild(modalContent);
+  domNode.appendChild(createModal);
+
+  // Cards Row
+  const cardsRow = el('div', {
+    style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', flexShrink: '0' }
+  });
+  domNode.appendChild(cardsRow);
+
+  // Workspace Split
+  const workspace = el('div', {
+    style: { display: 'grid', gridTemplateColumns: '320px 1fr', gap: '24px', flexGrow: '1', minHeight: '0' }
+  });
+  domNode.appendChild(workspace);
+
+  // Left Column
+  const leftCol = el('div', {
+    style: { display: 'flex', flexDirection: 'column', gap: '12px', minHeight: '0' }
+  });
+  const searchInput = el('input', {
+    type: 'text',
+    placeholder: '🔍 搜索作业...',
+    style: { padding: '10px 14px', border: '1px solid ' + STYLE.borderColor, borderRadius: STYLE.radius, fontSize: '13px', flexShrink: '0' }
+  });
+  const listContainer = el('div', {
+    style: { flexGrow: '1', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', paddingRight: '4px' }
+  });
+  leftCol.appendChild(searchInput);
+  leftCol.appendChild(listContainer);
+  workspace.appendChild(leftCol);
+
+  // Right Column
+  const rightCol = el('div', {
+    style: { backgroundColor: '#fff', border: '1px solid ' + STYLE.borderColor, borderRadius: '12px', display: 'flex', flexDirection: 'column', minHeight: '0', overflow: 'hidden' }
+  });
+  workspace.appendChild(rightCol);
+
+  let selectedAssignmentId = null;
+  let allAssignments = [];
+
+  // Function to load and render statistics
+  async function loadStatistics() {
+    listContainer.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:24px;">⏳ 加载数据中...</p>';
+    cardsRow.innerHTML = '';
+    
+    try {
+      const stats = await frontendCtx.invokeCommand('get_statistics');
+      allAssignments = stats.assignments || [];
+
+      // Render cards
+      const totalStudents = stats.totalStudents || 0;
+      const subRate = stats.totalAssignments > 0 && totalStudents > 0 
+        ? ((stats.totalSubmissions / (stats.totalAssignments * totalStudents)) * 100).toFixed(1)
+        : '0.0';
+      const gradingRate = stats.totalSubmissions > 0 
+        ? ((stats.totalGraded / stats.totalSubmissions) * 100).toFixed(1)
+        : '0.0';
+
+      const createCard = (title, val, desc, color) => {
+        return el('div', {
+          style: {
+            backgroundColor: '#fff', padding: '16px', borderRadius: '12px',
+            border: '1px solid ' + STYLE.borderColor, boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)'
+          }
+        },
+          el('p', { style: { margin: '0', fontSize: '13px', fontWeight: '600', color: STYLE.textSecondary } }, title),
+          el('h3', { style: { margin: '8px 0 4px 0', fontSize: '24px', fontWeight: '700', color: color || STYLE.textPrimary } }, val),
+          el('p', { style: { margin: '0', fontSize: '11px', color: STYLE.textSecondary } }, desc)
+        );
+      };
+
+      cardsRow.appendChild(createCard('发布作业数', stats.totalAssignments + ' 个', '课堂作业发布总数', '#1e293b'));
+      cardsRow.appendChild(createCard('学生提交数', stats.totalSubmissions + ' 份', `全班共 ${totalStudents} 名学生，整体提交率 ${subRate}%`, STYLE.primaryColor));
+      cardsRow.appendChild(createCard('平均成绩', stats.averageScore + ' 分', '全部已批改作业的平均得分', STYLE.successColor));
+      cardsRow.appendChild(createCard('批改进度', gradingRate + '%', `已批改 ${stats.totalGraded} 份，剩余 ${stats.totalSubmissions - stats.totalGraded} 份待批改`, STYLE.warningColor));
+
+      renderAssignmentList();
+      
+      // Auto select first assignment if none selected
+      if (!selectedAssignmentId && allAssignments.length > 0) {
+        selectAssignment(allAssignments[0].id);
+      } else if (selectedAssignmentId) {
+        selectAssignment(selectedAssignmentId);
+      } else {
+        renderRightColumnPlaceholder();
+      }
+    } catch (err) {
+      listContainer.innerHTML = `<p style="color:${STYLE.dangerColor};text-align:center;padding:24px;">加载失败: ${err.message}</p>`;
+    }
+  }
+
+  // Filter/render assignment list
+  function renderAssignmentList() {
+    const query = searchInput.value.trim().toLowerCase();
+    listContainer.innerHTML = '';
+    
+    const filtered = allAssignments.filter(a => a.title.toLowerCase().includes(query));
+    if (filtered.length === 0) {
+      listContainer.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:24px;">没有找到匹配的作业</p>';
+      return;
+    }
+
+    filtered.forEach(asgn => {
+      const isSelected = asgn.id === selectedAssignmentId;
+      const card = el('div', {
+        style: {
+          padding: '14px', borderRadius: STYLE.radius, border: '1px solid ' + (isSelected ? STYLE.primaryColor : STYLE.borderColor),
+          backgroundColor: isSelected ? '#f0fdf4' : '#fff', cursor: 'pointer', transition: 'all 0.2s',
+          display: 'flex', flexDirection: 'column', gap: '6px',
+          boxShadow: isSelected ? '0 4px 6px -1px rgba(34, 197, 94, 0.05)' : 'none'
+        },
+        onClick: () => selectAssignment(asgn.id)
+      },
+        el('h4', { style: { margin: '0', fontSize: '14px', fontWeight: '700', color: STYLE.textPrimary } }, asgn.title),
+        el('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: STYLE.textSecondary } },
+          el('span', {}, `提交: ${asgn.subCount} 份`),
+          el('span', {}, `平均分: ${asgn.avgScore} 分`)
+        ),
+        el('div', { style: { fontSize: '11px', color: STYLE.textSecondary } }, `截止时间: ${asgn.deadline ? formatDate(asgn.deadline) : '无'}`)
+      );
+      listContainer.appendChild(card);
+    });
+  }
+
+  // Bind search input filter
+  searchInput.addEventListener('input', renderAssignmentList);
+
+  function renderRightColumnPlaceholder() {
+    rightCol.innerHTML = `
+      <div style="flex-grow:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#94a3b8;gap:12px;">
+        <span style="font-size:48px;">👈</span>
+        <span style="font-size:14px;font-weight:500;">请在左侧选择一个作业查看提交详情及批改</span>
+      </div>
+    `;
+  }
+
+  // Select an assignment and render details
+  async function selectAssignment(id) {
+    selectedAssignmentId = id;
+    renderAssignmentList(); // Refresh selected state in list
+
+    const asgn = allAssignments.find(a => a.id === id);
+    if (!asgn) {
+      renderRightColumnPlaceholder();
+      return;
+    }
+
+    rightCol.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:32px;">⏳ 加载作业详情...</p>';
+
+    try {
+      const data = await frontendCtx.invokeCommand('list_submissions', { assignmentId: id });
+      const submissions = data.submissions || [];
+
+      rightCol.innerHTML = '';
+      
+      // Right header
+      const panelHeader = el('div', {
+        style: { padding: '18px 24px', borderBottom: '1px solid ' + STYLE.borderColor, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: '0' }
+      },
+        el('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' } },
+          el('h3', { style: { margin: '0', fontSize: '16px', fontWeight: '700', color: STYLE.textPrimary } }, asgn.title),
+          el('p', { style: { margin: '0', fontSize: '12px', color: STYLE.textSecondary } }, `截止时间: ${asgn.deadline ? formatDate(asgn.deadline) : '无'}`)
+        ),
+        el('div', { style: { display: 'flex', gap: '8px' } },
+          el('button', {
+            style: {
+              padding: '6px 12px', border: '1px solid ' + STYLE.borderColor, backgroundColor: '#fff',
+              color: STYLE.textPrimary, borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+            },
+            onClick: async () => {
+              try {
+                const res = await frontendCtx.invokeCommand('batch_download_urls', { assignmentId: id });
+                if (!res.files || res.files.length === 0) {
+                  alert('暂无学生提交文件，无法下载');
+                  return;
+                }
+                // Open all URLs in sequence
+                res.files.forEach(f => window.open(f.downloadUrl, '_blank'));
+              } catch (e) {
+                alert('批量下载失败: ' + e.message);
+              }
+            }
+          }, '📥 批量下载'),
+          el('button', {
+            style: {
+              padding: '6px 12px', border: 'none', backgroundColor: STYLE.successColor,
+              color: '#fff', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+            },
+            onClick: () => {
+              window.open(`/api/plugins/execute-command?type=ext-homework-hub.export_scores&assignmentId=${id}`, '_blank');
+            }
+          }, '📊 导出成绩')
+        )
+      );
+      rightCol.appendChild(panelHeader);
+
+      // Submissions table/list
+      const tableContainer = el('div', {
+        style: { flexGrow: '1', overflowY: 'auto', padding: '24px' }
+      });
+      rightCol.appendChild(tableContainer);
+
+      if (submissions.length === 0) {
+        tableContainer.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:48px;">📭 暂无学生提交该作业</p>';
+        return;
+      }
+
+      submissions.forEach(sub => {
+        const isGraded = sub.score >= 0;
+        const subRow = el('div', {
+          style: {
+            padding: '16px', marginBottom: '12px', backgroundColor: STYLE.bgGray,
+            borderRadius: '8px', border: '1px solid ' + STYLE.borderColor,
+            display: 'flex', flexDirection: 'column', gap: '10px'
+          }
+        });
+
+        // Top line info
+        const infoDiv = el('div', {
+          style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }
+        },
+          el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+            el('span', { style: { fontWeight: '700', fontSize: '14px', color: STYLE.textPrimary } }, `👤 ${sub.studentName || '未命名'} (${sub.studentNumber || sub.studentId})`),
+            isGraded
+              ? el('span', { style: { backgroundColor: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '600' } }, `${sub.score} 分`)
+              : el('span', { style: { backgroundColor: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: '600' } }, '待批改')
+          ),
+          el('div', { style: { display: 'flex', gap: '8px' } },
+            el('button', {
+              style: { padding: '4px 10px', backgroundColor: '#fff', border: '1px solid ' + STYLE.borderColor, borderRadius: '4px', cursor: 'pointer', fontSize: '12px', color: STYLE.textPrimary },
+              onClick: () => window.open(`/files${sub.filePath}`, '_blank')
+            }, '📥 下载文件'),
+            el('button', {
+              style: { padding: '4px 10px', backgroundColor: isGraded ? '#fff' : STYLE.warningColor, border: isGraded ? '1px solid ' + STYLE.borderColor : 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', color: isGraded ? STYLE.textPrimary : '#fff' },
+              onClick: () => {
+                const form = subRow.querySelector('.grading-form');
+                if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+              }
+            }, isGraded ? '✏️ 修改评分' : '📝 评分')
+          )
+        );
+
+        // File info & date
+        const fileDiv = el('div', {
+          style: { display: 'flex', gap: '16px', fontSize: '12px', color: STYLE.textSecondary }
+        },
+          el('span', {}, `📄 文件: ${sub.filename}`),
+          el('span', {}, `提交于: ${formatDate(sub.submittedAt)}`)
+        );
+
+        // Graded score / feedback if exists
+        const reviewDiv = el('div', {
+          style: { display: isGraded ? 'block' : 'none', fontSize: '12px', backgroundColor: '#fff', padding: '8px 12px', borderRadius: '6px', border: '1px solid ' + STYLE.borderColor }
+        },
+          el('span', { style: { fontWeight: '600', color: STYLE.textPrimary } }, '老师评语: '),
+          el('span', { style: { color: '#475569' } }, sub.feedback || '无评语')
+        );
+
+        // Grade submit form (hidden by default)
+        const gradingForm = el('div', {
+          className: 'grading-form',
+          style: { display: 'none', padding: '12px', backgroundColor: '#fff', borderRadius: '6px', border: '1px dashed ' + STYLE.borderColor, marginTop: '4px' }
+        },
+          el('div', { style: { display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' } },
+            el('label', { style: { fontSize: '13px', fontWeight: '500' } }, '评分:'),
+            el('input', { type: 'number', className: 'grade-score-input', min: '0', max: '100', value: isGraded ? sub.score : '', placeholder: '0-100', style: { width: '80px', padding: '6px', border: '1px solid ' + STYLE.borderColor, borderRadius: '4px', fontSize: '13px' } }),
+            el('label', { style: { fontSize: '13px', fontWeight: '500' } }, '评语:'),
+            el('input', { type: 'text', className: 'grade-feedback-input', value: sub.feedback || '', placeholder: '输入评语...', style: { flexGrow: '1', minWidth: '150px', padding: '6px', border: '1px solid ' + STYLE.borderColor, borderRadius: '4px', fontSize: '13px' } }),
+            el('button', {
+              style: { padding: '6px 14px', backgroundColor: STYLE.successColor, border: 'none', color: '#fff', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' },
+              onClick: async () => {
+                const score = parseFloat(gradingForm.querySelector('.grade-score-input').value);
+                const feedback = gradingForm.querySelector('.grade-feedback-input').value.trim();
+                
+                if (isNaN(score) || score < 0 || score > 100) {
+                  alert('请输入 0 到 100 之间的有效得分');
+                  return;
+                }
+
+                try {
+                  await frontendCtx.invokeCommand('grade', { submissionId: sub.id, score, feedback });
+                  await selectAssignment(id); // Reload assignment submissions
+                  await loadStatistics(); // Reload cards and stats
+                } catch (e) {
+                  alert('评分失败: ' + e.message);
+                }
+              }
+            }, '提交')
+          )
+        );
+
+        subRow.appendChild(infoDiv);
+        subRow.appendChild(fileDiv);
+        subRow.appendChild(reviewDiv);
+        subRow.appendChild(gradingForm);
+        tableContainer.appendChild(subRow);
+      });
+
+    } catch (err) {
+      rightCol.innerHTML = `<p style="color:${STYLE.dangerColor};text-align:center;padding:32px;">加载提交记录失败: ${err.message}</p>`;
+    }
+  }
+
+  // Load everything
+  await loadStatistics();
+}
+
+// ============================================================
+// 主入口：注册教师面板、学生面板以及大屏Tab
 // ============================================================
 export default {
   activate: async (frontendCtx) => {
-    // 教师面板
+    // 1. 教师大屏 Tab
+    frontendCtx.registerPanel({
+      slot: 'teacher.tab',
+      id: 'homework-tab-view',
+      title: '作业中心大屏',
+      render: async (domNode, context) => {
+        await renderTeacherTab(domNode, frontendCtx, context);
+      }
+    });
+
+    // 2. 教师快捷 Dashboard 卡片
     frontendCtx.registerPanel({
       slot: 'teacher.dashboard.widget',
       id: 'homework-teacher-widget',
@@ -726,7 +1224,7 @@ export default {
       }
     });
 
-    // 学生面板
+    // 3. 学生侧边栏面板
     frontendCtx.registerPanel({
       slot: 'student.view',
       id: 'homework-student-view',
@@ -737,3 +1235,4 @@ export default {
     });
   }
 };
+

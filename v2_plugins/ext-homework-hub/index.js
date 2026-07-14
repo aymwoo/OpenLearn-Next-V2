@@ -101,13 +101,19 @@ var index_default = {
         const db = await ctx.resolve(IDatabaseToken);
         const tbl = ctx.db.table("submissions");
         const rows = await db.prepare(
-          `SELECT * FROM ${tbl} WHERE assignment_id = ? ORDER BY submitted_at DESC`
+          `SELECT s.*, st.name as student_name, st.student_number 
+           FROM ${tbl} s
+           LEFT JOIN students st ON s.student_id = st.id
+           WHERE s.assignment_id = ? 
+           ORDER BY s.submitted_at DESC`
         ).all(assignmentId);
         return {
           assignmentId,
           submissions: rows.map((row) => ({
             id: row.id,
             studentId: row.student_id,
+            studentName: row.student_name,
+            studentNumber: row.student_number,
             filename: row.filename,
             filePath: row.file_path,
             submittedAt: row.submitted_at,
@@ -154,6 +160,50 @@ var index_default = {
             filename: row.filename,
             downloadUrl: `/files${row.file_path}`
           }))
+        };
+      }
+    });
+    await commandBus.registerHandler("get_statistics", {
+      execute: async () => {
+        const db = await ctx.resolve(IDatabaseToken);
+        const asgnTbl = ctx.db.table("assignments");
+        const subTbl = ctx.db.table("submissions");
+        const studentCountRow = await db.prepare("SELECT COUNT(*) as count FROM students").get();
+        const totalStudents = studentCountRow?.count || 0;
+        const asgnCountRow = await db.prepare(`SELECT COUNT(*) as count FROM ${asgnTbl}`).get();
+        const totalAssignments = asgnCountRow?.count || 0;
+        const subCountRow = await db.prepare(`SELECT COUNT(*) as count FROM ${subTbl}`).get();
+        const totalSubmissions = subCountRow?.count || 0;
+        const gradedRow = await db.prepare(`SELECT COUNT(*) as count, AVG(score) as avg_score FROM ${subTbl} WHERE score >= 0`).get();
+        const totalGraded = gradedRow?.count || 0;
+        const averageScore = totalGraded > 0 ? parseFloat(gradedRow.avg_score.toFixed(1)) : 0;
+        const assignmentsList = await db.prepare(`SELECT id, title, created_at, deadline FROM ${asgnTbl} ORDER BY created_at DESC`).all();
+        const assignmentsStats = await Promise.all(assignmentsList.map(async (asgn) => {
+          const stats = await db.prepare(`
+            SELECT 
+              COUNT(*) as sub_count,
+              SUM(CASE WHEN score >= 0 THEN 1 ELSE 0 END) as graded_count,
+              AVG(CASE WHEN score >= 0 THEN score ELSE NULL END) as avg_score
+            FROM ${subTbl}
+            WHERE assignment_id = ?
+          `).get(asgn.id);
+          return {
+            id: asgn.id,
+            title: asgn.title,
+            createdAt: asgn.created_at,
+            deadline: asgn.deadline,
+            subCount: stats?.sub_count || 0,
+            gradedCount: stats?.graded_count || 0,
+            avgScore: stats?.avg_score ? parseFloat(stats.avg_score.toFixed(1)) : 0
+          };
+        }));
+        return {
+          totalStudents,
+          totalAssignments,
+          totalSubmissions,
+          totalGraded,
+          averageScore,
+          assignments: assignmentsStats
         };
       }
     });

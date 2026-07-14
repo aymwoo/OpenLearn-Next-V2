@@ -75,7 +75,7 @@ export function NavigationSidebar({
       </div>
 
       {/* Dynamic plugin-registered tab buttons */}
-      <ExtensionPointRenderer slot="teacher.tab" slotProps={{ renderType: 'button' }} />
+      <ExtensionPointRenderer slot="teacher.tab" slotProps={{ renderType: 'button', mainNavCollapsed }} />
 
       {/* Today's Schedules Sidebar Widget */}
       {(() => {
