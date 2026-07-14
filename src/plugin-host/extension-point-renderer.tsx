@@ -99,7 +99,7 @@ export interface ExtensionPointRendererProps {
 /**
  * Wrapper component to support plugins using traditional DOM render function.
  */
-function DOMExtensionWrapper({ ext, route, slotProps }: { ext: any; route?: string; slotProps?: any }) {
+function DOMExtensionWrapper({ ext, route, slotProps, slot }: { ext: any; route?: string; slotProps?: any; slot: string }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const serializedProps = JSON.stringify(slotProps || {});
   
@@ -110,7 +110,12 @@ function DOMExtensionWrapper({ ext, route, slotProps }: { ext: any; route?: stri
     }
   }, [ext, route, serializedProps]);
 
-  return <div ref={containerRef} className="w-full h-full min-h-0" />;
+  // If slot is dashboard widget, use h-auto to prevent vertical overlaps,
+  // otherwise use h-full for full-page panels.
+  const isWidget = slot === 'teacher.dashboard.widget';
+  const heightClass = isWidget ? 'h-auto' : 'h-full';
+
+  return <div ref={containerRef} className={`w-full min-h-0 ${heightClass}`} />;
 }
 
 /**
@@ -164,6 +169,7 @@ export function ExtensionPointRenderer({
                   ext={ext}
                   route={ext.route || route}
                   slotProps={{ ...ext.slotProps, ...slotProps }}
+                  slot={slot}
                 />
               )}
             </Suspense>
