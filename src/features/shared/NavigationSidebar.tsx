@@ -1,6 +1,5 @@
 import React from 'react';
 import { Home, BookOpen, Presentation, Users, Calendar as CalendarIcon, LayoutTemplate, Puzzle, Shield, HelpCircle, Menu, ChevronLeft, Clock } from 'lucide-react';
-import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import type { SessionType, ScheduleType } from '../../store/appStore';
 
@@ -63,31 +62,6 @@ export function NavigationSidebar({
         <NavButton icon={Users} label={lang === 'zh' ? '班级管理' : 'Classes & Students'} tab="classes" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
         <NavButton icon={CalendarIcon} label={lang === 'zh' ? '课表管理' : 'Timetable Routine'} tab="timetable" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
         <NavButton icon={LayoutTemplate} label={lang === 'zh' ? '机房管理' : 'Computer Lab Seating'} tab="computer_labs" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
-      {/* Plugin admin tabs — consistent NavButton styling */}
-      {(() => {
-        const pluginTabs = usePluginHostStore((s) => (s as any).getExtensions?.('teacher.tab') || []);
-        if (pluginTabs.length === 0) return null;
-        return pluginTabs.map((ext: any) => {
-          const tabId = ext.pluginId + '/' + ext.id;
-          const isActive = teacherTab === tabId;
-          return (
-            <button
-              key={tabId}
-              onClick={() => setTeacherTab(tabId)}
-              className={`w-full flex items-center gap-3 rounded-xl transition-all ${
-                mainNavCollapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'
-              } ${
-                isActive
-                  ? 'bg-indigo-50 text-indigo-700 font-semibold'
-                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-              }`}
-            >
-              <Puzzle size={20} className="shrink-0" />
-              {!mainNavCollapsed && <span className="text-sm font-medium truncate">{ext.label || ext.id}</span>}
-            </button>
-          );
-        });
-      })()}
         <NavButton icon={Puzzle} label={lang === 'zh' ? '插件中心' : 'App Store / Plugins'} tab="plugins" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
 
         {session?.subRole === 'administrator' && (
@@ -96,6 +70,9 @@ export function NavigationSidebar({
             <span className={mainNavCollapsed ? 'hidden' : 'hidden md:block font-bold text-indigo-850'}>{lang === 'zh' ? '管理后台' : '⭐ Admin Center'}</span>
           </button>
         )}
+
+      {/* Dynamic plugin-registered tab buttons */}
+      <ExtensionPointRenderer slot="teacher.tab" slotProps={{ renderType: "button", mainNavCollapsed, teacherTab, setTeacherTab }} />
         <NavButton icon={HelpCircle} label={lang === 'zh' ? '帮助文档' : 'System Commands / Help'} tab="help" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
       </div>
 
