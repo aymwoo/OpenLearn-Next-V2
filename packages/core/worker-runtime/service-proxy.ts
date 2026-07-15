@@ -56,6 +56,11 @@ import { WorkerTimeoutError, WorkerTransportError } from './errors.js';
 // ── Callback serialization registry (Worker side) ─────────────────────
 // Maps invokeId -> Map<cbId, callback function>. Callbacks are stored
 // when an RPC call passes function-typed values in its arguments.
+// ── Command handler registry (Worker side) ──────────────────────
+// Maps commandType → execute function. Populated on registerHandler,
+// used to dispatch executeCommand messages from main thread.
+const handlerRegistry = new Map<string, (...args: any[]) => Promise<any>>();
+
 const cbRegistry = new Map<string, Map<number, (...a: unknown[]) => unknown>>();
 
 /** Recursively walk args, replace function values with { __rpc_cb: N } markers. */
@@ -125,6 +130,18 @@ export function createMethodProxy(
           });
 
           // Serialize nested callback functions in arguments
+          // Track handler registrations for executeCommand dispatch
+          const methodStr = String(method);
+          if (methodStr === 'registerHandler' && args.length >= 2) {
+            const cmdType = args[0] as string;
+            const h = args[1] as any;
+            if (typeof h?.execute === 'function') {
+              handlerRegistry.set(cmdType, h.execute);
+            }
+          } else if (methodStr === 'unregisterHandler' && args.length >= 1) {
+            handlerRegistry.delete(args[0] as string);
+          }
+
           serializeCallbacks(args, invokeId);
           // Send the invoke message
           transport.postMessage({
@@ -330,6 +347,30 @@ export function createServicesProxy(
     }
 
     // Handle callback invocations from main thread
+    // Handle command execution from main thread (ICommandBusService proxy)
+    if (typed.type === 'executeCommand') {
+      const execMsg = msg as { invokeId: string; commandType: string; command: any };
+      let handler = handlerRegistry.get(execMsg.commandType);
+      // If not found, try stripping the pluginId prefix
+      if (!handler) {
+        const idx = execMsg.commandType.indexOf('.');
+        if (idx > 0) {
+          handler = handlerRegistry.get(execMsg.commandType.substring(idx + 1));
+        }
+      }
+      if (handler) {
+        try {
+          const result = await handler(execMsg.command);
+          transport.postMessage({ type: 'result', invokeId: execMsg.invokeId, value: result });
+        } catch (e: any) {
+          transport.postMessage({ type: 'error', invokeId: execMsg.invokeId, message: e.message, code: e.name });
+        }
+      } else {
+        transport.postMessage({ type: 'error', invokeId: execMsg.invokeId, message: `No handler for command: ${execMsg.commandType}` });
+      }
+      return;
+    }
+
     if (typed.type === 'invoke-cb') {
       const cbMsg = msg as { invokeId: string; cbId: number; args: unknown[] };
       const cbMap = cbRegistry.get(cbMsg.invokeId);
@@ -385,6 +426,7 @@ export function createServicesProxy(
       );
     }
     pendingCalls.clear();
+    handlerRegistry.clear();
 
     // Clear the onMessage handler by registering a no-op
     transport.onMessage(() => {});
