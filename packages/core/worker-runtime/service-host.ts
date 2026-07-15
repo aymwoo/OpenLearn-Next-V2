@@ -48,6 +48,7 @@ import type { CapabilityGuard } from '../capability-system/index.js';
 import type { EventBus } from '../event-bus/index.js';
 import { EventForwarder } from './event-forwarder.js';
 import { WorkerCapabilityError } from './errors.js';
+import { resolvePluginCommandType } from '../plugin-host/plugin-namespace.js';
 
 /** Maximum length of serialized stack trace in characters. */
 const STACK_CAP = 4096;
@@ -443,11 +444,8 @@ export class ServiceHost {
         if (msg.method === 'registerHandler') {
           let [commandType] = msg.args as [string];
           const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
-          const prefix = pluginId + '.';
-          if (!commandType.startsWith(prefix)) {
-            commandType = prefix + commandType;
-          }
-          
+          commandType = resolvePluginCommandType(commandType, pluginId);
+
           commandBus.registerHandler(commandType, {
             execute: async (command) => {
               const rpcId = globalThis.crypto.randomUUID();
@@ -472,11 +470,8 @@ export class ServiceHost {
         } else if (msg.method === 'unregisterHandler') {
           let [commandType] = msg.args as [string];
           const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
-          const prefix = pluginId + '.';
-          if (!commandType.startsWith(prefix)) {
-            commandType = prefix + commandType;
-          }
-          
+          commandType = resolvePluginCommandType(commandType, pluginId);
+
           commandBus.unregisterHandler(commandType);
           this.registeredCommandTypes.delete(commandType);
           transport.postMessage({

@@ -346,6 +346,14 @@ const requireFn = createRequire('${requirePath}');
 
 var pendingCalls = new Map();
 
+// ── 插件命令命名空间解析（与 packages/core/plugin-host/plugin-namespace.ts
+//    保持一致 — 单一真理源；Worker bootstrap 是动态生成的代码字符串，
+//    无法通过 import 共享模块，因此内联一份，必须与源文件同步修改） ──
+function resolvePluginCommandType(type, pluginId) {
+  var prefix = pluginId + '.';
+  return type.indexOf(prefix) === 0 ? type : prefix + type;
+}
+
 // EventBusProxy — Worker 端事件订阅代理
 function createEventBusProxy(transport) {
   var subscriptions = new Map();
@@ -492,17 +500,19 @@ parentPort.on('message', async function(msg) {
 
       eventBusProxy = createEventBusProxy(parentPort);
       var rawCommandBus = rawServices['@openlearn/core:ICommandBusService'];
+      // Namespace prefix is the plugin's manifest.id (NOT the DB-generated
+      // pluginId UUID) so the key matches what the frontend invokeCommand
+      // and the host-side ServiceHost produce.
+      var namespacePrefix = workerData.manifestId || workerData.pluginId;
       var commandBus = rawCommandBus ? {
         execute: function(cmd) { return rawCommandBus.execute(cmd); },
         registerHandler: function(commandType, handler) {
-          var prefix = workerData.pluginId + '.';
-          var prefixed = (commandType.indexOf('.') !== -1 && commandType.startsWith(prefix)) ? commandType : prefix + commandType;
+          var prefixed = resolvePluginCommandType(commandType, namespacePrefix);
           registeredCommandHandlers.set(prefixed, handler);
           return rawCommandBus.registerHandler(prefixed);
         },
         unregisterHandler: function(commandType) {
-          var prefix = workerData.pluginId + '.';
-          var prefixed = (commandType.indexOf('.') !== -1 && commandType.startsWith(prefix)) ? commandType : prefix + commandType;
+          var prefixed = resolvePluginCommandType(commandType, namespacePrefix);
           registeredCommandHandlers.delete(prefixed);
           return rawCommandBus.unregisterHandler(prefixed);
         },
@@ -735,7 +745,7 @@ parentPort.on('message', async function(msg) {
  * ```ts
  * const wm = new WorkerManager(serviceRegistry, capabilityGuard, db);
  * const { transport, serviceHost } = await wm.createWorker(
- *   'ext-quiz-generator', manifest, sourceCode, ALL_SERVICE_TOKENS,
+ *   'ext-my-service', manifest, sourceCode, ALL_SERVICE_TOKENS,
  * );
  * ```
  */
@@ -857,7 +867,11 @@ export class WorkerManager {
     let worker: Worker;
     try {
       worker = new Worker(new URL(bootstrapDataUrl), {
-        workerData: { pluginId, serviceTokens, pluginDir },
+        // Pass both the DB id (`pluginId` — used as the actor/registry key)
+        // and `manifestId` (used as the namespace prefix for command types).
+        // The two diverge for ZIP-uploaded plugins whose DB id is a generated
+        // UUID while manifest.id is the plugin author's chosen name.
+        workerData: { pluginId, manifestId: manifest.id, serviceTokens, pluginDir },
         eval: false,
         stdout: true,
         stderr: true,
@@ -890,7 +904,12 @@ export class WorkerManager {
       manifestCaps,
       eventBus,  // optional: enables event forwarding
       undefined,
-      pluginId,
+      // 7th arg is the namespace prefix used by the host-side
+      // registerHandler/unregisterHandler intercept. It must be
+      // `manifest.id` (NOT the DB UUID `pluginId`) so the prefix
+      // matches what the frontend `ctx.invokeCommand` produces —
+      // see packages/core/plugin-host/plugin-namespace.ts.
+      manifest.id,
     );
 
     // 7. 注册到 WorkerRegistry（含 crash 检测）

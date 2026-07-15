@@ -19,6 +19,7 @@ import { FrontendServiceRegistry } from './service-registry';
 import { BrowserWorkerManager } from './browser-worker-manager';
 import { usePluginHostStore } from './plugin-host-store';
 import { useAppStore, appStore } from '../store/appStore';
+import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
 import {
   PluginState,
   FRONTEND_API_TOKEN,
@@ -513,8 +514,11 @@ export class FrontendPluginHost {
       },
       invokeCommand: async <T = any>(type: string, payload?: any): Promise<T> => {
         if (!frontendApi) throw new Error(`Plugin "${pluginId}" cannot invoke command: frontendApi is not available. Has FrontendPluginHost initialized?`);
-        // 自动添加插件命名空间前缀，使前端无需关心 UUID
-        const prefixedType = type.includes('.') ? type : `${pluginId}.${type}`;
+        // Use the same namespace rule as the worker runtime so the main
+        // CommandBus can find the handler that the worker's
+        // registerHandler call stored under the prefixed key.
+        // See packages/core/plugin-host/plugin-namespace.ts for the contract.
+        const prefixedType = resolvePluginCommandType(type, pluginId);
         const res = await frontendApi.post<T>('/api/plugins/execute-command', {
           type: prefixedType,
           payload,
