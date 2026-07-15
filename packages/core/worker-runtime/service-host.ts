@@ -68,7 +68,7 @@ export class ServiceHost {
   /**
    * @param serviceRegistry - DI container for resolving service instances
    * @param capabilityGuard - CapabilityGuard instance (sync access, NOT async ICapabilityService wrapper)
-   * @param pluginActorId - Actor identity for all invokes (e.g. `'plugin:ext-quiz-generator'`)
+   * @param pluginActorId - Actor identity for all invokes (e.g. `'plugin:ext-my-service'`)
    * @param manifestCapabilities - Capability strings from manifest.capabilitiesProposed
    * @param eventBus - Optional EventBus for event forwarding (Plan 4). When provided,
    *                   subscribe/unsubscribe messages from Worker create EventForwarder
@@ -388,6 +388,10 @@ export class ServiceHost {
       if (msg.token === '@openlearn/core:IDatabase') {
         const db = service as import('better-sqlite3').Database;
         let result: unknown;
+        if (msg.method === 'exec') {
+          const [sql] = msg.args as [string];
+          result = db.exec(sql);
+        } else 
         if (msg.method === 'prepareAndRun') {
           const [sql, args] = msg.args as [string, unknown[]];
           result = db.prepare(sql).run(...args);
