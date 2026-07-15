@@ -4983,6 +4983,15 @@ ${examsText}
         }
       }
 
+      // Debug: log all registered handlers when lookup fails
+      if (!handlersMap?.has?.(resolvedType) && !legacyMap?.has?.(resolvedType)) {
+        console.error('[execute-command] Handler NOT FOUND for type:', resolvedType);
+        console.error('[execute-command] Registered handlers:', 
+          [...(handlersMap?.keys?.() ?? [])].join(', ') || '(none)');
+        const matching = [...(handlersMap?.keys?.() ?? [])].filter(k => k.includes('courseware'));
+        console.error('[execute-command] Matching courseware keys:', matching.join(', ') || '(none)');
+      }
+
       const cmd = await kernelContainer.commandBus.createCommand(
         resolvedType,
         payload ?? {},

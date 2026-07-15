@@ -4,6 +4,7 @@
 :maxdepth: 2
 :hidden:
 
+installation-guide
 architecture_review_report
 plugin-development-tutorial
 scaffold
