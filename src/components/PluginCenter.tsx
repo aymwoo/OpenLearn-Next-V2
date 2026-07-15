@@ -188,47 +188,17 @@ const parsePluginSource = (sourceCode: string) => {
   return { manifest: manifest || undefined, actions };
 };
 
-// ── DEFAULT_PLUGIN (moved from App.tsx) ─────────────────────────────────────
+// ── DEFAULT_PLUGIN (示例模板) ─────────────────────────────────────────────────
 
 const DEFAULT_PLUGIN = `exports.default = {
   manifest: {
-    id: "ext-quiz-generator",
-    name: "测验组件插件",
+    id: "@my-scope/hello-world",
+    name: "Hello World Plugin",
     version: "1.0.0",
-    capabilitiesProposed: ["quiz:write"]
+    capabilitiesProposed: ["lesson:read"]
   },
   activate: async (ctx) => {
-    ctx.actionRegistry.register({
-      id: 'ext-quiz-create',
-      commandType: 'quiz.create',
-      description: '在课程白板上创建一个选择题测验',
-      capabilityRequired: 'whiteboard:write',
-      inputSchema: {
-        type: 'OBJECT',
-        properties: {
-          lessonId: { type: 'STRING', description: '课程 ID' },
-          question: { type: 'STRING', description: '问题内容' },
-          options: { type: 'ARRAY', items: { type: 'STRING' }, description: '选项列表' }
-        },
-        required: ['lessonId', 'question', 'options']
-      }
-    });
-
-    ctx.commandBus.registerHandler('quiz.create', {
-      execute: async (command) => {
-        const payload = command.payload;
-        const result = await ctx.commandBus.execute({
-          id: Math.random().toString(36).slice(2),
-          type: 'whiteboard.draw',
-          payload: {
-            lessonId: payload.lessonId,
-            type: 'quiz',
-            data: JSON.stringify({ question: payload.question, options: payload.options })
-          }
-        });
-        return { elementId: result.elementId };
-      }
-    });
+    ctx.log.info('Hello World plugin activated');
   }
 };`;
 

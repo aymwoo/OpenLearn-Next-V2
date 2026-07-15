@@ -27,7 +27,7 @@ import type { Manifest } from '../esm-loader/manifest-schema.js';
 export interface ServiceRequirement {
   /** 提供方插件的 manifest.id */
   pluginId: string;
-  /** 服务 Token 名称（如 ext-quiz-generator:IQuizEngineService） */
+  /** 服务 Token 名称（如 ext-my-service:IMyService） */
   tokenName: string;
 }
 
@@ -62,7 +62,7 @@ const KERNEL_TOKEN_PREFIX = '@openlearn/';
  * V3.2: 解析 manifest.requires 中的跨插件服务需求条目。
  *
  * - 以 @openlearn/ 开头的内核 Token 返回 null
- * - 格式 ext-quiz-generator:IQuizEngineService 解析为 { pluginId, tokenName }
+ * - 格式 ext-my-service:IMyService 解析为 { pluginId, tokenName }
  * - 不识别的格式返回 null
  */
 export function parseServiceRequirement(req: string): ServiceRequirement | null {

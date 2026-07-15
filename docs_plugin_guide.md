@@ -313,7 +313,7 @@ await eventBus.subscribe('*', (event) => {
 const actionRegistry = ctx.services.actionRegistry;
 
 await actionRegistry.register({
-  id: 'ext-quiz-generator',
+  id: 'ext-quiz-engine',
   commandType: 'quiz.generate',
   description: '根据教师提供的主题与数量，自动调用大模型生成随堂测验题并导入系统。',
   capabilityRequired: 'lesson:write',

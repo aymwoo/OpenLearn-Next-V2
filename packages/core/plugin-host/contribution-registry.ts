@@ -53,6 +53,10 @@ export interface StudentViewConfig {
 
 /** A contribution to the student.lesson.tool slot (lesson-scoped student tool). */
 export interface StudentLessonToolConfig {
+  id: string;
+  label: string;
+  icon?: string;
+}
 
 /** V3.2: A contribution to the help.plugin_docs slot (plugin documentation in help page). */
 export interface HelpDocConfig {
@@ -61,10 +65,6 @@ export interface HelpDocConfig {
   description?: string;
   /** URL to markdown documentation content */
   markdownUrl?: string;
-}
-  id: string;
-  label: string;
-  icon?: string;
 }
 
 /** Union of all contribution config shapes, keyed by slot name. */

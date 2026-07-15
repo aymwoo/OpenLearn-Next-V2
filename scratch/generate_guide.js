@@ -292,7 +292,7 @@ const htmlContent = `
                 <td><code>id</code></td>
                 <td>String</td>
                 <td>是</td>
-                <td>插件的唯一标识符。<b>命名规范：</b>第三方插件必须以 <code>ext-</code> 开头，以和内置核心插件区分开（如 <code>ext-quiz-generator</code>）。</td>
+                <td>插件的唯一标识符。<b>命名规范：</b>第三方插件必须以 <code>ext-</code> 开头，以和内置核心插件区分开（如 <code>ext-quiz-engine</code>）。</td>
             </tr>
             <tr>
                 <td><code>name</code></td>

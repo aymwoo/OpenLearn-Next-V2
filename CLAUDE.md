@@ -302,7 +302,7 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - PascalCase for component names and React refs: `Socket`, `Markdown`
 - State-updater pairs follow the `[value, setValue]` convention: `const [lang, setLang] = useState<Language>('zh')`
 - Database references use short names: `db`, `stmt`, `cmd`
-- Plugin entity IDs use snake_case pattern: `usr_admin`, `prov_deepseek`, `ext-quiz-generator`
+- Plugin entity IDs use snake_case pattern: `usr_admin`, `prov_deepseek`, `ext-quiz-engine`
 - Command types use dot-separated namespacing: `lesson.create`, `whiteboard.draw`, `vfs.write_file`, `ai.start_generation`
 - Interfaces are PascalCase: `PlatformCommand`, `CommandHandler`, `ActionDescriptor`, `PluginRegistration`
 - Type aliases are PascalCase: `ProcessHandler`, `EventSubscriber`, `VFSNode`, `Lesson`, `AgentChatAttachment`
@@ -475,7 +475,7 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - Examples: Extensions installed via plugin center UI
 - Pattern: `{ manifest: { id, name, version, capabilitiesProposed, classroomTools }, activate: async (ctx) => { ... } }` — stored as JS string in `plugins` table
 - Purpose: Identity that executes commands, subject to capability checks
-- Examples: `'agent-system-0'` (AI Agent), `'plugin:ext-quiz-generator'` (plugin), `'user-demo'`, `'teacher-demo'`
+- Examples: `'agent-system-0'` (AI Agent), `'plugin:ext-my-service'` (plugin), `'user-demo'`, `'teacher-demo'`
 - Pattern: String identifier assigned at command time, checked against CapabilityGuard
 ## Entry Points
 - Location: `server.ts` function `startServer()`, invoked at bottom via `startServer().catch(console.error)`

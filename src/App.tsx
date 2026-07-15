@@ -69,43 +69,13 @@ const AGENT_PROVIDER_STORAGE_KEY = 'openlearnv2.agentProviderId';
 
 const DEFAULT_PLUGIN = `exports.default = {
   manifest: {
-    id: "ext-quiz-generator",
-    name: "Quiz Component Plugin",
+    id: "@my-scope/hello-world",
+    name: "Hello World Plugin",
     version: "1.0.0",
-    capabilitiesProposed: ["quiz:write"]
+    capabilitiesProposed: ["lesson:read"]
   },
   activate: async (ctx) => {
-    ctx.actionRegistry.register({
-      id: 'ext-quiz-create',
-      commandType: 'quiz.create',
-      description: 'Create a multiple-choice quiz on the whiteboard for a lesson',
-      capabilityRequired: 'whiteboard:write',
-      inputSchema: {
-        type: 'OBJECT',
-        properties: {
-          lessonId: { type: 'STRING' },
-          question: { type: 'STRING' },
-          options: { type: 'ARRAY', items: { type: 'STRING' } }
-        },
-        required: ['lessonId', 'question', 'options']
-      }
-    });
-
-    ctx.commandBus.registerHandler('quiz.create', {
-      execute: async (command) => {
-        const payload = command.payload;
-        const result = await ctx.commandBus.execute({
-          id: Math.random().toString(36).slice(2),
-          type: 'whiteboard.draw',
-          payload: {
-            lessonId: payload.lessonId,
-            type: 'quiz',
-            data: JSON.stringify({ question: payload.question, options: payload.options })
-          }
-        });
-        return { elementId: result.elementId };
-      }
-    });
+    ctx.log.info('Hello World plugin activated');
   }
 };`;
 

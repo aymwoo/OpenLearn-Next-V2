@@ -4,8 +4,8 @@
  * T-09-03: All localStorage keys are prefixed with `edu_os_plugin:{pluginId}:`
  * to prevent cross-plugin data leakage and key collisions.
  *
- * Example: A plugin with id "ext-quiz-generator" storing key "config"
- * will actually write to localStorage key "edu_os_plugin:ext-quiz-generator:config".
+ * Example: A plugin with id "ext-hello-world" storing key "config"
+ * will actually write to localStorage key "edu_os_plugin:ext-hello-world:config".
  */
 
 import type { IStorageService } from '../plugin-host/types';

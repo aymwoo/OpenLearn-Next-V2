@@ -331,43 +331,43 @@ describe('buildContext', () => {
 
     // 创建声明 provides 的 manifest
     const manifestWithProvides: Manifest = {
-      id: 'ext-quiz-generator',
-      name: 'Quiz Generator',
+      id: 'ext-my-service',
+      name: 'My Service',
       version: '1.0.0',
       main: 'index.js',
-      provides: ['ext-quiz-generator:IQuizEngineService'],
+      provides: ['ext-my-service:IMyService'],
     };
 
     const ctx = await setupContext({ registry, tracker, manifest: manifestWithProvides });
 
     // 定义接口和 Token（模拟插件 contracts/ 中的定义）
-    interface IQuizEngineService {
-      score(answers: unknown[]): number;
+    interface IMyService {
+      doWork(): number;
     }
-    const QuizEngineToken = new Token<IQuizEngineService>(
-      'ext-quiz-generator:IQuizEngineService',
+    const MyToken = new Token<IMyService>(
+      'ext-my-service:IMyService',
       '2.3.1',
     );
 
-    const instance: IQuizEngineService = { score: () => 42 };
+    const instance: IMyService = { doWork: () => 42 };
 
     // 调用 ctx.provide(token, instance)
-    await ctx.provide(QuizEngineToken, instance);
+    await ctx.provide(MyToken, instance);
 
     // 验证 ServiceRegistry 中有注册，且版本为 2.3.1（非硬编码 1.0.0）
-    const resolved = await registry.resolve(QuizEngineToken);
+    const resolved = await registry.resolve(MyToken);
     expect(resolved).toBe(instance);
 
     // 验证版本号
-    const storedVersion = registry.getVersion('ext-quiz-generator:IQuizEngineService');
+    const storedVersion = registry.getVersion('ext-my-service:IMyService');
     expect(storedVersion).toBe('2.3.1');
 
     // 验证 dispose 清理
-    tracker.disposeAll('ext-quiz-generator');
+    tracker.disposeAll('ext-my-service');
 
     // 清理后不应再能 resolve
-    await expect(registry.resolve(QuizEngineToken)).rejects.toThrow(
-      'No provider registered for token: ext-quiz-generator:IQuizEngineService',
+    await expect(registry.resolve(MyToken)).rejects.toThrow(
+      'No provider registered for token: ext-my-service:IMyService',
     );
   });
 

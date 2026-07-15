@@ -194,10 +194,10 @@ describe('parseServiceRequirement', () => {
   });
 
   it('跨插件服务 token → 解析 pluginId 和 tokenName', () => {
-    const result = parseServiceRequirement('ext-quiz-generator:IQuizEngineService');
+    const result = parseServiceRequirement('ext-my-service:IMyService');
     expect(result).not.toBeNull();
-    expect(result!.pluginId).toBe('ext-quiz-generator');
-    expect(result!.tokenName).toBe('ext-quiz-generator:IQuizEngineService');
+    expect(result!.pluginId).toBe('ext-my-service');
+    expect(result!.tokenName).toBe('ext-my-service:IMyService');
   });
 
   it('无冒号的普通字符串 → 返回 null', () => {
@@ -213,20 +213,20 @@ describe('buildDepGraph with service dependencies', () => {
   it('从 manifest.requires 推导跨插件服务依赖并合并到图中', () => {
     const manifests = new Map<string, Manifest>();
     manifests.set(
-      'ext-quiz-pro',
-      makeManifestWithRequires('ext-quiz-pro', {
+      'ext-consumer',
+      makeManifestWithRequires('ext-consumer', {
         requires: [
           '@openlearn/core:ICommandBusService@^1.0.0',
-          'ext-quiz-generator:IQuizEngineService',
+          'ext-provider:IMyService',
         ],
       }),
     );
-    manifests.set('ext-quiz-generator', makeManifest('ext-quiz-generator'));
+    manifests.set('ext-provider', makeManifest('ext-provider'));
 
     const graph = buildDepGraph(manifests);
-    // ext-quiz-pro 的依赖应包含从 requires 推导出的 ext-quiz-generator
-    const deps = graph.get('ext-quiz-pro')!;
-    expect(deps).toContain('ext-quiz-generator');
+    // ext-consumer 的依赖应包含从 requires 推导出的 ext-provider
+    const deps = graph.get('ext-consumer')!;
+    expect(deps).toContain('ext-provider');
   });
 
   it('空 requires → 不添加额外依赖', () => {

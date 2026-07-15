@@ -20,12 +20,6 @@ const plugins = [
     zipName: 'ext-ai-quiz-pro.zip'
   },
   {
-    entry: 'packages/plugins/quiz/index.ts',
-    frontendEntry: 'packages/plugins/quiz/frontend.ts',
-    manifest: 'packages/plugins/quiz/manifest.json',
-    zipName: 'ext-quiz-generator.zip'
-  },
-  {
     entry: 'packages/plugins/rollcall/index.ts',
     manifest: 'packages/plugins/rollcall/manifest.json',
     zipName: 'ext-roll-call.zip'

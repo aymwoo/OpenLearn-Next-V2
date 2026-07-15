@@ -114,7 +114,7 @@ function wrapCommandBus(
   // V3.0: non-kernel plugins get auto-prefixed commands. Kernel plugins
   // (@openlearn/*) keep global namespace for backward compatibility.
   const isKernelPlugin = pluginId.startsWith('@openlearn/');
-  // The manifest ID is the stable public namespace (e.g. 'ext-quiz-generator').
+  // The manifest ID is the stable public namespace (e.g. 'ext-my-service').
   // The pluginId is the UUID assigned at install time.
   const manifestPrefix = manifestId ? manifestId + '.' : null;
 

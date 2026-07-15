@@ -1334,7 +1334,7 @@ await ctx.provide('@my-scope/IQuestionBank', questionBankService);
 **提供方插件** 将接口定义为 Token + Type 对，放在 `src/contracts/` 目录中：
 
 ```typescript
-// ext-quiz-generator/src/contracts/index.ts
+// ext-quiz-engine/src/contracts/index.ts
 import { Token } from '@openlearn/plugin-sdk';
 
 export interface IQuizEngineService {
@@ -1343,7 +1343,7 @@ export interface IQuizEngineService {
 }
 
 export const QuizEngineToken = new Token<IQuizEngineService>(
-  'ext-quiz-generator:IQuizEngineService',
+  'ext-quiz-engine:IQuizEngineService',
   '1.0.0'
 );
 ```
@@ -1352,7 +1352,7 @@ export const QuizEngineToken = new Token<IQuizEngineService>(
 
 ```json
 {
-  "provides": ["ext-quiz-generator:IQuizEngineService"]
+  "provides": ["ext-quiz-engine:IQuizEngineService"]
 }
 ```
 
@@ -1365,8 +1365,8 @@ ctx.provide(QuizEngineToken, new QuizEngine());
 **消费方插件** 在编译期导入类型，运行时通过 Token 解析：
 
 ```typescript
-import type { IQuizEngineService } from 'ext-quiz-generator/contracts';
-import { QuizEngineToken } from 'ext-quiz-generator/contracts';
+import type { IQuizEngineService } from 'ext-quiz-engine/contracts';
+import { QuizEngineToken } from 'ext-quiz-engine/contracts';
 
 const engine = await ctx.resolve(QuizEngineToken);
 // engine 类型为 IQuizEngineService，有完整的 IDE 补全
@@ -1379,7 +1379,7 @@ const score = engine.score(answers);
 {
   "requires": [
     "@openlearn/core:ICommandBusService@^1.0.0",
-    "ext-quiz-generator:IQuizEngineService"
+    "ext-quiz-engine:IQuizEngineService"
   ]
 }
 ```
@@ -1387,7 +1387,7 @@ const score = engine.score(answers);
 **校验机制**：
 - 安装时：检查提供方 `manifest.provides` 是否声明了 token → warn
 - 激活时：检查提供方是否已激活并提供服务 → 阻塞
-- 激活顺序：`ext-quiz-generator:IQuizEngineService` 自动推导为对 `ext-quiz-generator` 的依赖，提供方先激活
+- 激活顺序：`ext-quiz-engine:IQuizEngineService` 自动推导为对 `ext-quiz-engine` 的依赖，提供方先激活
 
 const qb = await ctx.resolve({ name: '@my-scope:IQuestionBank' } as any);
 ```

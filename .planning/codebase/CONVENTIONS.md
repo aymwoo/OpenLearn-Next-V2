@@ -23,7 +23,7 @@
 - PascalCase for component names and React refs: `Socket`, `Markdown`
 - State-updater pairs follow the `[value, setValue]` convention: `const [lang, setLang] = useState<Language>('zh')`
 - Database references use short names: `db`, `stmt`, `cmd`
-- Plugin entity IDs use snake_case pattern: `usr_admin`, `prov_deepseek`, `ext-quiz-generator`
+- Plugin entity IDs use snake_case pattern: `usr_admin`, `prov_deepseek`, `ext-quiz-engine`
 - Command types use dot-separated namespacing: `lesson.create`, `whiteboard.draw`, `vfs.write_file`, `ai.start_generation`
 
 **Types:**

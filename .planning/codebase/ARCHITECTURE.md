@@ -184,7 +184,7 @@
 
 **Actor:**
 - Purpose: Identity that executes commands, subject to capability checks
-- Examples: `'agent-system-0'` (AI Agent), `'plugin:ext-quiz-generator'` (plugin), `'user-demo'`, `'teacher-demo'`
+- Examples: `'agent-system-0'` (AI Agent), `'plugin:ext-my-service'` (plugin), `'user-demo'`, `'teacher-demo'`
 - Pattern: String identifier assigned at command time, checked against CapabilityGuard
 
 ## Entry Points
