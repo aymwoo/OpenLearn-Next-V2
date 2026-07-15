@@ -30,38 +30,40 @@ OpenLearnV2 采用 **插件驱动的命令-事件总线架构**（Plugin-Driven 
 
 ## 2. 系统架构总览
 
-```mermaid
-flowchart TB
-    subgraph Kernel["OpenLearnV2 Kernel"]
-        AI["AI Agent (Shell)<br/>Gemini / OpenAI 兼容模型"]
-        CB["CommandBus (内核管线)<br/>interceptor → Schema 校验 → CapabilityGuard → 审批 → Handler"]
-        subgraph Plugins["插件组"]
-            B["builtin<br/>课程管理"]
-            V["VFS<br/>虚拟文件系统"]
-            M["管理插件"]
-            AIP["AI 规划器"]
-            T["第三方插件<br/>(Plugin)"]
-        end
-        EB["EventBus<br/>事件写入 SQLite 审计日志"]
-        DB[("SQLite Database<br/>30+ 表")]
-        SR["ServiceRegistry<br/>Token 驱动 / DAG / 版本检查"]
-    end
-    AI -->|"自然语言 → functionCall"| CB
-    CB --> B & V & M & AIP & T
-    B & V & M & AIP & T --> EB
-    EB --> DB
-
-
----
-
-## 3. 核心子系统
-
-所有核心子系统位于 `packages/core/` 目录下，由 `Kernel` 类统一组装。
-
-### 3.1 Kernel — 全局单例容器
-
-Kernel 是系统的「操作系统内核」，采用分层初始化策略（Layer 0 → Layer 1 → Layer 2 → Layer 3），从无依赖的子系统开始逐层构建：
-
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ OpenLearnV2 Kernel                                            │   
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │ AI Agent (Shell)                                            │  │
+│  │ Gemini / OpenAI 兼容模型作为智能控制器                          │  │      
+│  └──────────────────────┬───────────────────────────┘  │          
+│                         │ 自然语言 → functionCall                   │ 
+│  ┌──────────────────────▼───────────────────────────┐  │          
+│  │ CommandBus (内核管线)                                         │  │ 
+│  │ interceptor → JSON Schema 校验 → CapabilityGuard              │  │
+│  │ → 高危审批闸门 → Handler 执行                                 │  │     
+│  └──┬──────────┬──────────┬──────────┬──────────┬─────────┘       │
+│     │          │          │          │          │               │ 
+│  ┌──▼──┐  ┌───▼──┐  ┌───▼──┐  ┌───▼──┐  ┌───▼────────┐           │
+│  │builtin│  │ VFS  │  │管理  │  │ AI   │  │ 第三方插件  │           │    
+│  │ 插件  │  │ 插件 │  │ 插件 │  │规划器│  │ (Plugin)   │           │       
+│  └──┬──┘  └──┬──┘  └──┬──┘  └──┬──┘  └──────┬──────┘           │  
+│     │        │        │        │              │               │   
+│  ┌──▼────────▼────────▼────────▼──────────────▼──────┐           │
+│  │ EventBus                                                    │           │
+│  │ 所有事件写入 SQLite 审计日志表                                 │           │
+│  └──────────────────────┬───────────────────────┘           │     
+│                         │                                        │
+│  ┌──────────────────────▼───────────────────────┐           │     
+│  │ SQLite Database (30+ 表)                                      │           │
+│  └─────────────┘           │                                      
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │ ServiceRegistry (依赖注入容器)                                  │  │ 
+│  │ Token 驱动 | 有向无环图 | 依赖验证 | SemVer 版本检查            │  │          
+│  └────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 Layer 0: EventBus, CapabilityGuard, ServiceRegistry, StorageService, AIService
 Layer 1: CommandBus(EventBus), ActionRegistry
@@ -86,34 +88,16 @@ Kernel 通过 lazy-evaluated Proxy 暴露全局单例 `kernelContainer`，避免
 
 **执行管线（interceptor chain）**:
 
-```mermaid
-flowchart TD
-    A["execute(command)"] --> B["1. 标准化 actorId<br/>空值默认 agent-system-0"]
-    B --> C["2. 拦截器链"]
-    C --> C1["JSON Schema 校验<br/>基于 ActionRegistry.inputSchema"]
-    C1 --> C2["CapabilityGuard 权限检查<br/>非 admin actor 校验 capabilityRequired"]
-    C2 --> C3{"isHighRisk<br/>+ 非 admin?"}
-    C3 -->|是| C4["写入 pending_commands 表<br/>+ 抛出异常中断"]
-    C3 -->|否| D["3. Handler 查找<br/>modern 优先, legacy 降级"]
-    D --> E["4. Handler.execute()<br/>执行业务逻辑"]
-    E --> F["5. 返回结果"]
-
-
-支持 modern 和 legacy 双通道处理器（D-11）：`registerHandler()` 注册到 modern Map，`registerLegacyHandler()` 注册到 legacy Map。execute 时优先匹配 modern，未命中则 fallback 到 legacy。
-
-### 3.3 EventBus — 事件发布/订阅
-
-轻量级发布/订阅模式，支持通配符 `*` 订阅所有事件。事件发布为异步并行——所有订阅者通过 `Promise.all` 并发触发，单个订阅者异常仅记录 console.error，不影响其他订阅者。
-
-```typescript
-interface PlatformEvent<T = unknown> {
-  readonly id: string;
-  readonly type: string;          // 过去式命名，如 "lesson.created"
-  readonly source: string;        // 来源插件/模块
-  readonly payload: T;
-  readonly timestamp: number;
-  readonly correlationId?: string; // 关联命令 ID，用于因果追踪
-}
+```
+execute(command):
+  ├─ 1. 标准化 actorId（空值默认 "agent-system-0"）
+  ├─ 2. 拦截器链:
+  │   ├─ JSON Schema 校验（基于 ActionRegistry 的 inputSchema）
+  │   ├─ CapabilityGuard 权限检查（非 admin actor 时校验 capabilityRequired）
+  │   └─ 高危审批闸门（isHighRisk + 非 admin → 写入 pending_commands 表 + 抛出异常）
+  ├─ 3. Handler 查找（modern 优先，legacy 降级）
+  ├─ 4. Handler.execute() 执行业务逻辑
+  └─ 5. 返回结果
 ```
 
 **审计日志**：Kernel 启动后通过 `initAuditLog()` 注册 `*` 通配符订阅者，将所有事件写入 SQLite `events` 表，形成不可篡改的审计日志。
@@ -481,44 +465,33 @@ AI Agent 调用 isHighRisk Action
 
 ## 附录 B：完整数据流
 
-```mermaid
-sequenceDiagram
-    participant User as 用户
-    participant API as POST /api/agent/chat
-    participant AI as AI 模型
-    participant Agent as executeAgentToolCall
-    participant Registry as ActionRegistry
-    participant CB as CommandBus
-    participant Handler as Handler
-    participant EB as EventBus
-    participant Audit as events 审计日志
-    participant Socket as Socket.IO
-
-    User->>API: 发送消息
-    API->>AI: 请求 functionCall
-    AI-->>API: lesson.create
-    API->>Agent: executeAgentToolCall()
-    Agent->>Registry: getActionByToolName()
-    Registry-->>Agent: action
-    Agent->>CB: execute()
-    activate CB
-    CB->>CB: JSON Schema 校验
-    CB->>CB: CapabilityGuard 权限检查
-    alt 高危操作
-        CB->>CB: 写入 pending_commands + 异常中断
-    end
-    CB->>Handler: execute()
-    Handler->>Handler: db.prepare().run()
-    Handler-->>CB: 结果
-    deactivate CB
-    CB->>EB: publish(事件)
-    EB->>Audit: 通配符订阅写入日志
-    EB->>Socket: 推送在线客户端
-    CB-->>Agent: 结果
-    Agent-->>AI: 返回结果
-
-
----
-
-> 本文档基于 OpenLearnV2 最新代码库（`main` 分支）通过 Codegraph 知识图谱分析生成。
-> 最后更新：2026-07-14
+```
+用户发送消息
+  │
+  ▼
+POST /api/agent/chat
+  │
+  ▼
+AI 模型返回 functionCall（如 lesson.create）
+  │
+  ▼
+executeAgentToolCall() 通过 ActionRegistry 查找 action
+  │
+  ▼
+CommandBus.execute() 执行拦截器管线:
+  ├─ JSON Schema payload 校验（基于 action.inputSchema）
+  ├─ CapabilityGuard 权限检查（非 admin actor）
+  └─ 高危操作 → 写入 pending_commands 审批表 + 抛出异常中断
+  │
+  ▼
+Handler 执行业务逻辑（db.prepare().run()）
+  │
+  ▼
+EventBus.publish() 发布事件（异步并行通知所有订阅者）
+  │
+  ├─ * 通配符订阅者写入 events 审计日志表
+  └─ Socket.IO 推送给在线客户端（教师/学生实时更新）
+  │
+  ▼
+返回结果给 AI Agent（继续对话或结束）
+```
