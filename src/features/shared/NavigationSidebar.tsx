@@ -71,11 +71,10 @@ export function NavigationSidebar({
           </button>
         )}
 
+      {/* Dynamic plugin-registered tab buttons */}
+      <ExtensionPointRenderer slot="teacher.tab" slotProps={{ renderType: "button", mainNavCollapsed }} />
         <NavButton icon={HelpCircle} label={lang === 'zh' ? '帮助文档' : 'System Commands / Help'} tab="help" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
       </div>
-
-      {/* Dynamic plugin-registered tab buttons */}
-      <ExtensionPointRenderer slot="teacher.tab" slotProps={{ renderType: 'button', mainNavCollapsed }} />
 
       {/* Today's Schedules Sidebar Widget */}
       {(() => {
