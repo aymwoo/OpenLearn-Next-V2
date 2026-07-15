@@ -1,0 +1,23 @@
+{
+  "name": "openlearn-plugin-courseware-hub",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "AI课件分发与成绩采集插件",
+  "author": "OpenLearn Developer",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=17.0.0",
+    "react-dom": ">=17.0.0",
+    "recharts": ">=2.0.0",
+    "lucide-react": ">=0.300.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0",
+    "jszip": "^3.10.0",
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "build": "node build.mjs"
+  }
+}
