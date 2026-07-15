@@ -518,7 +518,7 @@ export class FrontendPluginHost {
         // CommandBus can find the handler that the worker's
         // registerHandler call stored under the prefixed key.
         // See packages/core/plugin-host/plugin-namespace.ts for the contract.
-        const prefixedType = resolvePluginCommandType(type, pluginId);
+        const prefixedType = resolvePluginCommandType(type, manifest.id);
         const res = await frontendApi.post<T>('/api/plugins/execute-command', {
           type: prefixedType,
           payload,
