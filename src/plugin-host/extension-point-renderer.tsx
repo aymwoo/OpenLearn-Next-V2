@@ -16,7 +16,7 @@
  */
 
 import React, { Suspense } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Puzzle } from 'lucide-react';
 import { usePluginHost } from './plugin-host-context';
 import type { ExtensionSlot } from './types';
 
@@ -137,6 +137,39 @@ export function ExtensionPointRenderer({
   const extensions = host.getExtensions(slot as ExtensionSlot);
 
   if (extensions.length === 0) return null;
+
+  // teacher.tab with renderType 'button' — render NavButton-style buttons
+  // directly from extension metadata, bypassing plugin components entirely.
+  // This guarantees pixel-perfect styling consistency with system NavButton.
+  if (slot === 'teacher.tab' && slotProps?.renderType === 'button') {
+    return (
+      <>
+        {extensions.map((ext) => {
+          const tabValue = `${ext.pluginId}/${ext.id}`;
+          const isActive = slotProps?.teacherTab === tabValue;
+          const label = (ext as any).title || ext.label || ext.id;
+          return (
+            <button
+              key={`${ext.pluginId}/${ext.id}`}
+              onClick={() => slotProps?.setTeacherTab?.(tabValue)}
+              className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${
+                isActive
+                  ? 'bg-indigo-50 text-indigo-700 font-bold'
+                  : 'text-gray-600 hover:bg-gray-50'
+              } ${slotProps?.mainNavCollapsed ? 'justify-center px-2' : ''}`}
+              title={label}
+            >
+              <Puzzle size={20} className="shrink-0" />
+              <span className={slotProps?.mainNavCollapsed ? 'hidden' : 'hidden md:block'}>
+                {label}
+              </span>
+            </button>
+          );
+        })}
+      </>
+    );
+  }
+
 
   return (
     <>
