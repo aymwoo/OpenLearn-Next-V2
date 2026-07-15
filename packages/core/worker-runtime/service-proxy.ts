@@ -357,7 +357,6 @@ export function createServicesProxy(
     } else if (typed.type === 'result') {
       pending.resolve((msg as { value?: unknown }).value);
       // Clean up callback registry for this invoke
-      cbRegistry.delete(invokeId);
     }
   });
 
