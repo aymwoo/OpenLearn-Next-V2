@@ -4959,8 +4959,32 @@ ${examsText}
       if (!type) {
         return res.status(400).json({ success: false, error: 'Missing command type' });
       }
+
+      // Resolve the prefixed command type. Handlers are registered by the
+      // service-host with a plugin-UUID prefix (e.g. 019f6465-…:courseware.open_panel),
+      // but some callers (e.g. whiteboard toolbar buttons) may send the bare type.
+      // Fallback: if the bare type is not found, try suffix-matching against
+      // all registered handler keys.
+      let resolvedType = type;
+      const bus = kernelContainer.commandBus as any;
+      // service-host stores handlers in private 'handlers' / 'legacyHandlers' Maps
+      const handlersMap = bus.handlers;
+      const legacyMap = bus.legacyHandlers;
+      if (!handlersMap?.has?.(resolvedType) && !legacyMap?.has?.(resolvedType)) {
+        for (const map of [handlersMap, legacyMap]) {
+          if (!map) continue;
+          for (const [key] of map) {
+            if (key.endsWith(':' + resolvedType)) {
+              resolvedType = key;
+              break;
+            }
+          }
+          if (resolvedType !== type) break;
+        }
+      }
+
       const cmd = await kernelContainer.commandBus.createCommand(
-        type,
+        resolvedType,
         payload ?? {},
         getActorId(req),
       );
