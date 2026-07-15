@@ -31,39 +31,39 @@ OpenLearnV2 采用 **插件驱动的命令-事件总线架构**（Plugin-Driven 
 ## 2. 系统架构总览
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│ OpenLearnV2 Kernel                                            │   
-│                                                                  │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │ AI Agent (Shell)                                            │  │
-│  │ Gemini / OpenAI 兼容模型作为智能控制器                          │  │      
-│  └──────────────────────┬───────────────────────────┘  │          
-│                         │ 自然语言 → functionCall                   │ 
-│  ┌──────────────────────▼───────────────────────────┐  │          
-│  │ CommandBus (内核管线)                                         │  │ 
-│  │ interceptor → JSON Schema 校验 → CapabilityGuard              │  │
-│  │ → 高危审批闸门 → Handler 执行                                 │  │     
-│  └──┬──────────┬──────────┬──────────┬──────────┬─────────┘       │
-│     │          │          │          │          │               │ 
-│  ┌──▼──┐  ┌───▼──┐  ┌───▼──┐  ┌───▼──┐  ┌───▼────────┐           │
-│  │builtin│  │ VFS  │  │管理  │  │ AI   │  │ 第三方插件  │           │    
-│  │ 插件  │  │ 插件 │  │ 插件 │  │规划器│  │ (Plugin)   │           │       
-│  └──┬──┘  └──┬──┘  └──┬──┘  └──┬──┘  └──────┬──────┘           │  
-│     │        │        │        │              │               │   
-│  ┌──▼────────▼────────▼────────▼──────────────▼──────┐           │
-│  │ EventBus                                                    │           │
-│  │ 所有事件写入 SQLite 审计日志表                                 │           │
-│  └──────────────────────┬───────────────────────┘           │     
-│                         │                                        │
-│  ┌──────────────────────▼───────────────────────┐           │     
-│  │ SQLite Database (30+ 表)                                      │           │
-│  └─────────────┘           │                                      
-│                                                                  │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │ ServiceRegistry (依赖注入容器)                                  │  │ 
-│  │ Token 驱动 | 有向无环图 | 依赖验证 | SemVer 版本检查            │  │          
-│  └────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────┘
++--------------------------------------------------------------------+
+| OpenLearnV2 Kernel                                                 |
+|                                                                    |
+|  +------------------------------------------------------+          |
+|  | AI Agent (Shell)                                             |  |
+|  | Gemini / OpenAI 兼容模型作为智能控制器                       |  |
+|  +----------------------+-------------------------------+          |
+|                       | 自然语言 => functionCall                   |
+|  +----------------------+-------------------------------+          |
+|  | CommandBus (内核管线)                                        |  |
+|  | interceptor -> JSON Schema 校验 -> CapabilityGuard           |  |
+|  | -> 高危审批闸门 -> Handler 执行                              |  |
+|  +--+----------+----------+----------+----------+---------+        |
+|     |          |          |          |          |                  |
+|  +--+--+  +---+--+  +---+--+  +---+--+  +---+--------+             |
+|  |builtin|  | VFS  |  |管理  |  | AI   |  | 第三方插件  |          |
+|  | 插件  |  | 插件 |  | 插件 |  |规划器|  | (Plugin)   |           |
+|  +--+--+  +--+--+  +--+--+  +--+--+  +------+------+               |
+|     |        |        |        |              |                    |
+|  +--+--------+--------+--------+--------------+------+             |
+|  | EventBus                                                     |  |
+|  | 所有事件写入 SQLite 审计日志表                               |  |
+|  +----------------------+-------------------------------+          |
+|                       |                                            |
+|  +----------------------+-------------------------------+          |
+|  | SQLite Database (30+ 表)                                     |  |
+|  +------------------------------------------------------+          |
+|                                                                    |
+|  +------------------------------------------------------+          |
+|  | ServiceRegistry (依赖注入容器)                               |  |
+|  | Token 驱动 | DAG | 依赖验证 | SemVer 版本检查                |  |
+|  +------------------------------------------------------+          |
++--------------------------------------------------------------------+
 ```
 Layer 0: EventBus, CapabilityGuard, ServiceRegistry, StorageService, AIService
 Layer 1: CommandBus(EventBus), ActionRegistry
@@ -90,14 +90,23 @@ Kernel 通过 lazy-evaluated Proxy 暴露全局单例 `kernelContainer`，避免
 
 ```
 execute(command):
-  ├─ 1. 标准化 actorId（空值默认 "agent-system-0"）
-  ├─ 2. 拦截器链:
-  │   ├─ JSON Schema 校验（基于 ActionRegistry 的 inputSchema）
-  │   ├─ CapabilityGuard 权限检查（非 admin actor 时校验 capabilityRequired）
-  │   └─ 高危审批闸门（isHighRisk + 非 admin → 写入 pending_commands 表 + 抛出异常）
-  ├─ 3. Handler 查找（modern 优先，legacy 降级）
-  ├─ 4. Handler.execute() 执行业务逻辑
-  └─ 5. 返回结果
+  +-- 1. 标准化 actorId（空值默认 "agent-system-0"）
+  +-- 2. 拦截器链:
+  |   +-- JSON Schema 校验（基于 ActionRegistry 的 inputSchema）
+  |   +-- CapabilityGuard 权限检查（非 admin actor 时校验 capabilityRequired）
+  |   +-- 高危审批闸门（isHighRisk + 非 admin -> 写入 pending_commands 表 + 抛出异常）
+  +-- 3. Handler 查找（modern 优先，legacy 降级）
+  +-- 4. Handler.execute() 执行业务逻辑
+  +-- 5. 返回结果
+```
+interface PlatformEvent<T = unknown> {
+  readonly id: string;
+  readonly type: string;          // 过去式命名，如 "lesson.created"
+  readonly source: string;        // 来源插件/模块
+  readonly payload: T;
+  readonly timestamp: number;
+  readonly correlationId?: string; // 关联命令 ID，用于因果追踪
+}
 ```
 
 **审计日志**：Kernel 启动后通过 `initAuditLog()` 注册 `*` 通配符订阅者，将所有事件写入 SQLite `events` 表，形成不可篡改的审计日志。
@@ -467,31 +476,31 @@ AI Agent 调用 isHighRisk Action
 
 ```
 用户发送消息
-  │
-  ▼
+  |
+  v
 POST /api/agent/chat
-  │
-  ▼
+  |
+  v
 AI 模型返回 functionCall（如 lesson.create）
-  │
-  ▼
+  |
+  v
 executeAgentToolCall() 通过 ActionRegistry 查找 action
-  │
-  ▼
+  |
+  v
 CommandBus.execute() 执行拦截器管线:
-  ├─ JSON Schema payload 校验（基于 action.inputSchema）
-  ├─ CapabilityGuard 权限检查（非 admin actor）
-  └─ 高危操作 → 写入 pending_commands 审批表 + 抛出异常中断
-  │
-  ▼
+  +-- JSON Schema payload 校验（基于 action.inputSchema）
+  +-- CapabilityGuard 权限检查（非 admin actor）
+  +-- 高危操作 -> 写入 pending_commands 审批表 + 抛出异常中断
+  |
+  v
 Handler 执行业务逻辑（db.prepare().run()）
-  │
-  ▼
+  |
+  v
 EventBus.publish() 发布事件（异步并行通知所有订阅者）
-  │
-  ├─ * 通配符订阅者写入 events 审计日志表
-  └─ Socket.IO 推送给在线客户端（教师/学生实时更新）
-  │
-  ▼
+  |
+  +-- * 通配符订阅者写入 events 审计日志表
+  +-- Socket.IO 推送给在线客户端（教师/学生实时更新）
+  |
+  v
 返回结果给 AI Agent（继续对话或结束）
 ```
