@@ -6,6 +6,48 @@ import { LazyWhiteboard } from './components/LazyWhiteboard';
 import { LazyCourseware } from './components/LazyCourseware';
 import { LiveClassroomView } from './components/LiveClassroomView';
 import { CoursewareHubPanel } from './features/teacher/CoursewareHubPanel';
+
+function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null }) {
+  const extensionPoints = usePluginHostStore(state => state.extensionPoints);
+  const tabs = extensionPoints.get('teacher.tab' as any) || [];
+
+  // Auto-select first tab if none active
+  const effectiveActive = activeNavPlugin || (tabs.length > 0 ? tabs[0].pluginId : null);
+
+  const activeTab = tabs.find(t => t.pluginId === effectiveActive);
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Tab bar */}
+      <div className="flex gap-1 px-4 py-2 border-b border-gray-200 bg-gray-50 shrink-0">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => {
+              const store = usePluginHostStore.getState();
+              store.setActivePlugin?.(tab.pluginId);
+            }}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              effectiveActive === tab.pluginId
+                ? 'bg-white text-indigo-600 border border-b-white border-gray-200 -mb-[1px]'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            {tab.label || tab.pluginId}
+          </button>
+        ))}
+      </div>
+      {/* Active panel */}
+      <div className="flex-1 overflow-auto">
+        {activeTab?.component ? (
+          <activeTab.component renderType="panel" />
+        ) : (
+          <ExtensionPointRenderer slot="teacher.tab" slotProps={{ renderType: 'panel' }} />
+        )}
+      </div>
+    </div>
+  );
+}
 import { ChevronLeft, Menu } from 'lucide-react';
 // InteractiveCoursewareViewer: loaded as local module (Phase 5 v5.0 refactoring)
 import { QuickActionsMenu } from './components/QuickActionsMenu';
@@ -310,6 +352,7 @@ export default function App() {
   const [libraryResources, setLibraryResources] = useState<any[]>([]);
   const [loadingLibraryResources, setLoadingLibraryResources] = useState(false);
   const [showCoursewareHub, setShowCoursewareHub] = useState(false);
+  const [activeNavPlugin, setActiveNavPlugin] = useState<string | null>(null);
 
   const fetchLibraryResources = async () => {
     try {
@@ -4405,7 +4448,7 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
             {/* Phase 9: Dynamic plugin tab content — catch-all for non-hardcoded tabs */}
             {['dashboard', 'lesson_editor', 'live_class', 'plugins', 'courses', 'classes',
               'timetable', 'admin_directory', 'help', 'computer_labs'].includes(teacherTab) ? null : (
-              <ExtensionPointRenderer slot="teacher.tab" slotProps={{ renderType: 'panel' }} />
+              <PluginTabPanel activeNavPlugin={activeNavPlugin} />
             )}
 
             {teacherTab === 'dashboard' ? (

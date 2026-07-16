@@ -56,7 +56,7 @@ function PluginCardRenderer({ pluginId, slot, widgetId, elementId, lessonId }: {
 
   if (ext.component) {
     return React.createElement(
-      React.lazy(ext.component),
+      ext.component,
       { elementId, lessonId }
     );
   }
