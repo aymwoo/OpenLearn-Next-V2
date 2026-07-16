@@ -28,6 +28,7 @@ function TeacherPanelWrapper(props: any) {
 
 // Wrapper for whiteboard PluginCardRenderer: receives { elementId, lessonId } props
 function TeacherPanelDashboardWrapper(props: any) {
+  console.log('[courseware-hub] TeacherPanelDashboardWrapper called, pluginCtx:', !!pluginCtx, 'props:', props);
   if (!pluginCtx) return null;
   if (!props || !props.elementId) return null;
   const mergedCtx = { ...pluginCtx, elementId: props.elementId, lessonId: props.lessonId };

@@ -18,3 +18,12 @@ coverage/
 # Python virtual environment and Sphinx build artifacts
 .venv/
 docs/_build/
+
+# Design & planning documents (not part of the system code)
+.planning/
+artifacts/
+architecture_governance_report.md
+AI_Courseware_Runtime_Prompt.md
+v2_plugins/docs_plugin_guide.md
+v2_plugins/courseware-hub/src_restored/
+OpenLearn_Milestone1_Security_Framework.md
