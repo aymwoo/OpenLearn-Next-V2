@@ -5,6 +5,7 @@ import { translations, Language } from './i18n';
 import { LazyWhiteboard } from './components/LazyWhiteboard';
 import { LazyCourseware } from './components/LazyCourseware';
 import { LiveClassroomView } from './components/LiveClassroomView';
+import { CoursewareHubPanel } from './features/teacher/CoursewareHubPanel';
 import { ChevronLeft, Menu } from 'lucide-react';
 // InteractiveCoursewareViewer: loaded as local module (Phase 5 v5.0 refactoring)
 import { QuickActionsMenu } from './components/QuickActionsMenu';
@@ -308,6 +309,7 @@ export default function App() {
   const [selectedLibraryResourceId, setSelectedLibraryResourceId] = useState<string | null>(null);
   const [libraryResources, setLibraryResources] = useState<any[]>([]);
   const [loadingLibraryResources, setLoadingLibraryResources] = useState(false);
+  const [showCoursewareHub, setShowCoursewareHub] = useState(false);
 
   const fetchLibraryResources = async () => {
     try {
@@ -4915,6 +4917,7 @@ onRefresh={() => fetchElements(selectedLesson)}
                       });
                     }
                   }}
+                  onOpenCoursewareHub={() => setShowCoursewareHub(true)}
                 />
               </div>
             ) : teacherTab === 'plugins' ? (
@@ -8388,6 +8391,14 @@ onClose={() => setPreviewSelectedCourseware(null)}
         onSeedSuccess={handleSeedSuccess}
         onJumpTab={(tab) => setTeacherTab(tab)}
       />
+      
+      {/* Courseware Hub Panel */}
+      {showCoursewareHub && (
+        <CoursewareHubPanel
+          onClose={() => setShowCoursewareHub(false)}
+          lang={lang}
+        />
+      )}
 
       </div>
     </>

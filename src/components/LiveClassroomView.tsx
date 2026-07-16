@@ -4,6 +4,7 @@ import * as Icons from 'lucide-react';
 import { LazyWhiteboard } from '../components/LazyWhiteboard';
 import { TeacherAssignmentGradePanel } from './TeacherAssignmentGradePanel';
 import { io } from 'socket.io-client';
+import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
 
 // Dynamic Icon component to render Lucide icons by name string
 function DynamicIcon({ name, ...props }: { name: string; [key: string]: any }) {
@@ -41,6 +42,7 @@ interface LiveClassroomViewProps {
   activeStudentLessons: Record<string, string>;
   liveClassStudentProgress: any[];
   onPingStudent?: (studentId: string, message?: string) => void;
+  onOpenCoursewareHub?: () => void;
 }
 
 export function LiveClassroomView({
@@ -71,7 +73,8 @@ export function LiveClassroomView({
   onlineStudentIds,
   activeStudentLessons,
   liveClassStudentProgress,
-  onPingStudent
+  onPingStudent,
+  onOpenCoursewareHub
 }: LiveClassroomViewProps) {
   const [lockingClass, setLockingClass] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
@@ -205,7 +208,8 @@ export function LiveClassroomView({
           const modernTools = manifestObj.contributes?.['classroom.tool'] || [];
           return [...legacyTools, ...modernTools].map((t: any) => ({
             ...t,
-            pluginId: p.id
+            pluginId: p.id,
+            manifestId: manifestObj.id
           }));
         } catch (e) {
           return [];
@@ -409,16 +413,25 @@ export function LiveClassroomView({
         } catch {}
       }
 
+      // Only prefix plugin-internal commands (e.g. courseware.open_panel).
+      // Kernel commands like whiteboard.draw must pass through unmodified.
+      const KERNEL_COMMAND_RE = /^(whiteboard|lesson|assignment|class|student|vfs|plugin|ai|agent|system)\./;
+      const prefixedCommandType = (!KERNEL_COMMAND_RE.test(tool.commandType) && tool.manifestId)
+        ? resolvePluginCommandType(tool.commandType, tool.manifestId)
+        : tool.commandType;
       const res = await fetch('/api/commands', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          commandType: tool.commandType,
+          commandType: prefixedCommandType,
           payload: resolvedPayload
         })
       });
 
       if (res.ok) {
+        if (onOpenCoursewareHub && (tool.id === 'courseware-hub-teacher' || tool.commandType === 'courseware.open_panel')) {
+          onOpenCoursewareHub();
+        }
         setLiveClassFeed(prev => [
           {
             id: Math.random().toString(),

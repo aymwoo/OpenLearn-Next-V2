@@ -27,10 +27,31 @@
       "id": "courseware-hub-teacher",
       "name": "课件管理",
       "icon": "BookOpen",
-      "commandType": "courseware.open_panel"
+      "commandType": "whiteboard.draw",
+      "payload": {
+        "lessonId": "$lessonId",
+        "type": "plugin",
+        "data": "{\"pluginId\": \"@courseware-hub/plugin\", \"title\": \"课件管理\", \"teacherWidgetId\": \"courseware-hub-teacher\", \"studentWidgetId\": \"courseware-hub-student\", \"width\": 900, \"height\": 600}"
+      }
     }
   ],
   "engines": {
     "openlearn": ">=2.5.0"
+  },
+  "contributes": {
+    "teacher.dashboard.widget": [
+      {
+        "id": "courseware-hub-teacher",
+        "label": "课件管理",
+        "icon": "BookOpen"
+      }
+    ],
+    "student.view": [
+      {
+        "id": "courseware-hub-student",
+        "label": "我的课件",
+        "icon": "BookOpen"
+      }
+    ]
   }
 }

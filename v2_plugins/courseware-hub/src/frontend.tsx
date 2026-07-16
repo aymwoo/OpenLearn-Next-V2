@@ -26,6 +26,14 @@ function TeacherPanelWrapper(props: any) {
   return React.createElement(TeacherPanel, { ctx: pluginCtx });
 }
 
+// Wrapper for whiteboard PluginCardRenderer: receives { elementId, lessonId } props
+function TeacherPanelDashboardWrapper(props: any) {
+  if (!pluginCtx) return null;
+  if (!props || !props.elementId) return null;
+  const mergedCtx = { ...pluginCtx, elementId: props.elementId, lessonId: props.lessonId };
+  return React.createElement(TeacherPanel, { ctx: mergedCtx });
+}
+
 function DashboardWidgetWrapper() {
   return pluginCtx ? React.createElement(DashboardWidget, { ctx: pluginCtx }) : null;
 }
@@ -45,11 +53,20 @@ async function activate(hostCtx: any) {
 
   if (hostCtx.ui?.registerExtensionPoint) {
     hostCtx.ui.registerExtensionPoint('teacher.tab', {
-      id: 'courseware-hub-teacher',
+      id: 'courseware-hub-teacher-tab',
       label: '\u8bfe\u4ef6\u7ba1\u7406',
       icon: 'BookOpen',
       component: TeacherPanelWrapper,
       position: 70,
+      pluginId: hostCtx.pluginId,
+    });
+
+    // Register for whiteboard PluginCardRenderer rendering (teacher.dashboard.widget slot)
+    hostCtx.ui.registerExtensionPoint('teacher.dashboard.widget', {
+      id: 'courseware-hub-teacher',
+      label: '\u8bfe\u4ef6\u7ba1\u7406',
+      icon: 'BookOpen',
+      component: TeacherPanelDashboardWrapper,
       pluginId: hostCtx.pluginId,
     });
 

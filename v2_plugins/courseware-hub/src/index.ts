@@ -263,7 +263,7 @@ export default {
       'lesson:read', 'vfs:read', 'vfs:write',
     ],
     classroomTools: [
-      { id: 'courseware-hub-teacher', name: '课件管理', icon: 'BookOpen', commandType: 'courseware.open_panel' },
+      { id: 'courseware-hub-teacher', name: '课件管理', icon: 'BookOpen', commandType: 'whiteboard.draw', payload: { lessonId: '$lessonId', type: 'plugin', data: JSON.stringify({ pluginId: '@courseware-hub/plugin', title: '课件管理', teacherWidgetId: 'courseware-hub-teacher', studentWidgetId: 'courseware-hub-student', width: 900, height: 600 }) } },
     ],
     engines: { openlearn: '>=5.1.0' },
   },
@@ -712,9 +712,31 @@ export default {
 
     /** 仪表盘统计 */
 
-    /** classroomTools 入口 — 仅用于触发前端面板打开 */
+    /** classroomTools 入口 — 委托 whiteboard.draw 创建插件元素 */
     await commandBus.registerHandler('courseware.open_panel', {
-      async execute() {
+      async execute(cmd) {
+        const p = cmd.payload as any;
+        const lessonId = p?.lessonId;
+        if (lessonId) {
+          // Delegate to the kernel whiteboard.draw command to create a plugin card
+          const result = await commandBus.execute({
+            commandType: 'whiteboard.draw',
+            payload: {
+              lessonId,
+              type: 'plugin',
+              data: JSON.stringify({
+                pluginId: '@courseware-hub/plugin',
+                title: '课件管理',
+                teacherWidgetId: 'courseware-hub-teacher',
+                studentWidgetId: 'courseware-hub-student',
+                width: 900,
+                height: 600,
+              }),
+            },
+            actorId: 'plugin:courseware-hub',
+          });
+          return { panel: 'teacher', elementId: (result as any)?.elementId };
+        }
         return { panel: 'teacher' };
       },
     });

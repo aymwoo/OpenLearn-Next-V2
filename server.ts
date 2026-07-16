@@ -4974,7 +4974,7 @@ ${examsText}
         for (const map of [handlersMap, legacyMap]) {
           if (!map) continue;
           for (const [key] of map) {
-            if (key.endsWith(':' + resolvedType)) {
+            if (key.endsWith(':' + resolvedType) || key.endsWith('.' + resolvedType)) {
               resolvedType = key;
               break;
             }

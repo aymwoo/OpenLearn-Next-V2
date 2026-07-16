@@ -40,6 +40,7 @@ import type {
   IStorageService,
   IAIService,
 } from '../di/interfaces.js';
+import { resolvePluginCommandType } from './plugin-namespace.js';
 
 // ── 共享模块注册表 ──────────────────────────────────────────────────────
 
@@ -114,22 +115,12 @@ function wrapCommandBus(
   // V3.0: non-kernel plugins get auto-prefixed commands. Kernel plugins
   // (@openlearn/*) keep global namespace for backward compatibility.
   const isKernelPlugin = pluginId.startsWith('@openlearn/');
-  // The manifest ID is the stable public namespace (e.g. 'ext-my-service').
-  // The pluginId is the UUID assigned at install time.
-  const manifestPrefix = manifestId ? manifestId + '.' : null;
 
-  /** Resolve the registered command type — UUID-prefixed commands stay as-is;
-   *  non-UUID commands with dots pass through as-is (their own semantic namespace);
-   *  only apply pluginId prefix if the commandType has NO dots (bare action name). */
+  /** Resolve the registered command type — delegates to resolvePluginCommandType
+   *  for the unified namespace rule (manifest.id prefix, '.' separator). */
   const resolveType = (commandType: string): string => {
     if (isKernelPlugin) return commandType;
-    if (commandType.startsWith(pluginId + '.')) return commandType;
-    // Manifest-ID prefixed commands pass through as-is (stable semantic namespace)
-    if (manifestPrefix && commandType.startsWith(manifestPrefix)) return commandType;
-    // Commands with dots are already namespaced (e.g. quiz.create, vote.create) — pass through
-    if (commandType.includes('.')) return commandType;
-    // Bare command names (no dots) get UUID-prefixed for isolation
-    return `${pluginId}.${commandType}`;
+    return resolvePluginCommandType(commandType, manifestId || pluginId);
   };
 
   return {
@@ -172,15 +163,17 @@ function wrapCommandBus(
       },
     ),
     execute: createSafeFunction(async (command: any) => {
+      // Normalize command type: plugins may use either 'type' or 'commandType'
+      const rawType = command.type || command.commandType;
       // ponytail: try prefixed first, fall back to original for kernel commands
-      const prefixedCmd = { ...command, type: resolveType(command.type) };
+      const prefixedCmd = { ...command, type: resolveType(rawType) };
       try {
         return await commandBus.execute(prefixedCmd);
       } catch (e: any) {
         // If the prefixed type doesn't exist, try the original type
         // (e.g. kernel commands like whiteboard.draw that plugins call directly)
         if (e.message?.includes('No handler registered') || e.message?.includes('handler')) {
-          return commandBus.execute(command);
+          return commandBus.execute({ ...command, type: rawType });
         }
         throw e;
       }
