@@ -478,6 +478,7 @@ async function startServer() {
   await kernelContainer.ready;
 
   const app = express();
+  kernelContainer.pluginHost.setExpressApp(app);
   const PORT = parseInt(process.env.PORT || '9000', 10);
 
   // SEC-AUTH-03: 信任 Nginx 反向代理的 X-Forwarded-Proto 头
@@ -518,8 +519,8 @@ async function startServer() {
     legacyHeaders: false,
   });
 
-  app.use(express.json({ limit: '100mb' }));
-  app.use(express.urlencoded({ limit: '100mb', extended: true }));
+  app.use(express.json({ limit: '400mb' }));
+  app.use(express.urlencoded({ limit: '400mb', extended: true }));
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   app.use('/plugins', express.static(path.join(process.cwd(), 'plugins')));
   // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块）
@@ -4952,6 +4953,22 @@ ${examsText}
     }
   });
 
+  // Raw binary upload — avoids base64 overhead for large plugin zips
+  app.post('/api/plugins/upload-zip-raw', express.raw({ type: 'application/octet-stream', limit: '400mb' }), async (req, res) => {
+    try {
+      const zipBuffer = req.body;
+      const filename = req.headers['x-filename'] ? decodeURIComponent(req.headers['x-filename'] as string) : 'plugin.zip';
+      if (!Buffer.isBuffer(zipBuffer) || zipBuffer.length === 0) {
+        return res.status(400).json({ success: false, error: 'Empty or invalid zip file' });
+      }
+      const result = await kernelContainer.pluginHost.installPluginFromZip(zipBuffer);
+      res.json({ success: true, pluginId: (result as any).pluginId, manifest: result });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // Plugin command execution endpoint (V3.0: frontend invokeCommand bridge)
   app.post('/api/plugins/execute-command', async (req, res) => {
     try {
@@ -5139,6 +5156,7 @@ ${examsText}
       credentials: true,
     }
   });
+  kernelContainer.pluginHost.setSocketIO(io);
 
   kernelContainer.eventBus.subscribe('assignment.graded', (event) => {
     try {

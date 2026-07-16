@@ -18,6 +18,7 @@ import type { Database } from 'better-sqlite3';
 import fs from 'fs';
 import JSZip from 'jszip';
 import path from 'path';
+import express from 'express';
 import { pathToFileURL } from 'node:url';
 import { ServiceRegistry } from '../di/service-registry.js';
 import { EsmLoader } from '../esm-loader/esm-loader.js';
@@ -154,6 +155,9 @@ export class PluginHost {
    */
   /** 插件文件系统存储目录 */
   private pluginsDir: string;
+  private expressApp: any = null;
+  private _registeredRoutes = new Map<string, string>();
+  private _socketIO: any = null;
 
   constructor(
     private serviceRegistry: ServiceRegistry,
@@ -162,6 +166,41 @@ export class PluginHost {
     pluginsDir?: string,
   ) {
     this.pluginsDir = pluginsDir ?? path.resolve(process.cwd(), 'plugins');
+  }
+
+  setExpressApp(app: any): void {
+    this.expressApp = app;
+    // Restore static routes from installed plugins (survives server restart)
+    const allPlugins = this.db.prepare("SELECT id, manifest FROM plugins").all() as Array<{ id: string; manifest: string }>;
+    for (const p of allPlugins) {
+      try {
+        const m = JSON.parse(p.manifest);
+        if (m.deploy?.staticRoute && m.deploy?.staticDir) {
+          const pluginDir = this.getPluginDir(p.id);
+          const absDir = path.join(pluginDir, m.deploy.staticDir);
+          if (fs.existsSync(absDir)) {
+            this.expressApp.use(m.deploy.staticRoute, express.static(absDir));
+            this._registeredRoutes.set(m.id, m.deploy.staticRoute);
+            console.log(`[PluginHost] Restored static route "${m.deploy.staticRoute}" for plugin "${m.id}"`);
+          }
+        }
+      } catch { /* skip malformed */ }
+    }
+  }
+
+  setSocketIO(io: any): void {
+    this._socketIO = io;
+  }
+
+  private emitProgress(manifestId: string, step: string, detail?: string) {
+    if (this._socketIO) {
+      this._socketIO.emit('plugin:install:progress', {
+        pluginId: manifestId,
+        step,
+        detail: detail || '',
+        timestamp: Date.now(),
+      });
+    }
   }
 
   // ── 文件系统路径辅助方法 ──────────────────────────────────────────
@@ -1450,6 +1489,24 @@ export class PluginHost {
       console.warn(`[PluginHost] Failed to drop plugin tables for "${pluginId}":`, e);
     }
 
+    // 4c. Deregister static routes registered by deploy (best-effort cleanup)
+    if (this.expressApp && this._registeredRoutes.has(manifestId)) {
+      try {
+        const route = this._registeredRoutes.get(manifestId);
+        const stack = this.expressApp._router?.stack || [];
+        for (let i = stack.length - 1; i >= 0; i--) {
+          const layer = stack[i];
+          if (layer.route === undefined && layer.regexp && new RegExp(layer.regexp).test(route + '/')) {
+            stack.splice(i, 1);
+            break;
+          }
+        }
+        this._registeredRoutes.delete(manifestId);
+        console.log(`[PluginHost] Deregistered static route "${route}" for plugin "${manifestId}"`);
+      } catch (routeErr: any) {
+        console.warn(`[PluginHost] Failed to deregister static route for "${manifestId}":`, routeErr.message);
+      }
+    }
     // 5. 清理文件系统
     if (pluginDir && fs.existsSync(pluginDir)) {
       try {
@@ -1496,6 +1553,7 @@ export class PluginHost {
 
     // 1. 验证并打包 ZIP
     const { manifest, bundledCode } = await validateAndBundleZip(zipBuffer);
+    this.emitProgress(manifest.id, 'validating', 'Plugin validated, writing files...');
 
     // 2. 唯一性检查
     this.ensureUniqueManifestId(manifest.id);
@@ -1543,12 +1601,51 @@ export class PluginHost {
       fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
       fs.writeFileSync(zipFilePath, zipBuffer);
 
-      // Extract frontend.js if present in ZIP
+      // Extract frontend.js and deploy script if present in ZIP
       const zip = await JSZip.loadAsync(zipBuffer);
       const frontendFile = zip.file('frontend.js');
       if (frontendFile) {
         const frontendCode = await frontendFile.async('string');
         fs.writeFileSync(path.join(pluginDir, 'frontend.js'), frontendCode, 'utf-8');
+      }
+      // Extract deploy script declared in manifest
+      if (manifest.deploy?.script) {
+        const deployFile = zip.file(manifest.deploy.script);
+        if (deployFile) {
+          const deployCode = await deployFile.async('string');
+          fs.writeFileSync(path.join(pluginDir, manifest.deploy.script), deployCode, 'utf-8');
+        }
+      }
+
+      this.emitProgress(manifest.id, 'extracting', 'Extracting assets...');
+      // Extract storage/ directory if present in ZIP (for static assets bundled with plugin)
+      const storageEntries = Object.keys(zip.files).filter(
+        name => name.startsWith('storage/') && !zip.files[name].dir
+      );
+      if (storageEntries.length > 0) {
+        console.log(`[PluginHost] Extracting ${storageEntries.length} static asset files for plugin "${manifest.id}"...`);
+        // Collect unique directories first, create them once
+        const dirs = new Set<string>();
+        for (const name of storageEntries) {
+          dirs.add(path.dirname(name));
+        }
+        for (const dir of dirs) {
+          fs.mkdirSync(path.join(pluginDir, dir), { recursive: true });
+        }
+        // Write files in parallel batches (10 at a time) to balance speed and memory
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < storageEntries.length; i += BATCH_SIZE) {
+          const batch = storageEntries.slice(i, i + BATCH_SIZE);
+          await Promise.all(batch.map(async (name) => {
+            const file = zip.file(name);
+            if (file) {
+              const content = await file.async('nodebuffer');
+              const destPath = path.join(pluginDir, name);
+              fs.writeFileSync(destPath, content);
+            }
+          }));
+        }
+        console.log(`[PluginHost] Static assets extracted for plugin "${manifest.id}"`);
       }
 
       // 4b. Auto-install declared dependencies if present
@@ -1574,6 +1671,43 @@ export class PluginHost {
         }
       }
 
+      // 4c. Execute deploy script if declared in manifest
+      if (manifest.deploy?.script) {
+        // Try running from plugin dir; fall back to v2_plugins source dir
+        let deployScriptPath = path.join(pluginDir, manifest.deploy.script);
+        if (!fs.existsSync(deployScriptPath)) {
+          const altPath = path.join(process.cwd(), 'v2_plugins', 'scratch-editor-deploy', manifest.deploy.script);
+          if (fs.existsSync(altPath)) deployScriptPath = altPath;
+        }
+        if (fs.existsSync(deployScriptPath)) {
+          console.log(`[PluginHost] Running deploy script: node ${deployScriptPath}`);
+          try {
+            const { execSync } = await import('node:child_process');
+            execSync(`node "${deployScriptPath}" "${process.cwd()}"`, { timeout: 120000 });
+            console.log(`[PluginHost] Deploy script completed for plugin "${manifest.id}"`);
+          } catch (deployErr: any) {
+            console.error(`[PluginHost] Deploy script failed for plugin "${manifest.id}":`, deployErr.message);
+            throw new Error(`Deploy script "${manifest.deploy.script}" failed: ${deployErr.message}`);
+          }
+        } else {
+          console.warn(`[PluginHost] Deploy script "${manifest.deploy.script}" not found for plugin "${manifest.id}"`);
+        }
+      }
+      // 4d. Register static route if declared in manifest
+      if (manifest.deploy?.staticRoute && manifest.deploy?.staticDir && this.expressApp) {
+        const route = manifest.deploy.staticRoute;
+        const absDir = path.join(pluginDir, manifest.deploy.staticDir);
+        if (fs.existsSync(absDir)) {
+          this.expressApp.use(route, express.static(absDir));
+          this._registeredRoutes.set(manifest.id, route);
+          console.log(`[PluginHost] Registered static route "${route}" for plugin "${manifest.id}"`);
+        } else {
+          console.warn(
+            `[PluginHost] Static directory "${manifest.deploy.staticDir}" for route "${route}" not found for plugin "${manifest.id}"`,
+          );
+        }
+      }
+      this.emitProgress(manifest.id, 'registering', 'Registering routes and saving...');
       // 5. INSERT 到 DB（源码和 ZIP 已迁移到文件系统，DB 仅存元数据）
       // Read executionMode from manifest (default: 'inline'), override if administrator specifies
       const executionMode = overrideExecutionMode ?? ((manifest as any).executionMode === 'worker' ? 'worker' : 'inline');
@@ -1596,6 +1730,7 @@ export class PluginHost {
       this.pluginStates.set(pluginId, PluginState.INSTALLED);
 
       console.log(`[PluginHost] Plugin "${manifest.id}" installed from ZIP to ${filePath} (${pluginId})`);
+      this.emitProgress(manifest.id, 'complete', 'Installation complete');
       return {
         ...manifest,
         pluginId,

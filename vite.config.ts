@@ -11,6 +11,16 @@ export default defineConfig({
     },
   },
   server: {
+    proxy: {
+      '/api': 'http://localhost:9000',
+      '/plugins': 'http://localhost:9000',
+      '/uploads': 'http://localhost:9000',
+      '/scratch': 'http://localhost:9000',
+      '/_tools': {
+        target: 'http://localhost:9000',
+        rewrite: (path: string) => path.replace(/^\/_tools/, ''),
+      },
+    },
     hmr: process.env.DISABLE_HMR !== 'true',
     watch:
       process.env.DISABLE_HMR === 'true'

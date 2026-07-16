@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Shield, Sparkles, AlertTriangle, Play, ChevronLeft, ChevronRight, X, Loader2, CheckCircle, HelpCircle } from 'lucide-react';
 import JSZip from 'jszip';
+import { getSocketInstance } from '../services/socket-service';
 
 interface PluginInstallWizardProps {
   isOpen: boolean;
@@ -23,6 +24,9 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [progressMsg, setProgressMsg] = useState('');
+  const [progressPct, setProgressPct] = useState(0);
+  const zipFileRef = useRef<File | null>(null);
 
   // UI Preview States
   const [previewRole, setPreviewRole] = useState<'teacher' | 'student'>('teacher');
@@ -126,11 +130,22 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
   const handleInstall = async () => {
     if (!file) return;
     setInstalling(true);
+    setProgressPct(0);
+    setProgressMsg('');
     try {
-      await onConfirmInstall(file, executionMode);
+      // Raw binary upload — avoids base64 memory overhead for large files
+      const resp = await fetch('/api/plugins/upload-zip-raw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name) },
+        body: file,
+      });
+      const result = await resp.json();
+      if (!resp.ok || !result.success) throw new Error(result.error || 'Upload failed');
       onClose();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setProgressPct(0);
+      setProgressMsg('');
     } finally {
       setInstalling(false);
     }
@@ -435,10 +450,21 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
                 className="flex items-center gap-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer disabled:bg-indigo-400"
               >
                 {installing ? (
-                  <>
-                    <Loader2 size={13} className="animate-spin" />
-                    {lang === 'zh' ? '安装中...' : 'Installing...'}
-                  </>
+                  <div className="flex flex-col gap-1.5 min-w-32">
+                    <div className="flex items-center gap-1.5">
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>{lang === 'zh' ? '安装中...' : 'Installing...'}</span>
+                    </div>
+                    <div className="w-full h-1 bg-indigo-400/30 rounded-full overflow-hidden">
+                      <div className="h-full bg-white/80 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(progressPct, 5)}%` }} />
+                    </div>
+                    {progressMsg && (
+                      <div className="text-[10px] text-indigo-200 truncate max-w-40">
+                        {progressPct}% — {progressMsg}
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <>
                     <CheckCircle size={13} />

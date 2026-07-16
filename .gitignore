@@ -27,3 +27,5 @@ AI_Courseware_Runtime_Prompt.md
 v2_plugins/docs_plugin_guide.md
 v2_plugins/courseware-hub/src_restored/
 OpenLearn_Milestone1_Security_Framework.md
+v2_plugins/*/storage/
+v2_plugins/*/.codegraph/

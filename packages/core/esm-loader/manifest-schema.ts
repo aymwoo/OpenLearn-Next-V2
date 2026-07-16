@@ -51,6 +51,14 @@ const contributesSchema = z.object({
   })).optional(),
 }).optional();
 
+// ── V5.1: Deploy schema ───────────────────────────────────────────────
+
+const deploySchema = z.object({
+  script: z.string().min(1, { error: 'deploy.script 不能为空' }).optional(),
+  staticRoute: z.string().optional(),
+  staticDir: z.string().optional(),
+}).optional();
+
 // ── Version 4 schema (Phase 6+) ──────────────────────────────────────────
 
 /**
@@ -99,6 +107,7 @@ export const manifestSchema = z.object({
     })).optional(),
   }).optional(),
   contributes: contributesSchema,
+  deploy: deploySchema,
 }).passthrough();
 
 /**
