@@ -9,6 +9,7 @@ import { CoursewareHubPanel } from './features/teacher/CoursewareHubPanel';
 
 function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null }) {
   const extensionPoints = usePluginHostStore(state => state.extensionPoints);
+  const lang = useAppStore(state => state.lang);
   const tabs = extensionPoints.get('teacher.tab' as any) || [];
 
   // Auto-select first tab if none active
@@ -18,31 +19,24 @@ function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null })
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* Tab bar */}
-      <div className="flex gap-1 px-4 py-2 border-b border-gray-200 bg-gray-50 shrink-0">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => {
-              const store = usePluginHostStore.getState();
-              store.setActivePlugin?.(tab.pluginId);
-            }}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
-              effectiveActive === tab.pluginId
-                ? 'bg-white text-indigo-600 border border-b-white border-gray-200 -mb-[1px]'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            {tab.label || tab.pluginId}
-          </button>
-        ))}
-      </div>
       {/* Active panel */}
       <div className="flex-1 overflow-auto">
         {activeTab?.component ? (
           <activeTab.component renderType="panel" />
+        ) : activeTab && typeof (activeTab as any).render === 'function' ? (
+          <DOMExtensionWrapper ext={activeTab} slot="teacher.tab" slotProps={{ renderType: 'panel' }} />
         ) : (
-          <ExtensionPointRenderer slot="teacher.tab" slotProps={{ renderType: 'panel' }} />
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <Puzzle size={48} className="mx-auto text-gray-300 mb-3" />
+              <p className="text-sm text-gray-400 font-medium">
+                {lang === 'zh' ? '此插件未提供页面组件' : 'This plugin has no page component'}
+              </p>
+              <p className="text-xs text-gray-300 mt-1">
+                {lang === 'zh' ? '插件已注册导航条目，但未提供对应的界面渲染逻辑。' : 'The plugin registered a navigation entry but did not provide a render component.'}
+              </p>
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -73,7 +67,7 @@ import { motion, AnimatePresence, animate } from 'motion/react';
 import { io } from 'socket.io-client';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-import { ExtensionPointRenderer } from './plugin-host/extension-point-renderer';
+import { ExtensionPointRenderer, DOMExtensionWrapper } from './plugin-host/extension-point-renderer';
 import { usePluginHost } from './plugin-host/plugin-host-context';
 import { usePluginHostStore } from './plugin-host/plugin-host-store';
 import { PluginState } from './plugin-host/types';
@@ -352,7 +346,6 @@ export default function App() {
   const [libraryResources, setLibraryResources] = useState<any[]>([]);
   const [loadingLibraryResources, setLoadingLibraryResources] = useState(false);
   const [showCoursewareHub, setShowCoursewareHub] = useState(false);
-  const [activeNavPlugin, setActiveNavPlugin] = useState<string | null>(null);
 
   const fetchLibraryResources = async () => {
     try {
@@ -4448,7 +4441,7 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
             {/* Phase 9: Dynamic plugin tab content — catch-all for non-hardcoded tabs */}
             {['dashboard', 'lesson_editor', 'live_class', 'plugins', 'courses', 'classes',
               'timetable', 'admin_directory', 'help', 'computer_labs'].includes(teacherTab) ? null : (
-              <PluginTabPanel activeNavPlugin={activeNavPlugin} />
+              <PluginTabPanel activeNavPlugin={teacherTab.includes('/') ? teacherTab.split('/')[0] : null} />
             )}
 
             {teacherTab === 'dashboard' ? (

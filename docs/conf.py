@@ -31,3 +31,6 @@ myst_heading_anchors = 3
 source_suffix = {
     '.md': 'markdown',
 }
+# Version (keep in sync with root package.json)
+version = '0.1.8'
+release = '0.1.8'

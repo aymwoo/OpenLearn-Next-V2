@@ -234,6 +234,51 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 
 > **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^5.1.0"`。安装时 PluginHost 自动检查兼容性。
 
+### 2.4 导航页面 vs. 白板组件 — 如何区分？
+
+同一个插件可以注册到不同的 slot，**每个 slot 绑定独立的 React 组件**，无需任何 if-else 分支来区分。
+
+**核心规则：**
+
+| Slot | 渲染位置 | 组件收到的 props | 适用场景 |
+|------|---------|-----------------|---------|
+| `teacher.tab` | 侧边栏导航 → 全屏独立页面 | `{ renderType: 'panel' }` | 管理界面（列表、设置、数据看板） |
+| `teacher.dashboard.widget` | 白板内的可拖拽卡片 | `{ elementId, lessonId }` | 课堂交互组件（编辑、答题、展示） |
+| `classroom.tool` | 课堂互动工具架按钮 | — | 工具栏入口，点击后通过 `commandType` 触发动作 |
+| `student.view` | 学生端全屏视图 | `{ studentId }` | 学生操作界面 |
+
+**`teacher.tab` 和 `teacher.dashboard.widget` 的关键区别：**
+
+1. **容器不同**：`teacher.tab` 是全屏页面（`flex-1 overflow-auto`），适合列表、设置等管理界面；`teacher.dashboard.widget` 是白板内固定尺寸的卡片，适合课堂即时交互。
+
+2. **props 不同**：白板组件额外接收 `elementId`（当前白板元素 ID）和 `lessonId`（当前课节 ID），可用于数据隔离和持久化。
+
+3. **ID 匹配机制**：`teacher.dashboard.widget` 的 `id` 必须与 `manifest.classroomTools[].payload.data.teacherWidgetId` 一致，`PluginCardRenderer` 通过这个 ID 查找对应组件：
+
+```json
+// manifest.json — classroomTools 声明
+{
+  "classroomTools": [{
+    "id": "scratch-editor-tool",
+    "commandType": "whiteboard.draw",
+    "payload": {
+      "type": "plugin",
+      "data": "{ \"teacherWidgetId\": \"my-widget\", \"width\": 960 }"
+    }
+  }]
+}
+```
+
+```js
+// frontend.js — 组件注册，id 必须与 payload 中的 teacherWidgetId 一致
+ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
+    id: 'my-widget',           // ← 匹配 payload.data.teacherWidgetId
+    component: MyWidget,
+});
+```
+
+**典型模式：导航页 = 管理界面，白板组件 = 交互工具。** 例如作业中心应在 `teacher.tab` 注册作业列表管理页，在 `teacher.dashboard.widget` 注册具体某次作业的提交/批改面板。两者共享 `elementId`/`lessonId` 即可通过后端 API 打通数据。
+
 ---
 
 ## 3. 插件结构详解

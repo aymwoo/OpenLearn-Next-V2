@@ -99,7 +99,7 @@ export interface ExtensionPointRendererProps {
 /**
  * Wrapper component to support plugins using traditional DOM render function.
  */
-function DOMExtensionWrapper({ ext, route, slotProps, slot }: { ext: any; route?: string; slotProps?: any; slot: string }) {
+export function DOMExtensionWrapper({ ext, route, slotProps, slot }: { ext: any; route?: string; slotProps?: any; slot: string }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const serializedProps = JSON.stringify(slotProps || {});
   
