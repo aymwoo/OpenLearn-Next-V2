@@ -65,6 +65,14 @@ function buildAnalysisPrompt(html) {
 HTML:
 ${snippet}`;
 }
+function isAiAvailable(db) {
+  try {
+    const provider = db.prepare("SELECT id FROM ai_providers WHERE api_key IS NOT NULL AND api_key != '' LIMIT 1").get();
+    if (provider) return true;
+    if (typeof process !== 'undefined' && process.env && process.env.GEMINI_API_KEY) return true;
+  } catch (e) {}
+  return false;
+}
 function generateExtractionScript(config) {
   if (config.mode === "sdk")
     return "";
@@ -243,25 +251,29 @@ var src_default = {
         let injected = htmlContent;
         let extractionConfig = { mode: "sdk", security_warnings: scan.warnings };
         if (!hasSDKCall(htmlContent)) {
-          try {
-            const aiResponse = await ctx.services.ai.generateText(buildAnalysisPrompt(htmlContent));
-            const analysis = JSON.parse(aiResponse || "{}");
-            if (analysis.confidence && analysis.confidence >= 0.7) {
-              extractionConfig = { mode: "ai_injected", ai_analysis: analysis, security_warnings: scan.warnings };
-              const extractScript = generateExtractionScript(extractionConfig);
-              injected = htmlContent + extractScript;
-              ctx.log.info(`AI analysis: mode=${analysis.scoreSource} confidence=${analysis.confidence}`);
-            } else {
+          if (isAiAvailable(db)) {
+            try {
+              const aiResponse = await ctx.services.ai.generateText(buildAnalysisPrompt(htmlContent));
+              const analysis = JSON.parse(aiResponse || "{}");
+              if (analysis.confidence && analysis.confidence >= 0.7) {
+                extractionConfig = { mode: "ai_injected", ai_analysis: analysis, security_warnings: scan.warnings };
+                const extractScript = generateExtractionScript(extractionConfig);
+                injected = htmlContent + extractScript;
+                ctx.log.info(`AI analysis: mode=${analysis.scoreSource} confidence=${analysis.confidence}`);
+              } else {
+                injected = injectSDK(htmlContent);
+                extractionConfig.ai_analysis = {
+                  scoreSource: "dom",
+                  triggerEvent: "button_click",
+                  confidence: analysis.confidence || 0
+                };
+                ctx.log.info(`AI confidence low (${analysis.confidence || 0}), using SDK`);
+              }
+            } catch (err) {
+              ctx.log.warn(`AI analysis failed: ${err.message}, using SDK injection`);
               injected = injectSDK(htmlContent);
-              extractionConfig.ai_analysis = {
-                scoreSource: "dom",
-                triggerEvent: "button_click",
-                confidence: analysis.confidence || 0
-              };
-              ctx.log.info(`AI confidence low (${analysis.confidence || 0}), using SDK`);
             }
-          } catch (err) {
-            ctx.log.warn(`AI analysis failed: ${err.message}, using SDK injection`);
+          } else {
             injected = injectSDK(htmlContent);
           }
         } else {
