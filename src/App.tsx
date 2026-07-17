@@ -1686,6 +1686,13 @@ export default function App() {
     }
   };
 
+  // 每次进入插件中心时自动刷新插件列表
+  React.useEffect(() => {
+    if (teacherTab === 'plugins') {
+      fetchPlugins();
+    }
+  }, [teacherTab]);
+
   const fetchRegisteredCommands = async () => {
     try {
       const res = await fetch('/api/commands/registered');
@@ -3158,6 +3165,8 @@ export default function App() {
           const data = await res.json();
           if (data.success) {
             await fetchPlugins();
+            // 服务端插件激活可能有延迟（部署脚本等），1.5s 后再刷新一次
+            setTimeout(() => fetchPlugins(), 1500);
             addToast(
               lang === 'zh' ? '插件安装成功' : 'Plugin Installed',
               lang === 'zh'

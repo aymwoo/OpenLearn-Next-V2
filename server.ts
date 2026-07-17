@@ -988,6 +988,54 @@ async function startServer() {
     }
   });
 
+
+  // ── Resource command bus handlers (plugin accessible) ─────────────────
+  // Plugins call ctx.services.commandBus.execute('resource.list', {}) etc.
+  const RESOURCE_HANDLERS = {
+    'resource.list': {
+      execute: async (cmd: any) => {
+        const rows = kernelContainer.db.prepare(
+          'SELECT id, name, type, created_at FROM system_resources ORDER BY created_at DESC'
+        ).all();
+        return { resources: rows };
+      }
+    },
+    'resource.get': {
+      execute: async (cmd: any) => {
+        const row = kernelContainer.db.prepare(
+          'SELECT * FROM system_resources WHERE id = ?'
+        ).get(cmd.payload?.id) as any;
+        if (!row) return { error: 'not_found' };
+        return { resource: row };
+      }
+    },
+    'resource.create': {
+      execute: async (cmd: any) => {
+        const { name, type, content } = cmd.payload || {};
+        if (!name || !type || content === undefined)
+          return { error: 'invalid_params', message: 'name, type, content required' };
+        const id = globalThis.crypto.randomUUID();
+        kernelContainer.db.prepare(
+          'INSERT INTO system_resources(id,name,type,content,created_at) VALUES(?,?,?,?,datetime(\'now\'))'
+        ).run(id, name, type, content);
+        return { success: true, id, name, type };
+      }
+    },
+    'resource.delete': {
+      execute: async (cmd: any) => {
+        if (!cmd.payload?.id) return { error: 'invalid_params', message: 'id required' };
+        kernelContainer.db.prepare('DELETE FROM system_resources WHERE id = ?').run(cmd.payload.id);
+        return { success: true };
+      }
+    },
+  };
+  for (const [type, handler] of Object.entries(RESOURCE_HANDLERS)) {
+    try {
+      kernelContainer.commandBus.registerHandler(type, handler);
+    } catch {
+      /* already registered — harmless on server reload */
+    }
+  }
   // --- AI Courseware APIs ---
   app.post('/api/courseware/upload', async (req, res) => {
     try {
