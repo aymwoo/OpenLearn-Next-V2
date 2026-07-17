@@ -515,6 +515,15 @@ export function PluginCenter({
           )}
         </div>
 
+        {/* 隐藏文件上传输入框 — 同时服务于发现页和开发者页 */}
+        <input
+          type="file"
+          accept=".zip"
+          id="zip-plugin-uploader"
+          className="hidden"
+          onChange={handleZipInputChange}
+        />
+
         {storeTab === 'store' ? (
           <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
             {/* ZIP 拖放安装区域 — 发现页快速安装 */}
@@ -530,8 +539,6 @@ export function PluginCenter({
                 }}
                 onDrop={handleZipDrop}
                 onClick={() => {
-                  setZipError(null);
-                  setZipPreview(null);
                   document.getElementById("zip-plugin-uploader")?.click();
                 }}
               >
@@ -549,14 +556,9 @@ export function PluginCenter({
                 )}
               </div>
               {selectedZipFile && (
-                <button
-                  onClick={async () => {
-                    if (!selectedZipFile) return;
-                    await onZipUpload(selectedZipFile, "inline");
-                    setSelectedZipFile(null);
-                  }}
-                  className="mt-2 w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-md transition-colors"
-                >{lang === "zh" ? "安装 ZIP 插件" : "Install ZIP Plugin"}</button>
+                <p className="mt-2 text-xs text-center text-gray-400">
+                  {lang === "zh" ? "文件已选择，安装向导将自动弹出。" : "File selected. Installation wizard will open automatically."}
+                </p>
               )}
             </div>
             <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-4">
@@ -794,13 +796,6 @@ export function PluginCenter({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <input
-                  type="file"
-                  accept=".zip"
-                  id="zip-plugin-uploader"
-                  className="hidden"
-                  onChange={handleZipInputChange}
-                />
                 {/* Phase 9: Enhanced ZIP drop zone with processing/preview states */}
                 <div
                   className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors relative ${
