@@ -1,9 +1,0 @@
-{
-  "name": "ext-homework-hub",
-  "version": "1.0.0",
-  "description": "OpenLearn 作业收集与批改插件 — 支持作业发布、文件提交、在线评分、批量下载和成绩导出",
-  "main": "index.js",
-  "dependencies": {
-    "xlsx": "^0.18.5"
-  }
-}
