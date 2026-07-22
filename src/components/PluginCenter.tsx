@@ -32,6 +32,7 @@ import { LegacyPluginBadge } from './LegacyPluginBadge';
 import type { Language } from '../i18n';
 import JSZip from 'jszip';
 import { PluginSettingsModal } from './PluginSettingsModal';
+import { usePluginHostStore } from '../plugin-host/plugin-host-store';
 import { PluginInstallWizard } from './PluginInstallWizard';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -397,6 +398,9 @@ export function PluginCenter({
   // V3.1: Settings modal state
   const [settingsPlugin, setSettingsPlugin] = React.useState<{ id: string; name: string; manifest: string } | null>(null);
 
+  // Dashboard visibility — read the whole map at the component level (NOT inside .map())
+  const dashboardVisibilityMap = usePluginHostStore((s) => s.dashboardVisibility);
+
   // ── ZIP drop zone handler ─────────────────────────────────────────────────
 
   const handleZipDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -621,6 +625,9 @@ export function PluginCenter({
 
                 const isSystem = plugin.id.startsWith('@openlearn/');
 
+                // Dashboard visibility toggle — looked up from pre-read map
+                const dashboardVisible = dashboardVisibilityMap.get(plugin.id) ?? true;
+
                 return (
                   <div
                     key={plugin.id}
@@ -742,6 +749,25 @@ export function PluginCenter({
                         {plugin.status === 'active'
                           ? lang === 'zh' ? '禁用' : 'Disable'
                           : lang === 'zh' ? '启用' : 'Enable'}
+                      </button>
+                      {/* Dashboard visibility toggle */}
+                      <button
+                        onClick={() => {
+                          const next = !dashboardVisible;
+                          usePluginHostStore.getState().setDashboardVisibility(plugin.id, next);
+                        }}
+                        title={dashboardVisible
+                          ? (lang === 'zh' ? '在系统总览中隐藏' : 'Hide from Dashboard')
+                          : (lang === 'zh' ? '在系统总览中显示' : 'Show in Dashboard')
+                        }
+                        className={`px-2.5 py-1 text-[10px] font-medium rounded-lg transition-colors flex items-center gap-1 ${
+                          dashboardVisible
+                            ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${dashboardVisible ? 'bg-indigo-500' : 'bg-gray-400'}`} />
+                        {lang === 'zh' ? '总览' : 'Dash'}
                       </button>
                       {manifestInfo.hasConfig && (
                         <button

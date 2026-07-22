@@ -18,6 +18,7 @@
 import React, { Suspense } from 'react';
 import { Loader2, Puzzle } from 'lucide-react';
 import { usePluginHost } from './plugin-host-context';
+import { usePluginHostStore } from './plugin-host-store';
 import type { ExtensionSlot } from './types';
 
 // ── LoadingSkeleton ──────────────────────────────────────────────────────────
@@ -136,6 +137,8 @@ export function ExtensionPointRenderer({
   const host = usePluginHost();
   const extensions = host.getExtensions(slot as ExtensionSlot);
 
+  const visibility = usePluginHostStore((s) => s.dashboardVisibility);
+
   if (extensions.length === 0) return null;
 
   // teacher.tab with renderType 'button' — render NavButton-style buttons
@@ -176,6 +179,7 @@ export function ExtensionPointRenderer({
       {extensions.map((ext) => {
         const isReact = typeof ext.component === 'function';
         const isDOM = typeof ext.render === 'function';
+        if (slot === 'teacher.dashboard.widget' && visibility.get(ext.pluginId) === false) return null;
         if (!isReact && !isDOM) return null;
 
         return (

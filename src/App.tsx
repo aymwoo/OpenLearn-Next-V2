@@ -2275,6 +2275,19 @@ export default function App() {
       }
     }
   }, [plugins, host]);
+  // Initialize dashboard widget visibility — defaults to true for active plugins
+  // Persisted visibility is hydrated from localStorage in the store itself.
+  React.useEffect(() => {
+    if (!host.isInitialized() || plugins.length === 0) return;
+    const store = usePluginHostStore.getState();
+    for (const plugin of plugins) {
+      if (plugin.status !== 'active') continue;
+      if (!store.dashboardVisibility.has(plugin.id)) {
+        store.setDashboardVisibility(plugin.id, true);
+      }
+    }
+  }, [plugins, host]);
+
 
   useEffect(() => {
     if (!session) return;
@@ -3164,9 +3177,13 @@ export default function App() {
           });
           const data = await res.json();
           if (data.success) {
+            const installedId = data.pluginId || data.manifest?.id;
+            if (installedId) {
+              await fetch(`/api/plugins/${encodeURIComponent(installedId)}/toggle`, { method: 'POST' }).catch(() => {});
+            }
+            setStoreTab('store');
             await fetchPlugins();
-            // 服务端插件激活可能有延迟（部署脚本等），1.5s 后再刷新一次
-            setTimeout(() => fetchPlugins(), 1500);
+            setTimeout(() => fetchPlugins(), 1000);
             addToast(
               lang === 'zh' ? '插件安装成功' : 'Plugin Installed',
               lang === 'zh'
@@ -3202,7 +3219,7 @@ export default function App() {
 
   const handleTogglePlugin = async (id: string) => {
     try {
-      const res = await fetch(`/api/plugins/${id}/toggle`, { method: 'POST' });
+      const res = await fetch(`/api/plugins/${encodeURIComponent(id)}/toggle`, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
          await fetchPlugins();
@@ -3226,8 +3243,10 @@ export default function App() {
       return;
     }
     try {
-      const res = await fetch(`/api/plugins/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (res.ok) {
+         setTeacherTab('plugins');
+         setStoreTab('store');
          await fetchPlugins();
          setChatLog(prev => [...prev, { role: 'agent', content: `[System] Plugin uninstalled and deleted.` }]);
       } else {

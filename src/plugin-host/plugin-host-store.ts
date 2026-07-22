@@ -9,6 +9,7 @@
  * - extensionPoints: Map<slot, ExtensionPointConfig[]> — slot-based UI registrations
  * - services: Reference to the FrontendServiceRegistry (set on initialize)
  * - initialized: Boolean flag indicating the host is ready
+ * - dashboardVisibility: Map<pluginId, boolean> — per-plugin dashboard widget toggle
  *
  * Pitfall 5: This store manages ONLY PluginHost infrastructure state.
  * Application business state (lessons, classes, students) remains in
@@ -26,6 +27,8 @@ export interface PluginHostStoreState {
   extensionPoints: Map<string, ExtensionPointConfig[]>;
   services: FrontendServiceRegistry | null;
   initialized: boolean;
+  /** Per-plugin dashboard widget visibility. true (default, show) | false (hidden). */
+  dashboardVisibility: Map<string, boolean>;
 }
 
 // ── Actions ──────────────────────────────────────────────────────────────
@@ -57,9 +60,32 @@ export interface PluginHostStoreActions {
 
   /** Get all extension point configs for a slot. */
   getExtensions: (slot: ExtensionSlot) => ExtensionPointConfig[];
+
+  /** Set dashboard widget visibility for a single plugin. */
+  setDashboardVisibility: (pluginId: string, visible: boolean) => void;
+
+  /** Bulk-initialize dashboard visibility (called on app startup). */
+  setDashboardVisibilityBatch: (entries: Array<[string, boolean]>) => void;
 }
 
 // ── Store ────────────────────────────────────────────────────────────────
+
+// ── localStorage helpers for dashboard visibility ─────────────────────
+const DASH_VIS_KEY = 'openlearn:dashboardVisibility';
+
+function loadDashboardVisibility(): Map<string, boolean> {
+  try {
+    const raw = localStorage.getItem(DASH_VIS_KEY);
+    if (raw) return new Map(JSON.parse(raw));
+  } catch {}
+  return new Map();
+}
+
+function saveDashboardVisibility(map: Map<string, boolean>): void {
+  try {
+    localStorage.setItem(DASH_VIS_KEY, JSON.stringify([...map.entries()]));
+  } catch {}
+}
 
 export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreActions>()(
   (set, get) => ({
@@ -67,6 +93,7 @@ export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreA
     activePlugins: [],
     extensionPoints: new Map(),
     services: null,
+    dashboardVisibility: loadDashboardVisibility(),
     initialized: false,
 
     // ── Actions ────────────────────────────────────────────────────────
@@ -138,5 +165,23 @@ export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreA
     getExtensions: (slot) => {
       return get().extensionPoints.get(slot) ?? [];
     },
+
+    setDashboardVisibility: (pluginId, visible) =>
+      set((state) => {
+        const next = new Map(state.dashboardVisibility);
+        next.set(pluginId, visible);
+        saveDashboardVisibility(next);
+        return { dashboardVisibility: next };
+      }),
+
+    setDashboardVisibilityBatch: (entries) =>
+      set((state) => {
+        const next = new Map(state.dashboardVisibility);
+        for (const [pluginId, visible] of entries) {
+          next.set(pluginId, visible);
+        }
+        saveDashboardVisibility(next);
+        return { dashboardVisibility: next };
+      }),
   }),
 );
