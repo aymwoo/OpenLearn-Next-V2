@@ -56,7 +56,7 @@ export function PluginSettingsModal({
     setLoading(true);
     try {
       // Try REST API first
-      const res = await fetch(`/api/plugins/${pluginId}/config`);
+      const res = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}/config`);
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -94,7 +94,7 @@ export function PluginSettingsModal({
     setSaving(true);
     setSaveMsg(null);
     try {
-      const res = await fetch(`/api/plugins/${pluginId}/config`, {
+      const res = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}/config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(values),

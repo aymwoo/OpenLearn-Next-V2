@@ -189,7 +189,37 @@ export class FrontendPluginHost {
 
     try {
       const url = `/plugins/${pluginId}/frontend.js`;
-      const mod = await import(/* @vite-ignore */ url);
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch frontend.js for plugin "${pluginId}": HTTP ${res.status}`);
+      }
+      let sourceCode = await res.text();
+
+      // Transform bare module imports for browser ESM execution
+      if ((window as any).HostSharedDeps) {
+        sourceCode = sourceCode
+          .replace(/import\s+(\w+)\s+from\s+['"]react['"];?/g, 'const $1 = window.HostSharedDeps.React;')
+          .replace(/import\s+\*\s+as\s+(\w+)\s+from\s+['"]react['"];?/g, 'const $1 = window.HostSharedDeps.React;')
+          .replace(/import\s+\{\s*([^}]+)\s*\}\s+from\s+['"]react['"];?/g, (_, imports) => {
+            return `const { ${imports} } = window.HostSharedDeps.React;`;
+          })
+          .replace(/import\s+\{\s*([^}]+)\s*\}\s+from\s+['"]lucide-react['"];?/g, (_, imports) => {
+            return `const { ${imports} } = window.HostSharedDeps.LucideReact;`;
+          })
+          .replace(/import\s+\{\s*([^}]+)\s*\}\s+from\s+['"]recharts['"];?/g, (_, imports) => {
+            return `const { ${imports} } = window.HostSharedDeps.Recharts;`;
+          });
+      }
+
+      const blob = new Blob([sourceCode], { type: 'text/javascript' });
+      const blobUrl = URL.createObjectURL(blob);
+      let mod: any;
+      try {
+        mod = await import(/* @vite-ignore */ blobUrl);
+      } finally {
+        URL.revokeObjectURL(blobUrl);
+      }
+
       const plugin = mod.default ?? mod;
 
       if (typeof plugin.activate !== 'function') {
@@ -214,6 +244,7 @@ export class FrontendPluginHost {
 
       store.updatePluginState(pluginId, PluginState.ACTIVE);
     } catch (err) {
+      console.error(`[FrontendPluginHost] Failed to activate remote plugin "${pluginId}":`, err);
       store.updatePluginState(pluginId, PluginState.ERROR);
       store.unregisterPluginExtensionPoints(pluginId);
       throw err;

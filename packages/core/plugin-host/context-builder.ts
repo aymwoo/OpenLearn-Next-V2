@@ -219,6 +219,8 @@ function wrapEventBus(
     }),
     publish: createSafeFunction(async (event: any) => {
       const enrichedEvent = {
+        id: event.id || globalThis.crypto.randomUUID(),
+        timestamp: event.timestamp || Date.now(),
         ...event,
         source: event.source ? `plugin:${pluginId}.${event.source}` : `plugin:${pluginId}`,
       };

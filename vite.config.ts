@@ -12,12 +12,13 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:9000',
-      '/plugins': 'http://localhost:9000',
-      '/uploads': 'http://localhost:9000',
-      '/scratch': 'http://localhost:9000',
+      '/api': { target: 'http://127.0.0.1:9000', changeOrigin: true },
+      '/plugins': { target: 'http://127.0.0.1:9000', changeOrigin: true },
+      '/uploads': { target: 'http://127.0.0.1:9000', changeOrigin: true },
+      '/scratch': { target: 'http://127.0.0.1:9000', changeOrigin: true },
       '/_tools': {
-        target: 'http://localhost:9000',
+        target: 'http://127.0.0.1:9000',
+        changeOrigin: true,
         rewrite: (path: string) => path.replace(/^\/_tools/, ''),
       },
     },

@@ -313,8 +313,10 @@ var src_default = {
           ).run(coursewareKey, nextVersion);
         }
         await eventBus.publish({
+          id: globalThis.crypto.randomUUID(),
           type: "courseware.uploaded",
           source: ctx.pluginId,
+          timestamp: Date.now(),
           payload: {
             id: rowId,
             courseware_key: coursewareKey,
@@ -365,7 +367,7 @@ var src_default = {
           SELECT COUNT(DISTINCT cw.courseware_key) as total FROM ${cwTable} cw
           ${whereClause}
         `).get(...params);
-        const results = rows.map(async (r) => {
+        const results = await Promise.all(rows.map(async (r) => {
           const stats = await db.prepare(
             `SELECT COUNT(*) as submissions, ROUND(AVG(score), 1) as avg_score FROM ${scTable} WHERE courseware_id = ?`
           ).get(r.id);
@@ -374,9 +376,9 @@ var src_default = {
             extraction_config: JSON.parse(r.extraction_config || "{}"),
             security_warnings: JSON.parse(r.security_warnings || "[]"),
             target_classes: JSON.parse(r.target_classes || "[]"),
-            stats: { submissions: stats.submissions || 0, avg_score: stats.avg_score || 0 }
+            stats: { submissions: stats?.submissions || 0, avg_score: stats?.avg_score || 0 }
           };
-        });
+        }));
         return { items: results, total: count.total };
       }
     });
@@ -401,8 +403,10 @@ var src_default = {
           `UPDATE ${cwTable} SET status = ?, updated_at = datetime('now') WHERE id = ?`
         ).run(p.status, p.id);
         await eventBus.publish({
+          id: globalThis.crypto.randomUUID(),
           type: "courseware.published",
           source: ctx.pluginId,
+          timestamp: Date.now(),
           payload: { id: p.id, status: p.status }
         });
         return { id: p.id, status: p.status };
@@ -425,8 +429,10 @@ var src_default = {
           await resourceDelete(ctx, v.injected_html_vfs_path);
         }
         await eventBus.publish({
+          id: globalThis.crypto.randomUUID(),
           type: "courseware.deleted",
           source: ctx.pluginId,
+          timestamp: Date.now(),
           payload: { courseware_key: cw.courseware_key }
         });
         return { deleted: true };
@@ -472,8 +478,10 @@ var src_default = {
           ctx.log.warn(`Semester grade save failed: ${err.message}`);
         }
         await eventBus.publish({
+          id: globalThis.crypto.randomUUID(),
           type: "courseware.score_submitted",
           source: ctx.pluginId,
+          timestamp: Date.now(),
           payload: {
             courseware_id: p.courseware_id,
             student_id: p.student_id,

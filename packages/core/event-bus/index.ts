@@ -24,14 +24,19 @@ export class EventBus {
   }
 
   public async publish(event: PlatformEvent) {
-    const subs = this.subscribers.get(event.type) || new Set();
+    const fullEvent: PlatformEvent = {
+      id: event.id || globalThis.crypto.randomUUID(),
+      timestamp: event.timestamp || Date.now(),
+      ...event,
+    };
+    const subs = this.subscribers.get(fullEvent.type) || new Set();
     const wildcards = this.subscribers.get('*') || new Set();
     
     const allSubs = [...subs, ...wildcards];
     
     // Asynchronously resolve all subscribers
-    await Promise.all(allSubs.map(sub => Promise.resolve(sub(event)).catch(err => {
-      console.error(`Error in event subscriber for ${event.type}:`, err);
+    await Promise.all(allSubs.map(sub => Promise.resolve(sub(fullEvent)).catch(err => {
+      console.error(`Error in event subscriber for ${fullEvent.type}:`, err);
     })));
   }
 }

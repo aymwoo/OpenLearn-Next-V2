@@ -420,8 +420,10 @@ export default {
         }
 
         await eventBus.publish({
+          id: globalThis.crypto.randomUUID(),
           type: 'courseware.uploaded',
           source: ctx.pluginId,
+          timestamp: Date.now(),
           payload: {
             id: rowId, courseware_key: coursewareKey, version: nextVersion,
             title, extraction_mode: extractionConfig.mode,
@@ -467,7 +469,7 @@ export default {
           ${whereClause}
         `).get(...params) as any;
 
-        const results = (rows as CoursewareRow[]).map(async r => {
+        const results = await Promise.all((rows as CoursewareRow[]).map(async r => {
           const stats = await db.prepare(
             `SELECT COUNT(*) as submissions, ROUND(AVG(score), 1) as avg_score FROM ${scTable} WHERE courseware_id = ?`
           ).get(r.id) as any;
@@ -476,9 +478,9 @@ export default {
             extraction_config: JSON.parse(r.extraction_config || '{}'),
             security_warnings: JSON.parse(r.security_warnings || '[]'),
             target_classes: JSON.parse(r.target_classes || '[]'),
-            stats: { submissions: stats.submissions || 0, avg_score: stats.avg_score || 0 },
+            stats: { submissions: stats?.submissions || 0, avg_score: stats?.avg_score || 0 },
           };
-        });
+        }));
 
         return { items: results, total: count.total };
       },
@@ -510,8 +512,10 @@ export default {
         ).run(p.status, p.id);
 
         await eventBus.publish({
+          id: globalThis.crypto.randomUUID(),
           type: 'courseware.published',
           source: ctx.pluginId,
+          timestamp: Date.now(),
           payload: { id: p.id, status: p.status },
         });
 
@@ -545,8 +549,10 @@ export default {
         }
 
         await eventBus.publish({
+          id: globalThis.crypto.randomUUID(),
           type: 'courseware.deleted',
           source: ctx.pluginId,
+          timestamp: Date.now(),
           payload: { courseware_key: cw.courseware_key },
         });
 
@@ -598,8 +604,10 @@ export default {
         }
 
         await eventBus.publish({
+          id: globalThis.crypto.randomUUID(),
           type: 'courseware.score_submitted',
           source: ctx.pluginId,
+          timestamp: Date.now(),
           payload: {
             courseware_id: p.courseware_id, student_id: p.student_id,
             score: p.score, total: p.total,

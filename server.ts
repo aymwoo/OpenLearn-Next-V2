@@ -4872,9 +4872,10 @@ ${examsText}
   });
 
   // V3.0: 查询插件贡献点摘要
-  app.get('/api/plugins/:id/contributions', (req, res) => {
+  app.get('/api/plugins/:id(*)/contributions', (req, res) => {
     try {
-      const summary = kernelContainer.pluginHost.listContributions(req.params.id);
+      const rawId = decodeURIComponent(req.params.id);
+      const summary = kernelContainer.pluginHost.listContributions(rawId);
       res.json({ success: true, result: summary });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
@@ -4882,9 +4883,10 @@ ${examsText}
   });
 
   // V3.1: 读取插件配置（schema + 当前值）
-  app.get('/api/plugins/:id/config', (req, res) => {
+  app.get('/api/plugins/:id(*)/config', (req, res) => {
     try {
-      const pluginId = kernelContainer.pluginHost.resolvePluginUuid(req.params.id);
+      const rawId = decodeURIComponent(req.params.id);
+      const pluginId = kernelContainer.pluginHost.resolvePluginUuid(rawId);
       const row = kernelContainer.db
         .prepare('SELECT manifest FROM plugins WHERE id = ?')
         .get(pluginId) as { manifest: string } | undefined;
@@ -4905,9 +4907,10 @@ ${examsText}
   });
 
   // V3.1: 更新插件配置
-  app.post('/api/plugins/:id/config', (req, res) => {
+  app.post('/api/plugins/:id(*)/config', (req, res) => {
     try {
-      const pluginId = kernelContainer.pluginHost.resolvePluginUuid(req.params.id);
+      const rawId = decodeURIComponent(req.params.id);
+      const pluginId = kernelContainer.pluginHost.resolvePluginUuid(rawId);
       const updates = req.body;
       if (!updates || typeof updates !== 'object') {
         return res.status(400).json({ success: false, error: 'Body must be an object of key-value pairs' });
@@ -4926,46 +4929,49 @@ ${examsText}
     }
   });
 
-// GET single plugin by UUID or manifest.id alias
-  app.get('/api/plugins/:id', async (req, res) => {
+  app.post('/api/plugins/:id(*)/toggle', async (req, res) => {
     try {
+      const rawId = decodeURIComponent(req.params.id);
+      const cmd = kernelContainer.commandBus.createCommand(
+        'plugin.toggle',
+        { pluginId: rawId },
+        getActorId(req)
+      );
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/plugins/:id(*)', async (req, res) => {
+    try {
+      const rawId = decodeURIComponent(req.params.id);
+      const cmd = kernelContainer.commandBus.createCommand(
+        'plugin.uninstall',
+        { pluginId: rawId },
+        getActorId(req)
+      );
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // GET single plugin by UUID or manifest.id alias (Placed AFTER /config, /toggle, /contributions)
+  app.get('/api/plugins/:id(*)', async (req, res) => {
+    try {
+      const rawId = decodeURIComponent(req.params.id);
       const cmd = kernelContainer.commandBus.createCommand(
         'plugin.info',
-        { pluginId: req.params.id },
+        { pluginId: rawId },
         getActorId(req)
       );
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (err: any) {
       res.status(404).json({ success: false, error: err.message });
-    }
-  });
-
-  app.post('/api/plugins/:id/toggle', async (req, res) => {
-    try {
-      const cmd = kernelContainer.commandBus.createCommand(
-        'plugin.toggle',
-        { pluginId: req.params.id },
-        getActorId(req)
-      );
-      const result = await kernelContainer.commandBus.execute(cmd);
-      res.json(result);
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
-    }
-  });
-
-  app.delete('/api/plugins/:id', async (req, res) => {
-    try {
-      const cmd = kernelContainer.commandBus.createCommand(
-        'plugin.uninstall',
-        { pluginId: req.params.id },
-        getActorId(req)
-      );
-      const result = await kernelContainer.commandBus.execute(cmd);
-      res.json(result);
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
     }
   });
 
