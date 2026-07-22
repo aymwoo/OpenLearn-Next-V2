@@ -120,6 +120,8 @@ function wrapCommandBus(
    *  for the unified namespace rule (manifest.id prefix, '.' separator). */
   const resolveType = (commandType: string): string => {
     if (isKernelPlugin) return commandType;
+    if (commandType.startsWith(pluginId + '.')) return commandType;
+    if (manifestId && commandType.startsWith(manifestId + '.')) return commandType;
     return resolvePluginCommandType(commandType, manifestId || pluginId);
   };
 

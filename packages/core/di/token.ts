@@ -23,11 +23,11 @@
  */
 import { TokenError } from './errors.js';
 
-// Token naming regex: @scope/domain:Name
-// scope  : letters, digits, underscore, hyphen
+// Token naming regex: (@scope/)?domain:Name
+// scope  : letters, digits, underscore, hyphen (optional)
 // domain : letters, digits, underscore, hyphen
 // name   : letters, digits, underscore
-const TOKEN_NAME_RE = /^@[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+:[a-zA-Z0-9_]+$/;
+const TOKEN_NAME_RE = /^(?:@[a-zA-Z0-9_-]+\/)?([a-zA-Z0-9_-]+:[a-zA-Z0-9_]+)$/;
 
 export class Token<T> {
   // Phantom type parameter — carries the service interface type at

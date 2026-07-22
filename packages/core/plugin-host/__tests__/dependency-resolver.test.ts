@@ -8,6 +8,7 @@ import {
   checkMissingDeps,
   detectCycle,
   computeActivationOrder,
+  parseServiceRequirement,
 } from '../dependency-resolver.js';
 import type { Manifest } from '../../esm-loader/manifest-schema.js';
 
@@ -186,7 +187,6 @@ function makeManifestWithRequires(
 }
 
 describe('parseServiceRequirement', () => {
-  const { parseServiceRequirement } = require('../dependency-resolver.js');
 
   it('kernel token → 返回 null', () => {
     expect(parseServiceRequirement('@openlearn/core:ICommandBusService')).toBeNull();
@@ -204,8 +204,11 @@ describe('parseServiceRequirement', () => {
     expect(parseServiceRequirement('someRandomString')).toBeNull();
   });
 
-  it('tokenName 缺少冒号的格式 → 返回 null', () => {
-    expect(parseServiceRequirement('provider:bareName')).toBeNull();
+  it('valid token requirement format → 解析 pluginId 和 tokenName', () => {
+    expect(parseServiceRequirement('provider:bareName')).toEqual({
+      pluginId: 'provider',
+      tokenName: 'provider:bareName',
+    });
   });
 });
 

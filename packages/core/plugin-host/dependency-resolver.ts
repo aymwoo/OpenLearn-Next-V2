@@ -68,15 +68,12 @@ const KERNEL_TOKEN_PREFIX = '@openlearn/';
 export function parseServiceRequirement(req: string): ServiceRequirement | null {
   if (req.startsWith(KERNEL_TOKEN_PREFIX)) return null;
 
-  // 格式: pluginId:TokenName，pluginId 不含空格和冒号，TokenName 为有效的 Token 名
-  const match = req.match(/^([a-zA-Z0-9_-]+):([a-zA-Z0-9_:]+)$/);
+  // 格式: pluginId:ServiceName 或 @scope/domain:ServiceName
+  const match = req.match(/^(?:@[a-zA-Z0-9_-]+\/)?([a-zA-Z0-9_-]+):([a-zA-Z0-9_]+)$/);
   if (!match) return null;
 
-  const [, pluginId, tokenName] = match;
-  // tokenName 必须包含至少一个冒号（格式为 pluginId:IServiceName）
-  if (!tokenName.includes(':')) return null;
-
-  return { pluginId, tokenName };
+  const [, pluginId] = match;
+  return { pluginId, tokenName: req };
 }
 
 /**

@@ -26,6 +26,7 @@
  *     fully-qualified key for the same `(type, manifest.id)` pair.
  */
 
+import { describe, it, expect } from 'vitest';
 import { resolvePluginCommandType } from '../plugin-namespace.js';
 
 interface Case {
@@ -59,35 +60,19 @@ const cases: Case[] = [
   },
 ];
 
-let pass = 0;
-let fail = 0;
-
-for (const c of cases) {
-  const actual = resolvePluginCommandType(c.type, c.pluginId);
-  if (actual === c.expected) {
-    console.log(`PASS [${c.name}] -> ${actual}`);
-    pass++;
-  } else {
-    console.error(`FAIL [${c.name}]`);
-    console.error(`  expected: ${c.expected}`);
-    console.error(`  actual:   ${actual}`);
-    fail++;
+describe('plugin-namespace', () => {
+  for (const c of cases) {
+    it(c.name, () => {
+      const actual = resolvePluginCommandType(c.type, c.pluginId);
+      expect(actual).toBe(c.expected);
+    });
   }
-}
 
-// Two plugins registering the same bare command must end up with distinct keys.
-// This is the safety property that justified the worker-side prefix in the first place.
-const a = resolvePluginCommandType('createItem', '@scope-a/plugin');
-const b = resolvePluginCommandType('createItem', '@scope-b/plugin');
-if (a !== b && a === '@scope-a/plugin.createItem' && b === '@scope-b/plugin.createItem') {
-  console.log(`PASS [two plugins registering same bare command get distinct keys] -> ${a} != ${b}`);
-  pass++;
-} else {
-  console.error(`FAIL [two plugins registering same bare command get distinct keys]`);
-  console.error(`  a: ${a}`);
-  console.error(`  b: ${b}`);
-  fail++;
-}
-
-console.log(`\nResult: ${pass} pass, ${fail} fail`);
-if (fail > 0) process.exit(1);
+  it('two plugins registering same bare command get distinct keys', () => {
+    const a = resolvePluginCommandType('createItem', '@scope-a/plugin');
+    const b = resolvePluginCommandType('createItem', '@scope-b/plugin');
+    expect(a).toBe('@scope-a/plugin.createItem');
+    expect(b).toBe('@scope-b/plugin.createItem');
+    expect(a).not.toBe(b);
+  });
+});

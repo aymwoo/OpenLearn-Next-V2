@@ -336,7 +336,7 @@ export function createServicesProxy(
   const eventBusProxy = new EventBusProxy(transport);
 
   // Register the onMessage handler to dispatch responses
-  transport.onMessage((msg: unknown) => {
+  transport.onMessage(async (msg: unknown) => {
     const typed = msg as { type?: string; invokeId?: string };
 
     // Handle forwarded events from EventForwarder

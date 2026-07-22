@@ -338,7 +338,7 @@ describe('buildContext', () => {
       provides: ['ext-my-service:IMyService'],
     };
 
-    const ctx = await setupContext({ registry, tracker, manifest: manifestWithProvides });
+    const ctx = await setupContext({ registry, tracker, pluginId: 'ext-my-service', manifest: manifestWithProvides });
 
     // 定义接口和 Token（模拟插件 contracts/ 中的定义）
     interface IMyService {
