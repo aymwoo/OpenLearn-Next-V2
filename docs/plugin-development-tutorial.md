@@ -4,6 +4,9 @@
 
 1. [系统架构概述](#1-系统架构概述)
 2. [开发原理](#2-开发原理)
+   - [2.1 插件即 ESM 模块](#21-插件即-esm-模块)
+   - [2.2 双运行时架构](#22-双运行时架构)
+   - [2.3 使用 AI Skill 快速开发（推荐）](#23-使用-ai-skill-快速开发推荐)
 3. [插件结构详解](#3-插件结构详解)
 4. [手把手实例项目](#4-手把手实例项目)
 5. [API 及接口文档](#5-api-及接口文档)
@@ -282,6 +285,53 @@ ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
 > **控制 Dashboard 可见性**：插件可在 `manifest.configuration.properties` 中声明 `showInDashboard`（`boolean`，默认 `true`）。用户可在插件中心的每张卡片上切换此开关，系统将自动隐藏/显示该插件的 Dashboard 小部件。详见 [5.11 IConfigService](#511-iconfigservicev32-新增)。
 
 ---
+
+### 2.3 使用 AI Skill 快速开发（推荐）
+
+除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是一个运行在 Codex/Claude Code 中的 AI 代理工具，能够自动化插件开发的大部分流程。
+
+**安装：**
+
+```bash
+npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
+```
+
+安装后，在 Codex 对话中提及开发 OpenLearn 插件相关的话题（如「帮我写一个课堂投票插件」），Skill 就会自动激活。
+
+**Skill 能做什么：**
+
+| 能力 | 说明 |
+|------|------|
+| 📖 **读取最新文档** | 自动从 https://openlearn-next-v2.readthedocs.io 拉取最新 API 文档，智能缓存减少 token 消耗（月均 ~14K vs 纯在线 ~100K） |
+| 💬 **结构化需求讨论** | 逐一确认插件用途、核心功能、类型（server-only / full-stack / frontend-only）、UI 扩展点、权限、AI 能力、数据库结构 |
+| 🏗️ **模板代码生成** | 根据确认的需求，从三类官方模板中生成完整的 `package.json`、`tsconfig.json`、`src/index.ts`、`src/frontend.tsx` |
+| 🔧 **编码规范保证** | 自动遵循三件套模式（Action → Command → Event）、数据库表命名、JSX 经典模式、避免 Node.js 内置模块等规范 |
+| ✅ **构建与验证** | 给出 `npx @openlearn/plugin-sdk build` 指令和自检清单，确保产物无非法导入、JSX 运行时正确 |
+| 📦 **安装测试指引** | 提醒在管理后台上传 ZIP、激活插件、验证课堂工具栏 |
+
+**工作流程：**
+
+```
+用户说「帮我写一个 XX 插件」
+  → Skill 探活在线文档（~200 token）
+  → 需求讨论：逐项确认用途、功能、类型、UI 扩展点、权限
+  → 选择模板（server-only / full-stack / frontend-only）
+  → 替换占位符，生成源码
+  → 输出构建命令 + 检查清单
+  → 提醒上传安装方式
+```
+
+**支持的三种插件模板：**
+
+| 模板 | 适用场景 | 生成文件 |
+|------|---------|---------|
+| `server-only` | 纯后端（AI 工具 + 命令 + 事件，无 UI） | `package.json`, `tsconfig.json`, `src/index.ts` |
+| `full-stack` | 全栈（后端逻辑 + React 前端） | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
+| `frontend-only` | 纯前端（仅 UI 面板或课堂工具） | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
+
+**Skill 仓库地址**：[github.com/aymwoo/openlearn-skills](https://github.com/aymwoo/openlearn-skills)
+
+> **提示**：如果手动开发遇到困难，安装 Skill 后直接用自然语言描述需求即可。Skill 内置了本指南的所有 API 知识，能比逐页查阅文档快 5-10 倍地完成插件开发。
 
 ## 3. 插件结构详解
 
