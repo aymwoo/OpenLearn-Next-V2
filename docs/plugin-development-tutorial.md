@@ -947,6 +947,7 @@ ctx.config.onChange('maxOptions', (newVal, oldVal) => {
 
 ```typescript
 const recharts = ctx.require('recharts');
+```
 
 ### 5.13 ResourceService（V2.5 新增）
 
