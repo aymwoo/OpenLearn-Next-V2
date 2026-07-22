@@ -40,7 +40,7 @@ import type {
   IStorageService,
   IAIService,
 } from '../di/interfaces.js';
-import { resolvePluginCommandType } from './plugin-namespace.js';
+import { resolvePluginCommandType, stripPluginCommandPrefix } from './plugin-namespace.js';
 
 // ── 共享模块注册表 ──────────────────────────────────────────────────────
 
@@ -165,15 +165,18 @@ function wrapCommandBus(
     execute: createSafeFunction(async (command: any) => {
       // Normalize command type: plugins may use either 'type' or 'commandType'
       const rawType = command.type || command.commandType;
-      // ponytail: try prefixed first, fall back to original for kernel commands
       const prefixedCmd = { ...command, type: resolveType(rawType) };
       try {
         return await commandBus.execute(prefixedCmd);
       } catch (e: any) {
-        // If the prefixed type doesn't exist, try the original type
-        // (e.g. kernel commands like whiteboard.draw that plugins call directly)
-        if (e.message?.includes('No handler registered') || e.message?.includes('handler')) {
-          return commandBus.execute({ ...command, type: rawType });
+        // If the prefixed type doesn't exist in CommandBus, try fallback to the unprefixed type
+        // (e.g. kernel system commands like whiteboard.draw, vfs.write_file that plugins call)
+        const isNoHandler = typeof e?.message === 'string' && e.message.startsWith('No handler registered for command:');
+        if (isNoHandler) {
+          const unprefixedType = stripPluginCommandPrefix(rawType, manifestId || pluginId);
+          if (unprefixedType !== prefixedCmd.type) {
+            return await commandBus.execute({ ...command, type: unprefixedType });
+          }
         }
         throw e;
       }

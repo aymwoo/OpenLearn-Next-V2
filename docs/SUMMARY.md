@@ -2190,9 +2190,9 @@ await actionRegistry.register({
 
 **命令解析规则**：
 
-1. **系统和内核插件**（`@openlearn/` 前缀）：全局命名空间访问权，直接使用短指令名称
-2. **点号命名空间指令**（如 `quiz.create`、`vote.cast`）：直接以原名全局注册，保证协同工具无感工作
-3. **裸字符指令**（不含 `.`）：自动添加 `{pluginId}.` 前缀，实现强沙箱隔离
+1. **系统和内核插件**（`@openlearn/` 前缀）：继承全局命名空间访问权，直接使用全局指令名称
+2. **第三方插件指令**：统一自动添加 `{manifest.id}.` 前缀（如 `courseware.query` -> `@courseware-hub/plugin.courseware.query`），防止跨插件指令冲突与越权劫持
+3. **前缀显式声明**：若指令名已包含本插件前缀 `{manifest.id}.`，则保持原样，避免重复加前缀
 
 **防越权劫持**：
 
