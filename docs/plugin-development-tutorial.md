@@ -235,7 +235,7 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 | `student.fullscreen` | 2.5 | 学生 |
 | `global.setting` | 2.5 | 管理员 |
 
-> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^0.1.9"`。安装时 PluginHost 自动检查兼容性。
+> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^0.1.10"`。安装时 PluginHost 自动检查兼容性。
 
 ### 2.4 导航页面 vs. 白板组件 — 如何区分？
 
@@ -346,7 +346,7 @@ interface Manifest {
   description?: string;          // 描述
   author?: string;               // 作者
   engines?: {                    // 引擎版本约束
-    openlearn?: string;          // 如 "^0.1.9"
+    openlearn?: string;          // 如 "^0.1.10"
   };
   requires: string[];            // 依赖的服务 Token（格式 @openlearn/core:TokenName@^1.0.0）
   optional?: string[];           // 可选依赖
@@ -497,7 +497,7 @@ export default {
     main: 'index.js',
     description: '在课堂上创建实时投票，收集学生回答',
     author: 'Your Name',
-    engines: { openlearn: '^0.1.9' },
+    engines: { openlearn: '^0.1.10' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',
@@ -1801,7 +1801,7 @@ export default {
     main: 'index.js',
     description: '插件描述',
     author: '作者名',
-    engines: { openlearn: '^0.1.9' },
+    engines: { openlearn: '^0.1.10' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',
