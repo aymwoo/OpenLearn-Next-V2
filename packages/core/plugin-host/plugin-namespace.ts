@@ -57,24 +57,21 @@
  *   resolvePluginCommandType('listUsers', '@my-scope/hello')
  *   // => '@my-scope/hello.listUsers'
  */
+const UUID_V7_PREFIX = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}\./i;
+
 export function resolvePluginCommandType(type: string, pluginId: string): string {
   const prefix = pluginId + '.';
-  return type.startsWith(prefix) ? type : prefix + type;
+  if (type.startsWith(prefix)) return type;
+  if (UUID_V7_PREFIX.test(type)) return type;
+  return prefix + type;
 }
 
-/**
- * Inverse of {@link resolvePluginCommandType} — strips the plugin namespace prefix
- * to recover the original command type the plugin author wrote.
- *
- * Useful for logging, debugging, and interop with code that still expects the
- * bare type.
- *
- * @param type      The fully-qualified command type from the main CommandBus
- * @param pluginId  The plugin's manifest id
- * @returns The bare command type, or the original type if it was not prefixed
- *          by this plugin (e.g. a system command like `lesson.create`)
- */
 export function stripPluginCommandPrefix(type: string, pluginId: string): string {
   const prefix = pluginId + '.';
-  return type.startsWith(prefix) ? type.slice(prefix.length) : type;
+  if (type.startsWith(prefix)) return type.slice(prefix.length);
+  if (UUID_V7_PREFIX.test(type)) {
+    const idx = type.indexOf('.');
+    return type.slice(idx + 1);
+  }
+  return type;
 }
