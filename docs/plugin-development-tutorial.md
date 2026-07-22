@@ -279,6 +279,8 @@ ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
 
 **典型模式：导航页 = 管理界面，白板组件 = 交互工具。** 例如作业中心应在 `teacher.tab` 注册作业列表管理页，在 `teacher.dashboard.widget` 注册具体某次作业的提交/批改面板。两者共享 `elementId`/`lessonId` 即可通过后端 API 打通数据。
 
+> **控制 Dashboard 可见性**：插件可在 `manifest.configuration.properties` 中声明 `showInDashboard`（`boolean`，默认 `true`）。用户可在插件中心的每张卡片上切换此开关，系统将自动隐藏/显示该插件的 Dashboard 小部件。详见 [5.11 IConfigService](#511-iconfigservicev32-新增)。
+
 ---
 
 ## 3. 插件结构详解
@@ -887,12 +889,49 @@ ctx.config.onChange('maxOptions', (newVal, oldVal) => {
 });
 ```
 
+> **系统内置配置键**：`showInDashboard`（`boolean`）是一个被框架识别的特殊键。当插件在 `configuration.properties` 中声明此键后，插件卡片的「总览」开关可用，关闭后将隐藏 `teacher.dashboard.widget` 注册的小部件。此行为由框架在渲染层实现，无需插件自行处理。
+
 ### 5.12 共享模块 require（V5.1）
 
 插件可通过 `ctx.require()` 引用白名单中的 npm 包，无需自行打包：
 
 ```typescript
 const recharts = ctx.require('recharts');
+
+### 5.13 ResourceService（V5.2 新增）
+
+插件可通过 Command Bus 直接操作系统资源库（`system_resources` 表），无需自行发起 HTTP 请求。
+
+**命令列表：**
+
+| 命令 | payload | 返回值 | 说明 |
+|------|---------|--------|------|
+| `resource.list` | `{}` | `{ resources: [...] }` | 列出所有资源（id, name, type, created_at） |
+| `resource.get` | `{ id }` | `{ resource: {...} }` | 获取单个资源完整内容（含 content 字段） |
+| `resource.create` | `{ name, type, content }` | `{ success, id }` | 创建新资源。type 为 `"html"` 或 `"folder"` |
+| `resource.delete` | `{ id }` | `{ success }` | 删除指定资源 |
+
+**调用的能力要求**：`resource.create` 和 `resource.delete` 需要 `file:write` 权限，插件须在 `capabilitiesProposed` 中声明。
+
+**使用示例：**
+
+```typescript
+// 查询所有资源
+const { resources } = await ctx.services.commandBus.execute('resource.list', {});
+
+// 创建 HTML 课件资源
+const { id } = await ctx.services.commandBus.execute('resource.create', {
+  name: 'my-courseware-v1',
+  type: 'html',
+  content: '<html>...</html>',
+});
+
+// 读取资源内容
+const { resource } = await ctx.services.commandBus.execute('resource.get', { id });
+console.log(resource.content);
+```
+
+**注意**：当前 ResourceService 未注册为 ActionRegistry 条目，因此不能通过 AI Agent 的 function call 触发，仅供插件代码内直接调用。
 const pdf = ctx.require('jspdf');
 const markdown = ctx.require('react-markdown');
 const xlsx = ctx.require('xlsx');
