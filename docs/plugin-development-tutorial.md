@@ -183,7 +183,7 @@ interface PluginContext {
   // V3.2: 声明式贡献点只读视图
   contributions: ContributionAccessor; // list(): 内省插件在 manifest 中声明的贡献点
 
-  // V5.1: 主应用共享模块引用（白名单控制）
+  // V2.5: 主应用共享模块引用（白名单控制）
   require(moduleName: string): any;
 }
 ```
@@ -216,11 +216,11 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 | `ctx.log` | 2.5 | 结构化日志（debug/info/warn/error），自动注入 pluginId 和 timestamp |
 | `ctx.config` | 3.0 | 类型安全的配置读取，配合 manifest.configuration 声明 |
 | `ctx.provide()` | 3.0 | 向 DI 容器注册自定义服务供其他插件消费 |
-| `ctx.require()` | 5.1 | 引用主应用白名单共享模块（recharts、jspdf 等） |
+| `ctx.require()` | 2.5 | 引用主应用白名单共享模块（recharts、jspdf 等） |
 | `ctx.invokeCommand()`（前端） | 2.5 | 前端直接调用后端 CommandBus |
-| `teacher.panel` 扩展槽位 | 5.1 | 教师独立全宽管理面板 |
-| `student.fullscreen` 扩展槽位 | 5.1 | 学生全屏视图/考试模式 |
-| `global.setting` 扩展槽位 | 5.1 | 全局设置页扩展 |
+| `teacher.panel` 扩展槽位 | 2.5 | 教师独立全宽管理面板 |
+| `student.fullscreen` 扩展槽位 | 2.5 | 学生全屏视图/考试模式 |
+| `global.setting` 扩展槽位 | 2.5 | 全局设置页扩展 |
 
 **扩展槽位版本可用性一览：**
 
@@ -231,11 +231,11 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 | `student.view` | 1.0 | 学生 |
 | `student.lesson.tool` | 1.0 | 学生 |
 | `classroom.tool` | 1.0 | 课堂教学 |
-| `teacher.panel` | 5.1 | 教师 |
-| `student.fullscreen` | 5.1 | 学生 |
-| `global.setting` | 5.1 | 管理员 |
+| `teacher.panel` | 2.5 | 教师 |
+| `student.fullscreen` | 2.5 | 学生 |
+| `global.setting` | 2.5 | 管理员 |
 
-> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^5.1.0"`。安装时 PluginHost 自动检查兼容性。
+> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^2.5.0"`。安装时 PluginHost 自动检查兼容性。
 
 ### 2.4 导航页面 vs. 白板组件 — 如何区分？
 
@@ -941,14 +941,14 @@ ctx.config.onChange('maxOptions', (newVal, oldVal) => {
 
 > **系统内置配置键**：`showInDashboard`（`boolean`）是一个被框架识别的特殊键。当插件在 `configuration.properties` 中声明此键后，插件卡片的「总览」开关可用，关闭后将隐藏 `teacher.dashboard.widget` 注册的小部件。此行为由框架在渲染层实现，无需插件自行处理。
 
-### 5.12 共享模块 require（V5.1）
+### 5.12 共享模块 require（V2.5）
 
 插件可通过 `ctx.require()` 引用白名单中的 npm 包，无需自行打包：
 
 ```typescript
 const recharts = ctx.require('recharts');
 
-### 5.13 ResourceService（V5.2 新增）
+### 5.13 ResourceService（V2.5 新增）
 
 插件可通过 Command Bus 直接操作系统资源库（`system_resources` 表），无需自行发起 HTTP 请求。
 
