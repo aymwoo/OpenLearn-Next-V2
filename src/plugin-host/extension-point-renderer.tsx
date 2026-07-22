@@ -127,6 +127,59 @@ export function DOMExtensionWrapper({ ext, route, slotProps, slot }: { ext: any;
  *
  * Returns null if no extensions are registered for the slot.
  */
+// ── Stable component resolution cache ────────────────────────────────────────
+//
+// ext.component can be either:
+//   (a) A React component function  (props) => JSX   → use directly
+//   (b) A lazy factory  () => Promise<{default: Component}>  → wrap with React.lazy
+//
+// We must NOT call ext.component() during render to "probe" its return type,
+// because if it's a real React component, that invokes its hooks as side-effects,
+// causing React's "Rendered more/fewer hooks" error.
+//
+// Instead, we resolve once per ext.component reference and cache the result.
+const resolvedComponentCache = new WeakMap<Function, React.ComponentType<any>>();
+
+function resolveExtensionComponent(ext: any): React.ComponentType<any> {
+  const fn = ext.component as Function;
+  const cached = resolvedComponentCache.get(fn);
+  if (cached) return cached;
+
+  // Heuristic: lazy factories are typically arrow functions with 0-length
+  // that return a Promise. Real React components accept (props) and return JSX.
+  // We check if the function is marked as a React component or has hooks-like
+  // characteristics by checking its .length (props arg) and name patterns.
+  //
+  // Safest approach: if the function's source contains "createElement" or
+  // "use" calls, treat it as a direct component. But we can't inspect source
+  // reliably. Instead, we check: if calling it with no args returns a thenable,
+  // it's a lazy factory. BUT we can't call it during render.
+  //
+  // Final approach: treat it as a direct component by default. If the plugin
+  // registered it as a lazy factory (returns Promise), it should have been
+  // wrapped at registration time. The current codebase registers direct
+  // components, so this is safe.
+  //
+  // We use a marker property `__isLazyFactory` that can be set at registration.
+  if ((fn as any).__isLazyFactory === true) {
+    const lazy = React.lazy(fn as () => Promise<{ default: React.ComponentType<any> }>);
+    resolvedComponentCache.set(fn, lazy);
+    return lazy;
+  }
+
+  // Default: treat as direct React component
+  resolvedComponentCache.set(fn, fn as React.ComponentType<any>);
+  return fn as React.ComponentType<any>;
+}
+
+/**
+ * Renders all registered extension point components for a given slot.
+ *
+ * Each extension point is rendered via Suspense with a LoadingSkeleton fallback,
+ * wrapped in an individual ErrorBoundary.
+ *
+ * Returns null if no extensions are registered for the slot.
+ */
 export function ExtensionPointRenderer({
   slot,
   fallback,
@@ -198,7 +251,7 @@ export function ExtensionPointRenderer({
             <Suspense fallback={fallback ?? <LoadingSkeleton />}>
               {isReact ? (
                 React.createElement(
-                  (() => { const probe = ext.component(); return typeof probe?.then === 'function' ? React.lazy(ext.component) : ext.component; })(),
+                  resolveExtensionComponent(ext),
                   { route: ext.route || route, ...ext.slotProps, ...slotProps },
                 )
               ) : (
