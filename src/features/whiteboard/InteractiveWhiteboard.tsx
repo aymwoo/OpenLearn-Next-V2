@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { Stage, Layer, Rect, Circle, Line, Text as KonvaText, Group } from 'react-konva';
-import { MousePointer2, Square, Circle as CircleIcon, PenTool, Type, Eraser, Loader2, Presentation, ChevronLeft, ChevronRight, Wand2, Terminal, Activity, Trash2, Settings, Plus, X, Paintbrush, ChevronDown, Undo2, Redo2, RotateCcw, Play, Pause, Maximize2, Minimize2, Edit3, BookOpen, Eye, FileText, Highlighter, Sparkles, HelpCircle, Shuffle, UserCheck, Upload } from 'lucide-react';
+import { MousePointer2, Square, Circle as CircleIcon, PenTool, Type, Eraser, Loader2, Presentation, ChevronLeft, ChevronRight, Wand2, Terminal, Activity, Trash2, Settings, Plus, X, Paintbrush, ChevronDown, Undo2, Redo2, RotateCcw, Play, Pause, Maximize2, Minimize2, Edit3, BookOpen, Eye, FileText, Highlighter, Sparkles, HelpCircle, Shuffle, UserCheck, Upload, Grid, LayoutGrid } from 'lucide-react';
 import { Html } from 'react-konva-utils';
 import { init as initPptxPreview } from 'pptx-preview';
 import Reveal from 'reveal.js';
@@ -1406,6 +1406,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
   const [tool, setTool] = useState<'cursor' | 'rect' | 'circle' | 'pen' | 'text' | 'presentation' | 'highlighter'>('cursor');
   const [highlighterColor, setHighlighterColor] = useState('#facc15');
   const [currentPage, setCurrentPage] = useState(0);
+  const [showGrid, setShowGrid] = useState(true);
+  const [isDragOverBoard, setIsDragOverBoard] = useState(false);
+  const [pageTitles, setPageTitles] = useState<string[]>(['P1 · 引入导入', 'P2 · 核心讲解', 'P3 · 互动练习']);
   // currentDrawing holds the shape currently being drawn, so elements is source of truth for others.
   const [currentDrawing, setCurrentDrawing] = useState<any>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -3320,11 +3323,21 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
   const handleWhiteboardDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
+    if (!isDragOverBoard) setIsDragOverBoard(true);
   };
 
   const handleWhiteboardDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
+    setIsDragOverBoard(true);
+  };
+
+  const handleWhiteboardDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    // Only reset if leaving container
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragOverBoard(false);
+    }
   };
 
   // 组装元素 data：合并内容字段与定位字段，并补齐各类型的默认值
@@ -3454,18 +3467,35 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         onDragEnter={handleWhiteboardDragEnter}
         onDrop={handleWhiteboardDrop}
       >
-      <div className="flex items-center justify-center gap-2 p-2 bg-gray-100 border-b border-gray-200 absolute top-0 left-0 right-0 w-full z-10 shadow-sm animate-in fade-in duration-200">
-        <button onClick={() => { setTool('cursor'); setSelectedShapeId(null); }} className={`p-1.5 rounded ${tool === 'cursor' ? 'bg-white shadow' : 'hover:bg-gray-200'}`} title="Cursor Selector">
+      <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur-md border border-slate-200/80 absolute top-2 left-1/2 -translate-x-1/2 z-20 shadow-lg shadow-slate-200/50 rounded-2xl animate-in fade-in duration-200 font-sans select-none">
+        {/* Group 1: Selection */}
+        <button
+          onClick={() => { setTool('cursor'); setSelectedShapeId(null); }}
+          className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'cursor' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'}`}
+          title="选择工具 (Pointer / Selector)"
+        >
           <MousePointer2 size={16} />
         </button>
-        <button onClick={() => setTool('pen')} className={`p-1.5 rounded ${tool === 'pen' ? 'bg-white shadow' : 'hover:bg-gray-200'}`} title="Drawing Pen">
+
+        <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
+
+        {/* Group 2: Draw & Annotate */}
+        <button
+          onClick={() => setTool('pen')}
+          className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'pen' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'}`}
+          title="画笔工具 (Pen)"
+        >
           <PenTool size={16} />
         </button>
-        <button onClick={() => setTool('highlighter')} className={`p-1.5 rounded ${tool === 'highlighter' ? 'bg-white shadow text-yellow-600' : 'hover:bg-gray-200'}`} title="Highlighter Annotation">
+        <button
+          onClick={() => setTool('highlighter')}
+          className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'highlighter' ? 'bg-amber-500 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'}`}
+          title="荧光高亮笔 (Highlighter)"
+        >
           <Highlighter size={16} />
         </button>
         {tool === 'highlighter' && (
-          <div className="flex items-center gap-1 bg-white p-1 rounded-md shadow-inner border border-gray-200 animate-in zoom-in-95 duration-150">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 animate-in zoom-in-95 duration-150">
             {[
               { hex: '#facc15', label: 'Yellow' },
               { hex: '#4ade80', label: 'Green' },
@@ -3475,23 +3505,43 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               <button
                 key={col.hex}
                 onClick={() => setHighlighterColor(col.hex)}
-                className={`w-3.5 h-3.5 rounded-full border transition-all ${highlighterColor === col.hex ? 'ring-2 ring-indigo-500 scale-115 border-indigo-400' : 'border-gray-300'}`}
+                className={`w-3.5 h-3.5 rounded-full border transition-all ${highlighterColor === col.hex ? 'ring-2 ring-indigo-500 scale-110 border-white' : 'border-transparent'}`}
                 style={{ backgroundColor: col.hex }}
                 title={col.label}
               />
             ))}
           </div>
         )}
-        <button onClick={() => setTool('rect')} className={`p-1.5 rounded ${tool === 'rect' ? 'bg-white shadow' : 'hover:bg-gray-200'}`}>
+
+        <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
+
+        {/* Group 3: Shapes & Text */}
+        <button
+          onClick={() => setTool('rect')}
+          className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'rect' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'}`}
+          title="矩形工具 (Rectangle)"
+        >
           <Square size={16} />
         </button>
-        <button onClick={() => setTool('circle')} className={`p-1.5 rounded ${tool === 'circle' ? 'bg-white shadow' : 'hover:bg-gray-200'}`}>
+        <button
+          onClick={() => setTool('circle')}
+          className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'circle' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'}`}
+          title="圆形工具 (Circle)"
+        >
           <CircleIcon size={16} />
         </button>
-        <button onClick={() => setTool('text')} className={`p-1.5 rounded ${tool === 'text' ? 'bg-white shadow' : 'hover:bg-gray-200'}`}>
+        <button
+          onClick={() => setTool('text')}
+          className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'text' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'}`}
+          title="文本工具 (Text)"
+        >
           <Type size={16} />
         </button>
-         <button 
+
+        <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
+
+        {/* Group 4: Media & Applets */}
+        <button 
           onClick={() => {
              setDialogInput('# Title Slide\n---\n## Slide 2');
              setDialog({
@@ -3515,13 +3565,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                           segmentId: activeSegmentId
                       });
                       frontendEventBus.publish({
-      id: uuidv7(),
-      type: 'whiteboard.element_updated',
-      source: 'whiteboard',
-      payload: { lessonId },
-      timestamp: Date.now(),
-      correlationId: lessonId,
-    });
+                        id: uuidv7(),
+                        type: 'whiteboard.element_updated',
+                        source: 'whiteboard',
+                        payload: { lessonId },
+                        timestamp: Date.now(),
+                        correlationId: lessonId,
+                      });
                    } finally {
                       setIsSyncing(false);
                       setDialog(null);
@@ -3529,8 +3579,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 }
              });
           }} 
-          className="p-1.5 rounded hover:bg-gray-200"
-          title="Add Presentation"
+          className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+          title="插入演示幻灯片 (Presentation)"
         >
           <Presentation size={16} />
         </button>
@@ -3546,19 +3596,19 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     segmentId: activeSegmentId
                 });
                 frontendEventBus.publish({
-      id: uuidv7(),
-      type: 'whiteboard.element_updated',
-      source: 'whiteboard',
-      payload: { lessonId },
-      timestamp: Date.now(),
-      correlationId: lessonId,
-    });
+                  id: uuidv7(),
+                  type: 'whiteboard.element_updated',
+                  source: 'whiteboard',
+                  payload: { lessonId },
+                  timestamp: Date.now(),
+                  correlationId: lessonId,
+                });
              } finally {
                 setIsSyncing(false);
              }
           }} 
-          className="p-1.5 rounded hover:bg-gray-200"
-          title="Add Code Sandbox"
+          className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+          title="插入代码沙箱 (Code Sandbox)"
         >
           <Terminal size={16} />
         </button>
@@ -3574,22 +3624,55 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     segmentId: activeSegmentId
                 });
                 frontendEventBus.publish({
-      id: uuidv7(),
-      type: 'whiteboard.element_updated',
-      source: 'whiteboard',
-      payload: { lessonId },
-      timestamp: Date.now(),
-      correlationId: lessonId,
-    });
+                  id: uuidv7(),
+                  type: 'whiteboard.element_updated',
+                  source: 'whiteboard',
+                  payload: { lessonId },
+                  timestamp: Date.now(),
+                  correlationId: lessonId,
+                });
              } finally {
                 setIsSyncing(false);
              }
           }} 
-          className="p-1.5 rounded hover:bg-gray-200"
-          title="Add Math Graph Sandbox"
+          className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+          title="插入数学函数图表 (Math Graph)"
         >
           <Activity size={16} />
         </button>
+
+        <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
+
+        {/* Group 5: Teaching & AI */}
+        <button
+          onClick={async () => {
+             setIsSyncing(true);
+             try {
+                await onElementAdd('rollcall', {
+                    title: "随机点名助手",
+                    x: 120,
+                    y: 120,
+                    page: currentPage,
+                    segmentId: activeSegmentId
+                });
+                frontendEventBus.publish({
+                  id: uuidv7(),
+                  type: 'whiteboard.element_updated',
+                  source: 'whiteboard',
+                  payload: { lessonId },
+                  timestamp: Date.now(),
+                  correlationId: lessonId,
+                });
+             } finally {
+                setIsSyncing(false);
+             }
+          }}
+          className="p-1.5 rounded-xl text-indigo-600 hover:bg-indigo-50 transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
+          title="插入随机点名组件 (Roll Call)"
+        >
+          <UserCheck size={15} />
+        </button>
+
         <button
           onClick={async () => {
              setIsSyncing(true);
@@ -3601,13 +3684,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 });
                 if (res.ok) {
                    frontendEventBus.publish({
-      id: uuidv7(),
-      type: 'whiteboard.element_updated',
-      source: 'whiteboard',
-      payload: { lessonId },
-      timestamp: Date.now(),
-      correlationId: lessonId,
-    });
+                      id: uuidv7(),
+                      type: 'whiteboard.element_updated',
+                      source: 'whiteboard',
+                      payload: { lessonId },
+                      timestamp: Date.now(),
+                      correlationId: lessonId,
+                    });
                    if (onRefresh) onRefresh();
                 } else {
                    setDialog({
@@ -3621,51 +3704,100 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 setIsSyncing(false);
              }
           }}
-          className="p-1.5 rounded hover:bg-purple-100 text-purple-600 bg-purple-50 shadow-sm ml-2 font-medium flex items-center gap-1 text-xs"
-          title="Ask AI Tutor for a hint"
+          className="px-2 py-1 rounded-xl text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 shadow-2xs font-semibold flex items-center gap-1 text-xs transition-all cursor-pointer"
+          title="请求 AI 助教建议 (Ask AI Tutor)"
         >
-          <Wand2 size={14} /> Ask AI
+          <Wand2 size={13} className="text-purple-600" /> AI 助教
         </button>
+
+        <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
+
+        {/* Group 6: Canvas Controls & More */}
+        <button
+          onClick={() => setShowGrid((g) => !g)}
+          className={`p-1.5 rounded-xl transition-all cursor-pointer ${showGrid ? 'text-indigo-600 bg-indigo-50/80' : 'text-slate-400 hover:bg-slate-100'}`}
+          title={showGrid ? '关闭网格背景' : '开启网格背景'}
+        >
+          <Grid size={16} />
+        </button>
+
         {selectedShapeId && (
           <button
             onClick={() => {
               handleElementDelete(selectedShapeId);
               setSelectedShapeId(null);
             }}
-            className="p-1.5 rounded hover:bg-neutral-100 text-gray-700 shadow-sm font-semibold flex items-center gap-1 text-xs select-none"
-            title="Delete selected shape"
+            className="px-2 py-1 rounded-xl text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 shadow-2xs font-semibold flex items-center gap-1 text-xs transition-all cursor-pointer"
+            title="删除选中图形"
           >
-            <Trash2 size={14} /> 删除选中
+            <Trash2 size={13} /> 删除
           </button>
         )}
+
         {userRole !== 'student' ? (
           <button
             onClick={handleClearBoard}
-            className="p-1.5 rounded hover:bg-red-100 text-red-600 bg-red-50 shadow-sm font-semibold flex items-center gap-1 text-xs select-none"
-            title="Clear Board (Remove all elements)"
+            className="p-1.5 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+            title="清空白板 (Clear Board)"
           >
-            <Eraser size={14} /> 清空白板
+            <Eraser size={16} />
           </button>
         ) : (
           <button
             onClick={handleResetBoard}
-            className="p-1.5 rounded hover:bg-amber-100 text-amber-600 bg-amber-50 shadow-sm font-semibold flex items-center gap-1 text-xs select-none"
-            title="Reset Board (Revert to initial state)"
+            className="p-1.5 rounded-xl text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-all cursor-pointer"
+            title="重置白板 (Reset Board)"
           >
-            <RotateCcw size={14} /> 重置白板
+            <RotateCcw size={16} />
           </button>
         )}
-        <div className="w-px h-4 bg-gray-300 mx-1"></div>
-        {isSyncing && <Loader2 size={14} className="text-gray-400 animate-spin" />}
+        {isSyncing && <Loader2 size={15} className="text-indigo-500 animate-spin ml-1" />}
       </div>
       
       <div 
         ref={containerRef} 
-        className="flex-1 bg-gray-50/50 rounded-lg border border-dashed border-gray-200 relative overflow-hidden mt-12 w-full mb-16"
+        className="flex-1 bg-slate-50/70 rounded-2xl border border-slate-200/80 relative overflow-hidden mt-11 w-full mb-14 shadow-inner transition-all"
+        style={{
+          backgroundImage: showGrid ? 'radial-gradient(#cbd5e1 1.2px, transparent 1.2px)' : 'none',
+          backgroundSize: '24px 24px',
+          backgroundColor: '#f8fafc'
+        }}
         onDragOver={handleWhiteboardDragOver}
         onDragEnter={handleWhiteboardDragEnter}
-        onDrop={handleWhiteboardDrop}
+        onDragLeave={handleWhiteboardDragLeave}
+        onDrop={async (e) => {
+          setIsDragOverBoard(false);
+          await handleWhiteboardDrop(e);
+        }}
       >
+        {/* Drag dropzone hover hint */}
+        {isDragOverBoard && (
+          <div className="absolute inset-0 border-2 border-dashed border-indigo-500 bg-indigo-500/10 backdrop-blur-[2px] rounded-2xl flex flex-col items-center justify-center text-indigo-600 font-bold text-sm z-30 animate-in fade-in pointer-events-none">
+            <Plus size={32} className="mb-2 text-indigo-600 animate-bounce" />
+            <span>释放鼠标将组件放入当前白板页面</span>
+          </div>
+        )}
+
+        {/* Empty state hint */}
+        {safeElements.filter((el) => {
+          try {
+            const d = JSON.parse(el.data);
+            return activeSegmentId ? d.segmentId === activeSegmentId || !d.segmentId : (d.page ?? 0) === currentPage;
+          } catch {
+            return currentPage === 0;
+          }
+        }).length === 0 && !fullscreenElementId && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none text-slate-400 p-6 z-0">
+            <div className="w-16 h-16 rounded-2xl bg-indigo-50/80 border border-indigo-100/80 flex items-center justify-center mb-3 shadow-2xs">
+              <Sparkles className="w-7 h-7 text-indigo-500 animate-pulse" />
+            </div>
+            <p className="font-bold text-sm text-slate-700 mb-1">交互式备课白板</p>
+            <p className="text-xs text-slate-400 max-w-sm text-center">
+              从左侧组件库拖拽组件至此处，或使用顶部工具栏插入画笔、几何图形与 AI 助教
+            </p>
+          </div>
+        )}
+
         <div className="absolute inset-0 w-full h-full overflow-hidden">
           {containerSize.width > 0 && containerSize.height > 0 && (
             fullscreenElementId ? (
@@ -3949,14 +4081,56 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         </div>
       </div>
 
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-4 bg-white px-4 py-2 rounded-full shadow border border-gray-200">
-          <button onClick={() => setCurrentPage(p => Math.max(0, p - 1))} className="p-1 hover:bg-gray-100 rounded" disabled={currentPage === 0}>
-             <ChevronLeft size={20} className={currentPage === 0 ? "text-gray-300" : "text-gray-700"} />
-          </button>
-          <span className="text-sm font-medium text-gray-600">Page {currentPage + 1}</span>
-          <button onClick={() => setCurrentPage(p => p + 1)} className="p-1 hover:bg-gray-100 rounded">
-             <ChevronRight size={20} className="text-gray-700" />
-          </button>
+      {/* Bottom Page Navigation Bar */}
+      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-slate-200/80 font-sans select-none">
+        <button
+          onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+          className="p-1 hover:bg-slate-100 rounded-full text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent transition-colors cursor-pointer"
+          disabled={currentPage === 0}
+          title="上一页"
+        >
+          <ChevronLeft size={16} />
+        </button>
+
+        <div className="flex items-center gap-1">
+          {pageTitles.map((title, idx) => {
+            const isActive = idx === currentPage;
+            return (
+              <button
+                key={idx}
+                onClick={() => setCurrentPage(idx)}
+                className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  isActive
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <span>{title}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={() => {
+            const nextIdx = pageTitles.length;
+            setPageTitles((prev) => [...prev, `P${nextIdx + 1} · 备课页面`]);
+            setCurrentPage(nextIdx);
+          }}
+          className="p-1 hover:bg-indigo-50 hover:text-indigo-600 text-slate-400 rounded-full transition-colors cursor-pointer ml-0.5"
+          title="新建白板页面"
+        >
+          <Plus size={16} />
+        </button>
+
+        <button
+          onClick={() => setCurrentPage((p) => Math.min(pageTitles.length - 1, p + 1))}
+          className="p-1 hover:bg-slate-100 rounded-full text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent transition-colors cursor-pointer"
+          disabled={currentPage >= pageTitles.length - 1}
+          title="下一页"
+        >
+          <ChevronRight size={16} />
+        </button>
       </div>
 
       {dialog && (

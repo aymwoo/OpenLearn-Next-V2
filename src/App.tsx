@@ -4664,47 +4664,47 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
               />
             ) : teacherTab === 'lesson_editor' ? (
               <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-                <div className="p-4 border-b border-gray-100 flex items-center justify-between shrink-0 bg-gray-50/50">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <h3 className="font-semibold text-gray-700 flex items-center gap-2 truncate">
-                        <Wand2 size={18} className="text-indigo-600 shrink-0" />
-                        <span className="truncate">Lesson Editor: {lessons.find(l => l.id === selectedLesson)?.title || 'No Lesson Selected'}</span>
+                <div className="px-3.5 py-2 border-b border-slate-200/80 flex items-center justify-between shrink-0 bg-slate-50/80 backdrop-blur-xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <h3 className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-2 truncate">
+                        <Wand2 size={16} className="text-indigo-600 shrink-0" />
+                        <span className="truncate">{lang === 'zh' ? '课程编辑器: ' : 'Lesson Editor: '}{lessons.find(l => l.id === selectedLesson)?.title || (lang === 'zh' ? '未选择课程' : 'No Lesson Selected')}</span>
                       </h3>
                       {selectedLesson && (
-                        <div className="hidden sm:flex items-center gap-1.5 shrink-0 ml-2">
+                        <div className="hidden sm:flex items-center gap-1.5 shrink-0 ml-1">
                           {editorSaveStatus === 'saving' && (
-                            <div className="flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full animate-pulse">
+                            <div className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full animate-pulse">
                               <Loader2 size={10} className="animate-spin text-amber-600" />
-                              <span>{lang === 'zh' ? '正在保存到 SQLite...' : 'Saving to SQLite...'}</span>
+                              <span>{lang === 'zh' ? '同步 SQLite...' : 'Saving...'}</span>
                             </div>
                           )}
                           {editorSaveStatus === 'saved' && (
-                            <div className="flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-250 px-2 py-0.5 rounded-full">
-                              <CheckCircle2 size={11} className="text-emerald-600" />
-                              <span>{lang === 'zh' ? '已成功同步至 SQLite' : 'Saved to SQLite'}</span>
+                            <div className="flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-250 px-2 py-0.5 rounded-full">
+                              <CheckCircle2 size={10} className="text-emerald-600" />
+                              <span>{lang === 'zh' ? '已同步 SQLite' : 'Saved to SQLite'}</span>
                               {editorLastSavedTime && (
-                                <span className="text-emerald-500/80 text-[10px] ml-0.5 font-mono font-medium">
+                                <span className="text-emerald-600/70 text-[9px] font-mono">
                                   {editorLastSavedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                 </span>
                               )}
                             </div>
                           )}
                           {editorSaveStatus === 'error' && (
-                            <div className="flex items-center gap-1 text-[11px] font-medium text-rose-700 bg-rose-50 border border-rose-250 px-2 py-0.5 rounded-full">
-                              <X size={11} className="text-rose-600" />
-                              <span>{lang === 'zh' ? 'SQLite 写入失败' : 'Failed to save to SQLite'}</span>
+                            <div className="flex items-center gap-1 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-250 px-2 py-0.5 rounded-full">
+                              <X size={10} className="text-rose-600" />
+                              <span>{lang === 'zh' ? '写入失败' : 'Failed to save'}</span>
                             </div>
                           )}
                           {editorSaveStatus === 'none' && (
-                            <div className="flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
-                              <Database size={11} className="text-gray-400" />
-                              <span>{lang === 'zh' ? 'SQLite 备课库已就绪' : 'SQLite DB Ready'}</span>
+                            <div className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                              <Database size={10} className="text-slate-400" />
+                              <span>{lang === 'zh' ? 'SQLite 就绪' : 'SQLite Ready'}</span>
                             </div>
                           )}
                         </div>
                       )}
                     </div>
-                   <div className="flex items-center gap-2">
+                   <div className="flex items-center gap-2 shrink-0">
                      {selectedLesson && (
                        <button
                          onClick={() => {
@@ -4712,13 +4712,13 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                            setPreviewLessonTab('whiteboard');
                            setPreviewSelectedCourseware(null);
                          }}
-                         className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                         className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
                        >
                          <Eye size={13} />
-                         以学生视角预览
+                         <span>{lang === 'zh' ? '学生视角预览' : 'Student View'}</span>
                        </button>
                      )}
-                     <button onClick={() => setTeacherTab('courses')} className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg hover:bg-gray-200 transition-colors">Back to Courses</button>
+                     <button onClick={() => setTeacherTab('courses')} className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium rounded-lg transition-colors cursor-pointer">{lang === 'zh' ? '返回课程库' : 'Back to Courses'}</button>
                    </div>
                 </div>
                 <div className="flex-1 flex overflow-hidden">
