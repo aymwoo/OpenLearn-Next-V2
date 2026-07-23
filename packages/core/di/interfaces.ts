@@ -370,5 +370,21 @@ export const ILessonEngineServiceToken = new Token<ILessonEngineService>(
   '@openlearn/core:ILessonEngineService'
 );
 
+/**
+ * Interface for ClassroomRuntimeService.
+ */
+export interface IClassroomRuntimeService {
+  getRuntimeKernel(): Promise<unknown>;
+}
+
+/**
+ * Token for IClassroomRuntimeService.
+ * Identifier: @openlearn/core:IClassroomRuntimeService
+ */
+export const IClassroomRuntimeServiceToken = new Token<IClassroomRuntimeService>(
+  '@openlearn/core:IClassroomRuntimeService'
+);
+
+
 
 

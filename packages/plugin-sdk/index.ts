@@ -60,6 +60,7 @@ export type {
   IStorageService,
   IAIService,
   ILessonEngineService,
+  IClassroomRuntimeService,
   CommandHandler,
   CommandMetadata,
   EventSubscriber,
@@ -77,9 +78,29 @@ export {
   IPluginHostToken,
   ISemesterGradeServiceToken,
   ILessonEngineServiceToken,
+  IClassroomRuntimeServiceToken,
 } from '../core/di/interfaces.js';
 
+// ── Classroom Runtime ───────────────────────────────────────────────────
+
+export type {
+  RuntimeLifecycleState,
+  RuntimeRole,
+  RuntimePermission,
+  UserParticipant,
+  RuntimeStateTree,
+  RuntimeEventMap,
+  RuntimeEventType,
+  RuntimeEventEnvelope,
+  IRuntimeService,
+  IRuntimeModule,
+  RuntimeHookName,
+  RuntimeContextData,
+  RuntimeSnapshot,
+} from '../core/classroom-runtime/index.js';
+
 // ── Lesson Engine ───────────────────────────────────────────────────────
+
 
 export type {
   Lesson,
