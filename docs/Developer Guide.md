@@ -1,26 +1,46 @@
-# OpenLearn Developer Guide - Platform Module Catalog (开发者指南)
+# OpenLearn Developer Guide - Platform Domain Registry (开发者指南)
 
 ## 1. Executive Summary (概述)
 
-本指南汇总了 OpenLearn 平台开发中平台内核、集成层与模块注册表 (`PlatformModuleRegistry`) 的协同用法。
+本指南介绍如何在 OpenLearn 平台中声明业务域契约并使用 `PlatformDomainRegistry` 管理业务域与其所属模块的关系。
 
 ---
 
-## 2. Using Platform Module Registry (使用模块注册表)
+## 2. Registering a Business Domain (注册业务域)
 
 ```typescript
-import { PlatformModuleRegistry } from './packages/core/bootstrap/index.js';
+import {
+  PlatformDomainRegistry,
+  PlatformDomainDescriptor,
+} from './packages/core/bootstrap/index.js';
 
-const registry = new PlatformModuleRegistry();
-// Register top-level module metadata
-registry.register({
-  id: 'mod_lesson_engine',
-  name: 'lesson-engine',
-  displayName: 'Lesson Flow Engine',
-  version: '2.0.0',
-  description: 'Lesson timeline and state machine engine',
-  category: 'Core',
+const domainRegistry = new PlatformDomainRegistry();
+
+const teachingDomain: PlatformDomainDescriptor = {
+  id: 'domain_teaching',
+  name: 'teaching',
+  displayName: 'Teaching & Classroom Domain',
+  description: 'Bounded context for interactive lesson management and whiteboard',
+  version: '1.0.0',
+  category: 'Business',
+  modules: ['mod_lesson_engine', 'mod_whiteboard', 'mod_interaction'],
   status: 'Active',
   health: { isHealthy: true, status: 'Healthy' },
-});
+  capabilities: ['lesson-flow', 'whiteboard-sync'],
+};
+
+domainRegistry.registerDomain(teachingDomain);
+```
+
+---
+
+## 3. Querying Domains and Grouped Modules (查询业务域与所属模块)
+
+```typescript
+// Query Domain
+const domain = domainRegistry.findDomain('domain_teaching');
+
+// List Modules belonging to a Domain
+const modules = domainRegistry.listModules('domain_teaching');
+// ['mod_lesson_engine', 'mod_whiteboard', 'mod_interaction']
 ```
