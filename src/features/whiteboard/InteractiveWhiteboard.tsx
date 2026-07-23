@@ -14,6 +14,8 @@ import { getSocketInstance } from '../../services/socket-service';
 import { frontendEventBus } from '../../services/event-bus';
 import { appStore } from '../../store/appStore';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
+import { legacyAdapter, objectRegistry, commandManager, layerManager, selectionManager, canvasEventBus } from './canvas-model/index.js';
+import type { CanvasObject, CanvasPage } from './canvas-model/index.js';
 
 function PluginCardRenderer({ pluginId, slot, widgetId, elementId, lessonId }: { 
   pluginId: string; 
