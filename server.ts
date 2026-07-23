@@ -32,6 +32,8 @@ import { verifyPassword, hashPassword as bcryptHashPassword } from './packages/c
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from './server/utils/crypto.js';
 import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from './server/middleware/auth.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
+import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
+
 
 
 type AgentChatAttachment = { name: string; content: string };
@@ -421,7 +423,15 @@ const runOpenAIAgentChat = async (provider: StoredAIProvider, request: AgentChat
 };
 
 async function startServer() {
+  // Bridge server startup through Platform Kernel Bootstrap Adapter (PI-005)
+  await ServerBootstrapAdapter.bootstrap({
+    kernelContainer,
+    environment: (process.env.NODE_ENV as any) || 'development',
+    config: { port: Number(process.env.PORT) || 9000 },
+  });
+
   try {
+
     const existingQuiz = kernelContainer.db.prepare('SELECT id, manifest, source_code FROM plugins WHERE name = ?').get('Quiz Component Plugin') as any;
     if (existingQuiz && (!existingQuiz.manifest || !existingQuiz.manifest.includes('classroomTools') || !existingQuiz.source_code.includes('actorId:'))) {
       console.log('Upgrading old Quiz Component Plugin to add classroomTools and fix Actor...');
