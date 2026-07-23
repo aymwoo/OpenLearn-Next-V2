@@ -1,40 +1,58 @@
-# OpenLearn Developer Guide - Platform Kernel Bootstrap (开发者指南)
+# OpenLearn Developer Guide - Platform Integration Layer (开发者指南)
 
 ## 1. Executive Summary (概述)
 
-本指南指导开发者如何通过 Platform Kernel 暴露的 `ServerBootstrapAdapter` 与 `PlatformBuilder`API 自定义开发与拓展平台启动逻辑。
+本指南介绍如何在 OpenLearn 平台中实现并注册自定义业务域集成适配器 (`IntegrationAdapter`)。
 
 ---
 
-## 2. Standard Bootstrap Usage (标准启动方法)
+## 2. Implementing a Custom Domain Adapter (实现自定义业务适配器)
 
 ```typescript
-import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
+import {
+  IIntegrationAdapter,
+  IntegrationContext,
+  IntegrationHealthStatus,
+  IntegrationDescriptor,
+} from './packages/core/bootstrap/index.js';
 
-await ServerBootstrapAdapter.bootstrap({
-  environment: 'development',
-  config: { port: 9000 },
-  kernelContainer: myKernelInstance,
-});
+export class CustomDomainAdapter implements IIntegrationAdapter {
+  public readonly id = 'adapter_custom';
+  public readonly name = 'Custom Domain Adapter';
+  public readonly version = '1.0.0';
+
+  public async initialize(context: IntegrationContext): Promise<void> {
+    // Perform initialization
+  }
+
+  public async activate(): Promise<void> {}
+  public async deactivate(): Promise<void> {}
+  public async dispose(): Promise<void> {}
+
+  public async health(): Promise<IntegrationHealthStatus> {
+    return { isHealthy: true };
+  }
+
+  public metadata(): IntegrationDescriptor {
+    return {
+      id: this.id,
+      name: this.name,
+      version: this.version,
+      description: 'Custom Domain Integration Adapter',
+    };
+  }
+}
 ```
 
 ---
 
-## 3. Extending Bootstrap Stages (扩展启动阶段)
-
-可以通过 `PlatformBuilder` 添加自定义启动阶段：
+## 3. Registering Adapters with PlatformIntegration (注册适配器)
 
 ```typescript
-import { PlatformBuilder, IBootstrapStage } from './packages/core/bootstrap/index.js';
+import { PlatformIntegration } from './packages/core/bootstrap/index.js';
 
-const customStage: IBootstrapStage = {
-  id: 'custom_check',
-  name: 'CustomCheck',
-  description: 'Custom pre-flight health check',
-  execute: async (context) => {
-    // Custom check logic
-  },
-};
-
-const builder = PlatformBuilder.create().addBootstrapStage(customStage);
+const integration = new PlatformIntegration();
+integration.register(new CustomDomainAdapter());
+await integration.initializeAll(context);
+await integration.activateAll();
 ```
