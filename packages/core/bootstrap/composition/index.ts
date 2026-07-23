@@ -7,5 +7,7 @@ export * from './composition-validator.js';
 export * from './platform-composition-root.js';
 export * from './ai-composition-module.js';
 export * from './plugin-composition-module.js';
+export * from './whiteboard-composition-module.js';
+
 
 
