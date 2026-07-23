@@ -32,6 +32,7 @@ import {
   IClassroomRuntimeServiceToken,
   IPresenceEngineServiceToken,
   ITeachingCollaborationServiceToken,
+  ILearningAnalyticsServiceToken,
 } from '../di/interfaces.js';
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
@@ -43,6 +44,7 @@ import { LessonRuntime } from '../lesson-engine/index.js';
 import { ClassroomRuntimeKernel } from '../classroom-runtime/index.js';
 import { PresenceEngineKernel } from '../presence-engine/index.js';
 import { CollaborationEngineKernel } from '../collaboration-engine/index.js';
+import { AnalyticsEngineKernel } from '../analytics-engine/index.js';
 import path from 'path';
 
 export class Kernel {
@@ -62,6 +64,7 @@ export class Kernel {
   public readonly classroomRuntime: ClassroomRuntimeKernel;
   public readonly presenceEngine: PresenceEngineKernel;
   public readonly collaborationEngine: CollaborationEngineKernel;
+  public readonly analyticsEngine: AnalyticsEngineKernel;
   public readonly ready: Promise<void>;
 
   constructor() {
@@ -75,6 +78,9 @@ export class Kernel {
     // StorageService + AIService — Layer 0（无依赖）
     this.storageService = new StorageService(this.db);
     this.aiService = new AIService(this.db);
+
+    // AnalyticsEngineKernel — Layer 1 (Learning Analytics Engine)
+    this.analyticsEngine = new AnalyticsEngineKernel();
 
     // CollaborationEngineKernel — Layer 1 (Teaching Collaboration Engine)
     this.collaborationEngine = new CollaborationEngineKernel();
@@ -127,6 +133,8 @@ export class Kernel {
     this.serviceRegistry.register(IClassroomRuntimeServiceToken, { getRuntimeKernel: async () => this.classroomRuntime } as any);
     this.serviceRegistry.register(IPresenceEngineServiceToken, { getPresenceEngine: async () => this.presenceEngine } as any);
     this.serviceRegistry.register(ITeachingCollaborationServiceToken, { getCollaborationEngine: async () => this.collaborationEngine } as any);
+    this.serviceRegistry.register(ILearningAnalyticsServiceToken, { getAnalyticsEngine: async () => this.analyticsEngine } as any);
+
 
 
 

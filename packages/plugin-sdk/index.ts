@@ -63,6 +63,7 @@ export type {
   IClassroomRuntimeService,
   IPresenceEngineService,
   ITeachingCollaborationService,
+  ILearningAnalyticsService,
   CommandHandler,
   CommandMetadata,
   EventSubscriber,
@@ -83,9 +84,32 @@ export {
   IClassroomRuntimeServiceToken,
   IPresenceEngineServiceToken,
   ITeachingCollaborationServiceToken,
+  ILearningAnalyticsServiceToken,
 } from '../core/di/interfaces.js';
 
+// ── Learning Analytics Engine ───────────────────────────────────────────
+
+export type {
+  NormalizedAnalyticsEvent,
+  RawAnalyticsMetrics,
+  HighLevelIndicators,
+  StudentAnalyticsModel,
+  GroupAnalyticsModel,
+  LessonAnalyticsModel,
+  WhiteboardAnalyticsModel,
+  CodeAnalyticsModel,
+  QuizAnalyticsModel,
+  AIAnalyticsModel,
+  AnalyticsInsight,
+  PredictionResult,
+  AnalyticsPrivacyConfig,
+  CustomMetricDefinition,
+  CustomIndicatorDefinition,
+  CustomInsightRule,
+} from '../core/analytics-engine/index.js';
+
 // ── Teaching Collaboration Engine ───────────────────────────────────────
+
 
 export type {
   Participant,

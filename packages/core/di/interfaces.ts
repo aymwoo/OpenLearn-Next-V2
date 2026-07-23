@@ -415,6 +415,22 @@ export const ITeachingCollaborationServiceToken = new Token<ITeachingCollaborati
   '@openlearn/core:ITeachingCollaborationService'
 );
 
+/**
+ * Interface for LearningAnalyticsService.
+ */
+export interface ILearningAnalyticsService {
+  getAnalyticsEngine(): Promise<unknown>;
+}
+
+/**
+ * Token for ILearningAnalyticsService.
+ * Identifier: @openlearn/core:ILearningAnalyticsService
+ */
+export const ILearningAnalyticsServiceToken = new Token<ILearningAnalyticsService>(
+  '@openlearn/core:ILearningAnalyticsService'
+);
+
+
 
 
 
