@@ -83,3 +83,39 @@ Validation reports missing dependencies and circular capability graphs:
 const report = runtime.validate();
 if (!report.isValid) console.error(report.errors);
 ```
+
+---
+
+## PI-010 Addendum — Using the Platform Event Bus
+
+`EventBus` (module `packages/core/event-bus-runtime/`) carries **only platform
+infrastructure events**. Construct it once and bridge the kernel subsystems to it.
+
+```typescript
+import { EventBus, PlatformEventType } from '../event-bus-runtime/index.js';
+import { ServiceEventBus } from '../service-registry/index.js';
+import { BootstrapPipeline } from '../bootstrap/pipeline/bootstrap-pipeline.js';
+
+const bus = new EventBus();
+const svcBus = new ServiceEventBus();
+bus.bridgeServiceEventBus(svcBus);          // ServiceRegistered / ServiceRemoved
+bus.bridgeBootstrapPipeline(new BootstrapPipeline()); // Bootstrap stage events
+
+// Subscribe (with priority, filter, once, timeout)
+bus.subscribe('ServiceRegistered', (ctx) => {
+  console.log('service up:', (ctx.payload as { serviceId: string }).serviceId);
+}, { priority: 10, filter: (ctx) => ctx.source === 'service-registry' });
+
+// Publish lifecycle events
+await bus.publishPlatformStarting();
+await bus.publishPlatformStarted();
+
+// Cancellation inside a handler
+bus.subscribe('Test', (ctx) => {
+  if ((ctx.payload as { stop?: boolean }).stop) ctx.cancel();
+});
+```
+
+Dispatch guarantees: priority + ordered execution, per-handler error isolation,
+cancellation, and timeout. A handler failure never terminates the platform —
+failures are reported in `EventResult.results`.
