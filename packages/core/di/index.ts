@@ -50,3 +50,7 @@ export {
 
 export { StorageService } from './storage-service.js';
 export { AIService } from './ai-service.js';
+
+// ── Platform DI Container (PI-008) ──────────────────────────────────────
+
+export * from './container/index.js';
