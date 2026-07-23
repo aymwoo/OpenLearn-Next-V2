@@ -2327,49 +2327,73 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
     }
   });
 
-  // Seed example demo data for the Help Tour wizard
+  // Seed example demo data for the Help Tour wizard.
+  // Idempotent: uses stable demo IDs and reuses existing rows, so repeated
+  // clicks (or a DB that already holds demo data) never throw UNIQUE errors.
   app.post('/api/admin/seed-demo', (req, res) => {
     try {
-      // 1. Create a demo class
-      const classId = 'demo-class-' + Math.random().toString(36).slice(2, 6);
-      kernelContainer.db.prepare('INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)').run(
-        classId, '人工智能与创意编程示范班', '这是系统初始化的示例课程班级，用于教学体验。', Date.now()
-      );
+      const db = kernelContainer.db;
+      const DEMO_CLASS_ID = 'demo-class';
+      const DEMO_SCHEDULE_ID = 'demo-schedule';
 
-      // 2. Create 5 demo students
-      const demoStudents = [
-        { id: 's1-' + Math.random().toString(36).slice(2, 6), name: '小明', num: 'S001' },
-        { id: 's2-' + Math.random().toString(36).slice(2, 6), name: '小红', num: 'S002' },
-        { id: 's3-' + Math.random().toString(36).slice(2, 6), name: '小华', num: 'S003' },
-        { id: 's4-' + Math.random().toString(36).slice(2, 6), name: '小丽', num: 'S004' },
-        { id: 's5-' + Math.random().toString(36).slice(2, 6), name: '小强', num: 'S005' },
-      ];
+      // Clean up any stray demo classes left by older (random-id) seed runs.
+      const oldClasses = db
+        .prepare("SELECT id FROM classes WHERE id LIKE 'demo-class-%' AND id != ?")
+        .all(DEMO_CLASS_ID) as { id: string }[];
+      for (const oc of oldClasses) {
+        db.prepare('DELETE FROM class_students WHERE class_id = ?').run(oc.id);
+        db.prepare("DELETE FROM schedules WHERE class_id = ?").run(oc.id);
+        db.prepare('DELETE FROM classes WHERE id = ?').run(oc.id);
+      }
 
-      for (const s of demoStudents) {
-        kernelContainer.db.prepare('INSERT INTO students (id, name, student_number, created_at) VALUES (?, ?, ?, ?)').run(
-          s.id, s.name, s.num, Date.now()
-        );
-        kernelContainer.db.prepare('INSERT INTO class_students (class_id, student_id, created_at) VALUES (?, ?, ?)').run(
-          classId, s.id, Date.now()
+      // 1. Demo class (reuse if already present)
+      const existingClass = db.prepare('SELECT id FROM classes WHERE id = ?').get(DEMO_CLASS_ID);
+      if (!existingClass) {
+        db.prepare('INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)').run(
+          DEMO_CLASS_ID, '人工智能与创意编程示范班', '这是系统初始化的示例课程班级，用于教学体验。', Date.now()
         );
       }
 
-      // 3. Find or Create a demo lesson courseware
-      let lesson = kernelContainer.db.prepare("SELECT id FROM lessons WHERE type = 'whiteboard' LIMIT 1").get() as any;
+      // 2. Demo students (reuse by student_number to avoid UNIQUE collisions)
+      const demoStudents = [
+        { id: 'demo-s1', name: '小明', num: 'S001' },
+        { id: 'demo-s2', name: '小红', num: 'S002' },
+        { id: 'demo-s3', name: '小华', num: 'S003' },
+        { id: 'demo-s4', name: '小丽', num: 'S004' },
+        { id: 'demo-s5', name: '小强', num: 'S005' },
+      ];
+      const getStudentByNum = db.prepare('SELECT id FROM students WHERE student_number = ?');
+      const insertStudent = db.prepare('INSERT INTO students (id, name, student_number, created_at) VALUES (?, ?, ?, ?)');
+      const linkStudent = db.prepare('INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)');
+
+      for (const s of demoStudents) {
+        const row = getStudentByNum.get(s.num) as { id: string } | undefined;
+        const studentId = row ? row.id : s.id;
+        if (!row) {
+          insertStudent.run(studentId, s.name, s.num, Date.now());
+        }
+        linkStudent.run(DEMO_CLASS_ID, studentId, Date.now());
+      }
+
+      // 3. Demo lesson (reuse first existing lesson, or create one)
+      const lesson = db.prepare('SELECT id FROM lessons LIMIT 1').get() as any;
       let lessonId = lesson?.id;
       if (!lessonId) {
-        lessonId = 'demo-lesson-' + Math.random().toString(36).slice(2, 6);
-        kernelContainer.db.prepare('INSERT INTO lessons (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
+        lessonId = 'demo-lesson';
+        db.prepare('INSERT INTO lessons (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
           lessonId, '初识 Python：智能白板创意编程', JSON.stringify({ elements: [] }), Date.now(), Date.now()
         );
       }
-      // 4. Create scheduled session
-      const scheduleId = 'demo-schedule-' + Math.random().toString(36).slice(2, 6);
-      kernelContainer.db.prepare('INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, status, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-        scheduleId, classId, lessonId, new Date().toISOString().split('T')[0] + ' 09:00:00', 'scheduled', Date.now()
-      );
 
-      res.json({ success: true, classId, scheduleId, lessonId });
+      // 4. Demo schedule (reuse if already present)
+      const existingSchedule = db.prepare('SELECT id FROM schedules WHERE id = ?').get(DEMO_SCHEDULE_ID);
+      if (!existingSchedule) {
+        db.prepare('INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, status, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+          DEMO_SCHEDULE_ID, DEMO_CLASS_ID, lessonId, new Date().toISOString().split('T')[0] + ' 09:00:00', 'scheduled', Date.now()
+        );
+      }
+
+      res.json({ success: true, classId: DEMO_CLASS_ID, scheduleId: DEMO_SCHEDULE_ID, lessonId });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -3162,8 +3186,18 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
   app.delete('/api/students/:id', (req, res) => {
     try {
+      // 完整级联删除，与 gdpr-delete 保持一致，避免残留孤儿数据
       kernelContainer.db.prepare('DELETE FROM class_students WHERE student_id = ?').run(req.params.id);
       kernelContainer.db.prepare('DELETE FROM student_lesson_progress WHERE student_id = ?').run(req.params.id);
+      kernelContainer.db.prepare('DELETE FROM assignment_submissions WHERE student_id = ?').run(req.params.id);
+      kernelContainer.db.prepare('DELETE FROM attendance WHERE student_id = ?').run(req.params.id);
+      kernelContainer.db.prepare('DELETE FROM exam_scores WHERE student_id = ?').run(req.params.id);
+      kernelContainer.db.prepare('DELETE FROM student_semester_reports WHERE student_id = ?').run(req.params.id);
+      kernelContainer.db.prepare('DELETE FROM student_rollcalls WHERE student_id = ?').run(req.params.id);
+      kernelContainer.db.prepare('DELETE FROM plugin_submissions WHERE student_id = ?').run(req.params.id);
+      kernelContainer.db.prepare('DELETE FROM plugin_peer_reviews WHERE reviewer_id = ?').run(req.params.id);
+      kernelContainer.db.prepare('DELETE FROM student_seats WHERE student_id = ?').run(req.params.id);
+      kernelContainer.db.prepare('DELETE FROM student_read_notifications WHERE student_id = ?').run(req.params.id);
       kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(req.params.id);
       res.json({ success: true });
     } catch (e: any) {
