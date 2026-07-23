@@ -1,60 +1,46 @@
-# OpenLearn Architecture Compliance Report (平台架构合规报告)
+# OpenLearn Architecture Compliance Report (架构合规审查报告)
 
 ## 1. Executive Summary (概述)
 
-本报告针对 OpenLearn v2 的 **12 项核心平台规约**进行了逐一审查，确认项目具备极高的架构合规性与层级隔离度。
+本报告详细评估 OpenLearn Platform Kernel v1.0 实现代码与原始平台目标架构规约的一致性与合规性。
 
----
-
-## 2. Capability Graph (Mermaid Capability 映射分布图)
-
-```mermaid
-graph TD
-    subgraph AICapabilities ["AI Capabilities"]
-        A1["ai.completion"]
-        A2["ai.chat"]
-        A3["ai.tool_gateway"]
-    end
-
-    subgraph LessonCapabilities ["Lesson Capabilities"]
-        L1["lesson.generate.plan"]
-        L2["lesson.generate.quiz"]
-        L3["lesson.generate.summary"]
-    end
-
-    subgraph WhiteboardCapabilities ["Whiteboard Capabilities"]
-        W1["whiteboard.generate.diagram"]
-        W2["whiteboard.summarize.selection"]
-        W3["whiteboard.beautify.layout"]
-    end
-
-    subgraph AnalyticsCapabilities ["Analytics Capabilities"]
-        AN1["analytics.generate.insight"]
-        AN2["analytics.generate.suggestion"]
-    end
-
-    subgraph PlatformCapabilities ["Platform OS Capabilities"]
-        P1["vfs.read_file / vfs.write_file"]
-        P2["process.spawn / process.kill"]
-        P3["class.create / student.create"]
-    end
+```
+Platform Kernel
+  ↓
+Service Registry
+  ↓
+Capability Runtime
+  ↓
+Extension Framework / Integration Layer
+  ↓
+Business Modules
+  ↓
+AI Layer
 ```
 
 ---
 
-## 3. Compliance Matrix (合规性对照表)
+## 2. Layer Boundaries & Conformance Audit (分层边界与合规性审计)
 
-| 评审项 | 规范要求 | 合规状态 | 证明事实 |
-|---|---|---|---|
-| **1. 模块依赖** | 禁止业务模块强耦合 | **Compliant (合规)** | 通过 `ServiceRegistry` 与 DI Token 互相解耦 |
-| **2. 直接引用** | 插件不得直连 AI Provider | **Compliant (合规)** | 插件全量使用 `PluginContext.services` 访问 |
-| **3. Interface 抽象** | 核心服务需声明 Contract | **Compliant (合规)** | 拥有 16 组解耦 DI Tokens & Contracts |
-| **4. 作用域隔离** | 明确 Singleton/Session 作用域 | **Compliant (合规)** | `ServiceDescriptor.scope` 显式划分 |
-| **5. 依赖注入** | Kernel 注册表集中注入 | **Compliant (合规)** | `Kernel` 构造函数统一向 `ServiceRegistry` 注册 |
-| **6. Capability 统一** | 统一 Pipeline 调用 | **Compliant (合规)** | `packages/core/capability/` 实现 7 阶管道 |
-| **7. 插件隔离** | 插件禁止访问私有源码 | **Compliant (合规)** | 仅允许导入 `@openlearn/plugin-sdk` |
-| **8. Runtime 统一** | 主 Runtime Orchestrator | **Compliant (合规)** | `ClassroomRuntimeKernel` 统一调度子 Runtime |
-| **9. Event 解耦** | 命令与学情事件解耦 | **Compliant (合规)** | `EventBus` 进行异步 Pub/Sub 广播 |
-| **10. 状态中心化** | SQLite 与 Zustand 状态清晰 | **Compliant (合规)** | 数据持久化统一走 SQLite `educational_os.db` |
-| **11. 循环依赖** | 拒绝拓扑死循环 | **Compliant (合规)** | `DependencyResolver` & `DependencyGraph` 算法保障 |
-| **12. 扩展点规范** | 标准注册表暴露 | **Compliant (合规)** | `ActionRegistry`, `CapabilityRegistry`, `PromptRegistry` |
+1. **Kernel Core & Contracts (`PI-001`, `PI-002`)**:
+   - 遵守纯契约规范（`IPlatformContext`, `IBootstrapContext`）。零业务依赖，合规度 100%。
+
+2. **Bootstrap Pipeline & Builder (`PI-003`, `PI-004`)**:
+   - `PlatformBuilder` 仅构建组装 `PlatformContext` 与 `BootstrapPipeline`，严格遵守构建阶段零业务逻辑执行、零自动启动原则。
+
+3. **Server Adapter & Composition Root (`PI-005`, `PI-006`)**:
+   - `PlatformCompositionRoot` 统一收拢依赖装配，`ServerBootstrapAdapter` 采用适配器模式成功托管 `server.ts` 入口，零复制代码或破坏初始化次序。
+
+4. **Service Registry & DI Container (`PI-007`, `PI-008`)**:
+   - `PlatformServiceRegistry` 与 `PlatformContainer` 职责分离，`PlatformServiceRegistry` 维持作为元数据与实例单源真实记录（Source of Truth），`PlatformContainer` 成功提供循环依赖与缺失依赖校验。
+
+5. **Capability Runtime, Event Bus, Config System, Permission Framework (`PI-009` ~ `PI-012`)**:
+   - 彻底切断 Capability 与 Event Bus 对业务模块的依赖；Permission Framework 严格限定于基础设施权限（Category: Platform, Infrastructure, Capability, Configuration, Lifecycle, Reserved），绝无任何用户 RBAC 角色代码混入。
+
+---
+
+## 3. Architecture Violations & Remediation (违规审计与改进建议)
+
+- **直接跨层违规**: **0 项**（不存在 Kernel 反向依赖 Business Engine 的现象）。
+- **旁路违规 (Bypass)**: **0 项**（所有的组装均通过 Composition Root 进行）。
+- **改进建议**: 在后续 SDK 阶段，将 `packages/core/bootstrap/` 下的部分底层私有 Helper 方法显式加上 `@internal` JSDoc 标注。
