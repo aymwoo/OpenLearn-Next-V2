@@ -2,33 +2,32 @@
 
 ## 1. Executive Summary (概述)
 
-`PlatformCompositionRoot` (`packages/core/bootstrap/composition/`) 为 Platform Kernel 提供了唯一的依赖组装入口 (Composition Root)。系统所有的底层基础设施依赖（Logger, Configuration, Environment, Bootstrap Pipeline, Platform Context, Existing Infrastructure References）均统一在此收拢组装。
+在 Platform Adoption Sprint A1 Step 2 中，扩展了 **Composition Root**（位于 `packages/core/bootstrap/composition/`），新增 `AICompositionModule` (`ai-composition-module.ts`)。
 
-在 PI-006 中，**组合根只负责依赖的组装（Composition），绝对不执行业务逻辑，绝对不初始化业务引擎模块（Plugin Host, Lesson Engine, Whiteboard, Analytics, AI Runtime）**。业务引擎模块继续由现有的启动流程托管初始化。
+Composition Root 是 OpenLearn 平台内核集中进行基础设施与子系统依赖装配的**唯一合法位置**，切断了底层子系统直接硬编码相互依赖的隐患。
 
 ---
 
-## 2. Composition Architecture (Mermaid 组合根架构图)
+## 2. Registered Composition Modules (注册组合模块清单)
 
-```mermaid
-graph TD
-    PlatformBuilder["PlatformBuilder (Fluent API)"]
-    CompositionRoot["PlatformCompositionRoot (Composition Root)"]
-    CompositionValidator["CompositionValidator (Pre-composition Check)"]
-    BootstrapPipeline["BootstrapPipeline (5-Stage Startup Pipeline)"]
-    CompositionResult["CompositionResult (Assembled Output)"]
+1. **`AICompositionModule` (`mod_ai_composition`)**:
+   - 托管 AI Runtime 服务 (`srv_ai_runtime`, `srv_ai_provider_registry`) 注册至 `PlatformServiceRegistry`。
+   - 托管 7 大现存 AI 能力（`ChatCapability`, `CompletionCapability`, `ToolCapability`, `AnalyticsAICapability`, `LessonAICapability`, `PluginAICapability`, `WhiteboardAICapability`）注册至 `CapabilityRegistry`。
+   - 托管 AI 基础设施生命周期事件 (`AIInitialized`, `ProviderLoaded`, `RuntimeStarted`) 的发布。
 
-    PlatformBuilder -->|Calls| CompositionRoot
-    CompositionRoot -->|Validates| CompositionValidator
-    CompositionRoot -->|Assembles| BootstrapPipeline
-    CompositionRoot -->|Returns| CompositionResult
+---
+
+## 3. Usage Example (使用方法)
+
+```typescript
+import {
+  PlatformCompositionRoot,
+  AICompositionModule,
+} from './packages/core/bootstrap/index.js';
+
+const root = PlatformCompositionRoot.create();
+root.registerModule(new AICompositionModule());
+
+const result = root.compose({ environment: 'development' });
+console.log('Composition Status:', root.state); // 'Composed'
 ```
-
----
-
-## 3. Composition State Machine (状态机)
-
-`PlatformCompositionRoot` 内部状态严格按照下列次序流转：
-`Created` → `Validating` → `Composing` → `Composed` → `Disposed`
-
-当处于 `Composed` 或 `Disposed` 状态时，禁止再次注册模块，确保组合图的强只读保护。

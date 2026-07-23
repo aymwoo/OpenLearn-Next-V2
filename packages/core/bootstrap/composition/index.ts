@@ -5,3 +5,5 @@
 export * from './composition-types.js';
 export * from './composition-validator.js';
 export * from './platform-composition-root.js';
+export * from './ai-composition-module.js';
+

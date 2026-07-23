@@ -1,36 +1,28 @@
-# OpenLearn Developer Guide - Platform Permission Framework (开发者指南)
+# OpenLearn Developer Guide - AI Runtime Integration (开发者指南)
 
 ## 1. Executive Summary (概述)
 
-本指南指导开发者如何使用 `PermissionManager` 注册平台基础设施权限描述符，授予或撤销 Subject 权限，以及执行 `check()` / `require()` 鉴权断言。
+本指南指导开发者如何在 OpenLearn V2 平台中接入 AI Runtime，使用 `AICompositionModule` 进行全局依赖装配，并消费注册的 AI 服务与 AI 能力。
 
 ---
 
-## 2. Registering and Checking Infrastructure Permissions (注册与校验权限)
+## 2. Using AI Composition Module in Bootstrap Flow (在启动流中挂载 AI 模块)
 
 ```typescript
 import {
-  PermissionManager,
-  PermissionDescriptor,
+  PlatformBuilder,
+  PlatformCompositionRoot,
+  AICompositionModule,
 } from './packages/core/bootstrap/index.js';
 
-const manager = new PermissionManager();
+// 1. Initialize Platform Builder & Composition Root
+const builder = PlatformBuilder.create();
+const compositionRoot = PlatformCompositionRoot.create();
 
-const capPerm: PermissionDescriptor = {
-  id: 'perm_capability_invoke',
-  name: 'Invoke Capability Permission',
-  category: 'Capability',
-  defaultPolicy: 'Allow',
-};
+// 2. Register AI Composition Module
+compositionRoot.registerModule(new AICompositionModule());
+compositionRoot.compose({ environment: 'development' });
 
-manager.register(capPerm);
-
-// Check permission
-const context = await manager.check('kernel_worker', 'ai_capability', 'perm_capability_invoke');
-if (context.result?.allowed) {
-  // Proceed with capability invocation
-}
-
-// Enforce permission assertion (throws Infrastructure Permission Exception on deny)
-await manager.require('trusted_service', 'config_store', 'perm_capability_invoke');
+// 3. Build Platform Result
+const result = builder.buildResult();
 ```
