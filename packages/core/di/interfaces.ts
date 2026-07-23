@@ -355,4 +355,20 @@ export const ISemesterGradeServiceToken = new Token<ISemesterGradeService>(
   '@openlearn/core:ISemesterGradeService'
 );
 
+/**
+ * Interface for LessonEngineService.
+ */
+export interface ILessonEngineService {
+  getRuntime(): Promise<unknown>;
+}
+
+/**
+ * Token for ILessonEngineService.
+ * Identifier: @openlearn/core:ILessonEngineService
+ */
+export const ILessonEngineServiceToken = new Token<ILessonEngineService>(
+  '@openlearn/core:ILessonEngineService'
+);
+
+
 

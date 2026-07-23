@@ -59,6 +59,7 @@ export type {
   IProcessService,
   IStorageService,
   IAIService,
+  ILessonEngineService,
   CommandHandler,
   CommandMetadata,
   EventSubscriber,
@@ -75,7 +76,25 @@ export {
   IDatabaseToken,
   IPluginHostToken,
   ISemesterGradeServiceToken,
+  ILessonEngineServiceToken,
 } from '../core/di/interfaces.js';
+
+// ── Lesson Engine ───────────────────────────────────────────────────────
+
+export type {
+  Lesson,
+  Flow,
+  Stage,
+  Activity,
+  ActivityDefinition,
+  ActivityConfig,
+  StageAnalytics,
+  TeachingObject,
+  StudentAction,
+  LessonSnapshot,
+  LessonEventType,
+  TeachingContextData,
+} from '../core/lesson-engine/index.js';
 
 // ── Command & Event ─────────────────────────────────────────────────────
 
@@ -85,3 +104,4 @@ export type { PlatformEvent } from '../core/event-bus/index.js';
 // ── Action Registry ─────────────────────────────────────────────────────
 
 export type { ActionDescriptor } from '../core/registry/index.js';
+

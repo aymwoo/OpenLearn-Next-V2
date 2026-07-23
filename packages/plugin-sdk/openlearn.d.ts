@@ -305,3 +305,5 @@ declare const IAIServiceToken: Token<IAIService>;
 declare const IDatabaseToken: Token<unknown>;
 declare const IPluginHostToken: Token<unknown>;
 declare const ISemesterGradeServiceToken: Token<unknown>;
+declare const ILessonEngineServiceToken: Token<unknown>;
+
