@@ -33,6 +33,10 @@ import {
   IPresenceEngineServiceToken,
   ITeachingCollaborationServiceToken,
   ILearningAnalyticsServiceToken,
+  IAICapabilityServiceToken,
+  ICapabilityRuntimeServiceToken,
+  ICapabilityGovernanceServiceToken,
+  IPlatformServiceRegistryToken,
 } from '../di/interfaces.js';
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
@@ -45,6 +49,11 @@ import { ClassroomRuntimeKernel } from '../classroom-runtime/index.js';
 import { PresenceEngineKernel } from '../presence-engine/index.js';
 import { CollaborationEngineKernel } from '../collaboration-engine/index.js';
 import { AnalyticsEngineKernel } from '../analytics-engine/index.js';
+import { AIRuntimeKernel } from '../ai/index.js';
+import { AICapabilityKernel } from '../ai-capability/index.js';
+import { CapabilityRuntimeKernel } from '../capability/index.js';
+import { CapabilityGovernanceKernel } from '../capability-governance/index.js';
+import { ServiceRegistryKernel } from '../service-registry/index.js';
 import path from 'path';
 
 export class Kernel {
@@ -65,6 +74,11 @@ export class Kernel {
   public readonly presenceEngine: PresenceEngineKernel;
   public readonly collaborationEngine: CollaborationEngineKernel;
   public readonly analyticsEngine: AnalyticsEngineKernel;
+  public readonly aiRuntime: AIRuntimeKernel;
+  public readonly aiCapability: AICapabilityKernel;
+  public readonly capabilityFrameworkRuntime: CapabilityRuntimeKernel;
+  public readonly capabilityGovernance: CapabilityGovernanceKernel;
+  public readonly platformServiceRegistryKernel: ServiceRegistryKernel;
   public readonly ready: Promise<void>;
 
   constructor() {
@@ -78,6 +92,19 @@ export class Kernel {
     // StorageService + AIService — Layer 0（无依赖）
     this.storageService = new StorageService(this.db);
     this.aiService = new AIService(this.db);
+
+    // AIRuntimeKernel & AICapabilityKernel — Layer 1
+    this.aiRuntime = new AIRuntimeKernel();
+    this.aiCapability = new AICapabilityKernel(this.aiRuntime);
+
+    // CapabilityRuntimeKernel — Layer 1 (Platform Capability Framework)
+    this.capabilityFrameworkRuntime = new CapabilityRuntimeKernel(this.aiCapability);
+
+    // CapabilityGovernanceKernel — Layer 1 (Platform Capability Governance)
+    this.capabilityGovernance = new CapabilityGovernanceKernel();
+
+    // ServiceRegistryKernel — Layer 1 (Platform Service Registry)
+    this.platformServiceRegistryKernel = new ServiceRegistryKernel();
 
     // AnalyticsEngineKernel — Layer 1 (Learning Analytics Engine)
     this.analyticsEngine = new AnalyticsEngineKernel();
@@ -134,6 +161,14 @@ export class Kernel {
     this.serviceRegistry.register(IPresenceEngineServiceToken, { getPresenceEngine: async () => this.presenceEngine } as any);
     this.serviceRegistry.register(ITeachingCollaborationServiceToken, { getCollaborationEngine: async () => this.collaborationEngine } as any);
     this.serviceRegistry.register(ILearningAnalyticsServiceToken, { getAnalyticsEngine: async () => this.analyticsEngine } as any);
+    this.serviceRegistry.register(IAICapabilityServiceToken, { getCapabilityKernel: async () => this.aiCapability } as any);
+    this.serviceRegistry.register(ICapabilityRuntimeServiceToken, { getRuntimeKernel: async () => this.capabilityFrameworkRuntime } as any);
+    this.serviceRegistry.register(ICapabilityGovernanceServiceToken, { getGovernanceKernel: async () => this.capabilityGovernance } as any);
+    this.serviceRegistry.register(IPlatformServiceRegistryToken, { getServiceRegistryKernel: async () => this.platformServiceRegistryKernel } as any);
+
+
+
+
 
 
 

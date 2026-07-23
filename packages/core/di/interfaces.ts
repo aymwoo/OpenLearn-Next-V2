@@ -430,6 +430,70 @@ export const ILearningAnalyticsServiceToken = new Token<ILearningAnalyticsServic
   '@openlearn/core:ILearningAnalyticsService'
 );
 
+/**
+ * Interface for AICapabilityService.
+ */
+export interface IAICapabilityService {
+  getCapabilityKernel(): Promise<unknown>;
+}
+
+/**
+ * Token for IAICapabilityService.
+ * Identifier: @openlearn/core:IAICapabilityService
+ */
+export const IAICapabilityServiceToken = new Token<IAICapabilityService>(
+  '@openlearn/core:IAICapabilityService'
+);
+
+/**
+ * Interface for CapabilityRuntimeService.
+ */
+export interface ICapabilityRuntimeService {
+  getRuntimeKernel(): Promise<unknown>;
+}
+
+/**
+ * Token for ICapabilityRuntimeService.
+ * Identifier: @openlearn/core:ICapabilityRuntimeService
+ */
+export const ICapabilityRuntimeServiceToken = new Token<ICapabilityRuntimeService>(
+  '@openlearn/core:ICapabilityRuntimeService'
+);
+
+/**
+ * Interface for CapabilityGovernanceService.
+ */
+export interface ICapabilityGovernanceService {
+  getGovernanceKernel(): Promise<unknown>;
+}
+
+/**
+ * Token for ICapabilityGovernanceService.
+ * Identifier: @openlearn/core:ICapabilityGovernanceService
+ */
+export const ICapabilityGovernanceServiceToken = new Token<ICapabilityGovernanceService>(
+  '@openlearn/core:ICapabilityGovernanceService'
+);
+
+/**
+ * Interface for PlatformServiceRegistryService.
+ */
+export interface IPlatformServiceRegistryService {
+  getServiceRegistryKernel(): Promise<unknown>;
+}
+
+/**
+ * Token for IPlatformServiceRegistryService.
+ * Identifier: @openlearn/core:IPlatformServiceRegistryService
+ */
+export const IPlatformServiceRegistryToken = new Token<IPlatformServiceRegistryService>(
+  '@openlearn/core:IPlatformServiceRegistryService'
+);
+
+
+
+
+
 
 
 

@@ -64,6 +64,7 @@ export type {
   IPresenceEngineService,
   ITeachingCollaborationService,
   ILearningAnalyticsService,
+  IAICapabilityService,
   CommandHandler,
   CommandMetadata,
   EventSubscriber,
@@ -85,7 +86,61 @@ export {
   IPresenceEngineServiceToken,
   ITeachingCollaborationServiceToken,
   ILearningAnalyticsServiceToken,
+  IAICapabilityServiceToken,
+  ICapabilityRuntimeServiceToken,
+  ICapabilityGovernanceServiceToken,
+  IPlatformServiceRegistryToken,
 } from '../core/di/interfaces.js';
+
+export type {
+  IAICapability,
+  IChatCapability,
+  ICompletionCapability,
+  IToolCapability,
+  ILessonCapability,
+  IWhiteboardCapability,
+  IAnalyticsCapability,
+  IPluginCapability,
+} from '../core/ai-capability/index.js';
+
+export type {
+  CapabilityDescriptor,
+  CapabilityContext,
+  CapabilityRole,
+  CapabilityCategory,
+  ResultType,
+  InvocationRequest,
+  CapabilityResult,
+  ICapabilityProviderHandler,
+} from '../core/capability/index.js';
+
+export type {
+  GovernanceSpecification,
+  CapabilityLifecycleStatus,
+  GovernanceCategory,
+  ApprovalTier,
+  VisibilityTier,
+  CapabilityHealthMetrics,
+  CapabilitySearchResult,
+} from '../core/capability-governance/index.js';
+
+export type {
+  ServiceDescriptor,
+  ServiceScope,
+  ServiceLifecycleState,
+  ServiceInspectionInfo,
+  IAIServiceContract,
+  ILessonServiceContract,
+  IWhiteboardServiceContract,
+  IAnalyticsServiceContract,
+  IStorageServiceContract,
+  IPluginServiceContract,
+  IRuntimeServiceContract,
+} from '../core/service-registry/index.js';
+
+
+
+
 
 // ── Learning Analytics Engine ───────────────────────────────────────────
 
