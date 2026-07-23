@@ -1,94 +1,109 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
-  ServiceRegistryKernel,
+  PlatformServiceRegistry,
   ServiceDescriptor,
-  DependencyResolver,
-  IAIServiceContract,
+  ServiceScope,
 } from '../service-registry/index.js';
 
-describe('OpenLearn Platform Service Registry Test Suite', () => {
-  let kernel: ServiceRegistryKernel;
-
-  beforeEach(() => {
-    kernel = new ServiceRegistryKernel();
-  });
-
-  class MockAIService implements IAIServiceContract {
-    async generateText(prompt: string): Promise<string> {
-      return `AI Response to: ${prompt}`;
-    }
+describe('Kernel PI-007 Platform Service Registry Test Suite', () => {
+  interface ITestService {
+    getName(): string;
   }
 
-  const aiDesc: ServiceDescriptor<IAIServiceContract> = {
-    id: 'srv_ai',
-    namespace: 'service.ai',
-    serviceType: 'IAIServiceContract',
-    version: '1.0.0',
-    implementation: MockAIService,
-    scope: 'Singleton',
-    singleton: true,
-    dependencies: [],
-    metadata: {},
+  class TestServiceImpl implements ITestService {
+    getName() { return 'TestService'; }
+  }
+
+  const singletonDesc: ServiceDescriptor<ITestService> = {
+    id: 'srv_test_singleton',
+    lifetime: 'Singleton',
+    instance: new TestServiceImpl(),
+    description: 'Singleton Test Service',
   };
 
-  describe('1. Registry Core Operations (register, resolve, exists, replace, dispose)', () => {
-    it('should register and resolve service contracts', async () => {
-      kernel.registry.register(aiDesc);
+  const transientDesc: ServiceDescriptor<ITestService> = {
+    id: 'srv_test_transient',
+    lifetime: 'Transient',
+    factory: () => new TestServiceImpl(),
+    description: 'Transient Test Service',
+  };
 
-      expect(kernel.registry.exists('srv_ai')).toBe(true);
+  it('should register, resolve, and check existence of singleton services', () => {
+    const registry = new PlatformServiceRegistry();
+    registry.register(singletonDesc);
 
-      const resolved = kernel.registry.resolve<IAIServiceContract>('srv_ai');
-      const text = await resolved.generateText('test prompt');
-      expect(text).toBe('AI Response to: test prompt');
-    });
-
-    it('should replace active service instance and dispose cleanly', async () => {
-
-      kernel.registry.register(aiDesc);
-
-      const replacement: IAIServiceContract = {
-        generateText: async () => 'Replaced AI Response',
-      };
-
-      kernel.registry.replace('srv_ai', replacement);
-      const res = kernel.registry.resolve<IAIServiceContract>('srv_ai');
-      await expect(res.generateText('hello')).resolves.toBe('Replaced AI Response');
-
-      kernel.registry.dispose('srv_ai');
-
-      expect(kernel.registry.exists('srv_ai')).toBe(false);
-    });
+    expect(registry.exists('srv_test_singleton')).toBe(true);
+    const resolved = registry.resolve<ITestService>('srv_test_singleton');
+    expect(resolved.getName()).toBe('TestService');
   });
 
-  describe('2. Dependency Resolver & Cycle Detection', () => {
-    it('should resolve dependency graph in topological order and detect cycles', () => {
-      const descA: ServiceDescriptor = { ...aiDesc, id: 'srv_a', dependencies: ['srv_b'] };
-      const descB: ServiceDescriptor = { ...aiDesc, id: 'srv_b', dependencies: [] };
+  it('should prevent duplicate service registrations', () => {
+    const registry = new PlatformServiceRegistry();
+    registry.register(singletonDesc);
 
-      const ordered = DependencyResolver.resolveOrder([descA, descB]);
-      expect(ordered[0].id).toBe('srv_b');
-      expect(ordered[1].id).toBe('srv_a');
-
-      const cycleA: ServiceDescriptor = { ...aiDesc, id: 'cycle_a', dependencies: ['cycle_b'] };
-      const cycleB: ServiceDescriptor = { ...aiDesc, id: 'cycle_b', dependencies: ['cycle_a'] };
-
-      expect(() => DependencyResolver.resolveOrder([cycleA, cycleB])).toThrow('Circular Service Dependency Detected');
-    });
+    expect(() => registry.register(singletonDesc)).toThrow('already registered');
   });
 
-  describe('3. Service Inspector & Telemetry Events', () => {
-    it('should inspect active services and publish lifecycle events', () => {
-      const eventSpy = vi.fn();
-      kernel.eventBus.subscribe('ServiceReady', eventSpy);
+  it('should support tryResolve() returning undefined for unregistered services', () => {
+    const registry = new PlatformServiceRegistry();
+    expect(registry.tryResolve('non_existent_service')).toBeUndefined();
+  });
 
-      kernel.registry.register(aiDesc);
+  it('should replace registered service instances', () => {
+    const registry = new PlatformServiceRegistry();
+    registry.register(singletonDesc);
 
-      expect(eventSpy).toHaveBeenCalled();
+    const newInstance: ITestService = { getName: () => 'ReplacedService' };
+    registry.replace('srv_test_singleton', newInstance);
 
-      const inspectList = kernel.inspect();
-      expect(inspectList.length).toBe(1);
-      expect(inspectList[0].id).toBe('srv_ai');
-      expect(inspectList[0].lifecycleState).toBe('Ready');
-    });
+    const resolved = registry.resolve<ITestService>('srv_test_singleton');
+    expect(resolved.getName()).toBe('ReplacedService');
+  });
+
+  it('should handle Scoped service instances via ServiceScope', () => {
+    const registry = new PlatformServiceRegistry();
+    let count = 0;
+    const scopedDesc: ServiceDescriptor<ITestService> = {
+      id: 'srv_test_scoped',
+      lifetime: 'Scoped',
+      factory: () => ({ getName: () => `ScopedService_${++count}` }),
+    };
+    registry.register(scopedDesc);
+
+    const scope1 = new ServiceScope('scope_1');
+    const scope2 = new ServiceScope('scope_2');
+
+    const s1_a = registry.resolve<ITestService>('srv_test_scoped', scope1);
+    const s1_b = registry.resolve<ITestService>('srv_test_scoped', scope1);
+    const s2_a = registry.resolve<ITestService>('srv_test_scoped', scope2);
+
+    expect(s1_a).toBe(s1_b);
+    expect(s1_a.getName()).toBe('ScopedService_1');
+    expect(s2_a.getName()).toBe('ScopedService_2');
+  });
+
+  it('should resolveAll() active registered services', () => {
+    const registry = new PlatformServiceRegistry();
+    registry.register(singletonDesc);
+    registry.register(transientDesc);
+
+    const all = registry.resolveAll();
+    expect(all.length).toBe(2);
+  });
+
+  it('should validate registered descriptors and detect missing implementations', () => {
+    const registry = new PlatformServiceRegistry();
+    registry.register({ id: 'srv_invalid', lifetime: 'Singleton' });
+
+    const validation = registry.validate();
+    expect(validation.isValid).toBe(false);
+    expect(validation.errors.some((e) => e.code === 'MISSING_IMPLEMENTATION')).toBe(true);
+  });
+
+  it('should unregister and clear registered services cleanly', () => {
+    const registry = new PlatformServiceRegistry();
+    registry.register(singletonDesc);
+    expect(registry.unregister('srv_test_singleton')).toBe(true);
+    expect(registry.exists('srv_test_singleton')).toBe(false);
   });
 });
