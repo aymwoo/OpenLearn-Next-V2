@@ -17,6 +17,8 @@ import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import { legacyAdapter, objectRegistry, commandManager, layerManager, selectionManager, canvasEventBus } from './canvas-model/index.js';
 import type { CanvasObject, CanvasPage } from './canvas-model/index.js';
 import { interactionManager, pointerStateMachine, toolManager, viewportController, transformManager, snapEngine, guideEngine, shortcutEngine, clipboardService, contextMenuManager, cursorManager, textEditingManager } from './interaction-engine/index.js';
+import { renderingEngine, rendererRegistry, renderScheduler, virtualRenderer, dirtyRegionManager, layerRenderer, cacheManager, imageManager, textEngine, hitTestEngine, animationManager, performanceMonitor, highDPIController, exportService, themeManager, devToolsPanel } from './rendering-engine/index.js';
+import { teachingEngine, teachingObjectRegistry, teachingLifecycleManager, teachingRuntimeManager, teachingEventBus, teacherContextManager, studentContextManager, assessmentInterface, learningAnalyticsEngine, aiInterface, teachingPluginSDK } from './teaching-object/index.js';
 
 function PluginCardRenderer({ pluginId, slot, widgetId, elementId, lessonId }: { 
   pluginId: string; 
