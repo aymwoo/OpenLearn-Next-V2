@@ -25,4 +25,40 @@ export * from './src/features/ai-skill-registry/index.js';
 export * from './src/features/ai-teaching-workflow/index.js';
 export * from './src/features/ai-prompt-registry/index.js';
 export * from './src/features/ai-teacher-workspace/index.js';
+export * from './src/features/student-workspace/index.js';
 ```
+
+---
+
+## 3. Student Workspace (学生工作台, P6-01)
+
+The Student Workspace is part of the Product SDK. It reuses the same
+`workspace`, `classroom-runtime`, `resource-runtime`, `activity-workflow` and
+`ai-teacher-workspace` subsystems listed above — it does **not** introduce a
+parallel stack.
+
+```typescript
+import { StudentWorkspace, StudentWorkspaceContext, StudentWidgetRegistry } from './src/features/student-workspace/index.js';
+
+// Render for a student inside an existing classroom session
+<StudentWorkspace
+  student={{ id: 's1', name: 'Alice' }}
+  lessonId="les_1"
+  pluginHost={frontendPluginHost}
+/>;
+```
+
+Public surface (all reuse existing seams, no duplication):
+
+- `StudentWorkspace` — React component composing the shared Workspace Shell + Classroom Runtime.
+- `StudentWorkspaceContext` — restricted Student View over `ClassroomRuntimeKernel` (`getView()`, `hasPermission()`, `subscribe()`, `takeSnapshot()`/`restoreSnapshot()`).
+- `StudentWidgetRegistry` — registers the default student widgets into the shared `WorkspaceSlotRegistry` (`registerWidget()`, `registerDefaultWidgets()`, `unregisterWidget()`, `listWidgets()`, `clear()`).
+- `StudentWorkspaceSession` — per-student localStorage session persistence with auto-restore.
+- `StudentWorkspaceInit` / `StudentView` — public init & view types.
+
+Plugins extend the Student Workspace through the `student.view` /
+`student.lesson.tool` / `student.fullscreen` extension points — the same
+`ExtensionPointRenderer` mechanism as the Teacher Workspace.
+
+See [`Student Workspace.md`](Student Workspace.md) and
+[`Workspace Guide.md`](Workspace Guide.md) for details.

@@ -31,7 +31,12 @@ export class RuntimePermissionManager {
     ],
     [
       'Student',
-      new Set<RuntimePermission>(['whiteboard:draw', 'quiz:submit']),
+      new Set<RuntimePermission>([
+        'whiteboard:draw', // drawing / editing on the whiteboard
+        'quiz:submit', // activity & assessment submission
+        'ai:invoke', // AI learning assistant access
+        'plugin:execute', // student-facing plugin usage
+      ]),
     ],
     [
       'Observer',
