@@ -3,6 +3,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Markdown from 'react-markdown';
 import { translations, Language } from './i18n';
 import { LazyWhiteboard } from './components/LazyWhiteboard';
+import { LessonPalette } from './features/teacher/lesson-editor/LessonPalette';
+import { PaletteCardEditModal } from './features/teacher/lesson-editor/PaletteCardEditModal';
+import { PALETTE_ITEM_MAP } from './features/teacher/lesson-editor/paletteConfig';
+import { TimelineRail } from './features/teacher/lesson-editor/TimelineRail';
+import { SegmentEditorCard } from './features/teacher/lesson-editor/SegmentEditorCard';
 import { LazyCourseware } from './components/LazyCourseware';
 import { LiveClassroomView } from './components/LiveClassroomView';
 import { CoursewareHubPanel } from './features/teacher/CoursewareHubPanel';
@@ -476,7 +481,31 @@ export default function App() {
   };
   const [classStudentsMap, setClassStudentsMap] = useState<Record<string, StudentType[]>>({});
   const [expandedStudentId, _setExpandedStudentId] = useState<string | null>(null);
-  
+
+  // ── 批量管理模式（班级管理）──
+  const [batchMode, setBatchMode] = useState<boolean>(false);
+  const [selectedClassIds, setSelectedClassIds] = useState<Set<string>>(new Set());
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+  // 批量操作选择弹窗：schedule=批量排课, lockedLesson=批量锁定课程, transfer=批量转班
+  const [batchPicker, setBatchPicker] = useState<null | 'schedule' | 'lockedLesson' | 'transfer'>(null);
+  const [batchPickerLesson, setBatchPickerLesson] = useState<string>('');
+  const [batchPickerDate, setBatchPickerDate] = useState<string>('');
+  const [batchPickerTargetClass, setBatchPickerTargetClass] = useState<string>('');
+
+  // ── 备课画板：点击卡片预编辑后添加到白板 ──
+  const whiteboardRef = useRef<any>(null);
+  const [paletteEdit, setPaletteEdit] = useState<{ type: string; data: Record<string, any> } | null>(null);
+  const handlePaletteActivate = (type: string) => {
+    const cfg = PALETTE_ITEM_MAP[type];
+    if (cfg) setPaletteEdit({ type, data: { ...cfg.defaultData } });
+  };
+  const handlePaletteConfirm = async (data: Record<string, any>) => {
+    if (paletteEdit) {
+      await whiteboardRef.current?.addElementAtCenter(paletteEdit.type, data);
+    }
+    setPaletteEdit(null);
+  };
+
   // Role & Student View
   const session = useAppStore((s) => s.session);
   const setSession = useAppStore((s) => s.setSession);
@@ -1024,12 +1053,13 @@ export default function App() {
     }
   };
 
-  const handleExportAllClassesCombined = async () => {
-    if (classes.length === 0) return;
+  const handleExportAllClassesCombined = async (targetClasses?: any[]) => {
+    const exportList = targetClasses && targetClasses.length > 0 ? targetClasses : classes;
+    if (exportList.length === 0) return;
     setIsExportingAllCombined(true);
     try {
       await Promise.all(
-        classes.map(async (cls) => {
+        exportList.map(async (cls) => {
           await fetchClassStudents(cls.id);
           await fetchClassDashboard(cls.id);
         })
@@ -1058,7 +1088,7 @@ export default function App() {
         return stringified;
       };
 
-      classes.forEach((cls) => {
+      exportList.forEach((cls) => {
         const cStudents = classStudentsMap[cls.id] || [];
         const dashData = classDashboardMap[cls.id];
         if (!dashData || !dashData.assignments || cStudents.length === 0) return;
@@ -1809,6 +1839,144 @@ export default function App() {
         setClassStudentsMap(prev => ({ ...prev, [id]: data }));
       }
     } catch (e) {}
+  };
+
+  // ── 批量操作处理函数（班级管理）──
+  const toggleClassSelection = (id: string) => {
+    setSelectedClassIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAllClasses = () => {
+    setSelectedClassIds(prev =>
+      prev.size === classes.length && classes.length > 0 ? new Set() : new Set(classes.map(c => c.id))
+    );
+  };
+  const toggleStudentSelection = (id: string) => {
+    setSelectedStudentIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAllStudents = (list: StudentType[]) => {
+    setSelectedStudentIds(prev =>
+      prev.size === list.length && list.length > 0 ? new Set() : new Set(list.map(s => s.id))
+    );
+  };
+
+  const handleBatchDeleteClasses = async () => {
+    if (selectedClassIds.size === 0) return;
+    if (!confirm(lang === 'zh' ? `确认彻底删除选中的 ${selectedClassIds.size} 个班级吗？该操作不可恢复。` : `Delete ${selectedClassIds.size} selected classes permanently?`)) return;
+    for (const id of selectedClassIds) {
+      await fetch(`/api/classes/${id}`, { method: 'DELETE' });
+    }
+    setSelectedClassIds(new Set());
+    await fetchClasses();
+  };
+
+  const handleBatchExportClasses = async () => {
+    if (selectedClassIds.size === 0) return;
+    await handleExportAllClassesCombined(classes.filter(c => selectedClassIds.has(c.id)));
+  };
+
+  const handleBatchSetPasscode = async () => {
+    if (selectedClassIds.size === 0) return;
+    const val = window.prompt(lang === 'zh' ? '请输入临时班级密码（留空则清除）:' : 'Enter temporary passcode (leave empty to clear):');
+    if (val === null) return;
+    for (const id of selectedClassIds) {
+      await fetch(`/api/classes/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ class_passcode: val === '' ? null : val }),
+      });
+    }
+    setSelectedClassIds(new Set());
+    await fetchClasses();
+  };
+
+  const handleBatchScheduleClasses = () => {
+    if (selectedClassIds.size === 0) return;
+    setBatchPickerLesson('');
+    setBatchPickerDate(new Date().toISOString().split('T')[0]);
+    setBatchPicker('schedule');
+  };
+
+  const handleBatchDeleteStudents = async () => {
+    if (selectedStudentIds.size === 0 || !expandedClassId) return;
+    if (!confirm(lang === 'zh' ? `确认彻底删除选中的 ${selectedStudentIds.size} 名学生账号吗？将删除其全部关联数据，不可恢复。` : `Permanently delete ${selectedStudentIds.size} selected student accounts?`)) return;
+    for (const id of selectedStudentIds) {
+      await fetch(`/api/students/${id}`, { method: 'DELETE' });
+    }
+    setSelectedStudentIds(new Set());
+    await fetchClassStudents(expandedClassId);
+  };
+
+  const handleBatchResetPassword = async () => {
+    if (selectedStudentIds.size === 0 || !expandedClassId) return;
+    const val = window.prompt(lang === 'zh' ? '请输入要为选中学生设置的新密码:' : 'Enter new password for selected students:');
+    if (val === null || val.trim() === '') return;
+    for (const id of selectedStudentIds) {
+      await fetch(`/api/students/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: val }),
+      });
+    }
+    setSelectedStudentIds(new Set());
+    await fetchClassStudents(expandedClassId);
+  };
+
+  const handleBatchTransferStudents = () => {
+    if (selectedStudentIds.size === 0 || !expandedClassId) return;
+    setBatchPickerTargetClass('');
+    setBatchPicker('transfer');
+  };
+
+  const handleBatchSetLockedLesson = () => {
+    if (selectedStudentIds.size === 0 || !expandedClassId) return;
+    setBatchPickerLesson('');
+    setBatchPicker('lockedLesson');
+  };
+
+  const confirmBatchPicker = async () => {
+    if (!expandedClassId) return;
+    if (batchPicker === 'schedule') {
+      if (!batchPickerLesson) { alert(lang === 'zh' ? '请选择课程' : 'Please select a lesson'); return; }
+      for (const id of selectedClassIds) {
+        await fetch(`/api/classes/${id}/schedules`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lessonId: batchPickerLesson, scheduledDate: batchPickerDate + ' 09:00:00', status: 'scheduled' }),
+        });
+      }
+      setSelectedClassIds(new Set());
+    } else if (batchPicker === 'lockedLesson') {
+      if (!batchPickerLesson) { alert(lang === 'zh' ? '请选择课程' : 'Please select a lesson'); return; }
+      for (const id of selectedStudentIds) {
+        await fetch(`/api/students/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locked_lesson_id: batchPickerLesson }),
+        });
+      }
+      setSelectedStudentIds(new Set());
+    } else if (batchPicker === 'transfer') {
+      if (!batchPickerTargetClass || batchPickerTargetClass === expandedClassId) { alert(lang === 'zh' ? '请选择不同的目标班级' : 'Please select a different target class'); return; }
+      for (const id of selectedStudentIds) {
+        await fetch(`/api/classes/${expandedClassId}/students/${id}`, { method: 'DELETE' });
+        await fetch(`/api/classes/${batchPickerTargetClass}/students`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId: id }),
+        });
+      }
+      setSelectedStudentIds(new Set());
+    }
+    setBatchPicker(null);
+    if (expandedClassId) await fetchClassStudents(expandedClassId);
   };
 
   const fetchClassProgress = async (id: string) => {
@@ -4554,294 +4722,43 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                    </div>
                 </div>
                 <div className="flex-1 flex overflow-hidden">
-                    <div className="w-1/4 min-w-[210px] max-w-[260px] border-r border-gray-200 bg-slate-50/75 p-4 overflow-y-auto flex flex-col gap-4">
-                      <div>
-                        <h3 className="font-bold text-gray-800 text-xs xl:text-sm uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
-                          <Blocks size={14} className="text-indigo-600" />
-                          {lang === 'zh' ? '备课画板组件' : 'Drag Components'}
-                        </h3>
-                        <p className="text-[10px] text-gray-500 leading-tight">
-                          {lang === 'zh' ? '拖拽下方教具组件到右侧画板中，可实时推送并同步给所有在线学生！' : 'Drag any component to the whiteboard on the right to sync instantly with students.'}
-                        </p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2.5 overflow-y-auto">
-                        <div draggable onDragStart={(e) => { 
-                           const dataStr = JSON.stringify({ type: 'code-sandbox', code: "console.log('Hello Sandbox!');" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                           e.dataTransfer.setData('application/json', dataStr); 
-                           e.dataTransfer.setData('text/plain', dataStr);
-                        }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
-                           <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
-                             <Terminal size={18} />
-                           </div>
-                           <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '代码沙箱' : 'Code Editor'}</span>
-                        </div>
-                        <div draggable onDragStart={(e) => { 
-                           const dataStr = JSON.stringify({ type: 'math-graph', equation: "Math.sin(x)" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                           e.dataTransfer.setData('application/json', dataStr); 
-                           e.dataTransfer.setData('text/plain', dataStr);
-                        }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
-                           <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
-                             <Activity size={18} />
-                           </div>
-                           <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '数学函数' : 'Math Grapher'}</span>
-                        </div>
-                        <div draggable onDragStart={(e) => { 
-                           const dataStr = JSON.stringify({ type: 'presentation', markdown: "# Title Slide\n---\n## Slide 2" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                           e.dataTransfer.setData('application/json', dataStr); 
-                           e.dataTransfer.setData('text/plain', dataStr);
-                        }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
-                           <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
-                             <Presentation size={18} />
-                           </div>
-                           <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '课件演示' : 'Slides Deck'}</span>
-                        </div>
-                        <div draggable onDragStart={(e) => { 
-                           const dataStr = JSON.stringify({ type: 'quiz', question: "New Quiz" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                           e.dataTransfer.setData('application/json', dataStr); 
-                           e.dataTransfer.setData('text/plain', dataStr);
-                        }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
-                           <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
-                             <Puzzle size={18} />
-                           </div>
-                           <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '随堂测试' : 'Interactive Quiz'}</span>
-                        </div>
-                        <div draggable onDragStart={(e) => { 
-                           const dataStr = JSON.stringify({ type: 'html-applet', code: `<!-- Interactive Physics -->\n<div style='padding:20px; text-align:center;'>\n  <h2>Interactive Physics</h2>\n  <button onclick="alert('Simulating Gravity!')">Drop Ball</button>\n</div>` }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                           e.dataTransfer.setData('application/json', dataStr); 
-                           e.dataTransfer.setData('text/plain', dataStr);
-                        }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
-                           <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
-                             <Globe size={18} />
-                           </div>
-                           <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '交互实验' : 'HTML Applet'}</span>
-                        </div>
-                        <div draggable onDragStart={(e) => { 
-                           const dataStr = JSON.stringify({ type: 'assignment', title: "New Assignment", description: "Upload your work here" }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                           e.dataTransfer.setData('application/json', dataStr); 
-                           e.dataTransfer.setData('text/plain', dataStr);
-                         }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
-                            <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
-                              <ClipboardList size={18} />
-                            </div>
-                            <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '作业提交' : 'Assignment'}</span>
-                         </div>
-                        <div draggable onDragStart={(e) => { 
-                           const dataStr = JSON.stringify({ type: 'rollcall', allStudents: [] }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                           e.dataTransfer.setData('application/json', dataStr); 
-                           e.dataTransfer.setData('text/plain', dataStr);
-                         }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
-                            <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
-                              <Shuffle size={18} />
-                            </div>
-                            <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '随机点名' : 'Random Picker'}</span>
-                         </div>
-                        <div draggable onDragStart={(e) => { 
-                           const dataStr = JSON.stringify({ type: 'hello-world' }); e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('application/json', dataStr); e.dataTransfer.setData('text/plain', dataStr); e.dataTransfer.setData('text', dataStr);
-                           e.dataTransfer.setData('application/json', dataStr); 
-                           e.dataTransfer.setData('text/plain', dataStr);
-                         }} className="bg-white border border-gray-200/80 p-3 rounded-xl shadow-sm hover:border-indigo-400 hover:shadow-md hover:scale-[1.03] transition-all cursor-grab active:cursor-grabbing flex flex-col items-center justify-center gap-1.5 aspect-square text-center group" >
-                            <div className="p-1.5 bg-slate-50 text-gray-500 rounded-lg group-hover:bg-indigo-50 group-hover:text-indigo-650 transition-colors">
-                              <Sparkles size={18} />
-                            </div>
-                            <span className="font-semibold text-[10px] text-gray-700 group-hover:text-indigo-650 transition-colors">{lang === 'zh' ? '问候插件' : 'Hello World'}</span>
-                         </div>
-                      </div>
-                    </div>
+                    <LessonPalette lang={lang} onActivate={handlePaletteActivate} />
                    <div className="flex-1 relative bg-white flex flex-col min-w-0 overflow-y-auto">
-                     <div className="p-3 border-b border-gray-100 bg-white shrink-0 flex items-center justify-between gap-4">
-                       <div className="flex items-center gap-2 flex-1 overflow-x-auto">
-                       <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mr-2 shrink-0">Lesson Timeline</div>
-                       <div className="flex items-center gap-2 flex-1 overflow-x-auto py-1">
-                         {timelineSegments.map((seg, idx) => (
-                           <div 
-                             key={seg.id}
-                             draggable
-                             onDragStart={(e) => {
-                               setDraggedSegmentIdx(idx);
-                               e.dataTransfer.effectAllowed = 'move';
-                               e.dataTransfer.setData('text/plain', idx.toString());
-                             }}
-                             onDragOver={(e) => e.preventDefault()}
-                             onDrop={(e) => {
-                               e.preventDefault();
-                               if (draggedSegmentIdx === null) return;
-                               if (draggedSegmentIdx === idx) return;
-                               const newSegments = [...timelineSegments];
-                               const [removed] = newSegments.splice(draggedSegmentIdx, 1);
-                               newSegments.splice(idx, 0, removed);
-                               setTimelineSegments(newSegments);
-                               setDraggedSegmentIdx(null);
-                               if (selectedLesson) {
-                                 saveTimeline(selectedLesson, newSegments);
-                               }
-                             }}
-                             onClick={() => {
-                               setActiveSegmentId(seg.id);
-                             }}
-                             className={`px-3 py-1.5 rounded-lg border text-sm font-medium flex items-center gap-2 cursor-grab active:cursor-grabbing transition-all hover:shadow-sm whitespace-nowrap ${seg.color} ${draggedSegmentIdx === idx ? 'opacity-40 border-dashed' : ''} ${activeSegmentId === seg.id ? 'ring-2 ring-indigo-500 scale-[1.03] shadow-md border-indigo-400 font-bold' : ''}`}
-                           >
-                             <span className="opacity-50 text-xl leading-none -mt-1 cursor-grab" title="Drag to reorder">⋮⋮</span>
-                              {seg.notes && (
-                                <span title={`备注: ${seg.notes}`} className="inline-flex"><FileText size={11} className="text-amber-600 inline-block min-w-[11px] shrink-0 fill-current" /></span>
-                              )}
-                             {seg.title}
-                             <span className="text-[10px] opacity-70 bg-white/50 px-1.5 py-0.5 rounded ml-1">{seg.duration}</span>
-                           </div>
-                         ))}
-                         
-                         {selectedLesson && (
-                           <button
-                             onClick={() => {
-                               const newSegId = 'seg-' + Math.random().toString(36).slice(2, 9);
-                               const newSeg = {
-                                 id: newSegId,
-                                 title: `新环节 ${timelineSegments.length + 1}`, notes: '',
-                                 type: 'lecture',
-                                 duration: '10m',
-                                 color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                               };
-                               const updated = [...timelineSegments, newSeg];
-                               saveTimeline(selectedLesson, updated);
-                               setActiveSegmentId(newSegId);
-                             }}
-                             className="px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-xs font-semibold text-gray-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors flex items-center gap-1 shrink-0 bg-white cursor-pointer"
-                             title="Add new segment"
-                           >
-                             <Plus size={14} /> 新增环节
-                           </button>
-                         )}
-                       </div>
-                     </div>
-                     <button
-                       onClick={() => setEditorPanelsExpanded(p => !p)}
-                       className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-gray-600 text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
-                     >
-                       <Settings2 size={12} className={editorPanelsExpanded ? "text-indigo-650" : "text-gray-500"} />
-                       <span>{editorPanelsExpanded ? (lang === 'zh' ? "隐藏设置" : "Hide Settings") : (lang === 'zh' ? "展开设置" : "Show Settings")}</span>
-                     </button>
-                    </div>
-
-                     {/* Timeline Segment Editor Panel */}
-                     {selectedLesson && activeSegmentId && editorPanelsExpanded && (
-                       <div className="flex flex-col p-3 gap-2.5 bg-gray-50 border-b border-gray-100 text-xs text-gray-600 shrink-0">
-                         <div className="flex flex-wrap items-center gap-2">
-                           <span className="font-semibold text-gray-700 flex items-center gap-1">
-                             ⚡ 环节设置: {timelineSegments.find(s => s.id === activeSegmentId)?.title}
-                           </span>
-                           <div className="flex items-center gap-1.5">
-                             <span className="opacity-60">名称:</span>
-                             <input 
-                               type="text" 
-                               value={timelineSegments.find(s => s.id === activeSegmentId)?.title || ''} 
-                               onChange={(e) => {
-                                 const updated = timelineSegments.map(s => s.id === activeSegmentId ? { ...s, title: e.target.value } : s);
-                                 saveTimeline(selectedLesson, updated);
-                               }}
-                               className="border border-gray-200 px-2 py-1 rounded bg-white text-xs max-w-[120px] outline-none focus:border-indigo-400"
-                             />
-                           </div>
-                           <div className="flex items-center gap-1.5">
-                             <span className="opacity-60">时长:</span>
-                             <input 
-                               type="text" 
-                               value={timelineSegments.find(s => s.id === activeSegmentId)?.duration || '10m'} 
-                               onChange={(e) => {
-                                 const updated = timelineSegments.map(s => s.id === activeSegmentId ? { ...s, duration: e.target.value } : s);
-                                 saveTimeline(selectedLesson, updated);
-                               }}
-                               className="border border-gray-200 px-2 py-1 rounded bg-white text-xs max-w-[60px] outline-none focus:border-indigo-400"
-                             />
-                           </div>
-                           <div className="flex items-center gap-1.5">
-                             <span className="opacity-60">类型:</span>
-                             <select
-                               value={timelineSegments.find(s => s.id === activeSegmentId)?.type || 'lecture'}
-                               onChange={(e) => {
-                                 const updated = timelineSegments.map(s => s.id === activeSegmentId ? { ...s, type: e.target.value } : s);
-                                 saveTimeline(selectedLesson, updated);
-                               }}
-                               className="border border-gray-200 px-2 py-1 rounded bg-white text-xs outline-none focus:border-indigo-400 animate-none"
-                             >
-                               <option value="intro">准备环节 (intro)</option>
-                               <option value="lecture">讲授新课 (lecture)</option>
-                               <option value="practice">互动练习 (practice)</option>
-                               <option value="quiz">随堂测试 (quiz)</option>
-                               <option value="summary">要点总结 (summary)</option>
-                             </select>
-                           </div>
-                           <div className="flex items-center gap-1">
-                             <span className="opacity-60 mr-1">皮肤:</span>
-                             {[
-                               { name: 'Blue', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
-                               { name: 'Indigo', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
-                               { name: 'Green', color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' },
-                               { name: 'Purple', color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' },
-                               { name: 'Amber', color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' },
-                             ].map(c => (
-                               <button
-                                 key={c.name}
-                                 onClick={() => {
-                                   const updated = timelineSegments.map(s => s.id === activeSegmentId ? { ...s, color: c.color } : s);
-                                   saveTimeline(selectedLesson, updated);
-                                 }}
-                                 className={`w-4 h-4 rounded-full border ${c.color.split(' ')[0]} ${timelineSegments.find(s => s.id === activeSegmentId)?.color === c.color ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}`}
-                                 title={c.name}
-                                />
-                             ))}
-                           </div>
-                         </div>
-                         <div>
-                           <button
-                             onClick={() => {
-                               if (timelineSegments.length <= 1) {
-                                 alert('无法删除！课程必须包含至少一个环节。');
-                                 return;
-                               }
-                               if (window.confirm(`确定要删除环节"${timelineSegments.find(s => s.id === activeSegmentId)?.title}"吗？`)) {
-                                 const updated = timelineSegments.filter(s => s.id !== activeSegmentId);
-                                 saveTimeline(selectedLesson, updated);
-                                 setActiveSegmentId(updated[0]?.id || null);
-                               }
-                             }}
-                             className="text-red-500 hover:text-red-700 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
-                           >
-                             <Trash2 size={12} /> 删除此环节
-                            </button>
-                          </div>
-                          
-                          {/* Notes (Instructional Reminders) Row */}
-                          <div className="flex flex-col gap-1 border-t border-gray-200/60 pt-2.5 mt-1 bg-slate-50/50 -mx-3 px-3">
-                            <div className="flex items-center gap-1.5 font-semibold text-gray-700">
-                              <FileText size={13} className="text-amber-500 shrink-0" />
-                              <span>环节备注 & 教学提示 (Instructional Notes):</span>
-                            </div>
-                            <textarea
-                              rows={2}
-                              value={timelineSegments.find(s => s.id === activeSegmentId)?.notes || ''}
-                              onChange={(e) => {
-                                const updated = timelineSegments.map(s => s.id === activeSegmentId ? { ...s, notes: e.target.value } : s);
-                                saveTimeline(selectedLesson, updated);
-                              }}
-                              placeholder="在此为该环节添加教学要点、学生互动提示、教学设计分配等备注信息（将自动保存在教学大纲中）..."
-                              className="w-full border border-gray-200 px-2 py-1.5 rounded bg-white text-xs outline-none focus:border-indigo-400 placeholder:text-gray-400 placeholder:italic focus:ring-1 focus:ring-indigo-100 duration-150 resize-y"
-                            />
-                          </div>
-                          
-                          <div className="hidden">
-                            <button>
-                           </button>
-                         </div>
-                       </div>
-                     )} {/* 
-                           >
-                             <span className="opacity-50 text-xl leading-none -mt-1 cursor-grab">⋮⋮</span>
-                             {seg.title}
-                             <span className="text-[10px] opacity-70 bg-white/50 px-1.5 py-0.5 rounded ml-1">{seg.duration}</span>
-                           </div>
-                         ))}
-                       </div>
-                     </div>
-                     */}`
+                     <TimelineRail
+                       lang={lang}
+                       segments={timelineSegments}
+                       activeSegmentId={activeSegmentId}
+                       setActiveSegmentId={setActiveSegmentId}
+                       draggedSegmentIdx={draggedSegmentIdx}
+                       setDraggedSegmentIdx={setDraggedSegmentIdx}
+                       selectedLesson={selectedLesson}
+                       saveTimeline={saveTimeline}
+                       editorPanelsExpanded={editorPanelsExpanded}
+                       setEditorPanelsExpanded={setEditorPanelsExpanded}
+                     />
+                     {selectedLesson && activeSegmentId && editorPanelsExpanded && timelineSegments.some((s) => s.id === activeSegmentId) && (
+                       <SegmentEditorCard
+                         lang={lang}
+                         segment={timelineSegments.find((s) => s.id === activeSegmentId)}
+                         onPatch={(patch) =>
+                           saveTimeline(
+                             selectedLesson,
+                             timelineSegments.map((s) => (s.id === activeSegmentId ? { ...s, ...patch } : s)),
+                           )
+                         }
+                         onDelete={() => {
+                           if (timelineSegments.length <= 1) {
+                             alert('无法删除！课程必须包含至少一个环节。');
+                             return;
+                           }
+                           if (window.confirm(`确定要删除环节"${timelineSegments.find((s) => s.id === activeSegmentId)?.title}"吗？`)) {
+                             const updated = timelineSegments.filter((s) => s.id !== activeSegmentId);
+                             saveTimeline(selectedLesson, updated);
+                             setActiveSegmentId(updated[0]?.id || null);
+                           }
+                         }}
+                       />
+                     )}
                      <div className="flex-1 min-h-[500px] relative flex flex-col min-w-0">
                      {!selectedLesson ? (
                         <div className="absolute inset-0 flex items-center justify-center text-gray-400 p-8 text-center bg-gray-50">
@@ -4852,7 +4769,9 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                           </div>
                         </div>
                      ) : (
+   <>
                         <LazyWhiteboard
+ref={whiteboardRef}
 lessonId={selectedLesson}
 userRole={activeRole}
 elements={elements}
@@ -4932,6 +4851,16 @@ onClearBoard={async () => {
                             }}
 onRefresh={() => fetchElements(selectedLesson)}
 />
+                        {paletteEdit && PALETTE_ITEM_MAP[paletteEdit.type] && (
+                          <PaletteCardEditModal
+                            config={PALETTE_ITEM_MAP[paletteEdit.type]}
+                            lang={lang}
+                            initialData={paletteEdit.data}
+                            onConfirm={handlePaletteConfirm}
+                            onCancel={() => setPaletteEdit(null)}
+                          />
+                        )}
+   </>
                      )}
                    </div>
                    </div>
@@ -5019,6 +4948,56 @@ onRefresh={() => fetchElements(selectedLesson)}
                   <Users size={16} className="text-gray-400" />
                   {t.classes} & {t.students}
                 </h3>
+                {/* 批量管理模式开关 + 班级级操作栏 */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => {
+                      setBatchMode(b => !b);
+                      setSelectedClassIds(new Set());
+                      setSelectedStudentIds(new Set());
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium border transition-colors cursor-pointer ${batchMode ? 'bg-amber-500 text-white border-amber-500' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}
+                  >
+                    <Check size={14} /> {lang === 'zh' ? '批量管理' : 'Batch Mode'}
+                  </button>
+                  {batchMode && (
+                    <>
+                      <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer select-none">
+                        <input type="checkbox" checked={classes.length > 0 && selectedClassIds.size === classes.length} onChange={toggleSelectAllClasses} />
+                        {lang === 'zh' ? '全选' : 'Select All'}
+                      </label>
+                      <span className="text-xs text-gray-400">({selectedClassIds.size})</span>
+                      <button
+                        onClick={handleBatchDeleteClasses}
+                        disabled={selectedClassIds.size === 0}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <Trash2 size={13} /> {lang === 'zh' ? '删除' : 'Delete'}
+                      </button>
+                      <button
+                        onClick={handleBatchExportClasses}
+                        disabled={selectedClassIds.size === 0}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <Download size={13} /> {lang === 'zh' ? '导出' : 'Export'}
+                      </button>
+                      <button
+                        onClick={handleBatchSetPasscode}
+                        disabled={selectedClassIds.size === 0}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <Shield size={13} /> {lang === 'zh' ? '设密码' : 'Passcode'}
+                      </button>
+                      <button
+                        onClick={handleBatchScheduleClasses}
+                        disabled={selectedClassIds.size === 0}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-violet-50 text-violet-600 hover:bg-violet-100 border border-violet-200 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <CalendarIcon size={13} /> {lang === 'zh' ? '排课' : 'Schedule'}
+                      </button>
+                    </>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   {expandedClassId && (
                     <div 
@@ -5203,12 +5182,17 @@ onRefresh={() => fetchElements(selectedLesson)}
                       return (
                         <div key={cls.id} className="w-full mb-1 border-b border-gray-50 flex flex-col">
                           <div 
-                            className="p-2 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+                            className={`p-2 flex items-center justify-between ${batchMode ? 'cursor-pointer hover:bg-amber-50/60' : 'cursor-pointer hover:bg-gray-50'}`}
                             onClick={() => {
+                              if (batchMode) {
+                                toggleClassSelection(cls.id);
+                                return;
+                              }
                               if (isExpanded) {
                                 setExpandedClassId(null);
                               } else {
                                 setExpandedClassId(cls.id);
+                                setSelectedStudentIds(new Set());
                                 fetchClassStudents(cls.id);
                                 fetchClassProgress(cls.id);
                                 fetchClassDashboard(cls.id);
@@ -5217,8 +5201,35 @@ onRefresh={() => fetchElements(selectedLesson)}
                             }}
                           >
                              <div className="flex items-center gap-2">
-                               {isExpanded ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
-                               <div className="text-sm font-medium text-gray-800">{cls.name}</div>
+                               {batchMode && (
+                                 <input
+                                   type="checkbox"
+                                   className="shrink-0 accent-amber-500"
+                                   checked={selectedClassIds.has(cls.id)}
+                                   onChange={() => toggleClassSelection(cls.id)}
+                                   onClick={(e) => e.stopPropagation()}
+                                 />
+                               )}
+                               <button
+                                 type="button"
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   if (isExpanded) {
+                                     setExpandedClassId(null);
+                                   } else {
+                                     setExpandedClassId(cls.id);
+                                     setSelectedStudentIds(new Set());
+                                     fetchClassStudents(cls.id);
+                                     fetchClassProgress(cls.id);
+                                     fetchClassDashboard(cls.id);
+                                     fetchClassSchedules(cls.id);
+                                   }
+                                 }}
+                                 className="text-gray-400 hover:text-gray-600 shrink-0"
+                               >
+                                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                               </button>
+                               <div className={`text-sm font-medium ${batchMode && selectedClassIds.has(cls.id) ? 'text-amber-700' : 'text-gray-800'}`}>{cls.name}</div>
                              </div>
                              <div className="text-[10px] text-gray-400">Class</div>
                           </div>
@@ -6192,6 +6203,48 @@ onRefresh={() => fetchElements(selectedLesson)}
                                             {lang === 'zh' ? '未找到符合查询条件的学生。' : 'No students matched this search criteria.'}
                                           </div>
                                         ) : (
+                                          <>
+                                          {batchMode && (
+                                            <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex flex-wrap items-center gap-2">
+                                              <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={filtered.length > 0 && filtered.every((s: any) => selectedStudentIds.has(s.id))}
+                                                  onChange={() => toggleSelectAllStudents(filtered)}
+                                                />
+                                                {lang === 'zh' ? '全选本班' : 'Select All'}
+                                              </label>
+                                              <span className="text-xs text-gray-400">({selectedStudentIds.size})</span>
+                                              <button
+                                                onClick={handleBatchDeleteStudents}
+                                                disabled={selectedStudentIds.size === 0}
+                                                className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-50"
+                                              >
+                                                <Trash2 size={13} /> {lang === 'zh' ? '删除' : 'Delete'}
+                                              </button>
+                                              <button
+                                                onClick={handleBatchResetPassword}
+                                                disabled={selectedStudentIds.size === 0}
+                                                className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-50"
+                                              >
+                                                <Shield size={13} /> {lang === 'zh' ? '重置密码' : 'Reset PW'}
+                                              </button>
+                                              <button
+                                                onClick={handleBatchTransferStudents}
+                                                disabled={selectedStudentIds.size === 0}
+                                                className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-violet-50 text-violet-600 hover:bg-violet-100 border border-violet-200 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-50"
+                                              >
+                                                <Shuffle size={13} /> {lang === 'zh' ? '转班' : 'Transfer'}
+                                              </button>
+                                              <button
+                                                onClick={handleBatchSetLockedLesson}
+                                                disabled={selectedStudentIds.size === 0}
+                                                className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-teal-50 text-teal-600 hover:bg-teal-100 border border-teal-200 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-50"
+                                              >
+                                                <BookOpen size={13} /> {lang === 'zh' ? '设课程' : 'Lock Lesson'}
+                                              </button>
+                                            </div>
+                                          )}
                                           <div className="space-y-1">
                                             {filtered.map(st => {
                                         const isStExpanded = expandedStudentId === st.id;
@@ -6202,6 +6255,10 @@ onRefresh={() => fetchElements(selectedLesson)}
                                             <div 
                                               className="flex justify-between items-center text-sm text-gray-700 py-1 cursor-pointer hover:bg-gray-50 w-full rounded"
                                               onClick={() => {
+                                                if (batchMode) {
+                                                  toggleStudentSelection(st.id);
+                                                  return;
+                                                }
                                                 if (isStExpanded) {
                                                   setExpandedStudentId(null);
                                                 } else {
@@ -6211,6 +6268,15 @@ onRefresh={() => fetchElements(selectedLesson)}
                                               }}
                                             >
                                               <div className="flex items-center gap-2">
+                                                {batchMode && (
+                                                  <input
+                                                    type="checkbox"
+                                                    className="shrink-0 accent-amber-500"
+                                                    checked={selectedStudentIds.has(st.id)}
+                                                    onChange={() => toggleStudentSelection(st.id)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                  />
+                                                )}
                                                 {isStExpanded ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
                                                 <div className="flex flex-col">
                                                   <div className="flex items-center gap-1.5">
@@ -6467,7 +6533,7 @@ onRefresh={() => fetchElements(selectedLesson)}
                                         );
                                             })}
                                           </div>
-                                        )}
+                                        </>)}
                                       </div>
                                     );
                                  })()}
@@ -8164,6 +8230,71 @@ onClose={() => setPreviewSelectedCourseware(null)}
       )}
 
       {/* Grade Export Weighting Settings Modal */}
+      {/* 批量操作选择弹窗（排课 / 锁定课程 / 转班） */}
+      {batchPicker && (
+        <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white border text-gray-900 border-gray-200 rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden"
+          >
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80">
+              <h2 className="font-bold text-gray-800 text-base">
+                {batchPicker === 'schedule'
+                  ? (lang === 'zh' ? '批量排课' : 'Batch Schedule')
+                  : batchPicker === 'lockedLesson'
+                  ? (lang === 'zh' ? '批量设置锁定课程' : 'Batch Lock Lesson')
+                  : (lang === 'zh' ? '批量转班' : 'Batch Transfer')}
+              </h2>
+              <button onClick={() => setBatchPicker(null)} className="text-gray-400 hover:text-gray-600 text-lg font-bold p-1 hover:bg-gray-200 rounded">&times;</button>
+            </div>
+            <div className="p-5 space-y-4">
+              {(batchPicker === 'schedule' || batchPicker === 'lockedLesson') && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-600">{lang === 'zh' ? '选择课程' : 'Select Lesson'}</label>
+                  <select
+                    value={batchPickerLesson}
+                    onChange={(e) => setBatchPickerLesson(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">{lang === 'zh' ? '— 请选择 —' : '— Select —'}</option>
+                    {lessons.map((l: any) => <option key={l.id} value={l.id}>{l.title}</option>)}
+                  </select>
+                </div>
+              )}
+              {batchPicker === 'schedule' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-600">{lang === 'zh' ? '上课日期' : 'Schedule Date'}</label>
+                  <input
+                    type="date"
+                    value={batchPickerDate}
+                    onChange={(e) => setBatchPickerDate(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              )}
+              {batchPicker === 'transfer' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-600">{lang === 'zh' ? '选择目标班级' : 'Select Target Class'}</label>
+                  <select
+                    value={batchPickerTargetClass}
+                    onChange={(e) => setBatchPickerTargetClass(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">{lang === 'zh' ? '— 请选择 —' : '— Select —'}</option>
+                    {classes.filter((c: any) => c.id !== expandedClassId).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={() => setBatchPicker(null)} className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 cursor-pointer">{lang === 'zh' ? '取消' : 'Cancel'}</button>
+              <button onClick={confirmBatchPicker} className="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer">{lang === 'zh' ? '确认' : 'Confirm'}</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {isExportWeightModalOpen && (
         <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-6 z-50">
           <motion.div

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { Stage, Layer, Rect, Circle, Line, Text as KonvaText, Group } from 'react-konva';
 import { MousePointer2, Square, Circle as CircleIcon, PenTool, Type, Eraser, Loader2, Presentation, ChevronLeft, ChevronRight, Wand2, Terminal, Activity, Trash2, Settings, Plus, X, Paintbrush, ChevronDown, Undo2, Redo2, RotateCcw, Play, Pause, Maximize2, Minimize2, Edit3, BookOpen, Eye, FileText, Highlighter, Sparkles, HelpCircle, Shuffle, UserCheck, Upload } from 'lucide-react';
@@ -1348,6 +1348,11 @@ interface InteractiveWhiteboardProps {
   isEditMode?: boolean;
 }
 
+// 命令式接口：供外部（如备课画板点击添加）在画板中央插入元素
+export interface WhiteboardHandle {
+  addElementAtCenter: (type: string, contentData: Record<string, any>) => Promise<void>;
+}
+
 /**
  * 为 srcDoc 模式的 HTML Applet 注入 LMS 上下文和 bridge.js。
  * 服务端渲染路径（/runtime/ 或 /api/resources/）由 injectLmsSdk 处理；
@@ -1378,20 +1383,24 @@ ${rawCode || ''}
 </body></html>`;
 }
 
-export function InteractiveWhiteboard({ 
-  lessonId, 
-  elements, 
-  onElementAdd, 
-  onElementUpdate, 
-  onElementDelete,
-  onClearBoard,
-  onRefresh, 
-  enableAutoAI,
-  activeSegmentId,
-  onSegmentSync,
-  userRole = 'teacher',
-  isEditMode = true,
-}: InteractiveWhiteboardProps) {
+export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhiteboardProps>(
+  (
+    {
+      lessonId,
+      elements,
+      onElementAdd,
+      onElementUpdate,
+      onElementDelete,
+      onClearBoard,
+      onRefresh,
+      enableAutoAI,
+      activeSegmentId,
+      onSegmentSync,
+      userRole = 'teacher',
+      isEditMode = true,
+    }: InteractiveWhiteboardProps,
+    ref,
+  ) => {
   // 防御：确保 elements 始终是数组（极端情况下 Zustand store 可能返回非数组值）
   const safeElements = Array.isArray(elements) ? elements : [];
   const [tool, setTool] = useState<'cursor' | 'rect' | 'circle' | 'pen' | 'text' | 'presentation' | 'highlighter'>('cursor');
@@ -3318,6 +3327,74 @@ export function InteractiveWhiteboard({
     e.dataTransfer.dropEffect = 'copy';
   };
 
+  // 组装元素 data：合并内容字段与定位字段，并补齐各类型的默认值
+  const buildElementData = (
+    type: string,
+    content: Record<string, any>,
+    x: number,
+    y: number,
+  ): Record<string, any> => {
+    const base = { x, y, page: currentPage, segmentId: activeSegmentId };
+    switch (type) {
+      case 'code-sandbox':
+        return { ...base, code: content.code ?? "console.log('Hello Sandbox!');" };
+      case 'math-graph':
+        return { ...base, equation: content.equation ?? 'Math.sin(x)' };
+      case 'presentation':
+        return {
+          ...base,
+          markdown: content.markdown ?? '# Title Slide\n---\n## Slide 2',
+          width: 600,
+          height: 400,
+          slideX: 0,
+          slideY: 0,
+        };
+      case 'quiz':
+        return {
+          ...base,
+          question: content.question ?? 'New Quiz',
+          options: Array.isArray(content.options) ? content.options : ['A', 'B', 'C', 'D'],
+        };
+      case 'html-applet':
+        return { ...base, code: content.code ?? '' };
+      case 'assignment':
+        return { ...base, title: content.title ?? 'New Assignment', description: content.description ?? '' };
+      case 'hello-world':
+        return base;
+      case 'rollcall':
+        return { ...base, allStudents: [] };
+      default:
+        return { ...base, ...content };
+    }
+  };
+
+  // 命令式接口：在画板中央插入元素（供备课画板点击添加）
+  const addElementAtCenter = async (type: string, contentData: Record<string, any>) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = Math.round(rect.width / 2);
+    const y = Math.round(rect.height / 2);
+    setIsSyncing(true);
+    try {
+      await onElementAdd(type, buildElementData(type, contentData, x, y));
+      frontendEventBus.publish({
+        id: uuidv7(),
+        type: 'whiteboard.element_updated',
+        source: 'whiteboard',
+        payload: { lessonId },
+        timestamp: Date.now(),
+        correlationId: lessonId,
+      });
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error('addElementAtCenter error', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  useImperativeHandle(ref, () => ({ addElementAtCenter }));
+
   const handleWhiteboardDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -3351,76 +3428,7 @@ export function InteractiveWhiteboard({
       console.log(`Adding whiteboard element of type ${payload.type} at (${dropX}, ${dropY})`);
       setIsSyncing(true);
       try {
-        if (payload.type === 'code-sandbox') {
-           await onElementAdd('code-sandbox', {
-               code: payload.code || "console.log('Hello Sandbox!');",
-               x: dropX,
-               y: dropY,
-               page: currentPage,
-               segmentId: activeSegmentId
-           });
-        } else if (payload.type === 'math-graph') {
-           await onElementAdd('math-graph', {
-               equation: payload.equation || "Math.sin(x)",
-               x: dropX,
-               y: dropY,
-               page: currentPage,
-               segmentId: activeSegmentId
-           });
-        } else if (payload.type === 'presentation') {
-           await onElementAdd('presentation', {
-               markdown: payload.markdown || "# Title Slide\n---\n## Slide 2",
-               x: dropX,
-               y: dropY,
-               width: 600,
-               height: 400,
-               slideX: 0,
-               slideY: 0,
-               page: currentPage,
-               segmentId: activeSegmentId
-           });
-        } else if (payload.type === 'quiz') {
-           await onElementAdd('quiz', {
-               question: payload.question || "New Quiz",
-               options: ["A", "B", "C", "D"],
-               x: dropX,
-               y: dropY,
-               page: currentPage,
-               segmentId: activeSegmentId
-           });
-        } else if (payload.type === 'html-applet') {
-           await onElementAdd('html-applet', {
-               code: payload.code || "",
-               x: dropX,
-               y: dropY,
-               page: currentPage,
-               segmentId: activeSegmentId
-           });
-        } else if (payload.type === 'assignment') {
-           await onElementAdd('assignment', {
-               title: payload.title || "New Assignment",
-               description: payload.description || "",
-               x: dropX,
-               y: dropY,
-               page: currentPage,
-               segmentId: activeSegmentId
-           });
-        } else if (payload.type === 'hello-world') {
-            await onElementAdd('hello-world', {
-                x: dropX,
-                y: dropY,
-                page: currentPage,
-                segmentId: activeSegmentId
-            });
-         } else if (payload.type === 'rollcall') {
-            await onElementAdd('rollcall', {
-                allStudents: [],
-                x: dropX,
-                y: dropY,
-                page: currentPage,
-                segmentId: activeSegmentId
-            });
-         }
+        await onElementAdd(payload.type, buildElementData(payload.type, payload, dropX, dropY));
         frontendEventBus.publish({
       id: uuidv7(),
       type: 'whiteboard.element_updated',
@@ -4770,4 +4778,4 @@ export function InteractiveWhiteboard({
 
   </div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, forwardRef } from 'react';
 
 const Whiteboard = lazy(() =>
   import('../features/whiteboard/InteractiveWhiteboard').then((m) => ({
@@ -6,7 +6,7 @@ const Whiteboard = lazy(() =>
   })),
 );
 
-export function LazyWhiteboard(props: any) {
+export const LazyWhiteboard = forwardRef<any, any>((props, ref) => {
   return (
     <Suspense
       fallback={
@@ -15,7 +15,7 @@ export function LazyWhiteboard(props: any) {
         </div>
       }
     >
-      <Whiteboard {...props} />
+      <Whiteboard ref={ref} {...props} />
     </Suspense>
   );
-}
+});
