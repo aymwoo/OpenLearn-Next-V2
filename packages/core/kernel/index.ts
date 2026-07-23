@@ -30,6 +30,8 @@ import {
   ISemesterGradeServiceToken,
   ILessonEngineServiceToken,
   IClassroomRuntimeServiceToken,
+  IPresenceEngineServiceToken,
+  ITeachingCollaborationServiceToken,
 } from '../di/interfaces.js';
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
@@ -39,6 +41,8 @@ import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import { HotReloadController } from '../plugin-host/hot-reload.js';
 import { LessonRuntime } from '../lesson-engine/index.js';
 import { ClassroomRuntimeKernel } from '../classroom-runtime/index.js';
+import { PresenceEngineKernel } from '../presence-engine/index.js';
+import { CollaborationEngineKernel } from '../collaboration-engine/index.js';
 import path from 'path';
 
 export class Kernel {
@@ -56,6 +60,8 @@ export class Kernel {
   public readonly workerManager: WorkerManager;
   public readonly lessonRuntime: LessonRuntime;
   public readonly classroomRuntime: ClassroomRuntimeKernel;
+  public readonly presenceEngine: PresenceEngineKernel;
+  public readonly collaborationEngine: CollaborationEngineKernel;
   public readonly ready: Promise<void>;
 
   constructor() {
@@ -69,6 +75,12 @@ export class Kernel {
     // StorageService + AIService — Layer 0（无依赖）
     this.storageService = new StorageService(this.db);
     this.aiService = new AIService(this.db);
+
+    // CollaborationEngineKernel — Layer 1 (Teaching Collaboration Engine)
+    this.collaborationEngine = new CollaborationEngineKernel();
+
+    // PresenceEngineKernel — Layer 1 (Presence Tracking Engine)
+    this.presenceEngine = new PresenceEngineKernel();
 
     // ClassroomRuntimeKernel — Layer 1 (Master runtime orchestrator)
     this.classroomRuntime = new ClassroomRuntimeKernel();
@@ -113,6 +125,10 @@ export class Kernel {
     this.serviceRegistry.register(ISemesterGradeServiceToken, new SemesterGradeService(this.db as any));
     this.serviceRegistry.register(ILessonEngineServiceToken, { getRuntime: async () => this.lessonRuntime } as any);
     this.serviceRegistry.register(IClassroomRuntimeServiceToken, { getRuntimeKernel: async () => this.classroomRuntime } as any);
+    this.serviceRegistry.register(IPresenceEngineServiceToken, { getPresenceEngine: async () => this.presenceEngine } as any);
+    this.serviceRegistry.register(ITeachingCollaborationServiceToken, { getCollaborationEngine: async () => this.collaborationEngine } as any);
+
+
 
 
 

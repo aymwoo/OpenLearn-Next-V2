@@ -307,5 +307,9 @@ declare const IPluginHostToken: Token<unknown>;
 declare const ISemesterGradeServiceToken: Token<unknown>;
 declare const ILessonEngineServiceToken: Token<unknown>;
 declare const IClassroomRuntimeServiceToken: Token<unknown>;
+declare const IPresenceEngineServiceToken: Token<unknown>;
+declare const ITeachingCollaborationServiceToken: Token<unknown>;
+
+
 
 

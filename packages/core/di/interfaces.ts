@@ -385,6 +385,38 @@ export const IClassroomRuntimeServiceToken = new Token<IClassroomRuntimeService>
   '@openlearn/core:IClassroomRuntimeService'
 );
 
+/**
+ * Interface for PresenceEngineService.
+ */
+export interface IPresenceEngineService {
+  getPresenceEngine(): Promise<unknown>;
+}
+
+/**
+ * Token for IPresenceEngineService.
+ * Identifier: @openlearn/core:IPresenceEngineService
+ */
+export const IPresenceEngineServiceToken = new Token<IPresenceEngineService>(
+  '@openlearn/core:IPresenceEngineService'
+);
+
+/**
+ * Interface for TeachingCollaborationService.
+ */
+export interface ITeachingCollaborationService {
+  getCollaborationEngine(): Promise<unknown>;
+}
+
+/**
+ * Token for ITeachingCollaborationService.
+ * Identifier: @openlearn/core:ITeachingCollaborationService
+ */
+export const ITeachingCollaborationServiceToken = new Token<ITeachingCollaborationService>(
+  '@openlearn/core:ITeachingCollaborationService'
+);
+
+
+
 
 
 

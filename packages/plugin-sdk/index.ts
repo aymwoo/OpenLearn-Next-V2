@@ -61,6 +61,8 @@ export type {
   IAIService,
   ILessonEngineService,
   IClassroomRuntimeService,
+  IPresenceEngineService,
+  ITeachingCollaborationService,
   CommandHandler,
   CommandMetadata,
   EventSubscriber,
@@ -79,9 +81,56 @@ export {
   ISemesterGradeServiceToken,
   ILessonEngineServiceToken,
   IClassroomRuntimeServiceToken,
+  IPresenceEngineServiceToken,
+  ITeachingCollaborationServiceToken,
 } from '../core/di/interfaces.js';
 
+// ── Teaching Collaboration Engine ───────────────────────────────────────
+
+export type {
+  Participant,
+  ParticipantRole,
+  CollaborationPermission,
+  CollaborationMode,
+  GroupData,
+  GroupWorkspaceData,
+  SharedObjectData,
+  ObjectLock,
+  SyncType,
+  SyncMessage,
+  CollaborationAnalyticsData,
+  CollaborationEventType,
+  CollaborationEventMap,
+} from '../core/collaboration-engine/index.js';
+
+// ── Presence Engine ─────────────────────────────────────────────────────
+
+
+export type {
+  PresenceEntity,
+  EntityType,
+  EntityRole,
+  FocusState,
+  ConnectionState,
+  InteractionSignal,
+  TeacherStatus,
+  StudentStatus,
+  AIStatus,
+  PluginStatus,
+  WhiteboardStatus,
+  StageStatus,
+  GroupStatus,
+  GroupPresenceData,
+  PresenceDashboardMetrics,
+  PresencePrivacyConfig,
+  PresenceDiff,
+  PresenceEventType,
+  PresenceEventMap,
+  CustomPresenceDefinition,
+} from '../core/presence-engine/index.js';
+
 // ── Classroom Runtime ───────────────────────────────────────────────────
+
 
 export type {
   RuntimeLifecycleState,
