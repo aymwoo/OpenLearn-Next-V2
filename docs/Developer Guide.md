@@ -119,3 +119,82 @@ bus.subscribe('Test', (ctx) => {
 Dispatch guarantees: priority + ordered execution, per-handler error isolation,
 cancellation, and timeout. A handler failure never terminates the platform —
 failures are reported in `EventResult.results`.
+
+## PI-011 Addendum — Using the Platform Configuration System
+
+The Platform Configuration System is the unified, platform-only configuration
+abstraction. Construct it once during bootstrap, register providers, then
+`load()`.
+
+```typescript
+import { PlatformConfiguration } from './packages/core/configuration/index.js';
+
+const config = new PlatformConfiguration({
+  logger,
+  serviceRegistry,   // optional seam
+  container,         // optional seam
+  eventBus,          // optional seam
+  builder,           // optional seam
+});
+
+// Register providers (priority = higher wins)
+config.registerMemory({ appName: 'OpenLearn', nested: { max: 5 } }, { id: 'base' });
+config.registerEnvironment({ id: 'env', prefix: 'APP_', env: process.env });
+config.registerJsonFile('./config/platform.json', { id: 'file', priority: 50 });
+
+// Optionally with validation descriptors
+config.registerMemory({ port: 7000 }, {
+  id: 'overrides',
+  scope: 'Infrastructure',
+  priority: 100,
+  descriptors: [
+    { path: 'port', type: 'number', required: true, min: 1, max: 65535 },
+    { path: 'mode', type: 'string', enum: ['dev', 'prod'], default: 'dev' },
+  ],
+});
+
+await config.load();
+
+// Read
+const port = config.get<number>('port');          // throws if absent
+const name = config.tryGet<string>('appName', 'fallback');
+const has = config.exists('nested.max');
+
+// Immutability
+const snap = config.snapshot();
+const frozen = snap.get('port');                   // never mutates the platform
+```
+
+### Priority & merge rules
+
+- Providers are merged **ascending by priority** — lower-priority first, so
+  higher-priority values override.
+- Nested objects deep-merge; scalars and arrays replace.
+- Descriptor `default` values fill missing keys **before** validation.
+
+### Validation
+
+`config.getValidationReport()` returns `{ isValid, errors[], warnings[] }`.
+Each error carries a `code` (`REQUIRED`, `TYPE`, `RANGE_MIN`, `RANGE_MAX`,
+`ENUM`).
+
+### Scopes
+
+`get(path, scope)` returns `undefined` (does **not** throw) when the matching
+descriptor belongs to a different scope. Only a truly absent path throws
+`ConfigurationError` (`NOT_FOUND`).
+
+### Integration seams
+
+After `load()`, the system registers itself as the `kernel.configuration`
+service/instance, publishes `ConfigurationLoaded` on the EventBus, and invokes
+`builder.onConfigurationLoaded`. All of these are pass-in/attach seams — no
+business module is modified.
+
+### Reserved (NOT implemented in PI-011)
+
+- Live **hot reload** of configuration is a reserved seam. The `reload()` method
+  re-runs the full load with the current providers, but no file-watch or
+  push-based hot-reload mechanism is wired in this increment.
+- `Application` scope is reserved for application bootstrap and is not populated
+  by the platform kernel.
