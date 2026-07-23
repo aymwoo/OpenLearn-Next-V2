@@ -1,8 +1,8 @@
 /**
- * OpenLearn Platform Kernel - Bootstrap Types & Platform Contracts (EU-01)
+ * OpenLearn Platform Kernel - Bootstrap Types & Platform Contracts (EU-01 & EU-02 / PI-002)
  *
  * Establishes the foundational common language, lifecycle stages, error hierarchy,
- * platform constants, and abstract interfaces used across the Platform Kernel.
+ * platform constants, abstract interfaces, and bootstrap context contracts.
  */
 
 // ── ⑦ Common Platform Types ──────────────────────────────────────────────
@@ -194,7 +194,62 @@ export interface IPlatformLifecycle extends IPlatformStartup, IPlatformShutdown,
 }
 
 
-// ── ④ BootstrapContext Interface ──────────────────────────────────────────
+// ── PI-002: Bootstrap Context Contracts ─────────────────────────────────
+
+/** System runtime metadata contract describing operating environment & process details. */
+export interface IRuntimeMetadata {
+  readonly os: string;
+  readonly nodeVersion: string;
+  readonly arch: string;
+  readonly processId: number;
+  readonly memoryUsage: { readonly heapUsed: number; readonly heapTotal: number; readonly rss: number };
+  readonly buildVersion: Version;
+}
+
+/** Deployment environment context contract. */
+export interface IEnvironmentContext {
+  readonly type: EnvironmentType;
+  readonly isDevelopment: boolean;
+  readonly isProduction: boolean;
+  readonly isTest: boolean;
+  readonly isPluginSandbox: boolean;
+}
+
+/** Feature flags contract for querying runtime feature toggles. */
+export interface IFeatureFlags {
+  isEnabled(flagName: string): boolean;
+  getFlag<T = unknown>(flagName: string, defaultValue?: T): T;
+  getAllFlags(): Readonly<Record<string, unknown>>;
+}
+
+/** Platform diagnostics contract for system metrics and status checks. */
+export interface IPlatformDiagnostics {
+  getMetrics(): Readonly<Record<string, number>>;
+  getSystemStatus(): { readonly isHealthy: boolean; readonly activeServicesCount: number; readonly uptimeSeconds: number };
+}
+
+/** Service Locator interface contract. */
+export interface IServiceLocator {
+  hasService(serviceId: ServiceId): boolean;
+  getService<T>(serviceId: ServiceId): T;
+}
+
+/** Capability Catalog interface contract. */
+export interface ICapabilityCatalog {
+  hasCapability(capabilityId: CapabilityId): boolean;
+  getCapability<T = unknown>(capabilityId: CapabilityId): T;
+}
+
+/** Extension Catalog interface contract. */
+export interface IExtensionCatalog {
+  hasExtension(extensionId: ExtensionId): boolean;
+  getExtension<T = unknown>(extensionId: ExtensionId): T;
+}
+
+/** Event Dispatcher interface contract. */
+export interface IEventDispatcher {
+  dispatch(eventType: string, payload: unknown): Promise<unknown>;
+}
 
 /** Options supplied during platform startup. */
 export interface PlatformStartupOptions {
@@ -217,34 +272,54 @@ export interface IPlatformLogger {
   debug(message: string, ...args: unknown[]): void;
 }
 
-/** Interface reference for Service Registry. */
-export interface IServiceRegistryReference {
-  hasService(serviceId: ServiceId): boolean;
-  getService<T>(serviceId: ServiceId): T;
+/**
+ * PlatformContext Interface
+ * Central context interface describing platform identity, versioning, mode,
+ * configuration, feature flags, runtime metadata, diagnostics, locators, and tokens.
+ */
+export interface IPlatformContext {
+  readonly platformId: PlatformId;
+  readonly version: Version;
+  readonly namespace: Namespace;
+  readonly mode: PlatformMode;
+  readonly environment: IEnvironmentContext;
+  readonly config: PlatformBootstrapConfig;
+  readonly featureFlags: IFeatureFlags;
+  readonly runtimeMetadata: IRuntimeMetadata;
+  readonly bootstrapState: BootstrapState;
+  readonly logger: IPlatformLogger;
+  readonly diagnostics: IPlatformDiagnostics;
+  readonly serviceLocator: IServiceLocator;
+  readonly capabilityCatalog: ICapabilityCatalog;
+  readonly extensionCatalog: IExtensionCatalog;
+  readonly eventDispatcher: IEventDispatcher;
+  readonly shutdownToken: IShutdownToken;
 }
 
-/** Interface reference for Event Bus. */
-export interface IEventBusReference {
-  publish(eventType: string, payload: unknown): Promise<unknown>;
+/** Startup Cancellation Token contract. */
+export interface IStartupToken {
+  readonly token: string;
+  readonly isCancelled: boolean;
+  cancel(reason?: string): void;
 }
 
 /**
- * Immutable bootstrap context interface supplying configuration, logger,
- * service/event-bus references, environment, metadata, and shutdown token.
+ * BootstrapContext Interface
+ * Extended context interface specific to the platform startup execution pipeline.
  */
 export interface IBootstrapContext {
-  readonly platformId: PlatformId;
+  readonly startupTimestamp: number;
+  readonly startupOptions: PlatformStartupOptions;
+  readonly startupStage: PlatformStage;
+  readonly startupToken: IStartupToken;
+  readonly isCancelled: boolean;
+  readonly platformContext: IPlatformContext;
+
+  // Legacy helper methods preserved for backward compatibility
   readonly config: PlatformBootstrapConfig;
-  readonly logger: IPlatformLogger;
-  readonly serviceRegistryRef: IServiceRegistryReference;
-  readonly eventBusRef: IEventBusReference;
-  readonly environment: EnvironmentType;
   readonly state: BootstrapState;
   readonly currentStage: PlatformStage;
   readonly startTime: number;
-  readonly startupOptions: PlatformStartupOptions;
-  readonly shutdownToken: IShutdownToken;
-
   getMetadata(key: string): unknown;
   setStage(stage: PlatformStage): void;
 }
