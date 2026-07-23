@@ -11,6 +11,8 @@ export * from './integration/index.js';
 export * from './module-registry/index.js';
 export * from './domain-registry/index.js';
 export * from './lesson-session/index.js';
+export * from './permission/index.js';
+
 
 
 
