@@ -30,4 +30,36 @@ export interface GovernanceSpecification {
   readonly approvalTier: ApprovalTier;       // Official | Community | Experimental | Internal
   readonly status: CapabilityLifecycleStatus; // Draft | Experimental | Preview | Stable | Deprecated | Archived
 }
+
+---
+
+## PI-009 Addendum — Capability Runtime Metadata (Registry-side)
+
+**PI-009** complements this governance specification with a lightweight, runtime-side
+capability model (`packages/core/capability-runtime/`) used by the kernel for registration,
+resolution, and lifecycle control. Its `CapabilityDescriptor` carries the *operational*
+metadata the runtime needs (distinct from the governance `GovernanceSpecification` above):
+
+```typescript
+export interface CapabilityDescriptorInit {
+  readonly id: string;            // global unique capability id
+  readonly name?: string;         // human-readable name
+  readonly displayName?: string;
+  readonly version?: string;      // SemVer
+  readonly description?: string;
+  readonly category?: string;     // free-form grouping
+  readonly provider?: string;     // owning provider id
+  readonly dependencies?: ReadonlyArray<string>; // other capability ids
+  readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly priority?: number;     // selection priority within a contract
+  readonly contract?: string;     // groups capabilities for Multiple/Priority resolution
+  readonly optional?: boolean;    // missing => resolve to undefined
+  readonly isDefault?: boolean;   // fallback provider for its contract
+  readonly activator?: (ctx: CapabilityContext) => unknown; // builds the instance
+}
+```
+
+The runtime lifecycle (`CapabilityStatus`) is intentionally separate from the governance
+`CapabilityLifecycleStatus` (Draft/Experimental/.../Archived) above: one tracks *operational*
+state (Registered→Active), the other tracks *publication* state.
 ```

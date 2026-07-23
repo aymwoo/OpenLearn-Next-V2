@@ -62,4 +62,37 @@ export interface CapabilityDescriptor {
   readonly tags: ReadonlyArray<string>;
   readonly version: string;
 }
+
+---
+
+## PI-009 Addendum — Capability Runtime Module (`packages/core/capability-runtime/`)
+
+> **Distinction:** The runtime documented above (under `packages/core/capability/`) is the
+> platform **capability invocation framework** (descriptor, 7-step pipeline, role/permission
+> governance, events). **PI-009** introduces a separate, self-contained **Capability Runtime**
+> module at `packages/core/capability-runtime/` that owns capability *registration, resolution,
+> and lifecycle* as a first-class kernel subsystem. The two coexist; the PI-009 module does
+> **not** duplicate or replace the invocation framework.
+
+### PI-009 Public Surface
+
+| Class | Responsibility |
+|---|---|
+| `CapabilityStatus` | Lifecycle state machine: `Registered → Resolved → Active ⇄ Inactive`, plus `Disabled` / `Disposed`. |
+| `CapabilityDescriptor` | Immutable metadata (id, name, version, category, provider, contract, priority, dependencies, metadata) + `activator`. |
+| `CapabilityProvider` | Activation abstraction (`Single`/`Multiple`/`Priority`/`Default`); owns the `activator`. |
+| `CapabilityContext` | Passed to an `activator`; resolves sibling capabilities/services, records diagnostics, detects cycles. |
+| `CapabilityResolver` | Resolves `Single`/`Optional`/`Validation` (by id) and `Multiple`/`Priority`/`Default` (by contract). |
+| `CapabilityRegistry` | Source of truth: `register`/`unregister`/`replace`/`exists`/`find`/`list`, duplicate detection. |
+| `PlatformCapability` | Runtime wrapper binding descriptor + provider, caching the activated instance & status. |
+| `CapabilityRuntime` | Top-level orchestrator integrating `PlatformServiceRegistry`, `PlatformContainer`, and `PlatformBuilder`. |
+
+### Integration Points (PI-009)
+
+- **`PlatformServiceRegistry`** — every activator-backed capability is also registered as a
+  platform service (lazy factory), so the registry remains the single source of truth.
+- **`PlatformContainer` (PI-008)** — when supplied, capabilities are mirrored as DI services,
+  letting capabilities participate in the dependency-injection graph.
+- **`PlatformBuilder`** — `CapabilityRuntime.attachBuilder(source)` accepts a builder's
+  `capabilityCatalog` for cross-referencing (`isBuilderAware(id)`).
 ```
