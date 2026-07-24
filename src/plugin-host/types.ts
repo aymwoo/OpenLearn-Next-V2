@@ -64,9 +64,6 @@ export interface FrontendPluginInfo {
 // ── Extension Points ─────────────────────────────────────────────────────
 
 export type ExtensionSlot =
-  | 'teacher.panel'         // v5.1: 教师独立全宽管理面板
-  | 'student.fullscreen'    // v5.1: 学生全屏视图（考试模式）
-  | 'global.setting'       // v5.1: 全局设置页扩展
   | 'teacher.tab'
   | 'student.view'
   | 'classroom.tool'
@@ -74,7 +71,8 @@ export type ExtensionSlot =
   | 'student.lesson.tool'
   | 'teacher.panel'         // v5.1: 教师独立全宽管理面板
   | 'student.fullscreen'    // v5.1: 学生全屏视图（考试模式）
-  | 'global.setting';       // v5.1: 全局设置页扩展
+  | 'global.setting'        // v5.1: 全局设置页扩展
+  | 'nav.user_menu';        // v5.2: 顶部 Header 用户菜单扩展
 
 export interface ExtensionPointConfig {
   id: string;
@@ -83,6 +81,12 @@ export interface ExtensionPointConfig {
   component: () => Promise<{ default: React.ComponentType<any> }>;
   position?: number;
   pluginId: string;
+  /** v5.2: 导航分组 (teaching | management | analytics | extension) */
+  group?: 'teaching' | 'management' | 'analytics' | 'extension' | string;
+  /** v5.2: 动态徽标 (数字或小文本) */
+  badge?: number | string;
+  /** v5.2: 显隐角色防护 */
+  rolesAllowed?: ('admin' | 'teacher' | 'student')[];
   /** v5.1: 可选子路由 */
   route?: string;
   /** v5.1: 额外 props */

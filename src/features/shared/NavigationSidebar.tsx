@@ -1,6 +1,7 @@
 import React from 'react';
 import { Home, BookOpen, Presentation, Users, Calendar as CalendarIcon, LayoutTemplate, Puzzle, Shield, HelpCircle, Menu, ChevronLeft, Clock } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import type { SessionType, ScheduleType } from '../../store/appStore';
 
 interface NavigationSidebarProps {
@@ -37,6 +38,9 @@ export function NavigationSidebar({
   teacherTab, setTeacherTab,
   lang, session, todaySchedules,
 }: NavigationSidebarProps) {
+  const extensionPoints = usePluginHostStore((s) => s.extensionPoints);
+  const pluginTabs = extensionPoints.get('teacher.tab' as any) || [];
+
   return (
     <div id="navigation_sidebar" className={`${mainNavCollapsed ? 'w-16' : 'w-16 md:w-64'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300`}>
       {/* Collapse/Expand Toggle */}
@@ -55,24 +59,36 @@ export function NavigationSidebar({
         </button>
       </div>
 
-      <div className={`p-2 ${mainNavCollapsed ? 'md:p-2' : 'md:p-4'} flex flex-col gap-2 mt-2`}>
+      <div className={`p-2 ${mainNavCollapsed ? 'md:p-2' : 'md:p-4'} flex flex-col gap-3 mt-2 overflow-y-auto flex-1`}>
+        {/* Group 1: 教学工具 */}
+        <NavGroupHeader label={lang === 'zh' ? '教学工具' : 'TEACHING'} mainNavCollapsed={mainNavCollapsed} />
         <NavButton icon={Home} label={lang === 'zh' ? '系统总览' : 'Dashboard'} tab="dashboard" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
         <NavButton icon={BookOpen} label={lang === 'zh' ? '课程管理' : 'Courses'} tab="courses" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
         <NavButton icon={Presentation} label={lang === 'zh' ? '互动课堂' : 'Live Class'} tab="live_class" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} highlight />
         <NavButton icon={Users} label={lang === 'zh' ? '班级管理' : 'Classes & Students'} tab="classes" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
+
+        {/* Group 2: 系统管理 */}
+        <NavGroupHeader label={lang === 'zh' ? '系统管理' : 'SYSTEM MANAGEMENT'} mainNavCollapsed={mainNavCollapsed} />
         <NavButton icon={CalendarIcon} label={lang === 'zh' ? '课表管理' : 'Timetable Routine'} tab="timetable" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
         <NavButton icon={LayoutTemplate} label={lang === 'zh' ? '机房管理' : 'Computer Lab Seating'} tab="computer_labs" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
         <NavButton icon={Puzzle} label={lang === 'zh' ? '插件中心' : 'App Store / Plugins'} tab="plugins" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
 
         {session?.subRole === 'administrator' && (
-      <button onClick={() => setTeacherTab('admin_directory')} id="nav_btn_admin_directory" className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium text-indigo-700 hover:bg-indigo-50 border border-slate-200/50 rounded-xl ${teacherTab === 'admin_directory' ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50/50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '管理后台' : '⭐ Admin Center'}>
+          <button onClick={() => setTeacherTab('admin_directory')} id="nav_btn_admin_directory" className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium text-indigo-700 hover:bg-indigo-50 border border-slate-200/50 rounded-xl ${teacherTab === 'admin_directory' ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50/50'} ${mainNavCollapsed ? 'justify-center px-2' : ''}`} title={lang === 'zh' ? '管理后台' : '⭐ Admin Center'}>
             <Shield size={20} className="shrink-0 text-indigo-600 animate-pulse" />
             <span className={mainNavCollapsed ? 'hidden' : 'hidden md:block font-bold text-indigo-850'}>{lang === 'zh' ? '管理后台' : '⭐ Admin Center'}</span>
           </button>
         )}
 
-      {/* Dynamic plugin-registered tab buttons */}
-      <ExtensionPointRenderer slot="teacher.tab" slotProps={{ renderType: "button", mainNavCollapsed, teacherTab, setTeacherTab }} />
+        {/* Group 3: 扩展应用 (Dynamic plugin-registered tab buttons) */}
+        {pluginTabs.length > 0 && (
+          <>
+            <NavGroupHeader label={lang === 'zh' ? '扩展应用' : 'EXTENSIONS'} mainNavCollapsed={mainNavCollapsed} />
+            <ExtensionPointRenderer slot="teacher.tab" slotProps={{ renderType: "button", mainNavCollapsed, teacherTab, setTeacherTab }} />
+          </>
+        )}
+
+        <NavGroupHeader label={lang === 'zh' ? '帮助与支持' : 'HELP & SUPPORT'} mainNavCollapsed={mainNavCollapsed} />
         <NavButton icon={HelpCircle} label={lang === 'zh' ? '帮助文档' : 'System Commands / Help'} tab="help" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
       </div>
 
@@ -106,6 +122,17 @@ export function NavigationSidebar({
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+// ── Helper: Group Header Label ───────────────────────────────────────────
+
+function NavGroupHeader({ label, mainNavCollapsed }: { label: string; mainNavCollapsed: boolean }) {
+  if (mainNavCollapsed) return <div className="h-px bg-gray-200 my-1 w-full" />;
+  return (
+    <div className="px-3 pt-2 text-[10px] font-bold text-slate-400 tracking-wider uppercase hidden md:block select-none">
+      {label}
     </div>
   );
 }
