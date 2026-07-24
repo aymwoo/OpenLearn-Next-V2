@@ -15,11 +15,6 @@ if (!fs.existsSync(sdkDist)) {
 
 const plugins = [
   {
-    entry: 'packages/plugins/quiz-pro/index.ts',
-    manifest: 'packages/plugins/quiz-pro/manifest.json',
-    zipName: 'ext-ai-quiz-pro.zip'
-  },
-  {
     entry: 'packages/plugins/rollcall/index.ts',
     manifest: 'packages/plugins/rollcall/manifest.json',
     zipName: 'ext-roll-call.zip'
