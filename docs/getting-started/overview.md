@@ -14,10 +14,14 @@ OpenLearn V2 采用分层解耦的模块化设计，平台内核（Kernel）清�
 - **Layer 2（领域引擎与运行时）**: 引入 CommandBus 指令总线、ActionRegistry 动作注册表、ProcessManager 进程管理器、LessonRuntime（课程引擎）、ClassroomRuntimeKernel（课堂运行时）、PresenceEngineKernel（在线感知引擎）、CollaborationEngineKernel（协同引擎）与 AnalyticsEngineKernel（学习分析引擎）。
 - **Layer 3（宿主与协同）**: 包含 PluginHost（Worker Thread 隔离宿主）、WorkerManager（线程池管理器）与 HotReloadController（热重载控制器）。
 
+> 详细内核分层规范请参阅权威页面：[Platform Kernel 内核规范](../core/platform-kernel)
+
 ### 2. 组合根与依赖注入 (Composition Root & Dependency Injection)
 平台通过统一的 DI Container (`ServiceRegistry`) 和类型安全的 `Token<T>` 实现零硬编码耦合：
 - 所有底层服务和高层引擎均显式注册至 DI 容器。
 - 宿主与插件之间通过类型安全的 Token 进行依赖解算（Dependency Resolution）与服务共享。
+
+> 详细依赖注入机制请参阅权威页面：[Dependency Injection 依赖注入](../core/dependency-injection) 与 [Composition Root 服务组装](../architecture/composition-root)
 
 ### 3. 引导流水线 (Bootstrap Pipeline)
 系统启动遵循严格的 5 阶段引导流水线：
@@ -27,9 +31,13 @@ OpenLearn V2 采用分层解耦的模块化设计，平台内核（Kernel）清�
 4. **Activation**: 激活插件宿主与内置插件（Builtin, VFS, Process, Management, AI-Planner 等）。
 5. **Ready**: 完成健康检查并开启 Socket.IO / Express HTTP 服务。
 
+> 详细启动流程请参阅权威页面：[Bootstrap Pipeline 引导流水线](../core/bootstrap-pipeline)
+
 ### 4. 沙箱隔离的插件生态 (Plugin Ecosystem)
-- 插件以 Web Worker / Worker Thread 沙箱模式独立运行，主线程与插件进程安全隔离。
-- 插件通过 `@openlearn/plugin-sdk` 提供的 `PluginContext` 交互，无法直接触碰全局 DOM 或私有 Core API。
+- 插件以 Worker Thread 沙箱隔离模式运行，主进程与插件线程安全隔离。
+- 插件通过 `@openlearn/plugin-sdk@3.3.1` 提供的 `PluginContext` 交互，无法直接触碰全局 DOM 或私有 Core API。
+
+> 详细插件沙箱机制请参阅权威页面：[插件宿主架构与 Worker 沙箱](../plugin/plugin-architecture)
 
 ---
 

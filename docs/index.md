@@ -211,6 +211,7 @@ migration/version-migration
 
 reference/documentation-audit-report
 reference/missing-documentation-report
+reference/openlearn-documentation-quality-report
 ```
 
 ```{toctree}
