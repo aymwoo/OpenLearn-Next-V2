@@ -15,7 +15,7 @@ extensions = [
 ]
 
 templates_path = ['_templates']
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'requirements.txt', '.venv']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'requirements.txt', '.venv', 'archive', 'archive/*']
 
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
@@ -24,8 +24,10 @@ html_static_path = ['_static']
 myst_enable_extensions = [
     'colon_fence',
     'deflist',
+    'fieldlist',
 ]
-myst_heading_anchors = 3
+myst_heading_anchors = 4
+myst_fence_as_directive = ["mermaid"]
 
 # Source suffix
 source_suffix = {
