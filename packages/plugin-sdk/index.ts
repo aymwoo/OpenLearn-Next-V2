@@ -7,6 +7,13 @@
  * 用法：
  *   import type { PluginContext, Manifest } from '@openlearn/plugin-sdk';
  *   import { ICommandBusServiceToken } from '@openlearn/plugin-sdk';
+ *
+ * P7-A2 统一插件服务（已接入内核，插件可经 ctx.resolve 消费）：
+ *   import { IPluginLifecycleManagerToken, IPluginCapabilityGatewayToken } from '@openlearn/plugin-sdk';
+ *   const lifecycle = await ctx.resolve(IPluginLifecycleManagerToken); // 类型: PluginLifecycleManager
+ *   const gateway = await ctx.resolve(IPluginCapabilityGatewayToken);   // 类型: PluginCapabilityGateway
+ *   await lifecycle.uninstallPlugin(pluginId);
+ *   gateway.listCapabilities().forEach((c) => console.log(c.id));
  */
 
 // ── Plugin Context & Lifecycle ──────────────────────────────────────────
@@ -29,6 +36,7 @@ export type {
   IPluginLifecycleManager,
   IPluginCapabilityGateway,
   IUnifiedExtensionRegistry,
+  IPluginDistributionManager,
   CapabilityMetadata,
   ExtensionItemMetadata,
 } from '../core/plugin-host/index.js';
@@ -40,6 +48,7 @@ export {
   PluginLifecycleManager,
   PluginCapabilityGateway,
   UnifiedExtensionRegistry,
+  PluginDistributionManager,
 } from '../core/plugin-host/index.js';
 
 // ── Configuration Service (V3.2) ────────────────────────────────────────
@@ -129,6 +138,8 @@ export type {
   IAnalyticsCapability,
   IPluginCapability,
 } from '../core/ai-capability/index.js';
+
+export type { CapabilityRegistry } from '../core/ai-capability/registry/capability-registry.js';
 
 export type {
   CapabilityDescriptor,
