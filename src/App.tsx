@@ -3798,6 +3798,10 @@ export default function App() {
           session={session}
           lang={lang}
           onClose={() => setProfileOpen(false)}
+          onSaved={(name) => {
+            if (session) setSession({ ...session, name });
+            setProfileOpen(false);
+          }}
         />
 
         {activeRole === 'student' ? (

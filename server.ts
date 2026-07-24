@@ -2971,6 +2971,46 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
     }
   });
 
+  // P7 Step2: 自服务个人资料更新（仅显示名称 name，限定当前登录用户自身，禁止改角色/密码/账号）
+  app.post('/api/auth/profile', (req, res) => {
+    try {
+      const token = getCookieToken(req);
+      if (!token) return res.status(401).json({ error: 'Not authenticated' });
+      const session = getValidSession(token);
+      if (!session) return res.status(401).json({ error: 'Session expired' });
+
+      const rawName = (req.body && req.body.name) || '';
+      const name = typeof rawName === 'string' ? rawName.trim() : '';
+      if (!name) return res.status(400).json({ error: 'Display name is required' });
+      if (name.length > 50) return res.status(400).json({ error: 'Display name too long (max 50)' });
+
+      if (session.role === 'student') {
+        if (!session.studentId) return res.status(400).json({ error: 'Invalid student session' });
+        kernelContainer.db.prepare('UPDATE students SET name = ? WHERE id = ?').run(name, session.studentId);
+      } else {
+        // teacher 与 administrator(subRole) 均落在 users 表，按 session.userId 更新自身
+        if (!session.userId) return res.status(400).json({ error: 'Invalid user session' });
+        kernelContainer.db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, session.userId);
+      }
+
+      // 同步当前 session_data 的 name，避免同源其他请求读到旧值
+      try {
+        const row = kernelContainer.db.prepare('SELECT session_data FROM client_sessions WHERE id = ?').get(token) as any;
+        if (row && row.session_data) {
+          const data = JSON.parse(row.session_data);
+          data.name = name;
+          kernelContainer.db.prepare('UPDATE client_sessions SET session_data = ? WHERE id = ?').run(JSON.stringify(data), token);
+        }
+      } catch {
+        /* session_data 同步非关键路径 */
+      }
+
+      res.json({ success: true, name });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post('/api/auth/login', loginLimiter, (req, res) => {
     try {
       const { entrance, username, password, studentId } = req.body;
