@@ -287,6 +287,7 @@ export const IActionRegistryServiceToken = new Token<IActionRegistryService>(
 /**
  * Token for ICapabilityService.
  * Identifier: @openlearn/core:ICapabilityService
+ * Capability ID: cap_plugin_management
  */
 export const ICapabilityServiceToken = new Token<ICapabilityService>(
   '@openlearn/core:ICapabilityService',

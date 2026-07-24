@@ -197,6 +197,19 @@ export class ContributionRegistry {
     }));
   }
 
+  /**
+   * Return all raw contribution entries for extension bridge synchronization.
+   */
+  listAll(): Array<{ slot: string; pluginId: string; configs: ContributionConfig[] }> {
+    const result: Array<{ slot: string; pluginId: string; configs: ContributionConfig[] }> = [];
+    for (const [slot, slotMap] of this.contributions) {
+      for (const [pluginId, configs] of slotMap) {
+        result.push({ slot, pluginId, configs });
+      }
+    }
+    return result;
+  }
+
   // ── Lifecycle ─────────────────────────────────────────────────────────
 
   /**

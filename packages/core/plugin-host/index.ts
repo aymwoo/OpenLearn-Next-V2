@@ -2129,3 +2129,23 @@ export class PluginHost {
 // ── Re-exports ───────────────────────────────────────────────────────────────
 
 export { SemverMismatchError } from './errors.js';
+export { PluginRuntimeAdapter, type IPluginRuntime } from './plugin-runtime-adapter.js';
+export { PluginRuntimeComposition } from './plugin-runtime-composition.js';
+export { PluginContextAdapter, type IUnifiedPluginContext } from './plugin-context-adapter.js';
+export { PluginLifecycleManager, type IPluginLifecycleManager } from './plugin-lifecycle-manager.js';
+export { PluginCapabilityGateway, type IPluginCapabilityGateway } from './plugin-capability-gateway.js';
+export { UnifiedExtensionRegistry, type IUnifiedExtensionRegistry } from './unified-extension-registry.js';
+export {
+  PluginDistributionManager,
+  LocalRepositoryAdapter,
+  type IPluginDistributionManager,
+  type IPluginRepositoryAdapter,
+  type PluginPackageMetadata,
+} from './plugin-distribution-manager.js';
+
+
+
+
+
+
+

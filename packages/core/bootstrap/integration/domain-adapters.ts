@@ -9,6 +9,10 @@ export interface IAIRuntimeAdapter extends IIntegrationAdapter {
   generateText(prompt: string, options?: unknown): Promise<string>;
 }
 
+/**
+ * Lightweight domain adapter interface for PluginHost.
+ * Canonically implemented by IPluginRuntime (@openlearn/core/plugin-host).
+ */
 export interface IPluginHostAdapter extends IIntegrationAdapter {
   getActivePlugins(): Promise<ReadonlyArray<Record<string, unknown>>>;
 }
