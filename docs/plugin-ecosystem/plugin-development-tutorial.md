@@ -220,7 +220,7 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 
 > **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^0.1.10"`。安装时 PluginHost 自动检查兼容性。
 
-### 2.4 导航页面 vs. 白板组件 — 如何区分？
+### 2.6 导航页面 vs. 白板组件 — 如何区分？
 
 同一个插件可以注册到不同的 slot，**每个 slot 绑定独立的 React 组件**，无需任何 if-else 分支来区分。
 
@@ -269,52 +269,54 @@ ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
 
 ---
 
-### 2.3 使用 AI Skill 快速开发（推荐）
+### 2.7 使用 AI Skill 快速开发（推荐）
 
-除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是一个运行在 Codex/Claude Code 中的 AI 代理工具，能够自动化插件开发的大部分流程。
+除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（内核 `v0.1.10`、SDK `@openlearn/plugin-sdk@3.3.1` 与测试包 `@openlearn/plugin-test-kit@3.3.1`）的架构规范，能自动化插件开发的大部分流程。
 
-**安装：**
+**安装与配置：**
 
 ```bash
+# 使用 Antigravity CLI 或 npx 快捷添加官方开发 Skill
 npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 ```
 
-安装后，在 Codex 对话中提及开发 OpenLearn 插件相关的话题（如「帮我写一个课堂投票插件」），Skill 就会自动激活。
+安装后，在 Agent 对话中提及 OpenLearn 插件开发相关需求（例如：“*帮我写一个基于 Node 隔离沙箱的课堂互动抽奖插件*”），Skill 将会自动激活。
 
-**Skill 能做什么：**
+**Skill 核心能力（适配 OpenLearn V2 最新架构）：**
 
-| 能力 | 说明 |
-|------|------|
-| 📖 **读取最新文档** | 自动从 https://openlearn-next-v2.readthedocs.io 拉取最新 API 文档，智能缓存减少 token 消耗（月均 ~14K vs 纯在线 ~100K） |
-| 💬 **结构化需求讨论** | 逐一确认插件用途、核心功能、类型（server-only / full-stack / frontend-only）、UI 扩展点、权限、AI 能力、数据库结构 |
-| 🏗️ **模板代码生成** | 根据确认的需求，从三类官方模板中生成完整的 `package.json`、`tsconfig.json`、`src/index.ts`、`src/frontend.tsx` |
-| 🔧 **编码规范保证** | 自动遵循三件套模式（Action → Command → Event）、数据库表命名、JSX 经典模式、避免 Node.js 内置模块等规范 |
-| ✅ **构建与验证** | 给出 `npx @openlearn/plugin-sdk build` 指令和自检清单，确保产物无非法导入、JSX 运行时正确 |
-| 📦 **安装测试指引** | 提醒在管理后台上传 ZIP、激活插件、验证课堂工具栏 |
+| 能力维度 | 最新架构适配说明 |
+|---|---|
+| 📖 **权威文档与 SDK 契约** | 实时对齐 `@openlearn/plugin-sdk@3.3.1` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。 |
+| 💬 **结构化交互设计确认** | 自动引导确认插件模式（`server-only` / `full-stack` / `frontend-only`）、Worker Thread 沙箱权限、UI 扩展槽位（`teacherTab`, `classroomTool` 等）及表结构。 |
+| 🏗️ **标准脚手架与代码生成** | 自动生成包含 `package.json`、`tsconfig.json`、`src/index.ts` (后端 Worker 逻辑) 和 `src/frontend.tsx` (React 19 组件) 的标准项目工程。 |
+| 🛡️ **安全与规范防错** | 自动校验 CQRS 三件套模式（`ActionRegistry` → `CommandBus` → `EventBus`）、CapabilityGuard 权限申报、SQLite 增量迁移脚本与 ESM 沙箱导出规范。 |
+| 🧪 **测试套件集成** | 自动生成基于 `@openlearn/plugin-test-kit@3.3.1` 的 Vitest 单元测试桩（支持 `createMockContext()` 工厂）。 |
+| 📦 **一键打包与发布** | 提供 `npx @openlearn/plugin-sdk build` 命令行指导，生成经过 Manifest Schema 验证的插件 `.zip` 分发包。 |
 
-**工作流程：**
+**AI 辅助开发标准化工作流：**
 
 ```
-用户说「帮我写一个 XX 插件」
-  → Skill 探活在线文档（~200 token）
-  → 需求讨论：逐项确认用途、功能、类型、UI 扩展点、权限
-  → 选择模板（server-only / full-stack / frontend-only）
-  → 替换占位符，生成源码
-  → 输出构建命令 + 检查清单
-  → 提醒上传安装方式
+用户提出需求：「帮我开发一个随堂互动小测验插件」
+  → Skill 自动载入 @openlearn/plugin-sdk@3.3.1 规格与核心 Token
+  → 交互式确认：用途、沙箱权限 (vfs/lesson/db)、扩展槽位 (teacherTab/classroomTool)
+  → 选择插件模板 (full-stack / server-only / frontend-only)
+  → 生成项目结构与代码 (Action/Command/Event + React 19 UI)
+  → 自动生成 @openlearn/plugin-test-kit 单元测试
+  → 执行 npx @openlearn/plugin-sdk build 编译生成 ZIP 扩展包
+  → 提示在 OpenLearn V2 后台管理中上传激活并测试
 ```
 
-**支持的三种插件模板：**
+**支持的标准插件模板：**
 
-| 模板 | 适用场景 | 生成文件 |
-|------|---------|---------|
-| `server-only` | 纯后端（AI 工具 + 命令 + 事件，无 UI） | `package.json`, `tsconfig.json`, `src/index.ts` |
-| `full-stack` | 全栈（后端逻辑 + React 前端） | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
-| `frontend-only` | 纯前端（仅 UI 面板或课堂工具） | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
+| 模板类型 | 运行环境 | 生成的核心文件 |
+|---|---|---|
+| `server-only` | Node.js Worker Thread | `package.json`, `tsconfig.json`, `src/index.ts` |
+| `full-stack` | Worker Thread + 前端微前端 | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
+| `frontend-only` | 前端 React 19 渲染层 | `package.json`, `tsconfig.json`, `src/index.ts`, `src/frontend.tsx` |
 
-**Skill 仓库地址**：[github.com/aymwoo/openlearn-skills](https://github.com/aymwoo/openlearn-skills)
+**官方 Skill 资源与存储库**：[github.com/aymwoo/openlearn-skills](https://github.com/aymwoo/openlearn-skills)
 
-> **提示**：如果手动开发遇到困难，安装 Skill 后直接用自然语言描述需求即可。Skill 内置了本指南的所有 API 知识，能比逐页查阅文档快 5-10 倍地完成插件开发。
+> 💡 **提示**：在开发复杂插件时，直接使用 AI Skill 生成的基础代码天然遵循平台的 5 阶段启动流水线、DI Token 依赖注入与沙箱隔离规范，可提升 5~10 倍的开发效率。
 
 ## 3. 插件结构详解
 
