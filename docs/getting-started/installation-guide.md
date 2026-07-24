@@ -268,7 +268,7 @@ ALLOWED_ORIGINS=http://localhost:5173
 
 ### 开发自己的插件
 
-参见 [插件开发完全指南](../plugin-ecosystem/plugin-development-tutorial) 和 [插件脚手架开发指南](../plugin-ecosystem/scaffold-cli)。
+参见 [插件开发完全指南](../tutorials/plugin-development-tutorial) 和 [插件脚手架开发指南](../sdk/scaffold-cli)。
 
 ---
 
@@ -429,5 +429,5 @@ npm run dev
 
 ---
 
-> **相关文档**：[插件开发完全指南](../plugin-ecosystem/plugin-development-tutorial) · [核心架构与设计](../architecture/platform-kernel) · [插件脚手架开发指南](../plugin-ecosystem/scaffold-cli)
+> **相关文档**：[插件开发完全指南](../tutorials/plugin-development-tutorial) · [核心架构与设计](../architecture/platform-kernel) · [插件脚手架开发指南](../sdk/scaffold-cli)
 > 最后更新：2026-07-15
