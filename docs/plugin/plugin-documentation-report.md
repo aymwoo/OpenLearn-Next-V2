@@ -8,7 +8,7 @@
 
 ## 插件体系规范总结
 
-1. **SDK**: `@openlearn/plugin-sdk@3.3.1`
+1. **SDK**: `@openlearn/plugin-sdk@3.4.0`
 2. **沙箱**: Worker Thread 多进程安全隔离。
 3. **UI 槽位**: `teacherTab`, `classroomTool`, `studentLessonTool`, `dashboardWidget`, `helpDoc`。
 4. **服务共享**: `ctx.provide()` / `ctx.resolve()` 强类型 DI 映射。
