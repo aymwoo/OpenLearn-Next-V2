@@ -10,12 +10,32 @@ import { PluginCapability } from '../../ai-capability/capabilities/plugin-capabi
 import { PermissionManager } from '../permission/index.js';
 import { EventBus } from '../../event-bus/index.js';
 
+/**
+ * P7-A2 Stage 2: 共享的 PlatformServiceRegistry 单例。
+ * 原实现在 compose() 内 `new PlatformServiceRegistry()`，导致注册的真实实例在
+ * compose 结束后被丢弃、无任何消费者可见。改为模块级共享单例后，compose 后
+ * 可通过 getPlatformServiceRegistry().get(id) 查询到真实插件服务实例。
+ */
+let _sharedPlatformRegistry: PlatformServiceRegistry | undefined;
+
+export function getPlatformServiceRegistry(): PlatformServiceRegistry {
+  if (!_sharedPlatformRegistry) {
+    _sharedPlatformRegistry = new PlatformServiceRegistry();
+  }
+  return _sharedPlatformRegistry;
+}
+
+/** 测试用：清空共享注册表，避免多次 compose 触发重复注册冲突。 */
+export function resetPlatformServiceRegistry(): void {
+  _sharedPlatformRegistry = undefined;
+}
+
 export class PluginCompositionModule implements CompositionModule {
   public readonly id = 'mod_plugin_composition';
   public readonly name = 'PluginCompositionModule';
 
   public compose(options: CompositionContextOptions): void {
-    const serviceRegistry = new PlatformServiceRegistry();
+    const serviceRegistry = getPlatformServiceRegistry();
     const capabilityRegistry = new CapabilityRegistry();
     const permissionManager = new PermissionManager();
     const eventBus = new EventBus();

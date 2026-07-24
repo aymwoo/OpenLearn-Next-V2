@@ -192,6 +192,13 @@ export class PluginHost {
     this._socketIO = io;
   }
 
+  /**
+   * P7-A2 Stage 2: 暴露声明式 UI 贡献点存储，供插件组合层接入。
+   */
+  public getContributionRegistry(): ContributionRegistry {
+    return this.contributionRegistry;
+  }
+
   private emitProgress(manifestId: string, step: string, detail?: string) {
     if (this._socketIO) {
       this._socketIO.emit('plugin:install:progress', {
