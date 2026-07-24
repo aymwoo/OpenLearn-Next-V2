@@ -9,14 +9,40 @@
  *
  * It reads the SAME registry the host and plugins share (no duplicated list),
  * and starts activities through the existing classroom command/event pipeline.
+ *
+ * Two render modes (selected by the `mode` prop):
+ *   - 'launcher' (default, used by the student workspace): the catalogue of
+ *     activities the actor can start / join. Kept on the dark surface.
+ *   - 'status'   (used by the teacher dashboard "Activity Center"): a LIGHT,
+ *     dashboard-aligned monitor of activities currently in progress. It polls
+ *     the server and hides itself entirely when nothing is running. Clicking a
+ *     running activity opens a management popover (e.g. to end it).
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  HelpCircle,
+  Vote,
+  BarChart3,
+  MessagesSquare,
+  Users,
+  FileText,
+  Trophy,
+  CheckCircle2,
+  BookOpen,
+  Puzzle,
+  X,
+  Clock,
+  Loader2,
+} from 'lucide-react';
+import {
   fetchActivities,
   startActivity,
+  fetchRunningActivities,
+  finishActivity,
   type ActivityProviderDescriptor,
   type ActivityRole,
+  type RunningActivity,
 } from './activity-service.js';
 
 const panelBase: React.CSSProperties = {
@@ -32,6 +58,38 @@ export interface ActivityWorkspaceWidgetProps {
   actorId?: string;
   lang?: 'en' | 'zh';
   classroomId?: string;
+  /**
+   * 'launcher' (default) shows the start/join catalogue. 'status' shows the
+   * live "in progress" monitor used on the teacher dashboard.
+   */
+  mode?: 'launcher' | 'status';
+}
+
+/** Small map from the descriptor `icon` string to a lucide component. */
+const ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+  HelpCircle,
+  Vote,
+  BarChart3,
+  MessagesSquare,
+  Users,
+  FileText,
+  Trophy,
+  CheckCircle2,
+  BookOpen,
+};
+
+function ActivityIcon({ name, className }: { name?: string; className?: string }) {
+  const Cmp = (name && ICONS[name]) || Puzzle;
+  return <Cmp size={18} className={className} />;
+}
+
+/** Human-readable elapsed time since `startedAt`. */
+function formatElapsed(startedAt: number | null, lang: 'en' | 'zh'): string {
+  if (!startedAt) return lang === 'zh' ? '进行中' : 'In progress';
+  const sec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return lang === 'zh' ? `${m} 分 ${s} 秒` : `${m}m ${s}s`;
 }
 
 export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = ({
@@ -39,13 +97,25 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
   actorId,
   lang = 'en',
   classroomId,
+  mode = 'launcher',
 }) => {
+  // ── launcher-mode state (teacher/student start-or-join catalogue) ──
   const [activities, setActivities] = useState<ActivityProviderDescriptor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<Record<string, string>>({});
+  const [launcherStatus, setLauncherStatus] = useState<Record<string, string>>({});
 
+  // ── status-mode state (dashboard "in progress" monitor) ──
+  const [running, setRunning] = useState<RunningActivity[]>([]);
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [manageId, setManageId] = useState<string | null>(null);
+  const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState<string | null>(null);
+
+  // Launcher effect: load the catalogue of startable activities.
   useEffect(() => {
+    if (mode !== 'launcher') return;
     let cancelled = false;
     setLoading(true);
     fetchActivities(role as ActivityRole)
@@ -61,7 +131,168 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
     return () => {
       cancelled = true;
     };
-  }, [role]);
+  }, [role, mode]);
+
+  // Status effect: poll the live "running" list every 5s (matches db-status cadence).
+  useEffect(() => {
+    if (mode !== 'status') return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const list = await fetchRunningActivities();
+        if (!cancelled) setRunning(list);
+      } catch (e: unknown) {
+        if (!cancelled) setStatusError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setStatusLoading(false);
+      }
+    };
+    load();
+    const interval = setInterval(load, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [mode]);
+
+  const handleFinish = async () => {
+    if (!manageId) return;
+    setFinishing(true);
+    setFinishError(null);
+    try {
+      await finishActivity(manageId);
+      setManageId(null);
+      setRunning(await fetchRunningActivities());
+    } catch (e: unknown) {
+      setFinishError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFinishing(false);
+    }
+  };
+
+  // ── status (dashboard) mode ────────────────────────────────────────────────
+  if (mode === 'status') {
+    // Brief skeleton only while the first load is in flight — never perpetual.
+    if (statusLoading) {
+      return (
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm h-24 animate-pulse" />
+      );
+    }
+    // No running activities (or a transient error) → hide the card entirely.
+    if (statusError || running.length === 0) return null;
+
+    const managed = running.find((r) => r.id === manageId) || null;
+
+    return (
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2 text-slate-800 font-extrabold">
+            <span>🧩</span>
+            <span>{lang === 'zh' ? '进行中的活动' : 'Activities in Progress'}</span>
+          </div>
+          <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
+            {running.length}
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {running.map((a) => {
+            const isRunning = a.state === 'running';
+            return (
+              <button
+                key={a.id}
+                onClick={() => setManageId(a.id)}
+                className="w-full flex items-center gap-3 text-left bg-slate-50 hover:bg-slate-100 border border-slate-200/70 rounded-xl p-3 transition-colors"
+              >
+                <ActivityIcon name={a.icon} className="text-indigo-600 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold text-slate-800 truncate">{a.name}</div>
+                  {a.category && (
+                    <div className="text-[11px] text-slate-500 truncate">{a.category}</div>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      isRunning
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {isRunning
+                      ? lang === 'zh'
+                        ? '进行中'
+                        : 'Running'
+                      : lang === 'zh'
+                        ? '已暂停'
+                        : 'Paused'}
+                  </span>
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                    <Clock size={10} /> {formatElapsed(a.startedAt, lang)}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {managed && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+            onClick={() => setManageId(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-slate-800">{managed.name}</h3>
+                <button
+                  onClick={() => setManageId(null)}
+                  className="text-slate-400 hover:text-slate-600"
+                  aria-label="close"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="text-sm text-slate-500 mb-1">
+                {lang === 'zh' ? '状态' : 'Status'}:{' '}
+                {managed.state === 'running'
+                  ? lang === 'zh'
+                    ? '进行中'
+                    : 'Running'
+                  : lang === 'zh'
+                    ? '已暂停'
+                    : 'Paused'}
+              </div>
+              <div className="text-sm text-slate-500 mb-4">
+                {lang === 'zh' ? '开始时间' : 'Started'}:{' '}
+                {managed.startedAt ? new Date(managed.startedAt).toLocaleString() : '-'}
+              </div>
+              {finishError && <div className="text-xs text-rose-600 mb-2">{finishError}</div>}
+              <button
+                disabled={finishing}
+                onClick={handleFinish}
+                className="w-full bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white rounded-lg py-2 text-sm font-bold"
+              >
+                {finishing
+                  ? lang === 'zh'
+                    ? '结束中…'
+                    : 'Ending…'
+                  : lang === 'zh'
+                    ? '结束活动'
+                    : 'End Activity'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── launcher mode (student workspace / default) ─────────────────────────────
+  // (The data-loading effect for launcher mode is the guarded one near the top;
+  // it runs only when `mode === 'launcher'`.)
 
   // Group by category for a cleaner catalogue (same data, different layout).
   const byCategory = useMemo(() => {
@@ -75,14 +306,14 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
   }, [activities]);
 
   const handleLaunch = async (activity: ActivityProviderDescriptor) => {
-    setStatus((s) => ({ ...s, [activity.id]: lang === 'zh' ? '启动中…' : 'Starting…' }));
+    setLauncherStatus((s) => ({ ...s, [activity.id]: lang === 'zh' ? '启动中…' : 'Starting…' }));
     try {
       const res = await startActivity(
         activity.id,
         { classroomId, role },
         actorId,
       );
-      setStatus((s) => ({
+      setLauncherStatus((s) => ({
         ...s,
         [activity.id]: res.dispatched
           ? lang === 'zh'
@@ -93,7 +324,7 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
             : 'Notified ✓',
       }));
     } catch (e: unknown) {
-      setStatus((s) => ({
+      setLauncherStatus((s) => ({
         ...s,
         [activity.id]: e instanceof Error ? e.message : String(e),
       }));
@@ -177,8 +408,8 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
                         ? '参与'
                         : 'Open'}
                   </button>
-                  {status[a.id] && (
-                    <span style={{ fontSize: 11, opacity: 0.85 }}>{status[a.id]}</span>
+                  {launcherStatus[a.id] && (
+                    <span style={{ fontSize: 11, opacity: 0.85 }}>{launcherStatus[a.id]}</span>
                   )}
                 </div>
                 <div style={{ opacity: 0.5, fontSize: 10, marginTop: 4 }}>

@@ -735,6 +735,52 @@ async function startServer() {
     }
   });
 
+  // List activities that are currently in progress (running or paused). Used by
+  // the dashboard "Activity Center" status monitor ¡ª it shows live status and
+  // hides itself when nothing is running. State is in-memory on the provider
+  // instances, so this reflects the live server process only.
+  app.get('/api/activities/running', (_req, res) => {
+    try {
+      const activities = activityRegistry
+        .listProviders()
+        .filter((p) => p.state === 'running' || p.state === 'paused')
+        .map((p) => ({
+          id: p.descriptor.id,
+          name: p.descriptor.name,
+          icon: p.descriptor.icon,
+          category: p.descriptor.category,
+          provider: p.descriptor.provider,
+          state: p.state,
+          startedAt: p.startedAt ?? null,
+        }));
+      res.json({ activities });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Finish (end) a running activity ¡ª the management action exposed to the
+  // dashboard. Reuses the same ActivityContext as start().
+  app.post('/api/activities/:id/finish', async (req, res) => {
+    try {
+      const provider = activityRegistry.getProvider(req.params.id);
+      if (!provider) {
+        return res.status(404).json({ ok: false, error: 'Activity provider not found' });
+      }
+      const context = createActivityContext({
+        commandBus: kernelContainer.commandBus,
+        eventBus: kernelContainer.eventBus,
+        actionRegistry: kernelContainer.actionRegistry,
+        capability: kernelContainer.capabilityGuard as any,
+        ai: kernelContainer.aiService,
+      });
+      await provider.finish(context);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   // OS Agent interaction
   app.post('/api/agent/chat', async (req, res) => {
     try {

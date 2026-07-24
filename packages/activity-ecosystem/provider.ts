@@ -68,6 +68,8 @@ function publishEvent(
 export class BaseActivityProvider implements ActivityProvider {
   public readonly descriptor: ActivityProviderDescriptor;
   private _state: ActivityLifecycleState = 'registered';
+  /** Wall-clock ms when the activity last entered the `running` state. */
+  private _startedAt?: number;
   private readonly hooks: BaseActivityProviderOptions;
 
   constructor(options: BaseActivityProviderOptions) {
@@ -80,6 +82,11 @@ export class BaseActivityProvider implements ActivityProvider {
 
   public get state(): ActivityLifecycleState {
     return this._state;
+  }
+
+  /** When the activity entered `running` (undefined before first start). */
+  public get startedAt(): number | undefined {
+    return this._startedAt;
   }
 
   /** Internal marker used by the registry on registration. */
@@ -130,6 +137,7 @@ export class BaseActivityProvider implements ActivityProvider {
     }
 
     this._state = 'running';
+    this._startedAt = Date.now();
     publishEvent(context, ACTIVITY_EVENTS.STARTED, this.descriptor, {
       activityId: this.descriptor.id,
       provider: this.descriptor.provider,

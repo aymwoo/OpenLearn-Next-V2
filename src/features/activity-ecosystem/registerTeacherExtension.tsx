@@ -25,7 +25,7 @@ export function registerTeacherActivityCenter(): void {
   // dashboard), and the Activity Center never actually mounts.
   const activityCenterComponent = () =>
     import('./ActivityWorkspaceWidget.js').then((m) => ({
-      default: () => <ActivityWorkspaceWidget role="teacher" />,
+      default: () => <ActivityWorkspaceWidget role="teacher" mode="status" />,
     }));
   (activityCenterComponent as unknown as { __isLazyFactory?: boolean }).__isLazyFactory = true;
 

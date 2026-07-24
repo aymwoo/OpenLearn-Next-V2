@@ -18,6 +18,19 @@ export interface StartActivityResponse {
   error?: string;
 }
 
+/** A live (running/paused) activity instance reported by the server. */
+export interface RunningActivity {
+  id: string;
+  name: string;
+  icon?: string;
+  category?: string;
+  provider: string;
+  /** Lifecycle state — 'running' | 'paused' on this endpoint. */
+  state: string;
+  /** Epoch ms when the activity entered `running`, or null. */
+  startedAt: number | null;
+}
+
 /** Fetch the registered activity providers, optionally filtered by role. */
 export async function fetchActivities(
   role: ActivityRole = 'all',
@@ -30,6 +43,30 @@ export async function fetchActivities(
   }
   const data = (await res.json()) as { activities: ActivityProviderDescriptor[] };
   return data.activities ?? [];
+}
+
+/** Fetch the activities currently in progress (running / paused). */
+export async function fetchRunningActivities(): Promise<RunningActivity[]> {
+  const res = await fetch('/api/activities/running', {
+    headers: { Accept: 'application/json' },
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to load running activities (${res.status})`);
+  }
+  const data = (await res.json()) as { activities: RunningActivity[] };
+  return data.activities ?? [];
+}
+
+/** End a running activity (dashboard management action). */
+export async function finishActivity(id: string): Promise<void> {
+  const res = await fetch(`/api/activities/${encodeURIComponent(id)}/finish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || `Failed to finish activity (${res.status})`);
+  }
 }
 
 /**

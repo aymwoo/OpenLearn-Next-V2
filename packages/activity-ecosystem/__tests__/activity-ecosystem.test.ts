@@ -119,11 +119,15 @@ describe('Activity Ecosystem — Lifecycle', () => {
     registry.registerProvider(provider);
 
     expect(provider.state).toBe('registered');
+    expect(provider.startedAt).toBeUndefined();
     await provider.initialize(ctx);
     expect(provider.state).toBe('initialized');
 
     await provider.start(ctx, { foo: 'bar' });
     expect(provider.state).toBe('running');
+    // startedAt is recorded on start and exposed via the getter.
+    expect(provider.startedAt).toBeTypeOf('number');
+    expect(provider.startedAt).toBeGreaterThan(0);
 
     await provider.pause(ctx);
     expect(provider.state).toBe('paused');
