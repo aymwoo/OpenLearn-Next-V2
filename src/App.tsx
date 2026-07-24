@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Markdown from 'react-markdown';
 import { translations, Language } from './i18n';
 import { LazyWhiteboard } from './components/LazyWhiteboard';
+import { UserMenu } from './components/UserMenu';
+import { ProfileModal } from './components/ProfileModal';
 import { LessonPalette } from './features/teacher/lesson-editor/LessonPalette';
 import { PaletteCardEditModal } from './features/teacher/lesson-editor/PaletteCardEditModal';
 import { PALETTE_ITEM_MAP } from './features/teacher/lesson-editor/paletteConfig';
@@ -3571,6 +3573,8 @@ export default function App() {
     setSession(null);
   };
 
+  const [profileOpen, setProfileOpen] = useState(false);
+
   if (sessionLoading) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
@@ -3780,21 +3784,21 @@ export default function App() {
               </span>
             </div>
 
-            <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg select-none text-xs sm:text-sm">
-              <div className="w-2 h-2 rounded-full bg-green-500 mr-1.5 shrink-0 animate-pulse"></div>
-              <span className="font-bold text-slate-800 mr-2 truncate max-w-[130px]" title={session?.name}>
-                {session?.name}
-              </span>
-              <span className="text-slate-300 mr-2 border-r border-slate-200 h-4"></span>
-              <button 
-                onClick={handleLogout}
-                className="text-xs font-semibold text-rose-500 hover:text-rose-700 transition-colors cursor-pointer block"
-              >
-                {lang === 'zh' ? '安全登出' : 'Sign Out'}
-              </button>
-            </div>
+            <UserMenu
+              session={session}
+              lang={lang}
+              onLogout={handleLogout}
+              onProfile={() => setProfileOpen(true)}
+            />
           </div>
         </header>
+
+        <ProfileModal
+          open={profileOpen}
+          session={session}
+          lang={lang}
+          onClose={() => setProfileOpen(false)}
+        />
 
         {activeRole === 'student' ? (
           <div className="flex-1 p-6 overflow-y-auto w-full max-w-full space-y-6">
