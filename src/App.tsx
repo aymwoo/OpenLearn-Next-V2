@@ -1,4 +1,4 @@
-import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, Globe, Code, Puzzle, Blocks, Download, Upload, Paperclip, Terminal, ChevronUp, ChevronDown, ChevronRight, FileText, Shield, ShieldAlert, Check, X, Folder, File as FileIcon, Activity, Users, BarChart2, ClipboardList, Send, FileBadge, PlayCircle, Loader2, Calendar as CalendarIcon, CheckCircle2, Bell, BookOpen, Settings, PanelRightClose, PanelRightOpen, Home, Presentation, HelpCircle, Search, Settings2, Percent, ListFilter, Clock, Sparkles, Eye, Maximize2, Minimize2, Database, Shuffle } from 'lucide-react';
+import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, LayoutGrid, List, Globe, Code, Puzzle, Blocks, Download, Upload, Paperclip, Terminal, ChevronUp, ChevronDown, ChevronRight, FileText, Shield, ShieldAlert, Check, X, Folder, File as FileIcon, Activity, Users, BarChart2, ClipboardList, Send, FileBadge, PlayCircle, Loader2, Calendar as CalendarIcon, CheckCircle2, Bell, BookOpen, Settings, PanelRightClose, PanelRightOpen, Home, Presentation, HelpCircle, Search, Settings2, Percent, ListFilter, Clock, Sparkles, Eye, Maximize2, Minimize2, Database, Shuffle } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Markdown from 'react-markdown';
 import { translations, Language } from './i18n';
@@ -705,6 +705,7 @@ export default function App() {
   const [isExportingAllCombined, setIsExportingAllCombined] = useState(false);
   const [rosterSearchQuery, setRosterSearchQuery] = useState('');
   const [rosterTagFilter, setRosterTagFilter] = useState<'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare'>('all');
+  const [rosterViewMode, setRosterViewMode] = useState<'grid' | 'list'>('grid');
   const [classSubmissionFilters, setClassSubmissionFilters] = useState<Record<string, 'all' | 'submitted' | 'graded' | 'pending'>>({});
   const [classActiveTabs, setClassActiveTabs] = useState<Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>>({});
   const [studentActiveTabs, setStudentActiveTabs] = useState<Record<string, 'progress' | 'settings' | 'notes'>>({});
@@ -6013,8 +6014,26 @@ onRefresh={() => fetchElements(selectedLesson)}
                                       <Users size={14} className="text-indigo-500 animate-pulse" />
                                       {lang === 'zh' ? '班级学生花名册' : 'Class Student Roster'}
                                    </div>
-                                   <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                      {/* Dropdown selects from existing students not currently in this class */}
+                                  <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                     <div className="flex items-center gap-1 mr-1.5 bg-slate-100 rounded-lg p-0.5">
+                                        <button
+                                          type="button"
+                                          title={lang === 'zh' ? '卡片视图' : 'Card view'}
+                                          onClick={() => setRosterViewMode('grid')}
+                                          className={`p-1 rounded-md transition-colors ${rosterViewMode === 'grid' ? 'bg-white text-indigo-600 shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                          <LayoutGrid size={14} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          title={lang === 'zh' ? '列表视图（便于批量选中）' : 'List view (batch select)'}
+                                          onClick={() => setRosterViewMode('list')}
+                                          className={`p-1 rounded-md transition-colors ${rosterViewMode === 'list' ? 'bg-white text-indigo-600 shadow-xs' : 'text-gray-500 hover:text-gray-700'}`}
+                                        >
+                                          <List size={14} />
+                                        </button>
+                                      </div>
+                                     {/* Dropdown selects from existing students not currently in this class */}
                                       {students.filter(st => !cStudents.some(cs => cs.id === st.id)).length > 0 ? (
                                         <>
                                           <select
@@ -6246,7 +6265,7 @@ onRefresh={() => fetchElements(selectedLesson)}
                                           </div>
                                         ) : (
                                           <>
-                                          {batchMode && (
+                                          {(batchMode || rosterViewMode === 'list') && (
                                             <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex flex-wrap items-center gap-2">
                                               <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none">
                                                 <input
@@ -6287,17 +6306,17 @@ onRefresh={() => fetchElements(selectedLesson)}
                                               </button>
                                             </div>
                                           )}
-                                          <div className="space-y-1">
+                                          <div className={rosterViewMode === 'list' ? 'flex flex-col gap-1' : 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2 items-start'}>
                                             {filtered.map(st => {
                                         const isStExpanded = expandedStudentId === st.id;
                                         const progress = studentProgressMap[st.id] || [];
                                         const stActiveTab = studentActiveTabs[st.id] || 'progress';
                                         return (
-                                          <div key={st.id} className="border border-slate-100/75 w-full flex flex-col bg-white rounded-xl p-2.5 shadow-xs mb-1.5 hover:border-slate-200 hover:shadow-sm transition-all duration-200 text-left">
-                                            <div 
-                                              className="flex justify-between items-center text-sm text-gray-700 py-1 cursor-pointer hover:bg-gray-50 w-full rounded"
+                                          <div key={st.id} className="border border-slate-100/75 w-full min-w-0 flex flex-col bg-white rounded-xl p-2.5 shadow-xs hover:border-slate-200 hover:shadow-sm transition-all duration-200 text-left">
+                                            <div
+                                              className="flex justify-between items-center text-sm text-gray-700 py-1 cursor-pointer hover:bg-gray-50 w-full rounded gap-2"
                                               onClick={() => {
-                                                if (batchMode) {
+                                                if (batchMode || rosterViewMode === 'list') {
                                                   toggleStudentSelection(st.id);
                                                   return;
                                                 }
@@ -6309,8 +6328,8 @@ onRefresh={() => fetchElements(selectedLesson)}
                                                 }
                                               }}
                                             >
-                                              <div className="flex items-center gap-2">
-                                                {batchMode && (
+                                              <div className="flex items-center gap-2 min-w-0">
+                                                {(batchMode || rosterViewMode === 'list') && (
                                                   <input
                                                     type="checkbox"
                                                     className="shrink-0 accent-amber-500"
@@ -6320,9 +6339,9 @@ onRefresh={() => fetchElements(selectedLesson)}
                                                   />
                                                 )}
                                                 {isStExpanded ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
-                                                <div className="flex flex-col">
-                                                  <div className="flex items-center gap-1.5">
-                                                     <span className="font-medium text-gray-800 text-xs">{st.name}</span>
+                                                <div className="flex flex-col min-w-0">
+                                                  <div className="flex items-center gap-1.5 min-w-0">
+                                                     <span className="font-medium text-gray-800 text-xs truncate">{st.name}</span>
                                                      {(() => {
                                                        let noteCategory: string | null = null;
                                                        if (st.private_notes && st.private_notes !== '<br>' && st.private_notes.trim() !== '') {
