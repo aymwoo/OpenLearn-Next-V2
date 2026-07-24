@@ -52,7 +52,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
-    "@openlearn/plugin-sdk": "^3.1.0",
+    "@openlearn/plugin-sdk": "workspace:*",
     "@types/reveal.js": "^5.2.2",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",

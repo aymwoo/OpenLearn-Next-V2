@@ -28,7 +28,10 @@ await esbuild.build({
   format: 'esm',
   platform: 'node',
   outfile: path.join(distDir, 'index.js'),
-  external: ['zod'],
+  // Mark every bare/npm import (express, better-sqlite3, body-parser, zod,
+  // ws, ...) as external. Only the monorepo source (../core, ../activity-ecosystem)
+  // is inlined, so the ESM output never emits a broken `Dynamic require(...)`.
+  packages: 'external',
   // Keep the Token class + constants, drop everything else unused
   treeShaking: true,
 });

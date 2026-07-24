@@ -10,7 +10,7 @@ import {
   IPluginHostToken,
   IPluginLifecycleManagerToken,
   IPluginDistributionManagerToken,
-} from '@openlearn/plugin-sdk';
+} from '../core/di/interfaces.js';
 import type { PluginContext } from '@openlearn/plugin-sdk';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './ai-submit-injector.js';
 
