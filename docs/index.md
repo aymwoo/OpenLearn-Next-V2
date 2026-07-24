@@ -38,6 +38,7 @@ architecture/whiteboard-runtime
 architecture/workspace-runtime
 architecture/architecture-synchronization-report
 architecture/platform-foundation-audit-report
+architecture/navigation-audit-report
 ```
 
 ```{toctree}
