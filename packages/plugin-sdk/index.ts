@@ -21,6 +21,27 @@ export type {
   ContributionAccessor,
 } from '../core/plugin-host/types.js';
 
+// ── Unified Foundation Layer (P7 Sprints) ──────────────────────────────
+
+export type {
+  IPluginRuntime,
+  IUnifiedPluginContext,
+  IPluginLifecycleManager,
+  IPluginCapabilityGateway,
+  IUnifiedExtensionRegistry,
+  CapabilityMetadata,
+  ExtensionItemMetadata,
+} from '../core/plugin-host/index.js';
+
+export {
+  PluginRuntimeAdapter,
+  PluginRuntimeComposition,
+  PluginContextAdapter,
+  PluginLifecycleManager,
+  PluginCapabilityGateway,
+  UnifiedExtensionRegistry,
+} from '../core/plugin-host/index.js';
+
 // ── Configuration Service (V3.2) ────────────────────────────────────────
 
 export type {
@@ -253,4 +274,26 @@ export type { PlatformEvent } from '../core/event-bus/index.js';
 // ── Action Registry ─────────────────────────────────────────────────────
 
 export type { ActionDescriptor } from '../core/registry/index.js';
+
+// ── Activity Ecosystem (Sprint P7-01) ─────────────────────────────────
+// Third-party plugins build Activity Providers with the SAME APIs as the
+// official activities, then register them via `ctx.resolve(IActivityRegistryToken)`.
+
+export type {
+  ActivityCategory,
+  ActivityRole,
+  ActivityDevice,
+  ActivityLifecycleState,
+  ActivityProviderDescriptor,
+  ActivityProvider,
+  ActivityContext,
+  ActivityClassroomContext,
+} from '../activity-ecosystem/index.js';
+
+export {
+  IActivityRegistryToken,
+  ACTIVITY_EVENTS,
+  BaseActivityProvider,
+  defineActivityProvider,
+} from '../activity-ecosystem/index.js';
 

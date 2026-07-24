@@ -1,17 +1,23 @@
 /**
  * OpenLearn AI Teacher Workspace Widget Registry (Sprint P5-05)
  * Integrates AI Teacher Assistant into Workspace Widget Registry.
+ *
+ * [P5-06 Review Fix] Aligned with WorkspaceSlotRegistry.register() API
+ * and WorkspaceSlotProvider shape (id, slot, render, priority).
  */
 
+import React from 'react';
 import { WorkspaceSlotRegistry } from '../workspace/workspace-slot-registry.js';
+import { WorkspaceSlotType } from '../workspace/workspace-types.js';
 import { AITeacherWorkspaceWidget } from './ai-teacher-workspace-widget.js';
 
 export interface AIWidgetDescriptor {
   id: string;
   name: string;
-  slot: string;
+  slot: WorkspaceSlotType;
   component: React.ComponentType;
   provider: string;
+  priority?: number;
 }
 
 export class AITeacherWorkspaceRegistry {
@@ -28,13 +34,22 @@ export class AITeacherWorkspaceRegistry {
     }
     this.registeredWidgets.set(descriptor.id, descriptor);
 
-    // Register into Workspace Slot Registry (e.g. RightSidebar or FloatingArea)
-    this.slotRegistry.registerProvider({
-      slot: descriptor.slot as any,
-      providerId: descriptor.id,
-      component: descriptor.component,
-      priority: 10,
+    // Adapt to WorkspaceSlotProvider shape and use register() method
+    const Component = descriptor.component;
+    this.slotRegistry.register({
+      id: descriptor.id,
+      slot: descriptor.slot,
+      priority: descriptor.priority ?? 10,
+      render: (props?: Record<string, unknown>) => React.createElement(Component, props),
     });
+  }
+
+  public unregisterAIWidget(widgetId: string): boolean {
+    const removed = this.registeredWidgets.delete(widgetId);
+    if (removed) {
+      this.slotRegistry.unregister(widgetId);
+    }
+    return removed;
   }
 
   public registerDefaultAIWidget(): void {
@@ -42,7 +57,7 @@ export class AITeacherWorkspaceRegistry {
       id: 'widget_ai_teacher_workspace',
       name: 'AI Teacher Assistant Panel',
       slot: 'RightSidebar',
-      component: AITeacherWorkspaceWidget as any,
+      component: AITeacherWorkspaceWidget,
       provider: 'official',
     });
   }
@@ -54,4 +69,12 @@ export class AITeacherWorkspaceRegistry {
   public listWidgets(): ReadonlyArray<AIWidgetDescriptor> {
     return Object.freeze(Array.from(this.registeredWidgets.values()));
   }
+
+  public clear(): void {
+    for (const id of this.registeredWidgets.keys()) {
+      this.slotRegistry.unregister(id);
+    }
+    this.registeredWidgets.clear();
+  }
 }
+

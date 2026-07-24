@@ -75,6 +75,11 @@ import 'jspdf-autotable';
 import { ExtensionPointRenderer, DOMExtensionWrapper } from './plugin-host/extension-point-renderer';
 import { usePluginHost } from './plugin-host/plugin-host-context';
 import { usePluginHostStore } from './plugin-host/plugin-host-store';
+import { registerTeacherActivityCenter } from './features/activity-ecosystem/registerTeacherExtension.js';
+
+// Register the teacher Activity Center (idempotent) so teachers see the same
+// Activity Provider ecosystem the students get in their workspace.
+registerTeacherActivityCenter();
 import { PluginState } from './plugin-host/types';
 import { PluginCenter } from './components/PluginCenter';
 import { LegacyPluginBadge } from './components/LegacyPluginBadge';

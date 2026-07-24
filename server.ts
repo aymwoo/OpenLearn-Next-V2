@@ -34,6 +34,14 @@ import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } fr
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
 
+// ── Activity Ecosystem (Sprint P7-01) ─────────────────────────────────────
+import {
+  ActivityRegistry,
+  registerOfficialActivities,
+  createActivityContext,
+  IActivityRegistryToken,
+} from './packages/activity-ecosystem/index.js';
+
 
 
 type AgentChatAttachment = { name: string; content: string };
@@ -72,7 +80,7 @@ const lessonActiveSegments = new Map<string, string>(); // lessonId -> activeSeg
 
 const buildAgentSystemInstruction = (lang: 'zh' | 'en', currentLessonId?: string | null) => {
   let systemInstruction = lang === 'zh'
-    ? '你是一个教育系统底层的 OS Agent。你需要理解老师的指令，并调用可用的工具（命令）去执行这些操作。如果老师让你创建一节课，请务必利用工具生成详细的初始课程内容。如果老师要求管理进程/任务，请使用 process.spawn, process.kill, process.list。如果需存储文件、素材或创建目录，请使用 vfs.* 并在需要时管理班级和学生。你支持通过 class_create 创建班级, student_create 创建学生, class_add_student 将学生加入班级。当老师要求从提供的数据（如CSV、JSON、Markdown或对话中）创建班级或学生时，请依次发出这些指令。如果上一阶段返回了创建成功的班级ID或学生ID，你需要在后续的 functionCall 中引用这些ID（例如：把刚创建的学生ID加入到刚创建的班级ID中）。通过往复的工具调用，你可以自动完成完整的流程。'
+    ? '你是一个教育系统底层的 OS Agent。你需要理解老师的指令，并调用可用的工具（命令）去执行这些操作。如果老师让你创建一节课，请务必利用工具生成详细的初始课程内容。如果老师要求管理进程/任务，请使用 process.spawn, process.kill, process.list。如果需存储文件、素材或创建目录，请使用 vfs.* 并在需要时管理班级和学生。你支持通过 class_create 创建班级, student_create 创建学生, class_add_student 将学生加入班级。当老师要求从提供的数据（如CSV、JSON、Markdown或对话中）创建班级或学生时，请依次发出这些指令。如果上一阶段返回了创建成功的班级ID或学生ID，你需要在后续�? functionCall 中引用这些ID（例如：把刚创建的学生ID加入到刚创建的班级ID中）。通过往复的工具调用，你可以自动完成完整的流程�?'
     : 'You are an educational OS kernel agent. You interpret teacher instructions and use your available tools (commands) to execute them. If the teacher asks to create a lesson, always generate some detailed initial content for it. If the teacher asks to spawn or kill processes, use process tools. Use vfs tools to store assets, and manage classes/students as necessary. You support class_create, student_create, class_add_student. Always use tool chaining if you need to create a class and enroll students: first call class_create/student_create, receive their returned IDs, and then call class_add_student in the next turn. Always answer with a helpful summary.';
 
   if (currentLessonId) {
@@ -189,8 +197,8 @@ const executeAgentToolCall = async (
                   .run(JSON.stringify(dataObj), cmdResult.elementId);
                 console.log(`[Agent Tool Sync] Injected active segment "${activeSeg}" into element "${cmdResult.elementId}"`);
 
-                // 方案 A1：注入完成后发布二次事件，通知前端重新获取元素数据，
-                // 确保携带 segmentId 的元素能被正确渲染。
+                // 方案 A1：注入完成后发布二次事件，通知前端重新获取元素数据�?
+                // 确保携带 segmentId 的元素能被正确渲染�?
                 kernelContainer.eventBus.publish({
                   id: crypto.randomUUID(),
                   type: 'whiteboard.element_updated',
@@ -232,7 +240,7 @@ const runGeminiAgentChat = async (request: AgentChatRequest) => {
   if (!apiKey || apiKey.trim() === '' || apiKey.trim() === 'MY_GEMINI_API_KEY') {
     throw new Error(
       lang === 'zh'
-        ? '系统默认 AI 服务的 API Key (GEMINI_API_KEY) 未配置。请在后台的「系统设置」-「AI 提供商管理」中配置可用的 AI 提供商并将它设为主用，或者在服务器根目录的 `.env` 文件中填写正确的 `GEMINI_API_KEY`。'
+        ? '系统默认 AI 服务�? API Key (GEMINI_API_KEY) 未配置。请在后台的「系统设置�?-「AI 提供商管理」中配置可用�? AI 提供商并将它设为主用，或者在服务器根目录�? `.env` 文件中填写正确的 `GEMINI_API_KEY`�?'
         : 'The default System AI API Key (GEMINI_API_KEY) is not configured. Please configure a valid AI Provider in the admin dashboard and set it as active, or set `GEMINI_API_KEY` in the server `.env` file.'
     );
   }
@@ -437,7 +445,7 @@ async function startServer() {
       console.log('Upgrading old Quiz Component Plugin to add classroomTools and fix Actor...');
       kernelContainer.db.prepare('DELETE FROM plugins WHERE id = ?').run(existingQuiz.id);
     }
-    const existingRollCall = kernelContainer.db.prepare('SELECT id, manifest FROM plugins WHERE name = ?').get('Random Student Picker (随机点名小工具)') as any;
+    const existingRollCall = kernelContainer.db.prepare('SELECT id, manifest FROM plugins WHERE name = ?').get('Random Student Picker (随机点名小工�?)') as any;
     if (existingRollCall && (!existingRollCall.manifest || !existingRollCall.manifest.includes('classroomTools'))) {
       console.log('Upgrading old Random Student Picker Plugin to add classroomTools...');
       kernelContainer.db.prepare('DELETE FROM plugins WHERE id = ?').run(existingRollCall.id);
@@ -461,13 +469,13 @@ async function startServer() {
     console.error('Error creating student_rollcalls table:', e);
   }
 
-  // SEC-AUTH-03: client_sessions 添加 expires_at 列
+  // SEC-AUTH-03: client_sessions 添加 expires_at �?
   try {
     kernelContainer.db.exec(`ALTER TABLE client_sessions ADD COLUMN expires_at INTEGER`);
     console.log('client_sessions.expires_at column ensured.');
   } catch { /* 列已存在 */ }
 
-  // SEC-AUTH-03: 启动时清理过期 session
+  // SEC-AUTH-03: 启动时清理过�? session
   try {
     const now = Date.now();
     const idleTimeout = 24 * 60 * 60 * 1000;
@@ -487,19 +495,29 @@ async function startServer() {
 
   await kernelContainer.ready;
 
+  // ���� Activity Ecosystem bootstrap (Product Layer, kernel untouched) ����
+  // Register the singleton registry as a DI service so plugins can resolve it
+  // via the SAME `ctx.resolve(IActivityRegistryToken)` API used for core
+  // services. Official activities are registered as Activity Providers and
+  // contribute their AI Actions into the existing ActionRegistry.
+  const activityRegistry = new ActivityRegistry();
+  registerOfficialActivities(activityRegistry, kernelContainer.actionRegistry);
+  await kernelContainer.serviceRegistry.register(IActivityRegistryToken, activityRegistry);
+  console.log(`[ActivityEcosystem] Registered ${activityRegistry.listProviders().length} official activity providers.`);
+
   const app = express();
   kernelContainer.pluginHost.setExpressApp(app);
   const PORT = parseInt(process.env.PORT || '9000', 10);
 
-  // SEC-AUTH-03: 信任 Nginx 反向代理的 X-Forwarded-Proto 头
-  // 使 req.protocol / req.secure 能正确反映浏览器到 Nginx 的实际协议
+  // SEC-AUTH-03: 信任 Nginx 反向代理�? X-Forwarded-Proto �?
+  // �? req.protocol / req.secure 能正确反映浏览器�? Nginx 的实际协�?
   app.set('trust proxy', 1);
 
-  // ── 安全中间件 ────────────────────────────────────────────────────
-  // SEC-NET-02: HTTP 安全头（helmet）
-  // 教育平台需要加载外部课件资源（图片、字体、样式），因此 img-src/style-src/font-src 放宽为 https:
-  // script-src 保持严格限制，课件 iframe 通过 sandbox 属性提供额外安全层
-  // COOP/OAC/COEP 已禁用：HTML Applet 在 iframe 中运行时这些策略会导致跨域错误
+  // ── 安全中间�? ────────────────────────────────────────────────────
+  // SEC-NET-02: HTTP 安全头（helmet�?
+  // 教育平台需要加载外部课件资源（图片、字体、样式），因�? img-src/style-src/font-src 放宽�? https:
+  // script-src 保持严格限制，课�? iframe 通过 sandbox 属性提供额外安全层
+  // COOP/OAC/COEP 已禁用：HTML Applet �? iframe 中运行时这些策略会导致跨域错�?
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
@@ -515,12 +533,12 @@ async function startServer() {
     },
     crossOriginOpenerPolicy: false,
     crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: { policy: "cross-origin" }, // 允许沙箱 iframe（opaque origin）加载静态资源
+    crossOriginResourcePolicy: { policy: "cross-origin" }, // 允许沙箱 iframe（opaque origin）加载静态资�?
     originAgentCluster: false,
-    strictTransportSecurity: false, // 纯 HTTP 部署，禁止 HSTS（否则浏览器缓存后强制 HTTPS，导致 ERR_CONNECTION_REFUSED）
+    strictTransportSecurity: false, // �? HTTP 部署，禁�? HSTS（否则浏览器缓存后强�? HTTPS，导�? ERR_CONNECTION_REFUSED�?
   }));
 
-  // SEC-AUTH-04: 登录频率限制（5次/IP/分钟）
+  // SEC-AUTH-04: 登录频率限制�?5�?/IP/分钟�?
   const loginLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 分钟
     max: 5,
@@ -533,14 +551,14 @@ async function startServer() {
   app.use(express.urlencoded({ limit: '400mb', extended: true }));
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   app.use('/plugins', express.static(path.join(process.cwd(), 'plugins')));
-  // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块）
+  // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块�?
 
-  // SEC-NET-01: CORS 中间件 — 允许沙箱 iframe（origin: null）和同源请求
-  // 背景：iframe sandbox 去掉 allow-same-origin 后，浏览器给 iframe 分配 opaque origin，
-  // 导致其中的 fetch()/XHR 变成跨域请求。本中间件使这些请求正常工作。
+  // SEC-NET-01: CORS 中间�? �? 允许沙箱 iframe（origin: null）和同源请求
+  // 背景：iframe sandbox 去掉 allow-same-origin 后，浏览器给 iframe 分配 opaque origin�?
+  // 导致其中�? fetch()/XHR 变成跨域请求。本中间件使这些请求正常工作�?
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    // 沙箱 iframe 的请求带有 Origin: null；同源请求通常不带 Origin 头
+    // 沙箱 iframe 的请求带�? Origin: null；同源请求通常不带 Origin �?
     if (origin === 'null' || origin === undefined) {
       res.setHeader('Access-Control-Allow-Origin', origin ?? '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
@@ -553,7 +571,7 @@ async function startServer() {
     next();
   });
 
-  // SEC-DATA-03: Magic bytes 验证（文件头魔数）
+  // SEC-DATA-03: Magic bytes 验证（文件头魔数�?
   function validateMagicBytes(buffer: Buffer, fileName: string): boolean {
     const MAGIC_BYTES: Record<string, number[][]> = {
       '.pdf': [[0x25, 0x50, 0x44, 0x46]], // %PDF
@@ -584,7 +602,7 @@ async function startServer() {
       }
 
       const ext = path.extname(filename).toLowerCase();
-      // SEC-DATA-03: 拒绝可执行文件上传
+      // SEC-DATA-03: 拒绝可执行文件上�?
       if (BLOCKED_EXTENSIONS.includes(ext)) {
         return res.status(400).json({ error: `File type ${ext} is not allowed for security reasons.` });
       }
@@ -675,6 +693,48 @@ async function startServer() {
     }
   });
 
+  // ���� Activity Ecosystem REST (Sprint P7-01) ������������������������������������������������������������
+  // List registered activity providers, filtered by role. Reuses the same
+  // registry the Workspace and plugins share. No business logic is duplicated.
+  app.get('/api/activities', async (req, res) => {
+    try {
+      const role = (req.query.role as string) || 'all';
+      const list =
+        role === 'all'
+          ? activityRegistry.listDescriptors()
+          : activityRegistry.listByRole(role as any).map((p) => p.descriptor);
+      res.json({ activities: list });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Start an activity: builds an ActivityContext from the existing kernel
+  // services and drives the provider lifecycle (reuses Command Bus + Event Bus
+  // + Permission runtime). Permission isolation is enforced by startActivity().
+  app.post('/api/activities/:id/start', async (req, res) => {
+    try {
+      const { payload, actorId } = req.body || {};
+      const context = createActivityContext({
+        commandBus: kernelContainer.commandBus,
+        eventBus: kernelContainer.eventBus,
+        actionRegistry: kernelContainer.actionRegistry,
+        capability: kernelContainer.capabilityGuard as any,
+        ai: kernelContainer.aiService,
+      });
+      const result = await activityRegistry.startActivity(
+        req.params.id,
+        context,
+        payload ?? {},
+        actorId,
+      );
+      res.json({ ok: true, ...result });
+    } catch (err: any) {
+      const status = err?.code === 'PERMISSION_DENIED' ? 403 : 500;
+      res.status(status).json({ ok: false, error: err.message });
+    }
+  });
+
   // OS Agent interaction
   app.post('/api/agent/chat', async (req, res) => {
     try {
@@ -689,12 +749,12 @@ async function startServer() {
         }));
       }
 
-      // SEC-NET-04: Prompt 注入检测
+      // SEC-NET-04: Prompt 注入检�?
       if (detectPromptInjection(message)) {
         return res.status(400).json({
           success: false,
           error: lang === 'zh'
-            ? '检测到潜在的 prompt 注入尝试，请修改您的输入。'
+            ? '检测到潜在�? prompt 注入尝试，请修改您的输入�?'
             : 'Potential prompt injection detected. Please rephrase your input.',
         });
       }
@@ -1043,7 +1103,7 @@ async function startServer() {
     try {
       kernelContainer.commandBus.registerHandler(type, handler);
     } catch {
-      /* already registered — harmless on server reload */
+      /* already registered �? harmless on server reload */
     }
   }
   // --- AI Courseware APIs ---
@@ -1417,7 +1477,7 @@ async function startServer() {
         studentId,
         attempt.extra_json || '{}',
         finalScore,
-        `由教师在课堂中保存录入。课件完成度: ${Math.round(completion * 100)}%。课件原始反馈: ${attempt.comment || '无'}`,
+        `由教师在课堂中保存录入。课件完成度: ${Math.round(completion * 100)}%。课件原始反�?: ${attempt.comment || '�?'}`,
         Date.now(),
         Date.now()
       );
@@ -1531,7 +1591,7 @@ async function startServer() {
     res.json(lessons);
   });
 
-  // ── 作业上传与互评插件 API ──────────────────────────────────────────────
+  // ── 作业上传与互评插�? API ──────────────────────────────────────────────
   app.get('/api/lessons/:lessonId/eval-submissions', (req, res) => {
     try {
       const { lessonId } = req.params;
@@ -2360,7 +2420,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       const existingClass = db.prepare('SELECT id FROM classes WHERE id = ?').get(DEMO_CLASS_ID);
       if (!existingClass) {
         db.prepare('INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)').run(
-          DEMO_CLASS_ID, '人工智能与创意编程示范班', '这是系统初始化的示例课程班级，用于教学体验。', Date.now()
+          DEMO_CLASS_ID, '人工智能与创意编程示范班', '这是系统初始化的示例课程班级，用于教学体验�?', Date.now()
         );
       }
 
@@ -2391,7 +2451,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       if (!lessonId) {
         lessonId = 'demo-lesson';
         db.prepare('INSERT INTO lessons (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
-          lessonId, '初识 Python：智能白板创意编程', JSON.stringify({ elements: [] }), Date.now(), Date.now()
+          lessonId, '初识 Python：智能白板创意编�?', JSON.stringify({ elements: [] }), Date.now(), Date.now()
         );
       }
 
@@ -2728,7 +2788,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       if (!token) {
         return res.json({ session: null });
       }
-      // SEC-AUTH-03: 使用 getValidSession 自动检查过期
+      // SEC-AUTH-03: 使用 getValidSession 自动检查过�?
       const session = getValidSession(token);
       if (!session) {
         return res.json({ session: null });
@@ -2786,7 +2846,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         }
         kernelContainer.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
           .run(bcryptHashPassword(newPassword), session.userId);
-        // 使该用户所有其他 session 失效
+        // 使该用户所有其�? session 失效
         kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id != ? AND session_data LIKE ?')
           .run(token, `%${session.userId}%`);
         return res.json({ success: true, message: 'Password changed. All other devices have been logged out.' });
@@ -2811,7 +2871,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         }
         kernelContainer.db.prepare('UPDATE students SET password = ? WHERE id = ?')
           .run(bcryptHashPassword(newPassword), session.studentId);
-        // 使该学生所有其他 session 失效
+        // 使该学生所有其�? session 失效
         kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id != ? AND session_data LIKE ?')
           .run(token, `%${session.studentId}%`);
         return res.json({ success: true, message: 'Password changed. All other devices have been logged out.' });
@@ -2839,7 +2899,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         if (userObj.status === 'disabled') {
           return res.status(403).json({ error: 'Your account has been disabled. Please contact the administrator.' });
         }
-        // SEC-AUTH-02: bcrypt 验证 + 旧 SHA-256 自动升级
+        // SEC-AUTH-02: bcrypt 验证 + �? SHA-256 自动升级
         const { valid, needsUpgrade } = verifyPassword(password, userObj.password_hash);
         if (!valid) {
           return res.status(401).json({ error: 'Incorrect password' });
@@ -2871,29 +2931,29 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
           return res.status(400).json({ error: 'Password or Class Passcode is required' });
         }
 
-        // SEC-AUTH-01: bcrypt 验证 + 旧明文/旧哈希自动升级
+        // SEC-AUTH-01: bcrypt 验证 + 旧明�?/旧哈希自动升�?
         let matchesOwnPassword = false;
         const storedPwd = studentObj.password || '';
 
-        // bcrypt 哈希以 $2a$ / $2b$ / $2y$ 开头
+        // bcrypt 哈希�? $2a$ / $2b$ / $2y$ 开�?
         if (storedPwd.startsWith('$2')) {
           matchesOwnPassword = bcrypt.compareSync(providedPassword, storedPwd);
         }
-        // 旧 SHA-256 哈希（64 位 hex）
+        // �? SHA-256 哈希�?64 �? hex�?
         else if (/^[a-f0-9]{64}$/.test(storedPwd)) {
           const sha256Hash = crypto.createHash('sha256').update(providedPassword).digest('hex');
           if (sha256Hash === storedPwd) {
             matchesOwnPassword = true;
-            // 自动升级到 bcrypt
+            // 自动升级�? bcrypt
             kernelContainer.db.prepare('UPDATE students SET password = ? WHERE id = ?')
               .run(bcryptHashPassword(providedPassword), studentObj.id);
             console.log(`[Auth] Auto-upgraded password hash for student ${studentObj.student_number || studentObj.id}`);
           }
         }
-        // 旧明文密码
+        // 旧明文密�?
         else if (storedPwd === providedPassword) {
           matchesOwnPassword = true;
-          // 自动升级到 bcrypt
+          // 自动升级�? bcrypt
           kernelContainer.db.prepare('UPDATE students SET password = ? WHERE id = ?')
             .run(bcryptHashPassword(providedPassword), studentObj.id);
           console.log(`[Auth] Auto-upgraded plaintext password to bcrypt for student ${studentObj.student_number || studentObj.id}`);
@@ -2932,13 +2992,13 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
       if (sessionData) {
         const sessionToken = 'token_' + crypto.randomBytes(16).toString('hex');
-        // SEC-AUTH-03: session 添加 expires_at（24小时空闲 + 7天绝对）
+        // SEC-AUTH-03: session 添加 expires_at�?24小时空闲 + 7天绝对）
         const now = Date.now();
-        const expiresAt = now + 7 * 24 * 60 * 60 * 1000; // 7 天绝对过期
+        const expiresAt = now + 7 * 24 * 60 * 60 * 1000; // 7 天绝对过�?
         kernelContainer.db.prepare('INSERT INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)')
           .run(sessionToken, JSON.stringify(sessionData), now, expiresAt);
 
-        // 生产环境纯 HTTP，不设 Secure 标志（否则浏览器拒绝存储）
+        // 生产环境�? HTTP，不�? Secure 标志（否则浏览器拒绝存储�?
         res.setHeader('Set-Cookie', `edu_os_token=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
         return res.json({
           success: true,
@@ -3181,7 +3241,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       if (name) kernelContainer.db.prepare('UPDATE students SET name = ? WHERE id = ?').run(name, req.params.id);
       if (email !== undefined) kernelContainer.db.prepare('UPDATE students SET email = ? WHERE id = ?').run(email, req.params.id);
       if (password !== undefined) {
-        // SEC-AUTH-01: 更新时 bcrypt 哈希
+        // SEC-AUTH-01: 更新�? bcrypt 哈希
         const hashed = password.trim() !== '' ? bcryptHashPassword(password) : password;
         kernelContainer.db.prepare('UPDATE students SET password = ? WHERE id = ?').run(hashed, req.params.id);
       }
@@ -3256,7 +3316,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
     }
   });
 
-  // SEC-DATA-02: GDPR 完整数据删除（管理员专用，需二次确认）
+  // SEC-DATA-02: GDPR 完整数据删除（管理员专用，需二次确认�?
   app.delete('/api/students/:id/gdpr-delete', (req, res) => {
     try {
       if (!checkIsTeacherOrAdmin(req)) {
@@ -3268,7 +3328,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         return res.status(400).json({ error: 'Must explicitly confirm GDPR deletion with { confirm: true }' });
       }
 
-      // 级联删除所有关联数据
+      // 级联删除所有关联数�?
       kernelContainer.db.prepare('DELETE FROM class_students WHERE student_id = ?').run(studentId);
       kernelContainer.db.prepare('DELETE FROM student_lesson_progress WHERE student_id = ?').run(studentId);
       kernelContainer.db.prepare('DELETE FROM assignment_submissions WHERE student_id = ?').run(studentId);
@@ -3758,7 +3818,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
           WHERE strftime('%w', s.scheduled_date) = strftime('%w', ?)
         )
         SELECT r.id, r.class_id, r.lesson_id, ? as scheduled_date, r.time_slot, r.status, r.notes, r.created_at,
-               COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name
+               COALESCE(l.title, '未设定内�? (上课时自由选择)') as lesson_title, c.name as class_name
         FROM RankedSchedules r
         LEFT JOIN lessons l ON r.lesson_id = l.id
         JOIN classes c ON r.class_id = c.id
@@ -3775,7 +3835,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
   app.get('/api/schedules', (req, res) => {
     try {
       const schedules = kernelContainer.db.prepare(`
-        SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name
+        SELECT s.*, COALESCE(l.title, '未设定内�? (上课时自由选择)') as lesson_title, c.name as class_name
         FROM schedules s
         LEFT JOIN lessons l ON s.lesson_id = l.id
         LEFT JOIN classes c ON s.class_id = c.id
@@ -3790,7 +3850,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
   app.get('/api/classes/:classId/schedules', (req, res) => {
     try {
       const schedules = kernelContainer.db.prepare(`
-        SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title
+        SELECT s.*, COALESCE(l.title, '未设定内�? (上课时自由选择)') as lesson_title
         FROM schedules s
         LEFT JOIN lessons l ON s.lesson_id = l.id
         WHERE s.class_id = ?
@@ -3918,29 +3978,29 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       const mimeMatch = imageBase64.match(/^data:(image\/[^;]+);base64,/);
       const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
 
-      const prompt = `你是一个专业的课程表识别助手。请仔细分析这张学校教师的周课程表图片，直接提取出所有的课程条目。
+      const prompt = `你是一个专业的课程表识别助手。请仔细分析这张学校教师的周课程表图片，直接提取出所有的课程条目�?
 
 重要指令（非常关键，必须遵守）：
-1. 严禁输出任何长篇的推理过程、草稿或思考步骤（如不要输出 <think> 标签及其中的英文/中文思考过程）。
-2. 直接以 JSON 格式输出课程表数据数组，不要有任何前导说明文字或后随文字。
-3. 请立即输出结果，保持极简，避免输出长度超限而被API截断。
+1. 严禁输出任何长篇的推理过程、草稿或思考步骤（如不要输�? <think> 标签及其中的英文/中文思考过程）�?
+2. 直接�? JSON 格式输出课程表数据数组，不要有任何前导说明文字或后随文字�?
+3. 请立即输出结果，保持极简，避免输出长度超限而被API截断�?
 
 对于每一个课程条目，请提取以下信息：
-- dayOfWeek: 星期几（1=周一, 2=周二, 3=周三, 4=周四, 5=周五, 6=周六, 7=周日）
-- periodNumber: 第几节课（1-9）
-- className: 班级名称（例如 "高一(13)"、"高二(5)"）
-- subject: 科目名称（例如 "信息"、"劳动"、"数学"）
-- timeSlot: 上课时间段（例如 "10:50-11:30"）。如果图片中可见，请填入具体时间。通常课表的最左侧或某列（“时间”列）会标注该节次对应的上下课时间（例如第4节对应“10:50-11:30”），请将对应的时段填入该节次的所有课程条目中。如果确实不可见则为空字符串
-- location: 教室/机房信息（如果图片中可见，例如 "312"），如果不可见则为空字符串
-- teacherName: 教师姓名（如果图片中可见），如果不可见则为空字符串
+- dayOfWeek: 星期几（1=周一, 2=周二, 3=周三, 4=周四, 5=周五, 6=周六, 7=周日�?
+- periodNumber: 第几节课�?1-9�?
+- className: 班级名称（例�? "高一(13)"�?"高二(5)"�?
+- subject: 科目名称（例�? "信息"�?"劳动"�?"数学"�?
+- timeSlot: 上课时间段（例如 "10:50-11:30"）。如果图片中可见，请填入具体时间。通常课表的最左侧或某列（“时间”列）会标注该节次对应的上下课时间（例如�?4节对应�?10:50-11:30”），请将对应的时段填入该节次的所有课程条目中。如果确实不可见则为空字符串
+- location: 教室/机房信息（如果图片中可见，例�? "312"），如果不可见则为空字符�?
+- teacherName: 教师姓名（如果图片中可见），如果不可见则为空字符�?
 
 请注意：
 1. 必须提取课程表中的所有课程条目，不要遗漏
 2. 仔细区分不同的星期和节次
-3. 只返回一个有效的 JSON 数组，包含在方括号 [] 中，严禁使用 markdown 格式包裹
-4. 如果某个字段在图片中不可见，请使用空字符串
+3. 只返回一个有效的 JSON 数组，包含在方括�? [] 中，严禁使用 markdown 格式包裹
+4. 如果某个字段在图片中不可见，请使用空字符�?
 
-返回格式示例：
+返回格式示例�?
 [{"dayOfWeek":1,"periodNumber":1,"className":"高一(13)","subject":"信息","timeSlot":"08:00-08:40","location":"312","teacherName":""}]`;
 
       let text = '';
@@ -4045,7 +4105,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
         const geminiKey = process.env.GEMINI_API_KEY;
         if (!geminiKey) {
           console.warn(`[OCR Error] GEMINI_API_KEY is not configured`);
-          return res.status(500).json({ error: lang === 'zh' ? '未配置 AI 服务。请在系统设置中添加 AI Provider 或配置 GEMINI_API_KEY。' : 'No AI provider configured. Please add an AI Provider in settings or set GEMINI_API_KEY.' });
+          return res.status(500).json({ error: lang === 'zh' ? '未配�? AI 服务。请在系统设置中添加 AI Provider 或配�? GEMINI_API_KEY�?' : 'No AI provider configured. Please add an AI Provider in settings or set GEMINI_API_KEY.' });
         }
 
         const ai = new GoogleGenAI({ apiKey: geminiKey });
@@ -4120,7 +4180,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
 
       // Verify if there are any schedules for this class
       let schedules = db.prepare(`
-        SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title
+        SELECT s.*, COALESCE(l.title, '未设定内�? (上课时自由选择)') as lesson_title
         FROM schedules s
         LEFT JOIN lessons l ON s.lesson_id = l.id
         WHERE s.class_id = ?
@@ -4162,7 +4222,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
 
         // Re-fetch since we just created them
         schedules = db.prepare(`
-          SELECT s.*, COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title
+          SELECT s.*, COALESCE(l.title, '未设定内�? (上课时自由选择)') as lesson_title
           FROM schedules s
           LEFT JOIN lessons l ON s.lesson_id = l.id
           WHERE s.class_id = ?
@@ -4382,7 +4442,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
   app.get('/api/classes/:classId/semester-grades', (req, res) => {
     try {
       const classId = req.params.classId;
-      const semesterName = (req.query.semesterName as string) || '2026年春季学期';
+      const semesterName = (req.query.semesterName as string) || '2026年春季学�?';
 
       // 1. Get weights
       let weights = kernelContainer.db.prepare('SELECT * FROM class_grade_weights WHERE class_id = ?').get(classId) as any;
@@ -4627,7 +4687,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
   app.post('/api/classes/:classId/students/:studentId/semester-ai-evaluation', async (req, res) => {
     try {
       const { classId, studentId } = req.params;
-      const { semesterName = '2026年春季学期', providerId } = req.body;
+      const { semesterName = '2026年春季学�?', providerId } = req.body;
 
       // 1. Get student and class info
       const student = kernelContainer.db.prepare('SELECT name FROM students WHERE id = ?').get(studentId) as { name: string } | undefined;
@@ -4660,29 +4720,29 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       // Formatting context for AI
       const attSummary = attendanceStats.map(a => `${a.status === 'present' ? '出勤' : a.status === 'late' ? '迟到' : a.status === 'leave_early' ? '早退' : a.status === 'excused' ? '请假' : '缺勤'}: ${a.count}次`).join(', ') || '暂无出勤记录';
       const avgProg = progressObj.avg_progress !== null ? Math.round(progressObj.avg_progress) : 100;
-      const assignmentsText = assignmentGrades.map(a => `- 《${a.title}》得分: ${a.score}分 (教师评语: ${a.feedback || '无'})`).join('\n') || '- 暂无平时作业记录';
-      const examsText = examGrades.map(e => `- 《${e.title}》得分: ${e.score}/${e.max_score}`).join('\n') || '- 暂无考试成绩记录';
+      const assignmentsText = assignmentGrades.map(a => `- �?${a.title}》得�?: ${a.score}�? (教师评语: ${a.feedback || '�?'})`).join('\n') || '- 暂无平时作业记录';
+      const examsText = examGrades.map(e => `- �?${e.title}》得�?: ${e.score}/${e.max_score}`).join('\n') || '- 暂无考试成绩记录';
 
-      const prompt = `请扮演一位充满爱心、语气温馨的班主任老师。请结合下面这位学生的学期学习数据和作业表现，为该学生撰写一段【富有鼓励性、温馨、语气亲切】的学期期末总评语。
+      const prompt = `请扮演一位充满爱心、语气温馨的班主任老师。请结合下面这位学生的学期学习数据和作业表现，为该学生撰写一段【富有鼓励性、温馨、语气亲切】的学期期末总评语�?
 
-学生姓名：${student.name}
-班级学期：${semesterName}
+学生姓名�?${student.name}
+班级学期�?${semesterName}
 
-学期学习数据：
-- 考勤统计：${attSummary}
-- 平均课程学习进度：${avgProg}%
+学期学习数据�?
+- 考勤统计�?${attSummary}
+- 平均课程学习进度�?${avgProg}%
 - 作业得分与历次反馈：
 ${assignmentsText}
-- 考试/测验成绩：
+- 考试/测验成绩�?
 ${examsText}
 
-评语撰写要求：
-1. 语气必须极其亲切、温馨、富有鼓励性，像长辈或良师益友对孩子的对话，多用鼓励性的句式。
+评语撰写要求�?
+1. 语气必须极其亲切、温馨、富有鼓励性，像长辈或良师益友对孩子的对话，多用鼓励性的句式�?
 2. 评价要包含三个部分：
-   - 肯定其闪光点（如出勤好、某次作业优秀或取得的进步）。
-   - 指出其可以改进的地方（如进度落后、考试发挥不佳等），语气要非常温柔、委婉，给予其信心。
-   - 对未来的期许，激励学生在下学期继续努力。
-3. 长度控制在 150-250 字之间。不要包含任何 Markdown 格式，只返回纯文本评语。`;
+   - 肯定其闪光点（如出勤好、某次作业优秀或取得的进步）�?
+   - 指出其可以改进的地方（如进度落后、考试发挥不佳等），语气要非常温柔、委婉，给予其信心�?
+   - 对未来的期许，激励学生在下学期继续努力�?
+3. 长度控制�? 150-250 字之间。不要包含任�? Markdown 格式，只返回纯文本评语。`;
 
       // 3. Invoke AI Provider
       let text = '';
@@ -4768,7 +4828,7 @@ ${examsText}
           WHERE cs.student_id = ?
         )
         SELECT r.id, r.class_id, r.lesson_id, r.scheduled_date, r.time_slot, r.status, r.notes, r.created_at,
-               COALESCE(l.title, '未设定内容 (上课时自由选择)') as lesson_title, c.name as class_name,
+               COALESCE(l.title, '未设定内�? (上课时自由选择)') as lesson_title, c.name as class_name,
                (SELECT status FROM attendance a WHERE a.schedule_id = r.id AND a.student_id = ?) as attendance_status
         FROM RankedSchedules r
         LEFT JOIN lessons l ON r.lesson_id = l.id
@@ -4915,7 +4975,7 @@ ${examsText}
     res.json(kernelContainer.pluginHost.listPlugins());
   });
 
-  // V3.0: 查询插件贡献点摘要
+  // V3.0: 查询插件贡献点摘�?
   app.get('/api/plugins/:id(*)/contributions', (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
@@ -5051,7 +5111,7 @@ ${examsText}
     }
   });
 
-  // Raw binary upload — avoids base64 overhead for large plugin zips
+  // Raw binary upload �? avoids base64 overhead for large plugin zips
   app.post('/api/plugins/upload-zip-raw', express.raw({ type: 'application/octet-stream', limit: '400mb' }), async (req, res) => {
     try {
       const zipBuffer = req.body;
@@ -5076,7 +5136,7 @@ ${examsText}
       }
 
       // Resolve the prefixed command type. Handlers are registered by the
-      // service-host with a plugin-UUID prefix (e.g. 019f6465-…:courseware.open_panel),
+      // service-host with a plugin-UUID prefix (e.g. 019f6465-�?:courseware.open_panel),
       // but some callers (e.g. whiteboard toolbar buttons) may send the bare type.
       // Fallback: if the bare type is not found, try suffix-matching against
       // all registered handler keys.
@@ -5124,7 +5184,7 @@ ${examsText}
   app.get('/api/ai-providers', (req, res) => {
     try {
       const providers = kernelContainer.db.prepare('SELECT * FROM ai_providers ORDER BY created_at DESC').all() as any[];
-      // SEC-DATA-01: 掩码 API Key 后返回
+      // SEC-DATA-01: 掩码 API Key 后返�?
       const masked = providers.map(p => ({
         ...p,
         api_key: maskApiKey(decryptApiKey(p.api_key || '')),
@@ -5160,7 +5220,7 @@ ${examsText}
         return res.status(400).json({ error: 'Missing name, api_url or model_name' });
       }
       const now = Date.now();
-      // SEC-DATA-01: 含 **** 的掩码密钥 → 保留原值；纯明文 → 加密存储
+      // SEC-DATA-01: �? **** 的掩码密�? �? 保留原值；纯明�? �? 加密存储
       let finalKey: string;
       if (api_key && api_key.trim() !== '' && !api_key.includes('****')) {
         finalKey = encryptApiKey(api_key);
@@ -5192,10 +5252,10 @@ ${examsText}
         return res.status(400).json({ error: 'api_url and model_name are required' });
       }
 
-      // SEC-DATA-01: 解密 API Key（掩码密钥表示未修改，需从 DB 获取）
+      // SEC-DATA-01: 解密 API Key（掩码密钥表示未修改，需�? DB 获取�?
       let api_key = '';
       if (providedKey && providedKey.includes('****')) {
-        // 掩码密钥：用户未输入新 key，尝试从 DB 查询
+        // 掩码密钥：用户未输入�? key，尝试从 DB 查询
         const existing = kernelContainer.db.prepare(
           'SELECT api_key FROM ai_providers WHERE api_url = ? AND model_name = ? LIMIT 1'
         ).get(api_url, model_name) as { api_key: string } | undefined;
@@ -5348,8 +5408,8 @@ ${examsText}
     }
   });
 
-  // P0-1：补齐 whiteboard.element_deleted、whiteboard.cleared 的 Socket.IO 转发
-  // 以及 P1-1：whiteboard.batch_drawn 批量事件的转发
+  // P0-1：补�? whiteboard.element_deleted、whiteboard.cleared �? Socket.IO 转发
+  // 以及 P1-1：whiteboard.batch_drawn 批量事件的转�?
   kernelContainer.eventBus.subscribe('whiteboard.batch_drawn', (event) => {
     try {
       const payload = event.payload as any;
@@ -5449,14 +5509,14 @@ ${examsText}
       socket.to(data.roomId).emit('whiteboard-sync', data);
     });
 
-    // Step 4 (v5.0): 白板结构化事件 → 服务端 EventBus（审计日志 + 广播）
+    // Step 4 (v5.0): 白板结构化事�? �? 服务�? EventBus（审计日�? + 广播�?
     socket.on('whiteboard-event', (data: {
       type: string;
       payload: { lessonId: string; elementId?: string; elementType?: string; segmentId?: string };
       id: string;
       timestamp: number;
     }) => {
-      // 1. 发布到服务端 EventBus → 自动写入 events 表（审计日志）
+      // 1. 发布到服务端 EventBus �? 自动写入 events 表（审计日志�?
       kernelContainer.eventBus.publish({
         id: data.id,
         type: data.type,
@@ -5466,7 +5526,7 @@ ${examsText}
         correlationId: data.payload.lessonId,
       });
 
-      // 2. 广播到课程房间的其他客户端
+      // 2. 广播到课程房间的其他客户�?
       const lessonId = data.payload.lessonId;
       if (lessonId) {
         const roomName = lessonId.startsWith('assignment-') ? lessonId : `lesson-${lessonId}`;
@@ -5545,7 +5605,7 @@ ${examsText}
     }
   });
 
-  // ── 健康检查端点 (OBS-HEALTH-01) ──────────────────────────────────
+  // ── 健康检查端�? (OBS-HEALTH-01) ──────────────────────────────────
   const startTime = Date.now();
   app.get('/health', (_req: any, res: any) => {
     res.json({ status: 'ok', uptime: Math.floor((Date.now() - startTime) / 1000), version: '4.0.0' });
@@ -5605,7 +5665,7 @@ async function gracefulShutdown(signal: string) {
   }, SHUTDOWN_TIMEOUT_MS);
 
   try {
-    // 注意：这些操作在模块作用域无法直接访问 Express 的 httpServer
+    // 注意：这些操作在模块作用域无法直接访�? Express �? httpServer
     // 生产环境建议通过 startServer() 返回 cleanup 函数
     console.log('[Server] Shutting down...');
     process.exit(0);

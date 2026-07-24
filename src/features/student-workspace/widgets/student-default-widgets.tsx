@@ -22,7 +22,7 @@ import { NotificationsDropdown } from '../../modals/NotificationsDropdown.js';
 import { AITeacherWorkspaceWidget } from '../../ai-teacher-workspace/ai-teacher-workspace-widget.js';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer.js';
 import { ResourceRegistry } from '../../resource-runtime/resource-registry.js';
-import { ActivityRegistry } from '../../activity-workflow/activity-registry.js';
+import { ActivityWorkspaceWidget } from '../../activity-ecosystem/ActivityWorkspaceWidget.js';
 import type { StudentWorkspaceContext } from '../student-workspace/student-workspace-context.js';
 
 const panelBase: React.CSSProperties = {
@@ -69,24 +69,13 @@ export const StudentResourcesWidget: React.FC = () => {
   );
 };
 
-// ── Activities (reuses ActivityRegistry) ────────────────────────────────
-export const StudentActivitiesWidget: React.FC = () => {
-  const [providers] = useState(() => new ActivityRegistry().listProviders());
-  return (
-    <div style={panelBase}>
-      <div style={{ fontWeight: 600, marginBottom: 6 }}>🧩 Activities</div>
-      {providers.length === 0 ? (
-        <div style={{ opacity: 0.7 }}>No active activities.</div>
-      ) : (
-        <ul>
-          {providers.map((p) => (
-            <li key={p.id}>{p.type}</li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-};
+// ── Activities (reuses the Activity Ecosystem registry via REST) ───────
+// Same ActivityProvider implementation as the teacher Activity Center — the
+// role prop selects the participant layout. No duplicated activity list.
+export const StudentActivitiesWidget: React.FC<{ studentId?: string; lang?: 'en' | 'zh' }> = ({
+  studentId,
+  lang = 'en',
+}) => <ActivityWorkspaceWidget role="student" actorId={studentId} lang={lang} />;
 
 // ── Assignments (reuses StudentAssignmentEvalPanel) ─────────────────────
 export const StudentAssignmentsWidget: React.FC<{
