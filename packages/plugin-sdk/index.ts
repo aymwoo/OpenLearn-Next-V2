@@ -1,5 +1,5 @@
 /**
- * @openlearn/plugin-sdk — 插件开发类型定义包（V2.5）
+ * @openlearn/plugin-sdk — 插件开发类型定义包（V3.3）
  *
  * 为 OpenLearn 插件开发者提供类型安全的 API 契约。
  * 仅包含类型 + Token 值，不包含运行时代码。

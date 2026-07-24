@@ -40,7 +40,7 @@ OpenLearn V2 采用分层解耦的模块化设计，平台内核（Kernel）清�
 | **后端运行时** | Node.js (ESM), Express, Socket.IO, SQLite (`better-sqlite3`) |
 | **前端框架** | React 19, TypeScript, Vite |
 | **核心内核** | Custom Micro-kernel (`packages/core`) with DI Container |
-| **插件 SDK** | `@openlearn/plugin-sdk` (v3.2.1) |
+| **插件 SDK** | `@openlearn/plugin-sdk` (v3.3.1) |
 | **测试框架** | Vitest with jsdom environment |
 | **文档引擎** | Sphinx with MyST Parser, Mermaid, RTD Theme |
 
@@ -60,5 +60,5 @@ graph TD
     B --> H["Analytics Engine"]
     
     G --> I["Builtin Plugins"]
-    G --> J["Third-Party Plugins (SDK V3.2)"]
+    G --> J["Third-Party Plugins (SDK V3.3.1)"]
 ```

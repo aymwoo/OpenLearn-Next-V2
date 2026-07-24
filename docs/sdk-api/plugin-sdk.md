@@ -1,13 +1,13 @@
 # Plugin SDK API 参考手册
 
-`@openlearn/plugin-sdk` (v3.2.1) 是 OpenLearn V2 插件开发者使用的标准 NPM 包。
+`@openlearn/plugin-sdk` (v3.3.1) 是 OpenLearn V2 插件开发者使用的标准 NPM 包。
 
 ---
 
 ## 安装与引入
 
 ```bash
-npm install @openlearn/plugin-sdk@3.2.1
+npm install @openlearn/plugin-sdk@3.3.1
 ```
 
 在插件代码中使用：

@@ -22,7 +22,7 @@ During this Documentation Synchronization Sprint, the entire `docs/` suite of Op
 | **Plugin Ecosystem** | 5 | Synchronized | Plugin Host Lifecycle, Sandboxing (Worker Thread), Extension Points, Plugin Dev Tutorial (V3.2+), Scaffold CLI, Distribution |
 | **AI Platform** | 3 | Synchronized | AI Runtime Kernel, Model Adapters, AI Capability Layer, Tool Calling, AI Teacher Workspace |
 | **Analytics** | 1 | Synchronized | Learning Analytics Engine, Metrics & Indicators |
-| **SDK & API Reference**| 3 | Synchronized | `@openlearn/plugin-sdk` (v3.2.1), `@openlearn/plugin-test-kit`, Core API Reference |
+| **SDK & API Reference**| 3 | Synchronized | `@openlearn/plugin-sdk` (v3.3.1), `@openlearn/plugin-test-kit`, Core API Reference |
 | **Developer Guide** | 3 | Synchronized | Development Commands, Code Structure, Vitest Testing Strategy, Contributing Guidelines |
 | **Archive** | 60+ (excluded) | Archived | Superseded RFCs (`RFC-000` ~ `RFC-100`), Sprint Reports (`PI-*`, `A1`-`A3`, `EU-01`) |
 
@@ -38,7 +38,7 @@ During this Documentation Synchronization Sprint, the entire `docs/` suite of Op
 
 ### 3.2 API Drift Resolved
 1. **DI Tokens**: Documented all core Tokens (`ICommandBusServiceToken`, `IStorageServiceToken`, `IAIServiceToken`, etc.) exported in `packages/core/di/interfaces.ts`.
-2. **Plugin SDK Versioning**: Updated SDK references to `@openlearn/plugin-sdk@3.2.1` and added documentation for `Token`, `createMockContext`, `ContributionConfig`, and Activity Ecosystem tokens (`IActivityRegistryToken`).
+2. **Plugin SDK Versioning**: Updated SDK references to `@openlearn/plugin-sdk@3.3.1` and added documentation for `Token`, `createMockContext`, `ContributionConfig`, and Activity Ecosystem tokens (`IActivityRegistryToken`).
 3. **Pygments Code Block & Mermaid Fixes**: Replaced invalid `typescript` block lexers containing JSX with `tsx` and enabled `myst_fence_as_directive = ["mermaid"]` in `conf.py`.
 
 ---

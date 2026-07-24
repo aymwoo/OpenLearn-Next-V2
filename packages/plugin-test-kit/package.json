@@ -1,6 +1,6 @@
 {
   "name": "@openlearn/plugin-test-kit",
-  "version": "3.1.0",
+  "version": "3.3.1",
   "description": "Mock-based test utilities for OpenLearn plugin unit testing",
   "type": "module",
   "main": "./index.ts",
