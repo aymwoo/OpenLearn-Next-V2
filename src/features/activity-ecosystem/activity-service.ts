@@ -69,6 +69,30 @@ export async function finishActivity(id: string): Promise<void> {
   }
 }
 
+/** Pause a running activity (dashboard management action). */
+export async function pauseActivity(id: string): Promise<void> {
+  const res = await fetch(`/api/activities/${encodeURIComponent(id)}/pause`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || `Failed to pause activity (${res.status})`);
+  }
+}
+
+/** Resume a paused activity (dashboard management action). */
+export async function resumeActivity(id: string): Promise<void> {
+  const res = await fetch(`/api/activities/${encodeURIComponent(id)}/resume`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error || `Failed to resume activity (${res.status})`);
+  }
+}
+
 /**
  * Start an activity via the host. Reuses the existing classroom command/event
  * pipeline server-side. `actorId` carries the current user for permission

@@ -781,6 +781,48 @@ async function startServer() {
     }
   });
 
+  // Pause a running activity (dashboard management action).
+  app.post('/api/activities/:id/pause', async (req, res) => {
+    try {
+      const provider = activityRegistry.getProvider(req.params.id);
+      if (!provider) {
+        return res.status(404).json({ ok: false, error: 'Activity provider not found' });
+      }
+      const context = createActivityContext({
+        commandBus: kernelContainer.commandBus,
+        eventBus: kernelContainer.eventBus,
+        actionRegistry: kernelContainer.actionRegistry,
+        capability: kernelContainer.capabilityGuard as any,
+        ai: kernelContainer.aiService,
+      });
+      await provider.pause(context);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  // Resume a paused activity (dashboard management action).
+  app.post('/api/activities/:id/resume', async (req, res) => {
+    try {
+      const provider = activityRegistry.getProvider(req.params.id);
+      if (!provider) {
+        return res.status(404).json({ ok: false, error: 'Activity provider not found' });
+      }
+      const context = createActivityContext({
+        commandBus: kernelContainer.commandBus,
+        eventBus: kernelContainer.eventBus,
+        actionRegistry: kernelContainer.actionRegistry,
+        capability: kernelContainer.capabilityGuard as any,
+        ai: kernelContainer.aiService,
+      });
+      await provider.resume(context);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   // OS Agent interaction
   app.post('/api/agent/chat', async (req, res) => {
     try {

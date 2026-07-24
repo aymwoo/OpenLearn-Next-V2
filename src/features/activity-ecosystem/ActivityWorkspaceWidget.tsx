@@ -33,17 +33,21 @@ import {
   Puzzle,
   X,
   Clock,
-  Loader2,
+  Pause,
+  Play,
 } from 'lucide-react';
 import {
   fetchActivities,
   startActivity,
   fetchRunningActivities,
   finishActivity,
+  pauseActivity,
+  resumeActivity,
   type ActivityProviderDescriptor,
   type ActivityRole,
   type RunningActivity,
 } from './activity-service.js';
+import { useAppStore } from '../../store/appStore';
 
 const panelBase: React.CSSProperties = {
   padding: '12px',
@@ -110,8 +114,9 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [manageId, setManageId] = useState<string | null>(null);
-  const [finishing, setFinishing] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
   const [finishError, setFinishError] = useState<string | null>(null);
+  const setTeacherTab = useAppStore((s) => s.setTeacherTab);
 
   // Launcher effect: load the catalogue of startable activities.
   useEffect(() => {
@@ -155,19 +160,27 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
     };
   }, [mode]);
 
-  const handleFinish = async () => {
+  const runAction = async (action: (id: string) => Promise<void>) => {
     if (!manageId) return;
-    setFinishing(true);
+    setActionBusy(true);
     setFinishError(null);
     try {
-      await finishActivity(manageId);
-      setManageId(null);
+      await action(manageId);
+      // Refresh the live list so the card + popover reflect the new state.
       setRunning(await fetchRunningActivities());
     } catch (e: unknown) {
       setFinishError(e instanceof Error ? e.message : String(e));
     } finally {
-      setFinishing(false);
+      setActionBusy(false);
     }
+  };
+
+  const handleFinish = () => runAction(finishActivity);
+  const handlePause = () => runAction(pauseActivity);
+  const handleResume = () => runAction(resumeActivity);
+  const handleEnterClassroom = () => {
+    setManageId(null);
+    setTeacherTab('live_class');
   };
 
   // ── status (dashboard) mode ────────────────────────────────────────────────
@@ -270,18 +283,43 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
                 {managed.startedAt ? new Date(managed.startedAt).toLocaleString() : '-'}
               </div>
               {finishError && <div className="text-xs text-rose-600 mb-2">{finishError}</div>}
+              <div className="flex gap-2">
+                {managed.state === 'running' ? (
+                  <button
+                    disabled={actionBusy}
+                    onClick={handlePause}
+                    className="flex-1 flex items-center justify-center gap-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white rounded-lg py-2 text-sm font-bold"
+                  >
+                    <Pause size={14} /> {lang === 'zh' ? '暂停' : 'Pause'}
+                  </button>
+                ) : (
+                  <button
+                    disabled={actionBusy}
+                    onClick={handleResume}
+                    className="flex-1 flex items-center justify-center gap-1 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white rounded-lg py-2 text-sm font-bold"
+                  >
+                    <Play size={14} /> {lang === 'zh' ? '恢复' : 'Resume'}
+                  </button>
+                )}
+                <button
+                  disabled={actionBusy}
+                  onClick={handleFinish}
+                  className="flex-1 flex items-center justify-center gap-1 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white rounded-lg py-2 text-sm font-bold"
+                >
+                  {actionBusy
+                    ? lang === 'zh'
+                      ? '处理中…'
+                      : 'Working…'
+                    : lang === 'zh'
+                      ? '结束'
+                      : 'End'}
+                </button>
+              </div>
               <button
-                disabled={finishing}
-                onClick={handleFinish}
-                className="w-full bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white rounded-lg py-2 text-sm font-bold"
+                onClick={handleEnterClassroom}
+                className="w-full mt-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg py-2 text-sm font-bold"
               >
-                {finishing
-                  ? lang === 'zh'
-                    ? '结束中…'
-                    : 'Ending…'
-                  : lang === 'zh'
-                    ? '结束活动'
-                    : 'End Activity'}
+                {lang === 'zh' ? '进入课堂' : 'Enter Classroom'}
               </button>
             </div>
           </div>
