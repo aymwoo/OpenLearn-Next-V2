@@ -8,6 +8,8 @@ import {
   IEventBusServiceToken,
   IDatabaseToken,
   IPluginHostToken,
+  IPluginLifecycleManagerToken,
+  IPluginDistributionManagerToken,
 } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './ai-submit-injector.js';
@@ -51,6 +53,9 @@ export const BuiltinPlugin = {
     const eventBus = ctx.services.eventBus;
     const db = await ctx.resolve(IDatabaseToken);
     const pluginHost = await ctx.resolve(IPluginHostToken);
+    // P7-A2 Stage 3: 通过统一 facade 处理 install/uninstall（1:1 委托同一 PluginHost）
+    const lifecycleManager = await ctx.resolve(IPluginLifecycleManagerToken);
+    const distributionManager = await ctx.resolve(IPluginDistributionManagerToken);
 
     // 1. LESSON HANDLER
     const createLessonCmdType = 'lesson.create';
@@ -813,7 +818,7 @@ export const BuiltinPlugin = {
         const payload = command.payload as any;
         const base64Content = payload.base64Data.replace(/^data:[^;]+;base64,/, '');
         const fileBuffer = Buffer.from(base64Content, 'base64');
-        const manifest = await pluginHost.installPluginFromZip(fileBuffer, payload.executionMode);
+        const manifest = await distributionManager.installFromZip(fileBuffer, payload.executionMode);
         return { success: true, manifest };
       }
     });
@@ -863,7 +868,7 @@ export const BuiltinPlugin = {
     await commandBus.registerHandler(uninstallPluginCmdType, {
       async execute(command) {
         const payload = command.payload as any;
-        await pluginHost.uninstallPlugin(payload.pluginId);
+        await lifecycleManager.uninstallPlugin(payload.pluginId);
         return { success: true };
       }
     });

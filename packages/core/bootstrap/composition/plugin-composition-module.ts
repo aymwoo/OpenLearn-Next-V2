@@ -36,6 +36,16 @@ export class PluginCompositionModule implements CompositionModule {
 
   public compose(options: CompositionContextOptions): void {
     const serviceRegistry = getPlatformServiceRegistry();
+
+    // 幂等注册：共享单例注册表在多次 compose（如多 Kernel 实例/测试）时会触发
+    // 重复注册冲突，故已存在时替换为最新实例（与单例 Kernel 生产环境一致）。
+    const registerOrReplace = <T>(descriptor: { id: string }, instance: T): void => {
+      if (serviceRegistry.has(descriptor.id)) {
+        serviceRegistry.replace(descriptor.id, instance);
+      } else {
+        serviceRegistry.register(descriptor, instance);
+      }
+    };
     const capabilityRegistry = new CapabilityRegistry();
     const permissionManager = new PermissionManager();
     const eventBus = new EventBus();
@@ -50,49 +60,49 @@ export class PluginCompositionModule implements CompositionModule {
     const realExtensionRegistry = options?.infrastructureRefs?.get('extensionRegistry') ?? { name: 'UnifiedExtensionRegistry', version: '2.5.0' };
     const realDistributionManager = options?.infrastructureRefs?.get('distributionManager') ?? { name: 'PluginDistributionManager', version: '2.5.0' };
 
-    serviceRegistry.register({
+    registerOrReplace({
       id: 'srv_plugin_host',
       lifetime: 'Singleton',
       description: 'OpenLearn Plugin Host Service Engine',
       instance: realPluginHost,
     });
 
-    serviceRegistry.register({
+    registerOrReplace({
       id: 'srv_plugin_contribution_registry',
       lifetime: 'Singleton',
       description: 'Plugin UI & Slot Contribution Registry',
       instance: realContributionRegistry,
     });
 
-    serviceRegistry.register({
+    registerOrReplace({
       id: 'srv_plugin_runtime_composition',
       lifetime: 'Singleton',
       description: 'OpenLearn Plugin Runtime Composition Facade',
       instance: realRuntimeComposition,
     });
 
-    serviceRegistry.register({
+    registerOrReplace({
       id: 'srv_plugin_lifecycle_manager',
       lifetime: 'Singleton',
       description: 'OpenLearn Unified Plugin Lifecycle Manager',
       instance: realLifecycleManager,
     });
 
-    serviceRegistry.register({
+    registerOrReplace({
       id: 'srv_plugin_capability_gateway',
       lifetime: 'Singleton',
       description: 'OpenLearn Unified Plugin Capability Gateway',
       instance: realCapabilityGateway,
     });
 
-    serviceRegistry.register({
+    registerOrReplace({
       id: 'srv_unified_extension_registry',
       lifetime: 'Singleton',
       description: 'OpenLearn Unified Extension Registry Foundation',
       instance: realExtensionRegistry,
     });
 
-    serviceRegistry.register({
+    registerOrReplace({
       id: 'srv_plugin_distribution_manager',
       lifetime: 'Singleton',
       description: 'OpenLearn Plugin Distribution Manager Foundation',

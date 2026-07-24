@@ -107,6 +107,10 @@ export class PlatformServiceRegistry {
     this.logInfo(`Service Replaced: '${serviceId}'`);
   }
 
+  public has(serviceId: string): boolean {
+    return this.collection.has(serviceId);
+  }
+
   public resolve<T = unknown>(serviceId: string, scope?: ServiceScope): T {
     const desc = this.collection.get<T>(serviceId);
     if (!desc) {

@@ -102,8 +102,11 @@ export class PluginDistributionManager implements IPluginDistributionManager {
     return result;
   }
 
-  public async installFromZip(zipBuffer: Buffer): Promise<{ pluginId: string; manifest: Manifest }> {
-    const manifest = await this.pluginHost.installPluginFromZip(zipBuffer);
+  public async installFromZip(
+    zipBuffer: Buffer,
+    executionMode?: 'worker' | 'inline',
+  ): Promise<{ pluginId: string; manifest: Manifest }> {
+    const manifest = await this.pluginHost.installPluginFromZip(zipBuffer, executionMode);
     return { pluginId: manifest.id, manifest };
   }
 

@@ -111,6 +111,12 @@ export {
   ICapabilityRuntimeServiceToken,
   ICapabilityGovernanceServiceToken,
   IPlatformServiceRegistryToken,
+  IPluginLifecycleManagerToken,
+  IPluginDistributionManagerToken,
+  IPluginRuntimeCompositionToken,
+  IUnifiedExtensionRegistryToken,
+  IPluginCapabilityGatewayToken,
+  ICapabilityRegistryToken,
 } from '../core/di/interfaces.js';
 
 export type {

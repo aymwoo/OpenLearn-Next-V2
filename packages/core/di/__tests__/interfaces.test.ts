@@ -23,7 +23,19 @@ import {
   IStorageServiceToken,
   IAIServiceToken,
   IDatabaseToken,
+  IPluginLifecycleManagerToken,
+  IPluginDistributionManagerToken,
+  IPluginRuntimeCompositionToken,
+  IUnifiedExtensionRegistryToken,
+  IPluginCapabilityGatewayToken,
+  ICapabilityRegistryToken,
 } from '../interfaces.js';
+import { PluginLifecycleManager } from '../../plugin-host/plugin-lifecycle-manager.js';
+import { PluginDistributionManager } from '../../plugin-host/plugin-distribution-manager.js';
+import { PluginRuntimeComposition } from '../../plugin-host/plugin-runtime-composition.js';
+import { UnifiedExtensionRegistry } from '../../plugin-host/unified-extension-registry.js';
+import { PluginCapabilityGateway } from '../../plugin-host/plugin-capability-gateway.js';
+import { CapabilityRegistry } from '../../ai-capability/registry/capability-registry.js';
 
 // ── Test data ────────────────────────────────────────────────────────────────
 
@@ -100,6 +112,49 @@ describe('Kernel IService 注册', () => {
     expect(
       await kernel.serviceRegistry.resolve(IProcessServiceToken),
     ).toBe(kernel.processManager);
+  });
+
+  // P7-A2 Stage 3: 6 个统一插件 facade 注册进 DI，resolve 返回与 kernel 直接属性同一引用
+  it('resolve 返回的 facade 应与 kernel 直接属性一致（P7-A2 Stage 3）', async () => {
+    expect(await kernel.serviceRegistry.resolve(IPluginLifecycleManagerToken)).toBe(
+      kernel.pluginLifecycleManager,
+    );
+    expect(await kernel.serviceRegistry.resolve(IPluginDistributionManagerToken)).toBe(
+      kernel.pluginDistributionManager,
+    );
+    expect(await kernel.serviceRegistry.resolve(IPluginRuntimeCompositionToken)).toBe(
+      kernel.pluginRuntimeComposition,
+    );
+    expect(await kernel.serviceRegistry.resolve(IUnifiedExtensionRegistryToken)).toBe(
+      kernel.unifiedExtensionRegistry,
+    );
+    expect(await kernel.serviceRegistry.resolve(IPluginCapabilityGatewayToken)).toBe(
+      kernel.pluginCapabilityGateway,
+    );
+    expect(await kernel.serviceRegistry.resolve(ICapabilityRegistryToken)).toBe(kernel.capabilityRegistry);
+  });
+
+  it('resolve 出的 facade 是各自类的真实实例（P7-A2 Stage 3）', async () => {
+    expect(await kernel.serviceRegistry.resolve(IPluginLifecycleManagerToken)).toBeInstanceOf(
+      PluginLifecycleManager,
+    );
+    expect(await kernel.serviceRegistry.resolve(IPluginDistributionManagerToken)).toBeInstanceOf(
+      PluginDistributionManager,
+    );
+    expect(await kernel.serviceRegistry.resolve(IPluginRuntimeCompositionToken)).toBeInstanceOf(
+      PluginRuntimeComposition,
+    );
+    expect(await kernel.serviceRegistry.resolve(IUnifiedExtensionRegistryToken)).toBeInstanceOf(
+      UnifiedExtensionRegistry,
+    );
+    expect(await kernel.serviceRegistry.resolve(IPluginCapabilityGatewayToken)).toBeInstanceOf(
+      PluginCapabilityGateway,
+    );
+    expect(await kernel.serviceRegistry.resolve(ICapabilityRegistryToken)).toBeInstanceOf(CapabilityRegistry);
+  });
+
+  it('pluginLifecycleManager.listPlugins 委托真实 pluginHost.listPlugins（内容一致）', () => {
+    expect(kernel.pluginLifecycleManager.listPlugins()).toEqual(kernel.pluginHost.listPlugins());
   });
 
   it('resolve 返回的 StorageService 应是独立实例（SC-5）', async () => {

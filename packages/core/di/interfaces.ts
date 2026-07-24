@@ -326,6 +326,12 @@ export const IDatabaseToken = new Token<import('better-sqlite3').Database>(
 );
 
 import type { PluginHost } from '../plugin-host/index.js';
+import type { PluginRuntimeComposition } from '../plugin-host/plugin-runtime-composition.js';
+import type { PluginDistributionManager } from '../plugin-host/plugin-distribution-manager.js';
+import type { PluginCapabilityGateway } from '../plugin-host/plugin-capability-gateway.js';
+import type { UnifiedExtensionRegistry } from '../plugin-host/unified-extension-registry.js';
+import type { PluginLifecycleManager } from '../plugin-host/plugin-lifecycle-manager.js';
+import type { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
 
 /**
  * Token for PluginHost.
@@ -333,6 +339,54 @@ import type { PluginHost } from '../plugin-host/index.js';
  */
 export const IPluginHostToken = new Token<PluginHost>(
   '@openlearn/core:IPluginHost',
+);
+
+/**
+ * Token for Unified Plugin Lifecycle Manager (P7-A2 Stage 3).
+ * Identifier: @openlearn/core:IPluginLifecycleManager
+ */
+export const IPluginLifecycleManagerToken = new Token<PluginLifecycleManager>(
+  '@openlearn/core:IPluginLifecycleManager',
+);
+
+/**
+ * Token for Unified Plugin Distribution Manager (P7-A2 Stage 3).
+ * Identifier: @openlearn/core:IPluginDistributionManager
+ */
+export const IPluginDistributionManagerToken = new Token<PluginDistributionManager>(
+  '@openlearn/core:IPluginDistributionManager',
+);
+
+/**
+ * Token for Plugin Runtime Composition (P7-A2 Stage 3).
+ * Identifier: @openlearn/core:IPluginRuntimeComposition
+ */
+export const IPluginRuntimeCompositionToken = new Token<PluginRuntimeComposition>(
+  '@openlearn/core:IPluginRuntimeComposition',
+);
+
+/**
+ * Token for Unified Extension Registry (P7-A2 Stage 3).
+ * Identifier: @openlearn/core:IUnifiedExtensionRegistry
+ */
+export const IUnifiedExtensionRegistryToken = new Token<UnifiedExtensionRegistry>(
+  '@openlearn/core:IUnifiedExtensionRegistry',
+);
+
+/**
+ * Token for Plugin Capability Gateway (P7-A2 Stage 3).
+ * Identifier: @openlearn/core:IPluginCapabilityGateway
+ */
+export const IPluginCapabilityGatewayToken = new Token<PluginCapabilityGateway>(
+  '@openlearn/core:IPluginCapabilityGateway',
+);
+
+/**
+ * Token for Capability Registry (P7-A2 Stage 3).
+ * Identifier: @openlearn/core:ICapabilityRegistry
+ */
+export const ICapabilityRegistryToken = new Token<CapabilityRegistry>(
+  '@openlearn/core:ICapabilityRegistry',
 );
 
 /**

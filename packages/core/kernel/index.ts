@@ -37,6 +37,12 @@ import {
   ICapabilityRuntimeServiceToken,
   ICapabilityGovernanceServiceToken,
   IPlatformServiceRegistryToken,
+  IPluginLifecycleManagerToken,
+  IPluginDistributionManagerToken,
+  IPluginRuntimeCompositionToken,
+  IUnifiedExtensionRegistryToken,
+  IPluginCapabilityGatewayToken,
+  ICapabilityRegistryToken,
 } from '../di/interfaces.js';
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
@@ -198,6 +204,13 @@ export class Kernel {
     this.serviceRegistry.register(IAIServiceToken, this.aiService);
     this.serviceRegistry.register(IDatabaseToken, this.db as any);
     this.serviceRegistry.register(IPluginHostToken, this.pluginHost);
+    // P7-A2 Stage 3: 注册统一插件 facade，使插件可通过 ctx.resolve(token) 获取
+    this.serviceRegistry.register(IPluginLifecycleManagerToken, this.pluginLifecycleManager);
+    this.serviceRegistry.register(IPluginDistributionManagerToken, this.pluginDistributionManager);
+    this.serviceRegistry.register(IPluginRuntimeCompositionToken, this.pluginRuntimeComposition);
+    this.serviceRegistry.register(IUnifiedExtensionRegistryToken, this.unifiedExtensionRegistry);
+    this.serviceRegistry.register(IPluginCapabilityGatewayToken, this.pluginCapabilityGateway);
+    this.serviceRegistry.register(ICapabilityRegistryToken, this.capabilityRegistry);
     this.serviceRegistry.register(ISemesterGradeServiceToken, new SemesterGradeService(this.db as any));
     this.serviceRegistry.register(ILessonEngineServiceToken, { getRuntime: async () => this.lessonRuntime } as any);
     this.serviceRegistry.register(IClassroomRuntimeServiceToken, { getRuntimeKernel: async () => this.classroomRuntime } as any);

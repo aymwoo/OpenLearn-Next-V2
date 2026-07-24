@@ -5060,7 +5060,7 @@ ${examsText}
 
   // Plugin APIs
   app.get('/api/plugins', (req, res) => {
-    res.json(kernelContainer.pluginHost.listPlugins());
+    res.json(kernelContainer.pluginLifecycleManager.listPlugins());
   });
 
   // V3.0: 查询插件贡献点摘�?
@@ -5207,7 +5207,7 @@ ${examsText}
       if (!Buffer.isBuffer(zipBuffer) || zipBuffer.length === 0) {
         return res.status(400).json({ success: false, error: 'Empty or invalid zip file' });
       }
-      const result = await kernelContainer.pluginHost.installPluginFromZip(zipBuffer);
+      const result = await kernelContainer.pluginDistributionManager.installFromZip(zipBuffer);
       res.json({ success: true, pluginId: (result as any).pluginId, manifest: result });
     } catch (err: any) {
       console.error(err);
