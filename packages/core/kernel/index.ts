@@ -164,7 +164,9 @@ export class Kernel {
     this.pluginHost.setWorkerManager(this.workerManager);
 
     // P7-A2 Stage 2: 实例化插件生态统一 facade（真实单例，委托给 PluginHost）
-    const capabilityRegistry = new CapabilityRegistry();
+    // P7-A2 Stage 4: 复用 AICapabilityKernel 的真实能力注册表，使 capability gateway
+    // 反映平台真实能力（而非空注册表）。
+    const capabilityRegistry = this.aiCapability.registry;
     this.pluginRuntimeComposition = new PluginRuntimeComposition(this.pluginHost, this.workerManager);
     this.pluginLifecycleManager = new PluginLifecycleManager(this.pluginHost);
     this.pluginDistributionManager = new PluginDistributionManager(this.pluginHost);

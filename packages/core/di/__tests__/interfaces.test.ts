@@ -157,6 +157,13 @@ describe('Kernel IService 注册', () => {
     expect(kernel.pluginLifecycleManager.listPlugins()).toEqual(kernel.pluginHost.listPlugins());
   });
 
+  it('pluginCapabilityGateway 反映 AICapabilityKernel 的真实能力（P7-A2 Stage 4）', () => {
+    const caps = kernel.pluginCapabilityGateway.listCapabilities();
+    expect(caps.length).toBeGreaterThan(0);
+    expect(caps.some((c) => c.id === 'capability_plugin')).toBe(true);
+    expect(kernel.pluginCapabilityGateway.hasCapability('capability_plugin')).toBe(true);
+  });
+
   it('resolve 返回的 StorageService 应是独立实例（SC-5）', async () => {
     const storage = await kernel.serviceRegistry.resolve(IStorageServiceToken);
     expect(storage).toBe(kernel.storageService);
