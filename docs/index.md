@@ -81,6 +81,7 @@ sdk-api/core-api-reference
 developer-guide/developer-guide
 developer-guide/testing-strategy
 developer-guide/contributing
+developer-guide/sync-report
 ```
 
 ---
