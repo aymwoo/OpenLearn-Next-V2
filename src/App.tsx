@@ -12,6 +12,19 @@ import { LazyCourseware } from './components/LazyCourseware';
 import { LiveClassroomView } from './components/LiveClassroomView';
 import { CoursewareHubPanel } from './features/teacher/CoursewareHubPanel';
 
+// ── Hash-based routing helpers ────────────────────────────────────────────
+// Map the active teacher tab to/from the URL hash so page switches are
+// reflected in the browser address bar (e.g. #/classes). Hash routing needs
+// no server-side SPA fallback, unlike History API pushState.
+function tabToHash(tab: string): string {
+  return '#/' + tab;
+}
+function hashToTab(hash: string): string | null {
+  const raw = hash.replace(/^#/, '');
+  if (!raw || raw === '/') return null;
+  return raw.replace(/^\//, '');
+}
+
 function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null }) {
   const extensionPoints = usePluginHostStore(state => state.extensionPoints);
   const lang = useAppStore(state => state.lang);
@@ -564,6 +577,30 @@ export default function App() {
 
   const teacherTab = useAppStore(state => state.teacherTab);
   const setTeacherTab = useAppStore(state => state.setTeacherTab);
+
+  // ── Hash-based routing: reflect teacherTab in the address bar ──
+  // Deep link + back/forward support: read the active tab from the URL hash.
+  useEffect(() => {
+    const applyHash = () => {
+      const tab = hashToTab(window.location.hash);
+      if (tab && tab !== useAppStore.getState().teacherTab) {
+        setTeacherTab(tab);
+      }
+    };
+    window.addEventListener('hashchange', applyHash);
+    const initial = hashToTab(window.location.hash);
+    if (initial) setTeacherTab(initial);
+    return () => window.removeEventListener('hashchange', applyHash);
+  }, [setTeacherTab]);
+
+  // Write the active tab back into the URL hash so the address bar shows it.
+  useEffect(() => {
+    const desired = tabToHash(teacherTab);
+    if (window.location.hash !== desired) {
+      window.location.hash = desired;
+    }
+  }, [teacherTab, setTeacherTab]);
+
   const [isTourOpen, setIsTourOpen] = useState(false);
   const [isApprovalsCollapsed, setIsApprovalsCollapsed] = useState(false);
   const [isProcessesCollapsed, setIsProcessesCollapsed] = useState(false);
