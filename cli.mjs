@@ -23,7 +23,7 @@ Options:
 
 Environment:
   OPENLEARN_DB_PATH  SQLite database path (default: ~/openlearn-next/data.db)
-  GEMINI_API_KEY     Google Gemini API key for AI features
+  GEMINI_API_KEY     Optional. Fallback AI key; AI features are configured via AI Providers in the admin dashboard
 `);
     process.exit(0);
   }

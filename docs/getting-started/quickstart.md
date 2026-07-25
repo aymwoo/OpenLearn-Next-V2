@@ -22,10 +22,11 @@ pnpm install
 cp .env.example .env
 ```
 
-填入 Gemni API Key（用于开启 AI 助教功能）：
+（可选）配置 AI 服务。推荐在启动后于管理后台「AI 提供商管理」中添加 OpenAI 兼容的 AI 提供商；
+也可设置 `GEMINI_API_KEY` 作为回退（非必需）：
 
 ```ini
-GEMINI_API_KEY=your_gemini_api_key_here
+# GEMINI_API_KEY=your_gemini_api_key_here
 PORT=9000
 ```
 

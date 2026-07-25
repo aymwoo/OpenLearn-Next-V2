@@ -40,8 +40,8 @@ OPENLEARN_DB_PATH=./my.db npx openlearn-next  # 自定义数据库路径（默�
 # 安装依赖
 npm install
 
-# 配置环境变量
-echo "GEMINI_API_KEY=你的密钥" > .env
+# 配置环境变量（可选：AI 功能通过管理后台「AI 提供商」配置，或设置 GEMINI_API_KEY 作为回退）
+# echo "GEMINI_API_KEY=你的密钥" > .env
 
 # 启动开发服务
 ./dev.sh
@@ -173,7 +173,7 @@ ext-exam.zip
 
 | 变量 | 必需 | 说明 |
 |------|:--:|------|
-| `GEMINI_API_KEY` | ✅ | 默认 AI 服务密钥（也可在管理面板配置第三方 AI） |
+| `GEMINI_API_KEY` | — | 可选。AI 服务回退密钥；推荐在管理面板「AI 提供商管理」配置第三方 AI（OpenAI 兼容） |
 | `PORT` | — | 服务端口，默认 9000 |
 | `OPENLEARN_DB_PATH` | — | SQLite 数据库路径（npx 默认 ~/openlearn-next/data.db，本地开发默认项目目录） |
 | `ENCRYPTION_KEY` | ✅ | 64 位 hex，AI Provider API Key 加密密钥（`deploy.sh` 自动生成） |

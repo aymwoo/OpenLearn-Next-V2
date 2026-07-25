@@ -3,6 +3,7 @@ import { Home, BookOpen, Presentation, Users, Calendar as CalendarIcon, LayoutTe
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import type { SessionType, ScheduleType } from '../../store/appStore';
+import { useAppStore } from '../../store/appStore';
 
 interface NavigationSidebarProps {
   mainNavCollapsed: boolean;
@@ -40,6 +41,7 @@ export function NavigationSidebar({
 }: NavigationSidebarProps) {
   const extensionPoints = usePluginHostStore((s) => s.extensionPoints);
   const pluginTabs = extensionPoints.get('teacher.tab' as any) || [];
+  const siteInfo = useAppStore((s) => s.siteInfo);
 
   return (
     <div id="navigation_sidebar" className={`${mainNavCollapsed ? 'w-16' : 'w-16 md:w-64'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300`}>
@@ -57,6 +59,22 @@ export function NavigationSidebar({
         >
           {mainNavCollapsed ? <Menu size={18} /> : <ChevronLeft size={18} />}
         </button>
+      </div>
+
+      {/* Brand logo slot (站点 Logo 槽位) */}
+      <div className={`px-2 pt-2 ${mainNavCollapsed ? 'flex justify-center' : ''}`}>
+        <div className={`flex items-center gap-2 ${mainNavCollapsed ? '' : 'bg-slate-50 border border-gray-150 rounded-xl px-2.5 py-2'}`}>
+          {siteInfo.logoUrl ? (
+            <img src={siteInfo.logoUrl} alt="site logo" className="h-8 w-8 object-contain rounded-md shrink-0" />
+          ) : (
+            <div className="h-8 w-8 rounded-md bg-gradient-to-tr from-indigo-500 to-indigo-600 flex items-center justify-center text-white font-black text-sm shrink-0">OL</div>
+          )}
+          {!mainNavCollapsed && (
+            <span className="text-sm font-black text-gray-800 truncate">
+              {siteInfo.siteName || (lang === 'zh' ? '智慧课堂' : 'OpenLearn Next')}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className={`p-2 ${mainNavCollapsed ? 'md:p-2' : 'md:p-4'} flex flex-col gap-3 mt-2 overflow-y-auto flex-1`}>

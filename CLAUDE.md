@@ -25,7 +25,7 @@ npm start
 npm run clean
 ```
 
-环境要求：在 `.env.local` 或 `.env` 中配置 `GEMINI_API_KEY`（默认 AI 服务）。也可在管理后台配置第三方 AI 提供商。
+环境要求：`GEMINI_API_KEY` 已不再是必填项。AI 功能可在管理后台的「AI 提供商管理」中配置第三方 AI（OpenAI 兼容接口），或可选地设置 `GEMINI_API_KEY` 作为回退。
 
 ## 技术栈
 
@@ -277,7 +277,7 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 ## Platform Requirements
 - Node.js (支持 ES2022 modules)
 - pnpm 或 npm
-- 有效的 GEMINI_API_KEY（或配置第三方 AI 提供商）
+- AI 服务配置（可选）：在管理后台「AI 提供商管理」中添加 AI 提供商，或可选地设置 `GEMINI_API_KEY` 作为回退；两者均非必需
 - AI Studio 平台（Google Cloud Run 部署）
 - Metadata config `metadata.json` 声明 `MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API` 能力
 - 构建流程：`vite build`（前端）+ `esbuild server.ts --bundle --platform=node --format=cjs --packages=external`（后端）

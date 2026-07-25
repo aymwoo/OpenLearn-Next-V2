@@ -20,6 +20,7 @@ interface RightSidebarProps {
   setChatAttachments: React.Dispatch<React.SetStateAction<{ name: string; content: string }[]>>;
   handleChatFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleChatDrop: (e: React.DragEvent) => void;
+  onClearAgentMemory: () => void;
   events: any[];
   lang: string;
   t: Record<string, string>;
@@ -33,6 +34,7 @@ export function RightSidebar({
   chatLog, loading, input, setInput, handleSend,
   chatAttachments, setChatAttachments,
   handleChatFileChange, handleChatDrop,
+  onClearAgentMemory,
   events, lang, t,
 }: RightSidebarProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -74,6 +76,13 @@ export function RightSidebar({
                     <div className="min-w-0">
                       <h2 className="font-semibold text-gray-900 text-sm">{t.agentTitle}</h2>
                       <p className="text-[10px] text-gray-500">{t.agentSubtitle}</p>
+                      <button
+                        onClick={onClearAgentMemory}
+                        title={lang === 'zh' ? '清除内核助手的对话记忆' : 'Clear the kernel assistant\'s conversation memory'}
+                        className="mt-1 inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        🧹 {lang === 'zh' ? '清除记忆' : 'Clear memory'}
+                      </button>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5 min-w-[150px] max-w-[50%]">

@@ -71,6 +71,9 @@ export interface AppState {
   // Toast
   toasts: Toast[];
 
+  // Site-wide branding/settings (站点信息设置)
+  siteInfo: { siteName: string; slogan: string; logoUrl: string | null };
+
   // ── Actions ──────────────────────────────────────────────────────────────
 
   // Core setters (existing)
@@ -127,6 +130,9 @@ export interface AppState {
   // Toast setters
   addToast: (toast: Toast) => void;
   removeToast: (id: string) => void;
+
+  // Site info setter
+  setSiteInfo: (info: { siteName: string; slogan: string; logoUrl: string | null }) => void;
 }
 
 // ── Create vanilla store ───────────────────────────────────────────────────
@@ -184,6 +190,9 @@ export const appStore = createStore<AppState>((set) => ({
 
   // Toast defaults
   toasts: [],
+
+  // Site info defaults
+  siteInfo: { siteName: '', slogan: '', logoUrl: null },
 
   // ── Core setters ──────────────────────────────────────────────────────
 
@@ -255,6 +264,8 @@ export const appStore = createStore<AppState>((set) => ({
 
   addToast: (toast) => set((s) => ({ toasts: [...s.toasts, toast] })),
   removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+
+  setSiteInfo: (siteInfo) => set({ siteInfo }),
 }));
 
 // ── React-bound hook ───────────────────────────────────────────────────────

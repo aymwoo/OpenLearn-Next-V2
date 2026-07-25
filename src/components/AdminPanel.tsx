@@ -24,6 +24,12 @@ export interface AIProvider {
   updated_at?: number;
 }
 
+export interface SiteInfo {
+  siteName: string;
+  slogan: string;
+  logoUrl: string | null;
+}
+
 interface AdminPanelProps {
   currentUserId: string;
   currentUserRole: 'administrator' | 'teacher';
@@ -33,9 +39,11 @@ interface AdminPanelProps {
   testingProviderId: string | null;
   onAIProvidersChanged: () => void;
   onTriggerTour?: () => void;
+  siteInfo?: SiteInfo;
+  onSiteInfoChanged?: (info: SiteInfo) => void;
 }
 
-export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiProviders, testingProviderId, onAIProvidersChanged, onTriggerTour }: AdminPanelProps) {
+export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiProviders, testingProviderId, onAIProvidersChanged, onTriggerTour, siteInfo, onSiteInfoChanged }: AdminPanelProps) {
   const [users, setUsers] = useState<TeacherUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -49,6 +57,14 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiP
   const [providerApiKey, setProviderApiKey] = useState('');
   const [providerModelName, setProviderModelName] = useState('');
   const [providerSaving, setProviderSaving] = useState(false);
+
+  // Site settings form state
+  const [siteName, setSiteName] = useState(siteInfo?.siteName || '');
+  const [siteSlogan, setSiteSlogan] = useState(siteInfo?.slogan || '');
+  const [siteLogoUrl, setSiteLogoUrl] = useState<string | null>(siteInfo?.logoUrl || null);
+  const [siteLogoInput, setSiteLogoInput] = useState(siteInfo?.logoUrl || '');
+  const [siteSettingsSaving, setSiteSettingsSaving] = useState(false);
+  const [siteSettingsLoaded, setSiteSettingsLoaded] = useState(false);
 
   // Search/Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -73,7 +89,7 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiP
   const [refreshStatsCount, setRefreshStatsCount] = useState(0);
 
   // Top-level Admin Panel Tab State
-  const [activeAdminTab, setActiveAdminTab] = useState<'directory' | 'sqlite' | 'ai_providers'>('directory');
+  const [activeAdminTab, setActiveAdminTab] = useState<'directory' | 'sqlite' | 'ai_providers' | 'site_settings'>('directory');
   const [sqliteStats, setSqliteStats] = useState<{
     status: string;
     type: string;
@@ -204,6 +220,66 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiP
 
   const isAdmin = currentUserRole === 'administrator';
 
+  // ── Site Settings ────────────────────────────────────────────────────
+
+  const fetchSiteSettings = async () => {
+    try {
+      const res = await fetch('/api/site-settings');
+      if (res.ok) {
+        const data = await res.json();
+        setSiteName(data.siteName || '');
+        setSiteSlogan(data.slogan || '');
+        setSiteLogoUrl(data.logoUrl || null);
+        setSiteLogoInput(data.logoUrl || '');
+        setSiteSettingsLoaded(true);
+      }
+    } catch (err) {
+      console.error('Failed to fetch site settings', err);
+    }
+  };
+
+  const handleSiteLogoFile = (file: File | undefined) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setSiteLogoUrl(dataUrl);
+      setSiteLogoInput(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveSiteSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSiteSettingsSaving(true);
+      const logoToSave = siteLogoInput && siteLogoInput.trim() ? siteLogoInput.trim() : null;
+      const res = await fetch('/api/site-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          siteName: siteName.trim(),
+          slogan: siteSlogan.trim(),
+          logoUrl: logoToSave,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSiteLogoUrl(logoToSave);
+        onSiteInfoChanged?.(data.siteInfo);
+        setSuccess(lang === 'zh' ? '站点信息已保存！' : 'Site settings saved successfully!');
+        setTimeout(() => setSuccess(''), 4000);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || 'Server error');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error');
+    } finally {
+      setSiteSettingsSaving(false);
+    }
+  };
+
   const fetchUsers = async () => {
     try {
       setLoading(true);
@@ -236,6 +312,13 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiP
     }, 5000);
     return () => clearInterval(interval);
   }, [refreshStatsCount]);
+
+  // Fetch site settings when the corresponding tab is opened
+  useEffect(() => {
+    if (activeAdminTab === 'site_settings' && !siteSettingsLoaded) {
+      fetchSiteSettings();
+    }
+  }, [activeAdminTab, siteSettingsLoaded]);
 
   const handleOpenCreate = () => {
     setEditingUserId(null);
@@ -425,6 +508,17 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiP
         >
           <Database size={14} />
           {lang === 'zh' ? 'SQLite 数据库监控' : 'SQLite DB Engine Monitor'}
+        </button>
+        <button
+          onClick={() => setActiveAdminTab('site_settings')}
+          className={`px-4 py-2 border-b-2 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
+            activeAdminTab === 'site_settings'
+              ? 'border-indigo-600 text-indigo-700 font-bold'
+              : 'border-transparent text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          <Settings size={14} />
+          {lang === 'zh' ? '站点信息设置' : 'Site Settings'}
         </button>
       </div>
 
@@ -806,6 +900,108 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiP
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      ) : activeAdminTab === 'site_settings' ? (
+        <div className="flex-1 overflow-y-auto mt-4 animate-fade-in text-gray-800 pb-12">
+          <div className="bg-white border border-gray-200/85 rounded-2xl shadow-xs overflow-hidden max-w-3xl">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-slate-50/60">
+              <div>
+                <h3 className="font-bold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
+                  <Settings size={18} className="text-indigo-500" />
+                  {lang === 'zh' ? '平台站点信息（名称 / 口号 / Logo）' : 'Platform Site Info (Name / Slogan / Logo)'}
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {lang === 'zh' ? '设置将应用于登录页与平台各处的品牌 Logo 展示位。' : 'Applied to the login page and brand logo slots across the platform.'}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveSiteSettings} className="p-5 space-y-5 text-left">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  {lang === 'zh' ? '站点名称 *' : 'Site Name *'}
+                </label>
+                <input
+                  type="text"
+                  value={siteName}
+                  onChange={(e) => setSiteName(e.target.value)}
+                  placeholder={lang === 'zh' ? '例如：阳光实验小学智慧课堂' : 'e.g. Sunshine Elementary Smart Class'}
+                  className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  {lang === 'zh' ? '站点口号 / 标语' : 'Site Slogan / Tagline'}
+                </label>
+                <input
+                  type="text"
+                  value={siteSlogan}
+                  onChange={(e) => setSiteSlogan(e.target.value)}
+                  placeholder={lang === 'zh' ? '例如：下一代智能数字化学习系统' : 'e.g. Next-Generation Intelligent Learning'}
+                  className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  {lang === 'zh' ? '站点 Logo 图片' : 'Site Logo Image'}
+                </label>
+
+                {/* Logo preview slot */}
+                <div className="flex items-center gap-4">
+                  <div className="w-20 h-20 rounded-xl border border-gray-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                    {siteLogoInput ? (
+                      <img src={siteLogoInput} alt="logo preview" className="w-full h-full object-contain" />
+                    ) : (
+                      <Settings size={24} className="text-gray-300" />
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-all text-xs">
+                      <Plus size={14} />
+                      {lang === 'zh' ? '上传图片' : 'Upload Image'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleSiteLogoFile(e.target.files?.[0])}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => { setSiteLogoInput(''); setSiteLogoUrl(null); }}
+                      className="px-3 py-2 text-xs font-semibold text-rose-600 border border-gray-200 rounded-lg hover:bg-rose-50 transition-all cursor-pointer"
+                    >
+                      {lang === 'zh' ? '清除 Logo' : 'Clear Logo'}
+                    </button>
+                  </div>
+                </div>
+
+                <span className="text-[10px] text-gray-400 block">
+                  {lang === 'zh' ? '也可直接粘贴图片 URL：' : 'Or paste an image URL:'}
+                </span>
+                <input
+                  type="text"
+                  value={siteLogoInput}
+                  onChange={(e) => setSiteLogoInput(e.target.value)}
+                  placeholder="https://example.com/logo.png"
+                  className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+                <button
+                  type="submit"
+                  disabled={siteSettingsSaving}
+                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  {siteSettingsSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
+                  <span>{siteSettingsSaving ? (lang === 'zh' ? '保存中...' : 'Saving...') : (lang === 'zh' ? '保存站点信息' : 'Save Site Settings')}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       ) : (

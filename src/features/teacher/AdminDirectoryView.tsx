@@ -1,5 +1,5 @@
 import React from 'react';
-import { AdminPanel, type AIProvider } from '../../components/AdminPanel';
+import { AdminPanel, type AIProvider, type SiteInfo } from '../../components/AdminPanel';
 import { ShieldAlert } from 'lucide-react';
 import type { SessionType } from '../../store/appStore';
 
@@ -11,9 +11,11 @@ interface AdminDirectoryViewProps {
   testingProviderId: string | null;
   onAIProvidersChanged: () => void;
   onTriggerTour?: () => void;
+  siteInfo?: SiteInfo;
+  onSiteInfoChanged?: (info: SiteInfo) => void;
 }
 
-export function AdminDirectoryView({ session, lang, onLogout, aiProviders, testingProviderId, onAIProvidersChanged, onTriggerTour }: AdminDirectoryViewProps) {
+export function AdminDirectoryView({ session, lang, onLogout, aiProviders, testingProviderId, onAIProvidersChanged, onTriggerTour, siteInfo, onSiteInfoChanged }: AdminDirectoryViewProps) {
   if (session?.subRole !== 'administrator') {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-rose-500">
@@ -33,6 +35,8 @@ export function AdminDirectoryView({ session, lang, onLogout, aiProviders, testi
       testingProviderId={testingProviderId}
       onAIProvidersChanged={onAIProvidersChanged}
       onTriggerTour={onTriggerTour}
+      siteInfo={siteInfo}
+      onSiteInfoChanged={onSiteInfoChanged}
     />
   );
 }

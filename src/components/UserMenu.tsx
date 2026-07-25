@@ -43,8 +43,12 @@ export function UserMenu({ session, lang, onLogout, onProfile }: UserMenuProps) 
         title={session.name}
         className="flex items-center gap-1 rounded-full p-1 hover:bg-gray-100 transition-colors cursor-pointer"
       >
-        <span className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
-          <User size={20} />
+        <span className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 overflow-hidden">
+          {session.avatar ? (
+            <img src={session.avatar} alt={session.name} className="w-full h-full object-cover" />
+          ) : (
+            <User size={20} />
+          )}
         </span>
         <ChevronDown
           size={14}

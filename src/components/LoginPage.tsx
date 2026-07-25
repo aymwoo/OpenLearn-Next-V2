@@ -21,8 +21,15 @@ interface LoginPageProps {
   lang: 'zh' | 'en';
 }
 
+interface LoginSiteInfo {
+  siteName: string;
+  slogan: string;
+  logoUrl: string | null;
+}
+
 export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
   const [activeTab, setActiveTab] = useState<'teacher' | 'student'>('teacher');
+  const [siteInfo, setSiteInfo] = useState<LoginSiteInfo | null>(null);
   
   // Teacher credentials state
   const [username, setUsername] = useState('');
@@ -55,6 +62,22 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
       }
     };
     fetchStudents();
+  }, []);
+
+  // Fetch platform site info (logo / name / slogan) to render branding slot
+  useEffect(() => {
+    const fetchSiteInfo = async () => {
+      try {
+        const res = await fetch('/api/site-settings');
+        if (res.ok) {
+          const data = await res.json();
+          setSiteInfo(data);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch site settings for login branding:', err);
+      }
+    };
+    fetchSiteInfo();
   }, []);
 
   const handleTeacherLogin = async (e: React.FormEvent) => {
@@ -139,14 +162,22 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
       <div className="w-full max-w-md bg-slate-950/85 backdrop-blur-md rounded-2xl border border-slate-800 shadow-2xl p-6 sm:p-8" id="login_card">
         {/* App Greeting/Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center p-3 bg-gradient-to-tr from-indigo-500 to-indigo-600 rounded-2xl shadow-lg border border-indigo-400/20 mb-4 text-white">
-            <GraduationCap size={32} />
-          </div>
+          {siteInfo?.logoUrl ? (
+            <img
+              src={siteInfo.logoUrl}
+              alt={siteInfo.siteName || 'logo'}
+              className="inline-block h-16 w-16 object-contain mb-4 rounded-xl"
+            />
+          ) : (
+            <div className="inline-flex items-center justify-center p-3 bg-gradient-to-tr from-indigo-500 to-indigo-600 rounded-2xl shadow-lg border border-indigo-400/20 mb-4 text-white">
+              <GraduationCap size={32} />
+            </div>
+          )}
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center justify-center gap-2">
-            OpenLearn Next <span className="text-indigo-400 font-medium text-xs bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-400/20">V2.0</span>
+            {siteInfo?.siteName || 'OpenLearn Next'} <span className="text-indigo-400 font-medium text-xs bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-400/20">V2.0</span>
           </h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-2">
-            {lang === 'zh' ? '下一代智能数字化学习系统' : 'Next-Generation Intelligent Digital Learning Platform'}
+            {siteInfo?.slogan || (lang === 'zh' ? '下一代智能数字化学习系统' : 'Next-Generation Intelligent Digital Learning Platform')}
           </p>
         </div>
 

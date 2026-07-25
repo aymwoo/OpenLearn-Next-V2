@@ -529,6 +529,8 @@ export default function App() {
   // Role & Student View
   const session = useAppStore((s) => s.session);
   const setSession = useAppStore((s) => s.setSession);
+  const siteInfo = useAppStore((s) => s.siteInfo);
+  const setSiteInfo = useAppStore((s) => s.setSiteInfo);
 
   const [activeRole, setActiveRole] = useState<'teacher' | 'student'>('teacher');
   const [sessionLoading, setSessionLoading] = useState(true);
@@ -575,6 +577,22 @@ export default function App() {
       }
     };
     checkSession();
+  }, []);
+
+  // Load platform site settings (logo / name / slogan) so branding slots render globally
+  useEffect(() => {
+    const fetchSiteSettings = async () => {
+      try {
+        const res = await fetch('/api/site-settings');
+        if (res.ok) {
+          const data = await res.json();
+          setSiteInfo({ siteName: data.siteName || '', slogan: data.slogan || '', logoUrl: data.logoUrl || null });
+        }
+      } catch (err) {
+        console.warn('Failed to fetch site settings:', err);
+      }
+    };
+    fetchSiteSettings();
   }, []);
 
   const teacherTab = useAppStore(state => state.teacherTab);
@@ -1300,6 +1318,47 @@ export default function App() {
       setChatLog([{ role: 'agent', content: t.agentIntro }]);
     }
   }, [lang, t.agentIntro]);
+
+  // ── Kernel assistant conversation memory ────────────────────────────────
+  // The server persists turns per (user, lesson). We restore the visible
+  // chat log from that memory on mount and whenever the active lesson changes,
+  // so the assistant's memory is also reflected in the UI across reloads.
+  const restoreAgentMemory = useCallback(async (lessonId?: string | null) => {
+    try {
+      const res = await fetch(`/api/agent/conversations?lessonId=${encodeURIComponent(lessonId || '')}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const msgs = Array.isArray(data.messages) ? data.messages : [];
+      if (msgs.length > 0) {
+        setChatLog(
+          msgs.map((m: any) => ({
+            role: m.role === 'assistant' ? 'agent' : 'user',
+            content: m.content,
+          }))
+        );
+      } else {
+        setChatLog([{ role: 'agent', content: t.agentIntro }]);
+      }
+    } catch {
+      /* memory restore is best-effort; ignore network errors */
+    }
+  }, [t.agentIntro]);
+
+  const handleClearAgentMemory = useCallback(async () => {
+    try {
+      await fetch(`/api/agent/conversations?lessonId=${encodeURIComponent(selectedLesson || '')}`, {
+        method: 'DELETE',
+      });
+    } catch {
+      /* best-effort */
+    }
+    setChatLog([{ role: 'agent', content: t.agentIntro }]);
+  }, [selectedLesson, t.agentIntro]);
+
+  // Restore memory for the current lesson when it changes (and on first mount).
+  useEffect(() => {
+    restoreAgentMemory(selectedLesson);
+  }, [selectedLesson, restoreAgentMemory]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -3801,6 +3860,9 @@ export default function App() {
           onSaved={(name) => {
             if (session) setSession({ ...session, name });
             setProfileOpen(false);
+          }}
+          onAvatar={(avatar) => {
+            if (session) setSession({ ...session, avatar: avatar ?? undefined });
           }}
         />
 
@@ -6652,6 +6714,8 @@ onRefresh={() => fetchElements(selectedLesson)}
                 testingProviderId={testingProviderId}
                 onAIProvidersChanged={fetchAIProviders}
                 onTriggerTour={() => setIsTourOpen(true)}
+                siteInfo={siteInfo}
+                onSiteInfoChanged={setSiteInfo}
               />
             ) : teacherTab === 'computer_labs' ? (
               <ComputerLabView computerLabs={computerLabs} onRefresh={fetchLabs} lang={lang} />
@@ -6688,6 +6752,7 @@ onRefresh={() => fetchElements(selectedLesson)}
         setChatAttachments={setChatAttachments}
         handleChatFileChange={handleChatFileChange}
         handleChatDrop={handleChatDrop}
+        onClearAgentMemory={handleClearAgentMemory}
         events={events}
         lang={lang}
         t={t}

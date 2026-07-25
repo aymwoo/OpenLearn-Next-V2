@@ -31,3 +31,4 @@ v2_plugins/*/storage/
 v2_plugins/*/.codegraph/
 v2_plugins/
 storage/
+uploads/

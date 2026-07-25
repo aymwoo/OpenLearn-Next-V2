@@ -83,8 +83,8 @@ cd openlearnv2
 # 安装依赖
 npm install
 
-# 配置 AI API 密钥
-echo "GEMINI_API_KEY=你的密钥" > .env
+# 配置 AI 服务（可选：推荐在启动后于管理后台「AI 提供商管理」配置，或设置 GEMINI_API_KEY 作为回退）
+# echo "GEMINI_API_KEY=你的密钥" > .env
 
 # 启动开发服务（Express + Vite HMR）
 ./dev.sh
@@ -102,7 +102,7 @@ open http://localhost:9000
 
 ```bash
 # .env
-GEMINI_API_KEY=your-gemini-api-key
+# GEMINI_API_KEY=your-gemini-api-key   # 可选；推荐改用管理后台「AI 提供商管理」
 PORT=9000
 ENCRYPTION_KEY=your-64-char-hex-key
 LOG_LEVEL=info
@@ -111,7 +111,7 @@ ALLOWED_ORIGINS=http://localhost:5173
 
 | 变量 | 必需 | 说明 |
 |------|:--:|------|
-| `GEMINI_API_KEY` | ✅ | Gemini API 密钥，可从 [Google AI Studio](https://aistudio.google.com/) 免费获取 |
+| `GEMINI_API_KEY` | — | 可选。AI 服务回退密钥；推荐在管理后台「AI 提供商管理」配置第三方 AI（OpenAI 兼容接口） |
 | `PORT` | — | 服务端口，默认 `9000` |
 | `ENCRYPTION_KEY` | ✅ | 64 位 hex，用于加密 AI Provider API Key。`deploy.sh` 可自动生成 |
 | `OPENLEARN_DB_PATH` | — | SQLite 数据库路径。npx 默认 `~/openlearn-next/data.db`，本地开发默认项目目录 |
@@ -325,7 +325,7 @@ npm run build
 
 # 2. 配置环境变量
 cp .env.example .env
-# 编辑 .env，填写 GEMINI_API_KEY 和 ENCRYPTION_KEY
+# 编辑 .env，填写 ENCRYPTION_KEY（GEMINI_API_KEY 可选，推荐在管理后台「AI 提供商管理」配置）
 
 # 3. 启动服务
 npm start
@@ -389,11 +389,11 @@ docker-compose up -d
 
 - 检查端口是否被占用：`lsof -i :9000`
 - 检查防火墙是否放行端口
-- 确认 `.env` 文件中 `GEMINI_API_KEY` 已正确配置
+- 确认 AI 服务已配置：管理后台「AI 提供商管理」中已添加 AI 提供商，或 `.env` 中设置了 `GEMINI_API_KEY` 作为回退
 
 ### Q: AI Agent 功能不可用？
 
-- 确认 `GEMINI_API_KEY` 已正确设置
+- 确认已配置 AI 服务：管理后台「AI 提供商管理」中已添加 AI 提供商（推荐），或 `.env` 中设置了 `GEMINI_API_KEY` 作为回退
 - 可在管理面板中切换 AI 提供商（Gemini / OpenAI 兼容接口）
 - 检查网络是否能访问 AI API 地址
 
