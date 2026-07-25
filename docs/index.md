@@ -196,6 +196,7 @@ roadmap/documentation-roadmap
 :hidden:
 
 release-notes/v0.1.10
+release-notes/v0.1.11
 ```
 
 ```{toctree}
