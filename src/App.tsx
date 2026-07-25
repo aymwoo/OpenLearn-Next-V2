@@ -3660,7 +3660,28 @@ export default function App() {
         
         {/* Top Navbar */}
         <header className="h-16 border-b border-gray-200 bg-white flex items-center px-6 justify-between shrink-0 shadow-sm relative z-20">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 sm:gap-6">
+            {/* 站点品牌区 (Site Brand & Logo) */}
+            <div className="flex items-center gap-2.5 shrink-0">
+              {siteInfo.logoUrl ? (
+                <img src={siteInfo.logoUrl} alt="site logo" className="h-8 w-8 object-contain rounded-lg shrink-0" />
+              ) : (
+                <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-indigo-700 flex items-center justify-center text-white font-black text-sm shadow-xs shrink-0">OL</div>
+              )}
+              <div className="flex items-baseline gap-2">
+                <span className="text-base font-black text-slate-900 tracking-tight">
+                  {siteInfo.siteName || (lang === 'zh' ? '智慧课堂' : 'OpenLearn Next')}
+                </span>
+                {siteInfo.slogan && (
+                  <span className="hidden md:inline text-xs text-slate-400 font-normal truncate max-w-[200px]">
+                    {siteInfo.slogan}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <span className="text-slate-300 font-light text-lg select-none">/</span>
+
             <h2 className="font-semibold text-gray-800 tracking-tight flex items-center gap-2">
               <LayoutTemplate size={20} className="text-gray-400" />
               {activeRole === 'teacher' ? t.dashboard : 'Student Dashboard'}
