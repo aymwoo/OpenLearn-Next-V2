@@ -506,6 +506,18 @@ try {
 }
 
 try {
+  db.prepare('ALTER TABLE users ADD COLUMN avatar TEXT').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.prepare('ALTER TABLE students ADD COLUMN avatar TEXT').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
   const countObj = db.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number };
   if (countObj && countObj.cnt === 0) {
     console.log('Seeding default users (admin & teacher) with bcrypt...');

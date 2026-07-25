@@ -3018,6 +3018,109 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
     }
   });
 
+  // P7/Profile: 个人头像上传（base64 图片，存于 uploads/avatars/）
+  app.post('/api/auth/avatar', (req, res) => {
+    try {
+      const token = getCookieToken(req);
+      if (!token) return res.status(401).json({ error: 'Not authenticated' });
+      const session = getValidSession(token);
+      if (!session) return res.status(401).json({ error: 'Session expired' });
+
+      const { filename, base64Data } = req.body || {};
+      if (!filename || !base64Data) {
+        return res.status(400).json({ error: 'Filename and base64Data are required' });
+      }
+
+      const ext = path.extname(filename).toLowerCase();
+      const ALLOWED_IMG = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+      if (BLOCKED_EXTENSIONS.includes(ext) || !ALLOWED_IMG.includes(ext)) {
+        return res.status(400).json({ error: 'Only image files (jpg / png / gif / webp) are allowed' });
+      }
+
+      const base64Content = String(base64Data).replace(/^data:[^;]+;base64,/, '');
+      const fileBuffer = Buffer.from(base64Content, 'base64');
+      if (fileBuffer.length > 2 * 1024 * 1024) {
+        return res.status(400).json({ error: 'Avatar image must be smaller than 2MB' });
+      }
+      if (!validateMagicBytes(fileBuffer, filename)) {
+        return res.status(400).json({ error: 'File content does not match the declared image type' });
+      }
+
+      const avatarDir = path.join(process.cwd(), 'uploads', 'avatars');
+      fs.mkdirSync(avatarDir, { recursive: true });
+      const uniqueName = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}${ext}`;
+      const filePath = path.join(avatarDir, uniqueName);
+      fs.writeFileSync(filePath, fileBuffer);
+      const avatarUrl = `/uploads/avatars/${uniqueName}`;
+
+      // 读取并删除旧头像文件（避免孤儿文件）
+      let oldAvatar: string | null = null;
+      if (session.role === 'student') {
+        const row = kernelContainer.db.prepare('SELECT avatar FROM students WHERE id = ?').get(session.studentId) as any;
+        oldAvatar = row?.avatar ?? null;
+        kernelContainer.db.prepare('UPDATE students SET avatar = ? WHERE id = ?').run(avatarUrl, session.studentId);
+      } else {
+        const row = kernelContainer.db.prepare('SELECT avatar FROM users WHERE id = ?').get(session.userId) as any;
+        oldAvatar = row?.avatar ?? null;
+        kernelContainer.db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(avatarUrl, session.userId);
+      }
+      if (oldAvatar && oldAvatar.startsWith('/uploads/avatars/')) {
+        try { fs.unlinkSync(path.join(process.cwd(), oldAvatar)); } catch { /* ignore */ }
+      }
+
+      // 同步当前 session_data.avatar
+      try {
+        const row = kernelContainer.db.prepare('SELECT session_data FROM client_sessions WHERE id = ?').get(token) as any;
+        if (row && row.session_data) {
+          const data = JSON.parse(row.session_data);
+          data.avatar = avatarUrl;
+          kernelContainer.db.prepare('UPDATE client_sessions SET session_data = ? WHERE id = ?').run(JSON.stringify(data), token);
+        }
+      } catch { /* session_data 同步非关键路径 */ }
+
+      res.json({ success: true, avatar: avatarUrl });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // P7/Profile: 移除个人头像
+  app.delete('/api/auth/avatar', (req, res) => {
+    try {
+      const token = getCookieToken(req);
+      if (!token) return res.status(401).json({ error: 'Not authenticated' });
+      const session = getValidSession(token);
+      if (!session) return res.status(401).json({ error: 'Session expired' });
+
+      let oldAvatar: string | null = null;
+      if (session.role === 'student') {
+        const row = kernelContainer.db.prepare('SELECT avatar FROM students WHERE id = ?').get(session.studentId) as any;
+        oldAvatar = row?.avatar ?? null;
+        kernelContainer.db.prepare('UPDATE students SET avatar = NULL WHERE id = ?').run(session.studentId);
+      } else {
+        const row = kernelContainer.db.prepare('SELECT avatar FROM users WHERE id = ?').get(session.userId) as any;
+        oldAvatar = row?.avatar ?? null;
+        kernelContainer.db.prepare('UPDATE users SET avatar = NULL WHERE id = ?').run(session.userId);
+      }
+      if (oldAvatar && oldAvatar.startsWith('/uploads/avatars/')) {
+        try { fs.unlinkSync(path.join(process.cwd(), oldAvatar)); } catch { /* ignore */ }
+      }
+
+      try {
+        const row = kernelContainer.db.prepare('SELECT session_data FROM client_sessions WHERE id = ?').get(token) as any;
+        if (row && row.session_data) {
+          const data = JSON.parse(row.session_data);
+          data.avatar = null;
+          kernelContainer.db.prepare('UPDATE client_sessions SET session_data = ? WHERE id = ?').run(JSON.stringify(data), token);
+        }
+      } catch { /* session_data 同步非关键路径 */ }
+
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post('/api/auth/login', loginLimiter, (req, res) => {
     try {
       const { entrance, username, password, studentId } = req.body;
@@ -3050,7 +3153,8 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
           userId: userObj.id,
           username: userObj.username,
           subRole: userObj.role,
-          name: userObj.name
+          name: userObj.name,
+          avatar: userObj.avatar ?? null
         };
       } else if (entrance === 'student') {
         if (!studentId) {
@@ -3121,7 +3225,8 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
           role: 'student',
           studentId: studentObj.id,
           name: studentObj.name,
-          email: studentObj.email
+          email: studentObj.email,
+          avatar: studentObj.avatar ?? null
         };
       }
 
