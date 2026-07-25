@@ -13,33 +13,12 @@ if (!fs.existsSync(sdkDist)) {
   execSync('node packages/plugin-sdk/build.mjs', { stdio: 'inherit' });
 }
 
-const plugins = [
-  {
-    entry: 'packages/plugins/rollcall/index.ts',
-    manifest: 'packages/plugins/rollcall/manifest.json',
-    zipName: 'ext-roll-call.zip'
-  },
-  {
-    entry: 'packages/plugins/mindmap/index.ts',
-    manifest: 'packages/plugins/mindmap/manifest.json',
-    zipName: 'ext-mindmap-assistant.zip'
-  },
-  {
-    entry: 'packages/plugins/hello-world/index.ts',
-    manifest: 'packages/plugins/hello-world/manifest.json',
-    zipName: 'ext-hello-world.zip'
-  },
-  {
-    entry: 'packages/plugins/memo/index.ts',
-    manifest: 'packages/plugins/memo/manifest.json',
-    zipName: 'ext-memo.zip'
-  },
-  {
-    entry: 'packages/plugins/raffle-vote/index.ts',
-    manifest: 'packages/plugins/raffle-vote/manifest.json',
-    zipName: 'ext-raffle-vote.zip'
-  }
-];
+// All non-system plugins (rollcall, mindmap, hello-world, memo, raffle-vote,
+// quiz-pro, ...) were purged from the system per the "remove all non-system-core
+// plugins" directive, so there are no third-party plugin sources to bundle here.
+// The 7 system-core @openlearn plugins are loaded at runtime, not zipped by this
+// script. Keep this list empty unless a plugin source directory is reintroduced.
+const plugins = [];
 
 const outDir = path.resolve('dist/plugins');
 fs.mkdirSync(outDir, { recursive: true });
