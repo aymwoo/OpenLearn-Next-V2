@@ -743,6 +743,48 @@ const db = await ctx.resolve(IDatabaseToken);
 
 ```
 
+### P7-A2 统一插件服务（Unified Plugin Services）
+
+P7-A2 将原本分散在插件宿主内部的能力收敛为一组统一的门面（Facade）服务。插件无需感知内核装配细节，直接经 `ctx.resolve(...)` 即可消费。下列 Token 已在 `@openlearn/plugin-sdk` 中导出，返回类型亦同包提供。
+
+| Token 常量 | 标识字符串 | 返回类型 | 用途 |
+|-----------|-----------|---------|------|
+| `IPluginLifecycleManagerToken` | `@openlearn/core:IPluginLifecycleManager` | `PluginLifecycleManager` | 插件的安装 / 卸载 / 启用 / 停用等生命周期管理 |
+| `IPluginDistributionManagerToken` | `@openlearn/core:IPluginDistributionManager` | `PluginDistributionManager` | 插件分发：ZIP 上传、版本与市场 |
+| `IPluginRuntimeCompositionToken` | `@openlearn/core:IPluginRuntimeComposition` | `PluginRuntimeComposition` | 统一运行时组合（内核 + 插件运行时适配） |
+| `IUnifiedExtensionRegistryToken` | `@openlearn/core:IUnifiedExtensionRegistry` | `UnifiedExtensionRegistry` | 扩展点统一注册表 |
+| `IPluginCapabilityGatewayToken` | `@openlearn/core:IPluginCapabilityGateway` | `PluginCapabilityGateway` | 插件能力网关：列举 / 查询能力 |
+| `ICapabilityRegistryToken` | `@openlearn/core:ICapabilityRegistry` | `CapabilityRegistry` | 能力注册表：底层能力元数据 |
+
+在 `manifest.requires` 中声明依赖，格式为 `@openlearn/core:TokenName@^1.0.0`，例如：
+
+```json
+{
+  "requires": [
+    "@openlearn/core:IPluginLifecycleManager@^1.0.0",
+    "@openlearn/core:IPluginCapabilityGateway@^1.0.0"
+  ]
+}
+```
+
+在代码中解析：
+
+```typescript
+import {
+  IPluginLifecycleManagerToken,
+  IPluginCapabilityGatewayToken,
+} from '@openlearn/plugin-sdk';
+
+const lifecycle = await ctx.resolve(IPluginLifecycleManagerToken); // 类型: PluginLifecycleManager
+const gateway = await ctx.resolve(IPluginCapabilityGatewayToken);   // 类型: PluginCapabilityGateway
+
+await lifecycle.uninstallPlugin(pluginId);
+gateway.listCapabilities().forEach((c) => console.log(c.id));
+```
+
+> 注意：这些统一服务由内核在启动期装配完成，插件侧仅通过 Token 消费，避免在插件代码中直接依赖 `@openlearn/core` 的内部模块。
+
+
 ### 5.3 ICommandBusService
 
 ```typescript
