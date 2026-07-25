@@ -2684,7 +2684,14 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
   app.get('/api/classes', (req, res) => {
     try {
-      const classes = kernelContainer.db.prepare('SELECT * FROM classes ORDER BY created_at DESC').all();
+      const classes = kernelContainer.db.prepare(`
+        SELECT c.*,
+          (SELECT COUNT(*) FROM class_students WHERE class_id = c.id) AS student_count,
+          (SELECT COUNT(*) FROM schedules WHERE class_id = c.id) AS course_count,
+          (SELECT COUNT(*) FROM assignments WHERE class_id = c.id) AS assignment_count
+        FROM classes c
+        ORDER BY created_at DESC
+      `).all();
       res.json(classes);
     } catch (e: any) {
       res.status(500).json({ error: e.message });

@@ -5282,7 +5282,20 @@ onRefresh={() => fetchElements(selectedLesson)}
                                </button>
                                <div className={`text-sm font-medium ${batchMode && selectedClassIds.has(cls.id) ? 'text-amber-700' : 'text-gray-800'}`}>{cls.name}</div>
                              </div>
-                             <div className="text-[10px] text-gray-400">Class</div>
+                             <div className="flex items-center gap-3 text-[11px] text-gray-500 shrink-0">
+                               <span className="flex items-center gap-1" title={lang === 'zh' ? '学生人数' : 'Students'}>
+                                 <Users size={13} className="text-gray-400" />
+                                 {cls.student_count ?? 0}
+                               </span>
+                               <span className="flex items-center gap-1" title={lang === 'zh' ? '课程数量' : 'Courses'}>
+                                 <BookOpen size={13} className="text-gray-400" />
+                                 {cls.course_count ?? 0}
+                               </span>
+                               <span className="flex items-center gap-1" title={lang === 'zh' ? '作业数量' : 'Assignments'}>
+                                 <ClipboardList size={13} className="text-gray-400" />
+                                 {cls.assignment_count ?? 0}
+                               </span>
+                             </div>
                           </div>
                           {isExpanded && (
                             <motion.div 
