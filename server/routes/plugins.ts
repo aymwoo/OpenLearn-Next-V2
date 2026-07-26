@@ -6,6 +6,7 @@ import { createServer as createViteServer } from 'vite';
 import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { checkVersion, type UpdateSource } from '../services/version-fetcher.js';
 import { ISemesterGradeServiceToken } from '../../packages/core/di/interfaces.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import crypto from 'crypto';
@@ -134,23 +135,68 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  // 插件市场列表与版本更新检测 API
+ // 插件市场列表与版本更新检测 API
   app.get('/api/plugins/market', (req, res) => {
+    // Return update info for all installed plugins that declare updateSource
     try {
-      const marketItems = [
-        {
-          manifestId: '@aymwoo/plugin-research-workflow',
-          name: '研究性学习工作流',
-          latestVersion: '1.2.0',
-          description: '支持 PBL / STEAM 阶段式课题管理、班级名册加载、自动随机分组与鼠标拖拽平移的全栈插件',
-          author: 'OpenLearn Developer',
-          repository: 'https://github.com/aymwoo/plugin-research-workflow',
-          homepage: 'https://gitee.com/aymwoo/plugin-research-workflow',
-          changelog: '1. 引入全新算法支持按每组人数与总组数一键自动随机分组\n2. 全面接入平台 SQLite 数据库读取真实班级与学生名册\n3. 优化卡片拖拽 (Drag & Drop) 手感与视觉排版\n4. 修复 Worker 线程初始化耗时过长导致激活超时的隐患',
-          downloadUrl: '/v2_plugins/research-workflow/aymwoo-plugin-research-workflow.zip',
-        },
-      ];
-      res.json({ success: true, market: marketItems });
+      const plugins = kernelContainer.db
+        .prepare("SELECT id, manifest FROM plugins WHERE manifest LIKE '%updateSource%'")
+        .all() as Array<{ id: string; manifest: string }>;
+
+      const results: Array<{
+        pluginId: string;
+        manifestId: string;
+        installedVersion: string;
+        latestVersion: string | null;
+        hasUpdate: boolean;
+        isPrerelease: boolean;
+        downloadUrl: string | null;
+        changelog: string | null;
+        error?: string;
+      }> = [];
+
+      for (const p of plugins) {
+        let manifest: any;
+        try { manifest = JSON.parse(p.manifest); } catch { continue; }
+        const src: UpdateSource | undefined = manifest.updateSource;
+        if (!src?.type || !src?.repo) continue;
+        const result = await checkVersion(src, manifest.version || '0.0.0');
+        results.push({
+          pluginId: p.id,
+          manifestId: manifest.id || p.id,
+          installedVersion: manifest.version || '0.0.0',
+          ...result,
+        });
+      }
+
+      res.json({ success: true, market: results });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 手动检查单个插件更新
+  app.post('/api/plugins/:id(*)/check-update', async (req, res) => {
+    try {
+      const rawId = decodeURIComponent(req.params.id);
+      const pluginId = kernelContainer.pluginHost.resolvePluginUuid(rawId);
+      const row = kernelContainer.db
+        .prepare('SELECT manifest FROM plugins WHERE id = ?')
+        .get(pluginId) as { manifest: string } | undefined;
+      if (!row) return res.status(404).json({ success: false, error: 'Plugin not found' });
+
+      let manifest: any;
+      try { manifest = JSON.parse(row.manifest); } catch {
+        return res.status(400).json({ success: false, error: 'Invalid manifest JSON' });
+      }
+
+      const src: UpdateSource | undefined = manifest.updateSource;
+      if (!src?.type || !src?.repo) {
+        return res.json({ success: true, hasUpdate: false, message: '该插件未声明更新源' });
+      }
+
+      const result = await checkVersion(src, manifest.version || '0.0.0');
+      res.json({ success: true, ...result });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
@@ -160,18 +206,47 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   app.post('/api/plugins/:id(*)/one-click-update', async (req, res) => {
     try {
       const targetPluginId = decodeURIComponent(req.params.id);
-      const zipPath = path.resolve(process.cwd(), 'v2_plugins/research-workflow/aymwoo-plugin-research-workflow.zip');
+      const { downloadUrl } = req.body || {};
 
       let zipBuffer: Buffer;
-      if (fs.existsSync(zipPath)) {
-        zipBuffer = fs.readFileSync(zipPath);
+
+      if (downloadUrl) {
+        // Server-side download with timeout fallback signal
+        try {
+          const resp = await fetch(downloadUrl, {
+            headers: { 'User-Agent': 'OpenLearnV2-PluginUpdater/1.0' },
+            signal: AbortSignal.timeout(15000),
+          });
+          if (!resp.ok) {
+            return res.status(400).json({
+              success: false,
+              error: `下载更新包失败: HTTP ${resp.status}`,
+              fallbackToClient: true,
+            });
+          }
+          const arrayBuf = await resp.arrayBuffer();
+          zipBuffer = Buffer.from(arrayBuf);
+        } catch (e: any) {
+          const isTimeout = e.name === 'TimeoutError' || e.message?.includes('timeout');
+          return res.status(400).json({
+            success: false,
+            error: isTimeout ? '服务端下载超时，请尝试从客户端直传' : `下载失败: ${e.message}`,
+            fallbackToClient: true,
+          });
+        }
       } else {
-        return res.status(404).json({ success: false, error: '未找到更新安装包' });
+        // Legacy: local file path (backward compat)
+        const zipPath = path.resolve(process.cwd(), 'v2_plugins/research-workflow/aymwoo-plugin-research-workflow.zip');
+        if (fs.existsSync(zipPath)) {
+          zipBuffer = fs.readFileSync(zipPath);
+        } else {
+          return res.status(404).json({ success: false, error: '未找到更新安装包' });
+        }
       }
 
       const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipBuffer, {
         targetPluginId,
-        allowDowngrade: true,
+        allowDowngrade: false,
       });
 
       res.json({

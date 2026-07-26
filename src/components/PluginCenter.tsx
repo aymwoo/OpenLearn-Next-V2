@@ -417,6 +417,7 @@ export function PluginCenter({
   // Market feed & one-click update states
   const [marketMap, setMarketMap] = React.useState<Map<string, any>>(new Map());
   const [oneClickUpdatingId, setOneClickUpdatingId] = React.useState<string | null>(null);
+  const [checkingUpdateId, setCheckingUpdateId] = React.useState<string | null>(null);
   const [changelogModalPlugin, setChangelogModalPlugin] = React.useState<any | null>(null);
   const [updateToast, setUpdateToast] = React.useState<string | null>(null);
 
@@ -437,18 +438,64 @@ export function PluginCenter({
     return () => { isMounted = false; };
   }, []);
 
+  const handleCheckUpdate = async (pluginId: string, manifestId: string) => {
+    setCheckingUpdateId(pluginId);
+    try {
+      const res = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}/check-update`, {
+        method: 'POST',
+      }).then((r) => r.json());
+      if (res?.success) {
+        setMarketMap((prev) => {
+          const next = new Map(prev);
+          next.set(manifestId, { ...res, manifestId });
+          return next;
+        });
+      }
+    } catch {
+      // ignore
+    } finally {
+      setCheckingUpdateId(null);
+    }
+  };
+
   const handleOneClickUpdate = async (pluginId: string, marketItem?: any) => {
     setOneClickUpdatingId(pluginId);
     setUpdateToast(lang === 'zh' ? '正在连接市场执行一键无缝热更新...' : 'Connecting to market for one-click hot update...');
 
     try {
+      const body = marketItem?.downloadUrl ? JSON.stringify({ downloadUrl: marketItem.downloadUrl }) : undefined;
       const res = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}/one-click-update`, {
         method: 'POST',
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body,
       }).then((r) => r.json());
 
       if (res?.success) {
         setUpdateToast(lang === 'zh' ? `🎉 插件已成功热更新至 v${res.newVersion || '1.2.0'}！` : `🎉 Hot updated to v${res.newVersion || '1.2.0'}!`);
         setTimeout(() => window.location.reload(), 1200);
+      } else if (res?.fallbackToClient && marketItem?.downloadUrl) {
+        setUpdateToast(lang === 'zh' ? '服务端下载超时，切换至浏览器直传...' : 'Server download timed out, switching to browser transfer...');
+        try {
+          const zipResp = await fetch(marketItem.downloadUrl);
+          const blob = await zipResp.blob();
+          const formData = new FormData();
+          formData.append('file', blob, 'update.zip');
+          const uploadRes = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}/update-zip-raw`, {
+            method: 'POST',
+            headers: { 'x-install-mode': 'update' },
+            body: formData,
+          }).then((r) => r.json());
+          if (uploadRes?.success) {
+            setUpdateToast(lang === 'zh' ? `🎉 插件已成功热更新！` : `🎉 Hot updated!`);
+            setTimeout(() => window.location.reload(), 1200);
+          } else {
+            setUpdateToast(`❌ 更新失败: ${uploadRes?.error || '客户端上传失败'}`);
+            setTimeout(() => setUpdateToast(null), 4000);
+          }
+        } catch (e2: any) {
+          setUpdateToast(`❌ 客户端下载失败: ${e2.message}`);
+          setTimeout(() => setUpdateToast(null), 4000);
+        }
       } else {
         setUpdateToast(`❌ 更新失败: ${res?.error || '受热更新包限制'}`);
         setTimeout(() => setUpdateToast(null), 4000);
@@ -567,7 +614,8 @@ export function PluginCenter({
             </div>
           </div>
           {/* Toggle show system plugins */}
-          {storeTab === 'store' && (
+         {storeTab === 'store' && (
+            <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-500 hover:text-gray-900 select-none transition-colors border border-gray-200 rounded-lg px-3 py-1.5 bg-gray-50/50 shadow-sm">
               <input
                 type="checkbox"
@@ -577,6 +625,39 @@ export function PluginCenter({
               />
               <span>{lang === 'zh' ? '显示系统核心插件' : 'Show System Core Plugins'}</span>
             </label>
+
+            {/* Inline ZIP drop zone */}
+            <div
+              className={`flex items-center gap-1.5 cursor-pointer text-xs font-semibold select-none transition-colors border rounded-lg px-3 py-1.5 shadow-sm ${
+                selectedZipFile
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                  : 'border-teal-200 bg-teal-50/50 text-teal-600 hover:border-teal-400 hover:bg-teal-50'
+              }`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.currentTarget.classList.add('border-teal-400', 'bg-teal-50');
+              }}
+              onDragLeave={(e) => {
+                e.currentTarget.classList.remove('border-teal-400', 'bg-teal-50');
+              }}
+              onDrop={handleZipDrop}
+              onClick={() => {
+                document.getElementById('zip-plugin-uploader')?.click();
+              }}
+            >
+              {selectedZipFile ? (
+                <>
+                  <CheckCircle2 size={14} className="text-emerald-500" />
+                  <span className="max-w-[120px] truncate">{selectedZipFile.name}</span>
+                </>
+              ) : (
+                <>
+                  <Upload size={14} />
+                  <span>{lang === 'zh' ? '拖拽安装 ZIP' : 'Drop ZIP'}</span>
+                </>
+              )}
+            </div>
+            </div>
           )}
         </div>
 
@@ -605,42 +686,7 @@ export function PluginCenter({
         />
 
         {storeTab === 'store' ? (
-          <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
-            {/* ZIP 拖放安装区域 — 发现页快速安装 */}
-            <div className="mb-4">
-              <div
-                className={`border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-colors ${selectedZipFile ? "border-emerald-400 bg-emerald-50" : "border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/50"}`}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.currentTarget.classList.add("border-indigo-400", "bg-indigo-50/50");
-                }}
-                onDragLeave={(e) => {
-                  e.currentTarget.classList.remove("border-indigo-400", "bg-indigo-50/50");
-                }}
-                onDrop={handleZipDrop}
-                onClick={() => {
-                  document.getElementById("zip-plugin-uploader")?.click();
-                }}
-              >
-                {selectedZipFile ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <CheckCircle2 size={16} className="text-emerald-500" />
-                    <span className="text-sm font-medium text-emerald-700">{selectedZipFile.name}</span>
-                    <span className="text-xs text-gray-400">{lang === "zh" ? "点击更换文件" : "Click to change"}</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center gap-2">
-                    <Upload size={14} className="text-gray-400" />
-                    <span className="text-xs text-gray-500">{lang === "zh" ? "拖拽 ZIP 文件到此处安装插件，或点击选择" : "Drop ZIP file here to install plugin, or click to select"}</span>
-                  </div>
-                )}
-              </div>
-              {selectedZipFile && (
-                <p className="mt-2 text-xs text-center text-gray-400">
-                  {lang === "zh" ? "文件已选择，安装向导将自动弹出。" : "File selected. Installation wizard will open automatically."}
-                </p>
-              )}
-            </div>
+         <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
             <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-4">
               {plugins
                 .filter((p) => {
@@ -660,6 +706,7 @@ export function PluginCenter({
                   hasConfig: boolean;
                   repository: string;
                   homepage: string;
+                  updateSource?: { type: string; repo: string };
                 } = {
                   description: '扩展 Edu OS 功能的自定义插件。',
                   author: 'Community',
@@ -699,6 +746,9 @@ export function PluginCenter({
                   if (props && Object.keys(props).length > 0) {
                     manifestInfo.hasConfig = true;
                   }
+                  if (parsed.updateSource?.type && parsed.updateSource?.repo) {
+                    manifestInfo.updateSource = parsed.updateSource;
+                  }
                 } catch (e) {
                   // ignore parse error
                 }
@@ -714,7 +764,8 @@ export function PluginCenter({
 
                 // Query market item for version comparison
                 const marketItem = marketMap.get(manifestInfo.manifestId || plugin.id);
-                const hasUpdate = Boolean(marketItem && marketItem.latestVersion && marketItem.latestVersion !== manifestInfo.version);
+                const hasUpdate = Boolean(marketItem?.hasUpdate);
+                const updateError = marketItem?.error || null;
 
                 return (
                   <div
@@ -725,13 +776,32 @@ export function PluginCenter({
                   >
                     {/* Status & type badges */}
                     <div className="absolute top-0 right-0 p-3 flex items-center gap-1.5 flex-wrap justify-end">
-                      {hasUpdate && (
+                    {hasUpdate && (
                         <span
-                          title={lang === 'zh' ? `点击查看新特性并升级至 v${marketItem.latestVersion}` : `Upgradeable to v${marketItem.latestVersion}`}
-                          className="text-[10px] font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 animate-pulse shrink-0 cursor-pointer"
+                          title={lang === 'zh'
+                            ? `点击查看新特性${marketItem.isPrerelease ? '（预发布版本）' : ''}并升级至 v${marketItem.latestVersion}`
+                            : `Upgradeable to v${marketItem.latestVersion}${marketItem.isPrerelease ? ' (pre-release)' : ''}`}
+                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 shrink-0 cursor-pointer ${
+                            marketItem.isPrerelease
+                              ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white animate-pulse'
+                              : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white animate-pulse'
+                          }`}
                           onClick={() => setChangelogModalPlugin({ ...plugin, marketItem })}
                         >
-                          <span>⚡ {lang === 'zh' ? `发现新版本 v${marketItem.latestVersion}` : `New v${marketItem.latestVersion}`}</span>
+                          <span>
+                            {marketItem.isPrerelease ? '🔶 ' : '⚡ '}
+                            {lang === 'zh'
+                              ? `${marketItem.isPrerelease ? '预发布 ' : '发现新版本 '}v${marketItem.latestVersion}`
+                              : `${marketItem.isPrerelease ? 'Pre-release ' : 'New '}v${marketItem.latestVersion}`}
+                          </span>
+                        </span>
+                      )}
+                      {updateError && !hasUpdate && (
+                        <span
+                          title={updateError}
+                          className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 shrink-0 cursor-default"
+                        >
+                          <span>⚠️ {lang === 'zh' ? '检查失败' : 'Check failed'}</span>
                         </span>
                       )}
                       <span
@@ -853,6 +923,27 @@ export function PluginCenter({
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-1.5 flex-wrap min-h-[34px]">
+                      {manifestInfo.updateSource && (
+                        <button
+                          onClick={() => handleCheckUpdate(plugin.id, manifestInfo.manifestId || plugin.id)}
+                          disabled={checkingUpdateId === plugin.id}
+                          className={`px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50 ${
+                            hasUpdate
+                              ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                              : updateError
+                              ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                              : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
+                          }`}
+                          title={lang === 'zh' ? '手动检查远端更新' : 'Check for updates'}
+                        >
+                          {checkingUpdateId === plugin.id ? (
+                            <RefreshCw size={12} className="animate-spin" />
+                          ) : (
+                            <RefreshCw size={12} />
+                          )}
+                          <span>{lang === 'zh' ? '检查更新' : 'Check'}</span>
+                        </button>
+                      )}
                       {hasUpdate ? (
                         <>
                           <button
@@ -1644,6 +1735,11 @@ export function PluginCenter({
               <span className="text-xs font-mono font-bold bg-indigo-600 text-white px-2 py-0.5 rounded shadow-sm">
                 v{changelogModalPlugin.marketItem?.latestVersion || '1.2.0'}
               </span>
+              {changelogModalPlugin.marketItem?.isPrerelease && (
+                <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                  {lang === 'zh' ? '预发布' : 'Pre-release'}
+                </span>
+              )}
             </div>
             {changelogModalPlugin.marketItem?.repository && (
               <a

@@ -3,10 +3,22 @@
 All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are documented here.
 
 > Versioning note: the platform `openlearn-next` is versioned independently of
-> `@openlearn/plugin-sdk` (currently **3.4.2**) and `@openlearn/plugin-test-kit`.
+> `@openlearn/plugin-sdk` (currently **3.4.3**) and `@openlearn/plugin-test-kit`.
 > Bumping the platform does not change the SDK / test-kit versions.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
+
+## [Unreleased]
+
+### Features
+- **Remote Plugin Update Detection**: Replace hardcoded market data with dynamic version checking via `git ls-remote` (fallback to GitHub/Gitee Releases API) and semver comparison; add `updateSource` field to plugin manifest (`@openlearn/plugin-sdk@3.4.3`); add per-plugin "检查更新" button with server-first download and client-side fallback; support pre-release version badges.
+- **Dashboard Quick Access**: Make the brand logo/name area clickable to return to the dashboard; add an explicit "系统总览" / "Dashboard" nav button in the top header bar with active-state highlighting.
+- **Whiteboard Toolbar Docked**: Move the interactive whiteboard drawing toolbar from a centered floating overlay into the top white area as a docked, left-aligned bar with a bottom border separator.
+- **Admin Panel Monitoring Consolidation**: Move "SQLite 数据库健康体检" and "分布式操作系统硬件状况" cards from the "学校教职及系统配置" tab into the "系统监控" tab (renamed from "SQLite 数据库监控"), consolidating all system health metrics under one monitoring view; expand directory tab's staff list to full width.
+- **Plugin Center ZIP Install Relocated**: Move the ZIP drag-and-drop install area from the plugin store grid into the "发现" tab header bar, placed inline to the right of the "显示系统核心插件" toggle with matching compact styling and a teal/emerald color palette.
+
+### Fixes
+- **Agent Intro Crash**: Fix `Cannot read properties of undefined (reading 'agentIntro')` crash by adding a safe fallback (`?? translations['zh']`) when the language key is unrecognized; fix `toggleLanguage` to pass the current `lang` value directly instead of a function reference causing store corruption.
 
 ## [0.1.14] - 2026-07-26
 

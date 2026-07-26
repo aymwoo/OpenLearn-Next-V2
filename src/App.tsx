@@ -344,10 +344,10 @@ const hostEventBus = new EventBus();
 
 export default function App() {
   const lang = useAppStore((s) => s.lang);
-  const setLang = useAppStore((s) => s.setLang);
-  const t = translations[lang];
+ const setLang = useAppStore((s) => s.setLang);
+  const t = translations[lang] ?? translations['zh'];
 
-  const [mainNavCollapsed, setMainNavCollapsed] = useState(false);
+ const [mainNavCollapsed, setMainNavCollapsed] = useState(false);
   const liveClassSelectedClassId = useAppStore((s) => s.liveClassSelectedClassId);
   const setLiveClassSelectedClassId = useAppStore((s) => s.setLiveClassSelectedClassId);
   const liveClassIsActive = useAppStore((s) => s.liveClassIsActive);
@@ -3659,9 +3659,9 @@ export default function App() {
     }
   };
 
-  const toggleLanguage = () => {
-    setLang(prev => prev === 'zh' ? 'en' : 'zh');
-  };
+ const toggleLanguage = () => {
+    setLang(lang === 'zh' ? 'en' : 'zh');
+ };
 
   const studentNotifications = React.useMemo(() => {
     if (activeRole !== 'student' || !studentDashboardData) return [];
@@ -3758,9 +3758,19 @@ export default function App() {
         
         {/* Top Navbar */}
         <header className="h-16 border-b border-gray-200 bg-white flex items-center px-6 justify-between shrink-0 shadow-sm relative z-20">
-          <div className="flex items-center gap-4 sm:gap-6">
-            {/* 站点品牌区 (Site Brand & Logo) */}
-            <div className="flex items-center gap-2.5 shrink-0">
+         <div className="flex items-center gap-4 sm:gap-6">
+            {/* 站点品牌区 (Site Brand & Logo) — click to dashboard */}
+            <button
+              onClick={() => {
+                if (activeRole === 'teacher') {
+                  setTeacherTab('dashboard');
+                } else if (activeRole === 'student') {
+                  setStudentViewStatus('dashboard');
+                }
+              }}
+              className="flex items-center gap-2.5 shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+              title={lang === 'zh' ? '返回系统总览' : 'Back to Dashboard'}
+            >
               {siteInfo.logoUrl ? (
                 <img src={siteInfo.logoUrl} alt="site logo" className="h-8 w-8 object-contain rounded-lg shrink-0" />
               ) : (
@@ -3776,7 +3786,27 @@ export default function App() {
                   </span>
                 )}
               </div>
-            </div>
+            </button>
+
+            {/* Dashboard nav entry */}
+            <button
+              onClick={() => {
+                if (activeRole === 'teacher') {
+                  setTeacherTab('dashboard');
+                } else if (activeRole === 'student') {
+                  setStudentViewStatus('dashboard');
+                }
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                (activeRole === 'teacher' && teacherTab === 'dashboard') ||
+                (activeRole === 'student' && studentViewStatus === 'dashboard')
+                  ? 'bg-indigo-50 text-indigo-700'
+                  : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-100'
+              }`}
+            >
+              <Home size={16} />
+              {lang === 'zh' ? '系统总览' : 'Dashboard'}
+            </button>
 
             {activeRole === 'student' && (
               <>

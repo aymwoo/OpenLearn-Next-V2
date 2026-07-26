@@ -286,7 +286,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 
 | 能力维度 | 最新架构适配说明 |
 |---|---|
-| 📖 **权威文档与 SDK 契约** | 实时对齐 `@openlearn/plugin-sdk@3.3.1` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。 |
+| 📖 **权威文档与 SDK 契约** | 实时对齐 `@openlearn/plugin-sdk@3.4.3` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。 |
 | 💬 **结构化交互设计确认** | 自动引导确认插件模式（`server-only` / `full-stack` / `frontend-only`）、Worker Thread 沙箱权限、UI 扩展槽位（`teacherTab`, `classroomTool` 等）及表结构。 |
 | 🏗️ **标准脚手架与代码生成** | 自动生成包含 `package.json`、`tsconfig.json`、`src/index.ts` (后端 Worker 逻辑) 和 `src/frontend.tsx` (React 19 组件) 的标准项目工程。 |
 | 🛡️ **安全与规范防错** | 自动校验 CQRS 三件套模式（`ActionRegistry` → `CommandBus` → `EventBus`）、CapabilityGuard 权限申报、SQLite 增量迁移脚本与 ESM 沙箱导出规范。 |
@@ -297,7 +297,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 
 ```
 用户提出需求：「帮我开发一个随堂互动小测验插件」
-  → Skill 自动载入 @openlearn/plugin-sdk@3.3.1 规格与核心 Token
+  → Skill 自动载入 @openlearn/plugin-sdk@3.4.3 规格与核心 Token
   → 交互式确认：用途、沙箱权限 (vfs/lesson/db)、扩展槽位 (teacherTab/classroomTool)
   → 选择插件模板 (full-stack / server-only / frontend-only)
   → 生成项目结构与代码 (Action/Command/Event + React 19 UI)
@@ -341,6 +341,10 @@ interface Manifest {
   configuration?: {              // V3.2: 声明式配置 schema
     properties: Record<string, ConfigProperty>;
   };
+  updateSource?: {               // V3.4.3: 远端更新源声明
+    type: 'github-release' | 'gitee-release';
+    repo: string;                // 仓库路径，如 "user/repo-name"
+  };
 }
 
 interface ConfigProperty {
@@ -360,6 +364,31 @@ interface ClassroomTool {
   payload?: any;      // 默认 payload
 }
 ```
+
+#### 3.1.1 远端更新检测（V3.4.3 新增）
+
+在 `manifest.json` 中声明 `updateSource` 字段后，平台插件中心可自动检测远端仓库（GitHub / Gitee）Release 中的新版本，并支持一键热更新。
+
+```json
+{
+  "updateSource": {
+    "type": "github-release",
+    "repo": "user/plugin-repo-name"
+  }
+}
+```
+
+**检测机制**：
+1. 服务端优先使用 `git ls-remote --tags` 获取所有 semver tag，若不可用则回退到 GitHub/Gitee Releases HTTP API
+2. 优先推荐最新稳定版；若无稳定版更新则提示预发布（pre-release）版本
+3. Version tag 需遵循 semver 格式（可带 `v` 前缀），如 `v1.2.0`、`2.0.0-beta.1`
+
+**下载与安装**：
+- 服务端优先从 Release Assets 中拉取 `.zip` 更新包直接安装
+- 若服务端下载超时（15s），自动切换至浏览器直传安装
+- 用户可在插件卡片上点击「检查更新」手动触发检测
+
+> 💡 **提示**：`updateSource` 为可选字段。不声明此字段的插件仍可通过 ZIP 拖放或上传方式安装更新。
 
 ### 3.2 PluginContext — 插件上下文的完整 API
 

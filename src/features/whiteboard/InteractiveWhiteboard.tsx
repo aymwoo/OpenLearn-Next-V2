@@ -3679,7 +3679,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         onDragEnter={handleWhiteboardDragEnter}
         onDrop={handleWhiteboardDrop}
       >
-      <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white/95 backdrop-blur-md border border-slate-200/80 absolute top-2 left-1/2 -translate-x-1/2 z-20 shadow-lg shadow-slate-200/50 rounded-2xl animate-in fade-in duration-200 font-sans select-none">
+      <div className="flex items-center justify-start gap-1.5 px-3 py-1.5 bg-white border-b border-slate-200 shrink-0 font-sans select-none">
         {/* Group 1: Selection */}
         <button
           onClick={() => { setTool('cursor'); setSelectedShapeId(null); }}
@@ -3973,7 +3973,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       
       <div 
         ref={containerRef} 
-        className="flex-1 bg-slate-50/70 rounded-2xl border border-slate-200/80 relative overflow-hidden mt-11 w-full mb-14 shadow-inner transition-all"
+        className="flex-1 bg-slate-50/70 rounded-2xl border border-slate-200/80 relative overflow-hidden w-full mb-14 shadow-inner transition-all"
         style={{
           backgroundImage: showGrid ? 'radial-gradient(#cbd5e1 1.2px, transparent 1.2px)' : 'none',
           backgroundSize: '24px 24px',

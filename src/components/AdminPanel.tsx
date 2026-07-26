@@ -507,7 +507,7 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiP
           }`}
         >
           <Database size={14} />
-          {lang === 'zh' ? 'SQLite 数据库监控' : 'SQLite DB Engine Monitor'}
+          {lang === 'zh' ? '系统监控' : 'System Monitor'}
         </button>
         <button
           onClick={() => setActiveAdminTab('site_settings')}
@@ -901,239 +901,6 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiP
               </div>
             </div>
           </div>
-        </div>
-      ) : activeAdminTab === 'site_settings' ? (
-        <div className="flex-1 overflow-y-auto mt-4 animate-fade-in text-gray-800 pb-12">
-          <div className="bg-white border border-gray-200/85 rounded-2xl shadow-xs overflow-hidden max-w-3xl">
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-slate-50/60">
-              <div>
-                <h3 className="font-bold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
-                  <Settings size={18} className="text-indigo-500" />
-                  {lang === 'zh' ? '平台站点信息（名称 / 口号 / Logo）' : 'Platform Site Info (Name / Slogan / Logo)'}
-                </h3>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {lang === 'zh' ? '设置将应用于登录页与平台各处的品牌 Logo 展示位。' : 'Applied to the login page and brand logo slots across the platform.'}
-                </p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSaveSiteSettings} className="p-5 space-y-5 text-left">
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  {lang === 'zh' ? '站点名称 *' : 'Site Name *'}
-                </label>
-                <input
-                  type="text"
-                  value={siteName}
-                  onChange={(e) => setSiteName(e.target.value)}
-                  placeholder={lang === 'zh' ? '例如：阳光实验小学智慧课堂' : 'e.g. Sunshine Elementary Smart Class'}
-                  className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  {lang === 'zh' ? '站点口号 / 标语' : 'Site Slogan / Tagline'}
-                </label>
-                <input
-                  type="text"
-                  value={siteSlogan}
-                  onChange={(e) => setSiteSlogan(e.target.value)}
-                  placeholder={lang === 'zh' ? '例如：下一代智能数字化学习系统' : 'e.g. Next-Generation Intelligent Learning'}
-                  className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  {lang === 'zh' ? '站点 Logo 图片' : 'Site Logo Image'}
-                </label>
-
-                {/* Logo preview slot */}
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-xl border border-gray-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                    {siteLogoInput ? (
-                      <img src={siteLogoInput} alt="logo preview" className="w-full h-full object-contain" />
-                    ) : (
-                      <Settings size={24} className="text-gray-300" />
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-all text-xs">
-                      <Plus size={14} />
-                      {lang === 'zh' ? '上传图片' : 'Upload Image'}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleSiteLogoFile(e.target.files?.[0])}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => { setSiteLogoInput(''); setSiteLogoUrl(null); }}
-                      className="px-3 py-2 text-xs font-semibold text-rose-600 border border-gray-200 rounded-lg hover:bg-rose-50 transition-all cursor-pointer"
-                    >
-                      {lang === 'zh' ? '清除 Logo' : 'Clear Logo'}
-                    </button>
-                  </div>
-                </div>
-
-                <span className="text-[10px] text-gray-400 block">
-                  {lang === 'zh' ? '也可直接粘贴图片 URL：' : 'Or paste an image URL:'}
-                </span>
-                <input
-                  type="text"
-                  value={siteLogoInput}
-                  onChange={(e) => setSiteLogoInput(e.target.value)}
-                  placeholder="https://example.com/logo.png"
-                  className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
-                <button
-                  type="submit"
-                  disabled={siteSettingsSaving}
-                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  {siteSettingsSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
-                  <span>{siteSettingsSaving ? (lang === 'zh' ? '保存中...' : 'Saving...') : (lang === 'zh' ? '保存站点信息' : 'Save Site Settings')}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : (
-        <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-12 gap-6 pt-5 overflow-hidden">
-        {/* Left pane: Accounts directory list (xl:col-span-7) */}
-        <div className="xl:col-span-7 flex flex-col min-h-0 bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-gray-150 bg-gray-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-2">
-              <Users size={16} className="text-gray-500" />
-              <span className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
-                {lang === 'zh' ? '在册教师/管理员列表' : 'Registered Staff Accounts'}
-              </span>
-              <span className="bg-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-full text-[10px]">
-                {filteredUsers.length}
-              </span>
-            </div>
-
-            <button
-              onClick={handleOpenCreate}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-            >
-              <Plus size={12} />
-              {lang === 'zh' ? '添加教职账户' : 'Add Teacher Account'}
-            </button>
-          </div>
-
-          {/* Search bar & filter controls */}
-          <div className="p-3 border-b border-gray-100 bg-white grid grid-cols-1 sm:grid-cols-12 gap-2 shrink-0">
-            <div className="sm:col-span-8 relative flex items-center">
-              <span className="absolute left-3 text-gray-400">
-                <Search size={14} />
-              </span>
-              <input
-                type="text"
-                placeholder={lang === 'zh' ? '检索姓名、教工用户名...' : 'Search teachers by name or username...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full text-xs pl-9 pr-3 py-2 border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 rounded-xl"
-              />
-            </div>
-
-            <div className="sm:col-span-4 select-none">
-              <select
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value as any)}
-                className="w-full text-xs p-2 border border-gray-200 focus:outline-none focus:border-indigo-400 rounded-xl bg-slate-50 cursor-pointer"
-              >
-                <option value="all">{lang === 'zh' ? '全部角色' : 'All Roles'}</option>
-                <option value="administrator">{lang === 'zh' ? '管理员 (admin)' : 'Administrators'}</option>
-                <option value="teacher">{lang === 'zh' ? '非管理员 (teacher)' : 'Standard Teachers'}</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/55">
-            {loading ? (
-              <div className="flex justify-center items-center h-48 text-gray-400 text-xs">
-                <RefreshCw size={20} className="animate-spin mr-1.5" />
-                {lang === 'zh' ? '加载教职工账户中...' : 'Reading accounts...'}
-              </div>
-            ) : filteredUsers.length === 0 ? (
-              <div className="text-center p-8 text-gray-400 flex flex-col items-center justify-center h-full">
-                <Users size={36} className="opacity-20 mb-2" />
-                <p className="text-xs font-semibold">{lang === 'zh' ? '未检索到任何符合条件的教师账户' : 'No staff matched your filters.'}</p>
-              </div>
-            ) : (
-              filteredUsers.map(user => {
-                const isSelectedSelf = user.id === currentUserId;
-                const isUserAdmin = user.role === 'administrator';
-                const isDisabled = user.status === 'disabled';
-                return (
-                  <div 
-                    key={user.id}
-                    className={`p-3 bg-white border border-gray-150 hover:border-gray-350 rounded-xl shadow-2xs flex items-center justify-between group transition-all ${isDisabled ? 'opacity-75 bg-slate-50/50' : ''}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-xl flex items-center justify-center ${isDisabled ? 'bg-slate-200 text-slate-400' : isUserAdmin ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>
-                        {isUserAdmin ? <Shield size={18} /> : <Users size={18} />}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-black ${isDisabled ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{user.name}</span>
-                          {isSelectedSelf && (
-                            <span className="bg-indigo-100/80 text-indigo-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-indigo-200">
-                              {lang === 'zh' ? '你自己' : 'You'}
-                            </span>
-                          )}
-                          <span className={`text-[8.5px] font-black tracking-wider uppercase px-1.5 py-0.5 rounded-full ${
-                            isUserAdmin ? 'bg-indigo-950/90 text-indigo-400' : 'bg-slate-100 text-slate-500'
-                          }`}>
-                            {user.role}
-                          </span>
-                          {isDisabled && (
-                            <span className="bg-rose-100 text-rose-700 text-[8.5px] font-black px-1.5 py-0.5 rounded-full border border-rose-200">
-                              {lang === 'zh' ? '已禁用' : 'Disabled'}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[10px] text-gray-450 font-mono mt-1 flex items-center gap-1.5">
-                          <span>@{user.username}</span>
-                          <span>•</span>
-                          <span>{lang === 'zh' ? '注册日期：' : 'ID: '}{new Date(user.created_at).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleOpenEdit(user)}
-                        className="p-1 px-1.5 text-xs text-gray-650 hover:text-indigo-600 hover:bg-indigo-50/50 border border-transparent rounded-lg transition-colors flex items-center gap-1"
-                        title={lang === 'zh' ? '修改设置' : 'Update settings'}
-                      >
-                        <Edit2 size={12} />
-                        <span className="hidden md:inline text-[10px]">{lang === 'zh' ? '设置' : 'Edit'}</span>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUser(user.id, user.name)}
-                        className="p-1 px-1.5 text-xs text-gray-650 hover:text-rose-600 hover:bg-rose-50 border border-transparent rounded-lg transition-colors flex items-center gap-1"
-                        title={lang === 'zh' ? '注销删除' : 'Delete user'}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Right pane: Database health & server status (xl:col-span-5) */}
-        <div className="xl:col-span-5 flex flex-col min-h-0 gap-6">
           {/* Section 1: 'Database Health' Section Card */}
           <div className="bg-white border border-gray-200 rounded-2xl shadow-xs p-5 flex flex-col shrink-0 animate-fade-in text-gray-850" id="db_health_dashboard_card">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-4">
@@ -1269,6 +1036,236 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiP
             </div>
           </div>
         </div>
+      ) : activeAdminTab === 'site_settings' ? (
+        <div className="flex-1 overflow-y-auto mt-4 animate-fade-in text-gray-800 pb-12">
+          <div className="bg-white border border-gray-200/85 rounded-2xl shadow-xs overflow-hidden max-w-3xl">
+            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-slate-50/60">
+              <div>
+                <h3 className="font-bold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
+                  <Settings size={18} className="text-indigo-500" />
+                  {lang === 'zh' ? '平台站点信息（名称 / 口号 / Logo）' : 'Platform Site Info (Name / Slogan / Logo)'}
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {lang === 'zh' ? '设置将应用于登录页与平台各处的品牌 Logo 展示位。' : 'Applied to the login page and brand logo slots across the platform.'}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveSiteSettings} className="p-5 space-y-5 text-left">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  {lang === 'zh' ? '站点名称 *' : 'Site Name *'}
+                </label>
+                <input
+                  type="text"
+                  value={siteName}
+                  onChange={(e) => setSiteName(e.target.value)}
+                  placeholder={lang === 'zh' ? '例如：阳光实验小学智慧课堂' : 'e.g. Sunshine Elementary Smart Class'}
+                  className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-semibold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  {lang === 'zh' ? '站点口号 / 标语' : 'Site Slogan / Tagline'}
+                </label>
+                <input
+                  type="text"
+                  value={siteSlogan}
+                  onChange={(e) => setSiteSlogan(e.target.value)}
+                  placeholder={lang === 'zh' ? '例如：下一代智能数字化学习系统' : 'e.g. Next-Generation Intelligent Learning'}
+                  className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  {lang === 'zh' ? '站点 Logo 图片' : 'Site Logo Image'}
+                </label>
+
+                {/* Logo preview slot */}
+                <div className="flex items-center gap-4">
+                  <div className="w-20 h-20 rounded-xl border border-gray-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+                    {siteLogoInput ? (
+                      <img src={siteLogoInput} alt="logo preview" className="w-full h-full object-contain" />
+                    ) : (
+                      <Settings size={24} className="text-gray-300" />
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-all text-xs">
+                      <Plus size={14} />
+                      {lang === 'zh' ? '上传图片' : 'Upload Image'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleSiteLogoFile(e.target.files?.[0])}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => { setSiteLogoInput(''); setSiteLogoUrl(null); }}
+                      className="px-3 py-2 text-xs font-semibold text-rose-600 border border-gray-200 rounded-lg hover:bg-rose-50 transition-all cursor-pointer"
+                    >
+                      {lang === 'zh' ? '清除 Logo' : 'Clear Logo'}
+                    </button>
+                  </div>
+                </div>
+
+                <span className="text-[10px] text-gray-400 block">
+                  {lang === 'zh' ? '也可直接粘贴图片 URL：' : 'Or paste an image URL:'}
+                </span>
+                <input
+                  type="text"
+                  value={siteLogoInput}
+                  onChange={(e) => setSiteLogoInput(e.target.value)}
+                  placeholder="https://example.com/logo.png"
+                  className="w-full text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+                <button
+                  type="submit"
+                  disabled={siteSettingsSaving}
+                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  {siteSettingsSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
+                  <span>{siteSettingsSaving ? (lang === 'zh' ? '保存中...' : 'Saving...') : (lang === 'zh' ? '保存站点信息' : 'Save Site Settings')}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-12 gap-6 pt-5 overflow-hidden">
+        {/* Left pane: Accounts directory list (xl:col-span-12) */}
+        <div className="xl:col-span-12 flex flex-col min-h-0 bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-gray-150 bg-gray-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <Users size={16} className="text-gray-500" />
+              <span className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
+                {lang === 'zh' ? '在册教师/管理员列表' : 'Registered Staff Accounts'}
+              </span>
+              <span className="bg-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-full text-[10px]">
+                {filteredUsers.length}
+              </span>
+            </div>
+
+            <button
+              onClick={handleOpenCreate}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus size={12} />
+              {lang === 'zh' ? '添加教职账户' : 'Add Teacher Account'}
+            </button>
+          </div>
+
+          {/* Search bar & filter controls */}
+          <div className="p-3 border-b border-gray-100 bg-white grid grid-cols-1 sm:grid-cols-12 gap-2 shrink-0">
+            <div className="sm:col-span-8 relative flex items-center">
+              <span className="absolute left-3 text-gray-400">
+                <Search size={14} />
+              </span>
+              <input
+                type="text"
+                placeholder={lang === 'zh' ? '检索姓名、教工用户名...' : 'Search teachers by name or username...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full text-xs pl-9 pr-3 py-2 border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 rounded-xl"
+              />
+            </div>
+
+            <div className="sm:col-span-4 select-none">
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as any)}
+                className="w-full text-xs p-2 border border-gray-200 focus:outline-none focus:border-indigo-400 rounded-xl bg-slate-50 cursor-pointer"
+              >
+                <option value="all">{lang === 'zh' ? '全部角色' : 'All Roles'}</option>
+                <option value="administrator">{lang === 'zh' ? '管理员 (admin)' : 'Administrators'}</option>
+                <option value="teacher">{lang === 'zh' ? '非管理员 (teacher)' : 'Standard Teachers'}</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/55">
+            {loading ? (
+              <div className="flex justify-center items-center h-48 text-gray-400 text-xs">
+                <RefreshCw size={20} className="animate-spin mr-1.5" />
+                {lang === 'zh' ? '加载教职工账户中...' : 'Reading accounts...'}
+              </div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="text-center p-8 text-gray-400 flex flex-col items-center justify-center h-full">
+                <Users size={36} className="opacity-20 mb-2" />
+                <p className="text-xs font-semibold">{lang === 'zh' ? '未检索到任何符合条件的教师账户' : 'No staff matched your filters.'}</p>
+              </div>
+            ) : (
+              filteredUsers.map(user => {
+                const isSelectedSelf = user.id === currentUserId;
+                const isUserAdmin = user.role === 'administrator';
+                const isDisabled = user.status === 'disabled';
+                return (
+                  <div 
+                    key={user.id}
+                    className={`p-3 bg-white border border-gray-150 hover:border-gray-350 rounded-xl shadow-2xs flex items-center justify-between group transition-all ${isDisabled ? 'opacity-75 bg-slate-50/50' : ''}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-xl flex items-center justify-center ${isDisabled ? 'bg-slate-200 text-slate-400' : isUserAdmin ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {isUserAdmin ? <Shield size={18} /> : <Users size={18} />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-black ${isDisabled ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{user.name}</span>
+                          {isSelectedSelf && (
+                            <span className="bg-indigo-100/80 text-indigo-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-indigo-200">
+                              {lang === 'zh' ? '你自己' : 'You'}
+                            </span>
+                          )}
+                          <span className={`text-[8.5px] font-black tracking-wider uppercase px-1.5 py-0.5 rounded-full ${
+                            isUserAdmin ? 'bg-indigo-950/90 text-indigo-400' : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {user.role}
+                          </span>
+                          {isDisabled && (
+                            <span className="bg-rose-100 text-rose-700 text-[8.5px] font-black px-1.5 py-0.5 rounded-full border border-rose-200">
+                              {lang === 'zh' ? '已禁用' : 'Disabled'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-gray-450 font-mono mt-1 flex items-center gap-1.5">
+                          <span>@{user.username}</span>
+                          <span>•</span>
+                          <span>{lang === 'zh' ? '注册日期：' : 'ID: '}{new Date(user.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleOpenEdit(user)}
+                        className="p-1 px-1.5 text-xs text-gray-650 hover:text-indigo-600 hover:bg-indigo-50/50 border border-transparent rounded-lg transition-colors flex items-center gap-1"
+                        title={lang === 'zh' ? '修改设置' : 'Update settings'}
+                      >
+                        <Edit2 size={12} />
+                        <span className="hidden md:inline text-[10px]">{lang === 'zh' ? '设置' : 'Edit'}</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(user.id, user.name)}
+                        className="p-1 px-1.5 text-xs text-gray-650 hover:text-rose-600 hover:bg-rose-50 border border-transparent rounded-lg transition-colors flex items-center gap-1"
+                        title={lang === 'zh' ? '注销删除' : 'Delete user'}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
       </div>
     )}
 

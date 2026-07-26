@@ -55,6 +55,13 @@ interface Manifest {
     }>;
   };
   contributes?: Record<string, Array<{ id: string; [key: string]: unknown }>>;
+  /** 远端更新源配置。声明后插件中心可自动检测 GitHub/Gitee Release 中的新版本 */
+  updateSource?: {
+    /** 远端仓库类型：github-release | gitee-release */
+    type: 'github-release' | 'gitee-release';
+    /** 仓库路径，如 "user/repo-name" */
+    repo: string;
+  };
   [key: string]: unknown;
 }
 
@@ -351,7 +358,6 @@ export {
 };
 
 declare const IActivityRegistryToken: Token<unknown>;
-
 
 
 
