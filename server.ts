@@ -786,6 +786,23 @@ async function startServer() {
     }
   });
 
+  kernelContainer.eventBus.subscribe('spotlight:state_updated', (event) => {
+    try {
+      io.emit('spotlight:state_updated', event.payload);
+    } catch (e) {
+      console.error('[EventBus -> Socket.IO] Error processing spotlight:state_updated:', e);
+    }
+  });
+
+  kernelContainer.eventBus.subscribe('spotlight.state_updated', (event) => {
+    try {
+      io.emit('spotlight:state_updated', event.payload);
+    } catch (e) {
+      console.error('[EventBus -> Socket.IO] Error processing spotlight.state_updated:', e);
+    }
+  });
+
+
   // In-memory status maps
   const onlineStudents = new Map<string, { socketId: string, name: string }>();
   const activeStudentLessons = new Map<string, string>(); // studentId -> lessonId
