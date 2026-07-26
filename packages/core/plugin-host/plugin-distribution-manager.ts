@@ -107,7 +107,10 @@ export class PluginDistributionManager implements IPluginDistributionManager {
     executionMode?: 'worker' | 'inline',
   ): Promise<{ pluginId: string; manifest: Manifest }> {
     const manifest = await this.pluginHost.installPluginFromZip(zipBuffer, executionMode);
-    return { pluginId: manifest.id, manifest };
+    // installPluginFromZip returns Manifest & { pluginId: <DB UUID> }.
+    // Prefer the UUID so callers can toggle/activate without alias resolution.
+    const pluginId = (manifest as Manifest & { pluginId?: string }).pluginId ?? manifest.id;
+    return { pluginId, manifest };
   }
 
   public async installFromRepository(

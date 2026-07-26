@@ -245,16 +245,27 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  // Raw binary upload �? avoids base64 overhead for large plugin zips
+  // Raw binary upload — avoids base64 overhead for large plugin zips
   app.post('/api/plugins/upload-zip-raw', express.raw({ type: 'application/octet-stream', limit: '400mb' }), async (req, res) => {
     try {
       const zipBuffer = req.body;
       const filename = req.headers['x-filename'] ? decodeURIComponent(req.headers['x-filename'] as string) : 'plugin.zip';
+      const executionModeHeader = String(req.headers['x-execution-mode'] || '').toLowerCase();
+      const executionMode =
+        executionModeHeader === 'worker' || executionModeHeader === 'inline'
+          ? (executionModeHeader as 'worker' | 'inline')
+          : undefined;
       if (!Buffer.isBuffer(zipBuffer) || zipBuffer.length === 0) {
         return res.status(400).json({ success: false, error: 'Empty or invalid zip file' });
       }
-      const result = await kernelContainer.pluginDistributionManager.installFromZip(zipBuffer);
-      res.json({ success: true, pluginId: (result as any).pluginId, manifest: result });
+      const result = await kernelContainer.pluginDistributionManager.installFromZip(zipBuffer, executionMode);
+      // result.pluginId is DB UUID; result.manifest keeps package metadata
+      res.json({
+        success: true,
+        pluginId: result.pluginId,
+        manifest: result.manifest,
+        filename,
+      });
     } catch (err: any) {
       console.error(err);
       res.status(500).json({ success: false, error: err.message });
