@@ -2483,6 +2483,7 @@ export default function App() {
   const studentsRef = useRef(students);
   const addToastRef = useRef(addToast);
   const activatingPluginsRef = useRef<Set<string>>(new Set());
+  const togglingPluginsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => { activeRoleRef.current = activeRole; }, [activeRole]);
   useEffect(() => { activeStudentIdRef.current = activeStudentId; }, [activeStudentId]);
@@ -2496,7 +2497,7 @@ export default function App() {
 
     const store = usePluginHostStore.getState();
 
-    // 1. Activate active plugins
+    // 1. Activate active plugins (re-activate when version changes after in-place update)
     const activePluginsFromServer = plugins.filter((p) => p.status === 'active');
     for (const plugin of activePluginsFromServer) {
       if (!plugin.has_frontend) {
@@ -2506,9 +2507,17 @@ export default function App() {
         continue;
       }
       const localPlugin = store.activePlugins.find((p) => p.id === plugin.id);
-      if (!localPlugin || (localPlugin.state !== PluginState.ACTIVE && localPlugin.state !== PluginState.ACTIVATING)) {
-        activatingPluginsRef.current.add(plugin.id);
-        if (!localPlugin) {
+      const versionChanged = !!(localPlugin && plugin.version && localPlugin.version !== plugin.version);
+      const needsActivate =
+        !localPlugin ||
+        versionChanged ||
+        (localPlugin.state !== PluginState.ACTIVE && localPlugin.state !== PluginState.ACTIVATING);
+
+      if (!needsActivate) continue;
+
+      activatingPluginsRef.current.add(plugin.id);
+      const startActivate = () => {
+        if (!store.activePlugins.find((p) => p.id === plugin.id)) {
           store.addPlugin({
             id: plugin.id,
             name: plugin.name,
@@ -2516,10 +2525,22 @@ export default function App() {
             state: PluginState.INSTALLED,
             executionMode: 'inline',
           });
+        } else if (versionChanged) {
+          // Keep store entry but refresh version stamp
+          try {
+            usePluginHostStore.setState((s) => ({
+              activePlugins: s.activePlugins.map((p) =>
+                p.id === plugin.id ? { ...p, version: plugin.version, name: plugin.name } : p,
+              ),
+            }));
+          } catch {
+            /* ignore */
+          }
         }
         try {
           const manifest = JSON.parse(plugin.manifest);
-          host.activateRemotePlugin(plugin.id, manifest)
+          host
+            .activateRemotePlugin(plugin.id, manifest)
             .catch((err) => {
               console.error(`[App] Failed to activate remote plugin "${plugin.name}":`, err);
             })
@@ -2530,6 +2551,15 @@ export default function App() {
           activatingPluginsRef.current.delete(plugin.id);
           console.error(`[App] Failed to parse manifest for plugin "${plugin.name}":`, e);
         }
+      };
+
+      if (localPlugin && localPlugin.state === PluginState.ACTIVE && versionChanged) {
+        host
+          .deactivatePlugin(plugin.id)
+          .catch(() => {})
+          .finally(startActivate);
+      } else {
+        startActivate();
       }
     }
 
@@ -3435,49 +3465,99 @@ export default function App() {
     }
   };
 
-  const handleZipPluginUpload = async (file: File, executionMode: 'worker' | 'inline') => {
+  const handleZipPluginUpload = async (
+    file: File,
+    executionMode: 'worker' | 'inline',
+    opts?: { mode?: 'install' | 'update'; targetPluginId?: string; allowDowngrade?: boolean },
+  ) => {
     setInstallingPlugin(true);
+    const isUpdate = opts?.mode === 'update';
     try {
       // Raw binary upload — avoids base64 memory overhead for large files
-      const res = await fetch('/api/plugins/upload-zip-raw', {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/octet-stream',
+        'X-Filename': encodeURIComponent(file.name),
+        'X-Execution-Mode': executionMode,
+        'X-Install-Mode': isUpdate ? 'update' : 'install',
+        'X-Allow-Downgrade': opts?.allowDowngrade ? 'true' : 'false',
+      };
+      if (opts?.targetPluginId) {
+        headers['X-Target-Plugin-Id'] = encodeURIComponent(opts.targetPluginId);
+      }
+
+      const url =
+        isUpdate && opts?.targetPluginId
+          ? `/api/plugins/${encodeURIComponent(opts.targetPluginId)}/update-zip-raw`
+          : '/api/plugins/upload-zip-raw';
+
+      const res = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          'X-Filename': encodeURIComponent(file.name),
-          'X-Execution-Mode': executionMode,
-        },
+        headers,
         body: file,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         const errMsg = data.error || 'Unknown error';
-        addToast(lang === 'zh' ? '安装失败' : 'Installation Failed', errMsg, 'error');
+        addToast(
+          lang === 'zh' ? (isUpdate ? '更新失败' : '安装失败') : isUpdate ? 'Update Failed' : 'Installation Failed',
+          errMsg,
+          'error',
+        );
         throw new Error(errMsg);
       }
 
       const installedId = data.pluginId || data.manifest?.pluginId || data.manifest?.id;
-      if (installedId) {
+      const updated = !!(data.updated || isUpdate);
+
+      // New install: auto-activate. Update: keep previous enabled/disabled state
+      // (backend already hot-reloads when it was active).
+      if (!updated && installedId) {
         await fetch(`/api/plugins/${encodeURIComponent(installedId)}/toggle`, { method: 'POST' }).catch(() => {});
+      } else if (updated && data.wasActive && installedId) {
+        // Force frontend shell to drop stale UI bindings before list refresh re-activates
+        try {
+          await host.deactivatePlugin(installedId);
+        } catch {
+          /* ignore */
+        }
       }
 
       setTeacherTab('plugins');
       setStoreTab('store');
-      // Refresh immediately so the new plugin appears without a manual reload
       await fetchPlugins();
-      // Second pass: catch async activation / contribution registration lag
-      setTimeout(() => { void fetchPlugins(); }, 1000);
+      setTimeout(() => {
+        void fetchPlugins();
+      }, 1000);
 
       const pluginName = data.manifest?.name || installedId || file.name;
-      addToast(
-        lang === 'zh' ? '插件安装成功' : 'Plugin Installed',
-        lang === 'zh'
-          ? `三方插件 "${pluginName}" 已成功上传并以 [${executionMode === 'worker' ? 'Worker 隔离' : 'VM 嵌入'}] 模式激活运行！`
-          : `Plugin "${pluginName}" installed and activated in [${executionMode}] mode!`,
-        'success'
-      );
-      setChatLog(prev => [...prev, { role: 'agent', content: `[System] Plugin "${pluginName}" installed successfully from ZIP file.` }]);
+      if (updated) {
+        const fromV = data.oldVersion || '?';
+        const toV = data.newVersion || data.manifest?.version || '?';
+        addToast(
+          lang === 'zh' ? '插件更新成功' : 'Plugin Updated',
+          lang === 'zh'
+            ? `"${pluginName}" 已从 v${fromV} 更新到 v${toV}（配置与数据已保留）`
+            : `"${pluginName}" updated v${fromV} → v${toV} (config & data preserved)`,
+          'success',
+        );
+        setChatLog((prev) => [
+          ...prev,
+          { role: 'agent', content: `[System] Plugin "${pluginName}" updated ${fromV} → ${toV}.` },
+        ]);
+      } else {
+        addToast(
+          lang === 'zh' ? '插件安装成功' : 'Plugin Installed',
+          lang === 'zh'
+            ? `三方插件 "${pluginName}" 已成功上传并以 [${executionMode === 'worker' ? 'Worker 隔离' : 'VM 嵌入'}] 模式激活运行！`
+            : `Plugin "${pluginName}" installed and activated in [${executionMode}] mode!`,
+          'success',
+        );
+        setChatLog((prev) => [
+          ...prev,
+          { role: 'agent', content: `[System] Plugin "${pluginName}" installed successfully from ZIP file.` },
+        ]);
+      }
     } catch (err: any) {
-      // API failures already toasted above; cover unexpected/network errors here
       const msg = err?.message ? String(err.message) : '';
       const alreadyToasted = msg && msg !== 'Failed to fetch' && msg !== 'Network error';
       if (!alreadyToasted) {
@@ -3490,6 +3570,9 @@ export default function App() {
   };
 
   const handleTogglePlugin = async (id: string) => {
+    // Prevent double-clicks from racing two activate calls (activating → activating)
+    if (togglingPluginsRef.current.has(id)) return;
+    togglingPluginsRef.current.add(id);
     try {
       const res = await fetch(`/api/plugins/${encodeURIComponent(id)}/toggle`, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
@@ -3507,6 +3590,8 @@ export default function App() {
     } catch (e) {
       console.error('Failed to toggle plugin:', e);
       alert(lang === 'zh' ? '网络错误，切换插件失败' : 'Network error, failed to toggle plugin');
+    } finally {
+      togglingPluginsRef.current.delete(id);
     }
   };
 

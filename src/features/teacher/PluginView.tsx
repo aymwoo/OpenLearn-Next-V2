@@ -11,7 +11,11 @@ interface PluginViewProps {
   setPluginCode: (code: string) => void;
   installingPlugin: boolean;
   onInstall: (code: string) => Promise<void>;
-  onZipUpload: (base64: string) => Promise<void>;
+  onZipUpload: (
+    file: File,
+    executionMode: 'worker' | 'inline',
+    opts?: { mode?: 'install' | 'update'; targetPluginId?: string; allowDowngrade?: boolean },
+  ) => Promise<void>;
   onToggle: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }

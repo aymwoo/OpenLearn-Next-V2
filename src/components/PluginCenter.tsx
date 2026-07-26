@@ -44,6 +44,8 @@ export interface PluginType {
   created_at: number;
   manifest: string;
   execution_mode?: string;
+  version?: string;
+  has_frontend?: boolean;
 }
 
 interface ParsedManifest {
@@ -70,7 +72,11 @@ export interface PluginCenterProps {
   setPluginCode: (code: string) => void;
   installingPlugin: boolean;
   onInstall: () => void;
-  onZipUpload: (file: File, executionMode: 'worker' | 'inline') => Promise<void>;
+  onZipUpload: (
+    file: File,
+    executionMode: 'worker' | 'inline',
+    opts?: { mode?: 'install' | 'update'; targetPluginId?: string; allowDowngrade?: boolean },
+  ) => Promise<void>;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
 }
@@ -389,6 +395,9 @@ export function PluginCenter({
   const [showSystemPlugins, setShowSystemPlugins] = React.useState(false);
   const [dismissMigration, setDismissMigration] = React.useState(false);
   const [selectedZipFile, setSelectedZipFile] = React.useState<File | null>(null);
+  /** When set, wizard is opened from a card "Update" action and locked to that plugin. */
+  const [updateTargetPluginId, setUpdateTargetPluginId] = React.useState<string | null>(null);
+  const updateFileInputRef = React.useRef<HTMLInputElement>(null);
 
   // ZIP upload state (error messages, preview metadata, processing indicator)
   const [zipError, setZipError] = React.useState<string | null>(null);
@@ -408,6 +417,7 @@ export function PluginCenter({
     e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50/50');
     const files = e.dataTransfer.files;
     if (files.length > 0) {
+      setUpdateTargetPluginId(null);
       setSelectedZipFile(files[0]);
     }
   };
@@ -525,7 +535,22 @@ export function PluginCenter({
           accept=".zip"
           id="zip-plugin-uploader"
           className="hidden"
-          onChange={handleZipInputChange}
+          onChange={(e) => {
+            setUpdateTargetPluginId(null);
+            handleZipInputChange(e);
+          }}
+        />
+        {/* Card-level Update picker — locks wizard to a specific plugin id */}
+        <input
+          ref={updateFileInputRef}
+          type="file"
+          accept=".zip"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) setSelectedZipFile(f);
+            e.target.value = '';
+          }}
         />
 
         {storeTab === 'store' ? (
@@ -631,7 +656,7 @@ export function PluginCenter({
                 return (
                   <div
                     key={plugin.id}
-                    className={`bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden group flex flex-col gap-3 ${
+                    className={`bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden group flex flex-col gap-3 h-full ${
                       plugin.status !== 'active' ? 'opacity-75' : ''
                     }`}
                   >
@@ -724,20 +749,22 @@ export function PluginCenter({
                       </div>
                     )}
 
+                    {/* Footer: metadata + actions pinned to card bottom for cross-card alignment */}
+                    <div className="mt-auto flex flex-col gap-3 pt-1">
                     {/* Metadata strip: author + install date */}
                     <div className="flex items-center justify-between text-[10px] text-gray-400 border-t border-gray-100 pt-2">
-                      <span className="flex items-center gap-1">
-                        <Users size={10} />
-                        <span>{manifestInfo.author}</span>
+                      <span className="flex items-center gap-1 min-w-0">
+                        <Users size={10} className="shrink-0" />
+                        <span className="truncate">{manifestInfo.author}</span>
                       </span>
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1 shrink-0">
                         <span>{lang === 'zh' ? '安装于' : 'Installed'}</span>
                         <span className="font-mono">{installDate}</span>
                       </span>
                     </div>
 
                     {/* Action buttons */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap min-h-[34px]">
                       <button
                         onClick={() => onToggle(plugin.id)}
                         className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
@@ -750,7 +777,7 @@ export function PluginCenter({
                           ? lang === 'zh' ? '禁用' : 'Disable'
                           : lang === 'zh' ? '启用' : 'Enable'}
                       </button>
-                      {/* Dashboard visibility toggle */}
+                      {/* Dashboard visibility toggle (Switch style, aligned with other action buttons) */}
                       <button
                         onClick={() => {
                           const next = !dashboardVisible;
@@ -760,14 +787,24 @@ export function PluginCenter({
                           ? (lang === 'zh' ? '在系统总览中隐藏' : 'Hide from Dashboard')
                           : (lang === 'zh' ? '在系统总览中显示' : 'Show in Dashboard')
                         }
-                        className={`px-2.5 py-1 text-[10px] font-medium rounded-lg transition-colors flex items-center gap-1 ${
+                        className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
                           dashboardVisible
-                            ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                            ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200/60'
+                            : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200/60'
                         }`}
                       >
-                        <span className={`w-1.5 h-1.5 rounded-full ${dashboardVisible ? 'bg-indigo-500' : 'bg-gray-400'}`} />
-                        {lang === 'zh' ? '总览' : 'Dash'}
+                        <span>{lang === 'zh' ? '总览' : 'Dash'}</span>
+                        <span
+                          className={`w-7 h-3.5 rounded-full transition-colors flex items-center p-0.5 shrink-0 ${
+                            dashboardVisible ? 'bg-indigo-600' : 'bg-gray-300'
+                          }`}
+                        >
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full bg-white shadow-sm transition-transform ${
+                              dashboardVisible ? 'translate-x-3.5' : 'translate-x-0'
+                            }`}
+                          />
+                        </span>
                       </button>
                       {manifestInfo.hasConfig && (
                         <button
@@ -779,12 +816,23 @@ export function PluginCenter({
                         </button>
                       )}
                       {!isSystem && (
-                        <button
-                          onClick={() => onDelete(plugin.id)}
-                          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                        >
-                          {lang === 'zh' ? '删除' : 'Delete'}
-                        </button>
+                        <>
+                          <button
+                            onClick={() => {
+                              setUpdateTargetPluginId(plugin.id);
+                              updateFileInputRef.current?.click();
+                            }}
+                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 transition-colors"
+                          >
+                            {lang === 'zh' ? '更新' : 'Update'}
+                          </button>
+                          <button
+                            onClick={() => onDelete(plugin.id)}
+                            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                          >
+                            {lang === 'zh' ? '删除' : 'Delete'}
+                          </button>
+                        </>
                       )}
                       {plugin.execution_mode === 'legacy' && (
                         <button
@@ -795,6 +843,7 @@ export function PluginCenter({
                           {lang === 'zh' ? '迁移' : 'Migrate'}
                         </button>
                       )}
+                    </div>
                     </div>
                   </div>
                 );
@@ -1369,12 +1418,23 @@ export function PluginCenter({
                               {plugin.status === 'active' ? (lang === 'zh' ? '禁用' : 'Disable') : (lang === 'zh' ? '启用' : 'Enable')}
                             </button>
                             {!plugin.id.startsWith('@openlearn/') && (
-                              <button
-                                onClick={() => onDelete(plugin.id)}
-                                className="px-2 py-1 text-[10px] font-bold bg-red-950/60 border border-red-900/50 text-red-400 hover:bg-red-900/80 rounded transition-colors"
-                              >
-                                {lang === 'zh' ? '删除' : 'Delete'}
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setUpdateTargetPluginId(plugin.id);
+                                    updateFileInputRef.current?.click();
+                                  }}
+                                  className="px-2 py-1 text-[10px] font-bold bg-sky-950/60 border border-sky-900/50 text-sky-300 hover:bg-sky-900/80 rounded transition-colors"
+                                >
+                                  {lang === 'zh' ? '更新' : 'Update'}
+                                </button>
+                                <button
+                                  onClick={() => onDelete(plugin.id)}
+                                  className="px-2 py-1 text-[10px] font-bold bg-red-950/60 border border-red-900/50 text-red-400 hover:bg-red-900/80 rounded transition-colors"
+                                >
+                                  {lang === 'zh' ? '删除' : 'Delete'}
+                                </button>
+                              </>
                             )}
                           </div>
                         </div>
@@ -1435,9 +1495,14 @@ export function PluginCenter({
     {/* V3.2: Plugin Install Wizard */}
     <PluginInstallWizard
       isOpen={!!selectedZipFile}
-      onClose={() => setSelectedZipFile(null)}
+      onClose={() => {
+        setSelectedZipFile(null);
+        setUpdateTargetPluginId(null);
+      }}
       lang={lang}
       file={selectedZipFile}
+      lockedTargetPluginId={updateTargetPluginId}
+      installedPlugins={plugins}
       onConfirmInstall={onZipUpload}
     />
   </>

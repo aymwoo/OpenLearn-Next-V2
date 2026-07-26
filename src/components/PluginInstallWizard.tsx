@@ -2,12 +2,33 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Shield, Sparkles, AlertTriangle, ChevronLeft, ChevronRight, X, Loader2, CheckCircle } from 'lucide-react';
 import JSZip from 'jszip';
 
+export type ZipInstallOptions = {
+  mode: 'install' | 'update';
+  targetPluginId?: string;
+  allowDowngrade?: boolean;
+};
+
+interface InstalledPluginSummary {
+  id: string;
+  name: string;
+  status: string;
+  manifest: string;
+  version?: string;
+}
+
 interface PluginInstallWizardProps {
   isOpen: boolean;
   onClose: () => void;
   lang: 'zh' | 'en';
   file: File | null;
-  onConfirmInstall: (file: File, executionMode: 'worker' | 'inline') => Promise<void>;
+  /** When set, wizard is locked to updating this DB plugin id (card "Update"). */
+  lockedTargetPluginId?: string | null;
+  installedPlugins?: InstalledPluginSummary[];
+  onConfirmInstall: (
+    file: File,
+    executionMode: 'worker' | 'inline',
+    opts?: ZipInstallOptions,
+  ) => Promise<void>;
 }
 
 interface DetectedExtensionPoint {
@@ -145,7 +166,32 @@ const TEACHER_SLOTS = new Set([
 ]);
 const STUDENT_SLOTS = new Set(['student.view', 'student.dashboard.widget']);
 
-export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInstall }: PluginInstallWizardProps) {
+function coerceSemver(v: string | undefined | null): string {
+  if (!v || typeof v !== 'string') return '0.0.0';
+  const m = v.trim().match(/(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
+  if (!m) return '0.0.0';
+  return `${m[1]}.${m[2] || '0'}.${m[3] || '0'}`;
+}
+
+function compareSemver(a: string, b: string): number {
+  const pa = coerceSemver(a).split('.').map((x) => parseInt(x, 10));
+  const pb = coerceSemver(b).split('.').map((x) => parseInt(x, 10));
+  for (let i = 0; i < 3; i++) {
+    if (pa[i] < pb[i]) return -1;
+    if (pa[i] > pb[i]) return 1;
+  }
+  return 0;
+}
+
+export function PluginInstallWizard({
+  isOpen,
+  onClose,
+  lang,
+  file,
+  onConfirmInstall,
+  lockedTargetPluginId = null,
+  installedPlugins = [],
+}: PluginInstallWizardProps) {
   const [step, setStep] = useState(0);
   const [manifest, setManifest] = useState<any>(null);
   const [capabilities, setCapabilities] = useState<string[]>([]);
@@ -166,6 +212,18 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
   const [registeredPanels, setRegisteredPanels] = useState<DetectedExtensionPoint[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
 
+  // Upgrade detection
+  const [existingInstall, setExistingInstall] = useState<{
+    pluginId: string;
+    name: string;
+    version: string;
+    status: string;
+    isSystem: boolean;
+    manifestId: string;
+  } | null>(null);
+  const [allowDowngrade, setAllowDowngrade] = useState(false);
+  const [confirmInUse, setConfirmInUse] = useState(false);
+
   useEffect(() => {
     if (isOpen && file) {
       setStep(0);
@@ -180,6 +238,9 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
       setRegisteredPanels([]);
       setZipFiles([]);
       setPreviewRole('teacher');
+      setExistingInstall(null);
+      setAllowDowngrade(false);
+      setConfirmInUse(false);
       parseZip(file);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -216,10 +277,104 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
       if (parsed.executionMode === 'inline') {
         setExecutionMode('inline');
       }
+
+      // Detect same-id install for upgrade path
+      await detectExistingInstall(parsed);
     } catch (err: any) {
       setError(err.message || 'ZIP parse error');
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const detectExistingInstall = async (parsed: any) => {
+    setExistingInstall(null);
+    setAllowDowngrade(false);
+    setConfirmInUse(false);
+    if (!parsed?.id) return;
+
+    // Card "Update": lock to a specific plugin row
+    if (lockedTargetPluginId) {
+      const local = installedPlugins.find((p) => p.id === lockedTargetPluginId);
+      let localManifest: any = null;
+      try {
+        localManifest = local ? JSON.parse(local.manifest) : null;
+      } catch {
+        localManifest = null;
+      }
+      if (localManifest?.id && localManifest.id !== parsed.id) {
+        setError(
+          lang === 'zh'
+            ? `ZIP 的插件 ID（${parsed.id}）与当前卡片（${localManifest.id}）不一致，无法更新。`
+            : `ZIP manifest.id (${parsed.id}) does not match this plugin (${localManifest.id}).`,
+        );
+        return;
+      }
+      if (String(parsed.id).startsWith('@openlearn/')) {
+        setError(lang === 'zh' ? '系统核心插件禁止通过插件中心更新。' : 'System plugins cannot be updated here.');
+        return;
+      }
+      setExistingInstall({
+        pluginId: lockedTargetPluginId,
+        name: local?.name || localManifest?.name || parsed.name,
+        version: local?.version || localManifest?.version || '0.0.0',
+        status: local?.status || 'unknown',
+        isSystem: false,
+        manifestId: parsed.id,
+      });
+      return;
+    }
+
+    // Prefer local list (already loaded in Plugin Center)
+    const fromList = installedPlugins.find((p) => {
+      try {
+        return JSON.parse(p.manifest)?.id === parsed.id;
+      } catch {
+        return false;
+      }
+    });
+    if (fromList) {
+      let m: any = {};
+      try {
+        m = JSON.parse(fromList.manifest);
+      } catch {
+        m = {};
+      }
+      if (String(parsed.id).startsWith('@openlearn/') || fromList.id.startsWith('@openlearn/')) {
+        setError(lang === 'zh' ? '系统核心插件禁止通过插件中心更新。' : 'System plugins cannot be updated here.');
+        return;
+      }
+      setExistingInstall({
+        pluginId: fromList.id,
+        name: fromList.name || m.name || parsed.name,
+        version: fromList.version || m.version || '0.0.0',
+        status: fromList.status,
+        isSystem: false,
+        manifestId: parsed.id,
+      });
+      return;
+    }
+
+    // Fallback API lookup
+    try {
+      const res = await fetch(`/api/plugins/by-manifest/${encodeURIComponent(parsed.id)}`);
+      const data = await res.json();
+      if (data?.success && data.installed) {
+        if (data.isSystem) {
+          setError(lang === 'zh' ? '系统核心插件禁止通过插件中心更新。' : 'System plugins cannot be updated here.');
+          return;
+        }
+        setExistingInstall({
+          pluginId: data.pluginId,
+          name: data.name,
+          version: data.version || '0.0.0',
+          status: data.status,
+          isSystem: !!data.isSystem,
+          manifestId: parsed.id,
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to detect existing plugin install', e);
     }
   };
 
@@ -268,21 +423,52 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
     return matched.length > 0 ? matched : registeredPanels;
   }, [registeredPanels, previewRole]);
 
+  const isUpgrade = !!existingInstall;
+  const isDowngrade =
+    isUpgrade && compareSemver(manifest?.version || '0.0.0', existingInstall!.version) < 0;
+  const isInUse =
+    isUpgrade &&
+    existingInstall!.status === 'active' &&
+    (registeredPanels.some((p) =>
+      ['classroom.tool', 'student.view', 'teacher.tab', 'workspace.view'].includes(p.slot),
+    ) ||
+      !!(manifest?.classroomTools && manifest.classroomTools.length > 0) ||
+      !!(manifest?.contributes && Object.keys(manifest.contributes).length > 0));
+
+  const canProceedInstall = (() => {
+    if (!file || !manifest) return false;
+    if (existingInstall?.isSystem) return false;
+    if (isDowngrade && !allowDowngrade) return false;
+    if (isInUse && !confirmInUse) return false;
+    return true;
+  })();
+
   const handleInstall = async () => {
-    if (!file) return;
+    if (!file || !canProceedInstall) return;
     setInstalling(true);
     setError(null);
     setProgressPct(10);
-    setProgressMsg(lang === 'zh' ? '正在上传并安装...' : 'Uploading and installing...');
+    setProgressMsg(
+      lang === 'zh'
+        ? isUpgrade
+          ? '正在上传并更新...'
+          : '正在上传并安装...'
+        : isUpgrade
+          ? 'Uploading and updating...'
+          : 'Uploading and installing...',
+    );
     try {
-      // Delegate install + post-install refresh/activation to the parent handler.
-      await onConfirmInstall(file, executionMode);
+      await onConfirmInstall(file, executionMode, {
+        mode: isUpgrade ? 'update' : 'install',
+        targetPluginId: existingInstall?.pluginId,
+        allowDowngrade: isDowngrade ? allowDowngrade : false,
+      });
       setProgressPct(100);
-      setProgressMsg(lang === 'zh' ? '安装完成' : 'Complete');
+      setProgressMsg(lang === 'zh' ? (isUpgrade ? '更新完成' : '安装完成') : isUpgrade ? 'Updated' : 'Complete');
       onClose();
     } catch (e: any) {
       console.error(e);
-      setError(e?.message || (lang === 'zh' ? '安装失败' : 'Installation failed'));
+      setError(e?.message || (lang === 'zh' ? (isUpgrade ? '更新失败' : '安装失败') : isUpgrade ? 'Update failed' : 'Installation failed'));
       setProgressPct(0);
       setProgressMsg('');
     } finally {
@@ -334,7 +520,9 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
         <div className="flex justify-between items-center border-b border-slate-100 pb-4 shrink-0">
           <h2 className="font-extrabold text-base md:text-lg text-slate-800 flex items-center gap-2">
             <Shield className="text-indigo-600 animate-pulse" size={20} />
-            {lang === 'zh' ? `三方插件安装向导 (${step + 1}/5)` : `Plugin Setup Wizard (${step + 1}/5)`}
+            {lang === 'zh'
+              ? `${isUpgrade ? '三方插件更新向导' : '三方插件安装向导'} (${step + 1}/5)`
+              : `${isUpgrade ? 'Plugin Update Wizard' : 'Plugin Setup Wizard'} (${step + 1}/5)`}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-650 cursor-pointer">
             <X size={18} />
@@ -407,6 +595,76 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
                       </span>
                     </div>
                   </div>
+
+                  {existingInstall && (
+                    <div
+                      className={`mt-1 rounded-xl border p-4 ${
+                        isDowngrade ? 'border-red-200 bg-red-50/50' : 'border-amber-200 bg-amber-50/40'
+                      }`}
+                    >
+                      <h4 className="text-xs font-extrabold text-slate-800 mb-2">
+                        {lang === 'zh' ? '检测到已安装同一插件 — 将执行原地更新' : 'Same plugin already installed — in-place update'}
+                      </h4>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div className="bg-white/70 border border-slate-100 rounded-lg p-2">
+                          <div className="text-slate-400 font-semibold">{lang === 'zh' ? '当前版本' : 'Installed'}</div>
+                          <div className="font-bold text-slate-800 mt-0.5">
+                            {existingInstall.name}
+                            <span className="font-mono text-slate-500 ml-1">v{existingInstall.version}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-1 font-mono">
+                            {existingInstall.status === 'active'
+                              ? lang === 'zh'
+                                ? '状态: 运行中'
+                                : 'status: active'
+                              : lang === 'zh'
+                                ? '状态: 未启用'
+                                : 'status: inactive'}
+                          </div>
+                        </div>
+                        <div className="bg-white/70 border border-slate-100 rounded-lg p-2">
+                          <div className="text-slate-400 font-semibold">{lang === 'zh' ? 'ZIP 新版本' : 'Package'}</div>
+                          <div className="font-bold text-slate-800 mt-0.5">
+                            {manifest.name}
+                            <span className="font-mono text-indigo-600 ml-1">v{manifest.version || '0.0.0'}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-1">
+                            {lang === 'zh' ? '保留配置 / 业务数据 / UUID' : 'Keeps config, data & UUID'}
+                          </div>
+                        </div>
+                      </div>
+                      {isDowngrade && (
+                        <label className="mt-3 flex items-start gap-2 text-[11px] font-bold text-red-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={allowDowngrade}
+                            onChange={(e) => setAllowDowngrade(e.target.checked)}
+                          />
+                          <span>
+                            {lang === 'zh'
+                              ? `确认强制降级：v${existingInstall.version} → v${manifest.version || '0.0.0'}（可能不兼容）`
+                              : `Force downgrade v${existingInstall.version} → v${manifest.version || '0.0.0'} (may be incompatible)`}
+                          </span>
+                        </label>
+                      )}
+                      {isInUse && (
+                        <label className="mt-2 flex items-start gap-2 text-[11px] font-bold text-amber-800 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={confirmInUse}
+                            onChange={(e) => setConfirmInUse(e.target.checked)}
+                          />
+                          <span>
+                            {lang === 'zh'
+                              ? '该插件当前为启用状态且声明了课堂/教学扩展点，热更新可能导致课中 UI 短暂异常。我已知晓并继续。'
+                              : 'Plugin is active with classroom UI contributions. Hot-update may briefly disrupt live class UI. I understand.'}
+                          </span>
+                        </label>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -642,6 +900,57 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
               {/* Step 5: Sandbox config */}
               {step === 4 && (
                 <div className="flex flex-col gap-4">
+                  {existingInstall && (
+                    <div
+                      className={`rounded-xl border p-3 text-[11px] ${
+                        isDowngrade ? 'border-red-200 bg-red-50/60' : 'border-amber-200 bg-amber-50/50'
+                      }`}
+                    >
+                      <div className="font-extrabold text-slate-800 mb-1">
+                        {lang === 'zh'
+                          ? `更新确认：v${existingInstall.version} → v${manifest?.version || '0.0.0'}`
+                          : `Update: v${existingInstall.version} → v${manifest?.version || '0.0.0'}`}
+                      </div>
+                      <div className="text-slate-600">
+                        {lang === 'zh'
+                          ? '将原地替换代码与静态资源，保留 UUID、配置与业务数据。'
+                          : 'Replaces code/assets in place. UUID, config and data are preserved.'}
+                      </div>
+                      {isDowngrade && (
+                        <label className="mt-2 flex items-start gap-2 font-bold text-red-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={allowDowngrade}
+                            onChange={(e) => setAllowDowngrade(e.target.checked)}
+                          />
+                          <span>{lang === 'zh' ? '确认强制降级' : 'Confirm forced downgrade'}</span>
+                        </label>
+                      )}
+                      {isInUse && (
+                        <label className="mt-2 flex items-start gap-2 font-bold text-amber-800 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={confirmInUse}
+                            onChange={(e) => setConfirmInUse(e.target.checked)}
+                          />
+                          <span>
+                            {lang === 'zh'
+                              ? '已知晓课中热更新风险'
+                              : 'I accept live-class hot-update risk'}
+                          </span>
+                        </label>
+                      )}
+                      {!canProceedInstall && (
+                        <p className="mt-2 text-red-600 font-semibold">
+                          {lang === 'zh'
+                            ? '请先完成上方确认项后再更新。'
+                            : 'Complete the confirmation checks above before updating.'}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <p className="text-xs text-slate-500 font-medium">
                     {lang === 'zh'
                       ? '设置该插件启动时的微前端沙箱执行模式：'
@@ -760,14 +1069,16 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
               <button
                 type="button"
                 onClick={handleInstall}
-                disabled={installing}
+                disabled={installing || !canProceedInstall}
                 className="flex items-center gap-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer disabled:bg-indigo-400"
               >
                 {installing ? (
                   <div className="flex flex-col gap-1.5 min-w-32">
                     <div className="flex items-center gap-1.5">
                       <Loader2 size={13} className="animate-spin" />
-                      <span>{lang === 'zh' ? '安装中...' : 'Installing...'}</span>
+                      <span>
+                        {lang === 'zh' ? (isUpgrade ? '更新中...' : '安装中...') : isUpgrade ? 'Updating...' : 'Installing...'}
+                      </span>
                     </div>
                     <div className="w-full h-1 bg-indigo-400/30 rounded-full overflow-hidden">
                       <div
@@ -784,7 +1095,13 @@ export function PluginInstallWizard({ isOpen, onClose, lang, file, onConfirmInst
                 ) : (
                   <>
                     <CheckCircle size={13} />
-                    {lang === 'zh' ? '确认安装并上传' : 'Confirm & Install'}
+                    {lang === 'zh'
+                      ? isUpgrade
+                        ? '确认更新并上传'
+                        : '确认安装并上传'
+                      : isUpgrade
+                        ? 'Confirm & Update'
+                        : 'Confirm & Install'}
                   </>
                 )}
               </button>
