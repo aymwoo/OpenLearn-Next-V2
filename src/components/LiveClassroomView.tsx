@@ -44,6 +44,8 @@ interface LiveClassroomViewProps {
   liveClassStudentProgress: any[];
   onPingStudent?: (studentId: string, message?: string) => void;
   onOpenCoursewareHub?: () => void;
+  activeRole?: string;
+  setActiveRole?: (role: 'teacher' | 'student') => void;
 }
 
 export function LiveClassroomView({
@@ -75,7 +77,9 @@ export function LiveClassroomView({
   activeStudentLessons,
   liveClassStudentProgress,
   onPingStudent,
-  onOpenCoursewareHub
+  onOpenCoursewareHub,
+  activeRole,
+  setActiveRole,
 }: LiveClassroomViewProps) {
   const [lockingClass, setLockingClass] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
@@ -588,8 +592,32 @@ export function LiveClassroomView({
             </select>
           </div>
 
-          {/* Lock Buttons */}
-          <div className="flex gap-2">
+          {/* Lock & Role Buttons */}
+          <div className="flex items-center gap-2">
+            {setActiveRole && (
+              <div className="bg-slate-200/80 p-0.5 rounded-lg flex items-center gap-0.5 border border-slate-300/60 shadow-3xs">
+                <button
+                  onClick={() => setActiveRole('teacher')}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer ${
+                    activeRole === 'teacher'
+                      ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  👨‍🏫 {lang === 'zh' ? '教师模式' : 'Teacher Mode'}
+                </button>
+                <button
+                  onClick={() => setActiveRole('student')}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer ${
+                    activeRole === 'student'
+                      ? 'bg-pink-600 text-white shadow-2xs font-extrabold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  🎓 {lang === 'zh' ? '学生模式' : 'Student Mode'}
+                </button>
+              </div>
+            )}
             <button
               onClick={() => handleToggleClassLock(!isClassLocked)}
               disabled={lockingClass || !selectedLesson || !liveClassSelectedClassId}
