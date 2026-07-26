@@ -1074,14 +1074,14 @@ export function PluginCenter({
               <div className="flex items-center gap-2">
                 {/* Phase 9: Enhanced ZIP drop zone with processing/preview states */}
                 <div
-                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors relative ${
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] uppercase font-bold rounded-lg cursor-pointer transition-all ${
                     zipError
-                      ? 'border-red-400 bg-red-50/10'
+                      ? 'border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20'
                       : zipPreview
-                        ? 'border-emerald-400 bg-emerald-50/10'
+                        ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
                         : zipProcessing
-                          ? 'border-indigo-400 bg-indigo-50/20'
-                          : 'border-gray-300 hover:border-indigo-400 hover:bg-indigo-50/50'
+                          ? 'border border-indigo-500/30 bg-indigo-500/10 text-indigo-400'
+                          : 'border border-dashed border-gray-600 text-gray-400 hover:text-white hover:border-indigo-400 hover:bg-indigo-500/10'
                   }`}
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -1098,40 +1098,24 @@ export function PluginCenter({
                   }}
                 >
                   {zipProcessing ? (
-                    <div className="text-center">
-                      <Loader2 size={32} className="mx-auto text-indigo-400 mb-2 animate-spin" />
-                      <p className="text-sm text-gray-400">
-                        {lang === 'zh' ? '分析中...' : 'Analyzing...'}
-                      </p>
-                    </div>
+                    <>
+                      <Loader2 size={11} className="animate-spin" />
+                      <span>{lang === 'zh' ? '分析中...' : 'Analyzing...'}</span>
+                    </>
                   ) : zipPreview ? (
-                    <div className="text-center">
-                      <CheckCircle2 size={32} className="mx-auto text-emerald-400 mb-2" />
-                      <p className="text-sm text-emerald-400 font-semibold mb-1">{zipPreview.name}</p>
-                      <p className="text-xs text-gray-500 font-mono">{zipPreview.id} <span className="text-gray-600">v{zipPreview.version}</span></p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {lang === 'zh' ? '点击选择其他文件' : 'Click to select another file'}
-                      </p>
-                    </div>
+                    <>
+                      <CheckCircle2 size={11} />
+                      <span className="max-w-[100px] truncate">{zipPreview.name}</span>
+                    </>
                   ) : zipError ? (
-                    <div className="text-center">
-                      <ShieldAlert size={32} className="mx-auto text-red-400 mb-2" />
-                      <p className="text-sm text-red-400">{zipError}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {lang === 'zh' ? '点击重新选择' : 'Click to retry'}
-                      </p>
-                    </div>
+                    <>
+                      <ShieldAlert size={11} />
+                      <span>{lang === 'zh' ? '重试' : 'Retry'}</span>
+                    </>
                   ) : (
                     <>
-                      <Upload size={32} className="mx-auto text-gray-400 mb-2" />
-                      <p className="text-sm text-gray-500">
-                        {lang === 'zh' ? '拖拽 ZIP 文件到此处' : 'Drop ZIP file here'}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {lang === 'zh'
-                          ? '仅支持 .zip 格式的插件包'
-                          : '.zip plugin packages only'}
-                      </p>
+                      <Upload size={11} />
+                      <span>{lang === 'zh' ? '拖拽安装' : 'Drop ZIP'}</span>
                     </>
                   )}
                 </div>

@@ -1,6 +1,6 @@
 # 插件原地更新与分发 (Plugin In-Place Update & Distribution)
 
-> **适用范围**：`@openlearn/plugin-sdk@3.4.1`；宿主内核 `packages/core/plugin-host`、`packages/core/worker-runtime`、`server/routes/plugins.ts`、前端 `src/components/PluginInstallWizard.tsx`。
+> **适用范围**：`@openlearn/plugin-sdk@3.4.3`；宿主内核 `packages/core/plugin-host`、`packages/core/worker-runtime`、`server/routes/plugins.ts`、前端 `src/components/PluginInstallWizard.tsx`。
 > 本页说明插件 **原地更新（in-place update）** 能力：上传新 ZIP 后**保留插件 UUID、配置与业务数据**，仅替换代码与静态资源；并说明 Worker 激活超时的可调环境变量。
 
 ---

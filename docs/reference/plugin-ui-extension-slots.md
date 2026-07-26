@@ -1,6 +1,6 @@
 # UI 扩展槽位 Context / Props 上下文定义
 
-> **适用范围**：`@openlearn/plugin-sdk@3.4.1`
+> **适用范围**：`@openlearn/plugin-sdk@3.4.3`
 > 本页说明宿主在渲染各 UI 扩展槽位时**实际注入**给插件 React 组件的 Props，纠正 "宿主会自动注入 `lessonId` / `userId` / `role` / `socket`" 的常见误解。
 
 ---
