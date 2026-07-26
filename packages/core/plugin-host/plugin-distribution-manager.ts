@@ -60,14 +60,33 @@ export class LocalRepositoryAdapter implements IPluginRepositoryAdapter {
   }
 }
 
+export interface PluginUpdateOptions {
+  targetPluginId?: string;
+  executionMode?: 'worker' | 'inline';
+  allowDowngrade?: boolean;
+}
+
+export interface PluginUpdateResult {
+  pluginId: string;
+  manifest: Manifest;
+  oldVersion: string;
+  newVersion: string;
+  previousStatus: string;
+  wasActive: boolean;
+}
+
 export interface IPluginDistributionManager {
   readonly pluginHost: PluginHost;
   registerRepository(repo: IPluginRepositoryAdapter): void;
   listRepositories(): ReadonlyArray<IPluginRepositoryAdapter>;
   listAvailablePackages(): Promise<ReadonlyArray<PluginPackageMetadata>>;
-  installFromZip(zipBuffer: Buffer): Promise<{ pluginId: string; manifest: Manifest }>;
+  installFromZip(
+    zipBuffer: Buffer,
+    executionMode?: 'worker' | 'inline',
+  ): Promise<{ pluginId: string; manifest: Manifest }>;
   installFromRepository(repoId: string, pluginId: string): Promise<{ pluginId: string; manifest: Manifest }>;
   updatePlugin(pluginId: string, zipBuffer?: Buffer): Promise<void>;
+  updateFromZip(zipBuffer: Buffer, options?: PluginUpdateOptions): Promise<PluginUpdateResult>;
   uninstallPlugin(pluginId: string): Promise<void>;
   health(): IntegrationHealthStatus;
   metadata(): IntegrationDescriptor;
@@ -128,12 +147,24 @@ export class PluginDistributionManager implements IPluginDistributionManager {
 
   public async updatePlugin(pluginId: string, zipBuffer?: Buffer): Promise<void> {
     if (zipBuffer) {
-      const { validateAndBundleZip } = await import('../esm-loader/install-utils.js');
-      const { bundledCode } = await validateAndBundleZip(zipBuffer);
-      await this.pluginHost.reloadPlugin(pluginId, bundledCode);
-    } else {
-      await this.pluginHost.reloadPlugin(pluginId);
+      await this.updateFromZip(zipBuffer, { targetPluginId: pluginId });
+      return;
     }
+    // No zip: reload from on-disk index.js
+    const filePath = this.pluginHost.getPluginFilePath(this.pluginHost.resolvePluginUuid(pluginId));
+    const fs = await import('node:fs');
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Cannot reload plugin "${pluginId}": source file missing at ${filePath}`);
+    }
+    const code = fs.readFileSync(filePath, 'utf-8');
+    await this.pluginHost.reloadPlugin(pluginId, code);
+  }
+
+  public async updateFromZip(
+    zipBuffer: Buffer,
+    options: PluginUpdateOptions = {},
+  ): Promise<PluginUpdateResult> {
+    return this.pluginHost.updatePluginFromZip(zipBuffer, options);
   }
 
   public async uninstallPlugin(pluginId: string): Promise<void> {

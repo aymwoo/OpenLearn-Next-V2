@@ -823,6 +823,40 @@ export const BuiltinPlugin = {
       }
     });
 
+    // 6.6 PLUGIN UPDATE ZIP HANDLER
+    const updatePluginZipCmdType = 'plugin.update_zip';
+    await actionRegistry.register({
+      id: 'core-plugin-update-zip',
+      commandType: updatePluginZipCmdType,
+      description: '用新的 ZIP 包原地更新已安装插件（保留 UUID/配置/业务数据）',
+      capabilityRequired: 'plugin:write',
+      isHighRisk: true,
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          base64Data: { type: 'STRING', description: 'ZIP 文件的 Base64 编码数据' },
+          targetPluginId: { type: 'STRING', description: '目标插件 UUID 或 manifest.id（可选，缺省按 ZIP 内 manifest.id 匹配）' },
+          executionMode: { type: 'STRING', description: 'worker | inline' },
+          allowDowngrade: { type: 'BOOLEAN', description: '是否允许版本降级' },
+        },
+        required: ['base64Data'],
+      },
+    });
+
+    await commandBus.registerHandler(updatePluginZipCmdType, {
+      async execute(command) {
+        const payload = command.payload as any;
+        const base64Content = String(payload.base64Data || '').replace(/^data:[^;]+;base64,/, '');
+        const fileBuffer = Buffer.from(base64Content, 'base64');
+        const result = await distributionManager.updateFromZip(fileBuffer, {
+          targetPluginId: payload.targetPluginId,
+          executionMode: payload.executionMode,
+          allowDowngrade: !!payload.allowDowngrade,
+        });
+        return { success: true, ...result };
+      },
+    });
+
     // 7. PLUGIN TOGGLE HANDLER
     const togglePluginCmdType = 'plugin.toggle';
     await actionRegistry.register({

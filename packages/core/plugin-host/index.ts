@@ -136,6 +136,10 @@ export class PluginHost {
     }
   >();
 
+  /** Coalesce concurrent activate/deactivate calls per plugin (prevents activating→activating). */
+  private inflightActivate = new Map<string, Promise<void>>();
+  private inflightDeactivate = new Map<string, Promise<void>>();
+
   /**
    * Register a preloaded built-in plugin directly into memory (Phase 8).
    */
@@ -510,16 +514,32 @@ export class PluginHost {
         // 解析失败时使用默认值
       }
 
-      const state = this.pluginStates.get(row.id) ?? PluginState.INSTALLED;
+      // Prefer live state machine; fall back to DB status when not yet tracked in memory
+      let state = this.pluginStates.get(row.id);
+      if (!state) {
+        if (row.status === 'active') state = PluginState.ACTIVE;
+        else if (row.status === 'error') state = PluginState.ERROR;
+        else if (row.status === 'disabled' || row.status === 'inactive') state = PluginState.INACTIVE;
+        else state = PluginState.INSTALLED;
+      }
       const pluginDir = this.getPluginDir(row.id);
       const has_frontend = fs.existsSync(path.join(pluginDir, 'frontend.js'));
+
+      const status =
+        state === PluginState.ACTIVE
+          ? 'active'
+          : state === PluginState.ERROR
+            ? 'error'
+            : state === PluginState.ACTIVATING
+              ? 'activating'
+              : 'disabled';
 
       return {
         id: row.id,
         name: parsed.name ?? row.id,
         version: parsed.version ?? 'unknown',
         state,
-        status: state === PluginState.ACTIVE ? 'active' : 'disabled',
+        status,
         execution_mode: row.loader_version === 'vm' ? 'legacy' : 'esm',
         manifest: row.manifest,
         created_at: row.created_at,
@@ -826,6 +846,34 @@ export class PluginHost {
    */
   async activatePlugin(pluginId: string, options?: { mode?: 'inline' | 'worker' }): Promise<void> {
     pluginId = this.resolvePluginUuid(pluginId);
+
+    // Join in-flight activation instead of throwing activating → activating
+    const inflight = this.inflightActivate.get(pluginId);
+    if (inflight) return inflight;
+
+    const task = this.activatePluginExclusive(pluginId, options);
+    this.inflightActivate.set(pluginId, task);
+    try {
+      await task;
+    } finally {
+      if (this.inflightActivate.get(pluginId) === task) {
+        this.inflightActivate.delete(pluginId);
+      }
+    }
+  }
+
+  private async activatePluginExclusive(
+    pluginId: string,
+    options?: { mode?: 'inline' | 'worker' },
+  ): Promise<void> {
+    // Recover orphaned transient state left by a crashed/aborted previous attempt
+    if (this.pluginStates.get(pluginId) === PluginState.ACTIVATING) {
+      console.warn(
+        `[PluginHost] Recovering stuck ACTIVATING state for "${pluginId}" → ERROR before retry`,
+      );
+      this.pluginStates.set(pluginId, PluginState.ERROR);
+    }
+
     // Phase 5: Dual-mode activation — check if worker mode is requested
     const mode = options?.mode ?? this.getExecutionMode(pluginId) ?? 'inline';
     if (mode === 'worker') {
@@ -1222,6 +1270,31 @@ export class PluginHost {
    */
   async deactivatePlugin(pluginId: string): Promise<void> {
     pluginId = this.resolvePluginUuid(pluginId);
+
+    const inflight = this.inflightDeactivate.get(pluginId);
+    if (inflight) return inflight;
+
+    const task = this.deactivatePluginExclusive(pluginId);
+    this.inflightDeactivate.set(pluginId, task);
+    try {
+      await task;
+    } finally {
+      if (this.inflightDeactivate.get(pluginId) === task) {
+        this.inflightDeactivate.delete(pluginId);
+      }
+    }
+  }
+
+  private async deactivatePluginExclusive(pluginId: string): Promise<void> {
+    // Heal orphaned DEACTIVATING
+    if (this.pluginStates.get(pluginId) === PluginState.DEACTIVATING) {
+      console.warn(
+        `[PluginHost] Recovering stuck DEACTIVATING state for "${pluginId}" → INACTIVE before retry`,
+      );
+      this.pluginStates.set(pluginId, PluginState.INACTIVE);
+      return;
+    }
+
     // 1. 获取当前状态 — UNINSTALLED、未找到、或非 ACTIVE 状态时静默返回
     const currentState = this.pluginStates.get(pluginId);
     if (!currentState || currentState === PluginState.UNINSTALLED || currentState !== PluginState.ACTIVE) {
@@ -1409,7 +1482,37 @@ export class PluginHost {
       throw new Error(`Plugin not found: ${pluginId}`);
     }
 
-    const currentState = this.getPluginState(pluginId);
+    // Wait out any in-flight lifecycle op so we see a stable state
+    const pendingActivate = this.inflightActivate.get(pluginId);
+    if (pendingActivate) {
+      try {
+        await pendingActivate;
+      } catch {
+        /* previous attempt may have failed; continue to toggle based on new state */
+      }
+    }
+    const pendingDeactivate = this.inflightDeactivate.get(pluginId);
+    if (pendingDeactivate) {
+      try {
+        await pendingDeactivate;
+      } catch {
+        /* ignore */
+      }
+    }
+
+    let currentState = this.getPluginState(pluginId) ?? PluginState.INSTALLED;
+
+    // Heal stuck transient states (should not linger)
+    if (currentState === PluginState.ACTIVATING) {
+      console.warn(`[PluginHost] togglePlugin: healing stuck ACTIVATING for "${pluginId}" → ERROR`);
+      currentState = PluginState.ERROR;
+      this.pluginStates.set(pluginId, currentState);
+    } else if (currentState === PluginState.DEACTIVATING) {
+      console.warn(`[PluginHost] togglePlugin: healing stuck DEACTIVATING for "${pluginId}" → INACTIVE`);
+      currentState = PluginState.INACTIVE;
+      this.pluginStates.set(pluginId, currentState);
+    }
+
     const newStatus = currentState === PluginState.ACTIVE ? 'disabled' : 'active';
 
     if (newStatus === 'disabled') {
@@ -1755,6 +1858,321 @@ export class PluginHost {
         // 静默清理
       }
       this.pluginStates.delete(pluginId);
+      throw err;
+    }
+  }
+
+  /**
+   * Look up an installed plugin by manifest.id (logical id).
+   * Returns null when not installed.
+   */
+  findByManifestId(manifestId: string): {
+    pluginId: string;
+    manifest: Manifest;
+    status: string;
+    state: PluginState;
+    name: string;
+    version: string;
+  } | null {
+    const row = this.db
+      .prepare("SELECT id, name, status, manifest FROM plugins WHERE json_extract(manifest, '$.id') = ?")
+      .get(manifestId) as { id: string; name: string; status: string; manifest: string } | undefined;
+    if (!row) return null;
+    let parsed: Manifest;
+    try {
+      parsed = JSON.parse(row.manifest) as Manifest;
+    } catch {
+      return null;
+    }
+    const state = this.pluginStates.get(row.id) ?? PluginState.INSTALLED;
+    return {
+      pluginId: row.id,
+      manifest: parsed,
+      status: row.status,
+      state,
+      name: parsed.name ?? row.name,
+      version: parsed.version ?? '0.0.0',
+    };
+  }
+
+  private isSystemPluginRecord(pluginId: string, manifestId?: string): boolean {
+    if (pluginId.startsWith('@openlearn/') || this.preloadedPlugins.has(pluginId)) return true;
+    if (manifestId?.startsWith('@openlearn/')) return true;
+    return false;
+  }
+
+  /**
+   * Replace an already-installed plugin package in place (same DB UUID).
+   *
+   * - Blocks system plugins (@openlearn/* / preloaded)
+   * - Requires matching manifest.id
+   * - Version policy: new >= old unless allowDowngrade
+   * - Preserves config tables / plugin_migrations / business data
+   * - ACTIVE → hot reload (or deactivate+activate if execution mode changes)
+   * - inactive → replace files only, keep disabled
+   */
+  async updatePluginFromZip(
+    zipBuffer: Buffer,
+    options: {
+      targetPluginId?: string;
+      executionMode?: 'worker' | 'inline';
+      allowDowngrade?: boolean;
+    } = {},
+  ): Promise<{
+    pluginId: string;
+    manifest: Manifest;
+    oldVersion: string;
+    newVersion: string;
+    previousStatus: string;
+    wasActive: boolean;
+  }> {
+    if (!this.esmLoader) {
+      throw new Error('Cannot update ZIP plugin: no esmLoader injected');
+    }
+
+    const { manifest, bundledCode } = await validateAndBundleZip(zipBuffer);
+    this.emitProgress(manifest.id, 'validating', 'Plugin validated, preparing update...');
+
+    // Resolve existing install
+    let pluginId: string;
+    if (options.targetPluginId) {
+      pluginId = this.resolvePluginUuid(options.targetPluginId);
+      const row = this.db
+        .prepare('SELECT id, manifest, status FROM plugins WHERE id = ?')
+        .get(pluginId) as { id: string; manifest: string; status: string } | undefined;
+      if (!row) {
+        throw new Error(`Plugin "${options.targetPluginId}" is not installed`);
+      }
+      let existingManifest: Manifest;
+      try {
+        existingManifest = JSON.parse(row.manifest) as Manifest;
+      } catch {
+        throw new Error(`Plugin "${pluginId}" has a corrupt manifest`);
+      }
+      if (existingManifest.id !== manifest.id) {
+        throw new Error(
+          `Manifest id mismatch: card/target is "${existingManifest.id}", ZIP declares "${manifest.id}"`,
+        );
+      }
+    } else {
+      const found = this.findByManifestId(manifest.id);
+      if (!found) {
+        throw new Error(`Plugin "${manifest.id}" is not installed; use install instead of update`);
+      }
+      pluginId = found.pluginId;
+    }
+
+    if (this.isSystemPluginRecord(pluginId, manifest.id)) {
+      throw new Error(`Cannot update system plugin: ${manifest.id}`);
+    }
+
+    const existingRow = this.db
+      .prepare('SELECT id, name, status, manifest, execution_mode FROM plugins WHERE id = ?')
+      .get(pluginId) as {
+      id: string;
+      name: string;
+      status: string;
+      manifest: string;
+      execution_mode: string;
+    };
+
+    const oldManifest = JSON.parse(existingRow.manifest) as Manifest;
+    const oldVersion = oldManifest.version ?? '0.0.0';
+    const newVersion = manifest.version ?? '0.0.0';
+    const oldCoerced = semver.coerce(oldVersion)?.version ?? '0.0.0';
+    const newCoerced = semver.coerce(newVersion)?.version ?? '0.0.0';
+    if (semver.lt(newCoerced, oldCoerced) && !options.allowDowngrade) {
+      throw new Error(
+        `Refusing downgrade of "${manifest.id}" from v${oldVersion} to v${newVersion}. Pass allowDowngrade to force.`,
+      );
+    }
+
+    // engines.openlearn check
+    if (manifest.engines?.openlearn) {
+      if (!semver.satisfies(OPENLEARN_VERSION, manifest.engines.openlearn)) {
+        throw new Error(
+          `[PluginHost] Plugin "${manifest.id}" requires OpenLearn ${manifest.engines.openlearn}, ` +
+            `but host is running ${OPENLEARN_VERSION}.`,
+        );
+      }
+    }
+
+    const previousStatus = existingRow.status;
+    const currentState = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
+    const wasActive = currentState === PluginState.ACTIVE || previousStatus === 'active';
+    const oldMode = (this.getExecutionMode(pluginId) as 'worker' | 'inline') || 'inline';
+    const executionMode =
+      options.executionMode ??
+      ((manifest as any).executionMode === 'worker' ? 'worker' : oldMode || 'inline');
+
+    const pluginDir = this.getPluginDir(pluginId);
+    const filePath = this.getPluginFilePath(pluginId);
+    const manifestPath = this.getPluginManifestPath(pluginId);
+    const zipFilePath = path.join(pluginDir, 'package.zip');
+
+    // Snapshot old files for crude rollback on inactive path failures
+    const backupDir = path.join(pluginDir, '.update-backup');
+    try {
+      if (fs.existsSync(backupDir)) fs.rmSync(backupDir, { recursive: true, force: true });
+      fs.mkdirSync(backupDir, { recursive: true });
+      for (const name of ['index.js', 'manifest.json', 'package.zip', 'frontend.js']) {
+        const src = path.join(pluginDir, name);
+        if (fs.existsSync(src)) fs.copyFileSync(src, path.join(backupDir, name));
+      }
+    } catch {
+      // backup is best-effort
+    }
+
+    try {
+      fs.mkdirSync(pluginDir, { recursive: true });
+      fs.writeFileSync(filePath, bundledCode, 'utf-8');
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+      fs.writeFileSync(zipFilePath, zipBuffer);
+
+      const zip = await JSZip.loadAsync(zipBuffer);
+      const frontendFile = zip.file('frontend.js');
+      const frontendPath = path.join(pluginDir, 'frontend.js');
+      if (frontendFile) {
+        fs.writeFileSync(frontendPath, await frontendFile.async('string'), 'utf-8');
+      } else if (fs.existsSync(frontendPath)) {
+        fs.rmSync(frontendPath, { force: true });
+      }
+
+      if (manifest.deploy?.script) {
+        const deployFile = zip.file(manifest.deploy.script);
+        if (deployFile) {
+          fs.writeFileSync(path.join(pluginDir, manifest.deploy.script), await deployFile.async('string'), 'utf-8');
+        }
+      }
+
+      this.emitProgress(manifest.id, 'extracting', 'Extracting assets...');
+      const storageDir = path.join(pluginDir, 'storage');
+      const storageEntries = Object.keys(zip.files).filter(
+        (name) => name.startsWith('storage/') && !zip.files[name].dir,
+      );
+      if (storageEntries.length > 0) {
+        if (fs.existsSync(storageDir)) fs.rmSync(storageDir, { recursive: true, force: true });
+        const dirs = new Set<string>();
+        for (const name of storageEntries) dirs.add(path.dirname(name));
+        for (const dir of dirs) fs.mkdirSync(path.join(pluginDir, dir), { recursive: true });
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < storageEntries.length; i += BATCH_SIZE) {
+          const batch = storageEntries.slice(i, i + BATCH_SIZE);
+          await Promise.all(
+            batch.map(async (name) => {
+              const file = zip.file(name);
+              if (file) fs.writeFileSync(path.join(pluginDir, name), await file.async('nodebuffer'));
+            }),
+          );
+        }
+      }
+
+      // Optional dependency install
+      if (manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
+        try {
+          const pkgJsonPath = path.join(pluginDir, 'package.json');
+          fs.writeFileSync(
+            pkgJsonPath,
+            JSON.stringify(
+              { name: manifest.id, version: manifest.version, dependencies: manifest.dependencies },
+              null,
+              2,
+            ),
+            'utf-8',
+          );
+          const { execSync } = await import('node:child_process');
+          execSync('npm install --production --no-audit --no-fund --legacy-peer-deps --registry=https://registry.npmmirror.com', {
+            cwd: pluginDir,
+            stdio: 'ignore',
+          });
+        } catch (installErr) {
+          console.error(`[PluginHost] Failed to install dependencies during update of "${manifest.id}":`, installErr);
+        }
+      }
+
+      // Contribution registry refresh (manifest.id keyed)
+      if (manifest.contributes) {
+        this.contributionRegistry.register(manifest.id, manifest.contributes);
+      } else if (manifest.classroomTools && manifest.classroomTools.length > 0) {
+        this.contributionRegistry.registerClassroomTools(manifest.id, manifest.classroomTools as any);
+      } else {
+        this.contributionRegistry.unregister(manifest.id);
+      }
+
+      // Persist metadata — keep UUID; do not touch config/migrations tables
+      this.db
+        .prepare(
+          `UPDATE plugins SET name = ?, manifest = ?, file_path = ?, execution_mode = ?, loader_version = 'esm', updated_at = ? WHERE id = ?`,
+        )
+        .run(manifest.name, JSON.stringify(manifest), filePath, executionMode, Date.now(), pluginId);
+
+      this.emitProgress(manifest.id, 'registering', 'Applying runtime update...');
+
+      if (wasActive) {
+        if (oldMode !== executionMode) {
+          // Mode switch: full deactivate + activate under new mode
+          try {
+            if (oldMode === 'worker') await this.deactivateWorker(pluginId);
+            else await this.deactivatePlugin(pluginId);
+          } catch (e) {
+            console.warn(`[PluginHost] deactivate before mode-switch update failed for "${pluginId}":`, e);
+          }
+          await this.activatePlugin(pluginId);
+        } else {
+          // Same mode: atomic hot reload
+          await this.reloadPlugin(pluginId, bundledCode);
+        }
+      } else {
+        // Keep disabled — ensure state is not ACTIVE
+        if (currentState === PluginState.ACTIVE) {
+          // inconsistent DB/memory — force deactivate path already handled above
+        } else {
+          this.pluginStates.set(
+            pluginId,
+            currentState === PluginState.UNINSTALLED ? PluginState.INSTALLED : currentState,
+          );
+        }
+      }
+
+      // Cleanup backup
+      try {
+        if (fs.existsSync(backupDir)) fs.rmSync(backupDir, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+
+      console.log(
+        `[PluginHost] Plugin "${manifest.id}" updated ${oldVersion} → ${newVersion} (${pluginId}), wasActive=${wasActive}`,
+      );
+      this.emitProgress(manifest.id, 'complete', 'Update complete');
+      return {
+        pluginId,
+        manifest,
+        oldVersion,
+        newVersion,
+        previousStatus,
+        wasActive,
+      };
+    } catch (err) {
+      // Best-effort restore of key files for inactive updates; active reload has its own rollback
+      try {
+        if (fs.existsSync(backupDir)) {
+          for (const name of ['index.js', 'manifest.json', 'package.zip', 'frontend.js']) {
+            const b = path.join(backupDir, name);
+            if (fs.existsSync(b)) fs.copyFileSync(b, path.join(pluginDir, name));
+          }
+          this.db
+            .prepare(`UPDATE plugins SET name = ?, manifest = ?, execution_mode = ? WHERE id = ?`)
+            .run(existingRow.name, existingRow.manifest, existingRow.execution_mode, pluginId);
+        }
+      } catch (restoreErr) {
+        console.error(`[PluginHost] Failed to restore backup after update error:`, restoreErr);
+      }
+      try {
+        if (fs.existsSync(backupDir)) fs.rmSync(backupDir, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
       throw err;
     }
   }
