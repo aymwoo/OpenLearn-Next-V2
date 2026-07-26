@@ -218,6 +218,7 @@ reference/plugin-capability-matrix
 reference/plugin-ui-extension-slots
 reference/plugin-database-api
 reference/plugin-host-shared-deps
+reference/plugin-update-distribution
 ```
 
 ```{toctree}
