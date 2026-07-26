@@ -109,6 +109,31 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     res.json(kernelContainer.pluginLifecycleManager.listPlugins());
   });
 
+  // Lookup installed plugin by logical manifest.id (for upgrade detection in the wizard)
+  // MUST be registered before /api/plugins/:id(*)
+  app.get('/api/plugins/by-manifest/:manifestId(*)', (req, res) => {
+    try {
+      const manifestId = decodeURIComponent(req.params.manifestId);
+      const found = kernelContainer.pluginHost.findByManifestId(manifestId);
+      if (!found) {
+        return res.json({ success: true, installed: false });
+      }
+      res.json({
+        success: true,
+        installed: true,
+        pluginId: found.pluginId,
+        name: found.name,
+        version: found.version,
+        status: found.status,
+        state: found.state,
+        manifest: found.manifest,
+        isSystem: manifestId.startsWith('@openlearn/') || found.pluginId.startsWith('@openlearn/'),
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
   // V3.0: 查询插件贡献点摘�?
   app.get('/api/plugins/:id(*)/contributions', (req, res) => {
     try {
@@ -255,13 +280,38 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         executionModeHeader === 'worker' || executionModeHeader === 'inline'
           ? (executionModeHeader as 'worker' | 'inline')
           : undefined;
+      const modeHeader = String(req.headers['x-install-mode'] || 'install').toLowerCase();
+      const allowDowngrade = String(req.headers['x-allow-downgrade'] || '').toLowerCase() === 'true';
+      const targetPluginId = req.headers['x-target-plugin-id']
+        ? decodeURIComponent(String(req.headers['x-target-plugin-id']))
+        : undefined;
       if (!Buffer.isBuffer(zipBuffer) || zipBuffer.length === 0) {
         return res.status(400).json({ success: false, error: 'Empty or invalid zip file' });
       }
+
+      if (modeHeader === 'update') {
+        const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipBuffer, {
+          targetPluginId,
+          executionMode,
+          allowDowngrade,
+        });
+        return res.json({
+          success: true,
+          updated: true,
+          pluginId: result.pluginId,
+          manifest: result.manifest,
+          oldVersion: result.oldVersion,
+          newVersion: result.newVersion,
+          wasActive: result.wasActive,
+          filename,
+        });
+      }
+
       const result = await kernelContainer.pluginDistributionManager.installFromZip(zipBuffer, executionMode);
       // result.pluginId is DB UUID; result.manifest keeps package metadata
       res.json({
         success: true,
+        updated: false,
         pluginId: result.pluginId,
         manifest: result.manifest,
         filename,
@@ -271,6 +321,44 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       res.status(500).json({ success: false, error: err.message });
     }
   });
+
+  // Explicit update endpoint (card "Update" button)
+  app.post(
+    '/api/plugins/:id(*)/update-zip-raw',
+    express.raw({ type: 'application/octet-stream', limit: '400mb' }),
+    async (req, res) => {
+      try {
+        const targetPluginId = decodeURIComponent(req.params.id);
+        const zipBuffer = req.body;
+        const executionModeHeader = String(req.headers['x-execution-mode'] || '').toLowerCase();
+        const executionMode =
+          executionModeHeader === 'worker' || executionModeHeader === 'inline'
+            ? (executionModeHeader as 'worker' | 'inline')
+            : undefined;
+        const allowDowngrade = String(req.headers['x-allow-downgrade'] || '').toLowerCase() === 'true';
+        if (!Buffer.isBuffer(zipBuffer) || zipBuffer.length === 0) {
+          return res.status(400).json({ success: false, error: 'Empty or invalid zip file' });
+        }
+        const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipBuffer, {
+          targetPluginId,
+          executionMode,
+          allowDowngrade,
+        });
+        res.json({
+          success: true,
+          updated: true,
+          pluginId: result.pluginId,
+          manifest: result.manifest,
+          oldVersion: result.oldVersion,
+          newVersion: result.newVersion,
+          wasActive: result.wasActive,
+        });
+      } catch (err: any) {
+        console.error(err);
+        res.status(500).json({ success: false, error: err.message });
+      }
+    },
+  );
 
   // Plugin command execution endpoint (V3.0: frontend invokeCommand bridge)
   app.post('/api/plugins/execute-command', async (req, res) => {
