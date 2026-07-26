@@ -2,8 +2,6 @@
 
 欢迎使用 **OpenLearn V2** 官方技术文档中心。OpenLearn V2 是一套全栈、分布式、基于插件化微前端与 Worker Thread 沙箱隔离架构的智能教育操作系统（Educational OS）。
 
-本文档中心为 OpenLearn V2 平台的**唯一官方事实来源 (Single Source of Truth, SSOT)**，与当前开源代码库（`packages/core`, `packages/plugin-sdk@3.3.1`, `packages/plugin-test-kit@3.3.1`, `server.ts`, `src/`）保持 100% 同步。
-
 ---
 
 ```{toctree}
@@ -259,4 +257,4 @@ governance/architecture-governance
 - **[Plugin SDK](sdk/plugin-sdk)**: `@openlearn/plugin-sdk@3.3.1` 强类型定义、`Token<T>` DI 支持与 `ctx.provide()` 服务共享。
 - **[AI Runtime & Tools](ai/ai-runtime)**: 原生集成 Google GenAI (Gemini 2.5/3.0)、Prompt 模板与 Function Calling 工具调用。
 
-> 最后更新：2026-07-26
+> 最后更新：2026-07-27
