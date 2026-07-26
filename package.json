@@ -1,6 +1,6 @@
 {
   "name": "openlearn-next",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "private": false,
   "description": "A plugin-driven Educational OS / LMS platform with AI agent teaching assistant",
   "keywords": [
