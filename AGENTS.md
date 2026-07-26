@@ -62,6 +62,16 @@
 - **Scopes**: Component or domain — `plugin`, `kernel`, `worker`, `whiteboard`, `PluginCenter`, `db`, etc.
 - **PR descriptions**: Describe what changed and why, link related issues, include screenshots for UI changes.
 
+## Release & CHANGELOG Workflow
+
+- **Keep a Changelog Standard**: All platform changes are recorded in [CHANGELOG.md](CHANGELOG.md) under SemVer headings (`## [X.Y.Z] - YYYY-MM-DD`) with standard subsections (`### Features`, `### Fixes`, `### Refactor / Performance`, `### Docs`, `### Breaking Changes`).
+- **Unreleased Draft Buffer**: Maintain an `## [Unreleased]` section at the top of `CHANGELOG.md` during ongoing development. Move items to `## [X.Y.Z]` when cutting a release.
+- **Version Alignment**: When releasing a new version, bump `"version"` in `package.json`, update `CHANGELOG.md`, and create a git tag `vX.Y.Z`.
+- **Multi-tier Scope Boundaries**:
+  - `CHANGELOG.md`: Platform host (`openlearn-next`).
+  - `packages/plugin-sdk/CHANGELOG.md`: Plugin SDK types & DI tokens (`@openlearn/plugin-sdk`).
+  - `v2_plugins/<plugin-id>/CHANGELOG.md`: Individual plugins (e.g. `@aymwoo/plugin-research-workflow`).
+
 ## Environment
 
 Copy `.env.example` to `.env`. AI features are configured via **AI Providers** in the admin dashboard ("AI Provider Management") — `GEMINI_API_KEY` is optional and only used as a fallback. Default login: `admin/admin` (administrator) or `teacher/teacher` (teacher). The SQLite database is at `packages/core/db/educational_os.db`.
