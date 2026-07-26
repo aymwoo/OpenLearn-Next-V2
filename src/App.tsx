@@ -3436,57 +3436,57 @@ export default function App() {
   };
 
   const handleZipPluginUpload = async (file: File, executionMode: 'worker' | 'inline') => {
-    return new Promise<void>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const base64 = event.target?.result as string;
-        setInstallingPlugin(true);
-        try {
-          const res = await fetch('/api/plugins/upload-zip', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ base64Data: base64, filename: file.name, executionMode })
-          });
-          const data = await res.json();
-          if (data.success) {
-            const installedId = data.pluginId || data.manifest?.id;
-            if (installedId) {
-              await fetch(`/api/plugins/${encodeURIComponent(installedId)}/toggle`, { method: 'POST' }).catch(() => {});
-            }
-            setStoreTab('store');
-            await fetchPlugins();
-            setTimeout(() => fetchPlugins(), 1000);
-            addToast(
-              lang === 'zh' ? '插件安装成功' : 'Plugin Installed',
-              lang === 'zh'
-                ? `三方插件 "${data.manifest.name}" 已成功上传并以 [${executionMode === 'worker' ? 'Worker 隔离' : 'VM 嵌入'}] 模式激活运行！`
-                : `Plugin "${data.manifest.name}" installed and activated in [${executionMode}] mode!`,
-              'success'
-            );
-            setChatLog(prev => [...prev, { role: 'agent', content: `[System] Plugin "${data.manifest.name}" installed successfully from ZIP file.` }]);
-            resolve();
-          } else {
-            addToast(
-              lang === 'zh' ? '安装失败' : 'Installation Failed',
-              data.error || 'Unknown error',
-              'error'
-            );
-            reject(new Error(data.error));
-          }
-        } catch (err: any) {
-          addToast(
-            lang === 'zh' ? '网络错误' : 'Network Error',
-            err.message,
-            'error'
-          );
-          reject(err);
-        } finally {
-          setInstallingPlugin(false);
-        }
-      };
-      reader.onerror = () => reject(new Error('File reading failed'));
-      reader.readAsDataURL(file);
-    });
+    setInstallingPlugin(true);
+    try {
+      // Raw binary upload — avoids base64 memory overhead for large files
+      const res = await fetch('/api/plugins/upload-zip-raw', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'X-Filename': encodeURIComponent(file.name),
+          'X-Execution-Mode': executionMode,
+        },
+        body: file,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        const errMsg = data.error || 'Unknown error';
+        addToast(lang === 'zh' ? '安装失败' : 'Installation Failed', errMsg, 'error');
+        throw new Error(errMsg);
+      }
+
+      const installedId = data.pluginId || data.manifest?.pluginId || data.manifest?.id;
+      if (installedId) {
+        await fetch(`/api/plugins/${encodeURIComponent(installedId)}/toggle`, { method: 'POST' }).catch(() => {});
+      }
+
+      setTeacherTab('plugins');
+      setStoreTab('store');
+      // Refresh immediately so the new plugin appears without a manual reload
+      await fetchPlugins();
+      // Second pass: catch async activation / contribution registration lag
+      setTimeout(() => { void fetchPlugins(); }, 1000);
+
+      const pluginName = data.manifest?.name || installedId || file.name;
+      addToast(
+        lang === 'zh' ? '插件安装成功' : 'Plugin Installed',
+        lang === 'zh'
+          ? `三方插件 "${pluginName}" 已成功上传并以 [${executionMode === 'worker' ? 'Worker 隔离' : 'VM 嵌入'}] 模式激活运行！`
+          : `Plugin "${pluginName}" installed and activated in [${executionMode}] mode!`,
+        'success'
+      );
+      setChatLog(prev => [...prev, { role: 'agent', content: `[System] Plugin "${pluginName}" installed successfully from ZIP file.` }]);
+    } catch (err: any) {
+      // API failures already toasted above; cover unexpected/network errors here
+      const msg = err?.message ? String(err.message) : '';
+      const alreadyToasted = msg && msg !== 'Failed to fetch' && msg !== 'Network error';
+      if (!alreadyToasted) {
+        addToast(lang === 'zh' ? '网络错误' : 'Network Error', msg || 'Network error', 'error');
+      }
+      throw err;
+    } finally {
+      setInstallingPlugin(false);
+    }
   };
 
   const handleTogglePlugin = async (id: string) => {
