@@ -134,6 +134,61 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
+  // 插件市场列表与版本更新检测 API
+  app.get('/api/plugins/market', (req, res) => {
+    try {
+      const marketItems = [
+        {
+          manifestId: '@aymwoo/plugin-research-workflow',
+          name: '研究性学习工作流',
+          latestVersion: '1.2.0',
+          description: '支持 PBL / STEAM 阶段式课题管理、班级名册加载、自动随机分组与鼠标拖拽平移的全栈插件',
+          author: 'OpenLearn Developer',
+          repository: 'https://github.com/aymwoo/plugin-research-workflow',
+          homepage: 'https://gitee.com/aymwoo/plugin-research-workflow',
+          changelog: '1. 引入全新算法支持按每组人数与总组数一键自动随机分组\n2. 全面接入平台 SQLite 数据库读取真实班级与学生名册\n3. 优化卡片拖拽 (Drag & Drop) 手感与视觉排版\n4. 修复 Worker 线程初始化耗时过长导致激活超时的隐患',
+          downloadUrl: '/v2_plugins/research-workflow/aymwoo-plugin-research-workflow.zip',
+        },
+      ];
+      res.json({ success: true, market: marketItems });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // 一键热更新插件 API
+  app.post('/api/plugins/:id(*)/one-click-update', async (req, res) => {
+    try {
+      const targetPluginId = decodeURIComponent(req.params.id);
+      const zipPath = path.resolve(process.cwd(), 'v2_plugins/research-workflow/aymwoo-plugin-research-workflow.zip');
+
+      let zipBuffer: Buffer;
+      if (fs.existsSync(zipPath)) {
+        zipBuffer = fs.readFileSync(zipPath);
+      } else {
+        return res.status(404).json({ success: false, error: '未找到更新安装包' });
+      }
+
+      const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipBuffer, {
+        targetPluginId,
+        allowDowngrade: true,
+      });
+
+      res.json({
+        success: true,
+        updated: true,
+        pluginId: result.pluginId,
+        manifest: result.manifest,
+        oldVersion: result.oldVersion,
+        newVersion: result.newVersion || '1.2.0',
+        wasActive: result.wasActive,
+      });
+    } catch (err: any) {
+      console.error(err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // V3.0: 查询插件贡献点摘�?
   app.get('/api/plugins/:id(*)/contributions', (req, res) => {
     try {

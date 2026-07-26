@@ -116,7 +116,7 @@ import { NavigationSidebar } from './features/shared/NavigationSidebar';
 import { RightSidebar } from './features/shared/RightSidebar';
 import { ProcessLogsModal } from './features/modals/ProcessLogsModal';
 import { ImportModal } from './features/modals/ImportModal';
-import { CloudDriveModal } from './features/modals/CloudDriveModal';
+import { CloudDriveModal, CloudDrivePanel } from './features/modals/CloudDriveModal';
 import { NotificationDetailModal } from './features/modals/NotificationDetailModal';
 import { HelpView } from './features/teacher/HelpView';
 import { TimetableView } from './features/teacher/TimetableView';
@@ -367,6 +367,7 @@ export default function App() {
   const [cloudDrivePreviewNode, setCloudDrivePreviewNode] = useState<{ id: string, name: string, content: string } | null>(null);
 
   const [isSystemResourceLibraryOpen, setIsSystemResourceLibraryOpen] = useState(false);
+  const [systemResourceTab, setSystemResourceTab] = useState<'system' | 'cloud'>('system');
   const [selectedLibraryResourceId, setSelectedLibraryResourceId] = useState<string | null>(null);
   const [libraryResources, setLibraryResources] = useState<any[]>([]);
   const [loadingLibraryResources, setLoadingLibraryResources] = useState(false);
@@ -535,6 +536,7 @@ export default function App() {
   const [activeRole, setActiveRole] = useState<'teacher' | 'student'>('teacher');
   const [sessionLoading, setSessionLoading] = useState(true);
   const [dbConnected, setDbConnected] = useState<boolean>(true);
+  const [dbStatus, setDbStatus] = useState<'normal' | 'warning' | 'error'>('normal');
 
   useEffect(() => {
     if (!session) return;
@@ -542,11 +544,22 @@ export default function App() {
       try {
         const res = await fetch('/api/db-status');
         if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data.status === 'warning' || data.warning) {
+            setDbStatus('warning');
+          } else {
+            setDbStatus('normal');
+          }
+          setDbConnected(true);
+        } else if (res.status === 429 || res.status === 503) {
+          setDbStatus('warning');
           setDbConnected(true);
         } else {
+          setDbStatus('error');
           setDbConnected(false);
         }
       } catch (err) {
+        setDbStatus('error');
         setDbConnected(false);
       }
     };
@@ -3765,27 +3778,14 @@ export default function App() {
               </div>
             </div>
 
-            <span className="text-slate-300 font-light text-lg select-none">/</span>
-
-            <h2 className="font-semibold text-gray-800 tracking-tight flex items-center gap-2">
-              <LayoutTemplate size={20} className="text-gray-400" />
-              {activeRole === 'teacher' ? t.dashboard : 'Student Dashboard'}
-            </h2>
-            {session.role === 'teacher' && (
-              <div className="bg-gray-150 p-1 rounded-lg flex items-center gap-1">
-                <button 
-                  onClick={() => setActiveRole('teacher')}
-                  className={`px-3 py-1 text-xs sm:text-sm rounded ${activeRole === 'teacher' ? 'bg-white shadow-xs font-bold text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                  Teacher Mode
-                </button>
-                <button 
-                  onClick={() => setActiveRole('student')}
-                  className={`px-3 py-1 text-xs sm:text-sm rounded ${activeRole === 'student' ? 'bg-white shadow-xs font-bold text-pink-600' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                  Student Mode
-                </button>
-              </div>
+            {activeRole === 'student' && (
+              <>
+                <span className="text-slate-300 font-light text-lg select-none">/</span>
+                <h2 className="font-semibold text-gray-800 tracking-tight flex items-center gap-2">
+                  <LayoutTemplate size={20} className="text-gray-400" />
+                  Student Dashboard
+                </h2>
+              </>
             )}
             
             {activeRole === 'student' && session.role === 'teacher' && (
@@ -3908,46 +3908,42 @@ export default function App() {
               </div>
             )}
             <button 
-              onClick={() => setIsCloudDriveOpen(true)}
-              className="flex items-center gap-1.5 hover:text-indigo-600 transition-colors bg-white px-3 py-1.5 rounded-md border border-gray-200 shadow-sm font-medium"
-            >
-              <Folder size={14} className="text-indigo-500" />
-              Cloud Drive
-            </button>
-            <button 
               onClick={() => setIsSystemResourceLibraryOpen(true)}
-              className="flex items-center gap-1.5 hover:text-indigo-600 transition-colors bg-white px-3 py-1.5 rounded-md border border-gray-200 shadow-sm font-medium"
+              className="flex items-center gap-1.5 hover:text-indigo-600 transition-colors bg-white px-3 py-1.5 rounded-md border border-gray-200 shadow-sm font-medium cursor-pointer"
             >
               <Globe size={14} className="text-emerald-500 animate-pulse" />
               {lang === 'zh' ? '系统资源库' : 'System Resource Library'}
             </button>
             <button 
               onClick={toggleLanguage}
-              className="flex items-center gap-1.5 hover:text-gray-900 transition-colors bg-gray-50 px-3 py-1.5 rounded-md border border-gray-200"
+              title={lang === 'zh' ? 'Switch to English' : '切换为中文'}
+              className="p-2 hover:bg-slate-100 text-slate-600 hover:text-indigo-600 transition-colors bg-white rounded-lg border border-gray-200 shadow-3xs flex items-center justify-center shrink-0 cursor-pointer"
             >
-              <Globe size={14} />
-              {t.switchLang}
+              <Globe size={16} />
             </button>
 
-            {/* Database Connection Status Indicator */}
-            <div 
-              id="db-connection-status-badge"
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border select-none text-xs sm:text-sm font-medium transition-all duration-300 ${
-                dbConnected 
-                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-800' 
-                  : 'bg-rose-50 border-rose-200 text-rose-800 animate-pulse'
-              }`}
-              title={dbConnected ? (lang === 'zh' ? 'SQLite引擎已连接且正常运行' : 'SQLite DB Connected & Queryable') : (lang === 'zh' ? 'SQLite数据库连接已断开' : 'SQLite DB Offline')}
-            >
-              <Database size={14} className={dbConnected ? 'text-emerald-500' : 'text-rose-500'} />
-              <div className="relative flex h-2 w-2">
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${dbConnected ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${dbConnected ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-              </div>
-              <span className="font-semibold text-[11px] sm:text-xs tracking-wide">
-                SQLite: {dbConnected ? (lang === 'zh' ? '正常' : 'Connected') : (lang === 'zh' ? '断开' : 'Offline')}
-              </span>
-            </div>
+            {/* Database Connection Status Icon Indicator */}
+            {(() => {
+              const statusColor = dbStatus === 'error' || !dbConnected
+                ? { bg: 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100 animate-pulse', dot: 'bg-rose-500', ping: 'bg-rose-400', label: lang === 'zh' ? 'SQLite 数据库连接出错或已断开' : 'SQLite DB Error / Disconnected' }
+                : dbStatus === 'warning'
+                ? { bg: 'bg-amber-50 border-amber-200 text-amber-600 hover:bg-amber-100', dot: 'bg-amber-500', ping: 'bg-amber-400', label: lang === 'zh' ? 'SQLite 数据库存在状态警告' : 'SQLite DB Warning' }
+                : { bg: 'bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100', dot: 'bg-emerald-500', ping: 'bg-emerald-400', label: lang === 'zh' ? 'SQLite 数据库连接正常' : 'SQLite DB Connected & Normal' };
+
+              return (
+                <div 
+                  id="db-connection-status-badge"
+                  className={`w-8 h-8 rounded-lg border flex items-center justify-center relative select-none shrink-0 cursor-pointer transition-colors shadow-3xs ${statusColor.bg}`}
+                  title={statusColor.label}
+                >
+                  <Database size={15} />
+                  <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${statusColor.ping}`} />
+                    <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${statusColor.dot}`} />
+                  </span>
+                </div>
+              );
+            })()}
 
             <UserMenu
               session={session}
@@ -4889,6 +4885,28 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                         <Wand2 size={16} className="text-indigo-600 shrink-0" />
                         <span className="truncate">{lang === 'zh' ? '课程编辑器: ' : 'Lesson Editor: '}{lessons.find(l => l.id === selectedLesson)?.title || (lang === 'zh' ? '未选择课程' : 'No Lesson Selected')}</span>
                       </h3>
+                      <div className="bg-slate-200/80 p-0.5 rounded-lg flex items-center gap-0.5 border border-slate-300/60 shadow-3xs">
+                        <button
+                          onClick={() => setActiveRole('teacher')}
+                          className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer ${
+                            activeRole === 'teacher'
+                              ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          👨‍🏫 {lang === 'zh' ? '教师模式' : 'Teacher Mode'}
+                        </button>
+                        <button
+                          onClick={() => setActiveRole('student')}
+                          className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer ${
+                            activeRole === 'student'
+                              ? 'bg-pink-600 text-white shadow-2xs font-extrabold'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          🎓 {lang === 'zh' ? '学生模式' : 'Student Mode'}
+                        </button>
+                      </div>
                       {selectedLesson && (
                         <div className="hidden sm:flex items-center gap-1.5 shrink-0 ml-1">
                           {editorSaveStatus === 'saving' && (
@@ -5130,6 +5148,8 @@ onRefresh={() => fetchElements(selectedLesson)}
                     }
                   }}
                   onOpenCoursewareHub={() => setShowCoursewareHub(true)}
+                  activeRole={activeRole}
+                  setActiveRole={setActiveRole}
                 />
               </div>
             ) : teacherTab === 'plugins' ? (
@@ -8228,15 +8248,38 @@ onClose={() => setPreviewSelectedCourseware(null)}
         <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-6 z-50">
           <div className="bg-white border text-gray-900 border-gray-200 rounded-2xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80 shrink-0">
-              <div className="flex items-center gap-3">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80 shrink-0 flex-wrap gap-2">
+              <div className="flex items-center gap-3 flex-wrap">
                 <Globe size={20} className="text-emerald-500 animate-pulse" />
                 <h2 className="font-semibold text-gray-800 text-lg">
                   {lang === 'zh' ? '系统资源库与应用商城' : 'System Resource Library'}
                 </h2>
-                <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
-                  {lang === 'zh' ? '支持单HTML与完整文件夹' : 'Supports HTML files & Folders'}
-                </span>
+                
+                {/* Sub-category Tabs */}
+                <div className="flex items-center gap-1 bg-slate-200/80 p-0.5 rounded-xl border border-slate-300/60 shadow-3xs ml-2">
+                  <button
+                    onClick={() => setSystemResourceTab('system')}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      systemResourceTab === 'system'
+                        ? 'bg-white text-emerald-800 shadow-2xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Globe size={13} className="text-emerald-500" />
+                    <span>{lang === 'zh' ? '互动课件与系统资源' : 'System Resources'}</span>
+                  </button>
+                  <button
+                    onClick={() => setSystemResourceTab('cloud')}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                      systemResourceTab === 'cloud'
+                        ? 'bg-white text-indigo-800 shadow-2xs font-extrabold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Folder size={13} className="text-indigo-500" />
+                    <span>{lang === 'zh' ? '云端课程资源 (Cloud Drive)' : 'Cloud Course Resource'}</span>
+                  </button>
+                </div>
               </div>
               <button 
                 onClick={() => {
@@ -8249,7 +8292,16 @@ onClose={() => setPreviewSelectedCourseware(null)}
               </button>
             </div>
 
-            <div className="flex-1 flex overflow-hidden min-h-0">
+            {systemResourceTab === 'cloud' ? (
+              <CloudDrivePanel
+                vfsNodes={vfsNodes}
+                currentVfsParent={currentVfsParent}
+                setCurrentVfsParent={setCurrentVfsParent}
+                cloudDrivePreviewNode={cloudDrivePreviewNode}
+                setCloudDrivePreviewNode={setCloudDrivePreviewNode}
+              />
+            ) : (
+              <div className="flex-1 flex overflow-hidden min-h-0">
               {/* Left Pane - Upload controls & Resource list */}
               <div className="w-80 border-r border-gray-100 bg-slate-50 flex flex-col shrink-0">
                 
@@ -8478,9 +8530,10 @@ onClose={() => setPreviewSelectedCourseware(null)}
                 )}
               </div>
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
+    )}
 
       {/* Grade Export Weighting Settings Modal */}
       {/* 批量操作选择弹窗（排课 / 锁定课程 / 转班） */}

@@ -27,6 +27,10 @@ import {
   AlertTriangle,
   X,
   Settings,
+  Github,
+  FileText,
+  RefreshCw,
+  ExternalLink,
 } from 'lucide-react';
 import { LegacyPluginBadge } from './LegacyPluginBadge';
 import type { Language } from '../i18n';
@@ -410,6 +414,53 @@ export function PluginCenter({
   // Dashboard visibility — read the whole map at the component level (NOT inside .map())
   const dashboardVisibilityMap = usePluginHostStore((s) => s.dashboardVisibility);
 
+  // Market feed & one-click update states
+  const [marketMap, setMarketMap] = React.useState<Map<string, any>>(new Map());
+  const [oneClickUpdatingId, setOneClickUpdatingId] = React.useState<string | null>(null);
+  const [changelogModalPlugin, setChangelogModalPlugin] = React.useState<any | null>(null);
+  const [updateToast, setUpdateToast] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    fetch('/api/plugins/market')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.success && Array.isArray(data.market) && isMounted) {
+          const map = new Map<string, any>();
+          for (const item of data.market) {
+            map.set(item.manifestId, item);
+          }
+          setMarketMap(map);
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleOneClickUpdate = async (pluginId: string, marketItem?: any) => {
+    setOneClickUpdatingId(pluginId);
+    setUpdateToast(lang === 'zh' ? '正在连接市场执行一键无缝热更新...' : 'Connecting to market for one-click hot update...');
+
+    try {
+      const res = await fetch(`/api/plugins/${encodeURIComponent(pluginId)}/one-click-update`, {
+        method: 'POST',
+      }).then((r) => r.json());
+
+      if (res?.success) {
+        setUpdateToast(lang === 'zh' ? `🎉 插件已成功热更新至 v${res.newVersion || '1.2.0'}！` : `🎉 Hot updated to v${res.newVersion || '1.2.0'}!`);
+        setTimeout(() => window.location.reload(), 1200);
+      } else {
+        setUpdateToast(`❌ 更新失败: ${res?.error || '受热更新包限制'}`);
+        setTimeout(() => setUpdateToast(null), 4000);
+      }
+    } catch (e: any) {
+      setUpdateToast(`❌ 一键热更新失败: ${e.message}`);
+      setTimeout(() => setUpdateToast(null), 4000);
+    } finally {
+      setOneClickUpdatingId(null);
+    }
+  };
+
   // ── ZIP drop zone handler ─────────────────────────────────────────────────
 
   const handleZipDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -607,6 +658,8 @@ export function PluginCenter({
                   studentViewCount: number;
                   teacherWidgetCount: number;
                   hasConfig: boolean;
+                  repository: string;
+                  homepage: string;
                 } = {
                   description: '扩展 Edu OS 功能的自定义插件。',
                   author: 'Community',
@@ -617,6 +670,8 @@ export function PluginCenter({
                   studentViewCount: 0,
                   teacherWidgetCount: 0,
                   hasConfig: false,
+                  repository: '',
+                  homepage: '',
                 };
                 try {
                   const parsed = JSON.parse(plugin.manifest);
@@ -624,6 +679,10 @@ export function PluginCenter({
                   if (parsed.author) manifestInfo.author = parsed.author;
                   if (parsed.version) manifestInfo.version = parsed.version;
                   if (parsed.id) manifestInfo.manifestId = parsed.id;
+                  if (parsed.repository) {
+                    manifestInfo.repository = typeof parsed.repository === 'string' ? parsed.repository : (parsed.repository.url || '');
+                  }
+                  if (parsed.homepage) manifestInfo.homepage = parsed.homepage;
                   if (parsed.capabilitiesProposed) manifestInfo.capabilities = parsed.capabilitiesProposed;
                   if (parsed.contributes?.['classroom.tool']) {
                     manifestInfo.toolCount = parsed.contributes['classroom.tool'].length;
@@ -653,6 +712,10 @@ export function PluginCenter({
                 // Dashboard visibility toggle — looked up from pre-read map
                 const dashboardVisible = dashboardVisibilityMap.get(plugin.id) ?? true;
 
+                // Query market item for version comparison
+                const marketItem = marketMap.get(manifestInfo.manifestId || plugin.id);
+                const hasUpdate = Boolean(marketItem && marketItem.latestVersion && marketItem.latestVersion !== manifestInfo.version);
+
                 return (
                   <div
                     key={plugin.id}
@@ -661,7 +724,16 @@ export function PluginCenter({
                     }`}
                   >
                     {/* Status & type badges */}
-                    <div className="absolute top-0 right-0 p-3 flex items-center gap-1.5">
+                    <div className="absolute top-0 right-0 p-3 flex items-center gap-1.5 flex-wrap justify-end">
+                      {hasUpdate && (
+                        <span
+                          title={lang === 'zh' ? `点击查看新特性并升级至 v${marketItem.latestVersion}` : `Upgradeable to v${marketItem.latestVersion}`}
+                          className="text-[10px] font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 animate-pulse shrink-0 cursor-pointer"
+                          onClick={() => setChangelogModalPlugin({ ...plugin, marketItem })}
+                        >
+                          <span>⚡ {lang === 'zh' ? `发现新版本 v${marketItem.latestVersion}` : `New v${marketItem.latestVersion}`}</span>
+                        </span>
+                      )}
                       <span
                         className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 border transition-all ${
                           plugin.status === 'active'
@@ -751,13 +823,29 @@ export function PluginCenter({
 
                     {/* Footer: metadata + actions pinned to card bottom for cross-card alignment */}
                     <div className="mt-auto flex flex-col gap-3 pt-1">
-                    {/* Metadata strip: author + install date */}
-                    <div className="flex items-center justify-between text-[10px] text-gray-400 border-t border-gray-100 pt-2">
-                      <span className="flex items-center gap-1 min-w-0">
-                        <Users size={10} className="shrink-0" />
-                        <span className="truncate">{manifestInfo.author}</span>
-                      </span>
-                      <span className="flex items-center gap-1 shrink-0">
+                    {/* Metadata strip: author + git repository link + install date */}
+                    <div className="flex items-center justify-between text-[10px] text-gray-400 border-t border-gray-100 pt-2 gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="flex items-center gap-1 min-w-0">
+                          <Users size={10} className="shrink-0 text-gray-400" />
+                          <span className="truncate">{manifestInfo.author}</span>
+                        </span>
+                        {(manifestInfo.repository || manifestInfo.homepage || marketItem?.repository) && (
+                          <a
+                            href={manifestInfo.repository || manifestInfo.homepage || marketItem?.repository}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={lang === 'zh' ? '查看 Git 开源仓库 (GitHub/Gitee)' : 'View Git Repository'}
+                            className="inline-flex items-center gap-1 text-[10px] font-mono text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded border border-indigo-200/60 transition-colors shrink-0"
+                          >
+                            <Github size={10} />
+                            <span className="truncate max-w-[130px]">
+                              {(manifestInfo.repository || manifestInfo.homepage || marketItem?.repository).replace(/^https?:\/\//, '')}
+                            </span>
+                          </a>
+                        )}
+                      </div>
+                      <span className="flex items-center gap-1 shrink-0 ml-auto">
                         <span>{lang === 'zh' ? '安装于' : 'Installed'}</span>
                         <span className="font-mono">{installDate}</span>
                       </span>
@@ -765,6 +853,28 @@ export function PluginCenter({
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-1.5 flex-wrap min-h-[34px]">
+                      {hasUpdate ? (
+                        <>
+                          <button
+                            onClick={() => handleOneClickUpdate(plugin.id, marketItem)}
+                            disabled={oneClickUpdatingId === plugin.id}
+                            className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                          >
+                            {oneClickUpdatingId === plugin.id ? (
+                              <RefreshCw size={12} className="animate-spin" />
+                            ) : (
+                              <span>🚀 {lang === 'zh' ? `一键热更新 v${marketItem.latestVersion}` : `Update v${marketItem.latestVersion}`}</span>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setChangelogModalPlugin({ ...plugin, marketItem })}
+                            className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200/60 transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            <FileText size={12} />
+                            <span>{lang === 'zh' ? '新特性' : 'Notes'}</span>
+                          </button>
+                        </>
+                      ) : null}
                       <button
                         onClick={() => onToggle(plugin.id)}
                         className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
@@ -1505,6 +1615,89 @@ export function PluginCenter({
       installedPlugins={plugins}
       onConfirmInstall={onZipUpload}
     />
+
+    {/* V3.3: Release Notes & Changelog Modal */}
+    {changelogModalPlugin && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 flex flex-col gap-4 animate-in fade-in zoom-in-95">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="text-indigo-600" size={20} />
+              <h3 className="text-base font-bold text-gray-900">
+                {changelogModalPlugin.name} {lang === 'zh' ? '版本更新说明' : 'Release Notes'}
+              </h3>
+            </div>
+            <button
+              onClick={() => setChangelogModalPlugin(null)}
+              className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between bg-indigo-50/70 border border-indigo-100 rounded-xl p-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono font-bold bg-white text-gray-600 px-2 py-0.5 rounded border border-gray-200">
+                v{changelogModalPlugin.version || '1.1.0'}
+              </span>
+              <span className="text-indigo-400 font-bold">➔</span>
+              <span className="text-xs font-mono font-bold bg-indigo-600 text-white px-2 py-0.5 rounded shadow-sm">
+                v{changelogModalPlugin.marketItem?.latestVersion || '1.2.0'}
+              </span>
+            </div>
+            {changelogModalPlugin.marketItem?.repository && (
+              <a
+                href={changelogModalPlugin.marketItem.repository}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs font-mono text-indigo-600 hover:text-indigo-800 font-medium"
+              >
+                <Github size={12} />
+                <span>Git Repo</span>
+                <ExternalLink size={10} />
+              </a>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+              {lang === 'zh' ? '新特性与优化变更清单 (Changelog)' : 'What\'s New'}
+            </h4>
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 text-xs text-slate-700 leading-relaxed font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">
+              {changelogModalPlugin.marketItem?.changelog || (lang === 'zh' ? '1. 阶段式任务逻辑与自动化测试增强\n2. 前端轻量化与高可用平滑升级' : '1. General enhancements and bug fixes')}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+            <button
+              onClick={() => setChangelogModalPlugin(null)}
+              className="px-4 py-2 text-xs font-medium rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              {lang === 'zh' ? '稍后再说' : 'Later'}
+            </button>
+            <button
+              onClick={() => {
+                const targetId = changelogModalPlugin.id;
+                const mItem = changelogModalPlugin.marketItem;
+                setChangelogModalPlugin(null);
+                handleOneClickUpdate(targetId, mItem);
+              }}
+              className="px-4 py-2 text-xs font-bold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>🚀 {lang === 'zh' ? '立即一键热更新' : 'Update Now'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Toast notification for One-Click update */}
+    {updateToast && (
+      <div className="fixed bottom-6 right-6 z-50 bg-gray-900/90 backdrop-blur text-white text-xs font-medium px-4 py-3 rounded-xl shadow-2xl border border-gray-700/80 flex items-center gap-2 animate-in slide-in-from-bottom-5">
+        <RefreshCw size={14} className="text-indigo-400 animate-spin" />
+        <span>{updateToast}</span>
+      </div>
+    )}
   </>
   );
 }
