@@ -176,3 +176,5 @@ const hasPermission = PermissionChecker.validatePermission(desc, request.context
 // roles: Teacher | Student | Plugin | AI | Observer | System
 ```
 每个 descriptor 携带 `permission: CapabilityRole[]`（而非 `resource:action` 字符串）。
+
+> 最后更新：2026-07-26

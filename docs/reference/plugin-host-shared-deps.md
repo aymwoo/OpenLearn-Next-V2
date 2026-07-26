@@ -83,3 +83,5 @@ react, react-dom, recharts, lucide-react
 - **SDK 中不存在名为 `HostSharedDeps` 的 TS 常量或导出白名单**：在 `packages/plugin-sdk`（`*.ts`）中 grep `HostSharedDeps` / `sharedDeps` / `external:` 均无功（`index.ts`、`openlearn.d.ts` 未导出此类常量）。
 - 该名称仅作为**运行时 `window` 全局**存在（`src/main.tsx:14`），并被文档引用（如教程 "宿主依赖共享网关 (HostSharedDeps)"）。
 - **事实白名单 = `cli.mjs:276/292` 的硬编码数组 + `index.html` import map 的四键**。二者为权威来源且当前一致。若要新增共享库，需**同时**修改：`cli.mjs`（externals 数组）、`src/main.tsx`（全局）与 `index.html`（import map）。
+
+> 最后更新：2026-07-26

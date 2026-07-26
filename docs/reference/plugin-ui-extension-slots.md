@@ -150,3 +150,5 @@ export interface PluginModule {
 
 ### B. 声明式 manifest `contributes`（仅元数据层）
 `manifest.contributes?: Record<string, Array<{ id: string; [key: string]: unknown }>>`（`openlearn.d.ts:57`），存入 `ContributionRegistry` 供管理端预览，**不挂载 React 组件**。
+
+> 最后更新：2026-07-26

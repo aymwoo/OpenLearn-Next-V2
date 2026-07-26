@@ -223,16 +223,6 @@ reference/plugin-update-distribution
 
 ```{toctree}
 :maxdepth: 2
-:caption: 📚 快速参考 (Reference)
-:hidden:
-
-reference/documentation-audit-report
-reference/missing-documentation-report
-reference/openlearn-documentation-quality-report
-```
-
-```{toctree}
-:maxdepth: 2
 :caption: 🤝 社区与贡献 (Contributing)
 :hidden:
 
@@ -268,3 +258,5 @@ governance/architecture-governance
 - **[Plugin Host & Sandbox](plugin/plugin-architecture)**: Worker Thread 进程隔离、ESM 加载器与完整生命周期状态机。
 - **[Plugin SDK](sdk/plugin-sdk)**: `@openlearn/plugin-sdk@3.3.1` 强类型定义、`Token<T>` DI 支持与 `ctx.provide()` 服务共享。
 - **[AI Runtime & Tools](ai/ai-runtime)**: 原生集成 Google GenAI (Gemini 2.5/3.0)、Prompt 模板与 Function Calling 工具调用。
+
+> 最后更新：2026-07-26

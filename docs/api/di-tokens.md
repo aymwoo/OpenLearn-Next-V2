@@ -332,3 +332,5 @@ interface IPluginLogger {
 ## 5. 组合根（Composition Root）
 
 所有 Token 在 `packages/core/kernel/index.ts:204-231` 绑定到具体实例（`kernelContainer.serviceRegistry.register(...)`）。`server.ts` 仅补充 `IActivityRegistryToken`（`server.ts:537`）。插件无需关心绑定细节，直接 `ctx.resolve(Token)` 即可。
+
+> 最后更新：2026-07-26

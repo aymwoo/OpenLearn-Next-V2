@@ -158,3 +158,5 @@ interface ActivateProgressMessage {
 ```
 
 > 全栈插件若仍频繁超时，调大 `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` 与 `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_PROGRESS_SLIDE_MS` 即可，无需改代码。
+
+> 最后更新：2026-07-26

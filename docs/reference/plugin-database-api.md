@@ -120,3 +120,5 @@ export async function activate(ctx: PluginContext) {
 - 优先用 `ctx.db.ensureTable()` + `ctx.db.table()` 管理插件私有表；精细控制（联表、事务、读写平台表）再落到 `ctx.resolve(IDatabaseToken)` 的原始实例。
 - 升级表结构一律走 `ctx.db.migrate(targetVersion, fn)`，保证幂等与版本可追溯。
 - Worker 隔离模式插件避免依赖事务与 `exec`。
+
+> 最后更新：2026-07-26
