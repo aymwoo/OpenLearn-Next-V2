@@ -210,6 +210,18 @@ migration/version-migration
 
 ```{toctree}
 :maxdepth: 2
+:caption: 🎯 插件精准开发参考 (Plugin Dev Reference)
+:hidden:
+
+api/di-tokens
+reference/plugin-capability-matrix
+reference/plugin-ui-extension-slots
+reference/plugin-database-api
+reference/plugin-host-shared-deps
+```
+
+```{toctree}
+:maxdepth: 2
 :caption: 📚 快速参考 (Reference)
 :hidden:
 
