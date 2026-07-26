@@ -32,3 +32,5 @@ v2_plugins/*/.codegraph/
 v2_plugins/
 storage/
 uploads/
+/.agents/skills
+/agent/skills
