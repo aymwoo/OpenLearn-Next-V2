@@ -110,6 +110,16 @@ export interface ActivatedMessage {
 }
 
 /**
+ * Worker 激活过程中的进度心跳。
+ * 主线程收到后会重置激活超时计时，避免全栈插件 IPC/建表被 固定短超时误杀。
+ */
+export interface ActivateProgressMessage {
+  readonly type: 'activate-progress';
+  readonly stage?: string;
+  readonly message?: string;
+}
+
+/**
  * Worker 停用完成，通知主线程。
  */
 export interface DeactivateMessage {
@@ -135,6 +145,7 @@ export type WorkerMessage =
   | SubscribeMessage
   | UnsubscribeMessage
   | ActivatedMessage
+  | ActivateProgressMessage
   | DeactivateMessage
   | LogMessage;
 

@@ -15,7 +15,7 @@
  *     → ServiceHost(registry, capGuard, actorId, caps)
  *     → WorkerRegistry.register(pluginId, instance)
  *     → transport.postMessage({ type: 'activate', ... })
- *     → wait for 'activated' response (10s timeout)
+ *     → wait for 'activated' (default 60s, sliding on activate-progress)
  *     → return { transport, serviceHost }
  * ```
  *
@@ -61,8 +61,27 @@ export const ALL_SERVICE_TOKENS = [
 /** 最大并行 Worker 数（T-05-09: DoS 缓解）。 */
 const MAX_WORKERS = 32;
 
-/** Worker 激活超时（毫秒）。 */
-const ACTIVATE_TIMEOUT_MS = 10000;
+/**
+ * Worker 激活超时（毫秒）。
+ *
+ * 全栈插件在 Worker 内需要：动态 import、IPC resolve 多个 Token、schema migrate/建表。
+ * 主线程繁忙时 parentPort RPC 会排队，固定 10s 极易误超时。
+ * 可通过环境变量覆盖：OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS
+ */
+const ACTIVATE_TIMEOUT_MS = (() => {
+  const raw = process.env.OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS;
+  const n = raw ? Number(raw) : NaN;
+  if (Number.isFinite(n) && n >= 5000) return Math.floor(n);
+  return 60_000; // default 60s (was 10s)
+})();
+
+/** 收到 activate-progress 心跳时，将剩余超时重置为该窗口（滑动超时）。 */
+const ACTIVATE_PROGRESS_SLIDE_MS = (() => {
+  const raw = process.env.OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS;
+  const n = raw ? Number(raw) : NaN;
+  if (Number.isFinite(n) && n >= 3000) return Math.floor(n);
+  return Math.min(30_000, ACTIVATE_TIMEOUT_MS);
+})();
 
 // ── WorkerInstance ───────────────────────────────────────────────────────────
 
@@ -821,7 +840,7 @@ export class WorkerManager {
    * 7. 注册到 WorkerRegistry（含 crash 检测）
    * 8. 设置 transport.onMessage 路由到 ServiceHost
    * 9. 发送 activate 消息
-   * 10. 等待 'activated' 响应（10s 超时）
+   * 10. 等待 'activated'（默认 60s；activate-progress 心跳滑动续期）
    * 11. 返回 { transport, serviceHost }
    *
    * @param pluginId - 插件标识符
@@ -931,16 +950,59 @@ export class WorkerManager {
     // 8. 设置 transport 消息路由 → ServiceHost 及生命周期拦截
     let activationResolve: (() => void) | null = null;
     let activationReject: ((err: Error) => void) | null = null;
+    let activationTimer: ReturnType<typeof setTimeout> | null = null;
+    let activationTimedOut = false;
+    const activationStartedAt = Date.now();
+
+    const clearActivationTimer = () => {
+      if (activationTimer) {
+        clearTimeout(activationTimer);
+        activationTimer = null;
+      }
+    };
+
+    const armActivationTimer = (ms: number, reason: string) => {
+      clearActivationTimer();
+      activationTimer = setTimeout(() => {
+        activationTimedOut = true;
+        const elapsed = Date.now() - activationStartedAt;
+        if (activationReject) {
+          activationReject(
+            new WorkerTimeoutError(
+              ms,
+              `Worker activation timed out after ${elapsed}ms (last window ${ms}ms, reason=${reason}). ` +
+                `Full-stack plugins may need OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS raised ` +
+                `(current default ${ACTIVATE_TIMEOUT_MS}ms).`,
+            ),
+          );
+          activationResolve = null;
+          activationReject = null;
+        }
+      }, ms);
+    };
 
     transport.onMessage((msg: unknown) => {
-      const typed = msg as { type?: string };
+      const typed = msg as { type?: string; stage?: string; message?: string };
       if (typed.type === 'activated') {
+        clearActivationTimer();
         if (activationResolve) {
           activationResolve();
           activationResolve = null;
           activationReject = null;
         }
+      } else if (typed.type === 'activate-progress') {
+        // Sliding timeout: each progress heartbeat extends the wait window.
+        // Keeps long migrate/IPC sequences alive without unbounded hangs.
+        if (!activationTimedOut && activationReject) {
+          const stage = typed.stage || typed.message || 'progress';
+          console.log(
+            `[WorkerManager] activate-progress for "${pluginId}": ${stage} ` +
+              `(+${ACTIVATE_PROGRESS_SLIDE_MS}ms window)`,
+          );
+          armActivationTimer(ACTIVATE_PROGRESS_SLIDE_MS, `progress:${stage}`);
+        }
       } else if (typed.type === 'error') {
+        clearActivationTimer();
         if (activationReject) {
           activationReject(
             new WorkerActivateError(
@@ -952,8 +1014,8 @@ export class WorkerManager {
           activationReject = null;
         }
       }
-      
-      // 总是路由到 serviceHost，以处理其它 RPC/事件消息
+
+      // 总是路由到 serviceHost，以处理其它 RPC/事件消息（激活期间的 db/commandBus IPC）
       serviceHost.handleMessage(msg, transport);
     });
 
@@ -966,21 +1028,15 @@ export class WorkerManager {
       prevState,
     });
 
-    // 10. 等待 'activated' 响应（10s 超时）
+    // 10. 等待 'activated'（初始窗口 ACTIVATE_TIMEOUT_MS；progress 心跳滑动续期）
     try {
-      await Promise.race([
-        new Promise<void>((resolve, reject) => {
-          activationResolve = resolve;
-          activationReject = reject;
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new WorkerTimeoutError(ACTIVATE_TIMEOUT_MS)),
-            ACTIVATE_TIMEOUT_MS,
-          ),
-        ),
-      ]);
+      await new Promise<void>((resolve, reject) => {
+        activationResolve = resolve;
+        activationReject = reject;
+        armActivationTimer(ACTIVATE_TIMEOUT_MS, 'initial');
+      });
     } catch (err) {
+      clearActivationTimer();
       // 激活失败 — 清理 Worker
       try {
         await serviceHost.dispose();
@@ -992,6 +1048,8 @@ export class WorkerManager {
       }
       this.registry.cleanup(pluginId);
       throw err;
+    } finally {
+      clearActivationTimer();
     }
 
     // 11. 返回
