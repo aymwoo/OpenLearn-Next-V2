@@ -218,7 +218,7 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 | `student.fullscreen` | 2.5 | 学生 |
 | `global.setting` | 2.5 | 管理员 |
 
-> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^0.1.10"`。安装时 PluginHost 自动检查兼容性。
+> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^0.1.12"`。安装时 PluginHost 自动检查兼容性。
 
 ### 2.6 导航页面 vs. 白板组件 — 如何区分？
 
@@ -271,7 +271,7 @@ ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
 
 ### 2.7 使用 AI Skill 快速开发（推荐）
 
-除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（内核 `v0.1.10`、SDK `@openlearn/plugin-sdk@3.3.1` 与测试包 `@openlearn/plugin-test-kit@3.3.1`）的架构规范，能自动化插件开发的大部分流程。
+除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（内核 `v0.1.12`、SDK `@openlearn/plugin-sdk@3.4.1` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
 
 **安装与配置：**
 
@@ -331,7 +331,7 @@ interface Manifest {
   description?: string;          // 描述
   author?: string;               // 作者
   engines?: {                    // 引擎版本约束
-    openlearn?: string;          // 如 "^0.1.10"
+    openlearn?: string;          // 如 "^0.1.12"
   };
   requires: string[];            // 依赖的服务 Token（格式 @openlearn/core:TokenName@^1.0.0）
   optional?: string[];           // 可选依赖
@@ -482,7 +482,7 @@ export default {
     main: 'index.js',
     description: '在课堂上创建实时投票，收集学生回答',
     author: 'Your Name',
-    engines: { openlearn: '^0.1.10' },
+    engines: { openlearn: '^0.1.12' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',
@@ -1829,7 +1829,7 @@ export default {
     main: 'index.js',
     description: '插件描述',
     author: '作者名',
-    engines: { openlearn: '^0.1.10' },
+    engines: { openlearn: '^0.1.12' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',
