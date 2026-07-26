@@ -11,6 +11,7 @@ export default defineConfig({
       'packages/core/__tests__/**/*.test.ts',
       'packages/plugin-sdk/__tests__/**/*.test.ts',
       'packages/activity-ecosystem/__tests__/**/*.test.ts',
+      'v2_plugins/**/__tests__/**/*.test.ts',
       'src/plugin-host/__tests__/**/*.test.{ts,tsx}',
       'src/mfe/__tests__/**/*.test.{ts,tsx}',
       'src/features/**/__tests__/**/*.test.{ts,tsx}',
@@ -19,6 +20,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
     alias: {
+      '@openlearn/plugin-sdk': '/home/wuxf/Develop/openlearnv2/packages/plugin-sdk/index.ts',
+      '@openlearn/plugin-test-kit': '/home/wuxf/Develop/openlearnv2/packages/plugin-test-kit/index.ts',
       'xlsx': '/home/wuxf/Develop/openlearnv2/packages/core/__mocks__/xlsx.ts'
     },
     // Kernel integration tests include ZIP plugin seeding which can take >5s

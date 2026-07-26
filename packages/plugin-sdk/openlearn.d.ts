@@ -313,6 +313,47 @@ declare const IPresenceEngineServiceToken: Token<unknown>;
 declare const ITeachingCollaborationServiceToken: Token<unknown>;
 declare const ILearningAnalyticsServiceToken: Token<unknown>;
 
+export type {
+  PluginContext,
+  PluginDatabaseAPI,
+  PluginInfo,
+  PluginState,
+  Disposable,
+  IPluginLogger,
+  Manifest,
+  ICommandBusService,
+  IEventBusService,
+  IActionRegistryService,
+  ICapabilityService,
+  IProcessService,
+  IStorageService,
+  IAIService,
+};
+
+export {
+  Token,
+  ICommandBusServiceToken,
+  IEventBusServiceToken,
+  IActionRegistryServiceToken,
+  ICapabilityServiceToken,
+  IProcessServiceToken,
+  IStorageServiceToken,
+  IAIServiceToken,
+  IDatabaseToken,
+  IPointsDimensionRegistryToken,
+  IPointsLedgerServiceToken,
+  ILessonEngineServiceToken,
+  IClassroomRuntimeServiceToken,
+  IPresenceEngineServiceToken,
+  ITeachingCollaborationServiceToken,
+  ILearningAnalyticsServiceToken,
+  IActivityRegistryToken,
+};
+
+declare const IActivityRegistryToken: Token<unknown>;
+
+
+
 
 
 
