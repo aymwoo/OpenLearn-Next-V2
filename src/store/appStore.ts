@@ -148,7 +148,7 @@ export const appStore = createStore<AppState>((set) => ({
   students: [],
   liveClassSelectedClassId: null,
   liveClassIsActive: false,
-  teacherTab: 'dashboard',
+  teacherTab: 'courses',
 
   // Shared data defaults
   aiProviders: [],

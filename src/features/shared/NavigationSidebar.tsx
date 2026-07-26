@@ -64,7 +64,6 @@ export function NavigationSidebar({
       <div className={`p-2 ${mainNavCollapsed ? 'md:p-2' : 'md:p-4'} flex flex-col gap-3 overflow-y-auto flex-1`}>
         {/* Group 1: 教学工具 */}
         <NavGroupHeader label={lang === 'zh' ? '教学工具' : 'TEACHING'} mainNavCollapsed={mainNavCollapsed} />
-        <NavButton icon={Home} label={lang === 'zh' ? '系统总览' : 'Dashboard'} tab="dashboard" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
         <NavButton icon={BookOpen} label={lang === 'zh' ? '课程管理' : 'Courses'} tab="courses" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
         <NavButton icon={Presentation} label={lang === 'zh' ? '互动课堂' : 'Live Class'} tab="live_class" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} highlight />
         <NavButton icon={Users} label={lang === 'zh' ? '班级管理' : 'Classes & Students'} tab="classes" {...{ teacherTab, setTeacherTab, mainNavCollapsed }} />
