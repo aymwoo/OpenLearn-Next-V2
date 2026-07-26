@@ -6,7 +6,11 @@ import { createServer as createViteServer } from 'vite';
 import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { ISemesterGradeServiceToken } from '../../packages/core/di/interfaces.js';
+import {
+  ISemesterGradeServiceToken,
+  IPointsDimensionRegistryToken,
+  IPointsLedgerServiceToken,
+} from '../../packages/core/di/interfaces.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -500,6 +504,65 @@ export function registerGradingRoutes(ctx: ServerContext) {
     }
   });
 
+  // ─────────────────────────────────────────────────────────────────
+  // Points Ledger & Dimension Extensions API
+  // ─────────────────────────────────────────────────────────────────
+  app.get('/api/classes/:classId/points-dimensions', async (req, res) => {
+    try {
+      const dimensionRegistry = await kernelContainer.registry.resolve(IPointsDimensionRegistryToken);
+      const dimensions = dimensionRegistry.listDimensions();
+      res.json({ success: true, dimensions });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post('/api/students/:studentId/points', async (req, res) => {
+    try {
+      if (!checkIsTeacherOrAdmin(req)) {
+        return res.status(403).json({ success: false, error: 'Access Denied: Teachers or Administrators only' });
+      }
+
+      const { studentId } = req.params;
+      const { classId, dimensionId, deltaPoints, reason, pluginId } = req.body;
+
+      if (!classId || !dimensionId || deltaPoints === undefined || !reason) {
+        return res.status(400).json({ success: false, error: 'classId, dimensionId, deltaPoints, and reason are required' });
+      }
+
+      const ledgerService = await kernelContainer.registry.resolve(IPointsLedgerServiceToken);
+      const logItem = await ledgerService.addPoints(studentId, classId, dimensionId, Number(deltaPoints), reason, pluginId);
+
+      // Publish to EventBus & Socket.IO
+      kernelContainer.eventBus.publish({
+        id: logItem.id,
+        type: 'points.awarded',
+        source: pluginId || 'points-ledger',
+        payload: logItem,
+        timestamp: Date.now(),
+      });
+
+      res.json({ success: true, logItem });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get('/api/students/:studentId/points-logs', async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      const { classId } = req.query;
+
+      const ledgerService = await kernelContainer.registry.resolve(IPointsLedgerServiceToken);
+      const logs = await ledgerService.getLogs(studentId, classId as string | undefined);
+      const summary = await ledgerService.getStudentDimensionSummary(studentId, (classId as string) || '');
+
+      res.json({ success: true, logs, summary });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
   app.post('/api/classes/:classId/semester-reports/archive', (req, res) => {
     try {
       const { semesterName, reports } = req.body; // Array of reports to save
@@ -511,9 +574,9 @@ export function registerGradingRoutes(ctx: ServerContext) {
           id, student_id, class_id, semester_name,
           attendance_score, progress_score, assignment_score, exam_score,
           total_score, grade_level, teacher_evaluation, ai_evaluation,
-          created_at, updated_at
+          dimension_scores, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(student_id, class_id, semester_name) DO UPDATE SET
           attendance_score = excluded.attendance_score,
           progress_score = excluded.progress_score,
@@ -523,6 +586,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
           grade_level = excluded.grade_level,
           teacher_evaluation = excluded.teacher_evaluation,
           ai_evaluation = excluded.ai_evaluation,
+          dimension_scores = excluded.dimension_scores,
           updated_at = excluded.updated_at
       `);
 
@@ -542,6 +606,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
             r.gradeLevel,
             r.teacherEvaluation || null,
             r.aiEvaluation || null,
+            r.dimensionScores ? JSON.stringify(r.dimensionScores) : null,
             Date.now(),
             Date.now()
           );

@@ -603,7 +603,7 @@ export default function App() {
   useEffect(() => {
     const applyHash = () => {
       const tab = hashToTab(window.location.hash);
-      if (tab && tab !== useAppStore.getState().teacherTab) {
+      if (tab && tab !== appStore.getState().teacherTab) {
         setTeacherTab(tab);
       }
     };

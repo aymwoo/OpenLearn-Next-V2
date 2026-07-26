@@ -28,6 +28,8 @@ import {
   IDatabaseToken,
   IPluginHostToken,
   ISemesterGradeServiceToken,
+  IPointsDimensionRegistryToken,
+  IPointsLedgerServiceToken,
   ILessonEngineServiceToken,
   IClassroomRuntimeServiceToken,
   IPresenceEngineServiceToken,
@@ -47,6 +49,8 @@ import {
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
 import { SemesterGradeService } from '../di/semester-grade-service.js';
+import { PointsDimensionRegistry } from '../di/points-dimension-registry.js';
+import { PointsLedgerService } from '../di/points-ledger-service.js';
 import { PluginHost } from '../plugin-host/index.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import { HotReloadController } from '../plugin-host/hot-reload.js';
@@ -214,6 +218,8 @@ export class Kernel {
     this.serviceRegistry.register(IPluginCapabilityGatewayToken, this.pluginCapabilityGateway);
     this.serviceRegistry.register(ICapabilityRegistryToken, this.capabilityRegistry);
     this.serviceRegistry.register(ISemesterGradeServiceToken, new SemesterGradeService(this.db as any));
+    this.serviceRegistry.register(IPointsDimensionRegistryToken, new PointsDimensionRegistry());
+    this.serviceRegistry.register(IPointsLedgerServiceToken, new PointsLedgerService(this.db as any));
     this.serviceRegistry.register(ILessonEngineServiceToken, { getRuntime: async () => this.lessonRuntime } as any);
     this.serviceRegistry.register(IClassroomRuntimeServiceToken, { getRuntimeKernel: async () => this.classroomRuntime } as any);
     this.serviceRegistry.register(IPresenceEngineServiceToken, { getPresenceEngine: async () => this.presenceEngine } as any);

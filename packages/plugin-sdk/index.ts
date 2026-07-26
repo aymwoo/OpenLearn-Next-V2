@@ -111,6 +111,8 @@ export {
   IDatabaseToken,
   IPluginHostToken,
   ISemesterGradeServiceToken,
+  IPointsDimensionRegistryToken,
+  IPointsLedgerServiceToken,
   ILessonEngineServiceToken,
   IClassroomRuntimeServiceToken,
   IPresenceEngineServiceToken,
@@ -126,6 +128,13 @@ export {
   IUnifiedExtensionRegistryToken,
   IPluginCapabilityGatewayToken,
   ICapabilityRegistryToken,
+} from '../core/di/interfaces.js';
+
+export type {
+  PointsDimensionSpec,
+  IPointsDimensionRegistry,
+  PointLogItem,
+  IPointsLedgerService,
 } from '../core/di/interfaces.js';
 
 export type {

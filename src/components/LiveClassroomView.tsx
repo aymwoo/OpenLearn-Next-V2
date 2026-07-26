@@ -5,6 +5,7 @@ import { LazyWhiteboard } from '../components/LazyWhiteboard';
 import { TeacherAssignmentGradePanel } from './TeacherAssignmentGradePanel';
 import { io } from 'socket.io-client';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
+import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 
 // Dynamic Icon component to render Lucide icons by name string
 function DynamicIcon({ name, ...props }: { name: string; [key: string]: any }) {

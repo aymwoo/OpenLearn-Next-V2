@@ -301,9 +301,21 @@ db.exec(`
     grade_level TEXT NOT NULL,
     teacher_evaluation TEXT,
     ai_evaluation TEXT,
+    dimension_scores TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     UNIQUE(student_id, class_id, semester_name)
+  );
+
+  CREATE TABLE IF NOT EXISTS student_point_logs (
+    id TEXT PRIMARY KEY,
+    student_id TEXT NOT NULL,
+    class_id TEXT NOT NULL,
+    dimension_id TEXT NOT NULL,
+    plugin_id TEXT,
+    delta_points REAL NOT NULL,
+    reason TEXT NOT NULL,
+    created_at INTEGER NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS courseware (

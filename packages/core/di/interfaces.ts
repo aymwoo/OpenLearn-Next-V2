@@ -411,6 +411,67 @@ export const ISemesterGradeServiceToken = new Token<ISemesterGradeService>(
 );
 
 /**
+ * Specification for a Student Learning Points Dimension.
+ */
+export interface PointsDimensionSpec {
+  id: string;              // e.g. 'attendance', 'assignment', 'interactive_quiz', 'ai_practice'
+  name: string;            // e.g. '课堂互动打卡', 'AI练习积分'
+  category: 'builtin' | 'plugin';
+  defaultWeight: number;   // e.g. 0.15 (15%)
+  maxScore?: number;       // e.g. 100
+  description?: string;
+  pluginId?: string;
+}
+
+/**
+ * Interface for PointsDimensionRegistry.
+ */
+export interface IPointsDimensionRegistry {
+  registerDimension(spec: PointsDimensionSpec): void;
+  getDimension(id: string): PointsDimensionSpec | undefined;
+  listDimensions(): PointsDimensionSpec[];
+}
+
+export const IPointsDimensionRegistryToken = new Token<IPointsDimensionRegistry>(
+  '@openlearn/core:IPointsDimensionRegistry'
+);
+
+/**
+ * Point Audit Log Item
+ */
+export interface PointLogItem {
+  id: string;
+  studentId: string;
+  classId: string;
+  dimensionId: string;
+  pluginId?: string | null;
+  deltaPoints: number;
+  reason: string;
+  createdAt: number;
+}
+
+/**
+ * Interface for PointsLedgerService.
+ */
+export interface IPointsLedgerService {
+  addPoints(
+    studentId: string,
+    classId: string,
+    dimensionId: string,
+    deltaPoints: number,
+    reason: string,
+    pluginId?: string
+  ): Promise<PointLogItem>;
+  getLogs(studentId: string, classId?: string): Promise<PointLogItem[]>;
+  getStudentTotalByDimension(studentId: string, classId: string, dimensionId: string): Promise<number>;
+  getStudentDimensionSummary(studentId: string, classId: string): Promise<Record<string, number>>;
+}
+
+export const IPointsLedgerServiceToken = new Token<IPointsLedgerService>(
+  '@openlearn/core:IPointsLedgerService'
+);
+
+/**
  * Interface for LessonEngineService.
  */
 export interface ILessonEngineService {

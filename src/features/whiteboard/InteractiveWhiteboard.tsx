@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { Stage, Layer, Rect, Circle, Line, Text as KonvaText, Group } from 'react-konva';
-import { MousePointer2, Square, Circle as CircleIcon, PenTool, Type, Eraser, Loader2, Presentation, ChevronLeft, ChevronRight, Wand2, Terminal, Activity, Trash2, Settings, Plus, X, Paintbrush, ChevronDown, Undo2, Redo2, RotateCcw, Play, Pause, Maximize2, Minimize2, Edit3, BookOpen, Eye, FileText, Highlighter, Sparkles, HelpCircle, Shuffle, UserCheck, Upload, Grid, LayoutGrid } from 'lucide-react';
+import { MousePointer2, Square, Circle as CircleIcon, PenTool, Type, Eraser, Loader2, Presentation, ChevronLeft, ChevronRight, Wand2, Terminal, Activity, Trash2, Settings, Plus, X, Paintbrush, ChevronDown, Undo2, Redo2, RotateCcw, Play, Pause, Maximize2, Minimize2, Edit3, BookOpen, Eye, FileText, Highlighter, Sparkles, HelpCircle, Shuffle, UserCheck, Upload, Grid, LayoutGrid, Copy } from 'lucide-react';
 import { Html } from 'react-konva-utils';
 import { init as initPptxPreview } from 'pptx-preview';
 import Reveal from 'reveal.js';
@@ -14,6 +14,7 @@ import { getSocketInstance } from '../../services/socket-service';
 import { frontendEventBus } from '../../services/event-bus';
 import { appStore } from '../../store/appStore';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { legacyAdapter, objectRegistry, commandManager, layerManager, selectionManager, canvasEventBus } from './canvas-model/index.js';
 import type { CanvasObject, CanvasPage } from './canvas-model/index.js';
 import { interactionManager, pointerStateMachine, toolManager, viewportController, transformManager, snapEngine, guideEngine, shortcutEngine, clipboardService, contextMenuManager, cursorManager, textEditingManager } from './interaction-engine/index.js';
@@ -1353,6 +1354,19 @@ interface InteractiveWhiteboardProps {
   isEditMode?: boolean;
 }
 
+export interface WhiteboardPageItem {
+  id: string;
+  title: string;
+  order: number;
+  segmentId?: string | null;
+}
+
+export const DEFAULT_WHITEBOARD_PAGES: WhiteboardPageItem[] = [
+  { id: 'page-0', title: 'P1 · 引入导入', order: 0 },
+  { id: 'page-1', title: 'P2 · 核心讲解', order: 1 },
+  { id: 'page-2', title: 'P3 · 互动练习', order: 2 },
+];
+
 // 命令式接口：供外部（如备课画板点击添加）在画板中央插入元素
 export interface WhiteboardHandle {
   addElementAtCenter: (type: string, contentData: Record<string, any>) => Promise<void>;
@@ -1413,7 +1427,193 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
   const [currentPage, setCurrentPage] = useState(0);
   const [showGrid, setShowGrid] = useState(true);
   const [isDragOverBoard, setIsDragOverBoard] = useState(false);
-  const [pageTitles, setPageTitles] = useState<string[]>(['P1 · 引入导入', 'P2 · 核心讲解', 'P3 · 互动练习']);
+  const [pages, setPages] = useState<WhiteboardPageItem[]>(DEFAULT_WHITEBOARD_PAGES);
+  const [showPageDrawer, setShowPageDrawer] = useState(false);
+  const [editingPageIdx, setEditingPageIdx] = useState<number | null>(null);
+  const [editingPageTitle, setEditingPageTitle] = useState('');
+  const [activeMenuPageIdx, setActiveMenuPageIdx] = useState<number | null>(null);
+
+  // Sync pages config from safeElements (type === 'page_meta')
+  useEffect(() => {
+    const metaEl = safeElements.find((el) => el.type === 'page_meta');
+    if (metaEl) {
+      try {
+        const parsed = JSON.parse(metaEl.data);
+        if (Array.isArray(parsed.pages) && parsed.pages.length > 0) {
+          setPages(parsed.pages);
+        }
+      } catch (e) {
+        console.error('Failed to parse whiteboard page_meta:', e);
+      }
+    }
+  }, [elements]);
+
+  const savePagesConfig = (newPages: WhiteboardPageItem[]) => {
+    const metaEl = safeElements.find((el) => el.type === 'page_meta');
+    if (metaEl && onElementUpdate) {
+      onElementUpdate(metaEl.id, { pages: newPages });
+    } else if (onElementAdd) {
+      onElementAdd('page_meta', { pages: newPages });
+    }
+    if (socketRef.current) {
+      socketRef.current.emit('whiteboard-update', {
+        roomId: lessonId,
+        type: 'page-meta-update',
+        payload: { pages: newPages },
+      });
+    }
+  };
+
+  const handleSwitchPage = (idx: number) => {
+    setCurrentPage(idx);
+    setActiveMenuPageIdx(null);
+    if (socketRef.current) {
+      socketRef.current.emit('whiteboard-update', {
+        roomId: lessonId,
+        type: 'page-change',
+        payload: { page: idx },
+      });
+    }
+  };
+
+  const handleAddPage = (customTitle?: string) => {
+    const nextIdx = pages.length;
+    const newPage: WhiteboardPageItem = {
+      id: `page-${Date.now()}-${nextIdx}`,
+      title: customTitle || `P${nextIdx + 1} · 备课页面`,
+      order: nextIdx,
+    };
+    const nextPages = [...pages, newPage];
+    setPages(nextPages);
+    setCurrentPage(nextIdx);
+    savePagesConfig(nextPages);
+    if (socketRef.current) {
+      socketRef.current.emit('whiteboard-update', {
+        roomId: lessonId,
+        type: 'page-change',
+        payload: { page: nextIdx },
+      });
+    }
+  };
+
+  const handleRenamePage = (idx: number, newTitle: string) => {
+    if (!newTitle.trim()) {
+      setEditingPageIdx(null);
+      return;
+    }
+    const nextPages = pages.map((p, i) => (i === idx ? { ...p, title: newTitle.trim() } : p));
+    setPages(nextPages);
+    savePagesConfig(nextPages);
+    setEditingPageIdx(null);
+    setEditingPageTitle('');
+  };
+
+  const handleDuplicatePage = (idx: number) => {
+    const targetPage = pages[idx];
+    if (!targetPage) return;
+    const newIdx = idx + 1;
+    const newPage: WhiteboardPageItem = {
+      id: `page-${Date.now()}-${newIdx}`,
+      title: `${targetPage.title} (副本)`,
+      order: newIdx,
+    };
+
+    const nextPages = [
+      ...pages.slice(0, newIdx),
+      newPage,
+      ...pages.slice(newIdx).map((p) => ({ ...p, order: p.order + 1 })),
+    ];
+    setPages(nextPages);
+    setCurrentPage(newIdx);
+    savePagesConfig(nextPages);
+
+    const pageElements = safeElements.filter((el) => el.type !== 'page_meta' && (() => {
+      try {
+        const d = JSON.parse(el.data);
+        return (d.page ?? 0) === idx || d.pageId === targetPage.id;
+      } catch {
+        return idx === 0;
+      }
+    })());
+
+    pageElements.forEach((el) => {
+      try {
+        const d = JSON.parse(el.data);
+        if (onElementAdd) {
+          onElementAdd(el.type, {
+            ...d,
+            page: newIdx,
+            pageId: newPage.id,
+            x: (d.x ?? 100) + 20,
+            y: (d.y ?? 100) + 20,
+          });
+        }
+      } catch (e) {
+        console.error('Failed duplicating page element:', e);
+      }
+    });
+  };
+
+  const handleDeletePage = (idx: number) => {
+    if (pages.length <= 1) {
+      setDialog({ title: '无法删除', message: '至少需要保留一个白板页面！', type: 'alert' });
+      return;
+    }
+
+    const pageToDelete = pages[idx];
+    const pageElements = safeElements.filter((el) => el.type !== 'page_meta' && (() => {
+      try {
+        const d = JSON.parse(el.data);
+        return (d.page ?? 0) === idx || d.pageId === pageToDelete.id;
+      } catch {
+        return idx === 0;
+      }
+    })());
+
+    const performDelete = () => {
+      if (onElementDelete) {
+        pageElements.forEach((el) => onElementDelete(el.id));
+      }
+      const nextPages = pages.filter((_, i) => i !== idx).map((p, i) => ({ ...p, order: i }));
+      setPages(nextPages);
+      const nextCurrentPage = Math.min(currentPage, nextPages.length - 1);
+      setCurrentPage(nextCurrentPage);
+      savePagesConfig(nextPages);
+    };
+
+    if (pageElements.length > 0) {
+      setDialog({
+        title: '确认删除白板页面',
+        message: `页面 [${pageToDelete.title}] 包含 ${pageElements.length} 个组件，删除页面将同时清理该页面的组件，是否确定删除？`,
+        type: 'confirm',
+        onConfirm: performDelete,
+      });
+    } else {
+      performDelete();
+    }
+  };
+
+  const handleMovePage = (idx: number, direction: 'left' | 'right') => {
+    const targetIdx = direction === 'left' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= pages.length) return;
+
+    const nextPages = [...pages];
+    const item = nextPages[idx];
+    nextPages[idx] = nextPages[targetIdx];
+    nextPages[targetIdx] = item;
+
+    nextPages.forEach((p, i) => {
+      p.order = i;
+    });
+    setPages(nextPages);
+
+    if (currentPage === idx) {
+      setCurrentPage(targetIdx);
+    } else if (currentPage === targetIdx) {
+      setCurrentPage(idx);
+    }
+    savePagesConfig(nextPages);
+  };
   // currentDrawing holds the shape currently being drawn, so elements is source of truth for others.
   const [currentDrawing, setCurrentDrawing] = useState<any>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -2245,6 +2445,14 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
          if (onSegmentSync && data.payload?.segmentId) {
             onSegmentSync(data.payload.segmentId);
          }
+      } else if (data.type === 'page-change') {
+         if (typeof data.payload?.page === 'number') {
+            setCurrentPage(data.payload.page);
+         }
+      } else if (data.type === 'page-meta-update') {
+         if (Array.isArray(data.payload?.pages)) {
+            setPages(data.payload.pages);
+         }
       }
     };
 
@@ -2379,12 +2587,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
   const renderDrawingRaw = (drawing: any) => {
     if (!drawing) return null;
-    if (activeSegmentId) {
-      const segId = drawing.segmentId || 'seg-1';
-      if (segId !== activeSegmentId) return null;
-    } else if (drawing.page !== currentPage) {
-      return null;
-    }
+    const drawPage = drawing.page ?? 0;
+    const currentObj = pages[currentPage];
+    const pageMatches = (drawing.pageId && currentObj?.id) ? drawing.pageId === currentObj.id : drawPage === currentPage;
+    if (!pageMatches) return null;
+    if (activeSegmentId && drawing.segmentId && drawing.segmentId !== activeSegmentId) return null;
     if (drawing.type === 'pen') {
       return (
         <Line
@@ -3678,6 +3885,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           <UserCheck size={15} />
         </button>
 
+        <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
+
+        {/* Group 6: Plugin Classroom Tools */}
+        <ExtensionPointRenderer slot="classroom.tool" />
+
         <button
           onClick={async () => {
              setIsSyncing(true);
@@ -3709,10 +3921,10 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 setIsSyncing(false);
              }
           }}
-          className="px-2 py-1 rounded-xl text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 shadow-2xs font-semibold flex items-center gap-1 text-xs transition-all cursor-pointer"
+          className="p-1.5 rounded-xl text-purple-600 hover:bg-purple-50 transition-all cursor-pointer"
           title="请求 AI 助教建议 (Ask AI Tutor)"
         >
-          <Wand2 size={13} className="text-purple-600" /> AI 助教
+          <Wand2 size={16} />
         </button>
 
         <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
@@ -3785,9 +3997,15 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
         {/* Empty state hint */}
         {safeElements.filter((el) => {
+          if (el.type === 'page_meta') return false;
           try {
             const d = JSON.parse(el.data);
-            return activeSegmentId ? d.segmentId === activeSegmentId || !d.segmentId : (d.page ?? 0) === currentPage;
+            const elPage = d.page ?? 0;
+            const currentObj = pages[currentPage];
+            const pageMatches = (d.pageId && currentObj?.id) ? d.pageId === currentObj.id : elPage === currentPage;
+            if (!pageMatches) return false;
+            if (activeSegmentId && d.segmentId && d.segmentId !== activeSegmentId) return false;
+            return true;
           } catch {
             return currentPage === 0;
           }
@@ -3930,18 +4148,17 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           >
             <Layer>
               {safeElements.filter(el => {
+                if (el.type === 'page_meta') return false;
                 try {
                   const data = JSON.parse(el.data);
-                  if (activeSegmentId) {
-                    const elSegment = data.segmentId;
-                    if (!elSegment) return true; // Elements without explicit segmentId are visible in all segments
-                    return elSegment === activeSegmentId;
-                  } else {
-                    const elPage = data.page ?? 0;
-                    return elPage === currentPage;
-                  }
+                  const elPage = data.page ?? 0;
+                  const currentObj = pages[currentPage];
+                  const pageMatches = (data.pageId && currentObj?.id) ? data.pageId === currentObj.id : elPage === currentPage;
+                  if (!pageMatches) return false;
+                  if (activeSegmentId && data.segmentId && data.segmentId !== activeSegmentId) return false;
+                  return true;
                 } catch (e) {
-                  return activeSegmentId ? activeSegmentId === 'seg-1' : currentPage === 0;
+                  return currentPage === 0;
                 }
               }).map(renderElement)}
               {/* Show drawing in progress */}
@@ -4088,8 +4305,23 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
       {/* Bottom Page Navigation Bar */}
       <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-slate-200/80 font-sans select-none">
+        {/* Page Outline / Drawer Button */}
         <button
-          onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+          onClick={() => setShowPageDrawer(!showPageDrawer)}
+          className={`p-1.5 rounded-full transition-colors cursor-pointer flex items-center gap-1 text-xs font-medium ${
+            showPageDrawer ? 'bg-indigo-100 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'
+          }`}
+          title="页面大纲与预览 (Pages Outline)"
+        >
+          <LayoutGrid size={15} />
+          <span className="hidden sm:inline text-[11px] font-semibold">大纲 ({pages.length})</span>
+        </button>
+
+        <div className="h-4 w-px bg-slate-200 mx-0.5" />
+
+        {/* Previous Page */}
+        <button
+          onClick={() => handleSwitchPage(Math.max(0, currentPage - 1))}
           className="p-1 hover:bg-slate-100 rounded-full text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent transition-colors cursor-pointer"
           disabled={currentPage === 0}
           title="上一页"
@@ -4097,46 +4329,282 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           <ChevronLeft size={16} />
         </button>
 
-        <div className="flex items-center gap-1">
-          {pageTitles.map((title, idx) => {
+        {/* Page Tabs */}
+        <div className="flex items-center gap-1 max-w-[500px] overflow-x-auto no-scrollbar py-0.5">
+          {pages.map((pageItem, idx) => {
             const isActive = idx === currentPage;
+            const isEditing = editingPageIdx === idx;
             return (
-              <button
-                key={idx}
-                onClick={() => setCurrentPage(idx)}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                  isActive
-                    ? 'bg-indigo-600 text-white shadow-2xs'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-              >
-                <span>{title}</span>
-              </button>
+              <div key={pageItem.id || idx} className="relative group flex items-center">
+                {isEditing ? (
+                  <input
+                    type="text"
+                    autoFocus
+                    value={editingPageTitle}
+                    onChange={(e) => setEditingPageTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleRenamePage(idx, editingPageTitle);
+                      if (e.key === 'Escape') setEditingPageIdx(null);
+                    }}
+                    onBlur={() => handleRenamePage(idx, editingPageTitle)}
+                    className="px-2 py-0.5 text-xs font-bold bg-white border border-indigo-500 rounded-full outline-none w-28 text-slate-800 shadow-2xs"
+                  />
+                ) : (
+                  <button
+                    onClick={() => handleSwitchPage(idx)}
+                    onDoubleClick={() => {
+                      setEditingPageIdx(idx);
+                      setEditingPageTitle(pageItem.title);
+                    }}
+                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border ${
+                      isActive
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border-transparent'
+                    }`}
+                    title="双击重命名"
+                  >
+                    <span className="truncate max-w-[120px]">{pageItem.title}</span>
+                  </button>
+                )}
+
+                {/* Quick Menu Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveMenuPageIdx(activeMenuPageIdx === idx ? null : idx);
+                  }}
+                  className={`p-0.5 rounded-full hover:bg-black/10 transition-colors ml-[-4px] z-10 ${
+                    isActive ? 'text-white/80 hover:text-white' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                  title="页面选项"
+                >
+                  <ChevronDown size={12} />
+                </button>
+
+                {/* Dropdown Options Menu */}
+                {activeMenuPageIdx === idx && (
+                  <div
+                    className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-xl border border-slate-100 py-1 w-36 z-50 text-xs font-normal"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() => {
+                        setEditingPageIdx(idx);
+                        setEditingPageTitle(pageItem.title);
+                        setActiveMenuPageIdx(null);
+                      }}
+                      className="w-full px-3 py-1.5 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2 cursor-pointer"
+                    >
+                      <Edit3 size={13} /> 重命名
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleDuplicatePage(idx);
+                        setActiveMenuPageIdx(null);
+                      }}
+                      className="w-full px-3 py-1.5 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2 cursor-pointer"
+                    >
+                      <Copy size={13} /> 复制页面
+                    </button>
+
+                    {idx > 0 && (
+                      <button
+                        onClick={() => {
+                          handleMovePage(idx, 'left');
+                          setActiveMenuPageIdx(null);
+                        }}
+                        className="w-full px-3 py-1.5 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2 cursor-pointer"
+                      >
+                        <ChevronLeft size={13} /> 向左移动
+                      </button>
+                    )}
+
+                    {idx < pages.length - 1 && (
+                      <button
+                        onClick={() => {
+                          handleMovePage(idx, 'right');
+                          setActiveMenuPageIdx(null);
+                        }}
+                        className="w-full px-3 py-1.5 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2 cursor-pointer"
+                      >
+                        <ChevronRight size={13} /> 向右移动
+                      </button>
+                    )}
+
+                    <div className="my-1 border-t border-slate-100" />
+                    <button
+                      onClick={() => {
+                        handleDeletePage(idx);
+                        setActiveMenuPageIdx(null);
+                      }}
+                      className="w-full px-3 py-1.5 text-left text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer disabled:opacity-30"
+                      disabled={pages.length <= 1}
+                    >
+                      <Trash2 size={13} /> 删除页面
+                    </button>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
 
+        {/* Add Page Button */}
         <button
-          onClick={() => {
-            const nextIdx = pageTitles.length;
-            setPageTitles((prev) => [...prev, `P${nextIdx + 1} · 备课页面`]);
-            setCurrentPage(nextIdx);
-          }}
+          onClick={() => handleAddPage()}
           className="p-1 hover:bg-indigo-50 hover:text-indigo-600 text-slate-400 rounded-full transition-colors cursor-pointer ml-0.5"
           title="新建白板页面"
         >
           <Plus size={16} />
         </button>
 
+        {/* Next Page */}
         <button
-          onClick={() => setCurrentPage((p) => Math.min(pageTitles.length - 1, p + 1))}
+          onClick={() => handleSwitchPage(Math.min(pages.length - 1, currentPage + 1))}
           className="p-1 hover:bg-slate-100 rounded-full text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent transition-colors cursor-pointer"
-          disabled={currentPage >= pageTitles.length - 1}
+          disabled={currentPage >= pages.length - 1}
           title="下一页"
         >
           <ChevronRight size={16} />
         </button>
       </div>
+
+      {/* Page Outline & Thumbnail Drawer Overlay */}
+      {showPageDrawer && (
+        <div
+          className="absolute inset-0 bg-slate-900/30 backdrop-blur-xs z-30 flex flex-col justify-end pointer-events-auto font-sans"
+          onClick={() => setShowPageDrawer(false)}
+        >
+          <div
+            className="bg-white/95 backdrop-blur-xl border-t border-slate-200 rounded-t-2xl shadow-2xl p-4 max-h-[70vh] flex flex-col w-full max-w-5xl mx-auto animate-in slide-in-from-bottom duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2">
+                <LayoutGrid className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-bold text-slate-800 text-sm">白板页面大纲与预览</h3>
+                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-xs rounded-full font-semibold">
+                  共 {pages.length} 页
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleAddPage()}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                >
+                  <Plus size={14} /> 新建页面
+                </button>
+                <button
+                  onClick={() => setShowPageDrawer(false)}
+                  className="p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Pages Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 py-4 overflow-y-auto max-h-[50vh]">
+              {pages.map((p, idx) => {
+                const isActive = idx === currentPage;
+                const pageElementCount = safeElements.filter((el) => el.type !== 'page_meta' && (() => {
+                  try {
+                    const d = JSON.parse(el.data);
+                    return (d.page ?? 0) === idx || d.pageId === p.id;
+                  } catch {
+                    return idx === 0;
+                  }
+                })()).length;
+
+                return (
+                  <div
+                    key={p.id || idx}
+                    onClick={() => {
+                      handleSwitchPage(idx);
+                      setShowPageDrawer(false);
+                    }}
+                    className={`relative flex flex-col p-3 rounded-xl border-2 transition-all cursor-pointer group bg-white ${
+                      isActive
+                        ? 'border-indigo-600 bg-indigo-50/20 shadow-md ring-2 ring-indigo-500/20'
+                        : 'border-slate-200/80 hover:border-indigo-300 hover:shadow-sm'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md ${
+                        isActive ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        P{idx + 1}
+                      </span>
+                      {isActive && (
+                        <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                          当前激活
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="h-20 bg-slate-50 border border-slate-100 rounded-lg flex flex-col items-center justify-center mb-2 overflow-hidden relative">
+                      <FileText size={24} className={isActive ? 'text-indigo-400' : 'text-slate-300'} />
+                      <span className="text-[10px] text-slate-400 font-medium mt-1">
+                        {pageElementCount} 个组件/笔画
+                      </span>
+                    </div>
+
+                    <div className="font-bold text-xs text-slate-800 truncate mb-1" title={p.title}>
+                      {p.title}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-slate-400 text-[11px]" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => {
+                          setEditingPageIdx(idx);
+                          setEditingPageTitle(p.title);
+                        }}
+                        className="hover:text-indigo-600 p-1 rounded hover:bg-slate-100 transition-colors"
+                        title="重命名"
+                      >
+                        <Edit3 size={13} />
+                      </button>
+                      <button
+                        onClick={() => handleDuplicatePage(idx)}
+                        className="hover:text-indigo-600 p-1 rounded hover:bg-slate-100 transition-colors"
+                        title="复制页面"
+                      >
+                        <Copy size={13} />
+                      </button>
+                      {idx > 0 && (
+                        <button
+                          onClick={() => handleMovePage(idx, 'left')}
+                          className="hover:text-indigo-600 p-1 rounded hover:bg-slate-100 transition-colors"
+                          title="向左移"
+                        >
+                          <ChevronLeft size={13} />
+                        </button>
+                      )}
+                      {idx < pages.length - 1 && (
+                        <button
+                          onClick={() => handleMovePage(idx, 'right')}
+                          className="hover:text-indigo-600 p-1 rounded hover:bg-slate-100 transition-colors"
+                          title="向右移"
+                        >
+                          <ChevronRight size={13} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDeletePage(idx)}
+                        className="hover:text-red-600 p-1 rounded hover:bg-red-50 transition-colors disabled:opacity-30"
+                        disabled={pages.length <= 1}
+                        title="删除页面"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {dialog && (
         <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-[2px] flex items-center justify-center z-[9999] p-4 font-sans">

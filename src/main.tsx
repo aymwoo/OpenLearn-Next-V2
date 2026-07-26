@@ -9,6 +9,8 @@ import * as Recharts from 'recharts';
 import * as LucideReact from 'lucide-react';
 import './index.css';
 
+(window as any).React = React;
+(window as any).ReactDOM = ReactDOM;
 (window as any).HostSharedDeps = {
   React,
   ReactDOM,
