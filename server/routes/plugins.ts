@@ -136,7 +136,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
  // 插件市场列表与版本更新检测 API
-  app.get('/api/plugins/market', (req, res) => {
+  app.get('/api/plugins/market', async (req, res) => {
     // Return update info for all installed plugins that declare updateSource
     try {
       const plugins = kernelContainer.db
