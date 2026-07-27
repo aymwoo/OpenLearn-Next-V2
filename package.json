@@ -1,6 +1,6 @@
 {
   "name": "openlearn-next",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "private": false,
   "description": "A plugin-driven Educational OS / LMS platform with AI agent teaching assistant",
   "keywords": [
@@ -17,7 +17,7 @@
   "author": "OpenLearn Team",
   "repository": {
     "type": "git",
-    "url": "https://github.com/openlearn/openlearnv2"
+    "url": "https://github.com/aymwoo/OpenLearn-Next-V2"
   },
   "bin": {
     "openlearn-next": "cli.mjs"
