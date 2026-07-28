@@ -83,6 +83,7 @@ import { StudentCourseProgressList } from './features/student/StudentCourseProgr
 import { StudentLessonHeader } from './features/student/StudentLessonHeader';
 import { StudentLessonContentPanel } from './features/student/StudentLessonContentPanel';
 import { StudentLessonInteractionPanel } from './features/student/StudentLessonInteractionPanel';
+import { StudentLessonView } from './features/student/StudentLessonView';
 import { StudentSchedulePanel } from './features/student/StudentSchedulePanel';
 import { StudentDashboardHeader } from './features/student/StudentDashboardHeader';
 import { StudentRollCallAlarms } from './features/student/StudentRollCallAlarms';
@@ -3843,13 +3844,36 @@ export default function App() {
                 <Loader2 size={32} className="animate-spin" />
               </div>
             ) : studentViewStatus === 'lesson' ? (
-              <div className="flex flex-col h-full space-y-4">
-                <StudentLessonHeader students={students} activeStudentId={activeStudentId} setStudentViewStatus={setStudentViewStatus} setSelectedLesson={setSelectedLesson} lessons={lessons} selectedLesson={selectedLesson} />
-                <div className="flex-1 flex gap-6 min-h-0 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <StudentLessonContentPanel students={students} activeStudentId={activeStudentId} studentFullscreenPanel={studentFullscreenPanel} setStudentFullscreenPanel={setStudentFullscreenPanel} timelineSegments={timelineSegments} lang={lang} activeSegmentId={activeSegmentId} setActiveSegmentId={setActiveSegmentId} localProgressPercent={localProgressPercent} setLocalProgressPercent={setLocalProgressPercent} updateStudentProgress={updateStudentProgress} selectedLesson={selectedLesson} lessons={lessons} isStudentLessonContentCollapsed={isStudentLessonContentCollapsed} />
-                  <StudentLessonInteractionPanel studentLessonTab={studentLessonTab} setStudentLessonTab={setStudentLessonTab} isStudentLessonContentCollapsed={isStudentLessonContentCollapsed} setIsStudentLessonContentCollapsed={setIsStudentLessonContentCollapsed} lang={lang} studentFullscreenPanel={studentFullscreenPanel} setStudentFullscreenPanel={setStudentFullscreenPanel} selectedLesson={selectedLesson} elements={elements} activeRole={activeRole} activeSegmentId={activeSegmentId} setActiveSegmentId={setActiveSegmentId} fetchElements={fetchElements} currentVfsParent={currentVfsParent} setCurrentVfsParent={setCurrentVfsParent} vfsNodes={vfsNodes} studentSelectedCourseware={studentSelectedCourseware} setStudentSelectedCourseware={setStudentSelectedCourseware} activeStudentId={activeStudentId} addToast={addToast} />
-                </div>
-              </div>
+              <StudentLessonView
+                students={students}
+                activeStudentId={activeStudentId}
+                setStudentViewStatus={setStudentViewStatus}
+                setSelectedLesson={setSelectedLesson}
+                lessons={lessons}
+                selectedLesson={selectedLesson}
+                studentFullscreenPanel={studentFullscreenPanel}
+                setStudentFullscreenPanel={setStudentFullscreenPanel}
+                timelineSegments={timelineSegments}
+                lang={lang}
+                activeSegmentId={activeSegmentId}
+                setActiveSegmentId={setActiveSegmentId}
+                localProgressPercent={localProgressPercent}
+                setLocalProgressPercent={setLocalProgressPercent}
+                updateStudentProgress={updateStudentProgress}
+                isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
+                setIsStudentLessonContentCollapsed={setIsStudentLessonContentCollapsed}
+                studentLessonTab={studentLessonTab}
+                setStudentLessonTab={setStudentLessonTab}
+                elements={elements}
+                activeRole={activeRole}
+                fetchElements={fetchElements}
+                currentVfsParent={currentVfsParent}
+                setCurrentVfsParent={setCurrentVfsParent}
+                vfsNodes={vfsNodes}
+                studentSelectedCourseware={studentSelectedCourseware}
+                setStudentSelectedCourseware={setStudentSelectedCourseware}
+                addToast={addToast}
+              />
             ) : studentViewStatus === 'assignment' && selectedAssignment ? (
               <div className="flex flex-col h-full space-y-4">
                 <div className="flex items-center justify-between">
