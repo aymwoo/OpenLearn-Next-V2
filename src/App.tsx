@@ -97,6 +97,7 @@ import { LessonEditorView } from './features/teacher/LessonEditorView.js';
 import { CreateClassButton } from './features/teacher/classes/CreateClassButton.js';
 import { ManualImportButton } from './features/teacher/classes/ManualImportButton.js';
 import { ClassPasscodeController } from './features/teacher/classes/ClassPasscodeController.js';
+import { ClassRowHeader } from './features/teacher/classes/ClassRowHeader.js';
 
 const AGENT_PROVIDER_STORAGE_KEY = 'openlearnv2.agentProviderId';
 
@@ -5051,71 +5052,20 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                       })();
                       return (
                         <div key={cls.id} className="w-full mb-1 border-b border-gray-50 flex flex-col">
-                          <div 
-                            className={`p-2 flex items-center justify-between ${batchMode ? 'cursor-pointer hover:bg-amber-50/60' : 'cursor-pointer hover:bg-gray-50'}`}
-                            onClick={() => {
-                              if (batchMode) {
-                                toggleClassSelection(cls.id);
-                                return;
-                              }
-                              if (isExpanded) {
-                                setExpandedClassId(null);
-                              } else {
-                                setExpandedClassId(cls.id);
-                                setSelectedStudentIds(new Set());
-                                fetchClassStudents(cls.id);
-                                fetchClassProgress(cls.id);
-                                fetchClassDashboard(cls.id);
-                                fetchClassSchedules(cls.id);
-                              }
-                            }}
-                          >
-                             <div className="flex items-center gap-2">
-                               {batchMode && (
-                                 <input
-                                   type="checkbox"
-                                   className="shrink-0 accent-amber-500"
-                                   checked={selectedClassIds.has(cls.id)}
-                                   onChange={() => toggleClassSelection(cls.id)}
-                                   onClick={(e) => e.stopPropagation()}
-                                 />
-                               )}
-                               <button
-                                 type="button"
-                                 onClick={(e) => {
-                                   e.stopPropagation();
-                                   if (isExpanded) {
-                                     setExpandedClassId(null);
-                                   } else {
-                                     setExpandedClassId(cls.id);
-                                     setSelectedStudentIds(new Set());
-                                     fetchClassStudents(cls.id);
-                                     fetchClassProgress(cls.id);
-                                     fetchClassDashboard(cls.id);
-                                     fetchClassSchedules(cls.id);
-                                   }
-                                 }}
-                                 className="text-gray-400 hover:text-gray-600 shrink-0"
-                               >
-                                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                               </button>
-                               <div className={`text-sm font-medium ${batchMode && selectedClassIds.has(cls.id) ? 'text-amber-700' : 'text-gray-800'}`}>{cls.name}</div>
-                             </div>
-                             <div className="flex items-center gap-3 text-[11px] text-gray-500 shrink-0">
-                               <span className="flex items-center gap-1" title={lang === 'zh' ? '学生人数' : 'Students'}>
-                                 <Users size={13} className="text-gray-400" />
-                                 {cls.student_count ?? 0}
-                               </span>
-                               <span className="flex items-center gap-1" title={lang === 'zh' ? '课程数量' : 'Courses'}>
-                                 <BookOpen size={13} className="text-gray-400" />
-                                 {cls.course_count ?? 0}
-                               </span>
-                               <span className="flex items-center gap-1" title={lang === 'zh' ? '作业数量' : 'Assignments'}>
-                                 <ClipboardList size={13} className="text-gray-400" />
-                                 {cls.assignment_count ?? 0}
-                               </span>
-                             </div>
-                          </div>
+                          <ClassRowHeader
+                            cls={cls}
+                            lang={lang}
+                            isExpanded={isExpanded}
+                            batchMode={batchMode}
+                            selectedClassIds={selectedClassIds}
+                            setExpandedClassId={setExpandedClassId}
+                            setSelectedStudentIds={setSelectedStudentIds}
+                            toggleClassSelection={toggleClassSelection}
+                            fetchClassStudents={fetchClassStudents}
+                            fetchClassProgress={fetchClassProgress}
+                            fetchClassDashboard={fetchClassDashboard}
+                            fetchClassSchedules={fetchClassSchedules}
+                          />
                           {isExpanded && (
                             <motion.div 
                               initial={{ opacity: 0, y: -8 }}
