@@ -95,6 +95,7 @@ import { CourseManagement } from './features/teacher/CourseManagement';
 import { Dashboard } from './features/teacher/Dashboard';
 import { LessonEditorView } from './features/teacher/LessonEditorView.js';
 import { CreateClassButton } from './features/teacher/classes/CreateClassButton.js';
+import { ManualImportButton } from './features/teacher/classes/ManualImportButton.js';
 
 const AGENT_PROVIDER_STORAGE_KEY = 'openlearnv2.agentProviderId';
 
@@ -5001,16 +5002,12 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                     </div>
                   )}
 
-                  <button 
-                    onClick={() => {
-                      setImportError(null);
-                      setImportSuccess(null);
-                      setShowImportModal(true);
-                    }} 
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors border border-indigo-200 rounded-lg font-medium cursor-pointer"
-                  >
-                    <Upload size={14} /> {lang === 'zh' ? '手动导入数据' : 'Manual Import'}
-                  </button>
+                  <ManualImportButton
+                    lang={lang}
+                    setImportError={setImportError}
+                    setImportSuccess={setImportSuccess}
+                    setShowImportModal={setShowImportModal}
+                  />
                   <CreateClassButton lang={lang} fetchClasses={fetchClasses} />
                 </div>
               </div>
