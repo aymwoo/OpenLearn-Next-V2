@@ -11,6 +11,7 @@ export default defineConfig({
       'packages/core/__tests__/**/*.test.ts',
       'packages/plugin-sdk/__tests__/**/*.test.ts',
       'packages/activity-ecosystem/__tests__/**/*.test.ts',
+      'server/__tests__/**/*.test.ts',
       'v2_plugins/**/__tests__/**/*.test.ts',
       'src/plugin-host/__tests__/**/*.test.{ts,tsx}',
       'src/mfe/__tests__/**/*.test.{ts,tsx}',

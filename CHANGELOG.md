@@ -3,7 +3,7 @@
 All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are documented here.
 
 > Versioning note: the platform `openlearn-next` is versioned independently of
-> `@openlearn/plugin-sdk` (currently **3.4.3**) and `@openlearn/plugin-test-kit`.
+> `@openlearn/plugin-sdk` (currently **3.5.0**) and `@openlearn/plugin-test-kit`.
 > Bumping the platform does not change the SDK / test-kit versions.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
@@ -17,6 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 - **Hidden type errors surfaced & systematic roots fixed**: `tsc` was aborting early on an invalid `tsconfig` `exclude`, masking **389 real type errors**. Fixed: added `tsconfig` `exclude` for fixtures/templates; corrected 17 wrong relative-import depths (incl. a missing `student-workspace-registry`); added the missing `@testing-library/react` dev dependency; fixed two missing name imports. Made `PluginContext.resolve<T>` infer token types across the core↔SDK boundary (public phantom on `Token`). Tightened `@openlearn/plugin-sdk` to **3.5.0**: service tokens typed concretely (was `Token<unknown>`) and service interfaces accept sync-or-async (`void | Promise<void>`). Remaining ~116 genuine per-file type errors tracked as a type-debt backlog.
+
+### Refactor / Performance
+- **Server monolith decomposition — Phase 1 (realtime bridge)**: Extract the EventBus→Socket.IO forwarding block (`server.ts` lines 652–803: `assignment.graded` toast, `handleRollcallElement` rollcall persistence, and `whiteboard.*` / `spotlight.*` sync relays) into a standalone `server/realtime-bridge.ts` module behind `setupRealtimeBridge({ eventBus, io, db })`. Behavior preserved verbatim and locked by a new characterization test (`server/__tests__/realtime-bridge.test.ts`, 7 cases). Introduces a structural `BridgeDb` port and reuses the existing `EventBusPort`, keeping the server's `kernelContainer` as the composition root. No new `tsc` errors beyond the type-debt baseline.
 
 ## [0.1.15] - 2026-07-27
 
