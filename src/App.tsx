@@ -103,6 +103,7 @@ import { ClassStudentsPanel } from './features/teacher/classes/ClassStudentsPane
 import { ClassAssignmentsPanel } from './features/teacher/classes/ClassAssignmentsPanel.js';
 import { ClassSchedulesCharts } from './features/teacher/classes/ClassSchedulesCharts';
 import { ClassScheduleAttendance } from './features/teacher/classes/ClassScheduleAttendance';
+import { ClassesView } from './features/teacher/classes/ClassesView';
 
 const AGENT_PROVIDER_STORAGE_KEY = 'openlearnv2.agentProviderId';
 
@@ -4834,379 +4835,106 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                 onViewCourse={(lessonId) => { setTeacherTab('lesson_editor'); setSelectedLesson(lessonId); }}
               />
             ) : teacherTab === 'classes' ? (
-              <div className="flex-1 flex flex-col gap-6 h-full overflow-y-auto relative p-1 pr-3">
-
-            {/* School Management Module */}
-            <div className="flex-1 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col min-h-0">
-              <div className="p-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-                <h3 className="font-medium text-gray-700 flex items-center gap-2">
-                  <Users size={16} className="text-gray-400" />
-                  {t.classes} & {t.students}
-                </h3>
-                {/* 批量管理模式开关 + 班级级操作栏 */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={() => {
-                      setBatchMode(b => !b);
-                      setSelectedClassIds(new Set());
-                      setSelectedStudentIds(new Set());
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-medium border transition-colors cursor-pointer ${batchMode ? 'bg-amber-500 text-white border-amber-500' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'}`}
-                  >
-                    <Check size={14} /> {lang === 'zh' ? '批量管理' : 'Batch Mode'}
-                  </button>
-                  {batchMode && (
-                    <>
-                      <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer select-none">
-                        <input type="checkbox" checked={classes.length > 0 && selectedClassIds.size === classes.length} onChange={toggleSelectAllClasses} />
-                        {lang === 'zh' ? '全选' : 'Select All'}
-                      </label>
-                      <span className="text-xs text-gray-400">({selectedClassIds.size})</span>
-                      <button
-                        onClick={handleBatchDeleteClasses}
-                        disabled={selectedClassIds.size === 0}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        <Trash2 size={13} /> {lang === 'zh' ? '删除' : 'Delete'}
-                      </button>
-                      <button
-                        onClick={handleBatchExportClasses}
-                        disabled={selectedClassIds.size === 0}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        <Download size={13} /> {lang === 'zh' ? '导出' : 'Export'}
-                      </button>
-                      <button
-                        onClick={handleBatchSetPasscode}
-                        disabled={selectedClassIds.size === 0}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        <Shield size={13} /> {lang === 'zh' ? '设密码' : 'Passcode'}
-                      </button>
-                      <button
-                        onClick={handleBatchScheduleClasses}
-                        disabled={selectedClassIds.size === 0}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-violet-50 text-violet-600 hover:bg-violet-100 border border-violet-200 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        <CalendarIcon size={13} /> {lang === 'zh' ? '排课' : 'Schedule'}
-                      </button>
-                    </>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {expandedClassId && (
-                    <div 
-                      className="relative font-sans animate-in fade-in duration-200"
-                      onMouseEnter={() => setExportTooltipOpen(true)}
-                      onMouseLeave={() => setExportTooltipOpen(false)}
-                    >
-                      <AnimatePresence>
-                        {exportTooltipOpen && !exportDropdownOpen && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 4, scale: 0.95 }}
-                            transition={{ duration: 0.15, ease: "easeOut" }}
-                            className="absolute right-0 bottom-full mb-2.5 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-semibold rounded-lg shadow-xl z-55 pointer-events-none border border-slate-800 flex items-center gap-1.5 whitespace-nowrap"
-                          >
-                            <span>{lang === 'zh' ? '导出所有班级的成绩数据' : 'Export grade data for all classes'}</span>
-                            <div className="absolute right-8 -translate-x-1/2 top-full w-2 h-2 bg-slate-900 rotate-45 -mt-1 border-r border-b border-slate-800"></div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-
-                      <motion.button
-                        type="button"
-                        id="floating-export-all-grades-btn"
-                        onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
-                        whileHover={{ 
-                          scale: 1.05, 
-                          y: -1,
-                          boxShadow: "0 10px 15px -3px rgba(16, 185, 129, 0.3), 0 4px 6px -4px rgba(16, 185, 129, 0.3)"
-                        }}
-                        whileTap={{ scale: 0.95, y: 0 }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium rounded-lg shadow-sm transition-all cursor-pointer select-none"
-                      >
-                        <Download size={14} className="animate-pulse" />
-                        <span>{lang === 'zh' ? '一键导出所有成绩' : 'Export All Grades'}</span>
-                        <ChevronDown size={12} className={`transition-transform duration-200 ${exportDropdownOpen ? 'rotate-180' : ''}`} />
-                      </motion.button>
-                      
-                      {exportDropdownOpen && (
-                        <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-150 rounded-2xl shadow-2xl z-50 p-4 font-sans text-gray-800 animate-in fade-in slide-in-from-top-3 duration-200">
-                          <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-3">
-                            <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
-                              {lang === 'zh' ? '成绩单导出工具' : 'Grade Export Tools'}
-                            </span>
-                            <button 
-                              type="button"
-                              onClick={() => setExportDropdownOpen(false)}
-                              className="text-gray-400 hover:text-gray-600 text-[10px] font-extrabold cursor-pointer"
-                            >
-                              ✕
-                            </button>
-                          </div>
-
-                          {/* Combined Export option */}
-                          <div className="mb-4">
-                            <button
-                              type="button"
-                              onClick={handleExportAllClassesCombined}
-                              disabled={isExportingAllCombined}
-                              className="w-full flex items-center justify-between gap-2 p-3 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-100 text-emerald-950 rounded-xl font-bold text-xs cursor-pointer transition-all disabled:opacity-55"
-                            >
-                              <div className="flex items-center gap-2 text-left">
-                                <Sparkles size={14} className="text-emerald-600 animate-pulse" />
-                                <div>
-                                  <div className="font-extrabold">{lang === 'zh' ? '全班级汇总表' : 'All Classes Multi-Sheet'}</div>
-                                  <div className="text-[9px] text-emerald-600 font-medium">{lang === 'zh' ? '将所有学科班级合并至单张CSV表' : 'Consolidate everyone to a single CSV'}</div>
-                                </div>
-                              </div>
-                              {isExportingAllCombined ? (
-                                <Loader2 size={14} className="animate-spin text-emerald-600" />
-                              ) : (
-                                <ChevronRight size={14} className="text-emerald-500" />
-                              )}
-                            </button>
-                          </div>
-
-                          <div className="text-[9.5px] font-bold text-gray-400 uppercase tracking-widest mb-2 select-none">
-                            {lang === 'zh' ? '选择特定学科导出' : 'Export Individual Subjects'}
-                          </div>
-
-                          {/* Classes roster */}
-                          {classes.length === 0 ? (
-                            <div className="text-center p-4 text-xs text-gray-400 italic">
-                              {lang === 'zh' ? '暂无班级' : 'No classes available'}
-                            </div>
-                          ) : (
-                            <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                              {classes.map((cls) => (
-                                <button
-                                  key={cls.id}
-                                  type="button"
-                                  onClick={() => triggerExportForClass(cls.id, cls.name)}
-                                  disabled={loadingExportClassId === cls.id}
-                                  className="w-full text-left p-2.5 rounded-xl border border-gray-100 hover:border-indigo-200 hover:bg-indigo-50/20 flex items-center justify-between cursor-pointer transition-all text-xs"
-                                >
-                                  <div className="min-w-0 pr-2">
-                                    <div className="font-bold text-slate-800 truncate">{cls.name}</div>
-                                    <div className="text-[9px] text-gray-400 mt-0.5">
-                                      {(classStudentsMap[cls.id] || []).length} {lang === 'zh' ? '名学生已注册' : 'registered pupils'}
-                                    </div>
-                                  </div>
-                                  {loadingExportClassId === cls.id ? (
-                                    <Loader2 size={12} className="animate-spin text-indigo-500" />
-                                  ) : (
-                                    <Download className="text-gray-400 shrink-0 hover:text-indigo-600" size={12} />
-                                  )}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <ManualImportButton
-                    lang={lang}
-                    setImportError={setImportError}
-                    setImportSuccess={setImportSuccess}
-                    setShowImportModal={setShowImportModal}
-                  />
-                  <CreateClassButton lang={lang} fetchClasses={fetchClasses} />
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto p-2">
-                {classes.length === 0 && students.length === 0 ? (
-                   <div className="text-center p-8 text-sm text-gray-500">
-                     {t.noClasses} & {t.noStudents}
-                   </div>
-                ) : (
-                  <>
-                    {classes.map(cls => {
-                      const isExpanded = expandedClassId === cls.id;
-                      const cStudents = classStudentsMap[cls.id] || [];
-                      const activeSubmissionFilter = classSubmissionFilters[cls.id] || 'all';
-                      const recentSubs = classDashboardMap[cls.id]?.recentSubmissions || [];
-                      const performanceData = classDashboardMap[cls.id]?.performance || [];
-
-                      const filteredSubmissions = (() => {
-                        if (activeSubmissionFilter === 'all') {
-                          return recentSubs;
-                        } else if (activeSubmissionFilter === 'submitted') {
-                          return recentSubs.filter((sub: any) => sub.status === 'submitted');
-                        } else if (activeSubmissionFilter === 'graded') {
-                          return recentSubs.filter((sub: any) => sub.status === 'graded');
-                        } else if (activeSubmissionFilter === 'pending') {
-                          const pendingGradingSubmissions = recentSubs.filter((sub: any) => sub.status === 'submitted');
-                          const unsubmittedTasks = performanceData
-                            .filter((p: any) => !p.submission_status || p.submission_status === null)
-                            .map((p: any) => ({
-                              assignment_id: p.assignment_id,
-                              assignment_title: p.assignment_title,
-                              student_id: p.student_id,
-                              student_name: p.student_name,
-                              content: lang === 'zh' ? '尚未提交此作业' : 'Has not submitted this assignment yet',
-                              status: 'pending_student',
-                            }));
-                          return [...pendingGradingSubmissions, ...unsubmittedTasks];
-                        }
-                        return recentSubs;
-                      })();
-                      return (
-                        <div key={cls.id} className="w-full mb-1 border-b border-gray-50 flex flex-col">
-                          <ClassRowHeader
-                            cls={cls}
-                            lang={lang}
-                            isExpanded={isExpanded}
-                            batchMode={batchMode}
-                            selectedClassIds={selectedClassIds}
-                            setExpandedClassId={setExpandedClassId}
-                            setSelectedStudentIds={setSelectedStudentIds}
-                            toggleClassSelection={toggleClassSelection}
-                            fetchClassStudents={fetchClassStudents}
-                            fetchClassProgress={fetchClassProgress}
-                            fetchClassDashboard={fetchClassDashboard}
-                            fetchClassSchedules={fetchClassSchedules}
-                          />
-                          {isExpanded && (
-                            <motion.div 
-                              initial={{ opacity: 0, y: -8 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ duration: 0.3, ease: 'easeOut' }}
-                              className="pl-6 bg-gray-50 pb-2 pt-2 border-t border-gray-100 pr-2"
-                            >
-                               <ClassPasscodeController cls={cls} lang={lang} fetchClasses={fetchClasses} />
-                               <ClassTabs
-                                 cls={cls}
-                                 lang={lang}
-                                 classActiveTabs={classActiveTabs}
-                                 setClassActiveTabs={setClassActiveTabs}
-                               />
-                              {(classActiveTabs[cls.id] || 'students') === 'schedules' && (
-                                <ClassSchedulesCharts
-                                  cls={cls}
-                                  lang={lang}
-                                  cStudents={cStudents}
-                                  classProgressMap={classProgressMap}
-                                  classSchedulesMap={classSchedulesMap}
-                                  classDashboardMap={classDashboardMap}
-                                />
-                              )}
-                               
-                               {(classActiveTabs[cls.id] || 'students') === 'assignments' && (
-                                 <ClassAssignmentsPanel
-                                   cls={cls}
-                                   lang={lang}
-                                   cStudents={cStudents}
-                                   activeSubmissionFilter={activeSubmissionFilter}
-                                   classDashboardMap={classDashboardMap}
-                                   assignmentSortOrder={assignmentSortOrder}
-                                   setAssignmentSortOrder={setAssignmentSortOrder}
-                                   lessons={lessons}
-                                   isGeneratingPDFReport={isGeneratingPDFReport}
-                                   handleGeneratePDFReport={handleGeneratePDFReport}
-                                   setExportClassId={setExportClassId}
-                                   setExportClassName={setExportClassName}
-                                   setQuizzesWeight={setQuizzesWeight}
-                                   setAssignmentsWeight={setAssignmentsWeight}
-                                   setCustomCategoryOverrides={setCustomCategoryOverrides}
-                                   setIsExportWeightModalOpen={setIsExportWeightModalOpen}
-                                   isGeneratingAssignment={isGeneratingAssignment}
-                                   setQuizGeneratorClassId={setQuizGeneratorClassId}
-                                   setQuizGenMode={setQuizGenMode}
-                                   setQuizGenSelectedLessonId={setQuizGenSelectedLessonId}
-                                   setQuizGenTopic={setQuizGenTopic}
-                                   setSuggestedObjectives={setSuggestedObjectives}
-                                   setSuggestedQuestions={setSuggestedQuestions}
-                                   setIsQuizGeneratorOpen={setIsQuizGeneratorOpen}
-                                   setClassSubmissionFilters={setClassSubmissionFilters}
-                                   setActiveStudentId={setActiveStudentId}
-                                   setSelectedAssignment={setSelectedAssignment}
-                                   setStudentViewStatus={setStudentViewStatus}
-                                   setActiveRole={setActiveRole}
-                                   isGrading={isGrading}
-                                   setIsGrading={setIsGrading}
-                                   fetchClassDashboard={fetchClassDashboard}
-                                   get30DayAverageWarning={get30DayAverageWarning}
-                                 />
-                               )}
-
-                               {(classActiveTabs[cls.id] || 'students') === 'schedules' && (
-                                 <ClassScheduleAttendance
-                                   cls={cls}
-                                   lang={lang}
-                                   cStudents={cStudents}
-                                   newScheduleDate={newScheduleDate}
-                                   setNewScheduleDate={setNewScheduleDate}
-                                   newScheduleLessonId={newScheduleLessonId}
-                                   setNewScheduleLessonId={setNewScheduleLessonId}
-                                   lessons={lessons}
-                                   fetchClassSchedules={fetchClassSchedules}
-                                   classSchedulesMap={classSchedulesMap}
-                                   expandedScheduleId={expandedScheduleId}
-                                   setExpandedScheduleId={setExpandedScheduleId}
-                                   fetchScheduleAttendance={fetchScheduleAttendance}
-                                   scheduleAttendanceMap={scheduleAttendanceMap}
-                                   get30DayAverageWarning={get30DayAverageWarning}
-                                 />
-                               )}
-
-                               <ClassStudentsPanel
-                                 cls={cls}
-                                 classStudentsMap={classStudentsMap}
-                                 students={students}
-                                 lang={lang}
-                                 selectedStudentIds={selectedStudentIds}
-                                 rosterViewMode={rosterViewMode}
-                                 setRosterViewMode={setRosterViewMode}
-                                 rosterSearchQuery={rosterSearchQuery}
-                                 setRosterSearchQuery={setRosterSearchQuery}
-                                 rosterTagFilter={rosterTagFilter}
-                                 setRosterTagFilter={setRosterTagFilter}
-                                 batchMode={batchMode}
-                                 toggleSelectAllStudents={toggleSelectAllStudents}
-                                 handleBatchDeleteStudents={handleBatchDeleteStudents}
-                                 handleBatchResetPassword={handleBatchResetPassword}
-                                 handleBatchTransferStudents={handleBatchTransferStudents}
-                                 handleBatchSetLockedLesson={handleBatchSetLockedLesson}
-                                 expandedStudentId={expandedStudentId}
-                                 setExpandedStudentId={setExpandedStudentId}
-                                 fetchStudentProgress={fetchStudentProgress}
-                                 studentProgressMap={studentProgressMap}
-                                 studentActiveTabs={studentActiveTabs}
-                                 setStudentActiveTabs={setStudentActiveTabs}
-                                 toggleStudentSelection={toggleStudentSelection}
-                                 get30DayAverageWarning={get30DayAverageWarning}
-                                 lessons={lessons}
-                                 setStudents={setStudents}
-                                 setClassStudentsMap={setClassStudentsMap}
-                                 fetchClassStudents={fetchClassStudents}
-                                 fetchStudents={fetchStudents}
-                                 parseCSV={parseCSV}
-                               />
-
-                               {(classActiveTabs[cls.id] || 'students') === 'grades' && (
-                                 <SemesterGradeManager
-                                   classId={cls.id}
-                                   className={cls.name}
-                                   students={cStudents}
-                                   lang={lang}
-                                 />
-                               )}
-                             </motion.div>
-                           )}
-                         </div>
-                       );
-                     })}
-                   </>
-                )}
-              </div>
-            </div>
-            
-            </div>
+              <ClassesView
+                t={t}
+                lang={lang}
+                classes={classes}
+                students={students}
+                lessons={lessons}
+                batchMode={batchMode}
+                selectedClassIds={selectedClassIds}
+                setSelectedClassIds={setSelectedClassIds}
+                setSelectedStudentIds={setSelectedStudentIds}
+                setBatchMode={setBatchMode}
+                expandedClassId={expandedClassId}
+                setExpandedClassId={setExpandedClassId}
+                exportTooltipOpen={exportTooltipOpen}
+                setExportTooltipOpen={setExportTooltipOpen}
+                exportDropdownOpen={exportDropdownOpen}
+                setExportDropdownOpen={setExportDropdownOpen}
+                isExportingAllCombined={isExportingAllCombined}
+                loadingExportClassId={loadingExportClassId}
+                classStudentsMap={classStudentsMap}
+                setClassStudentsMap={setClassStudentsMap}
+                expandedStudentId={expandedStudentId}
+                setExpandedStudentId={setExpandedStudentId}
+                selectedStudentIds={selectedStudentIds}
+                rosterViewMode={rosterViewMode}
+                setRosterViewMode={setRosterViewMode}
+                rosterSearchQuery={rosterSearchQuery}
+                setRosterSearchQuery={setRosterSearchQuery}
+                rosterTagFilter={rosterTagFilter}
+                setRosterTagFilter={setRosterTagFilter}
+                toggleSelectAllStudents={toggleSelectAllStudents}
+                handleBatchDeleteStudents={handleBatchDeleteStudents}
+                handleBatchResetPassword={handleBatchResetPassword}
+                handleBatchTransferStudents={handleBatchTransferStudents}
+                handleBatchSetLockedLesson={handleBatchSetLockedLesson}
+                toggleStudentSelection={toggleStudentSelection}
+                get30DayAverageWarning={get30DayAverageWarning}
+                studentProgressMap={studentProgressMap}
+                studentActiveTabs={studentActiveTabs}
+                setStudentActiveTabs={setStudentActiveTabs}
+                setStudents={setStudents}
+                fetchClassStudents={fetchClassStudents}
+                fetchStudents={fetchStudents}
+                parseCSV={parseCSV}
+                setImportError={setImportError}
+                setImportSuccess={setImportSuccess}
+                setShowImportModal={setShowImportModal}
+                fetchClasses={fetchClasses}
+                classSubmissionFilters={classSubmissionFilters}
+                setClassSubmissionFilters={setClassSubmissionFilters}
+                classActiveTabs={classActiveTabs}
+                setClassActiveTabs={setClassActiveTabs}
+                classProgressMap={classProgressMap}
+                classSchedulesMap={classSchedulesMap}
+                classDashboardMap={classDashboardMap}
+                assignmentSortOrder={assignmentSortOrder}
+                setAssignmentSortOrder={setAssignmentSortOrder}
+                isGeneratingPDFReport={isGeneratingPDFReport}
+                handleGeneratePDFReport={handleGeneratePDFReport}
+                setExportClassId={setExportClassId}
+                setExportClassName={setExportClassName}
+                setQuizzesWeight={setQuizzesWeight}
+                setAssignmentsWeight={setAssignmentsWeight}
+                setCustomCategoryOverrides={setCustomCategoryOverrides}
+                setIsExportWeightModalOpen={setIsExportWeightModalOpen}
+                isGeneratingAssignment={isGeneratingAssignment}
+                setQuizGeneratorClassId={setQuizGeneratorClassId}
+                setQuizGenMode={setQuizGenMode}
+                setQuizGenSelectedLessonId={setQuizGenSelectedLessonId}
+                setQuizGenTopic={setQuizGenTopic}
+                setSuggestedObjectives={setSuggestedObjectives}
+                setSuggestedQuestions={setSuggestedQuestions}
+                setIsQuizGeneratorOpen={setIsQuizGeneratorOpen}
+                setActiveStudentId={setActiveStudentId}
+                setSelectedAssignment={setSelectedAssignment}
+                setStudentViewStatus={setStudentViewStatus}
+                setActiveRole={setActiveRole}
+                isGrading={isGrading}
+                setIsGrading={setIsGrading}
+                fetchClassDashboard={fetchClassDashboard}
+                newScheduleDate={newScheduleDate}
+                setNewScheduleDate={setNewScheduleDate}
+                newScheduleLessonId={newScheduleLessonId}
+                setNewScheduleLessonId={setNewScheduleLessonId}
+                expandedScheduleId={expandedScheduleId}
+                setExpandedScheduleId={setExpandedScheduleId}
+                fetchScheduleAttendance={fetchScheduleAttendance}
+                scheduleAttendanceMap={scheduleAttendanceMap}
+                toggleSelectAllClasses={toggleSelectAllClasses}
+                handleBatchDeleteClasses={handleBatchDeleteClasses}
+                handleBatchExportClasses={handleBatchExportClasses}
+                handleBatchSetPasscode={handleBatchSetPasscode}
+                handleBatchScheduleClasses={handleBatchScheduleClasses}
+                handleExportAllClassesCombined={handleExportAllClassesCombined}
+                triggerExportForClass={triggerExportForClass}
+                fetchClassProgress={fetchClassProgress}
+                fetchClassSchedules={fetchClassSchedules}
+                fetchStudentProgress={fetchStudentProgress}
+                toggleClassSelection={toggleClassSelection}
+              />
             ) : teacherTab === 'timetable' ? (
               <TimetableView classes={classes} lessons={lessons} lang={lang} onSchedulesUpdated={fetchTodaySchedules} />
             ) : teacherTab === 'admin_directory' ? (
