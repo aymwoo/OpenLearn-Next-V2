@@ -87,6 +87,7 @@ import { StudentLessonView } from './features/student/StudentLessonView';
 import { StudentAssignmentHeader } from './features/student/StudentAssignmentHeader';
 import { StudentAssignmentQuestionPanel } from './features/student/StudentAssignmentQuestionPanel';
 import { StudentAssignmentWorkPanel } from './features/student/StudentAssignmentWorkPanel';
+import { StudentAssignmentView } from './features/student/StudentAssignmentView';
 import { StudentSchedulePanel } from './features/student/StudentSchedulePanel';
 import { StudentDashboardHeader } from './features/student/StudentDashboardHeader';
 import { StudentRollCallAlarms } from './features/student/StudentRollCallAlarms';
@@ -3878,13 +3879,20 @@ export default function App() {
                 addToast={addToast}
               />
             ) : studentViewStatus === 'assignment' && selectedAssignment ? (
-              <div className="flex flex-col h-full space-y-4">
-                <StudentAssignmentHeader setStudentViewStatus={setStudentViewStatus} setSelectedAssignment={setSelectedAssignment} selectedAssignment={selectedAssignment} />
-                <div className="flex-1 flex gap-6 min-h-0 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <StudentAssignmentQuestionPanel selectedAssignment={selectedAssignment} quizStudentAnswers={quizStudentAnswers} submitQuizAssignment={submitQuizAssignment} />
-                  <StudentAssignmentWorkPanel selectedAssignment={selectedAssignment} subAssignmentTab={subAssignmentTab} setSubAssignmentTab={setSubAssignmentTab} quizStudentAnswers={quizStudentAnswers} setQuizStudentAnswers={setQuizStudentAnswers} submitQuizAssignment={submitQuizAssignment} elements={elements} activeRole={activeRole} activeStudentId={activeStudentId} fetchElements={fetchElements} />
-                </div>
-              </div>
+              <StudentAssignmentView
+                selectedAssignment={selectedAssignment}
+                setStudentViewStatus={setStudentViewStatus}
+                setSelectedAssignment={setSelectedAssignment}
+                quizStudentAnswers={quizStudentAnswers}
+                submitQuizAssignment={submitQuizAssignment}
+                subAssignmentTab={subAssignmentTab}
+                setSubAssignmentTab={setSubAssignmentTab}
+                setQuizStudentAnswers={setQuizStudentAnswers}
+                elements={elements}
+                activeRole={activeRole}
+                activeStudentId={activeStudentId}
+                fetchElements={fetchElements}
+              />
             ) : (
               <StudentDashboardPanel
                 students={students}
