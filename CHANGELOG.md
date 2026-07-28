@@ -13,13 +13,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Fixes
 - **npm Compatibility**: Replace `workspace:*` protocol with `^3.4.3` for `@openlearn/plugin-sdk` dependency to fix `npx openlearn-next` installation failure (`EUNSUPPORTEDPROTOCOL`).
 
-## [Unreleased]
+## [0.2.0] - 2026-07-28
 
 ### Fixes
 - **Hidden type errors surfaced & systematic roots fixed**: `tsc` was aborting early on an invalid `tsconfig` `exclude`, masking **389 real type errors**. Fixed: added `tsconfig` `exclude` for fixtures/templates; corrected 17 wrong relative-import depths (incl. a missing `student-workspace-registry`); added the missing `@testing-library/react` dev dependency; fixed two missing name imports. Made `PluginContext.resolve<T>` infer token types across the core↔SDK boundary (public phantom on `Token`). Tightened `@openlearn/plugin-sdk` to **3.5.0**: service tokens typed concretely (was `Token<unknown>`) and service interfaces accept sync-or-async (`void | Promise<void>`). Remaining ~116 genuine per-file type errors tracked as a type-debt backlog.
 
 ### Refactor / Performance
 - **Server monolith decomposition — Phase 1 (realtime bridge)**: Extract the EventBus→Socket.IO forwarding block (`server.ts` lines 652–803: `assignment.graded` toast, `handleRollcallElement` rollcall persistence, and `whiteboard.*` / `spotlight.*` sync relays) into a standalone `server/realtime-bridge.ts` module behind `setupRealtimeBridge({ eventBus, io, db })`. Behavior preserved verbatim and locked by a new characterization test (`server/__tests__/realtime-bridge.test.ts`, 7 cases). Introduces a structural `BridgeDb` port and reuses the existing `EventBusPort`, keeping the server's `kernelContainer` as the composition root. No new `tsc` errors beyond the type-debt baseline.
+- **Server monolith decomposition — Phase 2 (AI agent + shared cache)**: Extract the AI chat orchestration (`buildAgentSystemInstruction`, `buildAgentFinalMessage`, `normalizeToolSchema`, `buildOpenAITools`, `executeAgentToolCall`, `buildOpenAIChatUrl`, `runGeminiAgentChat`, `runOpenAIAgentChat`) into `server/ai-agent.ts`, and the two shared module-level state Maps (`MF_REMOTE_CACHE`, `lessonActiveSegments`) into `server/shared-state.ts`. Both are consumed by `server/routes/*.ts` through `ServerContext`. Pure helpers (`buildAgentSystemInstruction`, `buildAgentFinalMessage`, `normalizeToolSchema`, `buildOpenAITools`) are covered by `server/__tests__/ai-agent.test.ts`; network-dependent handlers are skipped with a documented reason.
+- **Server monolith decomposition — Phase 2 (presence / socket handlers)**: Extract the Socket.IO connection lifecycle (`io.on('connection', …)` — `register-student`, `enter-lesson`, `leave-lesson`, `join-room`, `whiteboard-update`, `whiteboard-event`, `teacher-broadcast-segment`, `teacher-ping-student`, `disconnect`, and presence broadcasting) into `server/presence.ts` behind `setupPresence({ io, eventBus })`. The shared `lessonActiveSegments` singleton is reused from `server/shared-state.ts`. Behavior (incl. the `whiteboard-event` detail that emits to the raw `lessonId`, not `lesson-<id>`) is locked by `server/__tests__/presence.test.ts` (7 cases).
+- **Server monolith decomposition — Phase 2 (startup DB migrations)**: Extract the boot-time DB seed/upgrade and SEC-AUTH-03 session cleanup from `startServer()` into `server/bootstrap-db.ts` behind `runStartupMigrations(db: MigrationDb)`. Covers old default-plugin upgrade (Quiz / Random Student Picker), `CREATE TABLE IF NOT EXISTS` for `student_rollcalls` / `site_settings` / `agent_conversations`, the idempotent `client_sessions.expires_at` column add, and the expired-session cleanup. Locked by `server/__tests__/bootstrap-db.test.ts` (7 cases).
+- **Composition root shrinks**: `server.ts` drops from ~1000 to ~322 lines. It now acts purely as the composition root — wiring `kernelContainer`, `ServerBootstrapAdapter`, HTTP/Socket.IO, and delegating all domain behavior to the `server/*` modules above. Each extracted slice has a verbatim-move characterization test; `tsc` remains at the 116-error type-debt baseline.
+
+## [Unreleased]
+
+### Next-round backlog
+- **Frontend monolith (`src/App.tsx`, ~8.9k lines)** is the next decomposition target (tentatively `0.3.0`), tracked separately from the `server.ts` work above.
+- **Type/lint debt**: ~116 `tsc` + ~1471 `eslint` errors carried as backlog from the `tsc` root-cause fix; not blocking.
 
 ## [0.1.15] - 2026-07-27
 

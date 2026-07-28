@@ -2,6 +2,15 @@
 
 Composition Root（服务组装根）是 OpenLearn V2 应用程序的入口点，定义在项目根目录的 `server.ts` 以及 `packages/core/bootstrap/composition/index.ts` 中。
 
+> **架构演变（v0.2.0）**：`server.ts` 已从 ~1000 行瘦身至 ~322 行，现在只承担"组装根"职责——装载环境、初始化 `kernelContainer`、启动 `ServerBootstrapAdapter`、组装 Express + Socket.IO，并把所有领域行为委托给 `server/` 下的独立模块。各模块均携带"逐字搬移 + 特征测试"保证行为不变：
+> - `server/realtime-bridge.ts` — `setupRealtimeBridge({ eventBus, io, db })`：EventBus → Socket.IO 实时转发。
+> - `server/ai-agent.ts` — AI 对话编排（`runGeminiAgentChat` / `runOpenAIAgentChat` 等）。
+> - `server/shared-state.ts` — 共享单例 `MF_REMOTE_CACHE` / `lessonActiveSegments`。
+> - `server/presence.ts` — `setupPresence({ io, eventBus })`：Socket.IO 连接生命周期与在线状态广播。
+> - `server/bootstrap-db.ts` — `runStartupMigrations(db)`：启动时 DB 建表/升级与过期会话清理。
+>
+> 路由模块（`server/routes/*.ts`）通过 `ServerContext`（`ctx`）消费这些能力，不再直接从 `server.ts` 导入符号。
+
 ---
 
 ## 组装根职责
