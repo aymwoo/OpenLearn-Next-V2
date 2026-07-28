@@ -48,7 +48,6 @@ import { AdminPanel } from './components/AdminPanel';
 import { HelpTour } from './components/HelpTour';
 import { TimetableManager } from './components/TimetableManager';
 import { SemesterGradeManager } from './components/SemesterGradeManager';
-import { StudentAssignmentEvalPanel } from './components/StudentAssignmentEvalPanel';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion, AnimatePresence, animate } from 'motion/react';
 import { io } from 'socket.io-client';
@@ -81,6 +80,9 @@ import { AnimatedCounter } from './components/AnimatedCounter';
 import { StudentPerformanceCharts } from './features/student/StudentPerformanceCharts';
 import { StudentQuickStats } from './features/student/StudentQuickStats';
 import { StudentCourseProgressList } from './features/student/StudentCourseProgressList';
+import { StudentLessonHeader } from './features/student/StudentLessonHeader';
+import { StudentLessonContentPanel } from './features/student/StudentLessonContentPanel';
+import { StudentLessonInteractionPanel } from './features/student/StudentLessonInteractionPanel';
 import { StudentSchedulePanel } from './features/student/StudentSchedulePanel';
 import { StudentDashboardHeader } from './features/student/StudentDashboardHeader';
 import { StudentRollCallAlarms } from './features/student/StudentRollCallAlarms';
@@ -3842,230 +3844,10 @@ export default function App() {
               </div>
             ) : studentViewStatus === 'lesson' ? (
               <div className="flex flex-col h-full space-y-4">
-                <div className="flex items-center justify-between">
-                  {students.find(s => s.id === activeStudentId)?.locked_lesson_id ? (
-                     <div className="text-indigo-600 font-medium text-sm flex items-center gap-2 px-2">
-                       <ShieldAlert size={16} /> Restricted Mode
-                     </div>
-                  ) : (
-                    <button 
-                      onClick={() => { setStudentViewStatus('dashboard'); setSelectedLesson(null); }}
-                      className="flex items-center gap-2 text-indigo-600 hover:text-indigo-800 transition-colors font-medium text-sm"
-                    >
-                      <ChevronRight className="rotate-180" size={16} /> Back to Dashboard
-                    </button>
-                  )}
-                  <h2 className="text-xl font-bold text-gray-800">{lessons.find(l => l.id === selectedLesson)?.title}</h2>
-                </div>
+                <StudentLessonHeader students={students} activeStudentId={activeStudentId} setStudentViewStatus={setStudentViewStatus} setSelectedLesson={setSelectedLesson} lessons={lessons} selectedLesson={selectedLesson} />
                 <div className="flex-1 flex gap-6 min-h-0 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                  <div className={`${
-                    isStudentLessonContentCollapsed 
-                      ? 'hidden' 
-                      : studentFullscreenPanel === 'left' 
-                        ? 'w-full' 
-                        : 'w-1/3 md:block hidden'
-                  } border-gray-100 pr-4 overflow-y-auto ${
-                    studentFullscreenPanel === 'right' ? 'hidden' : ''
-                  } ${
-                    studentFullscreenPanel === 'left' ? '' : 'border-r'
-                  } transition-all duration-300`}>
-                    <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-4 flex items-center justify-between pointer-events-auto shrink-0 select-none border-b border-gray-100 pb-2">
-                      <span className="flex items-center gap-1">
-                        <BookOpen size={14} className="text-indigo-500" /> Lesson Content (课程内容)
-                      </span>
-                      <button
-                        onClick={() => setStudentFullscreenPanel(p => p === 'left' ? 'none' : 'left')}
-                        className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-700 rounded transition-colors cursor-pointer flex items-center gap-1"
-                        title={studentFullscreenPanel === 'left' ? "退出全屏" : "全屏"}
-                      >
-                        {studentFullscreenPanel === 'left' ? (
-                          <>
-                            <Minimize2 size={13} />
-                            <span className="text-[10px] font-medium">退出全屏</span>
-                          </>
-                        ) : (
-                          <>
-                            <Maximize2 size={13} />
-                            <span className="text-[10px] font-medium">全屏</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    <div className="prose prose-sm prose-indigo max-w-none">
-                      {/* Timeline Segments (Only when student is unlocked) */}
-                      {!students.find(s => s.id === activeStudentId)?.locked_lesson_id && timelineSegments.length > 0 && (
-                        <div className="mb-4 flex flex-col gap-2 p-3 bg-slate-50/70 border border-slate-200/50 rounded-xl shadow-3xs text-left" onClick={(e) => e.stopPropagation()}>
-                          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1 select-none">
-                            <Activity size={12} className="text-indigo-500" />
-                            {lang === 'zh' ? '教学环节 (点击切换)' : 'Timeline Segments'}
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {timelineSegments.map((seg, idx) => (
-                              <button
-                                key={seg.id || idx}
-                                onClick={() => setActiveSegmentId(seg.id)}
-                                className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer shadow-3xs ${seg.color} ${activeSegmentId === seg.id ? 'ring-2 ring-indigo-500 scale-[1.02] shadow-sm border-indigo-400 font-bold' : 'opacity-85 hover:opacity-100'}`}
-                              >
-                                {seg.title} ({seg.duration})
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Learning Progress Slider Feedback Widget */}
-                      <div className="mb-4 bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 shadow-3xs flex flex-col gap-1.5 text-left select-none">
-                        <div className="flex justify-between items-center text-[10px] font-bold text-gray-500">
-                          <span className="flex items-center gap-1">
-                            <Activity size={12} className="text-indigo-500 animate-pulse" />
-                            {lang === 'zh' ? '自主学习进度反馈' : 'Learning Progress'}
-                          </span>
-                          <span className="font-mono text-indigo-600 font-extrabold">{localProgressPercent}%</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <input 
-                            type="range" 
-                            min="0" 
-                            max="100" 
-                            value={localProgressPercent} 
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value);
-                              setLocalProgressPercent(val);
-                            }}
-                            onMouseUp={() => updateStudentProgress(localProgressPercent)}
-                            onTouchEnd={() => updateStudentProgress(localProgressPercent)}
-                            className="flex-grow h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                          />
-                          <button
-                            onClick={() => {
-                              setLocalProgressPercent(100);
-                              updateStudentProgress(100);
-                            }}
-                            className={`text-[9px] font-bold rounded-lg px-2 py-1 transition-all ${
-                              localProgressPercent === 100 
-                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                                : 'bg-white hover:bg-slate-50 text-slate-650 border border-slate-200 hover:border-indigo-200 shadow-3xs cursor-pointer'
-                            }`}
-                          >
-                            {lang === 'zh' ? '已完成' : 'Done'}
-                          </button>
-                        </div>
-                      </div>
-
-                      <Markdown>{lessons.find(l => l.id === selectedLesson)?.content || ''}</Markdown>
-                    </div>
-                  </div>
-                  <div className={`${(isStudentLessonContentCollapsed || studentFullscreenPanel === 'right') ? 'w-full flex-grow' : 'flex-grow flex-1'} relative flex flex-col min-h-0 ${studentFullscreenPanel === 'left' ? 'hidden' : ''} transition-all duration-300`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                         <button
-                           onClick={() => setIsStudentLessonContentCollapsed(!isStudentLessonContentCollapsed)}
-                           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-100/80 cursor-pointer shadow-3xs"
-                           title={isStudentLessonContentCollapsed ? "展开课程内容" : "折叠课程内容"}
-                         >
-                           <BookOpen size={13} className="text-indigo-650" />
-                           <span>{isStudentLessonContentCollapsed ? (lang === 'zh' ? '展开课程内容' : 'Expand Content') : (lang === 'zh' ? '折叠课程内容' : 'Collapse Content')}</span>
-                         </button>
-                         <button onClick={() => setStudentLessonTab('whiteboard')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'whiteboard' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>Interactive Whiteboard</button>
-                         <button onClick={() => setStudentLessonTab('courseware')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'courseware' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>Interactive Courseware Viewer</button>
-                          <button onClick={() => setStudentLessonTab('assignment')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'assignment' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>{lang === 'zh' ? '作业提交与互评' : 'Assignments & Peer Reviews'}</button>
-                      </div>
-                      
-                      <button
-                        onClick={() => setStudentFullscreenPanel(p => p === 'right' ? 'none' : 'right')}
-                        className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-700 rounded transition-colors cursor-pointer flex items-center gap-1"
-                        title={studentFullscreenPanel === 'right' ? "退出全屏" : "全屏"}
-                      >
-                        {studentFullscreenPanel === 'right' ? (
-                          <>
-                            <Minimize2 size={13} />
-                            <span className="text-[10px] font-medium">退出全屏</span>
-                          </>
-                        ) : (
-                          <>
-                            <Maximize2 size={13} />
-                            <span className="text-[10px] font-medium">全屏</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    {studentLessonTab === 'whiteboard' && (
-                       <LazyWhiteboard
-lessonId={selectedLesson}
-elements={elements}
-userRole={activeRole}
-activeSegmentId={activeSegmentId}
-onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
-onElementUpdate={async () => { /* readonly or sync */ }}
-onElementDelete={async (elementId: string) => {
-                             await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, { method: 'DELETE' });
-                             fetchElements(selectedLesson);
-                           }}
-onClearBoard={async () => {
-                             await fetch(`/api/lessons/${selectedLesson}/whiteboard`, { method: 'DELETE' });
-                             fetchElements(selectedLesson);
-                           }}
-onElementAdd={async () => { /* readonly or sync */ }}
-onRefresh={() => fetchElements(selectedLesson)}
-/>
-                    )}
-                    {studentLessonTab === 'courseware' && (
-                       <div className="flex-1 flex gap-4 min-h-0">
-                         {/* Courseware Selector Sidebar */}
-                         <div className="w-48 flex-shrink-0 bg-gray-50 border border-gray-200 rounded-lg p-3 flex flex-col min-h-0">
-                            <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2 border-b border-gray-200 pb-2">Cloud Apps</h4>
-                            <div className="flex-1 overflow-y-auto space-y-1">
-                               {currentVfsParent !== null && (
-                                  <button onClick={() => setCurrentVfsParent(null)} className="flex items-center gap-2 p-1.5 text-xs text-indigo-600 w-full hover:bg-gray-200 rounded mb-1 font-medium">
-                                    <ChevronRight className="rotate-180" size={14} /> Back to Root
-                                  </button>
-                               )}
-                               {vfsNodes.filter(n => n.type === 'dir').map(node => (
-                                  <button
-                                    key={node.id}
-                                    onClick={() => setCurrentVfsParent(node.id)}
-                                    className="w-full text-left p-1.5 rounded text-xs text-gray-700 hover:bg-gray-200 flex items-center gap-2 group truncate"
-                                    title={node.name}
-                                  >
-                                    <Folder size={14} className="text-indigo-400 shrink-0 group-hover:text-indigo-600" />
-                                    <span className="truncate">{node.name}</span>
-                                  </button>
-                               ))}
-                               {vfsNodes.filter(n => n.type === 'file' && (n.name.endsWith('.html') || n.name.endsWith('.htm') || n.content?.includes('<html'))).length === 0 ? (
-                                  <div className="text-xs text-center text-gray-400 italic py-4">No interactive HTML apps found.</div>
-                               ) : (
-                                  vfsNodes.filter(n => n.type === 'file' && (n.name.endsWith('.html') || n.name.endsWith('.htm') || n.content?.includes('<html'))).map(node => (
-                                     <button
-                                       key={node.id}
-                                       onClick={() => setStudentSelectedCourseware(node.id)}
-                                       className={`w-full text-left p-2 rounded text-xs flex items-center gap-2 truncate transition-colors ${studentSelectedCourseware === node.id ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-gray-600 hover:bg-gray-100'}`}
-                                       title={node.name}
-                                     >
-                                        <Globe size={14} className="shrink-0" />
-                                        <span className="truncate">{node.name}</span>
-                                     </button>
-                                  ))
-                                )}
-                             </div>
-                             <div className="mt-2 text-[10px] text-gray-400 leading-tight">Note: Showing HTML courseware from current OS drive directory. Ask agent to generate courseware.</div>
-                          </div>
-                          <div className="flex-1 relative bg-white min-h-0">
-                             <LazyCourseware
-coursewareId={studentSelectedCourseware}
-onClose={() => setStudentSelectedCourseware(null)}
-/>
-                          </div>
-                       </div>
-                    )}
-                    {studentLessonTab === 'assignment' && (
-                       <StudentAssignmentEvalPanel
-                         lessonId={selectedLesson}
-                         studentId={activeStudentId}
-                         lang={lang}
-                         addToast={addToast}
-                       />
-                    )}
-                  </div>
+                  <StudentLessonContentPanel students={students} activeStudentId={activeStudentId} studentFullscreenPanel={studentFullscreenPanel} setStudentFullscreenPanel={setStudentFullscreenPanel} timelineSegments={timelineSegments} lang={lang} activeSegmentId={activeSegmentId} setActiveSegmentId={setActiveSegmentId} localProgressPercent={localProgressPercent} setLocalProgressPercent={setLocalProgressPercent} updateStudentProgress={updateStudentProgress} selectedLesson={selectedLesson} lessons={lessons} isStudentLessonContentCollapsed={isStudentLessonContentCollapsed} />
+                  <StudentLessonInteractionPanel studentLessonTab={studentLessonTab} setStudentLessonTab={setStudentLessonTab} isStudentLessonContentCollapsed={isStudentLessonContentCollapsed} setIsStudentLessonContentCollapsed={setIsStudentLessonContentCollapsed} lang={lang} studentFullscreenPanel={studentFullscreenPanel} setStudentFullscreenPanel={setStudentFullscreenPanel} selectedLesson={selectedLesson} elements={elements} activeRole={activeRole} activeSegmentId={activeSegmentId} setActiveSegmentId={setActiveSegmentId} fetchElements={fetchElements} currentVfsParent={currentVfsParent} setCurrentVfsParent={setCurrentVfsParent} vfsNodes={vfsNodes} studentSelectedCourseware={studentSelectedCourseware} setStudentSelectedCourseware={setStudentSelectedCourseware} activeStudentId={activeStudentId} addToast={addToast} />
                 </div>
               </div>
             ) : studentViewStatus === 'assignment' && selectedAssignment ? (
