@@ -32,9 +32,11 @@ const TOKEN_NAME_RE = /^(?:@[a-zA-Z0-9_-]+\/)?([a-zA-Z0-9_-]+:[a-zA-Z0-9_]+)$/;
 export class Token<T> {
   // Phantom type parameter — carries the service interface type at
   // compile time only.  Never accessed at runtime.
-  // Phantom type — carries the service interface at compile time only.
+  // Public phantom lets `ctx.resolve(token)` infer `T` structurally even
+  // when the token originates from a different `Token` declaration with
+  // the same public shape (e.g. the SDK's Token class).
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private readonly _phantomService!: T;
+  readonly __serviceType?: T;
 
   /** The string identifier, e.g. `@openlearn/core:ICommandBusService`. */
   public readonly name: string;

@@ -16,7 +16,8 @@
  *    same `IPlatformLogger` reused across the kernel.
  */
 
-import { DefaultPlatformLogger, type IPlatformLogger } from '../bootstrap/types/index.js';
+import { type IPlatformLogger } from '../bootstrap/types/index.js';
+import { DefaultPlatformLogger } from '../bootstrap/builder/platform-builder.js';
 import { ServiceEventBus } from '../service-registry/index.js';
 import { BootstrapPipeline } from '../bootstrap/pipeline/bootstrap-pipeline.js';
 import { PlatformEventObject } from './PlatformEvent.js';
@@ -96,10 +97,12 @@ export class EventBus {
     return this.registry.subscribeOnce(eventType, fn, options);
   }
 
-  public unsubscribe(subscriberOrId: EventSubscriber | string): boolean {
-    if (typeof subscriberOrId === 'string') return this.registry.unsubscribe(subscriberOrId);
+  public unsubscribe(subscriberOrId: EventSubscriber | string): void {
+    if (typeof subscriberOrId === 'string') {
+      this.registry.unsubscribe(subscriberOrId);
+      return;
+    }
     subscriberOrId.unsubscribe();
-    return true;
   }
 
   public clear(): void {

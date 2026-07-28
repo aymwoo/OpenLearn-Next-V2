@@ -13,7 +13,7 @@
  * @module
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { EventBus } from '../../event-bus/index.js';
 import { EventForwarder } from '../event-forwarder.js';
 import type { IWorkerTransport } from '../types.js';
@@ -21,6 +21,9 @@ import type { IWorkerTransport } from '../types.js';
 // -- Mock Transport ---------------------------------------------------------------
 
 interface MockTransport extends IWorkerTransport {
+  postMessage: Mock;
+  onMessage: Mock;
+  terminate: Mock;
   messages: any[];
 }
 

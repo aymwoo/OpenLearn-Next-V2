@@ -8,6 +8,13 @@ import {
 } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
 
+interface AiPlannerPayload {
+  taskType: string;
+  topic?: string;
+  classId?: string;
+  duration?: number;
+}
+
 export const AiPlannerPlugin = {
   manifest: {
     id: '@openlearn/plugin-ai-planner',
@@ -32,7 +39,8 @@ export const AiPlannerPlugin = {
     const processManager = ctx.services.processManager;
 
     // 1. Setup the long-running task handler for generating content/schedules
-    await processManager.registerHandler('ai_planner_task', async (processId, payload, state, log, updateState) => {
+    await processManager.registerHandler('ai_planner_task', async (processId, payloadArg, state, log, updateState) => {
+      const payload = payloadArg as AiPlannerPayload;
       log(`[AI Planner] Started generation task: ${payload.taskType}`);
       const duration = payload.duration || 5;
 
@@ -44,7 +52,7 @@ export const AiPlannerPlugin = {
         }
         await new Promise(r => setTimeout(r, 1000));
         updateState({ step: i + 1 });
-        log(`[AI Planner] Analyzing data... step ${i+1}/${duration}`);
+        log(`[AI Planner] Analyzing payload... step ${i+1}/${duration}`);
       }
       
       log(`[AI Planner] Analysis complete. Generating proposal...`);

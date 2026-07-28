@@ -8,5 +8,5 @@ interface ComputerLabViewProps {
 }
 
 export function ComputerLabView({ computerLabs, onRefresh, lang }: ComputerLabViewProps) {
-  return <ComputerLabManager computerLabs={computerLabs} onRefresh={onRefresh} lang={lang} />;
+  return <ComputerLabManager computerLabs={computerLabs} onRefresh={onRefresh} lang={lang as 'zh' | 'en'} />;
 }

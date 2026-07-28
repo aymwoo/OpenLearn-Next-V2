@@ -38,6 +38,7 @@ import type {
   IUIService,
   IStorageService,
   ISemesterGradeService,
+  FrontendPluginInfo,
 } from './types';
 
 // ── Module Loader type ───────────────────────────────────────────────────

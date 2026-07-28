@@ -13,7 +13,7 @@ export interface PlatformCommand<T = unknown> {
   readonly type: string;        // Namespace format, e.g., "lesson.create"
   readonly actorId: string;     
   readonly payload: T;          
-  readonly timestamp: number;   
+  readonly timestamp?: number;   
   readonly metadata?: CommandMetadata;
 }
 

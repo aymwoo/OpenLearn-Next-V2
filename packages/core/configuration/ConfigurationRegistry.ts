@@ -7,7 +7,8 @@
  * `tryGet` / `exists` / `list` / `snapshot`.
  */
 
-import { DefaultPlatformLogger, type IPlatformLogger } from '../bootstrap/types/index.js';
+import { type IPlatformLogger } from '../bootstrap/types/index.js';
+import { DefaultPlatformLogger } from '../bootstrap/builder/platform-builder.js';
 import { ConfigurationError } from './ConfigurationError.js';
 import { ConfigurationProvider } from './ConfigurationProvider.js';
 import { ConfigurationLoader } from './ConfigurationLoader.js';

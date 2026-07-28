@@ -118,7 +118,7 @@ import { ProcessLogsModal } from './features/modals/ProcessLogsModal';
 import { ImportModal } from './features/modals/ImportModal';
 import { CloudDriveModal, CloudDrivePanel } from './features/modals/CloudDriveModal';
 import { NotificationDetailModal } from './features/modals/NotificationDetailModal';
-import { HelpView } from './features/teacher/HelpView';
+import { HelpView, generateTemplateContent } from './features/teacher/HelpView';
 import { TimetableView } from './features/teacher/TimetableView';
 import { ComputerLabView } from './features/teacher/ComputerLabView';
 import { AdminDirectoryView } from './features/teacher/AdminDirectoryView';
@@ -3778,8 +3778,9 @@ export default function App() {
               )}
               <div className="flex items-baseline gap-2">
                 <span className="text-base font-black text-slate-900 tracking-tight">
-                  {siteInfo.siteName || (lang === 'zh' ? '智慧课堂' : 'OpenLearn Next')}
+                  {siteInfo.siteName || 'OpenLearn Next'}
                 </span>
+                <span className="text-[10px] font-medium text-slate-400 tracking-tight">v{__APP_VERSION__}</span>
                 {siteInfo.slogan && (
                   <span className="hidden md:inline text-xs text-slate-400 font-normal truncate max-w-[200px]">
                     {siteInfo.slogan}

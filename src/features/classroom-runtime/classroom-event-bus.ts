@@ -1,9 +1,9 @@
 /**
  * OpenLearn Classroom Event Model - Namespaced Event Bus (Sprint P4-03)
- * Unifies classroom events under the 'classroom.*' namespace over PlatformEventBus (PI-010).
+ * Unifies classroom events under the 'classroom.*' namespace over EventBus (PI-010).
  */
 
-import { PlatformEventBus } from '../../../packages/core/event-bus-runtime/EventBus.js';
+import { EventBus } from '../../../packages/core/event-bus-runtime/EventBus.js';
 
 export type ClassroomEventType =
   | 'classroom.created'
@@ -25,10 +25,10 @@ export interface ClassroomNamespacedEvent<T = Record<string, unknown>> {
 }
 
 export class ClassroomEventBus {
-  private eventBus: PlatformEventBus;
+  private eventBus: EventBus;
 
-  constructor(eventBus?: PlatformEventBus) {
-    this.eventBus = eventBus ?? new PlatformEventBus();
+  constructor(eventBus?: EventBus) {
+    this.eventBus = eventBus ?? new EventBus();
   }
 
   public publish<T = Record<string, unknown>>(

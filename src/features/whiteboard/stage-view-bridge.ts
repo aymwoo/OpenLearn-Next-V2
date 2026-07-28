@@ -5,7 +5,7 @@
  */
 
 import { useLessonEngineStore } from '../lesson-engine/lessonEngineStore.js';
-import { StageCanvasView, CanvasElementData } from '../../packages/core/lesson-engine/whiteboard-stage-adapter.js';
+import { StageCanvasView, CanvasElementData } from '../../../packages/core/lesson-engine/whiteboard-stage-adapter.js';
 
 export class WhiteboardStageBridge {
   /**

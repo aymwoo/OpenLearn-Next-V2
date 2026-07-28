@@ -21,8 +21,10 @@ export interface PluginModule {
   default?: {
     manifest?: Record<string, unknown>;
     activate?: (ctx: unknown) => Promise<void>;
+    deactivate?: () => Promise<void>;
   };
   activate?: (ctx: unknown) => Promise<void>;
+  deactivate?: () => Promise<void>;
   manifest?: Record<string, unknown>;
   [key: string]: unknown;
 }

@@ -29,7 +29,7 @@ export function AdminDirectoryView({ session, lang, onLogout, aiProviders, testi
     <AdminPanel
       currentUserId={session.userId || ''}
       currentUserRole={session.subRole}
-      lang={lang}
+      lang={lang as 'zh' | 'en'}
       onLogout={onLogout}
       aiProviders={aiProviders}
       testingProviderId={testingProviderId}

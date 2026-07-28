@@ -30,5 +30,11 @@
         ]
       }
     ]
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "packages/core/esm-loader/__tests__/fixtures",
+    "packages/plugin-sdk/scaffold/templates"
+  ]
 }

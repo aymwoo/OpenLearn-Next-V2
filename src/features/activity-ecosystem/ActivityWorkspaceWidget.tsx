@@ -88,7 +88,7 @@ function ActivityIcon({ name, className }: { name?: string; className?: string }
 }
 
 /** Human-readable elapsed time since `startedAt`. */
-function formatElapsed(startedAt: number | null, lang: 'en' | 'zh'): string {
+function formatElapsed(startedAt: number | null, lang: string): string {
   if (!startedAt) return lang === 'zh' ? '进行中' : 'In progress';
   const sec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
   const m = Math.floor(sec / 60);

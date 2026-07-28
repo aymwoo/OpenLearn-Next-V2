@@ -6,7 +6,6 @@
 import { CompositionModule, CompositionContextOptions } from './composition-types.js';
 import { PlatformServiceRegistry } from '../../service-registry/index.js';
 import { CapabilityRegistry } from '../../ai-capability/registry/capability-registry.js';
-import { PluginCapability } from '../../ai-capability/capabilities/plugin-capability.js';
 import { PermissionManager } from '../permission/index.js';
 import { EventBus } from '../../event-bus/index.js';
 
@@ -39,11 +38,12 @@ export class PluginCompositionModule implements CompositionModule {
 
     // 幂等注册：共享单例注册表在多次 compose（如多 Kernel 实例/测试）时会触发
     // 重复注册冲突，故已存在时替换为最新实例（与单例 Kernel 生产环境一致）。
-    const registerOrReplace = <T>(descriptor: { id: string }, instance: T): void => {
-      if (serviceRegistry.has(descriptor.id)) {
-        serviceRegistry.replace(descriptor.id, instance);
+    const registerOrReplace = <T>(config: { id: string; lifetime?: string; description?: string; instance: T }): void => {
+      const { id, instance } = config;
+      if (serviceRegistry.has(id)) {
+        serviceRegistry.replace(id, instance);
       } else {
-        serviceRegistry.register(descriptor, instance);
+        serviceRegistry.register({ id }, instance);
       }
     };
     const capabilityRegistry = new CapabilityRegistry();
@@ -109,10 +109,7 @@ export class PluginCompositionModule implements CompositionModule {
       instance: realDistributionManager,
     });
 
-    // 2. Register Plugin Capability into CapabilityRegistry
-    capabilityRegistry.registerCapability(new PluginCapability());
-
-    // 3. Register Plugin Infrastructure Permissions into PermissionManager
+    // 2. Register Plugin Infrastructure Permissions into PermissionManager
     permissionManager.register({
       id: 'perm_plugin_execute',
       name: 'Plugin Execution Permission',

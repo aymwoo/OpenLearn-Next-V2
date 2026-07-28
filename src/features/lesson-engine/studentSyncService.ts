@@ -3,7 +3,7 @@
  * Handles real-time synchronization for student devices matching teacher's active Stage & Activity.
  */
 
-import { eventBusService } from '../../services/event-bus.js';
+import { frontendEventBus } from '../../services/event-bus.js';
 import { useLessonEngineStore } from './lessonEngineStore.js';
 
 export class StudentSyncService {
@@ -13,12 +13,12 @@ export class StudentSyncService {
   public initialize(): void {
     if (this.isListening) return;
 
-    // Listen to real-time events published via eventBusService
-    eventBusService.subscribe('StudentSynced', (event) => {
+    // Listen to real-time events published via frontendEventBus
+    frontendEventBus.subscribe('StudentSynced', (event) => {
       this.handleStudentSynced(event.payload as any);
     });
 
-    eventBusService.subscribe('TeacherJump', (event) => {
+    frontendEventBus.subscribe('TeacherJump', (event) => {
       this.handleTeacherJump(event.payload as any);
     });
 

@@ -12,7 +12,7 @@ import { EventBus } from '../event-bus-runtime/EventBus.js';
 import { ServiceEventBus } from '../service-registry/index.js';
 
 function makeBus(): EventBus {
-  return new EventBus({ logger: { info() {}, warn() {}, error() {} } });
+  return new EventBus({ logger: { debug() {}, info() {}, warn() {}, error() {} } });
 }
 
 describe('Platform Event Bus — publish & subscribe', () => {
@@ -181,7 +181,7 @@ describe('Platform Event Bus — regression: BootstrapPipeline integration', () 
     const bus = makeBus();
     // Minimal structural fake of BootstrapPipeline exposing addListener.
     const fakePipeline = {
-      addListener(listener: (e: { type: string; stageName?: string; stageId?: string }) => void) {
+      addListener(listener: (e: { type: string; stageName?: string; stageId?: string; durationMs?: number }) => void) {
         listener({ type: 'StageStarted', stageName: 'Registration', stageId: 'reg' });
         listener({ type: 'StageCompleted', stageName: 'Registration', stageId: 'reg', durationMs: 5 });
         return () => {};
@@ -189,8 +189,8 @@ describe('Platform Event Bus — regression: BootstrapPipeline integration', () 
     } as unknown as import('../bootstrap/pipeline/bootstrap-pipeline.js').BootstrapPipeline;
 
     const seen: string[] = [];
-    bus.subscribe('BootstrapStageStarted', (ctx) => seen.push(ctx.type));
-    bus.subscribe('BootstrapStageCompleted', (ctx) => seen.push(ctx.type));
+    bus.subscribe('BootstrapStageStarted', (ctx) => { seen.push(ctx.type); });
+    bus.subscribe('BootstrapStageCompleted', (ctx) => { seen.push(ctx.type); });
     bus.bridgeBootstrapPipeline(fakePipeline);
 
     expect(seen).toEqual(['BootstrapStageStarted', 'BootstrapStageCompleted']);
@@ -201,8 +201,8 @@ describe('Platform Event Bus — regression: capability-runtime seam', () => {
   it('forwards capability events from a CapabilityEventSource', () => {
     const bus = makeBus();
     const seen: string[] = [];
-    bus.subscribe('CapabilityRegistered', (ctx) => seen.push((ctx.payload as { capabilityId: string }).capabilityId));
-    bus.subscribe('CapabilityResolved', (ctx) => seen.push((ctx.payload as { capabilityId: string }).capabilityId));
+    bus.subscribe('CapabilityRegistered', (ctx) => { seen.push((ctx.payload as { capabilityId: string }).capabilityId); });
+    bus.subscribe('CapabilityResolved', (ctx) => { seen.push((ctx.payload as { capabilityId: string }).capabilityId); });
 
     const fakeCap = {
       onCapabilityRegistered: (cb: (id: string) => void) => { cb('cap.a'); return () => {}; },

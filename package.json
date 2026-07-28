@@ -1,6 +1,6 @@
 {
   "name": "openlearn-next",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": false,
   "description": "A plugin-driven Educational OS / LMS platform with AI agent teaching assistant",
   "keywords": [
@@ -48,11 +48,11 @@
     "test": "vitest run",
     "migrate-passwords": "node -e \"console.log('Run this script to batch-upgrade password hashes. See server/utils/migrate-passwords.ts')\"",
     "db:backup": "node -e \"const db = require('./packages/core/db/index.js'); db.db.exec('VACUUM INTO \\'backup_'+Date.now()+'.db\\'');\"",
-    "db:reset": "rm -f packages/core/db/educational_os.db* && echo \"\u2713 Database deleted. Run pnpm dev to regenerate.\""
+    "db:reset": "rm -f packages/core/db/educational_os.db* && echo \"✓ Database deleted. Run pnpm dev to regenerate.\""
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
-    "@openlearn/plugin-sdk": "workspace:*",
+    "@openlearn/plugin-sdk": "^3.4.3",
     "@types/reveal.js": "^5.2.2",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",
@@ -90,6 +90,8 @@
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.1.14",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^4.17.21",

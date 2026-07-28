@@ -107,6 +107,7 @@ export const manifestSchema = z.object({
     })).optional(),
   }).optional(),
   contributes: contributesSchema,
+  classroomTools: z.array(z.unknown()).optional(),
   deploy: deploySchema,
 }).passthrough();
 

@@ -450,6 +450,18 @@ export function createMockContext(opts: CreateMockContextOptions = {}): PluginCo
     },
     db: dbApi,
     log: mockLogger,
+    provide: async <T>(token: Token<T>, instance: T): Promise<void> => {
+      tokenMap[token.name] = instance;
+    },
+    config: {
+      get: <T = unknown>(_key: string): T => undefined as T,
+      getAll: (): Record<string, unknown> => ({}),
+      set: async (_key: string, _value: unknown): Promise<void> => {},
+      onChange: (_cb: (key: string, newValue: unknown, oldValue: unknown) => void): () => void => () => {},
+    },
+    contributions: {
+      list: () => [],
+    },
     require: (moduleName: string): any => {
       throw new Error(`[MockContext] require("${moduleName}") is not available in test context. Use customTokens to inject mock modules.`);
     },

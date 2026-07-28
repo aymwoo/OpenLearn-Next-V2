@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { PlatformConfiguration } from '../configuration/PlatformConfiguration.js';
 import { ConfigurationError } from '../configuration/ConfigurationError.js';
 
-const logger = { info() {}, warn() {}, error() {} } as unknown as import('../../bootstrap/types/index.js').IPlatformLogger;
+const logger = { info() {}, warn() {}, error() {} } as unknown as import('../bootstrap/types/index.js').IPlatformLogger;
 
 function makeConfig(options?: Record<string, unknown>): PlatformConfiguration {
   return new PlatformConfiguration({ logger, ...options });

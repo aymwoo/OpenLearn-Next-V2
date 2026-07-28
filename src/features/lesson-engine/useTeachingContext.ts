@@ -3,7 +3,7 @@
  */
 
 import { useLessonEngineStore } from './lessonEngineStore.js';
-import { TeachingContextData } from '../../packages/core/lesson-engine/types.js';
+import { TeachingContextData } from '../../../packages/core/lesson-engine/types.js';
 
 export function useTeachingContext(): TeachingContextData {
   const currentLesson = useLessonEngineStore((s) => s.currentLesson);

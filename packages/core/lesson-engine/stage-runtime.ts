@@ -4,10 +4,10 @@
  */
 
 import { Stage, StageAnalytics, StudentAction, Activity, ActivityStatus } from './types.js';
-import { EventBus } from '../event-bus/index.js';
+import { EventBusPort } from '../event-bus/index.js';
 
 export interface StageRuntimeOptions {
-  eventBus?: EventBus;
+  eventBus?: EventBusPort;
   onTimeoutWarning?: (stageId: string, remainingSeconds: number) => void;
 }
 
@@ -17,7 +17,7 @@ export class StageRuntime {
   private startTime = 0;
   private elapsedTime = 0;
   private studentActions: StudentAction[] = [];
-  private eventBus?: EventBus;
+  private eventBus?: EventBusPort;
   private onTimeoutWarning?: (stageId: string, remainingSeconds: number) => void;
   private timer: ReturnType<typeof setInterval> | null = null;
 

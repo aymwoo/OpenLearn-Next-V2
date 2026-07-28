@@ -40,7 +40,7 @@ const defaultProps = {
   setPluginCode: () => {},
   installingPlugin: false,
   onInstall: () => {},
-  onZipUpload: () => {},
+  onZipUpload: async () => {},
   onToggle: () => {},
   onDelete: () => {},
 };

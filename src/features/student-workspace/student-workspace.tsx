@@ -14,7 +14,7 @@ import { WorkspaceLayout } from '../workspace/workspace-layout.js';
 import { WorkspaceSlotRegistry } from '../workspace/workspace-slot-registry.js';
 import { PluginHostProvider } from '../../plugin-host/plugin-host-context.js';
 import { StudentWorkspaceContext } from './student-workspace-context.js';
-import { StudentWidgetRegistry } from './student-workspace-registry.js';
+import { StudentWidgetRegistry } from './student-widget-registry.js';
 import { StudentWorkspaceSession } from './student-workspace-session.js';
 import type { StudentWorkspaceInit, StudentWorkspaceLang } from './student-workspace-types.js';
 

@@ -13,6 +13,10 @@ import type {
   ScheduleType,
   SessionType,
   Toast,
+  AssignmentType,
+  SubmissionType,
+  AttendanceType,
+  StudentProgressType,
 } from '../types/app';
 
 // ── State interface ────────────────────────────────────────────────────────
@@ -285,4 +289,8 @@ export type {
   ScheduleType,
   SessionType,
   Toast,
+  AssignmentType,
+  SubmissionType,
+  AttendanceType,
+  StudentProgressType,
 };

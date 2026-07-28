@@ -1,4 +1,5 @@
-import type { CanvasObject, CanvasPage, LayerManager, SelectionModel, Viewport } from '../types.js';
+import type { CanvasObject, CanvasPage, SelectionModel, Viewport } from '../types.js';
+import type { LayerManager } from '../layer/layer-system.js';
 
 export type CanvasEventType =
   | 'ObjectCreated'

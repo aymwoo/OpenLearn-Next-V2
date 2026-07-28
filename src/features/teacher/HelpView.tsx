@@ -1898,7 +1898,7 @@ const jsPDF  = ctx.require('jspdf').jsPDF;`}</pre>
     </div>
   );
 }
-const generateTemplateContent = (title: string, category: string): string => {
+export const generateTemplateContent = (title: string, category: string): string => {
   const normalizedTitle = title ? title.trim() : "New Course";
   switch (category) {
     case 'Mathematics':

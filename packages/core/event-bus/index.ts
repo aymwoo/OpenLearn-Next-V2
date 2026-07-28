@@ -9,6 +9,16 @@ export interface PlatformEvent<T = unknown> {
 
 export type EventSubscriber = (event: PlatformEvent) => void | Promise<void>;
 
+/**
+ * Structural port for an event bus. Both the core {@link EventBus} and the
+ * frontend `FrontendEventBus` satisfy this shape, so runtime constructors can
+ * accept either without a type cast at the frontend/core boundary.
+ */
+export interface EventBusPort {
+  publish(event: PlatformEvent): Promise<void>;
+  subscribe(eventType: string, handler: EventSubscriber): void;
+}
+
 export class EventBus {
   private subscribers = new Map<string, Set<EventSubscriber>>();
 

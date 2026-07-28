@@ -3,7 +3,7 @@
  */
 
 import { useLessonEngineStore } from './lessonEngineStore.js';
-import { Stage, StageAnalytics } from '../../packages/core/lesson-engine/types.js';
+import { Stage, StageAnalytics } from '../../../packages/core/lesson-engine/types.js';
 
 export function useStageRuntime(): {
   currentStage: Stage | null;

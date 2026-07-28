@@ -20,10 +20,10 @@ import { TeachingContextManager } from './teaching-context.js';
 import { WhiteboardStageAdapter } from './whiteboard-stage-adapter.js';
 import { LessonReplayer } from './replayer.js';
 import { LessonAIInterface } from './ai-interface.js';
-import { EventBus, PlatformEvent } from '../event-bus/index.js';
+import { EventBusPort, PlatformEvent } from '../event-bus/index.js';
 
 export interface LessonEngineOptions {
-  eventBus?: EventBus;
+  eventBus?: EventBusPort;
 }
 
 export class LessonRuntime {
@@ -37,7 +37,7 @@ export class LessonRuntime {
 
   private currentLesson: Lesson | null = null;
   private activeFlow: Flow | null = null;
-  private eventBus?: EventBus;
+  private eventBus?: EventBusPort;
   private snapshots: LessonSnapshot[] = [];
   private startTime = 0;
   private isLive = false;

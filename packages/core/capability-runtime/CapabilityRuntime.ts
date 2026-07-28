@@ -16,8 +16,8 @@
  * `CapabilityContext` it receives.
  */
 
-import { PlatformServiceRegistry } from '../../service-registry/platform-service-registry.js';
-import type { PlatformContainer } from '../../di/container/index.js';
+import { PlatformServiceRegistry } from '../service-registry/platform-service-registry.js';
+import type { PlatformContainer } from '../di/container/index.js';
 import { CapabilityRegistry } from './CapabilityRegistry.js';
 import { CapabilityResolver } from './CapabilityResolver.js';
 import { CapabilityContext } from './CapabilityContext.js';

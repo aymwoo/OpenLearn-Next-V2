@@ -30,7 +30,7 @@ import { validateAndBundleZip } from '../esm-loader/install-utils.js';
 import { ResourceTracker } from './resource-tracker.js';
 import { buildContext } from './context-builder.js';
 import { ContributionRegistry } from './contribution-registry.js';
-import type { ContributionSummary } from './contribution-registry.js';
+import type { ContributionSummary, ClassroomToolConfig } from './contribution-registry.js';
 import { ConfigService } from './config-service.js';
 import { checkMissingDeps, topologicalSort, buildDepGraph, parseServiceRequirement, CrossPluginServiceCheck } from './dependency-resolver.js';
 import semver from 'semver';
@@ -746,7 +746,7 @@ export class PluginHost {
     if (manifest.contributes) {
       this.contributionRegistry.register(manifest.id, manifest.contributes);
     } else if (manifest.classroomTools && manifest.classroomTools.length > 0) {
-      this.contributionRegistry.registerClassroomTools(manifest.id, manifest.classroomTools as any);
+      this.contributionRegistry.registerClassroomTools(manifest.id, manifest.classroomTools as ClassroomToolConfig[]);
     }
 
     // 2d. V3.0: 检查插件依赖是否已安装（仅警告，不阻止安装）
@@ -1682,7 +1682,7 @@ export class PluginHost {
     if (manifest.contributes) {
       this.contributionRegistry.register(manifest.id, manifest.contributes);
     } else if (manifest.classroomTools && manifest.classroomTools.length > 0) {
-      this.contributionRegistry.registerClassroomTools(manifest.id, manifest.classroomTools as any);
+      this.contributionRegistry.registerClassroomTools(manifest.id, manifest.classroomTools as ClassroomToolConfig[]);
     }
 
     // 2c. V3.0: 检查插件依赖（仅警告）
@@ -1999,7 +1999,7 @@ export class PluginHost {
 
     const previousStatus = existingRow.status;
     const currentState = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
-    const wasActive = currentState === PluginState.ACTIVE || previousStatus === 'active';
+    const wasActive = currentState === PluginState.ACTIVE ? true : previousStatus === 'active';
     const oldMode = (this.getExecutionMode(pluginId) as 'worker' | 'inline') || 'inline';
     const executionMode =
       options.executionMode ??
@@ -2094,7 +2094,7 @@ export class PluginHost {
       if (manifest.contributes) {
         this.contributionRegistry.register(manifest.id, manifest.contributes);
       } else if (manifest.classroomTools && manifest.classroomTools.length > 0) {
-        this.contributionRegistry.registerClassroomTools(manifest.id, manifest.classroomTools as any);
+        this.contributionRegistry.registerClassroomTools(manifest.id, manifest.classroomTools as ClassroomToolConfig[]);
       } else {
         this.contributionRegistry.unregister(manifest.id);
       }
@@ -2558,8 +2558,8 @@ export { PluginRuntimeAdapter, type IPluginRuntime } from './plugin-runtime-adap
 export { PluginRuntimeComposition } from './plugin-runtime-composition.js';
 export { PluginContextAdapter, type IUnifiedPluginContext } from './plugin-context-adapter.js';
 export { PluginLifecycleManager, type IPluginLifecycleManager } from './plugin-lifecycle-manager.js';
-export { PluginCapabilityGateway, type IPluginCapabilityGateway } from './plugin-capability-gateway.js';
-export { UnifiedExtensionRegistry, type IUnifiedExtensionRegistry } from './unified-extension-registry.js';
+export { PluginCapabilityGateway, type IPluginCapabilityGateway, type CapabilityMetadata } from './plugin-capability-gateway.js';
+export { UnifiedExtensionRegistry, type IUnifiedExtensionRegistry, type ExtensionItemMetadata } from './unified-extension-registry.js';
 export {
   PluginDistributionManager,
   LocalRepositoryAdapter,

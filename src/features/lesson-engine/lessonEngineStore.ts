@@ -12,9 +12,9 @@ import {
   UserRef,
   StageAnalytics,
   LessonSnapshot,
-} from '../../packages/core/lesson-engine/types.js';
-import { LessonRuntime } from '../../packages/core/lesson-engine/lesson-runtime.js';
-import { eventBusService } from '../../services/event-bus.js';
+} from '../../../packages/core/lesson-engine/types.js';
+import { LessonRuntime } from '../../../packages/core/lesson-engine/lesson-runtime.js';
+import { frontendEventBus } from '../../services/event-bus.js';
 
 interface LessonEngineStoreState {
   runtime: LessonRuntime;
@@ -53,7 +53,7 @@ const defaultUser: UserRef = {
 };
 
 // Global singleton core lesson runtime instance for frontend
-const coreRuntime = new LessonRuntime({ eventBus: eventBusService as any });
+const coreRuntime = new LessonRuntime({ eventBus: frontendEventBus });
 
 export const useLessonEngineStore = create<LessonEngineStoreState>((set, get) => {
   // Subscribe to core timeline updates

@@ -16,13 +16,13 @@
  * 声明，Worker 自动识别为 module）。
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { Worker } from 'node:worker_threads';
+import { Worker as NodeWorker } from 'node:worker_threads';
 import { NodeWorkerTransport } from '../transport.js';
 import { WorkerTransportError, WorkerNotSupportedError } from '../errors.js';
 import { BrowserWorkerTransport } from '../transport.js';
 
 // 存储所有测试中创建的 Worker，便于统一清理
-const workers: Worker[] = [];
+const workers: NodeWorker[] = [];
 
 afterEach(() => {
   for (const w of workers) {
@@ -36,13 +36,13 @@ afterEach(() => {
 });
 
 /** 创建一个最小化的空 Worker（无操作逻辑） */
-function createEmptyWorker(): Worker {
-  return new Worker(new URL('data:text/javascript,export default {}'));
+function createEmptyWorker(): NodeWorker {
+  return new NodeWorker(new URL('data:text/javascript,export default {}'));
 }
 
 /** 创建一个 echo Worker（将收到的消息原样返回） */
-function createEchoWorker(): Worker {
-  return new Worker(
+function createEchoWorker(): NodeWorker {
+  return new NodeWorker(
     new URL(
       'data:text/javascript,' +
         'import { parentPort } from "node:worker_threads";' +
@@ -164,7 +164,7 @@ describe('NodeWorkerTransport error handling', () => {
 
 describe('NodeWorkerTransport onExit', () => {
   it('receives exit code via onExit callback', async () => {
-    const worker = new Worker(new URL('data:text/javascript,process.exit(0);'));
+    const worker = new NodeWorker(new URL('data:text/javascript,process.exit(0);'));
     workers.push(worker);
     const transport = new NodeWorkerTransport(worker);
 

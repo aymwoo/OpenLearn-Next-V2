@@ -23,7 +23,7 @@ import { AITeacherWorkspaceWidget } from '../../ai-teacher-workspace/ai-teacher-
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer.js';
 import { ResourceRegistry } from '../../resource-runtime/resource-registry.js';
 import { ActivityWorkspaceWidget } from '../../activity-ecosystem/ActivityWorkspaceWidget.js';
-import type { StudentWorkspaceContext } from '../student-workspace/student-workspace-context.js';
+import type { StudentWorkspaceContext } from '../student-workspace-context.js';
 
 const panelBase: React.CSSProperties = {
   padding: '12px',
@@ -90,7 +90,7 @@ export const StudentAssignmentsWidget: React.FC<{
     <StudentAssignmentEvalPanel
       lessonId={lessonId}
       studentId={studentId}
-      lang={lang}
+      lang={lang as 'zh' | 'en'}
       addToast={() => {}}
     />
   );

@@ -13,9 +13,9 @@
 
 import {
   DEFAULT_BOOTSTRAP_CONFIG,
-  DefaultPlatformLogger,
   type IPlatformLogger,
 } from '../bootstrap/types/index.js';
+import { DefaultPlatformLogger } from '../bootstrap/builder/platform-builder.js';
 import { ConfigurationRegistry } from './ConfigurationRegistry.js';
 import type {
   BootstrapPipelineIntegrationSource,

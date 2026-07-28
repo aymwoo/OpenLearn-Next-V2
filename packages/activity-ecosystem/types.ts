@@ -126,6 +126,7 @@ export interface ActivityProviderDescriptor {
 export interface ActivityProvider {
   readonly descriptor: ActivityProviderDescriptor;
   readonly state: ActivityLifecycleState;
+  readonly startedAt?: number;
   initialize(context: ActivityContext): Promise<void> | void;
   start(context: ActivityContext, payload?: Record<string, unknown>): Promise<unknown>;
   pause(context: ActivityContext): Promise<void> | void;

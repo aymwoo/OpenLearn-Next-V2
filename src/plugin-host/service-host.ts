@@ -38,7 +38,7 @@
  * @module
  */
 
-import type { IWorkerTransport, InvokeMessage, SubscribeMessage, UnsubscribeMessage } from '../../../packages/core/worker-runtime/types';
+import type { IWorkerTransport, InvokeMessage, SubscribeMessage, UnsubscribeMessage } from '../../packages/core/worker-runtime/types';
 import type { FrontendServiceRegistry } from './service-registry';
 import type { ISocketService } from './types';
 

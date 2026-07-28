@@ -38,6 +38,9 @@ import type { PlatformEvent, EventSubscriber } from '../event-bus/index.js';
 import type { ActionDescriptor } from '../registry/index.js';
 import type { ProcessHandler } from '../process-manager/index.js';
 
+export type { CommandHandler, CommandMetadata } from '../command-bus/index.js';
+export type { EventSubscriber } from '../event-bus/index.js';
+
 // ── 1. ICommandBusService ─────────────────────────────────────────────────
 
 export interface ICommandBusService {
@@ -51,13 +54,13 @@ export interface ICommandBusService {
    * Register a handler for a command type.
    * Corresponds to CommandBus.registerHandler() — made async for cross-runtime compatibility.
    */
-  registerHandler(commandType: string, handler: CommandHandler): Promise<void>;
+  registerHandler(commandType: string, handler: CommandHandler): void | Promise<void>;
 
   /**
    * Unregister a handler for a command type.
    * Corresponds to CommandBus.unregisterHandler() — made async for cross-runtime compatibility.
    */
-  unregisterHandler(commandType: string): Promise<void>;
+  unregisterHandler(commandType: string): void | Promise<void>;
 
   /**
    * Create a command envelope with metadata.
@@ -68,7 +71,7 @@ export interface ICommandBusService {
     payload: T,
     actorId: string,
     metadata?: CommandMetadata,
-  ): Promise<PlatformCommand<T>>;
+  ): PlatformCommand<T> | Promise<PlatformCommand<T>>;
 
   /**
    * Set a command interceptor (capability check, high-risk approval, etc.).
@@ -76,7 +79,7 @@ export interface ICommandBusService {
    */
   setInterceptor(
     interceptor: (command: PlatformCommand) => Promise<void>,
-  ): Promise<void>;
+  ): void | Promise<void>;
 }
 
 // ── 2. IEventBusService ───────────────────────────────────────────────────
@@ -92,13 +95,13 @@ export interface IEventBusService {
    * Subscribe to events of a given type.
    * Corresponds to EventBus.subscribe() — made async for cross-runtime compatibility.
    */
-  subscribe(eventType: string, subscriber: EventSubscriber): Promise<void>;
+  subscribe(eventType: string, subscriber: EventSubscriber): EventSubscriber | void | Promise<void>;
 
   /**
    * Unsubscribe from events of a given type.
    * Corresponds to EventBus.unsubscribe() — made async for cross-runtime compatibility.
    */
-  unsubscribe(eventType: string, subscriber: EventSubscriber): Promise<void>;
+  unsubscribe(eventType: string, subscriber: EventSubscriber): void | Promise<void>;
 }
 
 // ── 3. IActionRegistryService ─────────────────────────────────────────────
@@ -108,26 +111,26 @@ export interface IActionRegistryService {
    * Register an action descriptor (tool) discoverable by the AI Agent.
    * Corresponds to ActionRegistry.register() — made async for cross-runtime compatibility.
    */
-  register(descriptor: ActionDescriptor): Promise<void>;
+  register(descriptor: ActionDescriptor): void | Promise<void>;
 
   /**
    * Unregister an action by its id.
    * Corresponds to ActionRegistry.unregister() — made async for cross-runtime compatibility.
    */
-  unregister(id: string): Promise<void>;
+  unregister(id: string): void | Promise<void>;
 
   /**
    * Get all registered action descriptors.
    * Corresponds to ActionRegistry.getAllActions() — made async for cross-runtime compatibility.
    */
-  getAllActions(): Promise<ActionDescriptor[]>;
+  getAllActions(): ActionDescriptor[] | Promise<ActionDescriptor[]>;
 
   /**
    * Get tools formatted for @google/genai functionDeclarations.
    * Corresponds to ActionRegistry.getAgentTools() — made async for cross-runtime compatibility.
    * Return type tightened from `any[]` to `unknown[]` per D-11.
    */
-  getAgentTools(): Promise<unknown[]>;
+  getAgentTools(): unknown[] | Promise<unknown[]>;
 
   /**
    * Find an action descriptor by its tool name (sanitized command type).
@@ -135,7 +138,7 @@ export interface IActionRegistryService {
    */
   getActionByToolName(
     toolName: string,
-  ): Promise<ActionDescriptor | undefined>;
+  ): ActionDescriptor | undefined | Promise<ActionDescriptor | undefined>;
 
   /**
    * Find an action descriptor by its exact command type string.
@@ -143,7 +146,7 @@ export interface IActionRegistryService {
    */
   getActionByCommandType(
     commandType: string,
-  ): Promise<ActionDescriptor | undefined>;
+  ): ActionDescriptor | undefined | Promise<ActionDescriptor | undefined>;
 }
 
 // ── 4. ICapabilityService ─────────────────────────────────────────────────
@@ -153,19 +156,19 @@ export interface ICapabilityService {
    * Grant a capability to an actor.
    * Corresponds to CapabilityGuard.grant() — made async for cross-runtime compatibility.
    */
-  grant(actorId: string, cap: string): Promise<void>;
+  grant(actorId: string, cap: string): void | Promise<void>;
 
   /**
    * Revoke all capabilities from an actor.
    * Corresponds to CapabilityGuard.revokeAll() — made async for cross-runtime compatibility.
    */
-  revokeAll(actorId: string): Promise<void>;
+  revokeAll(actorId: string): void | Promise<void>;
 
   /**
    * Check whether an actor has a required capability (supports wildcard matching).
    * Corresponds to CapabilityGuard.check() — made async for cross-runtime compatibility.
    */
-  check(actorId: string, requiredCap: string): Promise<boolean>;
+  check(actorId: string, requiredCap: string): boolean | Promise<boolean>;
 }
 
 // ── 5. IProcessService ────────────────────────────────────────────────────
@@ -176,13 +179,13 @@ export interface IProcessService {
    * Corresponds to ProcessManager.spawn() — made async for cross-runtime compatibility.
    * Payload tightened from `any` to `unknown` per D-11.
    */
-  spawn(name: string, taskType: string, payload: unknown): Promise<string>;
+  spawn(name: string, taskType: string, payload: unknown): string | Promise<string>;
 
   /**
    * Kill a running process by its id.
    * Corresponds to ProcessManager.kill() — made async for cross-runtime compatibility.
    */
-  kill(processId: string): Promise<void>;
+  kill(processId: string): void | Promise<void>;
 
   /**
    * Register a handler for a task type.
@@ -191,13 +194,13 @@ export interface IProcessService {
   registerHandler(
     taskType: string,
     handler: ProcessHandler,
-  ): Promise<void>;
+  ): void | Promise<void>;
 
   /**
    * Unregister a handler for a task type.
    * Corresponds to ProcessManager.unregisterHandler() — made async for cross-runtime compatibility.
    */
-  unregisterHandler(taskType: string): Promise<void>;
+  unregisterHandler(taskType: string): void | Promise<void>;
 
   /**
    * Register a recurring interval process.
@@ -207,13 +210,13 @@ export interface IProcessService {
     name: string,
     intervalMs: number,
     tickFn: (log: (msg: string) => void) => void,
-  ): Promise<string>;
+  ): string | Promise<string>;
 
   /**
    * Restore running processes from DB after server restart.
    * Corresponds to ProcessManager.restore() — made async for cross-runtime compatibility.
    */
-  restore(): Promise<void>;
+  restore(): void | Promise<void>;
 }
 
 // ── 6. IStorageService ────────────────────────────────────────────────────
@@ -317,11 +320,29 @@ export const IAIServiceToken = new Token<IAIService>(
   '@openlearn/core:IAIService',
 );
 
+// Self-contained SQLite surface so consumers (plugins) get a concrete type
+// without needing `better-sqlite3` type declarations reachable in their package.
+export interface SqliteStatement {
+  run(...params: unknown[]): unknown;
+  get(...params: unknown[]): unknown;
+  all(...params: unknown[]): unknown[];
+  iterate(...params: unknown[]): IterableIterator<unknown>;
+}
+export interface SqliteDatabase {
+  prepare(sql: string): SqliteStatement;
+  // `any` (not `T`) because the real better-sqlite3 `Database.transaction`
+  // returns a `Transaction<T>` wrapper; this keeps real `Database` assignable.
+  transaction<T extends (...args: unknown[]) => unknown>(fn: T): any;
+  exec(sql: string): unknown;
+  pragma(source: string, options?: unknown): unknown;
+  close(): void;
+}
+
 /**
  * Token for Database.
  * Identifier: @openlearn/core:IDatabase
  */
-export const IDatabaseToken = new Token<import('better-sqlite3').Database>(
+export const IDatabaseToken = new Token<SqliteDatabase>(
   '@openlearn/core:IDatabase',
 );
 

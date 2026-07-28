@@ -201,14 +201,14 @@ export class Kernel {
 
     // Register all IService instances into ServiceRegistry (D-14)
     // Must happen after all subsystems are created, before the interceptor
-    this.serviceRegistry.register(IEventBusServiceToken, this.eventBus as any);
-    this.serviceRegistry.register(ICapabilityServiceToken, this.capabilityGuard as any);
+    this.serviceRegistry.register(IEventBusServiceToken, this.eventBus);
+    this.serviceRegistry.register(ICapabilityServiceToken, this.capabilityGuard);
     this.serviceRegistry.register(IStorageServiceToken, this.storageService);
-    this.serviceRegistry.register(ICommandBusServiceToken, this.commandBus as any);
-    this.serviceRegistry.register(IActionRegistryServiceToken, this.actionRegistry as any);
-    this.serviceRegistry.register(IProcessServiceToken, this.processManager as any);
+    this.serviceRegistry.register(ICommandBusServiceToken, this.commandBus);
+    this.serviceRegistry.register(IActionRegistryServiceToken, this.actionRegistry);
+    this.serviceRegistry.register(IProcessServiceToken, this.processManager);
     this.serviceRegistry.register(IAIServiceToken, this.aiService);
-    this.serviceRegistry.register(IDatabaseToken, this.db as any);
+    this.serviceRegistry.register(IDatabaseToken, this.db);
     this.serviceRegistry.register(IPluginHostToken, this.pluginHost);
     // P7-A2 Stage 3: 注册统一插件 facade，使插件可通过 ctx.resolve(token) 获取
     this.serviceRegistry.register(IPluginLifecycleManagerToken, this.pluginLifecycleManager);

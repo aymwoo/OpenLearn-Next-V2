@@ -41,7 +41,7 @@ export type {
   ExtensionItemMetadata,
 } from '../core/plugin-host/index.js';
 
-export type {
+export {
   PluginRuntimeAdapter,
   PluginRuntimeComposition,
   PluginContextAdapter,
