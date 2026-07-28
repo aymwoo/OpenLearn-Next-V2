@@ -78,6 +78,10 @@ import type {
 } from './store/appStore';
 import { EventBus } from '../packages/core/event-bus';
 import { AnimatedCounter } from './components/AnimatedCounter';
+import { StudentPerformanceCharts } from './features/student/StudentPerformanceCharts';
+import { StudentQuickStats } from './features/student/StudentQuickStats';
+import { StudentCourseProgressList } from './features/student/StudentCourseProgressList';
+import { StudentSchedulePanel } from './features/student/StudentSchedulePanel';
 import { ToastContainer } from './features/shared/ToastContainer';
 import { NavigationSidebar } from './features/shared/NavigationSidebar';
 import { RightSidebar } from './features/shared/RightSidebar';
@@ -4399,180 +4403,16 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                   );
                 })()}
 
-                {/* Course List / Progress */}
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-                  <div className="p-4 border-b border-gray-100 flex items-center gap-2">
-                     <BookOpen size={18} className="text-teal-500" />
-                     <h3 className="font-semibold text-gray-800">My Independent Courses</h3>
-                  </div>
-                  <div className="p-4">
-                    {studentDashboardData.progress && studentDashboardData.progress.length === 0 ? (
-                      <div className="text-center p-8 text-gray-400 italic text-sm">No courses assigned yet.</div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {studentDashboardData.progress?.map((p: any) => (
-                          <div key={p.lesson_id} className="flex flex-col p-4 rounded-xl border border-gray-100 bg-gray-50 hover:border-teal-200 hover:shadow-sm transition-all focus:outline-none">
-                             <div className="flex justify-between items-start mb-3">
-                                <div className="font-semibold text-gray-800 text-lg">{p.lesson_title}</div>
-                                {p.completed === 1 && <span className="bg-green-100 text-green-800 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold">Completed</span>}
-                             </div>
-                             <div className="flex items-center gap-3 mb-4">
-                                <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden shrink-0">
-                                  <div className={`h-full ${p.progress_percent === 100 ? 'bg-green-500' : 'bg-teal-500'}`} style={{ width: `${p.progress_percent}%` }}></div>
-                                </div>
-                                <span className="text-xs text-gray-500 font-medium shrink-0">{p.progress_percent}%</span>
-                             </div>
-                             <button
-                               onClick={() => {
-                                 setSelectedLesson(p.lesson_id);
-                                 setStudentViewStatus('lesson');
-                               }}
-                             className="w-full flex justify-center items-center gap-2 bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow-sm transition-colors mt-auto"
-                             >
-                               {p.progress_percent === 0 ? <><PlayCircle size={16} /> Start Learning</> : <><PlayCircle size={16} /> Continue</>}
-                             </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <StudentCourseProgressList progress={studentDashboardData.progress} setSelectedLesson={setSelectedLesson} setStudentViewStatus={setStudentViewStatus} />
 
-                {/* Quick Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.05 }}
-                    className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center hover:border-indigo-300 hover:shadow-md transition-all duration-300"
-                  >
-                    <span className="text-3xl font-bold text-indigo-600">
-                      <AnimatedCounter value={studentDashboardData.classes?.length || 0} />
-                    </span>
-                    <span className="text-sm font-medium text-gray-500 mt-1 uppercase tracking-wider text-center select-none">Enrolled Classes</span>
-                  </motion.div>
+                <StudentQuickStats studentDashboardData={studentDashboardData} />
 
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.1 }}
-                    className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center hover:border-teal-300 hover:shadow-md transition-all duration-300"
-                  >
-                    <span className="text-3xl font-bold text-teal-600">
-                      <AnimatedCounter value={studentDashboardData.assignments?.filter((a: any) => a.submission_status === 'graded').length || 0} />
-                    </span>
-                    <span className="text-sm font-medium text-gray-500 mt-1 uppercase tracking-wider text-center select-none">Completed Assignments</span>
-                  </motion.div>
-
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.15 }}
-                    className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center hover:border-amber-300 hover:shadow-md transition-all duration-300"
-                  >
-                    <span className="text-3xl font-bold text-amber-500">
-                      <AnimatedCounter value={studentDashboardData.assignments?.filter((a: any) => !a.submission_status).length || 0} />
-                    </span>
-                    <span className="text-sm font-medium text-gray-500 mt-1 uppercase tracking-wider text-center select-none">Pending Assignments</span>
-                  </motion.div>
-
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.2 }}
-                    className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center hover:border-pink-300 hover:shadow-md transition-all duration-300"
-                  >
-                    <span className="text-3xl font-bold text-pink-600">
-                      <AnimatedCounter value={studentDashboardData.schedules?.length || 0} />
-                    </span>
-                    <span className="text-sm font-medium text-gray-500 mt-1 uppercase tracking-wider text-center select-none">Upcoming Lessons</span>
-                  </motion.div>
-                </div>
-
-                {/* Historical Semester Grade Performance Trend Chart Component */}
-                <motion.div
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.1, ease: 'easeOut' }}
-                >
-                  <SemesterGradeTrendChart assignments={studentDashboardData.assignments} lang={lang} />
-                </motion.div>
-
-                {/* 3-Month Historical Performance Line Chart */}
-                <motion.div
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.2, ease: 'easeOut' }}
-                >
-                  <RecentThreeMonthsPerformanceChart assignments={studentDashboardData.assignments} lang={lang} />
-                </motion.div>
-
-                {/* Academic Growth Trajectory Cumulative Average Progression Chart */}
-                <motion.div
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.25, ease: 'easeOut' }}
-                >
-                  <AcademicGrowthTrajectoryChart assignments={studentDashboardData.assignments} lang={lang} />
-                </motion.div>
-
-                {/* Visual Performance History Timeline & Chronological Chart Component */}
-                <motion.div
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.3, ease: 'easeOut' }}
-                >
-                  <StudentGradedTimeline assignments={studentDashboardData.assignments} />
-                </motion.div>
+                <StudentPerformanceCharts assignments={studentDashboardData.assignments} lang={lang} />
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   
                   {/* Schedules / Timetable */}
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-                    <div className="p-4 border-b border-gray-100 flex items-center gap-2">
-                       <CalendarIcon size={18} className="text-pink-500" />
-                       <h3 className="font-semibold text-gray-800">My Schedule</h3>
-                    </div>
-                    <div className="p-4 flex-1">
-                      {studentDashboardData.schedules.length === 0 ? (
-                        <div className="text-center p-8 text-gray-400 italic text-sm">No upcoming classes.</div>
-                      ) : (
-                        <div className="space-y-3">
-                          {studentDashboardData.schedules.map((sch: any) => (
-                            <div key={sch.id} className="flex flex-col p-3 rounded-lg border border-pink-100 bg-pink-50/30">
-                               <div className="flex justify-between items-start mb-2">
-                                  <div>
-                                    <div className="font-semibold text-gray-800">{sch.lesson_title}</div>
-                                    <div className="text-xs text-gray-500">{sch.class_name}</div>
-                                  </div>
-                                  <div className="bg-pink-100 text-pink-700 px-2 py-1 inline-block rounded text-xs font-bold font-mono tracking-tight">
-                                     {sch.scheduled_date}
-                                  </div>
-                               </div>
-                               <div className="flex justify-between items-end mt-2">
-                                 {sch.attendance_status ? (
-                                    <div className="text-xs text-gray-600 font-medium">
-                                      Attendance: <span className={`uppercase font-bold ${sch.attendance_status === 'present' ? 'text-green-600' : sch.attendance_status === 'late' ? 'text-amber-600' : 'text-red-600'}`}>{sch.attendance_status}</span>
-                                    </div>
-                                 ) : (
-                                    <div className="text-xs text-gray-400 italic">Attendance not yet recorded.</div>
-                                 )}
-                                 <button
-                                   onClick={() => {
-                                     setSelectedLesson(sch.lesson_id);
-                                     setStudentViewStatus('lesson');
-                                   }}
-                                   className="flex items-center gap-1 bg-pink-500 hover:bg-pink-600 text-white px-3 py-1.5 rounded text-xs font-semibold shadow-sm transition-colors"
-                                 >
-                                   <PlayCircle size={14} /> Join Class
-                                 </button>
-                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <StudentSchedulePanel schedules={studentDashboardData.schedules} setSelectedLesson={setSelectedLesson} setStudentViewStatus={setStudentViewStatus} />
 
                   {/* Assignments */}
                   <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
