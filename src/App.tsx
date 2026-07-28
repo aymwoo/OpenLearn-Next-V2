@@ -1,5 +1,7 @@
-import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, LayoutGrid, List, Globe, Code, Puzzle, Blocks, Download, Upload, Paperclip, Terminal, ChevronUp, ChevronDown, ChevronRight, FileText, Shield, ShieldAlert, Check, X, Folder, File as FileIcon, Activity, Users, BarChart2, ClipboardList, Send, FileBadge, PlayCircle, Loader2, Calendar as CalendarIcon, CheckCircle2, Bell, BookOpen, Settings, PanelRightClose, PanelRightOpen, Home, Presentation, HelpCircle, Search, Settings2, Percent, ListFilter, Clock, Sparkles, Eye, Maximize2, Minimize2, Database, Shuffle } from 'lucide-react';
+import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, LayoutGrid, List, Globe, Code, Blocks, Download, Upload, Paperclip, Terminal, ChevronUp, ChevronDown, ChevronRight, FileText, Shield, ShieldAlert, Check, X, Folder, File as FileIcon, Activity, Users, BarChart2, ClipboardList, Send, FileBadge, PlayCircle, Loader2, Calendar as CalendarIcon, CheckCircle2, Bell, BookOpen, Settings, PanelRightClose, PanelRightOpen, Home, Presentation, HelpCircle, Search, Settings2, Percent, ListFilter, Clock, Sparkles, Eye, Maximize2, Minimize2, Database, Shuffle } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { PluginTabPanel } from './components/PluginTabPanel.js';
+import { parseCSV } from './utils/pluginParsers.js';
 import Markdown from 'react-markdown';
 import { translations, Language } from './i18n';
 import { LazyWhiteboard } from './components/LazyWhiteboard';
@@ -27,41 +29,6 @@ function hashToTab(hash: string): string | null {
   return raw.replace(/^\//, '');
 }
 
-function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null }) {
-  const extensionPoints = usePluginHostStore(state => state.extensionPoints);
-  const lang = useAppStore(state => state.lang);
-  const tabs = extensionPoints.get('teacher.tab' as any) || [];
-
-  // Auto-select first tab if none active
-  const effectiveActive = activeNavPlugin || (tabs.length > 0 ? tabs[0].pluginId : null);
-
-  const activeTab = tabs.find(t => t.pluginId === effectiveActive);
-
-  return (
-    <div className="flex-1 flex flex-col min-h-0">
-      {/* Active panel */}
-      <div className="flex-1 overflow-auto">
-        {activeTab?.component ? (
-          <activeTab.component renderType="panel" />
-        ) : activeTab && typeof (activeTab as any).render === 'function' ? (
-          <DOMExtensionWrapper ext={activeTab} slot="teacher.tab" slotProps={{ renderType: 'panel' }} />
-        ) : (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <Puzzle size={48} className="mx-auto text-gray-300 mb-3" />
-              <p className="text-sm text-gray-400 font-medium">
-                {lang === 'zh' ? '此插件未提供页面组件' : 'This plugin has no page component'}
-              </p>
-              <p className="text-xs text-gray-300 mt-1">
-                {lang === 'zh' ? '插件已注册导航条目，但未提供对应的界面渲染逻辑。' : 'The plugin registered a navigation entry but did not provide a render component.'}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 import { ChevronLeft, Menu } from 'lucide-react';
 // InteractiveCoursewareViewer: loaded as local module (Phase 5 v5.0 refactoring)
 import { QuickActionsMenu } from './components/QuickActionsMenu';
@@ -181,163 +148,6 @@ const CAPABILITY_INFO: Record<string, {
     riskDescZh: '高风险：强力权限！允许插件创建、编辑或彻底抹除班级列表、学生个人账号、授课日志及考勤成绩等多项核心教务系统档案。',
     riskDescEn: 'High Risk: Critical! Grants ability to modify academic profiles, drop students, change registers, or log grade-sheets.'
   }
-};
-
-interface ParsedManifest {
-  id?: string;
-  name?: string;
-  version?: string;
-  description?: string;
-  author?: string;
-  capabilitiesProposed?: string[];
-}
-
-interface ParsedAction {
-  id: string;
-  commandType: string;
-  description?: string;
-}
-
-const parsePluginSource = (sourceCode: string) => {
-  let manifest: ParsedManifest | null = null;
-  const actions: ParsedAction[] = [];
-  
-  try {
-    const cleanCode = sourceCode
-      .replace(/require\s*\(.*?\)/g, '{}')
-      .replace(/import\s+.*?\s+from\s*['"].*?['"]/g, '');
-      
-    try {
-      const runner = new Function('exports', `
-        try {
-          ${cleanCode};
-          exports.default = exports.default || exports;
-        } catch(e) {}
-      `);
-      const mockExports = {} as any;
-      runner(mockExports);
-      const evaluated = mockExports.default || mockExports;
-      if (evaluated && evaluated.manifest) {
-        manifest = evaluated.manifest;
-      }
-    } catch (e: any) {
-      // Ignore evaluation error, fallback to regex
-    }
-
-    const idMatch = sourceCode.match(/id\s*:\s*['"]([^'"]+)['"]/);
-    const nameMatch = sourceCode.match(/name\s*:\s*['"]([^'"]+)['"]/);
-    const verMatch = sourceCode.match(/version\s*:\s*['"]([^'"]+)['"]/);
-    const descMatch = sourceCode.match(/description\s*:\s*['"]([^'"]+)['"]/);
-    const authorMatch = sourceCode.match(/author\s*:\s*['"]([^'"]+)['"]/);
-    
-    let capabilities: string[] = [];
-    const capsMatch = sourceCode.match(/capabilitiesProposed\s*:\s*\[([\s\S]*?)\]/);
-    if (capsMatch) {
-      capabilities = capsMatch[1]
-        .split(',')
-        .map(s => s.replace(/['"\s]/g, ''))
-        .filter(s => s.length > 0);
-    }
-
-    const mergedManifest: ParsedManifest = {
-      id: manifest?.id || idMatch?.[1] || undefined,
-      name: manifest?.name || nameMatch?.[1] || undefined,
-      version: manifest?.version || verMatch?.[1] || undefined,
-      description: manifest?.description || descMatch?.[1] || undefined,
-      author: manifest?.author || authorMatch?.[1] || undefined,
-      capabilitiesProposed: manifest?.capabilitiesProposed || (capabilities.length > 0 ? capabilities : undefined)
-    };
-
-    const actionBlockRegex = /actionRegistry\.register\s*\(\s*\{([\s\S]*?)\}\s*\)/g;
-    let match;
-    const codesToSearch = sourceCode;
-    while ((match = actionBlockRegex.exec(codesToSearch)) !== null) {
-      const block = match[1];
-      const cmdIdLoc = block.match(/id\s*:\s*['"]([^'"]+)['"]/);
-      const cmdTypeLoc = block.match(/commandType\s*:\s*['"]([^'"]+)['"]/);
-      const cmdDescLoc = block.match(/description\s*:\s*['"]([^'"]+)['"]/);
-      
-      if (cmdIdLoc || cmdTypeLoc) {
-        actions.push({
-          id: cmdIdLoc ? cmdIdLoc[1] : 'unknown',
-          commandType: cmdTypeLoc ? cmdTypeLoc[1] : 'unknown',
-          description: cmdDescLoc ? cmdDescLoc[1] : ''
-        });
-      }
-    }
-
-    return {
-      manifest: mergedManifest,
-      actions: actions,
-      error: null
-    };
-  } catch (err: any) {
-    return {
-      manifest: null,
-      actions: [],
-      error: err.toString()
-    };
-  }
-};
-
-const parseCSV = (text: string): { name: string; email: string }[] => {
-  const lines = text.split(/\r?\n/);
-  if (lines.length < 2) return [];
-
-  const headerLine = lines[0];
-  const separators = [',', ';', '\t'];
-  let sep = ',';
-  let maxCount = 0;
-  separators.forEach(s => {
-    const count = headerLine.split(s).length;
-    if (count > maxCount) {
-      maxCount = count;
-      sep = s;
-    }
-  });
-
-  const parseRow = (rowText: string): string[] => {
-    const result: string[] = [];
-    let insideQuote = false;
-    let entry = '';
-    for (let i = 0; i < rowText.length; i++) {
-      const char = rowText[i];
-      if (char === '"') {
-        insideQuote = !insideQuote;
-      } else if (char === sep && !insideQuote) {
-        result.push(entry.trim());
-        entry = '';
-      } else {
-        entry += char;
-      }
-    }
-    result.push(entry.trim());
-    return result;
-  };
-
-  const headers = parseRow(headerLine).map(h => h.toLowerCase().replace(/["'\r]/g, '').trim());
-  
-  const nameIdx = headers.findIndex(h => 
-    h.includes('name') || h.includes('student') || h.includes('姓名') || h.includes('学生')
-  );
-  const emailIdx = headers.findIndex(h => 
-    h.includes('email') || h.includes('mail') || h.includes('邮箱')
-  );
-
-  const finalNameIdx = nameIdx >= 0 ? nameIdx : 0;
-  const finalEmailIdx = emailIdx >= 0 ? emailIdx : 1;
-
-  const list: { name: string; email: string }[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
-    const cols = parseRow(lines[i]);
-    const name = cols[finalNameIdx] ? cols[finalNameIdx].replace(/["'\r]/g, '').trim() : '';
-    const email = cols[finalEmailIdx] ? cols[finalEmailIdx].replace(/["'\r]/g, '').trim() : '';
-    if (name) {
-      list.push({ name, email });
-    }
-  }
-  return list;
 };
 
 const hostEventBus = new EventBus();
