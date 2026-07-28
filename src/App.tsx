@@ -117,6 +117,7 @@ import { ClassAssignmentsPanel } from './features/teacher/classes/ClassAssignmen
 import { ClassSchedulesCharts } from './features/teacher/classes/ClassSchedulesCharts';
 import { ClassScheduleAttendance } from './features/teacher/classes/ClassScheduleAttendance';
 import { ClassesView } from './features/teacher/classes/ClassesView';
+import { TeacherView } from './features/teacher/TeacherView';
 
 const AGENT_PROVIDER_STORAGE_KEY = 'openlearnv2.agentProviderId';
 
@@ -3876,280 +3877,203 @@ export default function App() {
             subAssignmentTab={subAssignmentTab}
           />
         ) : (
-          <div className="flex-1 overflow-hidden flex bg-gray-50">
-            <NavigationSidebar
-              mainNavCollapsed={mainNavCollapsed}
-              setMainNavCollapsed={setMainNavCollapsed}
-              teacherTab={teacherTab}
-              setTeacherTab={setTeacherTab}
-              lang={lang}
-              session={session}
-              todaySchedules={todaySchedules}
-            />
-
-            <div className="flex-1 p-6 overflow-hidden flex gap-6 relative">
-
-            {/* Phase 9: Dynamic plugin tab content — catch-all for non-hardcoded tabs */}
-            {['dashboard', 'lesson_editor', 'live_class', 'plugins', 'courses', 'classes',
-              'timetable', 'admin_directory', 'help', 'computer_labs'].includes(teacherTab) ? null : (
-              <PluginTabPanel activeNavPlugin={teacherTab.includes('/') ? teacherTab.split('/')[0] : null} />
-            )}
-
-            {teacherTab === 'dashboard' ? (
-              <Dashboard
-                lang={lang} t={t}
-                lessons={lessons} classes={classes} students={students}
-                todaySchedules={todaySchedules}
-                approvals={approvals} processes={processes}
-                isApprovalsCollapsed={isApprovalsCollapsed}
-                setIsApprovalsCollapsed={setIsApprovalsCollapsed}
-                isProcessesCollapsed={isProcessesCollapsed}
-                setIsProcessesCollapsed={setIsProcessesCollapsed}
-                scoreOverrides={scoreOverrides} setScoreOverrides={setScoreOverrides}
-                handleApprove={handleApprove} handleReject={handleReject}
-                showLogs={showLogs} setShowLogs={setShowLogs}
-                processLogsContent={processLogsContent}
-                showProcessLogs={showProcessLogs}
-                fetchProcessLogs={fetchProcessLogs}
-                setShowProcessLogs={setShowProcessLogs}
-                addToast={addToast}
-                handleQuickScheduleClass={handleQuickScheduleClass}
-                handleQuickGenerateAssignment={handleQuickGenerateAssignment}
-                handleQuickCreateLesson={handleQuickCreateLesson}
-              />
-            ) : teacherTab === 'lesson_editor' ? (
-              <LessonEditorView
-                lang={lang}
-                lessons={lessons}
-                selectedLesson={selectedLesson}
-                activeRole={activeRole}
-                setActiveRole={setActiveRole}
-                editorSaveStatus={editorSaveStatus}
-                setEditorSaveStatus={setEditorSaveStatus}
-                editorLastSavedTime={editorLastSavedTime}
-                setEditorLastSavedTime={setEditorLastSavedTime}
-                setIsLessonPreviewVisible={setIsLessonPreviewVisible}
-                setPreviewLessonTab={setPreviewLessonTab}
-                setPreviewSelectedCourseware={setPreviewSelectedCourseware}
-                setTeacherTab={setTeacherTab}
-                handlePaletteActivate={handlePaletteActivate}
-                timelineSegments={timelineSegments}
-                activeSegmentId={activeSegmentId}
-                setActiveSegmentId={setActiveSegmentId}
-                draggedSegmentIdx={draggedSegmentIdx}
-                setDraggedSegmentIdx={setDraggedSegmentIdx}
-                saveTimeline={saveTimeline}
-                editorPanelsExpanded={editorPanelsExpanded}
-                setEditorPanelsExpanded={setEditorPanelsExpanded}
-                fetchElements={fetchElements}
-                whiteboardRef={whiteboardRef}
-                elements={elements}
-                paletteEdit={paletteEdit}
-                handlePaletteConfirm={handlePaletteConfirm}
-                setPaletteEdit={setPaletteEdit}
-              />
-) : teacherTab === 'live_class' ? (
-              <div className="flex-grow flex-1 flex flex-col min-h-0 min-w-0">
-                <LiveClassroomView
-                  selectedLesson={selectedLesson}
-                  setSelectedLesson={setSelectedLesson}
-                  lessons={lessons}
-                  classes={classes}
-                  students={liveClassSelectedClassId ? (classStudentsMap[liveClassSelectedClassId] || []) : []}
-                  plugins={plugins}
-                  lang={lang}
-                  timelineSegments={timelineSegments}
-                  activeSegmentId={activeSegmentId}
-                  setActiveSegmentId={setActiveSegmentId}
-                  liveClassSelectedClassId={liveClassSelectedClassId}
-                  setLiveClassSelectedClassId={setLiveClassSelectedClassId}
-                  liveClassIsActive={liveClassIsActive}
-                  setLiveClassIsActive={setLiveClassIsActive}
-                  liveClassTimeRemaining={liveClassTimeRemaining}
-                  setLiveClassTimeRemaining={setLiveClassTimeRemaining}
-                  liveClassFeed={liveClassFeed}
-                  setLiveClassFeed={setLiveClassFeed}
-                  liveClassAcknowledgedMap={liveClassAcknowledgedMap}
-                  setLiveClassAcknowledgedMap={setLiveClassAcknowledgedMap}
-                  elements={elements}
-                  fetchElements={fetchElements}
-                  fetchStudents={async () => {
-                    await fetchStudents();
-                    if (liveClassSelectedClassId) {
-                      await fetchClassStudents(liveClassSelectedClassId);
-                    }
-                  }}
-                  addToast={addToast}
-                  onlineStudentIds={onlineStudentIds}
-                  activeStudentLessons={activeStudentLessons}
-                  liveClassStudentProgress={liveClassStudentProgress}
-                  onPingStudent={(studentId, message) => {
-                    if (socketRef.current) {
-                      socketRef.current.emit('teacher-ping-student', {
-                        studentId,
-                        lessonId: selectedLesson,
-                        message
-                      });
-                    }
-                  }}
-                  onOpenCoursewareHub={() => setShowCoursewareHub(true)}
-                  activeRole={activeRole}
-                  setActiveRole={setActiveRole}
-                />
-              </div>
-            ) : teacherTab === 'plugins' ? (
-              <PluginView
-                plugins={plugins} lang={lang}
-                storeTab={storeTab} setStoreTab={setStoreTab}
-                pluginCode={pluginCode} setPluginCode={setPluginCode}
-                installingPlugin={installingPlugin}
-                onInstall={handleInstallPlugin} onZipUpload={handleZipPluginUpload}
-                onToggle={handleTogglePlugin} onDelete={handleDeletePlugin}
-              />
-            ) : teacherTab === 'courses' ? (
-              <CourseManagement
-                lang={lang}
-                lessons={lessons}
-                lessonsSearchQuery={lessonsSearchQuery}
-                setLessonsSearchQuery={setLessonsSearchQuery}
-                lessonsSortOrder={lessonsSortOrder}
-                setLessonsSortOrder={setLessonsSortOrder}
-                filteredLessons={filteredAndSortedLessons}
-                onOpenImportLessons={() => {
-                  setImportStatus('idle'); setImportProgress(0); setImportProgressTotal(0);
-                  setImportErrorMsg(''); setPreviewImportData([]); setIsImportLessonsOpen(true);
-                }}
-                onOpenCourseWizard={() => { setWizardStep(1); setIsCourseWizardOpen(true); }}
-                onViewCourse={(lessonId) => { setTeacherTab('lesson_editor'); setSelectedLesson(lessonId); }}
-              />
-            ) : teacherTab === 'classes' ? (
-              <ClassesView
-                t={t}
-                lang={lang}
-                classes={classes}
-                students={students}
-                lessons={lessons}
-                batchMode={batchMode}
-                selectedClassIds={selectedClassIds}
-                setSelectedClassIds={setSelectedClassIds}
-                setSelectedStudentIds={setSelectedStudentIds}
-                setBatchMode={setBatchMode}
-                expandedClassId={expandedClassId}
-                setExpandedClassId={setExpandedClassId}
-                exportTooltipOpen={exportTooltipOpen}
-                setExportTooltipOpen={setExportTooltipOpen}
-                exportDropdownOpen={exportDropdownOpen}
-                setExportDropdownOpen={setExportDropdownOpen}
-                isExportingAllCombined={isExportingAllCombined}
-                loadingExportClassId={loadingExportClassId}
-                classStudentsMap={classStudentsMap}
-                setClassStudentsMap={setClassStudentsMap}
-                expandedStudentId={expandedStudentId}
-                setExpandedStudentId={setExpandedStudentId}
-                selectedStudentIds={selectedStudentIds}
-                rosterViewMode={rosterViewMode}
-                setRosterViewMode={setRosterViewMode}
-                rosterSearchQuery={rosterSearchQuery}
-                setRosterSearchQuery={setRosterSearchQuery}
-                rosterTagFilter={rosterTagFilter}
-                setRosterTagFilter={setRosterTagFilter}
-                toggleSelectAllStudents={toggleSelectAllStudents}
-                handleBatchDeleteStudents={handleBatchDeleteStudents}
-                handleBatchResetPassword={handleBatchResetPassword}
-                handleBatchTransferStudents={handleBatchTransferStudents}
-                handleBatchSetLockedLesson={handleBatchSetLockedLesson}
-                toggleStudentSelection={toggleStudentSelection}
-                get30DayAverageWarning={get30DayAverageWarning}
-                studentProgressMap={studentProgressMap}
-                studentActiveTabs={studentActiveTabs}
-                setStudentActiveTabs={setStudentActiveTabs}
-                setStudents={setStudents}
-                fetchClassStudents={fetchClassStudents}
-                fetchStudents={fetchStudents}
-                parseCSV={parseCSV}
-                setImportError={setImportError}
-                setImportSuccess={setImportSuccess}
-                setShowImportModal={setShowImportModal}
-                fetchClasses={fetchClasses}
-                classSubmissionFilters={classSubmissionFilters}
-                setClassSubmissionFilters={setClassSubmissionFilters}
-                classActiveTabs={classActiveTabs}
-                setClassActiveTabs={setClassActiveTabs}
-                classProgressMap={classProgressMap}
-                classSchedulesMap={classSchedulesMap}
-                classDashboardMap={classDashboardMap}
-                assignmentSortOrder={assignmentSortOrder}
-                setAssignmentSortOrder={setAssignmentSortOrder}
-                isGeneratingPDFReport={isGeneratingPDFReport}
-                handleGeneratePDFReport={handleGeneratePDFReport}
-                setExportClassId={setExportClassId}
-                setExportClassName={setExportClassName}
-                setQuizzesWeight={setQuizzesWeight}
-                setAssignmentsWeight={setAssignmentsWeight}
-                setCustomCategoryOverrides={setCustomCategoryOverrides}
-                setIsExportWeightModalOpen={setIsExportWeightModalOpen}
-                isGeneratingAssignment={isGeneratingAssignment}
-                setQuizGeneratorClassId={setQuizGeneratorClassId}
-                setQuizGenMode={setQuizGenMode}
-                setQuizGenSelectedLessonId={setQuizGenSelectedLessonId}
-                setQuizGenTopic={setQuizGenTopic}
-                setSuggestedObjectives={setSuggestedObjectives}
-                setSuggestedQuestions={setSuggestedQuestions}
-                setIsQuizGeneratorOpen={setIsQuizGeneratorOpen}
-                setActiveStudentId={setActiveStudentId}
-                setSelectedAssignment={setSelectedAssignment}
-                setStudentViewStatus={setStudentViewStatus}
-                setActiveRole={setActiveRole}
-                isGrading={isGrading}
-                setIsGrading={setIsGrading}
-                fetchClassDashboard={fetchClassDashboard}
-                newScheduleDate={newScheduleDate}
-                setNewScheduleDate={setNewScheduleDate}
-                newScheduleLessonId={newScheduleLessonId}
-                setNewScheduleLessonId={setNewScheduleLessonId}
-                expandedScheduleId={expandedScheduleId}
-                setExpandedScheduleId={setExpandedScheduleId}
-                fetchScheduleAttendance={fetchScheduleAttendance}
-                scheduleAttendanceMap={scheduleAttendanceMap}
-                toggleSelectAllClasses={toggleSelectAllClasses}
-                handleBatchDeleteClasses={handleBatchDeleteClasses}
-                handleBatchExportClasses={handleBatchExportClasses}
-                handleBatchSetPasscode={handleBatchSetPasscode}
-                handleBatchScheduleClasses={handleBatchScheduleClasses}
-                handleExportAllClassesCombined={handleExportAllClassesCombined}
-                triggerExportForClass={triggerExportForClass}
-                fetchClassProgress={fetchClassProgress}
-                fetchClassSchedules={fetchClassSchedules}
-                fetchStudentProgress={fetchStudentProgress}
-                toggleClassSelection={toggleClassSelection}
-              />
-            ) : teacherTab === 'timetable' ? (
-              <TimetableView classes={classes} lessons={lessons} lang={lang} onSchedulesUpdated={fetchTodaySchedules} />
-            ) : teacherTab === 'admin_directory' ? (
-              <AdminDirectoryView
-                session={session}
-                lang={lang}
-                onLogout={handleLogout}
-                aiProviders={aiProviders}
-                testingProviderId={testingProviderId}
-                onAIProvidersChanged={fetchAIProviders}
-                onTriggerTour={() => setIsTourOpen(true)}
-                siteInfo={siteInfo}
-                onSiteInfoChanged={setSiteInfo}
-              />
-            ) : teacherTab === 'computer_labs' ? (
-              <ComputerLabView computerLabs={computerLabs} onRefresh={fetchLabs} lang={lang} />
-            ) : teacherTab === 'help' ? (
-              <HelpView
-                registeredCommands={registeredCommands}
-                onRefresh={fetchRegisteredCommands}
-              />
-            ) : null}
-
-
-          </div>
-
-        </div>
+          <TeacherView
+            mainNavCollapsed={mainNavCollapsed}
+            setMainNavCollapsed={setMainNavCollapsed}
+            teacherTab={teacherTab}
+            setTeacherTab={setTeacherTab}
+            lang={lang}
+            session={session}
+            todaySchedules={todaySchedules}
+            t={t}
+            lessons={lessons}
+            classes={classes}
+            students={students}
+            approvals={approvals}
+            processes={processes}
+            isApprovalsCollapsed={isApprovalsCollapsed}
+            setIsApprovalsCollapsed={setIsApprovalsCollapsed}
+            isProcessesCollapsed={isProcessesCollapsed}
+            setIsProcessesCollapsed={setIsProcessesCollapsed}
+            scoreOverrides={scoreOverrides}
+            setScoreOverrides={setScoreOverrides}
+            handleApprove={handleApprove}
+            handleReject={handleReject}
+            showLogs={showLogs}
+            setShowLogs={setShowLogs}
+            processLogsContent={processLogsContent}
+            showProcessLogs={showProcessLogs}
+            fetchProcessLogs={fetchProcessLogs}
+            setShowProcessLogs={setShowProcessLogs}
+            addToast={addToast}
+            handleQuickScheduleClass={handleQuickScheduleClass}
+            handleQuickGenerateAssignment={handleQuickGenerateAssignment}
+            handleQuickCreateLesson={handleQuickCreateLesson}
+            selectedLesson={selectedLesson}
+            activeRole={activeRole}
+            setActiveRole={setActiveRole}
+            editorSaveStatus={editorSaveStatus}
+            setEditorSaveStatus={setEditorSaveStatus}
+            editorLastSavedTime={editorLastSavedTime}
+            setEditorLastSavedTime={setEditorLastSavedTime}
+            setIsLessonPreviewVisible={setIsLessonPreviewVisible}
+            setPreviewLessonTab={setPreviewLessonTab}
+            setPreviewSelectedCourseware={setPreviewSelectedCourseware}
+            handlePaletteActivate={handlePaletteActivate}
+            timelineSegments={timelineSegments}
+            activeSegmentId={activeSegmentId}
+            setActiveSegmentId={setActiveSegmentId}
+            draggedSegmentIdx={draggedSegmentIdx}
+            setDraggedSegmentIdx={setDraggedSegmentIdx}
+            saveTimeline={saveTimeline}
+            editorPanelsExpanded={editorPanelsExpanded}
+            setEditorPanelsExpanded={setEditorPanelsExpanded}
+            fetchElements={fetchElements}
+            whiteboardRef={whiteboardRef}
+            elements={elements}
+            paletteEdit={paletteEdit}
+            handlePaletteConfirm={handlePaletteConfirm}
+            setPaletteEdit={setPaletteEdit}
+            setSelectedLesson={setSelectedLesson}
+            plugins={plugins}
+            liveClassSelectedClassId={liveClassSelectedClassId}
+            setLiveClassSelectedClassId={setLiveClassSelectedClassId}
+            liveClassIsActive={liveClassIsActive}
+            setLiveClassIsActive={setLiveClassIsActive}
+            liveClassTimeRemaining={liveClassTimeRemaining}
+            setLiveClassTimeRemaining={setLiveClassTimeRemaining}
+            liveClassFeed={liveClassFeed}
+            setLiveClassFeed={setLiveClassFeed}
+            liveClassAcknowledgedMap={liveClassAcknowledgedMap}
+            setLiveClassAcknowledgedMap={setLiveClassAcknowledgedMap}
+            onlineStudentIds={onlineStudentIds}
+            activeStudentLessons={activeStudentLessons}
+            liveClassStudentProgress={liveClassStudentProgress}
+            storeTab={storeTab}
+            setStoreTab={setStoreTab}
+            pluginCode={pluginCode}
+            setPluginCode={setPluginCode}
+            installingPlugin={installingPlugin}
+            onInstall={handleInstallPlugin}
+            onZipUpload={handleZipPluginUpload}
+            onToggle={handleTogglePlugin}
+            onDelete={handleDeletePlugin}
+            lessonsSearchQuery={lessonsSearchQuery}
+            setLessonsSearchQuery={setLessonsSearchQuery}
+            lessonsSortOrder={lessonsSortOrder}
+            setLessonsSortOrder={setLessonsSortOrder}
+            filteredLessons={filteredAndSortedLessons}
+            onOpenImportLessons={() => { setImportStatus('idle'); setImportProgress(0); setImportProgressTotal(0); setImportErrorMsg(''); setPreviewImportData([]); setIsImportLessonsOpen(true); }}
+            onOpenCourseWizard={() => { setWizardStep(1); setIsCourseWizardOpen(true); }}
+            onViewCourse={(lessonId) => { setTeacherTab('lesson_editor'); setSelectedLesson(lessonId); }}
+            onSchedulesUpdated={fetchTodaySchedules}
+            onLogout={handleLogout}
+            aiProviders={aiProviders}
+            testingProviderId={testingProviderId}
+            onAIProvidersChanged={fetchAIProviders}
+            onTriggerTour={() => setIsTourOpen(true)}
+            siteInfo={siteInfo}
+            onSiteInfoChanged={setSiteInfo}
+            computerLabs={computerLabs}
+            onRefresh={fetchLabs}
+            registeredCommands={registeredCommands}
+            fetchRegisteredCommands={fetchRegisteredCommands}
+            batchMode={batchMode}
+            selectedClassIds={selectedClassIds}
+            setSelectedClassIds={setSelectedClassIds}
+            setSelectedStudentIds={setSelectedStudentIds}
+            setBatchMode={setBatchMode}
+            expandedClassId={expandedClassId}
+            setExpandedClassId={setExpandedClassId}
+            exportTooltipOpen={exportTooltipOpen}
+            setExportTooltipOpen={setExportTooltipOpen}
+            exportDropdownOpen={exportDropdownOpen}
+            setExportDropdownOpen={setExportDropdownOpen}
+            isExportingAllCombined={isExportingAllCombined}
+            loadingExportClassId={loadingExportClassId}
+            classStudentsMap={classStudentsMap}
+            setClassStudentsMap={setClassStudentsMap}
+            expandedStudentId={expandedStudentId}
+            setExpandedStudentId={setExpandedStudentId}
+            selectedStudentIds={selectedStudentIds}
+            rosterViewMode={rosterViewMode}
+            setRosterViewMode={setRosterViewMode}
+            rosterSearchQuery={rosterSearchQuery}
+            setRosterSearchQuery={setRosterSearchQuery}
+            rosterTagFilter={rosterTagFilter}
+            setRosterTagFilter={setRosterTagFilter}
+            toggleSelectAllStudents={toggleSelectAllStudents}
+            handleBatchDeleteStudents={handleBatchDeleteStudents}
+            handleBatchResetPassword={handleBatchResetPassword}
+            handleBatchTransferStudents={handleBatchTransferStudents}
+            handleBatchSetLockedLesson={handleBatchSetLockedLesson}
+            toggleStudentSelection={toggleStudentSelection}
+            get30DayAverageWarning={get30DayAverageWarning}
+            studentProgressMap={studentProgressMap}
+            studentActiveTabs={studentActiveTabs}
+            setStudentActiveTabs={setStudentActiveTabs}
+            setStudents={setStudents}
+            fetchClassStudents={fetchClassStudents}
+            fetchStudents={fetchStudents}
+            parseCSV={parseCSV}
+            setImportError={setImportError}
+            setImportSuccess={setImportSuccess}
+            setShowImportModal={setShowImportModal}
+            fetchClasses={fetchClasses}
+            classSubmissionFilters={classSubmissionFilters}
+            setClassSubmissionFilters={setClassSubmissionFilters}
+            classActiveTabs={classActiveTabs}
+            setClassActiveTabs={setClassActiveTabs}
+            classProgressMap={classProgressMap}
+            classSchedulesMap={classSchedulesMap}
+            classDashboardMap={classDashboardMap}
+            assignmentSortOrder={assignmentSortOrder}
+            setAssignmentSortOrder={setAssignmentSortOrder}
+            isGeneratingPDFReport={isGeneratingPDFReport}
+            handleGeneratePDFReport={handleGeneratePDFReport}
+            setExportClassId={setExportClassId}
+            setExportClassName={setExportClassName}
+            setQuizzesWeight={setQuizzesWeight}
+            setAssignmentsWeight={setAssignmentsWeight}
+            setCustomCategoryOverrides={setCustomCategoryOverrides}
+            setIsExportWeightModalOpen={setIsExportWeightModalOpen}
+            isGeneratingAssignment={isGeneratingAssignment}
+            setQuizGeneratorClassId={setQuizGeneratorClassId}
+            setQuizGenMode={setQuizGenMode}
+            setQuizGenSelectedLessonId={setQuizGenSelectedLessonId}
+            setQuizGenTopic={setQuizGenTopic}
+            setSuggestedObjectives={setSuggestedObjectives}
+            setSuggestedQuestions={setSuggestedQuestions}
+            setIsQuizGeneratorOpen={setIsQuizGeneratorOpen}
+            setActiveStudentId={setActiveStudentId}
+            setSelectedAssignment={setSelectedAssignment}
+            setStudentViewStatus={setStudentViewStatus}
+            isGrading={isGrading}
+            setIsGrading={setIsGrading}
+            fetchClassDashboard={fetchClassDashboard}
+            newScheduleDate={newScheduleDate}
+            setNewScheduleDate={setNewScheduleDate}
+            newScheduleLessonId={newScheduleLessonId}
+            setNewScheduleLessonId={setNewScheduleLessonId}
+            expandedScheduleId={expandedScheduleId}
+            setExpandedScheduleId={setExpandedScheduleId}
+            fetchScheduleAttendance={fetchScheduleAttendance}
+            scheduleAttendanceMap={scheduleAttendanceMap}
+            toggleSelectAllClasses={toggleSelectAllClasses}
+            handleBatchDeleteClasses={handleBatchDeleteClasses}
+            handleBatchExportClasses={handleBatchExportClasses}
+            handleBatchSetPasscode={handleBatchSetPasscode}
+            handleBatchScheduleClasses={handleBatchScheduleClasses}
+            handleExportAllClassesCombined={handleExportAllClassesCombined}
+            triggerExportForClass={triggerExportForClass}
+            fetchClassProgress={fetchClassProgress}
+            fetchClassSchedules={fetchClassSchedules}
+            fetchStudentProgress={fetchStudentProgress}
+            toggleClassSelection={toggleClassSelection}
+            socketRef={socketRef}
+            setShowCoursewareHub={setShowCoursewareHub}
+            fetchTodaySchedules={fetchTodaySchedules}
+          />
         )}
       </div>
 
