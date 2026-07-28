@@ -25,7 +25,7 @@ export async function runStartupMigrations(db: MigrationDb): Promise<void> {
       console.log('Upgrading old Quiz Component Plugin to add classroomTools and fix Actor...');
       db.prepare('DELETE FROM plugins WHERE id = ?').run(existingQuiz.id);
     }
-    const existingRollCall = db.prepare('SELECT id, manifest FROM plugins WHERE name = ?').get('Random Student Picker (随机点名小工�?)') as any;
+    const existingRollCall = db.prepare('SELECT id, manifest FROM plugins WHERE name = ?').get('Random Student Picker (随机点名小工具)') as any;
     if (existingRollCall && (!existingRollCall.manifest || !existingRollCall.manifest.includes('classroomTools'))) {
       console.log('Upgrading old Random Student Picker Plugin to add classroomTools...');
       db.prepare('DELETE FROM plugins WHERE id = ?').run(existingRollCall.id);
