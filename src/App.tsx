@@ -1,4 +1,4 @@
-import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, LayoutGrid, List, Globe, Code, Blocks, Download, Upload, Paperclip, Terminal, ChevronUp, ChevronDown, ChevronRight, FileText, Shield, ShieldAlert, Check, X, Folder, File as FileIcon, Activity, Users, BarChart2, ClipboardList, Send, FileBadge, PlayCircle, Loader2, Calendar as CalendarIcon, CheckCircle2, Bell, BookOpen, Settings, PanelRightClose, PanelRightOpen, Home, Presentation, HelpCircle, Search, Settings2, Percent, ListFilter, Clock, Sparkles, Eye, Maximize2, Minimize2, Database, Shuffle } from 'lucide-react';
+import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, LayoutGrid, List, Globe, Code, Blocks, Download, Upload, Paperclip, Terminal, ChevronUp, ChevronDown, ChevronRight, FileText, Shield, ShieldAlert, Check, X, Folder, File as FileIcon, Activity, BarChart2, ClipboardList, Send, FileBadge, PlayCircle, Loader2, Calendar as CalendarIcon, CheckCircle2, Bell, BookOpen, Settings, PanelRightClose, PanelRightOpen, Home, Presentation, HelpCircle, Search, Settings2, Percent, ListFilter, Clock, Sparkles, Eye, Maximize2, Minimize2, Database, Shuffle } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PluginTabPanel } from './components/PluginTabPanel.js';
 import { parseCSV } from './utils/pluginParsers.js';
@@ -83,16 +83,14 @@ import { StudentCourseProgressList } from './features/student/StudentCourseProgr
 import { StudentLessonHeader } from './features/student/StudentLessonHeader';
 import { StudentLessonContentPanel } from './features/student/StudentLessonContentPanel';
 import { StudentLessonInteractionPanel } from './features/student/StudentLessonInteractionPanel';
-import { StudentLessonView } from './features/student/StudentLessonView';
+import { StudentView } from './features/student/StudentView';
 import { StudentAssignmentHeader } from './features/student/StudentAssignmentHeader';
 import { StudentAssignmentQuestionPanel } from './features/student/StudentAssignmentQuestionPanel';
 import { StudentAssignmentWorkPanel } from './features/student/StudentAssignmentWorkPanel';
-import { StudentAssignmentView } from './features/student/StudentAssignmentView';
 import { StudentSchedulePanel } from './features/student/StudentSchedulePanel';
 import { StudentDashboardHeader } from './features/student/StudentDashboardHeader';
 import { StudentRollCallAlarms } from './features/student/StudentRollCallAlarms';
 import { StudentAssignmentsPanel } from './features/student/StudentAssignmentsPanel';
-import { StudentDashboardPanel } from './features/student/StudentDashboardPanel';
 import { ToastContainer } from './features/shared/ToastContainer';
 import { NavigationSidebar } from './features/shared/NavigationSidebar';
 import { RightSidebar } from './features/shared/RightSidebar';
@@ -3836,80 +3834,47 @@ export default function App() {
         />
 
         {activeRole === 'student' ? (
-          <div className="flex-1 p-6 overflow-y-auto w-full max-w-full space-y-6">
-            {!activeStudentId ? (
-              <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-500 flex flex-col items-center justify-center">
-                <Users size={48} className="text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-700">No Student Selected</h3>
-                <p className="mt-2 text-sm">Please select a student from the top navigation bar to view their dashboard.</p>
-              </div>
-            ) : !studentDashboardData ? (
-              <div className="flex items-center justify-center h-full text-gray-400">
-                <Loader2 size={32} className="animate-spin" />
-              </div>
-            ) : studentViewStatus === 'lesson' ? (
-              <StudentLessonView
-                students={students}
-                activeStudentId={activeStudentId}
-                setStudentViewStatus={setStudentViewStatus}
-                setSelectedLesson={setSelectedLesson}
-                lessons={lessons}
-                selectedLesson={selectedLesson}
-                studentFullscreenPanel={studentFullscreenPanel}
-                setStudentFullscreenPanel={setStudentFullscreenPanel}
-                timelineSegments={timelineSegments}
-                lang={lang}
-                activeSegmentId={activeSegmentId}
-                setActiveSegmentId={setActiveSegmentId}
-                localProgressPercent={localProgressPercent}
-                setLocalProgressPercent={setLocalProgressPercent}
-                updateStudentProgress={updateStudentProgress}
-                isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
-                setIsStudentLessonContentCollapsed={setIsStudentLessonContentCollapsed}
-                studentLessonTab={studentLessonTab}
-                setStudentLessonTab={setStudentLessonTab}
-                elements={elements}
-                activeRole={activeRole}
-                fetchElements={fetchElements}
-                currentVfsParent={currentVfsParent}
-                setCurrentVfsParent={setCurrentVfsParent}
-                vfsNodes={vfsNodes}
-                studentSelectedCourseware={studentSelectedCourseware}
-                setStudentSelectedCourseware={setStudentSelectedCourseware}
-                addToast={addToast}
-              />
-            ) : studentViewStatus === 'assignment' && selectedAssignment ? (
-              <StudentAssignmentView
-                selectedAssignment={selectedAssignment}
-                setStudentViewStatus={setStudentViewStatus}
-                setSelectedAssignment={setSelectedAssignment}
-                quizStudentAnswers={quizStudentAnswers}
-                submitQuizAssignment={submitQuizAssignment}
-                subAssignmentTab={subAssignmentTab}
-                setSubAssignmentTab={setSubAssignmentTab}
-                setQuizStudentAnswers={setQuizStudentAnswers}
-                elements={elements}
-                activeRole={activeRole}
-                activeStudentId={activeStudentId}
-                fetchElements={fetchElements}
-              />
-            ) : (
-              <StudentDashboardPanel
-                students={students}
-                activeStudentId={activeStudentId}
-                studentDashboardData={studentDashboardData}
-                readNotifications={readNotifications}
-                setReadNotifications={setReadNotifications}
-                addToast={addToast}
-                lang={lang}
-                setSelectedLesson={setSelectedLesson}
-                setStudentViewStatus={setStudentViewStatus}
-                setSelectedAssignment={setSelectedAssignment}
-                setQuizStudentAnswers={setQuizStudentAnswers}
-                setSubAssignmentTab={setSubAssignmentTab}
-              />
-            )}
-          </div>
+          <StudentView
+            students={students}
+            activeStudentId={activeStudentId}
+            studentViewStatus={studentViewStatus}
+            studentDashboardData={studentDashboardData}
+            readNotifications={readNotifications}
+            setReadNotifications={setReadNotifications}
+            addToast={addToast}
+            lang={lang}
+            setSelectedLesson={setSelectedLesson}
+            setStudentViewStatus={setStudentViewStatus}
+            setSelectedAssignment={setSelectedAssignment}
+            setQuizStudentAnswers={setQuizStudentAnswers}
+            setSubAssignmentTab={setSubAssignmentTab}
+            lessons={lessons}
+            selectedLesson={selectedLesson}
+            studentFullscreenPanel={studentFullscreenPanel}
+            setStudentFullscreenPanel={setStudentFullscreenPanel}
+            timelineSegments={timelineSegments}
+            activeSegmentId={activeSegmentId}
+            setActiveSegmentId={setActiveSegmentId}
+            localProgressPercent={localProgressPercent}
+            setLocalProgressPercent={setLocalProgressPercent}
+            updateStudentProgress={updateStudentProgress}
+            isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
+            setIsStudentLessonContentCollapsed={setIsStudentLessonContentCollapsed}
+            studentLessonTab={studentLessonTab}
+            setStudentLessonTab={setStudentLessonTab}
+            elements={elements}
+            activeRole={activeRole}
+            fetchElements={fetchElements}
+            currentVfsParent={currentVfsParent}
+            setCurrentVfsParent={setCurrentVfsParent}
+            vfsNodes={vfsNodes}
+            studentSelectedCourseware={studentSelectedCourseware}
+            setStudentSelectedCourseware={setStudentSelectedCourseware}
+            selectedAssignment={selectedAssignment}
+            quizStudentAnswers={quizStudentAnswers}
+            submitQuizAssignment={submitQuizAssignment}
+            subAssignmentTab={subAssignmentTab}
+          />
         ) : (
           <div className="flex-1 overflow-hidden flex bg-gray-50">
             <NavigationSidebar
