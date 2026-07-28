@@ -82,6 +82,9 @@ import { StudentPerformanceCharts } from './features/student/StudentPerformanceC
 import { StudentQuickStats } from './features/student/StudentQuickStats';
 import { StudentCourseProgressList } from './features/student/StudentCourseProgressList';
 import { StudentSchedulePanel } from './features/student/StudentSchedulePanel';
+import { StudentDashboardHeader } from './features/student/StudentDashboardHeader';
+import { StudentRollCallAlarms } from './features/student/StudentRollCallAlarms';
+import { StudentAssignmentsPanel } from './features/student/StudentAssignmentsPanel';
 import { ToastContainer } from './features/shared/ToastContainer';
 import { NavigationSidebar } from './features/shared/NavigationSidebar';
 import { RightSidebar } from './features/shared/RightSidebar';
@@ -4326,82 +4329,9 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
             ) : (
               <div className="space-y-8">
                 {/* Dashboard Header */}
-                <div className="flex items-center gap-4 border-b border-gray-200 pb-4">
-                  <div className="h-16 w-16 bg-indigo-600 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-lg">
-                    {students.find(s => s.id === activeStudentId)?.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-800">Welcome, {students.find(s => s.id === activeStudentId)?.name}</h2>
-                    <p className="text-gray-500">Here is your learning summary.</p>
-                  </div>
-                </div>
+                <StudentDashboardHeader students={students} activeStudentId={activeStudentId} />
 
-                {(() => {
-                  const rollcalls = studentDashboardData?.rollcalls || [];
-                  const unreadRCs = rollcalls.filter((r: any) => !readNotifications.has(r.id));
-                  if (unreadRCs.length === 0) return null;
-                  
-                  return (
-                    <div className="space-y-4">
-                      {unreadRCs.map((r: any) => (
-                        <motion.div
-                          key={r.id}
-                          initial={{ scale: 0.95, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          className="bg-amber-500 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden"
-                        >
-                          <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl animate-pulse" />
-                          <div className="absolute -left-10 -top-10 w-32 h-32 bg-yellow-300/20 rounded-full blur-xl" />
-                          
-                          <div className="flex flex-col md:flex-row items-center justify-between gap-4 relative z-10">
-                            <div className="flex items-center gap-4">
-                              <div className="p-3 bg-white/20 backdrop-blur-md rounded-xl animate-bounce shrink-0">
-                                <Sparkles className="h-6 w-6 text-yellow-100" />
-                              </div>
-                              <div>
-                                <h3 className="text-lg font-bold tracking-tight">
-                                  {lang === 'zh' ? '⚡️ 闪电提问点名中，请立即回应！' : '⚡️ Active Classroom Roll Call Alarm!'}
-                                </h3>
-                                <p className="text-yellow-50 text-sm mt-1 max-w-xl font-medium">
-                                  {lang === 'zh'
-                                    ? `您刚才在课程"${r.lesson_title || '课堂'}"中被老师随机选中。大屏已同步闪烁您的姓名，请点击右侧按钮确认专注参与！`
-                                    : `You have been randomly selected by the teacher in lesson "${r.lesson_title || 'Class'}". Please click the button to confirm your presence and active attention!`}
-                                </p>
-                              </div>
-                            </div>
-                            <button
-                              onClick={async () => {
-                                try {
-                                  await fetch(`/api/students/${activeStudentId}/read_notifications`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ notificationId: r.id })
-                                  });
-                                  setReadNotifications(prev => {
-                                    const next = new Set(prev);
-                                    next.add(r.id);
-                                    return next;
-                                  });
-                                  addToast(
-                                    lang === 'zh' ? '已确认参与状态' : 'Presence confirmed',
-                                    lang === 'zh' ? '成功！已安全同步并确认在线。' : 'Successfully synchronized and confirmed active presence.',
-                                    'success'
-                                  );
-                                } catch (e) {
-                                  console.error('Failed to acknowledge rollcall', e);
-                                }
-                              }}
-                              className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg ring-2 ring-white/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer shrink-0"
-                            >
-                              <Check size={14} />
-                              <span>{lang === 'zh' ? '🙋‍♂️ 我已就位 / 确认听讲' : '🙋‍♂️ Present & Alert'}</span>
-                            </button>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  );
-                })()}
+                <StudentRollCallAlarms studentDashboardData={studentDashboardData} readNotifications={readNotifications} setReadNotifications={setReadNotifications} activeStudentId={activeStudentId} addToast={addToast} lang={lang} />
 
                 <StudentCourseProgressList progress={studentDashboardData.progress} setSelectedLesson={setSelectedLesson} setStudentViewStatus={setStudentViewStatus} />
 
@@ -4415,111 +4345,7 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                   <StudentSchedulePanel schedules={studentDashboardData.schedules} setSelectedLesson={setSelectedLesson} setStudentViewStatus={setStudentViewStatus} />
 
                   {/* Assignments */}
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
-                    <div className="p-4 border-b border-gray-100 flex items-center gap-2">
-                       <ClipboardList size={18} className="text-indigo-500" />
-                       <h3 className="font-semibold text-gray-800">My Assignments</h3>
-                    </div>
-                    <div className="p-4 flex-1">
-                      {studentDashboardData.assignments.length === 0 ? (
-                        <div className="text-center p-8 text-gray-400 italic text-sm">No assignments given.</div>
-                      ) : (
-                        <div className="space-y-3">
-                          {studentDashboardData.assignments.map((ast: any) => (
-                            <div key={ast.id} className="flex flex-col p-3 rounded-lg border border-gray-100 bg-gray-50 hover:bg-gray-100 transition-colors">
-                               <div className="flex justify-between items-start mb-1">
-                                  <div className="font-semibold text-indigo-900">{ast.title}</div>
-                                  {!ast.submission_status && <span className="bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold">Pending</span>}
-                                  {ast.submission_status === 'submitted' && <span className="bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold">Awaiting Grade</span>}
-                                  {ast.submission_status === 'graded' && (
-                                    <div className="flex items-center gap-1.5 shrink-0 relative group/ast-badge">
-                                      {ast.graded_at && (
-                                        <div className="text-gray-400 hover:text-indigo-600 transition-colors cursor-help p-0.5">
-                                          <Clock size={11} />
-                                          <div className="absolute right-0 bottom-full mb-1.5 hidden group-hover/ast-badge:block bg-gray-900 text-white text-[10px] p-2 rounded-xl shadow-xl z-25 whitespace-nowrap font-sans font-normal normal-case">
-                                            {lang === 'zh' 
-                                              ? `评审反馈时间: ${new Date(ast.graded_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` 
-                                              : `Feedback Hour: ${new Date(ast.graded_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
-                                            <div className="absolute top-full right-2 -mt-1 border-4 border-transparent border-t-gray-900" />
-                                          </div>
-                                        </div>
-                                      )}
-                                      <span className="bg-green-100 text-green-800 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold text-center">Score: {ast.score}%</span>
-                                    </div>
-                                  )}
-                               </div>
-                               <div className="text-xs text-gray-500 mb-2">{ast.class_name} &middot; <span className="text-gray-400 italic">{ast.content}</span></div>
-                               
-                               {ast.submission_status === 'graded' && ast.feedback && (
-                                 <div className="mt-2 bg-green-50 p-2.5 rounded-lg border border-green-100 flex flex-col gap-1 text-xs text-green-800">
-                                   <div className="flex items-center justify-between gap-2 border-b border-green-100/50 pb-1 mb-0.5">
-                                     <div className="flex items-center gap-1 font-semibold">
-                                       <CheckCircle2 size={13} className="shrink-0 text-green-600" />
-                                       <span>{lang === 'zh' ? '教师评审意见' : 'Teacher Feedback'}</span>
-                                     </div>
-                                     {ast.graded_at && (
-                                       <div className="flex items-center gap-1 text-[9px] text-green-600 font-mono bg-white/70 px-1.5 py-0.5 rounded border border-green-100/50 relative group/ast-time cursor-help">
-                                         <Clock size={10} className="inline" />
-                                         <span>
-                                           {new Date(ast.graded_at).toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric' })}
-                                         </span>
-                                         <div className="absolute right-0 bottom-full mb-1.5 hidden group-hover/ast-time:block bg-gray-900 text-white text-[10px] p-2 rounded-lg shadow-xl z-20 whitespace-nowrap font-sans font-normal text-left">
-                                           {lang === 'zh' 
-                                             ? `评审反馈于: ${new Date(ast.graded_at).toLocaleString('zh-CN')}` 
-                                             : `Feedback provided on: ${new Date(ast.graded_at).toLocaleString('en-US')}`}
-                                           <div className="absolute top-full right-3 -mt-1 border-4 border-transparent border-t-gray-900" />
-                                         </div>
-                                       </div>
-                                     )}
-                                   </div>
-                                   <span className="leading-snug bg-green-50/20 rounded p-1 text-xs text-gray-700 whitespace-pre-wrap">{ast.feedback}</span>
-                                 </div>
-                               )}
-                               
-                               {!ast.submission_status && (
-                                  <div className="mt-2 text-right flex items-center justify-end gap-2">
-                                    <button 
-                                      onClick={() => {
-                                        setSelectedAssignment(ast);
-                                        setStudentViewStatus('assignment');
-                                        setQuizStudentAnswers({});
-                                        setSubAssignmentTab('quiz');
-                                      }}
-                                      className="px-3 py-1.5 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 text-xs rounded shadow-sm focus:outline-none transition-colors font-medium flex items-center gap-1.5"
-                                    >
-                                      <PenTool size={14} /> Open Canvas
-                                    </button>
-                                  </div>
-                               )}
-                               {ast.submission_status && (
-                                  <div className="mt-2 text-right">
-                                    <button 
-                                      onClick={() => {
-                                        setSelectedAssignment(ast);
-                                        setStudentViewStatus('assignment');
-                                        setSubAssignmentTab('quiz');
-                                        if (ast.submission_content) {
-                                          try {
-                                            setQuizStudentAnswers(JSON.parse(ast.submission_content));
-                                          } catch (e) {
-                                            setQuizStudentAnswers({});
-                                          }
-                                        } else {
-                                          setQuizStudentAnswers({});
-                                        }
-                                      }}
-                                      className="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs rounded shadow-sm focus:outline-none transition-colors font-medium flex items-center gap-1.5 ml-auto"
-                                    >
-                                      <FileBadge size={14} /> View Submission
-                                    </button>
-                                  </div>
-                               )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                <StudentAssignmentsPanel assignments={studentDashboardData.assignments} setSelectedAssignment={setSelectedAssignment} setStudentViewStatus={setStudentViewStatus} setQuizStudentAnswers={setQuizStudentAnswers} setSubAssignmentTab={setSubAssignmentTab} lang={lang} />
                   
                   {/* Dynamic plugin-registered student dashboard views */}
                   <ExtensionPointRenderer slot="student.view" slotProps={{ studentId: activeStudentId }} />
