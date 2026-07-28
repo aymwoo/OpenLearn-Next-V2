@@ -109,7 +109,7 @@ export interface ISocketService {
 }
 
 export interface IUIService {
-  showToast(title: string, message: string, type: 'info' | 'success' | 'warning'): void;
+  showToast(title: string, message: string, type: 'info' | 'success' | 'warning' | 'error'): void;
   showModal(title: string, content: React.ReactNode): void;
   closeModal(): void;
   /** v5.1: 触发浏览器文件下载 */

@@ -524,7 +524,7 @@ export default function App() {
   const [segmentToEdit, setSegmentToEdit] = useState<any | null>(null);
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
   const [studentDashboardData, setStudentDashboardData] = useState<any>(null);
-  const addToast = (title: string, message: string, type: 'info' | 'success' | 'warning' = 'info') => {
+  const addToast = (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
     appStore.getState().addToast({ id, title, message, type });
     setTimeout(() => {

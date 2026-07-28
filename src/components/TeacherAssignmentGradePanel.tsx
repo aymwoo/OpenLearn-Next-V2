@@ -19,7 +19,7 @@ import {
 interface TeacherAssignmentGradePanelProps {
   lessonId: string;
   lang: 'zh' | 'en';
-  addToast: (title: string, message: string, type: 'info' | 'success' | 'warning') => void;
+  addToast: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
 export function TeacherAssignmentGradePanel({

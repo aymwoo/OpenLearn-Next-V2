@@ -62,7 +62,7 @@ export interface TeacherViewProps {
   showProcessLogs: string | null;
   fetchProcessLogs: (id: string) => Promise<void>;
   setShowProcessLogs: (id: string | null) => void;
-  addToast: (title: string, message: string, type?: 'info' | 'success' | 'warning') => void;
+  addToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   handleQuickScheduleClass: (classId: string, lessonId: string, date: string) => Promise<boolean>;
   handleQuickGenerateAssignment: (classId: string, title: string, desc: string) => Promise<string | null>;
   handleQuickCreateLesson: (title: string, content: string) => Promise<string>;

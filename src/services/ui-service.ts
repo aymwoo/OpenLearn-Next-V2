@@ -19,16 +19,16 @@ export interface ModalState {
 }
 
 export class UIService implements IUIService {
-  private addToastFn: ((title: string, message: string, type: 'info' | 'success' | 'warning') => void) | null;
+  private addToastFn: ((title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void) | null;
   private modalState: ModalState | null = null;
 
   constructor(
-    addToast?: (title: string, message: string, type: 'info' | 'success' | 'warning') => void,
+    addToast?: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void,
   ) {
     this.addToastFn = addToast ?? null;
   }
 
-  showToast(title: string, message: string, type: 'info' | 'success' | 'warning' = 'info'): void {
+  showToast(title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): void {
     if (this.addToastFn) {
       this.addToastFn(title, message, type);
     } else {

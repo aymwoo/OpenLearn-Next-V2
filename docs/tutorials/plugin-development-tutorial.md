@@ -1166,7 +1166,7 @@ interface ISocketService {
 }
 
 interface IUIService {
-  showToast(title: string, message: string, type: 'info' | 'success' | 'warning'): void;
+  showToast(title: string, message: string, type: 'info' | 'success' | 'warning' | 'error'): void;
   showModal(title: string, content: React.ReactNode): void;
   closeModal(): void;
   downloadFile(data: Blob | string, filename: string, mimeType?: string): void;

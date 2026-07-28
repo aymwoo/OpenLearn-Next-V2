@@ -39,7 +39,7 @@ export interface CourseWizardModalProps {
   setWizardCourseTimeline: Dispatch<SetStateAction<WizardSegment[]>>;
   wizardCourseContent: string;
   setWizardCourseContent: (v: string) => void;
-  addToast: (title: string, message: string, type: 'info' | 'success' | 'warning') => void;
+  addToast: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
   generateTemplateContent: (title: string, category: string) => string;
   handleDeployWizardCourse: () => void;
 }

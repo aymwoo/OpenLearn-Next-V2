@@ -38,7 +38,7 @@ interface LiveClassroomViewProps {
   elements: any[];
   fetchElements: (lessonId: string) => Promise<void>;
   fetchStudents: () => Promise<void>;
-  addToast: (title: string, message: string, type: 'info' | 'success' | 'warning') => void;
+  addToast: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
   onlineStudentIds: string[];
   activeStudentLessons: Record<string, string>;
   liveClassStudentProgress: any[];
