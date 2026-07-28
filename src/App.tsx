@@ -98,6 +98,7 @@ import { CreateClassButton } from './features/teacher/classes/CreateClassButton.
 import { ManualImportButton } from './features/teacher/classes/ManualImportButton.js';
 import { ClassPasscodeController } from './features/teacher/classes/ClassPasscodeController.js';
 import { ClassRowHeader } from './features/teacher/classes/ClassRowHeader.js';
+import { ClassTabs } from './features/teacher/classes/ClassTabs.js';
 
 const AGENT_PROVIDER_STORAGE_KEY = 'openlearnv2.agentProviderId';
 
@@ -5074,66 +5075,12 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                               className="pl-6 bg-gray-50 pb-2 pt-2 border-t border-gray-100 pr-2"
                             >
                                <ClassPasscodeController cls={cls} lang={lang} fetchClasses={fetchClasses} />
-                               {/* Class level Tabs */}
-                               <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl mb-4 max-w-md border border-slate-200/40" onClick={(e) => e.stopPropagation()}>
-                                 <button
-                                   onClick={(e) => {
-                                     e.stopPropagation();
-                                     setClassActiveTabs(prev => ({ ...prev, [cls.id]: 'students' }));
-                                   }}
-                                   className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
-                                     (classActiveTabs[cls.id] || 'students') === 'students'
-                                       ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/50'
-                                       : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
-                                   }`}
-                                 >
-                                   <Users size={12} />
-                                   <span>{lang === 'zh' ? '学生名单' : 'Students'}</span>
-                                 </button>
-                                 <button
-                                   onClick={(e) => {
-                                     e.stopPropagation();
-                                     setClassActiveTabs(prev => ({ ...prev, [cls.id]: 'assignments' }));
-                                   }}
-                                   className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
-                                     (classActiveTabs[cls.id] || 'students') === 'assignments'
-                                       ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/50'
-                                       : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
-                                   }`}
-                                 >
-                                   <Activity size={12} />
-                                   <span>{lang === 'zh' ? '作业成绩' : 'Assignments'}</span>
-                                 </button>
-                                 <button
-                                   onClick={(e) => {
-                                     e.stopPropagation();
-                                     setClassActiveTabs(prev => ({ ...prev, [cls.id]: 'schedules' }));
-                                   }}
-                                   className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
-                                     (classActiveTabs[cls.id] || 'students') === 'schedules'
-                                       ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/50'
-                                       : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
-                                   }`}
-                                 >
-                                   <CalendarIcon size={12} />
-                                   <span>{lang === 'zh' ? '课表考勤' : 'Attendance'}</span>
-                                 </button>
-                                 <button
-                                   onClick={(e) => {
-                                     e.stopPropagation();
-                                     setClassActiveTabs(prev => ({ ...prev, [cls.id]: 'grades' }));
-                                   }}
-                                   className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
-                                     (classActiveTabs[cls.id] || 'students') === 'grades'
-                                       ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/50'
-                                       : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
-                                   }`}
-                                 >
-                                   <ClipboardList size={12} />
-                                   <span>{lang === 'zh' ? '学期总评' : 'Grades'}</span>
-                                 </button>
-                               </div>
-
+                               <ClassTabs
+                                 cls={cls}
+                                 lang={lang}
+                                 classActiveTabs={classActiveTabs}
+                                 setClassActiveTabs={setClassActiveTabs}
+                               />
                                {(classActiveTabs[cls.id] || 'students') === 'schedules' && (
                                  <div className="space-y-4">
                                    {classProgressMap[cls.id] && classProgressMap[cls.id].length > 0 && (
