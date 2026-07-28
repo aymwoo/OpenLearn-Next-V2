@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { ClassStudentsPanel } from '../ClassStudentsPanel';
-import type { ClassType, StudentType, StudentProgressType, Lesson } from '../../../types/app';
+import type { ClassType, StudentType, StudentProgressType, Lesson } from '../../../../types/app';
 
 function makeClass(overrides: Partial<ClassType> = {}): ClassType {
   return {
@@ -36,7 +36,7 @@ function buildProps() {
     students: [makeStudent('s-1', 'Alice'), makeStudent('s-2', 'Bob'), makeStudent('s-3', 'Carol')],
     lang: 'en' as 'zh' | 'en',
     selectedStudentIds: new Set<string>(),
-    rosterViewMode: 'grid' as const,
+    rosterViewMode: 'grid' as 'grid' | 'list',
     setRosterViewMode: vi.fn(),
     rosterSearchQuery: '',
     setRosterSearchQuery: vi.fn(),
@@ -89,7 +89,7 @@ describe('ClassStudentsPanel', () => {
   });
 
   it('renders the empty-state message when the class has no students', () => {
-    const props = baseProps({ classStudentsMap: {} });
+    const props = baseProps({ classStudentsMap: { 'class-1': [] } });
     render(<ClassStudentsPanel {...props} />);
     expect(screen.getByText('No students registered in this class.')).toBeTruthy();
   });
