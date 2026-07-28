@@ -8,6 +8,15 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Refactor / Performance
+- **Frontend monolith decomposition — Phase 1 (lesson_editor view)**: Extract the teacher `lesson_editor` tab view (the course timeline editor shell: palette, timeline rail, segment editor, lazy whiteboard, save-status badges, and the student-view preview trigger) from `src/App.tsx` into `src/features/teacher/LessonEditorView.tsx` behind a `LessonEditorViewProps` interface. All App-level state/setters/handlers are passed as props; the JSX is moved verbatim. Behavior is preserved and locked by `src/features/teacher/__tests__/LessonEditorView.test.tsx` (3 cases). `src/App.tsx` is reduced by ~194 lines. No new `tsc` errors beyond the type-debt baseline (116). This begins the incremental, characterization-test-guarded decomposition of `src/App.tsx` (~8.5k lines remaining) targeted for `0.3.0`.
+
+### Next-round backlog
+- **Frontend monolith (`src/App.tsx`)** is the active decomposition target for `0.3.0` — extracted incrementally by feature area with characterization tests. The only remaining inline teacher view is `classes` (~1650-line "School Management Module"); every other teacher tab already delegates to an external component. The `server.ts` decomposition above is complete.
+- **Type/lint debt**: ~116 `tsc` + ~1471 `eslint` errors carried as backlog from the `tsc` root-cause fix; not blocking.
+
 ## [0.1.16] - 2026-07-28
 
 ### Fixes
@@ -24,12 +33,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Server monolith decomposition — Phase 2 (presence / socket handlers)**: Extract the Socket.IO connection lifecycle (`io.on('connection', …)` — `register-student`, `enter-lesson`, `leave-lesson`, `join-room`, `whiteboard-update`, `whiteboard-event`, `teacher-broadcast-segment`, `teacher-ping-student`, `disconnect`, and presence broadcasting) into `server/presence.ts` behind `setupPresence({ io, eventBus })`. The shared `lessonActiveSegments` singleton is reused from `server/shared-state.ts`. Behavior (incl. the `whiteboard-event` detail that emits to the raw `lessonId`, not `lesson-<id>`) is locked by `server/__tests__/presence.test.ts` (7 cases).
 - **Server monolith decomposition — Phase 2 (startup DB migrations)**: Extract the boot-time DB seed/upgrade and SEC-AUTH-03 session cleanup from `startServer()` into `server/bootstrap-db.ts` behind `runStartupMigrations(db: MigrationDb)`. Covers old default-plugin upgrade (Quiz / Random Student Picker), `CREATE TABLE IF NOT EXISTS` for `student_rollcalls` / `site_settings` / `agent_conversations`, the idempotent `client_sessions.expires_at` column add, and the expired-session cleanup. Locked by `server/__tests__/bootstrap-db.test.ts` (7 cases).
 - **Composition root shrinks**: `server.ts` drops from ~1000 to ~322 lines. It now acts purely as the composition root — wiring `kernelContainer`, `ServerBootstrapAdapter`, HTTP/Socket.IO, and delegating all domain behavior to the `server/*` modules above. Each extracted slice has a verbatim-move characterization test; `tsc` remains at the 116-error type-debt baseline.
-
-## [Unreleased]
-
-### Next-round backlog
-- **Frontend monolith (`src/App.tsx`, ~8.9k lines)** is the next decomposition target (tentatively `0.3.0`), tracked separately from the `server.ts` work above.
-- **Type/lint debt**: ~116 `tsc` + ~1471 `eslint` errors carried as backlog from the `tsc` root-cause fix; not blocking.
 
 ## [0.1.15] - 2026-07-27
 
