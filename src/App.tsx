@@ -94,6 +94,7 @@ import { PluginView } from './features/teacher/PluginView';
 import { CourseManagement } from './features/teacher/CourseManagement';
 import { Dashboard } from './features/teacher/Dashboard';
 import { LessonEditorView } from './features/teacher/LessonEditorView.js';
+import { CreateClassButton } from './features/teacher/classes/CreateClassButton.js';
 
 const AGENT_PROVIDER_STORAGE_KEY = 'openlearnv2.agentProviderId';
 
@@ -5010,22 +5011,7 @@ onRefresh={() => fetchElements(`assignment-${selectedAssignment.id}-student-${ac
                   >
                     <Upload size={14} /> {lang === 'zh' ? '手动导入数据' : 'Manual Import'}
                   </button>
-                  <button
-                    onClick={async () => {
-                      const name = window.prompt(lang === 'zh' ? '请输入班级名称:' : 'Enter class name:');
-                      if (name) {
-                        const res = await fetch('/api/classes', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ name })
-                        });
-                        if (res.ok) await fetchClasses();
-                      }
-                    }}
-                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg font-medium shadow-sm transition-colors cursor-pointer"
-                  >
-                    <Plus size={14} /> {lang === 'zh' ? '创建班级' : 'Create Class'}
-                  </button>
+                  <CreateClassButton lang={lang} fetchClasses={fetchClasses} />
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto p-2">
