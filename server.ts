@@ -28,6 +28,7 @@ import rateLimit from 'express-rate-limit';
 import { filterXSS } from 'xss';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './packages/plugins/ai-submit-injector.js';
 import { setupRealtimeBridge } from './server/realtime-bridge.js';
+import { setupPresence } from './server/presence.js';
 import { MF_REMOTE_CACHE, lessonActiveSegments } from './server/shared-state.js';
 import {
   buildAgentSystemInstruction,
@@ -297,123 +298,7 @@ async function startServer() {
   setupRealtimeBridge({ eventBus: kernelContainer.eventBus, io, db: kernelContainer.db });
 
 
-  // In-memory status maps
-  const onlineStudents = new Map<string, { socketId: string, name: string }>();
-  const activeStudentLessons = new Map<string, string>(); // studentId -> lessonId
-
-  const broadcastPresence = () => {
-    io.emit('presence-update', {
-      onlineStudentIds: Array.from(onlineStudents.keys()),
-      activeStudentLessons: Object.fromEntries(activeStudentLessons.entries())
-    });
-  };
-
-  io.on('connection', (socket: any) => {
-    let registeredStudentId: string | null = null;
-
-    socket.on('register-student', (data: { studentId: string, name: string }) => {
-      registeredStudentId = data.studentId;
-      onlineStudents.set(data.studentId, { socketId: socket.id, name: data.name });
-      console.log(`[Presence] Student online: ${data.name} (${data.studentId})`);
-      broadcastPresence();
-    });
-
-    socket.on('enter-lesson', (data: { studentId: string, lessonId: string }) => {
-      activeStudentLessons.set(data.studentId, data.lessonId);
-      socket.join(data.lessonId);
-      console.log(`[Presence] Student ${data.studentId} entered lesson ${data.lessonId}`);
-      broadcastPresence();
-
-      // Send current active segment if it exists
-      const activeSeg = lessonActiveSegments.get(data.lessonId);
-      if (activeSeg) {
-        socket.emit('student-active-segment-changed', {
-          lessonId: data.lessonId,
-          activeSegmentId: activeSeg
-        });
-      }
-    });
-
-    socket.on('leave-lesson', (data: { studentId: string }) => {
-      const oldRoom = activeStudentLessons.get(data.studentId);
-      if (oldRoom) {
-        socket.leave(oldRoom);
-      }
-      activeStudentLessons.delete(data.studentId);
-      console.log(`[Presence] Student ${data.studentId} left lesson`);
-      broadcastPresence();
-    });
-
-    socket.on('join-room', (roomId: string) => {
-      socket.join(roomId);
-    });
-
-    socket.on('whiteboard-update', (data: { roomId: string, type: string, payload: any }) => {
-      // 实时绘制事件（temp-draw, temp-end, segment-change）：直接广播，不经过 EventBus
-      socket.to(data.roomId).emit('whiteboard-sync', data);
-    });
-
-    // Step 4 (v5.0): 白板结构化事�? �? 服务�? EventBus（审计日�? + 广播�?
-    socket.on('whiteboard-event', (data: {
-      type: string;
-      payload: { lessonId: string; elementId?: string; elementType?: string; segmentId?: string };
-      id: string;
-      timestamp: number;
-    }) => {
-      // 1. 发布到服务端 EventBus �? 自动写入 events 表（审计日志�?
-      kernelContainer.eventBus.publish({
-        id: data.id,
-        type: data.type,
-        source: 'whiteboard',
-        payload: data.payload,
-        timestamp: data.timestamp,
-        correlationId: data.payload.lessonId,
-      });
-
-      // 2. 广播到课程房间的其他客户�?
-      const lessonId = data.payload.lessonId;
-      if (lessonId) {
-        const roomName = lessonId.startsWith('assignment-') ? lessonId : `lesson-${lessonId}`;
-        socket.to(data.payload.lessonId).emit('whiteboard-sync', {
-          type: 'refresh',
-          sourceEvent: data.type,
-        });
-      }
-    });
-
-    socket.on('teacher-broadcast-segment', (data: { lessonId: string, activeSegmentId: string }) => {
-      // Store the active segment in memory
-      lessonActiveSegments.set(data.lessonId, data.activeSegmentId);
-      // Broadcast to everyone in the lesson room (including the teacher client)
-      io.to(data.lessonId).emit('student-active-segment-changed', data);
-    });
-
-    socket.on('teacher-ping-student', (data: { studentId: string, lessonId: string, message?: string }) => {
-      console.log(`[Ping] Teacher pinged student ${data.studentId} for lesson ${data.lessonId}`);
-      const studentOnlineInfo = onlineStudents.get(data.studentId);
-      if (studentOnlineInfo) {
-        io.to(studentOnlineInfo.socketId).emit('student-pinged', {
-          lessonId: data.lessonId,
-          message: data.message
-        });
-      }
-    });
-
-    socket.on('disconnect', () => {
-      if (registeredStudentId) {
-        onlineStudents.delete(registeredStudentId);
-        activeStudentLessons.delete(registeredStudentId);
-        console.log(`[Presence] Student offline: ${registeredStudentId}`);
-        broadcastPresence();
-      }
-    });
-
-    // Send initial status immediately on connection
-    socket.emit('presence-update', {
-      onlineStudentIds: Array.from(onlineStudents.keys()),
-      activeStudentLessons: Object.fromEntries(activeStudentLessons.entries())
-    });
-  });
+  setupPresence({ io, eventBus: kernelContainer.eventBus });
 
   // Vite Middleware for Development
   if (process.env.NODE_ENV !== 'production') {
