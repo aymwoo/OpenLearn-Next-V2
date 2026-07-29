@@ -7,6 +7,13 @@ All notable changes to **@openlearn/plugin-sdk** are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.5.0] - 2026-07-28
+
+### Features
+- Concrete service token types (was `Token<unknown>`)
+- Sync-or-async service interfaces (`void | Promise<void>`)
+- Tightened DI token typing for `IUIService`, `ICoursewareService`, etc.
+
 ## [3.4.3] - 2026-07-26
 
 ### Features

@@ -34,3 +34,11 @@ OpenLearn V2 的安全体系涵盖用户鉴权、基于角色的访问控制（R
 针对 AI 能力集成提供额外的安全层（`server/utils/crypto.ts`）：
 - **Prompt Injection Detection**: 自动检测注入攻击指令（如 `"ignore previous instructions"`）。
 - **API Key Masking & AES Encryption**: 所有大模型 API Keys 在 SQLite 中均通过 AES-256-GCM 加密存储，在 UI 中提供掩码展示。
+
+---
+
+## 4. iframe Courseware Security
+
+- **Helmet CSP `frame-src` configuration**: The server's Content Security Policy `frame-src` directive is configured to allow `'self'`, `blob:`, `data:`, `http://localhost`, `http://127.0.0.1`, `http:`, and `https:` origins for iframe courseware embedding.
+- **iframe sandbox attribute**: Courseware is sandboxed using the `sandbox` attribute (`allow-scripts allow-forms allow-downloads` without `allow-same-origin`) to ensure strict cross-origin isolation.
+- **Bridge SDK Proxy pattern**: Cross-origin `postMessage` normalization is securely handled via the Bridge SDK utilizing the `Object.defineProperty + Proxy` pattern to shadow `window.parent` and `window.top` on cross-origin WindowProxies.

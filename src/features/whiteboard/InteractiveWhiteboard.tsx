@@ -1731,7 +1731,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     className="w-full h-full border-none"
                     src={data.coursewareUuid ? `/runtime/${data.coursewareUuid}/` : (data.resourceId ? `/api/resources/${data.resourceId}/` : undefined)}
                     srcDoc={data.coursewareUuid || data.resourceId ? undefined : wrapSrcDocWithBridge(data.code, lessonId)}
-                    sandbox="allow-scripts allow-forms allow-downloads"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
                   />
                 </div>
               )}
@@ -2494,7 +2494,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                             <div className="text-center text-gray-500">
                               <BookOpen size={64} className="mx-auto mb-4 text-indigo-300" />
                               <p className="text-lg font-semibold">{fsData.title || '交互课件'}</p>
-                              {fsData.coursewareUuid && <iframe src={`/runtime/${fsData.coursewareUuid}/`} className="w-full h-[60vh] mt-4 rounded-xl border" />}
+                              {fsData.coursewareUuid && <iframe src={`/runtime/${fsData.coursewareUuid}/`} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" className="w-full h-[60vh] mt-4 rounded-xl border" />}
                             </div>
                           </div>
                         )}

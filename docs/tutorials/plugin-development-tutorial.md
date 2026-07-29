@@ -1771,14 +1771,15 @@ zip -r my-plugin.zip my-plugin/
 
 ### 11.3 安装 ZIP 插件
 
-在「系统设置」→「插件中心」上传 ZIP 文件，系统自动：
+在「系统设置」→「插件中心」上传 ZIP 文件，或使用 **一键极速安装（Express Install ⚡）** 按钮启动向导，系统自动：
 1. 解压 ZIP
 2. 提取 index.js 作为入口
 3. 解析 manifest
 4. **使用 esbuild 的 `openlearn-token-enforcer` 插件进行二次扫描**（见 11.4）
 5. 验证依赖（SemVer 兼容性检查）
-6. 存入数据库
-7. 可选：立即激活
+6. 检查权限请求，并通过颜色编码（玫瑰色/高危、琥珀色/中风险、翡翠绿/安全）向用户提示安全风险
+7. 存入数据库
+8. 可选：立即激活
 
 ### 11.4 常见打包错误与排查
 
@@ -1888,6 +1889,31 @@ grep -E '^import .+ from "[^@\./]' dist/index.js
 - `>=1.0.0 <2.0.0` — 显式范围
 
 安装时 PluginHost 自动检查兼容性，不兼容则拒绝安装。
+
+## 12. Web 课件与 Bridge SDK 集成
+
+OpenLearn V2 支持嵌入交互式 HTML/Web 课件。为了确保平台安全性，课件运行在高度隔离的 iframe 沙箱中（设置了 `sandbox="allow-scripts allow-forms allow-downloads"` 限制，无 `allow-same-origin` 权限）。
+
+### 12.1 Bridge SDK 的 Proxy 代理模式
+
+在缺少 `allow-same-origin` 权限的沙箱中，`window.parent` 表现为跨域的 `WindowProxy`。传统通过 `window.parent.postMessage` 通信容易静默失败。针对此问题，平台提供了 Bridge SDK：
+- SDK 利用 `Object.defineProperty` 与 JavaScript `Proxy`，覆盖劫持并代理沙箱内课件的 `window.parent` 和 `window.top` 对象。
+- 当课件内部调用 `.postMessage()` 时，Proxy 会自动拦截并将 `targetOrigin === 'null'` 标准化修正为 `'*'`。
+- 课件 HTML 资源通过 `/runtime/:uuid/` 端点分发时，服务端将自动注入 `bridge.js` 脚本。
+
+### 12.2 课件上下文与 LMS API
+
+Bridge SDK 在初始化时，会自动将以下上下文对象挂载至全局：
+- `window.__LMS_STUDENT__`: 当前学生上下文数据
+- `window.__LMS_COURSEWARE__`: 当前课件元数据
+
+同时，提供全局对象 `LMS` 以调用平台能力：
+- `LMS.submit(data)`: 提交交互数据或测验答案
+- `LMS.saveProgress(data)`: 保存课件进度
+- `LMS.finish(data)`: 标记课件学习完成
+- `LMS.getStudent()`: 动态获取当前学生信息
+- `LMS.getCourseware()`: 动态获取课件信息
+- `LMS.log(event, data)`: 发送自定义行为日志
 
 ---
 

@@ -99,6 +99,7 @@ chmod +x deploy.sh
 │   ├── middleware/auth.ts       # 认证中间件
 │   ├── routes/auth.ts           # 认证路由
 │   └── utils/                   # 工具（加密·迁移·日志·上传）
+│       └── bridge-sdk.ts        # 交互式课件沙箱 Bridge SDK Proxy 实现
 ├── nginx.conf                   # Nginx 配置模板
 ├── deploy.sh                    # 一键部署脚本
 ├── ecosystem.config.cjs         # PM2 配置
@@ -143,6 +144,7 @@ ext-exam.zip
 - 共享依赖引用（`ctx.require('recharts')`）
 - 前端 Extension Slot（`teacher.panel` 等 8 个）
 - Worker Thread 隔离执行
+- **交互式 Web 课件支持**（含高度隔离的沙箱环境与 Bridge SDK Proxy 代理）
 
 **已安装的课堂工具：** 选择题测验 · 专业测验 · 随机点名 · 思维导图 · 计时器 · 代码沙箱 · 数学图形
 

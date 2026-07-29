@@ -4,6 +4,11 @@
 
 ```
 ├── server.ts              # Express + Socket.IO backend (API routes, AI agent, auth)
+├── server/                # Server-side modules (from v5.0)
+│   ├── middleware/        # Auth and security middleware
+│   ├── routes/            # Express route handlers
+│   └── utils/             # Server utilities
+│       └── bridge-sdk.ts  # Bridge SDK Proxy for interactive courseware iframe sandboxes
 ├── src/                   # React 19 frontend
 │   ├── App.tsx            # Main application shell
 │   ├── components/        # Shared UI components (PascalCase)
@@ -79,3 +84,9 @@ Copy `.env.example` to `.env`. AI features are configured via **AI Providers** i
 ## Plugin Development
 
 See [docs/plugin-development-tutorial.md](docs/plugin-development-tutorial.md) for the full guide. Plugins are ESM modules registered via the `@openlearn/plugin-sdk` types. Use the mock context from `@openlearn/plugin-test-kit` for isolated testing.
+
+## Security & Architecture Constraints
+
+- **CSP & iframe sandboxing**: Interactive courseware runs in `<iframe>` instances with strict sandboxing (`sandbox="allow-scripts allow-forms allow-downloads"`) and no `allow-same-origin`.
+- **Bridge SDK**: Because of the sandbox constraints, cross-origin communication requires the Bridge SDK. It uses `Object.defineProperty` and a JavaScript `Proxy` to intercept `.postMessage()` calls, normalizing `targetOrigin: 'null'` to `'*'` so that the courseware can communicate with the platform.
+- **CSP frame-src**: The Express server's Helmet middleware enforces `frame-src` directives to govern where iframe content can be loaded from.
