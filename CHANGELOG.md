@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 - **Fix Duplicate Toast Notifications (`appStore.ts`)**: Resolve duplicate toast card popups (e.g., plugin installation, course deployment) in `ToastContainer` by removing redundant `set(...)` array mutations in `appStore.ts`'s `addToast`/`removeToast` and delegating to `uiStore.subscribe` state synchronization. Locked by unit test suite `src/store/__tests__/appStoreToast.test.ts`.
+- **Universal `postMessage` TargetOrigin `'null'` Fault Tolerance**: Implement three-layer protection (`server/utils/bridge-sdk.ts`, `src/features/whiteboard/utils/bridgeUtils.ts`, and `src/App.tsx`) that catches and normalizes invalid `targetOrigin: 'null'` calls from sandboxed third-party iframe applets into `'*'` with `[LMS Bridge Notice]` warnings. Covered by unit tests in `whiteboard-components.test.tsx`.
 
 ### Docs
 - **Plugin Developer Documentation (`/docs`)**: Update `docs/reference/plugin-ui-extension-slots.md` and `docs/tutorials/plugin-development-tutorial.md` detailing `classroom.tool` slot rendering targets across both `WhiteboardToolbar` and `LessonPalette`.

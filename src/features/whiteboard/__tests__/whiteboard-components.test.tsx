@@ -20,6 +20,12 @@ describe('Whiteboard Extracted Components & Utilities', () => {
       expect(result).toContain('<script src="/bridge.js"></script>');
       expect(result).toContain('<h1>Hello World</h1>');
     });
+
+    it('should inject inline postMessage resilience script to normalize targetOrigin "null"', () => {
+      const result = wrapSrcDocWithBridge('<div>Applet</div>', 'lesson-456');
+      expect(result).toContain('origPM = window.postMessage');
+      expect(result).toContain("targetOrigin === 'null'");
+    });
   });
 
   describe('WhiteboardToolbar', () => {

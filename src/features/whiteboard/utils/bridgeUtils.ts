@@ -22,6 +22,24 @@ export function wrapSrcDocWithBridge(rawCode: string, lessonId: string): string 
 <script>
   window.__LMS_STUDENT__ = ${JSON.stringify(context)};
   window.__LMS_COURSEWARE__ = ${JSON.stringify(courseware)};
+  (function() {
+    try {
+      var origPM = window.postMessage;
+      window.postMessage = function(msg, targetOrigin, transfer) {
+        var origin = (targetOrigin === 'null' || targetOrigin === null) ? '*' : targetOrigin;
+        try { return origPM.call(this, msg, origin, transfer); }
+        catch(err) { if (err.name === 'SyntaxError') return origPM.call(this, msg, '*', transfer); throw err; }
+      };
+      if (window.parent && window.parent !== window) {
+        var origParentPM = window.parent.postMessage;
+        window.parent.postMessage = function(msg, targetOrigin, transfer) {
+          var origin = (targetOrigin === 'null' || targetOrigin === null) ? '*' : targetOrigin;
+          try { return origParentPM.call(window.parent, msg, origin, transfer); }
+          catch(err) { if (err.name === 'SyntaxError') return origParentPM.call(window.parent, msg, '*', transfer); throw err; }
+        };
+      }
+    } catch(e) {}
+  })();
 <\/script>
 <script src="/bridge.js"><\/script>
 </head><body>

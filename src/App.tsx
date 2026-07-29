@@ -2771,6 +2771,7 @@ export default function App() {
       const data = event.data;
       if (!data || typeof data !== 'object') return;
 
+      const safeTargetOrigin = (event.origin && event.origin !== 'null') ? event.origin : '*';
       let attemptId = data.attempt_id;
       let uuid = data.uuid;
       let type = data.type || '';

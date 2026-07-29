@@ -38,13 +38,15 @@ export const BRIDGE_SDK_CODE = `(function() {
       } catch (e) {}
       
       let origin = targetOrigin;
-      if (origin === 'null') {
+      if (origin === 'null' || origin === null) {
+        console.warn('[LMS Bridge Notice] Normalized invalid targetOrigin "null" to "*" for postMessage call');
         origin = '*';
       }
       try {
         return originalPostMessage.call(this, message, origin, transfer);
       } catch (err) {
         if (err.name === 'SyntaxError' && origin !== '*') {
+          console.warn('[LMS Bridge Notice] Recovered SyntaxError on postMessage, fallback targetOrigin to "*"', err);
           return originalPostMessage.call(this, message, '*', transfer);
         }
         throw err;
@@ -67,19 +69,56 @@ export const BRIDGE_SDK_CODE = `(function() {
           } catch (e) {}
           
           let origin = targetOrigin;
-          if (origin === 'null') {
+          if (origin === 'null' || origin === null) {
+            console.warn('[LMS Bridge Notice] Normalized invalid targetOrigin "null" to "*" for parent.postMessage call');
             origin = '*';
           }
           try {
             return parentPostMessage.call(window.parent, message, origin, transfer);
           } catch (err) {
             if (err.name === 'SyntaxError' && origin !== '*') {
+              console.warn('[LMS Bridge Notice] Recovered SyntaxError on parent.postMessage, fallback targetOrigin to "*"', err);
               return parentPostMessage.call(window.parent, message, '*', transfer);
             }
             throw err;
           }
         };
       } catch (e) {}
+    }
+
+    // Intercept message event listeners to sanitize event.source.postMessage replies
+    const origAddEventListener = window.addEventListener;
+    if (typeof origAddEventListener === 'function') {
+      window.addEventListener = function(type, listener, options) {
+        if (type === 'message' && typeof listener === 'function') {
+          const wrappedListener = function(event) {
+            try {
+              if (event && event.source && typeof event.source.postMessage === 'function') {
+                const origSourcePostMessage = event.source.postMessage;
+                event.source.postMessage = function(msg, targetOrigin, transfer) {
+                  let origin = targetOrigin;
+                  if (origin === 'null' || origin === null) {
+                    console.warn('[LMS Bridge Notice] Normalized invalid targetOrigin "null" to "*" on event.source.postMessage');
+                    origin = '*';
+                  }
+                  try {
+                    return origSourcePostMessage.call(event.source, msg, origin, transfer);
+                  } catch (err) {
+                    if (err.name === 'SyntaxError' && origin !== '*') {
+                      console.warn('[LMS Bridge Notice] Recovered SyntaxError on event.source.postMessage, fallback to "*"', err);
+                      return origSourcePostMessage.call(event.source, msg, '*', transfer);
+                    }
+                    throw err;
+                  }
+                };
+              }
+            } catch (e) {}
+            return listener.apply(this, arguments);
+          };
+          return origAddEventListener.call(this, type, wrappedListener, options);
+        }
+        return origAddEventListener.apply(this, arguments);
+      };
     }
   } catch (e) {}
 
