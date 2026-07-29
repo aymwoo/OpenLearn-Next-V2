@@ -84,7 +84,7 @@ export function PluginCenter({
       }
     } catch {
       // ignore
-    } font-mono: {
+    } finally {
       setCheckingUpdateId(null);
     }
   };
