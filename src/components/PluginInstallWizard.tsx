@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Shield, Sparkles, AlertTriangle, ChevronLeft, ChevronRight, X, Loader2, CheckCircle } from 'lucide-react';
+import { Shield, Sparkles, AlertTriangle, ChevronLeft, ChevronRight, X, Loader2, CheckCircle, Zap } from 'lucide-react';
 import JSZip from 'jszip';
 
 export type ZipInstallOptions = {
@@ -476,37 +476,89 @@ export function PluginInstallWizard({
     }
   };
 
+  const handleExpressInstall = async () => {
+    if (!file || processing || installing) return;
+    setAgreedToTerms(true);
+    setAllowDowngrade(true);
+    setConfirmInUse(true);
+
+    setInstalling(true);
+    setError(null);
+    setProgressPct(20);
+    setProgressMsg(
+      lang === 'zh'
+        ? isUpgrade
+          ? '极速同意全套授权，正在更新...'
+          : '极速同意全套授权，正在安装...'
+        : isUpgrade
+          ? 'Express approving terms & updating...'
+          : 'Express approving terms & installing...',
+    );
+    try {
+      await onConfirmInstall(file, executionMode, {
+        mode: isUpgrade ? 'update' : 'install',
+        targetPluginId: existingInstall?.pluginId,
+        allowDowngrade: true,
+      });
+      setProgressPct(100);
+      setProgressMsg(lang === 'zh' ? (isUpgrade ? '更新完成' : '安装完成') : isUpgrade ? 'Updated' : 'Complete');
+      onClose();
+    } catch (e: any) {
+      console.error(e);
+      setError(e?.message || (lang === 'zh' ? (isUpgrade ? '更新失败' : '安装失败') : isUpgrade ? 'Update failed' : 'Installation failed'));
+      setProgressPct(0);
+      setProgressMsg('');
+    } finally {
+      setInstalling(false);
+    }
+  };
+
   if (!isOpen) return null;
 
-  // Determine risk profile of capability
+  // Determine risk profile of capability with full row color coding
   const getRiskBadge = (cap: string) => {
     const high = ['db:schema', 'management:write', 'network:access'];
-    const med = ['whiteboard:write', 'vfs:write'];
+    const med = ['whiteboard:write', 'vfs:write', 'lesson:write', 'class:write'];
 
     if (high.includes(cap)) {
       return {
+        level: 'high' as const,
         label: lang === 'zh' ? '🔴 高危' : '🔴 High',
         desc:
           lang === 'zh'
-            ? '可读写数据库、获取网络数据，存在敏感信息暴露风险。'
+            ? '可读写数据库、获取网络数据，存在敏感信息暴露与跨站点数据隐患。'
             : 'Can read/write DB or access network, sensitive data risk.',
+        rowClass: 'bg-rose-50/80 border-rose-200/90 hover:border-rose-300 shadow-2xs text-rose-950',
+        badgeClass: 'bg-rose-100 text-rose-700 border-rose-200 font-extrabold',
+        codeClass: 'bg-white border-rose-200 text-rose-900',
+        descClass: 'text-rose-800/90',
       };
     }
     if (med.includes(cap)) {
       return {
+        level: 'medium' as const,
         label: lang === 'zh' ? '🟡 中危' : '🟡 Medium',
         desc:
           lang === 'zh'
-            ? '可在课表、白板中进行绘制或执行教学环节操作。'
+            ? '可在课表、白板中进行绘制修改或写入局部业务持久化数据。'
             : 'Can write to whiteboards or control course schedules.',
+        rowClass: 'bg-amber-50/80 border-amber-200/90 hover:border-amber-300 shadow-2xs text-amber-950',
+        badgeClass: 'bg-amber-100 text-amber-800 border-amber-200 font-extrabold',
+        codeClass: 'bg-white border-amber-200 text-amber-900',
+        descClass: 'text-amber-800/90',
       };
     }
     return {
+      level: 'low' as const,
       label: lang === 'zh' ? '🟢 低危' : '🟢 Low',
       desc:
         lang === 'zh'
-          ? '常规的基础界面弹窗与局域隔离存储能力。'
+          ? '常规的基础界面弹窗与局域隔离存储能力，安全可信。'
           : 'Basic UI elements or isolated local storage.',
+      rowClass: 'bg-emerald-50/70 border-emerald-200/90 hover:border-emerald-300 shadow-2xs text-emerald-950',
+      badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200 font-extrabold',
+      codeClass: 'bg-white border-emerald-200 text-emerald-900',
+      descClass: 'text-emerald-800/90',
     };
   };
 
@@ -690,15 +742,17 @@ export function PluginInstallWizard({
                         return (
                           <div
                             key={cap}
-                            className="border border-slate-100 rounded-xl p-3 flex flex-col gap-1 hover:border-slate-200 bg-slate-55/10"
+                            className={`border rounded-xl p-3.5 flex flex-col gap-1 transition-all ${risk.rowClass}`}
                           >
                             <div className="flex items-center justify-between">
-                              <span className="font-mono text-xs font-bold text-slate-800 bg-white border border-slate-150 rounded px-1.5 py-0.5">
+                              <span className={`font-mono text-xs font-bold rounded px-2 py-0.5 shadow-2xs ${risk.codeClass}`}>
                                 {cap}
                               </span>
-                              <span className="text-[10px] font-extrabold">{risk.label}</span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-md border ${risk.badgeClass}`}>
+                                {risk.label}
+                              </span>
                             </div>
-                            <p className="text-[11px] text-slate-500 leading-normal font-medium mt-1">{risk.desc}</p>
+                            <p className={`text-[11px] leading-relaxed font-medium mt-1 ${risk.descClass}`}>{risk.desc}</p>
                           </div>
                         );
                       })}
@@ -1044,6 +1098,26 @@ export function PluginInstallWizard({
                 className="px-3.5 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-400 hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 {lang === 'zh' ? '取消' : 'Cancel'}
+              </button>
+            )}
+
+            {!installing && file && manifest && !existingInstall?.isSystem && (
+              <button
+                type="button"
+                onClick={handleExpressInstall}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-lg text-xs font-bold shadow-xs transition-all cursor-pointer"
+                title={lang === 'zh' ? '同意全套权限与提示，直接安装完成' : 'Approve terms and install directly'}
+              >
+                <Zap size={13} className="fill-amber-200" />
+                <span>
+                  {lang === 'zh'
+                    ? isUpgrade
+                      ? '一键极速更新'
+                      : '一键极速安装'
+                    : isUpgrade
+                      ? 'Express Update'
+                      : 'Express Install'}
+                </span>
               </button>
             )}
 

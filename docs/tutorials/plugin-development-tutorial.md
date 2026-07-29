@@ -247,7 +247,7 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 |------|---------|-----------------|---------|
 | `teacher.tab` | 侧边栏导航 → 全屏独立页面 | `{ renderType: 'panel' }` | 管理界面（列表、设置、数据看板） |
 | `teacher.dashboard.widget` | 白板内的可拖拽卡片 | `{ elementId, lessonId }` | 课堂交互组件（编辑、答题、展示） |
-| `classroom.tool` | 课堂互动工具架按钮 | — | 工具栏入口，点击后通过 `commandType` 触发动作 |
+| `classroom.tool` | 课堂工具架按钮 & 备课画板组件卡片 | — | 画板工具栏快捷入口与 `LessonPalette` 组件列表入口，注册后教师可在画板中快速点击/插入 |
 | `student.view` | 学生端全屏视图 | `{ studentId }` | 学生操作界面 |
 
 **`teacher.tab` 和 `teacher.dashboard.widget` 的关键区别：**

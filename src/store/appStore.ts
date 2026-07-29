@@ -204,7 +204,6 @@ export const appStore = createStore<AppState>((set) => ({
 
   setLang: (lang) => {
     uiStore.getState().setLang(lang);
-    set({ lang });
   },
   setSession: (session) => set({ session }),
   setLessons: (lessons) =>
@@ -222,7 +221,6 @@ export const appStore = createStore<AppState>((set) => ({
   setLiveClassIsActive: (liveClassIsActive) => set({ liveClassIsActive }),
   setTeacherTab: (teacherTab) => {
     uiStore.getState().setTeacherTab(teacherTab);
-    set({ teacherTab });
   },
 
   // ── Shared data setters ───────────────────────────────────────────────
@@ -282,16 +280,13 @@ export const appStore = createStore<AppState>((set) => ({
 
   addToast: (toast) => {
     uiStore.getState().addToast(toast);
-    set((s) => ({ toasts: [...s.toasts, toast] }));
   },
   removeToast: (id) => {
     uiStore.getState().removeToast(id);
-    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
   },
 
   setSiteInfo: (siteInfo) => {
     uiStore.getState().setSiteInfo(siteInfo);
-    set({ siteInfo });
   },
 }));
 

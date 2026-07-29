@@ -8,6 +8,23 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.1] - 2026-07-29
+
+### Features
+- **Whiteboard Interactive Courseware Entry & Plugin Palette Integration**:
+  - Add direct **Interactive Web Courseware / HTML Applet (Globe)** button immediately following **Math Function (Math Graph)** in `WhiteboardToolbar.tsx`.
+  - Reorder `html-applet` in `paletteConfig.ts` to appear right after `math-graph` under the `present` group as "交互网页课件 (Interactive Courseware)".
+  - Dynamically expose third-party plugins registering `classroom.tool` extension points inside `LessonPalette.tsx`, enabling teachers to click and insert third-party plugin components directly onto the whiteboard canvas.
+- **Plugin Setup Wizard Enhancements (`PluginInstallWizard.tsx`)**:
+  - Add a **⚡ Express Install / Update (`一键极速安装 / 一键极速更新`)** button in the wizard footer to automatically approve all requested permissions, accept downgrade/hot-update warnings, and complete installation in one click.
+  - Apply risk-severity container and text color coding (`rose` for high risk, `amber` for medium risk, `emerald` for low risk) across requested capability rows in the permission audit step.
+
+### Fixes
+- **Fix Duplicate Toast Notifications (`appStore.ts`)**: Resolve duplicate toast card popups (e.g., plugin installation, course deployment) in `ToastContainer` by removing redundant `set(...)` array mutations in `appStore.ts`'s `addToast`/`removeToast` and delegating to `uiStore.subscribe` state synchronization. Locked by unit test suite `src/store/__tests__/appStoreToast.test.ts`.
+
+### Docs
+- **Plugin Developer Documentation (`/docs`)**: Update `docs/reference/plugin-ui-extension-slots.md` and `docs/tutorials/plugin-development-tutorial.md` detailing `classroom.tool` slot rendering targets across both `WhiteboardToolbar` and `LessonPalette`.
+
 - **Decompose Remaining "God Components" (`TimetableManager.tsx`, `HelpView.tsx`, `PluginCenter.tsx`)**:
   - `TimetableManager.tsx`: Extracted shared types into `src/components/timetable/types.ts` and date helpers into `src/components/timetable/utils/timetableUtils.ts`. Split into 4 domain sub-views in `src/components/timetable/sub-views/`: `TimetableCalendarView.tsx` (week/cycle/list grid), `TimetableAdjustView.tsx` (batch holiday adjustment form), `TimetableImportExportView.tsx` (CSV/JSON export & importer), and `TimetableOcrView.tsx` (AI vision OCR recognition & review table). Reduced line count from **2,629 down to 1,670 lines** (-959 lines). Verified with unit tests in `src/components/__tests__/TimetableManager.test.tsx` (7/7 passing).
   - `HelpView.tsx`: Extracted helpers into `src/features/teacher/help/helpUtils.ts` & `helpUtils2.ts`. Split into 4 sub-view viewers in `src/features/teacher/help/`: `CommandBusPlayground.tsx` (interactive command playground & API debugger), `SdkGuideViewer.tsx` (plugin SDK tutorial & code examples), `UserGuideViewer.tsx` (system user guide & applet specs), and `PluginDocsViewer.tsx` (extension docs renderer). Reduced line count from **1,926 down to 324 lines** (-1,602 lines). Verified with unit tests in `src/features/teacher/help/__tests__/HelpView.test.tsx` (4/4 passing).

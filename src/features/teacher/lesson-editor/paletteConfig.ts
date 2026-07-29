@@ -215,6 +215,28 @@ export const PALETTE_ITEMS: PaletteItemConfig[] = [
     ],
   },
   {
+    type: 'html-applet',
+    labelZh: '交互网页课件',
+    labelEn: 'Interactive Courseware',
+    descriptionZh: '可交互 HTML/ZIP 网页',
+    descriptionEn: 'Interactive web/ZIP applet',
+    icon: Globe,
+    color: 'emerald',
+    group: 'present',
+    defaultData: {
+      code: `<!-- Interactive Web Courseware -->\n<div style='padding:20px; text-align:center;'>\n  <h2>Interactive Web Courseware</h2>\n  <p>在属性栏中配置本地 ZIP/HTML 部署包。</p>\n</div>`,
+    },
+    editFields: [
+      {
+        key: 'code',
+        labelZh: 'HTML 代码',
+        labelEn: 'HTML Code',
+        kind: 'textarea',
+        placeholderZh: '<div>…</div>',
+      },
+    ],
+  },
+  {
     type: 'quiz',
     labelZh: '随堂测试',
     labelEn: 'Interactive Quiz',
@@ -264,28 +286,6 @@ export const PALETTE_ITEMS: PaletteItemConfig[] = [
         labelEn: 'Description',
         kind: 'textarea',
         placeholderZh: '作业要求说明…',
-      },
-    ],
-  },
-  {
-    type: 'html-applet',
-    labelZh: '交互实验',
-    labelEn: 'HTML Applet',
-    descriptionZh: '可交互网页',
-    descriptionEn: 'Interactive web',
-    icon: Globe,
-    color: 'emerald',
-    group: 'assess',
-    defaultData: {
-      code: `<!-- Interactive Physics -->\n<div style='padding:20px; text-align:center;'>\n  <h2>Interactive Physics</h2>\n  <button onclick="alert('Simulating Gravity!')">Drop Ball</button>\n</div>`,
-    },
-    editFields: [
-      {
-        key: 'code',
-        labelZh: 'HTML 代码',
-        labelEn: 'HTML Code',
-        kind: 'textarea',
-        placeholderZh: '<div>…</div>',
       },
     ],
   },

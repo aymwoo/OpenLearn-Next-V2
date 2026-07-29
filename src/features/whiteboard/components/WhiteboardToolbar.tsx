@@ -10,6 +10,7 @@ import {
   Presentation,
   Terminal,
   Activity,
+  Globe,
   Trash2,
   Highlighter,
   Wand2,
@@ -243,6 +244,35 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
         title="插入数学函数图表 (Math Graph)"
       >
         <Activity size={16} />
+      </button>
+
+      <button
+        onClick={async () => {
+           setIsSyncing(true);
+           try {
+              await onElementAdd('html-applet', {
+                  code: `<!-- Interactive Web Courseware -->\n<div style='padding:20px; text-align:center;'>\n  <h2>Interactive Web Courseware</h2>\n  <p>可在右侧属性栏中选择本地 ZIP/HTML 部署包。</p>\n</div>`,
+                  x: 100,
+                  y: 150,
+                  page: currentPage,
+                  segmentId: activeSegmentId
+              });
+              frontendEventBus.publish({
+                id: uuidv7(),
+                type: 'whiteboard.element_updated',
+                source: 'whiteboard',
+                payload: { lessonId },
+                timestamp: Date.now(),
+                correlationId: lessonId,
+              });
+           } finally {
+              setIsSyncing(false);
+           }
+        }} 
+        className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+        title="插入交互网页课件 (Interactive Courseware)"
+      >
+        <Globe size={16} />
       </button>
 
       <div className="w-px h-4 bg-slate-200/80 mx-0.5" />

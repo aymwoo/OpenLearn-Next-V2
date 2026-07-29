@@ -34,7 +34,7 @@ export type ExtensionSlot =
 |---|---|---|
 | `student.view` | `src/App.tsx:4752` | `{ studentId: activeStudentId }` |
 | `teacher.tab` | `NavigationSidebar.tsx:89`（按钮形态）/ `App.tsx:45`（面板形态） | 见 §2 |
-| `classroom.tool` | `InteractiveWhiteboard.tsx:3891` | 无（仅 `route?`） |
+| `classroom.tool` | `WhiteboardToolbar.tsx:283`（工具栏按钮）/ `LessonPalette.tsx:144`（备课画板组件列表卡片） | 无（仅 `route?`） |
 | `teacher.dashboard.widget` | `Dashboard.tsx:155` | 无（仅 `route?`） |
 | `help.plugin_docs` | `HelpView.tsx:1880` | 无（仅 `route?`） |
 
