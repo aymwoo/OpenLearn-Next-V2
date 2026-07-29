@@ -83,7 +83,7 @@ export interface AppState {
   // Core setters (existing)
   setLang: (lang: Language) => void;
   setSession: (session: SessionType | null) => void;
-  setLessons: (lessons: Lesson[]) => void;
+  setLessons: (lessons: Lesson[] | ((prev: Lesson[]) => Lesson[])) => void;
   setSelectedLesson: (selectedLesson: string | null) => void;
   setElements: (elements: WhiteboardElement[]) => void;
   setClasses: (classes: ClassType[]) => void;
@@ -202,7 +202,13 @@ export const appStore = createStore<AppState>((set) => ({
 
   setLang: (lang) => set({ lang }),
   setSession: (session) => set({ session }),
-  setLessons: (lessons) => set({ lessons }),
+  setLessons: (lessons) =>
+    set((state) => ({
+      lessons:
+        typeof lessons === 'function'
+          ? (lessons as (prev: Lesson[]) => Lesson[])(state.lessons)
+          : lessons,
+    })),
   setSelectedLesson: (selectedLesson) => set({ selectedLesson }),
   setElements: (elements) => set({ elements }),
   setClasses: (classes) => set({ classes }),
