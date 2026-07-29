@@ -18,7 +18,8 @@ export type PaletteColorKey =
   | 'rose'
   | 'emerald'
   | 'cyan'
-  | 'pink';
+  | 'pink'
+  | 'indigo';
 
 export type EditFieldKind = 'input' | 'textarea' | 'options';
 
@@ -134,6 +135,15 @@ export const COLOR_THEME: Record<
     cardHoverShadow: 'group-hover:shadow-pink-200/70',
     groupAccent: 'bg-pink-400',
     groupText: 'text-pink-500',
+  },
+  indigo: {
+    iconBg: 'bg-indigo-100',
+    iconText: 'text-indigo-600',
+    cardHoverBorder: 'hover:border-indigo-400',
+    cardHoverRing: 'group-hover:ring-indigo-300',
+    cardHoverShadow: 'group-hover:shadow-indigo-200/70',
+    groupAccent: 'bg-indigo-400',
+    groupText: 'text-indigo-500',
   },
 };
 

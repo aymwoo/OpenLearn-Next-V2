@@ -270,18 +270,18 @@ function wrapProcessManager(
     }),
     registerInterval: createSafeFunction(
       (name: string, intervalMs: number, tickFn: any) => {
-        return processService
-          .registerInterval(name, intervalMs, (log) => {
+        return Promise.resolve(
+          processService.registerInterval(name, intervalMs, (log) => {
             try {
               tickFn(log);
             } catch (e) {
               console.error(`[Plugin:${pluginId}] Error in interval task ${name}:`, e);
             }
-          })
-          .then((processId) => {
+          }),
+        ).then((processId) => {
             tracker.track(pluginId, {
               dispose: () => {
-                processService.kill(processId).catch(() => {});
+                Promise.resolve(processService.kill(processId)).catch(() => {});
               },
             });
             return processId;

@@ -1072,6 +1072,17 @@ export class WorkerManager {
   }
 
   /**
+   * 中止所有活跃 Worker 线程（有序关闭）。
+   *
+   * 遍历 WorkerRegistry 中当前活跃的 Worker，逐个调用 terminate() 释放线程资源。
+   * 供 PluginRuntimeComposition 在平台停机阶段调用。
+   */
+  async shutdownAll(): Promise<void> {
+    const ids = this.registry.list();
+    await Promise.all(ids.map((id) => this.terminateWorker(id)));
+  }
+
+  /**
    * 从数据库恢复所有 worker-mode 的活跃插件。
    *
    * 查询 execution_mode = 'worker' 且 status = 'active' 的插件，

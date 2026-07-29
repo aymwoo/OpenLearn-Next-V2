@@ -5,38 +5,14 @@ import {
   Camera, ImagePlus, ScanLine, CheckCircle2, XCircle, ArrowRight, Eye, Grid, List,
   ChevronLeft, ChevronRight
 } from 'lucide-react';
+import type { ClassType, LessonType, ScheduleType, TimetableManagerProps } from './timetable/types';
+import { getMonday, getWeekRangeString, getWeekDates, getIsAfternoon } from './timetable/utils/timetableUtils';
+import { TimetableCalendarView } from './timetable/sub-views/TimetableCalendarView';
+import { TimetableAdjustView } from './timetable/sub-views/TimetableAdjustView';
+import { TimetableImportExportView } from './timetable/sub-views/TimetableImportExportView';
+import { TimetableOcrView } from './timetable/sub-views/TimetableOcrView';
 
-interface ClassType {
-  id: string;
-  name: string;
-  description?: string;
-}
-
-interface LessonType {
-  id: string;
-  title: string;
-}
-
-interface ScheduleType {
-  id: string;
-  class_id: string;
-  lesson_id: string;
-  scheduled_date: string;
-  time_slot?: string | null;
-  status?: 'scheduled' | 'cancelled' | 'holiday' | 'swap' | string;
-  notes?: string | null;
-  lesson_title?: string;
-  class_name?: string;
-  isRepeating?: boolean;
-}
-
-interface TimetableManagerProps {
-  classes: ClassType[];
-  lessons: LessonType[];
-  lang: 'zh' | 'en';
-  onSchedulesUpdated: () => void;
-  onClassesUpdated?: () => void;
-}
+export type { ClassType, LessonType, ScheduleType, TimetableManagerProps };
 
 export const TimetableManager: React.FC<TimetableManagerProps> = ({
   classes,
@@ -1205,1045 +1181,107 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
 
       {/* Main workspace */}
       <div className="flex-1 overflow-y-auto p-5">
-        {activeTab === 'view' && (() => {
-          const weekDays = [
-            { key: 1, label: lang === 'zh' ? '周一 (Mon)' : 'Mon' },
-            { key: 2, label: lang === 'zh' ? '周二 (Tue)' : 'Tue' },
-            { key: 3, label: lang === 'zh' ? '周三 (Wed)' : 'Wed' },
-            { key: 4, label: lang === 'zh' ? '周四 (Thu)' : 'Thu' },
-            { key: 5, label: lang === 'zh' ? '周五 (Fri)' : 'Fri' },
-            { key: 6, label: lang === 'zh' ? '周六 (Sat)' : 'Sat' },
-            { key: 7, label: lang === 'zh' ? '周日 (Sun)' : 'Sun' }
-          ];
+        {activeTab === 'view' && (
+          <TimetableCalendarView
+            lang={lang}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            selectedClassId={selectedClassId}
+            setSelectedClassId={setSelectedClassId}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            classes={classes}
+            getClassDisplayName={getClassDisplayName}
+            loading={loading}
+            filteredSchedules={filteredSchedules}
+            currentWeekMonday={currentWeekMonday}
+            setCurrentWeekMonday={setCurrentWeekMonday}
+            showWeekend={showWeekend}
+            setShowWeekend={setShowWeekend}
+            dateOverrides={dateOverrides}
+            setDateOverrides={setDateOverrides}
+            setOverridingDateKey={setOverridingDateKey}
+            setOverrideMode={setOverrideMode}
+            setOverrideTargetDow={setOverrideTargetDow}
+            setOverrideTargetDate={setOverrideTargetDate}
+            openEditModal={openEditModal}
+            handleDeleteSchedule={handleDeleteSchedule}
+            getDayOfWeekIndex={getDayOfWeekIndex}
+            getMonday={getMonday}
+            getWeekRangeString={getWeekRangeString}
+            setFormClassId={setFormClassId}
+            setFormLessonId={setFormLessonId}
+            setFormDate={setFormDate}
+            setFormStatus={setFormStatus}
+            setFormNotes={setFormNotes}
+            setIsAddOpen={setIsAddOpen}
+          />
+        )}
 
-          const weekDates = getWeekDates(currentWeekMonday);
-
-          const getSchedulesForDate = (target: string, virtualDate: string): ScheduleType[] => {
-            // If no override, return normal behavior
-            if (target === virtualDate) {
-              // 1. Prefer date-specific custom schedules
-              const realSchedules = filteredSchedules.filter(s => s.scheduled_date === virtualDate);
-              if (realSchedules.length > 0) {
-                return realSchedules;
-              }
-
-              // 2. Fall back to repeating weekly template schedules from the past
-              const targetDow = getDayOfWeekIndex(virtualDate);
-              const historicalSchedules = filteredSchedules.filter(s => 
-                getDayOfWeekIndex(s.scheduled_date) === targetDow && 
-                s.scheduled_date <= virtualDate
-              );
-
-              // 3. Deduplicate by class_id and time_slot, keeping the latest one
-              const latestSchedulesMap: Record<string, ScheduleType> = {};
-              historicalSchedules.forEach(sch => {
-                const groupKey = `${sch.class_id}_${sch.time_slot || 'all-day'}`;
-                if (!latestSchedulesMap[groupKey]) {
-                  latestSchedulesMap[groupKey] = {
-                    ...sch,
-                    scheduled_date: virtualDate,
-                    isRepeating: true
-                  };
-                }
-              });
-
-              return Object.values(latestSchedulesMap);
-            }
-
-            // If override is active (target !== virtualDate)
-            let targetSchedules: ScheduleType[] = [];
-
-            if (target.startsWith('dow-')) {
-              const targetDow = parseInt(target.split('-')[1], 10);
-              // Fetch repeating weekly template schedules for targetDow from the past (scheduled_date <= virtualDate)
-              const historicalSchedules = filteredSchedules.filter(s => 
-                getDayOfWeekIndex(s.scheduled_date) === targetDow && 
-                s.scheduled_date <= virtualDate
-              );
-
-              const latestSchedulesMap: Record<string, ScheduleType> = {};
-              historicalSchedules.forEach(sch => {
-                const groupKey = `${sch.class_id}_${sch.time_slot || 'all-day'}`;
-                if (!latestSchedulesMap[groupKey]) {
-                  latestSchedulesMap[groupKey] = {
-                    ...sch,
-                    scheduled_date: virtualDate,
-                    isRepeating: true
-                  };
-                }
-              });
-              targetSchedules = Object.values(latestSchedulesMap);
-            } else {
-              // Target is a specific date (e.g. '2026-06-18')
-              // 1. Prefer date-specific custom schedules on target
-              const realSchedules = filteredSchedules.filter(s => s.scheduled_date === target);
-              if (realSchedules.length > 0) {
-                targetSchedules = realSchedules.map(sch => ({
-                  ...sch,
-                  scheduled_date: virtualDate,
-                  isRepeating: true // Treat as repeating so editing it creates an override on virtualDate
-                }));
-              } else {
-                // 2. Fall back to repeating weekly template schedules of the target's day of week from the past of target
-                const targetDow = getDayOfWeekIndex(target);
-                const historicalSchedules = filteredSchedules.filter(s => 
-                  getDayOfWeekIndex(s.scheduled_date) === targetDow && 
-                  s.scheduled_date <= target
-                );
-
-                const latestSchedulesMap: Record<string, ScheduleType> = {};
-                historicalSchedules.forEach(sch => {
-                  const groupKey = `${sch.class_id}_${sch.time_slot || 'all-day'}`;
-                  if (!latestSchedulesMap[groupKey]) {
-                    latestSchedulesMap[groupKey] = {
-                      ...sch,
-                      scheduled_date: virtualDate,
-                      isRepeating: true
-                    };
-                  }
-                });
-                targetSchedules = Object.values(latestSchedulesMap);
-              }
-            }
-
-            // Now merge with any actual custom schedule records on virtualDate (which represent local overrides/cancellations)
-            const localOverrides = filteredSchedules.filter(s => s.scheduled_date === virtualDate);
-            if (localOverrides.length > 0) {
-              const mergedSchedules = [...targetSchedules];
-              localOverrides.forEach(localSch => {
-                const groupKey = `${localSch.class_id}_${localSch.time_slot || 'all-day'}`;
-                const matchIdx = mergedSchedules.findIndex(s => `${s.class_id}_${s.time_slot || 'all-day'}` === groupKey);
-                if (matchIdx !== -1) {
-                  // Replace with the local override
-                  mergedSchedules[matchIdx] = localSch;
-                } else {
-                  // If it's a new schedule added to virtualDate, we can append it if it's active
-                  if (localSch.status !== 'cancelled' && localSch.status !== 'holiday') {
-                    mergedSchedules.push(localSch);
-                  }
-                }
-              });
-              return mergedSchedules;
-            }
-
-            return targetSchedules;
-          };
-
-          const weeklySchedulesByDay = weekDays.map((day, idx) => {
-            const dateStr = weekDates[idx];
-            // Support temporary date switches: load schedules from override target date if configured
-            const targetDateStr = dateOverrides[dateStr] || dateStr;
-            const daySchedules = getSchedulesForDate(targetDateStr, dateStr);
-            daySchedules.sort((a, b) => (a.time_slot || '').localeCompare(b.time_slot || ''));
-            return {
-              ...day,
-              dateStr,
-              displayLabel: lang === 'zh' ? `${day.label.split(' ')[0]} (${dateStr.substring(5)})` : `${day.label} (${dateStr.substring(5)})`,
-              schedules: daySchedules
-            };
-          });
-
-          const cycleSchedulesByDay = weekDays.map(day => {
-            const daySchedules = filteredSchedules.filter(s => getDayOfWeekIndex(s.scheduled_date) === day.key);
-            daySchedules.sort((a, b) => (a.time_slot || '').localeCompare(b.time_slot || ''));
-            return {
-              ...day,
-              displayLabel: day.label,
-              schedules: daySchedules
-            };
-          });
-
-          // Week View defaults to hide Saturday & Sunday (keys 6 and 7) unless showWeekend is checked
-          const currentSchedulesByDay = (viewMode === 'week' ? weeklySchedulesByDay : cycleSchedulesByDay)
-            .filter(day => {
-              if (viewMode === 'week' && !showWeekend) {
-                return day.key !== 6 && day.key !== 7;
-              }
-              return true;
-            });
-
-          return (
-            <div className="flex flex-col gap-4">
-              {/* Filters Row */}
-              <div className="bg-slate-50 border border-slate-200/50 p-3 rounded-xl flex flex-wrap gap-3 items-center justify-between">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-bold text-gray-500 flex items-center gap-1">
-                    <Filter size={13} />
-                    {lang === 'zh' ? '筛选：' : 'Filters:'}
-                  </span>
-
-                  <div className="flex bg-slate-200/70 p-0.5 rounded-lg border border-slate-300/30 shadow-xs mr-2 shrink-0">
-                    <button 
-                      onClick={() => setViewMode('week')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${viewMode === 'week' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
-                    >
-                      <Grid size={11} />
-                      {lang === 'zh' ? '周课表' : 'Week View'}
-                    </button>
-                    <button 
-                      onClick={() => setViewMode('cycle')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${viewMode === 'cycle' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
-                    >
-                      <RotateCcw size={11} />
-                      {lang === 'zh' ? '星期总览' : 'Cycle View'}
-                    </button>
-                    <button 
-                      onClick={() => setViewMode('list')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${viewMode === 'list' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
-                    >
-                      <List size={11} />
-                      {lang === 'zh' ? '列表' : 'List View'}
-                    </button>
-                  </div>
-                  
-                  <select 
-                    id="timetable_class_select"
-                    title="Select Class"
-                    className="bg-white border border-gray-200 rounded-lg text-xs py-1.5 px-2 text-gray-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 font-sans cursor-pointer"
-                    value={selectedClassId}
-                    onChange={e => setSelectedClassId(e.target.value)}
-                  >
-                    <option value="all">{lang === 'zh' ? '所有班级 (All Classes)' : 'All Classes'}</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{getClassDisplayName(c.name)}</option>)}
-                  </select>
-
-                  <select 
-                    id="timetable_status_select"
-                    title="Select Status"
-                    className="bg-white border border-gray-200 rounded-lg text-xs py-1.5 px-2 text-gray-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 font-sans cursor-pointer"
-                    value={statusFilter}
-                    onChange={e => setStatusFilter(e.target.value)}
-                  >
-                    <option value="all">{lang === 'zh' ? '所有状态 (All Status)' : 'All Status'}</option>
-                    <option value="scheduled">{lang === 'zh' ? '正常上课 (Scheduled)' : 'Scheduled'}</option>
-                    <option value="cancelled">{lang === 'zh' ? '停课 (Cancelled)' : 'Cancelled'}</option>
-                    <option value="holiday">{lang === 'zh' ? '假期调休 (Holiday)' : 'Holiday'}</option>
-                    <option value="swap">{lang === 'zh' ? '代课换课 (Swapped)' : 'Swapped'}</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2 flex-1 max-w-xs min-w-[200px]">
-                  <div className="relative w-full">
-                    <Search className="absolute left-2.5 top-2 text-gray-400" size={14} />
-                    <input 
-                      type="text"
-                      placeholder={lang === 'zh' ? '检索课程标题, 班级, 备注...' : 'Search title, class, notes...'}
-                      className="w-full bg-white border border-gray-200 rounded-lg pl-8 pr-2.5 py-1.5 text-xs text-gray-700 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                    />
-                    {searchQuery && (
-                      <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600">
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-
-                  <button 
-                    onClick={() => {
-                      setFormClassId(classes[0]?.id || '');
-                      setFormLessonId('');
-                      setFormDate(new Date().toISOString().split('T')[0]);
-                      setFormStatus('scheduled');
-                      setFormNotes('');
-                      setIsAddOpen(true);
-                    }}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs py-1.5 px-3 rounded-lg flex items-center gap-1 shadow-sm shrink-0 cursor-pointer transition-all"
-                  >
-                    <Plus size={14} />
-                    {lang === 'zh' ? '排定课时' : 'Schedule Class'}
-                  </button>
-                </div>
-              </div>
-
-              {/* List / Grid Content */}
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-indigo-500">
-                  <Loader2 className="animate-spin mb-2" size={32} />
-                  <span className="text-xs font-semibold">{lang === 'zh' ? '查询数据中...' : 'Accessing SQLite Database...'}</span>
-                </div>
-              ) : filteredSchedules.length === 0 ? (
-                <div className="text-center py-16 bg-slate-50/50 border border-dashed rounded-xl border-slate-200 flex flex-col items-center">
-                  <CalendarDays className="text-gray-300 mb-2" size={40} />
-                  <p className="text-gray-500 text-sm font-semibold">{lang === 'zh' ? '暂未匹配到对应的课次安排数据' : 'No schedules match your filters'}</p>
-                  <p className="text-gray-400 text-xs mt-1">{lang === 'zh' ? '您可以点击右上角“排定课时”为班级新增课程。' : 'Try adding a new entry using the schedule button above.'}</p>
-                </div>
-              ) : viewMode === 'list' ? (
-                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-                  <table className="w-full text-left border-collapse table-auto text-sm bg-white">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-gray-600 font-semibold text-xs">
-                        <th className="p-3 w-[15%]">{lang === 'zh' ? '上课日期' : 'Date'}</th>
-                        <th className="p-3 w-[15%]">{lang === 'zh' ? '具体时间段' : 'Time Slot'}</th>
-                        <th className="p-3 w-[20%]">{lang === 'zh' ? '关联班级' : 'Class'}</th>
-                        <th className="p-3 w-[25%]">{lang === 'zh' ? '授课内容主题' : 'Lesson Topic'}</th>
-                        <th className="p-3 w-[10%] text-center">{lang === 'zh' ? '日常状态' : 'Status'}</th>
-                        <th className="p-3 w-[15%] text-right">{lang === 'zh' ? '教务微调' : 'Actions'}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-150">
-                      {filteredSchedules.map(sch => {
-                        const isCancel = sch.status === 'cancelled' || sch.status === 'holiday';
-                        return (
-                          <tr key={sch.id} className={`hover:bg-slate-50/80 transition-colors ${isCancel ? 'bg-red-50/10 text-gray-400' : 'text-gray-700'}`}>
-                            <td className="p-3 font-semibold text-xs">
-                              <span className="flex items-center gap-1">
-                                <CalendarDays size={13} className="text-slate-400" />
-                                {sch.scheduled_date}
-                              </span>
-                            </td>
-                            <td className="p-3 font-mono text-xs text-indigo-750">
-                              {sch.time_slot || <span className="text-[10px] text-gray-300 italic">{lang === 'zh' ? '全天' : 'All-day'}</span>}
-                            </td>
-                            <td className="p-3 text-xs">
-                              <span className="bg-slate-100 text-slate-800 px-2 py-1 rounded-md border border-slate-250 font-medium">
-                                {sch.class_name}
-                              </span>
-                            </td>
-                            <td className="p-3">
-                              <div className="flex flex-col leading-snug">
-                                <span className={`font-semibold ${isCancel ? 'line-through opacity-70' : ''}`}>{sch.lesson_title}</span>
-                                {sch.notes && (
-                                  <span className={`text-[10px] italic mt-0.5 ${sch.status === 'holiday' ? 'text-amber-600 font-medium' : sch.status === 'cancelled' ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
-                                    📌 {sch.notes}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="p-3 text-center">
-                              <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
-                                sch.status === 'cancelled' 
-                                  ? 'bg-red-100 border-red-200 text-red-700'
-                                  : sch.status === 'holiday'
-                                    ? 'bg-amber-100 border-amber-200 text-amber-700'
-                                    : sch.status === 'swap'
-                                      ? 'bg-blue-100 border-blue-200 text-blue-700'
-                                      : 'bg-green-100 border-green-200 text-green-700'
-                              }`}>
-                                {sch.status === 'cancelled' 
-                                  ? (lang === 'zh' ? '停课' : 'Cancelled')
-                                  : sch.status === 'holiday'
-                                    ? (lang === 'zh' ? '假期调休' : 'Holiday')
-                                    : sch.status === 'swap'
-                                      ? (lang === 'zh' ? '换代课' : 'Swapped')
-                                      : (lang === 'zh' ? '正常上课' : 'Active')}
-                              </span>
-                            </td>
-                            <td className="p-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <button 
-                                  onClick={() => openEditModal(sch)}
-                                  className="text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 p-1.5 rounded transition-colors cursor-pointer"
-                                  title={lang === 'zh' ? '调整此节课排课 (换课/换时间/写备注)' : 'Adjust this class (Swap/Edit)'}
-                                >
-                                  <Edit2 size={13} />
-                                </button>
-                                <button 
-                                  onClick={() => handleDeleteSchedule(sch.id, sch.class_id)}
-                                  className="text-slate-500 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition-colors cursor-pointer"
-                                  title={lang === 'zh' ? '永久删除该课课表' : 'Delete schedule'}
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-4">
-                  {viewMode === 'week' && (
-                    <div className="flex flex-col md:flex-row items-center justify-between bg-indigo-50/40 border border-indigo-100/60 p-3 rounded-xl gap-3 shadow-2xs">
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => setCurrentWeekMonday(prev => new Date(prev.getTime() - 7 * 24 * 60 * 60 * 1000))}
-                          className="p-1.5 rounded-lg hover:bg-indigo-100 hover:text-indigo-700 text-indigo-600 transition-all cursor-pointer border border-indigo-200/50 bg-white shadow-2xs flex items-center justify-center"
-                          title={lang === 'zh' ? '上一周' : 'Previous Week'}
-                        >
-                          <ChevronLeft size={16} />
-                        </button>
-                        <button 
-                          onClick={() => setCurrentWeekMonday(getMonday(new Date()))}
-                          className="px-3 py-1.5 rounded-lg hover:bg-indigo-100 hover:text-indigo-700 text-indigo-600 transition-all cursor-pointer text-xs font-bold border border-indigo-200/50 bg-white shadow-2xs"
-                        >
-                          {lang === 'zh' ? '本周' : 'This Week'}
-                        </button>
-                        <button 
-                          onClick={() => setCurrentWeekMonday(prev => new Date(prev.getTime() + 7 * 24 * 60 * 60 * 1000))}
-                          className="p-1.5 rounded-lg hover:bg-indigo-100 hover:text-indigo-700 text-indigo-600 transition-all cursor-pointer border border-indigo-200/50 bg-white shadow-2xs flex items-center justify-center"
-                          title={lang === 'zh' ? '下一周' : 'Next Week'}
-                        >
-                          <ChevronRight size={16} />
-                        </button>
-                      </div>
-
-                      <div className="text-sm font-bold text-indigo-900 flex items-center gap-2">
-                        <CalendarDays size={16} className="text-indigo-500" />
-                        <span>{getWeekRangeString(currentWeekMonday)}</span>
-                      </div>
-
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-indigo-700 font-semibold">{lang === 'zh' ? '跳转日期：' : 'Go to Date:'}</span>
-                          <input 
-                            type="date" 
-                            title="Go to Date"
-                            className="bg-white border border-indigo-200 rounded-lg text-xs py-1 px-2 text-indigo-950 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 font-sans cursor-pointer"
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                setCurrentWeekMonday(getMonday(new Date(e.target.value)));
-                              }
-                            }}
-                          />
-                        </div>
-
-                        <div className="flex items-center gap-2 border-l border-indigo-150 pl-3">
-                          <label className="flex items-center gap-1.5 text-xs text-indigo-700 font-semibold cursor-pointer select-none">
-                            <input 
-                              type="checkbox"
-                              checked={showWeekend}
-                              onChange={e => setShowWeekend(e.target.checked)}
-                              className="w-3.5 h-3.5 text-indigo-600 border-indigo-300 rounded-sm focus:ring-indigo-500 focus:outline-hidden cursor-pointer"
-                            />
-                            {lang === 'zh' ? '显示周末' : 'Show Weekend'}
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="w-full overflow-x-auto pb-2">
-                    <div className="flex flex-col gap-4 min-w-[1050px]">
-                      
-                      {/* 1. Weekdays Headers Grid */}
-                      <div className={`grid ${currentSchedulesByDay.length === 5 ? 'grid-cols-5' : 'grid-cols-7'} gap-4`}>
-                        {currentSchedulesByDay.map(day => (
-                          <div key={`header-${day.key}`} className="bg-slate-50 border border-slate-200/50 rounded-xl p-3 text-center flex flex-col items-center justify-center gap-1 relative group/col">
-                            <div className="flex items-center justify-center gap-1.5 w-full">
-                              <span className="font-extrabold text-xs text-indigo-700 uppercase tracking-wider">{day.displayLabel}</span>
-                              
-                              {/* Override Date Button */}
-                              {viewMode === 'week' && (
-                                <button
-                                  onClick={() => {
-                                    const val = dateOverrides[day.dateStr] || '';
-                                    setOverridingDateKey(day.dateStr);
-                                    if (val.startsWith('dow-')) {
-                                      setOverrideMode('dow');
-                                      setOverrideTargetDow(val.split('-')[1]);
-                                      setOverrideTargetDate('');
-                                    } else if (val) {
-                                      setOverrideMode('date');
-                                      setOverrideTargetDate(val);
-                                      setOverrideTargetDow('');
-                                    } else {
-                                      setOverrideMode('dow');
-                                      setOverrideTargetDow('');
-                                      setOverrideTargetDate('');
-                                    }
-                                  }}
-                                  className="text-slate-400 hover:text-indigo-600 p-0.5 rounded-md hover:bg-slate-200/50 transition-all opacity-0 group-hover/col:opacity-100 focus:opacity-100 cursor-pointer flex items-center justify-center"
-                                  title={lang === 'zh' ? '临时切换显示日期' : 'Temporarily switch date'}
-                                >
-                                  <Edit2 size={10} />
-                                </button>
-                              )}
-                            </div>
-
-                            {/* Override Indicator */}
-                            {viewMode === 'week' && dateOverrides[day.dateStr] && (() => {
-                              const val = dateOverrides[day.dateStr];
-                              let label = '';
-                              if (val.startsWith('dow-')) {
-                                const dowNum = parseInt(val.split('-')[1], 10);
-                                const dowNamesZh = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-                                const dowNamesEn = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                                label = lang === 'zh' ? `常规${dowNamesZh[dowNum]}` : `Regular ${dowNamesEn[dowNum]}`;
-                              } else {
-                                label = val.substring(5); // e.g. "06-18"
-                              }
-                              return (
-                                <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 text-[9px] px-1.5 py-0.5 rounded-md font-semibold select-none shadow-3xs animate-fade-in">
-                                  <span>🔄 {label}</span>
-                                  <button 
-                                    onClick={() => {
-                                      const next = { ...dateOverrides };
-                                      delete next[day.dateStr];
-                                      setDateOverrides(next);
-                                    }}
-                                    className="hover:text-red-600 hover:bg-amber-100 rounded-sm p-px flex items-center justify-center cursor-pointer"
-                                    title={lang === 'zh' ? '恢复原日期课程' : 'Reset to original'}
-                                  >
-                                    <X size={8} />
-                                  </button>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* 2. Morning Row Grid */}
-                      <div className="bg-slate-50/30 border border-slate-200/50 rounded-2xl p-3 flex flex-col gap-2.5">
-                        <div className="flex items-center gap-1.5 text-[9px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-lg w-fit select-none border border-sky-100/60 shadow-3xs">
-                          <Sparkles size={10} className="animate-pulse" />
-                          {lang === 'zh' ? '上午课程 (AM)' : 'Morning (AM)'}
-                        </div>
-                        
-                        <div className={`grid ${currentSchedulesByDay.length === 5 ? 'grid-cols-5' : 'grid-cols-7'} gap-4`}>
-                          {currentSchedulesByDay.map(day => {
-                            const morningSchedules = day.schedules.filter(sch => !getIsAfternoon(sch.time_slot));
-                            return (
-                              <div key={`morning-col-${day.key}`} className="flex flex-col gap-2 bg-white/40 p-2.5 rounded-xl border border-dashed border-slate-200/60 min-h-[160px] justify-start">
-                                {morningSchedules.length === 0 ? (
-                                  <div className="flex-1 flex items-center justify-center text-[10px] text-slate-350 italic text-center p-3 border border-dashed border-slate-150 rounded-xl bg-white/30 select-none">
-                                    {lang === 'zh' ? '无课' : 'Free'}
-                                  </div>
-                                ) : (
-                                  morningSchedules.map(sch => renderScheduleCard(sch))
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* 3. Horizontal Divider Line */}
-                      <div className="relative my-2 flex items-center justify-center">
-                        <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                          <div className="w-full border-t-2 border-dashed border-slate-200/80"></div>
-                        </div>
-                        <div className="relative flex justify-center text-[9px] font-extrabold uppercase tracking-wider text-slate-400 bg-white px-4 py-1.5 rounded-full border border-slate-200/60 shadow-3xs">
-                          ☕ {lang === 'zh' ? '午休时间 / Midday Break' : 'Lunch Break'}
-                        </div>
-                      </div>
-
-                      {/* 4. Afternoon Row Grid */}
-                      <div className="bg-slate-50/30 border border-slate-200/50 rounded-2xl p-3 flex flex-col gap-2.5">
-                        <div className="flex items-center gap-1.5 text-[9px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-lg w-fit select-none border border-amber-100/60 shadow-3xs">
-                          <Clock size={10} />
-                          {lang === 'zh' ? '下午课程 (PM)' : 'Afternoon (PM)'}
-                        </div>
-                        
-                        <div className={`grid ${currentSchedulesByDay.length === 5 ? 'grid-cols-5' : 'grid-cols-7'} gap-4`}>
-                          {currentSchedulesByDay.map(day => {
-                            const afternoonSchedules = day.schedules.filter(sch => getIsAfternoon(sch.time_slot));
-                            return (
-                              <div key={`afternoon-col-${day.key}`} className="flex flex-col gap-2 bg-white/40 p-2.5 rounded-xl border border-dashed border-slate-200/60 min-h-[160px] justify-start">
-                                {afternoonSchedules.length === 0 ? (
-                                  <div className="flex-1 flex items-center justify-center text-[10px] text-slate-350 italic text-center p-3 border border-dashed border-slate-150 rounded-xl bg-white/30 select-none">
-                                    {lang === 'zh' ? '无课' : 'Free'}
-                                  </div>
-                                ) : (
-                                  afternoonSchedules.map(sch => renderScheduleCard(sch))
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* Holiday batch adjustments */}
         {activeTab === 'adjust' && (
-          <div className="max-w-2xl mx-auto bg-slate-50/50 border border-slate-200 rounded-2xl p-6 shadow-3xs">
-            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
-              <Sparkles className="text-amber-500 shrink-0" size={18} />
-              {lang === 'zh' ? '批量节假日调休排班' : 'Holiday / Cancellation Scheduler'}
-            </h2>
-            <p className="text-xs text-gray-500 mb-5">
-              {lang === 'zh' 
-                ? '此工具能快速把选定日期范围内的课程一键设为“假期调休”或“统一停课”，避免讲师依次手动调整，极大提高教务效率。' 
-                : 'Instantly cancel or exclude classes falling within a holiday or default break period.'}
-            </p>
-
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">{lang === 'zh' ? '开始日期 *' : 'Start Date *'}</label>
-                  <input 
-                    type="date"
-                    className="w-full border border-gray-200 rounded-lg text-xs p-2.5 bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-all font-sans text-gray-750"
-                    value={holStartDate}
-                    onChange={e => setHolStartDate(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">{lang === 'zh' ? '结束日期 *' : 'End Date *'}</label>
-                  <input 
-                    type="date"
-                    className="w-full border border-gray-200 rounded-lg text-xs p-2.5 bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-all font-sans text-gray-750"
-                    value={holEndDate}
-                    onChange={e => setHolEndDate(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">{lang === 'zh' ? '调整状态标签' : 'Target Status'}</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
-                    <input 
-                      type="radio" 
-                      name="holType" 
-                      checked={holType === 'holiday'} 
-                      onChange={() => setHolType('holiday')}
-                      className="accent-indigo-600 cursor-pointer"
-                    />
-                    🏝️ {lang === 'zh' ? '假期调休 (Holiday)' : 'Holiday Exclusion'}
-                  </label>
-                  <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
-                    <input 
-                      type="radio" 
-                      name="holType" 
-                      checked={holType === 'cancelled'} 
-                      onChange={() => setHolType('cancelled')}
-                      className="accent-red-600 cursor-pointer"
-                    />
-                    🛑 {lang === 'zh' ? '异常停课 (Cancelled)' : 'Suspicious Cancellation'}
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">{lang === 'zh' ? '假日说明 / 停课备注' : 'Exclusion Note / Reason'}</label>
-                <input 
-                  type="text"
-                  placeholder={lang === 'zh' ? '例: 国庆节假期停课调休 / 因极寒气象全市停课' : 'e.g., National Day break / weather closures'}
-                  className="w-full border border-gray-200 rounded-lg text-xs p-2.5 bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-all"
-                  value={holNotes}
-                  onChange={e => setHolNotes(e.target.value)}
-                />
-              </div>
-
-              <button 
-                onClick={handleBatchHolidayAdjustment}
-                disabled={loading}
-                className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
-              >
-                {loading ? <Loader2 className="animate-spin" size={14} /> : <RotateCcw size={14} />}
-                {lang === 'zh' ? '一键更新该周期课表' : 'Execute Batch Holiday Updates'}
-              </button>
-            </div>
-          </div>
+          <TimetableAdjustView
+            lang={lang}
+            holStartDate={holStartDate}
+            setHolStartDate={setHolStartDate}
+            holEndDate={holEndDate}
+            setHolEndDate={setHolEndDate}
+            holType={holType}
+            setHolType={setHolType}
+            holNotes={holNotes}
+            setHolNotes={setHolNotes}
+            handleBatchHolidayAdjustment={handleBatchHolidayAdjustment}
+            loading={loading}
+          />
         )}
 
-        {/* CSV/JSON Import & Export */}
         {activeTab === 'import_export' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Export panel */}
-            <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 flex flex-col justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2 border-b border-slate-100 pb-2.5 mb-3">
-                  <Download className="text-green-600" size={16} />
-                  {lang === 'zh' ? '导出系统课表' : 'Export Timetables'}
-                </h3>
-                <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                  {lang === 'zh' 
-                    ? '把系统中当前排定的所有班级课表一键备份成标准 CSV 或 JSON 文件。您可以使用 Excel 便捷编辑修改后再导入回来。' 
-                    : 'Download the compiled records from SQLite memory db into standard JSON or CSV sheet formats.'}
-                </p>
-              </div>
-
-              <div className="flex gap-2.5 mt-4">
-                <button 
-                  onClick={handleExportCSV}
-                  className="flex-1 bg-white hover:bg-slate-50 text-slate-800 border border-slate-250 font-bold text-xs py-2 rounded-lg cursor-pointer transition-all flex justify-center items-center gap-1"
-                >
-                  <FileSpreadsheet className="text-green-600" size={13} />
-                  {lang === 'zh' ? '导出为 Excel CSV' : 'Export CSV Sheet'}
-                </button>
-                <button 
-                  onClick={handleExportJSON}
-                  className="flex-1 bg-white hover:bg-slate-50 text-slate-800 border border-slate-250 font-bold text-xs py-2 rounded-lg cursor-pointer transition-all flex justify-center items-center gap-1"
-                >
-                  <FileSpreadsheet className="text-amber-500" size={13} />
-                  {lang === 'zh' ? '导出为 JSON 树' : 'Export JSON Data'}
-                </button>
-              </div>
-            </div>
-
-            {/* Import panel */}
-            <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 flex flex-col gap-3">
-              <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2 border-b border-slate-100 pb-2.5">
-                <Upload className="text-indigo-600" size={16} />
-                {lang === 'zh' ? '导入课表流程' : 'Import New Schedule'}
-              </h3>
-              
-              <div className="flex flex-col gap-3">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">{lang === 'zh' ? '分配排定给哪一个班级 *' : 'Target Class to load schedules *'}</label>
-                  <select 
-                    id="import_class_select"
-                    title="Import Target Class"
-                    className="w-full bg-white border border-gray-200 rounded-lg text-xs p-2 text-gray-750 cursor-pointer focus:outline-hidden"
-                    value={importClassId}
-                    onChange={e => setImportClassId(e.target.value)}
-                  >
-                    <option value="">{lang === 'zh' ? '选择班级...' : 'Select Class...'}</option>
-                    {classes.map(c => <option key={c.id} value={c.id}>{getClassDisplayName(c.name)}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">
-                    {lang === 'zh' ? '粘贴 CSV 数据内容' : 'Paste CSV data rows'}
-                  </label>
-                  <textarea 
-                    rows={4}
-                    placeholder={lang === 'zh' ? "date,lesson_id,time_slot,status,notes\n2026-06-15,les-1,09:00 - 10:30,scheduled,首节授课\n2026-06-16,les-2,10:45 - 12:15,holiday,假期放假停课" : "date,lesson_id,time_slot,status,notes\n2026-06-15,les-1,09:00 - 10:30,scheduled,First Class"}
-                    className="w-full bg-white border border-gray-250 text-xs p-2 rounded-lg font-mono placeholder:text-gray-350 focus:outline-hidden"
-                    value={csvText}
-                    onChange={e => setCsvText(e.target.value)}
-                  />
-                  <span className="text-[10px] text-gray-400 mt-1 block">
-                    {lang === 'zh' 
-                      ? '首行必须为属性列（支持：date, lesson_id, time_slot, status, notes）。支持复制 JSON 树粘贴直接解析。' 
-                      : 'Ensure first line consists of column keys (date, lesson_id, time_slots).'}
-                  </span>
-                </div>
-
-                {importMessage && (
-                  <div className={`p-2.5 rounded-lg text-xs border flex items-center gap-1.5 ${importMessage.type === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'}`}>
-                    <AlertCircle size={14} />
-                    <span>{importMessage.text}</span>
-                  </div>
-                )}
-
-                <button 
-                  onClick={handleImportData}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 rounded-lg cursor-pointer transition-all flex items-center justify-center gap-1 shadow-xs"
-                >
-                  <Plus size={13} />
-                  {lang === 'zh' ? '开始解析并安全导入' : 'Execute Schema Check & Upload'}
-                </button>
-              </div>
-            </div>
-          </div>
+          <TimetableImportExportView
+            lang={lang}
+            classes={classes}
+            getClassDisplayName={getClassDisplayName}
+            handleExportCSV={handleExportCSV}
+            handleExportJSON={handleExportJSON}
+            importClassId={importClassId}
+            setImportClassId={setImportClassId}
+            csvText={csvText}
+            setCsvText={setCsvText}
+            importMessage={importMessage}
+            handleImportData={handleImportData}
+          />
         )}
 
-        {/* OCR Image Recognition Tab */}
         {activeTab === 'ocr_import' && (
-          <div className="flex flex-col gap-5">
-            {/* Step 1: Upload Image */}
-            <div className="bg-slate-50/50 border border-slate-200 rounded-2xl p-5">
-              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
-                <Camera className="text-violet-500 shrink-0" size={18} />
-                {lang === 'zh' ? '第一步：上传课表图片' : 'Step 1: Upload Timetable Image'}
-              </h2>
-              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                {lang === 'zh' 
-                  ? '拍照或截图您的纸质/电子课表，AI 将自动识别课程信息并生成结构化数据。支持 PNG、JPG 格式，建议图片清晰、文字可辨。' 
-                  : 'Upload a photo or screenshot of your timetable. AI will automatically recognize class information and generate structured data.'}
-              </p>
-
-              {/* AI Provider Selector */}
-              <div className="mb-4 p-3 bg-white rounded-xl border border-slate-200">
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
-                  <Sparkles size={12} className="text-violet-500" />
-                  {lang === 'zh' ? 'AI 识别引擎' : 'AI Recognition Engine'}
-                </label>
-                <select
-                  title="OCR AI Provider"
-                  className="w-full bg-slate-50 border border-gray-200 rounded-lg text-xs p-2.5 text-gray-750 cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-violet-500"
-                  value={ocrProviderId}
-                  onChange={e => setOcrProviderId(e.target.value)}
-                >
-                  <option value="">{lang === 'zh' ? '默认 (Gemini)' : 'Default (Gemini)'}</option>
-                  {aiProviders.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.model_name})</option>
-                  ))}
-                </select>
-                <span className="text-[10px] text-gray-400 mt-1 block">
-                  {lang === 'zh' ? '选择用于识别课表图片的 AI 模型。需要支持图片输入的模型（如 GPT-4o、Gemini 等）。' : 'Choose the AI model for timetable recognition. Must support vision/image input.'}
-                </span>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-4">
-                {/* Upload Area */}
-                <div 
-                  className="flex-1 border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-violet-400 hover:bg-violet-50/30 transition-all group"
-                  onClick={() => ocrFileInputRef.current?.click()}
-                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                  onDrop={handleOcrDrop}
-                >
-                  <input 
-                    ref={ocrFileInputRef}
-                    type="file" 
-                    accept="image/png,image/jpeg,image/jpg,image/webp"
-                    className="hidden"
-                    onChange={handleOcrImageSelect}
-                  />
-                  <ImagePlus className="text-slate-400 group-hover:text-violet-500 transition-colors" size={36} />
-                  <span className="text-xs font-semibold text-slate-500 group-hover:text-violet-600 transition-colors">
-                    {lang === 'zh' ? '点击选择、拖拽图片至此处 或 Ctrl+V 粘贴截图' : 'Click, drag & drop, or Ctrl+V to paste screenshot'}
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    {lang === 'zh' ? '支持 PNG / JPG / JPEG / WebP，最大 20MB' : 'Supports PNG / JPG / JPEG / WebP, max 20MB'}
-                  </span>
-                </div>
-
-                {/* Image Preview */}
-                {ocrImagePreview && (
-                  <div className="flex-1 relative rounded-xl overflow-hidden border border-slate-200 bg-white shadow-sm">
-                    <img 
-                      src={ocrImagePreview} 
-                      alt="Timetable preview" 
-                      className="w-full h-full object-contain max-h-[280px]"
-                    />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOcrImagePreview(null);
-                        setOcrImageBase64(null);
-                        setOcrEntries([]);
-                        setOcrMessage(null);
-                        setOcrSelectedEntries(new Set());
-                        if (ocrFileInputRef.current) ocrFileInputRef.current.value = '';
-                      }}
-                      className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white p-1.5 rounded-lg transition-colors cursor-pointer"
-                      title={lang === 'zh' ? '移除图片' : 'Remove image'}
-                    >
-                      <X size={14} />
-                    </button>
-                    <div className="absolute bottom-2 left-2 bg-black/50 text-white text-[10px] px-2 py-1 rounded-lg flex items-center gap-1">
-                      <Eye size={10} />
-                      {lang === 'zh' ? '课表预览' : 'Preview'}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Recognize Button */}
-              <button
-                onClick={handleOcrRecognize}
-                disabled={!ocrImageBase64 || ocrLoading}
-                className="mt-4 w-full bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 shadow-sm disabled:cursor-not-allowed"
-              >
-                {ocrLoading ? (
-                  <>
-                    <Loader2 className="animate-spin" size={14} />
-                    {lang === 'zh' ? 'AI 识别中，请稍候...' : 'AI recognizing...'}
-                  </>
-                ) : (
-                  <>
-                    <ScanLine size={14} />
-                    {lang === 'zh' ? '开始 AI 智能识别' : 'Start AI Recognition'}
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Progress Display */}
-            {ocrLoading && (
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5 animate-in fade-in duration-200 text-left">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-semibold text-slate-700">{ocrProgressStatus}</span>
-                  <span className="font-mono font-bold text-indigo-600">{ocrProgress}%</span>
-                </div>
-                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden shrink-0">
-                  <div 
-                    className="h-full bg-gradient-to-r from-violet-500 to-indigo-600 transition-all duration-300 rounded-full"
-                    style={{ width: `${ocrProgress}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Status Message */}
-            {ocrMessage && (
-              <div className={`p-3 rounded-xl text-xs border flex items-start gap-2 ${
-                ocrMessage.type === 'error' 
-                  ? 'bg-red-50 border-red-200 text-red-700' 
-                  : ocrMessage.type === 'success'
-                    ? 'bg-green-50 border-green-200 text-green-700'
-                    : 'bg-blue-50 border-blue-200 text-blue-700'
-              }`}>
-                {ocrMessage.type === 'error' ? <XCircle size={14} className="shrink-0 mt-0.5" /> 
-                  : ocrMessage.type === 'success' ? <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
-                  : <ScanLine size={14} className="shrink-0 mt-0.5 animate-pulse" />}
-                <span>{ocrMessage.text}</span>
-              </div>
-            )}
-
-            {/* Step 2: Review Recognized Results */}
-            {ocrEntries.length > 0 && (
-              <div className="bg-slate-50/50 border border-slate-200 rounded-2xl p-5">
-                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
-                  <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
-                  {lang === 'zh' ? '第二步：审核识别结果' : 'Step 2: Review Recognized Entries'}
-                </h2>
-                <p className="text-xs text-gray-500 mb-3">
-                  {lang === 'zh' 
-                    ? '以下是 AI 从课表图片中识别出的课程安排，请勾选需要导入的条目。'
-                    : 'Below are the class entries recognized by AI. Select the ones you want to import.'}
-                </p>
-
-                {/* Select All */}
-                <div className="flex items-center justify-between mb-3">
-                  <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
-                    <input 
-                      type="checkbox"
-                      checked={ocrSelectedEntries.size === ocrEntries.length}
-                      onChange={toggleAllOcrEntries}
-                      className="accent-violet-600 cursor-pointer rounded"
-                    />
-                    {lang === 'zh' ? `全选 (${ocrSelectedEntries.size}/${ocrEntries.length})` : `Select All (${ocrSelectedEntries.size}/${ocrEntries.length})`}
-                  </label>
-                  <span className="text-[10px] text-slate-400">
-                    {lang === 'zh' ? '取消勾选可排除不需要导入的条目' : 'Uncheck to exclude entries from import'}
-                  </span>
-                </div>
-
-                {/* Entries Table */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-                  <table className="w-full text-left border-collapse table-auto text-xs bg-white">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-gray-600 font-semibold text-[10px] uppercase tracking-wide">
-                        <th className="p-2.5 w-[40px] text-center">✓</th>
-                        <th className="p-2.5">{lang === 'zh' ? '星期' : 'Day'}</th>
-                        <th className="p-2.5">{lang === 'zh' ? '节次' : 'Period'}</th>
-                        <th className="p-2.5">{lang === 'zh' ? '班级' : 'Class'}</th>
-                        <th className="p-2.5">{lang === 'zh' ? '科目' : 'Subject'}</th>
-                        <th className="p-2.5">{lang === 'zh' ? '时间段' : 'Time'}</th>
-                        <th className="p-2.5">{lang === 'zh' ? '教室' : 'Room'}</th>
-                        <th className="p-2.5">{lang === 'zh' ? '教师' : 'Teacher'}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {ocrEntries.map((entry, idx) => (
-                        <tr 
-                          key={idx} 
-                          className={`hover:bg-violet-50/30 transition-colors cursor-pointer ${
-                            ocrSelectedEntries.has(idx) ? 'bg-violet-50/20' : 'opacity-50'
-                          }`}
-                          onClick={() => toggleOcrEntry(idx)}
-                        >
-                          <td className="p-2.5 text-center">
-                            <input 
-                              type="checkbox"
-                              checked={ocrSelectedEntries.has(idx)}
-                              onChange={() => toggleOcrEntry(idx)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="accent-violet-600 cursor-pointer"
-                            />
-                          </td>
-                          <td className="p-2.5 font-medium">
-                            <span className="inline-block bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
-                              {dayNames[entry.dayOfWeek] || `Day${entry.dayOfWeek}`}
-                            </span>
-                          </td>
-                          <td className="p-2.5">
-                            <span className="inline-block bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
-                              {lang === 'zh' ? `第${entry.periodNumber}节` : `P${entry.periodNumber}`}
-                            </span>
-                          </td>
-                          <td className="p-2.5 font-semibold text-slate-800">{entry.className || '-'}</td>
-                          <td className="p-2.5">
-                            <span className="inline-block bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
-                              {entry.subject || '-'}
-                            </span>
-                          </td>
-                          <td className="p-2.5 font-mono text-slate-600">{entry.timeSlot || '-'}</td>
-                          <td className="p-2.5 text-slate-600">{entry.location || '-'}</td>
-                          <td className="p-2.5 text-slate-600">{entry.teacherName || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Import Settings */}
-            {ocrEntries.length > 0 && (
-              <div className="bg-slate-50/50 border border-slate-200 rounded-2xl p-5">
-                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
-                  <CheckCircle2 className="text-emerald-500 shrink-0" size={18} />
-                  {lang === 'zh' ? '第三步：确认导入日程' : 'Step 3: Confirm Import'}
-                </h2>
-
-                {(() => {
-                  const today = new Date();
-                  const day = today.getDay();
-                  const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-                  const monday = new Date(today.setDate(diff));
-                  const mondayDate = monday.toISOString().split('T')[0];
-
-                  const selectedItems = ocrEntries.filter((_, i) => ocrSelectedEntries.has(i));
-                  const unmatchedClasses = new Set<string>();
-                  let matchedCount = 0;
-                  selectedItems.forEach(entry => {
-                    const matched = findMatchedClass(entry.className || '');
-                    if (matched) {
-                      matchedCount++;
-                    } else if (entry.className) {
-                      unmatchedClasses.add(entry.className.trim());
-                    }
-                  });
-
-                  return (
-                    <div className="flex flex-col gap-4 mb-4">
-                      <div className="p-3.5 bg-indigo-50 border border-indigo-100 rounded-xl text-xs leading-relaxed">
-                        <div className="font-semibold text-indigo-900 flex items-center gap-1.5 mb-1.5">
-                          <Sparkles size={14} className="text-indigo-600 animate-pulse" />
-                          {lang === 'zh' ? '智能自动匹配规则' : 'Intelligent Auto-Mapping'}
-                        </div>
-                        <div className="text-gray-650 space-y-1">
-                          <div>• {lang === 'zh' ? `本周起始日期（周一）：${mondayDate}` : `Week Start Date (Monday): ${mondayDate}`}</div>
-                          <div>• {lang === 'zh' ? '班级匹配：系统将根据识别到的班级名称自动导入至系统中对应班级。若班级不存在，将自动创建。' : 'Class Matching: System will automatically import entries into matched classes or create new classes on the fly.'}</div>
-                        </div>
-                      </div>
-
-                      <div className="text-xs">
-                        <div className="font-semibold text-gray-700">
-                          {lang === 'zh' 
-                            ? `已选择 ${selectedItems.length} 条记录，其中 ${matchedCount} 条可直接匹配到系统班级。` 
-                            : `${selectedItems.length} entries selected, ${matchedCount} matched existing classes.`}
-                        </div>
-                        {unmatchedClasses.size > 0 && (
-                          <div className="mt-2 p-2.5 bg-violet-50 border border-violet-200 text-violet-800 rounded-lg leading-relaxed">
-                            💡 {lang === 'zh' 
-                              ? `以下识别出的班级在系统中暂不存在，导入时将自动创建：${Array.from(unmatchedClasses).join(', ')}` 
-                              : `The following recognized classes do not exist and will be automatically created on import: ${Array.from(unmatchedClasses).join(', ')}.`}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                <button
-                  onClick={handleOcrImport}
-                  disabled={ocrImporting || ocrSelectedEntries.size === 0}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 shadow-sm disabled:cursor-not-allowed"
-                >
-                  {ocrImporting ? (
-                    <>
-                      <Loader2 className="animate-spin" size={14} />
-                      {lang === 'zh' ? '正在导入...' : 'Importing...'}
-                    </>
-                  ) : (
-                    <>
-                      <Check size={14} />
-                      {lang === 'zh' ? `确认导入选中的 ${ocrSelectedEntries.size} 条课程` : `Import ${ocrSelectedEntries.size} Selected Entries`}
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-
-          </div>
+          <TimetableOcrView
+            lang={lang}
+            ocrProviderId={ocrProviderId}
+            setOcrProviderId={setOcrProviderId}
+            aiProviders={aiProviders}
+            ocrFileInputRef={ocrFileInputRef}
+            handleOcrDrop={handleOcrDrop}
+            handleOcrImageSelect={handleOcrImageSelect}
+            ocrImagePreview={ocrImagePreview}
+            setOcrImagePreview={setOcrImagePreview}
+            setOcrImageBase64={setOcrImageBase64}
+            setOcrEntries={setOcrEntries}
+            setOcrMessage={setOcrMessage}
+            setOcrSelectedEntries={setOcrSelectedEntries}
+            ocrImageBase64={ocrImageBase64}
+            ocrLoading={ocrLoading}
+            handleOcrRecognize={handleOcrRecognize}
+            ocrProgressStatus={ocrProgressStatus}
+            ocrProgress={ocrProgress}
+            ocrMessage={ocrMessage}
+            ocrEntries={ocrEntries}
+            ocrSelectedEntries={ocrSelectedEntries}
+            toggleAllOcrEntries={toggleAllOcrEntries}
+            toggleOcrEntry={toggleOcrEntry}
+            dayNames={dayNames}
+            findMatchedClass={findMatchedClass}
+            handleOcrImport={handleOcrImport}
+            ocrImporting={ocrImporting}
+          />
         )}
       </div>
 

@@ -86,8 +86,8 @@ export class PluginRuntimeAdapter implements IPluginRuntime {
       .filter((p) => p.state === 'active')
       .map((p) => ({
         id: p.id,
-        name: p.manifest.name,
-        version: p.manifest.version,
+        name: p.name,
+        version: p.version,
         state: p.state,
       }));
   }

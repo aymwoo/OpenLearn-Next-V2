@@ -105,6 +105,12 @@ export type ScheduleType = {
   lesson_title: string;
   scheduled_date: string;
   created_at: number;
+  status?: string;
+  time_slot?: string;
+  class_name?: string;
+  classroom?: string;
+  teacher_name?: string;
+  notes?: string;
 };
 
 export type AttendanceType = {

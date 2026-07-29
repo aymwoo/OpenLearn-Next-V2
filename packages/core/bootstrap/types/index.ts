@@ -294,6 +294,8 @@ export interface IPlatformContext {
   readonly extensionCatalog: IExtensionCatalog;
   readonly eventDispatcher: IEventDispatcher;
   readonly shutdownToken: IShutdownToken;
+  /** 当前平台启动阶段（供 bootstrap 管线与上下文读取） */
+  readonly currentStage?: PlatformStage;
 }
 
 /** Startup Cancellation Token contract. */

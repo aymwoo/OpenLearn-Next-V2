@@ -45,8 +45,8 @@ import type { IWorkerTransport } from '../types.js';
  * that route through a pair of EventEmitters.
  */
 function createMockTransportPair(): {
-  main: IWorkerTransport & { messages: any[] };
-  worker: IWorkerTransport & { messages: any[] };
+  main: IWorkerTransport & { messages: any[]; postMessage: ReturnType<typeof vi.fn> };
+  worker: IWorkerTransport & { messages: any[]; postMessage: ReturnType<typeof vi.fn> };
 } {
   const mainToWorker = new EventEmitter();
   const workerToMain = new EventEmitter();
@@ -55,7 +55,7 @@ function createMockTransportPair(): {
     send: EventEmitter,
     recv: EventEmitter,
     id: string,
-  ): IWorkerTransport & { messages: any[] } {
+  ): IWorkerTransport & { messages: any[]; postMessage: ReturnType<typeof vi.fn> } {
     let handler: ((msg: any) => void) | null = null;
     const messages: any[] = [];
 

@@ -49,6 +49,8 @@ function LoadingSkeleton() {
 interface ErrorBoundaryProps {
   children: React.ReactNode;
   fallback?: React.ReactNode;
+  /** React 在调用方通过 key 区分多个错误边界实例（JSX 属性，运行时由 React 消费） */
+  key?: React.Key;
 }
 
 interface ErrorBoundaryState {
@@ -65,9 +67,12 @@ class ExtensionErrorBoundary extends React.Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
 > {
+  state: ErrorBoundaryState = { hasError: false };
+  props: ErrorBoundaryProps;
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false };
+    this.props = props;
   }
 
   static getDerivedStateFromError(): ErrorBoundaryState {

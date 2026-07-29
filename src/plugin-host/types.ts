@@ -91,6 +91,8 @@ export interface ExtensionPointConfig {
   route?: string;
   /** v5.1: 额外 props */
   slotProps?: Record<string, any>;
+  /** v3: 可选自定义渲染函数（返回 React 节点，用于非组件式扩展点） */
+  render?: (props?: Record<string, any>) => React.ReactNode;
 }
 
 // ── Frontend Service Interfaces ──────────────────────────────────────────

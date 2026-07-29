@@ -313,7 +313,7 @@ export function Dashboard(props: DashboardProps) {
                                   </span>
                                 </div>
                                 <div className="flex justify-between items-center mt-1">
-                                  <span className="text-[10px] text-slate-400 font-mono">PID: {proc.pid || 'N/A'}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono">PID: {proc.id}</span>
                                   <button onClick={() => setShowProcessLogs(proc.id)} className="text-xs font-bold text-indigo-650 hover:text-indigo-850 transition-colors">
                                     {t.processLogs}
                                   </button>
