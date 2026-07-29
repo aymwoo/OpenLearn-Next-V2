@@ -137,6 +137,15 @@ export interface TeacherViewProps {
   onOpenImportLessons: () => void;
   onOpenCourseWizard: () => void;
   onViewCourse: (lessonId: string) => void;
+  onDeleteCourse: (lessonId: string) => Promise<void>;
+  onCopyCourse: (lessonId: string) => Promise<void>;
+  filterEnrollment: boolean;
+  setFilterEnrollment: (v: boolean) => void;
+  filterHasContent: boolean;
+  setFilterHasContent: (v: boolean) => void;
+  filterThisMonth: boolean;
+  setFilterThisMonth: (v: boolean) => void;
+  copyingLessonId: string | null;
 
   // ── TimetableView ───────────────────────────────────────────────────
   onSchedulesUpdated: () => Promise<void>;

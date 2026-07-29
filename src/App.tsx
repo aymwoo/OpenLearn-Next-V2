@@ -241,6 +241,10 @@ export default function App() {
   const setLessons = useAppStore((s) => s.setLessons);
   const [lessonsSearchQuery, setLessonsSearchQuery] = useState('');
   const [lessonsSortOrder, setLessonsSortOrder] = useState<'recent' | 'alphabetical' | 'enrollment'>('recent');
+  const [filterEnrollment, setFilterEnrollment] = useState(false);
+  const [filterHasContent, setFilterHasContent] = useState(false);
+  const [filterThisMonth, setFilterThisMonth] = useState(false);
+  const [copyingLessonId, setCopyingLessonId] = useState<string | null>(null);
 
   const filteredAndSortedLessons = React.useMemo(() => {
     let result = [...lessons];
@@ -252,6 +256,18 @@ export default function App() {
       );
     }
     
+    if (filterEnrollment) {
+      result = result.filter(lesson => (lesson.enrollment_count || 0) > 0);
+    }
+    if (filterHasContent) {
+      result = result.filter(lesson => lesson.content && lesson.content.trim().length > 0);
+    }
+    if (filterThisMonth) {
+      const now = Date.now();
+      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+      result = result.filter(lesson => (lesson.created_at || 0) >= monthStart);
+    }
+    
     if (lessonsSortOrder === 'recent') {
       result.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
     } else if (lessonsSortOrder === 'alphabetical') {
@@ -261,7 +277,7 @@ export default function App() {
     }
     
     return result;
-  }, [lessons, lessonsSearchQuery, lessonsSortOrder]);
+  }, [lessons, lessonsSearchQuery, lessonsSortOrder, filterEnrollment, filterHasContent, filterThisMonth]);
   const [registeredCommands, setRegisteredCommands] = useState<any[]>([]);
   const [plugins, setPlugins] = useState<PluginType[]>([]);
   const [aiProviders, setAiProviders] = useState<AIProvider[]>([]);
@@ -1654,12 +1670,54 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setLessons(data);
-        if (!selectedLesson && data.length > 0) {
+        if (!appStore.getState().selectedLesson && data.length > 0) {
           setSelectedLesson(data[0].id);
         }
       }
     } catch (e) {
       console.warn("Failed to fetch lessons", e);
+    }
+  };
+
+  const handleDeleteCourse = async (lessonId: string) => {
+    const res = await fetch(`/api/lessons/${lessonId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to delete course');
+    }
+    await fetchLessons();
+    if (selectedLesson === lessonId) {
+      setSelectedLesson(null);
+    }
+    addToast(
+      lang === 'zh' ? '课程已删除' : 'Course Deleted',
+      lang === 'zh' ? '课程及其所有关联数据已被删除。' : 'The course and all associated data have been deleted.',
+      'success'
+    );
+  };
+
+  const handleCopyCourse = async (lessonId: string) => {
+    setCopyingLessonId(lessonId);
+    try {
+      const res = await fetch(`/api/lessons/${lessonId}/clone`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to copy course');
+      }
+      await fetchLessons();
+      addToast(
+        lang === 'zh' ? '复制成功' : 'Course Copied',
+        lang === 'zh' ? '课程已成功复制。' : 'Course has been copied successfully.',
+        'success'
+      );
+    } catch (e: any) {
+      addToast(
+        lang === 'zh' ? '复制失败' : 'Copy Failed',
+        e.message || (lang === 'zh' ? '复制课程时发生错误。' : 'An error occurred while copying the course.'),
+        'error'
+      );
+    } finally {
+      setCopyingLessonId(null);
     }
   };
 
@@ -3759,6 +3817,15 @@ export default function App() {
           onOpenImportLessons={() => { setImportStatus('idle'); setImportProgress(0); setImportProgressTotal(0); setImportErrorMsg(''); setPreviewImportData([]); setIsImportLessonsOpen(true); }}
           onOpenCourseWizard={() => { setWizardStep(1); setIsCourseWizardOpen(true); }}
           onViewCourse={(lessonId) => { setTeacherTab('lesson_editor'); setSelectedLesson(lessonId); }}
+          onDeleteCourse={handleDeleteCourse}
+          onCopyCourse={handleCopyCourse}
+          filterEnrollment={filterEnrollment}
+          setFilterEnrollment={setFilterEnrollment}
+          filterHasContent={filterHasContent}
+          setFilterHasContent={setFilterHasContent}
+          filterThisMonth={filterThisMonth}
+          setFilterThisMonth={setFilterThisMonth}
+          copyingLessonId={copyingLessonId}
           onSchedulesUpdated={fetchTodaySchedules}
           onLogout={handleLogout}
           aiProviders={aiProviders}

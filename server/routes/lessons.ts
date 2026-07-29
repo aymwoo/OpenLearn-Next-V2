@@ -26,6 +26,7 @@ import {
   IActivityRegistryToken,
 } from '../../packages/activity-ecosystem/index.js';
 import type { ServerContext, AgentChatAttachment, AgentChatRequest, AgentToolExecution, StoredAIProvider } from '../context.js';
+import { v7 as uuidv7 } from 'uuid';
 import { injectLmsSdk } from './shared.js';
 
 export function registerLessonsRoutes(ctx: ServerContext) {
@@ -511,6 +512,95 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       res.json({ success: true, hint });
     } catch (e: any) {
       console.error('AI Tutor error:', e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── 课程删除 API ─────────────────────────────────────────────────────
+  app.delete('/api/lessons/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
+      kernelContainer.db.prepare('DELETE FROM student_lesson_progress WHERE lesson_id = ?').run(id);
+      kernelContainer.db.prepare('DELETE FROM schedules WHERE lesson_id = ?').run(id);
+      kernelContainer.db.prepare('DELETE FROM assignments WHERE lesson_id = ?').run(id);
+
+      const result = kernelContainer.db.prepare('DELETE FROM lessons WHERE id = ?').run(id);
+
+      if (result.changes === 0) {
+        return res.status(404).json({ error: 'Lesson not found' });
+      }
+
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── 课程统计 API（删除确认弹窗用）───────────────────────────────────
+  app.get('/api/lessons/:id/stats', (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const whiteboardCount = (kernelContainer.db.prepare(
+        'SELECT COUNT(*) as count FROM whiteboard_elements WHERE lesson_id = ?'
+      ).get(id) as any).count;
+
+      const scheduleCount = (kernelContainer.db.prepare(
+        'SELECT COUNT(*) as count FROM schedules WHERE lesson_id = ?'
+      ).get(id) as any).count;
+
+      const enrollmentCount = (kernelContainer.db.prepare(
+        'SELECT COUNT(*) as count FROM student_lesson_progress WHERE lesson_id = ?'
+      ).get(id) as any).count;
+
+      const assignmentCount = (kernelContainer.db.prepare(
+        'SELECT COUNT(*) as count FROM assignments WHERE lesson_id = ?'
+      ).get(id) as any).count;
+
+      res.json({ whiteboardCount, scheduleCount, enrollmentCount, assignmentCount });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── 课程复制 API ─────────────────────────────────────────────────────
+  app.post('/api/lessons/:id/clone', async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const original = kernelContainer.db.prepare('SELECT * FROM lessons WHERE id = ?').get(id) as any;
+      if (!original) {
+        return res.status(404).json({ error: 'Lesson not found' });
+      }
+
+      const newId = uuidv7();
+      const now = Date.now();
+      const newTitle = `副本-${original.title}`;
+
+      kernelContainer.db.prepare(
+        'INSERT INTO lessons (id, title, content, timeline, progress_mode, progress_conditions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(newId, newTitle, original.content, original.timeline, original.progress_mode, original.progress_conditions, now, now);
+
+      const whiteboardElements = kernelContainer.db.prepare(
+        'SELECT * FROM whiteboard_elements WHERE lesson_id = ?'
+      ).all(id) as any[];
+
+      const insertElement = kernelContainer.db.prepare(
+        'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)'
+      );
+
+      for (const el of whiteboardElements) {
+        insertElement.run(uuidv7(), newId, el.type, el.data, now);
+      }
+
+      const cloned = kernelContainer.db.prepare(
+        'SELECT l.*, 0 as enrollment_count FROM lessons l WHERE l.id = ?'
+      ).get(newId);
+
+      res.json({ success: true, lesson: cloned });
+    } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });

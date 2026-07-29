@@ -32,6 +32,86 @@ import { WhiteboardToolbar } from './components/WhiteboardToolbar';
 import { WhiteboardPageBar } from './components/WhiteboardPageBar';
 import { WhiteboardDialog } from './components/WhiteboardDialog';
 import { CoursewareEntrySelectorModal } from './components/CoursewareEntrySelectorModal';
+import { fullscreenRendererRegistry, FullscreenOverlay } from './fullscreen/FullscreenRendererRegistry';
+import type { FullscreenRendererProps } from './fullscreen/FullscreenRendererRegistry';
+import { propertyEditorRegistry } from './properties/PropertyEditorRegistry';
+
+// ── 自定义全屏渲染器注册 ─────────────────────────────────────────────────
+
+fullscreenRendererRegistry.register('quiz', ({ data }: FullscreenRendererProps) => (
+  <div className="max-w-2xl mx-auto space-y-6">
+    <h3 className="text-xl font-bold text-gray-800">{data.question}</h3>
+    <div className="flex flex-col gap-3">
+      {(data.options || []).map((opt: string, i: number) => (
+        <button key={i} className="px-5 py-4 text-left bg-gray-50 border-2 border-gray-200 rounded-xl text-base hover:bg-gray-100 transition-colors">
+          <span className="font-bold text-indigo-600 mr-3">{'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i]}.</span>
+          {opt}
+        </button>
+      ))}
+    </div>
+    {data.submissions && Object.keys(data.submissions).length > 0 && (
+      <div className="mt-4 p-4 bg-gray-50 rounded-xl">
+        <p className="text-sm font-semibold text-gray-600">提交统计: {Object.keys(data.submissions).length} 人已作答</p>
+      </div>
+    )}
+  </div>
+));
+
+fullscreenRendererRegistry.register('timer', ({ data }: FullscreenRendererProps) => (
+  <div className="flex items-center justify-center h-full">
+    <div className="text-center">
+      <div className="text-8xl font-mono font-bold text-orange-600 mb-4">
+        {String(Math.floor((data.remaining ?? data.duration ?? 60) / 60)).padStart(2, '0')}:{String((data.remaining ?? data.duration ?? 60) % 60).padStart(2, '0')}
+      </div>
+      <p className="text-lg text-gray-500">{data.label || '计时器'}</p>
+    </div>
+  </div>
+));
+
+fullscreenRendererRegistry.register('assignment', ({ data }: FullscreenRendererProps) => (
+  <div className="max-w-2xl mx-auto space-y-6">
+    <h3 className="text-xl font-bold text-gray-800">{data.title}</h3>
+    <p className="text-gray-600 text-base whitespace-pre-wrap">{data.description}</p>
+    <button className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-3 rounded-xl transition-colors text-base shadow-sm cursor-pointer">Upload File</button>
+  </div>
+));
+
+fullscreenRendererRegistry.register('rollcall', ({ data }: FullscreenRendererProps) => (
+  <div className="flex items-center justify-center h-full">
+    <div className="text-center">
+      <div className="text-6xl font-bold text-indigo-600 mb-4">{data.selectedStudent || '点击点名'}</div>
+      <p className="text-lg text-gray-500">随机点名</p>
+    </div>
+  </div>
+));
+
+fullscreenRendererRegistry.register('html-applet', ({ data, lessonId }: FullscreenRendererProps) => {
+  if (data.coursewareUuid) {
+    return (
+      <iframe
+        src={`/runtime/${data.coursewareUuid}/`}
+        sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+        className="w-full h-full rounded-xl border"
+      />
+    );
+  }
+  if (data.resourceId) {
+    return (
+      <iframe
+        src={`/api/resources/${data.resourceId}/`}
+        sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+        className="w-full h-full rounded-xl border"
+      />
+    );
+  }
+  return (
+    <iframe
+      srcDoc={wrapSrcDocWithBridge(data.code || '', lessonId)}
+      sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+      className="w-full h-full rounded-xl border"
+    />
+  );
+});
 
 interface WhiteboardElement {
   id: string;
@@ -2424,94 +2504,29 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           </div>
         )}
 
-        <div className="absolute inset-0 w-full h-full overflow-hidden">
+        <div className="absolute inset-0 w-full h-full overflow-hidden" style={{ pointerEvents: isDragOverBoard ? 'none' : 'auto' }}>
           {containerSize.width > 0 && containerSize.height > 0 && (
             fullscreenElementId ? (
-              /* ── Fullscreen overlay ── */
               (() => {
                 const fsEl = safeElements.find(e => e.id === fullscreenElementId);
                 if (!fsEl) { setFullscreenElementId(null); return null; }
                 let fsData: any = {};
                 try { fsData = JSON.parse(fsEl.data); } catch (_) {}
-                const pad = 16;
-                const fsW = containerSize.width - pad * 2;
-                const fsH = containerSize.height - pad * 2;
+                const typeLabel: Record<string, string> = {
+                  quiz: '📝 随堂测验', timer: '⏱ 计时器', assignment: '📋 作业',
+                  'code-sandbox': '💻 代码沙箱', 'html-applet': '🌐 交互课件',
+                  rollcall: '🎲 随机点名', presentation: '📽 演示文稿',
+                  'math-graph': '📐 数学图形', text: '📝 文本',
+                };
                 return (
-                  <div className="absolute inset-0 z-50 bg-black/60 flex items-center justify-center" style={{ pointerEvents: 'auto' }}>
-                    <div className="relative bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col" style={{ width: Math.max(400, fsW), height: Math.max(300, fsH) }}>
-                      <div className="bg-indigo-50 text-indigo-700 px-4 py-2 flex justify-between items-center text-sm font-semibold border-b border-indigo-100 shrink-0">
-                        <span>{fsEl.type === 'quiz' ? '📝 随堂测验' : fsEl.type === 'timer' ? '⏱ 计时器' : fsEl.type === 'assignment' ? '📋 作业' : fsEl.type === 'code-sandbox' ? '💻 代码沙箱' : fsEl.type === 'html-applet' ? '🌐 交互课件' : fsEl.type === 'rollcall' ? '🎲 随机点名' : fsEl.type}</span>
-                        <button
-                          onClick={() => setFullscreenElementId(null)}
-                          className="p-1.5 hover:bg-indigo-200/50 rounded-lg text-indigo-600 hover:text-indigo-900 transition-colors cursor-pointer flex items-center gap-1 text-xs"
-                        >
-                          <Minimize2 size={14} /> 退出全屏
-                        </button>
-                      </div>
-                      <div className="flex-1 overflow-auto p-6">
-                        {fsEl.type === 'quiz' && (
-                          <div className="max-w-2xl mx-auto space-y-6">
-                            <h3 className="text-xl font-bold text-gray-800">{fsData.question}</h3>
-                            <div className="flex flex-col gap-3">
-                              {(fsData.options || []).map((opt: string, i: number) => (
-                                <button key={i} className="px-5 py-4 text-left bg-gray-50 border-2 border-gray-200 rounded-xl text-base hover:bg-gray-100 transition-colors">
-                                  <span className="font-bold text-indigo-600 mr-3">{'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i]}.</span>
-                                  {opt}
-                                </button>
-                              ))}
-                            </div>
-                            {fsData.submissions && Object.keys(fsData.submissions).length > 0 && (
-                              <div className="mt-4 p-4 bg-gray-50 rounded-xl">
-                                <p className="text-sm font-semibold text-gray-600">提交统计: {Object.keys(fsData.submissions).length} 人已作答</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {fsEl.type === 'timer' && (
-                          <div className="flex items-center justify-center h-full">
-                            <div className="text-center">
-                              <div className="text-8xl font-mono font-bold text-orange-600 mb-4">
-                                {String(Math.floor((fsData.remaining ?? fsData.duration ?? 60) / 60)).padStart(2, '0')}:{String((fsData.remaining ?? fsData.duration ?? 60) % 60).padStart(2, '0')}
-                              </div>
-                              <p className="text-lg text-gray-500">{fsData.label || '计时器'}</p>
-                            </div>
-                          </div>
-                        )}
-                        {fsEl.type === 'assignment' && (
-                          <div className="max-w-2xl mx-auto space-y-6">
-                            <h3 className="text-xl font-bold text-gray-800">{fsData.title}</h3>
-                            <p className="text-gray-600 text-base whitespace-pre-wrap">{fsData.description}</p>
-                            <button className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-3 rounded-xl transition-colors text-base shadow-sm cursor-pointer">Upload File</button>
-                          </div>
-                        )}
-                        {fsEl.type === 'code-sandbox' && (
-                          <div className="h-full flex flex-col gap-4">
-                            <textarea value={fsData.code || ''} readOnly className="flex-1 p-4 bg-gray-900 text-green-400 font-mono text-sm rounded-xl resize-none" />
-                          </div>
-                        )}
-                        {fsEl.type === 'html-applet' && (
-                          <div className="h-full flex items-center justify-center">
-                            <div className="text-center text-gray-500">
-                              <BookOpen size={64} className="mx-auto mb-4 text-indigo-300" />
-                              <p className="text-lg font-semibold">{fsData.title || '交互课件'}</p>
-                              {fsData.coursewareUuid && <iframe src={`/runtime/${fsData.coursewareUuid}/`} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads" className="w-full h-[60vh] mt-4 rounded-xl border" />}
-                            </div>
-                          </div>
-                        )}
-                        {fsEl.type === 'rollcall' && (
-                          <div className="flex items-center justify-center h-full">
-                            <div className="text-center">
-                              <div className="text-6xl font-bold text-indigo-600 mb-4">{fsData.selectedStudent || '点击点名'}</div>
-                              <p className="text-lg text-gray-500">随机点名</p>
-                            </div>
-                          </div>
-                        )}
-                        {!['quiz', 'timer', 'assignment', 'code-sandbox', 'html-applet', 'rollcall'].includes(fsEl.type) && (
-                          <div className="flex items-center justify-center h-full text-gray-400 text-sm">此组件类型暂不支持全屏预览</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <FullscreenOverlay
+                    type={fsEl.type}
+                    title={typeLabel[fsEl.type] || fsEl.type}
+                    data={fsData}
+                    containerSize={containerSize}
+                    onClose={() => setFullscreenElementId(null)}
+                    lessonId={lessonId}
+                  />
                 );
               })()
             ) : (
@@ -2890,6 +2905,24 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   </div>
                 )}
               </div>
+
+              {/* 插件注册的属性编辑器 —— 优先于硬编码编辑器 */}
+              {(() => {
+                const PluginEditor = propertyEditorRegistry.get(selectedEl.type);
+                if (PluginEditor) {
+                  return (
+                    <PluginEditor
+                      elementId={selectedEl.id}
+                      elementType={selectedEl.type}
+                      data={editingProperties}
+                      updateData={handlePropsUpdate}
+                      lessonId={lessonId}
+                      onClose={() => setSelectedShapeId(null)}
+                    />
+                  );
+                }
+                return null;
+              })()}
 
               {/* 1. QUIZ (测验配置) */}
               {selectedEl.type === 'quiz' && (

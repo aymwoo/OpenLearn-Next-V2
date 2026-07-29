@@ -115,6 +115,15 @@ const baseProps: any = {
   onOpenImportLessons: vi.fn(),
   onOpenCourseWizard: vi.fn(),
   onViewCourse: vi.fn(),
+  onDeleteCourse: vi.fn(),
+  onCopyCourse: vi.fn(),
+  filterEnrollment: false,
+  setFilterEnrollment: vi.fn(),
+  filterHasContent: false,
+  setFilterHasContent: vi.fn(),
+  filterThisMonth: false,
+  setFilterThisMonth: vi.fn(),
+  copyingLessonId: null,
 
   // TimetableView
   onSchedulesUpdated: vi.fn(),

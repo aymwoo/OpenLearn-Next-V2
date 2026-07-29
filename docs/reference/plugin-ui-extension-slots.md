@@ -37,6 +37,8 @@ export type ExtensionSlot =
 | `classroom.tool` | `WhiteboardToolbar.tsx:283`（工具栏按钮）/ `LessonPalette.tsx:144`（备课画板组件列表卡片） | 无（仅 `route?`） |
 | `teacher.dashboard.widget` | `Dashboard.tsx:155` | 无（仅 `route?`） |
 | `help.plugin_docs` | `HelpView.tsx:1880` | 无（仅 `route?`） |
+| `whiteboard.fullscreen` | `InteractiveWhiteboard.tsx`（`FullscreenOverlay` 通过 `fullscreenRendererRegistry` 查找） | 见 §5 |
+| `whiteboard.property-editor` | `InteractiveWhiteboard.tsx`（属性面板通过 `propertyEditorRegistry` 查找） | 见 §6 |
 
 > `student.lesson.tool` / `teacher.panel` / `student.fullscreen` / `global.setting` / `nav.user_menu` 仅出现在 `ExtensionSlot` 联合类型中，**尚无渲染器挂载**，当前不会渲染任何内容。
 > `help.plugin_docs` 有渲染器，但**不在** `ExtensionSlot` 联合类型内（以字符串字面量传入，其 prop 类型为 `ExtensionSlot | string`）。
@@ -152,3 +154,83 @@ export interface PluginModule {
 `manifest.contributes?: Record<string, Array<{ id: string; [key: string]: unknown }>>`（`openlearn.d.ts:57`），存入 `ContributionRegistry` 供管理端预览，**不挂载 React 组件**。
 
 > 最后更新：2026-07-26
+
+---
+
+## 5. 白板全屏渲染器注册表 (`fullscreenRendererRegistry`)
+
+**注册表位置**：`src/features/whiteboard/fullscreen/FullscreenRendererRegistry.tsx`
+
+插件可通过 `fullscreenRendererRegistry.register(type, component)` 为白板组件类型注册自定义全屏视图。白板中点击组件的最大化按钮时，`FullscreenOverlay` 优先查询注册表；若无匹配，自动使用智能默认渲染器。
+
+### 使用方式
+
+```typescript
+import { fullscreenRendererRegistry } from '@/features/whiteboard/fullscreen';
+
+fullscreenRendererRegistry.register('ext-my-plugin/widget', ({ data, onClose, containerSize, lessonId }) => (
+  <div className="flex flex-col items-center justify-center h-full">
+    <h2>{data.title}</h2>
+    <p>{data.content}</p>
+  </div>
+));
+```
+
+### Props 类型 (`FullscreenRendererProps`)
+
+```typescript
+{
+  elementType: string;
+  data: Record<string, any>;
+  onClose: () => void;
+  containerSize: { width: number; height: number };
+  lessonId: string;
+}
+```
+
+### 默认兜底渲染
+
+未注册的类型自动使用 `/fullscreen/FullscreenRendererRegistry.tsx` 中的 `DefaultFullscreenRenderer`，按优先级检测 `data` 字段：
+`code` → 代码编辑器 / `markdown` → Markdown 预览 / `question` + `options` → 测验视图 / `text` → 文本展示 / `url` → 外链 / `src` → 图片 / `coursewareUuid` → iframe 课件 / `equation` → 公式 / 无可识别字段 → JSON 摘要。
+
+全屏 overlay 通过 `createPortal` 渲染到 `document.body`，使用 `fixed` 定位覆盖整个浏览器视口，支持 ESC 键和右上角关闭按钮退出。
+
+---
+
+## 6. 白板属性编辑器注册表 (`propertyEditorRegistry`)
+
+**注册表位置**：`src/features/whiteboard/properties/PropertyEditorRegistry.tsx`
+
+插件可通过 `propertyEditorRegistry.register(type, component)` 为白板组件类型注册自定义属性编辑器，在白板右侧属性面板中渲染。
+
+### 使用方式
+
+```typescript
+import { propertyEditorRegistry } from '@/features/whiteboard/properties';
+
+propertyEditorRegistry.register('ext-my-plugin/widget', ({ data, updateData, elementId, lessonId }) => (
+  <div className="space-y-3">
+    <label className="block text-[10px] text-slate-400 font-semibold mb-1">标题</label>
+    <input
+      value={data.title || ''}
+      onChange={e => updateData({ title: e.target.value })}
+      className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+    />
+  </div>
+));
+```
+
+### Props 类型 (`PropertyEditorProps`)
+
+```typescript
+{
+  elementId: string;
+  elementType: string;
+  data: Record<string, any>;          // 当前元素属性（可读写副本）
+  updateData: (partial: Record<string, any>) => void;  // 更新属性，自动同步到后端
+  lessonId: string;
+  onClose: () => void;
+}
+```
+
+调用 `updateData(partial)` 会立即触发本地状态更新 + 持久化到 SQLite。通用属性（x 坐标、y 坐标、宽度、高度）和删除按钮由平台统一渲染，插件无需关心。

@@ -8,6 +8,44 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.2] - 2026-07-30
+
+### Features
+- **Course Management Enhancement (`CourseManagement.tsx`)**:
+  - Add **icon toolbar** on each course card: View/Edit, Copy, Delete, replacing the single "View Interactive" button.
+  - Add **filter chips**: filter by enrollment (>0 students), content (non-empty), and creation date (this month).
+  - Add **course copy** with optimistic UI: click Copy → immediate placeholder card with loading state → API clone completes → list refreshes.
+  - Add **course deletion** with stats confirmation dialog showing affected whiteboard elements, schedules, enrollments, and assignments before irreversibly deleting.
+  - Course title is now clickable to navigate to the editor.
+- **Backend Course APIs (`server/routes/lessons.ts`)**:
+  - `DELETE /api/lessons/:id` — hard-delete a lesson with cascade deletion of whiteboard elements, student progress, schedules, and assignments.
+  - `GET /api/lessons/:id/stats` — return counts of whiteboard elements, schedules, enrollments, and assignments for the delete confirmation dialog.
+  - `POST /api/lessons/:id/clone` — full clone (title prefixed "副本-", content, timeline, whiteboard elements; enrollment reset to 0).
+- **Fullscreen Renderer Registry (`src/features/whiteboard/fullscreen/`)**:
+  - New `FullscreenRendererRegistry` with `register(type, component)` / `get(type)` API for third-party plugins to provide custom fullscreen views.
+  - Smart default renderer that auto-detects data fields (`code`, `markdown`, `question`, `text`, `url`, `src`, `coursewareUuid`, `equation`) and renders appropriate HTML without hardcoded type switches.
+  - `FullscreenOverlay` component using `createPortal` to render at `document.body` with `fixed` positioning covering the entire browser viewport (not just the whiteboard container).
+  - Built-in type registrations: `quiz`, `timer`, `assignment`, `rollcall` (preserved from legacy), plus `html-applet` with iframe + Bridge SDK.
+  - ESC key and close button always available in overlay.
+- **Property Editor Registry (`src/features/whiteboard/properties/`)**:
+  - New `PropertyEditorRegistry` with `register(type, component)` / `get(type)` API enabling third-party plugins to inject custom property editors into the whiteboard's right-side properties panel.
+  - Plugin editors receive `{ elementId, elementType, data, updateData, lessonId, onClose }` (data-driven `useState`-style API).
+  - Generic properties (x/y/width/height) and delete button remain platform-managed.
+  - Plugins import via `@/features/whiteboard/properties`.
+
+### Fixes
+- **Course navigation always redirects to the same course**: Fix stale closure in `fetchLessons()` polling interval where `selectedLesson` was read from the React closure instead of the Zustand store, causing the 2-second poll to reset `selectedLesson` to `data[0].id`. Changed to `appStore.getState().selectedLesson`.
+- **Drag-and-drop from palette to whiteboard fails when existing components are present**: Add `pointer-events: none` to the Konva Stage container during `isDragOverBoard` state, allowing native HTML5 `drop` events to pass through to the outer container div.
+
+### Refactor / Performance
+- **Fullscreen system refactored from hardcoded type switch** (90+ lines of if/else) to `FullscreenRendererRegistry` lookup with extensible registration.
+- **View/Edit icon** changed from `Eye` to `Edit3` for better "enter editor" affordance.
+- **Delete lesson route** now uses direct REST `DELETE /api/lessons/:id` instead of the command bus for simplicity.
+
+### Docs
+- Update `docs/reference/plugin-ui-extension-slots.md` with `whiteboard.fullscreen` and `whiteboard.property-editor` registry APIs.
+- Expand `docs/whiteboard/whiteboard-runtime.md` with fullscreen renderer architecture and property editor extensibility documentation.
+
 ## [0.2.1] - 2026-07-29
 
 ### Features

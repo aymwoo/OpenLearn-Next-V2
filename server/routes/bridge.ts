@@ -43,7 +43,8 @@ export function registerBridgeRoutes(ctx: ServerContext) {
     res.send(BRIDGE_SDK_CODE);
   });
 
-  app.get('/runtime/:uuid', (req, res) => {
+  app.get('/runtime/:uuid', (req, res, next) => {
+    if (req.path.endsWith('/')) return next();
     res.redirect(`/runtime/${req.params.uuid}/`);
   });
 
