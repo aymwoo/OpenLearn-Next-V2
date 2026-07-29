@@ -116,7 +116,7 @@ async function startServer() {
         imgSrc: ["'self'", "data:", "blob:", "https:"],
         connectSrc: ["'self'", "ws:", "wss:", "https:"],
         fontSrc: ["'self'", "data:", "https:", "https://fonts.gstatic.com"],
-        frameSrc: ["'self'", "blob:", "data:", "http://localhost:*", "http://127.0.0.1:*", "https:"],
+        frameSrc: ["'self'", "blob:", "data:", "http://localhost", "http://127.0.0.1", "http:", "https:"],
         objectSrc: ["'none'"],
       },
     },
