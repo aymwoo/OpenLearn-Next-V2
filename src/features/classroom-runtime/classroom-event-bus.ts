@@ -57,10 +57,9 @@ export class ClassroomEventBus {
     type: ClassroomEventType | '*',
     handler: (event: ClassroomNamespacedEvent) => void
   ): () => void {
-    return this.eventBus.subscribe((evt) => {
-      if (type === '*' || evt.type === type) {
-        handler(evt.payload as unknown as ClassroomNamespacedEvent);
-      }
+    const subscriber = this.eventBus.subscribe(type, (evt) => {
+      handler(evt.payload as unknown as ClassroomNamespacedEvent);
     });
+    return () => this.eventBus.unsubscribe(subscriber);
   }
 }
