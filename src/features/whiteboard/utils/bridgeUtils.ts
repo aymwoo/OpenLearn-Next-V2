@@ -24,20 +24,33 @@ export function wrapSrcDocWithBridge(rawCode: string, lessonId: string): string 
   window.__LMS_COURSEWARE__ = ${JSON.stringify(courseware)};
   (function() {
     try {
+      // Override window.postMessage (self-targeting, always works)
       var origPM = window.postMessage;
       window.postMessage = function(msg, targetOrigin, transfer) {
         var origin = (targetOrigin === 'null' || targetOrigin === null) ? '*' : targetOrigin;
         try { return origPM.call(this, msg, origin, transfer); }
         catch(err) { if (err.name === 'SyntaxError') return origPM.call(this, msg, '*', transfer); throw err; }
       };
-      if (window.parent && window.parent !== window) {
-        var origParentPM = window.parent.postMessage;
-        window.parent.postMessage = function(msg, targetOrigin, transfer) {
-          var origin = (targetOrigin === 'null' || targetOrigin === null) ? '*' : targetOrigin;
-          try { return origParentPM.call(window.parent, msg, origin, transfer); }
-          catch(err) { if (err.name === 'SyntaxError') return origParentPM.call(window.parent, msg, '*', transfer); throw err; }
-        };
+      // Shadow window.parent / window.top with Proxy to intercept .postMessage()
+      // Direct assignment (window.parent.postMessage = ...) silently fails on cross-origin WindowProxy
+      function proxyWin(realRef, propName) {
+        try {
+          var safePost = function(msg, targetOrigin, transfer) {
+            var origin = (targetOrigin === 'null' || targetOrigin === null) ? '*' : targetOrigin;
+            try { return realRef.postMessage.call(realRef, msg, origin, transfer); }
+            catch(err) { if (err.name === 'SyntaxError') return realRef.postMessage.call(realRef, msg, '*', transfer); throw err; }
+          };
+          var px = new Proxy(realRef, {
+            get: function(t, p) {
+              if (p === 'postMessage') return safePost;
+              try { var v = t[p]; return typeof v === 'function' ? v.bind(t) : v; } catch(e) { return undefined; }
+            }
+          });
+          Object.defineProperty(window, propName, { get: function() { return px; }, configurable: true });
+        } catch(e) {}
       }
+      if (window.parent && window.parent !== window) proxyWin(window.parent, 'parent');
+      try { if (window.top && window.top !== window) proxyWin(window.top, 'top'); } catch(e) {}
     } catch(e) {}
   })();
 <\/script>

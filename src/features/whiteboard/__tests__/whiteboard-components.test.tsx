@@ -21,10 +21,16 @@ describe('Whiteboard Extracted Components & Utilities', () => {
       expect(result).toContain('<h1>Hello World</h1>');
     });
 
-    it('should inject inline postMessage resilience script to normalize targetOrigin "null"', () => {
+    it('should inject inline Proxy-based postMessage resilience script to normalize targetOrigin "null"', () => {
       const result = wrapSrcDocWithBridge('<div>Applet</div>', 'lesson-456');
+      // Verify self-targeting postMessage override
       expect(result).toContain('origPM = window.postMessage');
       expect(result).toContain("targetOrigin === 'null'");
+      // Verify Proxy-based window.parent/window.top shadow pattern
+      expect(result).toContain('new Proxy(realRef');
+      expect(result).toContain('Object.defineProperty(window, propName');
+      expect(result).toContain("proxyWin(window.parent, 'parent')");
+      expect(result).toContain("proxyWin(window.top, 'top')");
     });
   });
 

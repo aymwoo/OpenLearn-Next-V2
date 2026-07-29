@@ -22,9 +22,69 @@ export const BRIDGE_SDK_CODE = `(function() {
     } catch (err) {}
   }
 
+  // ── Helper: create a safe postMessage wrapper that normalises 'null' → '*' ──
+  function __makeSafePostMessage(realTarget, label) {
+    return function(message, targetOrigin, transfer) {
+      try {
+        if (message && typeof message === 'object') {
+          if (!message.attempt_id && window.__LMS_STUDENT__?.attempt_id) {
+            message.attempt_id = window.__LMS_STUDENT__.attempt_id;
+          }
+          if (!message.uuid && window.__LMS_COURSEWARE__?.uuid) {
+            message.uuid = window.__LMS_COURSEWARE__.uuid;
+          }
+        }
+      } catch (e) {}
+
+      var origin = targetOrigin;
+      if (origin === 'null' || origin === null || origin === undefined) {
+        console.warn('[LMS Bridge Notice] Normalized invalid targetOrigin "' + origin + '" to "*" for ' + label);
+        origin = '*';
+      }
+      try {
+        return realTarget.postMessage.call(realTarget, message, origin, transfer);
+      } catch (err) {
+        if (err.name === 'SyntaxError' && origin !== '*') {
+          console.warn('[LMS Bridge Notice] Recovered SyntaxError on ' + label + ', fallback to "*"', err);
+          return realTarget.postMessage.call(realTarget, message, '*', transfer);
+        }
+        throw err;
+      }
+    };
+  }
+
+  // ── Helper: create a Proxy wrapper around a cross-origin WindowProxy ──
+  //    This is necessary because sandboxed iframes (without allow-same-origin)
+  //    cannot set properties on cross-origin WindowProxy objects.
+  //    We use Object.defineProperty to shadow window.parent / window.top
+  //    with a Proxy that intercepts the .postMessage() call.
+  function __proxyWindow(realRef, propName) {
+    try {
+      var safePost = __makeSafePostMessage(realRef, propName + '.postMessage');
+      var proxyObj = new Proxy(realRef, {
+        get: function(target, prop) {
+          if (prop === 'postMessage') return safePost;
+          try {
+            var val = target[prop];
+            if (typeof val === 'function') return val.bind(target);
+            return val;
+          } catch (e) { return undefined; }
+        }
+      });
+      Object.defineProperty(window, propName, {
+        get: function() { return proxyObj; },
+        configurable: true
+      });
+    } catch (e) {
+      // Proxy or defineProperty not supported, fall back to direct override attempt
+      try { realRef.postMessage = __makeSafePostMessage(realRef, propName + '.postMessage (fallback)'); } catch (_) {}
+    }
+  }
+
   // Proxy postMessage calls to enrich them with attempt_id/uuid and normalize targetOrigin
   try {
-    const originalPostMessage = window.postMessage;
+    // 1. Override window.postMessage (self-targeting, always works)
+    var originalPostMessage = window.postMessage;
     window.postMessage = function(message, targetOrigin, transfer) {
       try {
         if (message && typeof message === 'object') {
@@ -37,8 +97,8 @@ export const BRIDGE_SDK_CODE = `(function() {
         }
       } catch (e) {}
       
-      let origin = targetOrigin;
-      if (origin === 'null' || origin === null) {
+      var origin = targetOrigin;
+      if (origin === 'null' || origin === null || origin === undefined) {
         console.warn('[LMS Bridge Notice] Normalized invalid targetOrigin "null" to "*" for postMessage call');
         origin = '*';
       }
@@ -53,50 +113,29 @@ export const BRIDGE_SDK_CODE = `(function() {
       }
     };
 
+    // 2. Shadow window.parent with a Proxy that intercepts .postMessage()
     if (window.parent && window.parent !== window) {
-      const parentPostMessage = window.parent.postMessage;
-      try {
-        window.parent.postMessage = function(message, targetOrigin, transfer) {
-          try {
-            if (message && typeof message === 'object') {
-              if (!message.attempt_id && window.__LMS_STUDENT__?.attempt_id) {
-                message.attempt_id = window.__LMS_STUDENT__.attempt_id;
-              }
-              if (!message.uuid && window.__LMS_COURSEWARE__?.uuid) {
-                message.uuid = window.__LMS_COURSEWARE__.uuid;
-              }
-            }
-          } catch (e) {}
-          
-          let origin = targetOrigin;
-          if (origin === 'null' || origin === null) {
-            console.warn('[LMS Bridge Notice] Normalized invalid targetOrigin "null" to "*" for parent.postMessage call');
-            origin = '*';
-          }
-          try {
-            return parentPostMessage.call(window.parent, message, origin, transfer);
-          } catch (err) {
-            if (err.name === 'SyntaxError' && origin !== '*') {
-              console.warn('[LMS Bridge Notice] Recovered SyntaxError on parent.postMessage, fallback targetOrigin to "*"', err);
-              return parentPostMessage.call(window.parent, message, '*', transfer);
-            }
-            throw err;
-          }
-        };
-      } catch (e) {}
+      __proxyWindow(window.parent, 'parent');
     }
 
-    // Intercept message event listeners to sanitize event.source.postMessage replies
-    const origAddEventListener = window.addEventListener;
+    // 3. Shadow window.top with a Proxy that intercepts .postMessage()
+    try {
+      if (window.top && window.top !== window) {
+        __proxyWindow(window.top, 'top');
+      }
+    } catch (e) {}
+
+    // 4. Intercept message event listeners to sanitize event.source.postMessage replies
+    var origAddEventListener = window.addEventListener;
     if (typeof origAddEventListener === 'function') {
       window.addEventListener = function(type, listener, options) {
         if (type === 'message' && typeof listener === 'function') {
-          const wrappedListener = function(event) {
+          var wrappedListener = function(event) {
             try {
               if (event && event.source && typeof event.source.postMessage === 'function') {
-                const origSourcePostMessage = event.source.postMessage;
+                var origSourcePostMessage = event.source.postMessage;
                 event.source.postMessage = function(msg, targetOrigin, transfer) {
-                  let origin = targetOrigin;
+                  var origin = targetOrigin;
                   if (origin === 'null' || origin === null) {
                     console.warn('[LMS Bridge Notice] Normalized invalid targetOrigin "null" to "*" on event.source.postMessage');
                     origin = '*';
