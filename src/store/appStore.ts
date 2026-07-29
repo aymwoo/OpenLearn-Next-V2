@@ -141,9 +141,11 @@ export interface AppState {
 
 // ── Create vanilla store ───────────────────────────────────────────────────
 
+import { uiStore } from './uiStore';
+
 export const appStore = createStore<AppState>((set) => ({
   // Core defaults
-  lang: 'zh',
+  lang: uiStore.getState().lang,
   session: null,
   lessons: [],
   selectedLesson: null,
@@ -152,7 +154,7 @@ export const appStore = createStore<AppState>((set) => ({
   students: [],
   liveClassSelectedClassId: null,
   liveClassIsActive: false,
-  teacherTab: 'courses',
+  teacherTab: uiStore.getState().teacherTab,
 
   // Shared data defaults
   aiProviders: [],
@@ -193,14 +195,17 @@ export const appStore = createStore<AppState>((set) => ({
   notifications: [],
 
   // Toast defaults
-  toasts: [],
+  toasts: uiStore.getState().toasts,
 
   // Site info defaults
-  siteInfo: { siteName: '', slogan: '', logoUrl: null },
+  siteInfo: uiStore.getState().siteInfo,
 
   // ── Core setters ──────────────────────────────────────────────────────
 
-  setLang: (lang) => set({ lang }),
+  setLang: (lang) => {
+    uiStore.getState().setLang(lang);
+    set({ lang });
+  },
   setSession: (session) => set({ session }),
   setLessons: (lessons) =>
     set((state) => ({
@@ -215,7 +220,10 @@ export const appStore = createStore<AppState>((set) => ({
   setStudents: (students) => set({ students }),
   setLiveClassSelectedClassId: (liveClassSelectedClassId) => set({ liveClassSelectedClassId }),
   setLiveClassIsActive: (liveClassIsActive) => set({ liveClassIsActive }),
-  setTeacherTab: (teacherTab) => set({ teacherTab }),
+  setTeacherTab: (teacherTab) => {
+    uiStore.getState().setTeacherTab(teacherTab);
+    set({ teacherTab });
+  },
 
   // ── Shared data setters ───────────────────────────────────────────────
 
@@ -272,11 +280,92 @@ export const appStore = createStore<AppState>((set) => ({
 
   // ── Toast setters ─────────────────────────────────────────────────────
 
-  addToast: (toast) => set((s) => ({ toasts: [...s.toasts, toast] })),
-  removeToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  addToast: (toast) => {
+    uiStore.getState().addToast(toast);
+    set((s) => ({ toasts: [...s.toasts, toast] }));
+  },
+  removeToast: (id) => {
+    uiStore.getState().removeToast(id);
+    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+  },
 
-  setSiteInfo: (siteInfo) => set({ siteInfo }),
+  setSiteInfo: (siteInfo) => {
+    uiStore.getState().setSiteInfo(siteInfo);
+    set({ siteInfo });
+  },
 }));
+
+import { classStore } from './classStore';
+
+// Sync changes from uiStore into appStore
+uiStore.subscribe((uiState) => {
+  appStore.setState({
+    lang: uiState.lang,
+    teacherTab: uiState.teacherTab,
+    toasts: uiState.toasts,
+    siteInfo: uiState.siteInfo,
+  });
+});
+
+import { lessonStore } from './lessonStore';
+
+// Sync changes from classStore into appStore
+classStore.subscribe((classState) => {
+  appStore.setState({
+    classes: classState.classes,
+    students: classState.students,
+    classStudentsMap: classState.classStudentsMap,
+    classDashboardMap: classState.classDashboardMap,
+    studentProgressMap: classState.studentProgressMap,
+    classSchedulesMap: classState.classSchedulesMap,
+    scheduleAttendanceMap: classState.scheduleAttendanceMap,
+    assignmentSubmissionsMap: classState.assignmentSubmissionsMap,
+    classAssignmentsMap: classState.classAssignmentsMap,
+    classProgressMap: classState.classProgressMap,
+    classSeats: classState.classSeats,
+  });
+});
+
+import { liveClassStore } from './liveClassStore';
+
+// Sync changes from lessonStore into appStore
+lessonStore.subscribe((lessonState) => {
+  appStore.setState({
+    lessons: lessonState.lessons,
+    selectedLesson: lessonState.selectedLesson,
+    elements: lessonState.elements,
+    vfsNodes: lessonState.vfsNodes,
+  });
+});
+
+import { studentStore } from './studentStore';
+
+// Sync changes from liveClassStore into appStore
+liveClassStore.subscribe((liveState) => {
+  appStore.setState({
+    liveClassSelectedClassId: liveState.liveClassSelectedClassId,
+    liveClassIsActive: liveState.liveClassIsActive,
+    liveClassFeed: liveState.liveClassFeed,
+    liveClassTimeRemaining: liveState.liveClassTimeRemaining,
+    liveClassAcknowledgedMap: liveState.liveClassAcknowledgedMap,
+    liveClassStudentProgress: liveState.liveClassStudentProgress,
+    onlineStudentIds: liveState.onlineStudentIds,
+    activeStudentLessons: liveState.activeStudentLessons,
+  });
+});
+
+// Sync changes from studentStore into appStore
+studentStore.subscribe((studentState) => {
+  appStore.setState({
+    studentDashboardData: studentState.studentDashboardData,
+    notifications: studentState.notifications,
+  });
+});
+
+
+
+
+
 
 // ── React-bound hook ───────────────────────────────────────────────────────
 

@@ -18,6 +18,7 @@ export default defineConfig({
       'src/features/**/__tests__/**/*.test.{ts,tsx}',
       'src/components/__tests__/**/*.test.{ts,tsx}',
       'src/utils/__tests__/**/*.test.{ts,tsx}',
+      'src/store/__tests__/**/*.test.{ts,tsx}',
     ],
 
     environment: 'jsdom',
