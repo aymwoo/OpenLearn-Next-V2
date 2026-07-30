@@ -198,6 +198,9 @@ roadmap/documentation-roadmap
 release-notes/v0.1.10
 release-notes/v0.1.11
 release-notes/v0.1.12
+release-notes/v0.2.0
+release-notes/v0.2.1
+release-notes/v0.2.3
 ```
 
 ```{toctree}
