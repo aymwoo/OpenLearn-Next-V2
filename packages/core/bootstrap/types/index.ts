@@ -121,7 +121,7 @@ export const BootstrapError = PlatformBootstrapError;
 // ── ③ Platform Constants ─────────────────────────────────────────────────
 
 /** Current OpenLearn platform semantic version. */
-export const PLATFORM_VERSION: Version = '2.5.0';
+export const PLATFORM_VERSION: Version = '0.2.3';
 
 /** Official kernel name. */
 export const PLATFORM_KERNEL_NAME = 'OpenLearn Platform Kernel';

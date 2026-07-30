@@ -37,7 +37,7 @@ export interface IUnifiedExtensionRegistry {
 export class UnifiedExtensionRegistry implements IUnifiedExtensionRegistry {
   public readonly id = 'srv_unified_extension_registry';
   public readonly name = 'UnifiedExtensionRegistry';
-  public readonly version = '2.5.0';
+  public readonly version = '0.2.3';
 
   private readonly _extensions = new Map<string, Map<string, ExtensionItemMetadata>>();
 

@@ -95,7 +95,7 @@ export interface IPluginDistributionManager {
 export class PluginDistributionManager implements IPluginDistributionManager {
   public readonly id = 'srv_plugin_distribution_manager';
   public readonly name = 'PluginDistributionManager';
-  public readonly version = '2.5.0';
+  public readonly version = '0.2.3';
 
   private readonly _repositories = new Map<string, IPluginRepositoryAdapter>();
 

@@ -58,6 +58,7 @@ core/command-event-bus
 
 plugin/plugin-architecture
 plugin/plugin-lifecycle
+plugin/plugin-manifest-spec
 plugin/plugin-registry
 plugin/extension-registry
 plugin/plugin-documentation-report
@@ -178,6 +179,7 @@ tutorials/plugin-development-tutorial
 :hidden:
 
 examples/verifiable-examples
+examples/existing-plugins-guide
 ```
 
 ```{toctree}

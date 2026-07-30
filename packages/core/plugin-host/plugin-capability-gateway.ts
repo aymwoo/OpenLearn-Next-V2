@@ -38,7 +38,7 @@ export interface IPluginCapabilityGateway {
 export class PluginCapabilityGateway implements IPluginCapabilityGateway {
   public readonly id = 'srv_plugin_capability_gateway';
   public readonly name = 'PluginCapabilityGateway';
-  public readonly version = '2.5.0';
+  public readonly version = '0.2.3';
 
   constructor(public readonly capabilityRegistry: CapabilityRegistry) {}
 
