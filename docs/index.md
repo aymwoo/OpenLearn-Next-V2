@@ -195,12 +195,12 @@ roadmap/documentation-roadmap
 :caption: 📋 发布日志 (Release Notes)
 :hidden:
 
-release-notes/v0.1.10
-release-notes/v0.1.11
-release-notes/v0.1.12
-release-notes/v0.2.0
-release-notes/v0.2.1
 release-notes/v0.2.3
+release-notes/v0.2.1
+release-notes/v0.2.0
+release-notes/v0.1.12
+release-notes/v0.1.11
+release-notes/v0.1.10
 ```
 
 ```{toctree}
@@ -262,4 +262,4 @@ governance/architecture-governance
 - **[Plugin SDK](sdk/plugin-sdk)**: `@openlearn/plugin-sdk@3.3.1` 强类型定义、`Token<T>` DI 支持与 `ctx.provide()` 服务共享。
 - **[AI Runtime & Tools](ai/ai-runtime)**: 原生集成 Google GenAI (Gemini 2.5/3.0)、Prompt 模板与 Function Calling 工具调用。
 
-> 最后更新：2026-07-27
+> 最后更新：2026-07-30
