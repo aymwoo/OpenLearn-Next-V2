@@ -102,6 +102,10 @@ import { StudentAssignmentsPanel } from './features/student/StudentAssignmentsPa
 import { ToastContainer } from './features/shared/ToastContainer';
 import { NavigationSidebar } from './features/shared/NavigationSidebar';
 import { RightSidebar } from './features/shared/RightSidebar';
+import { AppModals } from './components/AppModals';
+import { useLmsBridge } from './services/lms-bridge';
+import { useAppPolling } from './hooks/useAppPolling';
+import { useAgentChat } from './hooks/useAgentChat';
 import { ProcessLogsModal } from './features/modals/ProcessLogsModal';
 import { ImportModal } from './features/modals/ImportModal';
 import { CloudDriveModal, CloudDrivePanel } from './features/modals/CloudDriveModal';
@@ -2823,109 +2827,7 @@ export default function App() {
     selectedAssignmentRef.current = selectedAssignment;
   }, [selectedAssignment]);
 
-  useEffect(() => {
-    if (!session) return;
-    const handleLmsMessage = async (event: MessageEvent) => {
-      const data = event.data;
-      if (!data || typeof data !== 'object') return;
-
-      const safeTargetOrigin = (event.origin && event.origin !== 'null') ? event.origin : '*';
-      let attemptId = data.attempt_id;
-      let uuid = data.uuid;
-      let type = data.type || '';
-      let payload = data.payload || data;
-
-      // Try to extract attemptId from sending iframe if same-origin is accessible
-      if (!attemptId && event.source) {
-        try {
-          const iframe = Array.from(document.querySelectorAll('iframe')).find(
-            f => f.contentWindow === event.source
-          );
-          if (iframe && iframe.contentWindow) {
-            const iframeWindow = iframe.contentWindow as any;
-            if (iframeWindow.__LMS_STUDENT__?.attempt_id) {
-              attemptId = iframeWindow.__LMS_STUDENT__.attempt_id;
-            }
-            if (iframeWindow.__LMS_COURSEWARE__?.uuid) {
-              uuid = iframeWindow.__LMS_COURSEWARE__.uuid;
-            }
-          }
-        } catch (e) {
-          // Cross-origin or other error, ignore
-        }
-      }
-
-      if (!attemptId) return;
-
-      // Identify if this is a submission or progress or general log
-      const isSubmit = 
-        type === 'LMS_SUBMIT' || 
-        type === 'LMS_FINISH' || 
-        type === 'submit' || 
-        type === 'finish' || 
-        type === 'completed' ||
-        (payload && typeof payload === 'object' && (
-          payload.score !== undefined || 
-          payload.grade !== undefined || 
-          payload.result !== undefined || 
-          payload.points !== undefined
-        ));
-
-      const isSaveProgress = type === 'LMS_SAVE_PROGRESS' || type === 'saveProgress';
-
-      if (isSubmit) {
-        try {
-          await fetch(`/api/courseware/attempts/${attemptId}/submit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              score: payload?.score ?? payload?.grade ?? payload?.result ?? payload?.points ?? undefined,
-              comment: payload?.comment ?? payload?.feedback ?? payload?.note ?? undefined,
-              completion: payload?.completion ?? 1.0,
-              status: 'submitted',
-              extra: payload
-            })
-          });
-        } catch (e) {
-          console.error('Failed to submit attempt data to backend:', e);
-        }
-      } else if (isSaveProgress) {
-        try {
-          await fetch(`/api/courseware/attempts/${attemptId}/submit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              score: payload?.score ?? payload?.grade ?? payload?.result ?? payload?.points ?? undefined,
-              comment: payload?.comment ?? payload?.feedback ?? undefined,
-              completion: payload?.completion ?? undefined,
-              status: 'inprogress',
-              extra: payload
-            })
-          });
-        } catch (e) {
-          console.error('Failed to save progress to backend:', e);
-        }
-      } else {
-        try {
-          await fetch(`/api/courseware/attempts/${attemptId}/log`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              eventType: type || 'log',
-              payload: payload
-            })
-          });
-        } catch (e) {
-          console.error('Failed to log event to backend:', e);
-        }
-      }
-    };
-
-    window.addEventListener('message', handleLmsMessage);
-    return () => {
-      window.removeEventListener('message', handleLmsMessage);
-    };
-  }, [session]);
+  useLmsBridge(session);
 
   const saveTimeline = async (lessonId: string, newSegments: any[]) => {
     setEditorSaveStatus('saving');
@@ -2989,63 +2891,29 @@ export default function App() {
     }
   }, [selectedLesson, lessons]);
 
-  useEffect(() => {
-    if (!session) return;
-    fetchLessons();
-    fetchPlugins();
-    fetchRegisteredCommands();
-    fetchEvents();
-    fetchApprovals();
-    fetchProcesses();
-    fetchClasses();
-    fetchTodaySchedules();
-    fetchStudents();
-    fetchLabs();
-    fetchVfs(currentVfsParentRef.current);
-    let isFetching = false;
-    const inv = setInterval(async () => {
-      if (isFetching) return;
-      isFetching = true;
-      try {
-        await fetchEvents(); 
-        await fetchLessons(); 
-        await fetchApprovals();
-        await fetchProcesses();
-        await fetchClasses();
-        await fetchTodaySchedules().catch(()=>{});
-        await fetchStudents();
-        await fetchLabs();
-        await fetchVfs(currentVfsParentRef.current);
-        await fetchRegisteredCommands();
-        if (showProcessLogs) {
-          await fetchProcessLogs(showProcessLogs);
-        }
-        if (expandedClassIdRef.current) {
-          await fetchClassStudents(expandedClassIdRef.current);
-        }
-        if (selectedLessonRef.current) {
-           await fetchElements(selectedLessonRef.current);
-        }
-        if (selectedAssignmentRef.current) {
-           await fetchElements(`assignment-${selectedAssignmentRef.current.id}-student-${activeStudentId || selectedAssignmentRef.current.student_id}`);
-        }
-      } finally {
-        isFetching = false;
-      }
-    }, 2000);
-    return () => clearInterval(inv);
-  }, [session, showProcessLogs, activeStudentId]);
-
-  useEffect(() => {
-    fetchVfs(currentVfsParent);
-  }, [currentVfsParent]);
-
-  useEffect(() => {
-    if (selectedLesson) {
-      fetchElements(selectedLesson);
-    }
-  }, [selectedLesson]);
-
+  useAppPolling({
+    session,
+    showProcessLogs,
+    activeStudentId,
+    currentVfsParent,
+    selectedLesson,
+    selectedAssignment,
+    expandedClassId,
+    fetchLessons,
+    fetchPlugins,
+    fetchRegisteredCommands,
+    fetchEvents,
+    fetchApprovals,
+    fetchProcesses,
+    fetchClasses,
+    fetchTodaySchedules,
+    fetchStudents,
+    fetchLabs,
+    fetchVfs,
+    fetchProcessLogs,
+    fetchClassStudents,
+    fetchElements,
+  });
 
   const handleChatFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -3959,13 +3827,18 @@ export default function App() {
         t={t}
       />
 
-      {/* Manual Import Classes & Students Modal */}
-      <ImportModal show={showImportModal} onClose={() => setShowImportModal(false)} lang={lang} handleImportFile={handleImportFile} importError={importError} importSuccess={importSuccess} isImporting={isImporting} downloadCSVTemplate={downloadCSVTemplate} />
-
-      <CourseWizardModal
+      <AppModals
+        lang={lang as 'zh' | 'en'}
+        t={t}
+        showImportModal={showImportModal}
+        setShowImportModal={setShowImportModal}
+        handleImportFile={handleImportFile}
+        importError={importError}
+        importSuccess={importSuccess}
+        isImporting={isImporting}
+        downloadCSVTemplate={downloadCSVTemplate}
         isCourseWizardOpen={isCourseWizardOpen}
         setIsCourseWizardOpen={setIsCourseWizardOpen}
-        lang={lang}
         wizardStep={wizardStep}
         setWizardStep={setWizardStep}
         wizardIsSubmitting={wizardIsSubmitting}
@@ -3982,12 +3855,8 @@ export default function App() {
         addToast={addToast}
         generateTemplateContent={generateTemplateContent}
         handleDeployWizardCourse={handleDeployWizardCourse}
-      />
-
-      <ImportLessonsModal
         isImportLessonsOpen={isImportLessonsOpen}
         setIsImportLessonsOpen={setIsImportLessonsOpen}
-        lang={lang}
         importStatus={importStatus}
         setIsDraggingImport={setIsDraggingImport}
         handleCSVFileChange={handleCSVFileChange}
@@ -4001,9 +3870,6 @@ export default function App() {
         importErrorMsg={importErrorMsg}
         setImportErrorMsg={setImportErrorMsg}
         handleCSVImportSubmit={handleCSVImportSubmit}
-      />
-
-      <QuizGeneratorModal
         isQuizGeneratorOpen={isQuizGeneratorOpen}
         setIsQuizGeneratorOpen={setIsQuizGeneratorOpen}
         lessons={lessons}
@@ -4025,13 +3891,8 @@ export default function App() {
         setSavingQuiz={setSavingQuiz}
         quizGeneratorClassId={quizGeneratorClassId}
         fetchClassDashboard={fetchClassDashboard}
-      />
-
-
-      <StudentPreviewModal
         isLessonPreviewVisible={isLessonPreviewVisible}
         setIsLessonPreviewVisible={setIsLessonPreviewVisible}
-        lessons={lessons}
         selectedLesson={selectedLesson}
         previewFullscreenPanel={previewFullscreenPanel}
         setPreviewFullscreenPanel={setPreviewFullscreenPanel}
@@ -4047,35 +3908,22 @@ export default function App() {
         vfsNodes={vfsNodes}
         previewSelectedCourseware={previewSelectedCourseware}
         setPreviewSelectedCourseware={setPreviewSelectedCourseware}
-      />
-
-      {/* Process Logs Modal */}
-      <ProcessLogsModal showProcessLogs={showProcessLogs} setShowProcessLogs={setShowProcessLogs} processLogsContent={processLogsContent} t={t} />
-
-      {/* Cloud Drive Modal */}
-      <CloudDriveModal isOpen={isCloudDriveOpen} onClose={() => setIsCloudDriveOpen(false)} vfsNodes={vfsNodes} currentVfsParent={currentVfsParent} setCurrentVfsParent={setCurrentVfsParent} cloudDrivePreviewNode={cloudDrivePreviewNode} setCloudDrivePreviewNode={setCloudDrivePreviewNode} />
-
-      <SystemResourceLibraryModal
+        showProcessLogs={showProcessLogs}
+        setShowProcessLogs={setShowProcessLogs}
+        processLogsContent={processLogsContent}
+        isCloudDriveOpen={isCloudDriveOpen}
+        setIsCloudDriveOpen={setIsCloudDriveOpen}
+        cloudDrivePreviewNode={cloudDrivePreviewNode}
+        setCloudDrivePreviewNode={setCloudDrivePreviewNode}
         isSystemResourceLibraryOpen={isSystemResourceLibraryOpen}
         setIsSystemResourceLibraryOpen={setIsSystemResourceLibraryOpen}
-        lang={lang}
         systemResourceTab={systemResourceTab}
         setSystemResourceTab={setSystemResourceTab}
         selectedLibraryResourceId={selectedLibraryResourceId}
         setSelectedLibraryResourceId={setSelectedLibraryResourceId}
-        vfsNodes={vfsNodes}
-        currentVfsParent={currentVfsParent}
-        setCurrentVfsParent={setCurrentVfsParent}
-        cloudDrivePreviewNode={cloudDrivePreviewNode}
-        setCloudDrivePreviewNode={setCloudDrivePreviewNode}
         loadingLibraryResources={loadingLibraryResources}
         libraryResources={libraryResources}
         fetchLibraryResources={fetchLibraryResources}
-      />
-
-      {/* Grade Export Weighting Settings Modal */}
-      {/* 批量操作选择弹窗（排课 / 锁定课程 / 转班） */}
-      <BatchPickerModal
         batchPicker={batchPicker}
         setBatchPicker={setBatchPicker}
         batchPickerLesson={batchPickerLesson}
@@ -4084,17 +3932,11 @@ export default function App() {
         setBatchPickerDate={setBatchPickerDate}
         batchPickerTargetClass={batchPickerTargetClass}
         setBatchPickerTargetClass={setBatchPickerTargetClass}
-        lessons={lessons}
         classes={classes}
         expandedClassId={expandedClassId}
         confirmBatchPicker={confirmBatchPicker}
-        lang={lang}
-      />
-
-      <ExportWeightModal
         isExportWeightModalOpen={isExportWeightModalOpen}
         setIsExportWeightModalOpen={setIsExportWeightModalOpen}
-        lang={lang}
         quizzesWeight={quizzesWeight}
         setQuizzesWeight={setQuizzesWeight}
         assignmentsWeight={assignmentsWeight}
@@ -4108,39 +3950,22 @@ export default function App() {
         exportClassName={exportClassName}
         csvPreviewData={csvPreviewData}
         handleExportGrades={handleExportGrades}
-      />
-
-      <NotificationDetailModal
-        notification={selectedNotificationForModal}
-        onClose={() => setSelectedNotificationForModal(null)}
-        lang={lang}
-        onOpenWorkspace={(assignment) => {
-          setSelectedAssignment(assignment);
-          setStudentViewStatus('assignment');
-          setQuizStudentAnswers({});
-          setSubAssignmentTab('quiz');
-        }}
+        selectedNotificationForModal={selectedNotificationForModal}
+        setSelectedNotificationForModal={setSelectedNotificationForModal}
+        setSelectedAssignment={setSelectedAssignment}
+        setStudentViewStatus={setStudentViewStatus}
+        setQuizStudentAnswers={setQuizStudentAnswers}
+        setSubAssignmentTab={setSubAssignmentTab}
+        isTourOpen={isTourOpen}
+        setIsTourOpen={setIsTourOpen}
+        handleSeedSuccess={handleSeedSuccess}
+        setTeacherTab={setTeacherTab}
+        showCoursewareHub={showCoursewareHub}
+        setShowCoursewareHub={setShowCoursewareHub}
       />
 
       {/* Real-time Toast Notifications */}
       <ToastContainer />
-
-      {/* Help Tour Wizard */}
-      <HelpTour
-        isOpen={isTourOpen}
-        onClose={() => setIsTourOpen(false)}
-        lang={lang as 'zh' | 'en'}
-        onSeedSuccess={handleSeedSuccess}
-        onJumpTab={(tab) => setTeacherTab(tab)}
-      />
-      
-      {/* Courseware Hub Panel */}
-      {showCoursewareHub && (
-        <CoursewareHubPanel
-          onClose={() => setShowCoursewareHub(false)}
-          lang={lang}
-        />
-      )}
 
       </div>
     </>
