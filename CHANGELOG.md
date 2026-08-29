@@ -8,6 +8,36 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.4] - 2026-08-29
+
+### Refactor / Performance
+- **Frontend Architecture & `App.tsx` Decoupling**:
+  - Slimmed `src/App.tsx` down from **3,974 lines** to **1,722 lines** (a total reduction of **-2,252 lines, -56.7%**), transforming the monolithic root into a clean routing and context coordinator.
+  - **`useLabAndSchedule`**: Encapsulated computer lab management, classroom seating layouts, timetable scheduling, and rollcall attendance tracking.
+  - **`useGradeExport`**: Encapsulated grade weighting calculations, real-time CSV preview, single/multi-class CSV grade exports, whole-school PDF generation, and 30-day academic risk warning algorithms.
+  - **`useLessonTimeline`**: Encapsulated lesson segment timeline state, drag-and-drop ordering, remote persistence, and SQLite auto-save state machine.
+  - **`useStudentNotifications`**: Encapsulated student assignment notices, grading feedback alerts, random rollcall notifications, and read receipt tracking.
+  - **`useLessonFiltering`**: Encapsulated lesson searching, sorting, and multi-criteria filters.
+  - **`usePluginManagement`**: Encapsulated plugin installations, raw binary ZIP uploads, approval workflows, and AI Provider CRUD / connectivity testing.
+  - **`useCourseWizard`**: Encapsulated multi-step course creation wizard workflow and timeline generation.
+  - **`useQuizGenerator`**: Encapsulated AI MCQ objective quiz generation and answer tracking.
+  - **`useClassBatchOperations`**: Encapsulated batch class/student selection, batch deletion, batch scheduling, batch password resets, and batch transfers.
+  - **`bulkImportService`**: Separated CSV/JSON import parsers and template downloads into pure service modules.
+  - **`AppModals` Adapter Pattern**: Refactored modal props into structured hook bundle adapters, eliminating dozens of top-level prop drilling lines.
+
+### Features
+- **Enhanced Hook & Service Layer**:
+  - Pure modular services for grade reporting (`gradeReportService.ts`) and bulk imports (`bulkImportService.ts`).
+  - Unified adapter support in `AppModals` allowing direct composition of domain hook bundles.
+
+### Fixes
+- **Redundant State & Shadowing Fixes**:
+  - Cleaned up shadowed state declarations and duplicate fetcher calls across `App.tsx`.
+  - Fixed PDF report generation state conflict between single-class and multi-class tracking.
+
+### Docs
+- Generated comprehensive architecture audit reports and stage-by-stage refactoring blueprints (`p0~p4` reports in artifact history).
+
 ## [0.2.3] - 2026-07-30
 
 ### Features
