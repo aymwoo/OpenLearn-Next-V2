@@ -42,6 +42,7 @@ import { usePluginManagement } from './hooks/usePluginManagement';
 import { useCourseWizard } from './hooks/useCourseWizard';
 import { useQuizGenerator } from './hooks/useQuizGenerator';
 import { useClassBatchOperations } from './hooks/useClassBatchOperations';
+import { useLabAndSchedule } from './hooks/useLabAndSchedule';
 import {
   downloadCSVTemplate as downloadCSVTemplateService,
   parseAndImportClassesOrStudents,
@@ -270,9 +271,38 @@ export default function App() {
   const [processLogsContent, setProcessLogsContent] = useState('');
   const classes = useAppStore((s) => s.classes);
   const setClasses = useAppStore((s) => s.setClasses);
-  const [todaySchedules, setTodaySchedules] = useState<any[]>([]);
   const students = useAppStore((s) => s.students);
   const setStudents = useAppStore((s) => s.setStudents);
+
+  // ── Hook: 机房座位与排课管理 ──
+  const {
+    computerLabs,
+    setComputerLabs,
+    loadingLabs,
+    setLoadingLabs,
+    fetchLabs,
+    classSeats,
+    setClassSeats,
+    savingSeats,
+    setSavingSeats,
+    fetchClassSeats,
+    todaySchedules,
+    setTodaySchedules,
+    fetchTodaySchedules,
+    classSchedulesMap,
+    setClassSchedulesMap,
+    fetchClassSchedules,
+    scheduleAttendanceMap,
+    setScheduleAttendanceMap,
+    fetchScheduleAttendance,
+    expandedScheduleId,
+    setExpandedScheduleId,
+    newScheduleDate,
+    setNewScheduleDate,
+    newScheduleLessonId,
+    setNewScheduleLessonId,
+  } = useLabAndSchedule();
+
   const [expandedClassId, _setExpandedClassId] = useState<string | null>(null);
   const expandedClassIdRef = useRef<string | null>(null);
   const setExpandedClassId = (id: string | null) => {
@@ -522,12 +552,6 @@ export default function App() {
   const [classSubmissionFilters, setClassSubmissionFilters] = useState<Record<string, 'all' | 'submitted' | 'graded' | 'pending'>>({});
   const [classActiveTabs, setClassActiveTabs] = useState<Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>>({});
   const [studentActiveTabs, setStudentActiveTabs] = useState<Record<string, 'progress' | 'settings' | 'notes'>>({});
-
-  // Computer labs and seating admin structures
-  const [computerLabs, setComputerLabs] = useState<any[]>([]);
-  const [loadingLabs, setLoadingLabs] = useState(false);
-  const [classSeats, setClassSeats] = useState<{ lab_id: string | null; seats: any[] }>({ lab_id: null, seats: [] });
-  const [savingSeats, setSavingSeats] = useState(false);
 
   const triggerExportForClass = async (classId: string, className: string) => {
     setLoadingExportClassId(classId);
@@ -857,50 +881,11 @@ export default function App() {
     } catch (e) {}
   };
 
-  const fetchTodaySchedules = async () => {
-    try {
-      const todayStr = new Date().toISOString().split('T')[0];
-      const res = await fetch(`/api/schedules/today?date=${todayStr}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.schedules) {
-          setTodaySchedules(data.schedules);
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to fetch today schedules", e);
-    }
-  };
-
   const fetchStudents = async () => {
     try {
       const res = await fetch('/api/students');
       if (res.ok) setStudents(await res.json());
     } catch (e) {}
-  };
-
-  const fetchLabs = async () => {
-    try {
-      setLoadingLabs(true);
-      const res = await fetch('/api/labs');
-      if (res.ok) setComputerLabs(await res.json());
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoadingLabs(false);
-    }
-  };
-
-  const fetchClassSeats = async (classId: string) => {
-    try {
-      const res = await fetch(`/api/classes/${classId}/seats`);
-      if (res.ok) {
-        const data = await res.json();
-        setClassSeats(data);
-      }
-    } catch (e) {
-      console.error(e);
-    }
   };
 
   const fetchClassStudents = async (id: string) => {
@@ -962,11 +947,6 @@ export default function App() {
   };
 
   const [classDashboardMap, setClassDashboardMap] = useState<Record<string, any>>({});
-  const [classSchedulesMap, setClassSchedulesMap] = useState<Record<string, ScheduleType[]>>({});
-  const [scheduleAttendanceMap, setScheduleAttendanceMap] = useState<Record<string, AttendanceType[]>>({});
-  const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>(null);
-  const [newScheduleDate, setNewScheduleDate] = useState<string>('');
-  const [newScheduleLessonId, setNewScheduleLessonId] = useState<string>('');
 
   const fetchClassDashboard = async (id: string) => {
     try {
@@ -1039,26 +1019,6 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setAssignmentSubmissionsMap(prev => ({ ...prev, [id]: data }));
-      }
-    } catch (e) {}
-  };
-
-  const fetchClassSchedules = async (id: string) => {
-    try {
-      const res = await fetch(`/api/classes/${id}/schedules`);
-      if (res.ok) {
-        const data = await res.json();
-        setClassSchedulesMap(prev => ({ ...prev, [id]: data }));
-      }
-    } catch (e) {}
-  };
-
-  const fetchScheduleAttendance = async (id: string) => {
-    try {
-      const res = await fetch(`/api/schedules/${id}/attendance`);
-      if (res.ok) {
-        const data = await res.json();
-        setScheduleAttendanceMap(prev => ({ ...prev, [id]: data }));
       }
     } catch (e) {}
   };
