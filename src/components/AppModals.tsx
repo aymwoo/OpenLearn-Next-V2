@@ -1,21 +1,26 @@
-import React, { Dispatch, SetStateAction } from 'react';
+import React, { lazy, Suspense } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import type { Lesson, ClassType, VFSNode, WhiteboardElement } from '../types/app';
-import { ImportModal } from '../features/modals/ImportModal';
-import { CourseWizardModal, WizardSegment } from '../features/modals/CourseWizardModal';
-import { ImportLessonsModal, ImportRow, ImportStatus } from '../features/modals/ImportLessonsModal';
-import { QuizGeneratorModal } from '../features/modals/QuizGeneratorModal';
-import { StudentPreviewModal } from '../features/modals/StudentPreviewModal';
-import { ProcessLogsModal } from '../features/modals/ProcessLogsModal';
-import { CloudDriveModal } from '../features/modals/CloudDriveModal';
-import { SystemResourceLibraryModal } from '../features/modals/SystemResourceLibraryModal';
-import { BatchPickerModal } from '../features/modals/BatchPickerModal';
-import { ExportWeightModal } from '../features/modals/ExportWeightModal';
-import { NotificationDetailModal } from '../features/modals/NotificationDetailModal';
-import { HelpTour } from './HelpTour';
+import type { WizardSegment } from '../features/modals/CourseWizardModal';
+import type { ImportRow, ImportStatus } from '../features/modals/ImportLessonsModal';
 import type { useCourseWizard } from '../hooks/useCourseWizard';
 import type { useQuizGenerator } from '../hooks/useQuizGenerator';
 import type { useClassBatchOperations } from '../hooks/useClassBatchOperations';
 import type { useStudentNotifications } from '../hooks/useStudentNotifications';
+
+const ImportModal = lazy(() => import('../features/modals/ImportModal').then(m => ({ default: m.ImportModal })));
+const CourseWizardModal = lazy(() => import('../features/modals/CourseWizardModal').then(m => ({ default: m.CourseWizardModal })));
+const ImportLessonsModal = lazy(() => import('../features/modals/ImportLessonsModal').then(m => ({ default: m.ImportLessonsModal })));
+const QuizGeneratorModal = lazy(() => import('../features/modals/QuizGeneratorModal').then(m => ({ default: m.QuizGeneratorModal })));
+const StudentPreviewModal = lazy(() => import('../features/modals/StudentPreviewModal').then(m => ({ default: m.StudentPreviewModal })));
+const ProcessLogsModal = lazy(() => import('../features/modals/ProcessLogsModal').then(m => ({ default: m.ProcessLogsModal })));
+const CloudDriveModal = lazy(() => import('../features/modals/CloudDriveModal').then(m => ({ default: m.CloudDriveModal })));
+const SystemResourceLibraryModal = lazy(() => import('../features/modals/SystemResourceLibraryModal').then(m => ({ default: m.SystemResourceLibraryModal })));
+const BatchPickerModal = lazy(() => import('../features/modals/BatchPickerModal').then(m => ({ default: m.BatchPickerModal })));
+const ExportWeightModal = lazy(() => import('../features/modals/ExportWeightModal').then(m => ({ default: m.ExportWeightModal })));
+const NotificationDetailModal = lazy(() => import('../features/modals/NotificationDetailModal').then(m => ({ default: m.NotificationDetailModal })));
+const HelpTour = lazy(() => import('./HelpTour').then(m => ({ default: m.HelpTour })));
+const CoursewareHubPanel = lazy(() => import('../features/teacher/CoursewareHubPanel').then(m => ({ default: m.CoursewareHubPanel })));
 
 export interface AppModalsProps {
   lang: 'zh' | 'en';
@@ -341,7 +346,7 @@ export function AppModals(props: AppModalsProps) {
   const setSelectedNotificationForModal = sn?.setSelectedNotificationForModal ?? props.setSelectedNotificationForModal ?? (() => {});
 
   return (
-    <>
+    <Suspense fallback={null}>
       <ImportModal
         show={showImportModal}
         onClose={() => setShowImportModal(false)}
@@ -535,6 +540,6 @@ export function AppModals(props: AppModalsProps) {
           lang={lang}
         />
       )}
-    </>
+    </Suspense>
   );
 }

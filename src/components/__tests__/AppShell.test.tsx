@@ -1,8 +1,18 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { PluginHostProvider } from '../../plugin-host/plugin-host-context';
 import { FrontendPluginHost } from '../../plugin-host/plugin-host';
+import { setSocketInstance } from '../../services/socket-service';
 import { AppShell, AppShellProps } from '../AppShell';
+
+beforeEach(() => {
+  setSocketInstance({
+    on: vi.fn(),
+    off: vi.fn(),
+    emit: vi.fn(),
+    disconnect: vi.fn(),
+  } as any);
+});
 
 afterEach(() => {
   cleanup();
@@ -280,17 +290,17 @@ const renderAppShell = (overrides: Record<string, unknown> = {}) =>
   );
 
 describe('AppShell', () => {
-  it('renders StudentView (and the "No Student Selected" panel) when activeRole is "student"', () => {
+  it('renders StudentView (and the "No Student Selected" panel) when activeRole is "student"', async () => {
     renderAppShell({ activeRole: 'student', activeStudentId: null });
-    expect(screen.getByText('No Student Selected')).toBeTruthy();
+    expect(await screen.findByText('No Student Selected')).toBeTruthy();
     // The teacher-only branch must NOT be present.
     expect(screen.queryByText('Live Class')).toBeNull();
   });
 
-  it('renders TeacherView (NavigationSidebar) when activeRole is "teacher"', () => {
+  it('renders TeacherView (NavigationSidebar) when activeRole is "teacher"', async () => {
     renderAppShell({ activeRole: 'teacher' });
     // TeacherView carries the bg-gray-50 branch root and always renders the nav sidebar.
-    expect(screen.getByText('Live Class')).toBeTruthy();
+    expect(await screen.findByText('Live Class')).toBeTruthy();
     // The student-only branch must NOT be present.
     expect(screen.queryByText('No Student Selected')).toBeNull();
   });

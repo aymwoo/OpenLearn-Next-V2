@@ -1,9 +1,27 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import type { StudentType, Lesson } from '../../../types/app';
 import { PluginHostProvider } from '../../../plugin-host/plugin-host-context';
 import { FrontendPluginHost } from '../../../plugin-host/plugin-host';
+import { setSocketInstance } from '../../../services/socket-service';
 import { StudentView } from '../StudentView';
+
+if (typeof global.ResizeObserver === 'undefined') {
+  global.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as any;
+}
+
+beforeEach(() => {
+  setSocketInstance({
+    on: vi.fn(),
+    off: vi.fn(),
+    emit: vi.fn(),
+    disconnect: vi.fn(),
+  } as any);
+});
 
 afterEach(() => {
   cleanup();
@@ -79,21 +97,21 @@ describe('StudentView', () => {
     expect(screen.queryByText('No Student Selected')).toBeNull();
   });
 
-  it('renders StudentLessonView when studentViewStatus is "lesson"', () => {
+  it('renders StudentLessonView when studentViewStatus is "lesson"', async () => {
     renderView({ studentViewStatus: 'lesson' });
-    expect(screen.getByText('Back to Dashboard')).toBeTruthy();
+    expect(await screen.findByText('Back to Dashboard')).toBeTruthy();
   });
 
-  it('renders StudentAssignmentView when studentViewStatus is "assignment" and selectedAssignment is set', () => {
+  it('renders StudentAssignmentView when studentViewStatus is "assignment" and selectedAssignment is set', async () => {
     renderView({
       studentViewStatus: 'assignment',
       selectedAssignment: { title: 'Test Assignment' },
     });
-    expect(screen.getByText('Assignment: Test Assignment')).toBeTruthy();
+    expect(await screen.findByText('Assignment: Test Assignment')).toBeTruthy();
   });
 
-  it('renders StudentDashboardPanel (default else) when studentViewStatus is "dashboard"', () => {
+  it('renders StudentDashboardPanel (default else) when studentViewStatus is "dashboard"', async () => {
     renderView({ studentViewStatus: 'dashboard' });
-    expect(screen.getByText('Welcome, Alice')).toBeTruthy();
+    expect(await screen.findByText('Welcome, Alice')).toBeTruthy();
   });
 });

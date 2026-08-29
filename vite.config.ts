@@ -51,15 +51,47 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // 将大型依赖单独分块，避免 Rollup 单 chunk 渲染卡死
-          if (id.includes('node_modules/konva')) return 'vendor-konva';
-          if (id.includes('node_modules/react-konva')) return 'vendor-konva';
-          if (id.includes('node_modules/react-konva-utils')) return 'vendor-konva';
-          if (id.includes('node_modules/reveal.js')) return 'vendor-reveal';
-          if (id.includes('node_modules/pptx-preview')) return 'vendor-pptx';
-          if (id.includes('node_modules/html2canvas')) return 'vendor-html2canvas';
-          if (id.includes('src/features/whiteboard')) return 'whiteboard';
-          if (id.includes('src/features/courseware')) return 'courseware';
+          if (id.includes('node_modules')) {
+            // React Core
+            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
+              return 'vendor-react';
+            }
+            // Lucide Icons
+            if (id.includes('/lucide-react/')) {
+              return 'vendor-icons';
+            }
+            // Framer Motion Animation
+            if (id.includes('/framer-motion/') || id.includes('/motion-dom/')) {
+              return 'vendor-motion';
+            }
+            // Recharts & D3 Data Visualization
+            if (id.includes('/recharts/') || id.includes('/d3-') || id.includes('/victory-')) {
+              return 'vendor-charts';
+            }
+            // PDF Generation
+            if (id.includes('/jspdf/') || id.includes('/jspdf-autotable/') || id.includes('/html2canvas/')) {
+              return 'vendor-pdf';
+            }
+            // Konva Canvas
+            if (id.includes('/konva/') || id.includes('/react-konva/') || id.includes('/react-konva-utils/')) {
+              return 'vendor-konva';
+            }
+            // Presentations & Previews
+            if (id.includes('/reveal.js/')) {
+              return 'vendor-reveal';
+            }
+            if (id.includes('/pptx-preview/')) {
+              return 'vendor-pptx';
+            }
+            // Markdown & Sanitization
+            if (id.includes('/marked/') || id.includes('/dompurify/') || id.includes('/highlight.js/')) {
+              return 'vendor-content';
+            }
+            // Utilities
+            if (id.includes('/es-toolkit/') || id.includes('/zustand/') || id.includes('/clsx/') || id.includes('/tailwind-merge/')) {
+              return 'vendor-utils';
+            }
+          }
         },
       },
     },
