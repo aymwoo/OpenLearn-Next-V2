@@ -43,18 +43,16 @@ import { useCourseWizard } from './hooks/useCourseWizard';
 import { useQuizGenerator } from './hooks/useQuizGenerator';
 import { useClassBatchOperations } from './hooks/useClassBatchOperations';
 import { useLabAndSchedule } from './hooks/useLabAndSchedule';
+import { useLessonTimeline } from './hooks/useLessonTimeline';
+import { useStudentNotifications } from './hooks/useStudentNotifications';
+import { useGradeExport } from './hooks/useGradeExport';
+import { useLessonFiltering } from './hooks/useLessonFiltering';
 import {
   downloadCSVTemplate as downloadCSVTemplateService,
   parseAndImportClassesOrStudents,
   parseLessonCSV,
   submitCSVLessons,
 } from './services/bulkImportService';
-import {
-  generateClassPDFReport,
-  exportClassGradesCSV,
-  exportAllClassesCombinedCSV,
-  computeCsvPreviewData,
-} from './services/gradeReportService';
 
 const AGENT_PROVIDER_STORAGE_KEY = 'openlearnv2.agentProviderId';
 
@@ -112,45 +110,22 @@ export default function App() {
 
   const lessons = useAppStore((s) => s.lessons);
   const setLessons = useAppStore((s) => s.setLessons);
-  const [lessonsSearchQuery, setLessonsSearchQuery] = useState('');
-  const [lessonsSortOrder, setLessonsSortOrder] = useState<'recent' | 'alphabetical' | 'enrollment'>('recent');
-  const [filterEnrollment, setFilterEnrollment] = useState(false);
-  const [filterHasContent, setFilterHasContent] = useState(false);
-  const [filterThisMonth, setFilterThisMonth] = useState(false);
-  const [copyingLessonId, setCopyingLessonId] = useState<string | null>(null);
-
-  const filteredAndSortedLessons = React.useMemo(() => {
-    let result = [...lessons];
-    if (lessonsSearchQuery.trim()) {
-      const q = lessonsSearchQuery.toLowerCase();
-      result = result.filter(lesson => 
-        lesson.title.toLowerCase().includes(q) || 
-        lesson.content.toLowerCase().includes(q)
-      );
-    }
-    
-    if (filterEnrollment) {
-      result = result.filter(lesson => (lesson.enrollment_count || 0) > 0);
-    }
-    if (filterHasContent) {
-      result = result.filter(lesson => lesson.content && lesson.content.trim().length > 0);
-    }
-    if (filterThisMonth) {
-      const now = Date.now();
-      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
-      result = result.filter(lesson => (lesson.created_at || 0) >= monthStart);
-    }
-    
-    if (lessonsSortOrder === 'recent') {
-      result.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
-    } else if (lessonsSortOrder === 'alphabetical') {
-      result.sort((a, b) => a.title.localeCompare(b.title));
-    } else if (lessonsSortOrder === 'enrollment') {
-      result.sort((a, b) => (b.enrollment_count || 0) - (a.enrollment_count || 0));
-    }
-    
-    return result;
-  }, [lessons, lessonsSearchQuery, lessonsSortOrder, filterEnrollment, filterHasContent, filterThisMonth]);
+  // ── Hook: 课程筛选、搜索与排序 ──
+  const {
+    lessonsSearchQuery,
+    setLessonsSearchQuery,
+    lessonsSortOrder,
+    setLessonsSortOrder,
+    filterEnrollment,
+    setFilterEnrollment,
+    filterHasContent,
+    setFilterHasContent,
+    filterThisMonth,
+    setFilterThisMonth,
+    copyingLessonId,
+    setCopyingLessonId,
+    filteredAndSortedLessons,
+  } = useLessonFiltering(lessons);
   const [registeredCommands, setRegisteredCommands] = useState<any[]>([]);
   const selectedLesson = useAppStore((s) => s.selectedLesson);
   const setSelectedLesson = useAppStore((s) => s.setSelectedLesson);
@@ -158,6 +133,13 @@ export default function App() {
   const setElements = useAppStore((s) => s.setElements);
 
   // ── Hook: 课程创建向导 (Course Wizard) ──
+  const courseWizard = useCourseWizard({
+    lang,
+    addToast,
+    fetchLessons,
+    setSelectedLesson,
+    setTeacherTab,
+  });
   const {
     isCourseWizardOpen,
     setIsCourseWizardOpen,
@@ -175,13 +157,7 @@ export default function App() {
     setWizardCourseTimeline,
     wizardIsSubmitting,
     handleDeployWizardCourse,
-  } = useCourseWizard({
-    lang,
-    addToast,
-    fetchLessons,
-    setSelectedLesson,
-    setTeacherTab,
-  });
+  } = courseWizard;
 
   // ── Hook: 插件与 AI 提供商生命周期管理 ──
   const {
@@ -247,11 +223,6 @@ export default function App() {
   const [importErrorMsg, setImportErrorMsg] = useState('');
   const [previewImportData, setPreviewImportData] = useState<{ title: string; content: string }[]>([]);
   const [isDraggingImport, setIsDraggingImport] = useState(false);
-  
-  // Lesson Editor persistence tracking states
-  const [editorSaveStatus, setEditorSaveStatus] = useState<'none' | 'saving' | 'saved' | 'error'>('none');
-  const [editorLastSavedTime, setEditorLastSavedTime] = useState<Date | null>(null);
-  const [editorPanelsExpanded, setEditorPanelsExpanded] = useState(true);
   
   const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [rightSidebarTab, setRightSidebarTab] = useState<'agent' | 'shell'>('agent');
@@ -470,15 +441,29 @@ export default function App() {
       setMainNavCollapsed(true);
     }
   }, [teacherTab]);
-  const [timelineSegments, setTimelineSegments] = useState<any[]>([
-    { id: 'seg-1', title: '开场准备', type: 'intro', duration: '5m', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
-    { id: 'seg-2', title: '讲授新课', type: 'lecture', duration: '20m', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
-    { id: 'seg-3', title: '互动练习', type: 'practice', duration: '15m', color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' },
-    { id: 'seg-4', title: '课堂总结', type: 'summary', duration: '5m', color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' }
-  ]);
-  const [draggedSegmentIdx, setDraggedSegmentIdx] = useState<number | null>(null);
-  const [activeSegmentId, setActiveSegmentId] = useState<string | null>('seg-1');
-  const [segmentToEdit, setSegmentToEdit] = useState<any | null>(null);
+  // ── Hook: 课程时间线与备课编辑器 ──
+  const {
+    timelineSegments,
+    setTimelineSegments,
+    activeSegmentId,
+    setActiveSegmentId,
+    segmentToEdit,
+    setSegmentToEdit,
+    draggedSegmentIdx,
+    setDraggedSegmentIdx,
+    editorSaveStatus,
+    setEditorSaveStatus,
+    editorLastSavedTime,
+    setEditorLastSavedTime,
+    editorPanelsExpanded,
+    setEditorPanelsExpanded,
+    saveTimeline,
+  } = useLessonTimeline({
+    selectedLesson,
+    lessons,
+    setLessons,
+  });
+
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
   const [studentDashboardData, setStudentDashboardData] = useState<any>(null);
   const addToast = (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
@@ -507,6 +492,7 @@ export default function App() {
   }, [studentViewStatus]);
   
   // ── Hook: AI 目标测验生成器 (Quiz Generator) ──
+  const quizGenerator = useQuizGenerator();
   const {
     isQuizGeneratorOpen,
     setIsQuizGeneratorOpen,
@@ -533,19 +519,8 @@ export default function App() {
     quizStudentAnswersRef,
     subAssignmentTab,
     setSubAssignmentTab,
-  } = useQuizGenerator();
+  } = quizGenerator;
 
-  // Grade Export Weightings state variables
-  const [isExportWeightModalOpen, setIsExportWeightModalOpen] = useState(false);
-  const [exportClassId, setExportClassId] = useState<string>('');
-  const [exportClassName, setExportClassName] = useState<string>('');
-  const [quizzesWeight, setQuizzesWeight] = useState<number>(40);
-  const [assignmentsWeight, setAssignmentsWeight] = useState<number>(60);
-  const [customCategoryOverrides, setCustomCategoryOverrides] = useState<Record<string, 'quiz' | 'assignment'>>({});
-  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
-  const [exportTooltipOpen, setExportTooltipOpen] = useState(false);
-  const [loadingExportClassId, setLoadingExportClassId] = useState<string | null>(null);
-  const [isExportingAllCombined, setIsExportingAllCombined] = useState(false);
   const [rosterSearchQuery, setRosterSearchQuery] = useState('');
   const [rosterTagFilter, setRosterTagFilter] = useState<'all' | 'Academic' | 'Behavioral' | 'General' | 'SpecialCare'>('all');
   const [rosterViewMode, setRosterViewMode] = useState<'grid' | 'list'>('grid');
@@ -553,82 +528,18 @@ export default function App() {
   const [classActiveTabs, setClassActiveTabs] = useState<Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>>({});
   const [studentActiveTabs, setStudentActiveTabs] = useState<Record<string, 'progress' | 'settings' | 'notes'>>({});
 
-  const triggerExportForClass = async (classId: string, className: string) => {
-    setLoadingExportClassId(classId);
-    try {
-      await fetchClassStudents(classId);
-      await fetchClassDashboard(classId);
-      await fetchClassProgress(classId);
-      
-      setExportClassId(classId);
-      setExportClassName(className);
-      setQuizzesWeight(40);
-      setAssignmentsWeight(60);
-      setCustomCategoryOverrides({});
-      setIsExportWeightModalOpen(true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoadingExportClassId(null);
-      setExportDropdownOpen(false);
-    }
-  };
-
-  const handleGeneratePDFReport = async (classId: string, className: string) => {
-    await fetchClassStudents(classId);
-    await fetchClassDashboard(classId);
-    await fetchClassProgress(classId);
-    await generateClassPDFReport({
-      classId,
-      className,
-      students: classStudentsMap[classId] || [],
-      dashData: classDashboardMap[classId],
-      lang,
-      addToast,
-      setIsGeneratingPDFReport,
-    });
-  };
-
-  const handleExportAllClassesCombined = async (targetClasses?: any[]) => {
-    const exportList = targetClasses && targetClasses.length > 0 ? targetClasses : classes;
-    if (exportList.length === 0) return;
-    setIsExportingAllCombined(true);
-    try {
-      await Promise.all(
-        exportList.map(async (cls) => {
-          await fetchClassStudents(cls.id);
-          await fetchClassDashboard(cls.id);
-        })
-      );
-      exportAllClassesCombinedCSV({
-        classes: exportList,
-        classStudentsMap,
-        classDashboardMap,
-        lang,
-      });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsExportingAllCombined(false);
-      setExportDropdownOpen(false);
-    }
-  };
-
-  const handleQuizzesWeightChange = (val: number) => {
-    const qWeight = Math.min(100, Math.max(0, val));
-    setQuizzesWeight(qWeight);
-    setAssignmentsWeight(100 - qWeight);
-  };
-
-  const handleAssignmentsWeightChange = (val: number) => {
-    const aWeight = Math.min(100, Math.max(0, val));
-    setAssignmentsWeight(aWeight);
-    setQuizzesWeight(100 - aWeight);
-  };
-
-  const [readNotifications, setReadNotifications] = useState<Set<string>>(new Set());
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [selectedNotificationForModal, setSelectedNotificationForModal] = useState<any | null>(null);
+  // ── Hook: 学者通知系统 ──
+  const studentNotificationsHook = useStudentNotifications(activeRole, studentDashboardData, lang);
+  const {
+    studentNotifications,
+    unreadNotifications,
+    readNotifications,
+    setReadNotifications,
+    selectedNotificationForModal,
+    setSelectedNotificationForModal,
+    isNotificationsOpen,
+    setIsNotificationsOpen,
+  } = studentNotificationsHook;
 
   useEffect(() => {
     if (activeStudentId) {
@@ -654,7 +565,6 @@ export default function App() {
   const [classAssignmentsMap, setClassAssignmentsMap] = useState<Record<string, AssignmentType[]>>({});
   const [assignmentSubmissionsMap, setAssignmentSubmissionsMap] = useState<Record<string, SubmissionType[]>>({});
   const [isGeneratingAssignment, setIsGeneratingAssignment] = useState<string | null>(null);
-  const [isGeneratingPDFReport, setIsGeneratingPDFReport] = useState<Record<string, boolean>>({});
   const [assignmentSortOrder, setAssignmentSortOrder] = useState<'dueDate' | 'status' | 'avgScore'>('dueDate');
   
   const [expandedAssignmentId, _setExpandedAssignmentId] = useState<string | null>(null);
@@ -898,7 +808,80 @@ export default function App() {
     } catch (e) {}
   };
 
+  const fetchClassProgress = async (id: string) => {
+    try {
+      const res = await fetch(`/api/classes/${id}/progress`);
+      if (res.ok) {
+        const data = await res.json();
+        setClassProgressMap(prev => ({ ...prev, [id]: data }));
+      }
+    } catch (e) {}
+  };
+
+  const [classDashboardMap, setClassDashboardMap] = useState<Record<string, any>>({});
+
+  const fetchClassDashboard = async (id: string) => {
+    try {
+      const res = await fetch(`/api/classes/${id}/dashboard`);
+      if (res.ok) {
+        const data = await res.json();
+        setClassDashboardMap(prev => ({ ...prev, [id]: data }));
+      }
+    } catch (e) {}
+  };
+
+  // ── Hook: 成绩导出与学情报表管理 ──
+  const gradeExport = useGradeExport({
+    lang,
+    classes,
+    classStudentsMap,
+    classDashboardMap,
+    fetchClassStudents,
+    fetchClassDashboard,
+    fetchClassProgress,
+  });
+  const {
+    isExportWeightModalOpen,
+    setIsExportWeightModalOpen,
+    exportClassId,
+    setExportClassId,
+    exportClassName,
+    setExportClassName,
+    quizzesWeight,
+    setQuizzesWeight,
+    assignmentsWeight,
+    setAssignmentsWeight,
+    customCategoryOverrides,
+    setCustomCategoryOverrides,
+    exportDropdownOpen,
+    setExportDropdownOpen,
+    exportTooltipOpen,
+    setExportTooltipOpen,
+    loadingExportClassId,
+    setLoadingExportClassId,
+    isExportingAllCombined,
+    setIsExportingAllCombined,
+    isGeneratingPDFReport,
+    setIsGeneratingPDFReport,
+    handleQuizzesWeightChange,
+    handleAssignmentsWeightChange,
+    csvPreviewData,
+    triggerExportForClass,
+    handleExportGrades,
+    handleGeneratePDFReport,
+    handleExportAllClassesCombined,
+    get30DayAverageWarning,
+  } = gradeExport;
+
   // ── Hook: 班级与学生批量管理操作 ──
+  const classBatch = useClassBatchOperations({
+    lang,
+    classes,
+    expandedClassId,
+    fetchClasses,
+    fetchClassStudents,
+    handleExportAllClassesCombined,
+  });
   const {
     batchMode,
     setBatchMode,
@@ -927,91 +910,7 @@ export default function App() {
     handleBatchTransferStudents,
     handleBatchSetLockedLesson,
     confirmBatchPicker,
-  } = useClassBatchOperations({
-    lang,
-    classes,
-    expandedClassId,
-    fetchClasses,
-    fetchClassStudents,
-    handleExportAllClassesCombined,
-  });
-
-  const fetchClassProgress = async (id: string) => {
-    try {
-      const res = await fetch(`/api/classes/${id}/progress`);
-      if (res.ok) {
-        const data = await res.json();
-        setClassProgressMap(prev => ({ ...prev, [id]: data }));
-      }
-    } catch (e) {}
-  };
-
-  const [classDashboardMap, setClassDashboardMap] = useState<Record<string, any>>({});
-
-  const fetchClassDashboard = async (id: string) => {
-    try {
-      const res = await fetch(`/api/classes/${id}/dashboard`);
-      if (res.ok) {
-        const data = await res.json();
-        setClassDashboardMap(prev => ({ ...prev, [id]: data }));
-      }
-    } catch (e) {}
-  };
-
-  const csvPreviewData = React.useMemo(() => {
-    return computeCsvPreviewData({
-      exportClassId,
-      classStudentsMap,
-      classDashboardMap,
-      quizzesWeight,
-      assignmentsWeight,
-      customCategoryOverrides,
-      lang,
-    });
-  }, [exportClassId, quizzesWeight, assignmentsWeight, customCategoryOverrides, classStudentsMap, classDashboardMap, lang]);
-
-  const handleExportGrades = (
-    classId: string, 
-    className: string, 
-    qWeight: number = 40, 
-    aWeight: number = 60, 
-    overrides: Record<string, 'quiz' | 'assignment'> = {}
-  ) => {
-    exportClassGradesCSV({
-      className,
-      students: classStudentsMap[classId] || [],
-      dashData: classDashboardMap[classId],
-      qWeight,
-      aWeight,
-      overrides,
-    });
-  };
-
-  const get30DayAverageWarning = (studentId: string, classId: string) => {
-    const dashData = classDashboardMap[classId];
-    if (!dashData || !dashData.performance) return null;
-
-    // 30 days in ms = 30 * 24 * 60 * 60 * 1000 = 2,592,000,000 ms
-    const thirtyDaysAgo = Date.now() - 2592000000;
-    const studentPerf = dashData.performance.filter((p: any) => p.student_id === studentId);
-    
-    // Filter graded submissions in the last 30 days
-    const recentSubmissions = studentPerf.filter((p: any) => 
-      p.submitted_at && 
-      p.submitted_at >= thirtyDaysAgo && 
-      p.score !== null && 
-      p.score !== undefined
-    );
-
-    if (recentSubmissions.length === 0) return null;
-
-    const scoreSum = recentSubmissions.reduce((sum: number, p: any) => sum + Number(p.score), 0);
-    const avg = scoreSum / recentSubmissions.length;
-    if (avg < 60) {
-      return Math.round(avg);
-    }
-    return null;
-  };
+  } = classBatch;
 
   const fetchAssignmentSubmissions = async (id: string) => {
     try {
@@ -1268,68 +1167,6 @@ export default function App() {
 
   useLmsBridge(session);
 
-  const saveTimeline = async (lessonId: string, newSegments: any[]) => {
-    setEditorSaveStatus('saving');
-    try {
-      const res = await fetch(`/api/lessons/${lessonId}/timeline`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timeline: newSegments })
-      });
-      if (res.ok) {
-        setLessons(prev => prev.map(l => l.id === lessonId ? { ...l, timeline: JSON.stringify(newSegments) } : l));
-        setTimelineSegments(newSegments);
-        setEditorSaveStatus('saved');
-        setEditorLastSavedTime(new Date());
-      } else {
-        setEditorSaveStatus('error');
-      }
-    } catch (e) {
-      console.error("Failed to save timeline:", e);
-      setEditorSaveStatus('error');
-    }
-  };
-
-  useEffect(() => {
-    if (selectedLesson) {
-      const lesson = lessons.find(l => l.id === selectedLesson);
-      if (lesson) {
-        let segments = [];
-        if (lesson.timeline) {
-          try {
-            segments = typeof lesson.timeline === 'string' ? JSON.parse(lesson.timeline) : lesson.timeline;
-          } catch (e) {
-            segments = [
-              { id: 'seg-1', title: '开场准备', type: 'intro', duration: '5m', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
-              { id: 'seg-2', title: '讲授新课', type: 'lecture', duration: '20m', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
-              { id: 'seg-3', title: '互动练习', type: 'practice', duration: '15m', color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' },
-              { id: 'seg-4', title: '课堂总结', type: 'summary', duration: '5m', color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' }
-            ];
-          }
-        } else {
-          segments = [
-            { id: 'seg-1', title: '开场准备', type: 'intro', duration: '5m', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
-            { id: 'seg-2', title: '讲授新课', type: 'lecture', duration: '20m', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
-            { id: 'seg-3', title: '互动练习', type: 'practice', duration: '15m', color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' },
-            { id: 'seg-4', title: '课堂总结', type: 'summary', duration: '5m', color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' }
-          ];
-        }
-        setTimelineSegments(segments);
-
-        const isNewLesson = lastSelectedLessonRef.current !== selectedLesson;
-        lastSelectedLessonRef.current = selectedLesson;
-
-        if (segments.length > 0) {
-          if (isNewLesson || !segments.some(s => s.id === activeSegmentId)) {
-            setActiveSegmentId(segments[0].id);
-          }
-        } else {
-          setActiveSegmentId(null);
-        }
-      }
-    }
-  }, [selectedLesson, lessons]);
-
   useAppPolling({
     session,
     showProcessLogs,
@@ -1434,52 +1271,6 @@ export default function App() {
     setLang(lang === 'zh' ? 'en' : 'zh');
  };
 
-  const studentNotifications = React.useMemo(() => {
-    if (activeRole !== 'student' || !studentDashboardData) return [];
-    const notifs = [];
-    const assignments = studentDashboardData.assignments || [];
-    for (const a of assignments) {
-      if (!a.submission_status) {
-        notifs.push({ 
-          id: `new-${a.id}`, 
-          type: 'new_assignment', 
-          title: lang === 'zh' ? '新发布作业' : 'New Assignment', 
-          message: lang === 'zh' ? `您有一项新作业："${a.title}"` : `You have a new assignment: ${a.title}`, 
-          date: a.created_at, 
-          relatedId: a.id 
-        });
-      } else if (a.submission_status === 'graded') {
-        const hasFeedback = !!a.feedback;
-        notifs.push({ 
-          id: `graded-${a.id}`, 
-          type: 'graded', 
-          title: hasFeedback ? (lang === 'zh' ? '收到新成绩与反馈' : 'Grade & Feedback Posted') : (lang === 'zh' ? '新成绩发布' : 'Assignment Graded'), 
-          message: hasFeedback
-            ? (lang === 'zh' ? `您的作业"${a.title}"已评分，得分：${a.score}%。反馈："${a.feedback}"` : `Your assignment "${a.title}" was graded. Score: ${a.score}%. Teacher feedback: "${a.feedback}"`)
-            : (lang === 'zh' ? `您的作业"${a.title}"已评分，得分：${a.score}%` : `Your assignment "${a.title}" was graded. Score: ${a.score}%`), 
-          date: a.submitted_at || a.created_at, 
-          relatedId: a.id 
-        });
-      }
-    }
-    
-    const rollcalls = studentDashboardData.rollcalls || [];
-    for (const r of rollcalls) {
-      notifs.push({
-        id: r.id,
-        type: 'rollcall_picked',
-        title: lang === 'zh' ? '⚡️ 随机提问选中通知' : '⚡️ Random Pick Notification',
-        message: lang === 'zh'
-          ? `您已被老师在课程"${r.lesson_title || '课堂'}"中随机选中提问！请立即确认您的出勤与注意。`
-          : `You have been randomly picked by the teacher in lesson "${r.lesson_title || 'Class'}"! Please pay immediate attention.`,
-        date: r.picked_time,
-        relatedId: r.lesson_id
-      });
-    }
-    
-    return notifs.sort((a, b) => b.date - a.date);
-  }, [activeRole, studentDashboardData, lang]);
-
   const handleLoginSuccess = useCallback((newSession: any) => {
     setSession(newSession);
     if (newSession.role === 'teacher') {
@@ -1517,8 +1308,6 @@ export default function App() {
   if (!session) {
     return <LoginPage onLoginSuccess={handleLoginSuccess} lang={lang} />;
   }
-
-  const unreadNotifications = studentNotifications.filter(n => !readNotifications.has(n.id));
 
   return (
     <>
@@ -1832,6 +1621,10 @@ export default function App() {
       <AppModals
         lang={lang as 'zh' | 'en'}
         t={t}
+        courseWizard={courseWizard}
+        quizGenerator={quizGenerator}
+        classBatch={classBatch}
+        studentNotificationsHook={studentNotificationsHook}
         showImportModal={showImportModal}
         setShowImportModal={setShowImportModal}
         handleImportFile={handleImportFile}
@@ -1839,24 +1632,8 @@ export default function App() {
         importSuccess={importSuccess}
         isImporting={isImporting}
         downloadCSVTemplate={downloadCSVTemplate}
-        isCourseWizardOpen={isCourseWizardOpen}
-        setIsCourseWizardOpen={setIsCourseWizardOpen}
-        wizardStep={wizardStep}
-        setWizardStep={setWizardStep}
-        wizardIsSubmitting={wizardIsSubmitting}
-        wizardCourseTitle={wizardCourseTitle}
-        setWizardCourseTitle={setWizardCourseTitle}
-        wizardCourseDescription={wizardCourseDescription}
-        setWizardCourseDescription={setWizardCourseDescription}
-        wizardCourseCategory={wizardCourseCategory}
-        setWizardCourseCategory={setWizardCourseCategory}
-        wizardCourseTimeline={wizardCourseTimeline}
-        setWizardCourseTimeline={setWizardCourseTimeline}
-        wizardCourseContent={wizardCourseContent}
-        setWizardCourseContent={setWizardCourseContent}
         addToast={addToast}
         generateTemplateContent={generateTemplateContent}
-        handleDeployWizardCourse={handleDeployWizardCourse}
         isImportLessonsOpen={isImportLessonsOpen}
         setIsImportLessonsOpen={setIsImportLessonsOpen}
         importStatus={importStatus}
@@ -1872,26 +1649,7 @@ export default function App() {
         importErrorMsg={importErrorMsg}
         setImportErrorMsg={setImportErrorMsg}
         handleCSVImportSubmit={handleCSVImportSubmit}
-        isQuizGeneratorOpen={isQuizGeneratorOpen}
-        setIsQuizGeneratorOpen={setIsQuizGeneratorOpen}
         lessons={lessons}
-        quizGenMode={quizGenMode}
-        setQuizGenMode={setQuizGenMode}
-        quizGenSelectedLessonId={quizGenSelectedLessonId}
-        setQuizGenSelectedLessonId={setQuizGenSelectedLessonId}
-        quizGenTopic={quizGenTopic}
-        setQuizGenTopic={setQuizGenTopic}
-        isGeneratingSuggestions={isGeneratingSuggestions}
-        setIsGeneratingSuggestions={setIsGeneratingSuggestions}
-        suggestedObjectives={suggestedObjectives}
-        setSuggestedObjectives={setSuggestedObjectives}
-        suggestedQuestions={suggestedQuestions}
-        setSuggestedQuestions={setSuggestedQuestions}
-        quizGenTimeLimit={quizGenTimeLimit}
-        setQuizGenTimeLimit={setQuizGenTimeLimit}
-        savingQuiz={savingQuiz}
-        setSavingQuiz={setSavingQuiz}
-        quizGeneratorClassId={quizGeneratorClassId}
         fetchClassDashboard={fetchClassDashboard}
         isLessonPreviewVisible={isLessonPreviewVisible}
         setIsLessonPreviewVisible={setIsLessonPreviewVisible}
@@ -1926,17 +1684,8 @@ export default function App() {
         loadingLibraryResources={loadingLibraryResources}
         libraryResources={libraryResources}
         fetchLibraryResources={fetchLibraryResources}
-        batchPicker={batchPicker}
-        setBatchPicker={setBatchPicker}
-        batchPickerLesson={batchPickerLesson}
-        setBatchPickerLesson={setBatchPickerLesson}
-        batchPickerDate={batchPickerDate}
-        setBatchPickerDate={setBatchPickerDate}
-        batchPickerTargetClass={batchPickerTargetClass}
-        setBatchPickerTargetClass={setBatchPickerTargetClass}
         classes={classes}
         expandedClassId={expandedClassId}
-        confirmBatchPicker={confirmBatchPicker}
         isExportWeightModalOpen={isExportWeightModalOpen}
         setIsExportWeightModalOpen={setIsExportWeightModalOpen}
         quizzesWeight={quizzesWeight}
@@ -1952,8 +1701,6 @@ export default function App() {
         exportClassName={exportClassName}
         csvPreviewData={csvPreviewData}
         handleExportGrades={handleExportGrades}
-        selectedNotificationForModal={selectedNotificationForModal}
-        setSelectedNotificationForModal={setSelectedNotificationForModal}
         setSelectedAssignment={setSelectedAssignment}
         setStudentViewStatus={setStudentViewStatus}
         setQuizStudentAnswers={setQuizStudentAnswers}
