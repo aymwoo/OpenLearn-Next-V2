@@ -8,6 +8,23 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.2.5] - 2026-08-29
+
+### Refactor / Performance
+- **Vite Fine-grained Bundle Chunking & 90.1% Entry Bundle Reduction**:
+  - Entry bundle `index.js` shrank from **2,181.47 kB (2.18 MB)** down to **216.43 kB (gzip: 66.69 kB)** — a **90.1% reduction** in initial download size.
+  - Implemented modular `manualChunks` in `vite.config.ts` separating third-party dependencies into categorized vendor chunks: `vendor-react`, `vendor-charts` (Recharts & D3), `vendor-pdf` (jsPDF & html2canvas), `vendor-konva`, `vendor-reveal`, `vendor-pptx`, `vendor-icons` (Lucide), `vendor-motion` (Framer Motion), `vendor-content` (Marked & DOMPurify), and `vendor-utils`.
+- **System-wide Asynchronous Component Lazy Loading (`React.lazy` & `Suspense`)**:
+  - **`AppModals`**: Converted all 13+ modal dialogs (`CourseWizardModal`, `QuizGeneratorModal`, `ImportLessonsModal`, `BatchPickerModal`, `ExportWeightModal`, `CloudDriveModal`, `SystemResourceLibraryModal`, `StudentPreviewModal`, `ProcessLogsModal`, `HelpTour`, etc.) to asynchronous on-demand loading.
+  - **`AppShell`**: Decoupled `TeacherView` and `StudentView` via `React.lazy`, eliminating cross-role code loading for student sessions.
+  - **`TeacherView`**: Implemented lazy loading for non-dashboard sub-views (`ClassesView`, `TimetableView`, `ComputerLabView`, `AdminDirectoryView`, `HelpView`, `PluginView`, `LiveClassroomView`).
+  - **`StudentView`**: Implemented lazy loading for `StudentLessonView` and `StudentAssignmentView`.
+
+### Fixes
+- **Asynchronous Unit Test Compatibility**:
+  - Updated `TeacherView`, `StudentView`, and `AppShell` unit tests to support async DOM querying (`await screen.findByText`) with `Suspense` hydration.
+  - Added jsDOM `ResizeObserver` mock and mock socket instance in test harnesses.
+
 ## [0.2.4] - 2026-08-29
 
 ### Refactor / Performance
