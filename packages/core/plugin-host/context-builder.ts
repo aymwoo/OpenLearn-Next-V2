@@ -183,8 +183,8 @@ function wrapCommandBus(
         throw e;
       }
     }),
-    setInterceptor: createSafeFunction((interceptor: any) => {
-      return commandBus.setInterceptor(interceptor);
+    setInterceptor: createSafeFunction((_interceptor: any) => {
+      throw new Error('[Security] setInterceptor cannot be configured from PluginContext');
     }),
     unregisterHandler: createSafeFunction((commandType: string) => {
       return commandBus.unregisterHandler(resolveType(commandType));

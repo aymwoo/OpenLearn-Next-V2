@@ -3,6 +3,7 @@ import { Star } from 'lucide-react';
 import { COLOR_THEME, PaletteItemConfig } from './paletteConfig';
 
 interface PaletteCardProps {
+  key?: React.Key;
   config: PaletteItemConfig;
   lang: 'zh' | 'en';
   onActivate: (type: string) => void;

@@ -144,7 +144,7 @@ export class BrowserWorkerManager {
     );
 
     // 7. Register and setup message routing
-    this.workerRegistry.set(pluginId, { worker, transport, serviceHost });
+    this.workerRegistry.set(pluginId, { pluginId, worker, transport, serviceHost });
 
     // Setup activation lifecycle handlers
     let activationResolve: (() => void) | null = null;

@@ -249,7 +249,7 @@ export class ResizeObjectCommand implements ICanvasCommand {
   }
 }
 
-export class UpdateObjectCommand<T = Record<string, unknown>> implements ICanvasCommand {
+export class UpdateObjectCommand<T extends Record<string, unknown> = Record<string, unknown>> implements ICanvasCommand {
   readonly id: string;
   readonly name = 'Update Object';
   readonly timestamp = Date.now();

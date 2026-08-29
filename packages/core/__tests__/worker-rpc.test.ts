@@ -258,7 +258,7 @@ export default {
     // Run increment command to modify the count state in Worker (0 -> 10)
     const result1 = await kernel.commandBus.execute({
       id: 'cmd-inc-1',
-      type: `${testPlugin!.id}.increment`,
+      type: 'ext-test-state-inherit.increment',
       actorId: 'user-teacher',
       payload: {}
     }) as any;
@@ -299,7 +299,7 @@ export default {
     // Run increment command again on the reloaded worker (should increment from 10 to 15)
     const result2 = await kernel.commandBus.execute({
       id: 'cmd-inc-2',
-      type: `${testPlugin!.id}.increment`,
+      type: 'ext-test-state-inherit.increment',
       actorId: 'user-teacher',
       payload: {}
     }) as any;
@@ -436,7 +436,7 @@ export default {
     // Query status
     const res1 = await kernel.commandBus.execute({
       id: 'cmd-watchdog-rc1',
-      type: `${testPlugin!.id}.get_run_status`,
+      type: 'ext-test-watchdog.get_run_status',
       actorId: 'user-teacher',
       payload: {}
     }) as any;
@@ -455,7 +455,7 @@ export default {
     // Trigger crash 1
     await kernel.commandBus.execute({
       id: 'cmd-watchdog-crash1',
-      type: `${testPlugin!.id}.crash_now`,
+      type: 'ext-test-watchdog.crash_now',
       actorId: 'user-teacher',
       payload: {}
     });
@@ -466,7 +466,7 @@ export default {
     // Verify it recovered and registered handlers again!
     const res2 = await kernel.commandBus.execute({
       id: 'cmd-watchdog-rc2',
-      type: `${testPlugin!.id}.get_run_status`,
+      type: 'ext-test-watchdog.get_run_status',
       actorId: 'user-teacher',
       payload: {}
     }) as any;
@@ -475,7 +475,7 @@ export default {
     // Trigger crash 2
     await kernel.commandBus.execute({
       id: 'cmd-watchdog-crash2',
-      type: `${testPlugin!.id}.crash_now`,
+      type: 'ext-test-watchdog.crash_now',
       actorId: 'user-teacher',
       payload: {}
     });
@@ -486,7 +486,7 @@ export default {
     // Verify it recovered again
     const res3 = await kernel.commandBus.execute({
       id: 'cmd-watchdog-rc3',
-      type: `${testPlugin!.id}.get_run_status`,
+      type: 'ext-test-watchdog.get_run_status',
       actorId: 'user-teacher',
       payload: {}
     }) as any;
@@ -495,7 +495,7 @@ export default {
     // Trigger crash 3
     await kernel.commandBus.execute({
       id: 'cmd-watchdog-crash3',
-      type: `${testPlugin!.id}.crash_now`,
+      type: 'ext-test-watchdog.crash_now',
       actorId: 'user-teacher',
       payload: {}
     });
@@ -506,7 +506,7 @@ export default {
     // Verify it recovered again
     const res4 = await kernel.commandBus.execute({
       id: 'cmd-watchdog-rc4',
-      type: `${testPlugin!.id}.get_run_status`,
+      type: 'ext-test-watchdog.get_run_status',
       actorId: 'user-teacher',
       payload: {}
     }) as any;
@@ -515,7 +515,7 @@ export default {
     // Trigger crash 4 (this should trigger the circuit breaker since count is 4 > 3)
     await kernel.commandBus.execute({
       id: 'cmd-watchdog-crash4',
-      type: `${testPlugin!.id}.crash_now`,
+      type: 'ext-test-watchdog.crash_now',
       actorId: 'user-teacher',
       payload: {}
     });

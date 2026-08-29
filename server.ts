@@ -136,8 +136,8 @@ async function startServer() {
     legacyHeaders: false,
   });
 
-  app.use(express.json({ limit: '400mb' }));
-  app.use(express.urlencoded({ limit: '400mb', extended: true }));
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ limit: '10mb', extended: true }));
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   app.use('/plugins', express.static(path.join(process.cwd(), 'plugins')));
   // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块�?

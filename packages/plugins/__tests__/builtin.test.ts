@@ -14,7 +14,11 @@ import {
   IAIServiceToken,
   IDatabaseToken,
   IPluginHostToken,
+  IPluginLifecycleManagerToken,
+  IPluginDistributionManagerToken,
 } from '../../core/di/interfaces.js';
+import { PluginLifecycleManager } from '../../core/plugin-host/plugin-lifecycle-manager.js';
+import { PluginDistributionManager } from '../../core/plugin-host/plugin-distribution-manager.js';
 import { CommandBus } from '../../core/command-bus/index.js';
 import { EventBus } from '../../core/event-bus/index.js';
 import { ActionRegistry } from '../../core/registry/index.js';
@@ -128,6 +132,8 @@ describe('BuiltinPlugin', () => {
 
     pluginHost = new PluginHost(serviceRegistry, new EsmLoader(), db);
     serviceRegistry.register(IPluginHostToken, pluginHost);
+    serviceRegistry.register(IPluginLifecycleManagerToken, new PluginLifecycleManager(pluginHost));
+    serviceRegistry.register(IPluginDistributionManagerToken, new PluginDistributionManager(pluginHost));
   });
 
   afterEach(() => {

@@ -538,8 +538,8 @@ parentPort.on('message', async function(msg) {
         createCommand: function(type, payload, actorId, metadata) {
           return rawCommandBus.createCommand(type, payload, actorId, metadata);
         },
-        setInterceptor: function(interceptor) {
-          return rawCommandBus.setInterceptor(interceptor);
+        setInterceptor: function(_interceptor) {
+          throw new Error('[Security] setInterceptor cannot be configured from Worker PluginContext');
         }
       } : undefined;
 

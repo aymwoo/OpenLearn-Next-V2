@@ -16,7 +16,7 @@ import { filterXSS } from 'xss';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
 import {
@@ -670,9 +670,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/users', async (req, res) => {
+  app.get('/api/users', requireAuth('administrator'), async (req, res) => {
     try {
-      const cmd = kernelContainer.commandBus.createCommand('user.list', {}, 'user-demo');
+      const cmd = kernelContainer.commandBus.createCommand('user.list', {}, getActorId(req));
       const users = await kernelContainer.commandBus.execute(cmd);
       res.json(users);
     } catch (e: any) {
@@ -680,7 +680,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/users', async (req, res) => {
+  app.post('/api/users', requireAuth('administrator'), async (req, res) => {
     try {
       const { username, password, role, name, status = 'active' } = req.body;
       const cmd = kernelContainer.commandBus.createCommand('user.create', {
@@ -689,7 +689,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         role,
         name,
         status
-      }, 'user-demo');
+      }, getActorId(req));
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -697,7 +697,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.put('/api/users/:id', async (req, res) => {
+  app.put('/api/users/:id', requireAuth('administrator'), async (req, res) => {
     try {
       const { username, role, name, password, status } = req.body;
       const cmd = kernelContainer.commandBus.createCommand('user.update', {
@@ -707,7 +707,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         name,
         password,
         status
-      }, 'user-demo');
+      }, getActorId(req));
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -715,11 +715,11 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/users/:id', async (req, res) => {
+  app.delete('/api/users/:id', requireAuth('administrator'), async (req, res) => {
     try {
       const cmd = kernelContainer.commandBus.createCommand('user.delete', {
         userId: req.params.id
-      }, 'user-demo');
+      }, getActorId(req));
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -737,7 +737,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/labs', (req, res) => {
+  app.post('/api/labs', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { room_number, rows, cols } = req.body;
       const id = 'lab_' + Math.random().toString(36).slice(2, 10);
@@ -750,7 +750,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.put('/api/labs/:id', (req, res) => {
+  app.put('/api/labs/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { room_number, rows, cols } = req.body;
       kernelContainer.db.prepare(
@@ -762,7 +762,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/labs/:id', (req, res) => {
+  app.delete('/api/labs/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       kernelContainer.db.prepare('DELETE FROM computer_labs WHERE id = ?').run(req.params.id);
       kernelContainer.db.prepare('DELETE FROM student_seats WHERE lab_id = ?').run(req.params.id);
@@ -784,7 +784,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:classId/seats', (req, res) => {
+  app.post('/api/classes/:classId/seats', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { lab_id, seats } = req.body;
       
@@ -1007,7 +1007,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:id/students/bulk-enroll', (req, res) => {
+  app.post('/api/classes/:id/students/bulk-enroll', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { students } = req.body;
       const classId = req.params.id;

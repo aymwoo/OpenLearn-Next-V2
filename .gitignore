@@ -34,3 +34,5 @@ storage/
 uploads/
 /.agents/skills
 /agent/skills
+graphify-out/
+test-cw.js

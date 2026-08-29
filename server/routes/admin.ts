@@ -16,7 +16,7 @@ import { filterXSS } from 'xss';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
 import {
@@ -37,7 +37,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
     runGeminiAgentChat, runOpenAIAgentChat,
   } = ctx;
 
-  app.post('/api/admin/seed-demo', (req, res) => {
+  app.post('/api/admin/seed-demo', requireAuth('administrator'), (req, res) => {
     try {
       const db = kernelContainer.db;
       const DEMO_CLASS_ID = 'demo-class';
@@ -57,7 +57,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
       const existingClass = db.prepare('SELECT id FROM classes WHERE id = ?').get(DEMO_CLASS_ID);
       if (!existingClass) {
         db.prepare('INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)').run(
-          DEMO_CLASS_ID, '人工智能与创意编程示范班', '这是系统初始化的示例课程班级，用于教学体验�?', Date.now()
+          DEMO_CLASS_ID, '人工智能与创意编程示范班', '这是系统初始化的示例课程班级，用于教学体验?', Date.now()
         );
       }
 
@@ -88,7 +88,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
       if (!lessonId) {
         lessonId = 'demo-lesson';
         db.prepare('INSERT INTO lessons (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
-          lessonId, '初识 Python：智能白板创意编�?', JSON.stringify({ elements: [] }), Date.now(), Date.now()
+          lessonId, '初识 Python：智能白板创意编?', JSON.stringify({ elements: [] }), Date.now(), Date.now()
         );
       }
 
@@ -109,7 +109,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
   // Helper functions for student number auto-generation (S001 style)
 
   // Management APIs
-  app.post('/api/classes/import', (req, res) => {
+  app.post('/api/classes/import', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { classes } = req.body;
       if (!classes || !Array.isArray(classes)) {
@@ -173,7 +173,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/students/import', (req, res) => {
+  app.post('/api/students/import', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { students } = req.body;
       if (!students || !Array.isArray(students)) {

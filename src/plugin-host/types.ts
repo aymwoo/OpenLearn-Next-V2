@@ -146,6 +146,12 @@ export interface FrontendPluginContext {
   };
   /** 调用后端已注册的 Command Handler，自动添加插件命名空间前缀 */
   invokeCommand<T = any>(type: string, payload?: any): Promise<T>;
+  /** 页面导航与 Tab 订阅控制 */
+  navigation?: {
+    getTeacherTab(): string;
+    setTeacherTab(tab: string): void;
+    subscribeTeacherTab(callback: (tab: string) => void): () => void;
+  };
   
   // Backward compatibility shims
   registerPanel?(config: any): void;

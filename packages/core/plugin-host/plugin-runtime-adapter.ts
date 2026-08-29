@@ -84,10 +84,10 @@ export class PluginRuntimeAdapter implements IPluginRuntime {
     const plugins = this.pluginHost.listPlugins();
     return plugins
       .filter((p) => p.state === 'active')
-      .map((p) => ({
+      .map((p: any) => ({
         id: p.id,
-        name: p.name,
-        version: p.version,
+        name: p.name ?? p.manifest?.name,
+        version: p.version ?? p.manifest?.version,
         state: p.state,
       }));
   }

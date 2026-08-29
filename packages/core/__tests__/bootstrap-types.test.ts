@@ -78,7 +78,7 @@ describe('EU-01 Platform Bootstrap Types & Contracts Test Suite', () => {
 
   describe('3. Platform Constants', () => {
     it('should export valid platform constants', () => {
-      expect(PLATFORM_VERSION).toBe('2.5.0');
+      expect(PLATFORM_VERSION).toBe('0.2.3');
       expect(PLATFORM_KERNEL_NAME).toBe('OpenLearn Platform Kernel');
       expect(BOOTSTRAP_TIMEOUT).toBe(30000);
       expect(DEFAULT_SCOPE).toBe('Singleton');

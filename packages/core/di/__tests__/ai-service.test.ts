@@ -65,7 +65,7 @@ describe('AIService', () => {
   it('generateText 应在无 provider 且无 Gemini key 时抛异常', async () => {
     vi.stubEnv('GEMINI_API_KEY', '');
     await expect(aiService.generateText('hello')).rejects.toThrow(
-      /No AI providers or Gemini API key/,
+      /GEMINI_API_KEY is not configured|No AI providers/,
     );
   });
 

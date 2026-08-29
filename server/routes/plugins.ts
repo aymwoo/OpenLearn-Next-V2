@@ -17,7 +17,7 @@ import { filterXSS } from 'xss';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
 import {
@@ -27,6 +27,44 @@ import {
   IActivityRegistryToken,
 } from '../../packages/activity-ecosystem/index.js';
 import type { ServerContext, AgentChatAttachment, AgentChatRequest, AgentToolExecution, StoredAIProvider } from '../context.js';
+
+function isSafeExternalUrl(urlStr: string): { safe: boolean; reason?: string } {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { safe: false, reason: 'Only HTTP and HTTPS protocols are allowed' };
+    }
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      hostname.endsWith('.local') ||
+      hostname === '0.0.0.0' ||
+      hostname === '::1' ||
+      hostname === '[::1]'
+    ) {
+      return { safe: false, reason: 'Access to loopback/local addresses is forbidden' };
+    }
+    const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4Match) {
+      const octets = ipv4Match.slice(1).map(Number);
+      if (
+        octets[0] === 127 ||
+        octets[0] === 10 ||
+        (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+        (octets[0] === 192 && octets[1] === 168) ||
+        (octets[0] === 169 && octets[1] === 254) ||
+        octets[0] === 0 ||
+        octets[0] >= 224
+      ) {
+        return { safe: false, reason: 'Access to private or link-local IP addresses is forbidden' };
+      }
+    }
+    return { safe: true };
+  } catch (e: any) {
+    return { safe: false, reason: `Invalid URL format: ${e.message}` };
+  }
+}
 
 export function registerPluginsRoutes(ctx: ServerContext) {
   const {
@@ -203,7 +241,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // 一键热更新插件 API
-  app.post('/api/plugins/:id(*)/one-click-update', async (req, res) => {
+  app.post('/api/plugins/:id(*)/one-click-update', requireAuth('administrator'), async (req, res) => {
     try {
       const targetPluginId = decodeURIComponent(req.params.id);
       const { downloadUrl } = req.body || {};
@@ -211,6 +249,13 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       let zipBuffer: Buffer;
 
       if (downloadUrl) {
+        const urlCheck = isSafeExternalUrl(downloadUrl);
+        if (!urlCheck.safe) {
+          return res.status(400).json({
+            success: false,
+            error: `安全拦截: 非法下载地址 (${urlCheck.reason})`,
+          });
+        }
         // Server-side download with timeout fallback signal
         try {
           const resp = await fetch(downloadUrl, {
@@ -300,7 +345,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // V3.1: 更新插件配置
-  app.post('/api/plugins/:id(*)/config', (req, res) => {
+  app.post('/api/plugins/:id(*)/config', requireAuth('administrator'), (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
       const pluginId = kernelContainer.pluginHost.resolvePluginUuid(rawId);
@@ -322,7 +367,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/plugins/:id(*)/toggle', async (req, res) => {
+  app.post('/api/plugins/:id(*)/toggle', requireAuth('administrator'), async (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
       const cmd = kernelContainer.commandBus.createCommand(
@@ -337,7 +382,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/plugins/:id(*)', async (req, res) => {
+  app.delete('/api/plugins/:id(*)', requireAuth('administrator'), async (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
       const cmd = kernelContainer.commandBus.createCommand(
@@ -368,7 +413,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/plugins', async (req, res) => {
+  app.post('/api/plugins', requireAuth('administrator'), async (req, res) => {
     try {
       const { sourceCode } = req.body;
       const cmd = kernelContainer.commandBus.createCommand(
@@ -384,7 +429,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/plugins/upload-zip', async (req, res) => {
+  app.post('/api/plugins/upload-zip', requireAuth('administrator'), async (req, res) => {
     try {
       const { base64Data, filename, executionMode } = req.body;
       const cmd = kernelContainer.commandBus.createCommand(
@@ -401,7 +446,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // Raw binary upload — avoids base64 overhead for large plugin zips
-  app.post('/api/plugins/upload-zip-raw', express.raw({ type: 'application/octet-stream', limit: '400mb' }), async (req, res) => {
+  app.post('/api/plugins/upload-zip-raw', requireAuth('administrator'), express.raw({ type: 'application/octet-stream', limit: '400mb' }), async (req, res) => {
     try {
       const zipBuffer = req.body;
       const filename = req.headers['x-filename'] ? decodeURIComponent(req.headers['x-filename'] as string) : 'plugin.zip';
@@ -455,6 +500,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   // Explicit update endpoint (card "Update" button)
   app.post(
     '/api/plugins/:id(*)/update-zip-raw',
+    requireAuth('administrator'),
     express.raw({ type: 'application/octet-stream', limit: '400mb' }),
     async (req, res) => {
       try {
@@ -499,7 +545,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       }
 
       // Resolve the prefixed command type. Handlers are registered by the
-      // service-host with a plugin-UUID prefix (e.g. 019f6465-�?:courseware.open_panel),
+      // service-host with a plugin-UUID prefix (e.g. 019f6465-?:courseware.open_panel),
       // but some callers (e.g. whiteboard toolbar buttons) may send the bare type.
       // Fallback: if the bare type is not found, try suffix-matching against
       // all registered handler keys.
@@ -547,7 +593,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   app.get('/api/ai-providers', (req, res) => {
     try {
       const providers = kernelContainer.db.prepare('SELECT * FROM ai_providers ORDER BY created_at DESC').all() as any[];
-      // SEC-DATA-01: 掩码 API Key 后返�?
+      // SEC-DATA-01: 掩码 API Key 后返?
       const masked = providers.map(p => ({
         ...p,
         api_key: maskApiKey(decryptApiKey(p.api_key || '')),
@@ -558,7 +604,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/ai-providers', (req, res) => {
+  app.post('/api/ai-providers', requireAuth('administrator'), (req, res) => {
     try {
       const { name, api_url, api_key, model_name } = req.body;
       if (!name || !api_url || !model_name) {
@@ -576,14 +622,14 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.put('/api/ai-providers/:id', (req, res) => {
+  app.put('/api/ai-providers/:id', requireAuth('administrator'), (req, res) => {
     try {
       const { name, api_url, api_key, model_name } = req.body;
       if (!name || !api_url || !model_name) {
         return res.status(400).json({ error: 'Missing name, api_url or model_name' });
       }
       const now = Date.now();
-      // SEC-DATA-01: �? **** 的掩码密�? �? 保留原值；纯明�? �? 加密存储
+      // SEC-DATA-01: ? **** 的掩码密? ? 保留原值；纯明? ? 加密存储
       let finalKey: string;
       if (api_key && api_key.trim() !== '' && !api_key.includes('****')) {
         finalKey = encryptApiKey(api_key);
@@ -599,7 +645,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/ai-providers/:id', (req, res) => {
+  app.delete('/api/ai-providers/:id', requireAuth('administrator'), (req, res) => {
     try {
       kernelContainer.db.prepare('DELETE FROM ai_providers WHERE id = ?').run(req.params.id);
       res.json({ success: true });
@@ -624,7 +670,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.put('/api/site-settings', (req, res) => {
+  app.put('/api/site-settings', requireAuth('administrator'), (req, res) => {
     try {
       const { siteName, slogan, logoUrl } = req.body || {};
       kernelContainer.db
@@ -642,7 +688,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/ai-providers/test', async (req, res) => {
+  app.post('/api/ai-providers/test', requireAuth('administrator'), async (req, res) => {
     try {
       const { api_url, api_key: providedKey, model_name } = req.body;
       if (!api_url || !model_name) {

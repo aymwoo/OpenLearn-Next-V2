@@ -34,6 +34,9 @@
   "exclude": [
     "node_modules",
     "dist",
+    "docs/_build",
+    "storage",
+    "coverage",
     "packages/core/esm-loader/__tests__/fixtures",
     "packages/plugin-sdk/scaffold/templates"
   ]
