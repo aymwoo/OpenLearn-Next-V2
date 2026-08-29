@@ -1,33 +1,14 @@
-import { MessageSquare, Wand2, Plus, Trash2, PenTool, LayoutTemplate, LayoutGrid, List, Globe, Code, Blocks, Download, Upload, Paperclip, Terminal, ChevronUp, ChevronDown, ChevronRight, FileText, Shield, ShieldAlert, Check, X, Folder, File as FileIcon, Activity, BarChart2, ClipboardList, Send, FileBadge, PlayCircle, Loader2, Calendar as CalendarIcon, CheckCircle2, Bell, BookOpen, Settings, PanelRightClose, PanelRightOpen, Home, Presentation, HelpCircle, Search, Settings2, Percent, ListFilter, Clock, Sparkles, Eye, Maximize2, Minimize2, Database, Shuffle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { PluginTabPanel } from './components/PluginTabPanel.js';
 import { parseCSV } from './utils/pluginParsers.js';
-import Markdown from 'react-markdown';
-import { translations, Language } from './i18n';
-import { LazyWhiteboard } from './components/LazyWhiteboard';
-import { UserMenu } from './components/UserMenu';
+import { translations } from './i18n';
+import { LoginPage } from './components/LoginPage';
 import { AppHeader } from './components/AppHeader';
 import { ProfileModal } from './components/ProfileModal';
-import { LessonPalette } from './features/teacher/lesson-editor/LessonPalette';
-import { PaletteCardEditModal } from './features/teacher/lesson-editor/PaletteCardEditModal';
 import { PALETTE_ITEM_MAP } from './features/teacher/lesson-editor/paletteConfig';
-import { TimelineRail } from './features/teacher/lesson-editor/TimelineRail';
-import { SegmentEditorCard } from './features/teacher/lesson-editor/SegmentEditorCard';
-import { LazyCourseware } from './components/LazyCourseware';
-import { LiveClassroomView } from './components/LiveClassroomView';
-import { CoursewareHubPanel } from './features/teacher/CoursewareHubPanel';
-import { CourseWizardModal } from './features/modals/CourseWizardModal';
-import { ImportLessonsModal } from './features/modals/ImportLessonsModal';
-import { QuizGeneratorModal } from './features/modals/QuizGeneratorModal';
-import { StudentPreviewModal } from './features/modals/StudentPreviewModal';
-import { SystemResourceLibraryModal } from './features/modals/SystemResourceLibraryModal';
-import { BatchPickerModal } from './features/modals/BatchPickerModal';
-import { ExportWeightModal } from './features/modals/ExportWeightModal';
+import { generateTemplateContent } from './features/teacher/HelpView';
 
 // ── Hash-based routing helpers ────────────────────────────────────────────
-// Map the active teacher tab to/from the URL hash so page switches are
-// reflected in the browser address bar (e.g. #/classes). Hash routing needs
-// no server-side SPA fallback, unlike History API pushState.
 function tabToHash(tab: string): string {
   return '#/' + tab;
 }
@@ -37,98 +18,32 @@ function hashToTab(hash: string): string | null {
   return raw.replace(/^\//, '');
 }
 
-import { ChevronLeft, Menu } from 'lucide-react';
-// InteractiveCoursewareViewer: loaded as local module (Phase 5 v5.0 refactoring)
-import { QuickActionsMenu } from './components/QuickActionsMenu';
-import { CountdownTimer } from './components/CountdownTimer';
-import { StudentGradedTimeline } from './components/StudentGradedTimeline';
-import { SemesterGradeTrendChart } from './components/SemesterGradeTrendChart';
-import { RecentThreeMonthsPerformanceChart } from './components/RecentThreeMonthsPerformanceChart';
-import { AcademicGrowthTrajectoryChart } from './components/AcademicGrowthTrajectoryChart';
-import { ScheduledLessonsProgressChart } from './components/ScheduledLessonsProgressChart';
-import { StudentCompareGrowthChart } from './components/StudentCompareGrowthChart';
-import { ClassAttendanceSummaryChart } from './components/ClassAttendanceSummaryChart';
-
-import { StudentPrivateNotesEditor } from './components/StudentPrivateNotesEditor';
-import { ComputerLabManager } from './components/ComputerLabManager';
-import { LoginPage } from './components/LoginPage';
-import { AdminPanel } from './components/AdminPanel';
-import { HelpTour } from './components/HelpTour';
-import { TimetableManager } from './components/TimetableManager';
-import { SemesterGradeManager } from './components/SemesterGradeManager';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { motion, AnimatePresence, animate } from 'motion/react';
-import { io } from 'socket.io-client';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-import { ExtensionPointRenderer, DOMExtensionWrapper } from './plugin-host/extension-point-renderer';
 import { usePluginHost } from './plugin-host/plugin-host-context';
 import { usePluginHostStore } from './plugin-host/plugin-host-store';
 import { registerTeacherActivityCenter } from './features/activity-ecosystem/registerTeacherExtension.js';
 
-// Register the teacher Activity Center (idempotent) so teachers see the same
-// Activity Provider ecosystem the students get in their workspace.
 registerTeacherActivityCenter();
 import { PluginState } from './plugin-host/types';
-import { PluginCenter } from './components/PluginCenter';
-import { LegacyPluginBadge } from './components/LegacyPluginBadge';
-import { FrontendAPIService } from './services/frontend-api';
-import { SocketService } from './services/socket-service';
-import { UIService } from './services/ui-service';
-import { StorageService } from './services/storage-service';
 import { useAppStore, appStore } from './store/appStore';
 import type {
-  Lesson, AIProvider, WhiteboardElement, PluginType, VFSNode, ProcessType,
+  AIProvider, PluginType, VFSNode, ProcessType,
   ClassType, StudentType, AssignmentType, SubmissionType,
   ScheduleType, AttendanceType, StudentProgressType,
-  Toast,
 } from './store/appStore';
-import { EventBus } from '../packages/core/event-bus';
-import { AnimatedCounter } from './components/AnimatedCounter';
-import { StudentPerformanceCharts } from './features/student/StudentPerformanceCharts';
-import { StudentQuickStats } from './features/student/StudentQuickStats';
-import { StudentCourseProgressList } from './features/student/StudentCourseProgressList';
-import { StudentLessonHeader } from './features/student/StudentLessonHeader';
-import { StudentLessonContentPanel } from './features/student/StudentLessonContentPanel';
-import { StudentLessonInteractionPanel } from './features/student/StudentLessonInteractionPanel';
 import { AppShell } from './components/AppShell';
-import { StudentAssignmentHeader } from './features/student/StudentAssignmentHeader';
-import { StudentAssignmentQuestionPanel } from './features/student/StudentAssignmentQuestionPanel';
-import { StudentAssignmentWorkPanel } from './features/student/StudentAssignmentWorkPanel';
-import { StudentSchedulePanel } from './features/student/StudentSchedulePanel';
-import { StudentDashboardHeader } from './features/student/StudentDashboardHeader';
-import { StudentRollCallAlarms } from './features/student/StudentRollCallAlarms';
-import { StudentAssignmentsPanel } from './features/student/StudentAssignmentsPanel';
 import { ToastContainer } from './features/shared/ToastContainer';
-import { NavigationSidebar } from './features/shared/NavigationSidebar';
 import { RightSidebar } from './features/shared/RightSidebar';
 import { AppModals } from './components/AppModals';
 import { useLmsBridge } from './services/lms-bridge';
 import { useAppPolling } from './hooks/useAppPolling';
 import { useAgentChat } from './hooks/useAgentChat';
-import { ProcessLogsModal } from './features/modals/ProcessLogsModal';
-import { ImportModal } from './features/modals/ImportModal';
-import { CloudDriveModal, CloudDrivePanel } from './features/modals/CloudDriveModal';
-import { NotificationDetailModal } from './features/modals/NotificationDetailModal';
-import { HelpView, generateTemplateContent } from './features/teacher/HelpView';
-import { TimetableView } from './features/teacher/TimetableView';
-import { ComputerLabView } from './features/teacher/ComputerLabView';
-import { AdminDirectoryView } from './features/teacher/AdminDirectoryView';
-import { PluginView } from './features/teacher/PluginView';
-
-import { CourseManagement } from './features/teacher/CourseManagement';
-import { Dashboard } from './features/teacher/Dashboard';
-import { LessonEditorView } from './features/teacher/LessonEditorView.js';
-import { CreateClassButton } from './features/teacher/classes/CreateClassButton.js';
-import { ManualImportButton } from './features/teacher/classes/ManualImportButton.js';
-import { ClassPasscodeController } from './features/teacher/classes/ClassPasscodeController.js';
-import { ClassRowHeader } from './features/teacher/classes/ClassRowHeader.js';
-import { ClassTabs } from './features/teacher/classes/ClassTabs.js';
-import { ClassStudentsPanel } from './features/teacher/classes/ClassStudentsPanel.js';
-import { ClassAssignmentsPanel } from './features/teacher/classes/ClassAssignmentsPanel.js';
-import { ClassSchedulesCharts } from './features/teacher/classes/ClassSchedulesCharts';
-import { ClassScheduleAttendance } from './features/teacher/classes/ClassScheduleAttendance';
-import { ClassesView } from './features/teacher/classes/ClassesView';
+import { useClassroomSocket } from './hooks/useClassroomSocket';
+import {
+  generateClassPDFReport,
+  exportClassGradesCSV,
+  exportAllClassesCombinedCSV,
+  computeCsvPreviewData,
+} from './services/gradeReportService';
 
 const AGENT_PROVIDER_STORAGE_KEY = 'openlearnv2.agentProviderId';
 
@@ -144,50 +59,6 @@ const DEFAULT_PLUGIN = `exports.default = {
   }
 };`;
 
-const CAPABILITY_INFO: Record<string, {
-  labelZh: string;
-  labelEn: string;
-  iconName: string;
-  risk: 'low' | 'medium' | 'high';
-  riskDescZh: string;
-  riskDescEn: string;
-}> = {
-  'whiteboard:write': {
-    labelZh: '写入交互白板内容',
-    labelEn: 'Whiteboard Write Access',
-    iconName: 'PenTool',
-    risk: 'medium',
-    riskDescZh: '中风险：允许插件在授课白板上自由擦写、增删几何教具和课件图形，会实时推送或改变所有在线学员的画板视图。',
-    riskDescEn: 'Medium Risk: Authorizes the plugin to draw, erase, or alter whiteboard elements, live-syncing to all classroom attendees.'
-  },
-  'whiteboard:read': {
-    labelZh: '读取白板元素图层',
-    labelEn: 'Whiteboard Read Access',
-    iconName: 'Eye',
-    risk: 'low',
-    riskDescZh: '低风险：仅读取白板当前的静态图形元素，用于做辅助的数据联动分析或内容导出。',
-    riskDescEn: 'Low Risk: Read active static vectors or quiz properties from the blackboard without modification.'
-  },
-  'management:read': {
-    labelZh: '读取教务学员名册',
-    labelEn: 'School Directory Read',
-    iconName: 'Users',
-    risk: 'medium',
-    riskDescZh: '中风险：允许插件遍历读取班级下的学生姓名、登录邮箱等档案信息（如在做点名提问筛选时）。',
-    riskDescEn: 'Medium Risk: Allows retrieving list of enrolled students, email profiles, or attendance history.'
-  },
-  'management:write': {
-    labelZh: '修改教务核心档案',
-    labelEn: 'School Directory Write',
-    iconName: 'Database',
-    risk: 'high',
-    riskDescZh: '高风险：强力权限！允许插件创建、编辑或彻底抹除班级列表、学生个人账号、授课日志及考勤成绩等多项核心教务系统档案。',
-    riskDescEn: 'High Risk: Critical! Grants ability to modify academic profiles, drop students, change registers, or log grade-sheets.'
-  }
-};
-
-const hostEventBus = new EventBus();
-
 export default function App() {
   const lang = useAppStore((s) => s.lang);
  const setLang = useAppStore((s) => s.setLang);
@@ -202,7 +73,6 @@ export default function App() {
   const [liveClassFeed, setLiveClassFeed] = useState<any[]>([]);
   const [liveClassAcknowledgedMap, setLiveClassAcknowledgedMap] = useState<Map<string, boolean>>(new Map());
 
-  const socketRef = useRef<any>(null);
   const host = usePluginHost();
   const [onlineStudentIds, setOnlineStudentIds] = useState<string[]>([]);
   const [activeStudentLessons, setActiveStudentLessons] = useState<Record<string, string>>({});
@@ -296,8 +166,6 @@ export default function App() {
   const setSelectedLesson = useAppStore((s) => s.setSelectedLesson);
   const elements = useAppStore((s) => s.elements);
   const setElements = useAppStore((s) => s.setElements);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
   const [showPluginModal, setShowPluginModal] = useState(false);
   const [storeTab, setStoreTab] = useState<'store' | 'widgets' | 'dev' | 'logs'>('store');
   const [pluginCode, setPluginCode] = useState(DEFAULT_PLUGIN);
@@ -633,362 +501,18 @@ export default function App() {
   };
 
   const handleGeneratePDFReport = async (classId: string, className: string) => {
-    setIsGeneratingPDFReport(prev => ({ ...prev, [classId]: true }));
-    try {
-      // Ensure data is loaded
-      await fetchClassStudents(classId);
-      await fetchClassDashboard(classId);
-      await fetchClassProgress(classId);
-
-      const cStudents = classStudentsMap[classId] || [];
-      const dashData = classDashboardMap[classId];
-      if (!dashData) {
-        addToast(
-          lang === 'zh' ? '暂无班级评分数据' : 'No Class Performance Data',
-          lang === 'zh' ? '请确保在此班级加载了作业与测验。' : 'Please check if assignments or quizzes are present for this class.',
-          'warning'
-        );
-        return;
-      }
-
-      const performanceData = dashData.performance || [];
-      const assignmentsData = dashData.assignments || [];
-
-      // Determine Student Ranking Distributions
-      const studentStatsMap: Record<string, {
-        id: string;
-        name: string;
-        totalGradesSum: number;
-        gradedCount: number;
-        submittedCount: number;
-        totalCount: number;
-      }> = {};
-
-      cStudents.forEach(st => {
-        studentStatsMap[st.id] = {
-          id: st.id,
-          name: st.name,
-          totalGradesSum: 0,
-          gradedCount: 0,
-          submittedCount: 0,
-          totalCount: 0
-        };
-      });
-
-      performanceData.forEach((p: any) => {
-        const sId = p.student_id;
-        if (studentStatsMap[sId]) {
-          studentStatsMap[sId].totalCount++;
-          if (p.submission_status === 'submitted' || p.submission_status === 'graded') {
-            studentStatsMap[sId].submittedCount++;
-          }
-          if (p.score !== null && p.score !== undefined) {
-            studentStatsMap[sId].totalGradesSum += p.score;
-            studentStatsMap[sId].gradedCount++;
-          }
-        }
-      });
-
-      const studentRanks = Object.values(studentStatsMap).map(st => {
-        const avgScore = st.gradedCount > 0 ? (st.totalGradesSum / st.gradedCount) : 0;
-        const submissionRate = st.totalCount > 0 ? (st.submittedCount / st.totalCount) * 100 : 0;
-        return {
-          ...st,
-          avgScore,
-          submissionRate
-        };
-      });
-
-      // Sort students by average score descending (ranking distribution)
-      studentRanks.sort((a, b) => b.avgScore - a.avgScore);
-
-      // Overall class metrics
-      let totalClassGradesSum = 0;
-      let totalClassGradedCount = 0;
-      let totalClassSubmissions = 0;
-      let totalClassOpportunities = 0;
-
-      performanceData.forEach((p: any) => {
-        totalClassOpportunities++;
-        if (p.submission_status === 'submitted' || p.submission_status === 'graded') {
-          totalClassSubmissions++;
-        }
-        if (p.score !== null && p.score !== undefined) {
-          totalClassGradesSum += p.score;
-          totalClassGradedCount++;
-        }
-      });
-
-      const classAvgScore = totalClassGradedCount > 0 ? (totalClassGradesSum / totalClassGradedCount) : 0;
-      const classSubmissionRate = totalClassOpportunities > 0 ? (totalClassSubmissions / totalClassOpportunities) * 100 : 0;
-
-      // Assignment Stats Breakdown
-      const assignmentStatsMap: Record<string, {
-        id: string;
-        title: string;
-        scores: number[];
-        submittedCount: number;
-        totalCount: number;
-      }> = {};
-
-      assignmentsData.forEach((a: any) => {
-        assignmentStatsMap[a.id] = {
-          id: a.id,
-          title: a.title,
-          scores: [],
-          submittedCount: 0,
-          totalCount: 0
-        };
-      });
-
-      performanceData.forEach((p: any) => {
-        const aId = p.assignment_id;
-        if (assignmentStatsMap[aId]) {
-          assignmentStatsMap[aId].totalCount++;
-          if (p.submission_status === 'submitted' || p.submission_status === 'graded') {
-            assignmentStatsMap[aId].submittedCount++;
-          }
-          if (p.score !== null && p.score !== undefined) {
-            assignmentStatsMap[aId].scores.push(p.score);
-          }
-        }
-      });
-
-      const assignmentStats = Object.values(assignmentStatsMap).map(ast => {
-        const count = ast.scores.length;
-        const sumVal = ast.scores.reduce((s, v) => s + v, 0);
-        const avgVal = count > 0 ? (sumVal / count) : 0;
-        const maxVal = count > 0 ? Math.max(...ast.scores) : 0;
-        const minVal = count > 0 ? Math.min(...ast.scores) : 0;
-        const subRateVal = ast.totalCount > 0 ? (ast.submittedCount / ast.totalCount) * 100 : 0;
-        return {
-          ...ast,
-          avg: avgVal,
-          max: maxVal,
-          min: minVal,
-          subRate: subRateVal
-        };
-      });
-
-      // Initialize jsPDF Doc
-      const doc = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      // Colors definition (Executive palette)
-      const primaryColor = [15, 23, 42]; // Slate 900
-      const accentColor = [79, 70, 229]; // Indigo 600
-      const textColor = [51, 65, 85]; // Slate 700
-      const borderLineColor = [226, 232, 240]; // Slate 200
-
-      // Helper for drawing clean dividers
-      const drawDivider = (yPos: number) => {
-        doc.setDrawColor(borderLineColor[0], borderLineColor[1], borderLineColor[2]);
-        doc.setLineWidth(0.3);
-        doc.line(14, yPos, 196, yPos);
-      };
-
-      // PAGE 1: Header/Branding Area
-      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.rect(0, 0, 210, 42, 'F'); // Dark primary banner
-
-      doc.setTextColor(255, 255, 255);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(20);
-      doc.text('CLASS PERFORMANCE REPORT', 14, 18);
-      
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.setTextColor(194, 205, 225); // Slate 300
-      doc.text(`Academic Insights • Generative Report Summary`, 14, 25);
-      doc.text(`Classroom: ${className} | Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 14, 32);
-
-      // Logo-box
-      doc.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
-      doc.rect(172, 10, 24, 24, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(14);
-      doc.setTextColor(255, 255, 255);
-      doc.text('OS', 180, 26);
-
-      let currentY = 52;
-
-      // Executive Metrics Grid
-      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text('I. EXECUTIVE OVERVIEW', 14, currentY);
-      currentY += 6;
-
-      const summaryRows = [
-        ['Classroom/Subject Name', className],
-        ['Total Enrolled Students', `${cStudents.length} student(s)`],
-        ['Curriculum Items (Assignments/Quizzes)', `${assignmentsData.length} items`],
-        ['Global Assignment Submission Rate', `${classSubmissionRate.toFixed(1)}%`],
-        ['Class Average Performance Score', `${classAvgScore.toFixed(1)}%`]
-      ];
-
-      (doc as any).autoTable({
-        startY: currentY,
-        head: [['Metric Indicator', 'Class-wide Metric Value']],
-        body: summaryRows,
-        theme: 'striped',
-        headStyles: {
-          fillColor: primaryColor,
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-          fontSize: 9
-        },
-        bodyStyles: {
-          textColor: textColor,
-          fontSize: 8.5
-        },
-        margin: { left: 14, right: 14 }
-      });
-
-      currentY = (doc as any).lastAutoTable.finalY + 12;
-
-      // Ranking Distribution Table
-      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text('II. STUDENT RANKING DISTRIBUTION', 14, currentY);
-      currentY += 6;
-
-      const rankingRows = studentRanks.map((sr, index) => {
-        let tier = 'Excellent';
-        if (sr.avgScore >= 90) tier = 'Excellent (A)';
-        else if (sr.avgScore >= 75) tier = 'Good (B)';
-        else if (sr.avgScore >= 60) tier = 'Satisfactory (C)';
-        else tier = 'Needs Improvement (D)';
-
-        return [
-          `${index + 1}`,
-          sr.name,
-          `${sr.submittedCount}/${sr.totalCount} (${sr.submissionRate.toFixed(0)}%)`,
-          `${sr.avgScore.toFixed(1)}%`,
-          tier
-        ];
-      });
-
-      (doc as any).autoTable({
-        startY: currentY,
-        head: [['Rank', 'Student Name', 'Completion Rate', 'Average Score', 'Academic Standing Tier']],
-        body: rankingRows,
-        theme: 'grid',
-        headStyles: {
-          fillColor: accentColor,
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-          fontSize: 8.5
-        },
-        bodyStyles: {
-          textColor: textColor,
-          fontSize: 8
-        },
-        alternateRowStyles: {
-          fillColor: [248, 250, 252] // light grey slate
-        },
-        columnStyles: {
-          0: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
-          1: { fontStyle: 'bold' },
-          2: { halign: 'center' },
-          3: { halign: 'center', fontStyle: 'bold' }
-        },
-        margin: { left: 14, right: 14 }
-      });
-
-      currentY = (doc as any).lastAutoTable.finalY + 12;
-
-      // Check for page overflow
-      if (currentY > 210) {
-        doc.addPage();
-        currentY = 20;
-      }
-
-      // Assignment Stats Table
-      doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.text('III. ASSIGNMENT PERFORMANCE METRICS', 14, currentY);
-      currentY += 6;
-
-      const assignmentRows = assignmentStats.map((ast) => {
-        return [
-          ast.title,
-          `${ast.subRate.toFixed(0)}%`,
-          `${ast.avg.toFixed(1)}%`,
-          `${ast.min.toFixed(0)}% - ${ast.max.toFixed(0)}%`
-        ];
-      });
-
-      (doc as any).autoTable({
-        startY: currentY,
-        head: [['Assignment/Quiz Title', 'Submission Rate', 'Average Grade', 'Range (Min - Max)']],
-        body: assignmentRows.length > 0 ? assignmentRows : [['No assignment performance records found.', '-', '-', '-']],
-        theme: 'striped',
-        headStyles: {
-          fillColor: [100, 116, 139], // Slate 500
-          textColor: [255, 255, 255],
-          fontStyle: 'bold',
-          fontSize: 8.5
-        },
-        bodyStyles: {
-          textColor: textColor,
-          fontSize: 8
-        },
-        columnStyles: {
-          1: { halign: 'center' },
-          2: { halign: 'center', fontStyle: 'bold' },
-          3: { halign: 'center' }
-        },
-        margin: { left: 14, right: 14 }
-      });
-
-      currentY = (doc as any).lastAutoTable.finalY + 15;
-
-      // If footer needs clean spacing or new page
-      if (currentY > 260) {
-        doc.addPage();
-        currentY = 25;
-      }
-
-      // Summary Note & Signature Section
-      doc.setFont('helvetica', 'italic');
-      doc.setFontSize(8);
-      doc.setTextColor(148, 163, 184); // Slate 400
-      doc.text('* This academic summary report is dynamically compiled and authorized based on stored gradebook entries.', 14, currentY);
-      
-      currentY += 12;
-      drawDivider(currentY);
-      
-      currentY += 6;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      doc.text('School OS Comprehensive Academic Platform • Secure Automated Export Document', 14, currentY);
-
-      // Save PDF
-      const fileName = `${className.replace(/\s+/g, '_')}_Performance_Summary_${new Date().toISOString().split('T')[0]}.pdf`;
-      doc.save(fileName);
-
-      addToast(
-        lang === 'zh' ? '📄 PDF 报告下载成功' : '📄 PDF Report Downloaded',
-        lang === 'zh' ? `高阶班级统计及排名分步图已存入 "${fileName}"` : `Successfully prepared academic diagnostics for "${className}"`,
-        'success'
-      );
-    } catch (error: any) {
-      console.error('PDF Generation Failed:', error);
-      addToast(
-        lang === 'zh' ? '❌ PDF 报告生成失败' : '❌ PDF Report Failed',
-        error.message || 'Error occurred during PDF generation',
-        'warning'
-      );
-    } finally {
-      setIsGeneratingPDFReport(prev => ({ ...prev, [classId]: false }));
-    }
+    await fetchClassStudents(classId);
+    await fetchClassDashboard(classId);
+    await fetchClassProgress(classId);
+    await generateClassPDFReport({
+      classId,
+      className,
+      students: classStudentsMap[classId] || [],
+      dashData: classDashboardMap[classId],
+      lang,
+      addToast,
+      setIsGeneratingPDFReport,
+    });
   };
 
   const handleExportAllClassesCombined = async (targetClasses?: any[]) => {
@@ -1002,114 +526,12 @@ export default function App() {
           await fetchClassDashboard(cls.id);
         })
       );
-
-      const headerRow = [
-        'Class Name',
-        'Student Name',
-        'Student Email',
-        'Quizzes Average',
-        'Assignments Average',
-        'Calculated Weighted Score (40% Quiz / 60% Assignment)',
-        'Simple Average Score',
-        'Submitted Count',
-        'Total Items'
-      ];
-
-      const csvRows: string[][] = [headerRow];
-
-      const escapeCSV = (val: string | number | null | undefined): string => {
-        if (val === null || val === undefined) return '';
-        const stringified = String(val);
-        if (stringified.includes(',') || stringified.includes('"') || stringified.includes('\n')) {
-          return `"${stringified.replace(/"/g, '""')}"`;
-        }
-        return stringified;
-      };
-
-      exportList.forEach((cls) => {
-        const cStudents = classStudentsMap[cls.id] || [];
-        const dashData = classDashboardMap[cls.id];
-        if (!dashData || !dashData.assignments || cStudents.length === 0) return;
-
-        const assignments = dashData.assignments || [];
-
-        const classifiedAssignments = assignments.map((a: any) => {
-          const isMcq = a.content && a.content.startsWith('{"quizType":"mcq_learning_objectives"');
-          const hasQuizInTitle = a.title && (a.title.toLowerCase().includes('quiz') || a.title.toLowerCase().includes('test') || a.title.includes('测验') || a.title.includes('测试'));
-          const category = (isMcq || hasQuizInTitle) ? 'quiz' : 'assignment';
-          return { ...a, category };
-        });
-
-        cStudents.forEach((st: any) => {
-          let quizScoreSum = 0;
-          let quizCount = 0;
-          let assignmentScoreSum = 0;
-          let assignmentCount = 0;
-          let overallSum = 0;
-          let gradedCount = 0;
-
-          classifiedAssignments.forEach((a: any) => {
-            const scoreObj = dashData.performance?.find(
-              (p: any) => p.student_id === st.id && p.assignment_id === a.id && p.submission_status === 'graded' && p.score !== null
-            );
-            if (scoreObj) {
-              const scoreVal = Number(scoreObj.score);
-              overallSum += scoreVal;
-              gradedCount++;
-              if (a.category === 'quiz') {
-                quizScoreSum += scoreVal;
-                quizCount++;
-              } else {
-                assignmentScoreSum += scoreVal;
-                assignmentCount++;
-              }
-            }
-          });
-
-          const qAvg = quizCount > 0 ? Math.round(quizScoreSum / quizCount) : null;
-          const aAvg = assignmentCount > 0 ? Math.round(assignmentScoreSum / assignmentCount) : null;
-          
-          let weightedScore = 0;
-          if (qAvg !== null && aAvg !== null) {
-            weightedScore = Math.round((qAvg * 0.4) + (aAvg * 0.6));
-          } else if (qAvg !== null) {
-            weightedScore = Math.round(qAvg);
-          } else if (aAvg !== null) {
-            weightedScore = Math.round(aAvg);
-          }
-          const simpleAvg = gradedCount > 0 ? Math.round(overallSum / gradedCount) : 0;
-
-          const studentRow = [
-            cls.name,
-            st.name,
-            st.email,
-            qAvg !== null ? `${qAvg}%` : 'N/A',
-            aAvg !== null ? `${aAvg}%` : 'N/A',
-            `${weightedScore}%`,
-            `${simpleAvg}%`,
-            `${gradedCount}`,
-            `${assignments.length}`
-          ];
-
-          csvRows.push(studentRow);
-        });
+      exportAllClassesCombinedCSV({
+        classes: exportList,
+        classStudentsMap,
+        classDashboardMap,
+        lang,
       });
-
-      if (csvRows.length <= 1) {
-        alert(lang === 'zh' ? '暂无可导出的成绩数据。请确保班级中有已评分的作业。' : 'No graded performance data available to export.');
-        return;
-      }
-
-      const csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
-        + csvRows.map(e => e.map(escapeCSV).join(",")).join("\n");
-      
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `All_Classes_Combined_Grades_${new Date().toISOString().slice(0, 10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
     } catch (e) {
       console.error(e);
     } finally {
@@ -1173,67 +595,12 @@ export default function App() {
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
   
-  // Chat file attachments
-  const [chatAttachments, setChatAttachments] = useState<{name: string, content: string}[]>([]);
-
   const [currentVfsParent, _setCurrentVfsParent] = useState<string | null>(null);
   const currentVfsParentRef = useRef<string | null>(null);
   const setCurrentVfsParent = (id: string | null) => {
     _setCurrentVfsParent(id);
     currentVfsParentRef.current = id;
   };
-
-  const [chatLog, setChatLog] = useState<{role: 'user'|'agent', content: string}[]>([
-    { role: 'agent', content: t.agentIntro }
-  ]);
-
-  // Update initial message when language changes if no other messages
-  useEffect(() => {
-    if (chatLog.length === 1 && chatLog[0].role === 'agent') {
-      setChatLog([{ role: 'agent', content: t.agentIntro }]);
-    }
-  }, [lang, t.agentIntro]);
-
-  // ── Kernel assistant conversation memory ────────────────────────────────
-  // The server persists turns per (user, lesson). We restore the visible
-  // chat log from that memory on mount and whenever the active lesson changes,
-  // so the assistant's memory is also reflected in the UI across reloads.
-  const restoreAgentMemory = useCallback(async (lessonId?: string | null) => {
-    try {
-      const res = await fetch(`/api/agent/conversations?lessonId=${encodeURIComponent(lessonId || '')}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      const msgs = Array.isArray(data.messages) ? data.messages : [];
-      if (msgs.length > 0) {
-        setChatLog(
-          msgs.map((m: any) => ({
-            role: m.role === 'assistant' ? 'agent' : 'user',
-            content: m.content,
-          }))
-        );
-      } else {
-        setChatLog([{ role: 'agent', content: t.agentIntro }]);
-      }
-    } catch {
-      /* memory restore is best-effort; ignore network errors */
-    }
-  }, [t.agentIntro]);
-
-  const handleClearAgentMemory = useCallback(async () => {
-    try {
-      await fetch(`/api/agent/conversations?lessonId=${encodeURIComponent(selectedLesson || '')}`, {
-        method: 'DELETE',
-      });
-    } catch {
-      /* best-effort */
-    }
-    setChatLog([{ role: 'agent', content: t.agentIntro }]);
-  }, [selectedLesson, t.agentIntro]);
-
-  // Restore memory for the current lesson when it changes (and on first mount).
-  useEffect(() => {
-    restoreAgentMemory(selectedLesson);
-  }, [selectedLesson, restoreAgentMemory]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -2028,113 +1395,15 @@ export default function App() {
   };
 
   const csvPreviewData = React.useMemo(() => {
-    if (!exportClassId) return null;
-    const cStudents = classStudentsMap[exportClassId] || [];
-    const dashData = classDashboardMap[exportClassId];
-    if (!dashData || !dashData.assignments || cStudents.length === 0) {
-      return null;
-    }
-    
-    const assignments = dashData.assignments || [];
-    const performance = dashData.performance || [];
-
-    // Classify assignments
-    const classifiedAssignments = assignments.map((a: any) => {
-      let category: 'quiz' | 'assignment' = 'assignment';
-      if (customCategoryOverrides[a.id]) {
-        category = customCategoryOverrides[a.id];
-      } else {
-        const isMcq = a.content && a.content.startsWith('{"quizType":"mcq_learning_objectives"');
-        const hasQuizInTitle = a.title && (a.title.toLowerCase().includes('quiz') || a.title.toLowerCase().includes('test') || a.title.includes('测验') || a.title.includes('测试'));
-        category = (isMcq || hasQuizInTitle) ? 'quiz' : 'assignment';
-      }
-      return { ...a, category };
+    return computeCsvPreviewData({
+      exportClassId,
+      classStudentsMap,
+      classDashboardMap,
+      quizzesWeight,
+      assignmentsWeight,
+      customCategoryOverrides,
+      lang,
     });
-
-    const headers: string[] = ['Student Name', 'Student Email'];
-    classifiedAssignments.forEach((a: any) => {
-      const catLabel = a.category === 'quiz' ? 'Quiz' : 'Assignment';
-      headers.push(`${catLabel}: ${a.title}`);
-    });
-    
-    headers.push(
-      'Quizzes Average', 
-      'Assignments Average', 
-      `Weighted Average (${quizzesWeight}% Quizzes, ${assignmentsWeight}% Assignments)`, 
-      'Simple Average Score', 
-      'Submitted Count', 
-      'Total Items'
-    );
-
-    const rows: string[][] = [];
-    const previewStudents = cStudents.slice(0, 5);
-
-    previewStudents.forEach((st: any) => {
-      const studentRow: string[] = [st.name, st.email];
-      
-      let quizScoreSum = 0;
-      let quizGradedCount = 0;
-      let assignmentScoreSum = 0;
-      let assignmentGradedCount = 0;
-      let totalScoreSum = 0;
-      let totalGradedCount = 0;
-      let submittedCount = 0;
-
-      classifiedAssignments.forEach((a: any) => {
-        const perf = performance.find((p: any) => p.assignment_id === a.id && p.student_id === st.id);
-        if (perf && perf.score !== null && perf.score !== undefined) {
-          studentRow.push(`${perf.score}%`);
-          const scoreVal = Number(perf.score);
-          
-          if (a.category === 'quiz') {
-            quizScoreSum += scoreVal;
-            quizGradedCount++;
-          } else {
-            assignmentScoreSum += scoreVal;
-            assignmentGradedCount++;
-          }
-          
-          totalScoreSum += scoreVal;
-          totalGradedCount++;
-          submittedCount++;
-        } else if (perf && perf.submission_status === 'submitted') {
-          studentRow.push(lang === 'zh' ? '待评分' : 'Pending Grade');
-          submittedCount++;
-        } else {
-          studentRow.push(lang === 'zh' ? '未提交' : 'Not Submitted');
-        }
-      });
-
-      const quizAvg = quizGradedCount > 0 ? Math.round(quizScoreSum / quizGradedCount) : null;
-      const assignmentAvg = assignmentGradedCount > 0 ? Math.round(assignmentScoreSum / assignmentGradedCount) : null;
-      
-      let weightedAvgStr = 'N/A';
-      if (quizAvg !== null && assignmentAvg !== null) {
-        const weighted = (quizAvg * (quizzesWeight / 100)) + (assignmentAvg * (assignmentsWeight / 100));
-        weightedAvgStr = `${Math.round(weighted)}%`;
-      } else if (quizAvg !== null) {
-        weightedAvgStr = `${quizAvg}%`;
-      } else if (assignmentAvg !== null) {
-        weightedAvgStr = `${assignmentAvg}%`;
-      }
-
-      const quizAvgStr = quizAvg !== null ? `${quizAvg}%` : 'N/A';
-      const assignmentAvgStr = assignmentAvg !== null ? `${assignmentAvg}%` : 'N/A';
-      const simpleAvgStr = totalGradedCount > 0 ? `${Math.round(totalScoreSum / totalGradedCount)}%` : 'N/A';
-      
-      studentRow.push(
-        quizAvgStr,
-        assignmentAvgStr,
-        weightedAvgStr,
-        simpleAvgStr,
-        `${submittedCount}`,
-        `${assignments.length}`
-      );
-
-      rows.push(studentRow);
-    });
-
-    return { headers, rows, totalStudents: cStudents.length };
   }, [exportClassId, quizzesWeight, assignmentsWeight, customCategoryOverrides, classStudentsMap, classDashboardMap, lang]);
 
   const handleExportGrades = (
@@ -2144,148 +1413,14 @@ export default function App() {
     aWeight: number = 60, 
     overrides: Record<string, 'quiz' | 'assignment'> = {}
   ) => {
-    const cStudents = classStudentsMap[classId] || [];
-    const dashData = classDashboardMap[classId];
-    
-    if (!dashData || !dashData.assignments) {
-      alert("No performance data available to export. Please open the dashboard to load class data first.");
-      return;
-    }
-    
-    if (cStudents.length === 0) {
-      alert("No students in this class to export grades for.");
-      return;
-    }
-
-    const assignments = dashData.assignments || [];
-    const performance = dashData.performance || [];
-
-    const escapeCSV = (val: string | number | null | undefined): string => {
-      if (val === null || val === undefined) return '';
-      const stringified = String(val);
-      if (stringified.includes(',') || stringified.includes('"') || stringified.includes('\n')) {
-        return `"${stringified.replace(/"/g, '""')}"`;
-      }
-      return stringified;
-    };
-
-    // Classify assignments
-    const classifiedAssignments = assignments.map((a: any) => {
-      let category: 'quiz' | 'assignment' = 'assignment';
-      if (overrides[a.id]) {
-        category = overrides[a.id];
-      } else {
-        const isMcq = a.content && a.content.startsWith('{"quizType":"mcq_learning_objectives"');
-        const hasQuizInTitle = a.title && (a.title.toLowerCase().includes('quiz') || a.title.toLowerCase().includes('test') || a.title.includes('测验') || a.title.includes('测试'));
-        category = (isMcq || hasQuizInTitle) ? 'quiz' : 'assignment';
-      }
-      return { ...a, category };
+    exportClassGradesCSV({
+      className,
+      students: classStudentsMap[classId] || [],
+      dashData: classDashboardMap[classId],
+      qWeight,
+      aWeight,
+      overrides,
     });
-
-    const headerRow: string[] = ['Student Name', 'Student Email'];
-    classifiedAssignments.forEach((a: any) => {
-      const catLabel = a.category === 'quiz' ? 'Quiz' : 'Assignment';
-      headerRow.push(`${catLabel}: ${a.title}`);
-    });
-    
-    headerRow.push(
-      'Quizzes Average', 
-      'Assignments Average', 
-      `Weighted Average (${qWeight}% Quizzes, ${aWeight}% Assignments)`, 
-      'Simple Average Score', 
-      'Submitted Count', 
-      'Total Items'
-    );
-
-    const csvRows: string[][] = [headerRow];
-
-    cStudents.forEach((st: any) => {
-      const studentRow: string[] = [st.name, st.email];
-      
-      let quizScoreSum = 0;
-      let quizGradedCount = 0;
-      
-      let assignmentScoreSum = 0;
-      let assignmentGradedCount = 0;
-
-      let totalScoreSum = 0;
-      let totalGradedCount = 0;
-      let submittedCount = 0;
-
-      classifiedAssignments.forEach((a: any) => {
-        const perf = performance.find((p: any) => p.assignment_id === a.id && p.student_id === st.id);
-        if (perf && perf.score !== null && perf.score !== undefined) {
-          studentRow.push(`${perf.score}%`);
-          const scoreVal = Number(perf.score);
-          
-          if (a.category === 'quiz') {
-            quizScoreSum += scoreVal;
-            quizGradedCount++;
-          } else {
-            assignmentScoreSum += scoreVal;
-            assignmentGradedCount++;
-          }
-          
-          totalScoreSum += scoreVal;
-          totalGradedCount++;
-          submittedCount++;
-        } else if (perf && perf.submission_status === 'submitted') {
-          studentRow.push('Pending Grade');
-          submittedCount++;
-        } else {
-          studentRow.push('Not Submitted');
-        }
-      });
-
-      const quizAvg = quizGradedCount > 0 ? Math.round(quizScoreSum / quizGradedCount) : null;
-      const assignmentAvg = assignmentGradedCount > 0 ? Math.round(assignmentScoreSum / assignmentGradedCount) : null;
-      
-      // Calculate weighted average
-      let weightedAvgStr = 'N/A';
-      if (quizAvg !== null && assignmentAvg !== null) {
-        // Both exist
-        const weighted = (quizAvg * (qWeight / 100)) + (assignmentAvg * (aWeight / 100));
-        weightedAvgStr = `${Math.round(weighted)}%`;
-      } else if (quizAvg !== null) {
-        // Only quizzes exist
-        weightedAvgStr = `${quizAvg}%`;
-      } else if (assignmentAvg !== null) {
-        // Only assignments exist
-        weightedAvgStr = `${assignmentAvg}%`;
-      }
-
-      const quizAvgStr = quizAvg !== null ? `${quizAvg}%` : 'N/A';
-      const assignmentAvgStr = assignmentAvg !== null ? `${assignmentAvg}%` : 'N/A';
-      const simpleAvgStr = totalGradedCount > 0 ? `${Math.round(totalScoreSum / totalGradedCount)}%` : 'N/A';
-      
-      studentRow.push(
-        quizAvgStr,
-        assignmentAvgStr,
-        weightedAvgStr,
-        simpleAvgStr,
-        `${submittedCount}`,
-        `${assignments.length}`
-      );
-
-      csvRows.push(studentRow.map(escapeCSV));
-    });
-
-    const csvContent = csvRows.map(row => row.join(',')).join('\n');
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    
-    const cleanClassName = className.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const dateStr = new Date().toISOString().split('T')[0];
-    const filename = `${cleanClassName}_grades_report_${dateStr}.csv`;
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   const get30DayAverageWarning = (studentId: string, classId: string) => {
@@ -2507,237 +1642,6 @@ export default function App() {
     }
   }, [plugins, host]);
 
-
-  useEffect(() => {
-    if (!session) return;
-    const socket = io();
-    socketRef.current = socket;
-
-    // Phase 9: Initialize frontend PluginHost services after socket connection
-    if (!host.isInitialized()) {
-      host.initialize(
-        new FrontendAPIService(),
-        new SocketService(socket),
-        new UIService(addToastRef.current),
-        new StorageService('__app__')
-      );
-    }
-
-    // Register student presence
-    if (activeRoleRef.current === 'student' && activeStudentIdRef.current) {
-      socket.emit('register-student', {
-        studentId: activeStudentIdRef.current,
-        name: studentsRef.current.find(s => s.id === activeStudentIdRef.current)?.name || activeStudentIdRef.current
-      });
-    }
-
-    // Join global whiteboard broadcast room so we receive whiteboard-sync events
-    // even before joining a specific lesson room.
-    socket.emit('join-room', 'whiteboard-broadcast');
-
-    socket.on('presence-update', (data: { onlineStudentIds: string[], activeStudentLessons: Record<string, string> }) => {
-      console.log('[Socket] presence-update received:', data);
-      setOnlineStudentIds(data.onlineStudentIds);
-      setActiveStudentLessons(data.activeStudentLessons);
-    });
-
-    socket.on('lesson-progress-mode-changed', (data: any) => {
-      console.log('[Socket] lesson-progress-mode-changed received:', data);
-      const { lessonId, progressMode, progressConditions } = data;
-      setLessons(prev => prev.map(l => {
-        if (l.id === lessonId) {
-          return {
-            ...l,
-            progress_mode: progressMode,
-            progress_conditions: progressConditions
-          };
-        }
-        return l;
-      }));
-    });
-
-    socket.on('student-active-segment-changed', (data: any) => {
-      console.log('[Socket] student-active-segment-changed received:', data);
-      const { activeSegmentId } = data;
-      setActiveSegmentId(activeSegmentId);
-    });
-
-    socket.on('student-pinged', (data: any) => {
-      console.log('[Socket] student-pinged received:', data);
-      const msg = data.message || (langRef.current === 'zh'
-        ? '⚠️ 学习进度预警：老师注意到您的进度有些落后，请抓紧时间跟上！'
-        : '⚠️ Progress Alert: The teacher noticed you are falling behind. Please keep up!');
-      addToast(
-        langRef.current === 'zh' ? '⚠️ 学习进度预警' : '⚠️ Progress Warning',
-        msg,
-        'warning'
-      );
-    });
-
-    socket.on('student-progress-updated', (data: any) => {
-      console.log('[Socket] student-progress-updated received:', data);
-      const { studentId, lessonId, progressPercent, completed } = data;
-      setLiveClassStudentProgress(prev => {
-        const index = prev.findIndex(p => p.student_id === studentId);
-        if (index !== -1) {
-          const next = [...prev];
-          next[index] = { ...next[index], progress_percent: progressPercent, completed: completed ? 1 : 0 };
-          return next;
-        } else {
-          return [...prev, { student_id: studentId, progress_percent: progressPercent, completed: completed ? 1 : 0 }];
-        }
-      });
-    });
-
-    socket.on('assignment-graded-toast', (data: any) => {
-      console.log('[Socket] assignment-graded-toast received on client:', data);
-      
-      // Check if this student is the active student
-      if (activeRoleRef.current === 'student' && activeStudentIdRef.current && data.studentId === activeStudentIdRef.current) {
-        const titleText = data.assignmentTitle || data.assignmentId;
-        const msg = langRef.current === 'zh'
-          ? `您的作业"${titleText}"已完成评分！得分：${data.score}%。建议反馈已收到，快去查看。`
-          : `Your assignment "${titleText}" was graded. Score: ${data.score}%. Tutoring feedback has been posted.`;
-
-        addToast(
-          langRef.current === 'zh' ? '🎓 作业已评分' : '🎓 Assignment Graded',
-          msg,
-          'success'
-        );
-
-        // Fetch student dashboard reactively
-        fetchStudentDashboard(activeStudentIdRef.current);
-      }
-    });
-
-    socket.on('student-picked', (data: any) => {
-      console.log('[Socket] student-picked received on client:', data);
-      
-      // Check if this student is the active student
-      if (activeRoleRef.current === 'student' && activeStudentIdRef.current && data.studentId === activeStudentIdRef.current) {
-        const msg = langRef.current === 'zh'
-          ? `闪电警报！您已被老师在课程随机提问点名中抽中！请立即集中注意力参与课堂。`
-          : `Attention alert! You have been randomly picked by the teacher! Please pay immediate attention.`;
-
-        addToast(
-          langRef.current === 'zh' ? '⚡️ 随机点名提问' : '⚡️ Classroom Pick Alert',
-          msg,
-          'warning'
-        );
-
-        // Fetch student dashboard reactively to load the newly added roll call
-        fetchStudentDashboard(activeStudentIdRef.current);
-      }
-
-      // Live Class Feed updates
-      setLiveClassFeed(prev => [
-        {
-          id: `feed-pick-${data.studentId}-${data.pickedTime || Date.now()}`,
-          time: new Date(data.pickedTime || Date.now()).toLocaleTimeString(),
-          type: 'picked',
-          message: langRef.current === 'zh'
-            ? `点名互动：随机抽中学生【${data.studentName}】。`
-            : `Classroom Pick: Randomly selected student "${data.studentName}".`,
-        },
-        ...prev
-      ]);
-    });
-
-    socket.on('student-acknowledged', (data: any) => {
-      console.log('[Socket] student-acknowledged received on client:', data);
-      const { studentId, notificationId } = data;
-      setLiveClassAcknowledgedMap(prev => {
-        const next = new Map(prev);
-        next.set(studentId, true);
-        return next;
-      });
-      setLiveClassFeed(prev => [
-        {
-          id: `feed-ack-${studentId}-${Date.now()}`,
-          time: new Date().toLocaleTimeString(),
-          type: 'checkin',
-          message: langRef.current === 'zh'
-            ? `学生已确认收到提问点名（学生 ID: ${studentId}）。`
-            : `Student acknowledged the classroom call (Student ID: ${studentId}).`,
-        },
-        ...prev
-      ]);
-      fetchStudents();
-    });
-
-    socket.on('class-lock-status-changed', (data: any) => {
-      console.log('[Socket] class-lock-status-changed received on client:', data);
-      const { classId, lessonId, locked } = data;
-      
-      // If we are student, reactively fetch students to update locked_lesson_id
-      if (activeRoleRef.current === 'student' && activeStudentIdRef.current) {
-        fetchStudents().then(() => {
-          // If locked, redirect to lock lesson
-          if (locked && lessonId) {
-            setSelectedLesson(lessonId);
-            setStudentViewStatus('lesson');
-            addToast(
-              langRef.current === 'zh' ? '🔒 课程已被锁定' : '🔒 Lesson Locked',
-              langRef.current === 'zh'
-                ? '老师已锁定当前授课，您将无法切换到其他页面。'
-                : 'The teacher has locked the active lesson. You cannot leave this page.',
-              'info'
-            );
-          }
-        });
-        fetchStudentDashboard(activeStudentIdRef.current);
-      } else {
-        fetchStudents();
-      }
-    });
-
-    // Global whiteboard-sync listener at App level.
-    // InteractiveWhiteboard also listens inside its own component, but that requires
-    // the whiteboard to already be mounted (which needs selectedLesson to be set).
-    // This handler ensures students receive whiteboard push updates even before
-    // they have joined a lesson — e.g. when a teacher dispatches a plugin card.
-    socket.on('whiteboard-sync', (data: any) => {
-      const { roomId, type } = data || {};
-      if (type === 'refresh' && roomId) {
-        // Fetch the new elements immediately
-        fetchElements(roomId);
-        // If the student has no lesson selected yet, auto-navigate to it
-        if (!selectedLessonRef.current && activeRoleRef.current === 'student') {
-          setSelectedLesson(roomId);
-          setStudentViewStatus('lesson');
-        }
-        // Join the socket room for subsequent updates (idempotent)
-        socket.emit('join-room', roomId);
-      }
-    });
-
-    return () => {
-      socket.disconnect();
-      socketRef.current = null;
-    };
-  }, [session, activeRole, activeStudentId]);
-
-  useEffect(() => {
-    if (socketRef.current && activeRole === 'student' && activeStudentId) {
-      if (studentViewStatus === 'lesson' && selectedLesson) {
-        socketRef.current.emit('enter-lesson', { studentId: activeStudentId, lessonId: selectedLesson });
-        
-        // Fetch current progress of the student for this lesson
-        fetch(`/api/students/${activeStudentId}/progress`)
-          .then(res => res.json())
-          .then(progressData => {
-            if (Array.isArray(progressData)) {
-              const currentProg = progressData.find((p: any) => p.lesson_id === selectedLesson);
-              setLocalProgressPercent(currentProg ? currentProg.progress_percent : 0);
-            }
-          })
-          .catch(console.error);
-      } else {
-        socketRef.current.emit('leave-lesson', { studentId: activeStudentId });
-      }
-    }
-  }, [studentViewStatus, selectedLesson, activeRole, activeStudentId]);
-
   const updateStudentProgress = async (progressVal: number) => {
     if (activeRole === 'student' && activeStudentId && selectedLesson) {
       try {
@@ -2764,15 +1668,6 @@ export default function App() {
       }
     } catch (e) {}
   };
-
-  useEffect(() => {
-    if (activeRole === 'teacher' && selectedLesson && activeSegmentId && socketRef.current) {
-      socketRef.current.emit('teacher-broadcast-segment', {
-        lessonId: selectedLesson,
-        activeSegmentId
-      });
-    }
-  }, [activeSegmentId, selectedLesson, activeRole]);
 
   useEffect(() => {
     if (liveClassSelectedClassId && selectedLesson) {
@@ -2915,46 +1810,59 @@ export default function App() {
     fetchElements,
   });
 
-  const handleChatFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return;
-    Array.from(e.target.files).forEach((file: any) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setChatAttachments(prev => [
-            ...prev,
-            { name: file.name, content: event.target!.result as string }
-          ]);
-        }
-      };
-      if (file.name.endsWith('.zip')) {
-        reader.readAsDataURL(file);
-      } else {
-        reader.readAsText(file);
-      }
-    });
-  };
+  const { socketRef } = useClassroomSocket({
+    session,
+    host,
+    activeRole,
+    activeStudentId,
+    selectedLesson,
+    activeSegmentId,
+    studentViewStatus,
+    lang,
+    students,
+    addToast,
+    setOnlineStudentIds,
+    setActiveStudentLessons,
+    setLessons,
+    setActiveSegmentId,
+    setLiveClassStudentProgress,
+    setLiveClassAcknowledgedMap,
+    setLiveClassFeed,
+    setSelectedLesson,
+    setStudentViewStatus,
+    setLocalProgressPercent,
+    fetchStudentDashboard,
+    fetchStudents,
+    fetchElements,
+  });
 
-  const handleChatDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (!e.dataTransfer.files) return;
-    Array.from(e.dataTransfer.files).forEach((file: any) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setChatAttachments(prev => [
-            ...prev,
-            { name: file.name, content: event.target!.result as string }
-          ]);
-        }
-      };
-      if (file.name.endsWith('.zip')) {
-        reader.readAsDataURL(file);
-      } else {
-        reader.readAsText(file);
-      }
-    });
-  };
+  const {
+    chatLog,
+    setChatLog,
+    input,
+    setInput,
+    loading,
+    setLoading,
+    chatAttachments,
+    setChatAttachments,
+    handleChatFileChange,
+    handleChatDrop,
+    handleSend,
+    handleClearAgentMemory,
+  } = useAgentChat({
+    lang,
+    t,
+    selectedLesson,
+    effectiveAgentProviderId,
+    expandedClassId,
+    fetchLessons,
+    fetchClasses,
+    fetchStudents,
+    fetchClassStudents,
+    fetchClassProgress,
+    fetchClassDashboard,
+    fetchElements,
+  });
 
   const downloadCSVTemplate = (type: 'class' | 'student') => {
     let filename = '';
@@ -3163,64 +2071,6 @@ export default function App() {
     };
 
     reader.readAsText(file);
-  };
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || loading) return;
-
-    const attachmentsToSend = [...chatAttachments];
-    let displayMessage = input;
-    if (attachmentsToSend.length > 0) {
-      displayMessage += `\n(📁 ${lang === 'zh' ? '附件' : 'Attachments'}: ${attachmentsToSend.map(f => f.name).join(', ')})`;
-    }
-
-    setChatLog(prev => [...prev, { role: 'user', content: displayMessage }]);
-    setInput('');
-    setChatAttachments([]);
-    setLoading(true);
-
-    try {
-      const res = await fetch('/api/agent/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          message: input, 
-          lang, 
-          currentLessonId: selectedLesson,
-          attachments: attachmentsToSend,
-          providerId: effectiveAgentProviderId === 'system' ? null : effectiveAgentProviderId
-        })
-      });
-      const data = await res.json();
-      
-      let replyContent = '';
-      if (!res.ok || data.success === false) {
-        replyContent = `⚠️ [System Error] ${data.error || (lang === 'zh' ? '未知系统错误' : 'Unknown System Error')}`;
-      } else {
-        replyContent = data.agentText || '';
-        if (data.toolResults && data.toolResults.length > 0) {
-          replyContent += `\n\n${t.executedCommands}` + data.toolResults.map((r:any) => r.callName).join(', ');
-        }
-      }
-      
-      setChatLog(prev => [...prev, { role: 'agent', content: replyContent }]);
-      
-      // Refresh state
-      await fetchLessons();
-      await fetchClasses();
-      await fetchStudents();
-      if (expandedClassIdRef.current) {
-        await fetchClassStudents(expandedClassIdRef.current);
-        await fetchClassProgress(expandedClassIdRef.current);
-        await fetchClassDashboard(expandedClassIdRef.current);
-      }
-      if (selectedLesson) await fetchElements(selectedLesson);
-    } catch (err) {
-      setChatLog(prev => [...prev, { role: 'agent', content: t.simulationError }]);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleInstallPlugin = async () => {

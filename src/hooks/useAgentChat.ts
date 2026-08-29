@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 export interface ChatMessage {
   role: 'user' | 'agent';
@@ -41,10 +41,65 @@ export function useAgentChat(options: UseAgentChatOptions) {
     fetchElements,
   } = options;
 
-  const [chatLog, setChatLog] = useState<ChatMessage[]>([]);
+  const [chatLog, setChatLog] = useState<ChatMessage[]>([
+    { role: 'agent', content: t.agentIntro || '' },
+  ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
+
+  // Update initial message when language changes if no other messages
+  useEffect(() => {
+    if (chatLog.length === 1 && chatLog[0].role === 'agent') {
+      setChatLog([{ role: 'agent', content: t.agentIntro }]);
+    }
+  }, [lang, t.agentIntro]);
+
+  // Restore memory from backend
+  const restoreAgentMemory = useCallback(
+    async (lessonId?: string | null) => {
+      try {
+        const res = await fetch(
+          `/api/agent/conversations?lessonId=${encodeURIComponent(lessonId || '')}`,
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const msgs = Array.isArray(data.messages) ? data.messages : [];
+        if (msgs.length > 0) {
+          setChatLog(
+            msgs.map((m: any) => ({
+              role: m.role === 'assistant' ? 'agent' : 'user',
+              content: m.content,
+            })),
+          );
+        } else {
+          setChatLog([{ role: 'agent', content: t.agentIntro }]);
+        }
+      } catch {
+        /* memory restore is best-effort; ignore network errors */
+      }
+    },
+    [t.agentIntro],
+  );
+
+  const handleClearAgentMemory = useCallback(async () => {
+    try {
+      await fetch(
+        `/api/agent/conversations?lessonId=${encodeURIComponent(selectedLesson || '')}`,
+        {
+          method: 'DELETE',
+        },
+      );
+    } catch {
+      /* best-effort */
+    }
+    setChatLog([{ role: 'agent', content: t.agentIntro }]);
+  }, [selectedLesson, t.agentIntro]);
+
+  // Restore memory for current lesson
+  useEffect(() => {
+    restoreAgentMemory(selectedLesson);
+  }, [selectedLesson, restoreAgentMemory]);
 
   const handleChatFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -153,10 +208,6 @@ export function useAgentChat(options: UseAgentChatOptions) {
     }
   };
 
-  const handleClearAgentMemory = () => {
-    setChatLog([]);
-  };
-
   return {
     chatLog,
     setChatLog,
@@ -170,5 +221,6 @@ export function useAgentChat(options: UseAgentChatOptions) {
     handleChatDrop,
     handleSend,
     handleClearAgentMemory,
+    restoreAgentMemory,
   };
 }
