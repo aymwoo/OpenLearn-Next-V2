@@ -45,7 +45,7 @@ export const BuiltinPlugin = {
       '@openlearn/core:IPluginHost@^1.0.0',
     ],
     capabilitiesProposed: ['lesson:read', 'lesson:write', 'whiteboard:read', 'whiteboard:write'],
-    engines: { openlearn: '^2.5.0' },
+    engines: { openlearn: '^0.2.5' },
   },
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;

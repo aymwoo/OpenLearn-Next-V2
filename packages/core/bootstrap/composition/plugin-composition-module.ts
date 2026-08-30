@@ -55,10 +55,10 @@ export class PluginCompositionModule implements CompositionModule {
     const realPluginHost = options?.infrastructureRefs?.get('pluginHost') ?? { name: 'PluginHostService', isReady: true, pluginsCount: 0 };
     const realContributionRegistry = options?.infrastructureRefs?.get('contributionRegistry') ?? { name: 'ContributionRegistry', slotsCount: 0 };
     const realRuntimeComposition = options?.infrastructureRefs?.get('runtimeComposition') ?? { name: 'PluginRuntimeComposition', isStarted: true };
-    const realLifecycleManager = options?.infrastructureRefs?.get('lifecycleManager') ?? { name: 'PluginLifecycleManager', version: '2.5.0' };
-    const realCapabilityGateway = options?.infrastructureRefs?.get('capabilityGateway') ?? { name: 'PluginCapabilityGateway', version: '2.5.0' };
-    const realExtensionRegistry = options?.infrastructureRefs?.get('extensionRegistry') ?? { name: 'UnifiedExtensionRegistry', version: '2.5.0' };
-    const realDistributionManager = options?.infrastructureRefs?.get('distributionManager') ?? { name: 'PluginDistributionManager', version: '2.5.0' };
+    const realLifecycleManager = options?.infrastructureRefs?.get('lifecycleManager') ?? { name: 'PluginLifecycleManager', version: '0.2.5' };
+    const realCapabilityGateway = options?.infrastructureRefs?.get('capabilityGateway') ?? { name: 'PluginCapabilityGateway', version: '0.2.5' };
+    const realExtensionRegistry = options?.infrastructureRefs?.get('extensionRegistry') ?? { name: 'UnifiedExtensionRegistry', version: '0.2.5' };
+    const realDistributionManager = options?.infrastructureRefs?.get('distributionManager') ?? { name: 'PluginDistributionManager', version: '0.2.5' };
 
     registerOrReplace({
       id: 'srv_plugin_host',

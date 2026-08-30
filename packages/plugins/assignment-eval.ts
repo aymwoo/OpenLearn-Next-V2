@@ -20,7 +20,7 @@ export const AssignmentEvalPlugin = {
       '@openlearn/core:ISemesterGradeService@^1.0.0'
     ],
     capabilitiesProposed: ['lesson:read', 'lesson:write'],
-    engines: { openlearn: '^2.5.0' },
+    engines: { openlearn: '^0.2.5' },
   },
 
   activate: async (ctx: PluginContext) => {

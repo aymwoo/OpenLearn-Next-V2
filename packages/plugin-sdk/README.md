@@ -20,7 +20,7 @@ export default {
     name: 'My Plugin',
     version: '1.0.0',
     main: 'index.js',
-    engines: { openlearn: '^3.5.0' },
+    engines: { openlearn: '^0.2.5' },
     capabilitiesProposed: ['lesson:read'],
   } satisfies Manifest,
 

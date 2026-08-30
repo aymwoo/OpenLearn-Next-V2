@@ -114,7 +114,7 @@ export const AiSubmitInjectorPlugin = {
       '@openlearn/core:IAIService@^1.0.0',
     ],
     capabilitiesProposed: [],
-    engines: { openlearn: '^2.5.0' },
+    engines: { openlearn: '^0.2.5' },
   },
   activate: async (ctx: PluginContext) => {
     const eventBus = ctx.services.eventBus;

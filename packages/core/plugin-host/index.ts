@@ -98,7 +98,7 @@ const ACTIVATION_TIMEOUT_MS = 5000;
 const DEACTIVATION_TIMEOUT_MS = 5000;
 
 /** 平台版本号 — 用于 engines.openlearn 兼容性检查 */
-export const OPENLEARN_VERSION = '0.2.3';
+export const OPENLEARN_VERSION = '0.2.5';
 
 // ── PluginHost ─────────────────────────────────────────────────────────────
 

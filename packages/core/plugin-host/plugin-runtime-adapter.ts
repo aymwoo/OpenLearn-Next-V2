@@ -27,7 +27,7 @@ export interface IPluginRuntime extends IPluginHostAdapter {
 export class PluginRuntimeAdapter implements IPluginRuntime {
   public readonly id = 'srv_plugin_runtime';
   public readonly name = 'PluginRuntimeAdapter';
-  public readonly version = '0.2.3';
+  public readonly version = '0.2.5';
 
   private _initialized = false;
   private _context?: IntegrationContext;

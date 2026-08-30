@@ -12,7 +12,7 @@ describe('PluginContextAdapter (EU-02)', () => {
       version: '1.0.0',
       description: 'Unit test plugin',
       main: 'index.js',
-      engines: { openlearn: '>=2.0.0' },
+      engines: { openlearn: '^0.2.5' },
     };
 
     return {

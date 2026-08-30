@@ -22,7 +22,7 @@ export type ExtensionId = string;
 /** Dot-separated namespace string (e.g. 'lesson.generate.quiz'). */
 export type Namespace = string;
 
-/** Semantic version string (e.g. '2.5.0'). */
+/** Semantic version string (e.g. '0.2.5'). */
 export type Version = string;
 
 /** Environment deployment mode. */
@@ -121,7 +121,7 @@ export const BootstrapError = PlatformBootstrapError;
 // ── ③ Platform Constants ─────────────────────────────────────────────────
 
 /** Current OpenLearn platform semantic version. */
-export const PLATFORM_VERSION: Version = '0.2.3';
+export const PLATFORM_VERSION: Version = '0.2.5';
 
 /** Official kernel name. */
 export const PLATFORM_KERNEL_NAME = 'OpenLearn Platform Kernel';

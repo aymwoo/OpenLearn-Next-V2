@@ -20,7 +20,7 @@ export const ProcessPlugin = {
       '@openlearn/core:IDatabase@^1.0.0',
     ],
     capabilitiesProposed: ['process:read', 'process:write'],
-    engines: { openlearn: '^2.5.0' },
+    engines: { openlearn: '^0.2.5' },
   },
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;

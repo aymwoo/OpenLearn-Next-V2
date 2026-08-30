@@ -26,7 +26,7 @@ export interface IPluginLifecycleManager {
 export class PluginLifecycleManager implements IPluginLifecycleManager {
   public readonly id = 'srv_plugin_lifecycle_manager';
   public readonly name = 'PluginLifecycleManager';
-  public readonly version = '0.2.3';
+  public readonly version = '0.2.5';
 
   constructor(public readonly pluginHost: PluginHost) {}
 

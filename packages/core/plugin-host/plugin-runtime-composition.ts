@@ -20,7 +20,7 @@ export interface IRuntimeCompositionOptions {
 export class PluginRuntimeComposition {
   public readonly id = 'srv_plugin_runtime_composition';
   public readonly name = 'PluginRuntimeComposition';
-  public readonly version = '0.2.3';
+  public readonly version = '0.2.5';
 
   private _isStarted = false;
   private _context?: IntegrationContext;

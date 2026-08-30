@@ -94,7 +94,7 @@ export default {
     name: 'My Plugin',
     version: '1.0.0',
     main: 'index.js',
-    engines: { openlearn: '^2.5.0' },           // V2.5: 平台版本兼容
+    engines: { openlearn: '^0.2.5' },           // 平台版本兼容
     capabilitiesProposed: ['lesson:read', 'whiteboard:write'],
     requires: ['@openlearn/core:ICommandBusService@^1.0.0'],
     pluginDependencies: ['ext-grade-calculator'], // V3.0: 插件依赖

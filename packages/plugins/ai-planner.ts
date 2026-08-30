@@ -29,7 +29,7 @@ export const AiPlannerPlugin = {
       '@openlearn/core:IEventBusService@^1.0.0',
     ],
     capabilitiesProposed: ['process:write', 'lesson:write', 'assignment:write'],
-    engines: { openlearn: '^2.5.0' },
+    engines: { openlearn: '^0.2.5' },
   },
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;

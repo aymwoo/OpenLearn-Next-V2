@@ -19,7 +19,7 @@ export default {
       '@openlearn/core:IDatabase@^1.0.0',
     ],
     capabilitiesProposed: ['lesson:read'],
-    engines: { openlearn: '>=5.0.0' },
+    engines: { openlearn: '^0.2.5' },
   },
 
   async activate(ctx: PluginContext) {

@@ -61,7 +61,7 @@ describe('PI-004 PlatformBuilder Test Suite', () => {
 
     const result = builder.buildResult();
 
-    expect(result.builderVersion).toBe('0.2.3');
+    expect(result.builderVersion).toBe('0.2.5');
     expect(result.validation.isValid).toBe(true);
     expect(result.platformContext.environment.type).toBe('development');
     expect(result.pipeline.stages.some((s) => s.id === 'custom_stage')).toBe(true);

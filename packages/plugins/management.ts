@@ -20,7 +20,7 @@ export const ManagementPlugin = {
       '@openlearn/core:IDatabase@^1.0.0',
     ],
     capabilitiesProposed: ['class:read', 'class:write', 'student:read', 'student:write'],
-    engines: { openlearn: '^2.5.0' },
+    engines: { openlearn: '^0.2.5' },
   },
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;

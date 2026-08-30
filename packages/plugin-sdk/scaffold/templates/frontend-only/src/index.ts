@@ -19,7 +19,7 @@ export default {
       commandType: '{{pluginId}}.open',
       payload: {},
     }],
-    engines: { openlearn: '>=5.0.0' },
+    engines: { openlearn: '^0.2.5' },
   },
 
   async activate(ctx: any) {

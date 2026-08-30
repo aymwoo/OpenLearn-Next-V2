@@ -26,7 +26,7 @@ export default {
       icon: 'Puzzle',
       commandType: '{{pluginId}}.open_tool',
     }],
-    engines: { openlearn: '>=5.0.0' },
+    engines: { openlearn: '^0.2.5' },
   },
 
   async activate(ctx: PluginContext) {
