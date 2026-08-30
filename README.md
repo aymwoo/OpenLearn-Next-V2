@@ -1,57 +1,42 @@
 # OpenLearnV2 — Educational OS
 
-插件驱动的在线教学平台（LMS），基于命令-事件总线架构设计，支持 AI Agent 辅助教学。
+插件驱动的在线教学平台（LMS），支持 AI Agent 辅助教学。
 
-## 技术栈
+> 📚 **完整文档**：[openlearn-next-v2.readthedocs.io](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/) · [快速开始](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/getting-started/quickstart.html) · [安装指南](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/getting-started/installation-guide.html) · [插件开发教程](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/tutorials/plugin-development-tutorial.html) · [版本迁移](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/migration/version-migration.html)
 
-**前端：** React 19 · Vite 6 · TailwindCSS 4 · TypeScript 5.8 · Zustand · Konva  
-**后端：** Express 4 · better-sqlite3 · Socket.IO · Node.js Worker Threads  
-**AI：** Gemini / OpenAI 兼容 API  
-**部署：** PM2 + Nginx + Docker  
+---
 
 ## 快速开始
 
-### 通过 npm 安装运行
+### 一键运行（无需 clone 项目）
 
 ```bash
-# 全局安装
-npm install -g openlearn-next
+# 通过 npx 直接启动（首次自动下载）
+npx openlearn-next
 
-# 启动
-openlearn-next
-
-# 更新到最新版
-npm update -g openlearn-next
+# 自定义端口 / 数据库路径
+npx openlearn-next -p 3000
+OPENLEARN_DB_PATH=./my.db npx openlearn-next
 ```
 
-#### 或通过 npx 一键启动
+### 全局安装
+
 ```bash
-# 首次会自动下载安装，无需 clone 项目
-
-npx openlearn-next -p 3000              # 自定义端口（默认 9000）
-OPENLEARN_DB_PATH=./my.db npx openlearn-next  # 自定义数据库路径（默认 ~/openlearn-next/data.db）
+npm install -g openlearn-next   # 安装
+openlearn-next                  # 启动
+npm update -g openlearn-next    # 更新
 ```
 
-默认账号：`admin` / `admin`（管理员），`teacher` / `teacher`（教师）。
+默认账号：`admin` / `admin`（管理员）、`teacher` / `teacher`（教师）。
 
 ### 本地开发
 
 ```bash
-# 安装依赖
 npm install
-
-# 配置环境变量（可选：AI 功能通过管理后台「AI 提供商」配置，或设置 GEMINI_API_KEY 作为回退）
-# echo "GEMINI_API_KEY=你的密钥" > .env
-
-# 启动开发服务
+# AI 功能可在管理后台「AI Provider 管理」配置；或设置 GEMINI_API_KEY 作为回退
 ./dev.sh
-# 或：npm run dev
-
-# 访问
 open http://localhost:9000
 ```
-
-默认账号：`admin` / `admin`（管理员），`teacher` / `teacher`（教师）
 
 ## 生产部署
 
@@ -60,112 +45,15 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-脚本自动完成：构建 → 生成 Nginx 配置 → 配置 PM2 → 生成加密密钥。  
-访问 `http://服务器IP` 或通过 Nginx 反向代理。
-
-## 项目结构
-
-```
-├── server.ts                    # Express + Socket.IO + API 路由
-├── packages/
-│   ├── core/                    # OS 内核
-│   │   ├── kernel/              # 内核容器，组装子系统
-│   │   ├── command-bus/         # 命令总线（注册 handler，执行命令）
-│   │   ├── event-bus/           # 事件总线（发布/订阅，审计日志）
-│   │   ├── registry/            # AI Agent 工具注册表
-│   │   ├── capability-system/   # 权限守卫（RBAC）
-│   │   ├── plugin-host/         # 插件生命周期 + 上下文构建
-│   │   ├── worker-runtime/      # Worker Thread 隔离执行
-│   │   ├── esm-loader/          # ESM 动态加载（data: URL）
-│   │   ├── di/                  # Token 依赖注入容器
-│   │   ├── db/                  # SQLite 数据库（30+ 表）
-│   │   └── process-manager/     # 后台进程/定时任务
-│   └── plugins/                 # 内置插件
-│       ├── builtin.ts           # 课程·白板·课件·插件管理
-│       ├── management.ts        # 班级·学生·作业·排课·考勤
-│       ├── vfs.ts               # 虚拟文件系统
-│       ├── process.ts           # 进程管理
-│       ├── ai-planner.ts        # AI 自动规划
-│       ├── ai-submit-injector.ts # LMS SDK 注入课件
-│       └── assignment-eval.ts   # 作业提交·互评·评分
-├── src/
-│   ├── App.tsx                  # 主应用组件
-│   ├── components/              # UI 组件（24 个）
-│   ├── features/                # 业务模块（白板·课件）
-│   ├── services/                # 前端服务（EventBus·Socket·API）
-│   ├── store/                   # Zustand 状态管理
-│   └── hooks/                   # 自定义 Hooks
-├── server/                      # 服务端模块（自 v5.0）
-│   ├── middleware/auth.ts       # 认证中间件
-│   ├── routes/auth.ts           # 认证路由
-│   └── utils/                   # 工具（加密·迁移·日志·上传）
-│       └── bridge-sdk.ts        # 交互式课件沙箱 Bridge SDK Proxy 实现
-├── nginx.conf                   # Nginx 配置模板
-├── deploy.sh                    # 一键部署脚本
-├── ecosystem.config.cjs         # PM2 配置
-├── Dockerfile
-└── docker-compose.yml
-```
-
-## 核心架构
-
-### OS 内核
-
-`Kernel` 是全局单例，组装 10 个子系统：
-
-| 层 | 子系统 | 职责 |
-|----|--------|------|
-| L0 | EventBus | 发布/订阅，通配符匹配，自动审计日志 |
-| L0 | CapabilityGuard | 字符串 RBAC（`lesson:write`、`*:*:*`） |
-| L0 | ServiceRegistry | Token DI 容器（拓扑排序，循环检测） |
-| L1 | CommandBus | 命令执行管线 + 拦截器链（权限 + 高危审批） |
-| L1 | ActionRegistry | AI Agent 工具注册表 |
-| L2 | ProcessManager | 后台进程/定时任务 |
-| L2 | EsmLoader | ESM 动态加载（Node.js data: URL） |
-| L2 | PluginHost | 插件生命周期管理 + 热重载 |
-| L3 | WorkerManager | Worker Thread 隔离 + RPC 代理 |
-| — | DB | SQLite WAL 模式，30+ 张表 |
-
-### 插件系统
-
-插件以 ZIP 包分发，通过 PluginCenter 上传安装：
-
-```
-ext-exam.zip
-├── manifest.json     # id, name, version, capabilitiesProposed, classroomTools
-├── server/index.js   # activate(ctx) → 注册 CommandHandler + Action
-└── frontend/         # React 组件（挂载到 Extension Slot）
-```
-
-**插件能力（v5.1）：**
-- 命令注册 + AI Agent 工具注册
-- 事件发布/订阅 + 审计日志
-- 自建数据库表（`ctx.db.ensureTable()`）
-- 共享依赖引用（`ctx.require('recharts')`）
-- 前端 Extension Slot（`teacher.panel` 等 8 个）
-- Worker Thread 隔离执行
-- **交互式 Web 课件支持**（含高度隔离的沙箱环境与 Bridge SDK Proxy 代理）
-
-**已安装的课堂工具：** 选择题测验 · 专业测验 · 随机点名 · 思维导图 · 计时器 · 代码沙箱 · 数学图形
-
-### 事件通信
-
-```
-教师操作白板
-  ├─ 实时绘制（高频）→ Socket.IO 直连（< 500ms）
-  └─ 结构操作        → frontendEventBus → SocketBridge → server EventBus
-                        ├─ SQLite events 表（审计）
-                        └─ io.to(room).emit()（其他客户端）
-```
+脚本自动完成：构建 → 生成 Nginx 配置 → 配置 PM2 → 生成加密密钥。
+访问 `http://服务器IP` 或经 Nginx 反向代理。
+详见 [部署指南](https://openlearn-next-v2.readthedocs.io/zh-cn/latest/deployment/production-guide.html)。
 
 ## npm 脚本
 
 | 命令 | 说明 |
 |------|------|
-| `npm install -g openlearn-next` | 全局安装 |
-| `npx openlearn-next` | 一键运行（免安装） |
-| `npm update -g openlearn-next` | 更新到最新版 |
-| `npm run dev` | 启动开发服务 |
+| `npm run dev` | 启动开发服务（端口 9000） |
 | `npm run build` | 生产构建（Vite + esbuild） |
 | `npm start` | 运行生产构建 |
 | `npm test` | 运行测试 |
@@ -175,9 +63,19 @@ ext-exam.zip
 
 | 变量 | 必需 | 说明 |
 |------|:--:|------|
-| `GEMINI_API_KEY` | — | 可选。AI 服务回退密钥；推荐在管理面板「AI 提供商管理」配置第三方 AI（OpenAI 兼容） |
-| `PORT` | — | 服务端口，默认 9000 |
-| `OPENLEARN_DB_PATH` | — | SQLite 数据库路径（npx 默认 ~/openlearn-next/data.db，本地开发默认项目目录） |
 | `ENCRYPTION_KEY` | ✅ | 64 位 hex，AI Provider API Key 加密密钥（`deploy.sh` 自动生成） |
-| `LOG_LEVEL` | — | 日志级别（debug / info / warn / error），默认 info |
+| `PORT` | — | 服务端口，默认 9000 |
+| `OPENLEARN_DB_PATH` | — | SQLite 数据库路径（npx 默认 `~/openlearn-next/data.db`，本地开发默认项目目录） |
+| `GEMINI_API_KEY` | — | 可选。AI 服务回退密钥；推荐在管理面板「AI Provider 管理」配置 |
 | `ALLOWED_ORIGINS` | — | CORS 白名单，逗号分隔 |
+| `LOG_LEVEL` | — | 日志级别（debug / info / warn / error），默认 info |
+
+## 文档链接
+
+| 主题 | 链接 |
+|------|------|
+| 📖 文档中心 | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/> |
+| 🚀 快速开始 | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/getting-started/quickstart.html> |
+| 🎓 插件开发 | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/tutorials/plugin-development-tutorial.html> |
+| 🛠 插件开发参考 | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/reference/plugin-database-api.html> |
+| 🔄 版本迁移 | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/migration/version-migration.html> |
