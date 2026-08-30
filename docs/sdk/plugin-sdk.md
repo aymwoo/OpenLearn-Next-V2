@@ -71,6 +71,8 @@ import {
 
 ### 导出 Token 清单
 
+> 完整 28 个 Token 的方法签名与标识字符串，请以 [DI Token 字典](../api/di-tokens) 为权威。下表列出最常用的 Token 速查。
+
 | Token 常量名 | 服务接口类型 | 说明 |
 | :--- | :--- | :--- |
 | `IDatabaseToken` | `Database` | 原生 SQLite 数据库只读/写连接 |
@@ -78,6 +80,9 @@ import {
 | `IEventBusServiceToken` | `IEventBusService` | 事件总线服务 |
 | `IActionRegistryServiceToken` | `IActionRegistryService` | AI Action 注册表 |
 | `ICapabilityServiceToken` | `ICapabilityService` | 权限能力服务 |
+| `IProcessServiceToken` | `IProcessService` | 受控后台进程 |
+| `IStorageServiceToken` | `IStorageService` | 键值存储 |
+| `IAIServiceToken` | `IAIService` | AI 文本生成 |
 | `IPluginHostToken` | `PluginHost` | 插件宿主对象（仅限管理插件） |
 | `ILessonEngineServiceToken` | `ILessonEngineService` | 课程引擎控制接口 |
 | `IClassroomRuntimeServiceToken` | `IClassroomRuntimeService` | 课堂实时运行时 |
@@ -86,6 +91,18 @@ import {
 | `ILearningAnalyticsServiceToken` | `ILearningAnalyticsService` | 学习分析与指标引擎 |
 | `IPluginLifecycleManagerToken` | `PluginLifecycleManager` | 插件生命周期统一接口 |
 | `IPluginDistributionManagerToken` | `PluginDistributionManager` | 插件分发与仓库管理 |
+| `IPluginRuntimeCompositionToken` | `PluginRuntimeComposition` | 插件运行时组合 |
+| `IUnifiedExtensionRegistryToken` | `UnifiedExtensionRegistry` | 统一扩展注册表 |
+| `IPluginCapabilityGatewayToken` | `PluginCapabilityGateway` | 插件能力网关 |
+| `ICapabilityRegistryToken` | `CapabilityRegistry` | AI 能力注册表 |
+| `ISemesterGradeServiceToken` | `ISemesterGradeService` | 学期成绩 |
+| `IPointsDimensionRegistryToken` | `IPointsDimensionRegistry` | 积分维度注册表 |
+| `IPointsLedgerServiceToken` | `IPointsLedgerService` | 积分流水 |
+| `IAICapabilityServiceToken` | `IAICapabilityService` | AI 能力网关 |
+| `ICapabilityRuntimeServiceToken` | `ICapabilityRuntimeService` | 能力运行时内核（见[能力 Provider 框架](../reference/capability-provider-framework)） |
+| `ICapabilityGovernanceServiceToken` | `ICapabilityGovernanceService` | 能力治理内核 |
+| `IPlatformServiceRegistryToken` | `IPlatformServiceRegistryService` | 平台服务注册表 |
+| `IActivityRegistryToken` | `ActivityRegistry` | 活动生态（见[活动生态开发指南](../reference/activity-ecosystem)） |
 
 ### 代码使用范例
 

@@ -1,6 +1,6 @@
 # 完整 DI Token 与 Service API 字典
 
-> **适用范围**：`@openlearn/plugin-sdk@3.4.3`（版本号以 `packages/plugin-sdk/package.json` 为准）。
+> **适用范围**：`@openlearn/plugin-sdk@3.5.0`（版本号以 `packages/plugin-sdk/package.json` 为准）。
 > 本页是插件获取平台内核服务的**唯一权威字典**。所有 Token 定义位于 `packages/core/di/interfaces.ts`，并由 `packages/plugin-sdk/index.ts:103-131, 319-324` 统一导出。
 > **重要**：插件 SDK 发布的 `dist/index.d.ts`（由 `openlearn.d.ts` 复制而来）**已过期**，仅含 15 个 Token 且部分类型被擦除为 `Token<unknown>`。请以本页（依据源 `index.ts` / `interfaces.ts`）为准；若你在 `tsc` 下遇到 `TS2305 "has no exported member"`，即为该过期声明所致，需重新生成 SDK 声明文件。
 
@@ -265,20 +265,48 @@ AI 能力注册表（与 `resource:action` 权限字符串无关，见 [能力�
 saveSemesterGrade(lessonId: string, studentId: string, grade: number): Promise<void>;
 ```
 
-### `IPointsDimensionRegistryToken` → `IPointsDimensionRegistry`（`interfaces.ts:429-433`）
+### `IPointsDimensionRegistryToken` → `IPointsDimensionRegistry`（`interfaces.ts:450-458`）
 ```typescript
 registerDimension(spec: PointsDimensionSpec): void;
 getDimension(id: string): PointsDimensionSpec | undefined;
 listDimensions(): PointsDimensionSpec[];
 ```
 
-### `IPointsLedgerServiceToken` → `IPointsLedgerService`（`interfaces.ts:456-468`，实现 `points-ledger-service.ts:5-104`）
+**`PointsDimensionSpec` 字段**（`interfaces.ts:437-448`）：
+```typescript
+interface PointsDimensionSpec {
+  id: string;              // e.g. 'attendance', 'assignment', 'interactive_quiz', 'ai_practice'
+  name: string;            // e.g. '课堂互动打卡', 'AI练习积分'
+  category: 'builtin' | 'plugin';
+  defaultWeight: number;   // e.g. 0.15 (15%)
+  maxScore?: number;       // e.g. 100
+  description?: string;
+  pluginId?: string;
+}
+```
+
+### `IPointsLedgerServiceToken` → `IPointsLedgerService`（`interfaces.ts:477-492`，实现 `points-ledger-service.ts:5-104`）
 ```typescript
 addPoints(studentId: string, classId: string, dimensionId: string, deltaPoints: number, reason: string, pluginId?: string): Promise<PointLogItem>;
 getLogs(studentId: string, classId?: string): Promise<PointLogItem[]>;
 getStudentTotalByDimension(studentId: string, classId: string, dimensionId: string): Promise<number>;
 getStudentDimensionSummary(studentId: string, classId: string): Promise<Record<string, number>>;
 ```
+
+**`PointLogItem` 字段**（`interfaces.ts:463-475`）：
+```typescript
+interface PointLogItem {
+  id: string;
+  studentId: string;
+  classId: string;
+  dimensionId: string;
+  pluginId?: string | null;
+  deltaPoints: number;
+  reason: string;
+  createdAt: number;
+}
+```
+> 后端表为 `student_point_logs`，列对应关系见[平台数据表参考](../reference/platform-data-tables)。
 
 ### 引擎门面接口（均为单方法，`interfaces.ts`）
 ```typescript

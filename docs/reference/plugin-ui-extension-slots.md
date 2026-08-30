@@ -1,6 +1,6 @@
 # UI 扩展槽位 Context / Props 上下文定义
 
-> **适用范围**：`@openlearn/plugin-sdk@3.4.3`
+> **适用范围**：`@openlearn/plugin-sdk@3.5.0`
 > 本页说明宿主在渲染各 UI 扩展槽位时**实际注入**给插件 React 组件的 Props，纠正 "宿主会自动注入 `lessonId` / `userId` / `role` / `socket`" 的常见误解。
 
 ---
@@ -32,11 +32,11 @@ export type ExtensionSlot =
 ### 已实际挂载渲染器（有真实 `ExtensionPointRenderer` 调用点）的槽位
 | 槽位 | 渲染调用点 | 宿主注入的 slotProps |
 |---|---|---|
-| `student.view` | `src/App.tsx:4752` | `{ studentId: activeStudentId }` |
-| `teacher.tab` | `NavigationSidebar.tsx:89`（按钮形态）/ `App.tsx:45`（面板形态） | 见 §2 |
-| `classroom.tool` | `WhiteboardToolbar.tsx:283`（工具栏按钮）/ `LessonPalette.tsx:144`（备课画板组件列表卡片） | 无（仅 `route?`） |
-| `teacher.dashboard.widget` | `Dashboard.tsx:155` | 无（仅 `route?`） |
-| `help.plugin_docs` | `HelpView.tsx:1880` | 无（仅 `route?`） |
+| `student.view` | `src/features/student-workspace/widgets/student-default-widgets.tsx`（及 `InteractiveWhiteboard.tsx` 学生分支） | `{ studentId: activeStudentId }` |
+| `teacher.tab` | `src/plugin-host/extension-point-renderer.tsx`（按钮形态）/ `src/components/PluginTabPanel.tsx`（面板形态） | 见 §2 |
+| `classroom.tool` | `src/features/whiteboard/components/WhiteboardToolbar.tsx`（工具栏按钮）/ 备课画板组件列表卡片 | 无（仅 `route?`） |
+| `teacher.dashboard.widget` | `src/features/teacher/Dashboard.tsx` | 无（仅 `route?`） |
+| `help.plugin_docs` | `src/features/teacher/help/PluginDocsViewer.tsx` | 无（仅 `route?`） |
 | `whiteboard.fullscreen` | `InteractiveWhiteboard.tsx`（`FullscreenOverlay` 通过 `fullscreenRendererRegistry` 查找） | 见 §5 |
 | `whiteboard.property-editor` | `InteractiveWhiteboard.tsx`（属性面板通过 `propertyEditorRegistry` 查找） | 见 §6 |
 
@@ -62,13 +62,13 @@ React.createElement(
 **不存在**自动注入的 `{ lessonId, userId, role, socket }`。组件类型为 `React.ComponentType<any>`（`types.ts:81`）。
 
 ### 各槽位实际 props
-- **`student.view`**（`App.tsx:4752`）：`{ studentId: string, route?: string }`。
+- **`student.view`**（`src/features/student-workspace/widgets/student-default-widgets.tsx`）：`{ studentId: string, route?: string }`。
 - **`teacher.tab`**：
-  - `renderType === 'button'`（`NavigationSidebar.tsx:89`）：渲染器**不渲染插件组件**，而是自行合成 `<button>`。插件组件被绕过。
-  - `renderType === 'panel'`（`App.tsx:45`）：组件以 `<activeTab.component renderType="panel" />` 渲染 → 收到 `{ renderType: 'panel' }`。
-- **`classroom.tool`**（`InteractiveWhiteboard.tsx:3891`）：仅 `{ route?: string }`。
-- **`teacher.dashboard.widget`**（`Dashboard.tsx:155`）：仅 `{ route?: string }`（可见性由 `dashboardVisibility` store 按插件控制）。
-- **`help.plugin_docs`**（`HelpView.tsx:1880`）：仅 `{ route?: string }`。
+  - `renderType === 'button'`（`src/plugin-host/extension-point-renderer.tsx`）：渲染器**不渲染插件组件**，而是自行合成 `<button>`。插件组件被绕过。
+  - `renderType === 'panel'`（`src/components/PluginTabPanel.tsx`）：组件以 `<activeTab.component renderType="panel" />` 渲染 → 收到 `{ renderType: 'panel' }`。
+- **`classroom.tool`**（`src/features/whiteboard/components/WhiteboardToolbar.tsx`）：仅 `{ route?: string }`。
+- **`teacher.dashboard.widget`**（`src/features/teacher/Dashboard.tsx`）：仅 `{ route?: string }`（可见性由 `dashboardVisibility` store 按插件控制）。
+- **`help.plugin_docs`**（`src/features/teacher/help/PluginDocsViewer.tsx`）：仅 `{ route?: string }`。
 
 ### 注册配置形态（即插件声明时的类型，`types.ts:77-94`）
 ```typescript
@@ -84,6 +84,7 @@ interface ExtensionPointConfig {
   rolesAllowed?: ('admin' | 'teacher' | 'student')[];
   route?: string;
   slotProps?: Record<string, any>;   // 合并进组件的任意额外 props
+  render?: (props?: Record<string, any>) => React.ReactNode;  // v3: 可选自定义渲染函数（非组件式扩展点）
 }
 ```
 

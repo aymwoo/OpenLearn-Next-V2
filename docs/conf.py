@@ -34,5 +34,5 @@ source_suffix = {
     '.md': 'markdown',
 }
 # Version (keep in sync with root package.json)
-version = '0.2.3'
-release = '0.2.3'
+version = '0.2.5'
+release = '0.2.5'

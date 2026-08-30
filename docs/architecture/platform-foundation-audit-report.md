@@ -1,5 +1,7 @@
 # Platform Foundation Audit Report
 
+> ⚠️ **已过时（Outdated）**：本报告为 2026-07-24 的审计快照，描述的是 v0.2.4 重构前的架构。`src/App.tsx` 已于 v0.2.4 由 **3,974 行瘦身至 1,722 行**，并拆分为领域 Hook 与子视图；v0.2.5 进一步引入 `React.lazy` 代码分割。文中行号（如 `L1-8600`、`L8200+`）与“monolithic 8607 lines”等描述均已失效，仅供历史参考。
+
 **Title**: OpenLearn V2 Platform Foundation Audit & Workspace Extension Slot Audit  
 **Author**: Chief Platform Architect  
 **Date**: July 24, 2026  
@@ -91,7 +93,7 @@ graph TD
 
 ## 3. Existing Extension Slots Audit
 
-The frontend UI extension subsystem is managed by `ExtensionPointRegistry` (`src/plugin-host/extension-points.ts`) and exposed via `@openlearn/plugin-sdk@3.3.1`.
+The frontend UI extension subsystem is managed by `ExtensionPointRegistry` (`src/plugin-host/extension-points.ts`) and exposed via `@openlearn/plugin-sdk@3.5.0`.
 
 ### Supported Extension Slots
 

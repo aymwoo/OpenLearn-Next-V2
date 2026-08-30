@@ -1,5 +1,7 @@
 # Navigation Audit Report
 
+> ⚠️ **已过时（Outdated）**：本报告为 2026-07-24 的审计快照，描述的是 v0.2.4 重构前的导航实现。文中关于 `src/App.tsx` 硬编码 tab 分支（`activeTab === 'xxx'`）的结论已于 v0.2.4 被部分解耦（抽取为领域 Hook 与子视图），仅供历史参考。
+
 **Title**: OpenLearn V2 PF-02 Navigation System Audit  
 **Author**: Chief Platform Architect  
 **Date**: July 24, 2026  

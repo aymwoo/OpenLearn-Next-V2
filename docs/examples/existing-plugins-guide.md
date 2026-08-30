@@ -22,7 +22,7 @@ manifest: {
     '@openlearn/core:IDatabase@^1.0.0',
   ],
   capabilitiesProposed: ['vfs:read', 'vfs:write'],
-  engines: { openlearn: '^2.5.0' },
+  engines: { openlearn: '^0.2.5' },
 }
 ```
 

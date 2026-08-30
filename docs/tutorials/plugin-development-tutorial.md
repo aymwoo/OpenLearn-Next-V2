@@ -2,7 +2,7 @@
 
 > 📅 **最后更新**：2026-07-27
 >
-> 本文档描述 Worker Thread 隔离模式与 Inline 模式的 API 差异。若你的插件运行在 Worker 模式下，请务必阅读 [§8.1.1 Worker 与 Inline 模式 API 差异](#811-worker-与-inline-模式-api-差异-⚠️)。
+> 本文档描述 Worker Thread 隔离模式与 Inline 模式的 API 差异。若你的插件运行在 Worker 模式下，请务必阅读 [§8.1.1 Worker 与 Inline 模式 API 差异](#worker-inline-mode-api)。
 
 
 
@@ -175,9 +175,7 @@ interface PluginContext {
 }
 ```
 
-> ⚠️ **Worker 模式限制**：以上接口为 Inline 模式的完整 API。在 Worker Thread 隔离模式下，`ctx.config`、`ctx.provide()` 不可用，`ctx.db.migrate()` 回调仅暴露 `prepare()`，`eventBus` 使用 `subscribe()/unsubscribe()` 而非 `on()/off()`。详见 [8.1.1 Worker 与 Inline 模式 API 差异](#811-worker-与-inline-模式-api-差异-⚠️)。
-
-```
+> ⚠️ **Worker 模式限制**：以上接口为 Inline 模式的完整 API。在 Worker Thread 隔离模式下，`ctx.config`、`ctx.provide()` 不可用，`ctx.db.migrate()` 回调仅暴露 `prepare()`，`eventBus` 使用 `subscribe()/unsubscribe()` 而非 `on()/off()`。详见 [8.1.1 Worker 与 Inline 模式 API 差异](#worker-inline-mode-api)。
 
 ### 2.5 生命周期状态机
 
@@ -196,48 +194,52 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 - **INACTIVE**：已停用，可通过 toggle 重新激活
 - **ERROR**：激活失败，可重试或卸载
 
+(version-compat-table)=
+
 ### 2.6 版本兼容性速查表
 
 开发插件前，先确认目标 OpenLearn 版本。以下特性按版本分组，选择适合你的目标版本。
+
+> **版本说明**：自 v0.2.3 起，宿主 API 版本与平台发行版本已统一（现为 `0.2.x`）。下表“最低版本”为统一后的平台版本。
 
 **API 特性版本要求：**
 
 | 特性 | 最低版本 | 说明 |
 |------|----------|------|
-| `ctx.log` | 2.5 | 结构化日志（debug/info/warn/error），自动注入 pluginId 和 timestamp |
-| `ctx.config` | 3.0 | 类型安全的配置读取，配合 manifest.configuration 声明 |
-| `ctx.provide()` | 3.0 | 向 DI 容器注册自定义服务供其他插件消费 |
-| `ctx.require()` | 2.5 | 引用主应用白名单共享模块（recharts、jspdf 等） |
-| `ctx.invokeCommand()`（前端） | 2.5 | 前端直接调用后端 CommandBus |
-| `teacher.panel` 扩展槽位 | 2.5 | 教师独立全宽管理面板 |
-| `student.fullscreen` 扩展槽位 | 2.5 | 学生全屏视图/考试模式 |
-| `global.setting` 扩展槽位 | 2.5 | 全局设置页扩展 |
+| `ctx.log` | 0.2.x | 结构化日志（debug/info/warn/error），自动注入 pluginId 和 timestamp |
+| `ctx.config` | 0.2.x | 类型安全的配置读取，配合 manifest.configuration 声明 |
+| `ctx.provide()` | 0.2.x | 向 DI 容器注册自定义服务供其他插件消费 |
+| `ctx.require()` | 0.2.x | 引用主应用白名单共享模块（recharts、jspdf 等） |
+| `ctx.invokeCommand()`（前端） | 0.2.x | 前端直接调用后端 CommandBus |
+| `teacher.panel` 扩展槽位 | 0.2.x | 教师独立全宽管理面板 |
+| `student.fullscreen` 扩展槽位 | 0.2.x | 学生全屏视图/考试模式 |
+| `global.setting` 扩展槽位 | 0.2.x | 全局设置页扩展 |
 
 **扩展槽位版本可用性一览：**
 
 | 槽位 | 最低版本 | 适用角色 |
 |------|----------|----------|
-| `teacher.tab` | 1.0 | 教师 |
-| `teacher.dashboard.widget` | 1.0 | 教师 |
-| `student.view` | 1.0 | 学生 |
-| `student.lesson.tool` | 1.0 | 学生 |
-| `classroom.tool` | 1.0 | 课堂教学 |
-| `teacher.panel` | 2.5 | 教师 |
-| `student.fullscreen` | 2.5 | 学生 |
-| `global.setting` | 2.5 | 管理员 |
+| `teacher.tab` | 0.1.x | 教师 |
+| `teacher.dashboard.widget` | 0.1.x | 教师 |
+| `student.view` | 0.1.x | 学生 |
+| `student.lesson.tool` | 0.1.x | 学生 |
+| `classroom.tool` | 0.1.x | 课堂教学 |
+| `teacher.panel` | 0.2.x | 教师 |
+| `student.fullscreen` | 0.2.x | 学生 |
+| `global.setting` | 0.2.x | 管理员 |
 
-> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^2.5.0"`。安装时 PluginHost 自动检查兼容性。
+> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^0.2.5"`。安装时 PluginHost 自动检查兼容性。
 >
 > ⚠️ **版本号说明**：OpenLearn 存在三个独立的版本号，请勿混淆：
 > | 版本 | 当前值 | 用途 |
 > |------|--------|------|
-> | 平台发行版本 | `0.1.14` | CHANGELOG 与 git tag 的发布版本 |
-> | 宿主 API 版本 | `2.5.0` | `engines.openlearn` 兼容性检查所用的版本 |
-> | SDK 版本 | `3.4.3` | `@openlearn/plugin-sdk` npm 包版本，仅影响类型定义 |
+> | 平台发行版本 | `0.2.5` | CHANGELOG 与 git tag 的发布版本 |
+> | 宿主 API 版本 | `0.2.5` | `engines.openlearn` 兼容性检查所用的版本（自 v0.2.3 起与平台版本统一） |
+> | SDK 版本 | `3.5.0` | `@openlearn/plugin-sdk` npm 包版本，仅影响类型定义 |
 >
-> **`engines.openlearn` 应填写宿主 API 版本（当前为 `2.5.0`）**，而非平台发行版本或 SDK 版本。
+> **`engines.openlearn` 应填写宿主 API 版本（当前为 `0.2.5`）**，而非平台发行版本或 SDK 版本。
 
-### 2.6 导航页面 vs. 白板组件 — 如何区分？
+### 2.7 导航页面 vs. 白板组件 — 如何区分？
 
 同一个插件可以注册到不同的 slot，**每个 slot 绑定独立的 React 组件**，无需任何 if-else 分支来区分。
 
@@ -286,9 +288,9 @@ ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
 
 ---
 
-### 2.7 使用 AI Skill 快速开发（推荐）
+### 2.8 使用 AI Skill 快速开发（推荐）
 
-除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（平台 `v2.5.0`、SDK `@openlearn/plugin-sdk@3.4.3` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
+除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（平台 `0.2.5`、SDK `@openlearn/plugin-sdk@3.5.0` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
 
 **安装与配置：**
 
@@ -303,7 +305,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 
 | 能力维度 | 最新架构适配说明 |
 |---|---|
-| 📖 **权威文档与 SDK 契约** | 实时对齐 `@openlearn/plugin-sdk@3.4.3` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。 |
+| 📖 **权威文档与 SDK 契约** | 实时对齐 `@openlearn/plugin-sdk@3.5.0` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。 |
 | 💬 **结构化交互设计确认** | 自动引导确认插件模式（`server-only` / `full-stack` / `frontend-only`）、Worker Thread 沙箱权限、UI 扩展槽位（`teacherTab`, `classroomTool` 等）及表结构。 |
 | 🏗️ **标准脚手架与代码生成** | 自动生成包含 `package.json`、`tsconfig.json`、`src/index.ts` (后端 Worker 逻辑) 和 `src/frontend.tsx` (React 19 组件) 的标准项目工程。 |
 | 🛡️ **安全与规范防错** | 自动校验 CQRS 三件套模式（`ActionRegistry` → `CommandBus` → `EventBus`）、CapabilityGuard 权限申报、SQLite 增量迁移脚本与 ESM 沙箱导出规范。 |
@@ -314,7 +316,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 
 ```
 用户提出需求：「帮我开发一个随堂互动小测验插件」
-  → Skill 自动载入 @openlearn/plugin-sdk@3.4.3 规格与核心 Token
+  → Skill 自动载入 @openlearn/plugin-sdk@3.5.0 规格与核心 Token
   → 交互式确认：用途、沙箱权限 (vfs/lesson/db)、扩展槽位 (teacherTab/classroomTool)
   → 选择插件模板 (full-stack / server-only / frontend-only)
   → 生成项目结构与代码 (Action/Command/Event + React 19 UI)
@@ -348,7 +350,7 @@ interface Manifest {
   description?: string;          // 描述
   author?: string;               // 作者
   engines?: {                    // 引擎版本约束
-    openlearn?: string;          // 宿主 API 版本，如 "^2.5.0"
+    openlearn?: string;          // 宿主 API 版本，如 "^0.2.5"
   };
   requires: string[];            // 依赖的服务 Token（格式 @openlearn/core:TokenName@^1.0.0）
   optional?: string[];           // 可选依赖
@@ -528,7 +530,7 @@ export default {
     main: 'index.js',
     description: '在课堂上创建实时投票，收集学生回答',
     author: 'Your Name',
-    engines: { openlearn: '^2.5.0' },
+    engines: { openlearn: '^0.2.5' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',
@@ -1146,6 +1148,16 @@ interface FrontendPluginContext {
     unregisterExtensionPoint(slot: ExtensionSlot, id: string): void;
   };
   invokeCommand<T = any>(type: string, payload?: any): Promise<T>; // V2.5: 调用后端 Command Handler
+  // 页面导航与 Tab 订阅控制
+  navigation?: {
+    getTeacherTab(): string;
+    setTeacherTab(tab: string): void;
+    subscribeTeacherTab(callback: (tab: string) => void): () => void;
+  };
+  // 向后兼容 shim
+  registerPanel?(config: any): void;
+  registerMenu?(config: any): void;
+  registerToolbarButton?(config: any): void;
 }
 ```
 
@@ -1170,6 +1182,13 @@ interface IUIService {
   showModal(title: string, content: React.ReactNode): void;
   closeModal(): void;
   downloadFile(data: Blob | string, filename: string, mimeType?: string): void;
+}
+
+interface IStorageService {
+  get(key: string): string | null;      // localStorage 读取
+  set(key: string, value: string): void;
+  delete(key: string): void;
+  clear(): void;
 }
 ```
 
@@ -1198,6 +1217,7 @@ export default function MyStudentPlugin(props: { studentId?: string }) {
 ```
 | `classroom.tool` | 课堂工具 |
 | `global.setting` | 全局设置页扩展（v3.2） |
+| `nav.user_menu` | 顶部 Header 用户菜单扩展（v5.2） |
 
 ### 6.5 invokeCommand（自 V2.5 起可用）
 
@@ -1438,6 +1458,8 @@ Worker 模式的特点：
 - 通过 RPC 代理访问内核服务（MethodProxy + EventBusProxy）
 - 10 秒激活超时
 - 崩溃后自动清理（dispose 强制回收）
+
+(worker-inline-mode-api)=
 
 #### 8.1.1 Worker 与 Inline 模式 API 差异 ⚠️
 
@@ -1723,7 +1745,7 @@ describe('my-plugin', () => {
 - [ ] `tsconfig.json` 中 `jsx` 为 `"react"`（非 `"react-jsx"`）
 - [ ] `react` / `react-dom` / `recharts` / `lucide-react` 标记为 `external`（由 HostSharedDeps 提供）
 - [ ] 不直接 import React hooks 之外的 React 子路径（如 `react/jsx-runtime`）
-- [ ] 使用的扩展点槽位在目标系统版本中存在（参考 [2.6 版本兼容性速查表](#26-版本兼容性速查表)）
+- [ ] 使用的扩展点槽位在目标系统版本中存在（参考 [2.6 版本兼容性速查表](#version-compat-table)）
 - [ ] 前端调用的命令在服务端有对应的 handler
 
 ### 构建检查
@@ -1940,7 +1962,7 @@ export default {
     main: 'index.js',
     description: '插件描述',
     author: '作者名',
-    engines: { openlearn: '^2.5.0' },
+    engines: { openlearn: '^0.2.5' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',

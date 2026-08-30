@@ -1,6 +1,6 @@
 # 能力权限矩阵全集 (Capabilities Permission Matrix)
 
-> **适用范围**：`@openlearn/plugin-sdk@3.4.3`
+> **适用范围**：`@openlearn/plugin-sdk@3.5.0`
 > 本页是插件声明与校验 `resource:action` 权限的**唯一权威字典**，用于避免 AI 捏造权限名导致 `CAPABILITY_DENIED` / `Access Denied`。
 > **关键事实**：代码库中存在**三套互不相干的 "capability" 机制**，请勿混淆：
 > 1. **权限 / RBAC 系统**（`CapabilityGuard`）—— 即本页所述 `resource:action` 字符串，在命令总线拦截器中强制执行。

@@ -195,6 +195,8 @@ roadmap/documentation-roadmap
 :caption: 📋 发布日志 (Release Notes)
 :hidden:
 
+release-notes/v0.2.5
+release-notes/v0.2.4
 release-notes/v0.2.3
 release-notes/v0.2.1
 release-notes/v0.2.0
@@ -220,6 +222,9 @@ api/di-tokens
 reference/plugin-capability-matrix
 reference/plugin-ui-extension-slots
 reference/plugin-database-api
+reference/platform-data-tables
+reference/activity-ecosystem
+reference/capability-provider-framework
 reference/plugin-host-shared-deps
 reference/plugin-update-distribution
 ```
@@ -259,7 +264,7 @@ governance/architecture-governance
 - **[Composition Root](architecture/composition-root)**: `server.ts` 统一组装根，Express API 路由与 Socket.IO 服务整合。
 - **[Bootstrap Pipeline](core/bootstrap-pipeline)**: 5 阶段启动流水线（Startup -> Registration -> Initialization -> Activation -> Ready）。
 - **[Plugin Host & Sandbox](plugin/plugin-architecture)**: Worker Thread 进程隔离、ESM 加载器与完整生命周期状态机。
-- **[Plugin SDK](sdk/plugin-sdk)**: `@openlearn/plugin-sdk@3.3.1` 强类型定义、`Token<T>` DI 支持与 `ctx.provide()` 服务共享。
+- **[Plugin SDK](sdk/plugin-sdk)**: `@openlearn/plugin-sdk@3.5.0` 强类型定义、`Token<T>` DI 支持与 `ctx.provide()` 服务共享。
 - **[AI Runtime & Tools](ai/ai-runtime)**: 原生集成 Google GenAI (Gemini 2.5/3.0)、Prompt 模板与 Function Calling 工具调用。
 
-> 最后更新：2026-07-30
+> 最后更新：2026-08-29
