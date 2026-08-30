@@ -214,6 +214,7 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 | `teacher.panel` 扩展槽位 | 0.2.x | 教师独立全宽管理面板 |
 | `student.fullscreen` 扩展槽位 | 0.2.x | 学生全屏视图/考试模式 |
 | `global.setting` 扩展槽位 | 0.2.x | 全局设置页扩展 |
+| `anchor:*` 锚点扩展槽位 | 0.2.6 | 宿主原生按钮/元素前后插入插件按钮 |
 
 **扩展槽位版本可用性一览：**
 
@@ -227,6 +228,7 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 | `teacher.panel` | 0.2.x | 教师 |
 | `student.fullscreen` | 0.2.x | 学生 |
 | `global.setting` | 0.2.x | 管理员 |
+| `anchor:*` | 0.2.6 | 教师/学生（按锚点所在宿主界面） |
 
 > **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^0.2.5"`。安装时 PluginHost 自动检查兼容性。
 >
@@ -251,6 +253,7 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 | `teacher.dashboard.widget` | 白板内的可拖拽卡片 | `{ elementId, lessonId }` | 课堂交互组件（编辑、答题、展示） |
 | `classroom.tool` | 课堂工具架按钮 & 备课画板组件卡片 | — | 画板工具栏快捷入口与 `LessonPalette` 组件列表入口，注册后教师可在画板中快速点击/插入 |
 | `student.view` | 学生端全屏视图 | `{ studentId }` | 学生操作界面 |
+| `anchor:*` | 宿主原生按钮/元素前后（`placement: 'before'/'after'`） | — | 在指定按钮前后插入插件按钮，锚点目录见 [`docs/plugin/anchor-slots.md`](../plugin/anchor-slots.md) |
 
 **`teacher.tab` 和 `teacher.dashboard.widget` 的关键区别：**
 
@@ -1218,6 +1221,7 @@ export default function MyStudentPlugin(props: { studentId?: string }) {
 | `classroom.tool` | 课堂工具 |
 | `global.setting` | 全局设置页扩展（v3.2） |
 | `nav.user_menu` | 顶部 Header 用户菜单扩展（v5.2） |
+| `anchor:*` | 宿主原生按钮/元素前后插入按钮（v0.2.6，锚点目录见 `docs/plugin/anchor-slots.md`） |
 
 ### 6.5 invokeCommand（自 V2.5 起可用）
 

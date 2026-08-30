@@ -90,7 +90,7 @@ class ExtensionErrorBoundary extends React.Component<
 // ── ExtensionPointRenderer ───────────────────────────────────────────────────
 
 export interface ExtensionPointRendererProps {
-  /** The extension slot to render (e.g. 'teacher.tab', 'student.view') */
+  /** The extension slot to render (e.g. 'teacher.tab', 'student.view', or an `anchor:*` slot) */
   slot: ExtensionSlot | string;
   /** Optional custom fallback shown during loading (replaces LoadingSkeleton) */
   fallback?: React.ReactNode;
@@ -100,6 +100,13 @@ export interface ExtensionPointRendererProps {
   route?: string;
   /** v5.1: 额外传递给插件的渲染属性 (如 renderType) */
   slotProps?: Record<string, any>;
+  /**
+   * v0.2.6: 锚点槽位渲染侧。仅对 `anchor:*` 槽位生效：
+   * - 'before'：只渲染 `placement === 'before'` 的扩展
+   * - 'after'：只渲染 `placement === 'after'` 或未声明 placement（默认）的扩展
+   * 不传时渲染该槽位全部扩展（兼容固定槽位行为）。
+   */
+  placement?: 'before' | 'after';
 }
 
 /**
@@ -191,11 +198,18 @@ export function ExtensionPointRenderer({
   lang,
   route,
   slotProps,
+  placement,
 }: ExtensionPointRendererProps) {
   const host = usePluginHost();
-  const extensions = host.getExtensions(slot as ExtensionSlot);
+  let extensions = host.getExtensions(slot as ExtensionSlot);
 
   const visibility = usePluginHostStore((s) => s.dashboardVisibility);
+
+  // v0.2.6: anchor slot placement filtering —— 宿主在锚点按钮前后各渲染一次，
+  // 本侧只渲染与 placement 匹配的扩展（未声明的默认视为 'after'）。
+  if (placement) {
+    extensions = extensions.filter((ext) => (ext.placement ?? 'after') === placement);
+  }
 
   if (extensions.length === 0) return null;
 

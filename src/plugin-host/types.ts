@@ -74,6 +74,22 @@ export type ExtensionSlot =
   | 'global.setting'        // v5.1: 全局设置页扩展
   | 'nav.user_menu';        // v5.2: 顶部 Header 用户菜单扩展
 
+/**
+ * Anchor slot — 锚点扩展槽（v0.2.6）。
+ *
+ * 与固定槽位不同，锚点槽位由「宿主在某个原生按钮/元素前后各渲染一次」实现：
+ *   <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:rollcall" placement="before" />
+ *   <button ...原生按钮... />
+ *   <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:rollcall" placement="after" />
+ *
+ * 插件通过 `placement: 'before' | 'after'` 声明按钮插在锚点的哪一侧。
+ * 命名约定：`anchor:{页面或区域}:{锚点 id}`，锚点 id 由宿主定义并对外公布。
+ */
+export type AnchorSlot = `anchor:${string}`;
+
+/** 所有可注册的槽位：固定槽位 + 锚点槽位 + 任意字符串（向前兼容）。 */
+export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
+
 export interface ExtensionPointConfig {
   id: string;
   label: string;
@@ -91,6 +107,8 @@ export interface ExtensionPointConfig {
   route?: string;
   /** v5.1: 额外 props */
   slotProps?: Record<string, any>;
+  /** v0.2.6: 锚点槽位专用 —— 相对宿主锚点按钮的位置（默认 'after'） */
+  placement?: 'before' | 'after';
   /** v3: 可选自定义渲染函数（返回 React 节点，用于非组件式扩展点） */
   render?: (props?: Record<string, any>) => React.ReactNode;
 }
@@ -141,8 +159,8 @@ export interface FrontendPluginContext {
   pluginId: string;
   manifest: FrontendPluginManifest;
   ui: {
-    registerExtensionPoint(slot: ExtensionSlot, config: ExtensionPointConfig): void;
-    unregisterExtensionPoint(slot: ExtensionSlot, id: string): void;
+    registerExtensionPoint(slot: AnyExtensionSlot, config: ExtensionPointConfig): void;
+    unregisterExtensionPoint(slot: AnyExtensionSlot, id: string): void;
   };
   /** 调用后端已注册的 Command Handler，自动添加插件命名空间前缀 */
   invokeCommand<T = any>(type: string, payload?: any): Promise<T>;

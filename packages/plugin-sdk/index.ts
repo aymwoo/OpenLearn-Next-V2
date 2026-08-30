@@ -68,6 +68,7 @@ export type {
   DashboardWidgetConfig,
   StudentViewConfig,
   StudentLessonToolConfig,
+  AnchorToolConfig,
   HelpDocConfig,
   ContributionConfig,
 } from '../core/plugin-host/contribution-registry.js';

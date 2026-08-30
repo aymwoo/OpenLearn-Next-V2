@@ -8,6 +8,24 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Features
+- **插件锚点扩展槽（Anchor Slots）—— 支持在宿主原生按钮前后插入插件按钮**：
+  - 新增 `anchor:*` 开放槽位：宿主在原生按钮/元素前后各渲染一次 `<ExtensionPointRenderer slot="anchor:..." placement="before|after" />`，插件通过 `placement` 声明插入侧。
+  - `ExtensionPointConfig` 新增 `placement?: 'before' | 'after'`（缺省 `'after'`）；`ExtensionPointRenderer` 新增同名 prop 用于按侧过滤渲染。
+  - 前端槽位类型放宽为 `AnyExtensionSlot`（`ExtensionSlot | AnchorSlot | string`），`FrontendPluginContext.ui.registerExtensionPoint` 支持任意锚点槽位。
+  - manifest `contributes` 通过 `.passthrough()` 允许任意 `anchor:*` 键；后端 `ContributionRegistry` 新增 `AnchorToolConfig` 类型并纳入 `ContributionConfig` 联合。
+  - SDK（`@openlearn/plugin-sdk`）导出 `AnchorToolConfig`；`openlearn.d.ts` 同步补充类型。
+  - 白板工具栏已埋七个锚点：`presentation`、`code-sandbox`、`math-graph`、`courseware`、`rollcall`、`ai-tutor`、`grid`（槽位前缀 `anchor:whiteboard-toolbar:`）。
+
+### Fixes
+- 前端扩展点 `position` 字段此前仅声明未生效：`plugin-host-store.getExtensions` 现在按 `position` 升序（缺省 `100`）返回，同一 slot 内跨插件稳定排序，锚点槽位同侧多按钮同样适用。
+
+### Docs
+- 新增锚点目录 [`docs/plugin/anchor-slots.md`](docs/plugin/anchor-slots.md)，并同步更新 `plugin/extension-registry.md`、`plugin/plugin-manifest-spec.md`、`reference/plugin-ui-extension-slots.md`、`tutorials/plugin-development-tutorial.md`、`index.md`（toctree）。
+- 新增 `ExtensionPointRenderer` 锚点 placement 过滤 + position 排序渲染测试，以及 manifest-schema / contribution-registry 锚点用例；全量回归 941 passed。
+
 ## [0.2.5] - 2026-08-29
 
 ### Refactor / Performance

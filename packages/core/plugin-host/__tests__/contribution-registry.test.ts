@@ -140,4 +140,22 @@ describe('ContributionRegistry', () => {
     expect(registry.getBySlot('classroom.tool')).toHaveLength(0);
     expect(registry.allSummaries()).toHaveLength(0);
   });
+
+  it('register 存储锚点槽位（anchor:*）贡献（v0.2.6）', () => {
+    registry.register('ext-anchor', {
+      'anchor:whiteboard-toolbar:rollcall': [
+        { id: 'btn-before', label: 'Before Btn', placement: 'before' },
+        { id: 'btn-after', label: 'After Btn', placement: 'after' },
+      ],
+    });
+
+    const items = registry.getBySlot('anchor:whiteboard-toolbar:rollcall');
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ id: 'btn-before', placement: 'before' });
+
+    const summary = registry.summary('ext-anchor');
+    expect(summary).toHaveLength(1);
+    expect(summary[0].slot).toBe('anchor:whiteboard-toolbar:rollcall');
+    expect(summary[0].items).toHaveLength(2);
+  });
 });

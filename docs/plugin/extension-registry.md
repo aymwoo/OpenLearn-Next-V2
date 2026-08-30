@@ -19,6 +19,9 @@ OpenLearn V2 提供了双层扩展点架构：
 | `teacher.dashboard.widget` | 教师端工作区仪表盘小组件 | `id`, `label`, `icon`, `position` |
 | `student.view` | 学生端主导航视图路线 | `id`, `label`, `icon`, `route` |
 | `student.lesson.tool` | 学生端课中互动小工具 | `id`, `label`, `icon` |
+| `anchor:*` | 宿主原生按钮/元素前后（锚点槽位，v0.2.6+） | `id`, `label`, `icon`, `placement`（`before`/`after`） |
+
+> 锚点槽位是开放命名空间，具体锚点 id 由宿主定义并公布，见 [`anchor-slots.md`](./anchor-slots.md)。
 
 ### API 使用示例
 ```typescript
@@ -56,9 +59,11 @@ export interface IUnifiedExtensionRegistry {
 
 ## 3. 前端 UI 扩展槽与渲染流程
 
-前端 React 层（位于 `src/components/PluginTabPanel.tsx` 与 `src/components/PluginCardRenderer.tsx`）：
+前端 React 层（位于 `src/plugin-host/extension-point-renderer.tsx` 的 `ExtensionPointRenderer`，以及 `src/components/PluginTabPanel.tsx`、`src/components/PluginCardRenderer.tsx`）：
 
 1. 用户点击插件提供的 `teacher.tab` 菜单。
 2. 前端根据 `manifest.id` 与 `staticRoute` 渲染安全 `<iframe>` 沙箱或动态组件。
 3. `<iframe>` 内通过 Bridge SDK 发起 `vfs.read_file` 或跨插件 Command 命令。
 4. 主应用路由与 CommandBus 处理请求并返回状态。
+
+**锚点槽位渲染**（v0.2.6+）：宿主在目标按钮前后各渲染一次 `ExtensionPointRenderer`，通过 `placement` prop 按侧过滤——`placement="before"` 只渲染声明 `placement: 'before'` 的扩展，`placement="after"` 只渲染声明 `'after'` 或未声明（默认）的扩展。见 [`anchor-slots.md`](./anchor-slots.md)。

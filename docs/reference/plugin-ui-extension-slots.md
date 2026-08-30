@@ -19,6 +19,10 @@ export type ExtensionSlot =
   | 'student.fullscreen'    // v5.1: 学生全屏视图（考试模式）
   | 'global.setting'        // v5.1: 全局设置页扩展
   | 'nav.user_menu';        // v5.2: 顶部 Header 用户菜单扩展
+
+// v0.2.6: 锚点槽位（开放命名空间）
+export type AnchorSlot = `anchor:${string}`;
+export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 ```
 
 ### 后端 manifest `contributes` 键（`contribution-registry.ts:20-68`，镜像 `plugin-sdk/openlearn.d.ts:213-262`）
@@ -27,6 +31,7 @@ export type ExtensionSlot =
 - `teacher.dashboard.widget` → `DashboardWidgetConfig`
 - `student.view` → `StudentViewConfig`
 - `student.lesson.tool` → `StudentLessonToolConfig`
+- `anchor:*` → `AnchorToolConfig`（v0.2.6+，开放命名空间，锚点 id 见 `docs/plugin/anchor-slots.md`）
 - `help.plugin_docs` → `HelpDocConfig`
 
 ### 已实际挂载渲染器（有真实 `ExtensionPointRenderer` 调用点）的槽位
@@ -35,6 +40,7 @@ export type ExtensionSlot =
 | `student.view` | `src/features/student-workspace/widgets/student-default-widgets.tsx`（及 `InteractiveWhiteboard.tsx` 学生分支） | `{ studentId: activeStudentId }` |
 | `teacher.tab` | `src/plugin-host/extension-point-renderer.tsx`（按钮形态）/ `src/components/PluginTabPanel.tsx`（面板形态） | 见 §2 |
 | `classroom.tool` | `src/features/whiteboard/components/WhiteboardToolbar.tsx`（工具栏按钮）/ 备课画板组件列表卡片 | 无（仅 `route?`） |
+| `anchor:*` | `src/features/whiteboard/components/WhiteboardToolbar.tsx`（锚点按钮前后，`placement="before\|after"`） | 无（仅 `route?`） |
 | `teacher.dashboard.widget` | `src/features/teacher/Dashboard.tsx` | 无（仅 `route?`） |
 | `help.plugin_docs` | `src/features/teacher/help/PluginDocsViewer.tsx` | 无（仅 `route?`） |
 | `whiteboard.fullscreen` | `InteractiveWhiteboard.tsx`（`FullscreenOverlay` 通过 `fullscreenRendererRegistry` 查找） | 见 §5 |
@@ -42,6 +48,7 @@ export type ExtensionSlot =
 
 > `student.lesson.tool` / `teacher.panel` / `student.fullscreen` / `global.setting` / `nav.user_menu` 仅出现在 `ExtensionSlot` 联合类型中，**尚无渲染器挂载**，当前不会渲染任何内容。
 > `help.plugin_docs` 有渲染器，但**不在** `ExtensionSlot` 联合类型内（以字符串字面量传入，其 prop 类型为 `ExtensionSlot | string`）。
+> `anchor:*`（v0.2.6+）为开放命名空间槽位，渲染器已挂载（`WhiteboardToolbar.tsx` 七个锚点），通过 `placement` prop 按侧过滤——`placement="before"` 只渲染声明 `'before'` 的扩展，`placement="after"` 只渲染声明 `'after'` 或未声明（默认）的扩展。同侧多插件按钮按 `position` 升序渲染（缺省 `100`）。锚点目录见 [`docs/plugin/anchor-slots.md`](../plugin/anchor-slots.md)。
 
 ---
 
@@ -84,6 +91,7 @@ interface ExtensionPointConfig {
   rolesAllowed?: ('admin' | 'teacher' | 'student')[];
   route?: string;
   slotProps?: Record<string, any>;   // 合并进组件的任意额外 props
+  placement?: 'before' | 'after';     // v0.2.6: 锚点槽位专用，相对宿主锚点按钮的位置（默认 'after'）
   render?: (props?: Record<string, any>) => React.ReactNode;  // v3: 可选自定义渲染函数（非组件式扩展点）
 }
 ```
@@ -95,6 +103,7 @@ interface TeacherTabConfig        { id: string; label: string; icon?: string; po
 interface DashboardWidgetConfig   { id: string; label: string; icon?: string; position?: number; }
 interface StudentViewConfig       { id: string; label: string; icon?: string; route?: string; }
 interface StudentLessonToolConfig { id: string; label: string; icon?: string; }
+interface AnchorToolConfig        { id: string; label: string; icon?: string; placement?: 'before' | 'after'; }
 interface HelpDocConfig           { id: string; title: string; description?: string; markdownUrl?: string; }
 ```
 > `manifest.contributes` 仅存入 `ContributionRegistry` 供管理端预览，前端 `ExtensionPointRenderer` 读取的是 zustand `ExtensionPointRegistry`，**不是** contribution registry。

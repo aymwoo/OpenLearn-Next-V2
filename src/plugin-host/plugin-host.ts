@@ -31,7 +31,7 @@ import {
 import type {
   FrontendPluginManifest,
   FrontendPluginContext,
-  ExtensionSlot,
+  AnyExtensionSlot,
   ExtensionPointConfig,
   IFrontendAPI,
   ISocketService,
@@ -468,7 +468,7 @@ export class FrontendPluginHost {
   /**
    * Get all registered extension point configs for a given slot.
    */
-  getExtensions(slot: ExtensionSlot): ExtensionPointConfig[] {
+  getExtensions(slot: AnyExtensionSlot): ExtensionPointConfig[] {
     return usePluginHostStore.getState().getExtensions(slot);
   }
 
@@ -520,13 +520,13 @@ export class FrontendPluginHost {
       pluginId,
       manifest,
       ui: {
-        registerExtensionPoint: (slot: ExtensionSlot, config: ExtensionPointConfig) => {
+        registerExtensionPoint: (slot: AnyExtensionSlot, config: ExtensionPointConfig) => {
           usePluginHostStore.getState().registerExtensionPoint(slot, {
             ...config,
             pluginId,
           });
         },
-        unregisterExtensionPoint: (slot: ExtensionSlot, id: string) => {
+        unregisterExtensionPoint: (slot: AnyExtensionSlot, id: string) => {
           usePluginHostStore.getState().unregisterExtensionPoint(slot, id);
         },
       },

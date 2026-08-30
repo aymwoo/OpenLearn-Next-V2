@@ -61,6 +61,7 @@ plugin/plugin-lifecycle
 plugin/plugin-manifest-spec
 plugin/plugin-registry
 plugin/extension-registry
+plugin/anchor-slots
 plugin/plugin-documentation-report
 ```
 

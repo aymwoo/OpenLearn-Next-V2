@@ -13,8 +13,6 @@
  * Design: Two-level index — slot → pluginId → ContributionConfig[]
  */
 
-import type { Manifest } from '../esm-loader/manifest-schema.js';
-
 // ── Contribution Config Types ────────────────────────────────────────────
 
 /** A contribution to the classroom.tool slot (command-triggered toolbar button). */
@@ -58,6 +56,18 @@ export interface StudentLessonToolConfig {
   icon?: string;
 }
 
+/**
+ * v0.2.6: A contribution to an `anchor:*` slot — a button injected
+ * immediately before/after a host-defined anchor button.
+ */
+export interface AnchorToolConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  /** Relative position to the host anchor button. Defaults to 'after'. */
+  placement?: 'before' | 'after';
+}
+
 /** V3.2: A contribution to the help.plugin_docs slot (plugin documentation in help page). */
 export interface HelpDocConfig {
   id: string;
@@ -74,6 +84,7 @@ export type ContributionConfig =
   | DashboardWidgetConfig
   | StudentViewConfig
   | StudentLessonToolConfig
+  | AnchorToolConfig
   | HelpDocConfig;
 
 /** A human-readable summary of what a plugin contributes. */
@@ -83,8 +94,15 @@ export interface ContributionSummary {
   items: Array<{ id: string; label: string }>;
 }
 
-/** The shape of the manifest.contributes section. */
-export type ContributesSection = NonNullable<Manifest['contributes']>;
+/**
+ * The shape of the manifest.contributes section.
+ *
+ * Loose boundary: keys are slot names (固定槽位 or `anchor:*` 锚点槽位).
+ * Values are config arrays. Declared as `Record<string, unknown>` because the
+ * zod schema `.passthrough()` preserves anchor:* keys without statically typing
+ * them; validation of individual entries happens at runtime.
+ */
+export type ContributesSection = Record<string, unknown>;
 
 // ── Registry ─────────────────────────────────────────────────────────────
 
@@ -108,12 +126,12 @@ export class ContributionRegistry {
     this.unregister(pluginId);
 
     for (const [slot, configs] of Object.entries(contributes)) {
-      if (!configs || configs.length === 0) continue;
+      if (!Array.isArray(configs) || configs.length === 0) continue;
 
       if (!this.contributions.has(slot)) {
         this.contributions.set(slot, new Map());
       }
-      this.contributions.get(slot)!.set(pluginId, configs);
+      this.contributions.get(slot)!.set(pluginId, configs as ContributionConfig[]);
     }
   }
 

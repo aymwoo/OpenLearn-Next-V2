@@ -49,7 +49,10 @@ const contributesSchema = z.object({
     label: z.string().min(1),
     icon: z.string().optional(),
   })).optional(),
-}).optional();
+  // v0.2.6: 锚点槽位（anchor:*）为开放命名空间，由宿主公布锚点 id。
+  // .passthrough() 保留任意 anchor:* 键（运行时透传），避免被 zod 默认 strip。
+  // 锚点条目的运行时校验由前端注册时（ExtensionPointConfig）完成。
+}).passthrough().optional();
 
 // ── V5.1: Deploy schema ───────────────────────────────────────────────
 

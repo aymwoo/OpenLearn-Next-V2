@@ -257,6 +257,12 @@ interface StudentLessonToolConfig {
   icon?: string;
 }
 
+interface AnchorToolConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  placement?: 'before' | 'after';
+}
 
 interface HelpDocConfig {
   id: string;
@@ -270,6 +276,7 @@ type ContributionConfig =
   | DashboardWidgetConfig
   | StudentViewConfig
   | StudentLessonToolConfig
+  | AnchorToolConfig
   | HelpDocConfig;
 
 // ── Plugin Context ───────────────────────────────────────────────────────

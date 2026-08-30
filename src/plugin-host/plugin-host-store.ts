@@ -17,7 +17,7 @@
  */
 
 import { create } from 'zustand';
-import type { FrontendPluginInfo, ExtensionSlot, ExtensionPointConfig, PluginState } from './types';
+import type { FrontendPluginInfo, AnyExtensionSlot, ExtensionPointConfig, PluginState } from './types';
 import type { FrontendServiceRegistry } from './service-registry';
 
 // ── State shape ──────────────────────────────────────────────────────────
@@ -50,16 +50,16 @@ export interface PluginHostStoreActions {
    * Register an extension point for a given slot.
    * Pitfall 3: Throws if duplicate id for the same slot.
    */
-  registerExtensionPoint: (slot: ExtensionSlot, config: ExtensionPointConfig) => void;
+  registerExtensionPoint: (slot: AnyExtensionSlot, config: ExtensionPointConfig) => void;
 
   /** Unregister a single extension point by slot + id. */
-  unregisterExtensionPoint: (slot: ExtensionSlot, id: string) => void;
+  unregisterExtensionPoint: (slot: AnyExtensionSlot, id: string) => void;
 
   /** Unregister all extension points belonging to a plugin. */
   unregisterPluginExtensionPoints: (pluginId: string) => void;
 
   /** Get all extension point configs for a slot. */
-  getExtensions: (slot: ExtensionSlot) => ExtensionPointConfig[];
+  getExtensions: (slot: AnyExtensionSlot) => ExtensionPointConfig[];
 
   /** Set dashboard widget visibility for a single plugin. */
   setDashboardVisibility: (pluginId: string, visible: boolean) => void;
@@ -163,7 +163,10 @@ export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreA
       }),
 
     getExtensions: (slot) => {
-      return get().extensionPoints.get(slot) ?? [];
+      const list = get().extensionPoints.get(slot) ?? [];
+      // 按 position 升序排序（缺省 100），同一 slot 内跨插件稳定排序。
+      // 锚点槽位（anchor:*）同样适用：同侧多个插件按钮按 position 排列。
+      return [...list].sort((a, b) => (a.position ?? 100) - (b.position ?? 100));
     },
 
     setDashboardVisibility: (pluginId, visible) =>

@@ -146,6 +146,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
 
       {/* Group 4: Media & Applets */}
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:presentation" placement="before" />
       <button 
         onClick={() => {
            setDialogInput('# Title Slide\n---\n## Slide 2');
@@ -189,6 +190,8 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       >
         <Presentation size={16} />
       </button>
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:presentation" placement="after" />
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:code-sandbox" placement="before" />
       <button
         onClick={async () => {
            setIsSyncing(true);
@@ -217,6 +220,8 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       >
         <Terminal size={16} />
       </button>
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:code-sandbox" placement="after" />
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:math-graph" placement="before" />
       <button
         onClick={async () => {
            setIsSyncing(true);
@@ -245,7 +250,9 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       >
         <Activity size={16} />
       </button>
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:math-graph" placement="after" />
 
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:courseware" placement="before" />
       <button
         onClick={async () => {
            setIsSyncing(true);
@@ -274,10 +281,12 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       >
         <Globe size={16} />
       </button>
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:courseware" placement="after" />
 
       <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
 
       {/* Group 5: Teaching & AI */}
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:rollcall" placement="before" />
       <button
         onClick={async () => {
            setIsSyncing(true);
@@ -306,12 +315,14 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       >
         <UserCheck size={15} />
       </button>
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:rollcall" placement="after" />
 
       <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
 
       {/* Group 6: Plugin Classroom Tools */}
       <ExtensionPointRenderer slot="classroom.tool" />
 
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:ai-tutor" placement="before" />
       <button
         onClick={async () => {
            setIsSyncing(true);
@@ -348,10 +359,12 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       >
         <Wand2 size={16} />
       </button>
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:ai-tutor" placement="after" />
 
       <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
 
       {/* Group 7: Canvas Controls & More */}
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:grid" placement="before" />
       <button
         onClick={() => setShowGrid((g) => !g)}
         className={`p-1.5 rounded-xl transition-all cursor-pointer ${showGrid ? 'text-indigo-600 bg-indigo-50/80' : 'text-slate-400 hover:bg-slate-100'}`}
@@ -359,6 +372,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       >
         <Grid size={16} />
       </button>
+      <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:grid" placement="after" />
 
       {selectedShapeId && (
         <button

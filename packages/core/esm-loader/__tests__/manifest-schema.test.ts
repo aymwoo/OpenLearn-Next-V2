@@ -61,6 +61,28 @@ describe('manifestSchema', () => {
     expect(() => manifestSchema.parse(manifest)).not.toThrow();
   });
 
+  it('should preserve anchor:* contribution keys via passthrough (v0.2.6)', () => {
+    const manifest = {
+      id: 'ext-anchor-demo',
+      name: 'Anchor Demo',
+      version: '1.0.0',
+      main: 'index.js',
+      contributes: {
+        'classroom.tool': [
+          { id: 't1', name: 'T1', commandType: 't1.cmd' },
+        ],
+        'anchor:whiteboard-toolbar:rollcall': [
+          { id: 'my-btn', label: 'My Button', placement: 'before' },
+        ],
+      },
+    };
+    const parsed = manifestSchema.parse(manifest);
+    expect(parsed.contributes).toBeDefined();
+    expect((parsed.contributes as any)['anchor:whiteboard-toolbar:rollcall']).toEqual([
+      { id: 'my-btn', label: 'My Button', placement: 'before' },
+    ]);
+  });
+
   it('should accept manifest with empty optional arrays', () => {
     const manifest = {
       id: 'ext-quiz',

@@ -136,6 +136,34 @@
 - **`teacher.dashboard.widget`**: 教师仪表盘小组件。
 - **`student.view`**: 学生端导航视图。
 - **`student.lesson.tool`**: 学生课中互动小工具。
+- **`anchor:*`（锚点槽位，v0.2.6+）**: 在宿主某个原生按钮/元素**前后**插入插件按钮。
+  - 槽位名遵循 `anchor:{页面或区域}:{锚点 id}` 约定，锚点 id 由宿主定义并公布（如 `anchor:whiteboard-toolbar:rollcall`）。
+  - `id`: 扩展 ID
+  - `label`: 按钮展示文本
+  - `icon`: Lucide 图标名称
+  - `placement`: `"before"` 插入锚点前 / `"after"` 插入锚点后（缺省 `"after"`）
+
+示例：在「随机点名」按钮前插入一个按钮：
+```json
+"contributes": {
+  "anchor:whiteboard-toolbar:rollcall": [
+    { "id": "my-button", "label": "我的按钮", "icon": "Sparkles", "placement": "before" }
+  ]
+}
+```
+
+> 前端实际渲染由插件在 `activate(ctx)` 内**命令式**注册完成（`contributes` 仅用于管理后台预览/枚举）：
+> ```ts
+> ctx.ui.registerExtensionPoint('anchor:whiteboard-toolbar:rollcall', {
+>   id: 'my-button',
+>   label: '我的按钮',
+>   placement: 'before',
+>   component: () => import('./MyButton'),
+> });
+> ```
+> 宿主必须在锚点按钮前后各渲染一次 `<ExtensionPointRenderer slot="anchor:..." placement="before|after" />`，插件按钮才会出现在对应侧。
+>
+> 完整锚点目录见 [`anchor-slots.md`](./anchor-slots.md)。
 
 ---
 
