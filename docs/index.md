@@ -187,6 +187,7 @@ examples/existing-plugins-guide
 :caption: 🗺️ 产品路线图 (Roadmap)
 :hidden:
 
+roadmap/v0.3.0-roadmap
 roadmap/documentation-roadmap
 ```
 
