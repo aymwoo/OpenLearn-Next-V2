@@ -60,8 +60,8 @@ export default defineConfig({
             if (id.includes('/lucide-react/')) {
               return 'vendor-icons';
             }
-            // Framer Motion Animation
-            if (id.includes('/framer-motion/') || id.includes('/motion-dom/')) {
+            // Framer Motion Animation (仅作为 motion 的间接依赖存在)
+            if (id.includes('/motion-dom/')) {
               return 'vendor-motion';
             }
             // Recharts & D3 Data Visualization
