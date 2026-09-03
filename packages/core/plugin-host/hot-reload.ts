@@ -155,8 +155,8 @@ export class HotReloadController {
     if (this.enabled) return;
     this.enabled = true;
 
-    await this.fileWatcher.startWatch(this.watchDir, (event) => {
-      this.handleFileChange(event.pluginId, event.filePath);
+    await this.fileWatcher.startWatch(this.watchDir, async (event) => {
+      await this.handleFileChange(event.pluginId, event.filePath);
     });
 
     console.log('[HotReload] Hot reload enabled — watching for plugin changes');

@@ -327,9 +327,12 @@ export interface IBootstrapContext {
 }
 
 export interface IBootstrapStage {
-  readonly name: PlatformStage;
+  readonly id: string;
+  readonly name: PlatformStage | string;
   readonly description: string;
+  readonly timeoutMs?: number;
   execute(context: IBootstrapContext): Promise<void>;
+  rollback?(context: IBootstrapContext): Promise<void>;
 }
 
 export interface IBootstrapPipeline {
