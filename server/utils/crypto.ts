@@ -39,21 +39,29 @@ function getEncryptionKey(): Buffer {
     }
   }
 
-  // 3. 自动生成并持久化到 .env（首次启动或密钥缺失/为空时）
+  // 3. 自动生成并持久化到 .env（仅在首次启动时——.env 中尚无 ENCRYPTION_KEY 行）
+  //
+  // 安全约束：绝不原地覆盖 .env 中已有的 ENCRYPTION_KEY= 行（即便值为空）。
+  // 覆盖现有密钥会导致已用旧密钥加密的 AI Provider Key 全部无法解密，
+  // 这是数据级而非配置级的故障，无法回滚。运维应当显式备份、轮换密钥。
   const newKey = crypto.randomBytes(32).toString('hex');
 
   try {
     if (fs.existsSync(envPath)) {
-      let content = fs.readFileSync(envPath, 'utf-8');
-      if (/^ENCRYPTION_KEY=/m.test(content)) {
-        // .env 中已有 ENCRYPTION_KEY= 行（值为空或不合法），原地替换
-        content = content.replace(/^ENCRYPTION_KEY=.*$/m, `ENCRYPTION_KEY=${newKey}`);
-        fs.writeFileSync(envPath, content);
-        console.log('[Crypto] ENCRYPTION_KEY replaced in .env (was empty or invalid)');
-      } else {
-        fs.appendFileSync(envPath, `\nENCRYPTION_KEY=${newKey}\n`);
-        console.log('[Crypto] ENCRYPTION_KEY auto-generated and persisted to .env');
+      const existingContent = fs.readFileSync(envPath, 'utf-8');
+      if (/^ENCRYPTION_KEY=/m.test(existingContent)) {
+        // .env 中已存在 ENCRYPTION_KEY= 行（包括空值），绝不覆盖。
+        // 留空并继续走 in-memory fallback —— 启动会进入降级模式但不会损坏现有密文。
+        console.warn(
+          '[Crypto] ENCRYPTION_KEY missing/empty in .env; NOT overwriting existing entry. ' +
+          'Generating ephemeral in-memory key — please set ENCRYPTION_KEY manually before relying on encrypted storage.'
+        );
+        process.env.ENCRYPTION_KEY = newKey;
+        _encryptionKey = Buffer.from(newKey, 'hex');
+        return _encryptionKey;
       }
+      fs.appendFileSync(envPath, `\nENCRYPTION_KEY=${newKey}\n`);
+      console.log('[Crypto] ENCRYPTION_KEY auto-generated and persisted to .env');
     } else {
       fs.writeFileSync(envPath, `ENCRYPTION_KEY=${newKey}\n`);
       console.log('[Crypto] .env created with auto-generated ENCRYPTION_KEY');

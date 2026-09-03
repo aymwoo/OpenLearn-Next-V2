@@ -15,6 +15,12 @@ coverage/
 
 /.codegraph
 
+# Local developer scratch space (test scripts, screenshots, ad-hoc DB fixes).
+# These files must never be committed — they may contain mock admin tokens,
+# hard-coded UUIDs, and one-off DB mutation scripts that have no place in
+# the production codebase.
+scratch/
+
 # Python virtual environment and Sphinx build artifacts
 .venv/
 docs/_build/
