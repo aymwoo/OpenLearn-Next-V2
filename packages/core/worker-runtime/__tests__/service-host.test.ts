@@ -546,4 +546,111 @@ describe('ServiceHost ActionRegistry tracking', () => {
 
     expect(actionRegistry.unregister).toHaveBeenCalledWith('action-foo');
   });
+
+  describe('IDatabase security barrier', () => {
+    it('should reject worker access to forbidden security tables (e.g. users)', async () => {
+      const mockDb = {
+        prepare: vi.fn(),
+        exec: vi.fn(),
+      };
+      const dbRegistry = createMockServiceRegistry({
+        '@openlearn/core:IDatabase': mockDb,
+      });
+
+      const host = new ServiceHost(
+        dbRegistry as any,
+        capGuard as any,
+        'plugin:ext-test-db',
+        ['management:write'],
+      );
+
+      await host.handleInvoke(
+        {
+          type: 'invoke',
+          invokeId: 'inv-sec-1',
+          token: '@openlearn/core:IDatabase',
+          method: 'prepareAndAll',
+          args: ['SELECT * FROM users', []],
+        },
+        transport as any,
+      );
+
+      expect(transport.messages[0].type).toBe('error');
+      expect(transport.messages[0].code).toBe('WorkerCapabilityError');
+      expect(transport.messages[0].message).toContain(
+        'Worker plugin "ext-test-db" is forbidden from accessing core security table "users"'
+      );
+      expect(mockDb.prepare).not.toHaveBeenCalled();
+    });
+
+    it('should reject DDL operations targeting tables outside plugin namespace', async () => {
+      const mockDb = {
+        prepare: vi.fn().mockReturnValue({
+          run: vi.fn().mockReturnValue({ changes: 0 }),
+        }),
+      };
+      const dbRegistry = createMockServiceRegistry({
+        '@openlearn/core:IDatabase': mockDb,
+      });
+
+      const host = new ServiceHost(
+        dbRegistry as any,
+        capGuard as any,
+        'plugin:ext-test-db',
+        ['management:write'],
+      );
+
+      await host.handleInvoke(
+        {
+          type: 'invoke',
+          invokeId: 'inv-sec-2',
+          token: '@openlearn/core:IDatabase',
+          method: 'prepareAndRun',
+          args: ['DROP TABLE lessons', []],
+        },
+        transport as any,
+      );
+
+      expect(transport.messages[0].type).toBe('error');
+      expect(transport.messages[0].code).toBe('WorkerCapabilityError');
+      expect(transport.messages[0].message).toContain('not permitted to perform DDL on table "lessons"');
+      expect(mockDb.prepare).not.toHaveBeenCalled();
+    });
+
+    it('should allow plugin to perform DDL within its own namespace', async () => {
+      const mockDb = {
+        prepare: vi.fn().mockReturnValue({
+          run: vi.fn().mockReturnValue({ changes: 1 }),
+        }),
+      };
+      const dbRegistry = createMockServiceRegistry({
+        '@openlearn/core:IDatabase': mockDb,
+      });
+
+      const host = new ServiceHost(
+        dbRegistry as any,
+        capGuard as any,
+        'plugin:ext-test-db',
+        ['management:write'],
+      );
+
+      await host.handleInvoke(
+        {
+          type: 'invoke',
+          invokeId: 'inv-sec-3',
+          token: '@openlearn/core:IDatabase',
+          method: 'prepareAndRun',
+          args: ['CREATE TABLE IF NOT EXISTS plugin_ext_test_db_data (id TEXT)', []],
+        },
+        transport as any,
+      );
+
+      expect(transport.messages[0]).toEqual({
+        type: 'result',
+        invokeId: 'inv-sec-3',
+        value: { changes: 1 },
+      });
+      expect(mockDb.prepare).toHaveBeenCalledWith('CREATE TABLE IF NOT EXISTS plugin_ext_test_db_data (id TEXT)');
+    });
+  });
 });

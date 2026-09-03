@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   BootstrapPipeline,
-  IBootstrapStage,
   PipelineExecutor,
   PipelineDiagnosticEvent,
 } from '../bootstrap/pipeline/index.js';
+import type { IBootstrapStage } from '../bootstrap/types/index.js';
 import {
   IBootstrapContext,
   PlatformStage,
