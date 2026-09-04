@@ -54,28 +54,35 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 ## 2. 各槽位组件收到的 Props（实际注入）
 
-渲染机制（`src/plugin-host/extension-point-renderer.tsx:253-256`）：
+渲染机制（`src/plugin-host/extension-point-renderer.tsx`）：
 ```typescript
 React.createElement(
   resolveExtensionComponent(ext),
-  { route: ext.route || route, ...ext.slotProps, ...slotProps },
+  {
+    route: ext.route || route,
+    lessonId, classId,          // 宿主统一注入的课堂上下文（v5.1）
+    ...ext.slotProps,
+    ...slotProps,
+  },
 );
 ```
-组件始终收到（合并顺序）：
+组件始终收到（合并顺序，后者覆盖前者）：
 1. `route?: string` —— 来自 `ext.route` 或渲染器 `route` prop
-2. `...ext.slotProps` —— 插件注册时声明的任意额外 props
-3. `...slotProps` —— 宿主在调用点传入的 props
+2. `lessonId` / `classId` —— 宿主统一注入的当前课程/班级（`string | null`，见 §3）
+3. `...ext.slotProps` —— 插件注册时声明的任意额外 props
+4. `...slotProps` —— 宿主在调用点传入的 props
 
-**不存在**自动注入的 `{ lessonId, userId, role, socket }`。组件类型为 `React.ComponentType<any>`（`types.ts:81`）。
+组件类型为 `React.ComponentType<any>`（`types.ts`）。
 
 ### 各槽位实际 props
-- **`student.view`**（`src/features/student-workspace/widgets/student-default-widgets.tsx`）：`{ studentId: string, route?: string }`。
+所有经 `ExtensionPointRenderer` 渲染的槽位组件都收到 `{ lessonId, classId, route? }`（v5.1 起由渲染器统一注入），此外：
+- **`student.view`**：`src/features/student/StudentDashboardPanel.tsx` 调用点额外注入 `{ studentId }`（注意 `student-default-widgets.tsx` 的 `StudentPluginWidgets` 调用点不注入 `studentId`）。
 - **`teacher.tab`**：
   - `renderType === 'button'`（`src/plugin-host/extension-point-renderer.tsx`）：渲染器**不渲染插件组件**，而是自行合成 `<button>`。插件组件被绕过。
-  - `renderType === 'panel'`（`src/components/PluginTabPanel.tsx`）：组件以 `<activeTab.component renderType="panel" />` 渲染 → 收到 `{ renderType: 'panel' }`。
-- **`classroom.tool`**（`src/features/whiteboard/components/WhiteboardToolbar.tsx`）：仅 `{ route?: string }`。
-- **`teacher.dashboard.widget`**（`src/features/teacher/Dashboard.tsx`）：仅 `{ route?: string }`（可见性由 `dashboardVisibility` store 按插件控制）。
-- **`help.plugin_docs`**（`src/features/teacher/help/PluginDocsViewer.tsx`）：仅 `{ route?: string }`。
+  - `renderType === 'panel'`（`src/components/PluginTabPanel.tsx`）：组件收到 `{ renderType: 'panel', lessonId, classId }`。
+- **`classroom.tool`**（`src/features/whiteboard/components/WhiteboardToolbar.tsx`）：`{ lessonId, classId, route? }`。
+- **`teacher.dashboard.widget`**（`src/features/teacher/Dashboard.tsx`）：`{ lessonId, classId, route? }`（可见性由 `dashboardVisibility` store 按插件控制）。
+- **`help.plugin_docs`**（`src/features/teacher/help/PluginDocsViewer.tsx`）：`{ lessonId, classId, route? }`。
 
 ### 注册配置形态（即插件声明时的类型，`types.ts:77-94`）
 ```typescript
@@ -110,13 +117,21 @@ interface HelpDocConfig           { id: string; title: string; description?: str
 
 ---
 
-## 3. 宿主注入了哪些上下文？（如何获取 user/role/lessonId/socket）
+## 3. 宿主注入了哪些上下文？（如何获取 user/role/lessonId/classId/socket）
 
-**没有**包裹插件组件的 per-slot Provider 注入 `userId` / `role` / `lessonId` / `socket`。可用途径：
+**没有**包裹插件组件的 per-slot Provider 注入 `userId` / `role` / `socket`。自 v5.1 起，宿主**统一注入**以下课堂上下文：
 
-1. **React Props** —— 见 §2。唯一被注入的身份数据是 `student.view` 的 `studentId`，以及 `teacher.tab` 的 `renderType`。
-2. **React Context `PluginHostProvider`** —— `src/main.tsx:25` 包裹整个应用。组件内调用 `usePluginHost()`（`src/plugin-host/plugin-host-context.tsx:41-47`）获取 `FrontendPluginHost`。
-3. **`FrontendPluginContext`**（即 `activate` 收到的 `ctx`，也是 `usePluginHost()` 暴露的内容，`types.ts:132-152`）：
+1. **React Props（渲染时）** —— 见 §2。所有扩展点组件收到 `lessonId`（当前课程，`string | null`，源 `appStore.selectedLesson`）与 `classId`（当前班级，`string | null`，源 `appStore.liveClassSelectedClassId`）；`student.view` 调用点额外注入 `studentId`；`teacher.tab` panel 形态额外收到 `renderType: 'panel'`。
+2. **`ctx.context`（激活时 / 非渲染场景）** —— `FrontendPluginContext` 新增只读快照 + 订阅（v5.1）：
+   ```typescript
+   context?: {
+     get(): { lessonId: string | null; classId: string | null };
+     subscribe(cb: (ctx: { lessonId: string | null; classId: string | null }) => void): () => void;
+   };
+   ```
+   用于事件回调、命令处理等非 React 组件场景读取当前课程/班级。
+3. **React Context `PluginHostProvider`** —— `src/main.tsx` 包裹整个应用。组件内调用 `usePluginHost()`（`src/plugin-host/plugin-host-context.tsx`）获取 `FrontendPluginHost`。
+4. **`FrontendPluginContext`**（即 `activate` 收到的 `ctx`，也是 `usePluginHost()` 暴露的内容，`types.ts`）：
    ```typescript
    interface FrontendPluginContext {
      services: {
@@ -127,15 +142,16 @@ interface HelpDocConfig           { id: string; title: string; description?: str
      };
      pluginId: string;
      manifest: FrontendPluginManifest;
-     ui: { registerExtensionPoint; unregisterExtensionPoint };
+     ui: { registerExtensionPoint; unregisterExtensionPoint; registerFullscreenRenderer; registerPropertyEditor; /* ... */ };
      invokeCommand<T>(type: string, payload?: unknown): Promise<T>;
      navigation: { getTeacherTab; setTeacherTab; subscribeTeacherTab };
+     context: { get; subscribe };        // v5.1 课堂上下文
      registerPanel? / registerMenu? / registerToolbarButton?; // 兼容 shim
    }
    ```
-   `ISocketService` 为 `emit/on/off/disconnect` 的薄封装（`types.ts:104-109`），**不是**原生 `Socket`。`FrontendPluginContext` 上没有 `auth` / `user` / `role` / `lessonId` 字段。
+   `ISocketService` 为 `emit/on/off/disconnect` 的薄封装（`types.ts`），**不是**原生 `Socket`。`FrontendPluginContext` 上**没有** `auth` / `user` / `role` 字段。
 
-**结论**：若插件需要当前用户、角色或课程上下文，必须**自行获取**——通过 `usePluginHost()` → `services`，或 `appStore` hooks（如 `useAppStore(s => s.teacherTab)`），或在自身 `config.slotProps` 中声明，或读取 `studentId` props。宿主不会自动注入。唯一的身份门控是声明式 `rolesAllowed`（`types.ts:89`），在**注册时**评估，而非渲染时。
+**结论**：当前课程/班级由宿主统一注入——渲染场景读 `props.lessonId` / `props.classId`，非渲染场景用 `ctx.context.get()` / `ctx.context.subscribe()`。当前用户/角色/原生 `socket` 仍**不注入**：插件需通过 `usePluginHost()` → `services` 或 `ctx.services` 自行获取（**不要**尝试 `import { useAppStore } from '@/...'`——`@/` 别名是宿主内部路径，第三方插件打包时不可解析）。唯一的身份门控是声明式 `rolesAllowed`（`types.ts`），在**注册时**评估，而非渲染时。
 
 ---
 
@@ -171,20 +187,29 @@ export interface PluginModule {
 
 **注册表位置**：`src/features/whiteboard/fullscreen/FullscreenRendererRegistry.tsx`
 
-插件可通过 `fullscreenRendererRegistry.register(type, component)` 为白板组件类型注册自定义全屏视图。白板中点击组件的最大化按钮时，`FullscreenOverlay` 优先查询注册表；若无匹配，自动使用智能默认渲染器。
+插件在 `activate(ctx)` 内通过 `ctx.ui.registerFullscreenRenderer(type, renderer)` 为白板组件类型注册自定义全屏视图。白板中点击组件的最大化按钮时，`FullscreenOverlay` 优先查询注册表；若无匹配，自动使用智能默认渲染器。
+
+> ⚠️ **第三方可达性（v3.5）**：`fullscreenRendererRegistry` 单例是**宿主内部对象**，第三方插件**不能** `import { fullscreenRendererRegistry } from '@/features/whiteboard/fullscreen'`（`@/` 是宿主 Vite 别名，插件打包时无法解析，且运行时无此全局）。唯一正确入口是 `activate(ctx)` 注入的 `ctx.ui.registerFullscreenRenderer`。类型 `FullscreenRendererProps` 从 `@openlearn/plugin-sdk` 导入（type-only）。
 
 ### 使用方式
 
-```typescript
-import { fullscreenRendererRegistry } from '@/features/whiteboard/fullscreen';
+```tsx
+import type { FullscreenRendererProps } from '@openlearn/plugin-sdk';
 
-fullscreenRendererRegistry.register('ext-my-plugin/widget', ({ data, onClose, containerSize, lessonId }) => (
-  <div className="flex flex-col items-center justify-center h-full">
-    <h2>{data.title}</h2>
-    <p>{data.content}</p>
-  </div>
-));
+async function activate(ctx) {
+  ctx.ui.registerFullscreenRenderer(
+    'ext-my-plugin/widget',
+    ({ data, onClose, containerSize, lessonId }: FullscreenRendererProps) => (
+      <div className="flex flex-col items-center justify-center h-full">
+        <h2>{data.title}</h2>
+        <p>{data.content}</p>
+      </div>
+    ),
+  );
+}
 ```
+
+同理可调用 `ctx.ui.unregisterFullscreenRenderer(type)`；插件停用/卸载时宿主自动清理其注册，无需手动注销。
 
 ### Props 类型 (`FullscreenRendererProps`)
 
@@ -211,23 +236,30 @@ fullscreenRendererRegistry.register('ext-my-plugin/widget', ({ data, onClose, co
 
 **注册表位置**：`src/features/whiteboard/properties/PropertyEditorRegistry.tsx`
 
-插件可通过 `propertyEditorRegistry.register(type, component)` 为白板组件类型注册自定义属性编辑器，在白板右侧属性面板中渲染。
+插件在 `activate(ctx)` 内通过 `ctx.ui.registerPropertyEditor(type, editor)` 为白板组件类型注册自定义属性编辑器，在白板右侧属性面板中渲染。
+
+> ⚠️ **第三方可达性（v3.5）**：同 §5，`propertyEditorRegistry` 是宿主内部单例，第三方插件不能 `import`。唯一正确入口是 `ctx.ui.registerPropertyEditor`。类型 `PropertyEditorProps` 从 `@openlearn/plugin-sdk` 导入（type-only）。
 
 ### 使用方式
 
-```typescript
-import { propertyEditorRegistry } from '@/features/whiteboard/properties';
+```tsx
+import type { PropertyEditorProps } from '@openlearn/plugin-sdk';
 
-propertyEditorRegistry.register('ext-my-plugin/widget', ({ data, updateData, elementId, lessonId }) => (
-  <div className="space-y-3">
-    <label className="block text-[10px] text-slate-400 font-semibold mb-1">标题</label>
-    <input
-      value={data.title || ''}
-      onChange={e => updateData({ title: e.target.value })}
-      className="w-full p-2 border border-slate-200 rounded-lg text-xs"
-    />
-  </div>
-));
+async function activate(ctx) {
+  ctx.ui.registerPropertyEditor(
+    'ext-my-plugin/widget',
+    ({ data, updateData, elementId, lessonId }: PropertyEditorProps) => (
+      <div className="space-y-3">
+        <label className="block text-[10px] text-slate-400 font-semibold mb-1">标题</label>
+        <input
+          value={data.title || ''}
+          onChange={e => updateData({ title: e.target.value })}
+          className="w-full p-2 border border-slate-200 rounded-lg text-xs"
+        />
+      </div>
+    ),
+  );
+}
 ```
 
 ### Props 类型 (`PropertyEditorProps`)

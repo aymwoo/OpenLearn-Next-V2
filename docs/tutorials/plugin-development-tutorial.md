@@ -230,16 +230,16 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 | `global.setting` | 0.2.x | 管理员 |
 | `anchor:*` | 0.2.6 | 教师/学生（按锚点所在宿主界面） |
 
-> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^0.2.5"`。安装时 PluginHost 自动检查兼容性。
+> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^0.2.8"`。安装时 PluginHost 自动检查兼容性。
 >
 > ⚠️ **版本号说明**：OpenLearn 存在三个独立的版本号，请勿混淆：
 > | 版本 | 当前值 | 用途 |
 > |------|--------|------|
-> | 平台发行版本 | `0.2.5` | CHANGELOG 与 git tag 的发布版本 |
-> | 宿主 API 版本 | `0.2.5` | `engines.openlearn` 兼容性检查所用的版本（自 v0.2.3 起与平台版本统一） |
+> | 平台发行版本 | `0.2.8` | CHANGELOG 与 git tag 的发布版本 |
+> | 宿主 API 版本 | `0.2.8` | `engines.openlearn` 兼容性检查所用的版本（自 v0.2.3 起与平台版本统一） |
 > | SDK 版本 | `3.5.0` | `@openlearn/plugin-sdk` npm 包版本，仅影响类型定义 |
 >
-> **`engines.openlearn` 应填写宿主 API 版本（当前为 `0.2.5`）**，而非平台发行版本或 SDK 版本。
+> **`engines.openlearn` 应填写宿主 API 版本（当前为 `0.2.8`）**，而非平台发行版本或 SDK 版本。
 
 ### 2.7 导航页面 vs. 白板组件 — 如何区分？
 
@@ -293,7 +293,7 @@ ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
 
 ### 2.8 使用 AI Skill 快速开发（推荐）
 
-除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（平台 `0.2.5`、SDK `@openlearn/plugin-sdk@3.5.0` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
+除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（平台 `0.2.8`、SDK `@openlearn/plugin-sdk@3.5.0` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
 
 **安装与配置：**
 
@@ -353,7 +353,7 @@ interface Manifest {
   description?: string;          // 描述
   author?: string;               // 作者
   engines?: {                    // 引擎版本约束
-    openlearn?: string;          // 宿主 API 版本，如 "^0.2.5"
+    openlearn?: string;          // 宿主 API 版本，如 "^0.2.8"
   };
   requires: string[];            // 依赖的服务 Token（格式 @openlearn/core:TokenName@^1.0.0）
   optional?: string[];           // 可选依赖
@@ -533,7 +533,7 @@ export default {
     main: 'index.js',
     description: '在课堂上创建实时投票，收集学生回答',
     author: 'Your Name',
-    engines: { openlearn: '^0.2.5' },
+    engines: { openlearn: '^0.2.8' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',
@@ -1206,7 +1206,7 @@ interface IStorageService {
 | `student.fullscreen` | 学生全屏视图/考试模式（v3.2） |
 | `student.lesson.tool` | 学生学习工具 |
 
-**学生端插件获取当前学生 ID**：宿主在渲染学生端扩展点（`student.view`、`student.fullscreen`）时，自动通过 `slotProps` 注入当前登录学生 ID。插件组件通过 props 接收：
+**学生端插件获取当前学生 ID**：宿主在渲染 `student.view` 扩展点时（`src/features/student/StudentDashboardPanel.tsx` 调用点），通过 `slotProps` 注入当前学生 ID。插件组件通过 props 接收：
 
 ```tsx
 // 前端插件入口 frontend.tsx
@@ -1218,6 +1218,8 @@ export default function MyStudentPlugin(props: { studentId?: string }) {
   return <div>当前学生 ID: {studentId}</div>;
 }
 ```
+
+**所有扩展点组件统一收到课堂上下文（v0.2.8+）**：宿主经 `ExtensionPointRenderer` 向每个扩展点组件注入 `{ lessonId, classId }`（当前课程/班级，`string | null`）；非渲染场景用 `ctx.context.get()` / `ctx.context.subscribe()` 读取。详见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
 | `classroom.tool` | 课堂工具 |
 | `global.setting` | 全局设置页扩展（v3.2） |
 | `nav.user_menu` | 顶部 Header 用户菜单扩展（v5.2） |
@@ -1966,7 +1968,7 @@ export default {
     main: 'index.js',
     description: '插件描述',
     author: '作者名',
-    engines: { openlearn: '^0.2.5' },
+    engines: { openlearn: '^0.2.8' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',

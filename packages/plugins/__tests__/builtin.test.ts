@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ServiceRegistry } from '../../core/di/service-registry.js';
-import { EsmLoader } from '../../core/esm-loader/esm-loader.js';
+import { NodeEsmLoader } from '../../core/esm-loader/index.js';
 import { PluginHost } from '../../core/plugin-host/index.js';
 import { BuiltinPlugin } from '../builtin.js';
 import {
@@ -130,7 +130,7 @@ describe('BuiltinPlugin', () => {
       generateText: async () => '',
     } as any);
 
-    pluginHost = new PluginHost(serviceRegistry, new EsmLoader(), db);
+    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db);
     serviceRegistry.register(IPluginHostToken, pluginHost);
     serviceRegistry.register(IPluginLifecycleManagerToken, new PluginLifecycleManager(pluginHost));
     serviceRegistry.register(IPluginDistributionManagerToken, new PluginDistributionManager(pluginHost));

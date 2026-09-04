@@ -19,6 +19,7 @@ import React, { Suspense } from 'react';
 import { Loader2, Puzzle } from 'lucide-react';
 import { usePluginHost } from './plugin-host-context';
 import { usePluginHostStore } from './plugin-host-store';
+import { useAppStore } from '../store/appStore';
 import type { ExtensionSlot } from './types';
 
 // ── LoadingSkeleton ──────────────────────────────────────────────────────────
@@ -205,6 +206,11 @@ export function ExtensionPointRenderer({
 
   const visibility = usePluginHostStore((s) => s.dashboardVisibility);
 
+  // v5.1: 宿主统一注入的课堂上下文（课程/班级）。源头在 appStore，
+  // 由渲染器读取并注入到所有扩展点组件 props 的最底层（可被 slotProps 覆盖）。
+  const selectedLesson = useAppStore((s) => s.selectedLesson);
+  const liveClassSelectedClassId = useAppStore((s) => s.liveClassSelectedClassId);
+
   // v0.2.6: anchor slot placement filtering —— 宿主在锚点按钮前后各渲染一次，
   // 本侧只渲染与 placement 匹配的扩展（未声明的默认视为 'after'）。
   if (placement) {
@@ -269,15 +275,18 @@ export function ExtensionPointRenderer({
           >
             <Suspense fallback={fallback ?? <LoadingSkeleton />}>
               {isReact ? (
-                React.createElement(
-                  resolveExtensionComponent(ext),
-                  { route: ext.route || route, ...ext.slotProps, ...slotProps },
-                )
+                React.createElement(resolveExtensionComponent(ext), {
+                  route: ext.route || route,
+                  lessonId: selectedLesson,
+                  classId: liveClassSelectedClassId,
+                  ...ext.slotProps,
+                  ...slotProps,
+                })
               ) : (
                 <DOMExtensionWrapper
                   ext={ext}
                   route={ext.route || route}
-                  slotProps={{ ...ext.slotProps, ...slotProps }}
+                  slotProps={{ lessonId: selectedLesson, classId: liveClassSelectedClassId, ...ext.slotProps, ...slotProps }}
                   slot={slot}
                 />
               )}

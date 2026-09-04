@@ -1,6 +1,6 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
-import type { Language } from '../../types';
+import type { Language } from '../types';
 
 export function PluginLogsPanel({ lang }: { lang: Language }) {
   const [logs, setLogs] = React.useState<any[]>([]);

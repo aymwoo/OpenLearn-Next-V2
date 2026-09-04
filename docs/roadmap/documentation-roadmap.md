@@ -1,7 +1,7 @@
 # Documentation Roadmap 文档演进路线图
 
 **Project**: OpenLearn V2
-**Current Milestone**: `openlearn-next@0.2.5`（2026-08-29 发布）
+**Current Milestone**: `openlearn-next@0.2.7`（2026-08-31 发布）
 
 > **平台开发目标请见 [v0.3.0+ 开发路线图](v0.3.0-roadmap)**（2026-08-30 审计产出，含 A/B/C/D 四阶段）。
 > 本页专注**文档体系**自身的演进。

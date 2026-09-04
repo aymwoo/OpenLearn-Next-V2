@@ -29,7 +29,7 @@ export const ProcessPlugin = {
     const db = await ctx.resolve(IDatabaseToken);
 
     // REGISTER TASK HANDLERS
-    await processManager.registerHandler('simulated_task', async (processId, payload, state, log, updateState) => {
+    await processManager.registerHandler('simulated_task', async (processId: string, payload: any, state: any, log: (msg: string) => void, updateState: (s: any) => void) => {
       log(`Process resumed/started: ${payload.name}`);
       const totalSteps = payload.duration;
       const startStep = state?.step || 0;

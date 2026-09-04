@@ -21,7 +21,7 @@ const classroomToolSchema = z.object({
   icon: z.string().optional(),
   description: z.string().optional(),
   commandType: z.string().min(1),
-  payload: z.record(z.unknown()).optional(),
+  payload: z.record(z.string(), z.unknown()).optional(),
 });
 
 const contributesSchema = z.object({
@@ -100,7 +100,7 @@ export const manifestSchema = z.object({
   pluginDependencies: z.array(z.string().min(1)).optional(),
   provides: z.array(z.string().min(1)).optional(),
   configuration: z.object({
-    properties: z.record(z.object({
+    properties: z.record(z.string(), z.object({
       type: z.enum(['string', 'number', 'boolean', 'integer']),
       default: z.unknown().optional(),
       description: z.string().optional(),

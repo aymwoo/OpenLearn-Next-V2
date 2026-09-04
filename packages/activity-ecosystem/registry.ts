@@ -40,8 +40,8 @@ export class ActivityRegistry {
       throw new Error(`ActivityRegistry: activity provider "${id}" is already registered.`);
     }
     this.providers.set(id, provider);
-    if (typeof (provider as { markRegistered?: () => void }).markRegistered === 'function') {
-      (provider as { markRegistered: () => void }).markRegistered();
+    if (typeof (provider as any).markRegistered === 'function') {
+      (provider as any).markRegistered();
     }
   }
 

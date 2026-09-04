@@ -2,15 +2,17 @@ import React from 'react';
 import { PluginCenter } from '../../components/PluginCenter';
 import type { PluginType } from '../../store/appStore';
 
+import type { Language } from '../../i18n';
+
 interface PluginViewProps {
   plugins: PluginType[];
-  lang: string;
-  storeTab: string;
-  setStoreTab: (tab: string) => void;
+  lang: Language;
+  storeTab: 'store' | 'widgets' | 'dev' | 'logs';
+  setStoreTab: (tab: 'store' | 'widgets' | 'dev' | 'logs') => void;
   pluginCode: string;
   setPluginCode: (code: string) => void;
   installingPlugin: boolean;
-  onInstall: (code: string) => Promise<void>;
+  onInstall: (code?: string) => Promise<void> | void;
   onZipUpload: (
     file: File,
     executionMode: 'worker' | 'inline',
@@ -30,7 +32,7 @@ export function PluginView(props: PluginViewProps) {
       pluginCode={props.pluginCode}
       setPluginCode={props.setPluginCode}
       installingPlugin={props.installingPlugin}
-      onInstall={props.onInstall}
+      onInstall={() => { void props.onInstall(props.pluginCode); }}
       onZipUpload={props.onZipUpload}
       onToggle={props.onToggle}
       onDelete={props.onDelete}

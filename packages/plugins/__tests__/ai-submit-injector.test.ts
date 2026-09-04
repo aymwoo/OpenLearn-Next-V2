@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { ServiceRegistry } from '../../core/di/service-registry.js';
-import { EsmLoader } from '../../core/esm-loader/esm-loader.js';
+import { NodeEsmLoader } from '../../core/esm-loader/index.js';
 import { PluginHost } from '../../core/plugin-host/index.js';
 import { AiSubmitInjectorPlugin } from '../ai-submit-injector.js';
 import {
@@ -88,7 +88,7 @@ describe('AiSubmitInjectorPlugin', () => {
       delete: async () => {},
     } as any);
 
-    pluginHost = new PluginHost(serviceRegistry, new EsmLoader(), db);
+    pluginHost = new PluginHost(serviceRegistry, new NodeEsmLoader(), db);
   });
 
   afterEach(() => {
@@ -116,7 +116,7 @@ describe('AiSubmitInjectorPlugin', () => {
     // Register a listener for the output event
     const eventReceivedPromise = new Promise<any>((resolve) => {
       eventBus.subscribe('courseware.uploaded', (event) => {
-        if (event.payload.name.startsWith('[自动提交版]')) {
+        if ((event.payload as any)?.name?.startsWith('[自动提交版]')) {
           resolve(event);
         }
       });

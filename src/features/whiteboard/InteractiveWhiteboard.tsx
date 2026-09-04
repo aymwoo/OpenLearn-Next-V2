@@ -86,11 +86,11 @@ fullscreenRendererRegistry.register('rollcall', ({ data }: FullscreenRendererPro
 ));
 
 fullscreenRendererRegistry.register('html-applet', ({ data, lessonId }: FullscreenRendererProps) => {
-  if (data.coursewareUuid) {
+    if (data.coursewareUuid) {
     return (
       <iframe
         src={`/runtime/${data.coursewareUuid}/`}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+        sandbox="allow-scripts allow-forms allow-downloads"
         className="w-full h-full rounded-xl border"
       />
     );
@@ -99,7 +99,7 @@ fullscreenRendererRegistry.register('html-applet', ({ data, lessonId }: Fullscre
     return (
       <iframe
         src={`/api/resources/${data.resourceId}/`}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+        sandbox="allow-scripts allow-forms allow-downloads"
         className="w-full h-full rounded-xl border"
       />
     );
@@ -107,7 +107,7 @@ fullscreenRendererRegistry.register('html-applet', ({ data, lessonId }: Fullscre
   return (
     <iframe
       srcDoc={wrapSrcDocWithBridge(data.code || '', lessonId)}
-      sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+      sandbox="allow-scripts allow-forms allow-downloads"
       className="w-full h-full rounded-xl border"
     />
   );
@@ -1811,7 +1811,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     className="w-full h-full border-none"
                     src={data.coursewareUuid ? `/runtime/${data.coursewareUuid}/` : (data.resourceId ? `/api/resources/${data.resourceId}/` : undefined)}
                     srcDoc={data.coursewareUuid || data.resourceId ? undefined : wrapSrcDocWithBridge(data.code, lessonId)}
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+                    sandbox="allow-scripts allow-forms allow-downloads"
                   />
                 </div>
               )}

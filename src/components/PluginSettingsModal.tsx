@@ -249,7 +249,7 @@ export function PluginSettingsModal({
             </div>
           ) : (
             <div className="space-y-0.5">
-              {Object.entries(schema).map(([key, prop]) => renderField(key, prop))}
+              {Object.entries(schema).map(([key, prop]) => renderField(key, prop as ConfigProperty))}
             </div>
           )}
         </div>

@@ -1,4 +1,5 @@
 import type { Language } from '../../i18n';
+export type { Language };
 
 export interface PluginType {
   id: string;

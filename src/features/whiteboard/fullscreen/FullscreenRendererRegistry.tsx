@@ -14,18 +14,37 @@ export type FullscreenRendererProps = {
 export type FullscreenRenderer = React.FC<FullscreenRendererProps>;
 
 class FullscreenRendererRegistry {
-  private renderers = new Map<string, FullscreenRenderer>();
+  private renderers = new Map<string, { impl: FullscreenRenderer; pluginId?: string }>();
 
-  register(type: string, renderer: FullscreenRenderer): void {
-    this.renderers.set(type, renderer);
+  register(type: string, renderer: FullscreenRenderer, pluginId?: string): void {
+    this.renderers.set(type, { impl: renderer, pluginId });
   }
 
   get(type: string): FullscreenRenderer | undefined {
-    return this.renderers.get(type);
+    return this.renderers.get(type)?.impl;
   }
 
   has(type: string): boolean {
     return this.renderers.has(type);
+  }
+
+  /**
+   * Remove a renderer by type. When `pluginId` is provided, the entry is only
+   * removed if it is owned by that plugin — prevents a plugin from evicting
+   * host built-in renderers or another plugin's renderer.
+   */
+  unregister(type: string, pluginId?: string): void {
+    const entry = this.renderers.get(type);
+    if (!entry) return;
+    if (pluginId && entry.pluginId !== pluginId) return;
+    this.renderers.delete(type);
+  }
+
+  /** Remove all renderers registered by the given plugin (lifecycle cleanup). */
+  unregisterPlugin(pluginId: string): void {
+    for (const [type, entry] of this.renderers) {
+      if (entry.pluginId === pluginId) this.renderers.delete(type);
+    }
   }
 }
 
@@ -188,7 +207,7 @@ function DefaultFullscreenRenderer({ data }: FullscreenRendererProps) {
     return (
       <iframe
         src={`/runtime/${data.coursewareUuid}/`}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+        sandbox="allow-scripts allow-forms allow-downloads"
         className="w-full h-full rounded-xl border"
       />
     );

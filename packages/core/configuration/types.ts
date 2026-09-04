@@ -113,7 +113,7 @@ export interface EventBusIntegrationSource {
 
 export interface BuilderIntegrationSource {
   getConfiguration?(): Record<string, unknown>;
-  onConfigurationLoaded?(cb: (config: Record<string, unknown>) => void): () => void;
+  onConfigurationLoaded?(configOrCb: Record<string, unknown> | ((config: Record<string, unknown>) => void)): unknown;
 }
 
 export interface BootstrapPipelineIntegrationSource {

@@ -143,9 +143,7 @@ export function useGradeExport(options: UseGradeExportOptions) {
         classes,
         classStudentsMap,
         classDashboardMap,
-        fetchClassStudents,
-        fetchClassDashboard,
-        fetchClassProgress,
+        lang,
       });
     } catch (e) {
       console.error('Export all classes error:', e);
@@ -153,7 +151,7 @@ export function useGradeExport(options: UseGradeExportOptions) {
       setIsExportingAllCombined(false);
       setExportDropdownOpen(false);
     }
-  }, [classes, classStudentsMap, classDashboardMap, fetchClassStudents, fetchClassDashboard, fetchClassProgress]);
+  }, [classes, classStudentsMap, classDashboardMap, lang]);
 
   const get30DayAverageWarning = useCallback(
     (studentId: string, classId: string) => {

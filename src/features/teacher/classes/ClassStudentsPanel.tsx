@@ -49,7 +49,7 @@ export interface ClassStudentsPanelProps {
   toggleStudentSelection: (id: string) => void;
   get30DayAverageWarning: (studentId: string, classId: string) => number | null;
   lessons: Lesson[];
-  setStudents: (students: StudentType[]) => void;
+  setStudents: React.Dispatch<React.SetStateAction<StudentType[]>> | ((students: StudentType[] | ((prev: StudentType[]) => StudentType[])) => void);
   setClassStudentsMap: (updater: (prev: Record<string, StudentType[]>) => Record<string, StudentType[]>) => void;
   fetchClassStudents: (id: string) => Promise<void>;
   fetchStudents: () => Promise<void>;

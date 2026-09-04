@@ -5,6 +5,8 @@ import {
 } from '../bootstrap/composition/index.js';
 import { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
 import { WhiteboardCapability } from '../ai-capability/capabilities/whiteboard-capability.js';
+import { AIRuntimeKernel } from '../ai/index.js';
+import { CapabilityLogger } from '../ai-capability/logging/capability-logger.js';
 import { EventBus } from '../event-bus/index.js';
 
 describe('Sprint A3 Step 2 Whiteboard Platform Integration Test Suite', () => {
@@ -21,7 +23,7 @@ describe('Sprint A3 Step 2 Whiteboard Platform Integration Test Suite', () => {
 
   it('should verify registration of Whiteboard Capability in CapabilityRegistry', () => {
     const registry = new CapabilityRegistry();
-    const whiteboardCap = new WhiteboardCapability();
+    const whiteboardCap = new WhiteboardCapability(new AIRuntimeKernel(), new CapabilityLogger());
     registry.registerCapability(whiteboardCap);
 
     expect(registry.hasCapability('capability_whiteboard')).toBe(true);

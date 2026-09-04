@@ -24,6 +24,20 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
   const data = event.data;
   if (!data || typeof data !== 'object') return;
 
+  // Security: Verify that event.source is an iframe within the current document
+  if (typeof window !== 'undefined' && typeof document !== 'undefined' && event.source) {
+    try {
+      const iframes = Array.from(document.querySelectorAll('iframe'));
+      const isFromValidIframe = iframes.some((f) => f.contentWindow === event.source);
+      if (!isFromValidIframe && event.source !== window) {
+        // Drop message from unknown external window / popup
+        return;
+      }
+    } catch {
+      // Ignore DOM query errors
+    }
+  }
+
   let attemptId = data.attempt_id;
   const type = data.type || '';
   const payload = data.payload || data;

@@ -45,11 +45,12 @@ export class ClassroomEventBus {
     };
 
     this.eventBus.publish({
-      id: event.id,
+      eventId: event.id,
       type: event.type,
       source: 'ClassroomRuntime',
       payload: event as unknown as Record<string, unknown>,
       timestamp: event.timestamp,
+      metadata: {},
     });
   }
 

@@ -45,7 +45,7 @@ export class AIContextProviderRegistry {
 
     for (const provider of this.providers.values()) {
       try {
-        const provided = provider.provideContext(classroomCtx);
+        const provided = provider.provideContext(classroomCtx) as (Partial<AIClassroomContextSnapshot> & { extensionData?: Record<string, unknown> }) | undefined;
         if (provided) {
           if (provided.lesson) lesson = { ...lesson, ...provided.lesson };
           if (provided.teacher) teacher = { ...teacher, ...provided.teacher };
@@ -54,10 +54,10 @@ export class AIContextProviderRegistry {
           if (provided.resources) resources = provided.resources as any;
           if (provided.whiteboard) whiteboard = { ...whiteboard, ...provided.whiteboard };
           if (provided.activities) activities = { ...activities, ...provided.activities };
-          if (provided.workspace) workspace = { ...workspace, ...provided.workspace };
+          if (provided.workspace) workspace = { ...workspace, ...provided.workspace } as any;
           if (provided.analyticsSummary) analyticsSummary = { ...analyticsSummary, ...provided.analyticsSummary };
-          if (provided.plugins) plugins = { ...plugins, ...provided.plugins };
-          if (provided.permissions) permissions = { ...permissions, ...provided.permissions };
+          if (provided.plugins) plugins = { ...plugins, ...provided.plugins } as any;
+          if (provided.permissions) permissions = { ...permissions, ...provided.permissions } as any;
           if (provided.extensionData) Object.assign(extensionData, provided.extensionData);
         }
       } catch {

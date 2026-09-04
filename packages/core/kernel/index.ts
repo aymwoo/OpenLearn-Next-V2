@@ -255,9 +255,7 @@ export class Kernel {
                         command.actorId === 'usr_admin' ||
                         command.actorId === 'admin-demo' ||
                         command.actorId?.endsWith(':administrator') || 
-                        command.actorId?.endsWith(':admin') ||
-                        command.actorId?.includes(':administrator') ||
-                        command.actorId?.includes(':admin');
+                        command.actorId?.endsWith(':admin');
 
         if (action.capabilityRequired && !isAdmin) {
           const allowed = this.capabilityGuard.check(command.actorId, action.capabilityRequired);

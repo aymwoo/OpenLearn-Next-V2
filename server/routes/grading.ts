@@ -495,7 +495,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
         return res.status(400).json({ success: false, error: 'lessonId, studentId, and grade are required' });
       }
 
-      const gradeService = await kernelContainer.registry.resolve(ISemesterGradeServiceToken);
+      const gradeService = await kernelContainer.serviceRegistry.resolve(ISemesterGradeServiceToken);
       await gradeService.saveSemesterGrade(lessonId, studentId, Math.round(Number(grade)));
 
       res.json({ success: true });
@@ -509,7 +509,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
   // ─────────────────────────────────────────────────────────────────
   app.get('/api/classes/:classId/points-dimensions', async (req, res) => {
     try {
-      const dimensionRegistry = await kernelContainer.registry.resolve(IPointsDimensionRegistryToken);
+      const dimensionRegistry = await kernelContainer.serviceRegistry.resolve(IPointsDimensionRegistryToken);
       const dimensions = dimensionRegistry.listDimensions();
       res.json({ success: true, dimensions });
     } catch (e: any) {
@@ -530,7 +530,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
         return res.status(400).json({ success: false, error: 'classId, dimensionId, deltaPoints, and reason are required' });
       }
 
-      const ledgerService = await kernelContainer.registry.resolve(IPointsLedgerServiceToken);
+      const ledgerService = await kernelContainer.serviceRegistry.resolve(IPointsLedgerServiceToken);
       const logItem = await ledgerService.addPoints(studentId, classId, dimensionId, Number(deltaPoints), reason, pluginId);
 
       // Publish to EventBus & Socket.IO
@@ -553,7 +553,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const { studentId } = req.params;
       const { classId } = req.query;
 
-      const ledgerService = await kernelContainer.registry.resolve(IPointsLedgerServiceToken);
+      const ledgerService = await kernelContainer.serviceRegistry.resolve(IPointsLedgerServiceToken);
       const logs = await ledgerService.getLogs(studentId, classId as string | undefined);
       const summary = await ledgerService.getStudentDimensionSummary(studentId, (classId as string) || '');
 

@@ -48,10 +48,10 @@ export function getCookieToken(req: Request): string | null {
 
 export function getActorId(req: Request): string {
   const token = getCookieToken(req);
-  if (!token) return 'user-frontend';
+  if (!token) return 'anonymous';
   try {
     const session = getValidSession(token);
-    if (!session) return 'user-frontend';
+    if (!session) return 'anonymous';
     let role = session.subRole || session.role;
     if (session.username === 'admin' || session.userId === 'usr_admin' || role === 'admin' || role === 'administrator') {
       role = 'administrator';
@@ -59,9 +59,9 @@ export function getActorId(req: Request): string {
     if (role) {
       return `user:${session.userId || 'demo'}:${role}`;
     }
-    return 'user-frontend';
+    return 'anonymous';
   } catch {
-    return 'user-frontend';
+    return 'anonymous';
   }
 }
 

@@ -10,6 +10,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-09-04
+
+### Features
+- **第三方插件白板扩展能力（v3.5）**：
+  - `ctx.ui.registerFullscreenRenderer(type, renderer)` / `ctx.ui.registerPropertyEditor(type, editor)` 允许插件为自定义白板元素类型注册全屏渲染器与属性编辑器；`fullscreenRendererRegistry` / `propertyEditorRegistry` 增加所有权感知的 `unregister` / `unregisterPlugin`，插件停用/卸载/激活失败时宿主自动清理其注册。
+  - SDK `@openlearn/plugin-sdk` 新增 `FullscreenRendererProps` / `FullscreenRenderer` / `PropertyEditorProps` / `PropertyEditorComponent` 四个 type-only 导出。
+- **扩展点组件统一注入课堂上下文**：
+  - `ExtensionPointRenderer` 向所有扩展点组件 props 注入 `{ lessonId, classId }`（当前课程/班级，源 `appStore.selectedLesson` / `liveClassSelectedClassId`），`teacher.tab` 面板形态同步注入。
+  - `FrontendPluginContext` 新增 `ctx.context.get()` / `ctx.context.subscribe()` 只读快照与订阅，供非渲染场景读取当前课程/班级。
+
+### Docs
+- 更新 [`docs/reference/plugin-ui-extension-slots.md`](docs/reference/plugin-ui-extension-slots.md)：明确各槽位注入的 `slotProps` 字段契约与 `ctx.context` 用法，纠正 `@/` 宿主内部导入对第三方插件不可达的误区，并将 `fullscreenRendererRegistry` / `propertyEditorRegistry` 用法改为 `ctx.ui.register*`。
+- 新增 [`docs/release-notes/v0.2.8.md`](docs/release-notes/v0.2.8.md) 发布说明。
+
+## [0.2.7] - 2026-08-31
+
+### Security
+- **严格无同源沙箱隔离（Strict Sandboxing）**：
+  - 彻底移除 `src/features/whiteboard/InteractiveWhiteboard.tsx`、`src/features/courseware/InteractiveCoursewareViewer.tsx` 与 `src/features/whiteboard/fullscreen/FullscreenRendererRegistry.tsx` 中所有 iframe 的 `allow-same-origin` 声明。
+  - 统一确立 `sandbox="allow-scripts allow-forms allow-downloads"` 严格沙箱隔离，完全依托 LMS Bridge Proxy 代理跨域消息，对齐平台架构最高安全标准。
+
+### Refactor / Performance
+- **数据库外键强制开启（Database Integrity）**：
+  - 在 `packages/core/db/index.ts` 初始化连接配置中显式启用 `db.pragma('foreign_keys = ON');`，在 SQLite 引擎层强制激活外键级联检查，杜绝孤儿数据。
+
+### Tooling
+- **ESLint TypeScript 规则优化**：
+  - 在 `eslint.config.js` 的 `**/*.{ts,tsx}` 配置段加入 `'no-undef': 'off'`，避免 ESLint 重复校验 TypeScript 编译器类型定义导致的假报错。
+
+### Docs
+- 新增 [`docs/release-notes/v0.2.7.md`](docs/release-notes/v0.2.7.md) 发布说明，更新 Sphinx toctree 并完成 HTML 文档生成。
+- 全量自动化测试回归 169 / 169 套件（941 个用例）100% 通过。
+
+## [0.2.6] - 2026-08-30
+
 ### Features
 - **插件锚点扩展槽（Anchor Slots）—— 支持在宿主原生按钮前后插入插件按钮**：
   - 新增 `anchor:*` 开放槽位：宿主在原生按钮/元素前后各渲染一次 `<ExtensionPointRenderer slot="anchor:..." placement="before|after" />`，插件通过 `placement` 声明插入侧。
@@ -19,12 +54,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - SDK（`@openlearn/plugin-sdk`）导出 `AnchorToolConfig`；`openlearn.d.ts` 同步补充类型。
   - 白板工具栏已埋七个锚点：`presentation`、`code-sandbox`、`math-graph`、`courseware`、`rollcall`、`ai-tutor`、`grid`（槽位前缀 `anchor:whiteboard-toolbar:`）。
 
+### Security
+- **权限边界与最小特权原则加固**：
+  - 在 `packages/core/capability-system/index.ts` 中移除 `'user-frontend': ['*:*:*']` 全局通配符特权，改为按用户角色（`:teacher` / `:student`）授予最小能力，未登录用户回退为 `anonymous: []` 零特权。
+  - `server/middleware/auth.ts` 中 `getActorId(req)` 未登录回退修正为 `'anonymous'`。
+  - 加固 `packages/core/kernel/index.ts` 中的 `isAdmin` 校验，消除子串模糊匹配隐患。
+- **Worker 沙箱原生模块安全黑名单**：
+  - 在 `packages/core/worker-runtime/worker-manager.ts` 的 `ctx.require` 中拦截 `child_process`, `fs`, `net`, `http`, `os`, `vm`, `cluster`, `worker_threads` 等危险模块，彻底防范插件逃逸沙箱执行主机指令。
+- **LMS Bridge 跨窗口消息源校验**：
+  - `src/services/lms-bridge.ts` 中校验 `event.source` 是否属于当前 DOM 中的合法 `iframe.contentWindow`，阻断跨窗口消息仿冒。
+- **AI Provider 连通性测试 SSRF 拦截**：
+  - `server/routes/plugins.ts` 中新增 `isSafeExternalUrl` 校验，封禁指向本地回环及内网私有网段的恶意探测。
+- **操作系统指令通道鉴权**：
+  - `server/routes/os.ts` 中对 `POST /api/commands` 挂载 `requireAuth()` 中间件。
+
 ### Fixes
-- 前端扩展点 `position` 字段此前仅声明未生效：`plugin-host-store.getExtensions` 现在按 `position` 升序（缺省 `100`）返回，同一 slot 内跨插件稳定排序，锚点槽位同侧多按钮同样适用。
+- **TypeScript 全量类型编译错误清零 (72 Errors -> 0)**：
+  - **前端主壳 TDZ 修复**：重构 `src/App.tsx` 中的 Hook 拓扑声明顺序，引入 `chatLogUpdaterRef` 解决 `useCourseWizard`、`usePluginManagement`、`useAgentChat` 的循环与延迟依赖，彻底清除 8 处变量在使用前引用错误。
+  - **组件与服务契约对齐**：
+    - `src/features/teacher/Dashboard.tsx`：适配 `scoreOverrides` 状态更新器与 `QuickActionsMenu` 异步回调。
+    - `src/features/teacher/PluginView.tsx`：引入严格 `Language` 与 Tab 联合类型。
+    - `src/features/teacher/classes/ClassStudentsPanel.tsx`：支持函数式更新器 `(prev => ...)`。
+    - `src/hooks/useGradeExport.ts`：修复 `exportAllClassesCombinedCSV` 参数传递结构。
+    - `src/components/PluginSettingsModal.tsx`：严格声明 `ConfigProperty` 类型断言。
+    - `src/features/ai-classroom-context/` & `classroom-runtime/`：修复多态值类型、只读数组解构以及 `EventBus.publish` 的 `metadata: {}` 字段。
+  - **核心包与服务端契约修复**：
+    - `packages/core/esm-loader/manifest-schema.ts`：适配 Zod v4 双参 `z.record(z.string(), z.unknown())`。
+    - `packages/plugins/__tests__/*.test.ts`：将抽象类 `new EsmLoader()` 替换为实体类 `new NodeEsmLoader()`。
+    - `server/routes/grading.ts`：将 `kernelContainer.registry` 修复为 `kernelContainer.serviceRegistry`。
+    - `packages/core/configuration/PlatformConfiguration.ts`：修复 `ConfigurationContext` 模块导入并放开动态扩展属性的可变性。
+- **前端扩展点排序生效**：
+  - `plugin-host-store.getExtensions` 按 `position` 升序（缺省 `100`）稳定排序。
+
+### Refactor / Performance
+- **数据库 9 处核心高频业务索引**：
+  - 在 `packages/core/db/index.ts` 中新增 9 个针对性复合与二级索引（`idx_whiteboard_lesson`、`idx_class_students_class`、`idx_class_students_student`、`idx_schedules_class_date`、`idx_courseware_attempt_cw_st`、`idx_submission_result_attempt`、`idx_events_type_time`、`idx_assignments_class`、`idx_attendance_schedule`），消除面授课堂、排课及成绩导出时的全表扫描。
 
 ### Docs
-- 新增锚点目录 [`docs/plugin/anchor-slots.md`](docs/plugin/anchor-slots.md)，并同步更新 `plugin/extension-registry.md`、`plugin/plugin-manifest-spec.md`、`reference/plugin-ui-extension-slots.md`、`tutorials/plugin-development-tutorial.md`、`index.md`（toctree）。
-- 新增 `ExtensionPointRenderer` 锚点 placement 过滤 + position 排序渲染测试，以及 manifest-schema / contribution-registry 锚点用例；全量回归 941 passed。
+- 新增锚点目录 [`docs/plugin/anchor-slots.md`](docs/plugin/anchor-slots.md) 并更新相关扩展点规范。
+- 新增 [`docs/release-notes/v0.2.6.md`](docs/release-notes/v0.2.6.md) 发布说明。
+- 全量自动化测试回归 169 / 169 套件（941 个用例）全绿通过。
 
 ## [0.2.5] - 2026-08-29
 

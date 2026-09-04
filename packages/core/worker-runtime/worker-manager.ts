@@ -691,6 +691,21 @@ parentPort.on('message', async function(msg) {
         },
         db: dbApi,
         require: function(moduleName) {
+          var BLOCKED_NATIVE_MODULES = [
+            'child_process', 'node:child_process',
+            'fs', 'node:fs', 'fs/promises', 'node:fs/promises',
+            'net', 'node:net',
+            'http', 'node:http', 'https', 'node:https', 'http2', 'node:http2',
+            'dgram', 'node:dgram', 'dns', 'node:dns',
+            'cluster', 'node:cluster',
+            'worker_threads', 'node:worker_threads',
+            'vm', 'node:vm',
+            'v8', 'node:v8',
+            'wasi', 'node:wasi'
+          ];
+          if (BLOCKED_NATIVE_MODULES.indexOf(moduleName) !== -1) {
+            throw new Error('[SecurityError] Direct access to Node.js native module "' + moduleName + '" is forbidden in plugin worker sandbox.');
+          }
           if (PLUGIN_SHARED_MODULES.indexOf(moduleName) !== -1) {
             try {
               return requireFn(moduleName);

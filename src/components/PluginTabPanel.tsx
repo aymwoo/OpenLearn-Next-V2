@@ -4,14 +4,16 @@ import { usePluginHostStore } from '../plugin-host/plugin-host-store';
 import { useAppStore } from '../store/appStore';
 import { DOMExtensionWrapper } from '../plugin-host/extension-point-renderer';
 
-function ActiveTabComponent({ component }: { component: unknown }) {
-  const Comp = component as ComponentType<{ renderType: string }>;
-  return <Comp renderType="panel" />;
+function ActiveTabComponent({ component, lessonId, classId }: { component: unknown; lessonId: string | null; classId: string | null }) {
+  const Comp = component as ComponentType<{ renderType: string; lessonId: string | null; classId: string | null }>;
+  return <Comp renderType="panel" lessonId={lessonId} classId={classId} />;
 }
 
 function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null }) {
   const extensionPoints = usePluginHostStore(state => state.extensionPoints);
   const lang = useAppStore(state => state.lang);
+  const lessonId = useAppStore(state => state.selectedLesson);
+  const classId = useAppStore(state => state.liveClassSelectedClassId);
   const tabs = extensionPoints.get('teacher.tab' as any) || [];
 
   // Auto-select first tab if none active
@@ -24,9 +26,9 @@ function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null })
       {/* Active panel */}
       <div className="flex-1 overflow-auto">
         {activeTab?.component ? (
-          <ActiveTabComponent component={activeTab.component} />
+          <ActiveTabComponent component={activeTab.component} lessonId={lessonId} classId={classId} />
         ) : activeTab && typeof (activeTab as any).render === 'function' ? (
-          <DOMExtensionWrapper ext={activeTab} slot="teacher.tab" slotProps={{ renderType: 'panel' }} />
+          <DOMExtensionWrapper ext={activeTab} slot="teacher.tab" slotProps={{ renderType: 'panel', lessonId, classId }} />
         ) : (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">

@@ -523,6 +523,32 @@ declare const IPresenceEngineServiceToken: Token<IPresenceEngineService>;
 declare const ITeachingCollaborationServiceToken: Token<ITeachingCollaborationService>;
 declare const ILearningAnalyticsServiceToken: Token<ILearningAnalyticsService>;
 
+// ── Frontend Whiteboard Registries (V3.5) ────────────────────────────────
+// Type-only mirrors of the host runtime registries for third-party plugins.
+// Plugins receive registration functions via `ctx.ui.registerFullscreenRenderer`
+// / `ctx.ui.registerPropertyEditor` — they do NOT import the host singletons.
+
+declare interface FullscreenRendererProps {
+  elementType: string;
+  data: Record<string, any>;
+  onClose: () => void;
+  containerSize: { width: number; height: number };
+  lessonId: string;
+}
+
+declare type FullscreenRenderer = (props: FullscreenRendererProps) => unknown;
+
+declare interface PropertyEditorProps {
+  elementId: string;
+  elementType: string;
+  data: Record<string, any>;
+  updateData: (partial: Record<string, any>) => void;
+  lessonId: string;
+  onClose: () => void;
+}
+
+declare type PropertyEditorComponent = (props: PropertyEditorProps) => unknown;
+
 export type {
   PluginContext,
   PluginDatabaseAPI,
@@ -564,6 +590,10 @@ export type {
   StartActivityResult,
   ActivityRegistry,
   PluginHost,
+  FullscreenRendererProps,
+  FullscreenRenderer,
+  PropertyEditorProps,
+  PropertyEditorComponent,
 };
 
 export {

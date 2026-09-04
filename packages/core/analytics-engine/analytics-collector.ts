@@ -23,9 +23,9 @@ export class AnalyticsCollector {
     this.eventStream = eventStream;
   }
 
-  public collect<T = Record<string, unknown>>(input: RawEventInput<T>): NormalizedAnalyticsEvent<T> {
+  public collect<T extends Record<string, unknown> = Record<string, unknown>>(input: RawEventInput<T>): NormalizedAnalyticsEvent<T> {
     const raw = this.normalizer.normalize(input);
-    const sanitized = this.privacyStorage.sanitizeEvent(raw) as NormalizedAnalyticsEvent<T>;
+    const sanitized = this.privacyStorage.sanitizeEvent(raw as any) as unknown as NormalizedAnalyticsEvent<T>;
     this.eventStream.publish(sanitized);
     return sanitized;
   }

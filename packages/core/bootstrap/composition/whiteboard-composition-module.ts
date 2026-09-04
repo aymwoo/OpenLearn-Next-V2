@@ -7,6 +7,8 @@ import { CompositionModule, CompositionContextOptions } from './composition-type
 import { PlatformServiceRegistry } from '../../service-registry/index.js';
 import { CapabilityRegistry } from '../../ai-capability/registry/capability-registry.js';
 import { WhiteboardCapability } from '../../ai-capability/capabilities/whiteboard-capability.js';
+import { AIRuntimeKernel } from '../../ai/index.js';
+import { CapabilityLogger } from '../../ai-capability/logging/capability-logger.js';
 import { EventBus } from '../../event-bus/index.js';
 
 export class WhiteboardCompositionModule implements CompositionModule {
@@ -34,7 +36,7 @@ export class WhiteboardCompositionModule implements CompositionModule {
     });
 
     // 2. Register Whiteboard Capability into CapabilityRegistry
-    capabilityRegistry.registerCapability(new WhiteboardCapability());
+    capabilityRegistry.registerCapability(new WhiteboardCapability(new AIRuntimeKernel(), new CapabilityLogger()));
 
     // 3. Publish Whiteboard Infrastructure Events
     eventBus.publish({

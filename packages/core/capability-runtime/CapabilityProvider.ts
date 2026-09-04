@@ -10,7 +10,8 @@
  */
 
 import { CapabilityError } from './CapabilityError.js';
-import type { CapabilityActivator, CapabilityContext } from './types.js';
+import type { CapabilityActivator } from './types.js';
+import type { CapabilityContext } from './CapabilityContext.js';
 
 export type CapabilityProviderMode = 'Single' | 'Multiple' | 'Priority' | 'Default';
 

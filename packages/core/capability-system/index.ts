@@ -4,7 +4,16 @@ export class CapabilityGuard {
   constructor() {
     // Default grants
     this.actorCapabilities.set('user-demo', ['*:*:*']); // User is superadmin
-    this.actorCapabilities.set('user-frontend', ['*:*:*']); // Frontend is superadmin
+    this.actorCapabilities.set('user-frontend', [
+      'lesson:*',
+      'whiteboard:*',
+      'management:*',
+      'quiz:*',
+      'vfs:*',
+      'process:*',
+      'plugin:*',
+    ]);
+    this.actorCapabilities.set('anonymous', []); // Anonymous has no permissions
     this.actorCapabilities.set('agent-system-0', [
       'lesson:write',
       'lesson:delete',
@@ -18,8 +27,8 @@ export class CapabilityGuard {
       'process:write',
       'process:read'
     ]);
-    this.actorCapabilities.set('teacher-demo', ['lesson:write', 'lesson:read']);
-    this.actorCapabilities.set('student-demo', ['student:write']);
+    this.actorCapabilities.set('teacher-demo', ['lesson:*', 'whiteboard:*', 'management:*', 'quiz:*', 'vfs:*']);
+    this.actorCapabilities.set('student-demo', ['student:write', 'lesson:read', 'whiteboard:read']);
   }
 
   public grant(actorId: string, cap: string) {
@@ -37,8 +46,33 @@ export class CapabilityGuard {
   public check(actorId: string, requiredCap: string): boolean {
     const isAdmin = actorId === 'role:administrator' || 
                     actorId?.endsWith(':administrator') || 
+                    actorId === 'admin' ||
+                    actorId === 'usr_admin' ||
                     actorId === 'admin-demo';
     if (isAdmin) return true;
+
+    // Role-based capability fallback
+    if (actorId?.endsWith(':teacher')) {
+      const teacherCaps = ['lesson:*', 'whiteboard:*', 'management:*', 'quiz:*', 'vfs:*', 'process:*', 'plugin:*'];
+      const [reqRes, reqAct] = requiredCap.split(':');
+      if (teacherCaps.some(c => {
+        const [res, act] = c.split(':');
+        return (res === reqRes || res === '*') && (act === reqAct || act === '*');
+      })) {
+        return true;
+      }
+    }
+
+    if (actorId?.endsWith(':student')) {
+      const studentCaps = ['student:write', 'lesson:read', 'whiteboard:read'];
+      const [reqRes, reqAct] = requiredCap.split(':');
+      if (studentCaps.some(c => {
+        const [res, act] = c.split(':');
+        return (res === reqRes || res === '*') && (act === reqAct || act === '*');
+      })) {
+        return true;
+      }
+    }
 
     const caps = this.actorCapabilities.get(actorId) || [];
     // Superadmin bypass

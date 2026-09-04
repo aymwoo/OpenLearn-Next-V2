@@ -34,6 +34,7 @@ export default [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+      'no-undef': 'off',
       'no-console': 'off',
     },
   },

@@ -49,6 +49,7 @@ export const db = new Database(dbPath);
 // WAL mode: 读写并行，写不阻塞读，写并发吞提升 3-5x
 db.pragma('journal_mode = WAL');
 db.pragma('synchronous = NORMAL');
+db.pragma('foreign_keys = ON');
 
 // Initialize schemas
 db.exec(`
@@ -393,6 +394,17 @@ db.exec(`
     status TEXT NOT NULL DEFAULT 'draft',
     graded_at INTEGER
   );
+
+  -- Performance Indexes
+  CREATE INDEX IF NOT EXISTS idx_whiteboard_lesson ON whiteboard_elements(lesson_id);
+  CREATE INDEX IF NOT EXISTS idx_class_students_class ON class_students(class_id);
+  CREATE INDEX IF NOT EXISTS idx_class_students_student ON class_students(student_id);
+  CREATE INDEX IF NOT EXISTS idx_schedules_class_date ON schedules(class_id, scheduled_date);
+  CREATE INDEX IF NOT EXISTS idx_courseware_attempt_cw_st ON courseware_attempt(courseware_id, student_id);
+  CREATE INDEX IF NOT EXISTS idx_submission_result_attempt ON submission_result(attempt_id);
+  CREATE INDEX IF NOT EXISTS idx_events_type_time ON events(type, timestamp);
+  CREATE INDEX IF NOT EXISTS idx_assignments_class ON assignments(class_id);
+  CREATE INDEX IF NOT EXISTS idx_attendance_schedule ON attendance(schedule_id);
 `);
 
 // Phase 5: Worker isolation mode support — execution_mode column for plugins table

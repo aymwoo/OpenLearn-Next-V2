@@ -9,7 +9,7 @@ export const createDefaultAIContextProvider = (
   id: string,
   name: string,
   key: string,
-  value: Record<string, unknown>
+  value: unknown
 ): IAIContextProvider => ({
   id,
   name,

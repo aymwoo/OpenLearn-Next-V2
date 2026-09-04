@@ -842,12 +842,12 @@ export const ManagementPlugin = {
           );
           return { success: true, affectedId: payload.scheduleId, count: 1 };
         } else if (payload.classId && payload.scheduledDate) {
-          const result = db.prepare('UPDATE schedules SET status = ?, notes = ? WHERE class_id = ? AND scheduled_date = ?').run(
+          const result: any = db.prepare('UPDATE schedules SET status = ?, notes = ? WHERE class_id = ? AND scheduled_date = ?').run(
             statusValue, notesValue, payload.classId, payload.scheduledDate
           );
           return { success: true, count: result.changes, classId: payload.classId, scheduledDate: payload.scheduledDate };
         } else if (payload.scheduledDate) {
-          const result = db.prepare('UPDATE schedules SET status = ?, notes = ? WHERE scheduled_date = ?').run(
+          const result: any = db.prepare('UPDATE schedules SET status = ?, notes = ? WHERE scheduled_date = ?').run(
             statusValue, notesValue, payload.scheduledDate
           );
           return { success: true, count: result.changes, scheduledDate: payload.scheduledDate };

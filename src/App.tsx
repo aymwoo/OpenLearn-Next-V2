@@ -132,88 +132,7 @@ export default function App() {
   const elements = useAppStore((s) => s.elements);
   const setElements = useAppStore((s) => s.setElements);
 
-  // ── Hook: 课程创建向导 (Course Wizard) ──
-  const courseWizard = useCourseWizard({
-    lang,
-    addToast,
-    fetchLessons,
-    setSelectedLesson,
-    setTeacherTab,
-  });
-  const {
-    isCourseWizardOpen,
-    setIsCourseWizardOpen,
-    wizardStep,
-    setWizardStep,
-    wizardCourseTitle,
-    setWizardCourseTitle,
-    wizardCourseCategory,
-    setWizardCourseCategory,
-    wizardCourseDescription,
-    setWizardCourseDescription,
-    wizardCourseContent,
-    setWizardCourseContent,
-    wizardCourseTimeline,
-    setWizardCourseTimeline,
-    wizardIsSubmitting,
-    handleDeployWizardCourse,
-  } = courseWizard;
 
-  // ── Hook: 插件与 AI 提供商生命周期管理 ──
-  const {
-    plugins,
-    setPlugins,
-    fetchPlugins,
-    aiProviders,
-    setAiProviders,
-    fetchAIProviders,
-    isAIProviderModalOpen,
-    setIsAIProviderModalOpen,
-    editingAIProvider,
-    setEditingAIProvider,
-    providerName,
-    setProviderName,
-    providerApiUrl,
-    setProviderApiUrl,
-    providerApiKey,
-    setProviderApiKey,
-    providerModelName,
-    setProviderModelName,
-    testingProviderId,
-    setTestingProviderId,
-    showPluginModal,
-    setShowPluginModal,
-    storeTab,
-    setStoreTab,
-    pluginCode,
-    setPluginCode,
-    installingPlugin,
-    setInstallingPlugin,
-    events,
-    setEvents,
-    fetchEvents,
-    approvals,
-    setApprovals,
-    fetchApprovals,
-    scoreOverrides,
-    setScoreOverrides,
-    handleSaveAIProvider,
-    handleDeleteAIProvider,
-    handleTestAIProvider,
-    handleInstallPlugin,
-    handleZipPluginUpload,
-    handleTogglePlugin,
-    handleDeletePlugin,
-    handleApprove,
-    handleReject,
-  } = usePluginManagement({
-    host,
-    lang,
-    addToast,
-    setChatLog: (updater: any) => setChatLog(updater),
-    setTeacherTab,
-    fetchLessons,
-  });
 
   // Import Lessons states
   const [isImportLessonsOpen, setIsImportLessonsOpen] = useState(false);
@@ -226,15 +145,7 @@ export default function App() {
   
   const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [rightSidebarTab, setRightSidebarTab] = useState<'agent' | 'shell'>('agent');
-  const [agentProviderId, setAgentProviderId] = useState<string>(() => {
-    if (typeof window === 'undefined') return 'system';
-    return window.localStorage.getItem(AGENT_PROVIDER_STORAGE_KEY) || 'system';
-  });
-  const effectiveAgentProviderId =
-    agentProviderId === 'system' || aiProviders.some(provider => provider.id === agentProviderId)
-      ? agentProviderId
-      : 'system';
-  const selectedAgentProvider = aiProviders.find(provider => provider.id === effectiveAgentProviderId) || null;
+
   const [showLogs, setShowLogs] = useState(false);
   const [vfsNodes, setVfsNodes] = useState<VFSNode[]>([]);
   const [processes, setProcesses] = useState<ProcessType[]>([]);
@@ -473,6 +384,116 @@ export default function App() {
       appStore.getState().removeToast(id);
     }, 6000);
   };
+
+  const fetchLessons = async () => {
+    try {
+      const res = await fetch('/api/lessons');
+      if (res.ok) {
+        const data = await res.json();
+        setLessons(data);
+        if (!appStore.getState().selectedLesson && data.length > 0) {
+          setSelectedLesson(data[0].id);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch lessons", e);
+    }
+  };
+
+  const chatLogUpdaterRef = useRef<(updater: any) => void>(() => {});
+
+  // ── Hook: 课程创建向导 (Course Wizard) ──
+  const courseWizard = useCourseWizard({
+    lang,
+    addToast,
+    fetchLessons,
+    setSelectedLesson,
+    setTeacherTab,
+  });
+  const {
+    isCourseWizardOpen,
+    setIsCourseWizardOpen,
+    wizardStep,
+    setWizardStep,
+    wizardCourseTitle,
+    setWizardCourseTitle,
+    wizardCourseCategory,
+    setWizardCourseCategory,
+    wizardCourseDescription,
+    setWizardCourseDescription,
+    wizardCourseContent,
+    setWizardCourseContent,
+    wizardCourseTimeline,
+    setWizardCourseTimeline,
+    wizardIsSubmitting,
+    handleDeployWizardCourse,
+  } = courseWizard;
+
+  // ── Hook: 插件与 AI 提供商生命周期管理 ──
+  const {
+    plugins,
+    setPlugins,
+    fetchPlugins,
+    aiProviders,
+    setAiProviders,
+    fetchAIProviders,
+    isAIProviderModalOpen,
+    setIsAIProviderModalOpen,
+    editingAIProvider,
+    setEditingAIProvider,
+    providerName,
+    setProviderName,
+    providerApiUrl,
+    setProviderApiUrl,
+    providerApiKey,
+    setProviderApiKey,
+    providerModelName,
+    setProviderModelName,
+    testingProviderId,
+    setTestingProviderId,
+    showPluginModal,
+    setShowPluginModal,
+    storeTab,
+    setStoreTab,
+    pluginCode,
+    setPluginCode,
+    installingPlugin,
+    setInstallingPlugin,
+    events,
+    setEvents,
+    fetchEvents,
+    approvals,
+    setApprovals,
+    fetchApprovals,
+    scoreOverrides,
+    setScoreOverrides,
+    handleSaveAIProvider,
+    handleDeleteAIProvider,
+    handleTestAIProvider,
+    handleInstallPlugin,
+    handleZipPluginUpload,
+    handleTogglePlugin,
+    handleDeletePlugin,
+    handleApprove,
+    handleReject,
+  } = usePluginManagement({
+    host,
+    lang,
+    addToast,
+    setChatLog: (updater: any) => chatLogUpdaterRef.current(updater),
+    setTeacherTab,
+    fetchLessons,
+  });
+
+  const [agentProviderId, setAgentProviderId] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'system';
+    return window.localStorage.getItem(AGENT_PROVIDER_STORAGE_KEY) || 'system';
+  });
+  const effectiveAgentProviderId =
+    agentProviderId === 'system' || aiProviders.some(provider => provider.id === agentProviderId)
+      ? agentProviderId
+      : 'system';
+  const selectedAgentProvider = aiProviders.find(provider => provider.id === effectiveAgentProviderId) || null;
   const [studentViewStatus, setStudentViewStatus] = useState<'dashboard' | 'lesson' | 'assignment'>('dashboard');
   const [studentLessonTab, setStudentLessonTab] = useState<'whiteboard' | 'courseware' | 'assignment'>('whiteboard');
   const [studentSelectedCourseware, setStudentSelectedCourseware] = useState<string | null>(null);
@@ -615,24 +636,26 @@ export default function App() {
     return false;
   };
 
-  const handleQuickGenerateAssignment = async (classId: string, topic: string): Promise<boolean> => {
+  const handleQuickGenerateAssignment = async (classId: string, title: string, desc?: string): Promise<string | null> => {
     try {
+      const topic = title || desc || 'Assignment';
       const res = await fetch(`/api/classes/${classId}/assignments/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic })
       });
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
         await fetchClassDashboard(classId);
-        return true;
+        return data.id || 'assignment-created';
       }
     } catch (e) {
       console.error("Quick generate assignment failed", e);
     }
-    return false;
+    return null;
   };
 
-  const handleQuickCreateLesson = async (title: string, content: string): Promise<boolean> => {
+  const handleQuickCreateLesson = async (title: string, content: string): Promise<string> => {
     try {
       const res = await fetch('/api/lessons', {
         method: 'POST',
@@ -640,13 +663,14 @@ export default function App() {
         body: JSON.stringify({ title, content })
       });
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
         await fetchLessons();
-        return true;
+        return data.id || 'lesson-created';
       }
     } catch (e) {
       console.error("Quick create lesson failed", e);
     }
-    return false;
+    return '';
   };
 
   const downloadCsvTemplate = () => {
@@ -690,20 +714,7 @@ export default function App() {
     }
   };
 
-  const fetchLessons = async () => {
-    try {
-      const res = await fetch('/api/lessons');
-      if (res.ok) {
-        const data = await res.json();
-        setLessons(data);
-        if (!appStore.getState().selectedLesson && data.length > 0) {
-          setSelectedLesson(data[0].id);
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to fetch lessons", e);
-    }
-  };
+
 
   const handleDeleteCourse = async (lessonId: string) => {
     const res = await fetch(`/api/lessons/${lessonId}`, { method: 'DELETE' });
@@ -1167,6 +1178,36 @@ export default function App() {
 
   useLmsBridge(session);
 
+  const {
+    chatLog,
+    setChatLog,
+    input,
+    setInput,
+    loading,
+    setLoading,
+    chatAttachments,
+    setChatAttachments,
+    handleChatFileChange,
+    handleChatDrop,
+    handleSend,
+    handleClearAgentMemory,
+  } = useAgentChat({
+    lang,
+    t,
+    selectedLesson,
+    effectiveAgentProviderId,
+    expandedClassId,
+    fetchLessons,
+    fetchClasses,
+    fetchStudents,
+    fetchClassStudents,
+    fetchClassProgress,
+    fetchClassDashboard,
+    fetchElements,
+  });
+
+  chatLogUpdaterRef.current = setChatLog;
+
   useAppPolling({
     session,
     showProcessLogs,
@@ -1214,34 +1255,6 @@ export default function App() {
     setLocalProgressPercent,
     fetchStudentDashboard,
     fetchStudents,
-    fetchElements,
-  });
-
-  const {
-    chatLog,
-    setChatLog,
-    input,
-    setInput,
-    loading,
-    setLoading,
-    chatAttachments,
-    setChatAttachments,
-    handleChatFileChange,
-    handleChatDrop,
-    handleSend,
-    handleClearAgentMemory,
-  } = useAgentChat({
-    lang,
-    t,
-    selectedLesson,
-    effectiveAgentProviderId,
-    expandedClassId,
-    fetchLessons,
-    fetchClasses,
-    fetchStudents,
-    fetchClassStudents,
-    fetchClassProgress,
-    fetchClassDashboard,
     fetchElements,
   });
 

@@ -6,13 +6,13 @@ import type { Lesson, ClassType, StudentType, ScheduleType, ProcessType } from "
 import { ExtensionPointRenderer } from "../../plugin-host/extension-point-renderer";
 
 interface DashboardProps {
-  lang: string; t: Record<string,string>;
+  lang: 'zh' | 'en'; t: Record<string,string>;
   lessons: Lesson[]; classes: ClassType[]; students: StudentType[];
   todaySchedules: ScheduleType[];
   approvals: any[]; processes: ProcessType[];
   isApprovalsCollapsed: boolean; setIsApprovalsCollapsed: (v:boolean)=>void;
   isProcessesCollapsed: boolean; setIsProcessesCollapsed: (v:boolean)=>void;
-  scoreOverrides: Record<string,number>; setScoreOverrides: (v:Record<string,number>)=>void;
+  scoreOverrides: Record<string,number>; setScoreOverrides: React.Dispatch<React.SetStateAction<Record<string, number>>> | ((v: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void);
   handleApprove: (id:string,overrides?:any)=>Promise<void>;
   handleReject: (id:string)=>Promise<void>;
   showLogs: boolean; setShowLogs: (v:boolean)=>void;
@@ -331,8 +331,14 @@ export function Dashboard(props: DashboardProps) {
                   lessons={lessons}
                   lang={lang}
                   onScheduleClass={handleQuickScheduleClass}
-                  onGenerateAssignment={handleQuickGenerateAssignment}
-                  onCreateLesson={handleQuickCreateLesson}
+                  onGenerateAssignment={async (classId, topic) => {
+                    const res = await handleQuickGenerateAssignment(classId, topic, topic);
+                    return !!res;
+                  }}
+                  onCreateLesson={async (title, content) => {
+                    const res = await handleQuickCreateLesson(title, content);
+                    return !!res;
+                  }}
                 />
               </>
     );

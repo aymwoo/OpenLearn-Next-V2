@@ -10,6 +10,8 @@
  */
 
 import type React from 'react';
+import type { FullscreenRenderer } from '../features/whiteboard/fullscreen/FullscreenRendererRegistry';
+import type { PropertyEditorComponent } from '../features/whiteboard/properties/PropertyEditorRegistry';
 
 // ── Token name constants (frontend namespace) ────────────────────────────
 
@@ -147,6 +149,12 @@ export interface ISemesterGradeService {
   saveSemesterGrade(lessonId: string, studentId: string, grade: number): Promise<void>;
 }
 
+/** v5.1: 宿主注入的只读课堂上下文快照（课程/班级）。 */
+export interface FrontendPluginContextSnapshot {
+  lessonId: string | null;
+  classId: string | null;
+}
+
 // ── Frontend Plugin Context ──────────────────────────────────────────────
 
 export interface FrontendPluginContext {
@@ -161,6 +169,12 @@ export interface FrontendPluginContext {
   ui: {
     registerExtensionPoint(slot: AnyExtensionSlot, config: ExtensionPointConfig): void;
     unregisterExtensionPoint(slot: AnyExtensionSlot, id: string): void;
+    /** v3.5: 为第三方白板元素类型注册自定义全屏渲染器（在 activate() 内调用） */
+    registerFullscreenRenderer(type: string, renderer: FullscreenRenderer): void;
+    unregisterFullscreenRenderer(type: string): void;
+    /** v3.5: 为第三方白板元素类型注册自定义属性编辑器（在 activate() 内调用） */
+    registerPropertyEditor(type: string, editor: PropertyEditorComponent): void;
+    unregisterPropertyEditor(type: string): void;
   };
   /** 调用后端已注册的 Command Handler，自动添加插件命名空间前缀 */
   invokeCommand<T = any>(type: string, payload?: any): Promise<T>;
@@ -169,6 +183,11 @@ export interface FrontendPluginContext {
     getTeacherTab(): string;
     setTeacherTab(tab: string): void;
     subscribeTeacherTab(callback: (tab: string) => void): () => void;
+  };
+  /** v5.1: 当前课堂上下文只读快照 + 订阅（非渲染场景读取当前课程/班级） */
+  context?: {
+    get(): FrontendPluginContextSnapshot;
+    subscribe(callback: (ctx: FrontendPluginContextSnapshot) => void): () => void;
   };
   
   // Backward compatibility shims

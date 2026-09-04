@@ -40,6 +40,8 @@ import type {
   ISemesterGradeService,
   FrontendPluginInfo,
 } from './types';
+import { fullscreenRendererRegistry } from '../features/whiteboard/fullscreen/FullscreenRendererRegistry';
+import { propertyEditorRegistry } from '../features/whiteboard/properties/PropertyEditorRegistry';
 
 // ── Module Loader type ───────────────────────────────────────────────────
 
@@ -247,7 +249,7 @@ export class FrontendPluginHost {
     } catch (err) {
       console.error(`[FrontendPluginHost] Failed to activate remote plugin "${pluginId}":`, err);
       store.updatePluginState(pluginId, PluginState.ERROR);
-      store.unregisterPluginExtensionPoints(pluginId);
+      this.unregisterPluginResources(pluginId);
       throw err;
     }
   }
@@ -325,7 +327,7 @@ export class FrontendPluginHost {
       store.updatePluginState(pluginId, PluginState.ACTIVE);
     } catch (err) {
       store.updatePluginState(pluginId, PluginState.ERROR);
-      store.unregisterPluginExtensionPoints(pluginId);
+      this.unregisterPluginResources(pluginId);
       throw err;
     }
   }
@@ -394,7 +396,7 @@ export class FrontendPluginHost {
       store.updatePluginState(pluginId, PluginState.ACTIVE);
     } catch (err) {
       store.updatePluginState(pluginId, PluginState.ERROR);
-      store.unregisterPluginExtensionPoints(pluginId);
+      this.unregisterPluginResources(pluginId);
       throw err;
     }
   }
@@ -429,7 +431,7 @@ export class FrontendPluginHost {
         err,
       );
     } finally {
-      store.unregisterPluginExtensionPoints(pluginId);
+      this.unregisterPluginResources(pluginId);
       this.pluginModules.delete(pluginId);
       store.updatePluginState(pluginId, PluginState.INACTIVE);
     }
@@ -460,6 +462,7 @@ export class FrontendPluginHost {
 
     this.sourceCodes.delete(pluginId);
     this.pluginModules.delete(pluginId);
+    this.unregisterPluginResources(pluginId);
     store.removePlugin(pluginId);
   }
 
@@ -473,6 +476,19 @@ export class FrontendPluginHost {
   }
 
   // ── Private ──────────────────────────────────────────────────────────
+
+  /**
+   * Clean up all plugin-owned resources on deactivation or activation failure:
+   * extension points + whiteboard fullscreen renderers + property editors.
+   *
+   * v3.5: whiteboard registries are host singletons; plugins reach them only
+   * through ctx.ui, so the host must evict their registrations here.
+   */
+  private unregisterPluginResources(pluginId: string): void {
+    usePluginHostStore.getState().unregisterPluginExtensionPoints(pluginId);
+    fullscreenRendererRegistry.unregisterPlugin(pluginId);
+    propertyEditorRegistry.unregisterPlugin(pluginId);
+  }
 
   /**
    * Default module loader: creates a Blob URL from source code and uses
@@ -529,6 +545,18 @@ export class FrontendPluginHost {
         unregisterExtensionPoint: (slot: AnyExtensionSlot, id: string) => {
           usePluginHostStore.getState().unregisterExtensionPoint(slot, id);
         },
+        registerFullscreenRenderer: (type, renderer) => {
+          fullscreenRendererRegistry.register(type, renderer, pluginId);
+        },
+        unregisterFullscreenRenderer: (type) => {
+          fullscreenRendererRegistry.unregister(type, pluginId);
+        },
+        registerPropertyEditor: (type, editor) => {
+          propertyEditorRegistry.register(type, editor, pluginId);
+        },
+        unregisterPropertyEditor: (type) => {
+          propertyEditorRegistry.unregister(type, pluginId);
+        },
       },
       navigation: {
         getTeacherTab: () => appStore.getState().teacherTab,
@@ -543,6 +571,23 @@ export class FrontendPluginHost {
             }
           });
         }
+      },
+      context: {
+        get: () => {
+          const s = appStore.getState();
+          return { lessonId: s.selectedLesson, classId: s.liveClassSelectedClassId };
+        },
+        subscribe: (callback: (ctx: { lessonId: string | null; classId: string | null }) => void) => {
+          const init = appStore.getState();
+          let snapshot = { lessonId: init.selectedLesson, classId: init.liveClassSelectedClassId };
+          return appStore.subscribe((s) => {
+            const next = { lessonId: s.selectedLesson, classId: s.liveClassSelectedClassId };
+            if (next.lessonId !== snapshot.lessonId || next.classId !== snapshot.classId) {
+              snapshot = next;
+              callback(next);
+            }
+          });
+        },
       },
       invokeCommand: async <T = any>(type: string, payload?: any): Promise<T> => {
         if (!frontendApi) throw new Error(`Plugin "${pluginId}" cannot invoke command: frontendApi is not available. Has FrontendPluginHost initialized?`);

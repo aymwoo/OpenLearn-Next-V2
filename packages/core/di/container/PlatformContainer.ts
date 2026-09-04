@@ -116,13 +116,9 @@ export class PlatformContainer {
       scope: mapScopeKind(desc.scopeKind) as ServiceScopeType,
       dependencies: desc.dependencies,
       metadata: desc.metadata,
+      instance: desc.instance,
+      factory: desc.instance === undefined ? ((scope: unknown) => this.buildInstance(desc, scope as ServiceScope)) : undefined,
     };
-
-    if (desc.instance !== undefined) {
-      serviceDescriptor.instance = desc.instance;
-    } else {
-      serviceDescriptor.factory = (scope: ServiceScope) => this.buildInstance(desc, scope);
-    }
 
     this.registry.register(serviceDescriptor);
     this.descriptors.set(desc.id, desc);

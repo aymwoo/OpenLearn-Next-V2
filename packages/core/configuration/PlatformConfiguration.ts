@@ -17,12 +17,12 @@ import {
 } from '../bootstrap/types/index.js';
 import { DefaultPlatformLogger } from '../bootstrap/builder/platform-builder.js';
 import { ConfigurationRegistry } from './ConfigurationRegistry.js';
+import { ConfigurationContext } from './ConfigurationContext.js';
 import type {
   BootstrapPipelineIntegrationSource,
   BuilderIntegrationSource,
   CapabilityRuntimeIntegrationSource,
   CompositionRootIntegrationSource,
-  ConfigurationContext,
   ConfigurationDescriptorInit,
   ConfigurationLoadResult,
   ConfigurationProviderInit,
@@ -54,11 +54,11 @@ export class PlatformConfiguration {
   private readonly logger: IPlatformLogger;
   private readonly serviceRegistry?: ServiceRegistryIntegrationSource;
   private readonly container?: ContainerIntegrationSource;
-  private readonly eventBus?: EventBusIntegrationSource;
-  private readonly builder?: BuilderIntegrationSource;
-  private readonly bootstrapPipeline?: BootstrapPipelineIntegrationSource;
-  private readonly compositionRoot?: CompositionRootIntegrationSource;
-  private readonly capabilityRuntime?: CapabilityRuntimeIntegrationSource;
+  private eventBus?: EventBusIntegrationSource;
+  private builder?: BuilderIntegrationSource;
+  private bootstrapPipeline?: BootstrapPipelineIntegrationSource;
+  private compositionRoot?: CompositionRootIntegrationSource;
+  private capabilityRuntime?: CapabilityRuntimeIntegrationSource;
 
   private selfRegistered = false;
 

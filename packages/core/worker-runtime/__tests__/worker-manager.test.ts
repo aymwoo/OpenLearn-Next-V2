@@ -64,11 +64,11 @@ function createMockWorkerInstance(
   const threadId = extra?.threadId ?? 1;
 
   const transport: IWorkerTransport = {
-    postMessage: extra?.postMessage ?? vi.fn(),
+    postMessage: (extra?.postMessage ?? vi.fn()) as (msg: unknown) => void,
     onMessage: vi.fn((handler: (msg: unknown) => void) => {
       (transport as any).messageHandler = handler;
     }),
-    terminate: extra?.terminate ?? vi.fn().mockResolvedValue(undefined),
+    terminate: (extra?.terminate ?? vi.fn().mockResolvedValue(undefined)) as () => Promise<void>,
     id: `worker:${threadId}`,
   };
 

@@ -155,7 +155,7 @@ export class HotReloadController {
     if (this.enabled) return;
     this.enabled = true;
 
-    await this.fileWatcher.startWatch(this.watchDir, (event) => {
+    await this.fileWatcher.startWatch(this.watchDir, async (event) => {
       this.handleFileChange(event.pluginId, event.filePath);
     });
 

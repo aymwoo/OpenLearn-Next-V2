@@ -715,6 +715,11 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         cleanUrl = cleanUrl.endsWith('/') ? cleanUrl + 'chat/completions' : cleanUrl + '/chat/completions';
       }
 
+      const urlSafety = isSafeExternalUrl(cleanUrl);
+      if (!urlSafety.safe) {
+        return res.status(400).json({ error: `Blocked unsafe AI provider URL: ${urlSafety.reason}` });
+      }
+
       const response = await fetch(cleanUrl, {
         method: 'POST',
         headers: {
