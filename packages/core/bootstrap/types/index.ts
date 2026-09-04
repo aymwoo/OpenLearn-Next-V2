@@ -327,7 +327,7 @@ export interface IBootstrapContext {
 }
 
 export interface IBootstrapStage {
-  readonly id?: string;
+  readonly id: string;
   readonly name: PlatformStage | string;
   readonly description: string;
   readonly timeoutMs?: number;

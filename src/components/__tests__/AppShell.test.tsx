@@ -290,9 +290,18 @@ const renderAppShell = (overrides: Record<string, unknown> = {}) =>
   );
 
 describe('AppShell', () => {
+  // AppShell uses React.lazy to load StudentView/TeacherView. In jsdom the
+  // dynamic ES import resolves asynchronously and StudentView's transitive
+  // lazy children (StudentLessonView/StudentAssignmentView) can stretch the
+  // import chain past the default findByText timeout. Use a generous timeout
+  // so the test waits for Suspense to resolve.
+  const LAZY_TIMEOUT = 10_000;
+
   it('renders StudentView (and the "No Student Selected" panel) when activeRole is "student"', async () => {
     renderAppShell({ activeRole: 'student', activeStudentId: null });
-    expect(await screen.findByText('No Student Selected')).toBeTruthy();
+    expect(
+      await screen.findByText('No Student Selected', undefined, { timeout: LAZY_TIMEOUT })
+    ).toBeTruthy();
     // The teacher-only branch must NOT be present.
     expect(screen.queryByText('Live Class')).toBeNull();
   });
@@ -300,7 +309,9 @@ describe('AppShell', () => {
   it('renders TeacherView (NavigationSidebar) when activeRole is "teacher"', async () => {
     renderAppShell({ activeRole: 'teacher' });
     // TeacherView carries the bg-gray-50 branch root and always renders the nav sidebar.
-    expect(await screen.findByText('Live Class')).toBeTruthy();
+    expect(
+      await screen.findByText('Live Class', undefined, { timeout: LAZY_TIMEOUT })
+    ).toBeTruthy();
     // The student-only branch must NOT be present.
     expect(screen.queryByText('No Student Selected')).toBeNull();
   });

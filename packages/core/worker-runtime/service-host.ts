@@ -388,19 +388,19 @@ export class ServiceHost {
       // ── Intercept IDatabase RPC helper methods ──────────────────────
       if (msg.token === '@openlearn/core:IDatabase') {
         const db = service as import('better-sqlite3').Database;
+        const [sql] = msg.args as [string];
+        this.assertDatabaseAccessAllowed(sql);
         let result: unknown;
         if (msg.method === 'exec') {
-          const [sql] = msg.args as [string];
           result = db.exec(sql);
-        } else 
-        if (msg.method === 'prepareAndRun') {
-          const [sql, args] = msg.args as [string, unknown[]];
+        } else if (msg.method === 'prepareAndRun') {
+          const [, args] = msg.args as [string, unknown[]];
           result = db.prepare(sql).run(...args);
         } else if (msg.method === 'prepareAndGet') {
-          const [sql, args] = msg.args as [string, unknown[]];
+          const [, args] = msg.args as [string, unknown[]];
           result = db.prepare(sql).get(...args);
         } else if (msg.method === 'prepareAndAll') {
-          const [sql, args] = msg.args as [string, unknown[]];
+          const [, args] = msg.args as [string, unknown[]];
           result = db.prepare(sql).all(...args);
         } else {
           throw new Error(`Method "${msg.method}" not supported on IDatabase RPC`);
@@ -578,5 +578,50 @@ export class ServiceHost {
     const { Token } = await import('../di/token.js');
     const token = new Token(tokenName);
     return this.serviceRegistry.resolve(token);
+  }
+
+  /**
+   * Security barrier for Worker plugin IDatabase RPC access.
+   *
+   * 1. Blocks access to core security tables (auth/session/plugin/admin).
+   * 2. Restricts DDL (CREATE/DROP/ALTER TABLE) to the plugin's own namespace
+   *    (`plugin_<id>_` prefix).
+   */
+  private assertDatabaseAccessAllowed(sql: string): void {
+    if (typeof sql !== 'string' || sql.trim() === '') return;
+
+    const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
+
+    const FORBIDDEN_CORE_TABLES = [
+      'users',
+      'client_sessions',
+      'plugins',
+      'plugin_storage',
+      'ai_providers',
+      'processes',
+      'pending_commands',
+    ];
+    for (const table of FORBIDDEN_CORE_TABLES) {
+      if (new RegExp(`\\b${table}\\b`, 'i').test(sql)) {
+        throw new WorkerCapabilityError(
+          this.pluginActorId,
+          '@openlearn/core:IDatabase',
+          `Worker plugin "${pluginId}" is forbidden from accessing core security table "${table}"`,
+        );
+      }
+    }
+
+    const ddlMatch = /^\s*(CREATE|DROP|ALTER)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-zA-Z_][\w]*)["'`]?/i.exec(sql);
+    if (ddlMatch) {
+      const table = ddlMatch[2];
+      const namespace = `plugin_${pluginId.replace(/-/g, '_')}_`;
+      if (!table.startsWith(namespace)) {
+        throw new WorkerCapabilityError(
+          this.pluginActorId,
+          '@openlearn/core:IDatabase',
+          `Worker plugin "${pluginId}" is not permitted to perform DDL on table "${table}"`,
+        );
+      }
+    }
   }
 }

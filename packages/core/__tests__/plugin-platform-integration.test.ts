@@ -5,8 +5,8 @@ import {
 } from '../bootstrap/composition/index.js';
 import { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
 import { PluginCapability } from '../ai-capability/capabilities/plugin-capability.js';
-import { AIRuntimeKernel } from '../ai/index.js';
 import { CapabilityLogger } from '../ai-capability/logging/capability-logger.js';
+import { AIRuntimeKernel } from '../ai/runtime/ai-runtime-kernel.js';
 import { PermissionManager } from '../bootstrap/permission/index.js';
 import { EventBus } from '../event-bus/index.js';
 
@@ -24,6 +24,9 @@ describe('Sprint A2 Step 2 Plugin Platform Integration Test Suite', () => {
 
   it('should verify registration of Plugin Capability in CapabilityRegistry', () => {
     const registry = new CapabilityRegistry();
+    // PluginCapability requires AIRuntimeKernel + CapabilityLogger as constructor
+    // dependencies. Use real (zero-arg) instances since this test only inspects
+    // capability metadata, not AI invocation behavior.
     const pluginCap = new PluginCapability(new AIRuntimeKernel(), new CapabilityLogger());
     registry.registerCapability(pluginCap);
 

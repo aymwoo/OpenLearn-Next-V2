@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { PlatformBuilder } from '../bootstrap/builder/index.js';
-import { IBootstrapStage } from '../bootstrap/pipeline/index.js';
+import type { IBootstrapStage } from '../bootstrap/types/index.js';
 import { ConfigurationError } from '../bootstrap/types/index.js';
 
 describe('PI-004 PlatformBuilder Test Suite', () => {

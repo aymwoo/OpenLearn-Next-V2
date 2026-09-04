@@ -20,6 +20,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `ExtensionPointRenderer` 向所有扩展点组件 props 注入 `{ lessonId, classId }`（当前课程/班级，源 `appStore.selectedLesson` / `liveClassSelectedClassId`），`teacher.tab` 面板形态同步注入。
   - `FrontendPluginContext` 新增 `ctx.context.get()` / `ctx.context.subscribe()` 只读快照与订阅，供非渲染场景读取当前课程/班级。
 
+### Security
+- **Worker 插件数据库安全屏障**：`ServiceHost` 拦截 IDatabase RPC，禁止 Worker 插件访问核心安全表（`users` / `client_sessions` / `plugins` / `ai_providers` 等），并将 DDL 操作限制在插件自身命名空间（`plugin_<id>_` 前缀）内。
+
 ### Docs
 - 更新 [`docs/reference/plugin-ui-extension-slots.md`](docs/reference/plugin-ui-extension-slots.md)：明确各槽位注入的 `slotProps` 字段契约与 `ctx.context` 用法，纠正 `@/` 宿主内部导入对第三方插件不可达的误区，并将 `fullscreenRendererRegistry` / `propertyEditorRegistry` 用法改为 `ctx.ui.register*`。
 - 新增 [`docs/release-notes/v0.2.8.md`](docs/release-notes/v0.2.8.md) 发布说明。
@@ -94,6 +97,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - 新增锚点目录 [`docs/plugin/anchor-slots.md`](docs/plugin/anchor-slots.md) 并更新相关扩展点规范。
 - 新增 [`docs/release-notes/v0.2.6.md`](docs/release-notes/v0.2.6.md) 发布说明。
 - 全量自动化测试回归 169 / 169 套件（941 个用例）全绿通过。
+
+### Security
+- **从仓库跟踪中移除 `scratch/` 目录（17 个文件）**：该目录包含本地开发脚本、playwright 验证脚本、49KB dashboard 截图等。最严重的是 `scratch/test_logs_api.ts` —— 一个会在 SQLite 中插入伪造 admin session token 的脚本。如果随 main 分支泄露，会成为种子式攻击向量。现已 `.gitignore` 排除并 `git rm --cached` 取消跟踪。
+- **`server/utils/crypto.ts` 禁止原地覆盖现有 ENCRYPTION_KEY**：旧逻辑检测到 .env 中存在 `ENCRYPTION_KEY=` 空值时会生成新密钥**原地替换**——这会让已用旧密钥加密的全部 AI Provider Key 不可解密（数据级不可回滚故障）。现改为：检测到现有 ENCRYPTION_KEY 行（含空值）时绝不动它，转用 ephemeral in-memory key + 警告日志，强制运维显式备份、轮换密钥。
+
+### Fixes
+- **TypeScript 编译错误修复（12 个，全部在未提交修改中）**：
+  - `src/components/plugin-center/types.ts`：将 `export type { Language } from '../../i18n'`（re-export 不创建本地绑定）改为 `import type + export type`，修复 `TS2304 Cannot find name 'Language'`。
+  - `packages/core/capability-runtime/CapabilityProvider.ts`：`CapabilityContext` 从 `./types.js` 导入但 types 未 re-export；改为从 `./CapabilityContext.js` 直接导入。
+  - `packages/core/esm-loader/manifest-schema.ts`：zod v4 要求 `z.record(keySchema, valueSchema)`，将两处 `z.record(z.unknown())` 改为 `z.record(z.string(), z.unknown())`。
+  - `packages/core/plugin-host/hot-reload.ts`：`HotReloadCallback` 要求 `Promise<void>` 返回，但 callback 返回 void；callback 改为 async。
+  - `packages/core/configuration/ConfigurationError.ts` + `ConfigurationRegistry.ts`：`ConfigurationErrorCode` 联合类型添加 `'NOT_FOUND'`，匹配 `ConfigurationRegistry.get()` 的实际语义。
+  - `packages/core/di/container/PlatformContainer.ts`：`ServiceDescriptor` 所有字段 readonly，不能事后赋值；改用三元表达式在对象字面量中一次性构造。
+  - **`packages/core/bootstrap/` 三个文件**：消除 `IBootstrapStage` 在 `types/index.ts` 和 `pipeline/bootstrap-stage.ts` 的双重定义歧义（TS2308 + TS2416）。统一为单一权威定义：types 中的版本包含完整字段（`id`、`timeoutMs`、`rollback`），`bootstrap-stage.ts` 改为 `export type` re-export，`pipeline/index.ts` 桶导出移除重复项。
+- **回归测试失败修复（2 个）**：
+  - `src/components/__tests__/AppShell.test.tsx`：`React.lazy` 加载 `StudentView` 的异步链超过 `findByText` 默认 1s 超时（Suspense fallback 一直显示）。`findByText` 显式传 `timeout: 10_000` 并加注释说明 jsdom lazy import 的特性。
+  - `packages/core/worker-runtime/__tests__/service-host.test.ts`：测试期望的错误消息 `'Access to table "users" is restricted'` 与实际产出的 `'Worker plugin "ext-test-db" is forbidden from accessing core security table "users"'` 不一致；同步测试断言到当前实现（代码演进后消息更详细）。
+  - `packages/core/__tests__/{bootstrap-pipeline,platform-builder,plugin-platform-integration}.test.ts`：依赖 bootstrap 类型重构 + 为 `PluginCapability` 构造传入真实依赖（`AIRuntimeKernel` + `CapabilityLogger`）。
+  - **全量回归 951 passed / 1 skipped**（170/170 测试文件），`pnpm lint` 通过。
+
+### Refactor / Performance
+- **`server.ts` health 端点版本号硬编码清理**：原代码返回 `version: '4.0.0'`，与 `package.json` 0.2.5 严重漂移。改为启动时从 `package.json` 读取 `version` 字段，**单一版本来源**，避免版本发布时手工同步遗漏。
+- **`vite.config.ts` 移除 `framer-motion` 死代码 chunk 规则**：项目已迁移到 `motion`（`framer-motion` 仅作为其间接依赖存在）；删除针对 `/framer-motion/` 的 chunk 分桶规则，保留对 `/motion-dom/` 的归类（`vendor-motion`）。
 
 ## [0.2.5] - 2026-08-29
 

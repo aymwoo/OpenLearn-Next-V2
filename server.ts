@@ -250,8 +250,17 @@ async function startServer() {
 
   // ── 健康检查端�? (OBS-HEALTH-01) ──────────────────────────────────
   const startTime = Date.now();
+  // 单一版本来源：从 package.json 读取，避免与版本发布时手工同步而漂移。
+  let platformVersion = '0.0.0';
+  try {
+    const pkgPath = path.join(process.cwd(), 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version?: string };
+    platformVersion = pkg.version ?? platformVersion;
+  } catch {
+    // 启动阶段不可用时保留默认占位；运行期仍能返回有意义响应。
+  }
   app.get('/health', (_req: any, res: any) => {
-    res.json({ status: 'ok', uptime: Math.floor((Date.now() - startTime) / 1000), version: '4.0.0' });
+    res.json({ status: 'ok', uptime: Math.floor((Date.now() - startTime) / 1000), version: platformVersion });
   });
 
   app.get('/health/ready', (_req: any, res: any) => {

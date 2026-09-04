@@ -110,15 +110,26 @@ export class PlatformContainer {
   }
 
   private registerDescriptor(desc: DependencyDescriptor): void {
-    const serviceDescriptor: ServiceDescriptor = {
-      id: desc.id,
-      lifetime: desc.lifetime,
-      scope: mapScopeKind(desc.scopeKind) as ServiceScopeType,
-      dependencies: desc.dependencies,
-      metadata: desc.metadata,
-      instance: desc.instance,
-      factory: desc.instance === undefined ? ((scope: unknown) => this.buildInstance(desc, scope as ServiceScope)) : undefined,
-    };
+    // ServiceDescriptor 的所有字段都是 readonly，因此必须在对象字面量中一次性
+    // 构造完成，不能事后赋值。
+    const serviceDescriptor: ServiceDescriptor =
+      desc.instance !== undefined
+        ? {
+            id: desc.id,
+            lifetime: desc.lifetime,
+            scope: mapScopeKind(desc.scopeKind) as ServiceScopeType,
+            dependencies: desc.dependencies,
+            metadata: desc.metadata,
+            instance: desc.instance,
+          }
+        : {
+            id: desc.id,
+            lifetime: desc.lifetime,
+            scope: mapScopeKind(desc.scopeKind) as ServiceScopeType,
+            dependencies: desc.dependencies,
+            metadata: desc.metadata,
+            factory: (scope: ServiceScope) => this.buildInstance(desc, scope),
+          };
 
     this.registry.register(serviceDescriptor);
     this.descriptors.set(desc.id, desc);

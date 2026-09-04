@@ -13,8 +13,8 @@ export type ConfigurationErrorCode =
   | 'PROVIDER_NOT_FOUND'
   | 'SOURCE_READ_FAILED'
   | 'INVALID_PATH'
-  | 'VALIDATION_FAILED'
-  | 'NOT_FOUND';
+  | 'NOT_FOUND'
+  | 'VALIDATION_FAILED';
 
 export class ConfigurationError extends Error {
   public readonly code: ConfigurationErrorCode;
