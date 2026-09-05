@@ -2,6 +2,8 @@ import React from 'react';
 import { wrapSrcDocWithBridge } from '../utils/bridgeUtils';
 import { coursewareSourceRegistry } from '../courseware/courseware-source-registry';
 import { useCoursewareFrameMount } from '../courseware/courseware-frame-limiter';
+import { useThemeStore, getThemeTokens } from '../../../store/themeStore';
+import { broadcastThemeToIframes } from '../../../services/lms-bridge';
 import type { HtmlAppletPayload } from '../canvas-model/types';
 
 export interface HtmlAppletFrameProps {
@@ -25,6 +27,11 @@ export interface HtmlAppletFrameProps {
 export function HtmlAppletFrame({ data, lessonId, className, title, lazy = true }: HtmlAppletFrameProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const mounted = useCoursewareFrameMount(lazy, containerRef);
+  const { theme } = useThemeStore();
+
+  const handleIframeLoad = () => {
+    broadcastThemeToIframes(theme, getThemeTokens(theme));
+  };
 
   const customSrc = coursewareSourceRegistry.resolve(data, { lessonId });
   const src = data.coursewareUuid
@@ -44,6 +51,7 @@ export function HtmlAppletFrame({ data, lessonId, className, title, lazy = true 
           referrerPolicy="no-referrer"
           title={title ?? data.title ?? 'Interactive Courseware'}
           credentialless={true}
+          onLoad={handleIframeLoad}
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center text-xs text-gray-400 bg-slate-50 rounded-xl">

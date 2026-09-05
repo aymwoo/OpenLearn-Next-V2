@@ -202,3 +202,37 @@ export function useLmsBridge(session: SessionType | null): void {
     };
   }, [session]);
 }
+
+/**
+ * 向页面中所有已加载的课件 / 微前端 iframe 广播当前主题状态
+ */
+export function broadcastThemeToIframes(theme: string, tokens: Record<string, string> = {}): void {
+  if (typeof document === 'undefined') return;
+  try {
+    const iframes = document.querySelectorAll('iframe');
+    iframes.forEach((iframe) => {
+      try {
+        iframe.contentWindow?.postMessage(
+          {
+            type: 'LMS_HOST_COMMAND',
+            event: 'theme:changed',
+            payload: { theme, tokens },
+          },
+          '*',
+        );
+        iframe.contentWindow?.postMessage(
+          {
+            type: 'LMS_THEME_CHANGED',
+            theme,
+            tokens,
+          },
+          '*',
+        );
+      } catch {
+        // 忽略可能存在的跨域限制报错
+      }
+    });
+  } catch {
+    // 忽略异常
+  }
+}

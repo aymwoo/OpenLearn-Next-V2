@@ -81,4 +81,82 @@ describe('themeStore (Theming System Engine)', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
     expect(document.getElementById('openlearn-custom-theme-temp-theme')).toBeNull();
   });
+
+  it('saveCustomTheme persists custom theme to localStorage and activates it', () => {
+    const customSpec = {
+      id: 'my-custom-blue',
+      label: '我的定制蓝',
+      description: '个性化蓝调',
+      previewBg: '#0f172a',
+      previewPrimary: '#38bdf8',
+      category: 'custom' as const,
+    };
+    const tokens = {
+      '--bg-app': '#0f172a',
+      '--color-primary': '#38bdf8',
+    };
+
+    useThemeStore.getState().saveCustomTheme(customSpec, tokens);
+
+    // 验证当前状态
+    expect(useThemeStore.getState().theme).toBe('my-custom-blue');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('my-custom-blue');
+
+    // 验证 localStorage 持久化
+    const stored = localStorage.getItem('openlearn_custom_themes');
+    expect(stored).toBeDefined();
+    const parsed = JSON.parse(stored!);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].spec.id).toBe('my-custom-blue');
+    expect(parsed[0].cssVariables['--color-primary']).toBe('#38bdf8');
+  });
+
+  it('deleteCustomTheme removes theme from localStorage and unregisters', () => {
+    const customSpec = {
+      id: 'to-delete',
+      label: '待删除',
+      description: '测试删除',
+      previewBg: '#000000',
+      previewPrimary: '#ffffff',
+      category: 'custom' as const,
+    };
+    useThemeStore.getState().saveCustomTheme(customSpec, { '--color-primary': '#ffffff' });
+    expect(useThemeStore.getState().theme).toBe('to-delete');
+
+    useThemeStore.getState().deleteCustomTheme('to-delete');
+
+    expect(useThemeStore.getState().theme).toBe('light');
+    const stored = localStorage.getItem('openlearn_custom_themes');
+    const parsed = JSON.parse(stored || '[]');
+    expect(parsed).toHaveLength(0);
+    expect(useThemeStore.getState().availableThemes.some((t) => t.id === 'to-delete')).toBe(false);
+  });
+
+  it('initTheme restores custom themes from localStorage correctly', () => {
+    const customList = [
+      {
+        spec: {
+          id: 'restored-theme',
+          label: '恢复主题',
+          description: '从缓存中恢复',
+          previewBg: '#1e293b',
+          previewPrimary: '#10b981',
+          category: 'custom',
+        },
+        cssVariables: {
+          '--bg-app': '#1e293b',
+          '--color-primary': '#10b981',
+        },
+      },
+    ];
+    localStorage.setItem('openlearn_custom_themes', JSON.stringify(customList));
+    localStorage.setItem('openlearn_theme', 'restored-theme');
+
+    useThemeStore.getState().initTheme();
+
+    expect(useThemeStore.getState().theme).toBe('restored-theme');
+    expect(useThemeStore.getState().availableThemes.some((t) => t.id === 'restored-theme')).toBe(true);
+    expect(document.getElementById('openlearn-custom-theme-restored-theme')).not.toBeNull();
+  });
 });
+

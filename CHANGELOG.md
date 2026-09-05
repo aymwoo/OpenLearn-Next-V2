@@ -10,7 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-06
+
 ### Features
+- **现代教育 OS 主题系统 (Theming System Engine - Phase 3)**：
+  - **主题可视化设计器 (`ThemeDesignerModal.tsx`)**：开发沉浸式调色板设计器，内置 4 套创意预设（高雅墨蓝、暮樱柔粉、复古秋叶、深海极客），提供核心主色/背景/卡片/边框/文字等色值微调、实时拟真沙箱视口微缩预览、配置 JSON 导入/导出与复制，支持本地自定义主题管理与一键激活。
+  - **微前端沙箱与互动课件主题同步 (MFE & Courseware Theme Bridge)**：升级 [`src/services/lms-bridge.ts`](file:///home/wuxf/Develop/openlearnv2/src/services/lms-bridge.ts) 与 [`server/utils/bridge-sdk.ts`](file:///home/wuxf/Develop/openlearnv2/server/utils/bridge-sdk.ts)，宿主向所有课件沙箱 `iframe` 跨域广播 `theme:changed` 与 `LMS_THEME_CHANGED` 消息；沙箱内部自动响应式写入 `data-theme` 属性与 CSS 变量，并为第三方课件提供 `window.LMS.getTheme()` 查询 API。
+  - **课件加载主动握手**：在 [`InteractiveCoursewareViewer.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/courseware/InteractiveCoursewareViewer.tsx) 与 [`HtmlAppletFrame.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/components/HtmlAppletFrame.tsx) 的 iframe `onLoad` 时主动下发当前主题，保障各类多文件互动课件与动态 HTML 小应用首屏样式无缝匹配。
 - **现代教育 OS 主题系统 (Theming System Engine - Phase 2)**：
   - **白板渲染引擎主题联动**：升级 [`theme-manager.ts`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/rendering-engine/theme/theme-manager.ts)，原生支持 `eyecareTokens` 与 `chalkboardTokens`，实现交互白板底色（黑板墨绿 `#0e1713`）、极坐标微网格点（淡绿微光 `#2d5242`）与笔刷/文字对比度智能自适应反转（Dark/Chalkboard 模式下黑色笔迹自动转为粉笔白 `#f8fafc`），并支持外部主题订阅与动态注册。
   - **白板悬浮控件 Token 化**：白板悬浮工具栏 [`WhiteboardToolbar.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/components/WhiteboardToolbar.tsx) 与底部分页导航胶囊 [`WhiteboardPageBar.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/components/WhiteboardPageBar.tsx) 全面语义化，支持选取、画笔、几何图形、荧光笔色盘与大纲抽屉无缝随全局换肤。

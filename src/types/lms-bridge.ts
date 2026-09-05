@@ -22,6 +22,11 @@ export interface LmsCoursewareContext {
   name: string;
 }
 
+export interface LmsThemeContext {
+  theme: string;
+  tokens: Record<string, string>;
+}
+
 export interface LmsBridgeApi {
   /** 提交最终成绩（宿主写入 courseware_attempt，status=submitted） */
   submit(data: Record<string, unknown>): void;
@@ -33,6 +38,8 @@ export interface LmsBridgeApi {
   log(event: string, data?: Record<string, unknown>): void;
   getStudent(): LmsStudentContext;
   getCourseware(): LmsCoursewareContext;
+  /** 获取当前宿主环境主题与设计令牌 */
+  getTheme(): LmsThemeContext | null;
   /** 订阅宿主下发的指令；返回取消订阅函数 */
   on(event: string, callback: (payload: unknown) => void): () => void;
   off(event: string, callback: (payload: unknown) => void): void;
@@ -47,5 +54,6 @@ declare global {
     LMS: LmsBridgeApi;
     __LMS_STUDENT__: LmsStudentContext;
     __LMS_COURSEWARE__: LmsCoursewareContext;
+    __LMS_THEME__?: LmsThemeContext;
   }
 }

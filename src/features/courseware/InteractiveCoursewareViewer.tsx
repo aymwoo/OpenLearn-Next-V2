@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Globe, Maximize2, Minimize2 } from 'lucide-react';
+import { useThemeStore, getThemeTokens } from '../../store/themeStore';
+import { broadcastThemeToIframes } from '../../services/lms-bridge';
 
 interface InteractiveCoursewareViewerProps {
   coursewareId: string | null;
@@ -9,6 +11,11 @@ interface InteractiveCoursewareViewerProps {
 export function InteractiveCoursewareViewer({ coursewareId, onClose }: InteractiveCoursewareViewerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { theme } = useThemeStore();
+
+  const handleIframeLoad = () => {
+    broadcastThemeToIframes(theme, getThemeTokens(theme));
+  };
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -78,6 +85,7 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
           allowFullScreen
           className="w-full h-full border-none"
           title="Interactive Courseware"
+          onLoad={handleIframeLoad}
         />
       </div>
     </div>

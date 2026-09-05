@@ -161,16 +161,50 @@ export const BRIDGE_SDK_CODE = `(function() {
     }
   } catch (e) {}
 
-  // ── Bidirectional host→courseware command bus ──
+  // ── Bidirectional host→courseware command bus & Theme Bridge ──
   var __lmsHandlers = {};
   var __lmsPendingRequests = {};
+
+  function __applyThemeTokens(themeData) {
+    if (!themeData || typeof themeData !== 'object') return;
+    try {
+      window.__LMS_THEME__ = themeData;
+      var docEl = document.documentElement;
+      if (docEl) {
+        if (themeData.theme) {
+          docEl.setAttribute('data-theme', themeData.theme);
+        }
+        if (themeData.tokens && typeof themeData.tokens === 'object') {
+          for (var k in themeData.tokens) {
+            if (Object.prototype.hasOwnProperty.call(themeData.tokens, k)) {
+              docEl.style.setProperty(k, themeData.tokens[k]);
+            }
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (window.__LMS_THEME__) {
+    __applyThemeTokens(window.__LMS_THEME__);
+  }
+
   window.addEventListener('message', function(event) {
     var d = event.data;
     if (!d || typeof d !== 'object') return;
     if (d.type === 'LMS_HOST_COMMAND' && d.event) {
+      if (d.event === 'theme:changed' && d.payload) {
+        __applyThemeTokens(d.payload);
+      }
       var cbs = __lmsHandlers[d.event] || [];
       for (var i = 0; i < cbs.length; i++) {
         try { cbs[i](d.payload); } catch (e) {}
+      }
+    } else if (d.type === 'LMS_THEME_CHANGED' && (d.theme || d.tokens)) {
+      __applyThemeTokens(d);
+      var themeCbs = __lmsHandlers['theme:changed'] || [];
+      for (var j = 0; j < themeCbs.length; j++) {
+        try { themeCbs[j](d); } catch (e) {}
       }
     } else if (d.type === 'LMS_PROGRESS_RESPONSE' && d.requestId) {
       var pending = __lmsPendingRequests[d.requestId];
@@ -212,6 +246,9 @@ export const BRIDGE_SDK_CODE = `(function() {
     },
     getCourseware() {
       return window.__LMS_COURSEWARE__;
+    },
+    getTheme() {
+      return window.__LMS_THEME__ || null;
     },
     log(event, data) {
       window.parent.postMessage({
