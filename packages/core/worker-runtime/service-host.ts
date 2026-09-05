@@ -91,6 +91,7 @@ export class ServiceHost {
     private readonly eventBus?: EventBus,
     private eventForwarder?: EventForwarder,
     private readonly pluginId?: string,
+    private readonly dbPluginId?: string,
   ) {}
 
   // ── Public accessors ───────────────────────────────────────────────────
@@ -614,8 +615,15 @@ export class ServiceHost {
     const ddlMatch = /^\s*(CREATE|DROP|ALTER)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-zA-Z_][\w]*)["'`]?/i.exec(sql);
     if (ddlMatch) {
       const table = ddlMatch[2];
-      const namespace = `plugin_${pluginId.replace(/-/g, '_')}_`;
-      if (!table.startsWith(namespace)) {
+      const validNamespaces: string[] = [];
+      if (this.dbPluginId) {
+        validNamespaces.push(`plugin_${this.dbPluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`);
+      }
+      if (pluginId) {
+        validNamespaces.push(`plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`);
+      }
+      const isAllowed = validNamespaces.some((ns) => table.startsWith(ns));
+      if (!isAllowed) {
         throw new WorkerCapabilityError(
           this.pluginActorId,
           '@openlearn/core:IDatabase',

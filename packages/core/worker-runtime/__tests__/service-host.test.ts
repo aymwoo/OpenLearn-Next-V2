@@ -652,5 +652,45 @@ describe('ServiceHost ActionRegistry tracking', () => {
       });
       expect(mockDb.prepare).toHaveBeenCalledWith('CREATE TABLE IF NOT EXISTS plugin_ext_test_db_data (id TEXT)');
     });
+
+    it('should allow worker plugin to perform DDL when table matches DB UUID pluginId even if manifest.id is a scoped name', async () => {
+      const mockDb = {
+        prepare: vi.fn().mockReturnValue({
+          run: vi.fn().mockReturnValue({ changes: 1 }),
+        }),
+      };
+      const dbRegistry = createMockServiceRegistry({
+        '@openlearn/core:IDatabase': mockDb,
+      });
+
+      const host = new ServiceHost(
+        dbRegistry as any,
+        capGuard as any,
+        'plugin:@ext/class-manager',
+        ['management:write'],
+        undefined,
+        undefined,
+        '@ext/class-manager', // manifest.id
+        '01a043a0-0786-71ca-a22b-4a6dd3110e3b', // dbPluginId (UUID)
+      );
+
+      await host.handleInvoke(
+        {
+          type: 'invoke',
+          invokeId: 'inv-sec-uuid',
+          token: '@openlearn/core:IDatabase',
+          method: 'prepareAndRun',
+          args: ['CREATE TABLE IF NOT EXISTS plugin_01a043a0_0786_71ca_a22b_4a6dd3110e3b_classes (id TEXT PRIMARY KEY)', []],
+        },
+        transport as any,
+      );
+
+      expect(transport.messages[0]).toEqual({
+        type: 'result',
+        invokeId: 'inv-sec-uuid',
+        value: { changes: 1 },
+      });
+      expect(mockDb.prepare).toHaveBeenCalledWith('CREATE TABLE IF NOT EXISTS plugin_01a043a0_0786_71ca_a22b_4a6dd3110e3b_classes (id TEXT PRIMARY KEY)');
+    });
   });
 });

@@ -946,6 +946,7 @@ export class WorkerManager {
       // matches what the frontend `ctx.invokeCommand` produces —
       // see packages/core/plugin-host/plugin-namespace.ts.
       manifest.id,
+      pluginId,
     );
 
     // 7. 注册到 WorkerRegistry（含 crash 检测）
