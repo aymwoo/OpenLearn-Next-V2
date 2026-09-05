@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import os from 'os';
 import { mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
@@ -34,6 +35,11 @@ let dbPath: string;
 if (process.env.OPENLEARN_DB_PATH) {
   dbPath = process.env.OPENLEARN_DB_PATH;
   mkdirSync(path.dirname(dbPath), { recursive: true });
+} else if (process.env.VITEST) {
+  const poolId = process.env.VITEST_POOL_ID || process.pid;
+  const testDbDir = path.join(os.tmpdir(), 'openlearn_test_dbs');
+  mkdirSync(testDbDir, { recursive: true });
+  dbPath = path.join(testDbDir, `openlearn_test_${poolId}.db`);
 } else {
   if (typeof import.meta !== 'undefined' && import.meta.url) {
     const __filename = fileURLToPath(import.meta.url);
@@ -42,6 +48,16 @@ if (process.env.OPENLEARN_DB_PATH) {
   } else {
     dbPath = path.join(__dirname, '../packages/core/db/educational_os.db');
   }
+}
+
+export function createDatabase(customPath?: string): Database.Database {
+  const targetPath = customPath || dbPath;
+  mkdirSync(path.dirname(targetPath), { recursive: true });
+  const instance = new Database(targetPath);
+  instance.pragma('journal_mode = WAL');
+  instance.pragma('synchronous = NORMAL');
+  instance.pragma('foreign_keys = ON');
+  return instance;
 }
 
 export const db = new Database(dbPath);

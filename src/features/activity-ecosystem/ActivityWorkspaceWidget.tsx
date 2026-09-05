@@ -118,6 +118,17 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
   const [finishError, setFinishError] = useState<string | null>(null);
   const setTeacherTab = useAppStore((s) => s.setTeacherTab);
 
+  // Group by category for a cleaner catalogue (same data, different layout).
+  const byCategory = useMemo(() => {
+    const groups = new Map<string, ActivityProviderDescriptor[]>();
+    for (const a of activities) {
+      const key = a.category;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(a);
+    }
+    return Array.from(groups.entries());
+  }, [activities]);
+
   // Launcher effect: load the catalogue of startable activities.
   useEffect(() => {
     if (mode !== 'launcher') return;
@@ -331,17 +342,6 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
   // ── launcher mode (student workspace / default) ─────────────────────────────
   // (The data-loading effect for launcher mode is the guarded one near the top;
   // it runs only when `mode === 'launcher'`.)
-
-  // Group by category for a cleaner catalogue (same data, different layout).
-  const byCategory = useMemo(() => {
-    const groups = new Map<string, ActivityProviderDescriptor[]>();
-    for (const a of activities) {
-      const key = a.category;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(a);
-    }
-    return Array.from(groups.entries());
-  }, [activities]);
 
   const handleLaunch = async (activity: ActivityProviderDescriptor) => {
     setLauncherStatus((s) => ({ ...s, [activity.id]: lang === 'zh' ? '启动中…' : 'Starting…' }));

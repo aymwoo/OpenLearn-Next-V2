@@ -30,11 +30,7 @@ export default defineConfig({
     },
     // Kernel integration tests include ZIP plugin seeding which can take >5s
     testTimeout: 60000,
-    // Disable parallel execution of test files to prevent SQLite write race conditions
-    fileParallelism: false,
-    sequence: {
-      concurrent: false,
-    },
+    fileParallelism: true,
   },
 });
 

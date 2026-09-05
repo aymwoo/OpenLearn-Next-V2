@@ -26,6 +26,9 @@ OpenLearn V2 的安全体系涵盖用户鉴权、基于角色的访问控制（R
 - **无 DOM 访问**: 插件线程中无 `window`, `document` 对象。
 - **IPC 通信网关**: 所有 API 调用必须通过序列化的 MessageChannel 进行。
 - **资源限额**: 监控 CPU 与内存占用，超限自动挂起（State 置为 `ERROR` / `PAUSED`）。
+- **数据库安全屏障与自建表 DDL 白名单**:
+  - `ServiceHost` 拦截所有 Worker 数据库操作，严禁插件越权访问系统关键表（`users`、`client_sessions`、`plugins`、`ai_providers` 等）。
+  - Worker 插件的自建表 DDL 被严格限定于专属命名空间白名单（支持插件 `manifest.id` 与平台分配的 `dbPluginId` 双合法前缀，特殊字符自动转义为 `_`），确保插件可在自己作用域下初始化表结构，同时彻底防止表名拦截导致的 Supervisor 重启崩溃循环。
 
 ---
 

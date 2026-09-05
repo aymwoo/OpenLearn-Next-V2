@@ -13,6 +13,7 @@
 
 | 序号 | 文件 | 描述 |
 |------|------|------|
-| 000 | 000_initial_schema.sql | 初始完整 Schema（30+ 表） |
+| 000 | 000_initial_schema.sql | 初始完整 Schema（30+ 表与核心索引） |
 | 001 | 001_add_execution_mode.sql | plugins 表添加 execution_mode |
 | 002 | 002_add_client_session_expiry.sql | client_sessions 添加 expires_at |
+| 003 | 003_classroom_runtime.sql | 课堂工具与 AI 对话记忆表（student_rollcalls, site_settings, agent_conversations） |

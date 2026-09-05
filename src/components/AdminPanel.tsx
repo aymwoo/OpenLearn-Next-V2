@@ -301,6 +301,7 @@ export function AdminPanel({ currentUserId, currentUserRole, lang, onLogout, aiP
   useEffect(() => {
     fetchUsers();
     fetchSqliteStats();
+    onAIProvidersChanged();
     // Simulate cpu fluctuations and poll database stats periodically for real-time telemetry
     const interval = setInterval(() => {
       fetchSqliteStats();

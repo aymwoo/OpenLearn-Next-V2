@@ -10,7 +10,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [0.2.9] - 2026-09-05
+### Features
+- **数据库版本化迁移体系 (Phase 20 - DB-MIG-01)**：
+  - 新增 [`server/utils/migrate.ts`](file:///home/wuxf/Develop/openlearnv2/server/utils/migrate.ts) 迁移加载与执行引擎，支持从 `migrations/` 自动读取 `.sql` 文件，按文件名自然排序并解析 `-- UP` 与 `-- DOWN` 分隔符。
+  - 服务启动时自动执行迁移并记录状态至 `_migrations` 表（包含 `applied_at` 与 `checksum`），具备天然幂等性与 duplicate column 容错保护，并支持单项迁移回滚。
+  - 落地首批标准迁移：[`000_initial_schema.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/000_initial_schema.sql)（30+ 核心数据表与索引）、[`001_add_execution_mode.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/001_add_execution_mode.sql)、[`002_add_client_session_expiry.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/002_add_client_session_expiry.sql)、[`003_classroom_runtime.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/003_classroom_runtime.sql)。
+
+### Fixes
+- **Worker 插件自建表 DDL 安全白名单修复**：
+  - [`ServiceHost`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/service-host.ts) 构造函数与方法支持同时校验 `dbPluginId`（DB UUID）与 `pluginId`（manifest.id）双重合法命名空间前缀，转义特殊字符为下划线，彻底修复 `@ext/class-manager` 等插件在 worker 内部建表时触发 `not permitted to perform DDL` 导致的 Watchdog 重启崩溃循环。
+- **自定义 AI 提供商首屏列表加载修复**：
+  - 修复 [`usePluginManagement`](file:///home/wuxf/Develop/openlearnv2/src/hooks/usePluginManagement.ts) 与 [`AdminPanel`](file:///home/wuxf/Develop/openlearnv2/src/components/AdminPanel.tsx) 初始化挂载时未主动调用 `fetchAIProviders()` 的问题，确保系统初次运行时默认自带的 DeepSeek 与 MiniMax 模型即时呈现，无需在添加新 provider 之后才被动刷新。
+- **React 19 Rules of Hooks 违规清零**：
+  - 修复 [`PluginCardRenderer.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/widgets/PluginCardRenderer.tsx)（`useRef`/`useEffect` 条件调用）与 [`ActivityWorkspaceWidget.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/activity-ecosystem/ActivityWorkspaceWidget.tsx)（`useMemo` 条件调用）中的 3 处致命 Hook 违规，消除了组件卸载/挂载时 Fiber 链条错乱的运行时风险。
+
+### Refactor / Performance
+- **测试套件多 Worker 数据库隔离与 Vitest 并发提速**：
+  - [`packages/core/db/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/db/index.ts) 在 `process.env.VITEST` 下按 Worker Pool ID / PID 分配隔离的临时 SQLite 实例，彻底消除跨测试文件数据库死锁竞争。
+  - [`vitest.config.ts`](file:///home/wuxf/Develop/openlearnv2/vitest.config.ts) 开启 `fileParallelism: true`，全量 172 个测试文件、965 个测试用例运行时间从 **204 秒极限压缩至 37.45 秒**（提速 **5.4 倍**）。
+- **ESLint 工具链基线修复与清理**：
+  - 修正 [`eslint.config.js`](file:///home/wuxf/Develop/openlearnv2/eslint.config.js) 全局 ignores，排除 `.venv`、构建产物与 Sphinx 文档静态脚本，调整非关键警告级别，`pnpm lint:eslint` 达成 0 Error 绿灯基线。
 
 ### Features
 - **html-applet 组件增强**：

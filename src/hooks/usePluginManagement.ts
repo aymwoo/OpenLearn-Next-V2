@@ -70,6 +70,11 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
     }
   }, []);
 
+  useEffect(() => {
+    fetchPlugins();
+    fetchAIProviders();
+  }, [fetchPlugins, fetchAIProviders]);
+
   const fetchEvents = useCallback(async () => {
     try {
       const res = await fetch('/api/events');

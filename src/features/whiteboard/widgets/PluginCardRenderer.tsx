@@ -19,19 +19,11 @@ export function PluginCardRenderer({ pluginId, slot, widgetId, elementId, lesson
   const ext = extensions.find(e => e.id === widgetId) 
     ?? extensions.find(e => e.pluginId === pluginId && e.id === widgetId);
   
-  if (!ext) {
-    return (
-      <div className="text-center py-6 text-xs text-gray-400 italic flex flex-col justify-center items-center h-full">
-        <Loader2 size={16} className="animate-spin mb-1" />
-        <span>组件 [{widgetId}] 正在加载或未启用...</span>
-      </div>
-    );
-  }
-
   // Create container ref and use useEffect to call render
   const containerRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
+    if (!ext) return;
     if (containerRef.current) {
       containerRef.current.innerHTML = '';
       if (!ext.component && (ext as any).render) {
@@ -40,6 +32,15 @@ export function PluginCardRenderer({ pluginId, slot, widgetId, elementId, lesson
       }
     }
   }, [ext, pluginId, widgetId, elementId, lessonId]);
+
+  if (!ext) {
+    return (
+      <div className="text-center py-6 text-xs text-gray-400 italic flex flex-col justify-center items-center h-full">
+        <Loader2 size={16} className="animate-spin mb-1" />
+        <span>组件 [{widgetId}] 正在加载或未启用...</span>
+      </div>
+    );
+  }
 
   if (ext.component) {
     return React.createElement(

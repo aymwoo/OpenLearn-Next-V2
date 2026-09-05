@@ -30,6 +30,7 @@ import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from
 import { setupRealtimeBridge } from './server/realtime-bridge.js';
 import { setupPresence } from './server/presence.js';
 import { runStartupMigrations } from './server/bootstrap-db.js';
+import { loadMigrationsFromDirectory, runMigrations } from './server/utils/migrate.js';
 import { MF_REMOTE_CACHE, lessonActiveSegments } from './server/shared-state.js';
 import {
   buildAgentSystemInstruction,
@@ -79,6 +80,16 @@ async function startServer() {
     environment: (process.env.NODE_ENV as any) || 'development',
     config: { port: Number(process.env.PORT) || 9000 },
   });
+
+  try {
+    const migrationsDir = path.join(process.cwd(), 'migrations');
+    const migrations = loadMigrationsFromDirectory(migrationsDir);
+    if (migrations.length > 0) {
+      runMigrations(kernelContainer.db, migrations);
+    }
+  } catch (err) {
+    console.error('[Migration] Failed to run database migrations:', err);
+  }
 
   await runStartupMigrations(kernelContainer.db);
 

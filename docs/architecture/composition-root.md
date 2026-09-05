@@ -7,7 +7,8 @@ Composition Root（服务组装根）是 OpenLearn V2 应用程序的入口点�
 > - `server/ai-agent.ts` — AI 对话编排（`runGeminiAgentChat` / `runOpenAIAgentChat` 等）。
 > - `server/shared-state.ts` — 共享单例 `MF_REMOTE_CACHE` / `lessonActiveSegments`。
 > - `server/presence.ts` — `setupPresence({ io, eventBus })`：Socket.IO 连接生命周期与在线状态广播。
-> - `server/bootstrap-db.ts` — `runStartupMigrations(db)`：启动时 DB 建表/升级与过期会话清理。
+> - `server/utils/migrate.ts` — `runMigrations(db, migrations)`：Phase 20 版本化数据库迁移运行器，服务启动阶段自动从 `migrations/` 目录加载 `.sql` 脚本，记录并比对 `_migrations` 元表状态，具备幂等性与 duplicate column 容错保护。
+> - `server/bootstrap-db.ts` — `runStartupMigrations(db)`：启动时 DB 兼容性保障、旧插件升级与过期会话清理。
 >
 > 路由模块（`server/routes/*.ts`）通过 `ServerContext`（`ctx`）消费这些能力，不再直接从 `server.ts` 导入符号。
 
