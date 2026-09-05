@@ -54,18 +54,18 @@ export function StudentLessonInteractionPanel(props: StudentLessonInteractionPan
   return (
     <div className={`${(isStudentLessonContentCollapsed || studentFullscreenPanel === 'right') ? 'w-full flex-grow' : 'flex-grow flex-1'} relative flex flex-col min-h-0 ${studentFullscreenPanel === 'left' ? 'hidden' : ''} transition-all duration-300`}>
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-           <button
-             onClick={() => setIsStudentLessonContentCollapsed(!isStudentLessonContentCollapsed)}
-             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors border border-indigo-100/80 cursor-pointer shadow-3xs"
-             title={isStudentLessonContentCollapsed ? "展开课程内容" : "折叠课程内容"}
-           >
-             <BookOpen size={13} className="text-indigo-650" />
-             <span>{isStudentLessonContentCollapsed ? (lang === 'zh' ? '展开课程内容' : 'Expand Content') : (lang === 'zh' ? '折叠课程内容' : 'Collapse Content')}</span>
-           </button>
-           <button onClick={() => setStudentLessonTab('whiteboard')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'whiteboard' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>Interactive Whiteboard</button>
-           <button onClick={() => setStudentLessonTab('courseware')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'courseware' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>Interactive Courseware Viewer</button>
-            <button onClick={() => setStudentLessonTab('assignment')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'assignment' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>{lang === 'zh' ? '作业提交与互评' : 'Assignments & Peer Reviews'}</button>
+         <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsStudentLessonContentCollapsed(!isStudentLessonContentCollapsed)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary-theme/10 text-primary-theme rounded-lg hover:bg-primary-theme/20 transition-colors border border-primary-theme/20 cursor-pointer shadow-3xs"
+              title={isStudentLessonContentCollapsed ? "展开课程内容" : "折叠课程内容"}
+            >
+              <BookOpen size={13} className="text-primary-theme" />
+              <span>{isStudentLessonContentCollapsed ? (lang === 'zh' ? '展开课程内容' : 'Expand Content') : (lang === 'zh' ? '折叠课程内容' : 'Collapse Content')}</span>
+            </button>
+            <button onClick={() => setStudentLessonTab('whiteboard')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'whiteboard' ? 'bg-primary-theme/10 text-primary-theme shadow-sm font-bold' : 'text-muted hover:bg-surface-secondary'}`}>Interactive Whiteboard</button>
+            <button onClick={() => setStudentLessonTab('courseware')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'courseware' ? 'bg-primary-theme/10 text-primary-theme shadow-sm font-bold' : 'text-muted hover:bg-surface-secondary'}`}>Interactive Courseware Viewer</button>
+            <button onClick={() => setStudentLessonTab('assignment')} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${studentLessonTab === 'assignment' ? 'bg-primary-theme/10 text-primary-theme shadow-sm font-bold' : 'text-muted hover:bg-surface-secondary'}`}>{lang === 'zh' ? '作业提交与互评' : 'Assignments & Peer Reviews'}</button>
         </div>
         
         <button

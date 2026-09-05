@@ -93,6 +93,14 @@
   border-color: var(--border-theme-subtle);
 }
 
+@utility bg-border-theme {
+  background-color: var(--border-theme);
+}
+
+@utility bg-border-theme-subtle {
+  background-color: var(--border-theme-subtle);
+}
+
 @utility text-main {
   color: var(--text-main);
 }

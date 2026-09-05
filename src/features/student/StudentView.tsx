@@ -97,9 +97,9 @@ export function StudentView(props: StudentViewProps) {
   return (
     <div className="flex-1 p-6 overflow-y-auto w-full max-w-full space-y-6">
       {!activeStudentId ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-12 text-center text-gray-500 flex flex-col items-center justify-center">
-          <Users size={48} className="text-gray-300 mb-4" />
-          <h3 className="text-lg font-medium text-gray-700">No Student Selected</h3>
+        <div className="bg-surface border border-theme rounded-xl p-12 text-center text-muted flex flex-col items-center justify-center">
+          <Users size={48} className="text-muted/40 mb-4" />
+          <h3 className="text-lg font-medium text-main">No Student Selected</h3>
           <p className="mt-2 text-sm">Please select a student from the top navigation bar to view their dashboard.</p>
         </div>
       ) : !studentDashboardData ? (

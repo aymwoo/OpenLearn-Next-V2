@@ -76,7 +76,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         lessons={lessons}
         selectedLesson={selectedLesson}
       />
-      <div className="flex-1 flex gap-6 min-h-0 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+      <div className="flex-1 flex gap-6 min-h-0 bg-surface border border-theme rounded-xl p-4 shadow-sm text-main">
         <StudentLessonContentPanel
           students={students}
           activeStudentId={activeStudentId}

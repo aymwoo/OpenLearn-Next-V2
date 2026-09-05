@@ -72,35 +72,35 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
   onRefresh
 }) => {
   return (
-    <div className="flex items-center justify-start gap-1.5 px-3 py-1.5 bg-white border-b border-slate-200 shrink-0 font-sans select-none">
+    <div className="flex items-center justify-start gap-1.5 px-3 py-1.5 bg-surface border-b border-theme shrink-0 font-sans select-none text-main">
       {/* Group 1: Selection */}
       <button
         onClick={() => { setTool('cursor'); setSelectedShapeId(null); }}
-        className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'cursor' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'}`}
+        className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'cursor' ? 'bg-primary-theme text-white shadow-2xs' : 'text-muted hover:bg-surface-secondary hover:text-main'}`}
         title="选择工具 (Pointer / Selector)"
       >
         <MousePointer2 size={16} />
       </button>
 
-      <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
+      <div className="w-px h-4 bg-border-theme mx-0.5" />
 
       {/* Group 2: Draw & Annotate */}
       <button
         onClick={() => setTool('pen')}
-        className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'pen' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'}`}
+        className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'pen' ? 'bg-primary-theme text-white shadow-2xs' : 'text-muted hover:bg-surface-secondary hover:text-main'}`}
         title="画笔工具 (Pen)"
       >
         <PenTool size={16} />
       </button>
       <button
         onClick={() => setTool('highlighter')}
-        className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'highlighter' ? 'bg-amber-500 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'}`}
+        className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'highlighter' ? 'bg-amber-500 text-white shadow-2xs' : 'text-muted hover:bg-surface-secondary hover:text-main'}`}
         title="荧光高亮笔 (Highlighter)"
       >
         <Highlighter size={16} />
       </button>
       {tool === 'highlighter' && (
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 animate-in zoom-in-95 duration-150">
+        <div className="flex items-center gap-1 bg-surface-secondary p-1 rounded-xl border border-theme animate-in zoom-in-95 duration-150">
           {[
             { hex: '#facc15', label: 'Yellow' },
             { hex: '#4ade80', label: 'Green' },
@@ -110,7 +110,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
             <button
               key={col.hex}
               onClick={() => setHighlighterColor(col.hex)}
-              className={`w-3.5 h-3.5 rounded-full border transition-all ${highlighterColor === col.hex ? 'ring-2 ring-indigo-500 scale-110 border-white' : 'border-transparent'}`}
+              className={`w-3.5 h-3.5 rounded-full border transition-all ${highlighterColor === col.hex ? 'ring-2 ring-primary-theme scale-110 border-white' : 'border-transparent'}`}
               style={{ backgroundColor: col.hex }}
               title={col.label}
             />
@@ -118,32 +118,32 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
         </div>
       )}
 
-      <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
+      <div className="w-px h-4 bg-border-theme mx-0.5" />
 
       {/* Group 3: Shapes & Text */}
       <button
         onClick={() => setTool('rect')}
-        className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'rect' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'}`}
+        className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'rect' ? 'bg-primary-theme text-white shadow-2xs' : 'text-muted hover:bg-surface-secondary hover:text-main'}`}
         title="矩形工具 (Rectangle)"
       >
         <Square size={16} />
       </button>
       <button
         onClick={() => setTool('circle')}
-        className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'circle' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'}`}
+        className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'circle' ? 'bg-primary-theme text-white shadow-2xs' : 'text-muted hover:bg-surface-secondary hover:text-main'}`}
         title="圆形工具 (Circle)"
       >
         <CircleIcon size={16} />
       </button>
       <button
         onClick={() => setTool('text')}
-        className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'text' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'}`}
+        className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'text' ? 'bg-primary-theme text-white shadow-2xs' : 'text-muted hover:bg-surface-secondary hover:text-main'}`}
         title="文本工具 (Text)"
       >
         <Type size={16} />
       </button>
 
-      <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
+      <div className="w-px h-4 bg-border-theme mx-0.5" />
 
       {/* Group 4: Media & Applets */}
       <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:presentation" placement="before" />
@@ -185,7 +185,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
               }
            });
         }} 
-        className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+        className="p-1.5 rounded-xl text-muted hover:bg-surface-secondary hover:text-main transition-all cursor-pointer"
         title="插入演示幻灯片 (Presentation)"
       >
         <Presentation size={16} />
@@ -215,7 +215,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
               setIsSyncing(false);
            }
         }} 
-        className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+        className="p-1.5 rounded-xl text-muted hover:bg-surface-secondary hover:text-main transition-all cursor-pointer"
         title="插入代码沙箱 (Code Sandbox)"
       >
         <Terminal size={16} />
@@ -245,7 +245,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
               setIsSyncing(false);
            }
         }} 
-        className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+        className="p-1.5 rounded-xl text-muted hover:bg-surface-secondary hover:text-main transition-all cursor-pointer"
         title="插入数学函数图表 (Math Graph)"
       >
         <Activity size={16} />
@@ -276,14 +276,14 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
               setIsSyncing(false);
            }
         }} 
-        className="p-1.5 rounded-xl text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+        className="p-1.5 rounded-xl text-muted hover:bg-surface-secondary hover:text-main transition-all cursor-pointer"
         title="插入交互网页课件 (Interactive Courseware)"
       >
         <Globe size={16} />
       </button>
       <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:courseware" placement="after" />
 
-      <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
+      <div className="w-px h-4 bg-border-theme mx-0.5" />
 
       {/* Group 5: Teaching & AI */}
       <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:rollcall" placement="before" />
@@ -310,14 +310,14 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
               setIsSyncing(false);
            }
         }}
-        className="p-1.5 rounded-xl text-indigo-600 hover:bg-indigo-50 transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
+        className="p-1.5 rounded-xl text-primary-theme hover:bg-primary-theme-light transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
         title="插入随机点名组件 (Roll Call)"
       >
         <UserCheck size={15} />
       </button>
       <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:rollcall" placement="after" />
 
-      <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
+      <div className="w-px h-4 bg-border-theme mx-0.5" />
 
       {/* Group 6: Plugin Classroom Tools */}
       <ExtensionPointRenderer slot="classroom.tool" />
@@ -354,20 +354,20 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
               setIsSyncing(false);
            }
         }}
-        className="p-1.5 rounded-xl text-purple-600 hover:bg-purple-50 transition-all cursor-pointer"
+        className="p-1.5 rounded-xl text-purple-600 hover:bg-purple-500/10 transition-all cursor-pointer"
         title="请求 AI 助教建议 (Ask AI Tutor)"
       >
         <Wand2 size={16} />
       </button>
       <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:ai-tutor" placement="after" />
 
-      <div className="w-px h-4 bg-slate-200/80 mx-0.5" />
+      <div className="w-px h-4 bg-border-theme mx-0.5" />
 
       {/* Group 7: Canvas Controls & More */}
       <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:grid" placement="before" />
       <button
         onClick={() => setShowGrid((g) => !g)}
-        className={`p-1.5 rounded-xl transition-all cursor-pointer ${showGrid ? 'text-indigo-600 bg-indigo-50/80' : 'text-slate-400 hover:bg-slate-100'}`}
+        className={`p-1.5 rounded-xl transition-all cursor-pointer ${showGrid ? 'text-primary-theme bg-primary-theme-light' : 'text-muted hover:bg-surface-secondary hover:text-main'}`}
         title={showGrid ? '关闭网格背景' : '开启网格背景'}
       >
         <Grid size={16} />
@@ -380,7 +380,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
             handleElementDelete(selectedShapeId);
             setSelectedShapeId(null);
           }}
-          className="px-2 py-1 rounded-xl text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 shadow-2xs font-semibold flex items-center gap-1 text-xs transition-all cursor-pointer"
+          className="px-2 py-1 rounded-xl text-rose-500 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 shadow-2xs font-semibold flex items-center gap-1 text-xs transition-all cursor-pointer"
           title="删除选中图形"
         >
           <Trash2 size={13} /> 删除
@@ -390,7 +390,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       {userRole !== 'student' ? (
         <button
           onClick={handleClearBoard}
-          className="p-1.5 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+          className="p-1.5 rounded-xl text-muted hover:text-rose-500 hover:bg-rose-500/10 transition-all cursor-pointer"
           title="清空白板 (Clear Board)"
         >
           <Eraser size={16} />
@@ -398,13 +398,13 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       ) : (
         <button
           onClick={handleResetBoard}
-          className="p-1.5 rounded-xl text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-all cursor-pointer"
+          className="p-1.5 rounded-xl text-muted hover:text-amber-500 hover:bg-amber-500/10 transition-all cursor-pointer"
           title="重置白板 (Reset Board)"
         >
           <RotateCcw size={16} />
         </button>
       )}
-      {isSyncing && <Loader2 size={15} className="text-indigo-500 animate-spin ml-1" />}
+      {isSyncing && <Loader2 size={15} className="text-primary-theme animate-spin ml-1" />}
     </div>
   );
 };

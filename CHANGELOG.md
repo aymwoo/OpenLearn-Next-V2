@@ -11,6 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Features
+- **现代教育 OS 主题系统 (Theming System Engine - Phase 2)**：
+  - **白板渲染引擎主题联动**：升级 [`theme-manager.ts`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/rendering-engine/theme/theme-manager.ts)，原生支持 `eyecareTokens` 与 `chalkboardTokens`，实现交互白板底色（黑板墨绿 `#0e1713`）、极坐标微网格点（淡绿微光 `#2d5242`）与笔刷/文字对比度智能自适应反转（Dark/Chalkboard 模式下黑色笔迹自动转为粉笔白 `#f8fafc`），并支持外部主题订阅与动态注册。
+  - **白板悬浮控件 Token 化**：白板悬浮工具栏 [`WhiteboardToolbar.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/components/WhiteboardToolbar.tsx) 与底部分页导航胶囊 [`WhiteboardPageBar.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/components/WhiteboardPageBar.tsx) 全面语义化，支持选取、画笔、几何图形、荧光笔色盘与大纲抽屉无缝随全局换肤。
+  - **核心教学主视图容器适配**：课堂控制中心 [`LiveClassroomView.tsx`](file:///home/wuxf/Develop/openlearnv2/src/components/LiveClassroomView.tsx)、备课工作台 [`LessonEditorView.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/teacher/LessonEditorView.tsx)（及画板组件库 [`LessonPalette.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/teacher/lesson-editor/LessonPalette.tsx)）与学生端工作台 [`StudentView.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/student/StudentView.tsx) 全面接入设计 Token。
+  - **单测护航**：新增 [`theme-manager.test.ts`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/__tests__/theme-manager.test.ts)，全量 174 个测试套件、976 个用例持续保持 100% 绿灯。
 - **现代教育 OS 主题系统 (Theming System Engine - Phase 1)**：
   - 基于 Tailwind CSS v4 原生变量机制构建设计 Token 层，在 [`src/index.css`](file:///home/wuxf/Develop/openlearnv2/src/index.css) 中规范 `--bg-app`、`--bg-surface`、`--border-theme`、`--text-main`、`--color-primary` 等语义化设计变量与实用类。
   - 内置 4 套教育场景专属预设：**浅色日间 (Light)**、**暗夜极客 (Dark)**、**教学护眼防眩光 (EyeCare)**、**经典墨绿黑板 (Chalkboard)**。

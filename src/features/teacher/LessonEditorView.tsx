@@ -70,11 +70,11 @@ export function LessonEditorView({
   setPaletteEdit,
 }: LessonEditorViewProps) {
   return (
-    <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-      <div className="px-3.5 py-2 border-b border-slate-200/80 flex items-center justify-between shrink-0 bg-slate-50/80 backdrop-blur-xs">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-surface rounded-2xl border border-theme overflow-hidden shadow-sm text-main">
+      <div className="px-3.5 py-2 border-b border-theme flex items-center justify-between shrink-0 bg-surface-secondary/80 backdrop-blur-xs">
         <div className="flex items-center gap-2.5 min-w-0">
-          <h3 className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-2 truncate">
-            <Wand2 size={16} className="text-indigo-600 shrink-0" />
+          <h3 className="font-bold text-main text-xs sm:text-sm flex items-center gap-2 truncate">
+            <Wand2 size={16} className="text-primary-theme shrink-0" />
             <span className="truncate">{lang === 'zh' ? '课程编辑器: ' : 'Lesson Editor: '}{lessons.find(l => l.id === selectedLesson)?.title || (lang === 'zh' ? '未选择课程' : 'No Lesson Selected')}</span>
           </h3>
           <div className="bg-slate-200/80 p-0.5 rounded-lg flex items-center gap-0.5 border border-slate-300/60 shadow-3xs">
@@ -125,8 +125,8 @@ export function LessonEditorView({
                 </div>
               )}
               {editorSaveStatus === 'none' && (
-                <div className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
-                  <Database size={10} className="text-slate-400" />
+                <div className="flex items-center gap-1 text-[10px] font-semibold text-muted bg-surface-secondary border border-theme px-2 py-0.5 rounded-full">
+                  <Database size={10} className="text-muted" />
                   <span>{lang === 'zh' ? 'SQLite 就绪' : 'SQLite Ready'}</span>
                 </div>
               )}
@@ -141,18 +141,18 @@ export function LessonEditorView({
                 setPreviewLessonTab('whiteboard');
                 setPreviewSelectedCourseware(null);
               }}
-              className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+              className="px-2.5 py-1 bg-primary-theme hover:bg-primary-theme-hover text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
             >
               <Eye size={13} />
               <span>{lang === 'zh' ? '学生视角预览' : 'Student View'}</span>
             </button>
           )}
-          <button onClick={() => setTeacherTab('courses')} className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium rounded-lg transition-colors cursor-pointer">{lang === 'zh' ? '返回课程库' : 'Back to Courses'}</button>
+          <button onClick={() => setTeacherTab('courses')} className="px-2.5 py-1 bg-surface-secondary hover:bg-surface border border-theme text-muted hover:text-main text-xs font-medium rounded-lg transition-colors cursor-pointer">{lang === 'zh' ? '返回课程库' : 'Back to Courses'}</button>
         </div>
       </div>
       <div className="flex-1 flex overflow-hidden">
         <LessonPalette lang={lang} onActivate={handlePaletteActivate} />
-        <div className="flex-1 relative bg-white flex flex-col min-w-0 overflow-y-auto">
+        <div className="flex-1 relative bg-surface flex flex-col min-w-0 overflow-y-auto">
           <TimelineRail
             lang={lang}
             segments={timelineSegments}
@@ -190,10 +190,10 @@ export function LessonEditorView({
           )}
           <div className="flex-1 min-h-[500px] relative flex flex-col min-w-0">
             {!selectedLesson ? (
-              <div className="absolute inset-0 flex items-center justify-center text-gray-400 p-8 text-center bg-gray-50">
+              <div className="absolute inset-0 flex items-center justify-center text-muted p-8 text-center bg-surface-secondary/50">
                 <div>
                   <PenTool size={48} className="mx-auto mb-4 opacity-30" />
-                  <p className="font-medium text-lg text-gray-500 mb-2">No active lesson selected</p>
+                  <p className="font-medium text-lg text-main mb-2">No active lesson selected</p>
                   <p className="text-sm">Please select a lesson from the Dashboard to orchestrate.</p>
                 </div>
               </div>

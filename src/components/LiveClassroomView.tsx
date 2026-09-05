@@ -551,15 +551,15 @@ export function LiveClassroomView({
   };
 
   return (
-    <div className="flex-grow flex-1 flex flex-col min-h-0 bg-white border border-slate-200 rounded-2xl shadow-xl text-slate-800 overflow-hidden font-sans">
+    <div className="flex-grow flex-1 flex flex-col min-h-0 bg-surface border border-theme rounded-2xl shadow-xl text-main overflow-hidden font-sans">
       {/* 1. Header Control Bar */}
-      <div className="bg-slate-50 p-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4 shrink-0">
+      <div className="bg-surface-secondary p-4 border-b border-theme flex flex-wrap items-center justify-between gap-4 shrink-0">
         <div className="flex items-center gap-3 select-none">
           <div className="relative flex items-center justify-center">
             <span className={`w-3 h-3 rounded-full ${liveClassIsActive ? 'bg-emerald-500 animate-ping' : 'bg-rose-500'} absolute`} />
             <span className={`w-2 h-2 rounded-full ${liveClassIsActive ? 'bg-emerald-500' : 'bg-rose-500'} relative`} />
           </div>
-          <h2 className="text-sm font-extrabold tracking-tight text-slate-800 flex items-center gap-2">
+          <h2 className="text-sm font-extrabold tracking-tight text-main flex items-center gap-2">
             {lang === 'zh' ? '🔴 智能授课工作流控制中心' : '🔴 Active Lesson control center'}
           </h2>
         </div>
@@ -574,7 +574,7 @@ export function LiveClassroomView({
                 setSelectedLesson(val);
                 if (val) fetchElements(val);
               }}
-              className="bg-white border border-slate-200 rounded-lg text-xs font-semibold px-3 py-1.5 focus:ring-1 focus:ring-indigo-500 text-slate-700 outline-none cursor-pointer hover:bg-slate-100 transition-colors"
+              className="bg-surface border border-theme rounded-lg text-xs font-semibold px-3 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none cursor-pointer hover:bg-surface-secondary transition-colors"
             >
               <option value="">{lang === 'zh' ? '-- 选择授课课节 --' : '-- Select Lesson --'}</option>
               {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
@@ -585,7 +585,7 @@ export function LiveClassroomView({
             <select
               value={liveClassSelectedClassId || ''}
               onChange={e => setLiveClassSelectedClassId(e.target.value === '' ? null : e.target.value)}
-              className="bg-white border border-slate-200 rounded-lg text-xs font-semibold px-3 py-1.5 focus:ring-1 focus:ring-indigo-500 text-slate-700 outline-none cursor-pointer hover:bg-slate-100 transition-colors"
+              className="bg-surface border border-theme rounded-lg text-xs font-semibold px-3 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none cursor-pointer hover:bg-surface-secondary transition-colors"
             >
               <option value="">{lang === 'zh' ? '-- 选择授课班级 --' : '-- Select Class --'}</option>
               {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -635,19 +635,19 @@ export function LiveClassroomView({
       </div>
 
       {/* 2. Main Three-column Panel Grid */}
-      <div className="flex-1 flex overflow-hidden min-h-0 bg-slate-50/30">
+      <div className="flex-1 flex overflow-hidden min-h-0 bg-surface-secondary/30">
         
         {/* Left Column: Timeline Control */}
         {!isLeftSidebarCollapsed && (
-          <div className="w-[220px] shrink-0 bg-white p-3.5 border-r border-slate-200/80 flex flex-col gap-4 overflow-y-auto">
+          <div className="w-[220px] shrink-0 bg-surface p-3.5 border-r border-theme flex flex-col gap-4 overflow-y-auto">
             <div>
               <div className="flex items-center justify-between mb-2 select-none">
-                <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                <h3 className="text-[10px] font-black uppercase text-muted tracking-wider">
                   {lang === 'zh' ? '教学步骤与时间管理' : 'Lesson Segments & Phases'}
                 </h3>
                 <button
                   onClick={() => setIsLeftSidebarCollapsed(true)}
-                  className="p-1 rounded bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+                  className="p-1 rounded bg-surface-secondary hover:bg-surface border border-theme text-muted hover:text-main transition-colors cursor-pointer"
                   title={lang === 'zh' ? '折叠导航栏' : 'Collapse Sidebar'}
                 >
                   <ChevronLeft size={10} />
@@ -655,19 +655,19 @@ export function LiveClassroomView({
               </div>
             
             {/* Live Timer status */}
-            <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 flex flex-col items-center justify-center gap-1 shadow-sm">
-              <span className="text-[9.5px] uppercase tracking-widest text-slate-505 font-semibold flex items-center gap-1">
+            <div className="bg-surface-secondary border border-theme rounded-xl p-3 flex flex-col items-center justify-center gap-1 shadow-sm">
+              <span className="text-[9.5px] uppercase tracking-widest text-muted font-semibold flex items-center gap-1">
                 <Clock size={11} className={liveClassIsActive ? 'animate-spin' : ''} style={{ animationDuration: '4s' }} />
                 {lang === 'zh' ? '当前步骤剩余时间' : 'Phase Remaining'}
               </span>
-              <div className={`text-2xl font-black font-mono tracking-widest ${liveClassIsActive ? 'text-indigo-650' : 'text-slate-450'}`}>
+              <div className={`text-2xl font-black font-mono tracking-widest ${liveClassIsActive ? 'text-primary-theme' : 'text-muted'}`}>
                 {formatTime(liveClassTimeRemaining)}
               </div>
               <div className="flex gap-1.5 w-full mt-2 shrink-0">
                 <button
                   onClick={() => setLiveClassIsActive(!liveClassIsActive)}
                   disabled={liveClassTimeRemaining <= 0}
-                  className="flex-1 py-1 rounded bg-slate-100 hover:bg-slate-205 text-[10px] font-bold text-slate-700 transition-all disabled:opacity-40 flex items-center justify-center gap-1 border border-slate-200"
+                  className="flex-1 py-1 rounded bg-surface hover:bg-surface-secondary text-[10px] font-bold text-main transition-all disabled:opacity-40 flex items-center justify-center gap-1 border border-theme"
                 >
                   {liveClassIsActive ? <Pause size={10} /> : <Play size={10} />}
                   <span>{liveClassIsActive ? (lang === 'zh' ? '暂停' : 'Pause') : (lang === 'zh' ? '开始' : 'Start')}</span>
@@ -677,7 +677,7 @@ export function LiveClassroomView({
                     setLiveClassIsActive(false);
                     setLiveClassTimeRemaining(0);
                   }}
-                  className="py-1 px-2.5 rounded bg-slate-100 hover:bg-rose-50 text-[10px] font-bold text-rose-600 hover:text-rose-700 transition-all flex items-center justify-center border border-slate-200"
+                  className="py-1 px-2.5 rounded bg-surface hover:bg-rose-500/10 text-[10px] font-bold text-rose-500 hover:text-rose-600 transition-all flex items-center justify-center border border-theme"
                   title="重置"
                 >
                   <Square size={10} />
@@ -687,7 +687,7 @@ export function LiveClassroomView({
           </div>
 
           <div className="flex-1 flex flex-col gap-2 min-h-0">
-            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-wider select-none">
+            <h4 className="text-[10px] font-black uppercase text-muted tracking-wider select-none">
               {lang === 'zh' ? '教学环节进度表' : 'Timeline Segments'}
             </h4>
             
@@ -700,23 +700,23 @@ export function LiveClassroomView({
                       key={seg.id}
                       className={`p-2.5 rounded-xl border transition-all flex flex-col gap-1.5 ${
                         isActive 
-                          ? 'bg-indigo-50/50 border-indigo-250 shadow-sm' 
-                          : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300'
+                          ? 'bg-primary-theme/10 border-primary-theme/40 shadow-sm' 
+                          : 'bg-surface border-theme hover:bg-surface-secondary'
                       }`}
                     >
                       <div className="flex justify-between items-start">
-                        <span className={`text-[11.5px] font-bold ${isActive ? 'text-indigo-900' : 'text-slate-800'}`}>{idx + 1}. {seg.title}</span>
-                        <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-slate-100 text-slate-550 border border-slate-200/50">{seg.duration}</span>
+                        <span className={`text-[11.5px] font-bold ${isActive ? 'text-primary-theme' : 'text-main'}`}>{idx + 1}. {seg.title}</span>
+                        <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-surface-secondary text-muted border border-theme">{seg.duration}</span>
                       </div>
-                      <div className={`text-[9.5px] line-clamp-2 leading-relaxed ${isActive ? 'text-indigo-750' : 'text-slate-450'}`}>
+                      <div className={`text-[9.5px] line-clamp-2 leading-relaxed ${isActive ? 'text-primary-theme' : 'text-muted'}`}>
                         {seg.notes || "无步骤描述备注信息。"}
                       </div>
                       <button
                         onClick={() => handleStartSegment(seg)}
                         className={`w-full py-1 rounded text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
                           isActive 
-                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm' 
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200/60'
+                            ? 'bg-primary-theme text-white hover:bg-primary-theme-hover shadow-sm' 
+                            : 'bg-surface-secondary text-muted hover:text-main hover:bg-surface border border-theme'
                         }`}
                       >
                         <Presentation size={10} />
@@ -727,7 +727,7 @@ export function LiveClassroomView({
                 })}
               </div>
             ) : (
-              <div className="text-xs text-slate-400 italic py-4 text-center">
+              <div className="text-xs text-muted italic py-4 text-center">
                 {lang === 'zh' ? '请选择一个课节加载流程表' : 'Select a lesson to view schedule.'}
               </div>
             )}
@@ -736,28 +736,28 @@ export function LiveClassroomView({
         )}
 
         {/* Middle Column: Live Interactive Whiteboard & Plugins Tool Shelf */}
-        <div className="flex-1 flex flex-col min-w-0 bg-slate-100 p-3 gap-3 relative">
+        <div className="flex-1 flex flex-col min-w-0 bg-surface-secondary/40 p-3 gap-3 relative">
           {selectedLesson ? (
             <div className="w-full h-full relative flex flex-col min-h-0">
-              <div className="flex justify-between items-center px-1.5 py-1 select-none text-slate-500 text-[10px] uppercase font-extrabold tracking-wide shrink-0 mb-1">
+              <div className="flex justify-between items-center px-1.5 py-1 select-none text-muted text-[10px] uppercase font-extrabold tracking-wide shrink-0 mb-1">
                 <div className="flex items-center gap-3">
                   {isLeftSidebarCollapsed && (
                     <button
                       onClick={() => setIsLeftSidebarCollapsed(false)}
-                      className="p-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-205 text-indigo-650 hover:text-indigo-700 transition-colors cursor-pointer mr-1.5 flex items-center gap-1 shadow-sm"
+                      className="p-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-primary-theme hover:text-primary-theme-hover transition-colors cursor-pointer mr-1.5 flex items-center gap-1 shadow-sm"
                       title={lang === 'zh' ? '展开环节大纲' : 'Expand Sidebar'}
                     >
                       <ChevronRight size={10} />
                       <span className="text-[9px] font-bold tracking-wider">{lang === 'zh' ? '展开' : 'Expand'}</span>
                     </button>
                   )}
-                  <div className="bg-slate-200/60 p-0.5 rounded-lg flex items-center gap-1">
+                  <div className="bg-surface-secondary p-0.5 rounded-lg flex items-center gap-1 border border-theme">
                     <button
                       onClick={() => setMiddleTab('whiteboard')}
                       className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
                         middleTab === 'whiteboard'
-                          ? 'bg-white text-indigo-700 shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
+                          ? 'bg-surface text-primary-theme shadow-sm'
+                          : 'text-muted hover:text-main'
                       }`}
                     >
                       {lang === 'zh' ? '💻 演示白板' : '💻 Whiteboard'}
@@ -766,8 +766,8 @@ export function LiveClassroomView({
                       onClick={() => setMiddleTab('submissions')}
                       className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
                         middleTab === 'submissions'
-                          ? 'bg-white text-indigo-700 shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
+                          ? 'bg-surface text-primary-theme shadow-sm'
+                          : 'text-muted hover:text-main'
                       }`}
                     >
                       {lang === 'zh' ? '📊 学生提交数据' : '📊 Student Submissions'}
@@ -777,15 +777,15 @@ export function LiveClassroomView({
                       onClick={() => setMiddleTab('assignment')}
                       className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
                         middleTab === 'assignment'
-                          ? 'bg-white text-indigo-700 shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700'
+                          ? 'bg-surface text-primary-theme shadow-sm'
+                          : 'text-muted hover:text-main'
                       }`}
                     >
                       {lang === 'zh' ? '🎓 作业成绩评定' : '🎓 Assignment Grades'}
                     </button>
                   </div>
                 </div>
-                <span className="text-indigo-655 font-mono tracking-widest animate-pulse flex items-center gap-1">
+                <span className="text-primary-theme font-mono tracking-widest animate-pulse flex items-center gap-1">
                   <Activity size={10} /> Live Broadcaster Connected
                 </span>
               </div>
@@ -793,48 +793,48 @@ export function LiveClassroomView({
               {middleTab === 'whiteboard' ? (
                 <>
                   {/* Whiteboard canvas wrapper */}
-                  <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-slate-200 shadow-md bg-white flex flex-col">
+                  <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col">
                     <LazyWhiteboard
-lessonId={selectedLesson}
-userRole={'teacher'}
-isEditMode={false}
-elements={elements}
-activeSegmentId={activeSegmentId}
-onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
-onElementAdd={async (type: string, data: any) => {
-                          await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ type, data })
-                          });
-                          fetchElements(selectedLesson);
-                        }}
-onElementUpdate={async (elementId: string, data: any) => {
-                          await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ data })
-                          });
-                          fetchElements(selectedLesson);
-                        }}
-onElementDelete={async (elementId: string) => {
-                          await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                            method: 'DELETE'
-                          });
-                          fetchElements(selectedLesson);
-                        }}
-onRefresh={() => fetchElements(selectedLesson)}
-/>
+                      lessonId={selectedLesson}
+                      userRole={'teacher'}
+                      isEditMode={false}
+                      elements={elements}
+                      activeSegmentId={activeSegmentId}
+                      onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
+                      onElementAdd={async (type: string, data: any) => {
+                        await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ type, data })
+                        });
+                        fetchElements(selectedLesson);
+                      }}
+                      onElementUpdate={async (elementId: string, data: any) => {
+                        await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ data })
+                        });
+                        fetchElements(selectedLesson);
+                      }}
+                      onElementDelete={async (elementId: string) => {
+                        await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                          method: 'DELETE'
+                        });
+                        fetchElements(selectedLesson);
+                      }}
+                      onRefresh={() => fetchElements(selectedLesson)}
+                    />
                   </div>
 
                   {/* Classroom Interactive Tool Shelf (Extensible Tools Panel) */}
-                  <div className="mt-3 bg-white border border-slate-200 rounded-xl p-3 shadow-sm shrink-0 flex flex-col gap-2 relative z-30">
-                    <div className="flex items-center justify-between text-[10px] uppercase font-black text-slate-555 tracking-wider select-none">
-                      <span className="flex items-center gap-1.5 text-indigo-655">
-                        <Shuffle size={12} className="text-indigo-600 animate-pulse" />
+                  <div className="mt-3 bg-surface border border-theme rounded-xl p-3 shadow-sm shrink-0 flex flex-col gap-2 relative z-30">
+                    <div className="flex items-center justify-between text-[10px] uppercase font-black text-muted tracking-wider select-none">
+                      <span className="flex items-center gap-1.5 text-primary-theme">
+                        <Shuffle size={12} className="text-primary-theme animate-pulse" />
                         <span>{lang === 'zh' ? '互动工具 (插件扩展)' : 'Classroom Interactive Tools'}</span>
                       </span>
-                      <span className="text-[8.5px] text-slate-400 font-mono">Plugins: {classroomTools.length} Active</span>
+                      <span className="text-[8.5px] text-muted font-mono">Plugins: {classroomTools.length} Active</span>
                     </div>
                     
                     {classroomTools.length > 0 ? (
@@ -844,34 +844,34 @@ onRefresh={() => fetchElements(selectedLesson)}
                             key={tool.id}
                             onClick={() => handleExecuteTool(tool)}
                             disabled={!selectedLesson}
-                            className="p-2 bg-slate-50 hover:bg-slate-105 border border-slate-205 hover:border-indigo-200 rounded-xl text-left transition-all active:scale-[0.98] disabled:opacity-40 flex items-center gap-2.5 w-44 shrink-0 group cursor-pointer"
+                            className="p-2 bg-surface-secondary hover:bg-surface border border-theme hover:border-primary-theme/50 rounded-xl text-left transition-all active:scale-[0.98] disabled:opacity-40 flex items-center gap-2.5 w-44 shrink-0 group cursor-pointer"
                             title={tool.description}
                           >
-                            <div className="p-1.5 bg-indigo-50 text-indigo-650 group-hover:bg-indigo-100 group-hover:text-indigo-700 rounded-lg border border-indigo-100 shrink-0 transition-colors">
+                            <div className="p-1.5 bg-primary-theme/10 text-primary-theme group-hover:bg-primary-theme/20 rounded-lg border border-primary-theme/20 shrink-0 transition-colors">
                               <DynamicIcon name={tool.icon} size={14} />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="text-xs font-bold text-slate-700 group-hover:text-slate-900 truncate">{tool.name}</div>
-                              <div className="text-[9px] text-slate-400 group-hover:text-slate-555 truncate mt-0.5">{tool.description}</div>
+                              <div className="text-xs font-bold text-main truncate">{tool.name}</div>
+                              <div className="text-[9px] text-muted truncate mt-0.5">{tool.description}</div>
                             </div>
                           </button>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-2 text-[10px] text-slate-400 italic">
+                      <div className="text-center py-2 text-[10px] text-muted italic">
                         {lang === 'zh' ? '暂无可用的互动工具。请在应用商店启用插件。' : 'No plugin tools loaded.'}
                       </div>
                     )}
                   </div>
                 </>
               ) : middleTab === 'submissions' ? (
-                <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-slate-200 shadow-md bg-white flex flex-col p-4">
+                <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col p-4">
                   {/* Submissions list view */}
                   <div className="flex justify-between items-center mb-4 gap-3 shrink-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-700">{lang === 'zh' ? '学生互动提交数据列表' : 'Student Submissions'}</span>
+                      <span className="text-xs font-bold text-main">{lang === 'zh' ? '学生互动提交数据列表' : 'Student Submissions'}</span>
                       {attempts.length > 0 && (
-                        <span className="text-[9px] bg-indigo-50 text-indigo-750 px-2 py-0.5 rounded-full border border-indigo-100 font-bold">
+                        <span className="text-[9px] bg-primary-theme/10 text-primary-theme px-2 py-0.5 rounded-full border border-primary-theme/20 font-bold">
                           {attempts.length} {lang === 'zh' ? '条记录' : 'records'}
                         </span>
                       )}
@@ -885,16 +885,16 @@ onRefresh={() => fetchElements(selectedLesson)}
                           placeholder={lang === 'zh' ? '搜索学生或课件...' : 'Search student or courseware...'}
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          className="bg-white border border-slate-200 rounded-lg text-xs pl-8 pr-3 py-1.5 focus:ring-1 focus:ring-indigo-500 text-slate-700 outline-none w-44 transition-all"
+                          className="bg-surface border border-theme rounded-lg text-xs pl-8 pr-3 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none w-44 transition-all"
                         />
-                        <Search size={12} className="absolute left-2.5 top-2.5 text-slate-400" />
+                        <Search size={12} className="absolute left-2.5 top-2.5 text-muted" />
                       </div>
 
                       {/* Filter */}
                       <select
                         value={submissionFilter}
                         onChange={(e: any) => setSubmissionFilter(e.target.value)}
-                        className="bg-white border border-slate-200 rounded-lg text-xs px-3 py-1.5 focus:ring-1 focus:ring-indigo-500 text-slate-700 outline-none cursor-pointer hover:bg-slate-50 transition-colors"
+                        className="bg-surface border border-theme rounded-lg text-xs px-3 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none cursor-pointer hover:bg-surface-secondary transition-colors"
                       >
                         <option value="all">{lang === 'zh' ? '全部状态' : 'All Status'}</option>
                         <option value="submitted">{lang === 'zh' ? '已提交/完成' : 'Submitted/Finished'}</option>
@@ -905,7 +905,7 @@ onRefresh={() => fetchElements(selectedLesson)}
                       <button
                         onClick={fetchAttempts}
                         disabled={loadingAttempts}
-                        className="p-1.5 bg-white hover:bg-slate-50 border border-slate-205 rounded-lg text-slate-605 hover:text-slate-800 transition-colors cursor-pointer flex items-center justify-center shadow-sm disabled:opacity-50"
+                        className="p-1.5 bg-surface hover:bg-surface-secondary border border-theme rounded-lg text-muted hover:text-main transition-colors cursor-pointer flex items-center justify-center shadow-sm disabled:opacity-50"
                         title={lang === 'zh' ? '刷新数据' : 'Refresh'}
                       >
                         <RefreshCw size={12} className={loadingAttempts ? 'animate-spin' : ''} />
@@ -914,10 +914,10 @@ onRefresh={() => fetchElements(selectedLesson)}
                   </div>
 
                   {/* Table area */}
-                  <div className="flex-1 overflow-y-auto border border-slate-100 rounded-xl scrollbar-thin">
+                  <div className="flex-1 overflow-y-auto border border-theme rounded-xl scrollbar-thin">
                     {loadingAttempts ? (
-                      <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2">
-                        <RefreshCw size={24} className="animate-spin text-indigo-600 mb-2" />
+                      <div className="h-full flex flex-col items-center justify-center text-muted gap-2">
+                        <RefreshCw size={24} className="animate-spin text-primary-theme mb-2" />
                         <span className="text-xs">{lang === 'zh' ? '正在加载学生提交数据...' : 'Loading submissions...'}</span>
                       </div>
                     ) : (() => {
@@ -941,11 +941,11 @@ onRefresh={() => fetchElements(selectedLesson)}
 
                       if (displayAttempts.length === 0) {
                         return (
-                          <div className="h-full flex flex-col items-center justify-center py-12 text-slate-400 gap-2">
-                            <FileText size={32} className="text-slate-300" />
+                          <div className="h-full flex flex-col items-center justify-center py-12 text-muted gap-2">
+                            <FileText size={32} className="text-muted/60" />
                             <span className="text-xs">{lang === 'zh' ? '暂无匹配的提交数据。' : 'No matching submissions found.'}</span>
                             {!liveClassSelectedClassId && (
-                              <span className="text-[10px] text-slate-400 italic">
+                              <span className="text-[10px] text-muted italic">
                                 {lang === 'zh' ? '提示：请在顶部选择一个班级进行筛选。' : 'Tip: Select a class at the top to filter.'}
                               </span>
                             )}
@@ -954,9 +954,9 @@ onRefresh={() => fetchElements(selectedLesson)}
                       }
 
                       return (
-                        <table className="w-full border-collapse text-left text-xs text-slate-700">
+                        <table className="w-full border-collapse text-left text-xs text-main">
                           <thead>
-                            <tr className="bg-slate-50 border-b border-slate-100 font-bold text-slate-550 select-none">
+                            <tr className="bg-surface-secondary border-b border-theme font-bold text-muted select-none">
                               <th className="p-3">{lang === 'zh' ? '学生姓名' : 'Student Name'}</th>
                               <th className="p-3">{lang === 'zh' ? '交互课件' : 'Courseware'}</th>
                               <th className="p-3">{lang === 'zh' ? '状态' : 'Status'}</th>
@@ -965,18 +965,18 @@ onRefresh={() => fetchElements(selectedLesson)}
                               <th className="p-3 text-right">{lang === 'zh' ? '操作' : 'Actions'}</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100">
+                          <tbody className="divide-y divide-border-theme">
                             {displayAttempts.map((a) => {
                               const isFinished = a.status === 'finished' || a.status === 'submitted';
                               const formattedTime = a.started_at ? new Date(a.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A';
                               
                               return (
-                                <tr key={a.attemptId} className="hover:bg-slate-50/50 transition-colors group">
+                                <tr key={a.attemptId} className="hover:bg-surface-secondary/50 transition-colors group">
                                   <td className="p-3">
-                                    <div className="font-semibold text-slate-800">{a.studentName}</div>
-                                    <div className="text-[10px] text-slate-400 mt-0.5">{lang === 'zh' ? '时间' : 'Time'}: {formattedTime}</div>
+                                    <div className="font-semibold text-main">{a.studentName}</div>
+                                    <div className="text-[10px] text-muted mt-0.5">{lang === 'zh' ? '时间' : 'Time'}: {formattedTime}</div>
                                   </td>
-                                  <td className="p-3 font-medium text-slate-600 max-w-[150px] truncate" title={a.coursewareName}>
+                                  <td className="p-3 font-medium text-main max-w-[150px] truncate" title={a.coursewareName}>
                                     {a.coursewareName}
                                   </td>
                                   <td className="p-3">
@@ -990,11 +990,11 @@ onRefresh={() => fetchElements(selectedLesson)}
                                   </td>
                                   <td className="p-3 text-center font-bold font-mono">
                                     {a.score !== null ? (
-                                      <span className="text-indigo-650 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-md">
+                                      <span className="text-primary-theme bg-primary-theme/10 border border-primary-theme/20 px-1.5 py-0.5 rounded-md">
                                         {a.score}分
                                       </span>
                                     ) : (
-                                      <span className="text-slate-400 font-medium">-</span>
+                                      <span className="text-muted font-medium">-</span>
                                     )}
                                   </td>
                                   <td className="p-3 text-center font-semibold font-mono">
@@ -1004,7 +1004,7 @@ onRefresh={() => fetchElements(selectedLesson)}
                                     <div className="flex justify-end gap-2">
                                       <button
                                         onClick={() => handleViewRaw(a)}
-                                        className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 border border-transparent hover:border-slate-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-[10px]"
+                                        className="p-1 text-muted hover:text-primary-theme hover:bg-surface-secondary border border-transparent hover:border-theme rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-[10px]"
                                         title={lang === 'zh' ? '查看提交轨迹事件数据' : 'View Raw Data'}
                                       >
                                         <Eye size={12} />
@@ -1022,8 +1022,8 @@ onRefresh={() => fetchElements(selectedLesson)}
                                           disabled={!isFinished}
                                           className={`px-2 py-1 text-[10px] font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border ${
                                             isFinished 
-                                              ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
-                                              : 'bg-slate-55 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                                              ? 'bg-primary-theme hover:bg-primary-theme-hover text-white border-primary-theme'
+                                              : 'bg-surface-secondary text-muted border-theme cursor-not-allowed opacity-60'
                                           }`}
                                           title={lang === 'zh' ? '将分数和进度作为随堂学习数据存入数据库，记入学期成绩' : 'Save to DB & Semester grade'}
                                         >
@@ -1060,18 +1060,18 @@ onRefresh={() => fetchElements(selectedLesson)}
         </div>
 
         {/* Right Column: Students Status & Feedback Log */}
-        <div className="w-[260px] shrink-0 bg-white p-3.5 border-l border-slate-200/80 flex flex-col gap-3.5 overflow-hidden">
+        <div className="w-[260px] shrink-0 bg-surface p-3.5 border-l border-theme flex flex-col gap-3.5 overflow-hidden">
           
           {/* Student attendance grid */}
           <div className="flex-1 flex flex-col min-h-0 gap-2">
-            <h3 className="text-[10px] font-black uppercase text-slate-555 tracking-wider select-none flex justify-between items-center shrink-0">
+            <h3 className="text-[10px] font-black uppercase text-muted tracking-wider select-none flex justify-between items-center shrink-0">
               <span className="flex items-center gap-1">
                 <span>{lang === 'zh' ? '学生专注力监控' : 'Student Status Console'}</span>
                 {liveClassSelectedClassId && (
                   <button
                     onClick={handleRandomPick}
                     disabled={students.length === 0 || isDrawing}
-                    className="ml-2 text-[9px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-200 px-1.5 py-0.5 rounded hover:bg-indigo-105 transition-colors flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+                    className="ml-2 text-[9px] font-bold bg-primary-theme/10 text-primary-theme border border-primary-theme/20 px-1.5 py-0.5 rounded hover:bg-primary-theme/20 transition-colors flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
                     title={lang === 'zh' ? '随机抽取一名学生提问' : 'Pick a student randomly'}
                   >
                     <Shuffle size={8.5} className={isDrawing ? 'animate-spin' : ''} />
@@ -1079,7 +1079,7 @@ onRefresh={() => fetchElements(selectedLesson)}
                   </button>
                 )}
               </span>
-              <span className="text-[9px] bg-slate-100 border border-slate-200 text-slate-555 font-mono px-1.5 py-0.5 rounded-md">
+              <span className="text-[9px] bg-surface-secondary border border-theme text-muted font-mono px-1.5 py-0.5 rounded-md">
                 {students.filter(s => s.locked_lesson_id === selectedLesson).length} / {students.length} Locked
               </span>
             </h3>
@@ -1262,7 +1262,7 @@ onRefresh={() => fetchElements(selectedLesson)}
           </div>
 
           {/* Hover Details / Class Summary Panel */}
-          <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 flex flex-col gap-1.5 h-[135px] shrink-0 shadow-sm select-none justify-center">
+          <div className="bg-surface-secondary border border-theme rounded-xl p-3 flex flex-col gap-1.5 h-[135px] shrink-0 shadow-sm select-none justify-center">
             {hoveredStudentId ? (() => {
               const st = students.find(s => s.id === hoveredStudentId);
               if (!st) return null;
@@ -1280,66 +1280,66 @@ onRefresh={() => fetchElements(selectedLesson)}
               })();
               
               return (
-                <div className="flex flex-col gap-1.5 text-xs text-slate-705">
-                  <div className="font-extrabold text-slate-800 border-b border-slate-200 pb-1 flex justify-between items-center shrink-0">
+                <div className="flex flex-col gap-1.5 text-xs text-main">
+                  <div className="font-extrabold text-main border-b border-theme pb-1 flex justify-between items-center shrink-0">
                     <span className="flex items-center gap-1.5 truncate">
                       <span className={`w-2 h-2 rounded-full shrink-0 ${onlineStudentIds.includes(st.id) ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
                       <span className="truncate max-w-[130px]">{st.name} ({st.student_number || 'N/A'})</span>
                     </span>
-                    <span className="text-[10px] text-indigo-655 font-mono font-black shrink-0">{progPercent}%</span>
+                    <span className="text-[10px] text-primary-theme font-mono font-black shrink-0">{progPercent}%</span>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-1.5 text-[9.5px] leading-tight shrink-0">
-                    <div className="flex flex-col gap-0.5 bg-white p-1 rounded-lg border border-slate-150">
-                      <span className="text-slate-400 font-bold">随堂测验</span>
-                      <span className={`font-bold font-mono text-[10px] ${studentProg != null && studentProg.quiz_score !== null ? 'text-indigo-600' : 'text-slate-400'}`}>
+                    <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
+                      <span className="text-muted font-bold">随堂测验</span>
+                      <span className={`font-bold font-mono text-[10px] ${studentProg != null && studentProg.quiz_score !== null ? 'text-primary-theme' : 'text-muted'}`}>
                         {studentProg != null && studentProg.quiz_score !== null ? `${studentProg.quiz_score} / 100` : '未提交'}
                       </span>
                     </div>
                     
-                    <div className="flex flex-col gap-0.5 bg-white p-1 rounded-lg border border-slate-150">
-                      <span className="text-slate-400 font-bold">教学环节进度</span>
-                      <span className="font-bold text-slate-655 text-[10px]">
+                    <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
+                      <span className="text-muted font-bold">教学环节进度</span>
+                      <span className="font-bold text-main text-[10px]">
                         {Array.isArray(completedSegIds) ? completedSegIds.length : 0} / {timelineSegments.length}
                       </span>
                     </div>
                   </div>
 
-                  <div className="text-[9px] text-slate-500 leading-relaxed truncate mt-0.5 shrink-0">
+                  <div className="text-[9px] text-muted leading-relaxed truncate mt-0.5 shrink-0">
                     环节: {timelineSegments.length > 0 ? timelineSegments.map((seg, sIdx) => {
                       const isSegCompleted = Array.isArray(completedSegIds) && completedSegIds.includes(seg.id);
                       return (
-                        <span key={seg.id} className={`mr-1 px-1 py-0.2 rounded ${isSegCompleted ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-105 text-slate-400 border border-slate-150'}`} title={seg.title}>
+                        <span key={seg.id} className={`mr-1 px-1 py-0.2 rounded ${isSegCompleted ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-surface text-muted border border-theme'}`} title={seg.title}>
                           {sIdx + 1}:{isSegCompleted ? '✓' : '✗'}
                         </span>
                       );
-                    }) : <span className="italic text-slate-400">暂无步骤</span>}
+                    }) : <span className="italic text-muted">暂无步骤</span>}
                   </div>
                 </div>
               );
             })() : (
               // Class summary state when no hover
-              <div className="flex flex-col gap-1 text-xs text-slate-700 h-full justify-center">
-                <div className="font-extrabold text-slate-800 border-b border-slate-200 pb-1.5 flex items-center gap-1.5 shrink-0">
-                  <Activity size={12} className="text-indigo-655 animate-pulse" />
+              <div className="flex flex-col gap-1 text-xs text-main h-full justify-center">
+                <div className="font-extrabold text-main border-b border-theme pb-1.5 flex items-center gap-1.5 shrink-0">
+                  <Activity size={12} className="text-primary-theme animate-pulse" />
                   <span>{lang === 'zh' ? '班级学情概况' : 'Class Overview'}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-1.5 text-[9.5px] leading-tight mt-1.5 shrink-0">
-                  <div className="flex flex-col items-center bg-white py-1 rounded-lg border border-slate-150">
-                    <span className="text-slate-400 font-medium">在线/总数</span>
+                  <div className="flex flex-col items-center bg-surface py-1 rounded-lg border border-theme">
+                    <span className="text-muted font-medium">在线/总数</span>
                     <span className="font-bold font-mono text-emerald-600 text-[11px] mt-0.5">
                       {students.filter(s => onlineStudentIds.includes(s.id)).length}/{students.length}
                     </span>
                   </div>
-                  <div className="flex flex-col items-center bg-white py-1 rounded-lg border border-slate-150">
-                    <span className="text-slate-400 font-medium">屏幕锁定</span>
+                  <div className="flex flex-col items-center bg-surface py-1 rounded-lg border border-theme">
+                    <span className="text-muted font-medium">屏幕锁定</span>
                     <span className="font-bold font-mono text-rose-500 text-[11px] mt-0.5">
                       {students.filter(s => s.locked_lesson_id === selectedLesson).length}
                     </span>
                   </div>
-                  <div className="flex flex-col items-center bg-white py-1 rounded-lg border border-slate-150">
-                    <span className="text-slate-400 font-medium">平均进度</span>
-                    <span className="font-bold font-mono text-indigo-650 text-[11px] mt-0.5">
+                  <div className="flex flex-col items-center bg-surface py-1 rounded-lg border border-theme">
+                    <span className="text-muted font-medium">平均进度</span>
+                    <span className="font-bold font-mono text-primary-theme text-[11px] mt-0.5">
                       {(() => {
                         const inClassStudents = students.filter(s => onlineStudentIds.includes(s.id));
                         if (inClassStudents.length === 0) return '0%';
@@ -1357,28 +1357,28 @@ onRefresh={() => fetchElements(selectedLesson)}
           </div>
 
           {/* Feedback log feed */}
-          <div className="h-[160px] flex flex-col border-t border-slate-150 pt-3 min-h-0 gap-2 shrink-0">
-            <h3 className="text-[10px] font-black uppercase text-slate-550 tracking-wider select-none flex justify-between items-center">
+          <div className="h-[160px] flex flex-col border-t border-theme pt-3 min-h-0 gap-2 shrink-0">
+            <h3 className="text-[10px] font-black uppercase text-muted tracking-wider select-none flex justify-between items-center">
               <span>{lang === 'zh' ? '课堂互动反馈流' : 'Live Classroom Feed'}</span>
               <button 
                 onClick={() => setLiveClassFeed([{ id: 'clear', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }), type: 'info', message: '反馈流已清空。' }])}
-                className="text-[9px] hover:text-slate-700 text-slate-400 underline transition-all"
+                className="text-[9px] hover:text-main text-muted underline transition-all"
               >
                 Clear
               </button>
             </h3>
             
-            <div className="flex-1 bg-white border border-slate-200 rounded-xl p-2.5 font-mono text-[9px] leading-relaxed overflow-y-auto space-y-2 select-text text-left text-slate-600 shadow-inner scrollbar-thin">
+            <div className="flex-1 bg-surface-secondary border border-theme rounded-xl p-2.5 font-mono text-[9px] leading-relaxed overflow-y-auto space-y-2 select-text text-left text-main shadow-inner scrollbar-thin">
               {liveClassFeed.map((f) => (
-                <div key={f.id} className="border-b border-slate-100 pb-1.5 last:border-b-0">
-                  <div className="flex justify-between items-center text-slate-400 font-bold mb-0.5">
+                <div key={f.id} className="border-b border-theme pb-1.5 last:border-b-0">
+                  <div className="flex justify-between items-center text-muted font-bold mb-0.5">
                     <span>{f.time}</span>
                     <span className={`px-1 rounded uppercase tracking-wide text-[7px] ${
                       f.type === 'success' 
                         ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
                         : f.type === 'warning' 
                           ? 'bg-amber-50 text-amber-600 border border-amber-100' 
-                          : 'bg-slate-100 text-slate-500 border border-slate-200'
+                          : 'bg-surface text-muted border border-theme'
                     }`}>
                       {f.type}
                     </span>
@@ -1388,7 +1388,7 @@ onRefresh={() => fetchElements(selectedLesson)}
                       ? 'text-emerald-700 font-medium' 
                       : f.type === 'warning' 
                         ? 'text-amber-700 font-medium' 
-                        : 'text-slate-655'
+                        : 'text-main'
                   }>
                     {f.message}
                   </p>
@@ -1404,12 +1404,12 @@ onRefresh={() => fetchElements(selectedLesson)}
       {/* Raw Data Detail Modal */}
       {selectedAttempt && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-100 animate-in fade-in zoom-in duration-200">
+          <div className="bg-surface rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-theme animate-in fade-in zoom-in duration-200 text-main">
             {/* Modal Header */}
-            <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="bg-surface-secondary px-6 py-4 border-b border-theme flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <FileText className="text-indigo-600" size={18} />
-                <h3 className="text-sm font-bold text-slate-800">
+                <FileText className="text-primary-theme" size={18} />
+                <h3 className="text-sm font-bold text-main">
                   {lang === 'zh' 
                     ? `[${selectedAttempt.studentName}] 的互动提交轨迹详情` 
                     : `Submission Details - ${selectedAttempt.studentName}`}
@@ -1417,7 +1417,7 @@ onRefresh={() => fetchElements(selectedLesson)}
               </div>
               <button
                 onClick={() => setSelectedAttempt(null)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                className="text-muted hover:text-main p-1.5 hover:bg-surface-secondary rounded-lg transition-colors cursor-pointer"
               >
                 <XCircle size={18} />
               </button>
@@ -1427,20 +1427,20 @@ onRefresh={() => fetchElements(selectedLesson)}
             <div className="p-6 overflow-y-auto space-y-4 flex-1 scrollbar-thin">
               {/* Summary Cards */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'zh' ? '课件名称' : 'Courseware'}</div>
-                  <div className="text-xs font-semibold text-slate-700 mt-1 truncate" title={selectedAttempt.coursewareName}>
+                <div className="bg-surface-secondary p-3 rounded-xl border border-theme">
+                  <div className="text-[10px] text-muted font-bold uppercase tracking-wider">{lang === 'zh' ? '课件名称' : 'Courseware'}</div>
+                  <div className="text-xs font-semibold text-main mt-1 truncate" title={selectedAttempt.coursewareName}>
                     {selectedAttempt.coursewareName}
                   </div>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'zh' ? '提交成绩' : 'Score'}</div>
-                  <div className="text-xs font-bold text-indigo-600 mt-1">
+                <div className="bg-surface-secondary p-3 rounded-xl border border-theme">
+                  <div className="text-[10px] text-muted font-bold uppercase tracking-wider">{lang === 'zh' ? '提交成绩' : 'Score'}</div>
+                  <div className="text-xs font-bold text-primary-theme mt-1">
                     {selectedAttempt.score !== null ? `${selectedAttempt.score} 分` : lang === 'zh' ? '未打分' : 'N/A'}
                   </div>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'zh' ? '课件完成度' : 'Completion'}</div>
+                <div className="bg-surface-secondary p-3 rounded-xl border border-theme">
+                  <div className="text-[10px] text-muted font-bold uppercase tracking-wider">{lang === 'zh' ? '课件完成度' : 'Completion'}</div>
                   <div className="text-xs font-bold text-emerald-600 mt-1">
                     {selectedAttempt.completion !== null ? `${Math.round(selectedAttempt.completion * 100)}%` : '0%'}
                   </div>
@@ -1449,14 +1449,14 @@ onRefresh={() => fetchElements(selectedLesson)}
 
               {/* Event Logs Timeline */}
               <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-700 border-b border-slate-100 pb-1.5 flex items-center gap-1.5 flex-wrap">
-                  <Activity size={13} className="text-indigo-650" />
+                <h4 className="text-xs font-bold text-main border-b border-theme pb-1.5 flex items-center gap-1.5 flex-wrap">
+                  <Activity size={13} className="text-primary-theme" />
                   <span>{lang === 'zh' ? '实时捕获轨迹事件流 (LMS Bridge)' : 'LMS Event Captures'}</span>
                 </h4>
 
                 {loadingRaw ? (
-                  <div className="py-12 flex flex-col items-center justify-center text-slate-400 gap-2">
-                    <RefreshCw size={20} className="animate-spin text-indigo-600" />
+                  <div className="py-12 flex flex-col items-center justify-center text-muted gap-2">
+                    <RefreshCw size={20} className="animate-spin text-primary-theme" />
                     <span className="text-xs">{lang === 'zh' ? '正在查询原始数据...' : 'Loading raw data...'}</span>
                   </div>
                 ) : Array.isArray(rawPayload) && rawPayload.length > 0 ? (
@@ -1483,7 +1483,7 @@ onRefresh={() => fetchElements(selectedLesson)}
                     })}
                   </div>
                 ) : (
-                  <div className="py-8 text-center text-xs text-slate-400 italic">
+                  <div className="py-8 text-center text-xs text-muted italic">
                     {lang === 'zh' ? '该学生未产生任何轨迹事件数据。' : 'No trace events captured.'}
                   </div>
                 )}
@@ -1491,14 +1491,14 @@ onRefresh={() => fetchElements(selectedLesson)}
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-between gap-3 shrink-0">
-              <div className="text-[10px] text-slate-400 flex items-center gap-1">
+            <div className="bg-surface-secondary px-6 py-4 border-t border-theme flex justify-between gap-3 shrink-0">
+              <div className="text-[10px] text-muted flex items-center gap-1">
                 <Award size={10} />
                 <span>Powered by LMS Bridge API v1</span>
               </div>
               <button
                 onClick={() => setSelectedAttempt(null)}
-                className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs transition-all cursor-pointer shadow-sm active:scale-95"
+                className="px-4 py-1.5 bg-surface hover:bg-surface-secondary border border-theme text-main font-bold rounded-lg text-xs transition-all cursor-pointer shadow-sm active:scale-95"
               >
                 {lang === 'zh' ? '关闭窗口' : 'Close'}
               </button>

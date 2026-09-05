@@ -13,6 +13,7 @@ import Markdown from 'react-markdown';
 import { getSocketInstance } from '../../services/socket-service';
 import { frontendEventBus } from '../../services/event-bus';
 import { appStore } from '../../store/appStore';
+import { useThemeStore } from '../../store/themeStore';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { legacyAdapter, objectRegistry, commandManager, layerManager, selectionManager, canvasEventBus } from './canvas-model/index.js';
@@ -148,6 +149,15 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
   ) => {
   // 防御：确保 elements 始终是数组（极端情况下 Zustand store 可能返回非数组值）
   const safeElements = Array.isArray(elements) ? elements : [];
+
+  // 全局主题系统响应与白板引擎桥接
+  const currentGlobalTheme = useThemeStore((s) => s.theme);
+  useEffect(() => {
+    themeManager.setTheme(currentGlobalTheme);
+  }, [currentGlobalTheme]);
+  const themeTokens = themeManager.getTokens();
+  const isDarkCanvas = currentGlobalTheme === 'dark' || currentGlobalTheme === 'chalkboard';
+
   const [tool, setTool] = useState<'cursor' | 'rect' | 'circle' | 'pen' | 'text' | 'presentation' | 'highlighter'>('cursor');
   const [highlighterColor, setHighlighterColor] = useState('#facc15');
   const [currentPage, setCurrentPage] = useState(0);
@@ -1236,15 +1246,19 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     setIsDrawing(true);
     const pos = e.target.getStage().getPointerPosition();
     if (tool === 'pen') {
-      setCurrentDrawing({ type: 'pen', points: [pos.x, pos.y], color: 'black' });
+      const defaultPenColor = isDarkCanvas ? '#f8fafc' : 'black';
+      setCurrentDrawing({ type: 'pen', points: [pos.x, pos.y], color: defaultPenColor });
     } else if (tool === 'highlighter') {
       setCurrentDrawing({ type: 'highlighter', points: [pos.x, pos.y], color: highlighterColor });
     } else if (tool === 'rect') {
-      setCurrentDrawing({ type: 'rectangle', x: pos.x, y: pos.y, width: 0, height: 0, stroke: 'blue' });
+      const defaultStroke = isDarkCanvas ? '#818cf8' : 'blue';
+      setCurrentDrawing({ type: 'rectangle', x: pos.x, y: pos.y, width: 0, height: 0, stroke: defaultStroke });
     } else if (tool === 'circle') {
-      setCurrentDrawing({ type: 'circle', x: pos.x, y: pos.y, radius: 0, stroke: 'green' });
+      const defaultStroke = isDarkCanvas ? '#4ade80' : 'green';
+      setCurrentDrawing({ type: 'circle', x: pos.x, y: pos.y, radius: 0, stroke: defaultStroke });
     } else if (tool === 'text') {
-      setCurrentDrawing({ type: 'text', x: pos.x, y: pos.y, text: 'Click to edit...', fontSize: 16, color: 'black' });
+      const defaultTextColor = isDarkCanvas ? '#f8fafc' : 'black';
+      setCurrentDrawing({ type: 'text', x: pos.x, y: pos.y, text: 'Click to edit...', fontSize: 16, color: defaultTextColor });
     }
   };
 
@@ -1799,7 +1813,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             key={el.id}
             id={el.id}
             points={data.points}
-            stroke={isSelected ? '#3b82f6' : (data.color || 'black')}
+            stroke={isSelected ? (themeTokens.selectionBorder || '#3b82f6') : (data.color && data.color !== 'black' && data.color !== '#000000' ? data.color : (isDarkCanvas ? '#f8fafc' : (data.color || 'black')))}
             strokeWidth={isSelected ? 6 : 4}
             tension={0.5}
             lineCap="round"
@@ -1994,7 +2008,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             y={data.y} 
             text={data.text} 
             fontSize={data.fontSize || 16} 
-            fill={isSelected ? '#3b82f6' : (data.color || 'black')}
+            fill={isSelected ? (themeTokens.selectionBorder || '#3b82f6') : (data.color && data.color !== 'black' && data.color !== '#000000' ? data.color : (isDarkCanvas ? '#f8fafc' : (data.color || 'black')))}
             fontStyle={isSelected ? 'bold' : 'normal'}
             draggable={userRole === 'teacher' && tool === 'cursor'}
             onClick={(e) => {
@@ -2399,9 +2413,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
   };
 
   return (
-    <div className="flex-1 flex flex-row min-h-0 overflow-hidden bg-white">
+    <div className="flex-1 flex flex-row min-h-0 overflow-hidden bg-app">
       <div 
-        className="flex-1 flex flex-col min-h-0 bg-white relative min-w-0"
+        className="flex-1 flex flex-col min-h-0 bg-app relative min-w-0"
         onDragOver={handleWhiteboardDragOver}
         onDragEnter={handleWhiteboardDragEnter}
         onDrop={handleWhiteboardDrop}
@@ -2433,11 +2447,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       
       <div 
         ref={containerRef} 
-        className="flex-1 bg-slate-50/70 rounded-2xl border border-slate-200/80 relative overflow-hidden w-full mb-14 shadow-inner transition-all"
+        className="flex-1 rounded-2xl border border-theme relative overflow-hidden w-full mb-14 shadow-inner transition-colors"
         style={{
-          backgroundImage: showGrid ? 'radial-gradient(#cbd5e1 1.2px, transparent 1.2px)' : 'none',
+          backgroundImage: showGrid ? `radial-gradient(${themeTokens.gridDot} 1.2px, transparent 1.2px)` : 'none',
           backgroundSize: '24px 24px',
-          backgroundColor: '#f8fafc'
+          backgroundColor: themeTokens.background
         }}
         onDragOver={handleWhiteboardDragOver}
         onDragEnter={handleWhiteboardDragEnter}
@@ -2470,12 +2484,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             return currentPage === 0;
           }
         }).length === 0 && !fullscreenElementId && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none text-slate-400 p-6 z-0">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-50/80 border border-indigo-100/80 flex items-center justify-center mb-3 shadow-2xs">
-              <Sparkles className="w-7 h-7 text-indigo-500 animate-pulse" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none text-muted p-6 z-0">
+            <div className="w-16 h-16 rounded-2xl bg-primary-theme-light border border-theme flex items-center justify-center mb-3 shadow-2xs">
+              <Sparkles className="w-7 h-7 text-primary-theme animate-pulse" />
             </div>
-            <p className="font-bold text-sm text-slate-700 mb-1">交互式备课白板</p>
-            <p className="text-xs text-slate-400 max-w-sm text-center">
+            <p className="font-bold text-sm text-main mb-1">交互式备课白板</p>
+            <p className="text-xs text-muted max-w-sm text-center">
               从左侧组件库拖拽组件至此处，或使用顶部工具栏插入画笔、几何图形与 AI 助教
             </p>
           </div>
@@ -2600,13 +2614,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         {contextMenu && (
           <div 
             style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px`, pointerEvents: 'auto' }}
-            className="absolute bg-white rounded-lg shadow-2xl border border-gray-200 py-1.5 w-44 z-40 font-sans text-sm animate-in fade-in zoom-in-95 duration-100"
+            className="absolute bg-surface rounded-lg shadow-2xl border border-theme py-1.5 w-44 z-40 font-sans text-sm animate-in fade-in zoom-in-95 duration-100 text-main"
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
           >
             {contextMenu.elementId ? (
               <>
-                <div className="px-3 py-1 text-[11px] text-gray-500 font-bold uppercase tracking-wider select-none">
+                <div className="px-3 py-1 text-[11px] text-muted font-bold uppercase tracking-wider select-none">
                   组件选项
                 </div>
                 <button 
@@ -2620,7 +2634,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     }
                     setContextMenu(null);
                   }}
-                  className="w-full px-3 py-1.5 flex items-center gap-2 text-left text-red-600 hover:bg-red-50 transition-colors text-xs font-semibold"
+                  className="w-full px-3 py-1.5 flex items-center gap-2 text-left text-rose-500 hover:bg-rose-500/10 transition-colors text-xs font-semibold cursor-pointer"
                 >
                   <Trash2 size={14} />
                   删除此组件
@@ -2628,7 +2642,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               </>
             ) : (
               <>
-                <div className="px-3 py-1 text-[11px] text-gray-400 font-bold uppercase tracking-wider select-none">
+                <div className="px-3 py-1 text-[11px] text-muted font-bold uppercase tracking-wider select-none">
                   白板操作
                 </div>
                 <button 
@@ -2636,7 +2650,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     setTool('cursor');
                     setContextMenu(null);
                   }}
-                  className={`w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs font-medium hover:bg-gray-50 transition-colors ${tool === 'cursor' ? 'text-indigo-600' : 'text-gray-750'}`}
+                  className={`w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs font-medium hover:bg-surface-secondary transition-colors cursor-pointer ${tool === 'cursor' ? 'text-primary-theme' : 'text-main'}`}
                 >
                   <MousePointer2 size={14} />
                   选择工具 (Cursor)
@@ -2646,7 +2660,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     setTool('pen');
                     setContextMenu(null);
                   }}
-                  className={`w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs font-medium hover:bg-gray-50 transition-colors ${tool === 'pen' ? 'text-indigo-600' : 'text-gray-750'}`}
+                  className={`w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs font-medium hover:bg-surface-secondary transition-colors cursor-pointer ${tool === 'pen' ? 'text-primary-theme' : 'text-main'}`}
                 >
                   <PenTool size={14} />
                   画笔工具 (Pen)
@@ -2656,7 +2670,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     setTool('highlighter');
                     setContextMenu(null);
                   }}
-                  className={`w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs font-medium hover:bg-gray-50 transition-colors ${tool === 'highlighter' ? 'text-indigo-600' : 'text-gray-750'}`}
+                  className={`w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs font-medium hover:bg-surface-secondary transition-colors cursor-pointer ${tool === 'highlighter' ? 'text-primary-theme' : 'text-main'}`}
                 >
                   <Highlighter size={14} />
                   高亮荧光笔 (Highlighter)
@@ -2666,7 +2680,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     setTool('rect');
                     setContextMenu(null);
                   }}
-                  className={`w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs font-medium hover:bg-gray-50 transition-colors ${tool === 'rect' ? 'text-indigo-600' : 'text-gray-750'}`}
+                  className={`w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs font-medium hover:bg-surface-secondary transition-colors cursor-pointer ${tool === 'rect' ? 'text-primary-theme' : 'text-main'}`}
                 >
                   <Square size={14} />
                   矩形工具 (Rectangle)
@@ -2676,7 +2690,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     setTool('circle');
                     setContextMenu(null);
                   }}
-                  className={`w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs font-medium hover:bg-gray-50 transition-colors ${tool === 'circle' ? 'text-indigo-600' : 'text-gray-750'}`}
+                  className={`w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs font-medium hover:bg-surface-secondary transition-colors cursor-pointer ${tool === 'circle' ? 'text-primary-theme' : 'text-main'}`}
                 >
                   <CircleIcon size={14} />
                   圆形工具 (Circle)
@@ -2686,7 +2700,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     setTool('text');
                     setContextMenu(null);
                   }}
-                  className={`w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs font-medium hover:bg-gray-50 transition-colors ${tool === 'text' ? 'text-indigo-600' : 'text-gray-750'}`}
+                  className={`w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs font-medium hover:bg-surface-secondary transition-colors cursor-pointer ${tool === 'text' ? 'text-primary-theme' : 'text-main'}`}
                 >
                   <Type size={14} />
                   文本工具 (Text)
@@ -2741,12 +2755,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
        if (!selectedEl) return null;
        
        return (
-          <div className="w-80 h-full max-h-full bg-slate-50 border-l border-slate-200 flex flex-col font-sans text-xs select-none shadow-xl shrink-0 z-20 animate-in slide-in-from-right duration-200" onPointerDown={e => e.stopPropagation()}>
+          <div className="w-80 h-full max-h-full bg-surface border-l border-theme flex flex-col font-sans text-xs select-none shadow-xl shrink-0 z-20 animate-in slide-in-from-right duration-200 text-main" onPointerDown={e => e.stopPropagation()}>
             {/* 顶栏 */}
-            <div className="px-4 py-3 border-b border-slate-200 bg-white flex justify-between items-center shrink-0">
+            <div className="px-4 py-3 border-b border-theme bg-surface-secondary flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
-                <Settings size={15} className="text-slate-500 animate-spin" style={{ animationDuration: '6s' }} />
-                <span className="font-bold text-slate-800 text-sm">属性编辑器</span>
+                <Settings size={15} className="text-muted animate-spin" style={{ animationDuration: '6s' }} />
+                <span className="font-bold text-main text-sm">属性编辑器</span>
               </div>
               <div className="flex items-center gap-1.5 font-sans">
                 {/* 撤销 (Undo) 按钮 */}
@@ -2755,14 +2769,14 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   disabled={(propertyUndoStack[selectedShapeId] || []).length === 0}
                   className={`p-1 rounded-lg transition-all flex items-center justify-center gap-1 border border-transparent select-none cursor-pointer ${
                     (propertyUndoStack[selectedShapeId] || []).length === 0
-                      ? 'text-slate-350 bg-transparent border-transparent opacity-40 cursor-not-allowed'
-                      : 'text-slate-700 bg-slate-50 hover:bg-slate-100 hover:border-slate-200 active:bg-slate-150'
+                      ? 'text-subtle bg-transparent border-transparent opacity-40 cursor-not-allowed'
+                      : 'text-main bg-surface hover:bg-surface-secondary hover:border-theme active:bg-surface-secondary'
                   }`}
                   title="撤销属性修改"
                 >
                   <Undo2 size={13} />
                   {((propertyUndoStack[selectedShapeId] || []).length > 0) && (
-                    <span className="text-[10px] font-bold text-slate-500">{(propertyUndoStack[selectedShapeId] || []).length}</span>
+                    <span className="text-[10px] font-bold text-muted">{(propertyUndoStack[selectedShapeId] || []).length}</span>
                   )}
                 </button>
 
@@ -2772,22 +2786,22 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   disabled={(propertyRedoStack[selectedShapeId] || []).length === 0}
                   className={`p-1 rounded-lg transition-all flex items-center justify-center gap-1 border border-transparent select-none cursor-pointer ${
                     (propertyRedoStack[selectedShapeId] || []).length === 0
-                      ? 'text-slate-350 bg-transparent border-transparent opacity-40 cursor-not-allowed'
-                      : 'text-slate-700 bg-slate-50 hover:bg-slate-100 hover:border-slate-200 active:bg-slate-150'
+                      ? 'text-subtle bg-transparent border-transparent opacity-40 cursor-not-allowed'
+                      : 'text-main bg-surface hover:bg-surface-secondary hover:border-theme active:bg-surface-secondary'
                   }`}
                   title="重做属性修改"
                 >
                   <Redo2 size={13} />
                   {((propertyRedoStack[selectedShapeId] || []).length > 0) && (
-                    <span className="text-[10px] font-bold text-slate-500">{(propertyRedoStack[selectedShapeId] || []).length}</span>
+                    <span className="text-[10px] font-bold text-muted">{(propertyRedoStack[selectedShapeId] || []).length}</span>
                   )}
                 </button>
 
-                <div className="h-4 w-px bg-slate-200 mx-0.5 shrink-0" />
+                <div className="h-4 w-px bg-border-theme mx-0.5 shrink-0" />
 
                 <button 
                   onClick={() => setSelectedShapeId(null)} 
-                  className="text-slate-400 hover:text-slate-650 hover:bg-slate-100 p-1 rounded-full transition-all cursor-pointer"
+                  className="text-muted hover:text-main hover:bg-surface-secondary p-1 rounded-full transition-all cursor-pointer"
                   title="关闭属性编辑器"
                 >
                   <X size={15} />
@@ -2798,45 +2812,45 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             {/* 内容区 */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {/* 基本标签和信息 */}
-              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2">
+              <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">组件类型</span>
-                  <span className="px-2 py-0.5 bg-indigo-50 text-indigo-650 rounded text-[10px] font-bold uppercase tracking-wider">
+                  <span className="text-muted text-[10px] font-bold uppercase tracking-wider">组件类型</span>
+                  <span className="px-2 py-0.5 bg-primary-theme-light text-primary-theme rounded text-[10px] font-bold uppercase tracking-wider">
                     {selectedEl.type}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">组件标识</span>
-                  <span className="font-mono text-slate-500 text-[10px] truncate max-w-[155px]" title={selectedEl.id}>
+                  <span className="text-muted text-[10px] font-bold uppercase tracking-wider">组件标识</span>
+                  <span className="font-mono text-muted text-[10px] truncate max-w-[155px]" title={selectedEl.id}>
                     {selectedEl.id}
                   </span>
                 </div>
               </div>
 
               {/* 通用属性: X, Y 坐标及宽高 */}
-              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                <h4 className="font-bold text-slate-700 text-xs border-b border-slate-100 pb-1.5 flex items-center gap-1.5">
+              <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
+                <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex items-center gap-1.5">
                   物理定位 & 尺寸
                 </h4>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">X 坐标</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">X 坐标</label>
                     <input 
                       type="number"
                       value={Math.round(editingProperties.x ?? 0)}
                       onChange={(e) => handleLocalPropChange('x', parseFloat(e.target.value) || 0)}
                       onBlur={(e) => handleNumericPropBlur('x', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">Y 坐标</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">Y 坐标</label>
                     <input 
                       type="number"
                       value={Math.round(editingProperties.y ?? 0)}
                       onChange={(e) => handleLocalPropChange('y', parseFloat(e.target.value) || 0)}
                       onBlur={(e) => handleNumericPropBlur('y', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
                     />
                   </div>
                 </div>
@@ -2844,25 +2858,25 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 {selectedEl.type !== 'pen' && selectedEl.type !== 'circle' && (
                   <div className="grid grid-cols-2 gap-2 mt-2">
                     <div>
-                      <label className="block text-[10px] text-slate-400 font-semibold mb-1">宽度 (Width)</label>
+                      <label className="block text-[10px] text-muted font-semibold mb-1">宽度 (Width)</label>
                       <input 
                         type="number"
                         min="50"
                         value={Math.round(editingProperties.width ?? 300)}
                         onChange={(e) => handleLocalPropChange('width', parseFloat(e.target.value) || 50)}
                         onBlur={(e) => handleNumericPropBlur('width', e.target.value)}
-                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-slate-400 font-semibold mb-1">高度 (Height)</label>
+                      <label className="block text-[10px] text-muted font-semibold mb-1">高度 (Height)</label>
                       <input 
                         type="number"
                         min="50"
                         value={Math.round(editingProperties.height ?? 300)}
                         onChange={(e) => handleLocalPropChange('height', parseFloat(e.target.value) || 50)}
                         onBlur={(e) => handleNumericPropBlur('height', e.target.value)}
-                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
                       />
                     </div>
                   </div>
@@ -2870,14 +2884,14 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
                 {selectedEl.type === 'circle' && (
                   <div className="mt-2">
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">半径 (Radius)</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">半径 (Radius)</label>
                     <input 
                       type="number"
                       min="5"
                       value={Math.round(editingProperties.radius ?? 50)}
                       onChange={(e) => handleLocalPropChange('radius', parseFloat(e.target.value) || 5)}
                       onBlur={(e) => handleNumericPropBlur('radius', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
                     />
                   </div>
                 )}
@@ -2903,25 +2917,25 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
               {/* 1. QUIZ (测验配置) */}
               {selectedEl.type === 'quiz' && (
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h4 className="font-bold text-slate-700 text-xs border-b border-slate-100 pb-1.5">
+                <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
+                  <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">
                     随堂测验配置
                   </h4>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">测验题目 (Question)</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">测验题目 (Question)</label>
                     <textarea
                       value={editingProperties.question || ''}
                       onChange={(e) => handleLocalPropChange('question', e.target.value)}
                       onBlur={(e) => handlePropBlur('question', e.target.value)}
-                      className="w-full h-20 p-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none font-medium leading-relaxed"
+                      className="w-full h-20 p-2 border border-theme rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main resize-none font-medium leading-relaxed"
                       placeholder="编写问题描述..."
                     />
                   </div>
 
                   {/* Correct answer selector */}
                   {(editingProperties.options || []).length > 0 && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5">
-                      <label className="block text-[10px] text-amber-700 font-bold mb-1.5">
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5">
+                      <label className="block text-[10px] text-amber-500 font-bold mb-1.5">
                         ⚠️ 正确答案 (Correct Answer)
                       </label>
                       <select
@@ -2932,8 +2946,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         }}
                         className={`w-full px-2 py-1.5 border rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer ${
                           editingProperties.correctAnswer
-                            ? 'border-green-300 bg-green-50 text-green-800'
-                            : 'border-amber-300 bg-white text-amber-800'
+                            ? 'border-green-500/40 bg-green-500/10 text-green-600'
+                            : 'border-amber-500/40 bg-surface text-main'
                         }`}
                       >
                         <option value="">-- 请选择正确答案 --</option>
@@ -2942,13 +2956,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         ))}
                       </select>
                       {!editingProperties.correctAnswer && (
-                        <p className="text-[9px] text-amber-600 mt-1">未设置正确答案将无法自动判分</p>
+                        <p className="text-[9px] text-amber-500 mt-1">未设置正确答案将无法自动判分</p>
                       )}
                     </div>
                   )}
 
                   <div className="space-y-2">
-                    <label className="block text-[10px] text-slate-400 font-semibold">
+                    <label className="block text-[10px] text-muted font-semibold">
                       选项列表 (Options)
                     </label>
                     <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
@@ -2957,7 +2971,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         const label = optionLabels[idx] || (idx + 1);
                         return (
                           <div key={idx} className="flex items-center gap-1.5">
-                            <span className="font-bold text-slate-700 bg-slate-100 rounded px-1.5 py-1 text-center shrink-0 min-w-[22px]">
+                            <span className="font-bold text-main bg-surface-secondary rounded px-1.5 py-1 text-center shrink-0 min-w-[22px]">
                               {label}
                             </span>
                             <input 
@@ -2965,12 +2979,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                               value={opt || ''}
                               onChange={(e) => handleOptionChangeLocal(idx, e.target.value)}
                               onBlur={(e) => handleOptionBlur(idx, e.target.value)}
-                              className="flex-1 px-2 py-1 border border-slate-200 rounded-lg text-xs font-medium"
+                              className="flex-1 px-2 py-1 border border-theme rounded-lg text-xs font-medium bg-surface text-main"
                             />
                             <button
                               onClick={() => handleRemoveOption(idx)}
                               title="删除选项"
-                              className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1 rounded-md shrink-0 transition-colors cursor-pointer"
+                              className="text-muted hover:text-rose-500 hover:bg-rose-500/10 p-1 rounded-md shrink-0 transition-colors cursor-pointer"
                             >
                               <Trash2 size={13} />
                             </button>
@@ -2981,7 +2995,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     
                     <button
                       onClick={handleAddOption}
-                      className="w-full mt-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold border border-slate-200/80 rounded-lg flex items-center justify-center gap-1 hover:text-slate-700 transition-all text-[11px] cursor-pointer"
+                      className="w-full mt-2 py-1 bg-surface-secondary hover:bg-surface-secondary text-main font-bold border border-theme rounded-lg flex items-center justify-center gap-1 transition-all text-[11px] cursor-pointer"
                     >
                       <Plus size={12} /> 添加选项
                     </button>
@@ -2991,28 +3005,28 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
               {/* 2. ASSIGNMENT (作业配置) */}
               {selectedEl.type === 'assignment' && (
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h4 className="font-bold text-slate-700 text-xs border-b border-slate-100 pb-1.5">
+                <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
+                  <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">
                     作业选项配置
                   </h4>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">作业任务标题 (Title)</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">作业任务标题 (Title)</label>
                     <input 
                       type="text"
                       value={editingProperties.title || ''}
                       onChange={(e) => handleLocalPropChange('title', e.target.value)}
                       onBlur={(e) => handlePropBlur('title', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
                       placeholder="作业名..."
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">详细作业要求描述</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">详细作业要求描述</label>
                     <textarea
                       value={editingProperties.description || ''}
                       onChange={(e) => handleLocalPropChange('description', e.target.value)}
                       onBlur={(e) => handlePropBlur('description', e.target.value)}
-                      className="w-full h-24 p-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none font-medium leading-relaxed"
+                      className="w-full h-24 p-2 border border-theme rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main resize-none font-medium leading-relaxed"
                       placeholder="请输入详细的作业指南..."
                     />
                   </div>
@@ -3021,25 +3035,25 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
               {/* 3. CODE SANDBOX 和 HTML APPLET 和 Sandbox */}
               {(selectedEl.type === 'code-sandbox' || selectedEl.type === 'html-applet') && (
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h4 className="font-bold text-slate-700 text-xs border-b border-slate-100 pb-1.5 flex justify-between items-center">
+                <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
+                  <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex justify-between items-center">
                     <span>动态运行代码定制</span>
                     {selectedEl.type === 'html-applet' && (
-                      <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded-full font-bold">HTML Applet</span>
+                      <span className="text-[10px] bg-primary-theme-light text-primary-theme px-1.5 py-0.5 rounded-full font-bold">HTML Applet</span>
                     )}
                   </h4>
 
                   {selectedEl.type === 'html-applet' && (
-                    <div className="space-y-3 border-b border-slate-100 pb-3">
+                    <div className="space-y-3 border-b border-theme pb-3">
                       <div>
-                        <label className="block text-[10px] text-indigo-600 font-bold mb-1">选择 AI 互动课件 (ZIP/HTML):</label>
+                        <label className="block text-[10px] text-primary-theme font-bold mb-1">选择 AI 互动课件 (ZIP/HTML):</label>
                         <select
                           value={editingProperties.coursewareUuid || ''}
                           onChange={(e) => {
                             const val = e.target.value;
                             handlePropsUpdate({ coursewareUuid: val, resourceId: '' });
                           }}
-                          className="w-full text-xs p-2 bg-slate-50 border border-indigo-200 hover:border-indigo-300 rounded-lg text-slate-750 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-semibold"
+                          className="w-full text-xs p-2 bg-surface-secondary border border-theme hover:border-primary-theme rounded-lg text-main focus:outline-none focus:ring-1 focus:ring-primary-theme transition-all font-semibold"
                         >
                           <option value="">-- 使用系统资源或自定义代码 --</option>
                           {coursewares.map(c => (
@@ -3051,14 +3065,14 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       </div>
 
                       <div>
-                        <label className="block text-[10px] text-slate-500 font-bold mb-1">选择已有的系统资源:</label>
+                        <label className="block text-[10px] text-muted font-bold mb-1">选择已有的系统资源:</label>
                         <select
                           value={editingProperties.resourceId || ''}
                           onChange={(e) => {
                             const val = e.target.value;
                             handlePropsUpdate({ resourceId: val, coursewareUuid: '' });
                           }}
-                          className="w-full text-xs p-2 bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-lg text-slate-750 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-semibold"
+                          className="w-full text-xs p-2 bg-surface-secondary border border-theme hover:border-primary-theme rounded-lg text-main focus:outline-none focus:ring-1 focus:ring-primary-theme transition-all font-semibold"
                         >
                           <option value="">-- 使用互动课件或自定义代码 --</option>
                           {systemResources.map(r => (
@@ -3069,8 +3083,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         </select>
                       </div>
 
-                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-[10px] text-slate-500 space-y-2">
-                        <span className="font-bold text-slate-600 block">上传资源 (会自动保存到对应库):</span>
+                      <div className="bg-surface-secondary p-2.5 rounded-xl border border-theme text-[10px] text-muted space-y-2">
+                        <span className="font-bold text-main block">上传资源 (会自动保存到对应库):</span>
                         <div className="grid grid-cols-2 gap-2">
                           {/* Courseware ZIP/HTML Upload */}
                           <label className="col-span-2 flex flex-col items-center justify-center p-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 hover:border-indigo-300 rounded-lg cursor-pointer text-center transition-all">
@@ -3246,12 +3260,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
               {/* 4. MATH GRAPH */}
               {selectedEl.type === 'math-graph' && (
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h4 className="font-bold text-slate-700 text-xs border-b border-slate-100 pb-1.5">
+                <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
+                  <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">
                     函数解析拟合
                   </h4>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">
+                    <label className="block text-[10px] text-muted font-semibold mb-1">
                       函数表达式 y = f(x)
                     </label>
                     <input 
@@ -3259,12 +3273,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       value={editingProperties.equation || ''}
                       onChange={(e) => handleLocalPropChange('equation', e.target.value)}
                       onBlur={(e) => handlePropBlur('equation', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                      className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
                     />
-                    <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                    <p className="text-[10px] text-muted mt-1 leading-snug">
                       支持标准 JS 表达式。 示例：<br />
-                      • <code className="bg-slate-100 px-1 rounded">Math.sin(x)</code> 正负弦波形<br />
-                      • <code className="bg-slate-100 px-1 rounded">Math.cos(x) * x</code> 振幅衰减
+                      • <code className="bg-surface-secondary px-1 rounded">Math.sin(x)</code> 正负弦波形<br />
+                      • <code className="bg-surface-secondary px-1 rounded">Math.cos(x) * x</code> 振幅衰减
                     </p>
                   </div>
                 </div>
@@ -3272,17 +3286,17 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
               {/* 5. PRESENTATION */}
               {selectedEl.type === 'presentation' && (
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h4 className="font-bold text-slate-700 text-xs border-b border-slate-100 pb-1.5">
+                <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
+                  <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">
                     幻灯片 Markdown 文案
                   </h4>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">Markdown 源代码</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">Markdown 源代码</label>
                     <textarea
                       value={editingProperties.markdown || ''}
                       onChange={(e) => handleLocalPropChange('markdown', e.target.value)}
                       onBlur={(e) => handlePropBlur('markdown', e.target.value)}
-                      className="w-full h-64 p-2.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-100 resize-none font-medium leading-relaxed bg-slate-50"
+                      className="w-full h-64 p-2.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme resize-none font-medium leading-relaxed bg-surface text-main"
                       placeholder="修改 Markdown 内容..."
                     />
                   </div>
@@ -3291,22 +3305,22 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
               {/* 6. TEXT (文字颜色样式) */}
               {selectedEl.type === 'text' && (
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h4 className="font-bold text-slate-700 text-xs border-b border-slate-100 pb-1.5">
+                <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
+                  <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">
                     文字属性管理
                   </h4>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">文本内容</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">文本内容</label>
                     <input 
                       type="text"
                       value={editingProperties.text || ''}
                       onChange={(e) => handleLocalPropChange('text', e.target.value)}
                       onBlur={(e) => handlePropBlur('text', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">文字大小 (FontSize)</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">文字大小 (FontSize)</label>
                     <input 
                       type="number"
                       min="10"
@@ -3314,20 +3328,20 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       value={editingProperties.fontSize || 16}
                       onChange={(e) => handleLocalPropChange('fontSize', parseInt(e.target.value) || 10)}
                       onBlur={(e) => handleNumericPropBlur('fontSize', e.target.value)}
-                      className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none"
+                      className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">文字填充颜色</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">文字填充颜色</label>
                     <div className="flex items-center gap-2">
                       <input 
                         type="color"
                         value={editingProperties.color || '#000000'}
                         onChange={(e) => handleLocalPropChange('color', e.target.value)}
                         onBlur={(e) => handlePropBlur('color', e.target.value)}
-                        className="w-8 h-8 rounded border border-slate-200 cursor-pointer shrink-0"
+                        className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                       />
-                      <span className="font-mono text-[11px] text-slate-500">
+                      <span className="font-mono text-[11px] text-muted">
                         {editingProperties.color || '#000000'}
                       </span>
                     </div>
@@ -3337,21 +3351,21 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
               {/* 7. RECTANGLE 和 SHAPE */}
               {(selectedEl.type === 'rectangle' || selectedEl.type === 'shape') && (
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h4 className="font-bold text-slate-700 text-xs border-b border-slate-100 pb-1.5">
+                <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
+                  <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">
                     矩形样式配置
                   </h4>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">外边框颜色</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">外边框颜色</label>
                     <div className="flex items-center gap-2">
                       <input 
                         type="color"
                         value={editingProperties.stroke || '#000000'}
                         onChange={(e) => handleLocalPropChange('stroke', e.target.value)}
                         onBlur={(e) => handlePropBlur('stroke', e.target.value)}
-                        className="w-8 h-8 rounded border border-slate-200 cursor-pointer shrink-0"
+                        className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                       />
-                      <span className="font-mono text-[11px] text-slate-500">
+                      <span className="font-mono text-[11px] text-muted">
                         {editingProperties.stroke || '#000000'}
                       </span>
                     </div>
@@ -3361,21 +3375,21 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
               {/* 8. CIRCLE */}
               {selectedEl.type === 'circle' && (
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h4 className="font-bold text-slate-700 text-xs border-b border-slate-100 pb-1.5">
+                <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
+                  <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">
                     圆形样式配置
                   </h4>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">外边框颜色</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">外边框颜色</label>
                     <div className="flex items-center gap-2">
                       <input 
                         type="color"
                         value={editingProperties.stroke || '#000000'}
                         onChange={(e) => handleLocalPropChange('stroke', e.target.value)}
                         onBlur={(e) => handlePropBlur('stroke', e.target.value)}
-                        className="w-8 h-8 rounded border border-slate-200 cursor-pointer shrink-0"
+                        className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                       />
-                      <span className="font-mono text-[11px] text-slate-500">
+                      <span className="font-mono text-[11px] text-muted">
                         {editingProperties.stroke || '#000000'}
                       </span>
                     </div>
@@ -3385,21 +3399,21 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
               {/* 9. PEN */}
               {selectedEl.type === 'pen' && (
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h4 className="font-bold text-slate-700 text-xs border-b border-slate-100 pb-1.5">
+                <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
+                  <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">
                     线条样式配置
                   </h4>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">折线颜色</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">折线颜色</label>
                     <div className="flex items-center gap-2">
                       <input 
                         type="color"
                         value={editingProperties.color || '#000000'}
                         onChange={(e) => handleLocalPropChange('color', e.target.value)}
                         onBlur={(e) => handlePropBlur('color', e.target.value)}
-                        className="w-8 h-8 rounded border border-slate-200 cursor-pointer shrink-0"
+                        className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                       />
-                      <span className="font-mono text-[11px] text-slate-500">
+                      <span className="font-mono text-[11px] text-muted">
                         {editingProperties.color || '#000000'}
                       </span>
                     </div>
@@ -3409,21 +3423,21 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
               {/* 10. HIGHLIGHTER */}
               {selectedEl.type === 'highlighter' && (
-                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                  <h4 className="font-bold text-slate-700 text-xs border-b border-slate-100 pb-1.5">
+                <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
+                  <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">
                     高亮荧光标记 (Highlighter)
                   </h4>
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-semibold mb-1">荧光笔颜色</label>
+                    <label className="block text-[10px] text-muted font-semibold mb-1">荧光笔颜色</label>
                     <div className="flex items-center gap-2">
                       <input 
                         type="color"
                         value={editingProperties.color || '#facc15'}
                         onChange={(e) => handleLocalPropChange('color', e.target.value)}
                         onBlur={(e) => handlePropBlur('color', e.target.value)}
-                        className="w-8 h-8 rounded border border-slate-200 cursor-pointer shrink-0"
+                        className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                       />
-                      <span className="font-mono text-[11px] text-slate-500">
+                      <span className="font-mono text-[11px] text-muted">
                         {editingProperties.color || '#facc15'}
                       </span>
                     </div>
@@ -3431,7 +3445,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 </div>
               )}
 
-              <div className="text-[10px] text-slate-400 text-center select-none pt-2 font-medium">
+              <div className="text-[10px] text-muted text-center select-none pt-2 font-medium">
                 提示：属性在失焦或修改时自动同步，多端可见。
               </div>
             </div>

@@ -73,37 +73,37 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
   });
 
   return (
-    <div className="w-[240px] shrink-0 border-r border-slate-200/80 bg-slate-50/90 p-3 overflow-y-auto flex flex-col gap-3 font-sans select-none">
+    <div className="w-[240px] shrink-0 border-r border-theme bg-surface-secondary/70 p-3 overflow-y-auto flex flex-col gap-3 font-sans select-none text-main">
       {/* Header */}
       <div>
         <div className="flex items-center justify-between">
-          <h3 className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider">
-            <Blocks size={15} className="text-indigo-600" />
+          <h3 className="flex items-center gap-1.5 text-xs font-bold text-main uppercase tracking-wider">
+            <Blocks size={15} className="text-primary-theme" />
             {lang === 'zh' ? '备课画板组件' : 'Components'}
           </h3>
-          <span className="text-[10px] font-semibold text-slate-400 bg-slate-200/60 px-1.5 py-0.5 rounded-full">
+          <span className="text-[10px] font-semibold text-muted bg-surface border border-theme px-1.5 py-0.5 rounded-full">
             {filteredItems.length}
           </span>
         </div>
-        <p className="text-[10px] text-slate-400 leading-tight mt-0.5">
+        <p className="text-[10px] text-muted leading-tight mt-0.5">
           {lang === 'zh' ? '拖拽到右侧白板，或点击配置添加到画板。' : 'Drag to whiteboard or click to configure.'}
         </p>
       </div>
 
       {/* Search Input */}
       <div className="relative">
-        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={lang === 'zh' ? '搜索画板组件...' : 'Search components...'}
-          className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all shadow-2xs"
+          className="w-full pl-8 pr-7 py-1.5 bg-surface border border-theme rounded-lg text-xs text-main placeholder-muted focus:outline-none focus:ring-1 focus:ring-primary-theme transition-all shadow-2xs"
         />
         {searchQuery && (
           <button
             onClick={() => setSearchQuery('')}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-main"
           >
             <X size={12} />
           </button>
@@ -111,11 +111,11 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
       </div>
 
       {/* Quick Filter Tabs */}
-      <div className="flex items-center gap-1 bg-slate-200/50 p-1 rounded-lg">
+      <div className="flex items-center gap-1 bg-surface-secondary border border-theme p-1 rounded-lg">
         <button
           onClick={() => setActiveTab('all')}
           className={`flex-1 py-1 text-[11px] font-medium rounded-md transition-all ${
-            activeTab === 'all' ? 'bg-white text-slate-800 shadow-2xs font-bold' : 'text-slate-500 hover:text-slate-800'
+            activeTab === 'all' ? 'bg-surface text-main shadow-2xs font-bold' : 'text-muted hover:text-main'
           }`}
         >
           {lang === 'zh' ? '全部' : 'All'}
@@ -123,7 +123,7 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
         <button
           onClick={() => setActiveTab('favorites')}
           className={`flex-1 py-1 text-[11px] font-medium rounded-md transition-all flex items-center justify-center gap-1 ${
-            activeTab === 'favorites' ? 'bg-white text-amber-600 shadow-2xs font-bold' : 'text-slate-500 hover:text-amber-600'
+            activeTab === 'favorites' ? 'bg-surface text-amber-500 shadow-2xs font-bold' : 'text-muted hover:text-amber-500'
           }`}
         >
           <Star size={11} className={activeTab === 'favorites' ? 'fill-amber-500' : ''} />
@@ -132,7 +132,7 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
         <button
           onClick={() => setActiveTab('recent')}
           className={`flex-1 py-1 text-[11px] font-medium rounded-md transition-all flex items-center justify-center gap-1 ${
-            activeTab === 'recent' ? 'bg-white text-indigo-600 shadow-2xs font-bold' : 'text-slate-500 hover:text-indigo-600'
+            activeTab === 'recent' ? 'bg-surface text-primary-theme shadow-2xs font-bold' : 'text-muted hover:text-primary-theme'
           }`}
         >
           <Clock size={11} />

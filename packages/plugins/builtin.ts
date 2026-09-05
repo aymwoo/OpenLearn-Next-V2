@@ -1210,6 +1210,16 @@ export const BuiltinPlugin = {
             'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
           ).run(coursewareId, uuid, name, 'html', entryName, Date.now());
 
+          // 同步登记到系统资源库（原生表，随平台持久化，不受插件卸载影响）
+          try {
+            const resId = 'res_' + crypto.randomBytes(8).toString('hex');
+            db.prepare(
+              'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)'
+            ).run(resId, name, 'html', fileBuffer.toString('utf-8'), Date.now());
+          } catch (resErr) {
+            console.error('[builtin.courseware] 登记 system_resources 失败:', resErr);
+          }
+
           await eventBus.publish({
             id: uuidv7(),
             type: 'courseware.uploaded',
@@ -1312,6 +1322,25 @@ export const BuiltinPlugin = {
             db.prepare(
               'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
             ).run(coursewareId, uuid, name, 'folder', entry, Date.now());
+
+            // 同步登记到系统资源库（folder 型：文件数组 JSON，二进制走 base64）
+            try {
+              const resFiles: any[] = [];
+              for (const [relativePath, file] of Object.entries(loadedZip.files)) {
+                const fileObj = file as any;
+                if (!fileObj.dir) {
+                  const buf: Buffer = await fileObj.async('nodebuffer');
+                  const isBinary = /\.(png|jpe?g|gif|webp|ico|mp3|wav|mp4|woff2?|ttf|otf|eot)$/i.test(relativePath);
+                  resFiles.push({ path: relativePath, content: isBinary ? buf.toString('base64') : buf.toString('utf-8') });
+                }
+              }
+              const resId = 'res_' + crypto.randomBytes(8).toString('hex');
+              db.prepare(
+                'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)'
+              ).run(resId, name, 'folder', JSON.stringify(resFiles), Date.now());
+            } catch (resErr) {
+              console.error('[builtin.courseware] 登记 system_resources 失败:', resErr);
+            }
 
             await eventBus.publish({
               id: uuidv7(),

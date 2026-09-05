@@ -79,3 +79,25 @@ useThemeStore.getState().registerTheme(
 );
 ```
 当插件卸载时，调用 `unregisterTheme(id)`，系统自动清理动态注入的样式标签并安全回滚至默认主题。
+
+---
+
+## 5. 白板渲染引擎与教学工作区深度联动 (Whiteboard & Workspace Synergy)
+
+在 Phase 2 中，主题系统深入连接交互白板渲染管线与教学工作流：
+
+### 5.1 白板主题渲染令牌 (`theme-manager.ts`)
+白板渲染引擎原生支持 `light`, `dark`, `eyecare`, `chalkboard` 四组专属 Tokens：
+- **`background`**: 画布底色与容器背景联动（例如黑板模式呈现经典深墨绿 `#0e1713`）。
+- **`gridDot`**: 极坐标与微网格参考点自适应变色（例如黑板模式下点阵呈现淡绿微光 `#2d5242`）。
+- **`pen` / `text`**: 笔触与文本高对比度智能判断。针对暗黑模式与黑板模式，自动反转历史黑色墨迹为粉笔白（`#f8fafc`），杜绝黑底黑字视障问题。
+- **自定义令牌订阅**: `themeManager.registerCustomTokens()` 与 `themeManager.subscribe()` 支持第三方白板插件自定义图形与笔迹高对比度滤镜。
+
+### 5.2 白板控件与视图容器全面语义化
+- **悬浮工具栏 (`WhiteboardToolbar`)**: 选取、画笔、几何图形、荧光笔色盘与网格开关接入 `--color-primary` 与 `--bg-surface`。
+- **分页导航胶囊 (`WhiteboardPageBar`)**: 底部分页器、缩略图大纲抽屉与右键菜单统一遵循主题语义类名。
+- **课堂主视图**:
+  - `LiveClassroomView`: 步骤时间轴、互动反馈流、学生专注力监控环与课件轨迹分析模态框全面支持 4 套教学主题。
+  - `LessonEditorView`: 课程编辑器、工具调色板 (`LessonPalette`) 与空状态均无缝换肤。
+  - `StudentView`: 学生端工作台、白板交互面板与大纲面板完全统一视觉语言。
+
