@@ -1,6 +1,171 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Trash2 } from 'lucide-react';
 
+/**
+ * 安全数学表达式求值器（不使用 eval，防止协同广播 XSS / RCE）
+ */
+export function safeEvaluateMath(rawExpr: string, x: number): number {
+  const cleanExpr = (rawExpr || '').trim();
+  if (!cleanExpr) return NaN;
+
+  // 严禁任何可能访问属性、原型链、执行代码的危险关键字和符号
+  const DANGEROUS_PATTERN = /[;={}\[\]'"`\\&|<>?!]|constructor|prototype|__proto__|window|document|fetch|eval|import|require|process/i;
+  if (DANGEROUS_PATTERN.test(cleanExpr)) {
+    throw new Error('表达式包含不安全字符');
+  }
+
+  // 规范化：移除 Math. 前缀，统一转小写
+  const expr = cleanExpr.replace(/Math\./gi, '').toLowerCase();
+
+  // 词法分词
+  const tokens: string[] = [];
+  let i = 0;
+  while (i < expr.length) {
+    const ch = expr[i];
+    if (/\s/.test(ch)) {
+      i++;
+      continue;
+    }
+    if (/[0-9.]/.test(ch)) {
+      let num = '';
+      while (i < expr.length && /[0-9.]/.test(expr[i])) {
+        num += expr[i++];
+      }
+      tokens.push(num);
+      continue;
+    }
+    if (/[a-z]/.test(ch)) {
+      let ident = '';
+      while (i < expr.length && /[a-z]/.test(expr[i])) {
+        ident += expr[i++];
+      }
+      tokens.push(ident);
+      continue;
+    }
+    if ('+-*/^%()'.includes(ch)) {
+      tokens.push(ch);
+      i++;
+      continue;
+    }
+    throw new Error(`不支持的符号: ${ch}`);
+  }
+
+  let pos = 0;
+  const peek = () => tokens[pos];
+  const consume = (expected?: string) => {
+    const t = tokens[pos++];
+    if (expected && t !== expected) {
+      throw new Error(`预期 '${expected}'，但得到 '${t}'`);
+    }
+    return t;
+  };
+
+  const parseExpression = (): number => parseAddSub();
+
+  const parseAddSub = (): number => {
+    let left = parseMulDiv();
+    while (peek() === '+' || peek() === '-') {
+      const op = consume();
+      const right = parseMulDiv();
+      left = op === '+' ? left + right : left - right;
+    }
+    return left;
+  };
+
+  const parseMulDiv = (): number => {
+    let left = parsePower();
+    while (peek() === '*' || peek() === '/' || peek() === '%') {
+      const op = consume();
+      const right = parsePower();
+      if (op === '*') left *= right;
+      else if (op === '/') left = right === 0 ? NaN : left / right;
+      else left %= right;
+    }
+    return left;
+  };
+
+  const parsePower = (): number => {
+    let left = parseUnary();
+    while (peek() === '^') {
+      consume();
+      const right = parsePower();
+      left = Math.pow(left, right);
+    }
+    return left;
+  };
+
+  const parseUnary = (): number => {
+    if (peek() === '-') {
+      consume();
+      return -parseUnary();
+    }
+    if (peek() === '+') {
+      consume();
+      return parseUnary();
+    }
+    return parsePrimary();
+  };
+
+  const parsePrimary = (): number => {
+    const t = peek();
+    if (!t) throw new Error('意外的表达式结尾');
+
+    if (t === '(') {
+      consume('(');
+      const val = parseExpression();
+      consume(')');
+      return val;
+    }
+
+    if (/^[0-9.]+$/.test(t)) {
+      consume();
+      return parseFloat(t);
+    }
+
+    if (t === 'x') {
+      consume();
+      return x;
+    }
+
+    if (t === 'pi') {
+      consume();
+      return Math.PI;
+    }
+    if (t === 'e') {
+      consume();
+      return Math.E;
+    }
+
+    const funcName = consume();
+    if (peek() === '(') {
+      consume('(');
+      const arg = parseExpression();
+      consume(')');
+      switch (funcName) {
+        case 'sin': return Math.sin(arg);
+        case 'cos': return Math.cos(arg);
+        case 'tan': return Math.tan(arg);
+        case 'sqrt': return Math.sqrt(arg);
+        case 'abs': return Math.abs(arg);
+        case 'log': return Math.log(arg);
+        case 'exp': return Math.exp(arg);
+        case 'round': return Math.round(arg);
+        case 'floor': return Math.floor(arg);
+        case 'ceil': return Math.ceil(arg);
+        default: throw new Error(`未知的数学函数: ${funcName}`);
+      }
+    }
+
+    throw new Error(`未知的数学标识符: ${t}`);
+  };
+
+  const result = parseExpression();
+  if (pos < tokens.length) {
+    throw new Error(`多余语法: ${tokens.slice(pos).join(' ')}`);
+  }
+  return result;
+}
+
 export function MathGraphWrapper({ 
   elementId, 
   data, 
@@ -18,7 +183,7 @@ export function MathGraphWrapper({
   onPointerUp: (e: React.PointerEvent) => void;
   onDelete: () => void;
 }) {
-  const [equation, setEquation] = useState<string>(data.equation || "Math.sin(x)");
+  const [equation, setEquation] = useState<string>(data.equation || "sin(x)");
   const [points, setPoints] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [containerDimensions, setContainerDimensions] = useState({ width: 400, height: 300 });
@@ -45,10 +210,10 @@ export function MathGraphWrapper({
       const centerY = containerDimensions.height / 2;
       for (let xUnit = -10; xUnit <= 10; xUnit += 0.2) {
          const x = xUnit;
-         const y = eval(equation);
+         const y = safeEvaluateMath(equation, x);
          if (typeof y !== 'number' || isNaN(y)) continue;
-         const px = centerX + x * 20; // scale 20, center centerX
-         const py = centerY - y * 20; // scale 20, center centerY
+         const px = centerX + x * 20;
+         const py = centerY - y * 20;
          generatedPoints.push(`${px},${py}`);
       }
       setPoints(generatedPoints.join(' '));

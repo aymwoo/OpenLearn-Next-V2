@@ -1202,8 +1202,16 @@ export const BuiltinPlugin = {
         const fileBuffer = Buffer.from(base64Content, 'base64');
 
         if (ext === '.html' || ext === '.htm') {
-          const entryName = filename;
-          fs.writeFileSync(path.join(storageDir, entryName), fileBuffer);
+          // SEC-FIX: 严格剥离路径穿越前缀（支持 posix 与 win32 斜杠），并强制校验目标路径位于 storageDir 沙箱目录内
+          const entryName = path.basename(filename.replace(/\\/g, '/'));
+          if (!entryName || entryName === '.' || entryName === '..') {
+            throw new Error('Invalid courseware filename');
+          }
+          const destPath = path.resolve(storageDir, entryName);
+          if (!destPath.startsWith(storageDir)) {
+            throw new Error(`Path traversal attempt in HTML courseware upload: ${filename}`);
+          }
+          fs.writeFileSync(destPath, fileBuffer);
 
           const coursewareId = 'cw_' + crypto.randomBytes(8).toString('hex');
           db.prepare(

@@ -911,6 +911,10 @@ export class WorkerManager {
         eval: false,
         stdout: true,
         stderr: true,
+        resourceLimits: {
+          maxOldGenerationSizeMb: 128,
+          maxYoungGenerationSizeMb: 32,
+        },
       });
       const pluginLogger = createLogger(`Plugin:${manifest.id || pluginId}`);
       worker.stdout.on('data', (chunk) => {

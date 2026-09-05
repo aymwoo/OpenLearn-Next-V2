@@ -1771,7 +1771,8 @@ export class PluginHost {
           fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2), 'utf-8');
 
           const { execSync } = await import('node:child_process');
-          execSync('npm install --production --no-audit --no-fund --legacy-peer-deps --registry=https://registry.npmmirror.com', {
+          // SEC-RCE-01: 始终添加 --ignore-scripts 防止恶意 npm 包通过 postinstall 钩子执行任意命令
+          execSync('npm install --production --no-audit --no-fund --legacy-peer-deps --ignore-scripts --registry=https://registry.npmmirror.com', {
             cwd: pluginDir,
             stdio: 'ignore',
           });
@@ -1783,24 +1784,31 @@ export class PluginHost {
 
       // 4c. Execute deploy script if declared in manifest
       if (manifest.deploy?.script) {
-        // Try running from plugin dir; fall back to v2_plugins source dir
-        let deployScriptPath = path.join(pluginDir, manifest.deploy.script);
-        if (!fs.existsSync(deployScriptPath)) {
-          const altPath = path.join(process.cwd(), 'v2_plugins', 'scratch-editor-deploy', manifest.deploy.script);
-          if (fs.existsSync(altPath)) deployScriptPath = altPath;
-        }
-        if (fs.existsSync(deployScriptPath)) {
-          console.log(`[PluginHost] Running deploy script: node ${deployScriptPath}`);
-          try {
-            const { execSync } = await import('node:child_process');
-            execSync(`node "${deployScriptPath}" "${process.cwd()}"`, { timeout: 120000 });
-            console.log(`[PluginHost] Deploy script completed for plugin "${manifest.id}"`);
-          } catch (deployErr: any) {
-            console.error(`[PluginHost] Deploy script failed for plugin "${manifest.id}":`, deployErr.message);
-            throw new Error(`Deploy script "${manifest.deploy.script}" failed: ${deployErr.message}`);
-          }
+        // SEC-RCE-02: 默认禁止执行外部 deploy 脚本，需显式设置 ALLOW_UNSAFE_PLUGIN_SCRIPTS=true 环境变量
+        if (process.env.ALLOW_UNSAFE_PLUGIN_SCRIPTS !== 'true') {
+          console.warn(
+            `[SECURITY WARNING] Deploy script "${manifest.deploy.script}" for plugin "${manifest.id}" blocked by default security policy. Set ALLOW_UNSAFE_PLUGIN_SCRIPTS=true to enable.`
+          );
         } else {
-          console.warn(`[PluginHost] Deploy script "${manifest.deploy.script}" not found for plugin "${manifest.id}"`);
+          // Try running from plugin dir; fall back to v2_plugins source dir
+          let deployScriptPath = path.join(pluginDir, manifest.deploy.script);
+          if (!fs.existsSync(deployScriptPath)) {
+            const altPath = path.join(process.cwd(), 'v2_plugins', 'scratch-editor-deploy', manifest.deploy.script);
+            if (fs.existsSync(altPath)) deployScriptPath = altPath;
+          }
+          if (fs.existsSync(deployScriptPath)) {
+            console.log(`[PluginHost] Running deploy script: node ${deployScriptPath}`);
+            try {
+              const { execSync } = await import('node:child_process');
+              execSync(`node "${deployScriptPath}" "${process.cwd()}"`, { timeout: 120000 });
+              console.log(`[PluginHost] Deploy script completed for plugin "${manifest.id}"`);
+            } catch (deployErr: any) {
+              console.error(`[PluginHost] Deploy script failed for plugin "${manifest.id}":`, deployErr.message);
+              throw new Error(`Deploy script "${manifest.deploy.script}" failed: ${deployErr.message}`);
+            }
+          } else {
+            console.warn(`[PluginHost] Deploy script "${manifest.deploy.script}" not found for plugin "${manifest.id}"`);
+          }
         }
       }
       // 4d. Register static route if declared in manifest

@@ -20,7 +20,7 @@ import { filterXSS } from 'xss';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
 import {
@@ -189,7 +189,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/schedules/:scheduleId/attendance', (req, res) => {
+  app.post('/api/schedules/:scheduleId/attendance', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { studentId, status } = req.body;
       kernelContainer.db.prepare(`
@@ -222,7 +222,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:classId/grade-weights', (req, res) => {
+  app.post('/api/classes/:classId/grade-weights', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { attendance_weight, progress_weight, assignment_weight, exam_weight } = req.body;
       const total = Number(attendance_weight) + Number(progress_weight) + Number(assignment_weight) + Number(exam_weight);
@@ -262,7 +262,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:classId/exams', (req, res) => {
+  app.post('/api/classes/:classId/exams', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { title, description, max_score } = req.body;
       if (!title) return res.status(400).json({ error: 'Title is required' });
@@ -286,7 +286,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/exams/:examId/scores', (req, res) => {
+  app.post('/api/exams/:examId/scores', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { scores } = req.body; // Array of { studentId, score, notes }
       if (!Array.isArray(scores)) return res.status(400).json({ error: 'Scores array is required' });
@@ -484,12 +484,8 @@ export function registerGradingRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/grade-sync', async (req, res) => {
+  app.post('/api/grade-sync', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
-      if (!checkIsTeacherOrAdmin(req)) {
-        return res.status(403).json({ success: false, error: 'Access Denied: Teachers or Administrators only' });
-      }
-
       const { lessonId, studentId, grade } = req.body;
       if (!lessonId || !studentId || grade === undefined) {
         return res.status(400).json({ success: false, error: 'lessonId, studentId, and grade are required' });
@@ -517,12 +513,8 @@ export function registerGradingRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/students/:studentId/points', async (req, res) => {
+  app.post('/api/students/:studentId/points', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
-      if (!checkIsTeacherOrAdmin(req)) {
-        return res.status(403).json({ success: false, error: 'Access Denied: Teachers or Administrators only' });
-      }
-
       const { studentId } = req.params;
       const { classId, dimensionId, deltaPoints, reason, pluginId } = req.body;
 
@@ -563,7 +555,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:classId/semester-reports/archive', (req, res) => {
+  app.post('/api/classes/:classId/semester-reports/archive', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { semesterName, reports } = req.body; // Array of reports to save
       if (!semesterName) return res.status(400).json({ error: 'semesterName is required' });
@@ -620,7 +612,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:classId/students/:studentId/semester-ai-evaluation', async (req, res) => {
+  app.post('/api/classes/:classId/students/:studentId/semester-ai-evaluation', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { classId, studentId } = req.params;
       const { semesterName = '2026年春季学�?', providerId } = req.body;

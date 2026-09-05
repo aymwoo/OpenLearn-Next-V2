@@ -564,6 +564,9 @@ try {
     const insertStmt = db.prepare('INSERT INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)');
     insertStmt.run('usr_admin', 'admin', hashPassword('admin'), 'administrator', 'System Admin', Date.now());
     insertStmt.run('usr_teacher', 'teacher', hashPassword('teacher'), 'teacher', 'Regular Teacher', Date.now());
+    console.warn(
+      '[SECURITY WARNING] Default users initialized (admin/admin, teacher/teacher). In production environments, immediately change these passwords via POST /api/auth/change-password!'
+    );
   }
 } catch (e) {
   console.error('Failed to seed default users:', e);

@@ -16,7 +16,7 @@ import { filterXSS } from 'xss';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
 import {
@@ -36,7 +36,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
     runGeminiAgentChat, runOpenAIAgentChat,
   } = ctx;
 
-  app.get('/api/events', (req, res) => {
+  app.get('/api/events', requireAuth('administrator'), (req, res) => {
     try {
       const events = kernelContainer.db.prepare('SELECT * FROM events ORDER BY timestamp DESC LIMIT 50').all();
       res.json(events);
@@ -91,9 +91,12 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
     });
 
   // VFS APIs
-  app.get('/api/vfs', (req, res) => {
+  app.get('/api/vfs', requireAuth(), (req, res) => {
     try {
       const parentId = req.query.parentId === 'null' ? null : (req.query.parentId || null);
+      const isStaff = checkIsTeacherOrAdmin(req);
+      const token = getCookieToken(req);
+      const session = (req as any).session || (token ? getValidSession(token) : null);
       
       let nodes: any[] = [];
       
@@ -104,12 +107,24 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
         const assignments = kernelContainer.db.prepare('SELECT a.id, a.title, c.name as cname, a.content FROM assignments a JOIN classes c ON a.class_id = c.id').all() as any[];
         nodes = assignments.map(a => ({ id: `assgn-${a.id}`, parent_id: 'virtual-assignments', type: 'file', name: `[${a.cname}] ${a.title}.md`, content: a.content }));
       } else if (parentId === 'virtual-submissions') {
-        const submissions = kernelContainer.db.prepare(`
-          SELECT sub.id, sub.content, a.title, s.name as sname, sub.score
-          FROM assignment_submissions sub
-          JOIN assignments a ON sub.assignment_id = a.id
-          JOIN students s ON sub.student_id = s.id
-        `).all() as any[];
+        // SEC-FIX: 严格数据脱敏，普通学生仅可查看本人提交与成绩，严禁全量拉取全校作业与分数
+        let submissions: any[] = [];
+        if (isStaff) {
+          submissions = kernelContainer.db.prepare(`
+            SELECT sub.id, sub.content, a.title, s.name as sname, sub.score
+            FROM assignment_submissions sub
+            JOIN assignments a ON sub.assignment_id = a.id
+            JOIN students s ON sub.student_id = s.id
+          `).all() as any[];
+        } else if (session?.userId) {
+          submissions = kernelContainer.db.prepare(`
+            SELECT sub.id, sub.content, a.title, s.name as sname, sub.score
+            FROM assignment_submissions sub
+            JOIN assignments a ON sub.assignment_id = a.id
+            JOIN students s ON sub.student_id = s.id
+            WHERE sub.student_id = ?
+          `).all(session.userId) as any[];
+        }
         nodes = submissions.map(sub => ({
           id: `sub-${sub.id}`, parent_id: 'virtual-submissions', type: 'file', name: `${sub.sname} - ${sub.title}.md`,
           content: `# ${sub.title} by ${sub.sname}\n\nScore: ${sub.score || 'Ungraded'}\n\n---\n\n${sub.content}`

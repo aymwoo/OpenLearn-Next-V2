@@ -16,7 +16,7 @@ import { filterXSS } from 'xss';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
 import {
@@ -61,6 +61,8 @@ export function registerResourcesRoutes(ctx: ServerContext) {
         }
 
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        // SEC-FIX: 防止首方存储型 XSS，为独立直出的 HTML 强制声明沙箱隔离策略
+        res.setHeader('Content-Security-Policy', "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' data: blob: https:;");
         let html = resource.content || '';
         const baseTag = `<base href="/api/resources/${req.params.id}/">`;
         if (html.toLowerCase().includes('<head>')) {
@@ -217,6 +219,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       } else {
         let content = fileObj.content;
         if (contentType.startsWith('text/html')) {
+          res.setHeader('Content-Security-Policy', "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' data: blob: https:;");
           content = injectLmsSdk(content, req, { id: resource.id, name: resource.name, uuid: resource.id });
         }
         return res.send(content);
@@ -226,7 +229,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/resources', async (req, res) => {
+  app.post('/api/resources', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { name, type, content } = req.body;
       if (!name || !type) {
@@ -292,7 +295,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/resources/:id', (req, res) => {
+  app.delete('/api/resources/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       kernelContainer.db.prepare('DELETE FROM system_resources WHERE id = ?').run(req.params.id);
       res.json({ success: true });

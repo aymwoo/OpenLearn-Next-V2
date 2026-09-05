@@ -16,7 +16,7 @@ import { filterXSS } from 'xss';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
 import {
@@ -45,7 +45,7 @@ export function registerAssignmentsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:classId/assignments/generate', async (req, res) => {
+  app.post('/api/classes/:classId/assignments/generate', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { topic, lessonId } = req.body;
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -66,7 +66,7 @@ export function registerAssignmentsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:classId/assignments/suggest', async (req, res) => {
+  app.post('/api/classes/:classId/assignments/suggest', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { lessonId } = req.body;
       const lesson = kernelContainer.db.prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId) as any;
@@ -138,7 +138,7 @@ Generate the response in the specified JSON schema.`;
     }
   });
 
-  app.post('/api/classes/:classId/assignments/create-suggested-quiz', async (req, res) => {
+  app.post('/api/classes/:classId/assignments/create-suggested-quiz', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { title, description, questions, learningObjectives, timeLimit, lessonId } = req.body;
       const id = 'ast-' + Date.now().toString(36);
@@ -160,9 +160,15 @@ Generate the response in the specified JSON schema.`;
     }
   });
 
-  app.post('/api/assignments/:id/submissions', (req, res) => {
+  app.post('/api/assignments/:id/submissions', requireAuth(), (req, res) => {
     try {
       const { studentId, content } = req.body;
+      const session = (req as any).session;
+      const isPrivileged = session && (session.role === 'teacher' || session.role === 'administrator');
+      if (!isPrivileged && session?.userId !== studentId) {
+        return res.status(403).json({ error: 'Cannot submit assignment on behalf of another student' });
+      }
+
       kernelContainer.db.prepare(`
         INSERT INTO assignment_submissions (assignment_id, student_id, content, submitted_at, status)
         VALUES (?, ?, ?, ?, 'submitted')
@@ -189,7 +195,7 @@ Generate the response in the specified JSON schema.`;
     }
   });
 
-  app.post('/api/assignments/:id/submissions/:studentId/grade', async (req, res) => {
+  app.post('/api/assignments/:id/submissions/:studentId/grade', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const asb = kernelContainer.db.prepare('SELECT * FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?').get(req.params.id, req.params.studentId) as any;
       const ast = kernelContainer.db.prepare('SELECT * FROM assignments WHERE id = ?').get(req.params.id) as any;

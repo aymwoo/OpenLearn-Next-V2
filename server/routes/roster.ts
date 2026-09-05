@@ -76,7 +76,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes', (req, res) => {
+  app.post('/api/classes', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { name, description } = req.body;
       const classId = Math.random().toString(36).slice(2);
@@ -89,7 +89,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.put('/api/classes/:id', (req, res) => {
+  app.put('/api/classes/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { name, description, class_passcode } = req.body;
       if (name) kernelContainer.db.prepare('UPDATE classes SET name = ? WHERE id = ?').run(name, req.params.id);
@@ -101,7 +101,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/classes/:id', (req, res) => {
+  app.delete('/api/classes/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const classId = req.params.id;
       const db = kernelContainer.db;
@@ -616,7 +616,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/students/:id/read_notifications', (req, res) => {
+  app.post('/api/students/:id/read_notifications', requireAuth(), (req, res) => {
     try {
       const { notificationId } = req.body;
       if (!notificationId) {
@@ -635,7 +635,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:classId/lock_lesson', (req, res) => {
+  app.post('/api/classes/:classId/lock_lesson', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { lessonId } = req.body;
       if (!lessonId) {
@@ -655,7 +655,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:classId/unlock_lesson', (req, res) => {
+  app.post('/api/classes/:classId/unlock_lesson', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       kernelContainer.db.prepare('UPDATE students SET locked_lesson_id = NULL WHERE id IN (SELECT student_id FROM class_students WHERE class_id = ?)')
         .run(req.params.classId);
@@ -807,7 +807,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
   // --------------------------------------
 
-  app.post('/api/students', (req, res) => {
+  app.post('/api/students', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { name, email, password, student_number } = req.body;
       const studentId = Math.random().toString(36).slice(2);
@@ -830,13 +830,13 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.put('/api/students/:id', (req, res) => {
+  app.put('/api/students/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { name, email, password, locked_lesson_id, private_notes, student_number } = req.body;
       if (name) kernelContainer.db.prepare('UPDATE students SET name = ? WHERE id = ?').run(name, req.params.id);
       if (email !== undefined) kernelContainer.db.prepare('UPDATE students SET email = ? WHERE id = ?').run(email, req.params.id);
       if (password !== undefined) {
-        // SEC-AUTH-01: 更新�? bcrypt 哈希
+        // SEC-AUTH-01: 更新? bcrypt 哈希
         const hashed = password.trim() !== '' ? bcryptHashPassword(password) : password;
         kernelContainer.db.prepare('UPDATE students SET password = ? WHERE id = ?').run(hashed, req.params.id);
       }
@@ -849,7 +849,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/students/:id', (req, res) => {
+  app.delete('/api/students/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       // 完整级联删除，与 gdpr-delete 保持一致，避免残留孤儿数据
       kernelContainer.db.prepare('DELETE FROM class_students WHERE student_id = ?').run(req.params.id);
@@ -911,19 +911,16 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  // SEC-DATA-02: GDPR 完整数据删除（管理员专用，需二次确认�?
-  app.delete('/api/students/:id/gdpr-delete', (req, res) => {
+  // SEC-DATA-02: GDPR 完整数据删除（管理员专用，需二次确认）
+  app.delete('/api/students/:id/gdpr-delete', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      if (!checkIsTeacherOrAdmin(req)) {
-        return res.status(403).json({ error: 'Only teachers and administrators can perform GDPR deletion' });
-      }
       const studentId = req.params.id;
       const { confirm } = req.body;
       if (confirm !== true) {
         return res.status(400).json({ error: 'Must explicitly confirm GDPR deletion with { confirm: true }' });
       }
 
-      // 级联删除所有关联数�?
+      // 级联删除所有关联数据
       kernelContainer.db.prepare('DELETE FROM class_students WHERE student_id = ?').run(studentId);
       kernelContainer.db.prepare('DELETE FROM student_lesson_progress WHERE student_id = ?').run(studentId);
       kernelContainer.db.prepare('DELETE FROM assignment_submissions WHERE student_id = ?').run(studentId);
@@ -958,8 +955,14 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/students/:id/progress', (req, res) => {
+  app.post('/api/students/:id/progress', requireAuth(), (req, res) => {
     try {
+      const session = (req as any).session;
+      const isPrivileged = session && (session.role === 'teacher' || session.role === 'administrator');
+      if (!isPrivileged && session?.userId !== req.params.id) {
+        return res.status(403).json({ error: 'Cannot update progress for another student' });
+      }
+
       const { lessonId, completed, progressPercent, completedSegments } = req.body;
       const completedSegmentsStr = typeof completedSegments === 'string'
         ? completedSegments
@@ -995,7 +998,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:id/students', (req, res) => {
+  app.post('/api/classes/:id/students', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { studentId } = req.body;
       kernelContainer.db.prepare('INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
@@ -1094,7 +1097,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/classes/:classId/students/:studentId', (req, res) => {
+  app.delete('/api/classes/:classId/students/:studentId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       kernelContainer.db.prepare('DELETE FROM class_students WHERE class_id = ? AND student_id = ?').run(req.params.classId, req.params.studentId);
       res.json({ success: true });
@@ -1152,8 +1155,14 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
 
   // Assignments & Quizzes
-  app.get('/api/students/:id/dashboard', (req, res) => {
+  app.get('/api/students/:id/dashboard', requireAuth(), (req, res) => {
     try {
+      const session = (req as any).session;
+      const isPrivileged = session && (session.role === 'teacher' || session.role === 'administrator');
+      if (!isPrivileged && session?.userId !== req.params.id) {
+        return res.status(403).json({ error: 'Cannot access another student dashboard' });
+      }
+
       const studentId = req.params.id;
       
       // Get classes

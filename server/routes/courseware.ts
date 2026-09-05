@@ -16,7 +16,7 @@ import { filterXSS } from 'xss';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
 import {
@@ -37,10 +37,11 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     runGeminiAgentChat, runOpenAIAgentChat,
   } = ctx;
 
-  app.post('/api/courseware/upload', async (req, res) => {
+  app.post('/api/courseware/upload', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { name, filename, base64Data } = req.body;
-      const cmd = kernelContainer.commandBus.createCommand('courseware.upload', { name, filename, base64Data }, 'teacher-demo');
+      const actorId = getActorId(req) || 'teacher';
+      const cmd = kernelContainer.commandBus.createCommand('courseware.upload', { name, filename, base64Data }, actorId);
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -48,10 +49,11 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/courseware/confirm', async (req, res) => {
+  app.post('/api/courseware/confirm', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { uuid, name, entry } = req.body;
-      const cmd = kernelContainer.commandBus.createCommand('courseware.confirm', { uuid, name, entry }, 'teacher-demo');
+      const actorId = getActorId(req) || 'teacher';
+      const cmd = kernelContainer.commandBus.createCommand('courseware.confirm', { uuid, name, entry }, actorId);
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -59,9 +61,10 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/courseware', async (req, res) => {
+  app.get('/api/courseware', requireAuth(), async (req, res) => {
     try {
-      const cmd = kernelContainer.commandBus.createCommand('courseware.list', {}, 'teacher-demo');
+      const actorId = getActorId(req) || 'system';
+      const cmd = kernelContainer.commandBus.createCommand('courseware.list', {}, actorId);
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -69,9 +72,10 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/courseware/:id', async (req, res) => {
+  app.delete('/api/courseware/:id', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
-      const cmd = kernelContainer.commandBus.createCommand('courseware.delete', { id: req.params.id }, 'teacher-demo');
+      const actorId = getActorId(req) || 'teacher';
+      const cmd = kernelContainer.commandBus.createCommand('courseware.delete', { id: req.params.id }, actorId);
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -177,6 +181,21 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     try {
       const { attemptId } = req.params;
       const { eventType, payload } = req.body;
+
+      // SEC-FIX: 会话与所属权检查，防止未授权恶意刷分/覆写日志
+      const token = getCookieToken(req);
+      const session = (req as any).session || (token ? getValidSession(token) : null);
+      if (!session) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+      if (session.role !== 'teacher' && session.role !== 'administrator') {
+        const attemptRow = kernelContainer.db.prepare(
+          'SELECT student_id FROM courseware_attempt WHERE id = ?'
+        ).get(attemptId) as { student_id: string } | undefined;
+        if (attemptRow && attemptRow.student_id !== session.userId) {
+          return res.status(403).json({ error: 'Forbidden: Cannot modify logs for another student' });
+        }
+      }
       
       const rawId = 'raw_' + crypto.randomBytes(8).toString('hex');
       kernelContainer.db.prepare(
@@ -255,6 +274,21 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       const { attemptId } = req.params;
       let { score, comment, completion, status, extra = {} } = req.body;
 
+      // SEC-FIX: 会话与所属权检查，防止未授权改分或冒名提交
+      const token = getCookieToken(req);
+      const session = (req as any).session || (token ? getValidSession(token) : null);
+      if (!session) {
+        return res.status(401).json({ error: 'Authentication required to submit attempt scores' });
+      }
+      if (session.role !== 'teacher' && session.role !== 'administrator') {
+        const attemptRow = kernelContainer.db.prepare(
+          'SELECT student_id FROM courseware_attempt WHERE id = ?'
+        ).get(attemptId) as { student_id: string } | undefined;
+        if (attemptRow && attemptRow.student_id !== session.userId) {
+          return res.status(403).json({ error: 'Forbidden: Cannot submit scores for another student' });
+        }
+      }
+
       const extracted = extractScoreCommentCompletion({ ...req.body, ...extra });
       if (score === undefined || score === null) score = extracted.score;
       if (comment === undefined || comment === null) comment = extracted.comment;
@@ -275,6 +309,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         }
       }
 
+      const actorId = session.userId || getActorId(req) || 'student';
       const cmd = kernelContainer.commandBus.createCommand('courseware.submit_attempt', {
         attemptId,
         score: parsedScore,
@@ -282,7 +317,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         completion: parsedCompletion,
         status,
         extra
-      }, 'student-demo');
+      }, actorId);
       const result = await kernelContainer.commandBus.execute(cmd);
       io.emit('courseware-attempt-updated', { attemptId, type: 'submit' });
       res.json(result);

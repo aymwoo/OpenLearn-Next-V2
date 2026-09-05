@@ -22,21 +22,57 @@ export function CodeSandboxWrapper({
   const [output, setOutput] = useState('');
 
   const runCode = () => {
+    setOutput('Running in isolated Web Worker...');
     try {
-      const logs: string[] = [];
-      const originalLog = console.log;
-      console.log = (...args) => {
-         logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
-         originalLog(...args);
+      // 在独立的 Web Worker 沙箱中执行不可信代码，隔离 window / document / localStorage
+      const workerScript = `
+        const logs = [];
+        const originalLog = console.log;
+        console.log = (...args) => {
+          logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+        };
+        self.onmessage = function(e) {
+          try {
+            const fn = new Function(e.data);
+            const res = fn();
+            if (res !== undefined) logs.push('Return: ' + String(res));
+            self.postMessage({ success: true, logs: logs.join('\\n') });
+          } catch (err) {
+            self.postMessage({ success: false, error: err.message, logs: logs.join('\\n') });
+          }
+        };
+      `;
+      const blob = new Blob([workerScript], { type: 'application/javascript' });
+      const workerUrl = URL.createObjectURL(blob);
+      const worker = new Worker(workerUrl);
+
+      const timer = setTimeout(() => {
+        worker.terminate();
+        URL.revokeObjectURL(workerUrl);
+        setOutput('Execution timed out (3000ms limit). Worker terminated.');
+      }, 3000);
+
+      worker.onmessage = (e) => {
+        clearTimeout(timer);
+        worker.terminate();
+        URL.revokeObjectURL(workerUrl);
+        if (e.data.success) {
+          setOutput(e.data.logs || 'Code executed successfully (no output)');
+        } else {
+          setOutput((e.data.logs ? e.data.logs + '\n' : '') + 'Error: ' + e.data.error);
+        }
       };
-      
-      const result = eval(code);
-      if (result !== undefined) logs.push(`Return: ${result}`);
-      setOutput(logs.join('\n'));
-      
-      console.log = originalLog;
+
+      worker.onerror = (err) => {
+        clearTimeout(timer);
+        worker.terminate();
+        URL.revokeObjectURL(workerUrl);
+        setOutput(`Worker Error: ${err.message}`);
+      };
+
+      worker.postMessage(code);
     } catch (e: any) {
-      setOutput(`Error: ${e.message}`);
+      setOutput(`Failed to spawn isolated worker: ${e.message}`);
     }
   };
 

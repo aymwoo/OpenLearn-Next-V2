@@ -16,7 +16,7 @@ import { filterXSS } from 'xss';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
 import {
@@ -36,7 +36,7 @@ export function registerProcessesRoutes(ctx: ServerContext) {
     runGeminiAgentChat, runOpenAIAgentChat,
   } = ctx;
 
-  app.get('/api/approvals', (req, res) => {
+  app.get('/api/approvals', requireAuth('administrator'), (req, res) => {
     try {
       const list = kernelContainer.db.prepare('SELECT * FROM pending_commands ORDER BY created_at DESC').all();
       res.json(list);
@@ -45,43 +45,42 @@ export function registerProcessesRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/approvals/:id/approve', async (req, res) => {
+  app.post('/api/approvals/:id/approve', requireAuth('administrator'), async (req, res) => {
     try {
       const pending: any = kernelContainer.db.prepare('SELECT * FROM pending_commands WHERE id = ?').get(req.params.id);
-      if (!pending) return res.status(404).json({error: 'Not found'});
-      
-      let payload = JSON.parse(pending.payload);
-      if (req.body && req.body.payloadOverride) {
-        payload = { ...payload, ...req.body.payloadOverride };
-      }
+      if (!pending) return res.status(404).json({ error: 'Not found' });
+
+      // SEC-FIX: 严禁允许外部客户端通过 payloadOverride 篡改审批单原始指令参数
+      const payload = JSON.parse(pending.payload);
+      const approverId = getActorId(req) || 'admin';
 
       const cmd = kernelContainer.commandBus.createCommand(
         pending.command_type,
         payload,
-        pending.actor_id,
-        { approved: true } // Bypass high risk check now
+        approverId,
+        { approved: true }
       );
-      
+
       const result = await kernelContainer.commandBus.execute(cmd);
       kernelContainer.db.prepare('DELETE FROM pending_commands WHERE id = ?').run(pending.id);
-      
+
       res.json({ success: true, result });
-    } catch(e: any) {
+    } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
-  
-  app.post('/api/approvals/:id/reject', async (req, res) => {
-     try {
-       kernelContainer.db.prepare('DELETE FROM pending_commands WHERE id = ?').run(req.params.id);
-       res.json({ success: true });
-     } catch(e: any) {
-       res.status(500).json({ error: e.message });
-     }
+
+  app.post('/api/approvals/:id/reject', requireAuth('administrator'), async (req, res) => {
+    try {
+      kernelContainer.db.prepare('DELETE FROM pending_commands WHERE id = ?').run(req.params.id);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // Processes APIs
-  app.get('/api/processes', (req, res) => {
+  app.get('/api/processes', requireAuth('administrator'), (req, res) => {
     try {
       // Only return currently active running processes to ensure real-time accuracy
       const list = kernelContainer.db.prepare("SELECT id, name, status, created_at, updated_at FROM processes WHERE status = 'running' ORDER BY created_at DESC").all();
@@ -91,7 +90,7 @@ export function registerProcessesRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/processes/:id/logs', (req, res) => {
+  app.get('/api/processes/:id/logs', requireAuth('administrator'), (req, res) => {
     try {
       const dbRow = kernelContainer.db.prepare('SELECT logs FROM processes WHERE id = ?').get(req.params.id) as any;
       res.json(dbRow || { logs: '' });

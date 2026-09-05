@@ -16,7 +16,7 @@ import { filterXSS } from 'xss';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
 import {
@@ -97,7 +97,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:classId/schedules', (req, res) => {
+  app.post('/api/classes/:classId/schedules', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { lessonId, scheduledDate, timeSlot, status, notes } = req.body;
       const id = 'sch-' + Date.now().toString(36);
@@ -131,7 +131,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
     }
   });
 
-  app.put('/api/classes/:classId/schedules/:scheduleId', (req, res) => {
+  app.put('/api/classes/:classId/schedules/:scheduleId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { lessonId, scheduledDate, timeSlot, status, notes } = req.body;
       kernelContainer.db.prepare(`
@@ -153,7 +153,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/classes/:classId/schedules/:scheduleId', (req, res) => {
+  app.delete('/api/classes/:classId/schedules/:scheduleId', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       kernelContainer.db.prepare('DELETE FROM schedules WHERE id = ? AND class_id = ?').run(req.params.scheduleId, req.params.classId);
       kernelContainer.db.prepare('DELETE FROM attendance WHERE schedule_id = ?').run(req.params.scheduleId);
@@ -163,7 +163,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:classId/schedules/batch', (req, res) => {
+  app.post('/api/classes/:classId/schedules/batch', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { schedules } = req.body; // array of { lessonId, scheduledDate, timeSlot, status, notes }
       const db = kernelContainer.db;
@@ -197,7 +197,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
   });
 
   // ==================== Timetable OCR ====================
-  app.post('/api/timetable/ocr', async (req, res) => {
+  app.post('/api/timetable/ocr', requireAuth('teacher', 'administrator'), async (req, res) => {
     const startTime = Date.now();
     console.log(`[OCR Start] Starting timetable OCR. Payload size: ${req.body.imageBase64?.length || 0} bytes. Lang: ${req.body.lang || 'zh'}`);
     

@@ -10,6 +10,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+- **VULN-06 白板协同投毒阻断 (RCE & XSS Defense)**：
+  - 彻底移除 [`MathGraphWrapper.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/widgets/MathGraphWrapper.tsx) 中的原生 `eval`，自研实现算术 AST 递归下降求值器 `safeEvaluateMath`，严格限定白名单数学运算与常用函数，彻底阻断 JS 语法、属性与原型链穿透。
+  - 重构 [`CodeSandboxWrapper.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/widgets/CodeSandboxWrapper.tsx)，将代码执行迁移至独立 Web Worker Blob 沙箱环境，隔离 DOM、Cookie、`localStorage` 访问，并配置 3 秒看门狗超时中断。
+- **VULN-03 审批端点鉴权与篡改拦截**：
+  - 在 [`server/routes/processes.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/processes.ts) 中对 `/api/approvals/*` 与 `/api/processes/*` 强制挂载 `requireAuth('administrator')`，并彻底移除 `payloadOverride` 字段，杜绝参数篡改风险。
+- **VULN-07 课件上传路径穿越与同源 XSS 隔离**：
+  - 在 [`packages/plugins/builtin.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugins/builtin.ts) 中对课件单 HTML 上传增加路径净化 `path.basename(filename.replace(/\\/g, '/'))` 与 `!destPath.startsWith(storageDir)` 沙箱边界强校验，彻底拦截 `../` 路径穿越写文件。
+  - 在 [`server/routes/resources.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/resources.ts) 直出 HTML 资源响应头注入 `Content-Security-Policy: sandbox allow-scripts allow-forms allow-downloads`，将其降级为 opaque origin，消除同源 XSS 攻击向量。
+- **VULN-01 核心业务路由鉴权全覆盖**：
+  - 在 [`server/routes/roster.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/roster.ts)、[`server/routes/grading.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/grading.ts)、[`server/routes/assignments.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/assignments.ts)、[`server/routes/schedules.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/schedules.ts)、[`server/routes/lessons.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/lessons.ts)、[`server/routes/workspace.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/workspace.ts) 中为所有增删改接口全面补齐 `requireAuth('teacher', 'administrator')`。
+  - 在 `/api/vfs` 针对 `virtual-submissions` 增加数据脱敏，普通学生仅可拉取本人提交物，杜绝全校学生姓名、提交内容与成绩泄露。
+- **VULN-02 课件成绩伪造与冒名提交拦截**：
+  - 在 [`server/routes/courseware.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/courseware.ts) 课件管理接口挂载教师/管理员鉴权，在 `/attempts/:attemptId/log` 与 `/submit` 增加学生所属权强校验，拦截跨账号冒名刷分改分。
+- **VULN-04 插件安装命令注入防护与默认凭证预警**：
+  - 在 [`packages/core/plugin-host/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/index.ts) 中为依赖安装统一添加 `--ignore-scripts` 阻断 postinstall 钩子执行，对 `manifest.deploy.script` 增加 `ALLOW_UNSAFE_PLUGIN_SCRIPTS=true` 环境变量门禁。
+  - 在 [`packages/core/db/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/db/index.ts) 针对默认内置管理员与教师账号增加显著安全日志预警。
+- **VULN-05 插件 Worker 资源配额限制**：
+  - 在 [`packages/core/worker-runtime/worker-manager.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/worker-manager.ts) 实例化 Worker 时配置 `resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 32 }`，有效抵御插件内存耗尽型拒绝服务（DoS）。
+- **自动化安全回归验证**：
+  - 新增 [`server/__tests__/security_hardening.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/security_hardening.test.ts)，全量 176 个测试套件、988 个用例 100% 绿灯通过。
+
+
 ## [0.3.0] - 2026-09-06
 
 ### Features

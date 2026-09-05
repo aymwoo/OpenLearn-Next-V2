@@ -16,7 +16,7 @@ import { filterXSS } from 'xss';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
 import {
@@ -173,13 +173,14 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/lessons', async (req, res) => {
+  app.post('/api/lessons', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { title, content } = req.body;
+      const actorId = getActorId(req) || 'teacher';
       const cmd = kernelContainer.commandBus.createCommand(
          'lesson.create',
          { title, content },
-         'user-frontend',
+         actorId,
          { approved: true }
       );
       const result = await kernelContainer.commandBus.execute(cmd);
@@ -189,14 +190,15 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.put('/api/lessons/:id/timeline', async (req, res) => {
+  app.put('/api/lessons/:id/timeline', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { id } = req.params;
       const { timeline } = req.body;
+      const actorId = getActorId(req) || 'teacher';
       const cmd = kernelContainer.commandBus.createCommand(
          'lesson.update_timeline',
          { lessonId: id, timeline },
-         'user-frontend',
+         actorId,
          { approved: true }
       );
       const result = await kernelContainer.commandBus.execute(cmd);
@@ -206,7 +208,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.put('/api/lessons/:id/progress-mode', async (req, res) => {
+  app.put('/api/lessons/:id/progress-mode', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { id } = req.params;
       const { progressMode, progressConditions } = req.body;
@@ -517,7 +519,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
   });
 
   // ── 课程删除 API ─────────────────────────────────────────────────────
-  app.delete('/api/lessons/:id', async (req, res) => {
+  app.delete('/api/lessons/:id', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { id } = req.params;
 
