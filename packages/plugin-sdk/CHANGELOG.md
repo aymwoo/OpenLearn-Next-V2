@@ -7,6 +7,11 @@ All notable changes to **@openlearn/plugin-sdk** are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.5.1] - 2026-09-04
+
+### Features
+- **Whiteboard renderer/editor types**: Export `FullscreenRendererProps`, `FullscreenRenderer`, `PropertyEditorProps`, `PropertyEditorComponent` (type-only) so third-party plugins can type their `ctx.ui.registerFullscreenRenderer` / `registerPropertyEditor` callbacks without importing host internals.
+
 ## [3.5.0] - 2026-07-28
 
 ### Features

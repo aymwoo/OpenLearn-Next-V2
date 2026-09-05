@@ -93,7 +93,7 @@ graph TD
 
 ## 3. Existing Extension Slots Audit
 
-The frontend UI extension subsystem is managed by `ExtensionPointRegistry` (`src/plugin-host/extension-points.ts`) and exposed via `@openlearn/plugin-sdk@3.5.0`.
+The frontend UI extension subsystem is managed by `ExtensionPointRegistry` (`src/plugin-host/extension-points.ts`) and exposed via `@openlearn/plugin-sdk@3.5.1`.
 
 ### Supported Extension Slots
 

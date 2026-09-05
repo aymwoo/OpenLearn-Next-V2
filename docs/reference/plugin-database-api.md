@@ -1,6 +1,6 @@
 # 插件数据库 API 与 Migration 规范
 
-> **适用范围**：`@openlearn/plugin-sdk@3.5.0`
+> **适用范围**：`@openlearn/plugin-sdk@3.5.1`
 > 本页说明插件可用的两条数据库路径、事务支持、以及插件版本升级时的表结构迁移范式。
 
 ---

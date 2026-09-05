@@ -1,6 +1,6 @@
 # 平台数据表参考（Platform Data Tables）
 
-> **适用范围**：`@openlearn/plugin-sdk@3.5.0`
+> **适用范围**：`@openlearn/plugin-sdk@3.5.1`
 > 插件通过 `ctx.resolve(IDatabaseToken)` 拿到**整个平台共享数据库**的裸 `better-sqlite3.Database` 句柄，可读写任意表。本页列出平台实际存在的全部数据表及关键列，作为插件跨表查询/读写时的参考。
 >
 > ⚠️ 若只想做插件私有数据，优先用 `ctx.db`（自动加 `plugin_{pluginId}_` 前缀）或 `ctx.services.storage`（`plugin_storage` 键值），见[插件数据库 API](plugin-database-api)。
