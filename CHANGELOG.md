@@ -11,6 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Features
+- **现代教育 OS 主题系统 (Theming System Engine - Phase 1)**：
+  - 基于 Tailwind CSS v4 原生变量机制构建设计 Token 层，在 [`src/index.css`](file:///home/wuxf/Develop/openlearnv2/src/index.css) 中规范 `--bg-app`、`--bg-surface`、`--border-theme`、`--text-main`、`--color-primary` 等语义化设计变量与实用类。
+  - 内置 4 套教育场景专属预设：**浅色日间 (Light)**、**暗夜极客 (Dark)**、**教学护眼防眩光 (EyeCare)**、**经典墨绿黑板 (Chalkboard)**。
+  - 新增中心化主题状态管理器 [`src/store/themeStore.ts`](file:///home/wuxf/Develop/openlearnv2/src/store/themeStore.ts)，支持 DOM 响应式同步、本地偏好记忆（`localStorage`）以及动态注册自定义主题样式；
+  - 研发顶栏主题切换器组件 [`ThemeSelector.tsx`](file:///home/wuxf/Develop/openlearnv2/src/components/ThemeSelector.tsx)，完成应用主外壳与导航侧边栏的语义化换肤适配。
 - **数据库版本化迁移体系 (Phase 20 - DB-MIG-01)**：
   - 新增 [`server/utils/migrate.ts`](file:///home/wuxf/Develop/openlearnv2/server/utils/migrate.ts) 迁移加载与执行引擎，支持从 `migrations/` 自动读取 `.sql` 文件，按文件名自然排序并解析 `-- UP` 与 `-- DOWN` 分隔符。
   - 服务启动时自动执行迁移并记录状态至 `_migrations` 表（包含 `applied_at` 与 `checksum`），具备天然幂等性与 duplicate column 容错保护，并支持单项迁移回滚。

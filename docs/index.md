@@ -32,6 +32,7 @@ architecture/lesson-runtime
 architecture/presence-collaboration
 architecture/security-permissions
 architecture/database-and-migrations
+architecture/theming-system
 architecture/service-registry
 architecture/whiteboard-runtime
 architecture/workspace-runtime

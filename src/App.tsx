@@ -25,6 +25,7 @@ import { registerTeacherActivityCenter } from './features/activity-ecosystem/reg
 registerTeacherActivityCenter();
 import { PluginState } from './plugin-host/types';
 import { useAppStore, appStore } from './store/appStore';
+import { useThemeStore } from './store/themeStore';
 import type {
   AIProvider, PluginType, VFSNode, ProcessType,
   ClassType, StudentType, AssignmentType, SubmissionType,
@@ -100,6 +101,10 @@ export default function App() {
       setLoadingLibraryResources(false);
     }
   };
+
+  React.useEffect(() => {
+    useThemeStore.getState().initTheme();
+  }, []);
 
   React.useEffect(() => {
     if (isSystemResourceLibraryOpen) {
@@ -1324,10 +1329,10 @@ export default function App() {
 
   return (
     <>
-      <div className="flex h-screen bg-gray-50 text-gray-900 font-sans">
+      <div className="flex h-screen bg-app text-main font-sans transition-colors duration-150">
       
       {/* Main Content Area: App Shell representing the Plugin Views */}
-      <div className="flex-1 flex flex-col bg-gray-50 h-full overflow-hidden">
+      <div className="flex-1 flex flex-col bg-app h-full overflow-hidden">
         
         {/* Top Navbar */}
         <AppHeader

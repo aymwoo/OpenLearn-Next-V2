@@ -10,6 +10,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { UserMenu } from './UserMenu';
+import { ThemeSelector } from './ThemeSelector';
 
 export interface AppHeaderProps {
   activeRole: 'teacher' | 'student';
@@ -70,7 +71,7 @@ export function AppHeader(props: AppHeaderProps) {
   } = props;
 
   return (
-    <header className="h-16 border-b border-gray-200 bg-white flex items-center px-6 justify-between shrink-0 shadow-sm relative z-20">
+    <header className="h-16 border-b border-theme bg-surface text-main flex items-center px-6 justify-between shrink-0 shadow-sm relative z-20 transition-colors duration-200">
      <div className="flex items-center gap-4 sm:gap-6">
         {/* 站点品牌区 (Site Brand & Logo) — click to dashboard */}
         <button
@@ -253,7 +254,7 @@ export function AppHeader(props: AppHeaderProps) {
         )}
         <button 
           onClick={() => setIsSystemResourceLibraryOpen(true)}
-          className="flex items-center gap-1.5 hover:text-indigo-600 transition-colors bg-white px-3 py-1.5 rounded-md border border-gray-200 shadow-sm font-medium cursor-pointer"
+          className="flex items-center gap-1.5 hover:text-primary-theme transition-colors bg-surface text-main px-3 py-1.5 rounded-md border border-theme shadow-sm font-medium cursor-pointer"
         >
           <Globe size={14} className="text-emerald-500 animate-pulse" />
           {lang === 'zh' ? '系统资源库' : 'System Resource Library'}
@@ -261,10 +262,12 @@ export function AppHeader(props: AppHeaderProps) {
         <button 
           onClick={toggleLanguage}
           title={lang === 'zh' ? 'Switch to English' : '切换为中文'}
-          className="p-2 hover:bg-slate-100 text-slate-600 hover:text-indigo-600 transition-colors bg-white rounded-lg border border-gray-200 shadow-3xs flex items-center justify-center shrink-0 cursor-pointer"
+          className="p-2 hover:bg-surface-secondary text-main transition-colors bg-surface rounded-lg border border-theme shadow-3xs flex items-center justify-center shrink-0 cursor-pointer"
         >
           <Globe size={16} />
         </button>
+
+        <ThemeSelector lang={lang} />
 
         {/* Database Connection Status Icon Indicator */}
         {(() => {

@@ -2,3 +2,125 @@
 @plugin "@tailwindcss/typography";
 
 @source "../packages/mfe-*/**/*.{ts,tsx}";
+
+@layer base {
+  :root, [data-theme="light"] {
+    --bg-app: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-surface-secondary: #f1f5f9;
+    --bg-surface-elevated: #ffffff;
+    --border-theme: #e2e8f0;
+    --border-theme-subtle: #f1f5f9;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --text-subtle: #94a3b8;
+    --color-primary: #4f46e5;
+    --color-primary-hover: #4338ca;
+    --color-primary-light: #eef2ff;
+    --color-primary-text: #ffffff;
+  }
+
+  [data-theme="dark"] {
+    --bg-app: #0b0f19;
+    --bg-surface: #111827;
+    --bg-surface-secondary: #1f2937;
+    --bg-surface-elevated: #1e293b;
+    --border-theme: #334155;
+    --border-theme-subtle: #1e293b;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-subtle: #64748b;
+    --color-primary: #6366f1;
+    --color-primary-hover: #818cf8;
+    --color-primary-light: rgba(99, 102, 241, 0.18);
+    --color-primary-text: #ffffff;
+  }
+
+  [data-theme="eyecare"] {
+    --bg-app: #f2f7f4;
+    --bg-surface: #ffffff;
+    --bg-surface-secondary: #e6f0ea;
+    --bg-surface-elevated: #ffffff;
+    --border-theme: #cce0d6;
+    --border-theme-subtle: #deece5;
+    --text-main: #143526;
+    --text-muted: #3d6350;
+    --text-subtle: #6c917d;
+    --color-primary: #2d6a4f;
+    --color-primary-hover: #1b4332;
+    --color-primary-light: #d8f3dc;
+    --color-primary-text: #ffffff;
+  }
+
+  [data-theme="chalkboard"] {
+    --bg-app: #0e1713;
+    --bg-surface: #16261f;
+    --bg-surface-secondary: #1d332a;
+    --bg-surface-elevated: #244235;
+    --border-theme: #2d5242;
+    --border-theme-subtle: #1f382d;
+    --text-main: #e8f5e9;
+    --text-muted: #a5d6a7;
+    --text-subtle: #66bb6a;
+    --color-primary: #4caf50;
+    --color-primary-hover: #388e3c;
+    --color-primary-light: rgba(76, 175, 80, 0.18);
+    --color-primary-text: #ffffff;
+  }
+}
+
+@utility bg-app {
+  background-color: var(--bg-app);
+}
+
+@utility bg-surface {
+  background-color: var(--bg-surface);
+}
+
+@utility bg-surface-secondary {
+  background-color: var(--bg-surface-secondary);
+}
+
+@utility bg-surface-elevated {
+  background-color: var(--bg-surface-elevated);
+}
+
+@utility border-theme {
+  border-color: var(--border-theme);
+}
+
+@utility border-theme-subtle {
+  border-color: var(--border-theme-subtle);
+}
+
+@utility text-main {
+  color: var(--text-main);
+}
+
+@utility text-muted {
+  color: var(--text-muted);
+}
+
+@utility text-subtle {
+  color: var(--text-subtle);
+}
+
+@utility bg-primary-theme {
+  background-color: var(--color-primary);
+}
+
+@utility bg-primary-theme-light {
+  background-color: var(--color-primary-light);
+}
+
+@utility bg-primary-theme-hover {
+  background-color: var(--color-primary-hover);
+}
+
+@utility text-primary-theme {
+  color: var(--color-primary);
+}
+
+@utility border-primary-theme {
+  border-color: var(--color-primary);
+}

@@ -44,17 +44,17 @@ export function NavigationSidebar({
   const siteInfo = useAppStore((s) => s.siteInfo);
 
   return (
-    <div id="navigation_sidebar" className={`${mainNavCollapsed ? 'w-16' : 'w-16 md:w-64'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300`}>
+    <div id="navigation_sidebar" className={`${mainNavCollapsed ? 'w-16' : 'w-16 md:w-64'} bg-surface border-r border-theme text-main flex flex-col transition-all duration-300`}>
       {/* Collapse/Expand Toggle */}
-      <div className={`p-2 flex border-b border-gray-150/60 ${mainNavCollapsed ? 'justify-center' : 'justify-between items-center px-4'} min-h-[48px] shrink-0`}>
+      <div className={`p-2 flex border-b border-theme-subtle ${mainNavCollapsed ? 'justify-center' : 'justify-between items-center px-4'} min-h-[48px] shrink-0`}>
         {!mainNavCollapsed && (
-          <span className="hidden md:inline text-[11px] font-black tracking-widest text-slate-400 uppercase select-none">
+          <span className="hidden md:inline text-[11px] font-black tracking-widest text-muted uppercase select-none">
             {lang === 'zh' ? '系统导航' : 'NAVIGATION'}
           </span>
         )}
         <button
           onClick={() => setMainNavCollapsed(!mainNavCollapsed)}
-          className="p-1.5 rounded-lg hover:bg-slate-100 text-gray-500 hover:text-indigo-600 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+          className="p-1.5 rounded-lg hover:bg-surface-secondary text-muted hover:text-primary-theme transition-colors cursor-pointer flex items-center justify-center shrink-0"
           title={mainNavCollapsed ? (lang === 'zh' ? '展开导航' : 'Expand Sidebar') : (lang === 'zh' ? '折叠导航' : 'Collapse Sidebar')}
         >
           {mainNavCollapsed ? <Menu size={18} /> : <ChevronLeft size={18} />}
@@ -130,9 +130,9 @@ export function NavigationSidebar({
 // ── Helper: Group Header Label ───────────────────────────────────────────
 
 function NavGroupHeader({ label, mainNavCollapsed }: { label: string; mainNavCollapsed: boolean }) {
-  if (mainNavCollapsed) return <div className="h-px bg-gray-200 my-1 w-full" />;
+  if (mainNavCollapsed) return <div className="h-px bg-border-theme-subtle my-1 w-full" />;
   return (
-    <div className="px-3 pt-2 text-[10px] font-bold text-slate-400 tracking-wider uppercase hidden md:block select-none">
+    <div className="px-3 pt-2 text-[10px] font-bold text-muted tracking-wider uppercase hidden md:block select-none">
       {label}
     </div>
   );
@@ -158,14 +158,14 @@ function NavButton({
     <button
       onClick={() => setTeacherTab(tab)}
       id={`nav_btn_${tab}`}
-      className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${
+      className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl cursor-pointer ${
         isActive
-          ? 'bg-indigo-50 text-indigo-700 font-bold' + (highlight ? ' shadow-sm border border-indigo-100' : '')
-          : 'text-gray-600 hover:bg-gray-50'
+          ? 'bg-primary-theme-light text-primary-theme font-bold' + (highlight ? ' shadow-xs border border-theme' : '')
+          : 'text-muted hover:bg-surface-secondary hover:text-main'
       } ${mainNavCollapsed ? 'justify-center px-2' : ''}`}
       title={label}
     >
-      <Icon size={20} className={`shrink-0 ${highlight && !isActive ? 'text-indigo-550' : ''}`} />
+      <Icon size={20} className={`shrink-0 ${highlight && !isActive ? 'text-primary-theme' : ''}`} />
       <span className={mainNavCollapsed ? 'hidden' : 'hidden md:block'}>{label}</span>
     </button>
   );
