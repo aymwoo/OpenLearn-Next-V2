@@ -1,6 +1,6 @@
 # 能力 Provider 框架（Capability Invocation Framework）开发指南
 
-> **适用范围**：`@openlearn/plugin-sdk@3.5.1`
+> **适用范围**：`@openlearn/plugin-sdk@3.5.2`
 > 本页说明"通用能力 Provider 框架"（`packages/core/capability/`）——它按**角色**鉴权，与 `resource:action` 权限字符串（见[能力权限矩阵](plugin-capability-matrix)）是**两套互不相干的机制**，请勿混淆。
 
 ---

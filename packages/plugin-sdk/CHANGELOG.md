@@ -7,6 +7,11 @@ All notable changes to **@openlearn/plugin-sdk** are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.5.2] - 2026-09-05
+
+### Features
+- **CoursewareSourceLoader**: Export `CoursewareSourceLoader` type for the html-applet content-source registry, letting plugins type their `ctx.ui.registerCoursewareSource` loaders.
+
 ## [3.5.1] - 2026-09-04
 
 ### Features

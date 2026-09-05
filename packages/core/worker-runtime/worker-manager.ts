@@ -595,7 +595,9 @@ parentPort.on('message', async function(msg) {
       }
 
       // 构建插件自建表 API (dbApi)
-      var tablePrefix = 'plugin_' + workerData.pluginId.replace(/[^a-zA-Z0-9_]/g, '_') + '_';
+      // 表前缀必须用 manifestId（与命令命名空间 L525 及 ServiceHost 的 DDL 守卫一致），
+      // 否则 Worker 插件在自己命名空间建表会被误判为越权 DDL。
+      var tablePrefix = 'plugin_' + (workerData.manifestId || workerData.pluginId).replace(/[^a-zA-Z0-9_]/g, '_') + '_';
       var dbService = rawServices['@openlearn/core:IDatabase'];
       var dbApi = dbService ? {
         ensureTable: function(tableName, schema) {

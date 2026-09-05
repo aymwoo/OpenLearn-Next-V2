@@ -230,16 +230,16 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 | `global.setting` | 0.2.x | 管理员 |
 | `anchor:*` | 0.2.6 | 教师/学生（按锚点所在宿主界面） |
 
-> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^0.2.8"`。安装时 PluginHost 自动检查兼容性。
+> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^0.2.9"`。安装时 PluginHost 自动检查兼容性。
 >
 > ⚠️ **版本号说明**：OpenLearn 存在三个独立的版本号，请勿混淆：
 > | 版本 | 当前值 | 用途 |
 > |------|--------|------|
-> | 平台发行版本 | `0.2.8` | CHANGELOG 与 git tag 的发布版本 |
-> | 宿主 API 版本 | `0.2.8` | `engines.openlearn` 兼容性检查所用的版本（自 v0.2.3 起与平台版本统一） |
-> | SDK 版本 | `3.5.1` | `@openlearn/plugin-sdk` npm 包版本，仅影响类型定义 |
+> | 平台发行版本 | `0.2.9` | CHANGELOG 与 git tag 的发布版本 |
+> | 宿主 API 版本 | `0.2.9` | `engines.openlearn` 兼容性检查所用的版本（自 v0.2.3 起与平台版本统一） |
+> | SDK 版本 | `3.5.2` | `@openlearn/plugin-sdk` npm 包版本，仅影响类型定义 |
 >
-> **`engines.openlearn` 应填写宿主 API 版本（当前为 `0.2.8`）**，而非平台发行版本或 SDK 版本。
+> **`engines.openlearn` 应填写宿主 API 版本（当前为 `0.2.9`）**，而非平台发行版本或 SDK 版本。
 
 ### 2.7 导航页面 vs. 白板组件 — 如何区分？
 
@@ -293,7 +293,7 @@ ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
 
 ### 2.8 使用 AI Skill 快速开发（推荐）
 
-除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（平台 `0.2.8`、SDK `@openlearn/plugin-sdk@3.5.1` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
+除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（平台 `0.2.9`、SDK `@openlearn/plugin-sdk@3.5.2` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
 
 **安装与配置：**
 
@@ -308,7 +308,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 
 | 能力维度 | 最新架构适配说明 |
 |---|---|
-| 📖 **权威文档与 SDK 契约** | 实时对齐 `@openlearn/plugin-sdk@3.5.1` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。 |
+| 📖 **权威文档与 SDK 契约** | 实时对齐 `@openlearn/plugin-sdk@3.5.2` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。 |
 | 💬 **结构化交互设计确认** | 自动引导确认插件模式（`server-only` / `full-stack` / `frontend-only`）、Worker Thread 沙箱权限、UI 扩展槽位（`teacherTab`, `classroomTool` 等）及表结构。 |
 | 🏗️ **标准脚手架与代码生成** | 自动生成包含 `package.json`、`tsconfig.json`、`src/index.ts` (后端 Worker 逻辑) 和 `src/frontend.tsx` (React 19 组件) 的标准项目工程。 |
 | 🛡️ **安全与规范防错** | 自动校验 CQRS 三件套模式（`ActionRegistry` → `CommandBus` → `EventBus`）、CapabilityGuard 权限申报、SQLite 增量迁移脚本与 ESM 沙箱导出规范。 |
@@ -319,7 +319,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 
 ```
 用户提出需求：「帮我开发一个随堂互动小测验插件」
-  → Skill 自动载入 @openlearn/plugin-sdk@3.5.1 规格与核心 Token
+  → Skill 自动载入 @openlearn/plugin-sdk@3.5.2 规格与核心 Token
   → 交互式确认：用途、沙箱权限 (vfs/lesson/db)、扩展槽位 (teacherTab/classroomTool)
   → 选择插件模板 (full-stack / server-only / frontend-only)
   → 生成项目结构与代码 (Action/Command/Event + React 19 UI)
@@ -353,7 +353,7 @@ interface Manifest {
   description?: string;          // 描述
   author?: string;               // 作者
   engines?: {                    // 引擎版本约束
-    openlearn?: string;          // 宿主 API 版本，如 "^0.2.8"
+    openlearn?: string;          // 宿主 API 版本，如 "^0.2.9"
   };
   requires: string[];            // 依赖的服务 Token（格式 @openlearn/core:TokenName@^1.0.0）
   optional?: string[];           // 可选依赖
@@ -533,7 +533,7 @@ export default {
     main: 'index.js',
     description: '在课堂上创建实时投票，收集学生回答',
     author: 'Your Name',
-    engines: { openlearn: '^0.2.8' },
+    engines: { openlearn: '^0.2.9' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',
@@ -1968,7 +1968,7 @@ export default {
     main: 'index.js',
     description: '插件描述',
     author: '作者名',
-    engines: { openlearn: '^0.2.8' },
+    engines: { openlearn: '^0.2.9' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',

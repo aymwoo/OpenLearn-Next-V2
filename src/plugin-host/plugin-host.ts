@@ -42,6 +42,7 @@ import type {
 } from './types';
 import { fullscreenRendererRegistry } from '../features/whiteboard/fullscreen/FullscreenRendererRegistry';
 import { propertyEditorRegistry } from '../features/whiteboard/properties/PropertyEditorRegistry';
+import { coursewareSourceRegistry } from '../features/whiteboard/courseware/courseware-source-registry';
 
 // ── Module Loader type ───────────────────────────────────────────────────
 
@@ -488,6 +489,7 @@ export class FrontendPluginHost {
     usePluginHostStore.getState().unregisterPluginExtensionPoints(pluginId);
     fullscreenRendererRegistry.unregisterPlugin(pluginId);
     propertyEditorRegistry.unregisterPlugin(pluginId);
+    coursewareSourceRegistry.unregisterPlugin(pluginId);
   }
 
   /**
@@ -556,6 +558,12 @@ export class FrontendPluginHost {
         },
         unregisterPropertyEditor: (type) => {
           propertyEditorRegistry.unregister(type, pluginId);
+        },
+        registerCoursewareSource: (loader) => {
+          coursewareSourceRegistry.register(loader, pluginId);
+        },
+        unregisterCoursewareSource: (id) => {
+          coursewareSourceRegistry.unregister(id, pluginId);
         },
       },
       navigation: {

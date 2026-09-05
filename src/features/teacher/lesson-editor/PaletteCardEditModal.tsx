@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { PaletteItemConfig, COLOR_THEME } from './paletteConfig';
+import { PaletteItemConfig, COLOR_THEME, SelectOption } from './paletteConfig';
 
 interface PaletteCardEditModalProps {
   config: PaletteItemConfig;
@@ -18,8 +18,32 @@ export function PaletteCardEditModal({
   onCancel,
 }: PaletteCardEditModalProps) {
   const [data, setData] = useState<Record<string, any>>(() => ({ ...initialData }));
+  const [selectOptions, setSelectOptions] = useState<Record<string, SelectOption[]>>({});
   const Icon = config.icon;
   const theme = COLOR_THEME[config.color];
+
+  // 动态加载 select 字段的选项
+  useEffect(() => {
+    let cancelled = false;
+    const selectFields = config.editFields.filter((f) => f.kind === 'select' && f.loadOptions);
+    if (selectFields.length === 0) return;
+    Promise.all(
+      selectFields.map(async (f) => {
+        try {
+          const opts = await f.loadOptions!();
+          return [f.key, opts] as const;
+        } catch {
+          return [f.key, []] as const;
+        }
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      setSelectOptions(Object.fromEntries(results));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [config]);
 
   const setField = (key: string, value: any) => {
     setData((prev) => ({ ...prev, [key]: value }));
@@ -87,6 +111,19 @@ export function PaletteCardEditModal({
                       f.key === 'code' || f.key === 'markdown' ? 'font-mono text-[12px]' : ''
                     }`}
                   />
+                ) : f.kind === 'select' ? (
+                  <select
+                    value={data[f.key] ?? ''}
+                    onChange={(e) => setField(f.key, e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  >
+                    <option value="">{lang === 'zh' ? '— 不选择 —' : '— None —'}</option>
+                    {(selectOptions[f.key] ?? f.options ?? []).map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 ) : (
                   <input
                     type="text"

@@ -27,7 +27,7 @@ import { CodeSandboxWrapper } from './widgets/CodeSandboxWrapper';
 import { MathGraphWrapper } from './widgets/MathGraphWrapper';
 import { HelloWorldWrapper } from './widgets/HelloWorldWrapper';
 import { RevealPresentationWrapper } from './widgets/RevealPresentationWrapper';
-import { wrapSrcDocWithBridge } from './utils/bridgeUtils';
+import { HtmlAppletFrame } from './components/HtmlAppletFrame';
 import { WhiteboardToolbar } from './components/WhiteboardToolbar';
 import { WhiteboardPageBar } from './components/WhiteboardPageBar';
 import { WhiteboardDialog } from './components/WhiteboardDialog';
@@ -85,33 +85,9 @@ fullscreenRendererRegistry.register('rollcall', ({ data }: FullscreenRendererPro
   </div>
 ));
 
-fullscreenRendererRegistry.register('html-applet', ({ data, lessonId }: FullscreenRendererProps) => {
-    if (data.coursewareUuid) {
-    return (
-      <iframe
-        src={`/runtime/${data.coursewareUuid}/`}
-        sandbox="allow-scripts allow-forms allow-downloads"
-        className="w-full h-full rounded-xl border"
-      />
-    );
-  }
-  if (data.resourceId) {
-    return (
-      <iframe
-        src={`/api/resources/${data.resourceId}/`}
-        sandbox="allow-scripts allow-forms allow-downloads"
-        className="w-full h-full rounded-xl border"
-      />
-    );
-  }
-  return (
-    <iframe
-      srcDoc={wrapSrcDocWithBridge(data.code || '', lessonId)}
-      sandbox="allow-scripts allow-forms allow-downloads"
-      className="w-full h-full rounded-xl border"
-    />
-  );
-});
+fullscreenRendererRegistry.register('html-applet', ({ data, lessonId }: FullscreenRendererProps) => (
+  <HtmlAppletFrame data={data} lessonId={lessonId} className="w-full h-full rounded-xl border" />
+));
 
 interface WhiteboardElement {
   id: string;
@@ -1772,7 +1748,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 onPointerMove={handleElementDragMove}
                 onPointerUp={handleElementDragEnd}
               >
-                <span>Interactive Courseware</span>
+                <span>{data.title || 'Interactive Courseware'}</span>
                 <div className="flex items-center gap-1">
                   <button onClick={() => setFullscreenElementId(el.id)} onPointerDown={e => e.stopPropagation()} className="p-1 hover:bg-slate-200/50 rounded-full text-gray-600 hover:text-gray-900 transition-colors cursor-pointer flex items-center justify-center" title="全屏"><Maximize2 size={11} /></button>
                   <button
@@ -1807,12 +1783,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               </div>
               {!data.isMinimized && (
                 <div className="flex-1 bg-white overflow-hidden relative min-h-0">
-                  <iframe
-                    className="w-full h-full border-none"
-                    src={data.coursewareUuid ? `/runtime/${data.coursewareUuid}/` : (data.resourceId ? `/api/resources/${data.resourceId}/` : undefined)}
-                    srcDoc={data.coursewareUuid || data.resourceId ? undefined : wrapSrcDocWithBridge(data.code, lessonId)}
-                    sandbox="allow-scripts allow-forms allow-downloads"
-                  />
+                  <HtmlAppletFrame data={data} lessonId={lessonId} className="w-full h-full border-none" />
                 </div>
               )}
               {!data.isMinimized && renderResizeHandles()}
@@ -2331,7 +2302,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           options: Array.isArray(content.options) ? content.options : ['A', 'B', 'C', 'D'],
         };
       case 'html-applet':
-        return { ...base, code: content.code ?? '' };
+        return {
+          ...base,
+          title: content.title ?? '',
+          code: content.code ?? '',
+          coursewareUuid: content.coursewareUuid ?? undefined,
+          resourceId: content.resourceId ?? undefined,
+        };
       case 'assignment':
         return { ...base, title: content.title ?? 'New Assignment', description: content.description ?? '' };
       case 'hello-world':

@@ -49,8 +49,11 @@ rendererRegistry.registerRenderer('geogebra-widget', GeoGebraRenderer);
 
 ### 画布对象与渲染管线
 当 `type === 'html-applet'` 时，白板将其渲染为一个嵌入的 Web 课件窗口：
-- **沙箱隔离**: 课件在 `<iframe>` 内渲染，并强制添加 `sandbox="allow-scripts allow-forms allow-downloads"`（无 `allow-same-origin`）以防止 XSS 与提权风险。
+- **沙箱隔离**: 课件在 `<iframe>` 内渲染，并强制添加 `sandbox="allow-scripts allow-forms allow-downloads"`（无 `allow-same-origin`）、`referrerPolicy="no-referrer"` 与 `credentialless`，以防止 XSS 与提权风险。
 - **Bridge 注入**: 针对 URL 托管课件（通过 `/runtime/:uuid/` 下发），服务端会在 HTML 响应头自动注入 Bridge SDK。
+- **统一组件**: 画布内嵌、全屏渲染器、默认兜底渲染器三处统一复用 `<HtmlAppletFrame>`（`src/features/whiteboard/components/HtmlAppletFrame.tsx`），按优先级解析四种内容源：`coursewareUuid` → `resourceId` → 插件自定义内容源（`coursewareSourceRegistry`）→ `code`（`srcDoc`）。
+- **懒挂载与并发上限**: iframe 进入可视区（含 200px 预加载边距）才创建，同时挂载的 iframe 数不超过 4 个（`courseware-frame-limiter.ts`）。
+- **双向通信**: `window.LMS` 支持 `submit`/`saveProgress`/`finish`/`log`/`setConfig`/`getProgress`/`on`/`off`；课件事件经前端 EventBus 转发到后端供 AI Agent 与插件订阅。
 
 ### SrcDoc 模式与 wrapSrcDocWithBridge
 对于纯文本/无后端的单体离线课件资源，使用 iframe 的 `srcdoc` 属性直接挂载 HTML 字符串。

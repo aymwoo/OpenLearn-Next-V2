@@ -3,12 +3,36 @@
 All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are documented here.
 
 > Versioning note: the platform `openlearn-next` is versioned independently of
-> `@openlearn/plugin-sdk` (currently **3.5.1**) and `@openlearn/plugin-test-kit`.
+> `@openlearn/plugin-sdk` (currently **3.5.2**) and `@openlearn/plugin-test-kit`.
 > Bumping the platform does not change the SDK / test-kit versions.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+
+## [0.2.9] - 2026-09-05
+
+### Features
+- **html-applet 组件增强**：
+  - 抽取统一 `<HtmlAppletFrame>` 组件（画布内嵌/全屏/兜底三处复用），按优先级解析四种内容源：`coursewareUuid` → `resourceId` → 插件自定义内容源 → `code`（`srcDoc`）。
+  - `HtmlAppletPayload` 补齐 `resourceId` / `sourceType` / `sourceId`，并修复 `buildElementData` 字段丢失与 `title` 渲染。
+  - 新增 `src/types/lms-bridge.ts`，声明 `window.LMS` / `__LMS_STUDENT__` / `__LMS_COURSEWARE__` 类型契约。
+- **插件内容源扩展**：新增 `coursewareSourceRegistry` 与 `ctx.ui.registerCoursewareSource` / `unregisterCoursewareSource`（所有权感知 + 停用自动清理），SDK 导出 `CoursewareSourceLoader` 类型。
+- **LMS Bridge 双向通信**：`window.LMS` 新增 `on` / `off` / `setConfig` / `getProgress`；宿主新增 `sendCommandToCourseware(iframe, event, payload)`；后端新增 `GET /api/courseware/attempts/:attemptId/progress`。
+- **课件事件化**：课件 `submitted` / `progress_saved` / `event_logged` / `config_reported` 发布到前端 EventBus（`courseware.` 前缀经 Socket 转发到后端 EventBus），后端 log 路由发布 `courseware.event_logged`。
+- **备课画板组件配置增强**：`EditFieldKind` 新增 `select`（静态 `options` + 动态 `loadOptions`），`PaletteCardEditModal` 支持下拉选择；html-applet 的 `coursewareUuid` / `resourceId` 可在备课画板直接选择。
+
+### Security
+- html-applet iframe 新增 `credentialless` 与 `referrerPolicy="no-referrer"`；`injectLmsSdk` 防御性移除 `<base>` 与 `<meta http-equiv=refresh>` 导航逃逸向量。
+
+### Fixes
+- Worker 插件自建表前缀改用 `manifestId`（与命令命名空间及 ServiceHost 的 DDL 守卫一致），避免 Worker 插件在自己命名空间建表被误判为越权 DDL。
+
+### Refactor / Performance
+- html-applet iframe 懒挂载（IntersectionObserver，200px 预加载边距）+ 同时挂载上限 4 个（`courseware-frame-limiter.ts`）。
+
+### Docs
+- `docs/reference/plugin-ui-extension-slots.md` 新增 §7 课件内容源、§8 LMS Bridge 双向通信；`docs/architecture/whiteboard-runtime.md` 同步 html-applet 渲染管线说明。
 
 ## [0.2.8] - 2026-09-04
 

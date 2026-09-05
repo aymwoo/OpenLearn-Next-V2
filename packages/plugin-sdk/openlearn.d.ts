@@ -549,6 +549,21 @@ declare interface PropertyEditorProps {
 
 declare type PropertyEditorComponent = (props: PropertyEditorProps) => unknown;
 
+declare interface CoursewareSourceLoader {
+  id: string;
+  resolve(
+    data: {
+      title?: string;
+      code?: string;
+      coursewareUuid?: string;
+      resourceId?: string;
+      sourceType?: string;
+      sourceId?: string;
+    },
+    context: { lessonId: string },
+  ): string | null;
+}
+
 export type {
   PluginContext,
   PluginDatabaseAPI,
@@ -594,6 +609,7 @@ export type {
   FullscreenRenderer,
   PropertyEditorProps,
   PropertyEditorComponent,
+  CoursewareSourceLoader,
 };
 
 export {

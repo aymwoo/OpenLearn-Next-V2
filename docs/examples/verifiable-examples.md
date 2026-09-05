@@ -1,6 +1,6 @@
 # Verifiable Examples 可编译验证示例全集
 
-包含符合 `@openlearn/plugin-sdk@3.5.1` 与 `@openlearn/plugin-test-kit@3.3.1` 契约的标准完整代码示例。
+包含符合 `@openlearn/plugin-sdk@3.5.2` 与 `@openlearn/plugin-test-kit@3.3.1` 契约的标准完整代码示例。
 
 ```typescript
 import { Token } from '@openlearn/plugin-sdk';

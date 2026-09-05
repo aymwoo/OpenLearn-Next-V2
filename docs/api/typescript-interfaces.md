@@ -1,6 +1,6 @@
 # TypeScript Interfaces 规范
 
-汇总 `@openlearn/plugin-sdk@3.5.1` 与 `packages/core/` 定义的所有核心 TS 接口。SDK 仅导出**类型 + Token 值**，不含运行时代码。
+汇总 `@openlearn/plugin-sdk@3.5.2` 与 `packages/core/` 定义的所有核心 TS 接口。SDK 仅导出**类型 + Token 值**，不含运行时代码。
 
 ---
 

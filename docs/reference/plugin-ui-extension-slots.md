@@ -1,6 +1,6 @@
 # UI 扩展槽位 Context / Props 上下文定义
 
-> **适用范围**：`@openlearn/plugin-sdk@3.5.1`
+> **适用范围**：`@openlearn/plugin-sdk@3.5.2`
 > 本页说明宿主在渲染各 UI 扩展槽位时**实际注入**给插件 React 组件的 Props，纠正 "宿主会自动注入 `lessonId` / `userId` / `role` / `socket`" 的常见误解。
 
 ---
@@ -142,7 +142,7 @@ interface HelpDocConfig           { id: string; title: string; description?: str
      };
      pluginId: string;
      manifest: FrontendPluginManifest;
-     ui: { registerExtensionPoint; unregisterExtensionPoint; registerFullscreenRenderer; registerPropertyEditor; /* ... */ };
+     ui: { registerExtensionPoint; unregisterExtensionPoint; registerFullscreenRenderer; registerPropertyEditor; registerCoursewareSource; unregisterCoursewareSource; /* ... */ };
      invokeCommand<T>(type: string, payload?: unknown): Promise<T>;
      navigation: { getTeacherTab; setTeacherTab; subscribeTeacherTab };
      context: { get; subscribe };        // v5.1 课堂上下文
@@ -276,3 +276,46 @@ async function activate(ctx) {
 ```
 
 调用 `updateData(partial)` 会立即触发本地状态更新 + 持久化到 SQLite。通用属性（x 坐标、y 坐标、宽度、高度）和删除按钮由平台统一渲染，插件无需关心。
+
+---
+
+## 7. 课件内容源扩展 (`coursewareSourceRegistry`)
+
+插件可以为白板 `html-applet` 组件接入自定义内容后端（如 OAuth 授权的第三方课件平台、私有资源网关）。
+
+### 使用方式
+
+```typescript
+import type { CoursewareSourceLoader } from '@openlearn/plugin-sdk';
+
+async function activate(ctx) {
+  ctx.ui.registerCoursewareSource({
+    id: 'ext-moodle/courseware',
+    resolve: (data, { lessonId }) =>
+      data.sourceType === 'moodle'
+        ? `https://moodle.example.com/course/${data.sourceId}?lesson=${lessonId}`
+        : null,
+  } satisfies CoursewareSourceLoader);
+}
+```
+
+- `resolve(data, { lessonId })` 返回 iframe 的 `src` URL；无法处理时返回 `null`。
+- 内容源优先级：`coursewareUuid` > `resourceId` > **插件自定义内容源** > `code`（`srcDoc`）。
+- 停用/卸载时宿主自动清理插件注册的 loader；`ctx.ui.unregisterCoursewareSource(id)` 可手动注销。
+- `HtmlAppletPayload` 约定字段 `sourceType` / `sourceId` 供插件 loader 识别。
+
+## 8. LMS Bridge 双向通信
+
+课件运行在沙箱 iframe 内，通过注入的 `window.LMS` 与宿主双向通信：
+
+| 方法 | 方向 | 说明 |
+|---|---|---|
+| `LMS.submit(data)` / `finish(data)` | 课件→宿主 | 提交成绩（status=submitted） |
+| `LMS.saveProgress(data)` | 课件→宿主 | 保存进度（status=inprogress） |
+| `LMS.log(event, data)` | 课件→宿主 | 遥测日志 |
+| `LMS.setConfig(config)` | 课件→宿主 | 上报配置/元数据 |
+| `LMS.getProgress()` | 课件→宿主 | 请求恢复上次进度（Promise） |
+| `LMS.on(event, cb)` / `off` | 宿主→课件 | 订阅宿主下发指令 |
+| `LMS.getStudent()` / `getCourseware()` | 同步 | 读取上下文 |
+
+宿主侧 `sendCommandToCourseware(iframe, event, payload)`（`src/services/lms-bridge.ts`）可向指定 iframe 下发 `LMS_HOST_COMMAND`。课件事件会发布到前端 `EventBus`（`courseware.submitted` / `progress_saved` / `event_logged` / `config_reported`），`courseware.` 前缀会经 Socket 转发到后端 EventBus 供 AI Agent 与插件订阅。

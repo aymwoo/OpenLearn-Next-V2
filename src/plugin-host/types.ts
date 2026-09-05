@@ -12,6 +12,7 @@
 import type React from 'react';
 import type { FullscreenRenderer } from '../features/whiteboard/fullscreen/FullscreenRendererRegistry';
 import type { PropertyEditorComponent } from '../features/whiteboard/properties/PropertyEditorRegistry';
+import type { CoursewareSourceLoader } from '../features/whiteboard/courseware/courseware-source-registry';
 
 // ── Token name constants (frontend namespace) ────────────────────────────
 
@@ -175,6 +176,9 @@ export interface FrontendPluginContext {
     /** v3.5: 为第三方白板元素类型注册自定义属性编辑器（在 activate() 内调用） */
     registerPropertyEditor(type: string, editor: PropertyEditorComponent): void;
     unregisterPropertyEditor(type: string): void;
+    /** 为 html-applet 注册自定义内容源 loader（在 activate() 内调用） */
+    registerCoursewareSource(loader: CoursewareSourceLoader): void;
+    unregisterCoursewareSource(id: string): void;
   };
   /** 调用后端已注册的 Command Handler，自动添加插件命名空间前缀 */
   invokeCommand<T = any>(type: string, payload?: any): Promise<T>;

@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { v7 as uuidv7 } from 'uuid';
+import { frontendEventBus } from './event-bus';
 import type { SessionType } from '../types/app';
 
 export interface LmsMessagePayload {
@@ -61,6 +63,30 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
 
   if (!attemptId || typeof attemptId !== 'string') return;
 
+  // ── 双向通信：课件上报配置/元数据 ──
+  if (type === 'LMS_CONFIG') {
+    emitCoursewareEvent('courseware.config_reported', attemptId, data.config ?? payload);
+    return;
+  }
+
+  // ── 双向通信：课件请求恢复上次保存的进度 ──
+  if (type === 'LMS_GET_PROGRESS') {
+    const requestId = data.requestId as string | undefined;
+    const source = event.source as Window | null;
+    if (requestId && source && typeof source.postMessage === 'function') {
+      let progress: Record<string, unknown> | null = null;
+      try {
+        const res = await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/progress`);
+        const json = (await res.json()) as { progress?: Record<string, unknown> | null };
+        progress = json.progress ?? null;
+      } catch {
+        progress = null;
+      }
+      source.postMessage({ type: 'LMS_PROGRESS_RESPONSE', requestId, progress }, '*');
+    }
+    return;
+  }
+
   // Identify if this is a submission, progress save, or general telemetry log
   const isSubmit =
     type === 'LMS_SUBMIT' ||
@@ -78,6 +104,7 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
   const isSaveProgress = type === 'LMS_SAVE_PROGRESS' || type === 'saveProgress';
 
   if (isSubmit) {
+    emitCoursewareEvent('courseware.submitted', attemptId, payload);
     try {
       await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/submit`, {
         method: 'POST',
@@ -94,6 +121,7 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
       console.error('[LMS Bridge] Failed to submit attempt data to backend:', e);
     }
   } else if (isSaveProgress) {
+    emitCoursewareEvent('courseware.progress_saved', attemptId, payload);
     try {
       await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/submit`, {
         method: 'POST',
@@ -110,6 +138,7 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
       console.error('[LMS Bridge] Failed to save progress to backend:', e);
     }
   } else {
+    emitCoursewareEvent('courseware.event_logged', attemptId, payload);
     try {
       await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/log`, {
         method: 'POST',
@@ -122,6 +151,37 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
     } catch (e) {
       console.error('[LMS Bridge] Failed to log event to backend:', e);
     }
+  }
+}
+
+/**
+ * 发布课件事件到前端 EventBus（`courseware.` 前缀会经 Socket 转发到后端 EventBus，
+ * 供 AI Agent 与插件订阅分析）。
+ */
+function emitCoursewareEvent(type: string, attemptId: string, payload: unknown): void {
+  void frontendEventBus.publish({
+    id: uuidv7(),
+    type,
+    source: 'courseware-bridge',
+    payload: { attemptId, data: payload },
+    timestamp: Date.now(),
+    correlationId: attemptId,
+  });
+}
+
+/**
+ * 宿主 → 课件单向指令：向指定 iframe 下发 `LMS_HOST_COMMAND` 事件。
+ * 课件侧通过 `window.LMS.on(event, callback)` 订阅。
+ */
+export function sendCommandToCourseware(
+  iframe: HTMLIFrameElement,
+  event: string,
+  payload?: unknown,
+): void {
+  try {
+    iframe.contentWindow?.postMessage({ type: 'LMS_HOST_COMMAND', event, payload }, '*');
+  } catch {
+    // 跨域/沙箱安全限制时静默失败
   }
 }
 

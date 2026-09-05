@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, Minimize2, X } from 'lucide-react';
 import Markdown from 'react-markdown';
+import { HtmlAppletFrame } from '../components/HtmlAppletFrame';
 
 export type FullscreenRendererProps = {
   elementType: string;
@@ -125,7 +126,7 @@ const PRIORITY_FIELDS = [
   { field: 'coursewareUuid', icon: '📚', label: '课件' },
 ];
 
-function DefaultFullscreenRenderer({ data }: FullscreenRendererProps) {
+function DefaultFullscreenRenderer({ data, lessonId }: FullscreenRendererProps) {
   const matched = PRIORITY_FIELDS.find(f => data[f.field] !== undefined && data[f.field] !== null && data[f.field] !== '');
 
   if (!matched) {
@@ -205,9 +206,9 @@ function DefaultFullscreenRenderer({ data }: FullscreenRendererProps) {
 
   if (field === 'coursewareUuid') {
     return (
-      <iframe
-        src={`/runtime/${data.coursewareUuid}/`}
-        sandbox="allow-scripts allow-forms allow-downloads"
+      <HtmlAppletFrame
+        data={{ coursewareUuid: String(data.coursewareUuid) }}
+        lessonId={lessonId}
         className="w-full h-full rounded-xl border"
       />
     );

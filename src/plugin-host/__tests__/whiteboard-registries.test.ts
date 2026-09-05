@@ -4,6 +4,8 @@ import { FrontendPluginHost } from '../plugin-host';
 import { usePluginHostStore } from '../plugin-host-store';
 import { fullscreenRendererRegistry } from '../../features/whiteboard/fullscreen/FullscreenRendererRegistry';
 import { propertyEditorRegistry } from '../../features/whiteboard/properties/PropertyEditorRegistry';
+import { coursewareSourceRegistry } from '../../features/whiteboard/courseware/courseware-source-registry';
+import type { CoursewareSourceLoader } from '../../features/whiteboard/courseware/courseware-source-registry';
 import type {
   FullscreenRenderer,
   FullscreenRendererProps,
@@ -133,5 +135,61 @@ describe('ctx.ui whiteboard registries', () => {
 
     expect(fullscreenRendererRegistry.has('ext-test/widget')).toBe(false);
     expect(propertyEditorRegistry.has('ext-test/widget')).toBe(false);
+  });
+});
+
+describe('ctx.ui.registerCoursewareSource', () => {
+  let host: FrontendPluginHost;
+
+  beforeEach(() => {
+    usePluginHostStore.setState({
+      activePlugins: [],
+      extensionPoints: new Map(),
+      services: null,
+      initialized: false,
+    });
+    coursewareSourceRegistry.unregisterPlugin('courseware-source-plugin');
+  });
+
+  it('wires registerCoursewareSource and resolves custom src URL, cleaned on deactivate', async () => {
+    const manifest: FrontendPluginManifest = {
+      id: 'courseware-source-plugin',
+      name: 'CS',
+      version: '1.0.0',
+    };
+    const loader: CoursewareSourceLoader = {
+      id: 'ext-moodle/courseware',
+      resolve: (data, ctx) =>
+        data.sourceType === 'moodle'
+          ? `https://moodle.example.com/course/${data.sourceId}?lesson=${ctx.lessonId}`
+          : null,
+    };
+
+    const plugin = {
+      manifest,
+      activate: async (ctx: FrontendPluginContext) => {
+        ctx.ui.registerCoursewareSource(loader);
+      },
+      deactivate: async () => {},
+    };
+    const moduleLoader = async () => ({
+      default: { manifest: plugin.manifest, activate: plugin.activate, deactivate: plugin.deactivate },
+    });
+
+    host = new FrontendPluginHost({ moduleLoader });
+    const mocks = createMockServices();
+    await host.initialize(mocks.frontendApi, mocks.socketService, mocks.uiService, mocks.storageService);
+    await host.installPlugin(manifest, 'export default {}');
+    await host.activatePlugin(manifest.id);
+
+    expect(
+      coursewareSourceRegistry.resolve({ sourceType: 'moodle', sourceId: '42' }, { lessonId: 'L1' }),
+    ).toBe('https://moodle.example.com/course/42?lesson=L1');
+    expect(coursewareSourceRegistry.resolve({ code: '<div/>' }, { lessonId: 'L1' })).toBeNull();
+
+    await host.deactivatePlugin(manifest.id);
+    expect(
+      coursewareSourceRegistry.resolve({ sourceType: 'moodle', sourceId: '42' }, { lessonId: 'L1' }),
+    ).toBeNull();
   });
 });

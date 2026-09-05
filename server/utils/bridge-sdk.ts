@@ -161,6 +161,27 @@ export const BRIDGE_SDK_CODE = `(function() {
     }
   } catch (e) {}
 
+  // ── Bidirectional host→courseware command bus ──
+  var __lmsHandlers = {};
+  var __lmsPendingRequests = {};
+  window.addEventListener('message', function(event) {
+    var d = event.data;
+    if (!d || typeof d !== 'object') return;
+    if (d.type === 'LMS_HOST_COMMAND' && d.event) {
+      var cbs = __lmsHandlers[d.event] || [];
+      for (var i = 0; i < cbs.length; i++) {
+        try { cbs[i](d.payload); } catch (e) {}
+      }
+    } else if (d.type === 'LMS_PROGRESS_RESPONSE' && d.requestId) {
+      var pending = __lmsPendingRequests[d.requestId];
+      if (pending) {
+        delete __lmsPendingRequests[d.requestId];
+        clearTimeout(pending.timer);
+        pending.resolve(d.progress || null);
+      }
+    }
+  });
+
   window.LMS = {
     submit(data) {
       window.parent.postMessage({
@@ -200,6 +221,43 @@ export const BRIDGE_SDK_CODE = `(function() {
         event: event,
         payload: data
       }, "*");
+    },
+    on(event, callback) {
+      (__lmsHandlers[event] = __lmsHandlers[event] || []).push(callback);
+      return function() {
+        var arr = __lmsHandlers[event] || [];
+        var idx = arr.indexOf(callback);
+        if (idx >= 0) arr.splice(idx, 1);
+      };
+    },
+    off(event, callback) {
+      var arr = __lmsHandlers[event] || [];
+      var idx = arr.indexOf(callback);
+      if (idx >= 0) arr.splice(idx, 1);
+    },
+    setConfig(config) {
+      window.parent.postMessage({
+        type: "LMS_CONFIG",
+        uuid: window.__LMS_COURSEWARE__?.uuid,
+        attempt_id: window.__LMS_STUDENT__?.attempt_id,
+        config: config
+      }, "*");
+    },
+    getProgress() {
+      return new Promise(function(resolve) {
+        var requestId = 'prog_' + Math.random().toString(36).slice(2) + '_' + Date.now();
+        var timer = setTimeout(function() {
+          delete __lmsPendingRequests[requestId];
+          resolve(null);
+        }, 5000);
+        __lmsPendingRequests[requestId] = { resolve: resolve, timer: timer };
+        window.parent.postMessage({
+          type: "LMS_GET_PROGRESS",
+          uuid: window.__LMS_COURSEWARE__?.uuid,
+          attempt_id: window.__LMS_STUDENT__?.attempt_id,
+          requestId: requestId
+        }, "*");
+      });
     }
   };
 

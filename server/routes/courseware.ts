@@ -236,6 +236,14 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       }
 
       io.emit('courseware-attempt-updated', { attemptId, type: 'log' });
+      void kernelContainer.eventBus.publish({
+        id: 'evt_' + crypto.randomBytes(8).toString('hex'),
+        type: 'courseware.event_logged',
+        source: 'builtin.courseware',
+        payload: { attemptId, eventType, payload },
+        timestamp: Date.now(),
+        correlationId: attemptId,
+      });
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -330,6 +338,25 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       const cmd = kernelContainer.commandBus.createCommand('courseware.get_attempt_raw_data', { attemptId }, 'teacher-demo');
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get('/api/courseware/attempts/:attemptId/progress', (req, res) => {
+    try {
+      const { attemptId } = req.params;
+      const result = kernelContainer.db.prepare(
+        'SELECT score, comment, completion, extra_json FROM submission_result WHERE attempt_id = ?'
+      ).get(attemptId) as any;
+      if (!result) {
+        return res.json({ progress: null });
+      }
+      let extra = {};
+      try { extra = JSON.parse(result.extra_json || '{}'); } catch { /* ignore malformed extra */ }
+      res.json({
+        progress: { score: result.score, comment: result.comment, completion: result.completion, extra },
+      });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

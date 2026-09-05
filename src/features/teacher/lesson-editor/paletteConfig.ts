@@ -21,7 +21,12 @@ export type PaletteColorKey =
   | 'pink'
   | 'indigo';
 
-export type EditFieldKind = 'input' | 'textarea' | 'options';
+export type EditFieldKind = 'input' | 'textarea' | 'options' | 'select';
+
+export interface SelectOption {
+  value: string;
+  label: string;
+}
 
 export interface EditField {
   key: string;
@@ -30,6 +35,10 @@ export interface EditField {
   kind: EditFieldKind;
   placeholderZh?: string;
   placeholderEn?: string;
+  /** kind === 'select' 时的静态选项 */
+  options?: SelectOption[];
+  /** kind === 'select' 时动态加载选项（如从 /api/courseware 拉取） */
+  loadOptions?: () => Promise<SelectOption[]>;
 }
 
 export interface PaletteItemConfig {
@@ -224,9 +233,48 @@ export const PALETTE_ITEMS: PaletteItemConfig[] = [
     color: 'emerald',
     group: 'present',
     defaultData: {
+      title: 'Interactive Web Courseware',
       code: `<!-- Interactive Web Courseware -->\n<div style='padding:20px; text-align:center;'>\n  <h2>Interactive Web Courseware</h2>\n  <p>在属性栏中配置本地 ZIP/HTML 部署包。</p>\n</div>`,
     },
     editFields: [
+      {
+        key: 'title',
+        labelZh: '标题',
+        labelEn: 'Title',
+        kind: 'input',
+        placeholderZh: '课件标题',
+        placeholderEn: 'Courseware title',
+      },
+      {
+        key: 'coursewareUuid',
+        labelZh: '互动课件',
+        labelEn: 'Courseware',
+        kind: 'select',
+        loadOptions: async () => {
+          try {
+            const res = await fetch('/api/courseware');
+            const data = (await res.json()) as Array<{ uuid: string; name: string }>;
+            return data.map((c) => ({ value: c.uuid, label: c.name }));
+          } catch {
+            return [];
+          }
+        },
+      },
+      {
+        key: 'resourceId',
+        labelZh: '系统资源',
+        labelEn: 'System Resource',
+        kind: 'select',
+        loadOptions: async () => {
+          try {
+            const res = await fetch('/api/resources');
+            const data = (await res.json()) as Array<{ id: string; name: string; type: string }>;
+            return data.map((r) => ({ value: r.id, label: `[${r.type}] ${r.name}` }));
+          } catch {
+            return [];
+          }
+        },
+      },
       {
         key: 'code',
         labelZh: 'HTML 代码',

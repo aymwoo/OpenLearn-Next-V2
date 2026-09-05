@@ -109,6 +109,10 @@ window.__LMS_COURSEWARE__ = {
   html = html.replace(/<script[^>]*src="[^"]*init-frog\.js"[^>]*><\/script>/gi, '<!-- Removed init-frog.js to prevent sandboxed iframe crash -->');
   html = html.replace(/<script[^>]*src='[^']*init-frog\.js'[^>]*><\/script>/gi, '<!-- Removed init-frog.js to prevent sandboxed iframe crash -->');
 
+  // 移除导航逃逸向量：<base> 可重定向相对资源、<meta http-equiv=refresh> 可跳转（沙箱内已隔离，仍防御性去除）
+  html = html.replace(/<base\b[^>]*>/gi, '<!-- Removed base tag -->');
+  html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?refresh["']?[^>]*>/gi, '<!-- Removed meta refresh -->');
+
   if (html.toLowerCase().includes('<head>')) {
     html = html.replace(/<head>/i, `<head>${injection}`);
   } else if (html.toLowerCase().includes('<html>')) {
