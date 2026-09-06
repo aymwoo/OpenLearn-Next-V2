@@ -8,6 +8,29 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.6] - 2026-09-06
+
+### Quality & Governance (防版本漂移质量加固)
+- **内核导出版本定义强收敛 (Kernel Definition Convergence)**：
+  - 将 [`packages/core/bootstrap/types/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/bootstrap/types/index.ts) 中的 `PLATFORM_VERSION` 改为直接从单一真理源 [`packages/core/version.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/version.ts) 导入，彻底消除内核内部出现双重硬编码字面量的隐患。
+- **全自动防版本漂移质量门禁测试 (Anti-Drift Test Gate)**：
+  - 新增专用自动化质量门禁测试套件 [`packages/core/__tests__/version-consistency.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/__tests__/version-consistency.test.ts)，设立 6 重自动化强断言：
+    1. 根目录 `package.json.version` 强等于 `PLATFORM_VERSION`；
+    2. `OPENLEARN_VERSION` 强等于 `PLATFORM_VERSION`；
+    3. `bootstrap/types` 导出的平台版本强等于核心版本；
+    4. `PlatformBuilder` 构建元数据与环境版本强等于核心版本；
+    5. 全量 7 个核心内置插件（`builtin`、`vfs`、`process`、`management`、`ai-planner`、`ai-submit-injector`、`assignment-eval`）的 `engines.openlearn` 约束能被平台当前版本 100% 满足；
+    6. `docs/conf.py` 动态或静态严格与 `package.json` 对齐。
+  - 后续任何发版若漏改任一处或引发插件互锁，`pnpm test` 会在 1 秒内阻断发布并给出清晰指引。
+- **文档系统版本动态绑定 (Dynamic Docs Versioning)**：
+  - 改造 [`docs/conf.py`](file:///home/wuxf/Develop/openlearnv2/docs/conf.py)，改用 Python 原生动态读取根目录 `package.json` 的版本号，保证 Sphinx 文档系统与主应用平台版本永不脱节。
+- **SDK 依赖版本对齐与发版脚本加固 (Dependency & Publish Hardening)**：
+  - 升级根目录 `package.json` 对 `@openlearn/plugin-sdk` 的依赖为 `^3.5.2`；
+  - 加固 [`scripts/publish.sh`](file:///home/wuxf/Develop/openlearnv2/scripts/publish.sh)，前置注入 `pnpm lint` 与防漂移测试强制门禁；
+  - 完善发版指南 [`.agents/skills/openlearn-release-workflow/SKILL.md`](file:///home/wuxf/Develop/openlearnv2/.agents/skills/openlearn-release-workflow/SKILL.md) 标准操作规程。
+- **生态与插件开发规范文档纠偏 (Ecosystem Doc Fixes)**：
+  - 修正 [`docs/plugin/plugin-manifest-spec.md`](file:///home/wuxf/Develop/openlearnv2/docs/plugin/plugin-manifest-spec.md) 与插件开发教程中的 SemVer 示范，全面替换为 `">=0.2.5"` 并详细阐述 SemVer 0.x 规则。
+
 ## [0.3.5] - 2026-09-06
 
 ### Fixes & Architecture Alignment
