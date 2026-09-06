@@ -63,6 +63,30 @@ import {
 #### `ctx.require(moduleName: string)`
 引用主应用共享模块白名单。仅允许引用：`recharts`, `react-markdown`, `jspdf`, `jspdf-autotable`, `xlsx`, `lucide-react`, `uuid`。
 
+#### `ctx.http`（v0.3.11 新增）
+`IPluginHttpRouter`，插件内置的 RESTful HTTP 路由器。所有端点均被平台安全网关统一挂载至 `/api/plugins/:pluginId/*`：
+- **`ctx.http.get(path, handler)`**: 注册 HTTP GET 请求处理函数。
+- **`ctx.http.post(path, handler)`**: 注册 HTTP POST 请求处理函数。
+- **`ctx.http.put(path, handler)`**: 注册 HTTP PUT 请求处理函数。
+- **`ctx.http.delete(path, handler)`**: 注册 HTTP DELETE 请求处理函数。
+- **`ctx.http.patch(path, handler)`**: 注册 HTTP PATCH 请求处理函数。
+- **`ctx.http.all(path, handler)`**: 匹配任意 HTTP 动词。
+
+##### `PluginApiRequest` 请求对象接口：
+- `method: string`: HTTP 动词（`GET`, `POST` 等大写字符串）。
+- `path: string`: 匹配的相对路径。
+- `params: Record<string, string>`: 动态路由路径参数提取（如 `:studentId`）。
+- `query: Record<string, any>`: URL 查询参数。
+- `headers: Record<string, string>`: 请求头过滤只读字典。
+- `body: any`: 解析后的只读 JSON 请求体（或 null）。硬限制 ≤ 1MB。
+- `ip: string`: 客户端真实 IP。
+- `actor: PluginApiActor`: 当前调用方身份上下文（`actorId`, `userId`, `username`, `role`, `permissions`）。
+
+##### `PluginApiResponse` 返回对象接口：
+- `status?: number`: HTTP 状态码（默认 200）。
+- `headers?: Record<string, string>`: 自定义响应头（高危头如 `Set-Cookie` 会被网关安全剔除）。
+- `body?: any`: 响应内容。若 Handler 直接返回普通对象或基本类型，会自动被包装为 `{ status: 200, body: 返回值 }`。
+
 ---
 
 ## 3. 依赖注入与 Token 系统 (DI System)
@@ -145,3 +169,47 @@ export const ServiceProviderPlugin = {
   }
 };
 ```
+
+---
+
+## 4. 插件 RESTful API 路由使用范例
+
+自 `@openlearn/plugin-sdk@3.6.0` / 平台 `v0.3.11` 起，插件可直接使用 `ctx.http` 导出轻量 API 服务：
+
+```typescript
+import type { PluginContext, PluginApiRequest } from '@openlearn/plugin-sdk';
+
+export default {
+  manifest: {
+    id: 'ext-student-feedback',
+    name: '学生反馈插件',
+    version: '1.0.0',
+    main: 'index.js',
+    api: {
+      routes: [
+        { method: 'GET', path: '/feedbacks', auth: true, roles: ['teacher', 'administrator'] },
+        { method: 'POST', path: '/submit', auth: false, rateLimit: { max: 20, windowMs: 60000 } }
+      ]
+    }
+  },
+  activate: async (ctx: PluginContext) => {
+    // 1. 公开端点：无需登录直接提交
+    ctx.http.post('/submit', async (req: PluginApiRequest) => {
+      const { score, comment } = req.body || {};
+      ctx.log.info('收到匿名反馈', { score, ip: req.ip });
+      return { status: 201, body: { success: true, receivedAt: Date.now() } };
+    });
+
+    // 2. 受限端点：仅教师/管理员可查询
+    ctx.http.get('/feedbacks', async (req: PluginApiRequest) => {
+      // req.actor 包含调用方信息
+      ctx.log.info('教师查询反馈列表', { user: req.actor.username });
+      return {
+        total: 1,
+        items: [{ score: 5, comment: '讲得很好' }]
+      };
+    });
+  }
+};
+```
+

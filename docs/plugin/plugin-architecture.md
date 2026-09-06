@@ -200,3 +200,53 @@ resourceTracker.disposeAll(pluginId);
 - `uuid`
 
 引用不在白名单中的第三方 Node 模块将强行抛出 `Error: Module ${moduleName} is not in the plugin shared modules whitelist.`。
+
+---
+
+## 8. 插件统一安全网关与 RESTful API 隔离机制 (PluginApiGateway)（v0.3.11 新增）
+
+实现位置：
+- **安全网关中间件**: [`server/routes/plugin-api-gateway.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/plugin-api-gateway.ts)
+- **路由分发总线**: [`packages/core/plugin-host/http-router.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/http-router.ts)
+- **挂载入口**: [`server/routes/plugins.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/plugins.ts)
+
+OpenLearn V2 允许插件通过 `ctx.http` 导出轻量 RESTful API。为确保系统安全性，所有外部 HTTP 流量均被收敛至统一入口 `/api/plugins/:pluginId/*`，并在派发前强制穿透六道纵深安全防御：
+
+```mermaid
+graph TD
+    Client["Client Request (Cookie / Bearer)"] --> Gate["PluginApiGateway Middleware"]
+    
+    subgraph "Six Defensive Gates"
+        Gate --> G1["1. 保留动作避让 (config / toggle 等)"]
+        G1 --> G2["2. 路径遍历检测 (双重 .. 校验 -> 400)"]
+        G2 --> G3["3. Payload 硬限制 (≤ 1MB -> 413)"]
+        G3 --> G4["4. 滑动窗口限流 (单端点 120 req/min -> 429)"]
+        G4 --> G5["5. 认证与 RBAC 守卫 (auth: false 免验, 否则 401/403)"]
+    end
+    
+    G5 --> Dispatch{"执行模式"}
+    
+    subgraph "Inline Execution"
+        Dispatch -->|Direct Dispatch| Router["PluginHttpRouter (Main Thread)"]
+    end
+    
+    subgraph "Worker Thread Isolation"
+        Dispatch -->|httpRequest RPC| WorkerBridge["WorkerManager (5000ms 熔断)"]
+        WorkerBridge -->|Structured DTO| WorkerRouter["Worker PluginHttpRouter"]
+        WorkerRouter -->|httpResponse RPC| WorkerBridge
+    end
+    
+    Router --> G6["6. 响应清洗 (强制剥离 Set-Cookie / CSP / CORS)"]
+    WorkerBridge --> G6
+    G6 --> Response["Sanitized Safe Response"]
+```
+
+### 核心安全防线说明：
+1. **系统保留动作避让**：核心动作（如 `config`, `toggle`, `contributions`）无缝放行至系统管理控制器，避免路由被恶意劫持。
+2. **路径遍历防护 (Path Traversal)**：对原始子路径及规范化路径执行双重检测，识别包含 `..` 或 `%2e%2e` 的路径遍历尝试，直接拒绝并返回 `400 Bad Request`。
+3. **Payload 体积硬限制**：请求体上限严格限制为 **1MB**（超限返回 `413 Payload Too Large`），大文件上传强制引导至平台统一 `IStorageService` 存储通道，防止 Node.js 主线程或 Worker 线程 OOM。
+4. **IP + 插件级内存滑动窗口限流器**：单端点默认 120 req/min，超限返回 `429 Too Many Requests` 及 `Retry-After` 标头，防御 DoS 与频繁刷接口。
+5. **前置认证与细粒度 RBAC 守卫**：解析 Cookie 会话（`edu_os_token`）与 Bearer Token。未登录拦截（401），角色不符拦截（403），仅显式声明 `auth: false` 的公开路由直接放行。
+6. **响应头安全脱敏清洗**：出站前强制剥离 `Set-Cookie`、`Content-Security-Policy`、`Access-Control-Allow-Origin` 等高危标头，从根本上防止插件窃取客户端会话或削弱全站安全策略。
+7. **Worker 跨线程纯 DTO 隔离**：Worker 沙箱插件通过只读 `PluginApiRequest` DTO 接收参数，绝不持有或访问原生 Express `req`/`res` 实例，并享有 5000ms 超时熔断保护（超时返回 `504 Gateway Timeout`）。
+

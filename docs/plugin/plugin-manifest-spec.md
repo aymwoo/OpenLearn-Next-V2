@@ -70,6 +70,16 @@
   "deploy": {
     "staticRoute": "/plugins/homework-hub/static",
     "staticDir": "public"
+  },
+  "api": {
+    "routes": [
+      { "method": "GET", "path": "/public-status", "auth": false },
+      { "method": "POST", "path": "/submissions/:id/grade", "auth": true, "roles": ["teacher", "administrator"], "rateLimit": { "max": 60, "windowMs": 60000 } }
+    ]
+  },
+  "updateSource": {
+    "type": "github-release",
+    "repo": "owner/openlearn-plugin-homework-hub"
   }
 }
 ```
@@ -194,3 +204,61 @@
 用于配置插件托管的静态资源路由（例如前端打包出的 HTML/JS/CSS 静态资源）：
 - `staticRoute`: 挂载到 Express 主服务上的 URL 路由前缀（如 `/plugins/my-plugin/static`）。
 - `staticDir`: 插件物理目录下的静态文件相对路径（如 `"public"` 或 `"dist/frontend"`）。
+
+---
+
+### 2.7 静态 RESTful API 路由与安全配置 (`api`)（v0.3.11 新增）
+
+用于声明插件对外暴露的 HTTP RESTful 路由清单及其前置安全审计规则。主平台网关（`PluginApiGateway`）依据此处声明在将流量分发至插件前执行安全与 RBAC 拦截：
+
+```json
+"api": {
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/public-status",
+      "auth": false
+    },
+    {
+      "method": "POST",
+      "path": "/submissions/:id/grade",
+      "auth": true,
+      "roles": ["teacher", "administrator"],
+      "rateLimit": {
+        "max": 60,
+        "windowMs": 60000
+      }
+    }
+  ]
+}
+```
+
+#### `api.routes` 数组属性说明：
+
+| 属性名 | 类型 | 必填 | 默认值 | 说明 |
+| :--- | :--- | :--- | :--- | :--- |
+| `method` | `string` | 是 | - | HTTP 请求方法：`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `ALL` |
+| `path` | `string` | 是 | - | 相对子路径（如 `/status` 或 `/items/:id`），支持命名参数与通配符 `*` |
+| `auth` | `boolean` | 否 | `true` | 是否必须登录认证。设为 `false` 允许未认证访问（公开端点） |
+| `roles` | `string[]` | 否 | `[]` | 允许访问的用户角色白名单（如 `["teacher", "administrator"]`）。若为空则仅需认证，管理员总是具备最高访问权限 |
+| `rateLimit.max` | `number` | 否 | `120` | 单 IP 在时间窗口内允许的最大请求次数（防刷防 DoS） |
+| `rateLimit.windowMs` | `number` | 否 | `60000` | 滑动窗口时长（毫秒），默认 1 分钟（60000ms） |
+
+> **提示**：所有插件 RESTful API 统一挂载至宿主 `/api/plugins/:pluginId/*` 路径。在插件代码中通过 `ctx.http.get(...)` 注册具体的路由处理逻辑。
+
+---
+
+### 2.8 远端版本更新源声明 (`updateSource`)（v0.3.10+）
+
+声明插件检查版本升级的外部 Git 仓库或发布源。平台插件中心据此执行远端版本检测；当未配置时平台自动回退扫描本地 `v2_plugins/*/manifest.json` 进行 SemVer 版本比对：
+
+```json
+"updateSource": {
+  "type": "github-release",
+  "repo": "owner/openlearn-plugin-homework-hub"
+}
+```
+
+- `type`: 更新源类型，支持 `"github-release"` 或 `"gitee-release"`。
+- `repo`: 仓库路径（`owner/repo`）。
+

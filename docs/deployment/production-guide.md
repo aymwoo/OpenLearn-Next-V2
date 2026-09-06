@@ -83,12 +83,23 @@ sudo systemctl enable --now openlearn
 
 OpenLearn 内置了免启动服务、免 Web 界面的完整命令行数据运维能力。
 
-### 3.1 环境健康诊断 (`doctor`)
-在首次部署或网络变动后，使用自检工具快速排查潜在问题：
+### 3.1 环境健康诊断与防版本漂移 (`doctor`)
+在首次部署、平台升级或系统排错时，使用自检工具快速排查潜在问题：
 ```bash
 npx openlearn-next doctor
 ```
-自检覆盖：Node.js 运行时版本、CPU 与内存余量、数据库目录写权限、目标服务端口探活与局域网接入点探测。
+自检覆盖全方位运行状态：
+- **基础设施**：Node.js 运行时版本（>=20）、CPU 与内存余量、数据库目录写权限、目标服务端口探活与局域网接入点探测；
+- **SDK Suite 综合检测**：同步校验 `@openlearn/plugin-sdk` 与 `@openlearn/plugin-test-kit` 的解析版本与依赖形态（workspace 链接 / 精确 pin / caret 范围）；
+- **核心版本防漂移**：校验宿主内核单一真理源与 `package.json` 的版本强一致性；
+- **插件生态平台兼容性**：
+  - **内置核心插件 (`Core Plugins`)**：校验 7 个系统核心插件的 `engines.openlearn` 是否被当前平台版本满足；
+  - **已安装扩展插件 (`Installed Plugins`)**：扫描数据库与本地插件，使用轻量级 SemVer 判定引擎校验扩展插件与平台版本的兼容性；
+- **一键自愈 (`doctor --fix`)**：
+  ```bash
+  npx openlearn-next doctor --fix
+  ```
+  自动清理 NPX 历史旧版本缓存、自动创建数据存储目录，消除运行期版本漂移与目录缺失隐患。
 
 ### 3.2 在线数据冷备 (`backup`)
 系统依托 SQLite WAL 预写日志机制，可在**业务不中断、数据库读写零阻塞**的情况下毫秒级生成一致性快照：

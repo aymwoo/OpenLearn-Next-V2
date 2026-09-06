@@ -1,6 +1,6 @@
 # 插件数据库 API 与 Migration 规范
 
-> **适用范围**：`@openlearn/plugin-sdk@3.5.2`
+> **适用范围**：`@openlearn/plugin-sdk@3.6.0` / 平台 `v0.3.11`
 > 本页说明插件可用的两条数据库路径、事务支持、以及插件版本升级时的表结构迁移范式。
 
 ---
@@ -13,7 +13,7 @@
 仅 4 个方法，所有表自动加前缀 `plugin_{pluginId}_`，互不干扰。
 
 ```typescript
-// packages/core/plugin-host/types.ts:96-106
+// packages/core/plugin-host/types.ts
 interface PluginDatabaseAPI {
   ensureTable(tableName: string, schema: string): Promise<void>;
   table(tableName: string): string;
@@ -31,21 +31,21 @@ interface PluginDatabaseAPI {
 
 **SQL 方言**：SQLite（better-sqlite3 `^12.11.1`）。**无查询构造器**，插件需手写原生 SQL。
 
-### 路径 B — `ctx.resolve(IDatabaseToken)`：原始 `better-sqlite3.Database`（非命名空间）
+### 路径 B — `ctx.resolve(IDatabaseToken)`：平台共享数据库（非命名空间）
 ```typescript
-const db = await ctx.resolve(IDatabaseToken); // 类型: better-sqlite3.Database
+const db = await ctx.resolve(IDatabaseToken); // 类型: better-sqlite3.Database (Inline) / 异步 RPC Proxy (Worker)
 ```
-- 注册于 `packages/core/kernel/index.ts:211`，是**整个平台共享数据库**，可读写任意表（`vfs_nodes`、`students`、`users` 等）。
-- **无命名空间隔离**。所有内置插件的数据操作实际走此路径（`vfs.ts:29`、`management.ts:29`、`builtin.ts:54` 等）。
-- 这是唯一能执行 `SELECT` / `INSERT` / `UPDATE` / `DELETE` / 事务的路径。
-- **类型缺口**：发布的 SDK 将 `IDatabaseToken` 声明为 `Token<unknown>`（`openlearn.d.ts:305`），仅从 `@openlearn/plugin-sdk` 导入时 `resolve` 结果需自行断言为 `better-sqlite3.Database` 后使用 `prepare()` / `exec()`。
+- 注册于 `packages/core/kernel/index.ts`，是**整个平台共享数据库**，可读写平台基础表（如 `vfs_nodes`、`students`、`users` 等）。
+- **无命名空间隔离**。所有内置核心插件的数据操作实际走此路径。
+- 这是唯一能直接执行平台级 `SELECT` / `INSERT` / `UPDATE` / `DELETE` 的路径。
+- **类型提示**：从 `@openlearn/plugin-sdk` 导入时 `resolve` 结果在 Inline 模式下可断言为 `better-sqlite3.Database` 使用 `prepare()` / `exec()`；在 Worker 模式下其方法返回 Promise。
 
 ---
 
-## 2. 事务支持
+## 2. 事务与 Worker 线程支持
 
 - `PluginDatabaseAPI` **没有** `transaction` / `beginTransaction` 方法。
-- 事务仅在**路径 B 原始 `better-sqlite3` 实例**上可用，使用 better-sqlite3 的**回调式** `db.transaction(fn)` API（调用返回函数即执行）：
+- 事务仅在**路径 B Inline 进程内的原始 `better-sqlite3` 实例**上可用，使用 better-sqlite3 的**回调式** `db.transaction(fn)` API（调用返回函数即执行）：
   ```typescript
   const db = await ctx.resolve(IDatabaseToken);
   const deleteTransaction = db.transaction(() => {
@@ -54,8 +54,10 @@ const db = await ctx.resolve(IDatabaseToken); // 类型: better-sqlite3.Database
   });
   deleteTransaction(); // 执行
   ```
-  真实用例：`packages/plugins/management.ts:235`、`packages/plugins/builtin.ts:679`。
-- **Worker（隔离）模式例外**：worker 隔离插件的 `migrate` 回调拿到的是**受限包装**，仅暴露 `prepare().run()` / `prepare().get()` / `prepare().all()`——**无 `exec`、无 `transaction`**（`worker-manager.ts:600-617`）。故 worker 隔离插件实际上无法使用真正的事务。
+  真实用例：`packages/plugins/management.ts`、`packages/plugins/builtin.ts`。
+- **Worker（隔离）模式支持与限制**：
+  - **`exec` 异步转发（v0.3.9+ 补齐）**：Worker 模式的 DB 代理已正式支持 `exec` 跨线程 RPC 转发（如 `await db.exec(...)`），返回 Promise。所有操作均经过主侧 `assertDatabaseAccessAllowed` 安全守卫（限制 DDL 命名空间并实施核心表黑名单过滤）。
+  - **事务限制**：由于线程间 IPC 无法同步传递函数闭包并保证 SQLite 线程独占锁，Worker 隔离插件暂不支持本地同步式的 `db.transaction(fn)` 回调。如需多步一致性，建议在单个 `exec` 中包含多条 SQL 语句或在主侧命令中封装。
 
 ---
 

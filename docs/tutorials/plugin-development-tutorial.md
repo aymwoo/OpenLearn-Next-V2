@@ -215,6 +215,8 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 | `student.fullscreen` 扩展槽位 | 0.2.x | 学生全屏视图/考试模式 |
 | `global.setting` 扩展槽位 | 0.2.x | 全局设置页扩展 |
 | `anchor:*` 锚点扩展槽位 | 0.2.6 | 宿主原生按钮/元素前后插入插件按钮 |
+| Worker DB `exec()` 转发 | 0.3.9 | Worker 隔离模式下支持通过 `ctx.resolve(IDatabaseToken)` 执行异步 `exec()` |
+| `ctx.http` RESTful API | 0.3.11 | 内置 RESTful 路由器、网关纵深防御与 Worker RPC 隔离（SDK 3.6.0） |
 
 **扩展槽位版本可用性一览：**
 
@@ -235,9 +237,9 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 > ⚠️ **版本号说明**：OpenLearn 存在独立的版本号维度，请勿混淆：
 > | 版本 | 说明 | 用途 |
 > |------|------|------|
-> | 平台发行版本 | 当前 `0.3.x` | 主应用平台发布版本（如 `0.3.5`，根目录 `package.json`） |
-> | 宿主 API 版本 | 当前 `0.3.x` | `engines.openlearn` 检查所用的版本（与平台版本单一真理源保持强一致） |
-> | SDK 版本 | 当前 `3.5.2` | `@openlearn/plugin-sdk` npm 包版本，独立语义化版本管理 |
+> | 平台发行版本 | 当前 `0.3.11` | 主应用平台发布版本（根目录 `package.json`） |
+> | 宿主 API 版本 | 当前 `0.3.11` | `engines.openlearn` 检查所用的版本（与平台版本单一真理源保持强一致） |
+> | SDK 版本 | 当前 `3.6.0` | `@openlearn/plugin-sdk` npm 包版本，独立语义化版本管理 |
 >
 > **`engines.openlearn` 应填写宿主版本兼容范围（推荐声明为 `>=0.2.5`）**，而非 SDK 版本。
 
@@ -410,21 +412,39 @@ interface ClassroomTool {
 - 若服务端下载超时（15s），自动切换至浏览器直传安装
 - 用户可在插件卡片上点击「检查更新」手动触发检测
 
-> 💡 **提示**：`updateSource` 为可选字段。不声明此字段的插件仍可通过 ZIP 拖放或上传方式安装更新。
+> 💡 **提示**：`updateSource` 为可选字段。不声明此字段的插件在点击「检查更新」时会自动回退扫描本地 `v2_plugins/*/manifest.json` 进行对比更新（v0.3.10+）。
+
+#### 3.1.2 静态 RESTful 路由与安全配置声明（v0.3.11 新增）
+
+若插件对外暴露 HTTP API，建议在 `manifest.json` 中声明 `api.routes`，以便宿主安全网关进行静态合规审计与前置 RBAC 拦截：
+
+```json
+{
+  "api": {
+    "routes": [
+      { "method": "GET", "path": "/public-stats", "auth": false },
+      { "method": "POST", "path": "/records", "auth": true, "roles": ["teacher", "administrator"], "rateLimit": { "max": 60, "windowMs": 60000 } }
+    ]
+  }
+}
+```
 
 ### 3.2 PluginContext — 插件上下文的完整 API
 
-插件通过 `activate(ctx)` 接收上下文对象。`ctx.services` 直接提供 7 个内核服务，无需 DI 解析：
+插件通过 `activate(ctx)` 接收上下文对象。`ctx.services` 直接提供 7 个内核核心服务，同时还直接提供了内置的日志、自建表数据库与 HTTP 路由器：
 
-| 服务 | 访问方式 | 用途 |
-|------|---------|------|
+| 功能 / 服务 | 访问方式 | 用途 |
+|---|---|---|
 | CommandBus | `ctx.services.commandBus` | 注册/执行命令 |
 | EventBus | `ctx.services.eventBus` | 发布/订阅事件 |
 | ActionRegistry | `ctx.services.actionRegistry` | 注册 AI 工具 |
 | Capability | `ctx.services.capability` | 权限管理 |
 | Process | `ctx.services.processManager` | 后台进程 |
-| Storage | `ctx.services.storage` | K-V 存储 |
-| AI | `ctx.services.ai` | 文本生成 |
+| Storage | `ctx.services.storage` | 专属键值存储 |
+| AI | `ctx.services.ai` | 文本与大模型生成 |
+| **HTTP Router** | `ctx.http` | **（v0.3.11 新增）注册 RESTful API（GET/POST/PUT/DELETE 等）** |
+| Database API | `ctx.db` | 命名空间自建表操作与版本迁移 (`migrate`) |
+| Structured Log | `ctx.log` | 自动携带 pluginId 与时间戳的结构化日志 |
 
 通过 DI 解析更多服务（`IDatabaseToken`、`IPluginHostToken` 等）：
 
@@ -1088,6 +1108,114 @@ const uuid = ctx.require('uuid');
 通配符: lesson:* 匹配 lesson:read, lesson:write, lesson:delete
 ```
 
+### 5.14 插件 RESTful API 开发实战（v0.3.11 新增）
+
+自 OpenLearn V2 `v0.3.11`（SDK `3.6.0`）起，平台正式支持插件对外导出标准 RESTful API，使插件能够与外部系统、前端交互组件或第三方工具直接进行 HTTP 通信。
+
+#### 1. 统一挂载路径规范
+所有插件的 HTTP 路由均统一由平台主安全网关挂载至：
+```text
+/api/plugins/:pluginId/*
+```
+例如插件 ID 为 `ext-homework-hub`，注册了 `/students/:id/summary` 端点，客户端访问的完整路径为：
+```text
+GET /api/plugins/ext-homework-hub/students/stu_1001/summary
+```
+
+#### 2. 在 `activate(ctx)` 中注册路由
+
+插件无需引入任何第三方路由库，直接通过 `ctx.http` 注册路由处理函数：
+
+```typescript
+import type { PluginContext, PluginApiRequest } from '@openlearn/plugin-sdk';
+
+export default {
+  manifest: {
+    id: 'ext-course-quiz',
+    name: '随堂测验服务',
+    version: '1.0.0',
+    main: 'index.js',
+    api: {
+      routes: [
+        // 声明静态安全与 RBAC 规则
+        { method: 'GET', path: '/public-info', auth: false },
+        { method: 'GET', path: '/questions/:qid', auth: true },
+        { method: 'POST', path: '/submit', auth: true, roles: ['student', 'teacher'] }
+      ]
+    }
+  },
+  activate: async (ctx: PluginContext) => {
+    // 1. 公开端点（auth: false 免认证直接放行）
+    ctx.http.get('/public-info', async () => {
+      return { status: 'online', plugin: ctx.pluginId, timestamp: Date.now() };
+    });
+
+    // 2. 提取动态路径参数 (:qid) 与查询参数
+    ctx.http.get('/questions/:qid', async (req: PluginApiRequest) => {
+      const questionId = req.params.qid;
+      const difficulty = req.query.difficulty || 'normal';
+
+      return {
+        id: questionId,
+        difficulty,
+        title: '计算题：求解未知数 x',
+      };
+    });
+
+    // 3. POST 请求与身份上下文验证
+    ctx.http.post('/submit', async (req: PluginApiRequest) => {
+      // 获取经过网关校验的安全身份
+      const { actorId, username, role } = req.actor;
+      const { answers } = req.body || {};
+
+      if (!answers) {
+        return { status: 400, body: { success: false, error: '缺少答题数据' } };
+      }
+
+      ctx.log.info('收到答卷提交', { user: username, actorId });
+
+      // 返回标准自定义响应结构
+      return {
+        status: 201,
+        headers: { 'x-quiz-processed': 'true' },
+        body: { success: true, submissionId: 'sub_9981', student: username }
+      };
+    });
+  }
+};
+```
+
+#### 3. 请求与响应 DTO 规范
+
+为保证宿主进程的安全与沙箱隔离，插件绝不直接接触 Node.js 原生 Express `req`/`res` 对象，全部通过类型安全的只读 DTO 进行通信：
+
+- **`PluginApiRequest` 核心字段**：
+  - `params`: 动态路径参数键值对（如 `:studentId` → `req.params.studentId`）
+  - `query`: 解析后的 URL Query 对象
+  - `headers`: 经过安全白名单过滤后的请求头（只读）
+  - `body`: 请求体 JSON 对象（受网关 1MB 硬限制保护）
+  - `ip`: 客户端真实 IP 地址
+  - `actor`: 调用方身份实体（`userId`, `username`, `role`, `permissions`）
+- **自动包装响应**：
+  - Handler 直接返回普通对象或基本类型时，路由器自动将其作为 200 OK 封装为 `{ status: 200, body: 返回值 }`。
+  - 需要自定义状态码或响应头时，显式返回 `{ status: 400, headers: { ... }, body: { ... } }`。
+
+#### 4. 平台统一安全网关 (`PluginApiGateway`) 的六道纵深防御
+
+外部发往插件的每一笔 HTTP 请求，均在主线程网关前置执行强力安全过滤：
+1. **系统保留端点避让**：核心管理动作（如 `/config`, `/toggle`, `/contributions`）自动避让至系统路由，防止插件拦截管理能力；
+2. **路径遍历防护 (Path Traversal)**：对原始子路径与规范化路径双重检测 `..`，命中直接阻断并返回 `400 Bad Request`；
+3. **Payload 体积硬限制**：请求体限制为 **1MB**（超限直接拒绝并返回 `413 Payload Too Large`），有效防范恶意刷大报文造成主线程或 Worker 线程 OOM；大文件必须通过 `IStorageService` 进行切片或流式传输；
+4. **内存滑动窗口限流器 (Rate Limiting)**：以客户端 IP + 插件 ID 为键执行滑动窗口计数，默认单端点 120 req/min，超限返回 `429 Too Many Requests`；可在 `manifest.json` 的 `rateLimit` 中自定义调优；
+5. **前置认证与细粒度 RBAC 拦截**：支持 Cookie 会话（`edu_os_token`）与 Bearer Token 鉴权。未登录返回 `401 Unauthorized`，角色不符返回 `403 Forbidden`。只有在清单中显式声明 `auth: false` 的路由方可公开免密访问；
+6. **响应脱敏清洗**：插件出站响应会被强制清洗，剥离 `Set-Cookie`、`Content-Security-Policy`、`Access-Control-Allow-Origin` 等高危标头，杜绝插件尝试劫持主域 Cookie 或篡改全站安全策略。
+
+#### 5. Worker 隔离模式下的透明 RPC 与看门狗熔断
+在 Worker 线程隔离模式下，插件代码运行在独立的子线程中。当外部请求到达时：
+- 主线程将 `PluginApiRequest` DTO 序列化后通过 IPC 发送至 Worker 线程；
+- Worker 线程在内部的 `PluginHttpRouter` 执行插件 Handler，并将响应结果回传；
+- **看门狗 5000ms 超时熔断**：若 Worker 插件陷入死循环或计算阻塞超过 5 秒，网关自动触发熔断机制，直接向客户端返回 `504 Gateway Timeout`，彻底消除由于第三方插件假死拖垮整个 Node.js 宿主连接池的隐患。
+
 ---
 
 ## 6. 前端插件系统
@@ -1476,9 +1604,10 @@ Worker 线程通过 IPC 代理访问宿主服务，**并非所有 `PluginContext
 | `ctx.services.commandBus` | 完整 | `registerHandler` / `execute` | `execute` 调用不自动加命名空间前缀，见下方 |
 | `ctx.services.eventBus` | `on()` / `off()` | `subscribe()` / `unsubscribe()` | 方法名不同 |
 | `ctx.services.actionRegistry` | 完整 | `register()` | — |
-| `ctx.db.migrate(fn)` | `sqliteDb.exec()` 可用 | 仅 `prepare().run/get/all` | **无 `exec`、无 `transaction`** |
+| `ctx.http` | 完整 `PluginHttpRouter` | 完整支持 (GET/POST 等) | **（v0.3.11 新增）** 通过 RPC 跨线程派发纯 DTO，内置 5000ms 熔断保护 |
+| `ctx.db.migrate(fn)` | `sqliteDb.exec()` 可用 | `prepare().run/get/all` + `exec()` | **（v0.3.9+ 补齐 exec）** 无 `transaction` |
 | `ctx.db.table()` | 返回 manifest ID 前缀 | 返回 UUID 前缀 | 同一次激活内一致，但切换模式会导致表名变化 |
-| `ctx.resolve(IDatabaseToken)` | 完整 `better-sqlite3` | 仅 `prepare().run/get/all` | **无 `exec`、无 `transaction`** |
+| `ctx.resolve(IDatabaseToken)` | 完整 `better-sqlite3` (同步) | `prepare().run/get/all` + `exec()` (异步) | **（v0.3.9+ 补齐 exec 异步转发）** 无 `transaction` |
 | `ctx.config` | 可用 | ❌ 不可用 | 需通过 `ctx.manifest.configuration.properties` 读取默认值 |
 | `ctx.provide()` | 可用 | ❌ 不可用 | 需 `typeof` 守卫跳过 |
 | `ctx.log` | 可用 | 可用 | — |
@@ -1713,6 +1842,26 @@ describe('my-plugin', () => {
     const handlers = ctx.services.commandBus._getHandlers();
     expect(handlers).toContain('myplugin.hello');
   });
+
+  // v0.3.11 新增：测试插件 RESTful API 路由
+  it('should respond to GET /api/plugins/my-plugin/status', async () => {
+    const ctx = createMockContext({ pluginId: 'my-plugin' });
+    await plugin.activate(ctx);
+
+    const res = await ctx.http.handle({
+      method: 'GET',
+      path: '/status',
+      params: {},
+      query: {},
+      headers: {},
+      body: null,
+      ip: '127.0.0.1',
+      actor: { actorId: 'user:1', role: 'teacher' }
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(expect.objectContaining({ online: true }));
+  });
 });
 ```
 
@@ -1724,27 +1873,29 @@ describe('my-plugin', () => {
 
 ### Manifest 检查
 
-- [ ] `id` 格式为 `@scope/name`，全局唯一
-- [ ] `engines.openlearn` 版本号**不高于**目标系统的实际版本
+- [ ] `id` 格式建议为 `@scope/name` 或 `ext-name`，全局唯一
+- [ ] `engines.openlearn` 建议声明向前兼容区间（推荐 `">=0.2.5"`），避免零主版本互锁
 - [ ] `requires` 中所有服务 Token 的版本前缀正确
 - [ ] `classroomTools` 中每个 `commandType` 都有对应的 `registerHandler`
+- [ ] 若导出 HTTP 端点，在 `api.routes` 中声明了端点路径、鉴权要求（`auth`）与角色权限（`roles`）
 
-### 服务端检查
+### 服务端与构建检查
 
+- [ ] 构建配置中已将 `@openlearn/plugin-sdk` 标记为 `external`，严禁将 SDK 打入插件 ZIP
 - [ ] 每个 Action（`actionRegistry.register`）都有对应的 Command Handler（`commandBus.registerHandler`）
 - [ ] `ctx.db.ensureTable` 创建的每个表都有注释说明用途
-- [ ] 数据库操作只使用 `prepare().run()` / `.get()` / `.all()`，避免 `exec()`、`pragma()` 等新版本方法
 - [ ] 跨插件调用（如 VFS）在 `capabilitiesProposed` 中声明了对应权限
 - [ ] `activate()` 中所有可能出现异常的操作包裹了 `try/catch`
 
 ### Worker 兼容性检查 ⚠️（目标运行模式为 Worker 时必查）
 
-- [ ] `ctx.db.migrate()` 回调中**未使用 `sqliteDb.exec()`**，全部改为 `sqliteDb.prepare().run()`
-- [ ] `ctx.resolve(IDatabaseToken)` 返回的实例上**未调用 `.exec()` 或 `.transaction()`**
+- [ ] `ctx.resolve(IDatabaseToken)` 返回的实例在 Worker 中调用 `exec()` 返回 Promise，需 `await`（v0.3.9+）
+- [ ] 未在 Worker 中调用同步回调式的 `db.transaction(fn)`
 - [ ] 未直接访问 `ctx.config`——改用 `ctx.manifest.configuration.properties` 读取默认值
 - [ ] `ctx.provide()` 调用包裹了 `typeof (ctx as any).provide === 'function'` 守卫
 - [ ] `eventBus` 使用 `subscribe()/unsubscribe()`，而非 `on()/off()`
 - [ ] Worker 内部 `commandBus.execute()` 的 `type` **手动拼接了 `ctx.manifest.id` 前缀**
+- [ ] Worker 内 HTTP API 响应体大小受 1MB 硬限制，大文件传输已引导至 `IStorageService`
 
 ### 前端检查
 
