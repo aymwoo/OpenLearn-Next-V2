@@ -7,6 +7,7 @@ import { checkVersion, type UpdateSource } from '../services/version-fetcher.js'
 import { encryptApiKey, decryptApiKey, maskApiKey } from '../utils/crypto.js';
 import { getActorId, requireAuth } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
 import type { ServerContext } from '../context.js';
 
 /**
@@ -612,6 +613,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       sendSafeError(res, err);
     }
   });
+
+  // ── V5.2: Plugin RESTful API Gateway ─────────────────────────────────────
+  // 命名空间强制挂载在 /api/plugins/:pluginId/*，支持任意 HTTP 动词
+  app.all('/api/plugins/:pluginId/*', pluginApiGatewayMiddleware);
 
   // AI Provider Endpoints (仅教师和管理员有权查看配置的模型提供方)
   app.get('/api/ai-providers', requireAuth('teacher', 'administrator'), (req, res) => {

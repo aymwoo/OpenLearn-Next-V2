@@ -22,6 +22,8 @@
  * - `activate` — 激活 Worker 并加载插件
  */
 
+import type { PluginApiRequest, PluginApiResponse } from '../plugin-host/types.js';
+
 // ── IWorkerTransport ─────────────────────────────────────────────────────────
 
 /**
@@ -136,9 +138,19 @@ export interface LogMessage {
 }
 
 /**
+ * Worker 返回 HTTP 响应 DTO。
+ */
+export interface HttpResponseMessage {
+  readonly type: 'httpResponse';
+  readonly invokeId: string;
+  readonly response?: PluginApiResponse;
+  readonly error?: { readonly message: string; readonly stack?: string };
+}
+
+/**
  * WorkerMessage — Worker 发给 Main Thread 的联合消息类型。
  *
- * 6 个成员类型，通过 type 字段区分。
+ * 7 个成员类型，通过 type 字段区分。
  */
 export type WorkerMessage =
   | InvokeMessage
@@ -147,7 +159,8 @@ export type WorkerMessage =
   | ActivatedMessage
   | ActivateProgressMessage
   | DeactivateMessage
-  | LogMessage;
+  | LogMessage
+  | HttpResponseMessage;
 
 // ── Main Thread → Worker 消息类型 ─────────────────────────────────────────
 
@@ -205,16 +218,26 @@ export interface ActivateMessage {
 }
 
 /**
+ * 主线程向 Worker 发送 HTTP 请求 DTO。
+ */
+export interface HttpRequestMessage {
+  readonly type: 'httpRequest';
+  readonly invokeId: string;
+  readonly request: PluginApiRequest;
+}
+
+/**
  * MainThreadMessage — Main Thread 发给 Worker 的联合消息类型。
  *
- * 5 个成员类型，通过 type 字段区分。
+ * 6 个成员类型，通过 type 字段区分。
  */
 export type MainThreadMessage =
   | ResultMessage
   | ErrorMessage
   | EventMessage
   | DeactivateRequestMessage
-  | ActivateMessage;
+  | ActivateMessage
+  | HttpRequestMessage;
 
 // ── 类型守卫函数 ──────────────────────────────────────────────────────────────
 

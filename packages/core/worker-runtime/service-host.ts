@@ -42,13 +42,14 @@
  * @module
  */
 
-import type { IWorkerTransport, InvokeMessage, SubscribeMessage, UnsubscribeMessage } from './types.js';
+import type { IWorkerTransport, InvokeMessage, SubscribeMessage, UnsubscribeMessage, HttpResponseMessage } from './types.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
 import type { CapabilityGuard } from '../capability-system/index.js';
 import type { EventBus } from '../event-bus/index.js';
 import { EventForwarder } from './event-forwarder.js';
 import { WorkerCapabilityError } from './errors.js';
 import { resolvePluginCommandType } from '../plugin-host/plugin-namespace.js';
+import type { PluginApiRequest, PluginApiResponse } from '../plugin-host/types.js';
 
 /** Maximum length of serialized stack trace in characters. */
 const STACK_CAP = 4096;
@@ -79,6 +80,14 @@ export class ServiceHost {
   private readonly pendingCommandExecutes = new Map<
     string,
     { resolve: (val: unknown) => void; reject: (err: Error) => void }
+  >();
+  private readonly pendingHttpRequests = new Map<
+    string,
+    {
+      resolve: (res: PluginApiResponse) => void;
+      reject: (err: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
   >();
   private readonly registeredCommandTypes = new Set<string>();
   private readonly registeredActionIds = new Set<string>();
@@ -162,6 +171,23 @@ export class ServiceHost {
             const err = new Error(eMsg.message);
             err.stack = eMsg.stack;
             pending.reject(err);
+          }
+          break;
+        }
+
+        case 'httpResponse': {
+          const rMsg = msg as HttpResponseMessage;
+          const pending = this.pendingHttpRequests.get(rMsg.invokeId);
+          if (pending) {
+            this.pendingHttpRequests.delete(rMsg.invokeId);
+            clearTimeout(pending.timer);
+            if (rMsg.error) {
+              const err = new Error(rMsg.error.message);
+              err.stack = rMsg.error.stack;
+              pending.reject(err);
+            } else {
+              pending.resolve(rMsg.response ?? { status: 200, body: null });
+            }
           }
           break;
         }
@@ -303,6 +329,64 @@ export class ServiceHost {
       }
       this.registeredActionIds.clear();
     }
+
+    // Clean up pending HTTP requests (reject with termination error)
+    if (this.pendingHttpRequests.size > 0) {
+      for (const [, pending] of this.pendingHttpRequests) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error(`Worker for plugin "${this.pluginActorId}" was terminated`));
+      }
+      this.pendingHttpRequests.clear();
+    }
+  }
+
+  /**
+   * 向 Worker 隔离线程派发 HTTP 请求 DTO，并等待响应（带超时守卫）
+   *
+   * @param transport - Worker 通信运输层
+   * @param request - 纯 DTO 请求对象
+   * @param timeoutMs - 超时时间（毫秒，默认 5000ms）
+   */
+  async dispatchHttpRequest(
+    transport: IWorkerTransport,
+    request: PluginApiRequest,
+    timeoutMs: number = 5000,
+  ): Promise<PluginApiResponse> {
+    const invokeId = globalThis.crypto.randomUUID();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (this.pendingHttpRequests.has(invokeId)) {
+          this.pendingHttpRequests.delete(invokeId);
+          const err = new Error(`Plugin API request timed out after ${timeoutMs}ms`);
+          err.name = 'GatewayTimeoutError';
+          reject(err);
+        }
+      }, timeoutMs);
+
+      this.pendingHttpRequests.set(invokeId, {
+        resolve: (val) => {
+          clearTimeout(timer);
+          resolve(val);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+        timer,
+      });
+
+      try {
+        transport.postMessage({
+          type: 'httpRequest',
+          invokeId,
+          request,
+        });
+      } catch (err: any) {
+        clearTimeout(timer);
+        this.pendingHttpRequests.delete(invokeId);
+        reject(err);
+      }
+    });
   }
 
   // ── Invoke handling (core RPC logic) ───────────────────────────────────

@@ -10,6 +10,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.3.11] - 2026-09-06
+
+### Features & Security
+- **插件安全 RESTful API 体系 (`Plugin RESTful API & Security Gateway`)**:
+  - **声明与注册双轨模型**：
+    - 在 `manifest.json` 中支持 `api.routes` 静态规则声明（支持 `method`, `path`, `auth`, `roles`, `rateLimit`），便于平台前置进行静态安全合规审计与网关路由规则初始化；
+    - 插件在 `activate(ctx)` 生命周期中直接通过 `ctx.http`（`IPluginHttpRouter`）注册路由处理函数（支持 `get`, `post`, `put`, `delete`, `patch`, `all`），支持动态路径参数提取（`:param`）与自动包装 200 OK；
+    - 统一路由端点挂载规范：`/api/plugins/:pluginId/*`。
+  - **纵深安全网关防御中间件 (`PluginApiGateway`)**:
+    - **系统保留路由避让**：核心动作（如 `config`, `toggle`, `contributions`）无缝避让放行至既有控制器；
+    - **路径遍历防护 (Path Traversal Protection)**：对原始子路径及规范化路径执行双重 `..` 检测，识别并阻断路径遍历攻击（返回 400）；
+    - **请求体硬限制 (DoS/OOM 防护)**：Payload 体积硬限制 1MB，超限直接返回 413，大文件上传强制引导至平台统一 `IStorageService` 通道；
+    - **滑动窗口内存限流器 (Rate Limiter)**：基于客户端 IP + 插件 ID 滑动窗口统计，默认单端点 120 req/min 防刷，超限返回 429 与 `Retry-After`；
+    - **前置认证与细粒度 RBAC 守卫**：支持 Session Cookie (`edu_os_token`) 与 `Authorization: Bearer` 凭证，校验用户角色权限，未登录返回 401，权限不符返回 403（`auth: false` 显式声明的公开路由直接放行）；
+    - **响应安全清洗 (Response Sanitization)**：安全网关强制剔除插件试图向客户端注入的高危响应头（包括 `Set-Cookie`, `Access-Control-Allow-Origin`, `Content-Security-Policy` 等），从根本上消除会话劫持与策略篡改风险。
+  - **Worker 沙箱隔离模式跨线程 RPC 通信**:
+    - 在 Worker 运行时与宿主之间扩展 `httpRequest` / `httpResponse` 跨线程 RPC 消息协议；
+    - Worker 线程通过纯只读不可变的 `PluginApiRequest` DTO 处理请求，完全杜绝沙箱插件直接持有或污染 Node.js 原生 Express Request/Response 对象的可能；
+    - 内置 5000ms 超时熔断保护，防止 Worker 挂起耗尽宿主连接。
+  - **Plugin Test Kit 与生命周期联动**:
+    - `@openlearn/plugin-test-kit` 的 `createMockContext` 默认内置 `PluginHttpRouter`，让插件开发者开箱即用编写单元测试；
+    - `ResourceTracker` 与插件生命周期深度绑定，插件卸载或热重载时自动清理路由器，彻底防止路由泄漏。
+
 ## [0.3.10] - 2026-09-06
 
 ### Features & CLI Utilities

@@ -58,13 +58,26 @@ interface Manifest {
       maximum?: number;
     }>;
   };
-  contributes?: Record<string, Array<{ id: string; [key: string]: unknown }>>;
-  /** 远端更新源配置。声明后插件中心可自动检测 GitHub/Gitee Release 中的新版本 */
+  contributes?: Record<string, any>;
   updateSource?: {
     /** 远端仓库类型：github-release | gitee-release */
     type: 'github-release' | 'gitee-release';
     /** 仓库路径，如 "user/repo-name" */
     repo: string;
+  };
+  /** RESTful API 路由与安全配置（V5.2） */
+  api?: {
+    baseRoute?: string;
+    routes?: Array<{
+      method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+      path: string;
+      auth?: boolean;
+      roles?: string[];
+      rateLimit?: {
+        windowMs?: number;
+        max?: number;
+      };
+    }>;
   };
   [key: string]: unknown;
 }
@@ -279,6 +292,65 @@ type ContributionConfig =
   | AnchorToolConfig
   | HelpDocConfig;
 
+// ── V5.2: RESTful API Contracts ──────────────────────────────────────────
+
+interface PluginApiRequest<TBody = unknown, TQuery = Record<string, string | string[]>> {
+  readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | string;
+  readonly path: string;
+  readonly params: Record<string, string>;
+  readonly query: TQuery;
+  readonly headers: Record<string, string>;
+  readonly body: TBody;
+  readonly ip: string;
+  readonly actor: {
+    readonly actorId: string;
+    readonly userId?: string;
+    readonly username?: string;
+    readonly role: 'administrator' | 'teacher' | 'student' | 'anonymous' | string;
+    readonly permissions?: string[];
+  };
+}
+
+interface PluginApiResponse<TBody = unknown> {
+  status?: number;
+  headers?: Record<string, string>;
+  body: TBody;
+}
+
+type PluginApiHandler<TBody = unknown, TRes = unknown> = (
+  req: PluginApiRequest<TBody>,
+) => Promise<PluginApiResponse<TRes> | TRes> | PluginApiResponse<TRes> | TRes;
+
+interface IPluginHttpRouter {
+  get<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>): void;
+  post<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
+  put<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
+  patch<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
+  delete<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>): void;
+  route<TBody = unknown, TRes = unknown>(
+    method: string,
+    path: string,
+    handler: PluginApiHandler<TBody, TRes>,
+  ): void;
+}
+
+declare class PluginHttpRouter implements IPluginHttpRouter {
+  get<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>): void;
+  post<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
+  put<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
+  patch<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
+  delete<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>): void;
+  route<TBody = unknown, TRes = unknown>(
+    method: string,
+    path: string,
+    handler: PluginApiHandler<TBody, TRes>,
+  ): void;
+  match(method: string, path: string): { handler: PluginApiHandler; params: Record<string, string> } | null;
+  handle(req: PluginApiRequest): Promise<PluginApiResponse>;
+  getRegisteredRoutes(): Array<{ method: string; pattern: string }>;
+  clear(): void;
+}
+
 // ── Plugin Context ───────────────────────────────────────────────────────
 
 interface PluginContext {
@@ -299,6 +371,7 @@ interface PluginContext {
   log: IPluginLogger;
   config: IConfigService;
   contributions: ContributionAccessor;
+  http: IPluginHttpRouter;
   require(moduleName: string): unknown;
 }
 
@@ -610,9 +683,14 @@ export type {
   PropertyEditorProps,
   PropertyEditorComponent,
   CoursewareSourceLoader,
+  PluginApiRequest,
+  PluginApiResponse,
+  PluginApiHandler,
+  IPluginHttpRouter,
 };
 
 export {
+  PluginHttpRouter,
   Token,
   ICommandBusServiceToken,
   IEventBusServiceToken,

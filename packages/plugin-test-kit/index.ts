@@ -29,6 +29,7 @@ import type {
   PlatformCommand,
   CommandHandler,
 } from '@openlearn/plugin-sdk';
+import { PluginHttpRouter } from '@openlearn/plugin-sdk';
 
 // ── Options ──────────────────────────────────────────────────────────────
 
@@ -462,6 +463,7 @@ export function createMockContext(opts: CreateMockContextOptions = {}): PluginCo
     contributions: {
       list: () => [],
     },
+    http: new PluginHttpRouter(),
     require: (moduleName: string): any => {
       throw new Error(`[MockContext] require("${moduleName}") is not available in test context. Use customTokens to inject mock modules.`);
     },

@@ -18,6 +18,7 @@ import type { PluginContext, PluginDatabaseAPI, IPluginLogger, ContributionAcces
 import { PLUGIN_SHARED_MODULES } from './types.js';
 import type { ContributionRegistry } from './contribution-registry.js';
 import { ConfigService } from './config-service.js';
+import { PluginHttpRouter } from './http-router.js';
 import type { Token } from '../di/token.js';
 import type { ResourceTracker } from './resource-tracker.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
@@ -595,11 +596,20 @@ export async function buildContext(
     },
   };
 
+  // 5.8. RESTful API 路由支持（V5.2）
+  const httpRouter = new PluginHttpRouter();
+  tracker.track(pluginId, {
+    dispose: () => {
+      httpRouter.clear();
+    },
+  });
+
   // 6. 构建完整的 PluginContext
   return {
     services,
     pluginId,
     manifest,
+    http: httpRouter,
     resolve: <T>(token: string | Token<T>): Promise<T> => {
       if (typeof token === 'string') {
         return serviceRegistry.resolveByName(token) as Promise<T>;

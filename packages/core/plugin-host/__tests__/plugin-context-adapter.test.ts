@@ -40,6 +40,7 @@ describe('PluginContextAdapter (EU-02)', () => {
         list: vi.fn().mockReturnValue([]),
       },
       config: {} as any,
+      http: {} as any,
       require: vi.fn().mockReturnValue({ shared: true }),
     };
   };

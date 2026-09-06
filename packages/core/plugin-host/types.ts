@@ -105,6 +105,63 @@ export interface PluginDatabaseAPI {
   migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | void): Promise<void>;
 }
 
+// ── V5.2: RESTful API 契约 ──────────────────────────────────────────────
+
+/** 插件 RESTful API 请求 DTO（只读、无原生 Node.js 对象、安全过滤） */
+export interface PluginApiRequest<TBody = unknown, TQuery = Record<string, string | string[]>> {
+  /** HTTP 请求动词（全大写） */
+  readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | string;
+  /** 插件命名空间下的相对路径（如 /students/101） */
+  readonly path: string;
+  /** 动态路由提取参数（如 { id: '101' }） */
+  readonly params: Record<string, string>;
+  /** 解析后的查询参数 */
+  readonly query: TQuery;
+  /** 经白名单清洗后的安全请求头 */
+  readonly headers: Record<string, string>;
+  /** 请求体（已解析为 JSON 或安全结构） */
+  readonly body: TBody;
+  /** 客户端 IP */
+  readonly ip: string;
+  /** 宿主注入的发起者上下文（只读不可伪造） */
+  readonly actor: {
+    readonly actorId: string;
+    readonly userId?: string;
+    readonly username?: string;
+    readonly role: 'administrator' | 'teacher' | 'student' | 'anonymous' | string;
+    readonly permissions?: string[];
+  };
+}
+
+/** 插件 RESTful API 响应结构 */
+export interface PluginApiResponse<TBody = unknown> {
+  /** HTTP 响应状态码（默认 200，有效范围 100-599） */
+  status?: number;
+  /** 自定义安全响应头（白名单过滤） */
+  headers?: Record<string, string>;
+  /** 响应体数据 */
+  body: TBody;
+}
+
+/** 插件 RESTful API 处理函数 */
+export type PluginApiHandler<TBody = unknown, TRes = unknown> = (
+  req: PluginApiRequest<TBody>,
+) => Promise<PluginApiResponse<TRes> | TRes> | PluginApiResponse<TRes> | TRes;
+
+/** 插件 HTTP 路由器接口 */
+export interface IPluginHttpRouter {
+  get<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>): void;
+  post<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
+  put<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
+  patch<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
+  delete<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>): void;
+  route<TBody = unknown, TRes = unknown>(
+    method: string,
+    path: string,
+    handler: PluginApiHandler<TBody, TRes>,
+  ): void;
+}
+
 export interface PluginContext {
   /** 7 个内核服务，通过 Token DI 获取的接口代理 */
   services: {
@@ -141,6 +198,11 @@ export interface PluginContext {
    * 读取 manifest.configuration 中声明的设置项，自动应用默认值和校验。
    */
   config: IConfigService;
+  /**
+   * 插件 RESTful API 路由器（V5.2）
+   * 提供 get/post/put/patch/delete 等端点声明
+   */
+  http: IPluginHttpRouter;
   /**
    * 引用主应用共享模块（v5.1）
    * 仅白名单中的模块可被引用，非白名单模块抛出错误

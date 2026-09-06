@@ -448,10 +448,90 @@ function createServiceProxies(serviceTokens) {
   return services;
 }
 
+// ── V5.2: Worker 端 RESTful Router ──
+function compileRoutePattern(pattern) {
+  var normalized = pattern.indexOf('/') === 0 ? pattern : '/' + pattern;
+  var paramNames = [];
+  var regexStr = normalized
+    .replace(/:([a-zA-Z0-9_]+)/g, function(_m, p) {
+      paramNames.push(p);
+      return '([^/]+)';
+    })
+    .replace(/\\*/g, function() {
+      paramNames.push('wildcard');
+      return '(.*)';
+    });
+  return { regex: new RegExp('^' + regexStr + '$'), paramNames: paramNames };
+}
+
+function createPluginHttpRouter() {
+  var routes = [];
+  var routeFn = function(method, path, handler) {
+    var upperMethod = method.toUpperCase();
+    var normalized = path.indexOf('/') === 0 ? path : '/' + path;
+    var compiled = compileRoutePattern(normalized);
+    routes.push({
+      method: upperMethod,
+      pattern: normalized,
+      regex: compiled.regex,
+      paramNames: compiled.paramNames,
+      handler: handler
+    });
+  };
+
+  return {
+    get: function(path, handler) { routeFn('GET', path, handler); },
+    post: function(path, handler) { routeFn('POST', path, handler); },
+    put: function(path, handler) { routeFn('PUT', path, handler); },
+    patch: function(path, handler) { routeFn('PATCH', path, handler); },
+    delete: function(path, handler) { routeFn('DELETE', path, handler); },
+    route: routeFn,
+    match: function(method, path) {
+      var upperMethod = method.toUpperCase();
+      var normalized = path.indexOf('/') === 0 ? path : '/' + path;
+      for (var i = 0; i < routes.length; i++) {
+        var entry = routes[i];
+        if (entry.method !== upperMethod) continue;
+        var m = normalized.match(entry.regex);
+        if (m) {
+          var params = {};
+          for (var j = 0; j < entry.paramNames.length; j++) {
+            params[entry.paramNames[j]] = decodeURIComponent(m[j + 1] || '');
+          }
+          return { handler: entry.handler, params: params };
+        }
+      }
+      return null;
+    },
+    handle: async function(req) {
+      var matched = this.match(req.method, req.path);
+      if (!matched) {
+        return { status: 404, body: { error: 'Cannot ' + req.method + ' ' + req.path } };
+      }
+      var requestWithParams = Object.assign({}, req, {
+        params: Object.assign({}, req.params, matched.params)
+      });
+      var rawResult = await matched.handler(requestWithParams);
+      if (rawResult !== null && typeof rawResult === 'object' && 'body' in rawResult && (typeof rawResult.status === 'number' || rawResult.status === undefined)) {
+        return {
+          status: rawResult.status !== undefined ? rawResult.status : 200,
+          headers: rawResult.headers,
+          body: rawResult.body
+        };
+      }
+      return { status: 200, body: rawResult };
+    },
+    clear: function() {
+      routes = [];
+    }
+  };
+}
+
 // ── 单消息处理器 ──
 
 var eventBusProxy = null;
 var registeredCommandHandlers = new Map();
+var pluginHttpRouter = createPluginHttpRouter();
 
 parentPort.on('message', async function(msg) {
   // 1. 转发的平台事件分发
@@ -484,6 +564,28 @@ parentPort.on('message', async function(msg) {
         invokeId: msg.invokeId,
         message: (err && err.message) ? err.message : String(err),
         stack: (err && err.stack) || ''
+      });
+    }
+    return;
+  }
+
+  // 1c. Intercept HTTP request from host (V5.2)
+  if (msg && msg.type === 'httpRequest') {
+    try {
+      var res = await pluginHttpRouter.handle(msg.request);
+      parentPort.postMessage({
+        type: 'httpResponse',
+        invokeId: msg.invokeId,
+        response: res
+      });
+    } catch (err) {
+      parentPort.postMessage({
+        type: 'httpResponse',
+        invokeId: msg.invokeId,
+        error: {
+          message: (err && err.message) ? err.message : String(err),
+          stack: (err && err.stack) || ''
+        }
       });
     }
     return;
@@ -731,7 +833,8 @@ parentPort.on('message', async function(msg) {
             }
           }
           throw new Error('Plugin cannot require non-shared module: ' + moduleName);
-        }
+        },
+        http: pluginHttpRouter
       };
 
       // 调用 activate
@@ -749,11 +852,14 @@ parentPort.on('message', async function(msg) {
               state = await plugin.deactivate();
             }
           } finally {
-            // 清理 pending calls 和事件代理
+            // 清理 pending calls 和事件代理与 HTTP 路由
             pendingCalls.clear();
             if (eventBusProxy) {
               eventBusProxy.disposeAll();
               eventBusProxy = null;
+            }
+            if (pluginHttpRouter) {
+              pluginHttpRouter.clear();
             }
             parentPort.postMessage({ type: 'deactivated', state: state });
           }

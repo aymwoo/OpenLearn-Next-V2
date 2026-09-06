@@ -37,7 +37,8 @@ import semver from 'semver';
 import { parseRequiresEntry } from '../esm-loader/manifest-utils.js';
 import { compose } from './middleware.js';
 import { PluginState } from './types.js';
-import type { PluginContext, PluginInfo, LifecyclePhase, Middleware, MiddlewareContext } from './types.js';
+import type { PluginContext, PluginInfo, LifecyclePhase, Middleware, MiddlewareContext, PluginApiRequest, PluginApiResponse } from './types.js';
+import { PluginHttpRouter } from './http-router.js';
 import {
   IllegalStateTransitionError,
   PluginActivateError,
@@ -147,6 +148,7 @@ export class PluginHost {
       activate: ((ctx: PluginContext) => Promise<void>) | undefined;
       deactivate?: (() => Promise<void>) | undefined;
       workerRef?: { transport: IWorkerTransport; serviceHost: ServiceHost };
+      context?: PluginContext;
     }
   >();
 
@@ -243,6 +245,75 @@ export class PluginHost {
   /** 获取插件 manifest.json 文件路径 */
   getPluginManifestPath(pluginId: string): string {
     return path.join(this.getPluginDir(pluginId), 'manifest.json');
+  }
+
+  // ── V5.2: RESTful API Gateway Dispatcher ───────────────────────────────
+
+  /**
+   * 向插件派发 HTTP 请求（自动路由到 Worker 隔离线程或 Inline 实例）
+   */
+  async dispatchHttpRequest(
+    pluginIdOrManifestId: string,
+    req: PluginApiRequest,
+    timeoutMs: number = 5000,
+  ): Promise<PluginApiResponse> {
+    const resolvedId = this.resolvePluginUuid(pluginIdOrManifestId);
+    const instance = this.pluginInstances.get(resolvedId) ?? this.pluginInstances.get(pluginIdOrManifestId);
+
+    if (!instance) {
+      const state = this.pluginStates.get(resolvedId) ?? this.pluginStates.get(pluginIdOrManifestId);
+      if (state && state !== PluginState.ACTIVE) {
+        return {
+          status: 503,
+          body: { error: `Plugin "${pluginIdOrManifestId}" is currently ${state}` },
+        };
+      }
+      return {
+        status: 404,
+        body: { error: `Plugin "${pluginIdOrManifestId}" not found or not active` },
+      };
+    }
+
+    // 1. Worker 模式派发
+    if (instance.workerRef) {
+      return instance.workerRef.serviceHost.dispatchHttpRequest(
+        instance.workerRef.transport,
+        req,
+        timeoutMs,
+      );
+    }
+
+    // 2. Inline 模式派发
+    if (instance.context?.http) {
+      return (instance.context.http as PluginHttpRouter).handle(req);
+    }
+
+    return {
+      status: 404,
+      body: { error: `Plugin "${pluginIdOrManifestId}" has no HTTP router registered` },
+    };
+  }
+
+  /**
+   * 获取指定插件的 Manifest（支持已激活或 DB 中的插件）
+   */
+  getPluginManifest(pluginIdOrManifestId: string): Manifest | null {
+    const resolvedId = this.resolvePluginUuid(pluginIdOrManifestId);
+    const instance = this.pluginInstances.get(resolvedId) ?? this.pluginInstances.get(pluginIdOrManifestId);
+    if (instance?.manifest) return instance.manifest;
+
+    const preloaded = this.preloadedPlugins.get(resolvedId) ?? this.preloadedPlugins.get(pluginIdOrManifestId);
+    if (preloaded?.manifest) return preloaded.manifest;
+
+    try {
+      const row = this.db
+        .prepare('SELECT manifest FROM plugins WHERE id = ?')
+        .get(resolvedId) as { manifest: string } | undefined;
+      if (row?.manifest) {
+        return JSON.parse(row.manifest);
+      }
+    } catch {}
+    return null;
   }
 
   // ── Phase 5: WorkerManager wiring (circular dependency fix) ────────────
@@ -976,7 +1047,7 @@ export class PluginHost {
           ]);
         });
 
-        this.pluginInstances.set(pluginId, { manifest, activate, deactivate });
+        this.pluginInstances.set(pluginId, { manifest, activate, deactivate, context: ctx });
         this.pluginStates.set(pluginId, PluginState.ACTIVE);
 
         this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('active', pluginId);
@@ -1141,6 +1212,7 @@ export class PluginHost {
           manifest: mergedManifest,
           activate,
           deactivate: typeof deactivate === 'function' ? deactivate : undefined,
+          context: ctx,
         });
         this.db
           .prepare('UPDATE plugins SET status = ? WHERE id = ?')
@@ -2603,6 +2675,14 @@ export {
   type IPluginRepositoryAdapter,
   type PluginPackageMetadata,
 } from './plugin-distribution-manager.js';
+
+export { PluginHttpRouter, compileRoutePattern } from './http-router.js';
+export type {
+  PluginApiRequest,
+  PluginApiResponse,
+  PluginApiHandler,
+  IPluginHttpRouter,
+} from './types.js';
 
 
 

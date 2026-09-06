@@ -54,13 +54,30 @@ const contributesSchema = z.object({
   // 锚点条目的运行时校验由前端注册时（ExtensionPointConfig）完成。
 }).passthrough().optional();
 
-// ── V5.1: Deploy schema ───────────────────────────────────────────────
-
 const deploySchema = z.object({
   script: z.string().min(1, { error: 'deploy.script 不能为空' }).optional(),
   staticRoute: z.string().optional(),
   staticDir: z.string().optional(),
 }).optional();
+
+// ── V5.2: RESTful API schema ──────────────────────────────────────────
+
+export const apiRouteSchema = z.object({
+  method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
+  path: z.string().min(1, { error: 'api route path 不能为空' }),
+  auth: z.boolean().optional(),
+  roles: z.array(z.string()).optional(),
+  rateLimit: z.object({
+    windowMs: z.number().optional(),
+    max: z.number().optional(),
+  }).optional(),
+});
+
+export const apiSchema = z.object({
+  baseRoute: z.string().optional(),
+  routes: z.array(apiRouteSchema).optional(),
+}).optional();
+
 
 // ── Version 4 schema (Phase 6+) ──────────────────────────────────────────
 
@@ -112,6 +129,7 @@ export const manifestSchema = z.object({
   contributes: contributesSchema,
   classroomTools: z.array(z.unknown()).optional(),
   deploy: deploySchema,
+  api: apiSchema,
 }).passthrough();
 
 /**

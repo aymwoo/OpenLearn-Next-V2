@@ -26,7 +26,13 @@ export type {
   Disposable,
   IPluginLogger,
   ContributionAccessor,
+  PluginApiRequest,
+  PluginApiResponse,
+  PluginApiHandler,
+  IPluginHttpRouter,
 } from '../core/plugin-host/types.js';
+
+export { PluginHttpRouter } from '../core/plugin-host/http-router.js';
 
 // ── Unified Foundation Layer (P7 Sprints) ──────────────────────────────
 

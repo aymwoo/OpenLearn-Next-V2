@@ -7,6 +7,14 @@ All notable changes to **@openlearn/plugin-sdk** are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Features
+- **Plugin RESTful API Router & Interfaces**:
+  - Export `IPluginHttpRouter`, `PluginApiHandler`, `PluginApiRequest`, `PluginApiResponse`, `PluginApiActor` interfaces in `@openlearn/plugin-sdk`.
+  - Expose `PluginHttpRouter` class in `@openlearn/plugin-sdk` and export on `ctx.http` within `PluginContext`.
+  - Add `api` configuration schema to `PluginManifest` for static route declaration, authentication guards, RBAC roles, and rate limit specification.
+
 ## [3.6.0] - 2026-09-06
 
 ### Fixed
