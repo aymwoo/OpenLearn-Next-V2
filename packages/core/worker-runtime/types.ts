@@ -148,9 +148,43 @@ export interface HttpResponseMessage {
 }
 
 /**
+ * Worker 返回 HTTP SSE 流式 Chunk。
+ */
+export interface HttpStreamChunkMessage {
+  readonly type: 'httpStreamChunk';
+  readonly streamId: string;
+  readonly data: string | Record<string, any>;
+  readonly event?: string;
+  readonly id?: string;
+}
+
+/**
+ * Worker 通知 HTTP SSE 流式结束。
+ */
+export interface HttpStreamEndMessage {
+  readonly type: 'httpStreamEnd';
+  readonly streamId: string;
+}
+
+/**
+ * Worker 通知 HTTP SSE 流式发生错误。
+ */
+export interface HttpStreamErrorMessage {
+  readonly type: 'httpStreamError';
+  readonly streamId: string;
+  readonly error: { readonly message: string; readonly stack?: string };
+}
+
+/**
+ * Worker 向宿主上报已注册路由元数据。
+ */
+export interface RoutesRegisteredMessage {
+  readonly type: 'routesRegistered';
+  readonly routes: Array<{ method: string; pattern: string; isStream?: boolean }>;
+}
+
+/**
  * WorkerMessage — Worker 发给 Main Thread 的联合消息类型。
- *
- * 7 个成员类型，通过 type 字段区分。
  */
 export type WorkerMessage =
   | InvokeMessage
@@ -160,7 +194,11 @@ export type WorkerMessage =
   | ActivateProgressMessage
   | DeactivateMessage
   | LogMessage
-  | HttpResponseMessage;
+  | HttpResponseMessage
+  | HttpStreamChunkMessage
+  | HttpStreamEndMessage
+  | HttpStreamErrorMessage
+  | RoutesRegisteredMessage;
 
 // ── Main Thread → Worker 消息类型 ─────────────────────────────────────────
 
@@ -227,9 +265,25 @@ export interface HttpRequestMessage {
 }
 
 /**
+ * 主线程向 Worker 发起 HTTP SSE 流式传输请求。
+ */
+export interface HttpStreamStartMessage {
+  readonly type: 'httpStreamStart';
+  readonly streamId: string;
+  readonly request: PluginApiRequest;
+}
+
+/**
+ * 主线程向 Worker 发送 HTTP SSE 流式反向中止信号（客户端断开）。
+ */
+export interface HttpStreamAbortMessage {
+  readonly type: 'httpStreamAbort';
+  readonly streamId: string;
+  readonly reason?: string;
+}
+
+/**
  * MainThreadMessage — Main Thread 发给 Worker 的联合消息类型。
- *
- * 6 个成员类型，通过 type 字段区分。
  */
 export type MainThreadMessage =
   | ResultMessage
@@ -237,7 +291,9 @@ export type MainThreadMessage =
   | EventMessage
   | DeactivateRequestMessage
   | ActivateMessage
-  | HttpRequestMessage;
+  | HttpRequestMessage
+  | HttpStreamStartMessage
+  | HttpStreamAbortMessage;
 
 // ── 类型守卫函数 ──────────────────────────────────────────────────────────────
 

@@ -12,6 +12,8 @@ import type {
   PluginApiHandler,
   PluginApiRequest,
   PluginApiResponse,
+  PluginStreamHandler,
+  PluginStreamResponse,
 } from './types.js';
 
 interface RouteEntry {
@@ -19,7 +21,9 @@ interface RouteEntry {
   pattern: string;
   regex: RegExp;
   paramNames: string[];
-  handler: PluginApiHandler;
+  handler?: PluginApiHandler;
+  streamHandler?: PluginStreamHandler;
+  isStream?: boolean;
 }
 
 /**
@@ -66,6 +70,7 @@ export class PluginHttpRouter implements IPluginHttpRouter {
       regex,
       paramNames,
       handler: handler as PluginApiHandler,
+      isStream: false,
     });
   }
 
@@ -90,12 +95,72 @@ export class PluginHttpRouter implements IPluginHttpRouter {
   }
 
   /**
+   * 注册 Server-Sent Events (SSE) 流式响应端点
+   */
+  stream<TBody = unknown>(path: string, handler: PluginStreamHandler<TBody>): void;
+  stream<TBody = unknown>(method: string, path: string, handler: PluginStreamHandler<TBody>): void;
+  stream<TBody = unknown>(
+    methodOrPath: string,
+    pathOrHandler: string | PluginStreamHandler<TBody>,
+    maybeHandler?: PluginStreamHandler<TBody>,
+  ): void {
+    if (typeof pathOrHandler === 'function') {
+      const path = methodOrPath;
+      const handler = pathOrHandler;
+      this.registerStream('GET', path, handler);
+      this.registerStream('POST', path, handler);
+    } else {
+      const method = methodOrPath.toUpperCase();
+      const path = pathOrHandler;
+      const handler = maybeHandler as PluginStreamHandler<TBody>;
+      this.registerStream(method, path, handler);
+    }
+  }
+
+  private registerStream<TBody = unknown>(
+    method: string,
+    path: string,
+    handler: PluginStreamHandler<TBody>,
+  ): void {
+    const normalized = path.startsWith('/') ? path : '/' + path;
+    const { regex, paramNames } = compileRoutePattern(normalized);
+    this.routes.push({
+      method: method.toUpperCase(),
+      pattern: normalized,
+      regex,
+      paramNames,
+      streamHandler: handler as PluginStreamHandler,
+      isStream: true,
+    });
+  }
+
+  /**
+   * 检查指定动词与路径是否为流式路由
+   */
+  isStream(method: string, path: string): boolean {
+    const upperMethod = method.toUpperCase();
+    const normalized = path.startsWith('/') ? path : '/' + path;
+    for (const entry of this.routes) {
+      if (entry.method !== upperMethod) continue;
+      if (entry.regex.test(normalized)) {
+        return entry.isStream === true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * 匹配路由并提取路由参数
    */
   match(
     method: string,
     path: string,
-  ): { handler: PluginApiHandler; params: Record<string, string> } | null {
+  ): {
+    handler?: PluginApiHandler;
+    streamHandler?: PluginStreamHandler;
+    isStream?: boolean;
+    params: Record<string, string>;
+  } | null {
     const upperMethod = method.toUpperCase();
     const normalized = path.startsWith('/') ? path : '/' + path;
 
@@ -109,6 +174,8 @@ export class PluginHttpRouter implements IPluginHttpRouter {
         }
         return {
           handler: entry.handler,
+          streamHandler: entry.streamHandler,
+          isStream: entry.isStream,
           params,
         };
       }
@@ -122,6 +189,20 @@ export class PluginHttpRouter implements IPluginHttpRouter {
   async handle(req: PluginApiRequest): Promise<PluginApiResponse> {
     const matched = this.match(req.method, req.path);
     if (!matched) {
+      return {
+        status: 404,
+        body: { error: `Cannot ${req.method} ${req.path}` },
+      };
+    }
+
+    if (matched.isStream) {
+      return {
+        status: 400,
+        body: { error: `${req.path} is a streaming route, please use SSE or ctx.http.stream` },
+      };
+    }
+
+    if (!matched.handler) {
       return {
         status: 404,
         body: { error: `Cannot ${req.method} ${req.path}` },
@@ -158,10 +239,40 @@ export class PluginHttpRouter implements IPluginHttpRouter {
   }
 
   /**
+   * 执行流式请求
+   */
+  async handleStream(req: PluginApiRequest, stream: PluginStreamResponse): Promise<void> {
+    const matched = this.match(req.method, req.path);
+    if (!matched || !matched.streamHandler) {
+      stream.error(new Error(`Cannot ${req.method} ${req.path} (Stream route not found)`));
+      stream.end();
+      return;
+    }
+
+    const requestWithParams: PluginApiRequest = {
+      ...req,
+      params: { ...req.params, ...matched.params },
+    };
+
+    try {
+      await matched.streamHandler(requestWithParams, stream);
+    } catch (err: any) {
+      if (!stream.isClosed) {
+        stream.error(err instanceof Error ? err : new Error(String(err)));
+        stream.end();
+      }
+    }
+  }
+
+  /**
    * 获取所有已注册的路由元数据（用于调试或内省）
    */
-  getRegisteredRoutes(): Array<{ method: string; pattern: string }> {
-    return this.routes.map((r) => ({ method: r.method, pattern: r.pattern }));
+  getRegisteredRoutes(): Array<{ method: string; pattern: string; isStream?: boolean }> {
+    return this.routes.map((r) => ({
+      method: r.method,
+      pattern: r.pattern,
+      isStream: r.isStream,
+    }));
   }
 
   /**

@@ -475,7 +475,21 @@ function createPluginHttpRouter() {
       pattern: normalized,
       regex: compiled.regex,
       paramNames: compiled.paramNames,
-      handler: handler
+      handler: handler,
+      isStream: false
+    });
+  };
+  var routeStreamFn = function(method, path, handler) {
+    var upperMethod = method.toUpperCase();
+    var normalized = path.indexOf('/') === 0 ? path : '/' + path;
+    var compiled = compileRoutePattern(normalized);
+    routes.push({
+      method: upperMethod,
+      pattern: normalized,
+      regex: compiled.regex,
+      paramNames: compiled.paramNames,
+      streamHandler: handler,
+      isStream: true
     });
   };
 
@@ -486,6 +500,19 @@ function createPluginHttpRouter() {
     patch: function(path, handler) { routeFn('PATCH', path, handler); },
     delete: function(path, handler) { routeFn('DELETE', path, handler); },
     route: routeFn,
+    stream: function(methodOrPath, pathOrHandler, maybeHandler) {
+      if (typeof pathOrHandler === 'function') {
+        var path = methodOrPath;
+        var handler = pathOrHandler;
+        routeStreamFn('GET', path, handler);
+        routeStreamFn('POST', path, handler);
+      } else {
+        var method = methodOrPath.toUpperCase();
+        var path = pathOrHandler;
+        var handler = maybeHandler;
+        routeStreamFn(method, path, handler);
+      }
+    },
     match: function(method, path) {
       var upperMethod = method.toUpperCase();
       var normalized = path.indexOf('/') === 0 ? path : '/' + path;
@@ -498,7 +525,12 @@ function createPluginHttpRouter() {
           for (var j = 0; j < entry.paramNames.length; j++) {
             params[entry.paramNames[j]] = decodeURIComponent(m[j + 1] || '');
           }
-          return { handler: entry.handler, params: params };
+          return {
+            handler: entry.handler,
+            streamHandler: entry.streamHandler,
+            isStream: entry.isStream,
+            params: params
+          };
         }
       }
       return null;
@@ -506,6 +538,12 @@ function createPluginHttpRouter() {
     handle: async function(req) {
       var matched = this.match(req.method, req.path);
       if (!matched) {
+        return { status: 404, body: { error: 'Cannot ' + req.method + ' ' + req.path } };
+      }
+      if (matched.isStream) {
+        return { status: 400, body: { error: req.path + ' is a streaming route, please use SSE or ctx.http.stream' } };
+      }
+      if (!matched.handler) {
         return { status: 404, body: { error: 'Cannot ' + req.method + ' ' + req.path } };
       }
       var requestWithParams = Object.assign({}, req, {
@@ -521,6 +559,30 @@ function createPluginHttpRouter() {
       }
       return { status: 200, body: rawResult };
     },
+    handleStream: async function(req, stream) {
+      var matched = this.match(req.method, req.path);
+      if (!matched || !matched.streamHandler) {
+        stream.error(new Error('Cannot ' + req.method + ' ' + req.path + ' (Stream route not found)'));
+        stream.end();
+        return;
+      }
+      var requestWithParams = Object.assign({}, req, {
+        params: Object.assign({}, req.params, matched.params)
+      });
+      try {
+        await matched.streamHandler(requestWithParams, stream);
+      } catch (err) {
+        if (!stream.isClosed) {
+          stream.error(err instanceof Error ? err : new Error(String(err)));
+          stream.end();
+        }
+      }
+    },
+    getRegisteredRoutes: function() {
+      return routes.map(function(r) {
+        return { method: r.method, pattern: r.pattern, isStream: r.isStream };
+      });
+    },
     clear: function() {
       routes = [];
     }
@@ -532,6 +594,7 @@ function createPluginHttpRouter() {
 var eventBusProxy = null;
 var registeredCommandHandlers = new Map();
 var pluginHttpRouter = createPluginHttpRouter();
+var activeWorkerStreams = new Map();
 
 parentPort.on('message', async function(msg) {
   // 1. 转发的平台事件分发
@@ -587,6 +650,95 @@ parentPort.on('message', async function(msg) {
           stack: (err && err.stack) || ''
         }
       });
+    }
+    return;
+  }
+
+  // 1d. Intercept HTTP stream start from host (V5.3)
+  if (msg && msg.type === 'httpStreamStart') {
+    var streamId = msg.streamId;
+    var isStreamClosed = false;
+    var closeCallbacks = [];
+
+    var streamWriter = {
+      get isClosed() {
+        return isStreamClosed;
+      },
+      write: function(data, event, id) {
+        if (isStreamClosed) return false;
+        var rawStr = typeof data === 'string' ? data : JSON.stringify(data);
+        if (rawStr.length > 65536) {
+          throw new Error('Chunk size exceeds 64KB limit');
+        }
+        parentPort.postMessage({
+          type: 'httpStreamChunk',
+          streamId: streamId,
+          data: data,
+          event: event,
+          id: id
+        });
+        return true;
+      },
+      end: function() {
+        if (isStreamClosed) return;
+        isStreamClosed = true;
+        activeWorkerStreams.delete(streamId);
+        parentPort.postMessage({
+          type: 'httpStreamEnd',
+          streamId: streamId
+        });
+      },
+      error: function(err) {
+        if (isStreamClosed) return;
+        isStreamClosed = true;
+        activeWorkerStreams.delete(streamId);
+        parentPort.postMessage({
+          type: 'httpStreamError',
+          streamId: streamId,
+          error: {
+            message: (err && err.message) ? err.message : String(err),
+            stack: (err && err.stack) || ''
+          }
+        });
+      },
+      onClose: function(callback) {
+        if (typeof callback === 'function') {
+          if (isStreamClosed) {
+            try { callback(); } catch(e) {}
+          } else {
+            closeCallbacks.push(callback);
+          }
+        }
+      }
+    };
+
+    activeWorkerStreams.set(streamId, {
+      stream: streamWriter,
+      abort: function() {
+        if (isStreamClosed) return;
+        isStreamClosed = true;
+        activeWorkerStreams.delete(streamId);
+        for (var i = 0; i < closeCallbacks.length; i++) {
+          try {
+            closeCallbacks[i]();
+          } catch(e) {
+            console.error('[WorkerStream] Error in onClose callback:', e);
+          }
+        }
+      }
+    });
+
+    pluginHttpRouter.handleStream(msg.request, streamWriter).catch(function(err) {
+      streamWriter.error(err);
+    });
+    return;
+  }
+
+  // 1e. Intercept HTTP stream abort from host (V5.3)
+  if (msg && msg.type === 'httpStreamAbort') {
+    var activeToAbort = activeWorkerStreams.get(msg.streamId);
+    if (activeToAbort) {
+      activeToAbort.abort();
     }
     return;
   }
@@ -840,6 +992,14 @@ parentPort.on('message', async function(msg) {
       // 调用 activate
       await plugin.activate(ctx, msg.prevState);
 
+      // 上报已注册路由元数据给宿主
+      if (pluginHttpRouter) {
+        parentPort.postMessage({
+          type: 'routesRegistered',
+          routes: pluginHttpRouter.getRegisteredRoutes()
+        });
+      }
+
       parentPort.postMessage({ type: 'activated' });
 
       // 4. 停用请求（激活后注册，避免竞争）
@@ -852,8 +1012,14 @@ parentPort.on('message', async function(msg) {
               state = await plugin.deactivate();
             }
           } finally {
-            // 清理 pending calls 和事件代理与 HTTP 路由
+            // 清理 pending calls、活跃流、事件代理与 HTTP 路由
             pendingCalls.clear();
+            if (activeWorkerStreams) {
+              for (var s of activeWorkerStreams.values()) {
+                try { s.abort(); } catch(e) {}
+              }
+              activeWorkerStreams.clear();
+            }
             if (eventBusProxy) {
               eventBusProxy.disposeAll();
               eventBusProxy = null;

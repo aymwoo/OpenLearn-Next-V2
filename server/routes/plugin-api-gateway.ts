@@ -19,7 +19,7 @@ import path from 'node:path';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getActorId, getCookieToken, getValidSession } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
-import type { PluginApiRequest, PluginApiResponse } from '../../packages/core/plugin-host/types.js';
+import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from '../../packages/core/plugin-host/types.js';
 import { compileRoutePattern } from '../../packages/core/plugin-host/http-router.js';
 
 /** 平台已有的保留管理动作路径（当只有单段子路径且完全匹配时放行给后续 Express 路由） */
@@ -90,6 +90,59 @@ class PluginRateLimiter {
 const rateLimiter = new PluginRateLimiter();
 // 每 5 分钟定时清理过期限流桶
 setInterval(() => rateLimiter.cleanup(), 5 * 60 * 1000).unref();
+
+/**
+ * 活跃 SSE 流连接计数器（按 IP 与按插件限额，防慢速长连接 DoS 耗尽文件描述符）
+ */
+class StreamConnectionTracker {
+  private ipCounts = new Map<string, number>();
+  private pluginCounts = new Map<string, number>();
+
+  /**
+   * 尝试获取流连接名额
+   */
+  tryAcquire(
+    ip: string,
+    pluginId: string,
+    maxIp: number = 5,
+    maxPlugin: number = 50,
+  ): { success: boolean; reason?: string } {
+    const curIp = this.ipCounts.get(ip) || 0;
+    if (curIp >= maxIp) {
+      return { success: false, reason: `Too many concurrent stream connections for this IP (max ${maxIp})` };
+    }
+
+    const curPlugin = this.pluginCounts.get(pluginId) || 0;
+    if (curPlugin >= maxPlugin) {
+      return { success: false, reason: `Too many concurrent stream connections for plugin (max ${maxPlugin})` };
+    }
+
+    this.ipCounts.set(ip, curIp + 1);
+    this.pluginCounts.set(pluginId, curPlugin + 1);
+    return { success: true };
+  }
+
+  /**
+   * 释放流连接名额
+   */
+  release(ip: string, pluginId: string): void {
+    const curIp = this.ipCounts.get(ip) || 0;
+    if (curIp <= 1) {
+      this.ipCounts.delete(ip);
+    } else {
+      this.ipCounts.set(ip, curIp - 1);
+    }
+
+    const curPlugin = this.pluginCounts.get(pluginId) || 0;
+    if (curPlugin <= 1) {
+      this.pluginCounts.delete(pluginId);
+    } else {
+      this.pluginCounts.set(pluginId, curPlugin - 1);
+    }
+  }
+}
+
+const streamConnectionTracker = new StreamConnectionTracker();
 
 /**
  * 提取当前登录用户的认证信息
@@ -276,7 +329,108 @@ export async function pluginApiGatewayMiddleware(
     },
   };
 
-  // 9. 派发请求并等待响应（带 5000ms 超时熔断守卫）
+  // 9. 判断是否为 SSE 流式路由
+  const isStream =
+    (matchedRule as any)?.streaming === true ||
+    pluginHost.isStreamRoute(pluginId, method, normalizedSubPath) ||
+    (req.headers.accept?.includes('text/event-stream') &&
+      pluginHost.isStreamRoute(pluginId, method, normalizedSubPath));
+
+  if (isStream) {
+    // 9.1 并发流数量配额检查（防慢速长连接 DoS 耗尽套接字与文件描述符）
+    const maxIp = (matchedRule as any)?.rateLimit?.maxConcurrentStreams ?? 5;
+    const acquireRes = streamConnectionTracker.tryAcquire(clientIp, resolvedUuid || pluginId, maxIp, 50);
+    if (!acquireRes.success) {
+      res.status(429).json({
+        success: false,
+        error: acquireRes.reason,
+      });
+      return;
+    }
+
+    // 9.2 写入标准 SSE 响应头并刷新
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    res.flushHeaders?.();
+
+    let streamEnded = false;
+    const closeListeners = new Set<() => void>();
+
+    const releaseResource = () => {
+      if (!streamEnded) {
+        streamEnded = true;
+        streamConnectionTracker.release(clientIp, resolvedUuid || pluginId);
+      }
+    };
+
+    res.on('close', () => {
+      releaseResource();
+      for (const cb of closeListeners) {
+        try {
+          cb();
+        } catch (e) {
+          console.error('[PluginApiGateway] Error in stream onClose listener:', e);
+        }
+      }
+    });
+
+    const streamResponse: PluginStreamResponse = {
+      get isClosed() {
+        if (streamEnded || res.writableEnded || res.destroyed) return true;
+        if (res.socket && !res.socket.writable) return true;
+        return false;
+      },
+      write(data: string | Record<string, any>, event?: string, id?: string): boolean {
+        if (this.isClosed) return false;
+        let sse = '';
+        if (id) sse += `id: ${id}\n`;
+        if (event) sse += `event: ${event}\n`;
+        const text = typeof data === 'object' ? JSON.stringify(data) : String(data);
+        const lines = text.split('\n');
+        for (const line of lines) {
+          sse += `data: ${line}\n`;
+        }
+        sse += '\n';
+        return res.write(sse);
+      },
+      end() {
+        if (streamEnded) return;
+        releaseResource();
+        res.end();
+      },
+      error(err: Error | string) {
+        if (this.isClosed) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        res.write(`event: error\ndata: ${JSON.stringify({ error: msg })}\n\n`);
+        this.end();
+      },
+      onClose(callback: () => void) {
+        if (this.isClosed) {
+          try {
+            callback();
+          } catch {}
+        } else {
+          closeListeners.add(callback);
+        }
+      },
+    };
+
+    try {
+      await pluginHost.dispatchHttpStream(pluginId, reqDto, streamResponse);
+    } catch (err: any) {
+      console.error(`[PluginApiGateway] Stream dispatch error for ${method} ${req.originalUrl}:`, err);
+      if (!streamResponse.isClosed) {
+        streamResponse.error(err);
+      }
+    }
+    return;
+  }
+
+  // 10. 普通 RESTful 派发请求并等待响应（带 5000ms 超时熔断守卫）
   try {
     const response: PluginApiResponse = await pluginHost.dispatchHttpRequest(
       pluginId,

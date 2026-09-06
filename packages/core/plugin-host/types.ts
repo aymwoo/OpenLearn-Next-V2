@@ -148,6 +148,48 @@ export type PluginApiHandler<TBody = unknown, TRes = unknown> = (
   req: PluginApiRequest<TBody>,
 ) => Promise<PluginApiResponse<TRes> | TRes> | PluginApiResponse<TRes> | TRes;
 
+/**
+ * 插件流式响应写入器接口 (SSE Stream Writer)
+ */
+export interface PluginStreamResponse {
+  /**
+   * 写入一个 SSE 数据块
+   * @param data 传输的数据（对象自动序列化为 JSON 字符串，字符串原样输出）
+   * @param event 可选的 SSE 事件类型名（默认 'message'）
+   * @param id 可选的 SSE 消息唯一 ID
+   * @returns 是否成功排队/写入（若客户端已断开则返回 false）
+   */
+  write(data: string | Record<string, any>, event?: string, id?: string): boolean;
+
+  /**
+   * 正常结束流式传输
+   */
+  end(): void;
+
+  /**
+   * 异常终止流式传输（向客户端发送 error 事件并关闭连接）
+   */
+  error(err: Error | string): void;
+
+  /**
+   * 客户端连接是否已断开
+   */
+  readonly isClosed: boolean;
+
+  /**
+   * 监听客户端断开连接事件（用于在客户端主动中止时中断大模型调用或循环任务）
+   */
+  onClose(callback: () => void): void;
+}
+
+/**
+ * 插件流式处理器签名
+ */
+export type PluginStreamHandler<TBody = unknown> = (
+  req: PluginApiRequest<TBody>,
+  stream: PluginStreamResponse,
+) => Promise<void> | void;
+
 /** 插件 HTTP 路由器接口 */
 export interface IPluginHttpRouter {
   get<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>): void;
@@ -160,6 +202,16 @@ export interface IPluginHttpRouter {
     path: string,
     handler: PluginApiHandler<TBody, TRes>,
   ): void;
+
+  /**
+   * 注册 Server-Sent Events (SSE) 流式响应端点（默认支持 GET 和 POST）
+   */
+  stream<TBody = unknown>(path: string, handler: PluginStreamHandler<TBody>): void;
+
+  /**
+   * 注册指定 HTTP 动词的 Server-Sent Events (SSE) 流式响应端点
+   */
+  stream<TBody = unknown>(method: string, path: string, handler: PluginStreamHandler<TBody>): void;
 }
 
 export interface PluginContext {

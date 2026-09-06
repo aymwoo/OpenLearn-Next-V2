@@ -29,6 +29,8 @@ export type {
   PluginApiRequest,
   PluginApiResponse,
   PluginApiHandler,
+  PluginStreamResponse,
+  PluginStreamHandler,
   IPluginHttpRouter,
 } from '../core/plugin-host/types.js';
 

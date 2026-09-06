@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [Unreleased]
 
 ### Features
+- **Plugin HTTP SSE Streaming (`ctx.http.stream`)**:
+  - Export `PluginStreamResponse` and `PluginStreamHandler` interfaces in `@openlearn/plugin-sdk`.
+  - Expose `ctx.http.stream(path, handler)` and `ctx.http.stream(method, path, handler)` on `IPluginHttpRouter` to enable Server-Sent Events (SSE) streaming for AI chat auto-typing and real-time progress push.
+  - Support bidirectional abort signals via `stream.onClose(cb)` and `stream.isClosed` to prevent LLM resource leakage when clients disconnect.
 - **Plugin RESTful API Router & Interfaces**:
   - Export `IPluginHttpRouter`, `PluginApiHandler`, `PluginApiRequest`, `PluginApiResponse`, `PluginApiActor` interfaces in `@openlearn/plugin-sdk`.
   - Expose `PluginHttpRouter` class in `@openlearn/plugin-sdk` and export on `ctx.http` within `PluginContext`.

@@ -42,14 +42,24 @@
  * @module
  */
 
-import type { IWorkerTransport, InvokeMessage, SubscribeMessage, UnsubscribeMessage, HttpResponseMessage } from './types.js';
+import type {
+  IWorkerTransport,
+  InvokeMessage,
+  SubscribeMessage,
+  UnsubscribeMessage,
+  HttpResponseMessage,
+  HttpStreamChunkMessage,
+  HttpStreamEndMessage,
+  HttpStreamErrorMessage,
+  RoutesRegisteredMessage,
+} from './types.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
 import type { CapabilityGuard } from '../capability-system/index.js';
 import type { EventBus } from '../event-bus/index.js';
 import { EventForwarder } from './event-forwarder.js';
 import { WorkerCapabilityError } from './errors.js';
 import { resolvePluginCommandType } from '../plugin-host/plugin-namespace.js';
-import type { PluginApiRequest, PluginApiResponse } from '../plugin-host/types.js';
+import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from '../plugin-host/types.js';
 
 /** Maximum length of serialized stack trace in characters. */
 const STACK_CAP = 4096;
@@ -91,6 +101,18 @@ export class ServiceHost {
   >();
   private readonly registeredCommandTypes = new Set<string>();
   private readonly registeredActionIds = new Set<string>();
+  private readonly activeStreams = new Map<
+    string,
+    {
+      stream: PluginStreamResponse;
+      transport: IWorkerTransport;
+      firstChunkTimer?: ReturnType<typeof setTimeout>;
+      idleTimer?: ReturnType<typeof setTimeout>;
+      lifetimeTimer: ReturnType<typeof setTimeout>;
+      cleanup: () => void;
+    }
+  >();
+  private registeredRoutes: Array<{ method: string; pattern: string; isStream?: boolean }> = [];
 
   constructor(
     private readonly serviceRegistry: ServiceRegistry,
@@ -189,6 +211,67 @@ export class ServiceHost {
               pending.resolve(rMsg.response ?? { status: 200, body: null });
             }
           }
+          break;
+        }
+
+        case 'httpStreamChunk': {
+          const cMsg = msg as HttpStreamChunkMessage;
+          const active = this.activeStreams.get(cMsg.streamId);
+          if (active) {
+            if (active.firstChunkTimer) {
+              clearTimeout(active.firstChunkTimer);
+              active.firstChunkTimer = undefined;
+            }
+            if (active.idleTimer) {
+              clearTimeout(active.idleTimer);
+              active.idleTimer = setTimeout(() => {
+                this.abortStream(cMsg.streamId, 'Stream idle timeout (60s)');
+                active.stream.error(new Error('Stream idle timeout (60s)'));
+                active.stream.end();
+              }, 60000);
+            }
+            // Check chunk size limit (T-STR-03: 64KB)
+            const rawData = cMsg.data;
+            const payloadLength = typeof rawData === 'string'
+              ? Buffer.byteLength(rawData)
+              : Buffer.byteLength(JSON.stringify(rawData));
+            if (payloadLength > 65536) {
+              this.abortStream(cMsg.streamId, 'Chunk size exceeded 64KB limit');
+              active.stream.error(new Error('Chunk size exceeded 64KB limit'));
+              active.stream.end();
+              break;
+            }
+            active.stream.write(cMsg.data, cMsg.event, cMsg.id);
+          }
+          break;
+        }
+
+        case 'httpStreamEnd': {
+          const eMsg = msg as HttpStreamEndMessage;
+          const active = this.activeStreams.get(eMsg.streamId);
+          if (active) {
+            active.cleanup();
+            this.activeStreams.delete(eMsg.streamId);
+            active.stream.end();
+          }
+          break;
+        }
+
+        case 'httpStreamError': {
+          const errMsg = msg as HttpStreamErrorMessage;
+          const active = this.activeStreams.get(errMsg.streamId);
+          if (active) {
+            active.cleanup();
+            this.activeStreams.delete(errMsg.streamId);
+            active.stream.error(new Error(errMsg.error.message));
+            active.stream.end();
+          }
+          break;
+        }
+
+        case 'routesRegistered': {
+          const rMsg = msg as RoutesRegisteredMessage;
+          this.registeredRoutes = rMsg.routes || [];
           break;
         }
 
@@ -338,6 +421,39 @@ export class ServiceHost {
       }
       this.pendingHttpRequests.clear();
     }
+
+    // Clean up active HTTP streams (abort and end)
+    if (this.activeStreams.size > 0) {
+      for (const [streamId, active] of this.activeStreams) {
+        active.cleanup();
+        try {
+          active.transport.postMessage({
+            type: 'httpStreamAbort',
+            streamId,
+            reason: `Worker for plugin "${this.pluginActorId}" was terminated`,
+          });
+        } catch {}
+        active.stream.end();
+      }
+      this.activeStreams.clear();
+    }
+  }
+
+  /**
+   * 中止指定的 Worker HTTP 流
+   */
+  abortStream(streamId: string, reason?: string): void {
+    const active = this.activeStreams.get(streamId);
+    if (!active) return;
+    active.cleanup();
+    this.activeStreams.delete(streamId);
+    try {
+      active.transport.postMessage({
+        type: 'httpStreamAbort',
+        streamId,
+        reason,
+      });
+    } catch {}
   }
 
   /**
@@ -387,6 +503,96 @@ export class ServiceHost {
         reject(err);
       }
     });
+  }
+
+  /**
+   * 向 Worker 隔离线程派发 HTTP SSE 流式请求，并桥接流式数据块（带超时看门狗与中断感知）
+   *
+   * @param transport - Worker 通信运输层
+   * @param request - 纯 DTO 请求对象
+   * @param stream - 主线程流式响应写入器
+   * @param maxLifetimeMs - 最大生命周期超时（默认 300,000ms = 5分钟）
+   */
+  async dispatchHttpStream(
+    transport: IWorkerTransport,
+    request: PluginApiRequest,
+    stream: PluginStreamResponse,
+    maxLifetimeMs: number = 300000,
+  ): Promise<void> {
+    const streamId = globalThis.crypto.randomUUID();
+
+    let firstChunkTimer: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
+      const active = this.activeStreams.get(streamId);
+      if (active) {
+        this.abortStream(streamId, 'First chunk timeout (10s)');
+        stream.error(new Error('First chunk timeout (10s)'));
+        stream.end();
+      }
+    }, 10000);
+
+    let idleTimer: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
+      const active = this.activeStreams.get(streamId);
+      if (active) {
+        this.abortStream(streamId, 'Stream idle timeout (60s)');
+        stream.error(new Error('Stream idle timeout (60s)'));
+        stream.end();
+      }
+    }, 60000);
+
+    const lifetimeTimer = setTimeout(() => {
+      const active = this.activeStreams.get(streamId);
+      if (active) {
+        this.abortStream(streamId, `Stream max lifetime exceeded (${Math.round(maxLifetimeMs / 1000)}s)`);
+        stream.error(new Error(`Stream max lifetime exceeded (${Math.round(maxLifetimeMs / 1000)}s)`));
+        stream.end();
+      }
+    }, maxLifetimeMs);
+
+    const cleanup = () => {
+      if (firstChunkTimer) {
+        clearTimeout(firstChunkTimer);
+        firstChunkTimer = undefined;
+      }
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = undefined;
+      }
+      clearTimeout(lifetimeTimer);
+    };
+
+    // 监听客户端连接关闭（反向中止 Worker 中的大模型或耗时流）
+    stream.onClose(() => {
+      this.abortStream(streamId, 'Client closed connection');
+    });
+
+    this.activeStreams.set(streamId, {
+      stream,
+      transport,
+      firstChunkTimer,
+      idleTimer,
+      lifetimeTimer,
+      cleanup,
+    });
+
+    try {
+      transport.postMessage({
+        type: 'httpStreamStart',
+        streamId,
+        request,
+      });
+    } catch (err: any) {
+      cleanup();
+      this.activeStreams.delete(streamId);
+      stream.error(err);
+      stream.end();
+    }
+  }
+
+  /**
+   * 获取由 Worker 注册的所有路由（含是否为流式路由）
+   */
+  getRegisteredRoutes(): Array<{ method: string; pattern: string; isStream?: boolean }> {
+    return this.registeredRoutes;
   }
 
   // ── Invoke handling (core RPC logic) ───────────────────────────────────

@@ -10,6 +10,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features & Security
+- **插件 HTTP SSE 流式长连接通信体系 (`Plugin HTTP SSE Streaming & Safety Defense`)**:
+  - **极简流式 API 契约 (`ctx.http.stream`)**:
+    - 在 `IPluginHttpRouter` 中新增 `stream(path, handler)`（支持缺省动词匹配 GET/POST）与 `stream(method, path, handler)`（显式动词匹配）；
+    - 向插件注入 `PluginStreamResponse` 写入器，支持 `stream.write(data, event?, id?)`、`stream.end()`、`stream.error(err)`、`stream.isClosed` 及 `stream.onClose(callback)`；
+    - 自动格式化符合 W3C 标准的 SSE 事件流（支持多行文本 `data: line1\ndata: line2\n\n` 及 JSON 结构自动序列化）。
+  - **Worker 隔离模式跨线程流式 RPC 通道**:
+    - 新增跨线程流式协议族：`httpStreamStart`、`httpStreamChunk`、`httpStreamEnd`、`httpStreamError`、`httpStreamAbort`、`routesRegistered`；
+    - Worker 内部通过轻量代理透明接收流式请求，实现毫秒级逐 chunk 双向 IPC 通信；
+    - Worker 插件激活时自动将注册的路由元数据（包含 `isStream` 标识）上报至宿主，宿主毫秒级精准识别流式路由。
+  - **反向中止与大模型算力熔断保护 (T-STR-04)**:
+    - 客户端断开连接（如用户点击“停止生成”、刷新或关闭页面）时，主线程通过 `res.on('close')` 毫秒级向 Worker 派发 `httpStreamAbort`；
+    - Worker 内部立即将 `stream.isClosed` 标记为 `true` 并触发 `stream.onClose(cb)` 监听器，强制打断 Worker 内正在进行的大模型 API 调用与循环任务，杜绝 Token 浪费与僵尸进程。
+  - **纵深流式安全防御机制 (Threat Mitigations)**:
+    - **T-STR-01 并发长连接硬上限**：单 IP 最多 5 个并发流，单插件最多 50 个并发流，超限返回 429 Too Many Requests，防御慢速长连接 Slowloris 攻击耗尽套接字与文件描述符；
+    - **T-STR-02 超时看门狗阶梯防护**：首包超时（10s）+ 最大空闲超时（60s）+ 最大生存期（300s）看门狗守护，超时强制切断悬挂流；
+    - **T-STR-03 单 Chunk 体积硬限制**：单个 SSE Chunk 大小硬限制 64KB，超限直接报错熔断，防内存洪峰 OOM；
+    - **T-STR-05 标头强制固化**：安全网关强制注入标准 SSE 标头（`text/event-stream; charset=utf-8`、`no-cache`、`no-transform`、`keep-alive`、`X-Accel-Buffering: no`），禁止插件篡改高危 Header；
+    - **T-STR-06 生命周期统一回收**：插件停用或热重载时，强制销毁所有未关闭的流并向 Worker 发送 abort，无任何悬挂遗留。
+  - **开发者测试工具包赋能 (`@openlearn/plugin-test-kit`)**:
+    - 导出 `createMockStreamResponse()` 工具函数与 `MockStreamResult` 接口，方便插件开发者在单测中无需启动 HTTP 服务器即可离线验证流式生成与中断逻辑。
+
 ## [0.3.11] - 2026-09-06
 
 ### Features & Security

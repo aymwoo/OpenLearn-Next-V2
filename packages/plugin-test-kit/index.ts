@@ -28,6 +28,7 @@ import type {
   ActionDescriptor,
   PlatformCommand,
   CommandHandler,
+  PluginStreamResponse,
 } from '@openlearn/plugin-sdk';
 import { PluginHttpRouter } from '@openlearn/plugin-sdk';
 
@@ -466,6 +467,65 @@ export function createMockContext(opts: CreateMockContextOptions = {}): PluginCo
     http: new PluginHttpRouter(),
     require: (moduleName: string): any => {
       throw new Error(`[MockContext] require("${moduleName}") is not available in test context. Use customTokens to inject mock modules.`);
+    },
+  };
+}
+
+export interface MockStreamResult {
+  stream: PluginStreamResponse;
+  getChunks: () => Array<{ data: string | Record<string, any>; event?: string; id?: string }>;
+  getErrors: () => Array<Error | string>;
+  isEnded: () => boolean;
+  simulateClose: () => void;
+}
+
+/**
+ * 创建用于测试插件流式输出 (SSE) 的 Mock 响应写入器
+ */
+export function createMockStreamResponse(): MockStreamResult {
+  const chunks: Array<{ data: string | Record<string, any>; event?: string; id?: string }> = [];
+  const errors: Array<Error | string> = [];
+  let ended = false;
+  let closed = false;
+  const closeCallbacks: Array<() => void> = [];
+
+  const stream: PluginStreamResponse = {
+    get isClosed() {
+      return closed || ended;
+    },
+    write(data, event, id) {
+      if (this.isClosed) return false;
+      chunks.push({ data, event, id });
+      return true;
+    },
+    end() {
+      ended = true;
+    },
+    error(err) {
+      errors.push(err);
+      ended = true;
+    },
+    onClose(cb) {
+      if (this.isClosed) {
+        cb();
+      } else {
+        closeCallbacks.push(cb);
+      }
+    },
+  };
+
+  return {
+    stream,
+    getChunks: () => chunks,
+    getErrors: () => errors,
+    isEnded: () => ended,
+    simulateClose: () => {
+      closed = true;
+      for (const cb of closeCallbacks) {
+        try {
+          cb();
+        } catch {}
+      }
     },
   };
 }

@@ -321,6 +321,19 @@ type PluginApiHandler<TBody = unknown, TRes = unknown> = (
   req: PluginApiRequest<TBody>,
 ) => Promise<PluginApiResponse<TRes> | TRes> | PluginApiResponse<TRes> | TRes;
 
+interface PluginStreamResponse {
+  write(data: string | Record<string, any>, event?: string, id?: string): boolean;
+  end(): void;
+  error(err: Error | string): void;
+  readonly isClosed: boolean;
+  onClose(callback: () => void): void;
+}
+
+type PluginStreamHandler<TBody = unknown> = (
+  req: PluginApiRequest<TBody>,
+  stream: PluginStreamResponse,
+) => Promise<void> | void;
+
 interface IPluginHttpRouter {
   get<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>): void;
   post<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
@@ -332,6 +345,8 @@ interface IPluginHttpRouter {
     path: string,
     handler: PluginApiHandler<TBody, TRes>,
   ): void;
+  stream<TBody = unknown>(path: string, handler: PluginStreamHandler<TBody>): void;
+  stream<TBody = unknown>(method: string, path: string, handler: PluginStreamHandler<TBody>): void;
 }
 
 declare class PluginHttpRouter implements IPluginHttpRouter {
@@ -345,9 +360,12 @@ declare class PluginHttpRouter implements IPluginHttpRouter {
     path: string,
     handler: PluginApiHandler<TBody, TRes>,
   ): void;
-  match(method: string, path: string): { handler: PluginApiHandler; params: Record<string, string> } | null;
+  stream<TBody = unknown>(path: string, handler: PluginStreamHandler<TBody>): void;
+  stream<TBody = unknown>(method: string, path: string, handler: PluginStreamHandler<TBody>): void;
+  match(method: string, path: string): { handler?: PluginApiHandler; streamHandler?: PluginStreamHandler; isStream?: boolean; params: Record<string, string> } | null;
   handle(req: PluginApiRequest): Promise<PluginApiResponse>;
-  getRegisteredRoutes(): Array<{ method: string; pattern: string }>;
+  handleStream(req: PluginApiRequest, stream: PluginStreamResponse): Promise<void>;
+  getRegisteredRoutes(): Array<{ method: string; pattern: string; isStream?: boolean }>;
   clear(): void;
 }
 
@@ -686,6 +704,8 @@ export type {
   PluginApiRequest,
   PluginApiResponse,
   PluginApiHandler,
+  PluginStreamResponse,
+  PluginStreamHandler,
   IPluginHttpRouter,
 };
 
