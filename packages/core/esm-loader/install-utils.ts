@@ -19,7 +19,6 @@
  * - **临时目录清理**: try/finally 确保临时文件被删除
  */
 
-import * as esbuild from 'esbuild';
 import JSZip from 'jszip';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -46,6 +45,7 @@ export async function bundlePlugin(
   entryCode: string,
   resolveDir: string,
 ): Promise<string> {
+  const esbuild = await import('esbuild');
   const result = await esbuild.build({
     stdin: {
       contents: entryCode,

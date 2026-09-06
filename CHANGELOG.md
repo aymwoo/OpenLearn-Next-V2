@@ -8,6 +8,19 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.2] - 2026-09-06
+
+### Fixes & Runtime Hardening
+- **Vite 依赖动态按需解耦 (Vite Decoupling & Module Loader Fix)**：
+  - 移除 [`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 顶层静态 `import { createServer as createViteServer } from 'vite'`，消除 esbuild 打包 CJS 时在 `dist/server.cjs` 顶层生成的 `require("vite")` 提升语句；
+  - 将开发期 Vite 中间件初始化改为在 `if (process.env.NODE_ENV !== 'production')` 分支内执行异步 `await import('vite')`，彻底解决在纯生产环境（零 `devDependencies` 安装）及 `npx openlearn-next@latest` 启动时由于缺失 vite 引发的 `Cannot find module 'vite'` 崩溃异常。
+- **esbuild 核心解耦与生产依赖补齐 (esbuild Dynamic Import & Dependency Governance)**：
+  - 移除 [`packages/core/esm-loader/install-utils.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/esm-loader/install-utils.ts) 顶层静态 `import * as esbuild from 'esbuild'`，在 `bundlePlugin` 函数内部改为按需动态 `await import('esbuild')`，避免服务启动模块加载期对 esbuild 的同步求值；
+  - 将 `esbuild` 正式移入 [`package.json`](file:///home/wuxf/Develop/openlearnv2/package.json) 的生产 `dependencies`，保障在独立部署与分发场景下管理后台上传安装插件 ZIP 时的内存打包与编译功能完好可用；
+  - 经扫描校验，`dist/server.cjs` 外部依赖缺失项完全归零（`Missing from dependencies: []`）。
+- **CLI 生产环境模式显式守卫 (CLI Production Safeguard)**：
+  - 在 [`cli.mjs`](file:///home/wuxf/Develop/openlearnv2/cli.mjs) 启动子进程前显式注入 `process.env.NODE_ENV = process.env.NODE_ENV || 'production'`，保障从 CLI/npx 唤起时稳定运行于生产静态托管模式。
+
 ## [0.3.1] - 2026-09-06
 
 ### Features

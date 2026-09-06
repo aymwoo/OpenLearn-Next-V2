@@ -37,6 +37,8 @@ if (!process.env.OPENLEARN_DB_PATH) {
   process.env.OPENLEARN_DB_PATH = join(dataDir, 'data.db');
 }
 
+process.env.NODE_ENV = process.env.NODE_ENV || 'production';
+
 console.log(`[openlearn-next] PORT=${process.env.PORT || '9000'}`);
 console.log(`[openlearn-next] DB=${process.env.OPENLEARN_DB_PATH}`);
 

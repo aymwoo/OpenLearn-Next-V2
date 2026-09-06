@@ -16,7 +16,6 @@ if (!process.env.NODE_ENV) {
   }
 }
 import { exec } from 'child_process';
-import { createServer as createViteServer } from 'vite';
 import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
 import { kernelContainer } from './packages/core/kernel/index.js';
@@ -284,6 +283,7 @@ async function startServer() {
 
   // Vite Middleware for Development
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
