@@ -11,12 +11,16 @@
 ### 一键运行（无需 clone 项目）
 
 ```bash
-# 通过 npx 直接启动（首次自动下载）
-npx openlearn-next
+# 推荐使用 @latest 强制校验最新发布版本，规避本地历史缓存版本漂移：
+npx openlearn-next@latest
 
-# 自定义端口 / 数据库路径
-npx openlearn-next -p 3000
-OPENLEARN_DB_PATH=./my.db npx openlearn-next
+# 自定义端口 / 启动后自动唤起浏览器 (-o) / 临时沙盒演示模式 (--demo)
+npx openlearn-next@latest -p 3000 -o
+npx openlearn-next@latest --demo -o
+
+# 运维诊断与一键自愈 / 在线冷备
+npx openlearn-next@latest doctor --fix
+npx openlearn-next@latest backup
 ```
 
 ### 全局安装
