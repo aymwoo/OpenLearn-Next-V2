@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.3.13] - 2026-09-06
+
+### Fixes & Packaging
+- **修复 NPM 发布包中 `workspace:*` 协议未展开导致的 npx 无法运行异常 (EUNSUPPORTEDPROTOCOL)**:
+  - **根因分析**：由于发包流程使用了原生 `npm publish`，原生 npm 不支持 pnpm monorepo 的 `workspace:*` 依赖协议，导致打入 tarball 的 `package.json` 中 `@openlearn/plugin-sdk` 依赖未展开为真实版本号；终端执行 `npx openlearn-next` 时报错 `npm error Unsupported URL Type "workspace:": workspace:*` 并退出；
+  - **发布修复**：切换发布脚本为 `pnpm publish --no-git-checks`，打包阶段由 pnpm 自动将 `workspace:*` 解析并转译替换为真实版本号（`3.6.0`）；
+  - **SOP 规范修正**：更新 `.agents/skills/openlearn-release-workflow/SKILL.md`，将平台主包发布命令标准化为 `pnpm publish --no-git-checks`。
+
 ## [0.3.12] - 2026-09-06
 
 ### Features & Security
