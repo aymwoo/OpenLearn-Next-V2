@@ -2,16 +2,6 @@ import esbuild from 'esbuild';
 import JSZip from 'jszip';
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
-
-// Ensure @openlearn/plugin-sdk is built — needed for esbuild to resolve
-// plugin imports.  On servers using npm (not pnpm), the workspace link
-// doesn't exist, so we resolve directly from the local dist.
-const sdkDist = path.resolve('packages/plugin-sdk/dist/index.js');
-if (!fs.existsSync(sdkDist)) {
-  console.log('Building @openlearn/plugin-sdk...');
-  execSync('node packages/plugin-sdk/build.mjs', { stdio: 'inherit' });
-}
 
 // All non-system plugins (rollcall, mindmap, hello-world, memo, raffle-vote,
 // quiz-pro, ...) were purged from the system per the "remove all non-system-core
@@ -29,6 +19,9 @@ async function build() {
       console.log(`Building plugin from ${plugin.entry}...`);
       
       // 1. esbuild bundle backend in memory
+      // SDK 必须保持 external（与 SDK CLI / token-enforcer 策略一致）：
+      // 打进 ZIP 会把构建时刻的 SDK 代码冻结在产物里，运行时与宿主解析到的
+      // SDK 版本脱节；external 让裸说明符在宿主 node_modules 上解析。
       const result = await esbuild.build({
         entryPoints: [plugin.entry],
         bundle: true,
@@ -37,14 +30,7 @@ async function build() {
         platform: 'node',
         sourcemap: 'inline',
         target: 'node18',
-        plugins: [{
-          name: 'resolve-plugin-sdk',
-          setup(build) {
-            build.onResolve({ filter: /^@openlearn\/plugin-sdk$/ }, () => ({
-              path: sdkDist,
-            }));
-          },
-        }],
+        external: ['@openlearn/plugin-sdk'],
       });
 
       if (!result.outputFiles || result.outputFiles.length === 0) {

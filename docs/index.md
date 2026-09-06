@@ -281,7 +281,7 @@ governance/architecture-governance
 - **[Composition Root](architecture/composition-root)**: `server.ts` 统一组装根，Express API 路由与 Socket.IO 服务整合。
 - **[Bootstrap Pipeline](core/bootstrap-pipeline)**: 5 阶段启动流水线（Startup -> Registration -> Initialization -> Activation -> Ready）。
 - **[Plugin Host & Sandbox](plugin/plugin-architecture)**: Worker Thread 进程隔离、ESM 加载器与完整生命周期状态机。
-- **[Plugin SDK](sdk/plugin-sdk)**: `@openlearn/plugin-sdk@3.5.2` 强类型定义、`Token<T>` DI 支持与 `ctx.provide()` 服务共享。
+- **[Plugin SDK](sdk/plugin-sdk)**: `@openlearn/plugin-sdk`（版本随平台 release 同步，发布流程统一重写，勿在文档中写死）强类型定义、`Token<T>` DI 支持与 `ctx.provide()` 服务共享。
 - **[AI Runtime & Tools](ai/ai-runtime)**: 原生集成 Google GenAI (Gemini 2.5/3.0)、Prompt 模板与 Function Calling 工具调用。
 - **[CLI & Operations](getting-started/installation-guide)**: `npx openlearn-next` 命令行自检 (`doctor`)、在线冷备 (`backup`)、数据还原 (`restore`)、沙盒演示 (`--demo`) 与缓存治理 (`clean`)。
 

@@ -47,6 +47,8 @@ jobs:
       # Step 3: Build and publish openlearn-next (main app, depends on @openlearn/plugin-sdk)
       - name: Publish openlearn-next
         run: |
+          SDK_VER=$(node -p "require('./packages/plugin-sdk/package.json').version")
+          sed -i 's|"@openlearn/plugin-sdk": "workspace:\*"|"@openlearn/plugin-sdk": "'"${SDK_VER}"'"|' package.json
           pnpm build
           npm publish
         env:

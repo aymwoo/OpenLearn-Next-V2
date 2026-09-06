@@ -431,17 +431,25 @@ export function PluginCenter({
               >
                 {lang === 'zh' ? '稍后再说' : 'Later'}
               </button>
-              <button
-                onClick={() => {
-                  const targetId = changelogModalPlugin.id;
-                  const mItem = changelogModalPlugin.marketItem;
-                  setChangelogModalPlugin(null);
-                  handleOneClickUpdate(targetId, mItem);
-                }}
-                className="px-4 py-2 text-xs font-bold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>🚀 {lang === 'zh' ? '立即一键热更新' : 'Update Now'}</span>
-              </button>
+              {changelogModalPlugin.marketItem?.downloadUrl ? (
+                <button
+                  onClick={() => {
+                    const targetId = changelogModalPlugin.id;
+                    const mItem = changelogModalPlugin.marketItem;
+                    setChangelogModalPlugin(null);
+                    handleOneClickUpdate(targetId, mItem);
+                  }}
+                  className="px-4 py-2 text-xs font-bold rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>🚀 {lang === 'zh' ? '立即一键热更新' : 'Update Now'}</span>
+                </button>
+              ) : (
+                <span className="px-3 py-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg">
+                  {lang === 'zh'
+                    ? '本地源更新：请重新构建 ZIP 后在「开发」页上传更新'
+                    : 'Local source update: rebuild the ZIP and upload it in the Dev tab'}
+                </span>
+              )}
             </div>
           </div>
         </div>

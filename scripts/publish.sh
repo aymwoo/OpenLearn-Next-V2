@@ -36,9 +36,14 @@ git checkout -- packages/plugin-test-kit/package.json
 # ── 3. Build & publish openlearn-next ──────────────────────────────
 log "Building openlearn-next..."
 pnpm build || err "build failed"
+# 将 workspace 协议重写为精确 SDK 版本再发布：npx/npm 消费者安装时按
+# 精确 pin 解析，与 server.cjs 构建时所用的 SDK 版本强绑定，防止版本漂移。
+sed -i 's|"@openlearn/plugin-sdk": "workspace:\*"|"@openlearn/plugin-sdk": "'"${SDK_VER}"'"|' package.json
 npm publish --registry=https://registry.npmjs.org || err "openlearn-next publish failed"
 APP_VER=$(node -p "require('./package.json').version")
 log "openlearn-next@${APP_VER} published"
+# Restore workspace protocol for local dev
+git checkout -- package.json
 
 # ── 4. Sync to npmmirror ──────────────────────────────────────────
 log "Syncing to npmmirror..."
