@@ -569,6 +569,7 @@ export class FrontendPluginHost {
       navigation: {
         getTeacherTab: () => appStore.getState().teacherTab,
         setTeacherTab: (tab: string) => appStore.getState().setTeacherTab(tab),
+        setSelectedLesson: (lessonId: string | null) => appStore.getState().setSelectedLesson(lessonId),
         subscribeTeacherTab: (callback: (tab: string) => void) => {
           let prevTab = appStore.getState().teacherTab;
           return appStore.subscribe((state) => {
