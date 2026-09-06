@@ -49,6 +49,78 @@ export function checkLessonOwnership(req: any, lessonId: string): { allowed: boo
   };
 }
 
+/**
+ * 白板写操作权限守卫中间件 (POST / PUT / DELETE / reset)
+ * 1. 强制登录验证：匿名请求直接 401 Unauthorized；
+ * 2. 随堂作业学生专属白板 (assignment-${assignmentId}-student-${studentId})：
+ *    - 学生仅允许修改本人的作业白板 (匹配 -student-{studentId} 后缀)
+ *    - 跨学生越权修改直接 403 Forbidden
+ *    - 教师与管理员放行 (用于批注与点评辅导)
+ * 3. 课程主教学白板 (!assignment-)：
+ *    - 仅课程创建教师或管理员可修改 (checkLessonOwnership 逻辑)
+ *    - 学生角色一律 403 Forbidden
+ */
+export function requireWhiteboardWriteAccess() {
+  return (req: any, res: any, next: any) => {
+    const { id } = req.params;
+    const token = getCookieToken(req);
+    const session = req.session || (token ? getValidSession(token) : null);
+    if (!session) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+    req.session = session;
+
+    const isAdmin =
+      session.username === 'admin' ||
+      session.userId === 'usr_admin' ||
+      session.role === 'admin' ||
+      session.role === 'administrator';
+
+    // ── 随堂作业专属白板 (assignment-*) ──
+    if (id.startsWith('assignment-')) {
+      if (isAdmin || session.role === 'teacher') {
+        return next();
+      }
+      if (session.role === 'student') {
+        const studentMatch = id.match(/-student-([^-]+)$/);
+        const targetStudentId = studentMatch ? studentMatch[1] : null;
+        const currentStudentId = session.studentId || session.userId;
+        if (targetStudentId && currentStudentId && targetStudentId === currentStudentId) {
+          return next();
+        }
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden: You do not have permission to modify another student\'s assignment whiteboard'
+        });
+      }
+      return res.status(403).json({ success: false, error: 'Forbidden: Invalid role for whiteboard write' });
+    }
+
+    // ── 课程主教学白板 ──
+    const isTeacherOrAdmin = isAdmin || session.role === 'teacher';
+    if (!isTeacherOrAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden: Students cannot modify classroom whiteboards'
+      });
+    }
+
+    const lesson = kernelContainer.db.prepare('SELECT * FROM lessons WHERE id = ?').get(id) as any;
+    if (!lesson) {
+      return res.status(404).json({ success: false, error: 'Lesson not found' });
+    }
+
+    if (isAdmin || !lesson.creator_id || lesson.creator_id === session.userId || lesson.creator_id === session.username) {
+      return next();
+    }
+
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden: You do not have permission to modify this lesson whiteboard because it was created by another teacher'
+    });
+  };
+}
+
 export function registerLessonsRoutes(ctx: ServerContext) {
   const { app, io } = ctx;
 
@@ -294,7 +366,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     res.json(elements);
   });
 
-  app.post('/api/lessons/:id/whiteboard/reset', async (req, res) => {
+  app.post('/api/lessons/:id/whiteboard/reset', requireWhiteboardWriteAccess(), async (req, res) => {
     try {
       const id = req.params.id;
       
@@ -302,13 +374,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       if (id.startsWith('assignment-')) {
         const deleteStmt = kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?');
         deleteStmt.run(id);
-        res.json({ success: true, message: 'Assignment whiteboard reset to empty' });
-        return;
-      }
-
-      const ownership = checkLessonOwnership(req, id);
-      if (!ownership.allowed) {
-        return res.status(ownership.status).json({ success: false, error: ownership.error });
+        return res.json({ success: true, message: 'Assignment whiteboard reset to empty' });
       }
       
       const snapshotId = `snapshot-${id}`;
@@ -344,21 +410,16 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/lessons/:id/whiteboard', async (req, res) => {
+  app.post('/api/lessons/:id/whiteboard', requireWhiteboardWriteAccess(), async (req, res) => {
     try {
       const { id } = req.params;
-      if (!id.startsWith('assignment-')) {
-        const ownership = checkLessonOwnership(req, id);
-        if (!ownership.allowed) {
-          return res.status(ownership.status).json({ success: false, error: ownership.error });
-        }
-      }
       const { type, data } = req.body;
+      const actorId = getActorId(req) || 'user-frontend';
       const cmd = kernelContainer.commandBus.createCommand('whiteboard.draw', {
         lessonId: id,
         type,
         data: JSON.stringify(data)
-      }, 'user-frontend', { approved: true });
+      }, actorId, { approved: true });
       
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
@@ -367,21 +428,16 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.put('/api/lessons/:id/whiteboard/:elementId', async (req, res) => {
+  app.put('/api/lessons/:id/whiteboard/:elementId', requireWhiteboardWriteAccess(), async (req, res) => {
     try {
-      const { id } = req.params;
-      if (!id.startsWith('assignment-')) {
-        const ownership = checkLessonOwnership(req, id);
-        if (!ownership.allowed) {
-          return res.status(ownership.status).json({ success: false, error: ownership.error });
-        }
-      }
+      const { id, elementId } = req.params;
       const { data } = req.body;
+      const actorId = getActorId(req) || 'user-frontend';
       const cmd = kernelContainer.commandBus.createCommand('whiteboard.update', {
         lessonId: id,
-        elementId: req.params.elementId,
+        elementId,
         data: JSON.stringify(data)
-      }, 'user-frontend', { approved: true });
+      }, actorId, { approved: true });
       
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
@@ -390,18 +446,13 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/lessons/:id/whiteboard', async (req, res) => {
+  app.delete('/api/lessons/:id/whiteboard', requireWhiteboardWriteAccess(), async (req, res) => {
     try {
       const { id } = req.params;
-      if (!id.startsWith('assignment-')) {
-        const ownership = checkLessonOwnership(req, id);
-        if (!ownership.allowed) {
-          return res.status(ownership.status).json({ success: false, error: ownership.error });
-        }
-      }
+      const actorId = getActorId(req) || 'user-frontend';
       const cmd = kernelContainer.commandBus.createCommand('whiteboard.clear', {
         lessonId: id
-      }, 'user-frontend', { approved: true });
+      }, actorId, { approved: true });
       
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
@@ -410,19 +461,14 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.delete('/api/lessons/:id/whiteboard/:elementId', async (req, res) => {
+  app.delete('/api/lessons/:id/whiteboard/:elementId', requireWhiteboardWriteAccess(), async (req, res) => {
     try {
-      const { id } = req.params;
-      if (!id.startsWith('assignment-')) {
-        const ownership = checkLessonOwnership(req, id);
-        if (!ownership.allowed) {
-          return res.status(ownership.status).json({ success: false, error: ownership.error });
-        }
-      }
+      const { id, elementId } = req.params;
+      const actorId = getActorId(req) || 'user-frontend';
       const cmd = kernelContainer.commandBus.createCommand('whiteboard.delete', {
         lessonId: id,
-        elementId: req.params.elementId
-      }, 'user-frontend', { approved: true });
+        elementId
+      }, actorId, { approved: true });
       
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
@@ -432,7 +478,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   });
 
   // ── Quiz submission (student) ──────────────────────────────────────────────
-  app.post('/api/lessons/:id/quiz-submit', async (req, res) => {
+  app.post('/api/lessons/:id/quiz-submit', requireAuth('student', 'teacher', 'administrator'), async (req, res) => {
     try {
       const { id: lessonId } = req.params;
       const { elementId, answer } = req.body;
@@ -440,18 +486,8 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'Missing elementId or answer' });
       }
 
-      // Get student info from session
-      const token = getCookieToken(req);
-      let studentId = 'guest';
-      if (token) {
-        const sessionRow = kernelContainer.db.prepare('SELECT * FROM client_sessions WHERE id = ?').get(token) as any;
-        if (sessionRow) {
-          const session = JSON.parse(sessionRow.session_data);
-          if (session.role === 'student') {
-            studentId = session.studentId || session.userId || 'guest';
-          }
-        }
-      }
+      const session = (req as any).session;
+      const studentId = session.studentId || session.userId || 'guest';
 
       // Retrieve the quiz element
       const row = kernelContainer.db.prepare(
@@ -492,12 +528,9 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   });
 
   // ── Quiz submissions retrieval (teacher) ────────────────────────────────────
-  app.get('/api/lessons/:id/quiz-submissions', (req, res) => {
+  app.get('/api/lessons/:id/quiz-submissions', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { id: lessonId } = req.params;
-      if (!checkIsTeacherOrAdmin(req)) {
-        return res.status(403).json({ error: 'Forbidden' });
-      }
 
       const elements = kernelContainer.db.prepare(
         'SELECT id, type, data FROM whiteboard_elements WHERE lesson_id = ? AND type = ?'
@@ -522,7 +555,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/lessons/:id/ai-tutor', async (req, res) => {
+  app.post('/api/lessons/:id/ai-tutor', requireAuth('student', 'teacher', 'administrator'), async (req, res) => {
     try {
       const { elements } = req.body;
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });

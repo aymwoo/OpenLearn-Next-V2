@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { checkLessonOwnership } from '../routes/lessons.js';
+import { checkLessonOwnership, requireWhiteboardWriteAccess } from '../routes/lessons.js';
 import { v7 as uuidv7 } from 'uuid';
 
 describe('Lesson Ownership & IDOR Protection Suite', () => {
@@ -168,6 +168,113 @@ describe('Lesson Ownership & IDOR Protection Suite', () => {
       const savedLesson = kernelContainer.db.prepare('SELECT * FROM lessons WHERE id = ?').get(res.lessonId) as any;
       expect(savedLesson).toBeDefined();
       expect(savedLesson.creator_id).toBe('usr_teacher_chemist');
+    });
+  });
+
+  describe('requireWhiteboardWriteAccess Middleware Suite', () => {
+    function executeMiddleware(middleware: any, req: any): Promise<{ status: number; body: any; nextCalled: boolean }> {
+      return new Promise((resolve) => {
+        let status = 200;
+        let body: any = null;
+        let nextCalled = false;
+        const res: any = {
+          status: (s: number) => {
+            status = s;
+            return {
+              json: (b: any) => {
+                body = b;
+                resolve({ status, body, nextCalled });
+              }
+            };
+          },
+          json: (b: any) => {
+            body = b;
+            resolve({ status, body, nextCalled });
+          }
+        };
+        const next = () => {
+          nextCalled = true;
+          resolve({ status, body, nextCalled });
+        };
+        middleware(req, res, next);
+      });
+    }
+
+    it('should reject anonymous whiteboard writes with 401 on regular lessons', async () => {
+      const mw = requireWhiteboardWriteAccess();
+      const req = { headers: {}, params: { id: aliceLessonId } };
+      const res = await executeMiddleware(mw, req);
+      expect(res.nextCalled).toBe(false);
+      expect(res.status).toBe(401);
+      expect(res.body.error).toContain('Authentication required');
+    });
+
+    it('should reject anonymous whiteboard writes with 401 on assignment whiteboards', async () => {
+      const mw = requireWhiteboardWriteAccess();
+      const req = { headers: {}, params: { id: 'assignment-asg1-student-charlie' } };
+      const res = await executeMiddleware(mw, req);
+      expect(res.nextCalled).toBe(false);
+      expect(res.status).toBe(401);
+      expect(res.body.error).toContain('Authentication required');
+    });
+
+    it('should reject students attempting to write to classroom lesson whiteboard with 403', async () => {
+      const mw = requireWhiteboardWriteAccess();
+      const req = { headers: {}, session: studentSession, params: { id: aliceLessonId } };
+      const res = await executeMiddleware(mw, req);
+      expect(res.nextCalled).toBe(false);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toContain('Students cannot modify classroom whiteboards');
+    });
+
+    it('should reject students attempting to modify another student assignment whiteboard with 403', async () => {
+      const mw = requireWhiteboardWriteAccess();
+      const req = { headers: {}, session: studentSession, params: { id: 'assignment-asg1-student-david' } };
+      const res = await executeMiddleware(mw, req);
+      expect(res.nextCalled).toBe(false);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toContain('modify another student');
+    });
+
+    it('should allow student modifying their own assignment whiteboard', async () => {
+      const mw = requireWhiteboardWriteAccess();
+      const req = {
+        headers: {},
+        session: { ...studentSession, studentId: 'usr_student_charlie' },
+        params: { id: 'assignment-asg1-student-usr_student_charlie' }
+      };
+      const res = await executeMiddleware(mw, req);
+      expect(res.nextCalled).toBe(true);
+    });
+
+    it('should allow teachers to access assignment whiteboards for grading', async () => {
+      const mw = requireWhiteboardWriteAccess();
+      const req = { headers: {}, session: bobSession, params: { id: 'assignment-asg1-student-usr_student_charlie' } };
+      const res = await executeMiddleware(mw, req);
+      expect(res.nextCalled).toBe(true);
+    });
+
+    it('should reject non-owner teacher modifying Alice lesson whiteboard with 403', async () => {
+      const mw = requireWhiteboardWriteAccess();
+      const req = { headers: {}, session: bobSession, params: { id: aliceLessonId } };
+      const res = await executeMiddleware(mw, req);
+      expect(res.nextCalled).toBe(false);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toContain('Forbidden');
+    });
+
+    it('should allow owner teacher Alice to modify her lesson whiteboard', async () => {
+      const mw = requireWhiteboardWriteAccess();
+      const req = { headers: {}, session: aliceSession, params: { id: aliceLessonId } };
+      const res = await executeMiddleware(mw, req);
+      expect(res.nextCalled).toBe(true);
+    });
+
+    it('should allow administrator to modify any lesson whiteboard', async () => {
+      const mw = requireWhiteboardWriteAccess();
+      const req = { headers: {}, session: adminSession, params: { id: aliceLessonId } };
+      const res = await executeMiddleware(mw, req);
+      expect(res.nextCalled).toBe(true);
     });
   });
 });
