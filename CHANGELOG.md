@@ -8,7 +8,10 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.3.1] - 2026-09-06
+
+### Features
+- **插件导航 API 扩展**：`FrontendPluginContext.navigation` 新增 `setSelectedLesson(lessonId: string | null)` 方法，转发到 `appStore.setSelectedLesson`，供第三方插件在 `activate(ctx)` 中切换当前课节。
 
 ### Security & Multi-Teacher Authorization (Round 4)
 - **IDOR 课程水平越权防护与教师专属所有权 (Lesson Ownership & IDOR Protection)**：
@@ -120,7 +123,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **ESLint 工具链基线修复与清理**：
   - 修正 [`eslint.config.js`](file:///home/wuxf/Develop/openlearnv2/eslint.config.js) 全局 ignores，排除 `.venv`、构建产物与 Sphinx 文档静态脚本，调整非关键警告级别，`pnpm lint:eslint` 达成 0 Error 绿灯基线。
 
-### Features
+### Features (v0.2.9)
 - **html-applet 组件增强**：
   - 抽取统一 `<HtmlAppletFrame>` 组件（画布内嵌/全屏/兜底三处复用），按优先级解析四种内容源：`coursewareUuid` → `resourceId` → 插件自定义内容源 → `code`（`srcDoc`）。
   - `HtmlAppletPayload` 补齐 `resourceId` / `sourceType` / `sourceId`，并修复 `buildElementData` 字段丢失与 `title` 渲染。
@@ -130,16 +133,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **课件事件化**：课件 `submitted` / `progress_saved` / `event_logged` / `config_reported` 发布到前端 EventBus（`courseware.` 前缀经 Socket 转发到后端 EventBus），后端 log 路由发布 `courseware.event_logged`。
 - **备课画板组件配置增强**：`EditFieldKind` 新增 `select`（静态 `options` + 动态 `loadOptions`），`PaletteCardEditModal` 支持下拉选择；html-applet 的 `coursewareUuid` / `resourceId` 可在备课画板直接选择。
 
-### Security
+### Security (v0.2.9)
 - html-applet iframe 新增 `credentialless` 与 `referrerPolicy="no-referrer"`；`injectLmsSdk` 防御性移除 `<base>` 与 `<meta http-equiv=refresh>` 导航逃逸向量。
 
-### Fixes
+### Fixes (v0.2.9)
 - Worker 插件自建表前缀改用 `manifestId`（与命令命名空间及 ServiceHost 的 DDL 守卫一致），避免 Worker 插件在自己命名空间建表被误判为越权 DDL。
 
-### Refactor / Performance
+### Refactor / Performance (v0.2.9)
 - html-applet iframe 懒挂载（IntersectionObserver，200px 预加载边距）+ 同时挂载上限 4 个（`courseware-frame-limiter.ts`）。
 
-### Docs
+### Docs (v0.2.9)
 - `docs/reference/plugin-ui-extension-slots.md` 新增 §7 课件内容源、§8 LMS Bridge 双向通信；`docs/architecture/whiteboard-runtime.md` 同步 html-applet 渲染管线说明。
 
 ## [0.2.8] - 2026-09-04
