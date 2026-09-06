@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-09-06
+
+### Features & CLI Utilities
+- **`doctor` 增加 SDK 套件与插件版本全方位兼容性检测**：
+  - **SDK Suite 综合检测**：同步校验 `@openlearn/plugin-sdk` 与 `@openlearn/plugin-test-kit` 的解析版本与安装形态；
+  - **内置核心插件平台兼容性 (`Core Plugins`)**：零外部依赖校验全部 7 个核心内置插件的 `engines.openlearn` 约束是否被当前平台版本满足，防范版本互锁；
+  - **已安装扩展插件引擎约束检测 (`Installed Plugins`)**：自研轻量级 SemVer 范围判定引擎，扫描 SQLite 数据库与本地插件清单，校验各扩展插件与平台版本（`engines.openlearn`）的兼容性，精准识别不兼容插件并提出预警。
+
 ### Fixes
 - **SDK 依赖版本漂移治理**：根 `package.json` 的 `@openlearn/plugin-sdk` 从 `^3.5.2` 改为 `workspace:*` 并刷新锁文件（此前锁文件冻结在 npm 3.5.2 快照、`.pnpm` 残留 3.4.3，与 workspace 3.6.0 三版本并存，宿主实际解析版本随安装历史漂移）；移除 `pnpm-workspace.yaml` 中过期的 `minimumReleaseAgeExclude`（SDK 3.5.2）与不存在的 `packages/mfe-courseware` workspace 条目。
 - **发布流程防漂移（npx 确定性依赖）**：`scripts/publish.sh` 与 CI `publish.yml` 在发布 `openlearn-next` 前将 `workspace:*` 重写为精确 SDK 版本并发布后还原——`server.cjs` 以 `--packages=external` 构建、运行时从消费者 `node_modules` 解析 SDK，精确 pin 保证 npx/npm 用户装到的 SDK 与构建时版本强一致。

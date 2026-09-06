@@ -15,23 +15,35 @@ pnpm lint || err "TypeScript check failed"
 pnpm vitest run packages/core/__tests__/version-consistency.test.ts || err "Version consistency gate failed! Check package.json vs packages/core/version.ts"
 
 # ── 1. Publish @openlearn/plugin-sdk ───────────────────────────────
-log "Building @openlearn/plugin-sdk..."
+log "Checking @openlearn/plugin-sdk..."
 cd packages/plugin-sdk
-npm publish --registry=https://registry.npmjs.org || err "plugin-sdk publish failed"
 SDK_VER=$(node -p "require('./package.json').version")
-log "@openlearn/plugin-sdk@${SDK_VER} published"
+REMOTE_SDK_VER=$(npm view @openlearn/plugin-sdk version 2>/dev/null || echo "")
+if [ "$SDK_VER" != "$REMOTE_SDK_VER" ]; then
+  log "Publishing @openlearn/plugin-sdk@${SDK_VER}..."
+  npm publish --registry=https://registry.npmjs.org || err "plugin-sdk publish failed"
+  log "@openlearn/plugin-sdk@${SDK_VER} published"
+else
+  log "@openlearn/plugin-sdk@${SDK_VER} already published on npm, skipping publish"
+fi
 cd ../..
 
 # ── 2. Publish @openlearn/plugin-test-kit ──────────────────────────
-log "Publishing @openlearn/plugin-test-kit..."
-sed -i 's|"@openlearn/plugin-sdk": "workspace:\*"|"@openlearn/plugin-sdk": "^'"$SDK_VER"'"|' packages/plugin-test-kit/package.json
+log "Checking @openlearn/plugin-test-kit..."
 cd packages/plugin-test-kit
-npm publish --registry=https://registry.npmjs.org || err "plugin-test-kit publish failed"
 TK_VER=$(node -p "require('./package.json').version")
-log "@openlearn/plugin-test-kit@${TK_VER} published"
+REMOTE_TK_VER=$(npm view @openlearn/plugin-test-kit version 2>/dev/null || echo "")
+if [ "$TK_VER" != "$REMOTE_TK_VER" ]; then
+  log "Publishing @openlearn/plugin-test-kit@${TK_VER}..."
+  sed -i 's|"@openlearn/plugin-sdk": "workspace:\*"|"@openlearn/plugin-sdk": "^'"$SDK_VER"'"|' package.json
+  npm publish --registry=https://registry.npmjs.org || err "plugin-test-kit publish failed"
+  log "@openlearn/plugin-test-kit@${TK_VER} published"
+  # Restore workspace protocol for local dev
+  git checkout -- package.json
+else
+  log "@openlearn/plugin-test-kit@${TK_VER} already published on npm, skipping publish"
+fi
 cd ../..
-# Restore workspace protocol for local dev
-git checkout -- packages/plugin-test-kit/package.json
 
 # ── 3. Build & publish openlearn-next ──────────────────────────────
 log "Building openlearn-next..."
@@ -43,7 +55,7 @@ npm publish --registry=https://registry.npmjs.org || err "openlearn-next publish
 APP_VER=$(node -p "require('./package.json').version")
 log "openlearn-next@${APP_VER} published"
 # Restore workspace protocol for local dev
-git checkout -- package.json
+sed -i 's|"@openlearn/plugin-sdk": "'"${SDK_VER}"'"|"@openlearn/plugin-sdk": "workspace:\*"|' package.json
 
 # ── 4. Sync to npmmirror ──────────────────────────────────────────
 log "Syncing to npmmirror..."

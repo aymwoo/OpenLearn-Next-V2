@@ -4,7 +4,14 @@ import { join } from 'node:path';
 import os from 'node:os';
 import Database from 'better-sqlite3';
 
-import { checkPortAvailable, getNetworkIps, runDoctor } from '../../../cli-doctor.mjs';
+import {
+  checkPortAvailable,
+  getNetworkIps,
+  runDoctor,
+  satisfiesVersionRange,
+  checkCorePluginsCompatibility,
+  checkInstalledPluginsCompatibility,
+} from '../../../cli-doctor.mjs';
 import { runBackup, runRestore, runResetAdmin, runPluginsList } from '../../../cli-data.mjs';
 
 describe('CLI Enhanced Suite (系统诊断与数据运维测试)', () => {
@@ -76,14 +83,61 @@ describe('CLI Enhanced Suite (系统诊断与数据运维测试)', () => {
       }
     });
 
-    it('3. runDoctor 返回合格的系统自检指标清单', async () => {
+    it('3. runDoctor 返回合格的系统自检指标清单（含 SDK 与插件生态检测）', async () => {
       const res = await runDoctor({ silent: true, dbPath });
       expect(res.ok).toBe(true);
-      expect(res.checks.length).toBeGreaterThanOrEqual(4);
+      expect(res.checks.length).toBeGreaterThanOrEqual(6);
       const names = res.checks.map((c) => c.name);
       expect(names).toContain('Node.js Runtime');
       expect(names).toContain('Hardware & OS');
       expect(names).toContain('Database Storage');
+      expect(names).toContain('SDK Version');
+      expect(names).toContain('Core Plugins');
+      expect(names).toContain('Installed Plugins');
+    });
+
+    it('3.1 satisfiesVersionRange 支持完整的 SemVer 范围语法', () => {
+      expect(satisfiesVersionRange('0.3.9', '>=0.2.5')).toBe(true);
+      expect(satisfiesVersionRange('0.3.9', '>= 0.2.5')).toBe(true);
+      expect(satisfiesVersionRange('0.3.9', '^0.3.0')).toBe(true);
+      expect(satisfiesVersionRange('0.4.0', '^0.3.0')).toBe(false);
+      expect(satisfiesVersionRange('0.3.9', '>=0.4.0')).toBe(false);
+      expect(satisfiesVersionRange('0.3.9', '*')).toBe(true);
+      expect(satisfiesVersionRange('0.3.9', '>=0.2.0 <1.0.0')).toBe(true);
+      expect(satisfiesVersionRange('1.0.0', '>=0.2.0 <1.0.0')).toBe(false);
+      expect(satisfiesVersionRange('0.3.9', '~0.3.0')).toBe(true);
+      expect(satisfiesVersionRange('0.4.0', '~0.3.0')).toBe(false);
+    });
+
+    it('3.2 checkCorePluginsCompatibility 验证内置核心插件满足平台约束', () => {
+      const check = checkCorePluginsCompatibility();
+      expect(check.name).toBe('Core Plugins');
+      expect(check.status).toBe('ok');
+      expect(check.message).toContain('全部 7 个核心内置插件');
+    });
+
+    it('3.3 checkInstalledPluginsCompatibility 准确识别已安装插件及版本冲突', async () => {
+      // 数据库已在 beforeEach 插入 ext-courseware-preview v1.2.0 (无 engines 限制，默认兼容)
+      const checkOk = await checkInstalledPluginsCompatibility({ dbPath, scanLocalPlugins: false });
+      expect(checkOk.name).toBe('Installed Plugins');
+      expect(checkOk.status).toBe('ok');
+      expect(checkOk.message).toContain('ext-courseware-preview');
+
+      // 插入一个不兼容当前平台的插件 (要求 openlearn >= 9.0.0)
+      const db = new Database(dbPath);
+      db.prepare('INSERT INTO plugins VALUES (?, ?, ?, ?, ?)').run(
+        'ext-future-plugin',
+        'Future Plugin',
+        JSON.stringify({ id: 'ext-future-plugin', version: '2.0.0', engines: { openlearn: '>=9.0.0' } }),
+        'active',
+        'esm',
+      );
+      db.close();
+
+      const checkWarn = await checkInstalledPluginsCompatibility({ dbPath, scanLocalPlugins: false });
+      expect(checkWarn.status).toBe('warn');
+      expect(checkWarn.message).toContain('不兼容');
+      expect(checkWarn.message).toContain('ext-future-plugin');
     });
   });
 
