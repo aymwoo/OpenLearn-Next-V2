@@ -41,22 +41,54 @@ npm --version    # 应输出 9.0.0 或更高
 
 ## 2. 快速开始
 
-### 方式一：npx 一键启动（推荐）
+### 方式一：npx 一键启动与 CLI 工具链（推荐）
 
-无需 clone 项目，首次运行时自动下载安装：
+无需 clone 项目，首次运行时自动下载安装并提供全套运维指令：
 
 ```bash
-# 默认端口 9000
+# 1. 标准启动（默认监听 0.0.0.0:9000，自动扫描局域网 IP 直显）
 npx openlearn-next
 
-# 自定义端口
-npx openlearn-next -p 3000
+# 2. 启动并自动唤起默认浏览器 (-o)
+npx openlearn-next -o
 
-# 自定义数据库路径（默认 ~/openlearn-next/data.db）
-OPENLEARN_DB_PATH=./my.db npx openlearn-next
+# 3. 自定义端口 (-p) 与绑定特定网卡 (-H)
+npx openlearn-next -p 3000 -H 127.0.0.1
+
+# 4. 临时演示沙盒模式（--demo：在 /tmp/ 创建一次性数据，退出自动销毁）
+npx openlearn-next --demo -o
+
+# 5. 指定 CORS 跨域白名单来源
+npx openlearn-next --cors "http://localhost:5173,*"
+
+# 6. 自定义数据库文件存储路径
+npx openlearn-next --db-path ./my.db
+# 或通过环境变量：OPENLEARN_DB_PATH=./my.db npx openlearn-next
 ```
 
-启动后访问 `http://localhost:9000` 即可进入系统。
+#### 🛠️ CLI 常用运维与诊断子命令
+
+`npx openlearn-next` 内置免界面运维工具链：
+
+```bash
+# 环境健康体检（自检 Node.js 版本、CPU/内存余量、存储权限、端口占用）
+npx openlearn-next doctor
+
+# 一键在线数据快照冷备（毫秒级导出当前数据库备份）
+npx openlearn-next backup my_backup.db
+
+# 从快照安全还原数据（自动创建旧数据库回滚镜像）
+npx openlearn-next restore my_backup.db
+
+# 免界面直接重置管理员密码（默认重置为 admin 或指定新密码）
+npx openlearn-next reset-admin --password new_password_123
+
+# 终端速查当前已安装的所有插件清单与运行状态
+npx openlearn-next plugins
+
+# 清理 NPX 远端历史包缓存（解决版本漂移或更新不生效）
+npx openlearn-next clean --npx
+```
 
 ### 方式二：npm 全局安装
 
