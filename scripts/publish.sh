@@ -9,6 +9,11 @@ NC='\033[0m'
 log()  { echo -e "${GREEN}[publish]${NC} $*"; }
 err()  { echo -e "${RED}[error]${NC} $*"; exit 1; }
 
+# ── 0. Preflight Quality Gate & Version Consistency ────────────────
+log "Running Preflight Quality Gates (lint & version-consistency)..."
+pnpm lint || err "TypeScript check failed"
+pnpm vitest run packages/core/__tests__/version-consistency.test.ts || err "Version consistency gate failed! Check package.json vs packages/core/version.ts"
+
 # ── 1. Publish @openlearn/plugin-sdk ───────────────────────────────
 log "Building @openlearn/plugin-sdk..."
 cd packages/plugin-sdk

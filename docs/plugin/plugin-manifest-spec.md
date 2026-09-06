@@ -13,7 +13,7 @@
   "version": "1.2.0",
   "main": "dist/index.js",
   "engines": {
-    "openlearn": "^0.2.9"
+    "openlearn": ">=0.2.5"
   },
   "requires": [
     "@openlearn/core:ICommandBusService@^1.0.0",
@@ -92,7 +92,9 @@
 ### 2.2 平台与服务依赖字段 (Dependencies)
 
 #### `engines.openlearn`
-指定要求的 OpenLearn 主应用平台版本号（SemVer 匹配）。例如 `"^0.2.9"` 表示仅允许在 `0.2.x` 及以上的宿主环境激活。
+指定要求的 OpenLearn 主应用平台版本号范围（SemVer 匹配）。例如 `">=0.2.5"` 表示允许在 `0.2.5` 及以上的任意宿主环境激活。
+
+> **重要注意**：在 SemVer 规范中，零主版本（如 `"^0.2.9"`）严格等价于 `">=0.2.9 <0.3.0"`，当宿主升级到 `0.3.x` 时会被判定为不兼容而拒载。因此推荐使用 `">=0.2.5"` 进行向前兼容声明。
 
 #### `requires`
 声明插件**强依赖**的宿主服务接口与版本范围。如果宿主环境缺少对应服务或服务版本不满足范围，插件激活将直接抛出 `SemverMismatchError` 并终止。

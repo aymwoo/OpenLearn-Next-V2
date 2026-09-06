@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { PlatformBuilder } from '../bootstrap/builder/index.js';
 import type { IBootstrapStage } from '../bootstrap/types/index.js';
 import { ConfigurationError } from '../bootstrap/types/index.js';
+import { PLATFORM_VERSION } from '../version.js';
 
 describe('PI-004 PlatformBuilder Test Suite', () => {
   it('should instantiate via PlatformBuilder.create() in Created state', () => {
@@ -61,7 +62,7 @@ describe('PI-004 PlatformBuilder Test Suite', () => {
 
     const result = builder.buildResult();
 
-    expect(result.builderVersion).toBe('0.3.5');
+    expect(result.builderVersion).toBe(PLATFORM_VERSION);
     expect(result.validation.isValid).toBe(true);
     expect(result.platformContext.environment.type).toBe('development');
     expect(result.pipeline.stages.some((s) => s.id === 'custom_stage')).toBe(true);

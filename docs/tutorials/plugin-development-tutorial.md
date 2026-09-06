@@ -230,16 +230,16 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 | `global.setting` | 0.2.x | 管理员 |
 | `anchor:*` | 0.2.6 | 教师/学生（按锚点所在宿主界面） |
 
-> **提示**：在 manifest.engines.openlearn 中声明目标版本，如 `"^0.2.9"`。安装时 PluginHost 自动检查兼容性。
+> **提示**：在 manifest.engines.openlearn 中声明目标版本范围，如 `">=0.2.5"`。安装时 PluginHost 自动检查兼容性。
 >
-> ⚠️ **版本号说明**：OpenLearn 存在三个独立的版本号，请勿混淆：
-> | 版本 | 当前值 | 用途 |
-> |------|--------|------|
-> | 平台发行版本 | `0.2.9` | CHANGELOG 与 git tag 的发布版本 |
-> | 宿主 API 版本 | `0.2.9` | `engines.openlearn` 兼容性检查所用的版本（自 v0.2.3 起与平台版本统一） |
-> | SDK 版本 | `3.5.2` | `@openlearn/plugin-sdk` npm 包版本，仅影响类型定义 |
+> ⚠️ **版本号说明**：OpenLearn 存在独立的版本号维度，请勿混淆：
+> | 版本 | 说明 | 用途 |
+> |------|------|------|
+> | 平台发行版本 | 当前 `0.3.x` | 主应用平台发布版本（如 `0.3.5`，根目录 `package.json`） |
+> | 宿主 API 版本 | 当前 `0.3.x` | `engines.openlearn` 检查所用的版本（与平台版本单一真理源保持强一致） |
+> | SDK 版本 | 当前 `3.5.2` | `@openlearn/plugin-sdk` npm 包版本，独立语义化版本管理 |
 >
-> **`engines.openlearn` 应填写宿主 API 版本（当前为 `0.2.9`）**，而非平台发行版本或 SDK 版本。
+> **`engines.openlearn` 应填写宿主版本兼容范围（推荐声明为 `>=0.2.5`）**，而非 SDK 版本。
 
 ### 2.7 导航页面 vs. 白板组件 — 如何区分？
 
@@ -353,7 +353,7 @@ interface Manifest {
   description?: string;          // 描述
   author?: string;               // 作者
   engines?: {                    // 引擎版本约束
-    openlearn?: string;          // 宿主 API 版本，如 "^0.2.9"
+    openlearn?: string;          // 宿主版本范围，如 ">=0.2.5"
   };
   requires: string[];            // 依赖的服务 Token（格式 @openlearn/core:TokenName@^1.0.0）
   optional?: string[];           // 可选依赖
@@ -533,7 +533,7 @@ export default {
     main: 'index.js',
     description: '在课堂上创建实时投票，收集学生回答',
     author: 'Your Name',
-    engines: { openlearn: '^0.2.9' },
+    engines: { openlearn: '>=0.2.5' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',
@@ -1968,7 +1968,7 @@ export default {
     main: 'index.js',
     description: '插件描述',
     author: '作者名',
-    engines: { openlearn: '^0.2.9' },
+    engines: { openlearn: '>=0.2.5' },
     requires: [
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',

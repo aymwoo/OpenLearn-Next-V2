@@ -33,6 +33,16 @@ myst_fence_as_directive = ["mermaid"]
 source_suffix = {
     '.md': 'markdown',
 }
-# Version (keep in sync with root package.json)
-version = '0.3.3'
-release = '0.3.3'
+import json
+from pathlib import Path
+
+# Version: dynamically synchronized from root package.json to prevent version drift
+_pkg_json_path = Path(__file__).resolve().parent.parent / "package.json"
+try:
+    with open(_pkg_json_path, "r", encoding="utf-8") as _f:
+        _pkg_data = json.load(_f)
+        version = _pkg_data.get("version", "0.3.5")
+        release = version
+except Exception:
+    version = '0.3.5'
+    release = '0.3.5'

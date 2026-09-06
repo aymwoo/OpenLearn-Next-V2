@@ -4,6 +4,7 @@
  * Establishes the foundational common language, lifecycle stages, error hierarchy,
  * platform constants, abstract interfaces, and bootstrap context contracts.
  */
+import { PLATFORM_VERSION as _PLATFORM_VERSION } from '../../version.js';
 
 // ── ⑦ Common Platform Types ──────────────────────────────────────────────
 
@@ -121,7 +122,7 @@ export const BootstrapError = PlatformBootstrapError;
 // ── ③ Platform Constants ─────────────────────────────────────────────────
 
 /** Current OpenLearn platform semantic version. */
-export const PLATFORM_VERSION: Version = '0.3.5';
+export const PLATFORM_VERSION: Version = _PLATFORM_VERSION;
 
 /** Official kernel name. */
 export const PLATFORM_KERNEL_NAME = 'OpenLearn Platform Kernel';
