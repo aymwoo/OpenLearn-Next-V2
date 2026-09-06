@@ -3,10 +3,17 @@
 All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are documented here.
 
 > Versioning note: the platform `openlearn-next` is versioned independently of
-> `@openlearn/plugin-sdk` (currently **3.5.2**) and `@openlearn/plugin-test-kit`.
+> `@openlearn/plugin-sdk` (currently **3.6.0**) and `@openlearn/plugin-test-kit`.
 > Bumping the platform does not change the SDK / test-kit versions.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
+
+## [0.3.9] - 2026-09-06
+
+### Fixes
+- **Worker 插件 DB 代理补齐 `exec` 转发**：`ctx.resolve(IDatabaseToken)` 的 worker 侧 stub 只暴露 `prepare/{run,get,all}`，worker 插件调用 `exec` 报 `rawDb.exec is not a function`。主侧 exec RPC 本就经过 `assertDatabaseAccessAllowed` 守卫（DDL 命名空间 + 核心表黑名单），此处补齐转发；返回 Promise（异步 RPC），与 `prepare*` 语义一致。
+- **脚手架 CLI 不再把 SDK 自身打进插件 bundle**（随 `@openlearn/plugin-sdk` **3.6.0** 发布，详见其 CHANGELOG）：SDK dist 引用宿主侧 pino/express/uuid/semver，此前被整体打进插件产物导致脚手架项目构建失败、产物在宿主被 token-enforcer 拒绝；现保持 external，与平台官方 `build-plugins.mjs` 一致，独立脚手架无需手动补装依赖。
+- 同步发布 `@openlearn/plugin-test-kit` **3.3.2**。
 
 ## [0.3.8] - 2026-09-06
 
