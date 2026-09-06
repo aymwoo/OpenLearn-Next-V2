@@ -41,15 +41,11 @@ export type {
   ExtensionItemMetadata,
 } from '../core/plugin-host/index.js';
 
-export {
-  PluginRuntimeAdapter,
-  PluginRuntimeComposition,
-  PluginContextAdapter,
-  PluginLifecycleManager,
-  PluginCapabilityGateway,
-  UnifiedExtensionRegistry,
-  PluginDistributionManager,
-} from '../core/plugin-host/index.js';
+// NOTE: concrete host-runtime classes (PluginRuntimeAdapter, ...,
+// PluginDistributionManager) are intentionally NOT re-exported here.
+// Plugins run in a self-contained Worker and must not pull express/jszip/pino
+// trees into their bundles; consume host-injected instances via the I*Tokens
+// above. Host process code imports these from '../core/plugin-host/index.js'.
 
 // ── Configuration Service (V3.2) ────────────────────────────────────────
 
