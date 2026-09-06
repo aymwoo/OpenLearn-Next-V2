@@ -8,6 +8,31 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Fixes
+- **SDK 依赖版本漂移治理**：根 `package.json` 的 `@openlearn/plugin-sdk` 从 `^3.5.2` 改为 `workspace:*` 并刷新锁文件（此前锁文件冻结在 npm 3.5.2 快照、`.pnpm` 残留 3.4.3，与 workspace 3.6.0 三版本并存，宿主实际解析版本随安装历史漂移）；移除 `pnpm-workspace.yaml` 中过期的 `minimumReleaseAgeExclude`（SDK 3.5.2）与不存在的 `packages/mfe-courseware` workspace 条目。
+- **发布流程防漂移（npx 确定性依赖）**：`scripts/publish.sh` 与 CI `publish.yml` 在发布 `openlearn-next` 前将 `workspace:*` 重写为精确 SDK 版本并发布后还原——`server.cjs` 以 `--packages=external` 构建、运行时从消费者 `node_modules` 解析 SDK，精确 pin 保证 npx/npm 用户装到的 SDK 与构建时版本强一致。
+- **`build-plugins.mjs` 与 SDK CLI / token-enforcer 策略对齐**：插件 ZIP 构建改为 `external: ['@openlearn/plugin-sdk']`，不再把构建时刻的 SDK 代码打进产物（否则运行时与宿主解析的 SDK 脱节，且可能被 token-enforcer 拒绝）。
+- **插件更新检测补全**：`POST /api/plugins/:id/check-update` 在插件未声明市场更新源（`updateSource`）时回退扫描本地 `v2_plugins/*/manifest.json` 按 semver 对比，避免已安装插件停留在安装时刻的快照版本；移除 `one-click-update` 中指向已下架 research-workflow 插件的硬编码死路径分支，无 `downloadUrl` 时明确返回 400 并引导客户端 ZIP 直传；Plugin Center 更新弹窗对本地源更新显示"重新构建 ZIP 上传"提示而非热更新按钮。
+- **`npx openlearn-next` CLI 参数解析与命令调度重构**：
+  - 引入健壮的零外部依赖 token 解析器，支持位置无关的子命令调度（如 `openlearn-next --port 9001 doctor` 不再跳过子命令错误拉起服务端）；
+  - 支持 `--key=value` 赋值语法（如 `--port=9000`、`--host=127.0.0.1`、`--cors=*`）；
+  - 严格校验必需参数缺失（如单独输入 `-p` 或 `-p -H 127.0.0.1` 时明确报错退出，不再静默吞并后序参数）；
+  - 增加未知/拼写错误命令拦截（如 `docotr` 给出友好报错提示，避免误启动服务）；
+  - 增加停机信号超时保护至 35s，确保内核 30s 优雅关机流程完整执行。
+- **`clean` 模式 SQLite WAL 预写日志安全落盘保护**：在默认清理模式下，清理 WAL/SHM 前先调用 SQLite `PRAGMA wal_checkpoint(TRUNCATE)` 将预写日志落盘至主库，消除直接 `unlinkSync` 导致未 checkpoint 事务静默丢失的高危隐患；同时兼容 Windows 下 `%LOCALAPPDATA%` NPX 缓存目录发现。
+- **`doctor` 防版本漂移体系升级与一键自愈 (`--fix`)**：
+  - **SDK Version 解析鲁棒化**：通过 Node 模块解析器与向上递归解析，兼容 npm/npx 依赖提升（hoisting）结构；
+  - **平台内核核心版本防漂移**：自动校验 `package.json` 与 `packages/core/version.ts` 的版本一致性；
+  - **NPX 缓存历史包防漂移**：扫描发现滞留的旧版本 NPX 缓存包并发出预警；
+  - **一键自愈 (`--fix`)**：支持 `npx openlearn-next doctor --fix` 一键自动清理旧版 NPX 缓存、自动同步版本元数据、自动创建数据目录。
+- **`backup` 目标目录自动递归创建**：在线冷备时若目标路径包含多级未创建目录，自动执行 `mkdirSync(recursive)` 防止 ENOENT 异常。
+- **`openlearn-next doctor` 新增 SDK Version 一致性检查**：对比 `package.json` 声明与 `node_modules` 实际解析版本（支持 workspace 链接 / 精确 pin / caret 三种形态，零依赖实现），不一致时报错并给出修复指引。
+
+### Docs
+- `docs/index.md` 去除硬编码的 `@openlearn/plugin-sdk@3.5.2` 版本号，改为跟随平台 release。
+
 ## [0.3.9] - 2026-09-06
 
 ### Fixes

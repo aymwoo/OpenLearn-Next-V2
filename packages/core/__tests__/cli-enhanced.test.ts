@@ -141,5 +141,55 @@ describe('CLI Enhanced Suite (系统诊断与数据运维测试)', () => {
       expect(res.plugins![0].id).toBe('ext-courseware-preview');
       expect(res.plugins![0].status).toBe('active');
     });
+
+    it('8. runBackup 在目标目录不存在时能够递归自动创建父目录', async () => {
+      const deepBackupPath = join(tempDir, 'nested', 'backups', 'deep_backup.db');
+      const res = await runBackup(deepBackupPath, { dbPath, silent: true });
+      expect(res.ok).toBe(true);
+      expect(existsSync(deepBackupPath)).toBe(true);
+    });
+  });
+
+  describe('cli.mjs (参数解析器与位置无关性测试)', () => {
+    it('9. parseCliArgs 正确识别位置无关的子命令与参数', async () => {
+      const { parseCliArgs } = await import('../../../cli.mjs');
+
+      // (a) 子命令在选项之后
+      const res1 = parseCliArgs(['--port', '9001', 'doctor']);
+      expect(res1.command).toBe('doctor');
+      expect(res1.flags.port).toBe('9001');
+
+      // (b) --flag=value 格式解析
+      const res2 = parseCliArgs(['--port=8888', '--host=127.0.0.1', 'doctor', '--fix']);
+      expect(res2.command).toBe('doctor');
+      expect(res2.flags.port).toBe('8888');
+      expect(res2.flags.host).toBe('127.0.0.1');
+      expect(res2.flags.fix).toBe(true);
+
+      // (c) 带位置参数的子命令与前置选项
+      const res3 = parseCliArgs(['--db-path', './custom.db', 'backup', 'my_snap.db']);
+      expect(res3.command).toBe('backup');
+      expect(res3.flags.dbPath).toBe('./custom.db');
+      expect(res3.subcommandArgs).toEqual(['my_snap.db']);
+
+      // (d) 无子命令的服务启动参数
+      const res4 = parseCliArgs(['-p', '3000', '-H', '0.0.0.0', '-o', '--demo']);
+      expect(res4.command).toBeNull();
+      expect(res4.flags.port).toBe('3000');
+      expect(res4.flags.host).toBe('0.0.0.0');
+      expect(res4.flags.open).toBe(true);
+      expect(res4.flags.demo).toBe(true);
+    });
+
+    it('10. parseCliArgs 准确拦截缺失数值的选项与未知命令', async () => {
+      const { parseCliArgs } = await import('../../../cli.mjs');
+
+      // 缺失端口数值
+      expect(() => parseCliArgs(['-p'])).toThrow(/必须指定有效的端口数值/);
+      expect(() => parseCliArgs(['--port', '-H', '127.0.0.1'])).toThrow(/必须指定有效的端口数值/);
+
+      // 未知手误命令
+      expect(() => parseCliArgs(['docotr'])).toThrow(/未知命令: "docotr"/);
+    });
   });
 });

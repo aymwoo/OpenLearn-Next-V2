@@ -36,6 +36,8 @@ export async function runBackup(outputFile, options = {}) {
     ? path.resolve(outputFile)
     : path.resolve(process.cwd(), `openlearn_backup_${timestamp}.db`);
 
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+
   try {
     const Database = (await import('better-sqlite3')).default;
     const db = new Database(dbPath, { readonly: true });
@@ -155,6 +157,14 @@ export async function runResetAdmin(newPassword = 'admin', options = {}) {
 
     const Database = (await import('better-sqlite3')).default;
     const db = new Database(dbPath);
+
+    const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get();
+    if (!tableCheck) {
+      const msg = `数据库尚未初始化 users 数据表 (${dbPath})。请先启动一次平台初始化数据表。`;
+      log(`ℹ ${msg}`);
+      db.close();
+      return { ok: false, error: msg };
+    }
 
     const updateRes = db.prepare('UPDATE users SET password_hash = ? WHERE username = ?').run(hash, 'admin');
 

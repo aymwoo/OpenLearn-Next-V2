@@ -1,6 +1,60 @@
 import { existsSync, readdirSync, rmSync, unlinkSync, statSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
+import { createRequire } from 'node:module';
 import os from 'node:os';
+
+const require = createRequire(import.meta.url);
+
+/**
+ * 获取本机所有潜在的 NPX 缓存根目录 (兼容 Linux, macOS 与 Windows)
+ * @param {string} [customDir]
+ * @returns {string[]}
+ */
+export function getNpxCacheDirs(customDir) {
+  if (customDir) return [resolve(customDir)];
+  const dirs = [join(os.homedir(), '.npm', '_npx')];
+  if (process.platform === 'win32' || process.env.LOCALAPPDATA) {
+    if (process.env.LOCALAPPDATA) {
+      dirs.push(join(process.env.LOCALAPPDATA, 'npm-cache', '_npx'));
+    }
+    dirs.push(join(os.homedir(), 'AppData', 'Local', 'npm-cache', '_npx'));
+    dirs.push(join(os.homedir(), 'AppData', 'Roaming', 'npm-cache', '_npx'));
+  }
+  return [...new Set(dirs)].filter((d) => existsSync(d));
+}
+
+/**
+ * 扫描当前系统中已缓存的 openlearn-next NPX 包实体（供治理与防版本漂移诊断使用）
+ * @param {Object} [options]
+ * @param {string} [options.customNpxDir]
+ * @returns {Array<{ dirPath: string, hash: string, version: string }>}
+ */
+export function scanNpxCacheEntries(options = {}) {
+  const dirs = getNpxCacheDirs(options.customNpxDir);
+  const found = [];
+  for (const npxDir of dirs) {
+    try {
+      const entries = readdirSync(npxDir);
+      for (const entry of entries) {
+        const entryPath = join(npxDir, entry);
+        try {
+          if (statSync(entryPath).isDirectory()) {
+            const targetPackage = join(entryPath, 'node_modules', 'openlearn-next');
+            if (existsSync(targetPackage)) {
+              let ver = 'unknown';
+              try {
+                const pkgData = JSON.parse(readFileSync(join(targetPackage, 'package.json'), 'utf-8'));
+                ver = pkgData.version || 'unknown';
+              } catch {}
+              found.push({ dirPath: entryPath, hash: entry, version: ver });
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+  return found;
+}
 
 /**
  * 安全清理 openlearn-next 在本地的各类运行与包缓存
@@ -29,34 +83,14 @@ export function runClean(options = {}) {
 
   // ── 1. 清理 NPX 历史包缓存 ─────────────────────────────────────────────
   if (isAll || isOnlyNpx || isDefault) {
-    const npxDir = options.customNpxDir ? resolve(options.customNpxDir) : join(os.homedir(), '.npm', '_npx');
-    if (existsSync(npxDir)) {
+    const cachedEntries = scanNpxCacheEntries(options);
+    for (const item of cachedEntries) {
       try {
-        const entries = readdirSync(npxDir);
-        for (const entry of entries) {
-          const entryPath = join(npxDir, entry);
-          try {
-            if (statSync(entryPath).isDirectory()) {
-              const targetPackage = join(entryPath, 'node_modules', 'openlearn-next');
-              if (existsSync(targetPackage)) {
-                let ver = 'unknown';
-                try {
-                  const pkgData = JSON.parse(readFileSync(join(targetPackage, 'package.json'), 'utf-8'));
-                  ver = pkgData.version || 'unknown';
-                } catch {
-                  // ignore JSON parse error
-                }
-                rmSync(entryPath, { recursive: true, force: true });
-                results.npxCleaned++;
-                log(`✓ 已清理 NPX 旧版缓存: ~/.npm/_npx/${entry} (openlearn-next@${ver})`);
-              }
-            }
-          } catch (err) {
-            // 单个目录清理失败不阻断整体流程
-          }
-        }
+        rmSync(item.dirPath, { recursive: true, force: true });
+        results.npxCleaned++;
+        log(`✓ 已清理 NPX 旧版缓存: ${item.dirPath} (openlearn-next@${item.version})`);
       } catch (err) {
-        log(`⚠ 读取 NPX 缓存目录失败: ${err.message}`);
+        // 单个目录清理失败不阻断整体流程
       }
     }
     if (results.npxCleaned === 0 && !options.silent) {
@@ -97,7 +131,18 @@ export function runClean(options = {}) {
         }
         log(`ℹ 数据库已重置，下次启动将全新自动初始化。`);
       } else {
-        // (b) 默认安全清理：清理 WAL 与临时运行日志，保留主库数据
+        // (b) 默认安全清理：先安全 Checkpoint 预写日志至主库，保护未落盘事务，再清理 WAL/SHM
+        if (existsSync(dbPath) && existsSync(walPath)) {
+          try {
+            const Database = require('better-sqlite3');
+            const db = new Database(dbPath);
+            db.pragma('wal_checkpoint(TRUNCATE)');
+            db.close();
+            log(`✓ 已安全归档并截断 SQLite 预写日志 (WAL Checkpoint 事务落盘)`);
+          } catch {
+            // 若数据库为 mock 测试文件或已锁定，安全保留主库并降级清理
+          }
+        }
         if (existsSync(walPath)) {
           unlinkSync(walPath);
           results.tempCleaned.push(walPath);

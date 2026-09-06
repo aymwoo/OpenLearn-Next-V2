@@ -46,24 +46,24 @@ npm --version    # 应输出 9.0.0 或更高
 无需 clone 项目，首次运行时自动下载安装并提供全套运维指令：
 
 ```bash
-# 1. 标准启动（默认监听 0.0.0.0:9000，自动扫描局域网 IP 直显）
-npx openlearn-next
+# 1. 标准启动（推荐指定 @latest 强制检索 npm registry 最新版本，杜绝旧缓存版本漂移）
+npx openlearn-next@latest
 
 # 2. 启动并自动唤起默认浏览器 (-o)
-npx openlearn-next -o
+npx openlearn-next@latest -o
 
 # 3. 自定义端口 (-p) 与绑定特定网卡 (-H)
-npx openlearn-next -p 3000 -H 127.0.0.1
+npx openlearn-next@latest -p 3000 -H 127.0.0.1
 
 # 4. 临时演示沙盒模式（--demo：在 /tmp/ 创建一次性数据，退出自动销毁）
-npx openlearn-next --demo -o
+npx openlearn-next@latest --demo -o
 
 # 5. 指定 CORS 跨域白名单来源
-npx openlearn-next --cors "http://localhost:5173,*"
+npx openlearn-next@latest --cors "http://localhost:5173,*"
 
 # 6. 自定义数据库文件存储路径
-npx openlearn-next --db-path ./my.db
-# 或通过环境变量：OPENLEARN_DB_PATH=./my.db npx openlearn-next
+npx openlearn-next@latest --db-path ./my.db
+# 或通过环境变量：OPENLEARN_DB_PATH=./my.db npx openlearn-next@latest
 ```
 
 #### 🛠️ CLI 常用运维与诊断子命令
@@ -71,8 +71,10 @@ npx openlearn-next --db-path ./my.db
 `npx openlearn-next` 内置免界面运维工具链：
 
 ```bash
-# 环境健康体检（自检 Node.js 版本、CPU/内存余量、存储权限、端口占用）
+# 环境健康体检与防版本漂移自检（--fix 可一键自愈旧版缓存与目录权限）
 npx openlearn-next doctor
+# 或一键自动自愈漂移与环境异常：
+npx openlearn-next doctor --fix
 
 # 一键在线数据快照冷备（毫秒级导出当前数据库备份）
 npx openlearn-next backup my_backup.db
