@@ -584,15 +584,35 @@ export class ServiceHost {
   /**
    * Security barrier for Worker plugin IDatabase RPC access.
    *
-   * 1. Blocks access to core security tables (auth/session/plugin/admin).
-   * 2. Restricts DDL (CREATE/DROP/ALTER TABLE) to the plugin's own namespace
-   *    (`plugin_<id>_` prefix).
+   * 1. Blocks dangerous SQLite low-level operations (ATTACH, DETACH, PRAGMA, TRIGGERS, VIEWS, VACUUM).
+   * 2. Blocks access to all platform core tables (auth, sessions, roster, grading, lessons, etc.).
+   * 3. Restricts DDL (CREATE/DROP/ALTER TABLE) strictly to the plugin's own namespace (`plugin_<id>_` prefix).
    */
   private assertDatabaseAccessAllowed(sql: string): void {
     if (typeof sql !== 'string' || sql.trim() === '') return;
 
     const pluginId = this.pluginId || this.pluginActorId.replace(/^plugin:/, '');
 
+    // SEC-DB-01: 绝对封禁底层高危与跨库操作指令
+    const FORBIDDEN_OPERATIONS = [
+      /\bATTACH(?:\s+DATABASE)?\b/i,
+      /\bDETACH(?:\s+DATABASE)?\b/i,
+      /\bPRAGMA\b/i,
+      /\bVACUUM\b/i,
+      /\bCREATE\s+(?:TEMP(?:ORARY)?\s+)?(?:TRIGGER|VIEW)\b/i,
+      /\bDROP\s+(?:TEMP(?:ORARY)?\s+)?(?:TRIGGER|VIEW)\b/i,
+    ];
+    for (const opRegex of FORBIDDEN_OPERATIONS) {
+      if (opRegex.test(sql)) {
+        throw new WorkerCapabilityError(
+          this.pluginActorId,
+          '@openlearn/core:IDatabase',
+          `Worker plugin "${pluginId}" is forbidden from executing dangerous statement "${sql.trim()}"`,
+        );
+      }
+    }
+
+    // SEC-DB-02: 完整保护核心安全表与业务主表，禁止插件通过裸 SQL 绕过业务层直接篡改
     const FORBIDDEN_CORE_TABLES = [
       'users',
       'client_sessions',
@@ -601,17 +621,29 @@ export class ServiceHost {
       'ai_providers',
       'processes',
       'pending_commands',
+      'classes',
+      'students',
+      'class_students',
+      'lessons',
+      'assignments',
+      'assignment_submissions',
+      'attendance',
+      'schedules',
+      'class_grade_weights',
+      'exams',
+      'exam_scores',
+      'student_semester_reports',
+      'student_rollcalls',
+      'student_seats',
+      'student_read_notifications',
+      'student_lesson_progress',
+      'courseware',
+      'courseware_attempt',
+      'system_resources',
+      'events',
+      '_migrations',
     ];
-    for (const table of FORBIDDEN_CORE_TABLES) {
-      if (new RegExp(`\\b${table}\\b`, 'i').test(sql)) {
-        throw new WorkerCapabilityError(
-          this.pluginActorId,
-          '@openlearn/core:IDatabase',
-          `Worker plugin "${pluginId}" is forbidden from accessing core security table "${table}"`,
-        );
-      }
-    }
-
+    // 先检查 DDL，优先抛出 DDL 具体的报错以与单元测试契约精确吻合
     const ddlMatch = /^\s*(CREATE|DROP|ALTER)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-zA-Z_][\w]*)["'`]?/i.exec(sql);
     if (ddlMatch) {
       const table = ddlMatch[2];
@@ -628,6 +660,16 @@ export class ServiceHost {
           this.pluginActorId,
           '@openlearn/core:IDatabase',
           `Worker plugin "${pluginId}" is not permitted to perform DDL on table "${table}"`,
+        );
+      }
+    }
+
+    for (const table of FORBIDDEN_CORE_TABLES) {
+      if (new RegExp(`\\b${table}\\b`, 'i').test(sql)) {
+        throw new WorkerCapabilityError(
+          this.pluginActorId,
+          '@openlearn/core:IDatabase',
+          `Worker plugin "${pluginId}" is forbidden from accessing core security table "${table}"`,
         );
       }
     }

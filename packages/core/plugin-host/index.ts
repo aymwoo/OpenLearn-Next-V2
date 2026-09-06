@@ -100,6 +100,19 @@ const DEACTIVATION_TIMEOUT_MS = 5000;
 /** 平台版本号 — 用于 engines.openlearn 兼容性检查 */
 export const OPENLEARN_VERSION = '0.2.5';
 
+/** 插件静态资源安全沙箱中间件 */
+function createPluginStaticMiddleware(absDir: string) {
+  return [
+    (_req: any, res: any, next: any) => {
+      // SEC-SANDBOX: 强制沙箱隔离，禁止访问宿主 Cookie、localStorage 及发起同源特权请求
+      res.setHeader('Content-Security-Policy', "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' blob: data:");
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      next();
+    },
+    express.static(absDir),
+  ];
+}
+
 // ── PluginHost ─────────────────────────────────────────────────────────────
 
 export class PluginHost {
@@ -183,7 +196,7 @@ export class PluginHost {
           const pluginDir = this.getPluginDir(p.id);
           const absDir = path.join(pluginDir, m.deploy.staticDir);
           if (fs.existsSync(absDir)) {
-            this.expressApp.use(m.deploy.staticRoute, express.static(absDir));
+            this.expressApp.use(m.deploy.staticRoute, ...createPluginStaticMiddleware(absDir));
             this._registeredRoutes.set(m.id, m.deploy.staticRoute);
             console.log(`[PluginHost] Restored static route "${m.deploy.staticRoute}" for plugin "${m.id}"`);
           }
@@ -1720,10 +1733,15 @@ export class PluginHost {
       }
       // Extract deploy script declared in manifest
       if (manifest.deploy?.script) {
+        const rawScript = manifest.deploy.script.replace(/\\/g, '/');
+        const resolvedScript = path.resolve(pluginDir, rawScript);
+        if (rawScript.includes('..') || !resolvedScript.startsWith(pluginDir + path.sep)) {
+          throw new Error(`Security Violation: Zip Slip detected in deploy script path "${manifest.deploy.script}"`);
+        }
         const deployFile = zip.file(manifest.deploy.script);
         if (deployFile) {
           const deployCode = await deployFile.async('string');
-          fs.writeFileSync(path.join(pluginDir, manifest.deploy.script), deployCode, 'utf-8');
+          fs.writeFileSync(resolvedScript, deployCode, 'utf-8');
         }
       }
 
@@ -1734,23 +1752,32 @@ export class PluginHost {
       );
       if (storageEntries.length > 0) {
         console.log(`[PluginHost] Extracting ${storageEntries.length} static asset files for plugin "${manifest.id}"...`);
-        // Collect unique directories first, create them once
+        // SEC-ZIPSLIP: 严密校验所有条目路径，防止通过 .. 实施 Zip Slip 穿越写任意文件
         const dirs = new Set<string>();
-        for (const name of storageEntries) {
-          dirs.add(path.dirname(name));
+        for (const rawName of storageEntries) {
+          const normalized = rawName.replace(/\\/g, '/');
+          const destPath = path.resolve(pluginDir, normalized);
+          if (normalized.includes('..') || !destPath.startsWith(pluginDir + path.sep)) {
+            throw new Error(`Security Violation: Zip Slip detected in asset path "${rawName}"`);
+          }
+          dirs.add(path.dirname(destPath));
         }
         for (const dir of dirs) {
-          fs.mkdirSync(path.join(pluginDir, dir), { recursive: true });
+          fs.mkdirSync(dir, { recursive: true });
         }
         // Write files in parallel batches (10 at a time) to balance speed and memory
         const BATCH_SIZE = 10;
         for (let i = 0; i < storageEntries.length; i += BATCH_SIZE) {
           const batch = storageEntries.slice(i, i + BATCH_SIZE);
           await Promise.all(batch.map(async (name) => {
+            const normalized = name.replace(/\\/g, '/');
+            const destPath = path.resolve(pluginDir, normalized);
+            if (normalized.includes('..') || !destPath.startsWith(pluginDir + path.sep)) {
+              throw new Error(`Security Violation: Zip Slip detected in asset path "${name}"`);
+            }
             const file = zip.file(name);
             if (file) {
               const content = await file.async('nodebuffer');
-              const destPath = path.join(pluginDir, name);
               fs.writeFileSync(destPath, content);
             }
           }));
@@ -1816,7 +1843,7 @@ export class PluginHost {
         const route = manifest.deploy.staticRoute;
         const absDir = path.join(pluginDir, manifest.deploy.staticDir);
         if (fs.existsSync(absDir)) {
-          this.expressApp.use(route, express.static(absDir));
+          this.expressApp.use(route, ...createPluginStaticMiddleware(absDir));
           this._registeredRoutes.set(manifest.id, route);
           console.log(`[PluginHost] Registered static route "${route}" for plugin "${manifest.id}"`);
         } else {

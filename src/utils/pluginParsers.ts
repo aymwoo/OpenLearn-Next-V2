@@ -14,39 +14,23 @@ interface ParsedAction {
 }
 
 const parsePluginSource = (sourceCode: string) => {
-  let manifest: ParsedManifest | null = null;
   const actions: ParsedAction[] = [];
 
   try {
-    const cleanCode = sourceCode
-      .replace(/require\s*\(.*?\)/g, '{}')
-      .replace(/import\s+.*?\s+from\s*['"].*?['"]/g, '');
+    // SEC-SANDBOX: 静态解析插件源码，杜绝在浏览器主线程中使用 new Function 执行任意不可信脚本
+    const manifestBlockMatch = sourceCode.match(/manifest\s*:\s*\{([\s\S]*?)\}(?:\s*,|\s*\})/);
+    const manifestScope = manifestBlockMatch ? manifestBlockMatch[1] : sourceCode;
 
-    try {
-      const runner = new Function('exports', `
-        try {
-          ${cleanCode};
-          exports.default = exports.default || exports;
-        } catch(e) {}
-      `);
-      const mockExports = {} as any;
-      runner(mockExports);
-      const evaluated = mockExports.default || mockExports;
-      if (evaluated && evaluated.manifest) {
-        manifest = evaluated.manifest;
-      }
-    } catch (e: any) {
-      // Ignore evaluation error, fallback to regex
-    }
-
-    const idMatch = sourceCode.match(/id\s*:\s*['"]([^'"]+)['"]/);
-    const nameMatch = sourceCode.match(/name\s*:\s*['"]([^'"]+)['"]/);
-    const verMatch = sourceCode.match(/version\s*:\s*['"]([^'"]+)['"]/);
-    const descMatch = sourceCode.match(/description\s*:\s*['"]([^'"]+)['"]/);
-    const authorMatch = sourceCode.match(/author\s*:\s*['"]([^'"]+)['"]/);
+    const idMatch = manifestScope.match(/id\s*:\s*['"]([^'"]+)['"]/) || sourceCode.match(/id\s*:\s*['"]([^'"]+)['"]/);
+    const nameMatch = manifestScope.match(/name\s*:\s*['"]([^'"]+)['"]/) || sourceCode.match(/name\s*:\s*['"]([^'"]+)['"]/);
+    const verMatch = manifestScope.match(/version\s*:\s*['"]([^'"]+)['"]/) || sourceCode.match(/version\s*:\s*['"]([^'"]+)['"]/);
+    const descMatch = manifestScope.match(/description\s*:\s*['"]([^'"]+)['"]/) || sourceCode.match(/description\s*:\s*['"]([^'"]+)['"]/);
+    const authorMatch = manifestScope.match(/author\s*:\s*['"]([^'"]+)['"]/) || sourceCode.match(/author\s*:\s*['"]([^'"]+)['"]/);
 
     let capabilities: string[] = [];
-    const capsMatch = sourceCode.match(/capabilitiesProposed\s*:\s*\[([\s\S]*?)\]/);
+    const capsMatch =
+      manifestScope.match(/capabilitiesProposed\s*:\s*\[([\s\S]*?)\]/) ||
+      sourceCode.match(/capabilitiesProposed\s*:\s*\[([\s\S]*?)\]/);
     if (capsMatch) {
       capabilities = capsMatch[1]
         .split(',')
@@ -55,12 +39,12 @@ const parsePluginSource = (sourceCode: string) => {
     }
 
     const mergedManifest: ParsedManifest = {
-      id: manifest?.id || idMatch?.[1] || undefined,
-      name: manifest?.name || nameMatch?.[1] || undefined,
-      version: manifest?.version || verMatch?.[1] || undefined,
-      description: manifest?.description || descMatch?.[1] || undefined,
-      author: manifest?.author || authorMatch?.[1] || undefined,
-      capabilitiesProposed: manifest?.capabilitiesProposed || (capabilities.length > 0 ? capabilities : undefined)
+      id: idMatch?.[1] || undefined,
+      name: nameMatch?.[1] || undefined,
+      version: verMatch?.[1] || undefined,
+      description: descMatch?.[1] || undefined,
+      author: authorMatch?.[1] || undefined,
+      capabilitiesProposed: capabilities.length > 0 ? capabilities : undefined
     };
 
     const actionBlockRegex = /actionRegistry\.register\s*\(\s*\{([\s\S]*?)\}\s*\)/g;

@@ -29,8 +29,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 在 [`packages/core/db/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/db/index.ts) 针对默认内置管理员与教师账号增加显著安全日志预警。
 - **VULN-05 插件 Worker 资源配额限制**：
   - 在 [`packages/core/worker-runtime/worker-manager.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/worker-manager.ts) 实例化 Worker 时配置 `resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 32 }`，有效抵御插件内存耗尽型拒绝服务（DoS）。
+- **VULN-08 Socket.IO 握手鉴权与 CORS 严格白名单化**：
+  - 在 [`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 为 Socket.IO 引入 `io.use()` 握手鉴权中间件，校验 `edu_os_token` Cookie/Auth 并注入 Session；严格限制 CORS Origin 回调，生产环境下禁止未配置时退化为 `origin: '*'`。
+  - 在 [`server/presence.ts`](file:///home/wuxf/Develop/openlearnv2/server/presence.ts) 增加角色与身份强校验，阻断学生客户端伪造他人 `studentId` 发起进入/离开课堂事件，并对 `teacher-broadcast-segment` 与 `teacher-ping-student` 严格限定仅教师或管理员可用。
+- **VULN-09 插件 ZIP 条目与脚本 Zip Slip 绝对防御**：
+  - 在 [`packages/core/plugin-host/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/index.ts) 中对 `storage/` 静态条目解压与 `manifest.deploy.script` 路径进行全面规范化，严格拒绝任何包含 `..` 的路径，并强校验 `path.resolve` 结果必须以插件安装目录为绝对前缀，阻断路径穿越写盘。
+- **VULN-10 Helmet Content-Security-Policy (CSP) 策略深度收紧**：
+  - 在 [`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 的 Helmet CSP 中移除 `scriptSrc` 通配 `https:` 与 `data:`，仅允许 `'self'`, `'unsafe-inline'`, `'unsafe-eval'`, `blob:`；移除 `frameSrc` 全局通配 `http:` 与 `https:`，仅允许 `'self'`, `blob:`, `data:` 及环境变量可配置的合法课件域；精确化 `styleSrc` 与 `fontSrc` 仅允许受信 Google Fonts 域名。
+- **VULN-11 数据库 RPC 核心安全表与底层高危 SQL 指令拦截**：
+  - 在 [`packages/core/worker-runtime/service-host.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/service-host.ts) 中增加 `FORBIDDEN_OPERATIONS` 正则，全面封杀 `ATTACH DATABASE`、`DETACH DATABASE`、`PRAGMA`、`VACUUM`、`CREATE/DROP TRIGGER` 与 `CREATE/DROP VIEW`；
+  - 扩展核心安全保护表白名单与 DDL 作用域校验，杜绝插件通过裸 SQL 绕过业务层或破坏数据库内部结构。
+- **VULN-12 生产环境依赖漏洞治理与子依赖版本覆盖**：
+  - 将仅用于开发和打包的 `xlsx` 迁移至 `devDependencies`，将 `vite` 迁移至 `devDependencies`；
+  - 在 `pnpm-workspace.yaml` 中配置安全版本覆盖（`overrides`），将 `ws` (>=8.21.0), `socket.io-parser` (>=4.2.7), `nanoid` (>=3.3.18), `postcss` (>=8.5.23), `ip-address` (>=10.3.1), `dompurify` (>=3.4.13), `qs` (>=6.16.0), `body-parser` (>=1.20.6), `protobufjs` (>=7.6.5) 全面升级到安全版本。
+  - `pnpm audit --prod` 达成 **0 vulnerabilities (无已知漏洞)**。
+- **VULN-13 课件 LMS Bridge 消息响应定向化与通配广播收紧**：
+  - 在 [`src/services/lms-bridge.ts`](file:///home/wuxf/Develop/openlearnv2/src/services/lms-bridge.ts) 回复 `LMS_PROGRESS_RESPONSE` 时严格校验接收方窗口属于 DOM 中受管辖的有效 iframe；针对具有非 null 真实域名的 iframe 定向回传 `event.origin`，并在 `sendCommandToCourseware` 中根据 iframe URL 解析真实 Origin，消除向非受信窗口通配泄露数据的隐患。
+- **VULN-14 前端插件静态解析与静态路由沙箱隔离**：
+  - 彻底重构 [`src/utils/pluginParsers.ts`](file:///home/wuxf/Develop/openlearnv2/src/utils/pluginParsers.ts)，完全删除主线程中的 `new Function` 动态求值，改用纯静态正则与作用域提取，杜绝浏览器主线程解析恶意插件时遭受同源脚本执行攻击；
+  - 在 [`packages/core/plugin-host/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/index.ts) 的插件静态资源路由挂载中间件，强制注入 `Content-Security-Policy: sandbox allow-scripts allow-forms allow-downloads` 与 `X-Content-Type-Options: nosniff` 响应头，确保插件静态前端页面降级至沙箱隔离环境，无法越权窃取宿主 Cookie 及本地存储。
 - **自动化安全回归验证**：
-  - 新增 [`server/__tests__/security_hardening.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/security_hardening.test.ts)，全量 176 个测试套件、988 个用例 100% 绿灯通过。
+  - 扩充 [`server/__tests__/security_hardening.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/security_hardening.test.ts) 与 [`src/utils/__tests__/pluginParsers.test.ts`](file:///home/wuxf/Develop/openlearnv2/src/utils/__tests__/pluginParsers.test.ts)，全量 176 个测试套件、993 个用例持续保持 100% 绿灯通过。
 
 
 ## [0.3.0] - 2026-09-06

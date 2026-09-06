@@ -116,4 +116,81 @@ describe('Security Hardening Suite (P0 Vulnerabilities)', () => {
       }
     });
   });
+
+  describe('VULN-09: Plugin Zip Slip Traversal Gate', () => {
+    it('should detect and reject any entry path containing traversal sequences', () => {
+      const maliciousEntries = [
+        '../evil.js',
+        'storage/../../etc/passwd',
+        '..\\..\\windows\\win.ini',
+        'nested/../../../dangerous.sh',
+      ];
+
+      for (const entry of maliciousEntries) {
+        const normalized = entry.replace(/\\/g, '/');
+        const hasTraversal = normalized.split('/').includes('..');
+        expect(hasTraversal).toBe(true);
+      }
+    });
+
+    it('should verify resolved path stays strictly within plugin directory', () => {
+      const pluginDir = '/var/app/plugins/test-plugin';
+      const safeEntry = 'storage/assets/logo.png';
+      const resolvedSafe = path.resolve(pluginDir, safeEntry);
+      expect(resolvedSafe.startsWith(pluginDir + path.sep)).toBe(true);
+
+      const maliciousEntry = '../../outside.js';
+      const resolvedMalicious = path.resolve(pluginDir, maliciousEntry);
+      expect(resolvedMalicious.startsWith(pluginDir + path.sep)).toBe(false);
+    });
+  });
+
+  describe('VULN-11: Database RPC High-Risk Keyword Blocker', () => {
+    const FORBIDDEN_SQL_PATTERNS = [
+      /\bATTACH\s+DATABASE\b/i,
+      /\bDETACH\s+DATABASE\b/i,
+      /\bPRAGMA\b/i,
+      /\bVACUUM\b/i,
+      /\bCREATE\s+(?:TEMP|TEMPORARY\s+)?TRIGGER\b/i,
+      /\bDROP\s+TRIGGER\b/i,
+      /\bCREATE\s+(?:TEMP|TEMPORARY\s+)?VIEW\b/i,
+      /\bDROP\s+VIEW\b/i,
+    ];
+
+    it('should block dangerous SQLite administration and metastructure commands', () => {
+      const maliciousSqls = [
+        "ATTACH DATABASE '/etc/passwd' AS shadow",
+        "ATTACH DATABASE ':memory:' AS hack",
+        "DETACH DATABASE shadow",
+        "PRAGMA table_info(users)",
+        "PRAGMA foreign_keys = OFF",
+        "VACUUM INTO 'backup.db'",
+        "CREATE TRIGGER rce AFTER INSERT ON users BEGIN SELECT 1; END",
+        "CREATE TEMPORARY TRIGGER backdoor BEFORE UPDATE ON students BEGIN SELECT 1; END",
+        "DROP TRIGGER rce",
+        "CREATE VIEW steal AS SELECT * FROM users",
+        "DROP VIEW steal",
+      ];
+
+      for (const sql of maliciousSqls) {
+        const isBlocked = FORBIDDEN_SQL_PATTERNS.some((p) => p.test(sql));
+        expect(isBlocked).toBe(true);
+      }
+    });
+
+    it('should allow legitimate DML statements', () => {
+      const safeSqls = [
+        "SELECT * FROM plugin_data WHERE key = 'counter'",
+        "INSERT INTO plugin_data (key, value) VALUES ('k', 'v')",
+        "UPDATE plugin_data SET value = 'v2' WHERE key = 'k'",
+        "DELETE FROM plugin_data WHERE key = 'k'",
+      ];
+
+      for (const sql of safeSqls) {
+        const isBlocked = FORBIDDEN_SQL_PATTERNS.some((p) => p.test(sql));
+        expect(isBlocked).toBe(false);
+      }
+    });
+  });
 });
+

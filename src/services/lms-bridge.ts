@@ -74,7 +74,17 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
     const requestId = data.requestId as string | undefined;
     const source = event.source as Window | null;
     if (requestId && source && typeof source.postMessage === 'function') {
-      let progress: Record<string, unknown> | null = null;
+      // SEC-AUTH: 确保接收方必须为 DOM 中受管辖的合法 iframe
+      if (typeof document !== 'undefined') {
+        const iframes = Array.from(document.querySelectorAll('iframe'));
+        const isFromValidIframe = iframes.some((f) => f.contentWindow === source);
+        if (!isFromValidIframe && source !== window) {
+          console.warn('[LMS Bridge Security] Dropping response to untrusted window');
+          return;
+        }
+      }
+
+      let progress: Record<string, unknown> | null;
       try {
         const res = await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/progress`);
         const json = (await res.json()) as { progress?: Record<string, unknown> | null };
@@ -82,7 +92,9 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
       } catch {
         progress = null;
       }
-      source.postMessage({ type: 'LMS_PROGRESS_RESPONSE', requestId, progress }, '*');
+      // 对于具有具体 Origin 的课件定向回复，沙箱 opaque origin (null) 时定向到该受控 window
+      const targetOrigin = event.origin && event.origin !== 'null' ? event.origin : '*';
+      source.postMessage({ type: 'LMS_PROGRESS_RESPONSE', requestId, progress }, targetOrigin);
     }
     return;
   }
@@ -177,9 +189,21 @@ export function sendCommandToCourseware(
   iframe: HTMLIFrameElement,
   event: string,
   payload?: unknown,
+  targetOrigin?: string,
 ): void {
   try {
-    iframe.contentWindow?.postMessage({ type: 'LMS_HOST_COMMAND', event, payload }, '*');
+    let origin = targetOrigin;
+    if (!origin && iframe.src && typeof window !== 'undefined') {
+      try {
+        const url = new URL(iframe.src, window.location.href);
+        if (url.origin && url.origin !== 'null' && !iframe.src.startsWith('blob:') && !iframe.src.startsWith('data:')) {
+          origin = url.origin;
+        }
+      } catch {
+        // ignore invalid URL
+      }
+    }
+    iframe.contentWindow?.postMessage({ type: 'LMS_HOST_COMMAND', event, payload }, origin || '*');
   } catch {
     // 跨域/沙箱安全限制时静默失败
   }

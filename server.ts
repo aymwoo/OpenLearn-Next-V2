@@ -109,31 +109,35 @@ async function startServer() {
   kernelContainer.pluginHost.setExpressApp(app);
   const PORT = parseInt(process.env.PORT || '9000', 10);
 
-  // SEC-AUTH-03: 信任 Nginx 反向代理�? X-Forwarded-Proto �?
-  // �? req.protocol / req.secure 能正确反映浏览器�? Nginx 的实际协�?
+  // SEC-AUTH-03: 信任 Nginx 反向代理? X-Forwarded-Proto ?
+  // ? req.protocol / req.secure 能正确反映浏览器? Nginx 的实际协?
   app.set('trust proxy', 1);
 
-  // ── 安全中间�? ────────────────────────────────────────────────────
-  // SEC-NET-02: HTTP 安全头（helmet�?
-  // 教育平台需要加载外部课件资源（图片、字体、样式），因�? img-src/style-src/font-src 放宽�? https:
-  // script-src 保持严格限制，课�? iframe 通过 sandbox 属性提供额外安全层
-  // COOP/OAC/COEP 已禁用：HTML Applet �? iframe 中运行时这些策略会导致跨域错�?
+  // ── 安全中间? ────────────────────────────────────────────────────
+  // SEC-NET-02: HTTP 安全头（helmet）— 严格 CSP 配置
+  const frameAllowedOrigins = process.env.ALLOWED_FRAME_ORIGINS
+    ? process.env.ALLOWED_FRAME_ORIGINS.split(',').map((s) => s.trim())
+    : ['http://localhost:*', 'http://127.0.0.1:*'];
+
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "blob:", "data:"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https:", "https://fonts.googleapis.com"],
+        // 移除通配 https: 与 data:，禁止加载全网任意第三方未授权脚本
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "blob:"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:", "blob:", "https:"],
         connectSrc: ["'self'", "ws:", "wss:", "https:"],
-        fontSrc: ["'self'", "data:", "https:", "https://fonts.gstatic.com"],
-        frameSrc: ["'self'", "blob:", "data:", "http://localhost", "http://127.0.0.1", "http:", "https:"],
+        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+        // 移除通配 http: 和 https:，限制 iframe 仅能加载本地、沙箱或受信任课件源
+        frameSrc: ["'self'", "blob:", "data:", ...frameAllowedOrigins],
         objectSrc: ["'none'"],
+        baseUri: ["'self'"],
       },
     },
     crossOriginOpenerPolicy: false,
     crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: { policy: "cross-origin" }, // 允许沙箱 iframe（opaque origin）加载静态资�?
+    crossOriginResourcePolicy: { policy: "cross-origin" }, // 允许沙箱 iframe（opaque origin）加载静态资?
     originAgentCluster: false,
     strictTransportSecurity: false, // �? HTTP 部署，禁�? HSTS（否则浏览器缓存后强�? HTTPS，导�? ERR_CONNECTION_REFUSED�?
   }));
@@ -184,15 +188,68 @@ async function startServer() {
   // SEC-NET-01: CORS 白名单化 — HTTP server + Socket.IO setup (moved up so ctx.io is ready)
   const httpServer = createHttpServer(app);
   const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',')
+    ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
     : (process.env.NODE_ENV === 'production'
-      ? [] // 生产环境必须配置
+      ? [] // 生产环境必须显式配置
       : ['http://localhost:5173', 'http://localhost:9000', 'http://localhost:4173']);
   const io = new Server(httpServer, {
     cors: {
-      origin: allowedOrigins.length > 0 ? allowedOrigins : '*',
+      origin: (origin, callback) => {
+        // 允许无 origin（如移动端、curl或同源请求）
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.length === 0) {
+          // 生产环境未配置 ALLOWED_ORIGINS 时，拒绝任意通配跨域
+          return callback(new Error('CORS not allowed'));
+        }
+        if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+          return callback(null, true);
+        }
+        return callback(new Error('Not allowed by CORS'));
+      },
       methods: ['GET', 'POST'],
       credentials: true,
+    }
+  });
+
+  // SEC-AUTH-SOCKET: Socket.IO 连接握手鉴权中间件，阻止匿名连接与身份伪造
+  io.use((socket, next) => {
+    try {
+      const cookieHeader = socket.handshake.headers.cookie;
+      let token: string | null = null;
+      if (cookieHeader) {
+        const parts = cookieHeader.split(';');
+        for (const part of parts) {
+          const trimmed = part.trim();
+          if (trimmed.startsWith('edu_os_token=')) {
+            token = trimmed.substring('edu_os_token='.length);
+            break;
+          }
+        }
+      }
+      if (!token && socket.handshake.auth?.token) {
+        token = socket.handshake.auth.token;
+      }
+
+      // 测试环境支持未带 token 的 mock 连接
+      if (process.env.NODE_ENV === 'test' && !token) {
+        return next();
+      }
+
+      if (!token) {
+        return next(new Error('Authentication required: missing edu_os_token'));
+      }
+
+      const session = getValidSession(token);
+      if (!session) {
+        return next(new Error('Authentication required: session expired or invalid'));
+      }
+
+      socket.data.session = session;
+      socket.data.userId = session.userId;
+      socket.data.role = session.role;
+      next();
+    } catch (err: any) {
+      next(new Error(`Authentication error: ${err.message}`));
     }
   });
   kernelContainer.pluginHost.setSocketIO(io);

@@ -87,4 +87,18 @@ describe('parsePluginSource', () => {
     expect(result).toHaveProperty('manifest');
     expect(result).toHaveProperty('actions');
   });
+
+  it('does not execute malicious arbitrary javascript in source code', () => {
+    (globalThis as any).__MALICIOUS_EXEC__ = false;
+    const maliciousSource = `
+      globalThis.__MALICIOUS_EXEC__ = true;
+      exports.default = {
+        manifest: { id: "evil-plugin", name: "Evil" }
+      };
+    `;
+    const result = parsePluginSource(maliciousSource);
+    expect((globalThis as any).__MALICIOUS_EXEC__).toBe(false);
+    expect(result.manifest?.id).toBe('evil-plugin');
+  });
 });
+

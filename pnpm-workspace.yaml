@@ -12,3 +12,15 @@ packages:
   - 'packages/mfe-whiteboard'
   - 'packages/mfe-courseware'
 
+overrides:
+  ws: '>=8.21.0'
+  socket.io-parser: '>=4.2.7'
+  nanoid: '>=3.3.18'
+  postcss: '>=8.5.23'
+  ip-address: '>=10.3.1'
+  dompurify: '>=3.4.13'
+  qs: '>=6.16.0'
+  body-parser: '>=1.20.6'
+  protobufjs: '>=7.6.5'
+
+

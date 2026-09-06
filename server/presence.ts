@@ -33,8 +33,15 @@ export function setupPresence({ io, eventBus }: PresenceDeps): void {
 
   io.on('connection', (socket: any) => {
     let registeredStudentId: string | null = null;
+    const session = socket.data?.session;
+    const isTeacherOrAdmin = session?.role === 'teacher' || session?.role === 'administrator';
 
     socket.on('register-student', (data: { studentId: string; name: string }) => {
+      // SEC-AUTH: 阻止学生客户端伪造他人 studentId
+      if (session && !isTeacherOrAdmin && session.userId !== data.studentId) {
+        console.warn(`[Presence Security] Student ${session.userId} attempted to impersonate ${data.studentId}`);
+        return socket.emit('error', { message: 'Forbidden: Cannot register presence for another student' });
+      }
       registeredStudentId = data.studentId;
       onlineStudents.set(data.studentId, { socketId: socket.id, name: data.name });
       console.log(`[Presence] Student online: ${data.name} (${data.studentId})`);
@@ -42,6 +49,9 @@ export function setupPresence({ io, eventBus }: PresenceDeps): void {
     });
 
     socket.on('enter-lesson', (data: { studentId: string; lessonId: string }) => {
+      if (session && !isTeacherOrAdmin && session.userId !== data.studentId) {
+        return socket.emit('error', { message: 'Forbidden: Cannot enter lesson for another student' });
+      }
       activeStudentLessons.set(data.studentId, data.lessonId);
       socket.join(data.lessonId);
       console.log(`[Presence] Student ${data.studentId} entered lesson ${data.lessonId}`);
@@ -58,6 +68,9 @@ export function setupPresence({ io, eventBus }: PresenceDeps): void {
     });
 
     socket.on('leave-lesson', (data: { studentId: string }) => {
+      if (session && !isTeacherOrAdmin && session.userId !== data.studentId) {
+        return socket.emit('error', { message: 'Forbidden: Cannot leave lesson for another student' });
+      }
       const oldRoom = activeStudentLessons.get(data.studentId);
       if (oldRoom) {
         socket.leave(oldRoom);
@@ -109,6 +122,11 @@ export function setupPresence({ io, eventBus }: PresenceDeps): void {
     );
 
     socket.on('teacher-broadcast-segment', (data: { lessonId: string; activeSegmentId: string }) => {
+      // SEC-AUTH: 仅教师或管理员可广播环节切换指令
+      if (session && !isTeacherOrAdmin) {
+        console.warn(`[Presence Security] Unauthorized teacher-broadcast-segment by ${session?.userId}`);
+        return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can broadcast segments' });
+      }
       // Store the active segment in memory
       lessonActiveSegments.set(data.lessonId, data.activeSegmentId);
       // Broadcast to everyone in the lesson room (including the teacher client)
@@ -116,6 +134,11 @@ export function setupPresence({ io, eventBus }: PresenceDeps): void {
     });
 
     socket.on('teacher-ping-student', (data: { studentId: string; lessonId: string; message?: string }) => {
+      // SEC-AUTH: 仅教师或管理员可向学生发起单向提醒
+      if (session && !isTeacherOrAdmin) {
+        console.warn(`[Presence Security] Unauthorized teacher-ping-student by ${session?.userId}`);
+        return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can ping students' });
+      }
       console.log(`[Ping] Teacher pinged student ${data.studentId} for lesson ${data.lessonId}`);
       const studentOnlineInfo = onlineStudents.get(data.studentId);
       if (studentOnlineInfo) {
