@@ -7,6 +7,12 @@ All notable changes to **@openlearn/plugin-sdk** are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.6.0] - 2026-09-06
+
+### Fixed
+- **CLI 不再把 SDK 自身打进插件 bundle**：`resolve-plugin-sdk` onResolve 插件此前返回 `path: sdkDist` 覆盖了 external 标记，导致 SDK dist（引用宿主侧 pino/express/uuid/semver）被整体打包——脚手架项目构建直接失败，产物在宿主上还会因 node:fs/node:path 被 token-enforcer 拒绝。现保持 external，与平台官方 `build-plugins.mjs` 行为一致；独立脚手架项目无需再手动补装依赖。
+- 脚手架模板 `engines.openlearn` 已为 `>=0.2.5`（与 npm 包兼容性检查语义一致，0.x 的 `^0.2.5` 不满足 0.3.x 宿主）。
+
 ## [3.5.2] - 2026-09-05
 
 ### Features

@@ -228,15 +228,10 @@ async function cmdBuild(args) {
     sourcemap: 'inline',
     target: 'node18',
     outfile,
+    // SDK 必须保持 external（裸说明符原样保留，运行时由宿主 node_modules 解析——
+    // 宿主依赖自带 @openlearn/plugin-sdk）。SDK dist 引用宿主侧 pino/express/uuid/semver，
+    // 打进插件 bundle 会导致脚手架项目构建失败，产物在宿主上被 token-enforcer 拒绝。
     external: ['@openlearn/plugin-sdk', ...external],
-    plugins: [{
-      name: 'resolve-plugin-sdk',
-      setup(build) {
-        build.onResolve({ filter: /^@openlearn\/plugin-sdk$/ }, () => ({
-          path: sdkDist,
-        }));
-      },
-    }],
   });
 
   // Load esbuild (try package-local first, then plugin-sdk bundled)
