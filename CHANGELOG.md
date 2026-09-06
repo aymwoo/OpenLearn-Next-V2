@@ -8,6 +8,15 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.3] - 2026-09-06
+
+### Fixes & Network Hardening
+- **Socket.IO & Express Same-Origin CORS 智能放行 (Same-Origin Auto-Allowance & CORS Fix)**：
+  - 在 [`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 引入统一的 `isOriginAllowed(origin, hostHeader)` 判定算法；
+  - 修复生产环境（未显式配 `ALLOWED_ORIGINS` 时）CORS 回调对同源浏览器请求（如 `http://localhost:9000`）抛出 `new Error('CORS not allowed')` 导致底层 Engine.IO 响应 `HTTP 400 Bad Request {"code": 3, "message": "Bad request"}` 的问题；
+  - 自动放行同源请求（`new URL(origin).host === hostHeader`）与本地回环来源（`localhost`、`127.0.0.1`、`[::1]`、`0.0.0.0`），对于未受信任跨域请求安全剔除 `Access-Control-Allow-Origin` 头而不再向底层抛出未捕获异常；
+  - 解决客户端重连由于 CORS 阻断陷入反复 400 的异常状态。
+
 ## [0.3.2] - 2026-09-06
 
 ### Fixes & Runtime Hardening

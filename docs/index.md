@@ -199,6 +199,7 @@ roadmap/documentation-roadmap
 :caption: 📋 发布日志 (Release Notes)
 :hidden:
 
+release-notes/v0.3.3
 release-notes/v0.3.2
 release-notes/v0.3.1
 release-notes/v0.3.0

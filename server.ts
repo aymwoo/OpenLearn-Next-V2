@@ -154,19 +154,65 @@ async function startServer() {
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   app.use('/plugins', express.static(path.join(process.cwd(), 'plugins')));
-  // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块�?
+  // MFE 静态文件服务已移除（v5.0 架构重构：白板和课件已内聚为本地模块?
 
-  // SEC-NET-01: CORS 中间�? �? 允许沙箱 iframe（origin: null）和同源请求
-  // 背景：iframe sandbox 去掉 allow-same-origin 后，浏览器给 iframe 分配 opaque origin�?
-  // 导致其中�? fetch()/XHR 变成跨域请求。本中间件使这些请求正常工作�?
+  // SEC-NET-01: CORS 白名单化与 Same-Origin 智能放行
+  const configuredOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
+
+  const isOriginAllowed = (origin: string | undefined, hostHeader?: string): boolean => {
+    // 允许无 origin（如移动端、curl 或同源请求）
+    if (!origin) return true;
+
+    // 1. 显式配置的白名单（支持通配符 '*' 或匹配具体 origin）
+    if (configuredOrigins.length > 0) {
+      if (configuredOrigins.includes('*') || configuredOrigins.includes(origin)) {
+        return true;
+      }
+    }
+
+    // 2. 同源（Same-Origin）自动放行：Origin 的 host 与请求的 Host 头部一致
+    if (hostHeader) {
+      try {
+        const originUrl = new URL(origin);
+        if (originUrl.host === hostHeader) {
+          return true;
+        }
+      } catch {}
+    }
+
+    // 3. 本地回环（localhost / 127.0.0.1 / [::1] / 0.0.0.0）放行
+    try {
+      const originUrl = new URL(origin);
+      const hostname = originUrl.hostname;
+      if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '0.0.0.0') {
+        return true;
+      }
+    } catch {}
+
+    // 4. 开发环境宽松放行（Vite 默认端口 5173 / 4173 等）
+    if (process.env.NODE_ENV !== 'production') {
+      return true;
+    }
+
+    return false;
+  };
+
+  // SEC-NET-01: Express CORS 中间件 — 允许沙箱 iframe（origin: null）、同源请求与合法来源
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    // 沙箱 iframe 的请求带�? Origin: null；同源请求通常不带 Origin �?
     if (origin === 'null' || origin === undefined) {
       res.setHeader('Access-Control-Allow-Origin', origin ?? '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
       res.setHeader('Access-Control-Max-Age', '86400'); // 预检缓存 24h
+    } else if (isOriginAllowed(origin, req.headers.host)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      res.setHeader('Access-Control-Max-Age', '86400');
     }
     if (req.method === 'OPTIONS') {
       return res.sendStatus(204);
@@ -186,28 +232,17 @@ async function startServer() {
 
   // SEC-NET-01: CORS 白名单化 — HTTP server + Socket.IO setup (moved up so ctx.io is ready)
   const httpServer = createHttpServer(app);
-  const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
-    : (process.env.NODE_ENV === 'production'
-      ? [] // 生产环境必须显式配置
-      : ['http://localhost:5173', 'http://localhost:9000', 'http://localhost:4173']);
   const io = new Server(httpServer, {
-    cors: {
-      origin: (origin, callback) => {
-        // 允许无 origin（如移动端、curl或同源请求）
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.length === 0) {
-          // 生产环境未配置 ALLOWED_ORIGINS 时，拒绝任意通配跨域
-          return callback(new Error('CORS not allowed'));
-        }
-        if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-          return callback(null, true);
-        }
-        return callback(new Error('Not allowed by CORS'));
-      },
-      methods: ['GET', 'POST'],
-      credentials: true,
-    }
+    cors: (req, callback) => {
+      const origin = req.headers.origin;
+      const host = req.headers.host;
+      const allowed = isOriginAllowed(origin, host);
+      callback(null, {
+        origin: allowed ? (origin || true) : false,
+        methods: ['GET', 'POST'],
+        credentials: true,
+      });
+    },
   });
 
   // SEC-AUTH-SOCKET: Socket.IO 连接握手鉴权中间件，阻止匿名连接与身份伪造
