@@ -8,12 +8,15 @@ import {
   ClipboardList,
   Sparkles,
   CheckCircle2,
+  Eye,
+  LogOut,
 } from 'lucide-react';
 import { UserMenu } from './UserMenu';
 import { ThemeSelector } from './ThemeSelector';
 
 export interface AppHeaderProps {
   activeRole: 'teacher' | 'student';
+  setActiveRole?: Dispatch<SetStateAction<'teacher' | 'student'>> | ((role: 'teacher' | 'student') => void);
   lang: 'zh' | 'en';
   teacherTab: string;
   studentViewStatus: 'dashboard' | 'lesson' | 'assignment';
@@ -68,6 +71,7 @@ export function AppHeader(props: AppHeaderProps) {
     setSelectedNotificationForModal,
     handleLogout,
     toggleLanguage,
+    setActiveRole,
   } = props;
 
   return (
@@ -133,17 +137,31 @@ export function AppHeader(props: AppHeaderProps) {
           </>
         )}
         
-        {activeRole === 'student' && session.role === 'teacher' && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500">View as:</span>
+        {activeRole === 'student' && session?.role === 'teacher' && (
+          <div className="flex items-center gap-2 bg-amber-50/90 border border-amber-200/80 px-2.5 py-1 rounded-lg shadow-2xs">
+            <span className="text-xs font-semibold text-amber-800 flex items-center gap-1">
+              <Eye size={13} className="text-amber-600" />
+              {lang === 'zh' ? '模拟学生:' : 'View as:'}
+            </span>
             <select 
-              className="border border-gray-200 rounded p-1 text-sm bg-white"
+              className="border border-amber-300 rounded px-1.5 py-0.5 text-xs bg-white text-gray-800 font-medium focus:ring-1 focus:ring-amber-400 focus:outline-hidden"
               value={activeStudentId || ''}
               onChange={(e) => setActiveStudentId(e.target.value)}
             >
-              <option value="">-- Select Student --</option>
+              <option value="">-- {lang === 'zh' ? '选择学生' : 'Select Student'} --</option>
               {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {setActiveRole && (
+              <button
+                type="button"
+                onClick={() => setActiveRole('teacher')}
+                className="ml-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white text-xs font-bold rounded-md flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                title={lang === 'zh' ? '退出模拟学生并返回教师端工作台' : 'Exit student view and return to teacher workspace'}
+              >
+                <LogOut size={12} />
+                {lang === 'zh' ? '返回教师端' : 'Exit Student View'}
+              </button>
+            )}
           </div>
         )}
       </div>

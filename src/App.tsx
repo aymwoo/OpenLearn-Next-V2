@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { Loader2, Eye, LogOut } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { parseCSV } from './utils/pluginParsers.js';
 import { translations } from './i18n';
@@ -1334,9 +1334,35 @@ export default function App() {
       {/* Main Content Area: App Shell representing the Plugin Views */}
       <div className="flex-1 flex flex-col bg-app h-full overflow-hidden">
         
+        {/* 全局模拟学生提示条 (Top Impersonation Banner) */}
+        {session?.role === 'teacher' && activeRole === 'student' && (
+          <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 text-white px-6 py-1.5 flex items-center justify-between text-xs font-medium shadow-sm z-30 shrink-0 border-b border-amber-600/30">
+            <div className="flex items-center gap-2.5">
+              <span className="bg-black/20 text-amber-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
+                <Eye size={12} />
+                {lang === 'zh' ? '学生模拟模式' : 'Student View Mode'}
+              </span>
+              <span>
+                {lang === 'zh'
+                  ? `您当前正在以学生身份（${students.find((s) => s.id === activeStudentId)?.name || '未选择'}）预览系统界面与交互。`
+                  : `You are currently previewing the platform as student (${students.find((s) => s.id === activeStudentId)?.name || 'None'}).`}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveRole('teacher')}
+              className="bg-white text-amber-800 hover:bg-amber-50 active:bg-amber-100 font-bold px-3 py-1 rounded-md shadow-xs transition-all flex items-center gap-1.5 cursor-pointer text-xs"
+            >
+              <LogOut size={13} />
+              {lang === 'zh' ? '退出模拟并返回教师端' : 'Exit Student View'}
+            </button>
+          </div>
+        )}
+
         {/* Top Navbar */}
         <AppHeader
           activeRole={activeRole}
+          setActiveRole={setActiveRole}
           lang={lang}
           teacherTab={teacherTab}
           studentViewStatus={studentViewStatus}

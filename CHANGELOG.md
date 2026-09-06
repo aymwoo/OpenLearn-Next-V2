@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes & UI
+- **修复教师端模拟学生（Student View）后无法返回教师端的交互缺失缺陷**:
+  - 在 `App.tsx` 页面最顶部新增常驻醒目的全局模拟学生横幅（Top Impersonation Banner），提示当前模拟学生并提供常驻【退出模拟并返回教师端】操作；
+  - 在 `AppHeader.tsx` 顶部导航栏的 `View as: [选择学生]` 下拉框旁接入 `setActiveRole` 并增加【返回教师端】快捷操作按钮；
+  - 完善 `AppHeader.test.tsx` 单元测试，覆盖模拟状态退出按钮的渲染与触发回调。
+
 ## [0.3.13] - 2026-09-06
 
 ### Fixes & Packaging

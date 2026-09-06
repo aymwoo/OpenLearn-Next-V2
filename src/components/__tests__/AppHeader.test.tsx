@@ -38,6 +38,7 @@ function makeProps(overrides: Partial<AppHeaderProps> = {}): AppHeaderProps {
     setSelectedNotificationForModal: vi.fn(),
     handleLogout: vi.fn(),
     toggleLanguage: vi.fn(),
+    setActiveRole: vi.fn(),
     ...overrides,
   };
 }
@@ -57,5 +58,36 @@ describe('AppHeader', () => {
   it('renders Chinese labels when lang="zh"', () => {
     render(<AppHeader {...makeProps({ lang: 'zh' })} />);
     expect(screen.getByText('系统资源库')).toBeTruthy();
+  });
+
+  it('renders Exit Student View button when teacher simulates student and handles click', () => {
+    const setActiveRole = vi.fn();
+    render(
+      <AppHeader
+        {...makeProps({
+          activeRole: 'student',
+          session: { name: 'Teacher', role: 'teacher', avatar: null },
+          lang: 'zh',
+          setActiveRole,
+        })}
+      />
+    );
+    const exitBtn = screen.getByText('返回教师端');
+    expect(exitBtn).toBeTruthy();
+    exitBtn.click();
+    expect(setActiveRole).toHaveBeenCalledWith('teacher');
+  });
+
+  it('does not render Exit Student View button for actual student session', () => {
+    render(
+      <AppHeader
+        {...makeProps({
+          activeRole: 'student',
+          session: { name: 'Student', role: 'student', avatar: null },
+        })}
+      />
+    );
+    expect(screen.queryByText('返回教师端')).toBeNull();
+    expect(screen.queryByText('Exit Student View')).toBeNull();
   });
 });
