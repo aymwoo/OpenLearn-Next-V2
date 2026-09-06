@@ -8,6 +8,17 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.7] - 2026-09-06
+
+### Features & CLI Utilities
+- **NPX 缓存与运行数据安全清理命令 (CLI Cache Cleaner Command)**：
+  - 在 [`cli.mjs`](file:///home/wuxf/Develop/openlearnv2/cli.mjs) 及 [`cli-cleaner.mjs`](file:///home/wuxf/Develop/openlearnv2/cli-cleaner.mjs) 中新增 `clean` / `clean-cache`（以及 `--clean` / `--clean-cache`）命令行工具；
+  - **精准清理 NPX 历史旧包**：自动扫描 `~/.npm/_npx/` 下的所有散列子目录，精准清理历史残留的旧版本 `openlearn-next` 临时目录，彻底杜绝 NPX 因缓存命中旧版本的问题；
+  - **优化运行数据与日志**：默认清理 SQLite WAL 预写日志 (`data.db-wal`)、共享内存文件 (`data.db-shm`) 与临时目录，并在默认模式下严格保护用户核心业务数据 `data.db` 不被误删；
+  - **丰富选项支持**：支持 `--npx`（仅清包缓存）、`--db`（重置本地数据库）与 `--all`（全量彻底清理重置）；
+  - 新增 `-v` / `--version` 快速版本查询与完善的 `-h` / `--help` 命令帮助指引；
+  - 新增自动化单元测试套件 [`packages/core/__tests__/cli-cleaner.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/__tests__/cli-cleaner.test.ts)。
+
 ## [0.3.6] - 2026-09-06
 
 ### Quality & Governance (防版本漂移质量加固)

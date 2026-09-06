@@ -1,6 +1,6 @@
 {
   "name": "openlearn-next",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "private": false,
   "description": "A plugin-driven Educational OS / LMS platform with AI agent teaching assistant",
   "keywords": [
@@ -28,6 +28,7 @@
     "dist/assets/",
     "dist/plugins/",
     "cli.mjs",
+    "cli-cleaner.mjs",
     "package.json",
     "README.md"
   ],
