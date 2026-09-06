@@ -10,6 +10,7 @@ import type {
   IntegrationHealthStatus,
   IntegrationDescriptor,
 } from '../bootstrap/integration/integration-types.js';
+import { PLATFORM_VERSION } from '../version.js';
 
 export interface IPluginLifecycleManager {
   readonly pluginHost: PluginHost;
@@ -26,7 +27,7 @@ export interface IPluginLifecycleManager {
 export class PluginLifecycleManager implements IPluginLifecycleManager {
   public readonly id = 'srv_plugin_lifecycle_manager';
   public readonly name = 'PluginLifecycleManager';
-  public readonly version = '0.2.5';
+  public readonly version = PLATFORM_VERSION;
 
   constructor(public readonly pluginHost: PluginHost) {}
 

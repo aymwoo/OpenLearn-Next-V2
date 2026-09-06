@@ -9,6 +9,8 @@ import type {
   IntegrationDescriptor,
 } from '../bootstrap/integration/integration-types.js';
 
+import { PLATFORM_VERSION } from '../version.js';
+
 export interface ExtensionItemMetadata {
   readonly id: string;
   readonly category: string;
@@ -37,7 +39,7 @@ export interface IUnifiedExtensionRegistry {
 export class UnifiedExtensionRegistry implements IUnifiedExtensionRegistry {
   public readonly id = 'srv_unified_extension_registry';
   public readonly name = 'UnifiedExtensionRegistry';
-  public readonly version = '0.2.5';
+  public readonly version = PLATFORM_VERSION;
 
   private readonly _extensions = new Map<string, Map<string, ExtensionItemMetadata>>();
 

@@ -31,6 +31,7 @@
 import { Worker } from 'node:worker_threads';
 import type { Database } from 'better-sqlite3';
 import fs from 'fs';
+import path from 'node:path';
 import { ServiceRegistry } from '../di/service-registry.js';
 import { CapabilityGuard } from '../capability-system/index.js';
 import type { EventBus } from '../event-bus/index.js';
@@ -902,12 +903,15 @@ export class WorkerManager {
     // 4. 创建 Worker
     let worker: Worker;
     try {
+      const resolvedPluginDir = (pluginDir && fs.existsSync(path.join(pluginDir, 'index.js')))
+        ? pluginDir
+        : undefined;
       worker = new Worker(new URL(bootstrapDataUrl), {
         // Pass both the DB id (`pluginId` — used as the actor/registry key)
         // and `manifestId` (used as the namespace prefix for command types).
         // The two diverge for ZIP-uploaded plugins whose DB id is a generated
         // UUID while manifest.id is the plugin author's chosen name.
-        workerData: { pluginId, manifestId: manifest.id, serviceTokens, pluginDir },
+        workerData: { pluginId, manifestId: manifest.id, serviceTokens, pluginDir: resolvedPluginDir },
         eval: false,
         stdout: true,
         stderr: true,

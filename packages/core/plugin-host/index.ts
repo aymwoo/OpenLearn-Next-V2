@@ -97,8 +97,9 @@ export function validatePluginStateTransition(
 const ACTIVATION_TIMEOUT_MS = 5000;
 const DEACTIVATION_TIMEOUT_MS = 5000;
 
-/** 平台版本号 — 用于 engines.openlearn 兼容性检查 */
-export const OPENLEARN_VERSION = '0.2.5';
+/** 平台版本号 — 用于 engines.openlearn 兼容性检查，统一从 version.js 引入并导出 */
+import { OPENLEARN_VERSION } from '../version.js';
+export { OPENLEARN_VERSION };
 
 /** 插件静态资源安全沙箱中间件 */
 function createPluginStaticMiddleware(absDir: string) {

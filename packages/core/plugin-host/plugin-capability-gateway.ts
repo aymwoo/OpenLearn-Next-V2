@@ -10,6 +10,7 @@ import type {
   IntegrationHealthStatus,
   IntegrationDescriptor,
 } from '../bootstrap/integration/integration-types.js';
+import { PLATFORM_VERSION } from '../version.js';
 
 export interface CapabilityMetadata {
   readonly id: string;
@@ -38,7 +39,7 @@ export interface IPluginCapabilityGateway {
 export class PluginCapabilityGateway implements IPluginCapabilityGateway {
   public readonly id = 'srv_plugin_capability_gateway';
   public readonly name = 'PluginCapabilityGateway';
-  public readonly version = '0.2.5';
+  public readonly version = PLATFORM_VERSION;
 
   constructor(public readonly capabilityRegistry: CapabilityRegistry) {}
 

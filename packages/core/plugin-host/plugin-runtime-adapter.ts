@@ -10,6 +10,7 @@ import type {
   IntegrationHealthStatus,
   IntegrationDescriptor,
 } from '../bootstrap/integration/integration-types.js';
+import { PLATFORM_VERSION } from '../version.js';
 
 export interface IPluginRuntime extends IPluginHostAdapter {
   readonly pluginHost: PluginHost;
@@ -27,7 +28,7 @@ export interface IPluginRuntime extends IPluginHostAdapter {
 export class PluginRuntimeAdapter implements IPluginRuntime {
   public readonly id = 'srv_plugin_runtime';
   public readonly name = 'PluginRuntimeAdapter';
-  public readonly version = '0.2.5';
+  public readonly version = PLATFORM_VERSION;
 
   private _initialized = false;
   private _context?: IntegrationContext;

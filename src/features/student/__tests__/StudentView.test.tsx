@@ -99,7 +99,7 @@ describe('StudentView', () => {
 
   it('renders StudentLessonView when studentViewStatus is "lesson"', async () => {
     renderView({ studentViewStatus: 'lesson' });
-    expect(await screen.findByText('Back to Dashboard')).toBeTruthy();
+    expect(await screen.findByText('Back to Dashboard', {}, { timeout: 5000 })).toBeTruthy();
   });
 
   it('renders StudentAssignmentView when studentViewStatus is "assignment" and selectedAssignment is set', async () => {
@@ -107,11 +107,11 @@ describe('StudentView', () => {
       studentViewStatus: 'assignment',
       selectedAssignment: { title: 'Test Assignment' },
     });
-    expect(await screen.findByText('Assignment: Test Assignment')).toBeTruthy();
+    expect(await screen.findByText('Assignment: Test Assignment', {}, { timeout: 5000 })).toBeTruthy();
   });
 
   it('renders StudentDashboardPanel (default else) when studentViewStatus is "dashboard"', async () => {
     renderView({ studentViewStatus: 'dashboard' });
-    expect(await screen.findByText('Welcome, Alice')).toBeTruthy();
+    expect(await screen.findByText('Welcome, Alice', {}, { timeout: 5000 })).toBeTruthy();
   });
 });

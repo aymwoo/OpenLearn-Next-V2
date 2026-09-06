@@ -19,6 +19,7 @@ import { exec } from 'child_process';
 import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
 import { kernelContainer } from './packages/core/kernel/index.js';
+import { PLATFORM_VERSION } from './packages/core/version.js';
 import { ISemesterGradeServiceToken } from './packages/core/di/interfaces.js';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
@@ -316,6 +317,34 @@ async function startServer() {
 
   setupPresence({ io, eventBus: kernelContainer.eventBus });
 
+  // ── 健康检查端点 (OBS-HEALTH-01) ──────────────────────────────────
+  const startTime = Date.now();
+  // 单一版本来源：统一引用 PLATFORM_VERSION，避免运行期读取 package.json 路径漂移
+  const platformVersion = PLATFORM_VERSION;
+  app.get('/health', (_req: any, res: any) => {
+    res.json({ status: 'ok', uptime: Math.floor((Date.now() - startTime) / 1000), version: platformVersion });
+  });
+
+  app.get('/health/ready', (_req: any, res: any) => {
+    try {
+      kernelContainer.db.prepare('SELECT 1').get();
+      const workerCount = kernelContainer.workerManager?.registry?.activeCount ?? 0;
+      res.json({ status: 'ready', db: 'connected', workers: workerCount });
+    } catch (e: any) {
+      res.status(503).json({ status: 'not_ready', error: e.message });
+    }
+  });
+
+  // SEC-AUTH-METRICS: 保护系统级指标，仅管理员可探测服务器运行性能指标
+  app.get('/metrics', requireAuth('administrator'), (_req: any, res: any) => {
+    const mem = process.memoryUsage();
+    res.json({
+      uptime: Math.floor((Date.now() - startTime) / 1000),
+      memory: { rss: Math.round(mem.rss / 1024 / 1024) + 'MB', heapUsed: Math.round(mem.heapUsed / 1024 / 1024) + 'MB' },
+      nodeVersion: process.version,
+    });
+  });
+
   // Vite Middleware for Development
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
@@ -349,41 +378,6 @@ async function startServer() {
     } else {
       console.error('HTTP Server error:', err);
     }
-  });
-
-  // ── 健康检查端�? (OBS-HEALTH-01) ──────────────────────────────────
-  const startTime = Date.now();
-  // 单一版本来源：从 package.json 读取，避免与版本发布时手工同步而漂移。
-  let platformVersion = '0.0.0';
-  try {
-    const pkgPath = path.join(process.cwd(), 'package.json');
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as { version?: string };
-    platformVersion = pkg.version ?? platformVersion;
-  } catch {
-    // 启动阶段不可用时保留默认占位；运行期仍能返回有意义响应。
-  }
-  app.get('/health', (_req: any, res: any) => {
-    res.json({ status: 'ok', uptime: Math.floor((Date.now() - startTime) / 1000), version: platformVersion });
-  });
-
-  app.get('/health/ready', (_req: any, res: any) => {
-    try {
-      kernelContainer.db.prepare('SELECT 1').get();
-      const workerCount = kernelContainer.workerManager?.registry?.activeCount ?? 0;
-      res.json({ status: 'ready', db: 'connected', workers: workerCount });
-    } catch (e: any) {
-      res.status(503).json({ status: 'not_ready', error: e.message });
-    }
-  });
-
-  // SEC-AUTH-METRICS: 保护系统级指标，仅管理员可探测服务器运行性能指标
-  app.get('/metrics', requireAuth('administrator'), (_req: any, res: any) => {
-    const mem = process.memoryUsage();
-    res.json({
-      uptime: Math.floor((Date.now() - startTime) / 1000),
-      memory: { rss: Math.round(mem.rss / 1024 / 1024) + 'MB', heapUsed: Math.round(mem.heapUsed / 1024 / 1024) + 'MB' },
-      nodeVersion: process.version,
-    });
   });
 
   httpServer.listen(PORT, '0.0.0.0', () => {

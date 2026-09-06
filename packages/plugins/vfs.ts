@@ -20,7 +20,7 @@ export const VfsPlugin = {
       '@openlearn/core:IDatabase@^1.0.0',
     ],
     capabilitiesProposed: ['vfs:read', 'vfs:write'],
-    engines: { openlearn: '^0.2.5' },
+    engines: { openlearn: '>=0.2.5' },
   },
   activate: async (ctx: PluginContext) => {
     const commandBus = ctx.services.commandBus;

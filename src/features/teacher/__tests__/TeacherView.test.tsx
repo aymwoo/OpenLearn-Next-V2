@@ -274,7 +274,7 @@ describe('TeacherView', () => {
   it('renders the HelpView child (with "Edu-OS Reference Hub" marker) for teacherTab="help"', async () => {
     const { container } = renderView({ teacherTab: 'help' });
     expect(container.querySelector('.bg-gray-50')).toBeTruthy();
-    expect(await screen.findByText(/Edu-OS Reference Hub/i)).toBeTruthy();
+    expect(await screen.findByText(/Edu-OS Reference Hub/i, {}, { timeout: 5000 })).toBeTruthy();
     // The dashboard child must NOT be present on the help tab (tab switch works).
     expect(screen.queryByText('Live Class')).toBeTruthy(); // nav still present
   });

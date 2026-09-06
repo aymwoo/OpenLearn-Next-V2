@@ -8,6 +8,21 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.5] - 2026-09-06
+
+### Fixes & Architecture Alignment
+- **平台版本单一真理源 (Single Source of Truth) 与漂移消除**：
+  - 新建 [`packages/core/version.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/version.ts)，统一导出 `PLATFORM_VERSION` 与 `OPENLEARN_VERSION`；
+  - 消除 [`packages/core/plugin-host/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/index.ts) 中历史滞留的 `OPENLEARN_VERSION = '0.2.5'` 硬编码；
+  - 消除 [`packages/core/bootstrap/types/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/bootstrap/types/index.ts) 与各适配器（`UnifiedExtensionRegistry`、`PluginRuntimeAdapter`、`PluginCapabilityGateway`、`PluginRuntimeComposition`、`PluginLifecycleManager`、`PluginDistributionManager` 等）中写死的 `'0.2.5'`；
+  - 修正 [`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 的 `/health` 接口版本获取逻辑，直接使用 `PLATFORM_VERSION`，彻底避免跨目录/CLI 运行环境下 `process.cwd()` 缺失 `package.json` 导致的读取回退。
+- **内置核心插件与模版兼容性放宽 (Relaxed Engine Constraints)**：
+  - 将 7 大内置插件（`builtin`、`vfs`、`process`、`management`、`ai-planner`、`ai-submit-injector`、`assignment-eval`）及插件 SDK 脚手架模板中的 `engines.openlearn` 由过紧的 `^0.2.5`（SemVer 规范下仅匹配 `<0.3.0`）调整为向上兼容的 `>=0.2.5`，杜绝 0.x 阶段版本升级引发的插件互锁拒载异常。
+- **SPA 路由与健康检查端点层级调整 (Route Order Correction)**：
+  - 将 `/health`、`/health/ready`、`/metrics` 端点移至静态 SPA 回退路由（`app.get('*', ...)`）之前，修复生产环境下对系统探针请求错误返回 `index.html` 的问题。
+- **历史数据库插件恢复安全容错 (Worker Directory Existence Guard)**：
+  - 在 [`packages/core/worker-runtime/worker-manager.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/worker-manager.ts) 创建 Worker 时，检查 `pluginDir/index.js` 是否在物理磁盘真实存在。若物理文件因迁移或版本迭代已清理，自动安全回退至内嵌数据 URL 启动，消除启动恢复时的 `ERR_MODULE_NOT_FOUND` 堆栈报警。
+
 ## [0.3.3] - 2026-09-06
 
 ### Fixes & Network Hardening

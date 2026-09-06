@@ -8,6 +8,7 @@ import { PlatformServiceRegistry } from '../../service-registry/index.js';
 import { CapabilityRegistry } from '../../ai-capability/registry/capability-registry.js';
 import { PermissionManager } from '../permission/index.js';
 import { EventBus } from '../../event-bus/index.js';
+import { PLATFORM_VERSION } from '../../version.js';
 
 /**
  * P7-A2 Stage 2: 共享的 PlatformServiceRegistry 单例。
@@ -55,10 +56,10 @@ export class PluginCompositionModule implements CompositionModule {
     const realPluginHost = options?.infrastructureRefs?.get('pluginHost') ?? { name: 'PluginHostService', isReady: true, pluginsCount: 0 };
     const realContributionRegistry = options?.infrastructureRefs?.get('contributionRegistry') ?? { name: 'ContributionRegistry', slotsCount: 0 };
     const realRuntimeComposition = options?.infrastructureRefs?.get('runtimeComposition') ?? { name: 'PluginRuntimeComposition', isStarted: true };
-    const realLifecycleManager = options?.infrastructureRefs?.get('lifecycleManager') ?? { name: 'PluginLifecycleManager', version: '0.2.5' };
-    const realCapabilityGateway = options?.infrastructureRefs?.get('capabilityGateway') ?? { name: 'PluginCapabilityGateway', version: '0.2.5' };
-    const realExtensionRegistry = options?.infrastructureRefs?.get('extensionRegistry') ?? { name: 'UnifiedExtensionRegistry', version: '0.2.5' };
-    const realDistributionManager = options?.infrastructureRefs?.get('distributionManager') ?? { name: 'PluginDistributionManager', version: '0.2.5' };
+    const realLifecycleManager = options?.infrastructureRefs?.get('lifecycleManager') ?? { name: 'PluginLifecycleManager', version: PLATFORM_VERSION };
+    const realCapabilityGateway = options?.infrastructureRefs?.get('capabilityGateway') ?? { name: 'PluginCapabilityGateway', version: PLATFORM_VERSION };
+    const realExtensionRegistry = options?.infrastructureRefs?.get('extensionRegistry') ?? { name: 'UnifiedExtensionRegistry', version: PLATFORM_VERSION };
+    const realDistributionManager = options?.infrastructureRefs?.get('distributionManager') ?? { name: 'PluginDistributionManager', version: PLATFORM_VERSION };
 
     registerOrReplace({
       id: 'srv_plugin_host',

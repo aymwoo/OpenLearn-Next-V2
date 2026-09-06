@@ -11,6 +11,7 @@ import type {
   IntegrationHealthStatus,
   IntegrationDescriptor,
 } from '../bootstrap/integration/integration-types.js';
+import { PLATFORM_VERSION } from '../version.js';
 
 export interface IRuntimeCompositionOptions {
   readonly pluginHost: PluginHost;
@@ -20,7 +21,7 @@ export interface IRuntimeCompositionOptions {
 export class PluginRuntimeComposition {
   public readonly id = 'srv_plugin_runtime_composition';
   public readonly name = 'PluginRuntimeComposition';
-  public readonly version = '0.2.5';
+  public readonly version = PLATFORM_VERSION;
 
   private _isStarted = false;
   private _context?: IntegrationContext;

@@ -124,8 +124,7 @@ describe('NodeWorkerTransport message roundtrip', () => {
     transport.postMessage(msg2);
 
     // Wait for both messages to be echoed back
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(messages).toHaveLength(2);
+    await vi.waitFor(() => expect(messages).toHaveLength(2), { timeout: 3000 });
     expect(messages[0].invokeId).toBe('1');
     expect(messages[1].subId).toBe('s1');
   });

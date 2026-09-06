@@ -10,6 +10,7 @@ import type {
   IntegrationHealthStatus,
   IntegrationDescriptor,
 } from '../bootstrap/integration/integration-types.js';
+import { PLATFORM_VERSION } from '../version.js';
 
 export interface PluginPackageMetadata {
   readonly id: string;
@@ -95,7 +96,7 @@ export interface IPluginDistributionManager {
 export class PluginDistributionManager implements IPluginDistributionManager {
   public readonly id = 'srv_plugin_distribution_manager';
   public readonly name = 'PluginDistributionManager';
-  public readonly version = '0.2.5';
+  public readonly version = PLATFORM_VERSION;
 
   private readonly _repositories = new Map<string, IPluginRepositoryAdapter>();
 
