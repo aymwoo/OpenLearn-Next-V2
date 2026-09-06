@@ -8,6 +8,36 @@ All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are 
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.8] - 2026-09-06
+
+### Features & CLI Utilities (CLI 运维诊断与便捷体验全景增强)
+- **多网卡局域网 IP 自动侦测与终端直显 (`-H, --host`)**：
+  - 启动服务时自动扫描全量本地网卡 IPv4 地址，终端同时以明亮高亮及可点击超链接形式输出 `Local` (http://localhost:PORT) 与 `Network` (http://192.168.x.x:PORT) 访问地址，极大简化教师多设备与局域网移动端机房联调流程；
+  - 支持 `-H, --host <host>` 参数自定义监听网卡。
+- **服务就绪后自动唤起浏览器 (`-o, --open`)**：
+  - 跨平台零外部依赖实现（macOS `open` / Windows `cmd start` / Linux `xdg-open`），在 HTTP 服务器真正绑定就绪时精准静默自动弹出默认浏览器。
+- **环境健康自检与就绪诊断工具 (`npx openlearn-next doctor`)**：
+  - 新增独立子模块 [`cli-doctor.mjs`](file:///home/wuxf/Develop/openlearnv2/cli-doctor.mjs)，支持五维综合体检：
+    1. Node.js 运行时版本校验（>= 20.0.0 严格检查）；
+    2. 硬件架构、CPU 核心数与剩余空闲物理内存容量评估；
+    3. 目标数据存储目录递归创建与原子写入/删除权限检测；
+    4. 目标端口（默认 9000 或 `-p` 指定）占用状态与自动避让检测；
+    5. 本机局域网网络接口连通性与 IPv4 地址检测。
+- **一键在线冷备快照与安全回滚恢复 (`backup` / `restore`)**：
+  - 新增独立数据运维子模块 [`cli-data.mjs`](file:///home/wuxf/Develop/openlearnv2/cli-data.mjs)；
+  - `backup [file]`：基于 SQLite WAL 在线一致性快照技术，毫秒级导出当前平台完整快照；
+  - `restore <file>`：还原前强制校验 SQLite Magic Header (`SQLite format 3\0`) 防坏文件注入，并自动为被覆盖主库生成 `.bak_<timestamp>` 安全回滚镜像副本。
+- **终端免界面重置管理员密码 (`reset-admin`)**：
+  - `reset-admin [--password <pwd>]`：在无需启动 Web 界面的情况下，直接对主库 `admin` 账号进行 bcrypt 加密重置，并在账号缺失时自动补全。
+- **命令行轻量级插件状态速查 (`plugins [list]`)**：
+  - 终端直接输出已安装插件的 ASCII 美化表格（包含插件 ID、版本、状态、加载模式），支持各类环境 schema 兼容。
+- **一次性纯净临时沙盒演示模式 (`--demo` / `--temp`)**：
+  - 在操作系统临时目录动态生成隔离沙盒环境运行，并在终端收到 `SIGINT` / `SIGTERM` 退出信号时，经由优雅关闭管道自动销毁沙盒数据，实现“零残留、用完即走”。
+- **CORS 跨域白名单命令行透传 (`--cors <origins>`)**：
+  - 命令行直接透传配置到 Express 与 Socket.IO 运行时跨域拦截器。
+- **自动化测试保障**：
+  - 新增专用自动化测试套件 [`packages/core/__tests__/cli-enhanced.test.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/__tests__/cli-enhanced.test.ts)，全量 7 项测试保障。
+
 ## [0.3.7] - 2026-09-06
 
 ### Features & CLI Utilities

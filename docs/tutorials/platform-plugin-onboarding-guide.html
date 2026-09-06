@@ -347,15 +347,23 @@ curl -X POST http://localhost:9000/api/plugins/ext-my-plugin/toggle   <span clas
   <div class="sec-label">SECTION 05</div>
   <h2>五、迭代修改与本地测试</h2>
 
-  <h3>5.1 开发热重载</h3>
+  <h3>5.1 首选：对话式迭代（AI Agent）</h3>
+  <p>修改插件<strong>不需要自己改代码</strong>——继续在 AI Agent 会话里提需求即可，
+  Agent 会按 skill 指引自动完成「改代码 → 升版本号 → 重新打包」：</p>
+  <div class="codeblock">再加一个签到趋势图表，然后升版本重新打包</div>
+  <p>Agent 的典型动作：<code>Edit src/frontend.tsx</code>（加图表）→
+  <code>manifest.json version: 0.1.0 → 0.1.1</code> → <code>npx @openlearn/plugin-sdk build</code> →
+  产出新 ZIP。之后把新 ZIP 重新上传插件中心（见第六章平滑更新）。
+  也可以直接让 Agent 连浏览器操作，完成上传与验证。</p>
+
+  <h3>5.2 热重载（源码方式）</h3>
   <p>在源码方式（<code>pnpm dev</code>，即 <code>NODE_ENV=development</code>）下，PluginHost 会监听 <code>plugins/</code> 目录，
-  文件变更约 300ms 后自动执行「停用旧版 → 清理 → 激活新版」，<strong>无需重启服务器</strong>。
-  快速迭代时可以把插件文件直接放进 <code>plugins/&lt;pluginId&gt;/</code> 观察 reload 日志。</p>
+  文件变更约 300ms 后自动执行「停用旧版 → 清理 → 激活新版」，<strong>无需重启服务器</strong>。</p>
   <div class="callout warn">
     <p><span class="ct">注意：</span>热重载覆盖后端逻辑；前端 UI 组件的改动需重新构建入口文件并刷新页面。</p>
   </div>
 
-  <h3>5.2 单元测试（Vitest + Mock Context）</h3>
+  <h3>5.3 单元测试（Vitest + Mock Context）</h3>
   <div class="codeblock">npm install --save-dev @openlearn/plugin-test-kit vitest
 npx vitest run                          <span class="c"># 在插件项目内运行</span>
 pnpm test                               <span class="c"># 在平台仓库根运行全量测试</span></div>
@@ -378,15 +386,16 @@ describe('my-plugin', () =&gt; {
 });</div>
 
   <p><code>createMockContext()</code> 提供命令总线、事件总线、AI、存储、日志等全套 Mock，
-  其中 <code>ctx.db</code> 是真实内存 SQLite，<code>ctx.services.commandBus.executeCalls</code> 可作为断言依据。</p>
+  其中 <code>ctx.db</code> 是真实内存 SQLite，<code>ctx.services.commandBus.executeCalls</code> 可作为断言依据。
+  测试同样可以交给 AI Agent：「为这个插件补一个 createMockContext 单元测试并跑到通过」。</p>
 
-  <h3>5.3 推荐迭代节奏</h3>
+  <h3>5.4 推荐迭代节奏</h3>
   <ol>
-    <li>修改 <code>src/index.ts</code>（或前端组件）→</li>
-    <li><code>npx vitest run</code> 确认逻辑正确 →</li>
-    <li><code>npx @openlearn/plugin-sdk build --watch</code> 保持打包 →</li>
-    <li>重新上传 ZIP 到插件中心，或在 dev 模式下直接观察热重载 →</li>
-    <li>在浏览器中验证 UI 与行为，记录问题。</li>
+    <li>向 AI Agent 描述新需求或 bug 现象 →</li>
+    <li>Agent 修改代码、升版本号、重新打包 →</li>
+    <li><code>npx vitest run</code> 确认逻辑正确（可让 Agent 代跑）→</li>
+    <li>重新上传 ZIP 到插件中心（同 ID 新版本自动平滑更新）→</li>
+    <li>在浏览器中验证 UI 与行为，把问题直接反馈给 Agent 修复。</li>
   </ol>
 
   <div class="page-footer"><span>OpenLearn V2 · 平台与插件测试上手指南</span><span>06</span></div>

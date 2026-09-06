@@ -15,7 +15,8 @@ if (!process.env.NODE_ENV) {
     process.env.NODE_ENV = 'production';
   }
 }
-import { exec } from 'child_process';
+import os from 'os';
+import { exec, spawn } from 'child_process';
 import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
 import { kernelContainer } from './packages/core/kernel/index.js';
@@ -366,6 +367,8 @@ async function startServer() {
     });
   }
 
+  const HOST = process.env.HOST || '0.0.0.0';
+
   httpServer.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {
       console.warn(`Port ${PORT} is already in use. Retrying in 1.5 seconds...`);
@@ -373,22 +376,72 @@ async function startServer() {
         try {
           httpServer.close();
         } catch (e) {}
-        httpServer.listen(PORT, '0.0.0.0');
+        httpServer.listen(PORT, HOST);
       }, 1500);
     } else {
       console.error('HTTP Server error:', err);
     }
   });
 
-  httpServer.listen(PORT, '0.0.0.0', () => {
-    const url = `http://localhost:${PORT}`;
+  const getNetworkIps = (): string[] => {
+    const ips: string[] = [];
+    try {
+      const interfaces = os.networkInterfaces();
+      for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name] || []) {
+          if (iface.family === 'IPv4' && !iface.internal && !iface.address.startsWith('127.')) {
+            ips.push(iface.address);
+          }
+        }
+      }
+    } catch {}
+    return ips;
+  };
+
+  const openBrowser = (targetUrl: string) => {
+    try {
+      const { platform } = process;
+      if (platform === 'darwin') {
+        spawn('open', [targetUrl], { stdio: 'ignore', detached: true }).unref();
+      } else if (platform === 'win32') {
+        spawn('cmd.exe', ['/c', 'start', '""', targetUrl], { stdio: 'ignore', detached: true }).unref();
+      } else {
+        spawn('xdg-open', [targetUrl], { stdio: 'ignore', detached: true }).unref();
+      }
+    } catch {
+      // 忽略无桌面或无默认浏览器的静默异常
+    }
+  };
+
+  httpServer.listen(PORT, HOST, () => {
+    const isAnyHost = HOST === '0.0.0.0';
+    const localUrl = `http://localhost:${PORT}`;
+    const primaryUrl = isAnyHost ? localUrl : `http://${HOST}:${PORT}`;
+
     const OSC = '\x1b]8;;';
     const ST = '\x1b\\';
     const reset = '\x1b[0m';
     const bold = '\x1b[1m';
     const green = '\x1b[32m';
     const cyan = '\x1b[36m';
-    console.log(`\n  ${bold}${green}Educational OS Kernel${reset} ready at ${bold}${cyan}${OSC}${url}${ST}http://localhost:${PORT}${OSC}${ST}${reset}\n`);
+    const dim = '\x1b[2m';
+
+    console.log(`\n  ${bold}${green}Educational OS Kernel${reset} v${PLATFORM_VERSION} ready:\n`);
+    console.log(`  ${dim}➜${reset}  ${bold}Local:${reset}   ${bold}${cyan}${OSC}${localUrl}${ST}${localUrl}${OSC}${ST}${reset}`);
+
+    if (isAnyHost) {
+      const netIps = getNetworkIps();
+      for (const ip of netIps) {
+        const netUrl = `http://${ip}:${PORT}`;
+        console.log(`  ${dim}➜${reset}  ${bold}Network:${reset} ${bold}${cyan}${OSC}${netUrl}${ST}${netUrl}${OSC}${ST}${reset}`);
+      }
+    }
+    console.log('');
+
+    if (process.env.OPEN_BROWSER === 'true') {
+      console.log(`  ${dim}➜  Auto-opening browser: ${primaryUrl}${reset}\n`);
+      openBrowser(primaryUrl);
+    }
   });
 }
 
