@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>OpenLearn V2 平台与插件测试上手指南</title>
+<style>
+  @page { size: 210mm 297mm; margin: 0; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 210mm;
+    background: #0f2233; /* darkest page bg, covers sub-pixel gaps */
+    font-family: "WenQuanYi Micro Hei", "Noto Sans CJK SC", sans-serif;
+    color: #1e293b;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .page {
+    width: 210mm; height: 297mm;
+    background: #f7f9fb;
+    page-break-after: always;
+    position: relative;
+    box-sizing: border-box;
+    padding: 18mm 18mm 16mm 18mm;
+    display: flex; flex-direction: column;
+  }
+  .page:last-child { page-break-after: auto; }
+  .page-footer {
+    position: absolute; bottom: 8mm; left: 18mm; right: 18mm;
+    display: flex; justify-content: space-between;
+    font-size: 8.5pt; color: #94a3b8;
+    border-top: 0.4pt solid #dbe3ea; padding-top: 2.5mm;
+  }
+  h1, h2, h3 { font-weight: 700; }
+  h2 {
+    font-size: 17pt; color: #0f2233; margin: 0 0 4mm 0;
+    padding-left: 3.5mm; border-left: 3.5pt solid #1f6f54;
+    line-height: 1.3;
+  }
+  h3 { font-size: 12pt; color: #134e35; margin: 5mm 0 2mm 0; }
+  p, li { font-size: 10pt; line-height: 1.75; margin: 0 0 2.2mm 0; }
+  ul, ol { margin: 0 0 2.5mm 0; padding-left: 6.5mm; }
+  li { margin-bottom: 1.2mm; }
+  strong { color: #0f2233; }
+  code {
+    font-family: "LXGW WenKai Mono", "WenQuanYi Micro Hei Mono", monospace;
+    font-size: 9pt; background: #e8eef2; color: #0f3a2c;
+    padding: 0.4mm 1.4mm; border-radius: 2px;
+  }
+  .codeblock {
+    font-family: "LXGW WenKai Mono", "WenQuanYi Micro Hei Mono", monospace;
+    font-size: 8.8pt; line-height: 1.6;
+    background: #0f2233; color: #dbe9e2;
+    border-radius: 3mm; padding: 3.5mm 4.5mm;
+    margin: 2mm 0 3.5mm 0;
+    white-space: pre-wrap; word-break: break-all;
+    break-inside: avoid;
+  }
+  .codeblock .c { color: #7fa391; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 2mm 0 4mm 0;
+    font-size: 9.2pt; break-inside: avoid;
+  }
+  th {
+    background: #134e35; color: #ffffff; font-weight: 600;
+    padding: 2mm 2.5mm; text-align: left; line-height: 1.4;
+  }
+  td {
+    border-bottom: 0.4pt solid #d6dfe6; padding: 1.8mm 2.5mm;
+    line-height: 1.5; vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #eef3f6; }
+  .callout {
+    background: #eaf4ef; border-left: 3pt solid #1f6f54;
+    border-radius: 0 2mm 2mm 0; padding: 2.5mm 4mm; margin: 2.5mm 0 3.5mm 0;
+    break-inside: avoid;
+  }
+  .callout.warn { background: #fdf3e3; border-left-color: #c07a1d; }
+  .callout p { margin: 0; font-size: 9.4pt; }
+  .callout .ct { font-weight: 700; color: #134e35; }
+  .callout.warn .ct { color: #8a5410; }
+
+  /* ---------- cover ---------- */
+  .cover {
+    background: #0f2233; color: #f2f7f5;
+    padding: 0; display: block; position: relative;
+  }
+  .cover-inner { position: absolute; inset: 0; padding: 20mm 18mm; box-sizing: border-box; }
+  .cover .kicker {
+    font-size: 11pt; letter-spacing: 5pt; color: rgba(242,247,245,.65);
+    margin-top: 28mm;
+  }
+  .cover .hero {
+    font-size: 34pt; font-weight: 700; line-height: 1.35;
+    margin: 10mm 0 0 0; max-width: 155mm;
+  }
+  .cover .hero-rule { width: 38mm; height: 1.2mm; background: #2e9e77; margin: 10mm 0 0 0; }
+  .cover .summary {
+    font-size: 12pt; line-height: 1.8; color: rgba(242,247,245,.85);
+    max-width: 150mm; margin-top: 12mm;
+  }
+  .cover .meta { font-size: 10.5pt; color: rgba(242,247,245,.6); line-height: 2; margin-top: 14mm; }
+  .cover .toc-card {
+    position: absolute; bottom: 20mm; left: 18mm; right: 18mm;
+    background: rgba(255,255,255,.06); border: 0.5pt solid rgba(255,255,255,.14);
+    border-radius: 3mm; padding: 6mm 8mm;
+  }
+  .cover .toc-card h3 { color: #9fd8c2; font-size: 10.5pt; letter-spacing: 2pt; margin: 0 0 3mm 0; }
+  .cover .toc-card ol { margin: 0; padding-left: 6mm; columns: 2; column-gap: 12mm; }
+  .cover .toc-card li { font-size: 9.8pt; color: rgba(242,247,245,.9); line-height: 1.9; break-inside: avoid; }
+  .cover-watermark {
+    position: absolute; right: -6mm; bottom: 58mm;
+    font-size: 90pt; font-weight: 700; color: rgba(255,255,255,.045);
+    transform: rotate(-90deg); transform-origin: right bottom; white-space: nowrap;
+  }
+
+  /* ---------- step numbers ---------- */
+  .step { display: flex; gap: 4mm; margin: 3mm 0 1mm 0; }
+  .step .num {
+    flex: 0 0 auto; width: 7mm; height: 7mm; border-radius: 50%;
+    background: #1f6f54; color: #fff; font-size: 10pt; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; margin-top: 0.8mm;
+  }
+  .step .body { flex: 1; }
+  .step .body p { margin-bottom: 1.5mm; }
+
+  .spacer { flex: 1; }
+  .sec-label {
+    font-size: 8.5pt; letter-spacing: 2.5pt; color: #6b8a7c; font-weight: 700;
+    margin-bottom: 2mm;
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= PAGE 1 : COVER ================= -->
+<div class="page cover">
+  <div class="cover-watermark">ONBOARDING GUIDE</div>
+  <div class="cover-inner">
+    <div class="kicker">OPENLEARN V2 · 测试协作手册</div>
+    <div class="hero">平台部署与插件<br>开发测试上手指南</div>
+    <div class="hero-rule"></div>
+    <div class="summary">
+      本手册面向参与平台与插件测试的朋友，覆盖从环境准备、创建插件、打包安装、
+      迭代修改到版本更新的完整流程。按章节顺序操作，每一步都给出了可直接执行的命令。
+    </div>
+    <div class="meta">
+      适用版本：openlearn-next v0.3.x（宿主 API 0.2.9）<br>
+      预计上手时间：约 1 小时
+    </div>
+    <div class="toc-card">
+      <h3>目录 CONTENTS</h3>
+      <ol>
+        <li>环境准备与平台启动</li>
+        <li>认识插件体系</li>
+        <li>创建你的第一个插件</li>
+        <li>打包与安装插件</li>
+        <li>迭代修改与本地测试</li>
+        <li>插件更新与卸载</li>
+        <li>常见问题与检查清单</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- ================= PAGE 2 : SETUP ================= -->
+<div class="page">
+  <div class="sec-label">SECTION 01</div>
+  <h2>一、环境准备与平台启动</h2>
+
+  <h3>1.1 前置要求</h3>
+  <ul>
+    <li><strong>Node.js ≥ 20</strong>（自带 npm 与 npx，推荐方式无需 clone 源码即可启动平台）；操作系统不限（Linux / macOS / Windows + WSL）</li>
+    <li>如需插件<strong>热重载迭代</strong>或平台源码调试，再选源码方式（另需 <strong>pnpm ≥ 9</strong> 与 Git）</li>
+  </ul>
+
+  <h3>1.2 启动平台（首选：npx 一键运行）</h3>
+  <p>无需克隆项目，首次运行自动下载平台包；npx 方式数据库默认在 <code>~/openlearn-next/data.db</code>，与源码目录完全隔离：</p>
+  <div class="codeblock">npx openlearn-next                       <span class="c"># 启动平台，默认端口 9000</span>
+npx openlearn-next -p 3000               <span class="c"># 自定义端口</span>
+OPENLEARN_DB_PATH=./my.db npx openlearn-next   <span class="c"># 自定义数据库路径</span></div>
+
+  <div class="codeblock"><span class="c"># 备选源码方式（仅插件热重载迭代 / 平台源码调试时需要）：</span>
+git clone https://github.com/aymwoo/OpenLearn-Next-V2.git
+cd OpenLearn-Next-V2 &amp;&amp; pnpm install
+pnpm dev    <span class="c"># 开发服务器，数据库在 packages/core/db/educational_os.db</span></div>
+
+  <div class="callout">
+    <p><span class="ct">启动成功的标志：</span>终端输出 <code>listening on port 9000</code>，浏览器访问 <strong>http://localhost:9000</strong>。</p>
+  </div>
+
+  <h3>1.3 默认账号</h3>
+  <table>
+    <tr><th style="width:26%">账号</th><th style="width:26%">密码</th><th>权限说明</th></tr>
+    <tr><td>admin</td><td>admin</td><td>管理员，拥有插件中心（Plugin Center）等全部功能</td></tr>
+    <tr><td>teacher</td><td>teacher</td><td>教师账号，可体验课程、白板与插件 UI 扩展点</td></tr>
+  </table>
+
+  <h3>1.4 常用命令</h3>
+  <table>
+    <tr><th style="width:42%">命令</th><th>用途</th></tr>
+    <tr><td><code>npx openlearn-next</code></td><td>npx 方式启动平台（测试朋友的首选）</td></tr>
+    <tr><td><code>npm update -g openlearn-next</code></td><td>全局安装方式下更新平台（npx 方式重新运行即自动拉取最新版）</td></tr>
+    <tr><td><code>pnpm test</code></td><td>运行 Vitest 测试套件（源码方式）</td></tr>
+    <tr><td><code>pnpm db:reset</code></td><td>重置数据库（源码方式）</td></tr>
+  </table>
+
+  <div class="callout warn">
+    <p><span class="ct">小提示：</span>数据搞乱了？npx 方式删除 <code>~/openlearn-next/data.db</code> 后重启即可；源码方式用 <code>pnpm db:reset</code>。</p>
+  </div>
+
+  <div class="page-footer"><span>OpenLearn V2 · 平台与插件测试上手指南</span><span>02</span></div>
+</div>
+
+<!-- ================= PAGE 3 : PLUGIN SYSTEM ================= -->
+<div class="page">
+  <div class="sec-label">SECTION 02</div>
+  <h2>二、认识插件体系</h2>
+
+  <p>每个插件都是一个独立包，核心是「<strong>manifest 清单 + activate 激活函数</strong>」。
+  平台通过 ESM Loader 加载插件，按 7 状态生命周期管理：
+  <code>installed → activating → active ⇄ deactivating → inactive → … → uninstalled</code>，
+  激活或停用失败会自动回滚并标记为 <code>error</code>。</p>
+
+  <h3>2.1 manifest.json 必需字段</h3>
+  <div class="codeblock">{
+  "id": "ext-homework-hub",        <span class="c">// 必需：全局唯一 ID（建议 ext- 前缀或 @org/name）</span>
+  "name": "作业管理中心",           <span class="c">// 必需：显示名称</span>
+  "version": "1.0.0",              <span class="c">// 必需：SemVer 版本号，更新插件靠它</span>
+  "main": "dist/index.js",         <span class="c">// 必需：入口文件相对路径</span>
+  "engines": { "openlearn": ">=0.2.5" }  <span class="c">// 宿主 API 版本兼容范围</span>
+}</div>
+
+  <h3>2.2 常用可选字段</h3>
+  <table>
+    <tr><th style="width:32%">字段</th><th>作用</th></tr>
+    <tr><td><code>requires</code> / <code>optional</code></td><td>强/弱依赖的平台服务，如 <code>@openlearn/core:ICommandBusService@^1.0.0</code>；optional 缺失时服务为 null 而不报错</td></tr>
+    <tr><td><code>pluginDependencies</code></td><td>依赖的其他插件，须先处于 ACTIVE 状态</td></tr>
+    <tr><td><code>capabilitiesProposed</code></td><td>申请的能力权限，如 <code>storage:read</code>、<code>ai:chat</code>、<code>vfs:write</code></td></tr>
+    <tr><td><code>contributes</code></td><td>UI 贡献点声明（teacher.tab、classroom.tool、student.view 等），实际渲染需在 activate 中用 <code>ctx.ui.registerExtensionPoint()</code> 注册</td></tr>
+    <tr><td><code>configuration</code></td><td>插件配置项 schema，管理员可在插件中心配置</td></tr>
+  </table>
+
+  <h3>2.3 插件运行时上下文（ctx）</h3>
+  <p>activate 函数收到的 <code>ctx</code> 提供：<code>ctx.services</code>（命令总线、事件总线、AI、存储等）、
+  <code>ctx.db</code>（插件私有 SQLite 表）、<code>ctx.ui</code>（UI 扩展点注册）、<code>ctx.logger</code>、
+  <code>ctx.require()</code>（加载平台内置的第三方库，如 uuid、xlsx、recharts）。</p>
+
+  <div class="callout">
+    <p><span class="ct">深入阅读：</span>manifest 完整规范见 <code>docs/plugin/plugin-manifest-spec.md</code>；
+    生命周期细节见 <code>docs/plugin/plugin-lifecycle.md</code>；完整教程见 <code>docs/tutorials/plugin-development-tutorial.md</code>。</p>
+  </div>
+
+  <div class="page-footer"><span>OpenLearn V2 · 平台与插件测试上手指南</span><span>03</span></div>
+</div>
+
+<!-- ================= PAGE 4 : CREATE PLUGIN ================= -->
+<div class="page">
+  <div class="sec-label">SECTION 03</div>
+  <h2>三、创建你的第一个插件（首选：AI Agent 开发）</h2>
+
+  <p><strong>首选方式：向 AI Agent 提出需求即可。</strong>AI Agent（如 ZCode）安装
+  <code>openlearn-next-plugin-dev</code> skill（skillhub.cn/skills/user_37fa416d/openlearn-next-plugin-dev）后，
+  会自动探活并获取最新插件开发在线文档（带本地缓存），与开发者讨论需求后直接生成代码、构建打包。</p>
+
+  <div class="step"><div class="num">1</div><div class="body">
+    <p><strong>在 AI Agent 会话中直接描述需求</strong>：</p>
+    <div class="codeblock">使用 openlearn-next-plugin-dev skill，
+开发一个课堂签到插件：含签到按钮和实时统计</div>
+  </div></div>
+
+  <div class="step"><div class="num">2</div><div class="body">
+    <p><strong>Agent 自动完成整个开发流程</strong>：</p>
+    <ul>
+      <li>加载 skill，探活在线文档（<code>openlearn-next-v2.readthedocs.io</code>），缓存命中则零额外 token 消耗；</li>
+      <li>读取插件开发指南（Manifest 规范、命令-事件-Action 模式、UI 扩展槽位、安全权限模型）；</li>
+      <li>生成 <code>src/index.ts</code>（manifest + activate，注册命令）与 <code>src/frontend.tsx</code>（前端面板）；</li>
+      <li>执行 <code>npx @openlearn/plugin-sdk build</code> 构建并打包出 <code>.zip</code> 安装包。</li>
+    </ul>
+  </div></div>
+
+  <div class="step"><div class="num">3</div><div class="body">
+    <p><strong>备选：手动脚手架</strong>（想了解内部原理时使用）——入口 <code>src/index.ts</code> 默认导出
+    <code>{ manifest, activate }</code>，manifest 必填 <code>id</code> / <code>name</code> / <code>version</code> /
+    <code>main</code> 四个字段：</p>
+    <div class="codeblock">npx @openlearn/plugin-sdk init --name my-plugin --template full-stack
+cd my-plugin &amp;&amp; npm install
+npx @openlearn/plugin-sdk build   <span class="c"># esbuild 打包并生成 my-plugin.zip</span></div>
+    <p>三种模板：<code>server-only</code>（默认）、<code>full-stack</code>（后端 + 前端 UI）、<code>frontend-only</code>。</p>
+  </div></div>
+
+  <div class="callout warn">
+    <p><span class="ct">注意（token-enforcer 安全扫描）：</span>插件入口只允许「相对路径导入」和
+    <code>@openlearn/*</code> Token 导入，<code>crypto</code>、<code>fs</code>、<code>path</code> 等 Node 模块和 npm 包
+    裸导入会被拒绝。已知问题：当前脚手架 CLI 会把 SDK 误打进产物，若遇
+    「Import of "node:fs" is not allowed」，让 AI Agent 以 <code>external: ['@openlearn/plugin-sdk']</code>
+    重新打包即可（与平台官方构建方式一致）。</p>
+  </div>
+
+  <div class="page-footer"><span>OpenLearn V2 · 平台与插件测试上手指南</span><span>04</span></div>
+</div>
+
+<!-- ================= PAGE 5 : INSTALL ================= -->
+<div class="page">
+  <div class="sec-label">SECTION 04</div>
+  <h2>四、打包与安装插件</h2>
+
+  <h3>4.1 通过插件中心安装（推荐）</h3>
+  <div class="step"><div class="num">1</div><div class="body">
+    <p>用 <strong>admin / admin</strong> 登录平台，进入 <strong>系统设置 → 插件中心（Plugin Center）</strong>。</p>
+  </div></div>
+  <div class="step"><div class="num">2</div><div class="body">
+    <p>点击上传，选择 <code>my-plugin.zip</code>；或使用「一键极速安装（Express Install）」向导。</p>
+  </div></div>
+  <div class="step"><div class="num">3</div><div class="body">
+    <p>系统会自动完成：解压 → 解析 manifest → 安全扫描（token-enforcer）→
+    SemVer 兼容检查 → 权限风险提示（红 = 高危 / 琥珀 = 中 / 绿 = 安全）→ 入库 → 可选立即激活。</p>
+  </div></div>
+  <div class="step"><div class="num">4</div><div class="body">
+    <p>在插件列表中确认状态为 <strong>active</strong>。若激活失败，列表中会显示 error 状态与错误信息，
+    这是测试时需要重点报告的内容。</p>
+  </div></div>
+
+  <h3>4.2 通过 REST API 安装（调试用）</h3>
+  <div class="codeblock">curl -F "file=@my-plugin.zip" http://localhost:9000/api/plugins/upload
+curl http://localhost:9000/api/plugins              <span class="c"># 查看已安装插件列表</span>
+curl -X POST http://localhost:9000/api/plugins/ext-my-plugin/toggle   <span class="c"># 激活/停用切换</span></div>
+
+  <table>
+    <tr><th style="width:52%">接口</th><th>说明</th></tr>
+    <tr><td><code>GET /api/plugins</code></td><td>已安装插件列表</td></tr>
+    <tr><td><code>POST /api/plugins/upload</code></td><td>上传 ZIP 安装（同 ID 不同版本走更新路径）</td></tr>
+    <tr><td><code>POST /api/plugins/:id/toggle</code></td><td>激活 / 停用切换</td></tr>
+    <tr><td><code>DELETE /api/plugins/:id</code></td><td>卸载插件</td></tr>
+    <tr><td><code>GET/POST /api/plugins/:id/config</code></td><td>读取 / 写入插件配置</td></tr>
+    <tr><td><code>GET /api/plugins/store</code></td><td>插件市场可安装列表</td></tr>
+  </table>
+
+  <div class="callout">
+    <p><span class="ct">安装后去了哪里：</span>插件文件解压在 <code>plugins/&lt;uuid&gt;/</code> 目录，
+    元数据记录在 SQLite 的 <code>plugins</code> 表（状态：installed / active / inactive / error）。</p>
+  </div>
+
+  <div class="page-footer"><span>OpenLearn V2 · 平台与插件测试上手指南</span><span>05</span></div>
+</div>
+
+<!-- ================= PAGE 6 : ITERATE & TEST ================= -->
+<div class="page">
+  <div class="sec-label">SECTION 05</div>
+  <h2>五、迭代修改与本地测试</h2>
+
+  <h3>5.1 开发热重载</h3>
+  <p>在源码方式（<code>pnpm dev</code>，即 <code>NODE_ENV=development</code>）下，PluginHost 会监听 <code>plugins/</code> 目录，
+  文件变更约 300ms 后自动执行「停用旧版 → 清理 → 激活新版」，<strong>无需重启服务器</strong>。
+  快速迭代时可以把插件文件直接放进 <code>plugins/&lt;pluginId&gt;/</code> 观察 reload 日志。</p>
+  <div class="callout warn">
+    <p><span class="ct">注意：</span>热重载覆盖后端逻辑；前端 UI 组件的改动需重新构建入口文件并刷新页面。</p>
+  </div>
+
+  <h3>5.2 单元测试（Vitest + Mock Context）</h3>
+  <div class="codeblock">npm install --save-dev @openlearn/plugin-test-kit vitest
+npx vitest run                          <span class="c"># 在插件项目内运行</span>
+pnpm test                               <span class="c"># 在平台仓库根运行全量测试</span></div>
+
+  <div class="codeblock">// __tests__/index.test.ts
+import { describe, it, expect } from 'vitest';
+import { createMockContext } from '@openlearn/plugin-test-kit';
+import plugin from '../src/index';
+
+describe('my-plugin', () =&gt; {
+  it('activates and registers handler', async () =&gt; {
+    const ctx = createMockContext({
+      pluginId: 'ext-my-plugin',
+      capabilities: ['lesson:read'],
+      overrides: { ai: { generateText: async () =&gt; 'mocked' } },
+    });
+    await plugin.activate(ctx);
+    expect(ctx.services.commandBus.handlers.get('myplugin.hello')).toBeDefined();
+  });
+});</div>
+
+  <p><code>createMockContext()</code> 提供命令总线、事件总线、AI、存储、日志等全套 Mock，
+  其中 <code>ctx.db</code> 是真实内存 SQLite，<code>ctx.services.commandBus.executeCalls</code> 可作为断言依据。</p>
+
+  <h3>5.3 推荐迭代节奏</h3>
+  <ol>
+    <li>修改 <code>src/index.ts</code>（或前端组件）→</li>
+    <li><code>npx vitest run</code> 确认逻辑正确 →</li>
+    <li><code>npx @openlearn/plugin-sdk build --watch</code> 保持打包 →</li>
+    <li>重新上传 ZIP 到插件中心，或在 dev 模式下直接观察热重载 →</li>
+    <li>在浏览器中验证 UI 与行为，记录问题。</li>
+  </ol>
+
+  <div class="page-footer"><span>OpenLearn V2 · 平台与插件测试上手指南</span><span>06</span></div>
+</div>
+
+<!-- ================= PAGE 7 : UPDATE & UNINSTALL ================= -->
+<div class="page">
+  <div class="sec-label">SECTION 06</div>
+  <h2>六、插件更新与卸载</h2>
+
+  <h3>6.1 版本更新的正确姿势</h3>
+  <div class="step"><div class="num">1</div><div class="body">
+    <p>修改代码后，<strong>务必递增 <code>manifest.json</code> 中的 <code>version</code></strong>（如 1.0.0 → 1.1.0）。</p>
+  </div></div>
+  <div class="step"><div class="num">2</div><div class="body">
+    <p>重新执行 <code>npx @openlearn/plugin-sdk build</code> 生成新的 ZIP。</p>
+  </div></div>
+  <div class="step"><div class="num">3</div><div class="body">
+    <p>在插件中心重新上传 <strong>相同 ID、不同版本</strong> 的 ZIP，系统自动走更新路径：</p>
+    <ul>
+      <li>若插件正处于 <strong>ACTIVE</strong> 状态，会自动「停用 → 覆盖文件与数据库记录 → 重新激活」，平滑无感升级；</li>
+      <li>若处于其他状态，则只覆盖文件，等待下次激活。</li>
+    </ul>
+  </div></div>
+
+  <h3>6.2 停用与卸载</h3>
+  <ul>
+    <li><strong>停用</strong>：插件中心列表中切换开关，或调用 <code>POST /api/plugins/:id/toggle</code>；</li>
+    <li><strong>卸载</strong>：插件中心卸载按钮，或 <code>DELETE /api/plugins/:id</code>，文件与数据库记录一并删除；</li>
+    <li>也可以「卸载后重新安装」当作最粗暴的更新方式，但会丢失插件私有数据。</li>
+  </ul>
+
+  <h3>6.3 测试时建议覆盖的场景</h3>
+  <table>
+    <tr><th style="width:40%">场景</th><th>预期表现</th></tr>
+    <tr><td>首次安装并激活</td><td>状态变为 active，扩展点正常渲染</td></tr>
+    <tr><td>激活后刷新页面</td><td>UI 扩展点仍然存在，配置不丢失</td></tr>
+    <tr><td>停用后再激活</td><td>功能恢复，无残留副作用</td></tr>
+    <tr><td>上传同 ID 更高版本</td><td>自动平滑升级，配置保留</td></tr>
+    <tr><td>上传含非法导入的 ZIP</td><td>安全扫描拦截，给出明确报错信息</td></tr>
+    <tr><td>卸载后重新安装</td><td>回到初始状态，不报错</td></tr>
+  </table>
+
+  <div class="page-footer"><span>OpenLearn V2 · 平台与插件测试上手指南</span><span>07</span></div>
+</div>
+
+<!-- ================= PAGE 8 : FAQ & CHECKLIST ================= -->
+<div class="page">
+  <div class="sec-label">SECTION 07</div>
+  <h2>七、常见问题与检查清单</h2>
+
+  <h3>7.1 常见问题（FAQ）</h3>
+  <table>
+    <tr><th style="width:38%">现象</th><th>排查方法</th></tr>
+    <tr><td>上传 ZIP 后激活失败</td><td>看插件中心报错与服务器终端日志；检查 <code>engines.openlearn</code> 版本范围是否包含 0.2.9</td></tr>
+    <tr><td>安全扫描拒绝安装</td><td>入口存在裸导入（fs/crypto/npm 包），改用 <code>ctx.require()</code> 或全局 API，重新打包</td></tr>
+    <tr><td>改了代码没生效</td><td>后端逻辑需重新 build + 上传（或放 plugins/ 目录走热重载）；前端组件需刷新页面</td></tr>
+    <tr><td>插件列表找不到插件</td><td><code>curl http://localhost:9000/api/plugins</code> 确认安装状态；检查数据库是否被 <code>pnpm db:reset</code> 清空</td></tr>
+    <tr><td>依赖的服务是 null</td><td>检查 manifest 的 <code>requires</code>/<code>optional</code> 服务 Token 拼写与版本范围</td></tr>
+  </table>
+
+  <h3>7.2 上手检查清单</h3>
+  <ul style="line-height:2">
+    <li>☐ 平台启动成功，能访问 http://localhost:9000 并用 admin/admin 登录</li>
+    <li>☐ 用脚手架创建了插件（init → npm install）</li>
+    <li>☐ manifest 包含 4 个必需字段且 ID 唯一</li>
+    <li>☐ <code>plugin-sdk build</code> 生成 ZIP 成功</li>
+    <li>☐ 通过插件中心上传并激活成功（状态 active）</li>
+    <li>☐ 修改代码、升版本号、重打包、重上传，完成一次完整迭代</li>
+    <li>☐ 至少跑通一个 createMockContext 单元测试</li>
+    <li>☐ 测试过停用 → 激活 → 卸载 → 重装闭环</li>
+  </ul>
+
+  <h3>7.3 问题反馈格式建议</h3>
+  <p>提交问题时请附上：<strong>插件 ID 与版本号</strong>、复现步骤、预期行为、实际行为、
+  服务器终端日志截图（含 <code>[PluginHost]</code> 相关行）。</p>
+
+  <div class="callout">
+    <p><span class="ct">更多资料：</span>完整插件开发教程 <code>docs/tutorials/plugin-development-tutorial.md</code> ·
+    Manifest 规范 <code>docs/plugin/plugin-manifest-spec.md</code> · SDK 说明 <code>docs/sdk/plugin-sdk.md</code> ·
+    平台快速开始 <code>docs/getting-started/quickstart.md</code></p>
+  </div>
+
+  <div class="spacer"></div>
+  <div class="callout">
+    <p><span class="ct">祝测试顺利！</span>遇到文档未覆盖的情况，欢迎直接联系平台维护者反馈。</p>
+  </div>
+
+  <div class="page-footer"><span>OpenLearn V2 · 平台与插件测试上手指南</span><span>08</span></div>
+</div>
+
+</body>
+</html>
