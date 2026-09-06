@@ -14,6 +14,8 @@ export type Lesson = {
   timeline?: string;
   created_at?: number;
   enrollment_count?: number;
+  creator_id?: string | null;
+  creator_name?: string | null;
 };
 
 export type WhiteboardElement = {

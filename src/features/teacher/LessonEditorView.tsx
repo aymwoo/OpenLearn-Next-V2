@@ -1,6 +1,8 @@
 import type { MutableRefObject } from 'react';
 import type { Lesson, WhiteboardElement } from '../../store/appStore';
-import { Wand2, Loader2, CheckCircle2, X, Database, Eye, PenTool } from 'lucide-react';
+import type { SessionType } from '../../types/app';
+import { useAppStore } from '../../store/appStore';
+import { Wand2, Loader2, CheckCircle2, X, Database, Eye, PenTool, AlertTriangle, Copy } from 'lucide-react';
 import { LazyWhiteboard } from '../../components/LazyWhiteboard';
 import { LessonPalette } from './lesson-editor/LessonPalette';
 import { TimelineRail } from './lesson-editor/TimelineRail';
@@ -10,6 +12,8 @@ import { PALETTE_ITEM_MAP } from './lesson-editor/paletteConfig';
 
 export interface LessonEditorViewProps {
   lang: 'zh' | 'en';
+  session?: SessionType | null;
+  onCopyCourse?: (lessonId: string) => Promise<void>;
   lessons: Lesson[];
   selectedLesson: string | null;
   activeRole: 'teacher' | 'student';
@@ -41,6 +45,8 @@ export interface LessonEditorViewProps {
 
 export function LessonEditorView({
   lang,
+  session,
+  onCopyCourse,
   lessons,
   selectedLesson,
   activeRole,
@@ -69,13 +75,42 @@ export function LessonEditorView({
   handlePaletteConfirm,
   setPaletteEdit,
 }: LessonEditorViewProps) {
+  const appSession = useAppStore((s) => s.session);
+  const effectiveSession = session || appSession;
+  const currentLesson = lessons.find((l) => l.id === selectedLesson);
+
+  const isAdmin =
+    effectiveSession?.username === 'admin' ||
+    effectiveSession?.userId === 'usr_admin' ||
+    (effectiveSession?.role as string) === 'administrator' ||
+    effectiveSession?.subRole === 'administrator';
+
+  const isOwner =
+    !currentLesson?.creator_id ||
+    currentLesson.creator_id === effectiveSession?.userId ||
+    currentLesson.creator_id === effectiveSession?.username;
+
+  const canEdit = isAdmin || isOwner;
+
+  const safeHandlePaletteActivate = (type: string) => {
+    if (!canEdit) {
+      alert(
+        lang === 'zh'
+          ? '【只读模式】您无法直接修改其他教师创建的课程。请点击上方的「一键克隆为我的备课」生成您的专属教案副本。'
+          : '[Read-Only Mode] You cannot modify lessons created by other teachers. Please clone it to your own lessons.'
+      );
+      return;
+    }
+    handlePaletteActivate(type);
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-surface rounded-2xl border border-theme overflow-hidden shadow-sm text-main">
       <div className="px-3.5 py-2 border-b border-theme flex items-center justify-between shrink-0 bg-surface-secondary/80 backdrop-blur-xs">
         <div className="flex items-center gap-2.5 min-w-0">
           <h3 className="font-bold text-main text-xs sm:text-sm flex items-center gap-2 truncate">
             <Wand2 size={16} className="text-primary-theme shrink-0" />
-            <span className="truncate">{lang === 'zh' ? '课程编辑器: ' : 'Lesson Editor: '}{lessons.find(l => l.id === selectedLesson)?.title || (lang === 'zh' ? '未选择课程' : 'No Lesson Selected')}</span>
+            <span className="truncate">{lang === 'zh' ? '课程编辑器: ' : 'Lesson Editor: '}{currentLesson?.title || (lang === 'zh' ? '未选择课程' : 'No Lesson Selected')}</span>
           </h3>
           <div className="bg-slate-200/80 p-0.5 rounded-lg flex items-center gap-0.5 border border-slate-300/60 shadow-3xs">
             <button
@@ -150,8 +185,31 @@ export function LessonEditorView({
           <button onClick={() => setTeacherTab('courses')} className="px-2.5 py-1 bg-surface-secondary hover:bg-surface border border-theme text-muted hover:text-main text-xs font-medium rounded-lg transition-colors cursor-pointer">{lang === 'zh' ? '返回课程库' : 'Back to Courses'}</button>
         </div>
       </div>
+
+      {!canEdit && currentLesson && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-xs text-amber-900 shrink-0">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+            <span>
+              {lang === 'zh'
+                ? `【他人课程只读模式】当前课程由教师「${currentLesson.creator_name || currentLesson.creator_id}」创建。您拥有完整查看与备课参考权限。如需编辑调整，请克隆为您的专属教案。`
+                : `[Read-Only Mode] This lesson was created by teacher "${currentLesson.creator_name || currentLesson.creator_id}". To customize, please clone it.`}
+            </span>
+          </div>
+          {onCopyCourse && (
+            <button
+              onClick={() => onCopyCourse(currentLesson.id)}
+              className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1 rounded-lg shadow-xs transition-all hover:shadow cursor-pointer shrink-0"
+            >
+              <Copy size={13} />
+              <span>{lang === 'zh' ? '一键克隆为我的备课' : 'Clone as My Lesson'}</span>
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex-1 flex overflow-hidden">
-        <LessonPalette lang={lang} onActivate={handlePaletteActivate} />
+        <LessonPalette lang={lang} onActivate={safeHandlePaletteActivate} />
         <div className="flex-1 relative bg-surface flex flex-col min-w-0 overflow-y-auto">
           <TimelineRail
             lang={lang}

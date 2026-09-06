@@ -85,6 +85,7 @@ db.exec(`
     timeline TEXT,
     progress_mode TEXT DEFAULT 'manual',
     progress_conditions TEXT,
+    creator_id TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   );
@@ -422,6 +423,12 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_assignments_class ON assignments(class_id);
   CREATE INDEX IF NOT EXISTS idx_attendance_schedule ON attendance(schedule_id);
 `);
+
+try {
+  db.exec('ALTER TABLE lessons ADD COLUMN creator_id TEXT');
+} catch {
+  // Column already exists — ignore error
+}
 
 // Phase 5: Worker isolation mode support — execution_mode column for plugins table
 try {

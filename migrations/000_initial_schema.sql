@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS lessons (
   timeline TEXT,
   progress_mode TEXT DEFAULT 'manual',
   progress_conditions TEXT,
+  creator_id TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );

@@ -1,18 +1,63 @@
 import { GoogleGenAI } from '@google/genai';
 import { v7 as uuidv7 } from 'uuid';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { getCookieToken, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import type { ServerContext } from '../context.js';
+
+/**
+ * 校验当前用户对课程的管理权 (水平越权 IDOR 防护)
+ * - 管理员 (administrator) 拥有全局管辖权
+ * - 教师仅可修改/删除本人创建的课程 (creator_id === session.userId)
+ * - 兼容历史未记录 creator_id 的课程
+ */
+export function checkLessonOwnership(req: any, lessonId: string): { allowed: boolean; status: number; error?: string; lesson?: any } {
+  const token = getCookieToken(req);
+  const session = req.session || (token ? getValidSession(token) : null);
+  if (!session) {
+    return { allowed: false, status: 401, error: 'Authentication required' };
+  }
+
+  const isAdmin =
+    session.username === 'admin' ||
+    session.userId === 'usr_admin' ||
+    session.role === 'admin' ||
+    session.role === 'administrator';
+
+  const isTeacherOrAdmin = isAdmin || session.role === 'teacher';
+  if (!isTeacherOrAdmin) {
+    return { allowed: false, status: 403, error: 'Forbidden: Only teachers or administrators can modify lessons' };
+  }
+
+  const lesson = kernelContainer.db.prepare('SELECT * FROM lessons WHERE id = ?').get(lessonId) as any;
+  if (!lesson) {
+    return { allowed: false, status: 404, error: 'Lesson not found' };
+  }
+
+  if (isAdmin) {
+    return { allowed: true, status: 200, lesson };
+  }
+
+  if (!lesson.creator_id || lesson.creator_id === session.userId || lesson.creator_id === session.username) {
+    return { allowed: true, status: 200, lesson };
+  }
+
+  return {
+    allowed: false,
+    status: 403,
+    error: 'Forbidden: You do not have permission to modify this lesson because it was created by another teacher'
+  };
+}
 
 export function registerLessonsRoutes(ctx: ServerContext) {
   const { app, io } = ctx;
 
   app.get('/api/lessons', (req, res) => {
     const lessons = kernelContainer.db.prepare(`
-      SELECT l.*, 
+      SELECT l.*, u.name as creator_name,
         (SELECT COUNT(*) FROM student_lesson_progress WHERE lesson_id = l.id) as enrollment_count
       FROM lessons l
+      LEFT JOIN users u ON l.creator_id = u.id
       ORDER BY l.created_at DESC
     `).all();
     res.json(lessons);
@@ -146,10 +191,12 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.post('/api/lessons', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { title, content } = req.body;
+      const session = (req as any).session;
+      const creatorId = session?.userId || session?.username || 'usr_teacher';
       const actorId = getActorId(req) || 'teacher';
       const cmd = kernelContainer.commandBus.createCommand(
          'lesson.create',
-         { title, content },
+         { title, content, creatorId },
          actorId,
          { approved: true }
       );
@@ -163,6 +210,11 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.put('/api/lessons/:id/timeline', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { id } = req.params;
+      const ownership = checkLessonOwnership(req, id);
+      if (!ownership.allowed) {
+        return res.status(ownership.status).json({ success: false, error: ownership.error });
+      }
+
       const { timeline } = req.body;
       const actorId = getActorId(req) || 'teacher';
       const cmd = kernelContainer.commandBus.createCommand(
@@ -181,6 +233,11 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.put('/api/lessons/:id/progress-mode', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { id } = req.params;
+      const ownership = checkLessonOwnership(req, id);
+      if (!ownership.allowed) {
+        return res.status(ownership.status).json({ success: false, error: ownership.error });
+      }
+
       const { progressMode, progressConditions } = req.body;
       const conditionsStr = typeof progressConditions === 'string'
         ? progressConditions
@@ -248,6 +305,11 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         res.json({ success: true, message: 'Assignment whiteboard reset to empty' });
         return;
       }
+
+      const ownership = checkLessonOwnership(req, id);
+      if (!ownership.allowed) {
+        return res.status(ownership.status).json({ success: false, error: ownership.error });
+      }
       
       const snapshotId = `snapshot-${id}`;
       const hasSnapshot = kernelContainer.db.prepare('SELECT count(*) as count FROM whiteboard_elements WHERE lesson_id = ?').get(snapshotId) as any;
@@ -285,8 +347,11 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.post('/api/lessons/:id/whiteboard', async (req, res) => {
     try {
       const { id } = req.params;
-      if (!id.startsWith('assignment-') && !checkIsTeacherOrAdmin(req)) {
-        return res.status(403).json({ error: 'Forbidden: Only teachers can draw on classroom whiteboards' });
+      if (!id.startsWith('assignment-')) {
+        const ownership = checkLessonOwnership(req, id);
+        if (!ownership.allowed) {
+          return res.status(ownership.status).json({ success: false, error: ownership.error });
+        }
       }
       const { type, data } = req.body;
       const cmd = kernelContainer.commandBus.createCommand('whiteboard.draw', {
@@ -305,8 +370,11 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.put('/api/lessons/:id/whiteboard/:elementId', async (req, res) => {
     try {
       const { id } = req.params;
-      if (!id.startsWith('assignment-') && !checkIsTeacherOrAdmin(req)) {
-        return res.status(403).json({ error: 'Forbidden: Only teachers can update elements on classroom whiteboards' });
+      if (!id.startsWith('assignment-')) {
+        const ownership = checkLessonOwnership(req, id);
+        if (!ownership.allowed) {
+          return res.status(ownership.status).json({ success: false, error: ownership.error });
+        }
       }
       const { data } = req.body;
       const cmd = kernelContainer.commandBus.createCommand('whiteboard.update', {
@@ -325,8 +393,11 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.delete('/api/lessons/:id/whiteboard', async (req, res) => {
     try {
       const { id } = req.params;
-      if (!id.startsWith('assignment-') && !checkIsTeacherOrAdmin(req)) {
-        return res.status(403).json({ error: 'Forbidden: Only teachers can clear the classroom whiteboard' });
+      if (!id.startsWith('assignment-')) {
+        const ownership = checkLessonOwnership(req, id);
+        if (!ownership.allowed) {
+          return res.status(ownership.status).json({ success: false, error: ownership.error });
+        }
       }
       const cmd = kernelContainer.commandBus.createCommand('whiteboard.clear', {
         lessonId: id
@@ -342,8 +413,11 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.delete('/api/lessons/:id/whiteboard/:elementId', async (req, res) => {
     try {
       const { id } = req.params;
-      if (!id.startsWith('assignment-') && !checkIsTeacherOrAdmin(req)) {
-        return res.status(403).json({ error: 'Forbidden: Only teachers can delete elements from classroom whiteboards' });
+      if (!id.startsWith('assignment-')) {
+        const ownership = checkLessonOwnership(req, id);
+        if (!ownership.allowed) {
+          return res.status(ownership.status).json({ success: false, error: ownership.error });
+        }
       }
       const cmd = kernelContainer.commandBus.createCommand('whiteboard.delete', {
         lessonId: id,
@@ -492,6 +566,10 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
   app.delete('/api/lessons/:id', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { id } = req.params;
+      const ownership = checkLessonOwnership(req, id);
+      if (!ownership.allowed) {
+        return res.status(ownership.status).json({ success: false, error: ownership.error });
+      }
 
       kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
       kernelContainer.db.prepare('DELETE FROM student_lesson_progress WHERE lesson_id = ?').run(id);
@@ -538,7 +616,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
   });
 
   // ── 课程复制 API ─────────────────────────────────────────────────────
-  app.post('/api/lessons/:id/clone', async (req, res) => {
+  app.post('/api/lessons/:id/clone', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { id } = req.params;
 
@@ -547,13 +625,15 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         return res.status(404).json({ error: 'Lesson not found' });
       }
 
+      const session = (req as any).session;
+      const creatorId = session?.userId || session?.username || 'usr_teacher';
       const newId = uuidv7();
       const now = Date.now();
       const newTitle = `副本-${original.title}`;
 
       kernelContainer.db.prepare(
-        'INSERT INTO lessons (id, title, content, timeline, progress_mode, progress_conditions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(newId, newTitle, original.content, original.timeline, original.progress_mode, original.progress_conditions, now, now);
+        'INSERT INTO lessons (id, title, content, timeline, progress_mode, progress_conditions, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(newId, newTitle, original.content, original.timeline, original.progress_mode, original.progress_conditions, creatorId, now, now);
 
       const whiteboardElements = kernelContainer.db.prepare(
         'SELECT * FROM whiteboard_elements WHERE lesson_id = ?'
@@ -567,9 +647,12 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         insertElement.run(uuidv7(), newId, el.type, el.data, now);
       }
 
-      const cloned = kernelContainer.db.prepare(
-        'SELECT l.*, 0 as enrollment_count FROM lessons l WHERE l.id = ?'
-      ).get(newId);
+      const cloned = kernelContainer.db.prepare(`
+        SELECT l.*, u.name as creator_name, 0 as enrollment_count 
+        FROM lessons l 
+        LEFT JOIN users u ON l.creator_id = u.id
+        WHERE l.id = ?
+      `).get(newId);
 
       res.json({ success: true, lesson: cloned });
     } catch (e: any) {

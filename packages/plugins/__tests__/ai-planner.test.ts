@@ -57,6 +57,7 @@ describe('AiPlannerPlugin', () => {
         id TEXT PRIMARY KEY,
         title TEXT,
         content TEXT,
+        creator_id TEXT,
         created_at INTEGER,
         updated_at INTEGER
       );

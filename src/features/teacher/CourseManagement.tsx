@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { BookOpen, Upload, Plus, Search, X, Users, Edit3, Copy, Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { BookOpen, Upload, Plus, Search, X, Users, Edit3, Copy, Trash2, Loader2, AlertTriangle, UserCheck, Eye } from 'lucide-react';
 import Markdown from 'react-markdown';
-import type { Lesson } from '../../store/appStore';
+import type { Lesson, SessionType } from '../../types/app';
+import { useAppStore } from '../../store/appStore';
 
 interface CourseStats {
   whiteboardCount: number;
@@ -12,6 +13,7 @@ interface CourseStats {
 
 interface CourseManagementProps {
   lang: string;
+  session?: SessionType | null;
   lessons: Lesson[];
   lessonsSearchQuery: string;
   setLessonsSearchQuery: (q: string) => void;
@@ -33,7 +35,7 @@ interface CourseManagementProps {
 }
 
 export function CourseManagement({
-  lang, lessons, lessonsSearchQuery, setLessonsSearchQuery,
+  lang, session, lessons, lessonsSearchQuery, setLessonsSearchQuery,
   lessonsSortOrder, setLessonsSortOrder, filteredLessons,
   onOpenImportLessons, onOpenCourseWizard, onViewCourse,
   onDeleteCourse, onCopyCourse,
@@ -42,6 +44,15 @@ export function CourseManagement({
   filterThisMonth, setFilterThisMonth,
   copyingLessonId,
 }: CourseManagementProps) {
+  const appSession = useAppStore((s) => s.session);
+  const effectiveSession = session || appSession;
+  const isAdmin =
+    effectiveSession?.username === 'admin' ||
+    effectiveSession?.userId === 'usr_admin' ||
+    (effectiveSession?.role as string) === 'administrator' ||
+    effectiveSession?.subRole === 'administrator';
+
+  const [filterMyLessons, setFilterMyLessons] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
   const [deleteStats, setDeleteStats] = useState<CourseStats | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -140,6 +151,18 @@ export function CourseManagement({
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-1.5">
                 <button
+                  onClick={() => setFilterMyLessons(!filterMyLessons)}
+                  className={`px-2 py-1 text-[10px] font-bold rounded-md border transition-all cursor-pointer ${
+                    filterMyLessons
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                  }`}
+                  title={lang === 'zh' ? '只看我创建的课程' : 'Only show courses created by me'}
+                >
+                  <UserCheck size={11} className="inline mr-0.5 -mt-0.5" />
+                  {lang === 'zh' ? '我的备课' : 'My Courses'}
+                </button>
+                <button
                   onClick={() => setFilterEnrollment(!filterEnrollment)}
                   className={`px-2 py-1 text-[10px] font-bold rounded-md border transition-all cursor-pointer ${
                     filterEnrollment
@@ -200,49 +223,87 @@ export function CourseManagement({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filteredLessons.map((lesson) => {
-                const isCopying = copyingLessonId === lesson.id;
-                return (
-                  <div key={lesson.id} className={`border border-gray-200 hover:border-indigo-300 rounded-xl p-4 flex flex-col bg-gray-50/50 hover:shadow-md transition-all ${isCopying ? 'opacity-60 pointer-events-none' : ''}`}>
-                    <div className="flex items-center justify-between mb-2 gap-2">
-                      <div className="font-semibold text-gray-800 text-lg truncate cursor-pointer hover:text-indigo-600 transition-colors" title={lesson.title} onClick={() => onViewCourse(lesson.id)}>{lesson.title}</div>
-                      <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 px-1.5 py-0.5 border border-indigo-100 rounded text-[10px] font-bold shrink-0">
-                        <Users size={10} className="text-indigo-500" />
-                        {lesson.enrollment_count || 0}
-                      </span>
-                    </div>
-                    <div className="text-sm text-gray-500 line-clamp-3 mb-4 flex-1">
-                      <Markdown>{lesson.content}</Markdown>
-                    </div>
-                    <div className="flex justify-between items-center mt-auto">
-                      <div className="text-xs text-gray-400">ID: {lesson.id.substring(0, 8)}...</div>
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          onClick={() => onViewCourse(lesson.id)}
-                          className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
-                          title={lang === 'zh' ? '查看编辑' : 'View & Edit'}
-                        >
-                          <Edit3 size={15} />
-                        </button>
-                        <button
-                          onClick={() => onCopyCourse(lesson.id)}
-                          className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors cursor-pointer"
-                          title={lang === 'zh' ? '复制课程' : 'Copy Course'}
-                        >
-                          <Copy size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleOpenDeleteConfirm(lesson)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
-                          title={lang === 'zh' ? '删除课程' : 'Delete Course'}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+              {filteredLessons
+                .filter((lesson) => {
+                  if (!filterMyLessons) return true;
+                  return (
+                    !lesson.creator_id ||
+                    lesson.creator_id === effectiveSession?.userId ||
+                    lesson.creator_id === effectiveSession?.username
+                  );
+                })
+                .map((lesson) => {
+                  const isCopying = copyingLessonId === lesson.id;
+                  const isOwner =
+                    !lesson.creator_id ||
+                    lesson.creator_id === effectiveSession?.userId ||
+                    lesson.creator_id === effectiveSession?.username;
+                  const canManage = isAdmin || isOwner;
+
+                  return (
+                    <div key={lesson.id} className={`border border-gray-200 hover:border-indigo-300 rounded-xl p-4 flex flex-col bg-gray-50/50 hover:shadow-md transition-all ${isCopying ? 'opacity-60 pointer-events-none' : ''}`}>
+                      <div className="flex items-center justify-between mb-2 gap-2">
+                        <div className="font-semibold text-gray-800 text-lg truncate cursor-pointer hover:text-indigo-600 transition-colors" title={lesson.title} onClick={() => onViewCourse(lesson.id)}>{lesson.title}</div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {lesson.creator_name ? (
+                            <span
+                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
+                                isOwner
+                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 font-semibold'
+                                  : 'bg-slate-100 text-slate-600 border-slate-200'
+                              }`}
+                              title={lang === 'zh' ? `创建教师: ${lesson.creator_name}` : `Created by: ${lesson.creator_name}`}
+                            >
+                              {isOwner ? '👑 ' : '👤 '}{lesson.creator_name}
+                            </span>
+                          ) : null}
+                          <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 px-1.5 py-0.5 border border-indigo-100 rounded text-[10px] font-bold">
+                            <Users size={10} className="text-indigo-500" />
+                            {lesson.enrollment_count || 0}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-sm text-gray-500 line-clamp-3 mb-4 flex-1">
+                        <Markdown>{lesson.content}</Markdown>
+                      </div>
+                      <div className="flex justify-between items-center mt-auto">
+                        <div className="text-xs text-gray-400">ID: {lesson.id.substring(0, 8)}...</div>
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            onClick={() => onViewCourse(lesson.id)}
+                            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
+                            title={canManage ? (lang === 'zh' ? '查看与编辑' : 'View & Edit') : (lang === 'zh' ? '查看只读 (他人课程)' : 'View Read-Only')}
+                          >
+                            {canManage ? <Edit3 size={15} /> : <Eye size={15} />}
+                          </button>
+                          <button
+                            onClick={() => onCopyCourse(lesson.id)}
+                            className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors cursor-pointer"
+                            title={lang === 'zh' ? '克隆为我的备课' : 'Clone Course'}
+                          >
+                            <Copy size={14} />
+                          </button>
+                          {canManage ? (
+                            <button
+                              onClick={() => handleOpenDeleteConfirm(lesson)}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
+                              title={lang === 'zh' ? '删除课程' : 'Delete Course'}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          ) : (
+                            <span
+                              className="p-1.5 text-gray-300 cursor-not-allowed"
+                              title={lang === 'zh' ? '仅创建教师或管理员可删除' : 'Only creator or admin can delete'}
+                            >
+                              <Trash2 size={14} />
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           )}
         </div>

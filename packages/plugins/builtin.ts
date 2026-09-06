@@ -78,15 +78,19 @@ export const BuiltinPlugin = {
       async execute(command) {
         const payload = command.payload as any;
         const lessonId = uuidv7();
+        const rawCreatorId = payload.creatorId || command.actorId || 'admin';
+        const creatorId = typeof rawCreatorId === 'string' && rawCreatorId.startsWith('user:')
+          ? rawCreatorId.split(':')[1]
+          : rawCreatorId;
         
-        const stmt = db.prepare('INSERT INTO lessons (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)');
-        stmt.run(lessonId, payload.title, payload.content || '', Date.now(), Date.now());
+        const stmt = db.prepare('INSERT INTO lessons (id, title, content, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
+        stmt.run(lessonId, payload.title, payload.content || '', creatorId, Date.now(), Date.now());
 
         await eventBus.publish({
           id: uuidv7(),
           type: 'lesson.created',
           source: 'builtin.lesson',
-          payload: { id: lessonId, title: payload.title },
+          payload: { id: lessonId, title: payload.title, creatorId },
           timestamp: Date.now(),
           correlationId: command.id
         });

@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security & Multi-Teacher Authorization (Round 4)
+- **IDOR 课程水平越权防护与教师专属所有权 (Lesson Ownership & IDOR Protection)**：
+  - **数据层升级**：在 [`packages/core/db/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/db/index.ts) 与 [`migrations/000_initial_schema.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/000_initial_schema.sql) 中的 `lessons` 表增加 `creator_id TEXT` 字段，并在系统启动时平滑执行 `ALTER TABLE lessons ADD COLUMN creator_id TEXT`，全面兼容历史老版本未标记创建人的课程；
+  - **内核指令绑定**：在 [`packages/plugins/builtin.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugins/builtin.ts) 的 `lesson.create` 命令执行时，优先解析 `payload.creatorId` 或提取 `command.actorId`（自动解析 `user:usr_id:teacher` 前缀），并在发出的 `lesson.created` 领域事件中携带创建人 ID；
+  - **路由所有权守卫**：在 [`server/routes/lessons.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/lessons.ts) 抽象出通用鉴权函数 `checkLessonOwnership(req, lessonId)`，支持超级管理员全局兜底维护、创建者教师本人正常放行、无所属历史课程平滑放行，并对跨教师越权操作强阻断（返回 403 Forbidden）；全面覆盖 `PUT /api/lessons/:id/timeline`、`PUT /api/lessons/:id/progress-mode`、`POST/PUT/DELETE /api/lessons/:id/whiteboard/*` 以及 `DELETE /api/lessons/:id`；
+  - **教研协同流转与一键克隆**：重构 `POST /api/lessons/:id/clone` 接口，要求教师或管理员认证，在复制课程模板与白板结构时自动将新课程属主更新为当前操作教师，实现“跨教师只读浏览 + 一键克隆转为本人教案”的顺畅备课流转；
+  - **前端交互与安全视觉**：
+    - 在 [`CourseManagement.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/teacher/CourseManagement.tsx) 课程卡片中显著标注创建教师身份（本人课程展示皇冠徽章，他人课程展示只读图标），对于非本人创建课程禁用删除按钮并提示权限不足；新增「我的备课」快速筛选开关，支持教师在海量共享课程中一键聚焦个人教案；
+    - 在 [`LessonEditorView.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/teacher/LessonEditorView.tsx) 中增加只读横幅提示，并在他人课程模式下引导一键克隆，拦截非所有者修改操作；
+  - **自动化测试套件**：编写 [`server/__tests__/lesson_ownership.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/lesson_ownership.test.ts)，全方位覆盖未登录拦截 (401)、学生越权阻断 (403)、跨教师越权拦截 (403)、管理员放行、老旧课程兼容以及克隆后属主流转等核心用例，全平台 177 个测试套件（1002 个测试用例）持续 100% 绿灯。
+
 ### Security & Engineering Governance (Round 3)
 - **SEC-01 传输安全与 Cookie 策略加固 (Cookie Secure & Nginx TLS Best Practice)**：
   - 在 [`server/routes/roster.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/roster.ts) 中对身份凭据 Cookie `edu_os_token` 进行安全改造，根据请求来源及环境协议动态注入 `; Secure` 标识，并将超长有效期缩短并精准对齐服务端会话有效期（7 天 / 604,800 秒）。
