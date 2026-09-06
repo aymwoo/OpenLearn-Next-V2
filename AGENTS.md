@@ -56,7 +56,7 @@
 
 - **Framework**: Vitest with jsdom environment
 - **Test location**: `__tests__/` directories co-located with source, files ending in `.test.ts` or `.test.tsx`
-- **Config**: Defined in `vitest.config.ts` — file parallelism disabled to prevent SQLite write races; 60s timeout for integration tests
+- **Config**: Defined in `vitest.config.ts` — `fileParallelism: true` enabled safely via isolated per-worker temporary SQLite databases (keyed by `VITEST_POOL_ID` in `/tmp/openlearn_test_dbs/`); 60s timeout for integration tests
 - **Plugin testing**: Use `createMockContext()` from `@openlearn/plugin-test-kit` to isolate plugin tests
 - Run a subset with `pnpm vitest run -t "pattern"`
 

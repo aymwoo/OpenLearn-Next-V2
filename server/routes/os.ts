@@ -1,40 +1,21 @@
-import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { exec } from 'child_process';
-import { createServer as createViteServer } from 'vite';
-import { createServer as createHttpServer } from 'http';
-import { Server } from 'socket.io';
-import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { ISemesterGradeServiceToken } from '../../packages/core/di/interfaces.js';
-import { GoogleGenAI, Type } from '@google/genai';
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import { filterXSS } from 'xss';
-import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
-import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
-import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
-import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
-import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
-import {
-  ActivityRegistry,
-  registerOfficialActivities,
-  createActivityContext,
-  IActivityRegistryToken,
-} from '../../packages/activity-ecosystem/index.js';
-import type { ServerContext, AgentChatAttachment, AgentChatRequest, AgentToolExecution, StoredAIProvider } from '../context.js';
+import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { decryptApiKey, detectPromptInjection } from '../utils/crypto.js';
+import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
+import { createActivityContext } from '../../packages/activity-ecosystem/index.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS } from './shared.js';
+import { sendSafeError } from '../utils/error-handler.js';
+import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
 
 export function registerOsRoutes(ctx: ServerContext) {
   const {
-    app, io, loginLimiter,
-    MF_REMOTE_CACHE, lessonActiveSegments,
-    buildAgentSystemInstruction, buildAgentFinalMessage, normalizeToolSchema,
-    buildOpenAITools, executeAgentToolCall, buildOpenAIChatUrl,
-    runGeminiAgentChat, runOpenAIAgentChat,
+    app,
+    runGeminiAgentChat,
+    runOpenAIAgentChat,
     activityRegistry,
   } = ctx;
 
@@ -106,7 +87,7 @@ export function registerOsRoutes(ctx: ServerContext) {
       });
     } catch (e: any) {
       console.error('Upload error:', e);
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -124,7 +105,7 @@ export function registerOsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json({ success: true, result });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -133,11 +114,11 @@ export function registerOsRoutes(ctx: ServerContext) {
       const actions = kernelContainer.actionRegistry.getAllActions();
       res.json(actions);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      sendSafeError(res, err);
     }
   });
 
-  // ���� Activity Ecosystem REST (Sprint P7-01) ������������������������������������������������������������
+  //  Activity Ecosystem REST (Sprint P7-01) 
   // List registered activity providers, filtered by role. Reuses the same
   // registry the Workspace and plugins share. No business logic is duplicated.
   app.get('/api/activities', async (req, res) => {
@@ -149,7 +130,7 @@ export function registerOsRoutes(ctx: ServerContext) {
           : activityRegistry.listByRole(role as any).map((p) => p.descriptor);
       res.json({ activities: list });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -175,12 +156,12 @@ export function registerOsRoutes(ctx: ServerContext) {
       res.json({ ok: true, ...result });
     } catch (err: any) {
       const status = err?.code === 'PERMISSION_DENIED' ? 403 : 500;
-      res.status(status).json({ ok: false, error: err.message });
+      sendSafeError(res, err, status);
     }
   });
 
   // List activities that are currently in progress (running or paused). Used by
-  // the dashboard "Activity Center" status monitor �� it shows live status and
+  // the dashboard "Activity Center" status monitor  it shows live status and
   // hides itself when nothing is running. State is in-memory on the provider
   // instances, so this reflects the live server process only.
   app.get('/api/activities/running', (_req, res) => {
@@ -199,11 +180,11 @@ export function registerOsRoutes(ctx: ServerContext) {
         }));
       res.json({ activities });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      sendSafeError(res, err);
     }
   });
 
-  // Finish (end) a running activity �� the management action exposed to the
+  // Finish (end) a running activity
   // dashboard. Reuses the same ActivityContext as start().
   app.post('/api/activities/:id/finish', async (req, res) => {
     try {
@@ -221,7 +202,7 @@ export function registerOsRoutes(ctx: ServerContext) {
       await provider.finish(context);
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ ok: false, error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -242,7 +223,7 @@ export function registerOsRoutes(ctx: ServerContext) {
       await provider.pause(context);
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ ok: false, error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -263,7 +244,7 @@ export function registerOsRoutes(ctx: ServerContext) {
       await provider.resume(context);
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ ok: false, error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -352,7 +333,7 @@ export function registerOsRoutes(ctx: ServerContext) {
       });
     } catch (err: any) {
       console.error(err);
-      res.status(500).json({ success: false, error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -374,7 +355,7 @@ export function registerOsRoutes(ctx: ServerContext) {
         messages: rows.map(r => ({ role: r.role, content: r.content, createdAt: r.created_at }))
       });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -392,7 +373,7 @@ export function registerOsRoutes(ctx: ServerContext) {
       kernelContainer.db.prepare('DELETE FROM agent_conversations WHERE conv_key = ?').run(convKey);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 }

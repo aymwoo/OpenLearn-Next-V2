@@ -1,48 +1,22 @@
-import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { exec } from 'child_process';
-import { createServer as createViteServer } from 'vite';
-import { createServer as createHttpServer } from 'http';
-import { Server } from 'socket.io';
-import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { ISemesterGradeServiceToken } from '../../packages/core/di/interfaces.js';
-import { GoogleGenAI, Type } from '@google/genai';
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import { filterXSS } from 'xss';
+import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
-import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
-import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
-import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
-import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
-import {
-  ActivityRegistry,
-  registerOfficialActivities,
-  createActivityContext,
-  IActivityRegistryToken,
-} from '../../packages/activity-ecosystem/index.js';
-import type { ServerContext, AgentChatAttachment, AgentChatRequest, AgentToolExecution, StoredAIProvider } from '../context.js';
+import { requireAuth } from '../middleware/auth.js';
+import type { ServerContext } from '../context.js';
 import { injectLmsSdk } from './shared.js';
+import { sendSafeError } from '../utils/error-handler.js';
 
 export function registerResourcesRoutes(ctx: ServerContext) {
-  const {
-    app, io, loginLimiter,
-    MF_REMOTE_CACHE, lessonActiveSegments,
-    buildAgentSystemInstruction, buildAgentFinalMessage, normalizeToolSchema,
-    buildOpenAITools, executeAgentToolCall, buildOpenAIChatUrl,
-    runGeminiAgentChat, runOpenAIAgentChat,
-  } = ctx;
+  const { app } = ctx;
 
   app.get('/api/resources', (req, res) => {
     try {
       const resources = kernelContainer.db.prepare('SELECT id, name, type, created_at FROM system_resources ORDER BY created_at DESC').all();
       res.json(resources);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -117,7 +91,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       html = injectLmsSdk(html, req, { id: resource.id, name: resource.name, uuid: resource.id });
       return res.send(html);
     } catch (e: any) {
-      res.status(500).send(e.message);
+      sendSafeError(res, e);
     }
   });
 
@@ -225,7 +199,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
         return res.send(content);
       }
     } catch (e: any) {
-      res.status(500).send(e.message);
+      sendSafeError(res, e);
     }
   });
 
@@ -291,7 +265,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
 
       res.json({ success: true, id, name, type });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -300,7 +274,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       kernelContainer.db.prepare('DELETE FROM system_resources WHERE id = ?').run(req.params.id);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 

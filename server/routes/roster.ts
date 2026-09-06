@@ -1,41 +1,16 @@
-import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { exec } from 'child_process';
-import { createServer as createViteServer } from 'vite';
-import { createServer as createHttpServer } from 'http';
-import { Server } from 'socket.io';
-import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { ISemesterGradeServiceToken } from '../../packages/core/di/interfaces.js';
-import { GoogleGenAI, Type } from '@google/genai';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import { filterXSS } from 'xss';
-import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
+import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
-import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
 import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
-import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
-import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
-import {
-  ActivityRegistry,
-  registerOfficialActivities,
-  createActivityContext,
-  IActivityRegistryToken,
-} from '../../packages/activity-ecosystem/index.js';
-import type { ServerContext, AgentChatAttachment, AgentChatRequest, AgentToolExecution, StoredAIProvider } from '../context.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS, generateStudentNumber } from './shared.js';
+import { sendSafeError } from '../utils/error-handler.js';
+import type { ServerContext } from '../context.js';
 
 export function registerRosterRoutes(ctx: ServerContext) {
-  const {
-    app, io, loginLimiter,
-    MF_REMOTE_CACHE, lessonActiveSegments,
-    buildAgentSystemInstruction, buildAgentFinalMessage, normalizeToolSchema,
-    buildOpenAITools, executeAgentToolCall, buildOpenAIChatUrl,
-    runGeminiAgentChat, runOpenAIAgentChat,
-  } = ctx;
+  const { app, io, loginLimiter } = ctx;
 
   app.get('/api/classes', (req, res) => {
     try {
@@ -72,7 +47,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       `).all(req.params.id);
       res.json(students);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -85,7 +60,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       );
       res.json({ success: true, id: classId });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -97,7 +72,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       if (class_passcode !== undefined) kernelContainer.db.prepare('UPDATE classes SET class_passcode = ? WHERE id = ?').run(class_passcode, req.params.id);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -149,7 +124,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       deleteTransaction();
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -228,7 +203,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
       }
       return res.status(500).json({ status: 'disconnected', error: 'Unexpected response from SQLite' });
     } catch (e: any) {
-      return res.status(500).json({ status: 'disconnected', error: e.message });
+      const exposed = process.env.NODE_ENV === 'production' ? 'Database connection error' : e.message;
+      return res.status(500).json({ status: 'disconnected', error: exposed });
     }
   });
 
@@ -245,7 +221,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       }
       res.json({ session });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -255,10 +231,12 @@ export function registerRosterRoutes(ctx: ServerContext) {
       if (token) {
         kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(token);
       }
-      res.setHeader('Set-Cookie', `edu_os_token=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax`);
+      const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https' || (process.env.NODE_ENV === 'production' && process.env.ENABLE_HTTPS === 'true');
+      const secureFlag = isSecure ? '; Secure' : '';
+      res.setHeader('Set-Cookie', `edu_os_token=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax${secureFlag}`);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -329,7 +307,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
       res.status(400).json({ error: 'Unsupported role' });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -369,7 +347,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
       res.json({ success: true, name });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -435,7 +413,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
       res.json({ success: true, avatar: avatarUrl });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -472,7 +450,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -588,13 +566,17 @@ export function registerRosterRoutes(ctx: ServerContext) {
       if (sessionData) {
         const sessionToken = 'token_' + crypto.randomBytes(16).toString('hex');
         // SEC-AUTH-03: session 添加 expires_at�?24小时空闲 + 7天绝对）
+        // SEC-AUTH-03: session 添加 expires_at?24小时空闲 + 7天绝对）
         const now = Date.now();
-        const expiresAt = now + 7 * 24 * 60 * 60 * 1000; // 7 天绝对过�?
+        const expiresAt = now + 7 * 24 * 60 * 60 * 1000; // 7 天绝对过?
         kernelContainer.db.prepare('INSERT INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)')
           .run(sessionToken, JSON.stringify(sessionData), now, expiresAt);
 
-        // 生产环境�? HTTP，不�? Secure 标志（否则浏览器拒绝存储�?
-        res.setHeader('Set-Cookie', `edu_os_token=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`);
+        // SEC-COOKIE: 根据环境与协议自适应设置 Secure 标志，对齐 7 天绝对过期时间
+        const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https' || (process.env.NODE_ENV === 'production' && process.env.ENABLE_HTTPS === 'true');
+        const secureFlag = isSecure ? '; Secure' : '';
+        const maxAgeSeconds = 7 * 24 * 60 * 60; // 7 天（604800 秒），与 DB client_sessions.expires_at 精确对齐
+        res.setHeader('Set-Cookie', `edu_os_token=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secureFlag}`);
         return res.json({
           success: true,
           session: sessionData
@@ -602,7 +584,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       }
       res.status(400).json({ error: 'Unsupported entry type' });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -612,7 +594,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const rows = kernelContainer.db.prepare('SELECT notification_id FROM student_read_notifications WHERE student_id = ?').all(req.params.id) as any[];
       res.json(rows.map(r => r.notification_id));
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -631,7 +613,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       });
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -733,7 +715,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const labs = kernelContainer.db.prepare('SELECT * FROM computer_labs ORDER BY created_at DESC').all();
       res.json(labs);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -746,7 +728,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       ).run(id, room_number, parseInt(rows), parseInt(cols), Date.now());
       res.json({ success: true, id, room_number, rows, cols });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -758,7 +740,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       ).run(room_number, parseInt(rows), parseInt(cols), req.params.id);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -768,7 +750,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       kernelContainer.db.prepare('DELETE FROM student_seats WHERE lab_id = ?').run(req.params.id);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -780,7 +762,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const seats = kernelContainer.db.prepare('SELECT * FROM student_seats WHERE class_id = ?').all(req.params.classId);
       res.json({ lab_id: labId, seats });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -802,7 +784,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
   // --------------------------------------
@@ -826,7 +808,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       );
       res.json({ success: true, id: studentId, student_number: finalNum, tempPassword: password || '123456' });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -845,7 +827,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       if (student_number !== undefined) kernelContainer.db.prepare('UPDATE students SET student_number = ? WHERE id = ?').run(student_number, req.params.id);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -866,7 +848,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(req.params.id);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -907,7 +889,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         exportedAt: new Date().toISOString(),
       });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -937,7 +919,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       console.log(`[GDPR] Complete data deletion for student ${studentId}`);
       res.json({ success: true, message: 'All student data has been permanently deleted.' });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -951,7 +933,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       `).all(req.params.id);
       res.json(progress);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -994,7 +976,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -1006,7 +988,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       );
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -1056,7 +1038,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
       res.json({ success: true, count: results.length, results });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -1072,7 +1054,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       `).all(req.params.id);
       res.json(progress);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -1093,7 +1075,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       `).all(req.params.lessonId, req.params.lessonId, req.params.classId);
       res.json(progress);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -1102,7 +1084,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       kernelContainer.db.prepare('DELETE FROM class_students WHERE class_id = ? AND student_id = ?').run(req.params.classId, req.params.studentId);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -1150,7 +1132,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
       res.json({ assignments, recentSubmissions, performance, rollcallStats });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -1255,7 +1237,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
       res.json({ classes: studentClasses, schedules, assignments, progress, rollcalls, profile });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 

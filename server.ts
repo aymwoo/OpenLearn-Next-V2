@@ -44,7 +44,7 @@ import {
 } from './server/ai-agent.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from './packages/core/db/index.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from './server/utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId } from './server/middleware/auth.js';
+import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from './server/middleware/auth.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
 
@@ -341,7 +341,8 @@ async function startServer() {
     }
   });
 
-  app.get('/metrics', (_req: any, res: any) => {
+  // SEC-AUTH-METRICS: 保护系统级指标，仅管理员可探测服务器运行性能指标
+  app.get('/metrics', requireAuth('administrator'), (_req: any, res: any) => {
     const mem = process.memoryUsage();
     res.json({
       uptime: Math.floor((Date.now() - startTime) / 1000),

@@ -186,6 +186,7 @@ export interface FrontendPluginContext {
   navigation?: {
     getTeacherTab(): string;
     setTeacherTab(tab: string): void;
+    setSelectedLesson?(lessonId: string | null): void;
     subscribeTeacherTab(callback: (tab: string) => void): () => void;
   };
   /** v5.1: 当前课堂上下文只读快照 + 订阅（非渲染场景读取当前课程/班级） */

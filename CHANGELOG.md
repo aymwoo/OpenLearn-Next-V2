@@ -10,6 +10,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security & Engineering Governance (Round 3)
+- **SEC-01 传输安全与 Cookie 策略加固 (Cookie Secure & Nginx TLS Best Practice)**：
+  - 在 [`server/routes/roster.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/roster.ts) 中对身份凭据 Cookie `edu_os_token` 进行安全改造，根据请求来源及环境协议动态注入 `; Secure` 标识，并将超长有效期缩短并精准对齐服务端会话有效期（7 天 / 604,800 秒）。
+  - 在 [`nginx.conf`](file:///home/wuxf/Develop/openlearnv2/nginx.conf) 与 [`nginx.generated.conf`](file:///home/wuxf/Develop/openlearnv2/nginx.generated.conf) 增补全链路 HTTPS 443 SSL 规范配置（TLS 1.2/1.3、强加密套件、HSTS），并提供 80 端口强跳 443 的最佳实践指导。
+- **SEC-02 敏感端点鉴权防护与统一脱敏错误处理中间件 (Endpoint Protection & Info Leakage Defense)**：
+  - 对监控与关键配置端点挂载严格权限门禁：[`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 中的 `/metrics` 挂载 `requireAuth('administrator')`；[`server/routes/plugins.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/plugins.ts) 中的 `GET /api/ai-providers` 挂载 `requireAuth('teacher', 'administrator')`，`/api/admin/logs` 挂载 `requireAuth('administrator')`。
+  - 创建 [`server/utils/error-handler.ts`](file:///home/wuxf/Develop/openlearnv2/server/utils/error-handler.ts) 实现统一的 `sendSafeError` 错误响应中间件，在生产环境下统一屏蔽底层 SQL 语句、文件系统绝对路径与系统异常堆栈，全面替换各路由模块中的裸 `e.message` 返回，杜绝敏感系统信息探测与泄漏。
+- **SEC-03 依赖治理、锁定文件与工程规范校准 (Dependency Governance & Clean Repository)**：
+  - 彻底清理仓库跟踪的冗余锁定文件 `package-lock.json` 与历史遗留临时文件 `temp_check.mjs`、`test-results/`，同步在 [`.gitignore`](file:///home/wuxf/Develop/openlearnv2/.gitignore) 增补忽略规则。
+  - 在 [`package.json`](file:///home/wuxf/Develop/openlearnv2/package.json) 补齐 `"engines": { "node": ">=20.0.0", "pnpm": ">=9.0.0" }`；清理失效废弃脚本 `migrate-passwords`；
+  - 编写 [`scripts/backup-db.ts`](file:///home/wuxf/Develop/openlearnv2/scripts/backup-db.ts) 重构 `db:backup` 脚本，修复此前因 ESM/CJS 混用导致的模块加载失败。
+- **SEC-04 代码清洁度与路由层解耦治理 (Lint Warnings & Architecture Hygiene)**：
+  - 全面清理由旧版 `server.ts` 拆分至 14 个路由文件时机械复制的无用头文件导入与上下文全量解构代码（如 `GoogleGenAI`、`xss`、`crypto`、`bcrypt`、`ai-submit-injector` 等），ESLint warnings 大幅缩减近 600 个，TypeScript 类型检查零错误通过。
+- **SEC-05 自动化测试与内核文档同步 (Docs & Test Parallelism Alignment)**：
+  - 校准 [`AGENTS.md`](file:///home/wuxf/Develop/openlearnv2/AGENTS.md) 描述，阐明 Vitest 启用 `fileParallelism: true` 的真实原理（通过环境变量 `VITEST_POOL_ID` 隔离于独立 SQLite 库文件），修复文档失真；全量 176 个测试套件、993 个用例持续 100% 绿灯通过。
+
 ### Security
 - **VULN-06 白板协同投毒阻断 (RCE & XSS Defense)**：
   - 彻底移除 [`MathGraphWrapper.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/widgets/MathGraphWrapper.tsx) 中的原生 `eval`，自研实现算术 AST 递归下降求值器 `safeEvaluateMath`，严格限定白名单数学运算与常用函数，彻底阻断 JS 语法、属性与原型链穿透。

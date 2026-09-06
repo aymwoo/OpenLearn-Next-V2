@@ -1,42 +1,12 @@
-import express from 'express';
-import path from 'path';
-import fs from 'fs';
-import { exec } from 'child_process';
-import { createServer as createViteServer } from 'vite';
-import { createServer as createHttpServer } from 'http';
-import { Server } from 'socket.io';
-import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { ISemesterGradeServiceToken } from '../../packages/core/di/interfaces.js';
-import { GoogleGenAI, Type } from '@google/genai';
-import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import { filterXSS } from 'xss';
-import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
-import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
-import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
-import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
-import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
-import {
-  ActivityRegistry,
-  registerOfficialActivities,
-  createActivityContext,
-  IActivityRegistryToken,
-} from '../../packages/activity-ecosystem/index.js';
-import type { ServerContext, AgentChatAttachment, AgentChatRequest, AgentToolExecution, StoredAIProvider } from '../context.js';
+import { GoogleGenAI } from '@google/genai';
 import { v7 as uuidv7 } from 'uuid';
-import { injectLmsSdk } from './shared.js';
+import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { getCookieToken, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
+import { sendSafeError } from '../utils/error-handler.js';
+import type { ServerContext } from '../context.js';
 
 export function registerLessonsRoutes(ctx: ServerContext) {
-  const {
-    app, io, loginLimiter,
-    MF_REMOTE_CACHE, lessonActiveSegments,
-    buildAgentSystemInstruction, buildAgentFinalMessage, normalizeToolSchema,
-    buildOpenAITools, executeAgentToolCall, buildOpenAIChatUrl,
-    runGeminiAgentChat, runOpenAIAgentChat,
-  } = ctx;
+  const { app, io } = ctx;
 
   app.get('/api/lessons', (req, res) => {
     const lessons = kernelContainer.db.prepare(`
@@ -60,7 +30,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       `).all(lessonId);
       res.json(rows);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -112,7 +82,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
       res.json(result);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -127,7 +97,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       `).all(submissionId);
       res.json(rows);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -169,7 +139,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         grade
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -186,7 +156,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json({ success: true, result });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -204,7 +174,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json({ success: true, result });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -227,7 +197,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
   
@@ -308,7 +278,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         res.json({ success: true, message: 'Lesson whiteboard cleared (no snapshot)' });
       }
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -328,7 +298,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -348,7 +318,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -365,7 +335,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -383,7 +353,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -443,7 +413,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
       res.json({ success: true, isCorrect, score, studentId });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -474,7 +444,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
       res.json({ success: true, quizzes });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -514,7 +484,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       res.json({ success: true, hint });
     } catch (e: any) {
       console.error('AI Tutor error:', e);
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -536,7 +506,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -563,7 +533,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
       res.json({ whiteboardCount, scheduleCount, enrollmentCount, assignmentCount });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -603,7 +573,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
 
       res.json({ success: true, lesson: cloned });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 

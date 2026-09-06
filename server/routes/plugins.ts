@@ -1,32 +1,12 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { exec } from 'child_process';
-import { createServer as createViteServer } from 'vite';
-import { createServer as createHttpServer } from 'http';
-import { Server } from 'socket.io';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { checkVersion, type UpdateSource } from '../services/version-fetcher.js';
-import { ISemesterGradeServiceToken } from '../../packages/core/di/interfaces.js';
-import { GoogleGenAI, Type } from '@google/genai';
-import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import { filterXSS } from 'xss';
-import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
-import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
-import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
-import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
-import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
-import {
-  ActivityRegistry,
-  registerOfficialActivities,
-  createActivityContext,
-  IActivityRegistryToken,
-} from '../../packages/activity-ecosystem/index.js';
-import type { ServerContext, AgentChatAttachment, AgentChatRequest, AgentToolExecution, StoredAIProvider } from '../context.js';
+import { encryptApiKey, decryptApiKey, maskApiKey } from '../utils/crypto.js';
+import { getActorId, requireAuth } from '../middleware/auth.js';
+import { sendSafeError } from '../utils/error-handler.js';
+import type { ServerContext } from '../context.js';
 
 function isSafeExternalUrl(urlStr: string): { safe: boolean; reason?: string } {
   try {
@@ -68,11 +48,12 @@ function isSafeExternalUrl(urlStr: string): { safe: boolean; reason?: string } {
 
 export function registerPluginsRoutes(ctx: ServerContext) {
   const {
-    app, io, loginLimiter,
-    MF_REMOTE_CACHE, lessonActiveSegments,
-    buildAgentSystemInstruction, buildAgentFinalMessage, normalizeToolSchema,
-    buildOpenAITools, executeAgentToolCall, buildOpenAIChatUrl,
-    runGeminiAgentChat, runOpenAIAgentChat,
+    app,
+    buildOpenAITools,
+    executeAgentToolCall,
+    buildOpenAIChatUrl,
+    runGeminiAgentChat,
+    runOpenAIAgentChat,
   } = ctx;
 
   app.get('/api/docs/plugin-guide', (req, res) => {
@@ -84,15 +65,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const content = fs.readFileSync(docPath, 'utf-8');
       res.json({ success: true, content });
     } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
+      sendSafeError(res, e);
     }
   });
 
   // Get recent system logs (for admin/developer console)
-  app.get('/api/admin/logs', (req, res) => {
-    if (!checkIsTeacherOrAdmin(req)) {
-      return res.status(403).json({ success: false, error: 'Access denied: teachers or admins only' });
-    }
+  app.get('/api/admin/logs', requireAuth('administrator'), (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 200;
       const component = req.query.component as string | undefined;
@@ -139,7 +117,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const sliceStart = Math.max(0, parsedLogs.length - limit);
       res.json({ success: true, logs: parsedLogs.slice(sliceStart) });
     } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -169,7 +147,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         isSystem: manifestId.startsWith('@openlearn/') || found.pluginId.startsWith('@openlearn/'),
       });
     } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -209,7 +187,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
       res.json({ success: true, market: results });
     } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -236,7 +214,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const result = await checkVersion(src, manifest.version || '0.0.0');
       res.json({ success: true, ...result });
     } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -305,7 +283,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       });
     } catch (err: any) {
       console.error(err);
-      res.status(500).json({ success: false, error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -316,7 +294,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const summary = kernelContainer.pluginHost.listContributions(rawId);
       res.json({ success: true, result: summary });
     } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -340,7 +318,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         },
       });
     } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -363,7 +341,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       kernelContainer.pluginHost.setPluginConfig(pluginId, manifest, updates);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -378,7 +356,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -393,7 +371,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -425,7 +403,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       res.json(result);
     } catch (err: any) {
       console.error(err);
-      res.status(500).json({ success: false, error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -441,7 +419,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       res.json(result);
     } catch (err: any) {
       console.error(err);
-      res.status(500).json({ success: false, error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -493,7 +471,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       });
     } catch (err: any) {
       console.error(err);
-      res.status(500).json({ success: false, error: err.message });
+      sendSafeError(res, err);
     }
   });
 
@@ -531,7 +509,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         });
       } catch (err: any) {
         console.error(err);
-        res.status(500).json({ success: false, error: err.message });
+        sendSafeError(res, err);
       }
     },
   );
@@ -585,12 +563,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       res.json({ success: true, result });
     } catch (err: any) {
       console.error('[execute-command]', err.message);
-      res.status(500).json({ success: false, error: err.message });
+      sendSafeError(res, err);
     }
   });
 
-  // AI Provider Endpoints
-  app.get('/api/ai-providers', (req, res) => {
+  // AI Provider Endpoints (仅教师和管理员有权查看配置的模型提供方)
+  app.get('/api/ai-providers', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const providers = kernelContainer.db.prepare('SELECT * FROM ai_providers ORDER BY created_at DESC').all() as any[];
       // SEC-DATA-01: 掩码 API Key 后返?
@@ -600,7 +578,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       }));
       res.json(masked);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -618,7 +596,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         .run(id, name, api_url, encryptedKey, model_name, now, now);
       res.json({ success: true, id });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -629,7 +607,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'Missing name, api_url or model_name' });
       }
       const now = Date.now();
-      // SEC-DATA-01: ? **** 的掩码密? ? 保留原值；纯明? ? 加密存储
+      // SEC-DATA-01: 对 **** 的掩码密码，保留原值；纯明文加密存储
       let finalKey: string;
       if (api_key && api_key.trim() !== '' && !api_key.includes('****')) {
         finalKey = encryptApiKey(api_key);
@@ -641,7 +619,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         .run(name, api_url, finalKey, model_name, now, req.params.id);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -650,7 +628,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       kernelContainer.db.prepare('DELETE FROM ai_providers WHERE id = ?').run(req.params.id);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -666,7 +644,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         logoUrl: row?.logo_url || null,
       });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -684,7 +662,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         siteInfo: { siteName: siteName || '', slogan: slogan || '', logoUrl: logoUrl || null },
       });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -695,10 +673,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'api_url and model_name are required' });
       }
 
-      // SEC-DATA-01: 解密 API Key（掩码密钥表示未修改，需�? DB 获取�?
+      // SEC-DATA-01: 解密 API Key（掩码密钥表示未修改，需要从 DB 获取）
       let api_key = '';
       if (providedKey && providedKey.includes('****')) {
-        // 掩码密钥：用户未输入�? key，尝试从 DB 查询
+        // 掩码密钥：用户未输入新 key，尝试从 DB 查询
         const existing = kernelContainer.db.prepare(
           'SELECT api_key FROM ai_providers WHERE api_url = ? AND model_name = ? LIMIT 1'
         ).get(api_url, model_name) as { api_key: string } | undefined;
@@ -742,7 +720,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         res.status(response.status).json({ success: false, error: `API responded with status ${response.status}: ${responseText.slice(0, 200)}` });
       }
     } catch (e: any) {
-      res.status(500).json({ success: false, error: `Connection failed: ${e.message}` });
+      sendSafeError(res, e, 500, 'Connection failed');
     }
   });
 }

@@ -42,3 +42,9 @@ uploads/
 /agent/skills
 graphify-out/
 test-cw.js
+package-lock.json
+test-results/
+temp_*.mjs
+temp_*.js
+backups/
+

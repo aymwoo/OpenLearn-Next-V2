@@ -1,47 +1,18 @@
-import express from 'express';
-import path from 'path';
-import fs from 'fs';
-import { exec } from 'child_process';
-import { createServer as createViteServer } from 'vite';
-import { createServer as createHttpServer } from 'http';
-import { Server } from 'socket.io';
-import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { ISemesterGradeServiceToken } from '../../packages/core/di/interfaces.js';
 import { GoogleGenAI, Type } from '@google/genai';
-import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import { filterXSS } from 'xss';
-import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
-import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packages/core/db/index.js';
-import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from '../utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
-import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
-import { ServerBootstrapAdapter } from '../../packages/core/bootstrap/index.js';
-import {
-  ActivityRegistry,
-  registerOfficialActivities,
-  createActivityContext,
-  IActivityRegistryToken,
-} from '../../packages/activity-ecosystem/index.js';
-import type { ServerContext, AgentChatAttachment, AgentChatRequest, AgentToolExecution, StoredAIProvider } from '../context.js';
+import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { getCookieToken, getValidSession, requireAuth } from '../middleware/auth.js';
+import type { ServerContext } from '../context.js';
+import { sendSafeError } from '../utils/error-handler.js';
 
 export function registerAssignmentsRoutes(ctx: ServerContext) {
-  const {
-    app, io, loginLimiter,
-    MF_REMOTE_CACHE, lessonActiveSegments,
-    buildAgentSystemInstruction, buildAgentFinalMessage, normalizeToolSchema,
-    buildOpenAITools, executeAgentToolCall, buildOpenAIChatUrl,
-    runGeminiAgentChat, runOpenAIAgentChat,
-  } = ctx;
+  const { app } = ctx;
 
   app.get('/api/classes/:classId/assignments', (req, res) => {
     try {
       const assignments = kernelContainer.db.prepare('SELECT * FROM assignments WHERE class_id = ? ORDER BY created_at DESC').all(req.params.classId);
       res.json(assignments);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -62,7 +33,7 @@ export function registerAssignmentsRoutes(ctx: ServerContext) {
       );
       res.json({ success: true, assignment: { id, class_id: req.params.classId, lesson_id: lessonId || null, title: gen.title, description: gen.description, content: gen.content } });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -134,7 +105,7 @@ Generate the response in the specified JSON schema.`;
       const text = response.text || '{}';
       res.json(JSON.parse(text));
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -156,7 +127,7 @@ Generate the response in the specified JSON schema.`;
 
       res.json({ success: true, assignmentId: id });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -176,7 +147,7 @@ Generate the response in the specified JSON schema.`;
       `).run(req.params.id, studentId, content, Date.now());
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -191,7 +162,7 @@ Generate the response in the specified JSON schema.`;
       `).all(req.params.id);
       res.json(submissions);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -281,7 +252,7 @@ Provide a grade score (0-100) and brief feedback. Ensure you output in this exac
       
       res.json({ success: true, pendingApproval: true, message: 'Grade generated and sent for approval.', score: grade.score, feedback: grade.feedback });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
