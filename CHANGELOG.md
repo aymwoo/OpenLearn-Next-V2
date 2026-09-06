@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.3.12] - 2026-09-06
+
 ### Features & Security
 - **插件 HTTP SSE 流式长连接通信体系 (`Plugin HTTP SSE Streaming & Safety Defense`)**:
   - **极简流式 API 契约 (`ctx.http.stream`)**:

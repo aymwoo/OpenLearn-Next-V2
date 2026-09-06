@@ -199,6 +199,7 @@ roadmap/documentation-roadmap
 :caption: 📋 发布日志 (Release Notes)
 :hidden:
 
+release-notes/v0.3.12
 release-notes/v0.3.11
 release-notes/v0.3.10
 release-notes/v0.3.8
@@ -287,4 +288,4 @@ governance/architecture-governance
 - **[AI Runtime & Tools](ai/ai-runtime)**: 原生集成 Google GenAI (Gemini 2.5/3.0)、Prompt 模板与 Function Calling 工具调用。
 - **[CLI & Operations](getting-started/installation-guide)**: `npx openlearn-next` 命令行自检 (`doctor`)、在线冷备 (`backup`)、数据还原 (`restore`)、沙盒演示 (`--demo`) 与缓存治理 (`clean`)。
 
-> 最后更新：2026-09-06 (v0.3.10)
+> 最后更新：2026-09-06 (v0.3.12)
