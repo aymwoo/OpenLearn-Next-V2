@@ -665,6 +665,12 @@ parentPort.on('message', async function(msg) {
           if (!svc) throw new Error('No provider registered for token: ' + tokenName);
           if (tokenName === '@openlearn/core:IDatabase') {
             return {
+              // 主侧 exec RPC 已过 assertDatabaseAccessAllowed 守卫（DDL 命名空间 + 核心表黑名单），
+              // 这里补齐转发，避免 worker 插件调用 exec 时报 "rawDb.exec is not a function"。
+              // 注意返回 Promise（异步 RPC），与 prepare* 一致。
+              exec: function(sql) {
+                return svc.exec(sql);
+              },
               prepare: function(sql) {
                 return {
                   run: function() {
