@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.3.14] - 2026-09-09
+
+### Fixes & Packaging
+- **修复 `npx openlearn-next` 运行时无法解析可选依赖 `xlsx` 的告警 (Cannot find package 'xlsx')**:
+  - **根因分析**：`xlsx` 被误声明为 devDependency，但服务端 bundle 以 `--packages=external` 构建，`import('xlsx')` 被保留为运行时动态导入；devDependency 不会随发布包安装到消费者环境（含 npx 缓存目录），导致动态导入失败并打印 `[PluginHost] xlsx not available (optional)` 告警；
+  - **修复**：将 `xlsx` 从 devDependencies 移至 dependencies，确保运行时动态导入可正常解析，插件共享模块正确注册 Excel 导入导出能力。
+
 ### Fixes & UI
 - **修复教师端模拟学生（Student View）后无法返回教师端的交互缺失缺陷**:
   - 在 `App.tsx` 页面最顶部新增常驻醒目的全局模拟学生横幅（Top Impersonation Banner），提示当前模拟学生并提供常驻【退出模拟并返回教师端】操作；

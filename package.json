@@ -1,6 +1,6 @@
 {
   "name": "openlearn-next",
-  "version": "0.3.13",
+  "version": "0.3.14",
   "private": false,
   "description": "A plugin-driven Educational OS / LMS platform with AI agent teaching assistant",
   "keywords": [
@@ -88,6 +88,7 @@
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "uuid": "^14.0.0",
+    "xlsx": "^0.18.5",
     "xss": "^1.0.15",
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
@@ -119,7 +120,6 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vitest": "^4.1.9",
-    "xlsx": "^0.18.5"
+    "vitest": "^4.1.9"
   }
 }
