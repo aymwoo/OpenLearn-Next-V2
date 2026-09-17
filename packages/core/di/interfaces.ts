@@ -411,6 +411,35 @@ export const ICapabilityRegistryToken = new Token<CapabilityRegistry>(
 );
 
 /**
+ * 用户会话桥接数据传输对象
+ */
+export interface AuthBridgeUser {
+  userId: string;
+  username: string;
+  role: 'administrator' | 'teacher' | 'student';
+  name?: string;
+  email?: string;
+  avatar?: string | null;
+  classId?: string;
+}
+
+/**
+ * 平台统一安全会话桥接服务接口
+ */
+export interface IAuthSessionBridgeService {
+  createSession(user: AuthBridgeUser): Promise<{ token: string; maxAge: number }>;
+}
+
+/**
+ * Token for Auth Session Bridge Service (LTI 1.3 / SSO).
+ * Identifier: @openlearn/core:IAuthSessionBridgeService
+ */
+export const IAuthSessionBridgeToken = new Token<IAuthSessionBridgeService>(
+  '@openlearn/core:IAuthSessionBridgeService',
+  '1.0.0',
+);
+
+/**
  * Interface for SemesterGradeService.
  * Handles syncing final calculated regular scores into the host's semester grades system.
  */

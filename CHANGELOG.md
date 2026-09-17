@@ -3,12 +3,21 @@
 All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are documented here.
 
 > Versioning note: the platform `openlearn-next` is versioned independently of
-> `@openlearn/plugin-sdk` (currently **3.6.0**) and `@openlearn/plugin-test-kit`.
+> `@openlearn/plugin-sdk` (currently **3.6.1**) and `@openlearn/plugin-test-kit`.
 > Bumping the platform does not change the SDK / test-kit versions.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+
+## [0.3.15] - 2026-09-17
+
+### Features & Security
+- **LTI 1.3 协议支持与安全会话桥接体系 (LTI 1.3 Advantage & Safe SSO Integration)**:
+  - **Iframe 嵌入安全管控 (`server.ts`)**: 新增 `LTI_ALLOWED_LMS_ORIGINS` 环境变量支持，配置后动态放行 CSP `frame-ancestors` 并自动关闭 `X-Frame-Options: SAMEORIGIN`，使平台可在受信任的 Canvas/Moodle 等 LMS 平台的 iframe 中无缝内嵌运行，未配置时保持原有严格同源防点击劫持策略；
+  - **平台统一会话桥接服务 (`IAuthSessionBridgeService`)**: 在 DI 容器中注册统一会话创建服务，供特权认证插件安全同步用户并生成 `client_sessions`；
+  - **网关跨域会话 Cookie 安全注入与特权守卫 (`PluginApiGateway`)**: 扩展 `PluginApiResponse` 支持 `sessionToken` 字段，且通过特权守卫限制仅声明依赖 `IAuthSessionBridgeService` 的认证插件可触发下发；网关在主线程自动写入符合第三方 Iframe 规范的 `SameSite=None; Secure; HttpOnly` 会话 Cookie，同时保持对非授权普通响应头 `Set-Cookie` 的严格黑名单剥离；
+  - **官方参考插件研发 (`@openlearn/plugin-lti-provider`)**: 提供完整的 LTI 1.3 Tool Provider 独立插件参考实现，内聚 OIDC 3-Legged 登录状态机、RS256 JWT 验签与公钥托管（`/jwks`），支持 LTI Advantage 成绩回传 (`assignment.graded` 监听与 AGS 同步)。
 
 ## [0.3.14] - 2026-09-09
 

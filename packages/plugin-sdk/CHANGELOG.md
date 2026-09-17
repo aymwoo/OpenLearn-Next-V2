@@ -9,7 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-### Features
+## [3.6.1] - 2026-09-12
+
+### Features & Types
+- **Auth Session Bridge Tokens & Interfaces (`IAuthSessionBridgeToken`)**:
+  - Export `IAuthSessionBridgeToken`, `IAuthSessionBridgeService`, and `AuthBridgeUser` interfaces to enable privileged authentication plugins (such as LTI 1.3 Tool Provider) to securely synchronize users and issue session tokens via DI.
+  - Extend `PluginApiResponse` with optional `sessionToken` field to support transparent `Set-Cookie` injection by the host API Gateway for embedded iframe environments (`SameSite=None; Secure`).
 - **Plugin HTTP SSE Streaming (`ctx.http.stream`)**:
   - Export `PluginStreamResponse` and `PluginStreamHandler` interfaces in `@openlearn/plugin-sdk`.
   - Expose `ctx.http.stream(path, handler)` and `ctx.http.stream(method, path, handler)` on `IPluginHttpRouter` to enable Server-Sent Events (SSE) streaming for AI chat auto-typing and real-time progress push.

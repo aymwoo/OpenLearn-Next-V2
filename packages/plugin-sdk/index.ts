@@ -134,6 +134,7 @@ export {
   IUnifiedExtensionRegistryToken,
   IPluginCapabilityGatewayToken,
   ICapabilityRegistryToken,
+  IAuthSessionBridgeToken,
 } from '../core/di/interfaces.js';
 
 export type {
@@ -141,6 +142,8 @@ export type {
   IPointsDimensionRegistry,
   PointLogItem,
   IPointsLedgerService,
+  IAuthSessionBridgeService,
+  AuthBridgeUser,
 } from '../core/di/interfaces.js';
 
 export type {

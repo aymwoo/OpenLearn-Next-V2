@@ -443,6 +443,20 @@ export async function pluginApiGatewayMiddleware(
       ? response.status
       : 200;
 
+    // SEC-LTI-AUTH: 仅当插件在 Manifest 中明确声明依赖 IAuthSessionBridgeService 特权服务时，才允许网关注入会话 Cookie
+    const allowsSessionBridge = Array.isArray(manifest?.requires) &&
+      manifest.requires.some((r: string) => typeof r === 'string' && r.includes('IAuthSessionBridgeService'));
+
+    if (allowsSessionBridge && response.sessionToken && typeof response.sessionToken === 'string' && response.sessionToken.startsWith('token_')) {
+      const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https' || (process.env.NODE_ENV === 'production' && process.env.ENABLE_HTTPS === 'true');
+      const secureFlag = isSecure ? '; Secure' : '';
+      const sameSite = isSecure ? 'SameSite=None' : 'SameSite=Lax';
+      res.setHeader('Set-Cookie', `edu_os_token=${response.sessionToken}; Path=/; HttpOnly; ${sameSite}; Max-Age=604800${secureFlag}`);
+    } else if (response.sessionToken && !allowsSessionBridge) {
+      console.warn(`[PluginApiGateway:SECURITY] Plugin '${pluginId}' attempted to return sessionToken without declaring IAuthSessionBridgeService in manifest.requires. Cookie rejected.`);
+    }
+
+
     // 清洗响应 Header（剔除高危头）
     if (response.headers && typeof response.headers === 'object') {
       for (const [k, v] of Object.entries(response.headers)) {
@@ -453,11 +467,11 @@ export async function pluginApiGatewayMiddleware(
       }
     }
 
-    if (res.getHeader('content-type') === undefined) {
+    if (res.getHeader('content-type') === undefined && response.body !== undefined && response.body !== null) {
       res.setHeader('content-type', 'application/json; charset=utf-8');
     }
 
-    res.status(status).send(response.body);
+    res.status(status).send(response.body !== undefined ? response.body : '');
   } catch (err: any) {
     if (err.name === 'GatewayTimeoutError' || err.message?.includes('timed out')) {
       res.status(504).json({ success: false, error: 'Gateway Timeout: Plugin did not respond in time' });

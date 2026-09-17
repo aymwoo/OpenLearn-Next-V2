@@ -117,10 +117,16 @@ async function startServer() {
   // ── 安全中间? ────────────────────────────────────────────────────
   // SEC-NET-02: HTTP 安全头（helmet）— 严格 CSP 配置
   const frameAllowedOrigins = process.env.ALLOWED_FRAME_ORIGINS
-    ? process.env.ALLOWED_FRAME_ORIGINS.split(',').map((s) => s.trim())
+    ? process.env.ALLOWED_FRAME_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
     : ['http://localhost:*', 'http://127.0.0.1:*'];
 
+  const ltiAllowedOrigins = process.env.LTI_ALLOWED_LMS_ORIGINS
+    ? process.env.LTI_ALLOWED_LMS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
+    : [];
+
   app.use(helmet({
+    // SEC-LTI: 若配置了允许嵌入的 LMS 平台域名，禁用全局 X-Frame-Options，由 CSP frame-ancestors 严格精细化管控
+    xFrameOptions: ltiAllowedOrigins.length > 0 ? false : { action: 'sameorigin' },
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -132,18 +138,19 @@ async function startServer() {
         fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
         // 移除通配 http: 和 https:，限制 iframe 仅能加载本地、沙箱或受信任课件源
         frameSrc: ["'self'", "blob:", "data:", ...frameAllowedOrigins],
+        frameAncestors: ltiAllowedOrigins.length > 0 ? ["'self'", ...ltiAllowedOrigins] : ["'self'"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
       },
     },
     crossOriginOpenerPolicy: false,
     crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: { policy: "cross-origin" }, // 允许沙箱 iframe（opaque origin）加载静态资?
+    crossOriginResourcePolicy: { policy: "cross-origin" }, // 允许沙箱 iframe（opaque origin）加载静态资源
     originAgentCluster: false,
-    strictTransportSecurity: false, // �? HTTP 部署，禁�? HSTS（否则浏览器缓存后强�? HTTPS，导�? ERR_CONNECTION_REFUSED�?
+    strictTransportSecurity: false, // 针对 HTTP 部署，禁用 HSTS（否则浏览器缓存后强制 HTTPS，导致 ERR_CONNECTION_REFUSED）
   }));
 
-  // SEC-AUTH-04: 登录频率限制�?5�?/IP/分钟�?
+  // SEC-AUTH-04: 登录频率限制?5?/IP/分钟?
   const loginLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 分钟
     max: 5,

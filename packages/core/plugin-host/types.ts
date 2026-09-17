@@ -141,6 +141,11 @@ export interface PluginApiResponse<TBody = unknown> {
   headers?: Record<string, string>;
   /** 响应体数据 */
   body: TBody;
+  /**
+   * 可选的 SSO 会话 Token（由平台 IAuthSessionBridgeService 颁发）。
+   * 若提供且为合法的 token_* 格式，网关在主线程自动写入符合 SameSite=None; Secure 规范的会话 Cookie。
+   */
+  sessionToken?: string;
 }
 
 /** 插件 RESTful API 处理函数 */

@@ -315,6 +315,7 @@ interface PluginApiResponse<TBody = unknown> {
   status?: number;
   headers?: Record<string, string>;
   body: TBody;
+  sessionToken?: string;
 }
 
 type PluginApiHandler<TBody = unknown, TRes = unknown> = (
@@ -707,6 +708,8 @@ export type {
   PluginStreamResponse,
   PluginStreamHandler,
   IPluginHttpRouter,
+  AuthBridgeUser,
+  IAuthSessionBridgeService,
 };
 
 export {
@@ -730,9 +733,25 @@ export {
   ITeachingCollaborationServiceToken,
   ILearningAnalyticsServiceToken,
   IActivityRegistryToken,
+  IAuthSessionBridgeToken,
 };
 
 declare const IActivityRegistryToken: Token<ActivityRegistry>;
+declare const IAuthSessionBridgeToken: Token<IAuthSessionBridgeService>;
+
+interface AuthBridgeUser {
+  userId: string;
+  username: string;
+  role: 'administrator' | 'teacher' | 'student';
+  name?: string;
+  email?: string;
+  avatar?: string | null;
+  classId?: string;
+}
+
+interface IAuthSessionBridgeService {
+  createSession(user: AuthBridgeUser): Promise<{ token: string; maxAge: number }>;
+}
 
 
 
