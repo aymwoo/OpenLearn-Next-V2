@@ -63,14 +63,15 @@ import {
 #### `ctx.require(moduleName: string)`
 引用主应用共享模块白名单。仅允许引用：`recharts`, `react-markdown`, `jspdf`, `jspdf-autotable`, `xlsx`, `lucide-react`, `uuid`。
 
-#### `ctx.http`（v0.3.11 新增）
-`IPluginHttpRouter`，插件内置的 RESTful HTTP 路由器。所有端点均被平台安全网关统一挂载至 `/api/plugins/:pluginId/*`：
+#### `ctx.http`（v0.3.11 / v0.3.12 新增）
+`IPluginHttpRouter`，插件内置的 RESTful & SSE 流式 HTTP 路由器。所有端点均被平台安全网关统一挂载至 `/api/plugins/:pluginId/*`：
 - **`ctx.http.get(path, handler)`**: 注册 HTTP GET 请求处理函数。
 - **`ctx.http.post(path, handler)`**: 注册 HTTP POST 请求处理函数。
 - **`ctx.http.put(path, handler)`**: 注册 HTTP PUT 请求处理函数。
 - **`ctx.http.delete(path, handler)`**: 注册 HTTP DELETE 请求处理函数。
 - **`ctx.http.patch(path, handler)`**: 注册 HTTP PATCH 请求处理函数。
 - **`ctx.http.all(path, handler)`**: 匹配任意 HTTP 动词。
+- **`ctx.http.stream(path, handler)`**: **（v0.3.12 新增）** 注册 Server-Sent Events (SSE) 流式响应端点（支持大模型流式生成，内置反向中断与看门狗超时保护）。
 
 ##### `PluginApiRequest` 请求对象接口：
 - `method: string`: HTTP 动词（`GET`, `POST` 等大写字符串）。
@@ -86,6 +87,10 @@ import {
 - `status?: number`: HTTP 状态码（默认 200）。
 - `headers?: Record<string, string>`: 自定义响应头（高危头如 `Set-Cookie` 会被网关安全剔除）。
 - `body?: any`: 响应内容。若 Handler 直接返回普通对象或基本类型，会自动被包装为 `{ status: 200, body: 返回值 }`。
+- `sessionToken?: string`: **（v0.3.15 新增）** 可选的 SSO 会话凭证（配合 `IAuthSessionBridgeToken` 签发，由安全网关自动写入跨域安全 Cookie）。
+
+#### `ctx.reportProgress(stage?, message?)`（v0.3.15+ 新增）
+激活期心跳上报与超时滑动续期函数。耗时初始化（如大模型加载、数据结构批量迁移）期间周期性调用，向宿主汇报阶段状态并自动延长激活等待窗口，防止被误判超时。
 
 ---
 
@@ -95,10 +100,11 @@ import {
 
 ### 导出 Token 清单
 
-> 完整 28 个 Token 的方法签名与标识字符串，请以 [DI Token 字典](../api/di-tokens) 为权威。下表列出最常用的 Token 速查。
+> 完整 29 个 Token 的方法签名与标识字符串，请以 [DI Token 字典](../api/di-tokens) 为权威。下表列出最常用的 Token 速查。
 
 | Token 常量名 | 服务接口类型 | 说明 |
 | :--- | :--- | :--- |
+| `IAuthSessionBridgeToken` | `IAuthSessionBridgeService` | 统一安全会话桥接（LTI 1.3 / SSO 单点登录，v0.3.15+） |
 | `IDatabaseToken` | `Database` | 原生 SQLite 数据库只读/写连接 |
 | `ICommandBusServiceToken` | `ICommandBusService` | 命令总线服务 |
 | `IEventBusServiceToken` | `IEventBusService` | 事件总线服务 |

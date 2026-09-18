@@ -84,9 +84,11 @@ ctx.ui.registerExtensionPoint('anchor:whiteboard-toolbar:rollcall', {
 在目标按钮前后各渲染一次 `ExtensionPointRenderer`，并指定 `placement`：
 
 ```tsx
-<ExtensionPointRenderer slot="anchor:whiteboard-toolbar:xxx" placement="before" />
-<button …原生按钮… />
-<ExtensionPointRenderer slot="anchor:whiteboard-toolbar:xxx" placement="after" />
+<>
+  <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:xxx" placement="before" />
+  <button className="native-toolbar-btn">原生按钮</button>
+  <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:xxx" placement="after" />
+</>
 ```
 
 - `placement="before"` 一侧只渲染声明 `placement: 'before'` 的扩展。

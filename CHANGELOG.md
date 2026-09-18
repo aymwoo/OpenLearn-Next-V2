@@ -10,6 +10,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.3.16] - 2026-09-18
+
+### Fixes & Frontend Plugin Host
+- **修复前端插件加载器（`FrontendPluginHost`）裸模块导入解析缺失导致扩展点（如 `teacher.tab`）未注册缺陷**:
+  - **裸模块导入转换器 (`transformBareModuleImports`)**：重构 `src/plugin-host/plugin-host.ts` 中针对动态 Blob URL 的 ESM 裸模块导入替换逻辑，由原本单一简单正则升级为全形态 ESM 导入解析转换器；
+  - **覆盖复合导入与别名语法**：完整支持复合默认+具名导入（如 `import React, { useState, useEffect } from "react"`）、别名转换（如 `import { useState as useState2 }` 转为对象解构 `{ useState: useState2 }`，避免 `SyntaxError`）、命名空间导入（`* as React`）及多行/带注释语句；
+  - **补全共享宿主依赖映射表 (`SHARED_MODULE_MAP`)**：将 `react-dom`、`react-dom/client`、`react/jsx-runtime` 纳入宿主共享依赖，并在 `src/main.tsx` 中向 `window.HostSharedDeps` 完整导出，彻底消除浏览器端 `TypeError: Failed to resolve module specifier "react"` 报错；
+  - **解决插件左侧导航与控制台挂载异常**：修复如恋云课程 (`lianyun-course` / `019fa0e6-5f59-7718-b86e-b35c93ba39aa`) 等插件在启用后前端未能正常执行 `activate(ctx)` 的问题，使得 `teacher.tab`（恋云课程管理）在左侧导航栏的“扩展应用”列表和 `teacher.dashboard.widget` 正常生效。
+
+### Fixes & Worker Runtime
+- **修复 Worker 激活期异常导致 60 秒假超时挂起 (`WorkerTimeoutError`) 与 Watchdog 误熔断缺陷**:
+  - **激活期快速失败机制 (Fail-Fast)**：在 `WorkerManager.createWorker()` 中对底层 `worker` 绑定激活期单次 `exit` 与 `error` 监听；当插件在初始化/激活初期发生未捕获异常、语法错误或进程退出时，主线程由原先盲等 60 秒改为在 5ms 内立即拒绝并抛出精准的 `WorkerActivateError`，彻底消除假超时误报；
+  - **WorkerInstance 生命周期细化 (`status: activating`)**：将 `WorkerInstance.status` 扩展为包含 `'activating'` 状态，仅在收到 `'activated'` 消息后提升为 `'running'`；当 Worker 在激活期意外退出时，`WorkerRegistry` 仅清理资源并标记 `crashed`，严禁触发 Watchdog 自动重启风暴，避免并发争用与误触熔断器 (Circuit Breaker)；
+  - **Worker 沙箱异步异常陷阱 (`unhandledRejection` / `uncaughtException`)**：在 `generateBootstrapCode` 中为 Worker 进程注入全局未捕获异常监听，格式化错误堆栈并通过 `parentPort` 发送结构化 `error` 消息后再优雅退出，避免由于插件未 `await` 异步 RPC 调用导致 Worker 进程无声暴毙；
+  - **插件上下文心跳 API (`ctx.reportProgress`)**：在 `PluginContext` 中暴露 `reportProgress(stage?, message?)`，支持耗时全栈插件在执行数据迁移或大模型加载时向宿主上报进度并滑动续期激活超时窗口；
+  - **数据库迁移 DDL 命名空间放行与异步时序保护 (`service-host.ts` & `worker-manager.ts`)**：
+    - 在 `ServiceHost.assertDatabaseAccessAllowed` DDL 白名单中放行 `plugin_migrations` 表，解决 Worker 插件执行 `ctx.db.migrate` 自动初始化迁移记录表时因命名空间拦截报错的问题；
+    - 在 Worker 沙箱 `dbApi.migrate` 的 `dbWrapper` 中加入 `pendingPromises` 队列并统一 `Promise.all`，保证即使插件开发者未显式 `await` 内部 SQL 也能安全按序完成迁移后再更新版本号；
+    - 修复机房插件 `@aymwoo/plugin-lab-seat` 在 `activate()` 中异步 DDL 操作未捕获 Promise Rejection 导致的崩溃问题。
+
+### Docs & Engineering
+- **Sphinx 技术文档严苛零告警编译与全量同步**:
+  - 修复 `docs/conf.py` 静态目录配置缺失引发的 `_static` 警告，补全 `docs/_static/.gitkeep`；
+  - 修复 `docs/plugin/anchor-slots.md` 中未包裹 TSX 语法导致的 Pygments 词法分析器异常；
+  - 清理 `docs/index.md` 目录树中重复引用的 `api/di-tokens`；
+  - 全面同步前端共享依赖白名单、Worker 迁移 DDL 规则、心跳 API 及 `IAuthSessionBridgeToken` 字典规范。
+
 ## [0.3.15] - 2026-09-17
 
 ### Features & Security

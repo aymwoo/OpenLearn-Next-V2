@@ -199,6 +199,7 @@ roadmap/documentation-roadmap
 :caption: 📋 发布日志 (Release Notes)
 :hidden:
 
+release-notes/v0.3.16
 release-notes/v0.3.15
 release-notes/v0.3.14
 release-notes/v0.3.13
@@ -241,7 +242,6 @@ migration/version-migration
 :caption: 🎯 插件精准开发参考 (Plugin Dev Reference)
 :hidden:
 
-api/di-tokens
 reference/plugin-capability-matrix
 reference/plugin-ui-extension-slots
 reference/plugin-database-api

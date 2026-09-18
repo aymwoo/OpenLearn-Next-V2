@@ -153,6 +153,22 @@ describe('WorkerRegistry', () => {
     expect(registry.activeCount).toBe(0);
   });
 
+  it('should not trigger watchdog restarts if worker crashed while activating', () => {
+    const recreateCallback = vi.fn();
+    registry.recreateWorkerCallback = recreateCallback;
+
+    const instance = createMockWorkerInstance('activating-crash-plugin');
+    instance.status = 'activating' as any;
+    registry.register('activating-crash-plugin', instance);
+
+    // Simulate Worker exit(1) during activation
+    instance.emitter.emit('exit', 1);
+
+    expect(registry.get('activating-crash-plugin')).toBeUndefined();
+    expect(registry.activeCount).toBe(0);
+    expect(recreateCallback).not.toHaveBeenCalled();
+  });
+
   it('should not crash-cleanup for zero exit code', () => {
     const instance = createMockWorkerInstance('ok-plugin');
     registry.register('ok-plugin', instance);
@@ -311,5 +327,54 @@ describe('WorkerManager', () => {
     // Mock DB returns empty array
     await wm.restoreWorkers();
     expect(wm.registry.activeCount).toBe(0);
+  });
+
+  it('should fail-fast if worker process exits during activation', async () => {
+    const exitingPluginCode = `
+      export default {
+        manifest: { id: 'exit-plugin', name: 'Exit Plugin', version: '1.0.0' },
+        activate: async () => {
+          process.exit(1);
+        },
+        deactivate: async () => {}
+      };
+    `;
+    const manifest: Manifest = {
+      id: 'exit-plugin',
+      name: 'Exit Plugin',
+      version: '1.0.0',
+    } as Manifest;
+
+    const start = Date.now();
+    await expect(
+      wm.createWorker('exit-plugin', manifest, exitingPluginCode, []),
+    ).rejects.toThrow(/Worker process exited with code 1/);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(5000);
+  });
+
+  it('should catch and report unhandledRejection during worker activation', async () => {
+    const unhandledRejectionCode = `
+      export default {
+        manifest: { id: 'rejection-plugin', name: 'Rejection Plugin', version: '1.0.0' },
+        activate: async () => {
+          Promise.reject(new Error('Simulated async explosion in worker'));
+          await new Promise((r) => setTimeout(r, 200));
+        },
+        deactivate: async () => {}
+      };
+    `;
+    const manifest: Manifest = {
+      id: 'rejection-plugin',
+      name: 'Rejection Plugin',
+      version: '1.0.0',
+    } as Manifest;
+
+    const start = Date.now();
+    await expect(
+      wm.createWorker('rejection-plugin', manifest, unhandledRejectionCode, []),
+    ).rejects.toThrow(/Unhandled rejection in worker: Simulated async explosion in worker/);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(5000);
   });
 });

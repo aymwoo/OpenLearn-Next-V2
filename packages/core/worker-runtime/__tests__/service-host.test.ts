@@ -692,5 +692,47 @@ describe('ServiceHost ActionRegistry tracking', () => {
       });
       expect(mockDb.prepare).toHaveBeenCalledWith('CREATE TABLE IF NOT EXISTS plugin_01a043a0_0786_71ca_a22b_4a6dd3110e3b_classes (id TEXT PRIMARY KEY)');
     });
+
+    it('should allow worker plugin to execute DDL on plugin_migrations for ctx.db.migrate', async () => {
+      const mockDb = {
+        prepare: vi.fn().mockReturnValue({
+          run: vi.fn().mockReturnValue({ changes: 1 }),
+        }),
+      };
+      const dbRegistry = createMockServiceRegistry({
+        '@openlearn/core:IDatabase': mockDb,
+      });
+
+      const host = new ServiceHost(
+        dbRegistry as any,
+        capGuard as any,
+        'plugin:@aymwoo/plugin-lab-seat',
+        ['management:write'],
+        undefined,
+        undefined,
+        '@aymwoo/plugin-lab-seat',
+        '019fa0d4-2e31-76d9-8322-ca08f60012a8',
+      );
+
+      await host.handleInvoke(
+        {
+          type: 'invoke',
+          invokeId: 'inv-sec-migrations',
+          token: '@openlearn/core:IDatabase',
+          method: 'prepareAndRun',
+          args: ['CREATE TABLE IF NOT EXISTS plugin_migrations (plugin_id TEXT PRIMARY KEY, version INTEGER NOT NULL)', []],
+        },
+        transport as any,
+      );
+
+      expect(transport.messages[0]).toEqual({
+        type: 'result',
+        invokeId: 'inv-sec-migrations',
+        value: { changes: 1 },
+      });
+      expect(mockDb.prepare).toHaveBeenCalledWith(
+        'CREATE TABLE IF NOT EXISTS plugin_migrations (plugin_id TEXT PRIMARY KEY, version INTEGER NOT NULL)'
+      );
+    });
   });
 });

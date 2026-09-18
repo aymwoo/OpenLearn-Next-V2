@@ -90,13 +90,13 @@ const ACTIVATE_PROGRESS_SLIDE_MS = (() => {
  * WorkerInstance — 已注册 Worker 的内部运行时记录。
  *
  * 由 WorkerRegistry 追踪，包含 Worker 线程引用、运输层、ServiceHost 等。
- * status 字段追踪生命周期：running → terminating/crashed。
+ * status 字段追踪生命周期：activating → running → terminating/crashed。
  */
 interface WorkerInstance {
   pluginId: string;
   worker: Worker;
   createdAt: number;
-  status: 'running' | 'terminating' | 'crashed';
+  status: 'activating' | 'running' | 'terminating' | 'crashed';
   transport: IWorkerTransport;
   serviceHost: ServiceHost;
   manifest?: Manifest;
@@ -164,16 +164,36 @@ export class WorkerRegistry {
     });
 
     instance.worker.on('exit', (code) => {
-      if (code !== 0 && this.workers.has(pluginId)) {
+      if (this.workers.has(pluginId)) {
         const entry = this.workers.get(pluginId)!;
         if (entry.status === 'terminating') {
           // Intentionally terminated, not a crash!
           return;
         }
-        entry.status = 'crashed';
-        console.error(
-          `[WorkerRegistry] Worker for "${pluginId}" exited with code ${code}`,
-        );
+        if (entry.status === 'activating') {
+          // Worker crashed or exited during activation before sending 'activated'.
+          // Mark as crashed, clean up, but DO NOT trigger watchdog restarts.
+          // The activation promise in createWorker will reject with WorkerActivateError.
+          entry.status = 'crashed';
+          console.error(
+            `[WorkerRegistry] Worker for "${pluginId}" exited with code ${code} during activation`,
+          );
+          if (entry.serviceHost && typeof entry.serviceHost.dispose === 'function') {
+            entry.serviceHost.dispose().catch((err) => {
+              console.error(
+                `[WorkerRegistry] Failed to dispose serviceHost on activation crash for "${pluginId}":`,
+                err,
+              );
+            });
+          }
+          this.cleanup(pluginId);
+          return;
+        }
+        if (code !== 0) {
+          entry.status = 'crashed';
+          console.error(
+            `[WorkerRegistry] Worker for "${pluginId}" exited with code ${code}`,
+          );
 
         const manifest = entry.manifest;
         const sourceCode = entry.sourceCode;
@@ -231,8 +251,9 @@ export class WorkerRegistry {
           }
         }
       }
-    });
-  }
+    }
+  });
+}
 
   /**
    * 通过 pluginId 获取 WorkerInstance。
@@ -361,6 +382,38 @@ function generateBootstrapCode(): string {
 import { parentPort, workerData } from 'node:worker_threads';
 import { createRequire } from 'node:module';
 const requireFn = createRequire('${requirePath}');
+
+process.on('unhandledRejection', function(reason) {
+  var msg = (reason && reason.message) ? reason.message : String(reason);
+  var stack = (reason && reason.stack) || '';
+  console.error('[Worker unhandledRejection for ' + workerData.pluginId + ']:', msg, stack);
+  try {
+    parentPort.postMessage({
+      type: 'error',
+      message: 'Unhandled rejection in worker: ' + msg,
+      stack: stack
+    });
+  } catch (e) {}
+  setTimeout(function() {
+    process.exit(1);
+  }, 10);
+});
+
+process.on('uncaughtException', function(err) {
+  var msg = (err && err.message) ? err.message : String(err);
+  var stack = (err && err.stack) || '';
+  console.error('[Worker uncaughtException for ' + workerData.pluginId + ']:', msg, stack);
+  try {
+    parentPort.postMessage({
+      type: 'error',
+      message: 'Uncaught exception in worker: ' + msg,
+      stack: stack
+    });
+  } catch (e) {}
+  setTimeout(function() {
+    process.exit(1);
+  }, 10);
+});
 
 // ── 内联 RPC Proxy 实现（在 Worker 隔离上下文中运行） ──
 
@@ -873,25 +926,35 @@ parentPort.on('message', async function(msg) {
           var row = await dbService.prepareAndGet('SELECT version FROM plugin_migrations WHERE plugin_id = ?', [workerData.pluginId]);
           var currentVersion = row ? row.version : 0;
           if (currentVersion < targetVersion) {
+            var pendingPromises = [];
             var dbWrapper = {
               prepare: function(sql) {
                 return {
                   run: function() {
                     var args = Array.prototype.slice.call(arguments);
-                    return dbService.prepareAndRun(sql, args);
+                    var p = dbService.prepareAndRun(sql, args);
+                    pendingPromises.push(p);
+                    return p;
                   },
                   get: function() {
                     var args = Array.prototype.slice.call(arguments);
-                    return dbService.prepareAndGet(sql, args);
+                    var p = dbService.prepareAndGet(sql, args);
+                    pendingPromises.push(p);
+                    return p;
                   },
                   all: function() {
                     var args = Array.prototype.slice.call(arguments);
-                    return dbService.prepareAndAll(sql, args);
+                    var p = dbService.prepareAndAll(sql, args);
+                    pendingPromises.push(p);
+                    return p;
                   }
                 };
               }
             };
             await upgradeFn(dbWrapper);
+            if (pendingPromises.length > 0) {
+              await Promise.all(pendingPromises);
+            }
             await dbService.prepareAndRun('INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)', [workerData.pluginId, targetVersion]);
           }
         }
@@ -912,6 +975,15 @@ parentPort.on('message', async function(msg) {
         pluginId: workerData.pluginId,
         manifest: msg.manifest,
         log: pluginLog,
+        reportProgress: function(stage, message) {
+          try {
+            parentPort.postMessage({
+              type: 'activate-progress',
+              stage: stage || 'progress',
+              message: message || ''
+            });
+          } catch (e) {}
+        },
         resolve: async function(token) {
           var tokenName = typeof token === 'string' ? token : (token && token.name);
           if (!tokenName) throw new Error('Invalid token');
@@ -1241,7 +1313,7 @@ export class WorkerManager {
       pluginId,
       worker,
       createdAt,
-      status: 'running',
+      status: 'activating',
       transport,
       serviceHost,
       manifest,
@@ -1285,10 +1357,52 @@ export class WorkerManager {
       }, ms);
     };
 
+    const onWorkerExit = (code: number) => {
+      clearActivationTimer();
+      if (activationReject) {
+        activationReject(
+          new WorkerActivateError(
+            pluginId,
+            `Worker process exited with code ${code} during activation before sending 'activated'`,
+          ),
+        );
+        activationResolve = null;
+        activationReject = null;
+      }
+    };
+
+    const onWorkerError = (err: Error) => {
+      clearActivationTimer();
+      if (activationReject) {
+        activationReject(
+          new WorkerActivateError(
+            pluginId,
+            `Worker process encountered error during activation: ${err?.message || err}`,
+            { cause: err },
+          ),
+        );
+        activationResolve = null;
+        activationReject = null;
+      }
+    };
+
+    worker.once('exit', onWorkerExit);
+    worker.once('error', onWorkerError);
+
+    const cleanupActivationWorkerListeners = () => {
+      worker.off('exit', onWorkerExit);
+      worker.off('error', onWorkerError);
+    };
+
     transport.onMessage((msg: unknown) => {
       const typed = msg as { type?: string; stage?: string; message?: string };
       if (typed.type === 'activated') {
         clearActivationTimer();
+        cleanupActivationWorkerListeners();
+        const instance = this.registry.get(pluginId);
+        if (instance) {
+          instance.status = 'running';
+        }
         if (activationResolve) {
           activationResolve();
           activationResolve = null;
@@ -1307,6 +1421,7 @@ export class WorkerManager {
         }
       } else if (typed.type === 'error') {
         clearActivationTimer();
+        cleanupActivationWorkerListeners();
         if (activationReject) {
           activationReject(
             new WorkerActivateError(
@@ -1316,6 +1431,8 @@ export class WorkerManager {
           );
           activationResolve = null;
           activationReject = null;
+        } else {
+          console.error(`[WorkerRuntime] Unhandled error from worker "${pluginId}":`, msg);
         }
       }
 
@@ -1341,6 +1458,7 @@ export class WorkerManager {
       });
     } catch (err) {
       clearActivationTimer();
+      cleanupActivationWorkerListeners();
       // 激活失败 — 清理 Worker
       try {
         await serviceHost.dispose();
@@ -1354,6 +1472,7 @@ export class WorkerManager {
       throw err;
     } finally {
       clearActivationTimer();
+      cleanupActivationWorkerListeners();
     }
 
     // 11. 返回

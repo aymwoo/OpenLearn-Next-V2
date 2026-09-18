@@ -72,7 +72,11 @@ const VALID_TRANSITIONS: Record<PluginState, PluginState[]> = {
 5. **物理部署**：将文件解压至 `plugins/<pluginId>/`，向数据库 `plugins` 表插入记录（状态设为 `'installed'`）。
 
 ### 3.2 激活阶段 (`activatePlugin`)
-激活超时限制为 **5000 毫秒** (`ACTIVATION_TIMEOUT_MS`)。流程如下：
+激活超时与执行行为依插件运行模式而定：
+- **进程内模式 (Inline Mode)**：超时限制为 **5000 毫秒** (`ACTIVATION_TIMEOUT_MS`)；
+- **Worker 隔离模式 (Worker Mode)**：初始等待窗口为 **60000 毫秒** (`OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS`)，支持通过 `ctx.reportProgress(stage?, message?)` 触发 `activate-progress` 滑动续期，并在 Worker 抛错或异常退出时实行 **5ms 快速失败 (Fail-Fast)**，避免假挂起。
+
+流程如下：
 1. **状态校验与转换**：`INSTALLED` / `INACTIVE` / `ERROR` $\rightarrow$ `ACTIVATING`。
 2. **依赖检查**：
    - `checkPluginDependencies`: 检查 `manifest.pluginDependencies` 中的插件是否处于 `ACTIVE` 状态。
@@ -82,9 +86,9 @@ const VALID_TRANSITIONS: Record<PluginState, PluginState[]> = {
    - 对不满足 `optional` 版本依赖的服务自动设为 `null`。
 4. **能力授权**：向 `CapabilityService` 批量申请 `manifest.capabilitiesProposed` 声明的能力。
 5. **洋葱中间件前置管线 (`beforeActivate`)**：顺序执行已注册的生命周期中间件。
-6. **执行 `activate(ctx)` 回调**：使用 `Promise.race` 包装 5 秒超时定时器。
+6. **执行 `activate(ctx)` 回调**：使用 `Promise.race` 包装超时定时器与错误监听。
 7. **转换成功**：状态更改为 `ACTIVE`，更新 DB 记录。
-8. **异常回滚 (Rollback)**：若激活失败或超时，状态强行转为 `ERROR`，调用 `resourceTracker.disposeAll(pluginId)` 释放半创建资源，并撤销已申请能力。
+8. **异常回滚 (Rollback)**：若激活失败或超时，状态强行转为 `ERROR`，调用 `resourceTracker.disposeAll(pluginId)` 释放半创建资源，并撤销已申请能力。Worker 模式下释放沙箱并不触发 Watchdog 重启循环。
 
 ### 3.3 停用阶段 (`deactivatePlugin`)
 停用超时限制同样为 **5000 毫秒** (`DEACTIVATION_TIMEOUT_MS`)。流程如下：

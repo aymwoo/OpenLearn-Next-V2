@@ -1363,32 +1363,18 @@ const result = await ctx.invokeCommand('poll.get_results', { pollId: 'xxx' });
 // 命令类型会自动添加插件命名空间前缀
 ```
 
-### 6.6 宿主依赖共享网关 (HostSharedDeps)
+### 6.6 宿主依赖共享网关 (HostSharedDeps) 与动态转译
 
-> **⚠️ JSX 运行时限制**：`HostSharedDeps` 仅提供 `React` 和 `ReactDOM` 经典运行时，**不包含 `react/jsx-runtime`**。插件前端代码必须使用经典 JSX 转换（`"jsx": "react-jsx"` 不可用）：
-> 
-> ```json
-> // tsconfig.json — 插件项目
-> { "compilerOptions": { "jsx": "react" } }  // 经典模式，不是 "react-jsx"
-> ```
-> 
-> 或 esbuild 配置：
-> ```javascript
-> esbuild.build({
->   jsxFactory: "React.createElement",
->   jsxFragment: "React.Fragment",
->   external: ["react", "react-dom", "recharts", "lucide-react"],
-> });
-> ```
+为避免每个第三方插件前端重复打包庞大的基础库，OpenLearnV2 提供了 **宿主依赖共享网关 (HostSharedDeps)** 以及 **全形态 ESM 裸模块导入转译器 (`transformBareModuleImports`)**。全局 `window.HostSharedDeps` 暴露以下共享运行时：
 
-为避免每个第三方插件前端重复打包庞大的基础库，OpenLearnV2 提供了 **宿主依赖共享网关 (HostSharedDeps)**。全局 `window.HostSharedDeps` 暴露以下对象：
+- `React` / `'react'`: React 核心与 Hooks API
+- `ReactDOM` / `'react-dom'`: DOM 渲染与 `createPortal`
+- `ReactDOMClient` / `'react-dom/client'`: 现代 Root API (`createRoot`)
+- `jsxRuntime` / `'react/jsx-runtime'`: 现代 JSX 运行时 (`jsx`, `jsxs`)
+- `Recharts` / `'recharts'`: Recharts 图表库
+- `LucideReact` / `'lucide-react'`: Lucide 图标库
 
-- `React` (npm: react)
-- `ReactDOM` (npm: react-dom)
-- `Recharts` (npm: recharts)
-- `LucideReact` (npm: lucide-react)
-
-插件前端构建时需将这些库配置为 external：
+插件前端构建时可安心将这些库配置为 external，宿主在执行 Blob URL 动态导入前会自动完成解构语法转译与别名对齐（如 `import React, { useState } from 'react'`、`import { createPortal } from 'react-dom'`、`import { jsx as _jsx } from 'react/jsx-runtime'`）：
 
 ```javascript
 import esbuild from 'esbuild';
@@ -1397,39 +1383,25 @@ esbuild.build({
   entryPoints: ['src/frontend.tsx'],
   bundle: true,
   outfile: 'dist/frontend.js',
-  external: ['react', 'react-dom', 'recharts', 'lucide-react'],
+  external: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'recharts', 'lucide-react'],
   format: 'esm',
 });
 ```
 
-### 6.7 前端 JSX 转换配置（重要）
+### 6.7 前端 JSX 转换配置
 
-宿主通过 `window.HostSharedDeps` 提供的基础库：
+宿主通过 `window.HostSharedDeps` 与转译器提供的完整共享库：
 
-| 共享对象 | NPM 包 | 提供的内容 |
-|----------|--------|-----------|
-| `HostSharedDeps.React` | `react` | React 对象（包含 `createElement`） |
-| `HostSharedDeps.ReactDOM` | `react-dom` | ReactDOM 对象 |
-| `HostSharedDeps.Recharts` | `recharts` | Recharts 组件库 |
-| `HostSharedDeps.LucideReact` | `lucide-react` | Lucide 图标库 |
+| 共享对象 | NPM 包 | 提供的内容 | 转换支持 |
+|----------|--------|-----------|---------|
+| `HostSharedDeps.React` | `react` | React 核心 API (`createElement`, Hooks) | 经典模式 (`"jsx": "react"`) |
+| `HostSharedDeps.ReactDOM` | `react-dom` | ReactDOM 对象及 Portal | 支持 |
+| `HostSharedDeps.ReactDOMClient` | `react-dom/client` | 现代 DOM Root 创建 (`createRoot`) | 支持 |
+| `HostSharedDeps.jsxRuntime` | `react/jsx-runtime` | 自动 JSX 工厂函数 (`jsx`, `jsxs`) | 现代模式 (`"jsx": "react-jsx"`) |
+| `HostSharedDeps.Recharts` | `recharts` | Recharts 图表组件库 | 支持 |
+| `HostSharedDeps.LucideReact` | `lucide-react` | Lucide 图标库 | 支持 |
 
-**宿主不提供** `react/jsx-runtime` 子路径。因此构建前端时**必须使用经典 JSX 转换**（`React.createElement`），不能使用自动 JSX 运行时。
-
-**tsconfig.json 配置：**
-
-```json
-{
-  "compilerOptions": {
-    "jsx": "react"
-  }
-}
-```
-
-> `"jsx"` 必须是 `"react"`，不能是 `"react-jsx"`。
-
-**esbuild 构建注意事项：**
-
-esbuild 默认读取项目根目录的 `tsconfig.json`。如果 tsconfig 中 `"jsx"` 设为 `"react-jsx"`，无论 build API 中如何设置 `jsx: 'transform'` 或 `jsxFactory`，都会被 tsconfig 覆盖，最终产物仍会包含 `import ... from "react/jsx-runtime"` 导致运行时错误。
+> **提示**：从平台 `v0.3.15+` 起，宿主已内置 `react/jsx-runtime` 映射，现代 `tsconfig.json` 的 `"jsx": "react-jsx"`（自动模式）与经典 `"jsx": "react"`（经典模式）均可原生支持。
 
 **推荐 esbuild 构建配置：**
 

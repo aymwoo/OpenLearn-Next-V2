@@ -1,33 +1,48 @@
 # 宿主共享依赖白名单 (HostSharedDeps)
 
-> **适用范围**：`@openlearn/plugin-sdk@3.5.2`
-> 本页说明打包前端插件时**必须 external（不可打进 bundle）** 的宿主全局库，及其精确版本，防止因重复打包导致包体积过大或 "Invalid hook call" 等重复加载错误。
+> **适用范围**：`@openlearn/plugin-sdk@3.6.1` / 平台 `v0.3.15+`
+> 本页说明打包前端插件时**推荐 external（由宿主提供）** 的宿主全局库，及其精确版本，防止因重复打包导致包体积过大或 "Invalid hook call" 等重复加载错误。
 
 ---
 
-## 1. 宿主全局提供的共享库（务必 external）
+## 1. 宿主全局提供的共享库
 
-**恰好 4 个库**由宿主在运行时注入为全局变量，前端插件**必须**标记为 external：
+宿主在运行时通过全局对象 `window.HostSharedDeps` 注入并暴露基础前端运行时，供前端插件（ESM Bundle）动态复用：
 
 ```
-react, react-dom, recharts, lucide-react
+react, react-dom, react-dom/client, react/jsx-runtime, recharts, lucide-react
 ```
 
-三处定义必须一致（实际一致）：
-- **SDK 构建 CLI 硬编码 externals 数组**（`packages/plugin-sdk/cli.mjs:276, 292`）：
+### 多层保障机制：
+- **运行时 `window.HostSharedDeps`**（[`src/main.tsx`](file:///home/wuxf/Develop/openlearnv2/src/main.tsx)）：
+  ```ts
+  (window as any).HostSharedDeps = {
+    React,
+    ReactDOM,
+    ReactDOMClient,
+    Recharts,
+    LucideReact,
+    jsxRuntime: JsxRuntime,
+    'react': React,
+    'react-dom': ReactDOM,
+    'react-dom/client': ReactDOMClient,
+    'react/jsx-runtime': JsxRuntime,
+    'recharts': Recharts,
+    'lucide-react': LucideReact,
+  };
+  ```
+- **前端动态导入转译器 (`transformBareModuleImports`)**（[`src/plugin-host/plugin-host.ts`](file:///home/wuxf/Develop/openlearnv2/src/plugin-host/plugin-host.ts)）：
+  当前端插件 `frontend.js` 包含对上述共享库的裸模块导入时，宿主在执行 Blob URL 动态导入前会自动执行 ESM 语法转译，全面兼容：
+  - 复合默认 + 具名导入（如 `import React, { useState, useEffect } from "react"`）
+  - 别名转换（如 `import { useState as useState2 } from "react"` 转译为对象解构 `{ useState: useState2 }`，避免语法错误）
+  - 命名空间导入（如 `import * as React from "react"`）
+  - 纯具名/纯默认导入与副作用导入（`import "react"`）
+- **SDK 构建 CLI 预置 externals 数组**（`packages/plugin-sdk/cli.mjs`）：
   ```js
   ...buildOpts(frontendEntry, join(distDir, 'frontend.js'), ['react', 'react-dom', 'recharts', 'lucide-react'])
-  // buildOpts 内部拼接：external: ['@openlearn/plugin-sdk', ...external]  (cli.mjs:231)
   ```
-- **运行时 `window.HostSharedDeps`**（`src/main.tsx:14-18`）：
-  ```ts
-  (window as any).HostSharedDeps = { React, ReactDOM, Recharts, LucideReact };
-  ```
-- **宿主 import map**（`index.html:7-16`，将裸指定向到上述全局）：`react` / `react-dom` / `recharts` / `lucide-react` 均映射到 `window.HostSharedDeps.*`。
 
-脚手架模板注释亦明示（`scaffold/templates/full-stack/src/frontend.tsx:5-6`）："Host shared dependencies (react, react-dom, recharts, lucide-react) are provided via window.HostSharedDeps — do not bundle them."
-
-> **不在此清单内的一切库均不被宿主提供**。若插件 `import` 了 `react-konva`、`konva`、`socket.io-client`、`motion`、`react-markdown`、`@lucide/lab` 等，它们**不在** `HostSharedDeps` 也不在 import map——插件必须自行打包，否则加载时 import 失败。
+> **非白名单依赖提示**：若插件 `import` 了 `react-konva`、`konva`、`socket.io-client`、`motion`、`react-markdown` 等未在白名单中的第三方库，插件必须自行打入 bundle，宿主不提供自动共享注入。
 
 ---
 
@@ -35,12 +50,14 @@ react, react-dom, recharts, lucide-react
 
 版本取自 `package.json`（声明范围）与 `node_modules`（实际安装）。
 
-| 库 | 声明范围 | 实际安装 | 宿主共享？ |
-|---|---|---|---|
-| `react` | `^19.0.1` | `19.2.7` | ✅ 是 |
-| `react-dom` | `^19.0.1` | `19.2.7` | ✅ 是 |
-| `recharts` | `^3.8.1` | `3.8.1` | ✅ 是 |
-| `lucide-react` | `^0.546.0` | `0.546.0` | ✅ 是 |
+| 库 | 声明范围 | 实际安装 | 宿主共享？ | 说明 |
+|---|---|---|---|---|
+| `react` | `^19.0.1` | `19.2.7` | ✅ 是 | React 核心与 Hooks |
+| `react-dom` | `^19.0.1` | `19.2.7` | ✅ 是 | DOM 渲染与 Portal (`createPortal`) |
+| `react-dom/client` | `^19.0.1` | `19.2.7` | ✅ 是 | 现代 Root API (`createRoot`) |
+| `react/jsx-runtime` | `^19.0.1` | `19.2.7` | ✅ 是 | 现代 JSX 运行时 (`jsx`, `jsxs`) |
+| `recharts` | `^3.8.1` | `3.8.1` | ✅ 是 | Recharts 图表库 |
+| `lucide-react` | `^0.546.0` | `0.546.0` | ✅ 是 | Lucide 图标库 |
 
 ---
 
@@ -63,7 +80,7 @@ react, react-dom, recharts, lucide-react
 | `jspdf` | `^4.2.1` | — | ❌ 否 |
 | `zustand` | `^5.0.14` | — | ❌ 否 |
 
-> ⚠️ **文档口径纠正**：部分旧文档（`docs_plugin_guide.md:708`）提及 `window.HostSharedDeps.socketService` / `uiService`，但运行时 `main.tsx:14` 仅暴露 `React` / `ReactDOM` / `Recharts` / `LucideReact` 四键，**无** `socketService` / `uiService` 键。宿主虽依赖 `socket.io-client`，但当前未将其暴露为全局。以本页四键清单为权威。
+> ⚠️ **文档口径纠正**：部分旧文档（`docs_plugin_guide.md:708`）提及 `window.HostSharedDeps.socketService` / `uiService`，但运行时仅暴露 React 生态基础库（`React` / `ReactDOM` / `ReactDOMClient` / `Recharts` / `LucideReact` / `jsxRuntime`），**无** `socketService` / `uiService` 键。宿主虽依赖 `socket.io-client`，但未将其暴露为全局。插件获取通信和 UI 服务必须通过 `hostCtx.services` 或 `hostCtx.ui`。
 
 ---
 
@@ -74,14 +91,14 @@ react, react-dom, recharts, lucide-react
 - **如何触发构建**：脚手架插件置 `"build": "openlearn-plugin-sdk build"`（`scaffold/templates/full-stack/package.json`）。
 - **externals 如何设置**：由 CLI **自动注入**，插件作者无需在打包器配置中声明。前端 externals 数组 `['react','react-dom','recharts','lucide-react']` 硬编码于 `cli.mjs:276,292`；服务端 bundle 另加 `@openlearn/plugin-sdk`（`cli.mjs:231`）。
 - **manifest 层声明**：脚手架模板声明 `peerDependencies: { "react": ">=17", "react-dom": ">=17" }`（`full-stack` 与 `frontend-only` 模板）。这是"插件消费宿主 React"的人类/清单信号，**不参与** externals 计算（externals 为硬编码）。
-- **若手动打包忘记 external**：宿主遗留脚本 `scripts/build-plugins.mjs:67` 仅把 `external: ['react','react-dom']`（漏了 `recharts` / `lucide-react`），是复制粘贴隐患。未 externalize `react` / `react-dom` 会导致**第二个 React 实例**，表现为 "Invalid hook call" / Context 断裂。使用标准 `openlearn-plugin-sdk build` CLI 不会遗漏（数组被强制注入）；仅在手写 esbuild/vite 步骤时才会有此风险。
+- **若手动打包忘记 external**：未 externalize `react` / `react-dom` 会导致**第二个 React 实例**，表现为 "Invalid hook call" / Context 断裂。使用标准 `openlearn-plugin-sdk build` CLI 不会遗漏（数组被强制注入）；若使用手写打包工具，必须将白名单内的共享库列入 external。
 
 ---
 
-## 5. `HostSharedDeps` / 白名单常量
+## 5. `HostSharedDeps` 与动态转译器联动
 
-- **SDK 中不存在名为 `HostSharedDeps` 的 TS 常量或导出白名单**：在 `packages/plugin-sdk`（`*.ts`）中 grep `HostSharedDeps` / `sharedDeps` / `external:` 均无功（`index.ts`、`openlearn.d.ts` 未导出此类常量）。
-- 该名称仅作为**运行时 `window` 全局**存在（`src/main.tsx:14`），并被文档引用（如教程 "宿主依赖共享网关 (HostSharedDeps)"）。
-- **事实白名单 = `cli.mjs:276/292` 的硬编码数组 + `index.html` import map 的四键**。二者为权威来源且当前一致。若要新增共享库，需**同时**修改：`cli.mjs`（externals 数组）、`src/main.tsx`（全局）与 `index.html`（import map）。
+- **SDK 与运行时分工**：SDK 在编译期通过 external 排除共享库；宿主在加载期通过 `FrontendPluginHost` 动态拦截裸模块说明符，自动注入 `window.HostSharedDeps` 引用，同时兼容现代打包器生成的 `react/jsx-runtime` 和 `react-dom/client`。
+- **事实白名单**：包含 `react`、`react-dom`、`react-dom/client`、`react/jsx-runtime`、`recharts` 与 `lucide-react`。
 
-> 最后更新：2026-07-26
+> 最后更新：2026-09-18
+

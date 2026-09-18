@@ -201,18 +201,7 @@ export class FrontendPluginHost {
 
       // Transform bare module imports for browser ESM execution
       if ((window as any).HostSharedDeps) {
-        sourceCode = sourceCode
-          .replace(/import\s+(\w+)\s+from\s+['"]react['"];?/g, 'const $1 = window.HostSharedDeps.React;')
-          .replace(/import\s+\*\s+as\s+(\w+)\s+from\s+['"]react['"];?/g, 'const $1 = window.HostSharedDeps.React;')
-          .replace(/import\s+\{\s*([^}]+)\s*\}\s+from\s+['"]react['"];?/g, (_, imports) => {
-            return `const { ${imports} } = window.HostSharedDeps.React;`;
-          })
-          .replace(/import\s+\{\s*([^}]+)\s*\}\s+from\s+['"]lucide-react['"];?/g, (_, imports) => {
-            return `const { ${imports} } = window.HostSharedDeps.LucideReact;`;
-          })
-          .replace(/import\s+\{\s*([^}]+)\s*\}\s+from\s+['"]recharts['"];?/g, (_, imports) => {
-            return `const { ${imports} } = window.HostSharedDeps.Recharts;`;
-          });
+        sourceCode = transformBareModuleImports(sourceCode);
       }
 
       const blob = new Blob([sourceCode], { type: 'text/javascript' });
@@ -649,3 +638,129 @@ class SemesterGradeServiceProxy implements ISemesterGradeService {
     }
   }
 }
+
+// ── Bare Module Import Transformer ──────────────────────────────────────────
+
+/**
+ * Map of bare module specifiers to their global host shared dependencies expression.
+ */
+export const SHARED_MODULE_MAP: Record<string, string> = {
+  'react': 'window.HostSharedDeps.React',
+  'react-dom': 'window.HostSharedDeps.ReactDOM',
+  'react-dom/client': '(window.HostSharedDeps.ReactDOMClient || window.HostSharedDeps.ReactDOM)',
+  'react/jsx-runtime': 'window.HostSharedDeps.jsxRuntime',
+  'recharts': 'window.HostSharedDeps.Recharts',
+  'lucide-react': 'window.HostSharedDeps.LucideReact',
+};
+
+/**
+ * Transforms named import specifiers (e.g. `useState, useEffect, useMemo as useMemo2`)
+ * into destructuring syntax (e.g. `useState, useEffect, useMemo: useMemo2`).
+ *
+ * @param namedClause The content inside the import `{ ... }` braces.
+ * @returns Transformed destructuring properties string.
+ */
+export function transformNamedImports(namedClause: string): string {
+  return namedClause
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => s.replace(/^type\s+/, ''))
+    .map((s) => s.replace(/\s+as\s+/, ': '))
+    .join(', ');
+}
+
+/**
+ * Transforms an ESM import clause into equivalent `const ... = window.HostSharedDeps...` statements.
+ *
+ * @param clause The import clause before `from`.
+ * @param depExpr The expression evaluating to the dependency namespace.
+ * @returns Transformed JS statement(s), or null if clause is not recognized.
+ */
+export function transformImportClause(clause: string, depExpr: string): string | null {
+  clause = clause
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '')
+    .trim();
+  const statements: string[] = [];
+
+  // Form 1: Default + Namespace: `Default, * as All`
+  const defAndNs = clause.match(/^([a-zA-Z_$][\w$]*)\s*,\s*\*\s*as\s+([a-zA-Z_$][\w$]*)$/);
+  if (defAndNs) {
+    statements.push(`const ${defAndNs[1]} = ${depExpr}?.default ?? ${depExpr};`);
+    statements.push(`const ${defAndNs[2]} = ${depExpr};`);
+    return statements.join(' ');
+  }
+
+  // Form 2: Default + Named: `Default, { a, b as c }`
+  const defAndNamed = clause.match(/^([a-zA-Z_$][\w$]*)\s*,\s*\{([\s\S]*)\}$/);
+  if (defAndNamed) {
+    const defaultName = defAndNamed[1];
+    const namedBody = transformNamedImports(defAndNamed[2]);
+    statements.push(`const ${defaultName} = ${depExpr}?.default ?? ${depExpr};`);
+    if (namedBody) {
+      statements.push(`const { ${namedBody} } = ${depExpr};`);
+    }
+    return statements.join(' ');
+  }
+
+  // Form 3: Namespace only: `* as All`
+  const nsOnly = clause.match(/^\*\s*as\s+([a-zA-Z_$][\w$]*)$/);
+  if (nsOnly) {
+    return `const ${nsOnly[1]} = ${depExpr};`;
+  }
+
+  // Form 4: Named only: `{ a, b as c }`
+  const namedOnly = clause.match(/^\{([\s\S]*)\}$/);
+  if (namedOnly) {
+    const namedBody = transformNamedImports(namedOnly[1]);
+    return `const { ${namedBody} } = ${depExpr};`;
+  }
+
+  // Form 5: Default only: `Default`
+  const defOnly = clause.match(/^([a-zA-Z_$][\w$]*)$/);
+  if (defOnly) {
+    return `const ${defOnly[1]} = ${depExpr}?.default ?? ${depExpr};`;
+  }
+
+  return null;
+}
+
+/**
+ * Transforms bare module imports in browser ESM source code into references to
+ * `window.HostSharedDeps`.
+ *
+ * Supports:
+ * - Default imports (`import React from 'react'`)
+ * - Named imports (`import { useState, useEffect } from 'react'`)
+ * - Renamed named imports (`import { useState as useState2 } from 'react'`)
+ * - Combined default + named (`import React, { useState } from 'react'`)
+ * - Namespace imports (`import * as React from 'react'`)
+ * - Side-effect imports (`import 'react'`)
+ *
+ * @param sourceCode The original ESM JavaScript source code.
+ * @returns Transformed JavaScript source code.
+ */
+export function transformBareModuleImports(sourceCode: string): string {
+  // 1. Replace side-effect imports: `import "react";`
+  let transformed = sourceCode.replace(/import\s+['"]([^'"]+)['"];?/g, (match, specifier) => {
+    if (SHARED_MODULE_MAP[specifier]) {
+      return `/* [HostSharedDeps] ${match} */`;
+    }
+    return match;
+  });
+
+  // 2. Replace import clauses: `import ... from "specifier";`
+  transformed = transformed.replace(
+    /import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"];?/g,
+    (match, clause, specifier) => {
+      const depExpr = SHARED_MODULE_MAP[specifier];
+      if (!depExpr) return match;
+      const replacement = transformImportClause(clause, depExpr);
+      return replacement ? replacement : match;
+    },
+  );
+
+  return transformed;
+}
+

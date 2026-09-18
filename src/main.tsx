@@ -5,8 +5,10 @@ import { PluginHostProvider } from './plugin-host/plugin-host-context';
 import { FrontendPluginHost } from './plugin-host/plugin-host';
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
+import * as ReactDOMClient from 'react-dom/client';
 import * as Recharts from 'recharts';
 import * as LucideReact from 'lucide-react';
+import * as JsxRuntime from 'react/jsx-runtime';
 import './index.css';
 
 (window as any).React = React;
@@ -14,8 +16,16 @@ import './index.css';
 (window as any).HostSharedDeps = {
   React,
   ReactDOM,
+  ReactDOMClient,
   Recharts,
   LucideReact,
+  jsxRuntime: JsxRuntime,
+  'react': React,
+  'react-dom': ReactDOM,
+  'react-dom/client': ReactDOMClient,
+  'react/jsx-runtime': JsxRuntime,
+  'recharts': Recharts,
+  'lucide-react': LucideReact,
 };
 
 const pluginHost = new FrontendPluginHost();

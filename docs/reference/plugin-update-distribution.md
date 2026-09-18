@@ -137,26 +137,33 @@ interface PluginInstallWizardProps {
 
 ---
 
-## 5. Worker 激活超时（可调环境变量）
+## 5. Worker 激活超时与快速失败机制
 
-全栈插件在 Worker 内需动态 `import`、IPC 解析多个 Token、执行 `schema migrate/建表`；主线程繁忙时 RPC 会排队，固定短超时易误杀。默认行为已调整为：
+全栈插件在 Worker 内需动态 `import`、IPC 解析多个 Token、执行 `schema migrate/建表`；主线程繁忙时 RPC 会排队，固定短超时易误杀。平台提供了完善的超时配置、心跳续期与快速失败机制：
 
 | 环境变量 | 默认值 | 说明 |
 |---|---|---|
-| `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` | `60000` | 初始激活等待窗口（最小 5000） |
-| `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_PROGRESS_SLIDE_MS` | `min(30000, 初始窗口)` | 每次收到 `activate-progress` 心跳后重置的滑动窗口（最小 3000） |
+| `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` | `60000` | 初始激活等待窗口（最小 5000ms） |
+| `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_PROGRESS_SLIDE_MS` | `min(30000, 初始窗口)` | 每次收到进度心跳后重置的滑动窗口（最小 3000ms） |
 
-**滑动超时机制**：Worker 在激活过程中可周期性向主线程发送 `activate-progress` 心跳消息（`packages/core/worker-runtime/types.ts` 的 `ActivateProgressMessage`），主线程收到后重置剩余超时，避免长迁移/IPC 被误杀，同时防止无限挂起。
+### 5.1 上下文心跳 API (`ctx.reportProgress`) 与滑动超时
+在耗时初始化操作（如大模型加载、复杂 SQL 数据迁移）期间，插件可通过 `PluginContext` 的 `ctx.reportProgress` 主动上报进度并续期超时窗口：
 
 ```typescript
-// 心跳消息类型
-interface ActivateProgressMessage {
-  readonly type: 'activate-progress';
-  readonly stage?: string;
-  readonly message?: string;
+export async function activate(ctx: PluginContext) {
+  ctx.reportProgress?.('migration', '正在执行数据表结构初始化...');
+  await ctx.db.migrate(1, async (db) => {
+    // 迁移操作
+  });
+
+  ctx.reportProgress?.('model-load', '正在加载本地模型权重...');
+  // 耗时加载逻辑，自动滑动续期超时，防止被误判超时熔断
 }
 ```
 
-> 全栈插件若仍频繁超时，调大 `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` 与 `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_PROGRESS_SLIDE_MS` 即可，无需改代码。
+### 5.2 激活期快速失败机制 (Fail-Fast)
+为杜绝“插件语法错误或未捕获异常导致主线程盲等 60 秒”的假超时问题，系统引入了激活期快速失败保障：
+- **即时错误捕获**：主线程在 Worker 激活阶段直接监听底层 `exit` 和 `error` 事件；若 Worker 发生未捕获异常或进程退出，主线程在 5ms 内立即拒绝激活 Promise 并抛出精准的 `WorkerActivateError`；
+- **状态细分与 Watchdog 防风暴**：Worker 实例在激活期状态标记为 `activating`，仅在成功收到 `'activated'` 协议消息后提升为 `running`；若在 `activating` 阶段崩溃退出，Watchdog 不会触发自动重启循环，防止误触全局熔断器（Circuit Breaker）。
 
-> 最后更新：2026-07-26
+> 最后更新：2026-09-18

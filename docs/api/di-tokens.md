@@ -1,7 +1,7 @@
 # 完整 DI Token 与 Service API 字典
 
-> **适用范围**：`@openlearn/plugin-sdk@3.5.2`（版本号以 `packages/plugin-sdk/package.json` 为准）。
-> 本页是插件获取平台内核服务的**唯一权威字典**。所有 Token 定义位于 `packages/core/di/interfaces.ts`，并由 `packages/plugin-sdk/index.ts:103-131, 319-324` 统一导出。
+> **适用范围**：`@openlearn/plugin-sdk@3.6.1`（版本号以 `packages/plugin-sdk/package.json` 为准） / 平台 `v0.3.15+`。
+> 本页是插件获取平台内核服务的**唯一权威字典**。所有 Token 定义位于 `packages/core/di/interfaces.ts`，并由 `packages/plugin-sdk/index.ts` 统一导出。
 > **重要**：插件 SDK 发布的 `dist/index.d.ts`（由 `openlearn.d.ts` 复制而来）由 `node packages/plugin-sdk/build.mjs` 生成，需在 SDK 源码变更后**重新构建**；若你在 `tsc` 下遇到 `TS2305 "has no exported member"`，即为 SDK 声明文件未同步所致，运行 `node packages/plugin-sdk/build.mjs` 重新生成即可。
 
 ---
@@ -13,15 +13,16 @@
 1. **`ctx.resolve(Token)` —— 通用 DI 路径**。除了下方 7 个核心服务代理之外，任何已注册的 Token 都走这条路：
 
    ```typescript
-   import { IPluginLifecycleManagerToken, IDatabaseToken } from '@openlearn/plugin-sdk';
+   import { IPluginLifecycleManagerToken, IDatabaseToken, IAuthSessionBridgeToken } from '@openlearn/plugin-sdk';
 
-   const lifecycle = await ctx.resolve(IPluginLifecycleManagerToken); // 类型: PluginLifecycleManager
-   const db        = await ctx.resolve(IDatabaseToken);               // 类型: better-sqlite3.Database
+   const lifecycle  = await ctx.resolve(IPluginLifecycleManagerToken); // 类型: PluginLifecycleManager
+   const db         = await ctx.resolve(IDatabaseToken);               // 类型: better-sqlite3.Database
+   const authBridge = await ctx.resolve(IAuthSessionBridgeToken);      // 类型: IAuthSessionBridgeService
    ```
 
 2. **`ctx.services.X` —— 仅 7 个核心服务的便捷代理**（与对应 Token 解析出的实例相同）。
 
-`PluginContext` 完整形态（`packages/core/plugin-host/types.ts:108-149`）：
+`PluginContext` 完整形态（`packages/core/plugin-host/types.ts`）：
 
 ```typescript
 interface PluginContext {
@@ -46,13 +47,15 @@ interface PluginContext {
   log: IPluginLogger;             // ctx.log.info(...)
   config: IConfigService;
   contributions: ContributionAccessor;
+  http: IPluginHttpRouter;        // RESTful & SSE 流式路由
   require(moduleName: string): unknown; // 仅白名单内的共享模块
+  reportProgress?(stage?: string, message?: string): void; // 激活期进度心跳与超时续期
 }
 ```
 
 ---
 
-## 2. 完整 Token 列表（28 个）
+## 2. 完整 Token 列表（29 个）
 
 `Token<T>` 本身是一个运行时常量（`packages/core/di/token.ts:32-62`），其 `name` 形如 `@openlearn/core:ICommandBusService`，`T` 仅用于编译期类型携带。
 
@@ -113,6 +116,12 @@ interface PluginContext {
 | 导出 Token | 解析类型 | 标识字符串 |
 |---|---|---|
 | `IActivityRegistryToken` | `ActivityRegistry` | （定义于 `packages/activity-ecosystem/index.ts:28`） |
+
+### G. 认证与会话桥接 Token (v0.3.15+)
+
+| 导出 Token | 解析类型 | 标识字符串 |
+|---|---|---|
+| `IAuthSessionBridgeToken` | `IAuthSessionBridgeService` | `@openlearn/core:IAuthSessionBridgeService` |
 
 ---
 
@@ -334,6 +343,24 @@ startActivity(id: string, context: ActivityContext, payload?: Record<string, unk
 clear(): void;
 ```
 
+### `IAuthSessionBridgeToken` → `IAuthSessionBridgeService`（`interfaces.ts:426-440`，v0.3.15+）
+```typescript
+createSession(user: AuthBridgeUser): Promise<{ token: string; maxAge: number }>;
+```
+**`AuthBridgeUser` 字段**（`interfaces.ts:416-424`）：
+```typescript
+interface AuthBridgeUser {
+  userId: string;
+  username: string;
+  role: 'administrator' | 'teacher' | 'student';
+  name?: string;
+  email?: string;
+  avatar?: string | null;
+  classId?: string;
+}
+```
+> 特权认证服务，用于 LTI 1.3、SAML 等第三方 SSO 认证插件即时建档、生成会话并由安全网关自动写入跨域安全 Cookie。
+
 ### 日志（`ctx.log`，无 Token）
 ```typescript
 interface IPluginLogger {
@@ -351,7 +378,7 @@ interface IPluginLogger {
 经全仓检索（`packages/`），以下常被误以为存在的 Token **并不存在**，若 `ctx.resolve` 会失败或类型缺失：
 
 - **`IWhiteboardToken`** —— 不存在。白板能力经由 `ICommandBusService` / `IEventBusService`（事件如 `whiteboard.element_drawn`）或类型辅助 `IWhiteboardServiceContract`（仅类型、`plugin-sdk/index.ts:181`，非 Token）间接获取。
-- **`IAuthToken` / `IUserToken` / `IAuthServiceToken` / `IUserContextToken`** —— 不存在。鉴权由服务端中间件处理，不作为 DI Token 暴露给插件。
+- **`IAuthToken` / `IUserToken` / `IAuthServiceToken` / `IUserContextToken`** —— 不存在。普通鉴权由服务端中间件自动接管。需要为外部身份签发会话的特权插件请且仅使用官方的 `IAuthSessionBridgeToken`。
 - **`ILoggerToken`** —— 不存在。日志经 `ctx.log: IPluginLogger` 提供，不可 `resolve`。
 - **`IPluginRuntimeToken` / `IUnifiedPluginContextToken`** —— 不存在。`IPluginRuntime` / `IUnifiedPluginContext` 是导出**类型**（适配器），但未定义对应 `Token<T>`，无法传给 `ctx.resolve`。
 
@@ -359,6 +386,6 @@ interface IPluginLogger {
 
 ## 5. 组合根（Composition Root）
 
-所有 Token 在 `packages/core/kernel/index.ts:204-231` 绑定到具体实例（`kernelContainer.serviceRegistry.register(...)`）。`server.ts` 仅补充 `IActivityRegistryToken`（`server.ts:537`）。插件无需关心绑定细节，直接 `ctx.resolve(Token)` 即可。
+所有 Token 在 `packages/core/kernel/index.ts` 绑定到具体实例（`kernelContainer.serviceRegistry.register(...)`），包含 `IAuthSessionBridgeToken` 等平台级核心单例。`server.ts` 仅补充 `IActivityRegistryToken`（`server.ts:537`）。插件无需关心绑定细节，直接 `ctx.resolve(Token)` 即可。
 
-> 最后更新：2026-07-26
+> 最后更新：2026-09-18

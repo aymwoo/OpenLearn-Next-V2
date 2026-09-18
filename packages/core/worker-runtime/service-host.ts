@@ -944,7 +944,7 @@ export class ServiceHost {
       if (pluginId) {
         validNamespaces.push(`plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`);
       }
-      const isAllowed = validNamespaces.some((ns) => table.startsWith(ns));
+      const isAllowed = validNamespaces.some((ns) => table.startsWith(ns)) || table.toLowerCase() === 'plugin_migrations';
       if (!isAllowed) {
         throw new WorkerCapabilityError(
           this.pluginActorId,

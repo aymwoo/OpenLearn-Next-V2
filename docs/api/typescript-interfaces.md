@@ -1,6 +1,6 @@
 # TypeScript Interfaces 规范
 
-汇总 `@openlearn/plugin-sdk@3.5.2` 与 `packages/core/` 定义的所有核心 TS 接口。SDK 仅导出**类型 + Token 值**，不含运行时代码。
+汇总 `@openlearn/plugin-sdk@3.6.1` 与 `packages/core/` 定义的所有核心 TS 接口。SDK 仅导出**类型 + Token 值**，不含运行时代码。
 
 ---
 
@@ -20,7 +20,9 @@ interface PluginContext {
   log: IPluginLogger;
   config: IConfigService;
   contributions: ContributionAccessor;
+  http: IPluginHttpRouter;
   require(moduleName: string): unknown;
+  reportProgress?(stage?: string, message?: string): void;
 }
 ```
 
@@ -55,6 +57,7 @@ interface FrontendPluginContext {
 | `IStorageService` | 键值存储（get / set / delete） |
 | `IAIService` | AI 文本生成（generateText） |
 | `ISemesterGradeService` | 学期成绩（saveSemesterGrade） |
+| `IAuthSessionBridgeService` | 统一安全会话桥接（createSession，用于 LTI 1.3 / SSO） |
 | `IPointsDimensionRegistry` | 积分维度（registerDimension / getDimension / listDimensions） |
 | `IPointsLedgerService` | 积分流水（addPoints / getLogs / …） |
 | 引擎门面 | `ILessonEngineService` / `IClassroomRuntimeService` / `IPresenceEngineService` / `ITeachingCollaborationService` / `ILearningAnalyticsService` / `IAICapabilityService` / `ICapabilityRuntimeService` / `ICapabilityGovernanceService` / `IPlatformServiceRegistryService`（均为 `getX(): Promise<unknown>` 薄门面） |
@@ -113,4 +116,4 @@ SDK 额外导出了各引擎的**纯类型**（仅供类型断言，无对应 `T
 
 见 [DI Token 字典](di-tokens) 第 4 节：`IWhiteboardToken` / `IAuthToken` / `ILoggerToken` / `IPluginRuntimeToken` / `IUnifiedPluginContextToken` 等均**不存在**。
 
-> 最后更新：2026-08-29
+> 最后更新：2026-09-18

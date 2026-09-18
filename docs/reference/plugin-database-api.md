@@ -1,6 +1,6 @@
 # 插件数据库 API 与 Migration 规范
 
-> **适用范围**：`@openlearn/plugin-sdk@3.6.0` / 平台 `v0.3.11`
+> **适用范围**：`@openlearn/plugin-sdk@3.6.1` / 平台 `v0.3.15+`
 > 本页说明插件可用的两条数据库路径、事务支持、以及插件版本升级时的表结构迁移范式。
 
 ---
@@ -55,8 +55,12 @@ const db = await ctx.resolve(IDatabaseToken); // 类型: better-sqlite3.Database
   deleteTransaction(); // 执行
   ```
   真实用例：`packages/plugins/management.ts`、`packages/plugins/builtin.ts`。
-- **Worker（隔离）模式支持与限制**：
-  - **`exec` 异步转发（v0.3.9+ 补齐）**：Worker 模式的 DB 代理已正式支持 `exec` 跨线程 RPC 转发（如 `await db.exec(...)`），返回 Promise。所有操作均经过主侧 `assertDatabaseAccessAllowed` 安全守卫（限制 DDL 命名空间并实施核心表黑名单过滤）。
+- **Worker（隔离）模式支持与安全守卫**：
+  - **`exec` 异步转发与 DDL 守卫**：Worker 模式的 DB 代理正式支持 `exec` 跨线程 RPC 转发（如 `await db.exec(...)`），返回 Promise。所有操作均经过主侧 `assertDatabaseAccessAllowed` 安全守卫：
+    - **DDL 命名空间守卫**：第三方 Worker 插件建表 / 改表必须使用自身前缀 `plugin_{pluginId}_`；
+    - **系统迁移表放行**：宿主已将 `plugin_migrations` 表纳入 DDL 白名单，允许 Worker 线程透明调用 `ctx.db.migrate()` 初始化并更新版本控制表，杜绝 `WorkerCapabilityError` 权限报错；
+    - **核心数据表黑名单过滤**：严格禁止第三方插件对 `users`、`client_sessions` 等高危系统表执行越权 DDL。
+  - **异步 Migration 队列时序保护 (`pendingPromises`)**：Worker 线程在执行 `ctx.db.migrate(v, fn)` 时，沙箱代理自动捕获内部所有未显式 `await` 的异步 DB 操作并统一 `Promise.all`，确保全部迁移 SQL 成功写入 SQLite 后再原子化持久化新版本号。
   - **事务限制**：由于线程间 IPC 无法同步传递函数闭包并保证 SQLite 线程独占锁，Worker 隔离插件暂不支持本地同步式的 `db.transaction(fn)` 回调。如需多步一致性，建议在单个 `exec` 中包含多条 SQL 语句或在主侧命令中封装。
 
 ---
