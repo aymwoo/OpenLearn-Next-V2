@@ -212,7 +212,7 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
             <span>🧩</span>
             <span>{lang === 'zh' ? '进行中的活动' : 'Activities in Progress'}</span>
           </div>
-          <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
+          <span className="text-xs font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">
             {running.length}
           </span>
         </div>
@@ -229,17 +229,17 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
                 <ActivityIcon name={a.icon} className="text-indigo-600 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="font-bold text-slate-800 truncate">{a.name}</div>
-                  {a.category && <div className="text-[11px] text-slate-500 truncate">{a.category}</div>}
+                  {a.category && <div className="text-xs text-slate-500 truncate">{a.category}</div>}
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                       isRunning ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                     }`}
                   >
                     {isRunning ? (lang === 'zh' ? '进行中' : 'Running') : lang === 'zh' ? '已暂停' : 'Paused'}
                   </span>
-                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                  <span className="text-xs text-slate-400 flex items-center gap-1">
                     <Clock size={10} /> {formatElapsed(a.startedAt, lang)}
                   </span>
                 </div>
@@ -379,7 +379,7 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
       <div style={{ fontWeight: 600, marginBottom: 8 }}>🧩 {title}</div>
       {byCategory.map(([category, items]) => (
         <div key={category} style={{ marginBottom: 10 }}>
-          <div style={{ opacity: 0.6, fontSize: 11, textTransform: 'uppercase', marginBottom: 4 }}>{category}</div>
+          <div style={{ opacity: 0.6, fontSize: 12, textTransform: 'uppercase', marginBottom: 4 }}>{category}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {items.map((a) => (
               <div
@@ -397,7 +397,7 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
                   {a.name}
                 </div>
                 {a.description && (
-                  <div style={{ opacity: 0.7, fontSize: 11, margin: '2px 0 6px' }}>{a.description}</div>
+                  <div style={{ opacity: 0.7, fontSize: 12, margin: '2px 0 6px' }}>{a.description}</div>
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <button
@@ -414,9 +414,9 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
                   >
                     {role === 'teacher' ? (lang === 'zh' ? '启动' : 'Start') : lang === 'zh' ? '参与' : 'Open'}
                   </button>
-                  {launcherStatus[a.id] && <span style={{ fontSize: 11, opacity: 0.85 }}>{launcherStatus[a.id]}</span>}
+                  {launcherStatus[a.id] && <span style={{ fontSize: 12, opacity: 0.85 }}>{launcherStatus[a.id]}</span>}
                 </div>
-                <div style={{ opacity: 0.5, fontSize: 10, marginTop: 4 }}>
+                <div style={{ opacity: 0.5, fontSize: 12, marginTop: 4 }}>
                   {a.provider === 'official' ? 'official' : a.provider}
                 </div>
               </div>

@@ -70,7 +70,7 @@ export function NavigationSidebar({
         className={`p-2 flex border-b border-theme-subtle ${mainNavCollapsed ? 'justify-center' : 'justify-between items-center px-4'} min-h-[48px] shrink-0`}
       >
         {!mainNavCollapsed && (
-          <span className="hidden md:inline text-[11px] font-black tracking-widest text-muted uppercase select-none">
+          <span className="hidden md:inline text-xs font-black tracking-widest text-muted uppercase select-none">
             {lang === 'zh' ? '系统导航' : 'NAVIGATION'}
           </span>
         )}
@@ -183,7 +183,7 @@ export function NavigationSidebar({
               <Clock size={12} className="text-indigo-600 animate-pulse shrink-0" />
               {lang === 'zh' ? '本堂余课' : 'Classes Remaining'}
             </div>
-            <div className="text-[11px] text-gray-500 mb-2">
+            <div className="text-xs text-gray-500 mb-2">
               {lang === 'zh' ? `今天还有 ${remaining} 节课面授` : `${remaining} more classes left today`}
             </div>
             {upcoming.length > 0 && (
@@ -191,12 +191,12 @@ export function NavigationSidebar({
                 {upcoming.map((sch: any) => (
                   <div
                     key={sch.id}
-                    className="text-[10px] p-1.5 bg-white rounded border border-indigo-100/60 shadow-3xs hover:border-indigo-200 transition-colors"
+                    className="text-xs p-1.5 bg-white rounded border border-indigo-100/60 shadow-3xs hover:border-indigo-200 transition-colors"
                   >
                     <div className="font-bold text-gray-750 truncate" title={sch.lesson_title}>
                       {sch.lesson_title}
                     </div>
-                    <div className="text-[9px] text-gray-450 truncate flex justify-between mt-0.5">
+                    <div className="text-xs text-gray-450 truncate flex justify-between mt-0.5">
                       <span className="font-medium text-slate-500 truncate max-w-[60px]">{sch.class_name}</span>
                       <span className="font-mono text-indigo-700 font-semibold">{sch.time_slot}</span>
                     </div>
@@ -216,7 +216,7 @@ export function NavigationSidebar({
 function NavGroupHeader({ label, mainNavCollapsed }: { label: string; mainNavCollapsed: boolean }) {
   if (mainNavCollapsed) return <div className="h-px bg-border-theme-subtle my-1 w-full" />;
   return (
-    <div className="px-3 pt-2 text-[10px] font-bold text-muted tracking-wider uppercase hidden md:block select-none">
+    <div className="px-3 pt-2 text-xs font-bold text-muted tracking-wider uppercase hidden md:block select-none">
       {label}
     </div>
   );

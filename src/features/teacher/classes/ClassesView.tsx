@@ -216,7 +216,7 @@ export function ClassesView(props: ClassesViewProps) {
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 4, scale: 0.95 }}
                       transition={{ duration: 0.15, ease: 'easeOut' }}
-                      className="absolute right-0 bottom-full mb-2.5 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-semibold rounded-lg shadow-xl z-55 pointer-events-none border border-slate-800 flex items-center gap-1.5 whitespace-nowrap"
+                      className="absolute right-0 bottom-full mb-2.5 px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-xl z-55 pointer-events-none border border-slate-800 flex items-center gap-1.5 whitespace-nowrap"
                     >
                       <span>
                         {props.lang === 'zh' ? '导出所有班级的成绩数据' : 'Export grade data for all classes'}
@@ -249,13 +249,13 @@ export function ClassesView(props: ClassesViewProps) {
                 {props.exportDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-150 rounded-2xl shadow-2xl z-50 p-4 font-sans text-gray-800 animate-in fade-in slide-in-from-top-3 duration-200">
                     <div className="flex items-center justify-between border-b border-gray-100 pb-2 mb-3">
-                      <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                      <span className="text-xs font-black uppercase text-slate-400 tracking-wider">
                         {props.lang === 'zh' ? '成绩单导出工具' : 'Grade Export Tools'}
                       </span>
                       <button
                         type="button"
                         onClick={() => props.setExportDropdownOpen(false)}
-                        className="text-gray-400 hover:text-gray-600 text-[10px] font-extrabold cursor-pointer"
+                        className="text-gray-400 hover:text-gray-600 text-xs font-extrabold cursor-pointer"
                       >
                         ✕
                       </button>
@@ -275,7 +275,7 @@ export function ClassesView(props: ClassesViewProps) {
                             <div className="font-extrabold">
                               {props.lang === 'zh' ? '全班级汇总表' : 'All Classes Multi-Sheet'}
                             </div>
-                            <div className="text-[9px] text-emerald-600 font-medium">
+                            <div className="text-xs text-emerald-600 font-medium">
                               {props.lang === 'zh'
                                 ? '将所有学科班级合并至单张CSV表'
                                 : 'Consolidate everyone to a single CSV'}
@@ -290,7 +290,7 @@ export function ClassesView(props: ClassesViewProps) {
                       </button>
                     </div>
 
-                    <div className="text-[9.5px] font-bold text-gray-400 uppercase tracking-widest mb-2 select-none">
+                    <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 select-none">
                       {props.lang === 'zh' ? '选择特定学科导出' : 'Export Individual Subjects'}
                     </div>
 
@@ -311,7 +311,7 @@ export function ClassesView(props: ClassesViewProps) {
                           >
                             <div className="min-w-0 pr-2">
                               <div className="font-bold text-slate-800 truncate">{cls.name}</div>
-                              <div className="text-[9px] text-gray-400 mt-0.5">
+                              <div className="text-xs text-gray-400 mt-0.5">
                                 {(props.classStudentsMap[cls.id] || []).length}{' '}
                                 {props.lang === 'zh' ? '名学生已注册' : 'registered pupils'}
                               </div>

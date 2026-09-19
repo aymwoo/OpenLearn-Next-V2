@@ -154,7 +154,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang }: ComputerLa
             <span className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
               {lang === 'zh' ? '机房列表' : 'Computer Labs'}
             </span>
-            <span className="bg-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-full text-[10px]">
+            <span className="bg-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-full text-xs">
               {computerLabs.length}
             </span>
           </div>
@@ -166,7 +166,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang }: ComputerLa
                 <p className="text-xs font-medium">
                   {lang === 'zh' ? '暂无机房编号规则' : 'No Computer Labs configured yet.'}
                 </p>
-                <p className="text-[10px] text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 mt-1">
                   {lang === 'zh'
                     ? '点击右上角按钮添加首个机房规格。'
                     : 'Click the button above to add your first computer room.'}
@@ -193,7 +193,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang }: ComputerLa
                       </div>
                       <div>
                         <div className="text-sm font-bold text-gray-800">{lab.room_number}</div>
-                        <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                        <div className="text-xs text-gray-400 font-mono mt-0.5">
                           {lab.rows} {lang === 'zh' ? '行' : 'Rows'} × {lab.cols} {lang === 'zh' ? '列' : 'Cols'}
                           <span className="mx-1.5">•</span>
                           {lab.rows * lab.cols} {lang === 'zh' ? '个机位' : 'Seats'}
@@ -293,7 +293,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang }: ComputerLa
                       className="w-full text-xs p-2.5 border border-gray-300 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded-xl mt-1.5"
                       required
                     />
-                    <span className="text-[10px] text-gray-400 block mt-0.5">
+                    <span className="text-xs text-gray-400 block mt-0.5">
                       {lang === 'zh' ? '上下方向机位数 (最大15行)' : 'Horizontal sets count (Max 15)'}
                     </span>
                   </div>
@@ -311,7 +311,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang }: ComputerLa
                       className="w-full text-xs p-2.5 border border-gray-300 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded-xl mt-1.5"
                       required
                     />
-                    <span className="text-[10px] text-gray-400 block mt-0.5">
+                    <span className="text-xs text-gray-400 block mt-0.5">
                       {lang === 'zh' ? '左右方向机位数 (最大15列)' : 'Vertical sets count (Max 15)'}
                     </span>
                   </div>
@@ -319,7 +319,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang }: ComputerLa
 
                 {/* Simulated visual scale widget */}
                 <div className="border border-dashed border-gray-200 bg-gray-50/50 p-4 rounded-xl">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">
                     {lang === 'zh' ? '布局网格缩略结构' : 'Layout Aspect Schema'}
                   </span>
                   <div className="flex flex-col gap-1 items-center justify-center p-3 bg-white rounded-lg border border-gray-100 min-h-[120px]">
@@ -333,13 +333,13 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang }: ComputerLa
                             />
                           ))}
                           {cols > 8 && (
-                            <div className="w-4 text-[10px] text-gray-400 flex items-center justify-center">...</div>
+                            <div className="w-4 text-xs text-gray-400 flex items-center justify-center">...</div>
                           )}
                         </div>
                       ))}
-                      {rows > 6 && <div className="text-[10px] text-center text-gray-400 mt-1">...</div>}
+                      {rows > 6 && <div className="text-xs text-center text-gray-400 mt-1">...</div>}
                     </div>
-                    <span className="text-[10px] text-gray-450 mt-3 font-medium">
+                    <span className="text-xs text-gray-450 mt-3 font-medium">
                       配置容量：{rows} × {cols} = {rows * cols} 座位
                     </span>
                   </div>
@@ -382,28 +382,28 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang }: ComputerLa
               {activePreviewLab ? (
                 <div className="flex-1 overflow-auto p-6 flex flex-col items-center justify-center bg-slate-950 text-white min-h-[300px]">
                   {/* Classroom podium / front indicator */}
-                  <div className="w-48 bg-slate-800 border border-slate-700 py-1.5 rounded text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-10 select-none shadow-md shrink-0">
+                  <div className="w-48 bg-slate-800 border border-slate-700 py-1.5 rounded text-center text-xs font-bold text-slate-400 uppercase tracking-widest mb-10 select-none shadow-md shrink-0">
                     {lang === 'zh' ? '📽️ 讲台 / 主荧幕' : '📽️ Classroom Teacher Stage / Screen'}
                   </div>
 
                   <div className="flex flex-col gap-3 py-4 max-w-full">
                     {Array.from({ length: activePreviewLab.rows }).map((_, rIdx) => (
                       <div key={rIdx} className="flex gap-3 justify-center items-center">
-                        <span className="text-[10px] font-bold font-mono text-slate-500 w-6 text-right select-none pr-1">
+                        <span className="text-xs font-bold font-mono text-slate-500 w-6 text-right select-none pr-1">
                           R{rIdx + 1}
                         </span>
                         {Array.from({ length: activePreviewLab.cols }).map((_, cIdx) => (
                           <div
                             key={cIdx}
-                            className="group relative w-10 h-10 rounded-lg flex flex-col items-center justify-center bg-slate-800 border border-slate-700 hover:border-indigo-500 hover:bg-slate-750 font-mono text-[9px] font-semibold text-indigo-400 transition-all select-none shadow-sm cursor-help"
+                            className="group relative w-10 h-10 rounded-lg flex flex-col items-center justify-center bg-slate-800 border border-slate-700 hover:border-indigo-500 hover:bg-slate-750 font-mono text-xs font-semibold text-indigo-400 transition-all select-none shadow-sm cursor-help"
                           >
                             <Monitor size={14} className="opacity-40" />
-                            <span className="text-[8px] text-slate-400 mt-0.5">
+                            <span className="text-xs text-slate-400 mt-0.5">
                               {rIdx + 1}-{cIdx + 1}
                             </span>
 
                             {/* Hover tooltip */}
-                            <div className="absolute bottom-11 bg-indigo-950 text-white text-[9px] rounded px-2 py-1 hidden group-hover:block whitespace-nowrap z-30 font-sans border border-indigo-800 shadow-xl font-medium">
+                            <div className="absolute bottom-11 bg-indigo-950 text-white text-xs rounded px-2 py-1 hidden group-hover:block whitespace-nowrap z-30 font-sans border border-indigo-800 shadow-xl font-medium">
                               {lang === 'zh'
                                 ? `第 ${rIdx + 1} 排，第 ${cIdx + 1} 列`
                                 : `Row ${rIdx + 1} / Column ${cIdx + 1}`}
@@ -414,7 +414,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang }: ComputerLa
                     ))}
                   </div>
 
-                  <div className="mt-8 flex items-center justify-center gap-6 text-[10px] text-slate-400 shrink-0 select-none border-t border-slate-900 pt-4 w-full">
+                  <div className="mt-8 flex items-center justify-center gap-6 text-xs text-slate-400 shrink-0 select-none border-t border-slate-900 pt-4 w-full">
                     <div className="flex items-center gap-1.5">
                       <div className="w-3.5 h-3.5 rounded bg-slate-800 border border-slate-700 flex items-center justify-center p-0.5">
                         <Monitor size={10} className="text-indigo-400 opacity-40" />

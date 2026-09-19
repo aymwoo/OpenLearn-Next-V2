@@ -116,7 +116,7 @@ export function Dashboard(props: DashboardProps) {
                   <div className="flex-1 flex flex-col justify-between">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="bg-amber-400 text-slate-950 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse shadow-xs">
+                        <span className="bg-amber-400 text-slate-950 text-xs font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse shadow-xs">
                           {lang === 'zh' ? '下一堂面授课' : 'NEXT CLASS'}
                         </span>
                         <span className="font-mono text-xs text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100/30">
@@ -161,10 +161,10 @@ export function Dashboard(props: DashboardProps) {
               {/* Right Side: Todays Schedule Text List */}
               <div className="w-full md:w-[300px] lg:w-[350px] flex flex-col gap-3">
                 <div className="flex justify-between items-center border-b border-slate-200/80 pb-2">
-                  <span className="text-[11px] uppercase font-extrabold tracking-wider text-indigo-600 flex items-center gap-1.5">
+                  <span className="text-xs uppercase font-extrabold tracking-wider text-indigo-600 flex items-center gap-1.5">
                     📅 {lang === 'zh' ? '今日面授排课流' : "TODAY'S SCHEDULES"}
                   </span>
-                  <span className="text-[10px] text-slate-500 font-medium">
+                  <span className="text-xs text-slate-500 font-medium">
                     {lang === 'zh'
                       ? `共 ${todaySchedules.length} 节 | 已下课 ${finishedCount} 节`
                       : `Total ${todaySchedules.length} | Done ${finishedCount}`}
@@ -191,35 +191,35 @@ export function Dashboard(props: DashboardProps) {
                           }`}
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="font-mono text-[10px] text-slate-500 shrink-0">{sch.time_slot}</span>
+                            <span className="font-mono text-xs text-slate-500 shrink-0">{sch.time_slot}</span>
                             <span
                               className={`font-bold truncate max-w-[120px] lg:max-w-[150px] ${isNext ? 'text-indigo-650' : 'text-slate-700'}`}
                               title={sch.lesson_title}
                             >
                               {sch.lesson_title}
                             </span>
-                            <span className="text-[9px] text-slate-455 truncate max-w-[60px] lg:max-w-[80px]">
+                            <span className="text-xs text-slate-455 truncate max-w-[60px] lg:max-w-[80px]">
                               ({sch.class_name})
                             </span>
                           </div>
                           <div className="shrink-0 ml-2">
                             {isNext && (
-                              <span className="bg-amber-400 text-slate-950 font-extrabold text-[8px] px-1.5 py-0.5 rounded uppercase scale-90 inline-block animate-pulse shadow-xs">
+                              <span className="bg-amber-400 text-slate-950 font-extrabold text-xs px-1.5 py-0.5 rounded uppercase scale-90 inline-block animate-pulse shadow-xs">
                                 进行
                               </span>
                             )}
                             {isFinished && (
-                              <span className="bg-slate-100 text-slate-500 text-[8px] px-1.5 py-0.5 rounded font-bold">
+                              <span className="bg-slate-100 text-slate-500 text-xs px-1.5 py-0.5 rounded font-bold">
                                 已完
                               </span>
                             )}
                             {isFuture && (
-                              <span className="bg-indigo-50 text-indigo-700 text-[8px] px-1.5 py-0.5 rounded font-medium border border-indigo-100/50">
+                              <span className="bg-indigo-50 text-indigo-700 text-xs px-1.5 py-0.5 rounded font-medium border border-indigo-100/50">
                                 待上
                               </span>
                             )}
                             {isCancel && (
-                              <span className="bg-rose-50 text-rose-600 text-[8px] px-1.5 py-0.5 rounded font-bold border border-rose-100/50">
+                              <span className="bg-rose-50 text-rose-600 text-xs px-1.5 py-0.5 rounded font-bold border border-rose-100/50">
                                 停课
                               </span>
                             )}
@@ -415,13 +415,13 @@ export function Dashboard(props: DashboardProps) {
                           {proc.name}
                         </span>
                         <span
-                          className={`text-[10px] uppercase px-2 py-0.5 rounded-full font-bold ${proc.status === 'running' ? 'bg-blue-100 text-blue-700' : proc.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : proc.status === 'failed' ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-700'}`}
+                          className={`text-xs uppercase px-2 py-0.5 rounded-full font-bold ${proc.status === 'running' ? 'bg-blue-100 text-blue-700' : proc.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : proc.status === 'failed' ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-700'}`}
                         >
                           {proc.status}
                         </span>
                       </div>
                       <div className="flex justify-between items-center mt-1">
-                        <span className="text-[10px] text-slate-400 font-mono">PID: {proc.id}</span>
+                        <span className="text-xs text-slate-400 font-mono">PID: {proc.id}</span>
                         <button
                           onClick={() => setShowProcessLogs(proc.id)}
                           className="text-xs font-bold text-indigo-650 hover:text-indigo-850 transition-colors"

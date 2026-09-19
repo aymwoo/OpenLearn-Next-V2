@@ -94,7 +94,7 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
               </option>
             ))}
           </select>
-          <span className="text-[10px] text-gray-400 mt-1 block">
+          <span className="text-xs text-gray-400 mt-1 block">
             {lang === 'zh'
               ? '选择用于识别课表图片的 AI 模型。需要支持图片输入的模型（如 GPT-4o、Gemini 等）。'
               : 'Choose the AI model for timetable recognition. Must support vision/image input.'}
@@ -125,7 +125,7 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
                 ? '点击选择、拖拽图片至此处 或 Ctrl+V 粘贴截图'
                 : 'Click, drag & drop, or Ctrl+V to paste screenshot'}
             </span>
-            <span className="text-[10px] text-slate-400">
+            <span className="text-xs text-slate-400">
               {lang === 'zh' ? '支持 PNG / JPG / JPEG / WebP，最大 20MB' : 'Supports PNG / JPG / JPEG / WebP, max 20MB'}
             </span>
           </div>
@@ -153,7 +153,7 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
               >
                 <X size={14} />
               </button>
-              <div className="absolute bottom-2 left-2 bg-black/50 text-white text-[10px] px-2 py-1 rounded-lg flex items-center gap-1">
+              <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg flex items-center gap-1">
                 <Eye size={10} />
                 {lang === 'zh' ? '课表预览' : 'Preview'}
               </div>
@@ -245,7 +245,7 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
                 ? `全选 (${ocrSelectedEntries.size}/${ocrEntries.length})`
                 : `Select All (${ocrSelectedEntries.size}/${ocrEntries.length})`}
             </label>
-            <span className="text-[10px] text-slate-400">
+            <span className="text-xs text-slate-400">
               {lang === 'zh' ? '取消勾选可排除不需要导入的条目' : 'Uncheck to exclude entries from import'}
             </span>
           </div>
@@ -254,7 +254,7 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
           <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
             <table className="w-full text-left border-collapse table-auto text-xs bg-white">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-gray-600 font-semibold text-[10px] uppercase tracking-wide">
+                <tr className="bg-slate-50 border-b border-slate-200 text-gray-600 font-semibold text-xs uppercase tracking-wide">
                   <th className="p-2.5 w-[40px] text-center">✓</th>
                   <th className="p-2.5">{lang === 'zh' ? '星期' : 'Day'}</th>
                   <th className="p-2.5">{lang === 'zh' ? '节次' : 'Period'}</th>
@@ -284,18 +284,18 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
                       />
                     </td>
                     <td className="p-2.5 font-medium">
-                      <span className="inline-block bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                      <span className="inline-block bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-md text-xs font-bold">
                         {dayNames[entry.dayOfWeek] || `Day${entry.dayOfWeek}`}
                       </span>
                     </td>
                     <td className="p-2.5">
-                      <span className="inline-block bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                      <span className="inline-block bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-md text-xs font-bold">
                         {lang === 'zh' ? `第${entry.periodNumber}节` : `P${entry.periodNumber}`}
                       </span>
                     </td>
                     <td className="p-2.5 font-semibold text-slate-800">{entry.className || '-'}</td>
                     <td className="p-2.5">
-                      <span className="inline-block bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-md text-[10px] font-bold">
+                      <span className="inline-block bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-md text-xs font-bold">
                         {entry.subject || '-'}
                       </span>
                     </td>

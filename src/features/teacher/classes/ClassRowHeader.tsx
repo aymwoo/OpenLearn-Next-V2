@@ -84,7 +84,7 @@ export function ClassRowHeader({
           {cls.name}
         </div>
       </div>
-      <div className="flex items-center gap-3 text-[11px] text-gray-500 shrink-0">
+      <div className="flex items-center gap-3 text-xs text-gray-500 shrink-0">
         <span className="flex items-center gap-1" title={lang === 'zh' ? '学生人数' : 'Students'}>
           <Users size={13} className="text-gray-400" />
           {cls.student_count ?? 0}

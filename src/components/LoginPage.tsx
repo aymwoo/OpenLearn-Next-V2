@@ -309,7 +309,7 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
                     </option>
                   ))}
                 </select>
-                <p className="text-[10px] text-slate-500 font-medium">
+                <p className="text-xs text-slate-500 font-medium">
                   {lang === 'zh'
                     ? '✨ 在沙盒调试中，你可以直接下拉选择已有的学生账户一键登录为该生。'
                     : '✨ Sandbox help: Quick select existing students on file to simulate as student.'}
@@ -319,7 +319,7 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
 
             <div className="relative flex py-2 items-center">
               <div className="flex-grow border-t border-slate-850"></div>
-              <span className="flex-shrink mx-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              <span className="flex-shrink mx-3 text-xs font-bold text-slate-500 uppercase tracking-wider">
                 {lang === 'zh' ? '或手动输入学号' : 'Or input key manually'}
               </span>
               <div className="flex-grow border-t border-slate-850"></div>

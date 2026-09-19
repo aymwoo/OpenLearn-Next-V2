@@ -72,7 +72,7 @@ export const TimetableImportExportView: React.FC<TimetableImportExportViewProps>
 
         <div className="flex flex-col gap-3">
           <div>
-            <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">
+            <label className="block text-xs uppercase font-bold text-gray-500 mb-1">
               {lang === 'zh' ? '分配排定给哪一个班级 *' : 'Target Class to load schedules *'}
             </label>
             <select
@@ -92,7 +92,7 @@ export const TimetableImportExportView: React.FC<TimetableImportExportViewProps>
           </div>
 
           <div>
-            <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">
+            <label className="block text-xs uppercase font-bold text-gray-500 mb-1">
               {lang === 'zh' ? '粘贴 CSV 数据内容' : 'Paste CSV data rows'}
             </label>
             <textarea
@@ -106,7 +106,7 @@ export const TimetableImportExportView: React.FC<TimetableImportExportViewProps>
               value={csvText}
               onChange={(e) => setCsvText(e.target.value)}
             />
-            <span className="text-[10px] text-gray-400 mt-1 block">
+            <span className="text-xs text-gray-400 mt-1 block">
               {lang === 'zh'
                 ? '首行必须为属性列（支持：date, lesson_id, time_slot, status, notes）。支持复制 JSON 树粘贴直接解析。'
                 : 'Ensure first line consists of column keys (date, lesson_id, time_slots).'}

@@ -113,13 +113,13 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
         className={`p-2.5 rounded-xl border border-slate-150 border-l-4 ${statusColorClass} transition-all hover:shadow-xs relative group flex flex-col justify-between min-h-[85px]`}
       >
         <div>
-          <div className="text-[9px] font-mono text-slate-500 mb-1 font-bold flex justify-between items-center">
+          <div className="text-xs font-mono text-slate-500 mb-1 font-bold flex justify-between items-center">
             <span className="flex items-center gap-1">
               <Clock size={11} className="text-slate-400" />
               {sch.time_slot || (lang === 'zh' ? '全天' : 'All-day')}
             </span>
             {viewMode === 'cycle' && (
-              <span className="text-[8px] text-slate-400 font-sans font-normal bg-slate-100 px-1 py-0.5 rounded-sm">
+              <span className="text-xs text-slate-400 font-sans font-normal bg-slate-100 px-1 py-0.5 rounded-sm">
                 {sch.scheduled_date}
               </span>
             )}
@@ -131,7 +131,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
             {sch.class_name}
           </div>
           {sch.notes && (
-            <div className="text-[9px] text-amber-600 font-medium mt-1 truncate" title={sch.notes}>
+            <div className="text-xs text-amber-600 font-medium mt-1 truncate" title={sch.notes}>
               📌 {sch.notes}
             </div>
           )}
@@ -139,7 +139,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
 
         <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100/50">
           <span
-            className={`inline-block text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
+            className={`inline-block text-xs px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
               sch.status === 'cancelled'
                 ? 'bg-red-50 border-red-100 text-red-600'
                 : sch.status === 'holiday'

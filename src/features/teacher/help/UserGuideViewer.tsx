@@ -18,7 +18,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
           <div className="space-y-2">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               Edu-OS 核心系统主要特性使用教程
-              <span className="text-[10px] bg-indigo-500/30 text-indigo-200 border border-indigo-500/50 px-2 py-0.5 rounded-full font-normal">
+              <span className="text-xs bg-indigo-500/30 text-indigo-200 border border-indigo-500/50 px-2 py-0.5 rounded-full font-normal">
                 v2.1.0 LTS
               </span>
             </h3>
@@ -28,16 +28,16 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
               AI 成绩回传的 HTML Applet 实验组件。
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
-              <span className="text-[10px] bg-indigo-800/40 text-indigo-150 border border-indigo-700/50 px-2 py-0.5 rounded-full font-medium">
+              <span className="text-xs bg-indigo-800/40 text-indigo-150 border border-indigo-700/50 px-2 py-0.5 rounded-full font-medium">
                 🏫 班级与学生指令集
               </span>
-              <span className="text-[10px] bg-emerald-800/40 text-emerald-150 border border-emerald-700/50 px-2 py-0.5 rounded-full font-medium">
+              <span className="text-xs bg-emerald-800/40 text-emerald-150 border border-emerald-700/50 px-2 py-0.5 rounded-full font-medium">
                 📋 课程大纲时间轴同步
               </span>
-              <span className="text-[10px] bg-amber-800/40 text-amber-150 border border-amber-700/50 px-2 py-0.5 rounded-full font-medium">
+              <span className="text-xs bg-amber-800/40 text-amber-150 border border-amber-700/50 px-2 py-0.5 rounded-full font-medium">
                 🎨 协作白板指令渲染
               </span>
-              <span className="text-[10px] bg-sky-800/40 text-sky-150 border border-sky-700/50 px-2 py-0.5 rounded-full font-medium">
+              <span className="text-xs bg-sky-800/40 text-sky-150 border border-sky-700/50 px-2 py-0.5 rounded-full font-medium">
                 🚀 postMessage 成绩监听
               </span>
             </div>
@@ -55,7 +55,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                 </div>
                 <div>
                   <h4 className="text-sm text-gray-900">1. 使用核心指令管理班级与学生</h4>
-                  <p className="text-[11px] text-gray-400 font-normal mt-0.5">Administrative CLI & Capability Model</p>
+                  <p className="text-xs text-gray-400 font-normal mt-0.5">Administrative CLI & Capability Model</p>
                 </div>
               </div>
               <p className="text-xs text-gray-600 leading-relaxed mt-3">
@@ -63,9 +63,9 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                 。任何行政、学籍以及课表排期修改，底层最终都会被封装为非对称的内核指令，经由分布式指令总线进行安全校验与事务落库。
               </p>
 
-              <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 text-[11px] text-indigo-900 space-y-1.5 mt-3">
+              <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 text-xs text-indigo-900 space-y-1.5 mt-3">
                 <span className="font-bold block">🔒 核心访问权限声明 (RBAC Capabilities):</span>
-                <ul className="list-disc list-inside space-y-1 text-gray-600 text-[10.5px]">
+                <ul className="list-disc list-inside space-y-1 text-gray-600 text-xs">
                   <li>
                     <code className="bg-white/80 px-1 rounded border border-indigo-150">class:write</code>
                     ：允许创建/删除行政班级。
@@ -82,7 +82,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
               </div>
             </div>
 
-            <div className="space-y-3 font-mono text-[11px] mt-4">
+            <div className="space-y-3 font-mono text-xs mt-4">
               <div className="bg-gray-50 rounded-xl p-3 border border-gray-150 relative">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-indigo-600 font-bold">A. 创建班级 (class.create)</span>
@@ -90,12 +90,12 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                     onClick={() =>
                       handleCopy('guide_cmd_class', '{\n  "name": "高三一班",\n  "description": "物理实验班"\n}')
                     }
-                    className="text-[10px] text-indigo-600 hover:underline hover:text-indigo-800 font-sans"
+                    className="text-xs text-indigo-600 hover:underline hover:text-indigo-800 font-sans"
                   >
                     {copiedId === 'guide_cmd_class' ? '已复制' : '复制参数'}
                   </button>
                 </div>
-                <pre className="text-[10px] text-gray-500 overflow-x-auto whitespace-pre-wrap leading-relaxed">
+                <pre className="text-xs text-gray-500 overflow-x-auto whitespace-pre-wrap leading-relaxed">
                   {`{
   "name": "高三一班",
   "description": "2026届物理实验班"
@@ -113,12 +113,12 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                         '{\n  "name": "李华",\n  "email": "lihua@openlearn.org",\n  "password": "mypassword123"\n}',
                       )
                     }
-                    className="text-[10px] text-indigo-600 hover:underline hover:text-indigo-800 font-sans"
+                    className="text-xs text-indigo-600 hover:underline hover:text-indigo-800 font-sans"
                   >
                     {copiedId === 'guide_cmd_student' ? '已复制' : '复制参数'}
                   </button>
                 </div>
-                <pre className="text-[10px] text-gray-500 overflow-x-auto whitespace-pre-wrap leading-relaxed">
+                <pre className="text-xs text-gray-500 overflow-x-auto whitespace-pre-wrap leading-relaxed">
                   {`{
   "name": "李华",
   "email": "lihua@openlearn.org",
@@ -137,12 +137,12 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                         '{\n  "studentId": "student-uuid-xxxx",\n  "lockedLessonId": "lesson-uuid-yyyy"\n}',
                       )
                     }
-                    className="text-[10px] text-indigo-600 hover:underline hover:text-indigo-800 font-sans"
+                    className="text-xs text-indigo-600 hover:underline hover:text-indigo-800 font-sans"
                   >
                     {copiedId === 'guide_cmd_lock' ? '已复制' : '复制参数'}
                   </button>
                 </div>
-                <pre className="text-[10px] text-gray-500 overflow-x-auto whitespace-pre-wrap leading-relaxed">
+                <pre className="text-xs text-gray-500 overflow-x-auto whitespace-pre-wrap leading-relaxed">
                   {`{
   "studentId": "student-uuid-xxxx",
   "lockedLessonId": "lesson-uuid-yyyy"
@@ -161,7 +161,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                 </div>
                 <div>
                   <h4 className="text-sm text-gray-900">2. 课程编辑与时间轴推进</h4>
-                  <p className="text-[11px] text-gray-400 font-normal mt-0.5">Structure Markdown & Timeline Sync</p>
+                  <p className="text-xs text-gray-400 font-normal mt-0.5">Structure Markdown & Timeline Sync</p>
                 </div>
               </div>
 
@@ -171,7 +171,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                   工具编排课件，或选择数学、计算机科学、文学、物理、历史、艺术模板一键填充结构化实验教案。
                 </p>
 
-                <div className="p-3 bg-gray-50 rounded-xl border border-gray-150 space-y-1 text-[11px] font-sans">
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-150 space-y-1 text-xs font-sans">
                   <span className="font-bold text-gray-800 block">📝 大纲解析与进度切片规则：</span>
                   <p className="text-gray-500">
                     系统内核采用递归的 AST 语法分析器，提取文档中的一级标题 (
@@ -182,7 +182,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                   </p>
                 </div>
 
-                <div className="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-2 text-[11px] text-emerald-800">
+                <div className="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-2 text-xs text-emerald-800">
                   <span className="font-bold flex items-center gap-1">
                     <Sparkles size={12} /> 时间轴实时推进机制 (Sync Protocol)：
                   </span>
@@ -210,7 +210,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
               </div>
             </div>
 
-            <div className="p-3 bg-gray-50 rounded-xl border border-gray-150 text-[10px] text-gray-500 leading-relaxed">
+            <div className="p-3 bg-gray-50 rounded-xl border border-gray-150 text-xs text-gray-500 leading-relaxed">
               💡 <span className="font-semibold text-gray-700">常规课表与临时调整：</span>
               如果需要将某一天的课程临时调换为星期几的常规安排（如将下周一临时指定为星期五课表），可在"课表看板"或使用{' '}
               <code className="bg-gray-100 font-mono text-rose-600 px-1 rounded">schedule.update_date_mapping</code>{' '}
@@ -227,7 +227,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                 </div>
                 <div>
                   <h4 className="text-sm text-gray-900">3. 互动协作白板深度原理</h4>
-                  <p className="text-[11px] text-gray-400 font-normal mt-0.5">
+                  <p className="text-xs text-gray-400 font-normal mt-0.5">
                     Whiteboard Drawing API & State Serialization
                   </p>
                 </div>
@@ -237,11 +237,11 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                 的矢量节点模型，实时在 SQLite 数据库中持久化并在前端的 Canvas/SVG 容器中完成合并渲染。
               </p>
 
-              <div className="p-3 bg-gray-50 rounded-xl border border-gray-150 text-[10.5px] font-mono text-gray-500 space-y-1 mt-3">
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-150 text-xs font-mono text-gray-500 space-y-1 mt-3">
                 <span className="font-bold text-gray-700 block font-sans">
                   💾 矢量节点序列化数据示例 (SQLite Schema):
                 </span>
-                <pre className="text-[9.5px] overflow-x-auto whitespace-pre-wrap">
+                <pre className="text-xs overflow-x-auto whitespace-pre-wrap">
                   {`{
   "id": "elt-90928a",
   "type": "rect",
@@ -250,7 +250,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                 </pre>
               </div>
 
-              <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-100 text-[11px] text-amber-900 space-y-2 mt-3">
+              <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-100 text-xs text-amber-900 space-y-2 mt-3">
                 <span className="font-bold block">💡 互动绘制指令说明 (whiteboard.draw):</span>
                 <p className="text-gray-600 leading-relaxed">
                   除了在画板上使用画笔绘图外，插件生态亦可通过向总线派发{' '}
@@ -272,12 +272,12 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                       '{\n  "lessonId": "lesson-101",\n  "type": "mindmap",\n  "data": "{\\"title\\":\\"光电效应\\",\\"branches\\":[\\"赫兹发现\\",\\"爱因斯坦解释\\"]}"\n}',
                     )
                   }
-                  className="text-[10px] text-amber-700 hover:underline font-sans font-bold"
+                  className="text-xs text-amber-700 hover:underline font-sans font-bold"
                 >
                   {copiedId === 'guide_cmd_draw_map' ? '已复制' : '复制 Payload'}
                 </button>
               </div>
-              <pre className="font-mono text-[9px] text-amber-900/70 overflow-x-auto">
+              <pre className="font-mono text-xs text-amber-900/70 overflow-x-auto">
                 {`{
   "lessonId": "lesson-101",
   "type": "mindmap",
@@ -296,7 +296,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                 </div>
                 <div>
                   <h4 className="text-sm text-gray-900">4. 现场教学与课堂控制流程</h4>
-                  <p className="text-[11px] text-gray-400 font-normal mt-0.5">Live Classroom Lifecycle & WS Protocol</p>
+                  <p className="text-xs text-gray-400 font-normal mt-0.5">Live Classroom Lifecycle & WS Protocol</p>
                 </div>
               </div>
               <p className="text-xs text-gray-600 leading-relaxed mt-3">
@@ -311,7 +311,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                   </div>
                   <div>
                     <span className="font-semibold text-gray-800">课堂通道初始化 (WebSocket Connect)</span>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
+                    <p className="text-xs text-gray-500 mt-0.5">
                       点击"开始上课"后，服务器将为该班级开辟独立的 Room
                       广播室。所有在该行政班级内的学生设备自动建立双向心跳长连接。
                     </p>
@@ -324,7 +324,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                   </div>
                   <div>
                     <span className="font-semibold text-gray-800">全屏课件与屏幕强控 (Class Lock)</span>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
+                    <p className="text-xs text-gray-500 mt-0.5">
                       教师启动教学视图后，系统会广播 `class_lock`
                       事件。学生终端界面被迫最小化非教学区，全屏强制渲染指定的课时 Markdown
                       文档，拦截一切其他的键盘路由跳转。
@@ -338,7 +338,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                   </div>
                   <div>
                     <span className="font-semibold text-gray-800">出勤签到统计 (Roll Call & Attendance)</span>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
+                    <p className="text-xs text-gray-500 mt-0.5">
                       教师一键下发签到令牌，学生端界面滑出覆盖式的签到组件。系统利用 WebSocket
                       增量计数，在教师端看板的考勤环形图中实时计算到课率、迟到率以及旷课名单。
                     </p>
@@ -351,7 +351,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                   </div>
                   <div>
                     <span className="font-semibold text-gray-800">交互过程感知与动态审计 (Activity Auditing)</span>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
+                    <p className="text-xs text-gray-500 mt-0.5">
                       学生每一次提交的实验数据、成绩变动、签到时刻等操作，均以结构化日志格式推送并在教师端的动态操作审计终端上显示。
                     </p>
                   </div>
@@ -359,11 +359,11 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
               </div>
             </div>
 
-            <div className="p-3 bg-sky-50/50 rounded-xl border border-sky-100 text-[10.5px] text-sky-850 flex items-center gap-2 mt-4">
+            <div className="p-3 bg-sky-50/50 rounded-xl border border-sky-100 text-xs text-sky-850 flex items-center gap-2 mt-4">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
               <span>
                 <strong>考勤数据存根：</strong>签到动作一经产生，将自动持久化至底层的{' '}
-                <code className="font-mono text-[10px] bg-white px-1 border border-sky-200 rounded">attendance</code>{' '}
+                <code className="font-mono text-xs bg-white px-1 border border-sky-200 rounded">attendance</code>{' '}
                 表中，随时供导出 PDF 或生成学期报告。
               </span>
             </div>
@@ -378,7 +378,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
             </div>
             <div>
               <h4 className="text-base text-white">5. HTML Applet 的打包、分发与 AI 成绩监听注入机制</h4>
-              <p className="text-[11px] text-slate-400 font-normal mt-0.5">
+              <p className="text-xs text-slate-400 font-normal mt-0.5">
                 HTML Applet Architecture & parent.postMessage Interface Spec
               </p>
             </div>

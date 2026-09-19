@@ -157,7 +157,7 @@ export function LessonEditorView({
           <div className="bg-slate-200/80 p-0.5 rounded-lg flex items-center gap-0.5 border border-slate-300/60 shadow-3xs">
             <button
               onClick={() => setActiveRole('teacher')}
-              className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer ${
+              className={`px-2.5 py-1 text-xs font-bold rounded transition-all cursor-pointer ${
                 activeRole === 'teacher'
                   ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -167,7 +167,7 @@ export function LessonEditorView({
             </button>
             <button
               onClick={() => setActiveRole('student')}
-              className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all cursor-pointer ${
+              className={`px-2.5 py-1 text-xs font-bold rounded transition-all cursor-pointer ${
                 activeRole === 'student'
                   ? 'bg-pink-600 text-white shadow-2xs font-extrabold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -179,17 +179,17 @@ export function LessonEditorView({
           {selectedLesson && (
             <div className="hidden sm:flex items-center gap-1.5 shrink-0 ml-1">
               {editorSaveStatus === 'saving' && (
-                <div className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full animate-pulse">
+                <div className="flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full animate-pulse">
                   <Loader2 size={10} className="animate-spin text-amber-600" />
                   <span>{lang === 'zh' ? '同步 SQLite...' : 'Saving...'}</span>
                 </div>
               )}
               {editorSaveStatus === 'saved' && (
-                <div className="flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-250 px-2 py-0.5 rounded-full">
+                <div className="flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-250 px-2 py-0.5 rounded-full">
                   <CheckCircle2 size={10} className="text-emerald-600" />
                   <span>{lang === 'zh' ? '已同步 SQLite' : 'Saved to SQLite'}</span>
                   {editorLastSavedTime && (
-                    <span className="text-emerald-600/70 text-[9px] font-mono">
+                    <span className="text-emerald-600/70 text-xs font-mono">
                       {editorLastSavedTime.toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
@@ -200,13 +200,13 @@ export function LessonEditorView({
                 </div>
               )}
               {editorSaveStatus === 'error' && (
-                <div className="flex items-center gap-1 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-250 px-2 py-0.5 rounded-full">
+                <div className="flex items-center gap-1 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-250 px-2 py-0.5 rounded-full">
                   <X size={10} className="text-rose-600" />
                   <span>{lang === 'zh' ? '写入失败' : 'Failed to save'}</span>
                 </div>
               )}
               {editorSaveStatus === 'none' && (
-                <div className="flex items-center gap-1 text-[10px] font-semibold text-muted bg-surface-secondary border border-theme px-2 py-0.5 rounded-full">
+                <div className="flex items-center gap-1 text-xs font-semibold text-muted bg-surface-secondary border border-theme px-2 py-0.5 rounded-full">
                   <Database size={10} className="text-muted" />
                   <span>{lang === 'zh' ? 'SQLite 就绪' : 'SQLite Ready'}</span>
                 </div>

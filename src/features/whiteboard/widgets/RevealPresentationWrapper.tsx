@@ -353,7 +353,7 @@ export function RevealPresentationWrapper({
                     {fileType === 'md' && (
                       <button
                         onClick={() => setAutoplay((p) => !p)}
-                        className={`px-2.5 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider transition-colors border cursor-pointer ${autoplay ? 'bg-emerald-50 border-emerald-400 text-white animate-pulse' : 'bg-transparent border-neutral-700 text-neutral-400 hover:bg-neutral-850'}`}
+                        className={`px-2.5 py-1 rounded-md text-xs uppercase font-bold tracking-wider transition-colors border cursor-pointer ${autoplay ? 'bg-emerald-50 border-emerald-400 text-white animate-pulse' : 'bg-transparent border-neutral-700 text-neutral-400 hover:bg-neutral-850'}`}
                       >
                         {autoplay ? 'Autoplay Live' : 'Autoplay'}
                       </button>
@@ -405,7 +405,7 @@ export function RevealPresentationWrapper({
                 // Markdown mode
                 <div className="flex-1 w-full flex items-center justify-center max-w-[90vw] min-h-0">
                   <div className="w-full bg-white rounded-xl shadow-md border border-slate-100 flex flex-col overflow-y-auto p-6 md:p-8 aspect-video relative transition-all duration-300 hover:shadow-lg max-h-[82vh] max-w-none p-12 md:p-16 border-neutral-850 rounded-3xl shadow-2xl">
-                    <div className="flex justify-between items-center text-[10px] font-semibold text-slate-400 border-b border-slate-100 pb-2 mb-4 shrink-0">
+                    <div className="flex justify-between items-center text-xs font-semibold text-slate-400 border-b border-slate-100 pb-2 mb-4 shrink-0">
                       <span className="tracking-wide uppercase text-indigo-650">SMART CLASS SLIDE DECK</span>
                       <span className="font-mono">
                         SLIDE {slideIndex + 1} / {totalSlides}
@@ -424,7 +424,7 @@ export function RevealPresentationWrapper({
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-2 border-t border-slate-50 flex items-center justify-between text-[10px] text-slate-400 shrink-0 font-sans">
+                    <div className="mt-4 pt-2 border-t border-slate-50 flex items-center justify-between text-xs text-slate-400 shrink-0 font-sans">
                       <span>智慧互动教室白板演示系统</span>
                       <span>Page {slideIndex + 1}</span>
                     </div>
@@ -518,7 +518,7 @@ export function RevealPresentationWrapper({
                 </button>
               </>
             ) : (
-              <div className="flex items-center gap-1 bg-indigo-50 border border-indigo-200/50 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-semibold">
+              <div className="flex items-center gap-1 bg-indigo-50 border border-indigo-200/50 text-indigo-700 px-2 py-0.5 rounded text-xs font-semibold">
                 <Presentation size={10} />
                 <span>{fileType.toUpperCase()} 课件演示中</span>
               </div>
@@ -531,14 +531,14 @@ export function RevealPresentationWrapper({
             {isTeacher && (
               <div className="flex items-center gap-1.5 border-r border-slate-200 pr-3">
                 {uploading ? (
-                  <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
+                  <div className="flex items-center gap-1 text-xs text-slate-500 font-medium">
                     <Loader2 size={10} className="animate-spin" />
                     <span>上传解析中...</span>
                   </div>
                 ) : isFileLoaded ? (
                   <div className="flex items-center gap-1.5 bg-slate-200/50 pl-2 pr-1.5 py-0.5 rounded border border-slate-300/30">
                     <span
-                      className="text-[10px] font-medium text-slate-600 max-w-[120px] truncate font-mono"
+                      className="text-xs font-medium text-slate-600 max-w-[120px] truncate font-mono"
                       title={fileName}
                     >
                       {fileName}
@@ -555,7 +555,7 @@ export function RevealPresentationWrapper({
                   <div>
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1 font-semibold text-[10px] cursor-pointer"
+                      className="px-2 py-1 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1 font-semibold text-xs cursor-pointer"
                       title="上传 PPTX 或 PDF 课件"
                     >
                       <Upload size={10} />
@@ -578,7 +578,7 @@ export function RevealPresentationWrapper({
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setAutoplay((p) => !p)}
-                  className={`p-1 rounded flex items-center gap-1 font-semibold text-[10px] transition-colors border cursor-pointer ${autoplay ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                  className={`p-1 rounded flex items-center gap-1 font-semibold text-xs transition-colors border cursor-pointer ${autoplay ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
                   title="开启/关闭幻灯片自动播放"
                 >
                   {autoplay ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" /> : null}
@@ -589,7 +589,7 @@ export function RevealPresentationWrapper({
                   <select
                     value={autoplayInterval}
                     onChange={(e) => setAutoplayInterval(Number(e.target.value))}
-                    className="bg-white border border-slate-200 rounded px-1 text-[10px] py-0.5 text-slate-700 font-medium"
+                    className="bg-white border border-slate-200 rounded px-1 text-xs py-0.5 text-slate-700 font-medium"
                   >
                     <option value={2}>2秒</option>
                     <option value={4}>4秒</option>
@@ -602,7 +602,7 @@ export function RevealPresentationWrapper({
 
             {/* Sync Fullscreen settings for Teacher */}
             {isTeacher && mode === 'ppt' && (
-              <label className="flex items-center gap-1 text-[10px] text-slate-500 font-medium cursor-pointer">
+              <label className="flex items-center gap-1 text-xs text-slate-500 font-medium cursor-pointer">
                 <input
                   type="checkbox"
                   checked={isFullscreenSynced}
@@ -653,7 +653,7 @@ export function RevealPresentationWrapper({
                       {fileType === 'md' && (
                         <button
                           onClick={() => setAutoplay((p) => !p)}
-                          className={`px-2.5 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider transition-colors border cursor-pointer ${autoplay ? 'bg-emerald-50 border-emerald-400 text-white animate-pulse' : 'bg-transparent border-neutral-700 text-neutral-400 hover:bg-neutral-850'}`}
+                          className={`px-2.5 py-1 rounded-md text-xs uppercase font-bold tracking-wider transition-colors border cursor-pointer ${autoplay ? 'bg-emerald-50 border-emerald-400 text-white animate-pulse' : 'bg-transparent border-neutral-700 text-neutral-400 hover:bg-neutral-850'}`}
                         >
                           {autoplay ? 'Autoplay Live' : 'Autoplay'}
                         </button>
@@ -709,7 +709,7 @@ export function RevealPresentationWrapper({
                   <div
                     className={`w-full bg-white rounded-xl shadow-md border border-slate-100 flex flex-col overflow-y-auto p-6 md:p-8 aspect-video relative transition-all duration-300 hover:shadow-lg max-h-full ${isContainerFullscreen ? 'max-w-4xl p-12 md:p-16 border-neutral-850 rounded-3xl shadow-2xl' : ''}`}
                   >
-                    <div className="flex justify-between items-center text-[10px] font-semibold text-slate-400 border-b border-slate-100 pb-2 mb-4 shrink-0">
+                    <div className="flex justify-between items-center text-xs font-semibold text-slate-400 border-b border-slate-100 pb-2 mb-4 shrink-0">
                       <span className="tracking-wide uppercase text-indigo-650">SMART CLASS SLIDE DECK</span>
                       <span className="font-mono">
                         SLIDE {slideIndex + 1} / {totalSlides}
@@ -728,7 +728,7 @@ export function RevealPresentationWrapper({
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-2 border-t border-slate-50 flex items-center justify-between text-[10px] text-slate-400 shrink-0 font-sans">
+                    <div className="mt-4 pt-2 border-t border-slate-50 flex items-center justify-between text-xs text-slate-400 shrink-0 font-sans">
                       <span>智慧互动教室白板演示系统</span>
                       <span>Page {slideIndex + 1}</span>
                     </div>
@@ -800,7 +800,7 @@ export function RevealPresentationWrapper({
             {/* Outline Sidebar Navigator */}
             {outline.length > 0 && (
               <div className="w-1/4 min-w-[120px] max-w-[200px] border-r border-slate-200 bg-slate-50/50 flex flex-col py-3 px-2 overflow-y-auto shrink-0 select-none">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 mb-2 flex items-center gap-1">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest px-2 mb-2 flex items-center gap-1">
                   <FileText size={10} />
                   文档大纲
                 </span>
@@ -816,7 +816,7 @@ export function RevealPresentationWrapper({
                           targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
                       }}
-                      className="text-left text-[11px] py-1 px-2 rounded hover:bg-slate-100 text-slate-600 hover:text-slate-900 truncate cursor-pointer font-medium whitespace-nowrap border-0 bg-transparent"
+                      className="text-left text-xs py-1 px-2 rounded hover:bg-slate-100 text-slate-600 hover:text-slate-900 truncate cursor-pointer font-medium whitespace-nowrap border-0 bg-transparent"
                       style={{ paddingLeft: `${Math.max(8, o.level * 6)}px` }}
                       title={o.text}
                     >
@@ -868,7 +868,7 @@ export function RevealPresentationWrapper({
           <div className="flex-1 flex flex-col md:flex-row min-h-0 bg-white">
             {/* Preset template selector panel (Left side) */}
             <div className="w-full md:w-1/3 border-b md:border-b-0 md:border-r border-slate-100 bg-slate-50/40 p-3 flex flex-col overflow-y-auto shrink-0 select-none">
-              <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-2 flex items-center gap-1">
+              <span className="text-xs font-bold text-slate-400 tracking-wider uppercase mb-2 flex items-center gap-1">
                 <Wand2 size={10} className="text-indigo-650" />
                 推荐课件及文档模板
               </span>
@@ -887,15 +887,15 @@ export function RevealPresentationWrapper({
                     }}
                     className="w-full text-left p-2.5 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm transition-all focus:outline-none cursor-pointer group"
                   >
-                    <div className="font-bold text-[11px] text-slate-800 group-hover:text-indigo-700 whitespace-nowrap overflow-hidden text-ellipsis">
+                    <div className="font-bold text-xs text-slate-800 group-hover:text-indigo-700 whitespace-nowrap overflow-hidden text-ellipsis">
                       {preset.name}
                     </div>
-                    <div className="text-[9px] text-slate-400 mt-0.5">{preset.desc}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">{preset.desc}</div>
                   </button>
                 ))}
               </div>
 
-              <div className="mt-4 p-2 bg-amber-50 rounded border border-amber-100 text-[10px] text-amber-700 font-sans leading-relaxed">
+              <div className="mt-4 p-2 bg-amber-50 rounded border border-amber-100 text-xs text-amber-700 font-sans leading-relaxed">
                 <strong>💡 使用提示</strong>
                 <br />
                 在任意位置插入一行 <code>---</code> 即可分割出一个新的幻灯片（PPT）页面。
@@ -905,8 +905,8 @@ export function RevealPresentationWrapper({
             {/* Simple, real-time sync textarea editor */}
             <div className="flex-1 flex flex-col p-3 min-h-[200px]">
               <div className="flex items-center justify-between mb-1.5 px-1">
-                <span className="font-bold text-slate-500 text-[10px] uppercase">Markdown Source Code</span>
-                <span className="text-[9px] text-slate-400">实时自动同步到所有协同终端</span>
+                <span className="font-bold text-slate-500 text-xs uppercase">Markdown Source Code</span>
+                <span className="text-xs text-slate-400">实时自动同步到所有协同终端</span>
               </div>
               <textarea
                 value={markdown}

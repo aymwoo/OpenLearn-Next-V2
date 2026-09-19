@@ -127,13 +127,13 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
         className={`p-2.5 rounded-xl border border-slate-150 border-l-4 ${statusColorClass} transition-all hover:shadow-xs relative group flex flex-col justify-between min-h-[85px]`}
       >
         <div>
-          <div className="text-[9px] font-mono text-slate-500 mb-1 font-bold flex justify-between items-center">
+          <div className="text-xs font-mono text-slate-500 mb-1 font-bold flex justify-between items-center">
             <span className="flex items-center gap-1">
               <Clock size={11} className="text-slate-400" />
               {sch.time_slot || (lang === 'zh' ? '全天' : 'All-day')}
             </span>
             {viewMode === 'cycle' && (
-              <span className="text-[8px] text-slate-400 font-sans font-normal bg-slate-100 px-1 py-0.5 rounded-sm">
+              <span className="text-xs text-slate-400 font-sans font-normal bg-slate-100 px-1 py-0.5 rounded-sm">
                 {sch.scheduled_date}
               </span>
             )}
@@ -145,7 +145,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
             {sch.class_name}
           </div>
           {sch.notes && (
-            <div className="text-[9px] text-amber-600 font-medium mt-1 truncate" title={sch.notes}>
+            <div className="text-xs text-amber-600 font-medium mt-1 truncate" title={sch.notes}>
               📌 {sch.notes}
             </div>
           )}
@@ -153,7 +153,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
 
         <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100/50">
           <span
-            className={`inline-block text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
+            className={`inline-block text-xs px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
               sch.status === 'cancelled'
                 ? 'bg-red-50 border-red-100 text-red-600'
                 : sch.status === 'holiday'
@@ -345,21 +345,21 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
           <div className="flex bg-slate-200/70 p-0.5 rounded-lg border border-slate-300/30 shadow-xs mr-2 shrink-0">
             <button
               onClick={() => setViewMode('week')}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${viewMode === 'week' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${viewMode === 'week' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
             >
               <Grid size={11} />
               {lang === 'zh' ? '周课表' : 'Week View'}
             </button>
             <button
               onClick={() => setViewMode('cycle')}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${viewMode === 'cycle' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${viewMode === 'cycle' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
             >
               <RotateCcw size={11} />
               {lang === 'zh' ? '星期总览' : 'Cycle View'}
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${viewMode === 'list' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${viewMode === 'list' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'}`}
             >
               <List size={11} />
               {lang === 'zh' ? '列表' : 'List View'}
@@ -482,7 +482,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                     </td>
                     <td className="p-3 font-mono text-xs text-indigo-750">
                       {sch.time_slot || (
-                        <span className="text-[10px] text-gray-300 italic">{lang === 'zh' ? '全天' : 'All-day'}</span>
+                        <span className="text-xs text-gray-300 italic">{lang === 'zh' ? '全天' : 'All-day'}</span>
                       )}
                     </td>
                     <td className="p-3 text-xs">
@@ -497,7 +497,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                         </span>
                         {sch.notes && (
                           <span
-                            className={`text-[10px] italic mt-0.5 ${sch.status === 'holiday' ? 'text-amber-600 font-medium' : sch.status === 'cancelled' ? 'text-red-500 font-medium' : 'text-slate-400'}`}
+                            className={`text-xs italic mt-0.5 ${sch.status === 'holiday' ? 'text-amber-600 font-medium' : sch.status === 'cancelled' ? 'text-red-500 font-medium' : 'text-slate-400'}`}
                           >
                             📌 {sch.notes}
                           </span>
@@ -506,7 +506,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                     </td>
                     <td className="p-3 text-center">
                       <span
-                        className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
+                        className={`inline-block text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
                           sch.status === 'cancelled'
                             ? 'bg-red-100 border-red-200 text-red-700'
                             : sch.status === 'holiday'
@@ -680,7 +680,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                           label = val.substring(5);
                         }
                         return (
-                          <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 text-[9px] px-1.5 py-0.5 rounded-md font-semibold select-none shadow-3xs animate-fade-in">
+                          <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 text-xs px-1.5 py-0.5 rounded-md font-semibold select-none shadow-3xs animate-fade-in">
                             <span>🔄 {label}</span>
                             <button
                               onClick={() => {
@@ -702,7 +702,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
 
               {/* 2. Morning Row Grid */}
               <div className="bg-slate-50/30 border border-slate-200/50 rounded-2xl p-3 flex flex-col gap-2.5">
-                <div className="flex items-center gap-1.5 text-[9px] font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-lg w-fit select-none border border-sky-100/60 shadow-3xs">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-lg w-fit select-none border border-sky-100/60 shadow-3xs">
                   <Sparkles size={10} className="animate-pulse" />
                   {lang === 'zh' ? '上午课程 (AM)' : 'Morning (AM)'}
                 </div>
@@ -716,7 +716,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                         className="flex flex-col gap-2 bg-white/40 p-2.5 rounded-xl border border-dashed border-slate-200/60 min-h-[160px] justify-start"
                       >
                         {morningSchedules.length === 0 ? (
-                          <div className="flex-1 flex items-center justify-center text-[10px] text-slate-350 italic text-center p-3 border border-dashed border-slate-150 rounded-xl bg-white/30 select-none">
+                          <div className="flex-1 flex items-center justify-center text-xs text-slate-350 italic text-center p-3 border border-dashed border-slate-150 rounded-xl bg-white/30 select-none">
                             {lang === 'zh' ? '无课' : 'Free'}
                           </div>
                         ) : (
@@ -733,14 +733,14 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                 <div className="absolute inset-0 flex items-center" aria-hidden="true">
                   <div className="w-full border-t-2 border-dashed border-slate-200/80"></div>
                 </div>
-                <div className="relative flex justify-center text-[9px] font-extrabold uppercase tracking-wider text-slate-400 bg-white px-4 py-1.5 rounded-full border border-slate-200/60 shadow-3xs">
+                <div className="relative flex justify-center text-xs font-extrabold uppercase tracking-wider text-slate-400 bg-white px-4 py-1.5 rounded-full border border-slate-200/60 shadow-3xs">
                   ☕ {lang === 'zh' ? '午休时间 / Midday Break' : 'Lunch Break'}
                 </div>
               </div>
 
               {/* 4. Afternoon Row Grid */}
               <div className="bg-slate-50/30 border border-slate-200/50 rounded-2xl p-3 flex flex-col gap-2.5">
-                <div className="flex items-center gap-1.5 text-[9px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-lg w-fit select-none border border-amber-100/60 shadow-3xs">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-lg w-fit select-none border border-amber-100/60 shadow-3xs">
                   <Clock size={10} />
                   {lang === 'zh' ? '下午课程 (PM)' : 'Afternoon (PM)'}
                 </div>
@@ -754,7 +754,7 @@ export const TimetableCalendarView: React.FC<TimetableCalendarViewProps> = ({
                         className="flex flex-col gap-2 bg-white/40 p-2.5 rounded-xl border border-dashed border-slate-200/60 min-h-[160px] justify-start"
                       >
                         {afternoonSchedules.length === 0 ? (
-                          <div className="flex-1 flex items-center justify-center text-[10px] text-slate-350 italic text-center p-3 border border-dashed border-slate-150 rounded-xl bg-white/30 select-none">
+                          <div className="flex-1 flex items-center justify-center text-xs text-slate-350 italic text-center p-3 border border-dashed border-slate-150 rounded-xl bg-white/30 select-none">
                             {lang === 'zh' ? '无课' : 'Free'}
                           </div>
                         ) : (

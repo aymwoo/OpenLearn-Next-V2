@@ -60,25 +60,25 @@ export function SystemErrorCenterModal() {
     switch (type) {
       case 'react':
         return (
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
+          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
             React
           </span>
         );
       case 'api':
         return (
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-400 border border-purple-200 dark:border-purple-800">
+          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-400 border border-purple-200 dark:border-purple-800">
             API 5xx
           </span>
         );
       case 'promise':
         return (
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
             Promise
           </span>
         );
       default:
         return (
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
             Runtime
           </span>
         );
@@ -104,14 +104,14 @@ export function SystemErrorCenterModal() {
           <AlertTriangle size={15} className="text-rose-400 group-hover:scale-110 transition-transform" />
           <div className="text-xs font-semibold flex items-center gap-1.5">
             <span>捕获到</span>
-            <span className="bg-rose-500/80 text-white font-mono px-1.5 py-0.2 rounded-md text-[11px] font-bold">
+            <span className="bg-rose-500/80 text-white font-mono px-1.5 py-0.2 rounded-md text-xs font-bold">
               {errors.length}
             </span>
             <span>处系统异常</span>
           </div>
           <button
             type="button"
-            className="text-[11px] font-bold text-rose-300 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-lg transition-colors ml-1"
+            className="text-xs font-bold text-rose-300 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-lg transition-colors ml-1"
           >
             查看与复制
           </button>
@@ -227,7 +227,7 @@ export function SystemErrorCenterModal() {
                                 <span className="font-bold text-xs text-gray-900 dark:text-gray-100 truncate">
                                   #{errors.length - index} {item.title}
                                 </span>
-                                <span className="text-[11px] text-gray-400 font-mono">
+                                <span className="text-xs text-gray-400 font-mono">
                                   {new Date(item.timestamp).toLocaleTimeString()}
                                 </span>
                               </div>
@@ -235,7 +235,7 @@ export function SystemErrorCenterModal() {
                                 {item.message}
                               </p>
                               {item.endpoint && (
-                                <p className="text-[11px] text-gray-500 font-mono truncate">接口: {item.endpoint}</p>
+                                <p className="text-xs text-gray-500 font-mono truncate">接口: {item.endpoint}</p>
                               )}
                             </div>
                           </div>
@@ -244,7 +244,7 @@ export function SystemErrorCenterModal() {
                             <button
                               type="button"
                               onClick={(e) => handleCopyItem(e, item)}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
                                 isCopied
                                   ? 'bg-emerald-600 text-white'
                                   : 'bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-gray-200'
@@ -272,7 +272,7 @@ export function SystemErrorCenterModal() {
                         {/* Expandable Stack Trace & Environment Details */}
                         {isExpanded && (
                           <div className="px-4 py-3 bg-slate-900 text-slate-200 border-t border-gray-100 dark:border-gray-800 text-xs font-mono space-y-2.5">
-                            <div className="flex items-center justify-between text-[11px] text-slate-400 border-b border-slate-800 pb-1.5">
+                            <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-1.5">
                               <span>页面地址: {item.url || '未知'}</span>
                               <span>时间: {new Date(item.timestamp).toLocaleString()}</span>
                             </div>
@@ -280,7 +280,7 @@ export function SystemErrorCenterModal() {
                             {item.stack && (
                               <div>
                                 <span className="text-rose-400 font-bold block mb-1">Stack Trace:</span>
-                                <pre className="whitespace-pre-wrap text-[11px] leading-relaxed max-h-48 overflow-y-auto opacity-90">
+                                <pre className="whitespace-pre-wrap text-xs leading-relaxed max-h-48 overflow-y-auto opacity-90">
                                   {item.stack}
                                 </pre>
                               </div>
@@ -289,7 +289,7 @@ export function SystemErrorCenterModal() {
                             {item.componentStack && (
                               <div className="pt-2 border-t border-slate-800">
                                 <span className="text-amber-400 font-bold block mb-1">Component Stack:</span>
-                                <pre className="whitespace-pre-wrap text-[11px] leading-relaxed max-h-36 overflow-y-auto opacity-80">
+                                <pre className="whitespace-pre-wrap text-xs leading-relaxed max-h-36 overflow-y-auto opacity-80">
                                   {item.componentStack}
                                 </pre>
                               </div>

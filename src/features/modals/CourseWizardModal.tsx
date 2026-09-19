@@ -116,7 +116,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                       }`}
                     >
                       <div
-                        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] border ${
+                        className={`w-5 h-5 rounded-full flex items-center justify-center text-xs border ${
                           isActive
                             ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs font-bold'
                             : isCompleted
@@ -230,7 +230,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                       </div>
 
                       <div className="bg-slate-50 p-4 rounded-xl border border-gray-100 space-y-2 select-none text-left">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">
                           {lang === 'zh' ? '科目时间轴专家建议' : 'SUBJECT HEURISTICS'}
                         </span>
                         <div className="text-xs text-gray-600 leading-relaxed font-sans mt-1">
@@ -436,7 +436,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                           className="bg-white border rounded-xl p-3 text-left transition-all hover:bg-indigo-50/20 hover:border-indigo-400 cursor-pointer active:scale-98"
                         >
                           <div className="font-bold text-gray-800 text-xs sm:text-sm">{preset.title}</div>
-                          <div className="text-[10px] text-gray-400 mt-1.5 leading-relaxed">{preset.desc}</div>
+                          <div className="text-xs text-gray-400 mt-1.5 leading-relaxed">{preset.desc}</div>
                         </button>
                       ))}
                     </div>
@@ -466,7 +466,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                           };
                           setWizardCourseTimeline([...wizardCourseTimeline, newSeg]);
                         }}
-                        className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                        className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
                       >
                         <Plus size={12} /> {lang === 'zh' ? '增设阶段' : 'Append Phase'}
                       </button>
@@ -479,7 +479,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                           className="flex flex-col sm:flex-row items-center gap-3 bg-white border border-gray-200 rounded-lg p-2.5 shadow-xs"
                         >
                           <div className="flex items-center gap-2 w-full sm:w-auto">
-                            <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-gray-500 font-bold shrink-0">
+                            <span className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-xs text-gray-500 font-bold shrink-0">
                               {idx + 1}
                             </span>
                             <input
@@ -497,7 +497,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
 
                           <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end sm:ml-auto">
                             <div className="flex items-center gap-1 bg-slate-50 border border-gray-200 rounded px-2 py-0.5 shrink-0">
-                              <span className="text-[10px] font-bold text-gray-400">时长:</span>
+                              <span className="text-xs font-bold text-gray-400">时长:</span>
                               <input
                                 type="text"
                                 value={seg.duration}
@@ -506,7 +506,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                                   updated[idx].duration = e.target.value;
                                   setWizardCourseTimeline(updated);
                                 }}
-                                className="w-8 text-[11px] text-gray-800 font-extrabold bg-transparent text-center focus:outline-none"
+                                className="w-8 text-xs text-gray-800 font-extrabold bg-transparent text-center focus:outline-none"
                               />
                             </div>
 
@@ -531,7 +531,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                                 }
                                 setWizardCourseTimeline(updated);
                               }}
-                              className="bg-slate-50 border border-gray-200 text-[10px] font-bold text-gray-600 rounded p-1 focus:outline-none cursor-pointer"
+                              className="bg-slate-50 border border-gray-200 text-xs font-bold text-gray-600 rounded p-1 focus:outline-none cursor-pointer"
                             >
                               <option value="intro">{lang === 'zh' ? '温习 / 导入' : 'Warm-up / Intro'}</option>
                               <option value="lecture">{lang === 'zh' ? '主体 / 精讲' : 'Core Lecture'}</option>
@@ -561,7 +561,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                       ))}
                     </div>
 
-                    <div className="mt-2 text-[10px] text-right text-gray-500 font-mono select-none">
+                    <div className="mt-2 text-xs text-right text-gray-500 font-mono select-none">
                       {lang === 'zh' ? '📈 环节累加公式：' : '📈 Dynamic aggregation formula: '}
                       <span className="text-gray-800 font-semibold">
                         {wizardCourseTimeline.map((s) => s.duration).join(' + ')}
@@ -658,14 +658,14 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                       <div className="font-bold text-indigo-950 text-base sm:text-lg truncate">
                         {wizardCourseTitle || (lang === 'zh' ? '未指定课程主题' : 'Blank Topic')}
                       </div>
-                      <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-50 text-indigo-800 uppercase tracking-wide border border-indigo-150 shrink-0">
+                      <span className="inline-flex px-2 py-0.5 rounded text-xs font-extrabold bg-indigo-50 text-indigo-800 uppercase tracking-wide border border-indigo-150 shrink-0">
                         {wizardCourseCategory}
                       </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 text-xs">
                       <div>
-                        <span className="text-gray-400 block tracking-wider text-[10px] font-bold">
+                        <span className="text-gray-400 block tracking-wider text-xs font-bold">
                           {lang === 'zh' ? '教研环节数' : 'TOTAL STEPS'}
                         </span>
                         <span className="text-gray-800 font-extrabold text-sm block mt-1">
@@ -673,7 +673,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                         </span>
                       </div>
                       <div>
-                        <span className="text-gray-400 block tracking-wider text-[10px] font-bold">
+                        <span className="text-gray-400 block tracking-wider text-xs font-bold">
                           {lang === 'zh' ? '发布载体引擎' : 'STORAGE MEDIUM'}
                         </span>
                         <div className="flex items-center gap-1 text-emerald-650 font-extrabold text-sm mt-1">
@@ -683,20 +683,20 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
                       </div>
                     </div>
 
-                    <div className="bg-slate-50 border border-gray-150 p-3 rounded-lg text-[11px] text-gray-600 line-clamp-2 italic leading-relaxed text-left">
+                    <div className="bg-slate-50 border border-gray-150 p-3 rounded-lg text-xs text-gray-600 line-clamp-2 italic leading-relaxed text-left">
                       {wizardCourseDescription || (lang === 'zh' ? '无科目描述内容' : 'No description written.')}
                     </div>
 
                     {/* Progress map view */}
                     <div className="space-y-1.5 select-none">
-                      <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider block">
+                      <span className="text-xs font-extrabold text-gray-400 uppercase tracking-wider block">
                         {lang === 'zh' ? '教学时间轴环流预览' : 'TIMELINE PROGRESS OVERVIEW'}
                       </span>
                       <div className="flex items-center gap-1 w-full overflow-x-auto py-1">
                         {wizardCourseTimeline.map((seg, idx) => (
                           <Fragment key={seg.id}>
                             <div
-                              className={`px-2 py-1 text-[10px] font-bold rounded border truncate max-w-[120px] ${seg.color.split(' ')[0]}`}
+                              className={`px-2 py-1 text-xs font-bold rounded border truncate max-w-[120px] ${seg.color.split(' ')[0]}`}
                             >
                               {seg.title.split(' / ')[0]} ({seg.duration})
                             </div>
@@ -714,7 +714,7 @@ export function CourseWizardModal(props: CourseWizardModalProps) {
 
             {/* Footer controls */}
             <div className="p-4 border-t border-gray-105 bg-slate-50 flex justify-between items-center shrink-0">
-              <span className="text-[11px] font-bold font-mono text-gray-400 uppercase select-none">
+              <span className="text-xs font-bold font-mono text-gray-400 uppercase select-none">
                 {lang === 'zh' ? '⚙️ SQLITE 写入预检通过' : '⚙️ SQLITE VERIFICATION SUCCESS'}
               </span>
               <div className="flex items-center gap-2">

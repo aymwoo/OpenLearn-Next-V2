@@ -210,12 +210,12 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                     {mySubmission.file_path.split('/').pop()}
                   </p>
                 </div>
-                <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-indigo-200">
+                <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full border border-indigo-200">
                   V{mySubmission.version}
                 </span>
               </div>
 
-              <div className="border-t border-slate-100 pt-2.5 flex justify-between items-center text-[10px] text-slate-400">
+              <div className="border-t border-slate-100 pt-2.5 flex justify-between items-center text-xs text-slate-400">
                 <span className="flex items-center gap-1">
                   <Clock size={11} />
                   {zh ? '更新时间:' : 'Updated At:'} {new Date(mySubmission.updated_at).toLocaleString()}
@@ -245,7 +245,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
           {/* Form to submit/overwrite */}
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
                 {zh ? '输入作品文件路径 / 虚拟路径' : 'Simulated File Path'}
               </label>
               <div className="flex gap-2">
@@ -282,7 +282,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
               <div className="space-y-4">
                 <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center justify-between shadow-3xs">
                   <div>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                    <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
                       {zh ? '学期对接总分' : 'Weighted Final Grade'}
                     </span>
                     <h2 className="text-3xl font-extrabold text-indigo-700 font-mono mt-1">
@@ -292,7 +292,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
 
                   <div className="text-right">
                     <span
-                      className={`inline-block px-2.5 py-1 text-[10px] font-bold rounded-lg border ${
+                      className={`inline-block px-2.5 py-1 text-xs font-bold rounded-lg border ${
                         myGrade.status === 'confirmed'
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                           : 'bg-amber-50 text-amber-700 border-amber-100'
@@ -300,12 +300,12 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                     >
                       {myGrade.status === 'confirmed' ? (zh ? '已确认同步' : 'Synced') : zh ? '教师评分草稿' : 'Draft'}
                     </span>
-                    <p className="text-[9px] text-slate-400 mt-1.5 font-medium">
+                    <p className="text-xs text-slate-400 mt-1.5 font-medium">
                       {zh
                         ? `教师分 ${myGrade.teacher_score} (占 ${(myGrade.teacher_weight * 100).toFixed(0)}%)`
                         : `Teacher ${myGrade.teacher_score} (${(myGrade.teacher_weight * 100).toFixed(0)}%)`}
                     </p>
-                    <p className="text-[9px] text-slate-400 mt-0.5 font-medium">
+                    <p className="text-xs text-slate-400 mt-0.5 font-medium">
                       {zh
                         ? `学生互评 (占 ${(myGrade.peer_weight * 100).toFixed(0)}%)`
                         : `Peer Review (${(myGrade.peer_weight * 100).toFixed(0)}%)`}
@@ -317,7 +317,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                   <div className="bg-slate-100/60 p-3 rounded-lg border border-slate-200 flex gap-2">
                     <MessageSquare size={14} className="text-slate-400 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-[10px] font-bold text-slate-500">{zh ? '教师寄语' : 'Teacher Comments'}</p>
+                      <p className="text-xs font-bold text-slate-500">{zh ? '教师寄语' : 'Teacher Comments'}</p>
                       <p className="text-xs text-slate-650 mt-0.5">{myGrade.teacher_comment}</p>
                     </div>
                   </div>
@@ -380,7 +380,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                           {peerSub.student_name || peerSub.student_id}
                         </h4>
                         <p
-                          className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5 truncate max-w-[200px]"
+                          className="text-xs text-slate-400 font-mono flex items-center gap-1 mt-0.5 truncate max-w-[200px]"
                           title={peerSub.file_path}
                         >
                           <FileText size={11} className="text-slate-350" />
@@ -393,7 +393,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                       href={peerSub.file_path}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[10px] font-bold text-indigo-650 hover:text-indigo-800 transition-colors border border-indigo-100 px-2 py-1 rounded bg-indigo-50/50 hover:bg-indigo-50"
+                      className="text-xs font-bold text-indigo-650 hover:text-indigo-800 transition-colors border border-indigo-100 px-2 py-1 rounded bg-indigo-50/50 hover:bg-indigo-50"
                     >
                       {zh ? '下载查阅' : 'Download File'}
                     </a>
@@ -408,7 +408,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                           {zh ? `我已评分：${existingReview.score} 分` : `My Score: ${existingReview.score} pts`}
                         </p>
                         {existingReview.comment && (
-                          <p className="text-[11px] text-emerald-700/80 mt-0.5 italic">"{existingReview.comment}"</p>
+                          <p className="text-xs text-emerald-700/80 mt-0.5 italic">"{existingReview.comment}"</p>
                         )}
                       </div>
                     </div>
@@ -417,7 +417,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                   {/* Rating form */}
                   <div className="bg-slate-50/60 border border-slate-100 rounded-lg p-3 space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                         {zh ? '滑动或输入互评分数' : 'Peer Rating'}
                       </span>
                       <div className="flex items-center gap-1.5">
@@ -432,7 +432,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                           }}
                           className="w-12 text-center text-xs font-bold font-mono border border-slate-200 rounded px-1 py-0.5 bg-white text-indigo-750"
                         />
-                        <span className="text-[10px] text-slate-400 font-bold">{zh ? '分' : 'pts'}</span>
+                        <span className="text-xs text-slate-400 font-bold">{zh ? '分' : 'pts'}</span>
                       </div>
                     </div>
 

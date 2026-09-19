@@ -23,7 +23,7 @@ export function SegmentEditorCard({ lang, segment, onPatch, onDelete }: SegmentE
       {/* Fields grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
             {lang === 'zh' ? '名称' : 'Title'}
           </span>
           <input
@@ -35,7 +35,7 @@ export function SegmentEditorCard({ lang, segment, onPatch, onDelete }: SegmentE
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
             {lang === 'zh' ? '时长' : 'Duration'}
           </span>
           <input
@@ -47,7 +47,7 @@ export function SegmentEditorCard({ lang, segment, onPatch, onDelete }: SegmentE
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
             {lang === 'zh' ? '类型' : 'Type'}
           </span>
           <select
@@ -64,7 +64,7 @@ export function SegmentEditorCard({ lang, segment, onPatch, onDelete }: SegmentE
         </label>
 
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+          <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
             {lang === 'zh' ? '配色' : 'Color'}
           </span>
           <div className="flex items-center gap-1.5 pt-1">
@@ -84,7 +84,7 @@ export function SegmentEditorCard({ lang, segment, onPatch, onDelete }: SegmentE
 
       {/* Notes */}
       <div className="flex flex-col gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1">
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-400 flex items-center gap-1">
           <FileText size={12} className="text-amber-500" />
           {lang === 'zh' ? '环节备注 & 教学提示' : 'Instructional Notes'}
         </span>

@@ -139,7 +139,7 @@ export function PluginStorePanel({
                           ? `点击查看新特性${marketItem.isPrerelease ? '（预发布版本）' : ''}并升级至 v${marketItem.latestVersion}`
                           : `Upgradeable to v${marketItem.latestVersion}${marketItem.isPrerelease ? ' (pre-release)' : ''}`
                       }
-                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 shrink-0 cursor-pointer ${
+                      className={`text-xs font-bold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 shrink-0 cursor-pointer ${
                         marketItem.isPrerelease
                           ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white animate-pulse'
                           : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white animate-pulse'
@@ -157,13 +157,13 @@ export function PluginStorePanel({
                   {updateError && !hasUpdate && (
                     <span
                       title={updateError}
-                      className="text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 shrink-0 cursor-default"
+                      className="text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 shrink-0 cursor-default"
                     >
                       <span>⚠️ {lang === 'zh' ? '检查失败' : 'Check failed'}</span>
                     </span>
                   )}
                   <span
-                    className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 border transition-all ${
+                    className={`text-xs font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 border transition-all ${
                       plugin.status === 'active'
                         ? 'bg-emerald-50 text-emerald-750 border-emerald-250'
                         : 'bg-slate-100 text-slate-500 border-slate-200'
@@ -183,13 +183,13 @@ export function PluginStorePanel({
                     </span>
                   </span>
                   {plugin.execution_mode === 'esm' && (
-                    <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-150 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                    <span className="text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-150 px-1.5 py-0.5 rounded uppercase tracking-wider">
                       ESM
                     </span>
                   )}
                   {(plugin as any).execution_mode === 'legacy' && <LegacyPluginBadge lang={lang} />}
                   {isSystem && (
-                    <span className="text-[10px] font-bold bg-violet-50 text-violet-700 border border-violet-200 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                    <span className="text-xs font-bold bg-violet-50 text-violet-700 border border-violet-200 px-1.5 py-0.5 rounded uppercase tracking-wider">
                       {lang === 'zh' ? '系统' : 'SYSTEM'}
                     </span>
                   )}
@@ -204,14 +204,14 @@ export function PluginStorePanel({
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-semibold text-gray-900 line-clamp-1">{plugin.name}</h4>
                       {manifestInfo.version && (
-                        <span className="text-[10px] font-mono font-bold bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded shrink-0">
+                        <span className="text-xs font-mono font-bold bg-gray-100 text-gray-500 border border-gray-200 px-1.5 py-0.5 rounded shrink-0">
                           v{manifestInfo.version}
                         </span>
                       )}
                     </div>
                     {manifestInfo.manifestId && (
                       <p
-                        className="text-[10px] text-gray-400 font-mono truncate mt-0.5"
+                        className="text-xs text-gray-400 font-mono truncate mt-0.5"
                         title={manifestInfo.manifestId}
                       >
                         {manifestInfo.manifestId}
@@ -229,7 +229,7 @@ export function PluginStorePanel({
                   manifestInfo.teacherWidgetCount > 0) && (
                   <div className="flex flex-wrap gap-1.5">
                     {manifestInfo.toolCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-0.5 rounded-full">
                         <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
                         {lang === 'zh'
                           ? `${manifestInfo.toolCount} 个课堂工具`
@@ -237,7 +237,7 @@ export function PluginStorePanel({
                       </span>
                     )}
                     {manifestInfo.studentViewCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-sky-50 text-sky-600 border border-sky-100 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium bg-sky-50 text-sky-600 border border-sky-100 px-2 py-0.5 rounded-full">
                         <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
                         {lang === 'zh'
                           ? `${manifestInfo.studentViewCount} 个学生视图`
@@ -245,7 +245,7 @@ export function PluginStorePanel({
                       </span>
                     )}
                     {manifestInfo.teacherWidgetCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-amber-50 text-amber-600 border border-amber-100 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium bg-amber-50 text-amber-600 border border-amber-100 px-2 py-0.5 rounded-full">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                         {lang === 'zh'
                           ? `${manifestInfo.teacherWidgetCount} 个教师组件`
@@ -253,7 +253,7 @@ export function PluginStorePanel({
                       </span>
                     )}
                     {manifestInfo.capabilities.length > 0 && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded-full">
                         <Shield size={9} />
                         {lang === 'zh'
                           ? `${manifestInfo.capabilities.length} 项权限`
@@ -265,7 +265,7 @@ export function PluginStorePanel({
 
                 {/* Footer metadata & actions */}
                 <div className="mt-auto flex flex-col gap-3 pt-1">
-                  <div className="flex items-center justify-between text-[10px] text-gray-400 border-t border-gray-100 pt-2 gap-2 flex-wrap">
+                  <div className="flex items-center justify-between text-xs text-gray-400 border-t border-gray-100 pt-2 gap-2 flex-wrap">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="flex items-center gap-1 min-w-0">
                         <Users size={10} className="shrink-0 text-gray-400" />
@@ -277,7 +277,7 @@ export function PluginStorePanel({
                           target="_blank"
                           rel="noopener noreferrer"
                           title={lang === 'zh' ? '查看 Git 开源仓库 (GitHub/Gitee)' : 'View Git Repository'}
-                          className="inline-flex items-center gap-1 text-[10px] font-mono text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded border border-indigo-200/60 transition-colors shrink-0"
+                          className="inline-flex items-center gap-1 text-xs font-mono text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded border border-indigo-200/60 transition-colors shrink-0"
                         >
                           <Github size={10} />
                           <span className="truncate max-w-[130px]">

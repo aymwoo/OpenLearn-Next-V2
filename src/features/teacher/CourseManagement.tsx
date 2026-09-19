@@ -164,7 +164,7 @@ export function CourseManagement({
                 )}
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                   {lang === 'zh' ? '排序方式：' : 'Sort by:'}
                 </span>
                 <select
@@ -183,7 +183,7 @@ export function CourseManagement({
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setFilterMyLessons(!filterMyLessons)}
-                  className={`px-2 py-1 text-[10px] font-bold rounded-md border transition-all cursor-pointer ${
+                  className={`px-2 py-1 text-xs font-bold rounded-md border transition-all cursor-pointer ${
                     filterMyLessons
                       ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
                       : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
@@ -195,7 +195,7 @@ export function CourseManagement({
                 </button>
                 <button
                   onClick={() => setFilterEnrollment(!filterEnrollment)}
-                  className={`px-2 py-1 text-[10px] font-bold rounded-md border transition-all cursor-pointer ${
+                  className={`px-2 py-1 text-xs font-bold rounded-md border transition-all cursor-pointer ${
                     filterEnrollment
                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                       : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
@@ -206,7 +206,7 @@ export function CourseManagement({
                 </button>
                 <button
                   onClick={() => setFilterHasContent(!filterHasContent)}
-                  className={`px-2 py-1 text-[10px] font-bold rounded-md border transition-all cursor-pointer ${
+                  className={`px-2 py-1 text-xs font-bold rounded-md border transition-all cursor-pointer ${
                     filterHasContent
                       ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
                       : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
@@ -217,7 +217,7 @@ export function CourseManagement({
                 </button>
                 <button
                   onClick={() => setFilterThisMonth(!filterThisMonth)}
-                  className={`px-2 py-1 text-[10px] font-bold rounded-md border transition-all cursor-pointer ${
+                  className={`px-2 py-1 text-xs font-bold rounded-md border transition-all cursor-pointer ${
                     filterThisMonth
                       ? 'bg-amber-50 text-amber-700 border-amber-200'
                       : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
@@ -304,7 +304,7 @@ export function CourseManagement({
                         <div className="flex items-center gap-1.5 shrink-0">
                           {lesson.creator_name ? (
                             <span
-                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
+                              className={`text-xs font-medium px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
                                 isOwner
                                   ? 'bg-indigo-50 text-indigo-700 border-indigo-200 font-semibold'
                                   : 'bg-slate-100 text-slate-600 border-slate-200'
@@ -319,7 +319,7 @@ export function CourseManagement({
                               {lesson.creator_name}
                             </span>
                           ) : null}
-                          <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 px-1.5 py-0.5 border border-indigo-100 rounded text-[10px] font-bold">
+                          <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 px-1.5 py-0.5 border border-indigo-100 rounded text-xs font-bold">
                             <Users size={10} className="text-indigo-500" />
                             {lesson.enrollment_count || 0}
                           </span>

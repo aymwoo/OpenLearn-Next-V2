@@ -27,7 +27,7 @@ export function StudentCourseProgressList(props: StudentCourseProgressListProps)
                 <div className="flex justify-between items-start mb-3">
                   <div className="font-semibold text-gray-800 text-lg">{p.lesson_title}</div>
                   {p.completed === 1 && (
-                    <span className="bg-green-100 text-green-800 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold">
+                    <span className="bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded uppercase font-bold">
                       Completed
                     </span>
                   )}

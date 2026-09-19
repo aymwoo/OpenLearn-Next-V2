@@ -86,7 +86,7 @@ export function CountdownTimer({ assignmentId, timeLimitMinutes, onTimeUp, isSub
           </span>
         </div>
         {isLow && (
-          <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-red-600 font-bold animate-pulse">
+          <span className="flex items-center gap-1 text-xs uppercase tracking-wider text-red-600 font-bold animate-pulse">
             <AlertTriangle size={12} /> Time is almost up!
           </span>
         )}

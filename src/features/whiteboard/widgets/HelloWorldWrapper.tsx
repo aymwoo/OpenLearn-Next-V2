@@ -50,10 +50,10 @@ export function HelloWorldWrapper({
   return (
     <div
       className="w-full h-full bg-white border border-slate-200/80 rounded-xl shadow-lg overflow-hidden flex flex-col font-sans select-none"
-      style={{ pointerEvents: 'auto' }}
+      style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
     >
       <div
-        className="bg-slate-50 text-slate-700 px-2 py-1.5 flex justify-between items-center text-[10px] font-semibold border-b border-slate-150 cursor-move select-none shrink-0"
+        className="bg-slate-50 text-slate-700 px-2 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-slate-150 cursor-move select-none shrink-0"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -78,7 +78,7 @@ export function HelloWorldWrapper({
           onClick={handleClick}
           disabled={loading}
           onPointerDown={(e) => e.stopPropagation()}
-          className="w-full py-1 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-650 hover:to-purple-750 text-white font-bold text-[10px] rounded-lg shadow-sm active:scale-95 transition-all flex items-center justify-center gap-1 cursor-pointer"
+          className="w-full py-1 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-650 hover:to-purple-750 text-white font-bold text-xs rounded-lg shadow-sm active:scale-95 transition-all flex items-center justify-center gap-1 cursor-pointer"
         >
           <Wand2 size={11} className={loading ? 'animate-spin' : ''} />
           <span>{loading ? '输出中...' : '点击输出'}</span>

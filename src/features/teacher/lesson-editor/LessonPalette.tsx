@@ -85,11 +85,11 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
             <Blocks size={15} className="text-primary-theme" />
             {lang === 'zh' ? '备课画板组件' : 'Components'}
           </h3>
-          <span className="text-[10px] font-semibold text-muted bg-surface border border-theme px-1.5 py-0.5 rounded-full">
+          <span className="text-xs font-semibold text-muted bg-surface border border-theme px-1.5 py-0.5 rounded-full">
             {filteredItems.length}
           </span>
         </div>
-        <p className="text-[10px] text-muted leading-tight mt-0.5">
+        <p className="text-xs text-muted leading-tight mt-0.5">
           {lang === 'zh' ? '拖拽到右侧白板，或点击配置添加到画板。' : 'Drag to whiteboard or click to configure.'}
         </p>
       </div>
@@ -118,7 +118,7 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
       <div className="flex items-center gap-1 bg-surface-secondary border border-theme p-1 rounded-lg">
         <button
           onClick={() => setActiveTab('all')}
-          className={`flex-1 py-1 text-[11px] font-medium rounded-md transition-all ${
+          className={`flex-1 py-1 text-xs font-medium rounded-md transition-all ${
             activeTab === 'all' ? 'bg-surface text-main shadow-2xs font-bold' : 'text-muted hover:text-main'
           }`}
         >
@@ -126,7 +126,7 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
         </button>
         <button
           onClick={() => setActiveTab('favorites')}
-          className={`flex-1 py-1 text-[11px] font-medium rounded-md transition-all flex items-center justify-center gap-1 ${
+          className={`flex-1 py-1 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1 ${
             activeTab === 'favorites'
               ? 'bg-surface text-amber-500 shadow-2xs font-bold'
               : 'text-muted hover:text-amber-500'
@@ -137,7 +137,7 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
         </button>
         <button
           onClick={() => setActiveTab('recent')}
-          className={`flex-1 py-1 text-[11px] font-medium rounded-md transition-all flex items-center justify-center gap-1 ${
+          className={`flex-1 py-1 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1 ${
             activeTab === 'recent'
               ? 'bg-surface text-primary-theme shadow-2xs font-bold'
               : 'text-muted hover:text-primary-theme'
@@ -154,7 +154,7 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
           <div className="text-center py-8 text-slate-400 text-xs">
             <Sparkles size={24} className="mx-auto mb-2 opacity-30 text-indigo-500" />
             <p className="font-medium text-slate-500">{lang === 'zh' ? '未找到相关组件' : 'No components found'}</p>
-            <p className="text-[10px] mt-1 text-slate-400">
+            <p className="text-xs mt-1 text-slate-400">
               {activeTab !== 'all'
                 ? lang === 'zh'
                   ? '尝试切换到全部组件'
@@ -207,12 +207,12 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
                   >
                     <div className="flex items-center gap-1.5">
                       <span className={`w-1.5 h-1.5 rounded-full ${accent.groupAccent}`} />
-                      <span className={`text-[10px] font-bold uppercase tracking-wider ${accent.groupText}`}>
+                      <span className={`text-xs font-bold uppercase tracking-wider ${accent.groupText}`}>
                         {lang === 'zh' ? group.labelZh : group.labelEn}
                       </span>
                     </div>
                     <div className="flex items-center gap-1 text-slate-400 group-hover/grp:text-slate-600">
-                      <span className="text-[9px] font-mono font-medium opacity-70">({items.length})</span>
+                      <span className="text-xs font-mono font-medium opacity-70">({items.length})</span>
                       {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                     </div>
                   </button>

@@ -47,7 +47,7 @@ export function FontSizeSelector({ lang = 'zh' }: FontSizeSelectorProps) {
       >
         <Type size={16} />
         {!isDefault && (
-          <span className="absolute -bottom-1 -right-1 text-[9px] px-1 py-0.2 rounded-full bg-primary-theme text-white font-extrabold leading-none shadow-xs">
+          <span className="absolute -bottom-1 -right-1 text-xs px-1 py-0.2 rounded-full bg-primary-theme text-white font-extrabold leading-none shadow-xs">
             {scale}%
           </span>
         )}
@@ -61,7 +61,7 @@ export function FontSizeSelector({ lang = 'zh' }: FontSizeSelectorProps) {
               <div className="text-xs font-semibold text-main">
                 {lang === 'zh' ? '界面字号大小' : 'Interface Font Size'}
               </div>
-              <div className="text-2xs text-muted mt-0.5">
+              <div className="text-xs text-muted mt-0.5">
                 {lang === 'zh' ? '全局等比缩放排版与文字' : 'Proportionally scale typography'}
               </div>
             </div>
@@ -69,7 +69,7 @@ export function FontSizeSelector({ lang = 'zh' }: FontSizeSelectorProps) {
               <button
                 type="button"
                 onClick={resetScale}
-                className="flex items-center gap-1 text-2xs text-muted hover:text-primary-theme transition-colors cursor-pointer px-1.5 py-0.5 rounded hover:bg-surface-secondary"
+                className="flex items-center gap-1 text-xs text-muted hover:text-primary-theme transition-colors cursor-pointer px-1.5 py-0.5 rounded hover:bg-surface-secondary"
                 title={lang === 'zh' ? '恢复默认 100%' : 'Reset to 100%'}
               >
                 <RotateCcw size={11} />
@@ -92,7 +92,7 @@ export function FontSizeSelector({ lang = 'zh' }: FontSizeSelectorProps) {
 
             <div className="text-center">
               <div className="text-sm font-black text-main leading-tight">{scale}%</div>
-              <div className="text-3xs text-muted">
+              <div className="text-xs text-muted">
                 {currentPreset
                   ? lang === 'zh'
                     ? currentPreset.labelZh.split(' ')[0]
@@ -116,7 +116,7 @@ export function FontSizeSelector({ lang = 'zh' }: FontSizeSelectorProps) {
 
           {/* 预设档位胶囊列表 */}
           <div className="space-y-1 mb-3">
-            <div className="text-3xs font-bold text-muted uppercase tracking-wider px-1">
+            <div className="text-xs font-bold text-muted uppercase tracking-wider px-1">
               {lang === 'zh' ? '常用档位' : 'Presets'}
             </div>
             <div className="grid grid-cols-1 gap-1">
@@ -146,7 +146,7 @@ export function FontSizeSelector({ lang = 'zh' }: FontSizeSelectorProps) {
 
           {/* 实时效果示例框 */}
           <div className="p-2.5 rounded-lg border border-theme-subtle bg-surface-secondary/40 mb-2">
-            <div className="text-3xs text-muted mb-1 flex items-center justify-between">
+            <div className="text-xs text-muted mb-1 flex items-center justify-between">
               <span>{lang === 'zh' ? '实时效果预览' : 'Live Preview'}</span>
               <span>{scale}%</span>
             </div>
@@ -158,7 +158,7 @@ export function FontSizeSelector({ lang = 'zh' }: FontSizeSelectorProps) {
           </div>
 
           {/* 快捷键操作提示 */}
-          <div className="text-3xs text-muted/80 text-center px-1">
+          <div className="text-xs text-muted/80 text-center px-1">
             {lang === 'zh' ? '快捷键：Ctrl + Alt + 加号/减号' : 'Shortcut: Ctrl + Alt + +/-'}
           </div>
         </div>

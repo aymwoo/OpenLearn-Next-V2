@@ -446,6 +446,7 @@ export default function App() {
 
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
   const [studentDashboardData, setStudentDashboardData] = useState<any>(null);
+  const [liveClassFocusLocked, setLiveClassFocusLocked] = useState(false);
   const addToast = (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
     appStore.getState().addToast({ id, title, message, type });
@@ -455,10 +456,11 @@ export default function App() {
   };
 
   // ── 全班专注锁定：学生被教师锁定时，只读跟随当前授课 ──────────────────────
-  // 锁定状态由 students 表中的 locked_lesson_id 派生，经 socket
-  // 'class-lock-status-changed' → fetchStudents() 实时刷新。
+  // 锁定状态由 students 表中的 locked_lesson_id 派生，或由 ClassroomSyncChannel 广播实时下发。
   const isStudentLocked =
-    activeRole === 'student' && !!activeStudentId && !!students.find((s) => s.id === activeStudentId)?.locked_lesson_id;
+    activeRole === 'student' &&
+    ((!!activeStudentId && !!students.find((s) => s.id === activeStudentId)?.locked_lesson_id) ||
+      liveClassFocusLocked);
 
   const notifyLockedNavigation = () => {
     addToast(
@@ -1517,6 +1519,7 @@ export default function App() {
           break;
         }
         case 'TEACHER_LOCK_CLASS': {
+          setLiveClassFocusLocked(!!msg.payload.locked);
           if (msg.payload.locked) {
             setIsFollowingTeacher(true);
             setStudentViewStatus('lesson');
@@ -1605,7 +1608,7 @@ export default function App() {
           {session?.role === 'teacher' && activeRole === 'student' && !isStudentLiveMode && (
             <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 text-white px-6 py-1.5 flex items-center justify-between text-xs font-medium shadow-sm z-30 shrink-0 border-b border-amber-600/30">
               <div className="flex items-center gap-2.5">
-                <span className="bg-black/20 text-amber-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
+                <span className="bg-black/20 text-amber-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider text-xs flex items-center gap-1">
                   <Eye size={12} />
                   {lang === 'zh' ? '学生模拟模式' : 'Student View Mode'}
                 </span>
@@ -1638,12 +1641,12 @@ export default function App() {
                     <h1 className="text-sm font-black text-main tracking-wide">
                       {lang === 'zh' ? '互动课堂 · 学生端' : 'Interactive Classroom · Student Client'}
                     </h1>
-                    <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                    <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                       {lang === 'zh' ? '已与教师中控台实时联动' : 'Synced with Teacher'}
                     </span>
                   </div>
-                  <div className="text-[11px] text-muted flex items-center gap-2">
+                  <div className="text-xs text-muted flex items-center gap-2">
                     <span>
                       {activeStudentId
                         ? `学生: ${students.find((s) => s.id === activeStudentId)?.name || activeStudentId}`

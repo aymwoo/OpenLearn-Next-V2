@@ -613,7 +613,7 @@ export function PluginInstallWizard({
                     </div>
                     <div>
                       <h3 className="font-extrabold text-slate-900 text-base">{manifest.name}</h3>
-                      <p className="text-[10px] font-mono text-gray-500 mt-1">
+                      <p className="text-xs font-mono text-gray-500 mt-1">
                         ID: {manifest.id} | v{manifest.version || '1.0.0'}
                       </p>
                     </div>
@@ -629,7 +629,7 @@ export function PluginInstallWizard({
                   </div>
                   <div className="grid grid-cols-2 gap-4 mt-2">
                     <div className="border border-slate-100 rounded-xl p-3 bg-slate-50/30">
-                      <span className="text-[10px] text-gray-400 block font-semibold">
+                      <span className="text-xs text-gray-400 block font-semibold">
                         {lang === 'zh' ? '主程序入口' : 'Main Entry'}
                       </span>
                       <span className="text-xs font-bold text-slate-700 font-mono mt-0.5 block">
@@ -637,7 +637,7 @@ export function PluginInstallWizard({
                       </span>
                     </div>
                     <div className="border border-slate-100 rounded-xl p-3 bg-slate-50/30">
-                      <span className="text-[10px] text-gray-400 block font-semibold">
+                      <span className="text-xs text-gray-400 block font-semibold">
                         {lang === 'zh' ? '前端沙箱包' : 'Frontend UI Asset'}
                       </span>
                       <span
@@ -665,14 +665,14 @@ export function PluginInstallWizard({
                           ? '检测到已安装同一插件 — 将执行原地更新'
                           : 'Same plugin already installed — in-place update'}
                       </h4>
-                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
                         <div className="bg-white/70 border border-slate-100 rounded-lg p-2">
                           <div className="text-slate-400 font-semibold">{lang === 'zh' ? '当前版本' : 'Installed'}</div>
                           <div className="font-bold text-slate-800 mt-0.5">
                             {existingInstall.name}
                             <span className="font-mono text-slate-500 ml-1">v{existingInstall.version}</span>
                           </div>
-                          <div className="text-[10px] text-slate-400 mt-1 font-mono">
+                          <div className="text-xs text-slate-400 mt-1 font-mono">
                             {existingInstall.status === 'active'
                               ? lang === 'zh'
                                 ? '状态: 运行中'
@@ -688,13 +688,13 @@ export function PluginInstallWizard({
                             {manifest.name}
                             <span className="font-mono text-indigo-600 ml-1">v{manifest.version || '0.0.0'}</span>
                           </div>
-                          <div className="text-[10px] text-slate-400 mt-1">
+                          <div className="text-xs text-slate-400 mt-1">
                             {lang === 'zh' ? '保留配置 / 业务数据 / UUID' : 'Keeps config, data & UUID'}
                           </div>
                         </div>
                       </div>
                       {isDowngrade && (
-                        <label className="mt-3 flex items-start gap-2 text-[11px] font-bold text-red-700 cursor-pointer">
+                        <label className="mt-3 flex items-start gap-2 text-xs font-bold text-red-700 cursor-pointer">
                           <input
                             type="checkbox"
                             className="mt-0.5"
@@ -709,7 +709,7 @@ export function PluginInstallWizard({
                         </label>
                       )}
                       {isInUse && (
-                        <label className="mt-2 flex items-start gap-2 text-[11px] font-bold text-amber-800 cursor-pointer">
+                        <label className="mt-2 flex items-start gap-2 text-xs font-bold text-amber-800 cursor-pointer">
                           <input
                             type="checkbox"
                             className="mt-0.5"
@@ -758,11 +758,11 @@ export function PluginInstallWizard({
                               >
                                 {cap}
                               </span>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-md border ${risk.badgeClass}`}>
+                              <span className={`text-xs px-2 py-0.5 rounded-md border ${risk.badgeClass}`}>
                                 {risk.label}
                               </span>
                             </div>
-                            <p className={`text-[11px] leading-relaxed font-medium mt-1 ${risk.descClass}`}>
+                            <p className={`text-xs leading-relaxed font-medium mt-1 ${risk.descClass}`}>
                               {risk.desc}
                             </p>
                           </div>
@@ -772,7 +772,7 @@ export function PluginInstallWizard({
                   )}
 
                   {capabilities.length > 0 && (
-                    <label className="flex items-start gap-2 border border-orange-100 rounded-xl p-3 bg-orange-50/30 cursor-pointer mt-2 text-[11px] text-orange-850 font-bold leading-normal">
+                    <label className="flex items-start gap-2 border border-orange-100 rounded-xl p-3 bg-orange-50/30 cursor-pointer mt-2 text-xs text-orange-850 font-bold leading-normal">
                       <input
                         type="checkbox"
                         checked={agreedToTerms}
@@ -858,7 +858,7 @@ export function PluginInstallWizard({
                       <button
                         type="button"
                         onClick={() => setPreviewRole('teacher')}
-                        className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                        className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                           previewRole === 'teacher'
                             ? 'bg-white shadow text-indigo-650'
                             : 'text-slate-550 hover:text-slate-800'
@@ -869,7 +869,7 @@ export function PluginInstallWizard({
                       <button
                         type="button"
                         onClick={() => setPreviewRole('student')}
-                        className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                        className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                           previewRole === 'student'
                             ? 'bg-white shadow text-indigo-650'
                             : 'text-slate-550 hover:text-slate-800'
@@ -897,7 +897,7 @@ export function PluginInstallWizard({
                         </div>
                       ) : (
                         <div className="flex flex-col gap-3">
-                          <div className="text-[11px] font-semibold text-slate-500">
+                          <div className="text-xs font-semibold text-slate-500">
                             {lang === 'zh'
                               ? `共 ${filteredPanels.length} 项（按「${previewRole === 'teacher' ? '教师端' : '学生端'}」筛选）`
                               : `${filteredPanels.length} item(s) for ${previewRole} view`}
@@ -910,13 +910,13 @@ export function PluginInstallWizard({
                               >
                                 <div className="min-w-0">
                                   <div className="text-sm font-bold text-slate-800 truncate">{p.label}</div>
-                                  <div className="text-[11px] text-slate-500 font-mono mt-0.5 truncate">
+                                  <div className="text-xs text-slate-500 font-mono mt-0.5 truncate">
                                     {p.slot}
                                     {p.id && p.id !== '?' ? ` · ${p.id}` : ''}
                                   </div>
                                 </div>
                                 <span
-                                  className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                                  className={`shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded border ${
                                     p.source === 'manifest'
                                       ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                                       : 'bg-indigo-50 text-indigo-700 border-indigo-100'
@@ -929,14 +929,14 @@ export function PluginInstallWizard({
                           </ul>
                           {zipFiles.length > 0 && (
                             <div className="pt-2 border-t border-slate-100">
-                              <div className="text-[10px] font-semibold text-slate-400 mb-1">
+                              <div className="text-xs font-semibold text-slate-400 mb-1">
                                 {lang === 'zh' ? '包内文件' : 'Package files'}
                               </div>
                               <div className="flex flex-wrap gap-1.5">
                                 {zipFiles.map((f) => (
                                   <span
                                     key={f.name}
-                                    className="text-[10px] font-mono bg-white border border-slate-150 rounded px-1.5 py-0.5 text-slate-600"
+                                    className="text-xs font-mono bg-white border border-slate-150 rounded px-1.5 py-0.5 text-slate-600"
                                   >
                                     {f.name}
                                     {f.size > 0 ? ` (${Math.max(1, Math.round(f.size / 1024))} KB)` : ''}
@@ -950,7 +950,7 @@ export function PluginInstallWizard({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 text-[10px] text-gray-550 font-medium shrink-0 bg-indigo-50/40 p-2 border border-indigo-100/40 rounded-lg">
+                  <div className="flex items-center gap-1.5 text-xs text-gray-550 font-medium shrink-0 bg-indigo-50/40 p-2 border border-indigo-100/40 rounded-lg">
                     <Sparkles size={11} className="text-indigo-600" />
                     <span>
                       {lang === 'zh'
@@ -966,7 +966,7 @@ export function PluginInstallWizard({
                 <div className="flex flex-col gap-4">
                   {existingInstall && (
                     <div
-                      className={`rounded-xl border p-3 text-[11px] ${
+                      className={`rounded-xl border p-3 text-xs ${
                         isDowngrade ? 'border-red-200 bg-red-50/60' : 'border-amber-200 bg-amber-50/50'
                       }`}
                     >
@@ -1036,7 +1036,7 @@ export function PluginInstallWizard({
                         <h4 className="font-extrabold text-xs md:text-sm text-slate-800">
                           {lang === 'zh' ? 'Worker 强沙箱隔离模式 (推荐)' : 'Worker Sandbox Isolation (Recommended)'}
                         </h4>
-                        <p className="text-[11px] text-slate-550 mt-1 leading-normal font-medium">
+                        <p className="text-xs text-slate-550 mt-1 leading-normal font-medium">
                           {lang === 'zh'
                             ? '插件代码在独立的后台 Worker 线程中加载运行。即便发生死循环、崩溃抛错也不会株连系统主服务崩溃，安全性最高。'
                             : "Loads in isolated background worker threads. Uncaught plugin errors won't crash main system."}
@@ -1062,7 +1062,7 @@ export function PluginInstallWizard({
                         <h4 className="font-extrabold text-xs md:text-sm text-slate-800">
                           {lang === 'zh' ? 'VM Inline 主进程运行模式' : 'VM Inline Execution'}
                         </h4>
-                        <p className="text-[11px] text-slate-550 mt-1 leading-normal font-medium">
+                        <p className="text-xs text-slate-550 mt-1 leading-normal font-medium">
                           {lang === 'zh'
                             ? '插件在主进程上下文中运行，执行性能极高。但如果代码发生不可捕获错误，可能会造成服务崩溃，适合受信任的代码。'
                             : 'Runs in host process, higher execution speed. Uncaught plugin failures might cause host server to stop.'}
@@ -1173,7 +1173,7 @@ export function PluginInstallWizard({
                       />
                     </div>
                     {progressMsg && (
-                      <div className="text-[10px] text-indigo-200 truncate max-w-40">
+                      <div className="text-xs text-indigo-200 truncate max-w-40">
                         {progressPct}% — {progressMsg}
                       </div>
                     )}

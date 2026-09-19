@@ -93,27 +93,27 @@ export function RightSidebar({
                     </div>
                     <div className="min-w-0">
                       <h2 className="font-semibold text-gray-900 text-sm">{t.agentTitle}</h2>
-                      <p className="text-[10px] text-gray-500">{t.agentSubtitle}</p>
+                      <p className="text-xs text-gray-500">{t.agentSubtitle}</p>
                       <button
                         onClick={onClearAgentMemory}
                         title={
                           lang === 'zh' ? '清除内核助手的对话记忆' : "Clear the kernel assistant's conversation memory"
                         }
-                        className="mt-1 inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+                        className="mt-1 inline-flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
                       >
                         🧹 {lang === 'zh' ? '清除记忆' : 'Clear memory'}
                       </button>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5 min-w-[150px] max-w-[50%]">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">
+                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
                       {lang === 'zh' ? 'AI 提供商' : 'AI Provider'}
                     </span>
                     <div className="relative w-full">
                       <select
                         value={effectiveAgentProviderId}
                         onChange={(e) => setAgentProviderId(e.target.value)}
-                        className="w-full appearance-none rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50 px-3 py-2 pr-9 text-[11px] font-medium text-gray-700 shadow-sm outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                        className="w-full appearance-none rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50 px-3 py-2 pr-9 text-xs font-medium text-gray-700 shadow-sm outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                       >
                         <option value="system">
                           {lang === 'zh' ? '系统默认（Gemini）' : 'System Default (Gemini)'}
@@ -130,7 +130,7 @@ export function RightSidebar({
                       />
                     </div>
                     <div
-                      className="text-[10px] text-gray-400 truncate w-full text-right"
+                      className="text-xs text-gray-400 truncate w-full text-right"
                       title={
                         effectiveAgentProviderId === 'system'
                           ? lang === 'zh'
@@ -188,7 +188,7 @@ export function RightSidebar({
                     {chatAttachments.map((f, i) => (
                       <div
                         key={i}
-                        className="flex items-center gap-1 bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-[10px]"
+                        className="flex items-center gap-1 bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs"
                       >
                         <FileText size={10} className="shrink-0" />
                         <span className="truncate max-w-[100px]" title={f.name}>
@@ -236,7 +236,7 @@ export function RightSidebar({
               </form>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col bg-black text-green-400 font-mono text-[10px] min-h-0 mx-4 mb-4 rounded-xl shadow-inner border border-gray-800 overflow-hidden">
+            <div className="flex-1 flex flex-col bg-black text-green-400 font-mono text-xs min-h-0 mx-4 mb-4 rounded-xl shadow-inner border border-gray-800 overflow-hidden">
               <div className="p-3 border-b border-gray-800 flex items-center justify-between shrink-0 bg-gray-900">
                 <div className="flex items-center gap-2 text-gray-300 font-sans tracking-wide">
                   <Terminal size={14} />
@@ -250,10 +250,10 @@ export function RightSidebar({
                   events.map((ev, i) => (
                     <div key={i} className="flex flex-col gap-1 hover:bg-gray-800/50 p-2 rounded mb-1">
                       <div className="flex items-center gap-2 justify-between">
-                        <span className="text-gray-500 shrink-0 text-[9px]">
+                        <span className="text-gray-500 shrink-0 text-xs">
                           [{new Date(ev.timestamp).toLocaleTimeString()}]
                         </span>
-                        <span className="text-blue-400 shrink-0 truncate text-[9px]" title={ev.source}>
+                        <span className="text-blue-400 shrink-0 truncate text-xs" title={ev.source}>
                           {ev.source}
                         </span>
                       </div>
@@ -274,7 +274,7 @@ export function RightSidebar({
           <Wand2 size={18} className="mb-6 hover:text-indigo-500" />
           <Terminal size={18} className="hover:text-indigo-500" />
           <div className="mt-8 flex-1 flex flex-col justify-end pb-8">
-            <div className="uppercase tracking-widest text-[9px] rotate-180" style={{ writingMode: 'vertical-rl' }}>
+            <div className="uppercase tracking-widest text-xs rotate-180" style={{ writingMode: 'vertical-rl' }}>
               OS Core Options
             </div>
           </div>

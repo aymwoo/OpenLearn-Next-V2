@@ -120,7 +120,7 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
                     )}
                     <div className="flex flex-col">
                       <span className="font-semibold text-gray-800">{sch.lesson_title}</span>
-                      <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                      <span className="text-xs text-gray-500 flex items-center gap-1">
                         <CalendarIcon size={10} /> {sch.scheduled_date}
                       </span>
                     </div>
@@ -128,7 +128,7 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
                 </div>
                 {isExp && (
                   <div className="border-t border-gray-100 p-2 bg-gray-50/50">
-                    <div className="text-[10px] font-medium text-gray-500 mb-2 uppercase tracking-wider">
+                    <div className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wider">
                       Attendance Check-in
                     </div>
                     <div className="grid gap-1">
@@ -148,7 +148,7 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
                                 if (avg30 !== null) {
                                   return (
                                     <span
-                                      className="inline-flex items-center gap-0.5 bg-red-50 text-red-700 border border-red-200 px-1 py-0.5 rounded text-[9px] font-bold animate-pulse"
+                                      className="inline-flex items-center gap-0.5 bg-red-50 text-red-700 border border-red-200 px-1 py-0.5 rounded text-xs font-bold animate-pulse"
                                       title={
                                         lang === 'zh'
                                           ? `30天平均成绩已降至60%以下 (${avg30}%)`
@@ -176,7 +176,7 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
                                     });
                                     if (res.ok) fetchScheduleAttendance(sch.id);
                                   }}
-                                  className={`px-1.5 py-0.5 rounded text-[10px] capitalize border transition-all cursor-pointer ${
+                                  className={`px-1.5 py-0.5 rounded text-xs capitalize border transition-all cursor-pointer ${
                                     aRec?.status === status
                                       ? status === 'present'
                                         ? 'bg-green-50 border-green-200 text-green-700 font-medium'
@@ -194,7 +194,7 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
                         );
                       })}
                       {cStudents.length === 0 && (
-                        <div className="text-[10px] italic text-gray-400">No students to check in.</div>
+                        <div className="text-xs italic text-gray-400">No students to check in.</div>
                       )}
                     </div>
                   </div>

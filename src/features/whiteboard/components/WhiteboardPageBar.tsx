@@ -67,7 +67,7 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
           title="页面大纲与预览 (Pages Outline)"
         >
           <LayoutGrid size={15} />
-          <span className="hidden sm:inline text-[11px] font-semibold">大纲 ({pages.length})</span>
+          <span className="hidden sm:inline text-xs font-semibold">大纲 ({pages.length})</span>
         </button>
 
         <div className="h-4 w-px bg-border-theme mx-0.5" />
@@ -288,14 +288,14 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span
-                        className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md ${
+                        className={`text-xs font-extrabold px-2 py-0.5 rounded-md ${
                           isActive ? 'bg-primary-theme text-white' : 'bg-surface-secondary text-muted'
                         }`}
                       >
                         P{idx + 1}
                       </span>
                       {isActive && (
-                        <span className="text-[10px] font-bold text-primary-theme bg-primary-theme-light px-1.5 py-0.5 rounded">
+                        <span className="text-xs font-bold text-primary-theme bg-primary-theme-light px-1.5 py-0.5 rounded">
                           当前激活
                         </span>
                       )}
@@ -303,7 +303,7 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
 
                     <div className="h-20 bg-surface-secondary border border-theme rounded-lg flex flex-col items-center justify-center mb-2 overflow-hidden relative">
                       <FileText size={24} className={isActive ? 'text-primary-theme' : 'text-subtle'} />
-                      <span className="text-[10px] text-muted font-medium mt-1">{pageElementCount} 个组件/笔画</span>
+                      <span className="text-xs text-muted font-medium mt-1">{pageElementCount} 个组件/笔画</span>
                     </div>
 
                     <div className="font-bold text-xs text-main truncate mb-1" title={p.title}>
@@ -311,7 +311,7 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                     </div>
 
                     <div
-                      className="flex items-center justify-between pt-2 border-t border-theme text-muted text-[11px]"
+                      className="flex items-center justify-between pt-2 border-t border-theme text-muted text-xs"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button

@@ -130,7 +130,7 @@ export function TimelineRail({
 
                 {/* sequence number or check */}
                 <span
-                  className={`flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold shrink-0 ${
+                  className={`flex items-center justify-center w-4 h-4 rounded-full text-xs font-bold shrink-0 ${
                     isActive
                       ? 'bg-white/25 text-white'
                       : isCompleted
@@ -149,7 +149,7 @@ export function TimelineRail({
                 {/* Duration Badge */}
                 {seg.duration && (
                   <span
-                    className={`text-[10px] px-1 py-0.2 rounded font-mono font-normal flex items-center gap-0.5 ${isActive ? 'bg-black/20 text-white' : 'bg-black/5 text-slate-500'}`}
+                    className={`text-xs px-1 py-0.2 rounded font-mono font-normal flex items-center gap-0.5 ${isActive ? 'bg-black/20 text-white' : 'bg-black/5 text-slate-500'}`}
                   >
                     <Clock size={9} />
                     {seg.duration}
@@ -162,7 +162,7 @@ export function TimelineRail({
 
                 {/* Status indicator */}
                 {isActive && (
-                  <span className="flex items-center gap-1 ml-0.5 pl-1.5 border-l border-white/30 text-[10px] font-extrabold uppercase tracking-wide shrink-0">
+                  <span className="flex items-center gap-1 ml-0.5 pl-1.5 border-l border-white/30 text-xs font-extrabold uppercase tracking-wide shrink-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                     {lang === 'zh' ? '进行中' : 'LIVE'}
                   </span>
@@ -180,7 +180,7 @@ export function TimelineRail({
             title={lang === 'zh' ? '新增教学环节' : 'Add flow segment'}
           >
             <Plus size={13} />
-            <span className="text-[11px]">{lang === 'zh' ? '添加环节' : 'Add Step'}</span>
+            <span className="text-xs">{lang === 'zh' ? '添加环节' : 'Add Step'}</span>
           </button>
         )}
       </div>

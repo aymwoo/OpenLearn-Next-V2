@@ -119,12 +119,12 @@ export function StudentPreviewModal(props: StudentPreviewModalProps) {
                     {previewFullscreenPanel === 'left' ? (
                       <>
                         <Minimize2 size={13} />
-                        <span className="text-[10px] font-medium">退出全屏</span>
+                        <span className="text-xs font-medium">退出全屏</span>
                       </>
                     ) : (
                       <>
                         <Maximize2 size={13} />
-                        <span className="text-[10px] font-medium">全屏</span>
+                        <span className="text-xs font-medium">全屏</span>
                       </>
                     )}
                   </button>
@@ -171,12 +171,12 @@ export function StudentPreviewModal(props: StudentPreviewModalProps) {
                     {previewFullscreenPanel === 'right' ? (
                       <>
                         <Minimize2 size={13} />
-                        <span className="text-[10px] font-medium">退出全屏</span>
+                        <span className="text-xs font-medium">退出全屏</span>
                       </>
                     ) : (
                       <>
                         <Maximize2 size={13} />
-                        <span className="text-[10px] font-medium">全屏</span>
+                        <span className="text-xs font-medium">全屏</span>
                       </>
                     )}
                   </button>
@@ -284,7 +284,7 @@ export function StudentPreviewModal(props: StudentPreviewModalProps) {
                               ))
                           )}
                         </div>
-                        <div className="mt-2 text-[10px] text-gray-400 leading-tight">
+                        <div className="mt-2 text-xs text-gray-400 leading-tight">
                           Note: Showing HTML courseware from current OS drive directory.
                         </div>
                       </div>

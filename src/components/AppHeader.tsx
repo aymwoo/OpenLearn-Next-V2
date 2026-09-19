@@ -124,7 +124,7 @@ export function AppHeader(props: AppHeaderProps) {
             <span className="text-base font-black text-slate-900 tracking-tight">
               {siteInfo.siteName || 'OpenLearn Next'}
             </span>
-            <span className="text-[10px] font-medium text-slate-400 tracking-tight">v{__APP_VERSION__}</span>
+            <span className="text-xs font-medium text-slate-400 tracking-tight">v{__APP_VERSION__}</span>
             {siteInfo.slogan && (
               <span className="hidden md:inline text-xs text-slate-400 font-normal truncate max-w-[200px]">
                 {siteInfo.slogan}
@@ -200,7 +200,7 @@ export function AppHeader(props: AppHeaderProps) {
             >
               <Bell size={20} />
               {unreadNotifications.length > 0 && (
-                <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[18px]">
+                <span className="absolute top-1 right-1 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[18px]">
                   {unreadNotifications.length}
                 </span>
               )}

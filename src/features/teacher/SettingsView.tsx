@@ -56,7 +56,7 @@ export function SettingsView({ lang, onNavigateToAdmin }: SettingsViewProps) {
       {/* System Specs Overview Box */}
       <div className="bg-slate-100 border border-slate-200/60 rounded-xl p-5 block sm:flex sm:items-center justify-between text-left gap-4 space-y-3 sm:space-y-0">
         <div className="space-y-1">
-          <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-wider">
+          <span className="text-xs font-extrabold text-indigo-600 uppercase tracking-wider">
             {lang === 'zh' ? '环境自检指标' : 'ENVIRONMENT DIAGNOSTICS'}
           </span>
           <h4 className="font-extrabold text-gray-800 text-sm">

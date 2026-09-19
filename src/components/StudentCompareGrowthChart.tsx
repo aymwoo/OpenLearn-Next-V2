@@ -246,24 +246,24 @@ export function StudentCompareGrowthChart({
           <div>
             <h4 className="font-extrabold text-gray-900 text-sm flex items-center gap-1.5 flex-wrap">
               <span>{t.panelTitle}</span>
-              <span className="inline-flex items-center gap-0.5 bg-indigo-100 text-indigo-800 border border-indigo-200/50 rounded-full px-2 py-0.5 text-[9px] font-black uppercase">
+              <span className="inline-flex items-center gap-0.5 bg-indigo-100 text-indigo-800 border border-indigo-200/50 rounded-full px-2 py-0.5 text-xs font-black uppercase">
                 <Sparkles size={8} className="animate-spin text-indigo-600" />
                 {lang === 'zh' ? '多维透视' : 'Cohort Analytics'}
               </span>
             </h4>
-            <p className="text-gray-500 text-[11px] mt-0.5 leading-relaxed">{t.panelSub}</p>
+            <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">{t.panelSub}</p>
           </div>
         </div>
 
         {/* Controls block for toggling metric type */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-2 border-t border-gray-100/60 pt-3">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider">{t.metricSelect}</span>
+            <span className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">{t.metricSelect}</span>
             <div className="inline-flex bg-gray-100 p-0.5 rounded-lg border border-gray-200/55 shadow-3xs select-none">
               <button
                 type="button"
                 onClick={() => setCompareMetric('running_average')}
-                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
                   compareMetric === 'running_average'
                     ? 'bg-white text-indigo-700 shadow-xs border-indigo-50 font-extrabold'
                     : 'text-gray-500 hover:text-gray-800'
@@ -275,7 +275,7 @@ export function StudentCompareGrowthChart({
               <button
                 type="button"
                 onClick={() => setCompareMetric('raw_score')}
-                className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+                className={`px-3 py-1 text-xs font-bold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
                   compareMetric === 'raw_score'
                     ? 'bg-white text-indigo-700 shadow-xs border-indigo-50 font-extrabold'
                     : 'text-gray-500 hover:text-gray-800'
@@ -287,7 +287,7 @@ export function StudentCompareGrowthChart({
             </div>
           </div>
 
-          <div className="text-[10px] text-indigo-600/75 italic bg-indigo-50/50 px-2 py-1 rounded-md border border-indigo-100/30">
+          <div className="text-xs text-indigo-600/75 italic bg-indigo-50/50 px-2 py-1 rounded-md border border-indigo-100/30">
             {compareMetric === 'running_average'
               ? lang === 'zh'
                 ? '💡 呈现从第一次作业后开始的平均学力，能更好地平滑单次测验失常'
@@ -304,7 +304,7 @@ export function StudentCompareGrowthChart({
         {/* Left side: Student roster checkboxes */}
         <div className="lg:col-span-1 bg-slate-50/50 rounded-xl border border-slate-150 p-3 flex flex-col justify-between max-h-[340px] overflow-hidden">
           <div className="flex flex-col h-full">
-            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-2 block select-none">
+            <span className="text-xs font-black uppercase text-slate-400 tracking-wider mb-2 block select-none">
               {lang === 'zh' ? '参比学生选单' : 'Active Pupil List'}
             </span>
             <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5" id="enrolled-pupils-compare-checklist">
@@ -325,7 +325,7 @@ export function StudentCompareGrowthChart({
                   >
                     <div className="flex items-center gap-2 truncate pr-2">
                       <div
-                        className={`w-5 h-5 rounded-full flex items-center justify-center border text-[9px] text-white shrink-0 font-extrabold`}
+                        className={`w-5 h-5 rounded-full flex items-center justify-center border text-xs text-white shrink-0 font-extrabold`}
                         style={{
                           backgroundColor: isSelected ? sColor : '#e2e8f0',
                           borderColor: isSelected ? sColor : '#cbd5e1',
@@ -334,8 +334,8 @@ export function StudentCompareGrowthChart({
                         {isSelected ? <Check size={11} className="stroke-[3]" /> : st.name.charAt(0)}
                       </div>
                       <div className="truncate">
-                        <div className="truncate font-bold text-gray-800 text-[11.5px]">{st.name}</div>
-                        {st.email && <div className="text-[8.5px] text-gray-400 truncate">{st.email}</div>}
+                        <div className="truncate font-bold text-gray-800 text-xs">{st.name}</div>
+                        {st.email && <div className="text-xs text-gray-400 truncate">{st.email}</div>}
                       </div>
                     </div>
                   </button>
@@ -344,7 +344,7 @@ export function StudentCompareGrowthChart({
             </div>
           </div>
 
-          <div className="mt-3 pt-2.5 border-t border-slate-200/70 text-[9.5px] text-slate-400 leading-normal flex items-center gap-1">
+          <div className="mt-3 pt-2.5 border-t border-slate-200/70 text-xs text-slate-400 leading-normal flex items-center gap-1">
             <Activity size={12} className="text-indigo-400" />
             <span>{lang === 'zh' ? '勾选即可实时载入/移除比对' : 'Toggle checkboxes to real-time update'}</span>
           </div>
@@ -366,13 +366,13 @@ export function StudentCompareGrowthChart({
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                   <XAxis
                     dataKey="name"
-                    tick={{ fontSize: 9, fill: '#64748b', fontWeight: 'bold' }}
+                    tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
                     axisLine={{ stroke: '#e2e8f0' }}
                     tickLine={false}
                   />
                   <YAxis
                     domain={[0, 100]}
-                    tick={{ fontSize: 9, fill: '#64748b', fontWeight: 'bold' }}
+                    tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
                     axisLine={{ stroke: '#e2e8f0' }}
                     tickLine={false}
                   />
@@ -383,7 +383,7 @@ export function StudentCompareGrowthChart({
                           <div className="p-3 bg-white/95 border border-gray-150 rounded-xl shadow-xl max-w-[280px] font-sans text-xs">
                             <div className="font-extrabold text-slate-800 leading-tight mb-2 border-b border-gray-100 pb-1.5 flex items-center justify-between">
                               <span className="truncate max-w-[180px]">{label}</span>
-                              <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
+                              <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
                                 Evaluated Item
                               </span>
                             </div>
@@ -396,7 +396,7 @@ export function StudentCompareGrowthChart({
                                 return (
                                   <div
                                     key={p.dataKey}
-                                    className="flex items-center justify-between gap-4 font-sans text-[11px]"
+                                    className="flex items-center justify-between gap-4 font-sans text-xs"
                                   >
                                     <div className="flex items-center gap-1.5 min-w-0">
                                       <span
@@ -450,7 +450,7 @@ export function StudentCompareGrowthChart({
       {/* Bottom Summary Scorecard comparison grid */}
       {selectedStudentIds.length >= 2 && comparedStudentSummary.length > 0 && (
         <div className="px-4 pb-4 border-t border-gray-100 pt-3">
-          <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-2.5 select-none flex items-center gap-1">
+          <div className="text-xs font-black uppercase text-slate-400 tracking-wider mb-2.5 select-none flex items-center gap-1">
             <Award size={12} className="text-indigo-500" />
             <span>{t.metricsTableTitle}</span>
           </div>
@@ -470,26 +470,26 @@ export function StudentCompareGrowthChart({
                     <span className="text-xs font-extrabold text-slate-800 truncate" title={sumItem.name}>
                       {sumItem.name}
                     </span>
-                    <span className="text-[9px] text-gray-400 font-mono font-bold">
+                    <span className="text-xs text-gray-400 font-mono font-bold">
                       {sumItem.totalItems} {lang === 'zh' ? '个样本' : 'graded'}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-100/60 select-none">
                     <div>
-                      <span className="text-[8px] text-gray-400 uppercase font-black">
+                      <span className="text-xs text-gray-400 uppercase font-black">
                         {lang === 'zh' ? '基础/当前均分' : 'Base/Live Avg'}
                       </span>
-                      <div className="text-[11px] font-bold font-mono text-slate-700 mt-0.5">
+                      <div className="text-xs font-bold font-mono text-slate-700 mt-0.5">
                         {sumItem.startingAvg}% → {sumItem.finalAvg}%
                       </div>
                     </div>
 
                     <div className="text-right">
-                      <span className="text-[8px] text-gray-400 uppercase font-black">{t.tableNet}</span>
+                      <span className="text-xs text-gray-400 uppercase font-black">{t.tableNet}</span>
                       <div className="flex items-center justify-end gap-0.5 mt-0.5">
                         <span
-                          className={`text-[11px] font-black font-mono ${
+                          className={`text-xs font-black font-mono ${
                             isUpward ? 'text-emerald-600' : isDownward ? 'text-red-500' : 'text-slate-600'
                           }`}
                         >
@@ -501,7 +501,7 @@ export function StudentCompareGrowthChart({
                     </div>
                   </div>
 
-                  <div className="mt-2 text-[9px] bg-white p-1 rounded border border-slate-150 flex items-center justify-between font-mono select-none">
+                  <div className="mt-2 text-xs bg-white p-1 rounded border border-slate-150 flex items-center justify-between font-mono select-none">
                     <span className="text-gray-400 font-bold">{lang === 'zh' ? '评估最值' : 'Peak Score'}</span>
                     <span className="font-extrabold text-indigo-700">{sumItem.peak}%</span>
                   </div>

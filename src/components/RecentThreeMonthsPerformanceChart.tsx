@@ -159,7 +159,7 @@ export function RecentThreeMonthsPerformanceChart({
           <div>
             <h3 className="font-extrabold text-gray-950 text-base flex items-center gap-2">
               <span>{lang === 'zh' ? '近3个月作业成绩分析' : 'Recent 3-Month Progress Chart'}</span>
-              <span className="inline-flex items-center gap-0.5 bg-rose-50 text-rose-700 border border-rose-100 rounded-full px-2 py-0.5 text-[9px] font-bold">
+              <span className="inline-flex items-center gap-0.5 bg-rose-50 text-rose-700 border border-rose-100 rounded-full px-2 py-0.5 text-xs font-bold">
                 {lang === 'zh' ? '90天回顾' : '90 Days Review'}
               </span>
             </h3>
@@ -178,13 +178,13 @@ export function RecentThreeMonthsPerformanceChart({
             <div className="inline-flex border border-gray-200 rounded-lg p-0.5 bg-white shadow-2xs">
               <button
                 onClick={() => setFilterMode('3months')}
-                className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${filterMode === '3months' ? 'bg-rose-600 text-white' : 'text-gray-500 hover:text-gray-800'}`}
+                className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${filterMode === '3months' ? 'bg-rose-600 text-white' : 'text-gray-500 hover:text-gray-800'}`}
               >
                 {lang === 'zh' ? '近 3 个月' : 'Last 3 Months'}
               </button>
               <button
                 onClick={() => setFilterMode('all')}
-                className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${filterMode === 'all' ? 'bg-rose-600 text-white' : 'text-gray-500 hover:text-gray-800'}`}
+                className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${filterMode === 'all' ? 'bg-rose-600 text-white' : 'text-gray-500 hover:text-gray-800'}`}
               >
                 {lang === 'zh' ? '全部记录' : 'All Graded'}
               </button>
@@ -218,25 +218,25 @@ export function RecentThreeMonthsPerformanceChart({
       {/* Basic summary metrics for the selected set */}
       <div className="px-5 py-3.5 border-b border-gray-100 bg-white grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="p-3 bg-rose-50/10 rounded-xl border border-rose-100/30 flex flex-col">
-          <span className="text-[10px] font-bold text-gray-450 uppercase tracking-wider">
+          <span className="text-xs font-bold text-gray-450 uppercase tracking-wider">
             {lang === 'zh' ? '平均成绩' : 'Avg. Score'}
           </span>
           <span className="text-xl font-extrabold text-rose-950 font-mono mt-0.5">{stats.average}%</span>
         </div>
         <div className="p-3 bg-amber-50/10 rounded-xl border border-amber-100/30 flex flex-col">
-          <span className="text-[10px] font-bold text-gray-450 uppercase tracking-wider">
+          <span className="text-xs font-bold text-gray-450 uppercase tracking-wider">
             {lang === 'zh' ? '最高分数' : 'Peak Score'}
           </span>
           <span className="text-xl font-extrabold text-amber-950 font-mono mt-0.5">{stats.highest}%</span>
         </div>
         <div className="p-3 bg-indigo-50/10 rounded-xl border border-indigo-100/30 flex flex-col">
-          <span className="text-[10px] font-bold text-gray-450 uppercase tracking-wider">
+          <span className="text-xs font-bold text-gray-450 uppercase tracking-wider">
             {lang === 'zh' ? '作业评阅数' : 'Graded Count'}
           </span>
           <span className="text-xl font-extrabold text-indigo-950 font-mono mt-0.5">{stats.total}</span>
         </div>
         <div className="p-3 bg-emerald-50/10 rounded-xl border border-emerald-100/30 flex flex-col">
-          <span className="text-[10px] font-bold text-gray-450 uppercase tracking-wider">
+          <span className="text-xs font-bold text-gray-450 uppercase tracking-wider">
             {lang === 'zh' ? '及格件数' : 'Passing Works'}
           </span>
           <span className="text-xl font-extrabold text-emerald-950 font-mono mt-0.5">{stats.passing}</span>
@@ -251,7 +251,7 @@ export function RecentThreeMonthsPerformanceChart({
             <h4 className="text-gray-800 text-xs font-bold">
               {lang === 'zh' ? '近3个月没有已评分的作业记录' : 'No Graded Submissions in the past 3 months'}
             </h4>
-            <p className="text-gray-400 text-[10px] mt-1 px-4 max-w-sm mx-auto">
+            <p className="text-gray-400 text-xs mt-1 px-4 max-w-sm mx-auto">
               {lang === 'zh'
                 ? '暂无符合检索时间窗的评语或测验成绩。您可以点击“全部记录”进行查询，或交办新作业让名师或AI进行极速评分。'
                 : 'No performance updates were logged during this period. Try switching to "All Graded" to see historic trends, or complete pending tasks now!'}
@@ -271,13 +271,13 @@ export function RecentThreeMonthsPerformanceChart({
                 {showGrid && <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />}
                 <XAxis
                   dataKey="dateLabel"
-                  tick={{ fontSize: 9, fill: '#64748b', fontWeight: 'bold' }}
+                  tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={false}
                 />
                 <YAxis
                   domain={[0, 100]}
-                  tick={{ fontSize: 9, fill: '#64748b', fontWeight: 'bold' }}
+                  tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={false}
                 />
@@ -288,26 +288,26 @@ export function RecentThreeMonthsPerformanceChart({
                       return (
                         <div className="p-3 bg-white/95 border border-rose-100 rounded-xl shadow-xl max-w-[260px] backdrop-blur-xs font-sans">
                           <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-1 mb-1 border-opacity-50">
-                            <span className="text-[9px] text-gray-400 font-bold uppercase font-mono">
+                            <span className="text-xs text-gray-400 font-bold uppercase font-mono">
                               {d.className}
                             </span>
-                            <span className="inline-flex items-center bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono border border-rose-100">
+                            <span className="inline-flex items-center bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full text-xs font-bold font-mono border border-rose-100">
                               {d.score}%
                             </span>
                           </div>
                           <p className="text-xs font-bold text-slate-800 leading-snug">{d.fullTitle}</p>
-                          <p className="text-[9px] text-slate-400 mt-1">{d.fullDateLabel}</p>
+                          <p className="text-xs text-slate-400 mt-1">{d.fullDateLabel}</p>
                           {d.gradedAtStr && (
-                            <p className="text-[9px] text-rose-500 font-mono mt-0.5">
+                            <p className="text-xs text-rose-500 font-mono mt-0.5">
                               {lang === 'zh' ? `测评时间: ${d.gradedAtStr}` : `Reviewed: ${d.gradedAtStr}`}
                             </p>
                           )}
                           {d.feedback && (
                             <div className="mt-2 bg-rose-50/40 p-1.5 rounded border border-rose-100/50">
-                              <span className="text-[8px] font-bold text-rose-800 uppercase block tracking-wider mb-0.5">
+                              <span className="text-xs font-bold text-rose-800 uppercase block tracking-wider mb-0.5">
                                 {lang === 'zh' ? '随堂反馈意见' : 'FEEDBACK'}
                               </span>
-                              <p className="text-[10px] text-slate-600 italic">"{d.feedback}"</p>
+                              <p className="text-xs text-slate-600 italic">"{d.feedback}"</p>
                             </div>
                           )}
                         </div>
@@ -325,7 +325,7 @@ export function RecentThreeMonthsPerformanceChart({
                     label={{
                       value: lang === 'zh' ? `近期平均 (${stats.average}%)` : `Recent Avg (${stats.average}%)`,
                       fill: '#db2777',
-                      fontSize: 8,
+                      fontSize: 12,
                       fontWeight: 'bold',
                       position: 'top',
                       offset: 3,

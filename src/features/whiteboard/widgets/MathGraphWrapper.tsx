@@ -186,9 +186,11 @@ export function MathGraphWrapper({
   onPointerMove,
   onPointerUp,
   onDelete,
+  readOnly = false,
 }: {
   elementId: string;
   data: any;
+  readOnly?: boolean;
   onElementUpdate?: (id: string, data: any) => Promise<void>;
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerMove: (e: React.PointerEvent) => void;
@@ -244,7 +246,7 @@ export function MathGraphWrapper({
   return (
     <div
       className="w-full h-full bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-mono text-sm"
-      style={{ pointerEvents: 'auto' }}
+      style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
     >
       <div
         className="bg-gray-100 text-gray-700 px-3 py-1.5 flex justify-between items-center text-xs border-b border-gray-300 cursor-move select-none shrink-0"
@@ -253,28 +255,31 @@ export function MathGraphWrapper({
         onPointerUp={onPointerUp}
       >
         <span className="flex items-center gap-1 font-semibold text-gray-600">Math Graph Sandbox</span>
-        <button
-          onClick={onDelete}
-          onPointerDown={(e) => e.stopPropagation()}
-          className="p-1 hover:bg-gray-200 rounded-full text-gray-500 hover:text-red-500 transition-colors cursor-pointer flex items-center justify-center"
-          title="删除组件"
-        >
-          <Trash2 size={13} />
-        </button>
+        {!readOnly && (
+          <button
+            onClick={onDelete}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="p-1 hover:bg-gray-200 rounded-full text-gray-500 hover:text-red-500 transition-colors cursor-pointer flex items-center justify-center"
+            title="删除组件"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
       <div className="p-3 border-b border-gray-200 flex-none flex flex-col gap-1">
         <span className="text-gray-500 text-xs">y = f(x)</span>
         <input
           type="text"
           value={equation}
+          disabled={readOnly}
           onChange={(e) => setEquation(e.target.value)}
           onBlur={handleBlur}
-          className="w-full border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-500 font-mono text-xs"
+          className="w-full border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-500 font-mono text-xs disabled:bg-gray-100 disabled:cursor-not-allowed"
           placeholder="e.g. Math.sin(x) * x"
           onPointerDown={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
         />
-        {error && <div className="text-red-500 text-[10px] mt-1">{error}</div>}
+        {error && <div className="text-red-500 text-xs mt-1">{error}</div>}
       </div>
       <div className="flex-1 relative overflow-hidden bg-white min-h-0" ref={graphContainerRef}>
         <svg

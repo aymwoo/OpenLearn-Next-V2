@@ -135,7 +135,7 @@ export const AITeacherWorkspaceWidget: React.FC<AITeacherWorkspaceWidgetProps> =
                 onClick={() => setState((prev) => ({ ...prev, activeSection: sec }))}
                 style={{
                   padding: '4px 8px',
-                  fontSize: '11px',
+                  fontSize: '12px',
                   borderRadius: '4px',
                   border: '1px solid #cbd5e1',
                   background: state.activeSection === sec ? '#3b82f6' : '#f8fafc',

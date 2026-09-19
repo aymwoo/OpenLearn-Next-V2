@@ -46,27 +46,27 @@ export const SdkGuideViewer: React.FC<SdkGuideViewerProps> = ({
             <p className="text-xs text-gray-600 leading-relaxed">
               Edu-OS 基于 <span className="font-semibold text-indigo-600">CommandBus（命令总线）</span> +{' '}
               <span className="font-semibold text-indigo-600">EventBus（事件总线）</span> 微内核架构。 插件通过标准 ESM
-              模块导出 <code className="bg-gray-100 text-rose-600 px-1 rounded text-[10px]">activate(ctx)</code>{' '}
+              模块导出 <code className="bg-gray-100 text-rose-600 px-1 rounded text-xs">activate(ctx)</code>{' '}
               函数接收 <span className="font-semibold">PluginContext</span>， 进而访问 7 大内核服务。本页提供完整的 API
               参考、参数说明和可运行示例。
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
-              <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full font-medium">
+              <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full font-medium">
                 🔄 DI 依赖注入
               </span>
-              <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full font-medium">
+              <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full font-medium">
                 🔒 能力安全模型
               </span>
-              <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full font-medium">
+              <span className="text-xs bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full font-medium">
                 ⚡ 热重载 + Worker 隔离
               </span>
-              <span className="text-[10px] bg-rose-50 text-rose-700 border border-rose-100 px-2 py-0.5 rounded-full font-medium">
+              <span className="text-xs bg-rose-50 text-rose-700 border border-rose-100 px-2 py-0.5 rounded-full font-medium">
                 📦 ESM + CommonJS 双格式
               </span>
-              <span className="text-[10px] bg-sky-50 text-sky-700 border border-sky-100 px-2 py-0.5 rounded-full font-medium">
+              <span className="text-xs bg-sky-50 text-sky-700 border border-sky-100 px-2 py-0.5 rounded-full font-medium">
                 🆔 别名生命周期 (Alias Lifecycle)
               </span>
-              <span className="text-[10px] bg-teal-50 text-teal-700 border border-teal-100 px-2 py-0.5 rounded-full font-medium">
+              <span className="text-xs bg-teal-50 text-teal-700 border border-teal-100 px-2 py-0.5 rounded-full font-medium">
                 🛡️ Worker Storage 安全隔离
               </span>
             </div>
@@ -84,7 +84,7 @@ export const SdkGuideViewer: React.FC<SdkGuideViewerProps> = ({
                 <h4 className="text-xs font-bold text-gray-900">
                   示例 1：思维导图插件 — 注册 Action + 处理器 + 发布事件
                 </h4>
-                <p className="text-[10px] text-gray-500 mt-0.5">
+                <p className="text-xs text-gray-500 mt-0.5">
                   演示 ctx.services 解构、Action 注册、createCommand 创建信封、eventBus.publish 发布事件
                 </p>
               </div>
@@ -117,7 +117,7 @@ export const SdkGuideViewer: React.FC<SdkGuideViewerProps> = ({
                 <h4 className="text-xs font-bold text-gray-900">
                   示例 2：AI 作业批改插件 — 演示 AI + 事件订阅 + 存储 + DI
                 </h4>
-                <p className="text-[10px] text-gray-500 mt-0.5">
+                <p className="text-xs text-gray-500 mt-0.5">
                   演示 ctx.resolve 获取数据库、services.ai 生成文本、services.storage 持久化、eventBus 订阅
                 </p>
               </div>
@@ -150,7 +150,7 @@ export const SdkGuideViewer: React.FC<SdkGuideViewerProps> = ({
                 <h4 className="text-xs font-bold text-gray-900">
                   示例 3：考试系统插件 — 演示 ctx.db 自建表 + deactivate 清理
                 </h4>
-                <p className="text-[10px] text-gray-500 mt-0.5">
+                <p className="text-xs text-gray-500 mt-0.5">
                   演示 ctx.db.ensureTable 建表、ctx.db.table 获取带前缀表名、deactivate 生命周期
                 </p>
               </div>

@@ -66,13 +66,13 @@ export function PaletteCard({ config, lang, onActivate, isFavorite = false, onTo
         <span className="font-semibold text-xs text-main truncate group-hover:text-primary-theme transition-colors">
           {lang === 'zh' ? config.labelZh : config.labelEn}
         </span>
-        <span className="text-[10px] text-muted leading-tight mt-0.5 truncate">
+        <span className="text-xs text-muted leading-tight mt-0.5 truncate">
           {lang === 'zh' ? config.descriptionZh : config.descriptionEn}
         </span>
       </div>
 
       <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-        <span className="text-[9px] font-bold text-indigo-500 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-100">
+        <span className="text-xs font-bold text-indigo-500 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-100">
           + Drag
         </span>
       </div>

@@ -31,7 +31,7 @@ export function StudentAssignmentQuestionPanel(props: {
               const parsed = JSON.parse(selectedAssignment.content);
               return (
                 <div className="space-y-2 font-sans">
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                     Lesson Learning Objectives:
                   </div>
                   <ul className="space-y-1.5">

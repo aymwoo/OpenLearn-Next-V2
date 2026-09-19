@@ -70,7 +70,7 @@ export function RollCallWrapper({
   return (
     <div
       className="w-full h-full bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 border border-indigo-500/50 rounded-xl shadow-2xl overflow-hidden flex flex-col font-sans select-none"
-      style={{ pointerEvents: 'auto' }}
+      style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
     >
       <div
         className="bg-indigo-950/80 text-indigo-200 px-3 py-2 flex justify-between items-center text-xs font-semibold border-b border-indigo-900/50 cursor-move select-none shrink-0"
@@ -99,7 +99,7 @@ export function RollCallWrapper({
         <div className="w-full flex-1 flex flex-col items-center justify-center p-2 rounded-lg bg-indigo-950/50 border border-indigo-900/30">
           {isRolling ? (
             <div className="text-center space-y-2">
-              <div className="text-[10px] text-indigo-300 uppercase tracking-widest animate-pulse font-semibold">
+              <div className="text-xs text-indigo-300 uppercase tracking-widest animate-pulse font-semibold">
                 检索班级学生中...
               </div>
               <div className="text-2xl font-extrabold text-amber-300 scale-105 tracking-wider font-sans">
@@ -108,14 +108,14 @@ export function RollCallWrapper({
             </div>
           ) : selectedStudent ? (
             <div className="text-center space-y-1.5">
-              <div className="text-[9px] text-indigo-400 uppercase tracking-widest font-semibold flex items-center justify-center gap-1">
+              <div className="text-xs text-indigo-400 uppercase tracking-widest font-semibold flex items-center justify-center gap-1">
                 <UserCheck size={11} className="text-emerald-400 animate-bounce" />
                 <span>抽中的幸运学生</span>
               </div>
               <div className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-300 tracking-wider">
                 {selectedStudent.name}
               </div>
-              <div className="text-[9px] text-indigo-300/70 font-mono overflow-hidden text-ellipsis max-w-full">
+              <div className="text-xs text-indigo-300/70 font-mono overflow-hidden text-ellipsis max-w-full">
                 {selectedStudent.email || 'No Email Account'}
               </div>
             </div>
@@ -123,7 +123,7 @@ export function RollCallWrapper({
             <div className="text-center space-y-1">
               <HelpCircle size={28} className="text-indigo-400/80 mx-auto animate-pulse" />
               <div className="text-xs text-indigo-300 font-semibold">随机抽取摇奖板</div>
-              <p className="text-[9px] text-indigo-400/60 leading-tight">将在白板上演示随机滚动，对课堂提问大有裨益</p>
+              <p className="text-xs text-indigo-400/60 leading-tight">将在白板上演示随机滚动，对课堂提问大有裨益</p>
             </div>
           )}
         </div>
@@ -133,13 +133,13 @@ export function RollCallWrapper({
           <button
             onClick={pickStudent}
             disabled={isRolling}
-            className="w-full py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-650 hover:to-purple-750 text-white font-bold text-[11px] uppercase tracking-wider rounded-lg shadow-md active:scale-97 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5"
+            className="w-full py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-650 hover:to-purple-750 text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-md active:scale-97 disabled:opacity-50 transition-all flex items-center justify-center gap-1.5"
           >
             <Shuffle size={12} className={isRolling ? 'animate-spin' : ''} />
             <span>{isRolling ? '滚轮运转中...' : selectedStudent ? '重新随机点名' : '开始随机点名'}</span>
           </button>
 
-          <div className="text-[8.5px] text-indigo-400/60 text-center font-mono">
+          <div className="text-xs text-indigo-400/60 text-center font-mono">
             班级人数：{allStudents.length} 人 • 内核总线热同步
           </div>
         </div>

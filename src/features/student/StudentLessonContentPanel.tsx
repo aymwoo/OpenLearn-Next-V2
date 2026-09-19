@@ -64,12 +64,12 @@ export function StudentLessonContentPanel(props: StudentLessonContentPanelProps)
           {studentFullscreenPanel === 'left' ? (
             <>
               <Minimize2 size={13} />
-              <span className="text-[10px] font-medium">退出全屏</span>
+              <span className="text-xs font-medium">退出全屏</span>
             </>
           ) : (
             <>
               <Maximize2 size={13} />
-              <span className="text-[10px] font-medium">全屏</span>
+              <span className="text-xs font-medium">全屏</span>
             </>
           )}
         </button>
@@ -83,7 +83,7 @@ export function StudentLessonContentPanel(props: StudentLessonContentPanelProps)
               className="mb-4 flex flex-col gap-2 p-3 bg-slate-50/70 border border-slate-200/50 rounded-xl shadow-3xs text-left"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1 select-none">
+              <div className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5 mb-1 select-none">
                 <Activity size={12} className="text-indigo-500" />
                 {lang === 'zh' ? '教学环节 (点击切换)' : 'Timeline Segments'}
               </div>
@@ -103,7 +103,7 @@ export function StudentLessonContentPanel(props: StudentLessonContentPanelProps)
 
         {/* Learning Progress Slider Feedback Widget */}
         <div className="mb-4 bg-slate-50 p-2.5 rounded-xl border border-slate-200/60 shadow-3xs flex flex-col gap-1.5 text-left select-none">
-          <div className="flex justify-between items-center text-[10px] font-bold text-gray-500">
+          <div className="flex justify-between items-center text-xs font-bold text-gray-500">
             <span className="flex items-center gap-1">
               <Activity size={12} className="text-indigo-500 animate-pulse" />
               {lang === 'zh' ? '自主学习进度反馈' : 'Learning Progress'}
@@ -129,7 +129,7 @@ export function StudentLessonContentPanel(props: StudentLessonContentPanelProps)
                 setLocalProgressPercent(100);
                 updateStudentProgress(100);
               }}
-              className={`text-[9px] font-bold rounded-lg px-2 py-1 transition-all ${
+              className={`text-xs font-bold rounded-lg px-2 py-1 transition-all ${
                 localProgressPercent === 100
                   ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
                   : 'bg-white hover:bg-slate-50 text-slate-650 border border-slate-200 hover:border-indigo-200 shadow-3xs cursor-pointer'

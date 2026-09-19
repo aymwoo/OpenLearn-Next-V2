@@ -73,7 +73,7 @@ export function NotificationDetailModal({
                         <span>{lang === 'zh' ? '教师评审意见与反馈' : 'Teacher Feedback & Recommendations'}</span>
                       </div>
                       {notification.assignment.graded_at && (
-                        <div className="text-[10px] text-gray-400 font-mono flex items-center gap-1 font-normal select-none">
+                        <div className="text-xs text-gray-400 font-mono flex items-center gap-1 font-normal select-none">
                           <Clock size={11} className="text-neutral-400" />
                           <span>
                             {new Date(notification.assignment.graded_at).toLocaleString(

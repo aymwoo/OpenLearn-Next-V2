@@ -21,12 +21,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **全站中文字体规范化与 9pt (12px) 物理保底 (Chinese Web Typography & 9pt Minimum Floor Guarantee)**:
+  - **中文排版底线标准设定**：根据现代中文网页排版规范与印刷字号换算标准（$9\text{pt} = 12\text{px}$，中文小五号字），杜绝页面中因字号过小（如 6px~11px）导致的中文字符发虚、笔画粘连与难以辨认问题；
+  - **全局 CSS 强防御兜底 (`src/index.css`)**：在全局样式表中配置 `max(12px, calc(12px * var(--app-font-scale, 1))) !important` 规则，确保即使用户选择紧凑缩放模式（85%），全站各处文字依然严格受 12px（9pt）物理底线保护；
+  - **全站源码扫描与字号升级**：对全平台 70+ 个页面与组件中的 748 处微像素类名（`text-[6px]` ~ `text-[11.5px]`）全面升级为标准 Tailwind `text-xs` 或 `text-sm`，将 `text-2xs` 与 `text-3xs` 平移升级，并同步将所有 Recharts/SVG 图表（学情轨迹、出勤统计、成绩趋势等）轴线刻度与提示框字体统一提升至 12px。
+
 - **全局字体缩放无障碍辅助功能 (Global Font Size Scaling & Accessibility)**:
   - **全局字号状态管理 (`fontSizeStore`)**：基于 Zustand 构建字号缩放状态机（支持 80%、90%、100%、110%、125%、150%），状态自动持久化至 `localStorage`；
   - **全站 CSS 变量与视图穿透生效**：通过 `--font-scale` 变量联动根节点 `html` 与主要工作区样式，并向所有沙箱课件 `iframe` 广播字号缩放指令（`broadcastFontScaleToIframes`）；
   - **顶栏统一控制交互 (`FontSizeSelector`)**：在系统全局顶栏集成快捷调节器，并移除非顶部的冗余按钮（如白板与课程编辑器工具栏），保障操作界面纯净统一。
 
 ### Fixes
+
+- **全班专注锁定白板内嵌组件只读与交互阻断 (Class Focus Lock Whiteboard Component Read-Only Guard)**:
+  - **缺陷**：当教师开启“全班专注模式/禁言锁定”时，学生端白板画布虽有锁定提示遮罩，但白板内部渲染的各类教学组件（Reveal 演示文稿、代码沙箱、数理画板、点名器、互动课件等）仍可被学生独立点击和操作；
+  - **修复**：在白板容器与所有内嵌教学小部件上联动 `isLocked` / `readOnly` 状态，对白板画布层全面注入交互阻断（`pointer-events-none`、只读参数穿透传递与操作拦截），确保专注锁定期间学生端所有内嵌组件完全处于只读观察状态；
+  - **测试覆盖**：新增单元测试 `src/features/whiteboard/__tests__/whiteboard-readonly-lock.test.tsx` 严格验证只读遮罩与组件交互拦截逻辑。
+
 
 - **交互网页课件任意文件名 404 与自愈恢复机制 (Arbitrary HTML Courseware Entry & Self-Healing)**:
   - **缺陷**：在属性编辑器中选择单文件 HTML 课件时，系统固定寻址 `index.html`；若课件文件名为中文或自定义命名（如 `自适应五子棋.html`、`约翰·斯诺的霍乱地图.html`），运行时报错 `File not found: index.html`；且仅存放在 `system_resources` 原生表的课件在磁盘缺少物理文件时无法直接运行；

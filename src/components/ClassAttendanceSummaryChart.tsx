@@ -172,7 +172,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
         <span className="text-xs font-semibold text-gray-500 font-sans block mb-1">
           {lang === 'zh' ? '近30天内没有出勤记录' : 'No Attendance Records in Last 30 Days'}
         </span>
-        <span className="text-[10px] text-gray-400 max-w-sm">
+        <span className="text-xs text-gray-400 max-w-sm">
           {lang === 'zh'
             ? '在新日程安排中为学生记录出勤后，统计数据将自动在此处生成。'
             : 'Attendance stats will generate automatically once you schedule lessons and register student statuses.'}
@@ -209,7 +209,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
             <h4 className="text-sm font-bold text-gray-800">
               {lang === 'zh' ? '近30天班级出勤率分析' : '30-Day Class Attendance Rates'}
             </h4>
-            <p className="text-[10px] text-gray-400">
+            <p className="text-xs text-gray-400">
               {lang === 'zh'
                 ? '基于最近30天内的课程日程和已记录的出勤状态'
                 : 'Based on scheduled lessons and submitted attendance records'}
@@ -220,7 +220,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
         {/* Aggregated Stats Row */}
         <div className="flex items-center gap-4 bg-gray-50/50 p-1.5 px-3 rounded-lg border border-gray-100/60 text-xs text-gray-600">
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">
+            <span className="text-xs text-gray-400 uppercase font-bold tracking-wider">
               {lang === 'zh' ? '平均率' : 'Avg Rate'}:
             </span>
             <span
@@ -231,7 +231,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
           </div>
           <div className="h-3 w-[1px] bg-gray-200" />
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">
+            <span className="text-xs text-gray-400 uppercase font-bold tracking-wider">
               {lang === 'zh' ? '总课时' : 'Schedules'}:
             </span>
             <span className="font-extrabold text-slate-800">{stats.totalSchedules}</span>
@@ -243,21 +243,21 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
         <div className="flex flex-col items-center py-1">
           <div className="flex items-center gap-1.5 text-green-600 mb-0.5">
             <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping" />
-            <span className="font-semibold text-[10px]">{lang === 'zh' ? '已到' : 'Present'}</span>
+            <span className="font-semibold text-xs">{lang === 'zh' ? '已到' : 'Present'}</span>
           </div>
           <div className="text-sm font-bold text-gray-800">{stats.totalPresent}</div>
         </div>
         <div className="flex flex-col items-center py-1 border-x border-gray-100">
           <div className="flex items-center gap-1.5 text-amber-500 mb-0.5">
             <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
-            <span className="font-semibold text-[10px]">{lang === 'zh' ? '迟到' : 'Late'}</span>
+            <span className="font-semibold text-xs">{lang === 'zh' ? '迟到' : 'Late'}</span>
           </div>
           <div className="text-sm font-bold text-gray-800">{stats.totalLate}</div>
         </div>
         <div className="flex flex-col items-center py-1">
           <div className="flex items-center gap-1.5 text-red-500 mb-0.5">
             <span className="w-1.5 h-1.5 bg-red-400 rounded-full" />
-            <span className="font-semibold text-[10px]">{lang === 'zh' ? '缺勤' : 'Absent'}</span>
+            <span className="font-semibold text-xs">{lang === 'zh' ? '缺勤' : 'Absent'}</span>
           </div>
           <div className="text-sm font-bold text-gray-800">{stats.totalAbsent}</div>
         </div>
@@ -299,7 +299,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
                 <span className="font-extrabold block">
                   {lang === 'zh' ? '检测到低出勤率周期预警' : 'Problematic Low Attendance Period Detected'}
                 </span>
-                <p className="mt-0.5 text-[11px] text-rose-700/90 leading-relaxed">
+                <p className="mt-0.5 text-xs text-rose-700/90 leading-relaxed">
                   {lang === 'zh'
                     ? `班级在 ${lowestAttendanceDay.date}（课程: 《${lowestAttendanceDay.lessonTitle}》）到课率处于低谷（仅为 ${lowestAttendanceDay.attendanceRate}%）。请留意可能存在影响出勤的外部因素或教学周期瓶颈。`
                     : `Check-in density dropped to a critical low of ${lowestAttendanceDay.attendanceRate}% on ${lowestAttendanceDay.date} for lesson: "${lowestAttendanceDay.lessonTitle}". Keep track of potential class milestones or periodic patterns.`}
@@ -309,7 +309,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
           )}
 
           {/* Core Legend Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 text-[10px] text-gray-500 bg-slate-50/50 px-3 py-2 rounded-lg border border-gray-100/50">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500 bg-slate-50/50 px-3 py-2 rounded-lg border border-gray-100/50">
             <span className="font-semibold">{lang === 'zh' ? '出勤率梯度图例:' : 'Attendance Rate Intensity:'}</span>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1">
@@ -335,10 +335,10 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
             {/* Left Heatmap Grid (Mon-Sun columns) */}
             <div className="md:col-span-7 bg-white border border-gray-100 p-4 rounded-xl shadow-2xs">
               <div className="flex items-center justify-between mb-3 border-b border-gray-50 pb-2">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
                   {lang === 'zh' ? '35天教学周期考勤热度' : '5-Week Sequential Heatmap'}
                 </span>
-                <span className="text-[9.5px] text-gray-400 font-mono">Mon-Sun Matrix</span>
+                <span className="text-xs text-gray-400 font-mono">Mon-Sun Matrix</span>
               </div>
 
               <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
@@ -348,7 +348,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
                 ).map((label) => (
                   <div
                     key={label}
-                    className="text-center text-[10px] font-black text-slate-400 py-1 uppercase tracking-wider font-sans"
+                    className="text-center text-xs font-black text-slate-400 py-1 uppercase tracking-wider font-sans"
                   >
                     {label}
                   </div>
@@ -398,38 +398,38 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
                       }
                     >
                       {/* Day count */}
-                      <span className="text-[11px] font-bold select-none">{day.dayOfMonth}</span>
+                      <span className="text-xs font-bold select-none">{day.dayOfMonth}</span>
 
                       {/* Accent first of month */}
                       {day.dayOfMonth === 1 && (
-                        <span className="absolute -top-1.5 -right-1 bg-indigo-700 text-white text-[7px] font-black tracking-widest uppercase px-1 rounded shadow-xs scale-90">
+                        <span className="absolute -top-1.5 -right-1 bg-indigo-700 text-white text-xs font-black tracking-widest uppercase px-1 rounded shadow-xs scale-90">
                           {day.monthName}
                         </span>
                       )}
 
                       {/* Desktop Hover Tooltip Box */}
                       {day.match && (
-                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-950 text-white p-2 text-[9.5px] leading-relaxed rounded-xl shadow-2xl opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:-translate-y-0.5 transition-all duration-150 z-50 block">
+                        <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-950 text-white p-2 text-xs leading-relaxed rounded-xl shadow-2xl opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 group-hover:-translate-y-0.5 transition-all duration-150 z-50 block">
                           <div className="font-extrabold border-b border-slate-850 pb-1 mb-1 truncate text-left">
                             {day.match.lessonTitle}
                           </div>
-                          <div className="flex justify-between font-mono gap-1 text-[8.5px]">
+                          <div className="flex justify-between font-mono gap-1 text-xs">
                             <span className="text-slate-400">{lang === 'zh' ? '日期' : 'Date'}:</span>
                             <span className="font-bold">{day.dateStr}</span>
                           </div>
-                          <div className="flex justify-between font-mono gap-1 text-[8.5px]">
+                          <div className="flex justify-between font-mono gap-1 text-xs">
                             <span className="text-slate-400">{lang === 'zh' ? '实到人数' : 'Present'}:</span>
                             <span className="font-extrabold text-emerald-300">{day.match.present}</span>
                           </div>
-                          <div className="flex justify-between font-mono gap-1 text-[8.5px]">
+                          <div className="flex justify-between font-mono gap-1 text-xs">
                             <span className="text-slate-400">{lang === 'zh' ? '迟到人数' : 'Late'}:</span>
                             <span className="font-extrabold text-amber-300">{day.match.late}</span>
                           </div>
-                          <div className="flex justify-between font-mono gap-1 text-[8.5px]">
+                          <div className="flex justify-between font-mono gap-1 text-xs">
                             <span className="text-slate-400">{lang === 'zh' ? '未到人数' : 'Absent'}:</span>
                             <span className="font-extrabold text-rose-300">{day.match.absent}</span>
                           </div>
-                          <div className="text-center font-bold font-mono text-[11px] text-indigo-300 pt-1 border-t border-slate-800 mt-1">
+                          <div className="text-center font-bold font-mono text-xs text-indigo-300 pt-1 border-t border-slate-800 mt-1">
                             {lang === 'zh' ? '到课比率:' : 'Access density:'} {ratePercent}%
                           </div>
                           <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-[4px] border-transparent border-t-slate-950" />
@@ -446,7 +446,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
               {selectedDay ? (
                 <div className="text-left flex-1 flex flex-col justify-between h-full space-y-3">
                   <div>
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1">
                       {lang === 'zh' ? '日期考勤指数详情' : 'Acreage Diagnostic Center'}
                     </span>
                     <h5 className="text-xs font-black text-gray-800 flex items-center gap-1.5 justify-start">
@@ -459,7 +459,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
                     <div className="space-y-3 flex-1 flex flex-col justify-between">
                       {/* Lesson title */}
                       <div className="bg-white border border-gray-150 p-2.5 rounded-lg text-left">
-                        <span className="text-[8.5px] font-bold text-gray-400 block uppercase">
+                        <span className="text-xs font-bold text-gray-400 block uppercase">
                           {lang === 'zh' ? '讲授课目' : 'Subject of Instruction'}
                         </span>
                         <p
@@ -498,7 +498,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
                         </div>
 
                         <div className="text-left space-y-0.5">
-                          <span className="text-[10px] font-bold text-gray-400 block uppercase">
+                          <span className="text-xs font-bold text-gray-400 block uppercase">
                             {lang === 'zh' ? '考勤宏观评估' : 'Check-in Diagnostics'}
                           </span>
                           <span
@@ -528,7 +528,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
                       {/* Breakdown Status Badges Grid */}
                       <div className="grid grid-cols-3 gap-1.5 text-center">
                         <div className="bg-white border border-gray-150 p-1.5 rounded-lg">
-                          <span className="text-[8px] font-bold text-emerald-600 block uppercase">
+                          <span className="text-xs font-bold text-emerald-600 block uppercase">
                             {lang === 'zh' ? '到席' : 'In Class'}
                           </span>
                           <span className="text-xs font-mono font-extrabold text-slate-800">
@@ -536,7 +536,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
                           </span>
                         </div>
                         <div className="bg-white border border-gray-150 p-1.5 rounded-lg">
-                          <span className="text-[8px] font-bold text-amber-500 block uppercase">
+                          <span className="text-xs font-bold text-amber-500 block uppercase">
                             {lang === 'zh' ? '迟到' : 'Late'}
                           </span>
                           <span className="text-xs font-mono font-extrabold text-slate-800">
@@ -544,7 +544,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
                           </span>
                         </div>
                         <div className="bg-white border border-gray-150 p-1.5 rounded-lg">
-                          <span className="text-[8px] font-bold text-rose-500 block uppercase">
+                          <span className="text-xs font-bold text-rose-500 block uppercase">
                             {lang === 'zh' ? '缺席' : 'Absent'}
                           </span>
                           <span className="text-xs font-mono font-extrabold text-slate-800">
@@ -556,10 +556,10 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
                   ) : (
                     <div className="flex-1 flex flex-col items-center justify-center py-6 text-slate-400 text-center gap-1 select-none font-sans">
                       <AlertCircle size={24} className="text-slate-300" />
-                      <span className="font-bold text-slate-500 text-[11px]">
+                      <span className="font-bold text-slate-500 text-xs">
                         {lang === 'zh' ? '当天没有排课计划' : 'No Lesson Scheduled'}
                       </span>
-                      <span className="text-[9px] max-w-[180px] text-gray-400">
+                      <span className="text-xs max-w-[180px] text-gray-400">
                         {lang === 'zh'
                           ? '本日期无分配的课程安排及签到表。'
                           : 'No instruction maps were recorded on this period.'}
@@ -573,7 +573,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
                   <span className="font-bold text-slate-600 text-xs">
                     {lang === 'zh' ? '请点击考勤方块' : 'Select a Cell to Inspect'}
                   </span>
-                  <span className="text-[9.5px] text-gray-400 max-w-[180px] leading-relaxed">
+                  <span className="text-xs text-gray-400 max-w-[180px] leading-relaxed">
                     {lang === 'zh'
                       ? '在左侧历史视窗中轻点日期，可瞬间深度解读班级应出席名册及课题明细。'
                       : 'Click any of the heat blocks to audit lesson stats and classroom ratios.'}
@@ -591,14 +591,14 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
               <XAxis
                 dataKey="displayDate"
-                tick={{ fontSize: 9, fill: '#9ca3af' }}
+                tick={{ fontSize: 12, fill: '#9ca3af' }}
                 axisLine={{ stroke: '#e5e7eb' }}
                 tickLine={false}
               />
               <YAxis
                 domain={[0, 100]}
                 tickFormatter={(v) => `${v}%`}
-                tick={{ fontSize: 9, fill: '#9ca3af' }}
+                tick={{ fontSize: 12, fill: '#9ca3af' }}
                 axisLine={false}
                 tickLine={false}
               />
@@ -613,7 +613,7 @@ export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAtten
                           <span className="max-w-[130px] truncate" title={item.lessonTitle}>
                             {item.lessonTitle}
                           </span>
-                          <span className="text-[10px] text-gray-400 font-mono normal-case">{item.date}</span>
+                          <span className="text-xs text-gray-400 font-mono normal-case">{item.date}</span>
                         </div>
                         <div className="flex justify-between gap-4 text-gray-600">
                           <span className="flex items-center gap-1 text-gray-400">

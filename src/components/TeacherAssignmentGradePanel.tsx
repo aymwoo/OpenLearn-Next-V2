@@ -227,7 +227,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
             <Award size={16} className="text-indigo-655" />
             {zh ? '学生作业成绩评定与折算系统' : 'Student Assignment Grading & Sync'}
           </h3>
-          <span className="text-[9px] bg-indigo-50 text-indigo-750 px-2 py-0.5 rounded-full border border-indigo-100 font-bold">
+          <span className="text-xs bg-indigo-50 text-indigo-750 px-2 py-0.5 rounded-full border border-indigo-100 font-bold">
             {submissions.length} {zh ? '个提交' : 'submissions'}
           </span>
         </div>
@@ -249,7 +249,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
             <h4 className="text-xs font-bold text-slate-700">
               {zh ? '全局默认折算权重设置' : 'Default Grading Weights Configuration'}
             </h4>
-            <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
+            <p className="text-xs text-slate-400 mt-0.5 font-medium">
               {zh
                 ? '调整权重分配，所有尚未锁定成绩的学生将自动应用此默认权重比例。'
                 : 'Setting global default weights. Changes will automatically apply to non-confirmed grades.'}
@@ -259,7 +259,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
 
         <div className="flex items-center gap-4 shrink-0 bg-white px-3.5 py-2 rounded-lg border border-slate-200 shadow-3xs">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-slate-500">{zh ? '教师评分:' : 'Teacher:'}</span>
+            <span className="text-xs font-bold text-slate-500">{zh ? '教师评分:' : 'Teacher:'}</span>
             <input
               type="range"
               min="0"
@@ -275,7 +275,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
           <div className="h-4 w-[1px] bg-slate-200" />
 
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-slate-500">{zh ? '学生互评:' : 'Peer Review:'}</span>
+            <span className="text-xs font-bold text-slate-500">{zh ? '学生互评:' : 'Peer Review:'}</span>
             <span className="text-xs font-bold text-slate-700 w-8">{defaultPeerWeight}%</span>
           </div>
         </div>
@@ -317,7 +317,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
                     </div>
                     <div>
                       <div className="text-xs font-bold text-slate-800">{sub.studentName}</div>
-                      <div className="text-[9px] text-slate-400 font-mono mt-0.5 flex items-center gap-1.5">
+                      <div className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-1.5">
                         <span>V{sub.version}</span>
                         <span>•</span>
                         <span>{new Date(sub.updatedAt).toLocaleString()}</span>
@@ -327,12 +327,12 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
 
                   <div className="flex items-center gap-2">
                     {isConfirmed ? (
-                      <span className="bg-emerald-55 text-emerald-700 text-[10px] font-black px-2.5 py-1 rounded-full border border-emerald-150 flex items-center gap-1 shadow-3xs select-none">
+                      <span className="bg-emerald-55 text-emerald-700 text-xs font-black px-2.5 py-1 rounded-full border border-emerald-150 flex items-center gap-1 shadow-3xs select-none">
                         <CheckCircle size={12} />
                         {zh ? '成绩已同步' : 'Synced to Reports'}
                       </span>
                     ) : (
-                      <span className="bg-amber-50 text-amber-805 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200/60 select-none">
+                      <span className="bg-amber-50 text-amber-805 text-xs font-bold px-2 py-0.5 rounded-full border border-amber-200/60 select-none">
                         {sub.grade ? (zh ? '草稿状态' : 'Draft') : zh ? '未评定' : 'Ungraded'}
                       </span>
                     )}
@@ -341,7 +341,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
                       href={sub.filePath}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[10px] text-indigo-600 hover:text-indigo-850 font-medium hover:underline flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded-lg shadow-4xs"
+                      className="text-xs text-indigo-600 hover:text-indigo-850 font-medium hover:underline flex items-center gap-1 bg-white border border-slate-200 px-2 py-1 rounded-lg shadow-4xs"
                       title={sub.filePath}
                     >
                       <FileText size={11} />
@@ -356,24 +356,24 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
                   {/* Left part: Peer Reviews */}
                   <div className="lg:col-span-5 flex flex-col gap-2.5 border-r border-slate-100 pr-0 lg:pr-5 text-left">
                     <div className="flex justify-between items-center">
-                      <span className="text-[11px] font-bold text-slate-650 flex items-center gap-1 select-none">
+                      <span className="text-xs font-bold text-slate-650 flex items-center gap-1 select-none">
                         <Users size={13} className="text-slate-400" />
                         {zh ? '学生互评详情' : 'Peer Review Details'}
                       </span>
-                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                      <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
                         {zh ? '互评人数:' : 'Reviews:'} {sub.peerReviews.length}
                       </span>
                     </div>
 
                     <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-center gap-3">
                       <div className="bg-white border border-slate-200 w-12 h-12 rounded-lg flex flex-col items-center justify-center shrink-0 shadow-3xs">
-                        <span className="text-[9px] text-slate-405 select-none font-bold">{zh ? '均分' : 'Avg'}</span>
+                        <span className="text-xs text-slate-405 select-none font-bold">{zh ? '均分' : 'Avg'}</span>
                         <span className="text-sm font-extrabold text-slate-700 leading-none mt-0.5">
                           {sub.peerAverageScore}
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] text-slate-450 leading-normal font-medium">
+                        <p className="text-xs text-slate-450 leading-normal font-medium">
                           {sub.peerReviews.length > 0
                             ? zh
                               ? `根据同学互评分数得出的平均值。`
@@ -385,7 +385,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
                         {sub.peerReviews.length > 0 && (
                           <button
                             onClick={() => toggleReviews(sub.id)}
-                            className="text-[10px] text-indigo-650 hover:text-indigo-800 font-bold mt-1.5 flex items-center gap-0.5 cursor-pointer outline-none"
+                            className="text-xs text-indigo-650 hover:text-indigo-800 font-bold mt-1.5 flex items-center gap-0.5 cursor-pointer outline-none"
                           >
                             {expandedReviews[sub.id] ? (
                               <>
@@ -414,12 +414,12 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
                                 <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
                                 {rev.reviewer_name}
                               </span>
-                              <span className="text-indigo-650 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 text-[10px]">
+                              <span className="text-indigo-650 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 text-xs">
                                 {rev.score} {zh ? '分' : 'pts'}
                               </span>
                             </div>
                             {rev.comment && (
-                              <p className="text-[10px] text-slate-550 mt-1 italic pl-2.5 border-l-2 border-slate-100 font-medium">
+                              <p className="text-xs text-slate-550 mt-1 italic pl-2.5 border-l-2 border-slate-100 font-medium">
                                 "{rev.comment}"
                               </p>
                             )}
@@ -434,7 +434,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Teacher Score Input */}
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-650 mb-1 select-none">
+                        <label className="block text-xs font-bold text-slate-650 mb-1 select-none">
                           {zh ? '教师平时分评分 (0-100)' : 'Teacher Score (0-100)'}
                         </label>
                         <div className="flex gap-2">
@@ -468,10 +468,10 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
                       {/* Weight micro configuration */}
                       <div>
                         <div className="flex justify-between items-center mb-1">
-                          <label className="block text-[10px] font-bold text-slate-600 select-none">
+                          <label className="block text-xs font-bold text-slate-600 select-none">
                             {zh ? '打分占比 (教师权重)' : 'Teacher Score Weight'}
                           </label>
-                          <span className="text-[10px] font-bold text-slate-400">
+                          <span className="text-xs font-bold text-slate-400">
                             {zh ? `学生互评: ${pWeight}%` : `Peer: ${pWeight}%`}
                           </span>
                         </div>
@@ -494,7 +494,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
 
                     {/* Teacher Feedback Comment */}
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-655 mb-1 select-none">
+                      <label className="block text-xs font-bold text-slate-655 mb-1 select-none">
                         {zh ? '教师评价评语' : 'Teacher Comments & Feedback'}
                       </label>
                       <textarea
@@ -521,7 +521,7 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
                         >
                           <Database size={14} />
                         </div>
-                        <div className="text-[10px] text-slate-500 font-medium">
+                        <div className="text-xs text-slate-500 font-medium">
                           <div>{zh ? '平时总分计算公式' : 'Calculated Final Grade'}:</div>
                           <div className="font-bold text-slate-700 mt-0.5 animate-formula">
                             {tWeight}% × <span className="text-indigo-650 font-bold">{currentScore}</span>

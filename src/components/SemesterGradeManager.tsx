@@ -379,7 +379,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
             <h2 className="text-sm font-bold text-slate-800 text-left">
               {lang === 'zh' ? `【${className}】期末综合总评与计算` : `Semester Grade: ${className}`}
             </h2>
-            <p className="text-[10px] text-slate-400 mt-0.5 text-left">
+            <p className="text-xs text-slate-400 mt-0.5 text-left">
               {lang === 'zh'
                 ? '多维度评估学生考勤率、课程进度、作业以及考试分数'
                 : 'Assess attendance, progress, assignments, and test scores'}
@@ -388,7 +388,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
             {lang === 'zh' ? '学期名' : 'Semester'}
           </label>
           <select
@@ -484,7 +484,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
             {/* Grid stats overview */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 shrink-0 text-left">
               <div className="bg-slate-50/50 border border-slate-200/40 p-3 rounded-2xl">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-left">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wide text-left">
                   {lang === 'zh' ? '出勤均分权重' : 'Attendance Weight'}
                 </div>
                 <div className="text-base font-black text-slate-800 mt-1 text-left">
@@ -492,7 +492,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                 </div>
               </div>
               <div className="bg-slate-50/50 border border-slate-200/40 p-3 rounded-2xl">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-left">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wide text-left">
                   {lang === 'zh' ? '课程进度权重' : 'Progress Weight'}
                 </div>
                 <div className="text-base font-black text-slate-800 mt-1 text-left">
@@ -500,7 +500,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                 </div>
               </div>
               <div className="bg-slate-50/50 border border-slate-200/40 p-3 rounded-2xl">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-left">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wide text-left">
                   {lang === 'zh' ? '作业成绩权重' : 'Assignments Weight'}
                 </div>
                 <div className="text-base font-black text-slate-800 mt-1 text-left">
@@ -508,7 +508,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                 </div>
               </div>
               <div className="bg-slate-50/50 border border-slate-200/40 p-3 rounded-2xl">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-left">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wide text-left">
                   {lang === 'zh' ? '测验考试权重' : 'Exams Weight'}
                 </div>
                 <div className="text-base font-black text-slate-800 mt-1 text-left">
@@ -522,7 +522,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
               <div className="max-w-full overflow-x-auto">
                 <table className="w-full text-left border-collapse table-auto text-xs">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-gray-500 font-bold text-[10px] uppercase tracking-wide">
+                    <tr className="bg-slate-50 border-b border-slate-200 text-gray-500 font-bold text-xs uppercase tracking-wide">
                       <th className="p-3 w-[70px]">{lang === 'zh' ? '学号' : 'ID'}</th>
                       <th className="p-3 w-[90px]">{lang === 'zh' ? '姓名' : 'Name'}</th>
                       <th className="p-3 text-center w-[75px]">{lang === 'zh' ? '考勤分' : 'Attn'}</th>
@@ -540,7 +540,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                   <tbody className="divide-y divide-slate-100">
                     {gradeReports.map((report) => (
                       <tr key={report.studentId} className="hover:bg-slate-50/40 transition-colors">
-                        <td className="p-3 font-mono text-slate-400 text-[10px]">{report.studentNumber || '-'}</td>
+                        <td className="p-3 font-mono text-slate-400 text-xs">{report.studentNumber || '-'}</td>
                         <td className="p-3 font-bold text-slate-800">{report.studentName}</td>
                         <td className="p-3 text-center font-medium text-slate-600">{report.attendanceScore}分</td>
                         <td className="p-3 text-center font-medium text-slate-600">{report.progressScore}分</td>
@@ -577,7 +577,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                             className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans text-gray-750"
                           />
                           {report.aiEvaluation && (
-                            <div className="bg-amber-50/50 border border-amber-100 text-amber-900 rounded-xl p-2.5 text-[11px] leading-relaxed relative animate-in fade-in slide-in-from-left-2 duration-200 text-left">
+                            <div className="bg-amber-50/50 border border-amber-100 text-amber-900 rounded-xl p-2.5 text-xs leading-relaxed relative animate-in fade-in slide-in-from-left-2 duration-200 text-left">
                               <div className="font-bold text-amber-800 mb-1 flex items-center gap-1 justify-start">
                                 <Sparkles size={10} className="text-amber-500 shrink-0" />
                                 <span>{lang === 'zh' ? 'AI 温馨推荐评语 (鼓励性)：' : 'AI Suggested evaluation:'}</span>
@@ -590,7 +590,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                           <button
                             onClick={() => handleGenerateAIComment(report.studentId)}
                             disabled={aiLoading[report.studentId]}
-                            className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-200 text-white rounded-xl text-[10px] font-black cursor-pointer shadow-xs hover:shadow-sm transition-all flex items-center justify-center gap-1 w-full disabled:cursor-not-allowed"
+                            className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-200 text-white rounded-xl text-xs font-black cursor-pointer shadow-xs hover:shadow-sm transition-all flex items-center justify-center gap-1 w-full disabled:cursor-not-allowed"
                           >
                             {aiLoading[report.studentId] ? (
                               <Loader2 className="animate-spin text-white" size={10} />
@@ -642,7 +642,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                           : `Entering scores: ${activeScoreExam.title}`}
                       </span>
                     </h3>
-                    <p className="text-[10px] text-slate-400 mt-1 text-left">
+                    <p className="text-xs text-slate-400 mt-1 text-left">
                       {lang === 'zh'
                         ? `满分：${activeScoreExam.max_score} 分`
                         : `Max score: ${activeScoreExam.max_score}`}
@@ -659,7 +659,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                 <div className="max-h-96 overflow-y-auto mb-4 border border-slate-250/60 rounded-xl bg-white">
                   <table className="w-full text-left border-collapse table-auto text-xs">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-gray-500 font-semibold text-[10px] uppercase tracking-wide">
+                      <tr className="bg-slate-50 border-b border-slate-200 text-gray-500 font-semibold text-xs uppercase tracking-wide">
                         <th className="p-3">{lang === 'zh' ? '学号' : 'Student ID'}</th>
                         <th className="p-3">{lang === 'zh' ? '姓名' : 'Student Name'}</th>
                         <th className="p-3 text-center w-[120px]">{lang === 'zh' ? '考试得分' : 'Score'}</th>
@@ -671,7 +671,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                         const studentScore = examStudentScores[s.id] || { score: '', notes: '' };
                         return (
                           <tr key={s.id} className="hover:bg-slate-50/20">
-                            <td className="p-3 font-mono text-[10px] text-slate-400">{s.student_number || '-'}</td>
+                            <td className="p-3 font-mono text-xs text-slate-400">{s.student_number || '-'}</td>
                             <td className="p-3 font-bold text-slate-800">{s.name}</td>
                             <td className="p-3 text-center">
                               <div className="inline-flex items-center gap-1.5 justify-center">
@@ -689,7 +689,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                                   }}
                                   className="w-16 bg-white border border-gray-200 rounded-lg p-1.5 text-center text-xs focus:ring-1 focus:ring-indigo-500 text-gray-800 font-bold"
                                 />
-                                <span className="text-[10px] text-slate-400">/ {activeScoreExam.max_score}</span>
+                                <span className="text-xs text-slate-400">/ {activeScoreExam.max_score}</span>
                               </div>
                             </td>
                             <td className="p-3">
@@ -745,7 +745,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                     </h3>
                     <button
                       onClick={() => setShowAddExam(!showAddExam)}
-                      className="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg font-black flex items-center gap-1 transition-colors cursor-pointer"
+                      className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg font-black flex items-center gap-1 transition-colors cursor-pointer"
                     >
                       <Plus size={10} />
                       <span>{lang === 'zh' ? '创建测试卷' : 'Add Test'}</span>
@@ -761,13 +761,13 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                         <div className="space-y-1 text-left">
                           <h4 className="text-xs font-bold text-slate-800 text-left">{exam.title}</h4>
                           {exam.description && (
-                            <p className="text-[10px] text-slate-400 leading-normal text-left">{exam.description}</p>
+                            <p className="text-xs text-slate-400 leading-normal text-left">{exam.description}</p>
                           )}
                           <div className="flex items-center gap-2 mt-2 justify-start">
-                            <span className="inline-block bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-lg text-[9px] font-bold">
+                            <span className="inline-block bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-lg text-xs font-bold">
                               {lang === 'zh' ? `总分: ${exam.max_score}分` : `Max: ${exam.max_score}`}
                             </span>
-                            <span className="text-[9px] text-slate-400">
+                            <span className="text-xs text-slate-400">
                               {new Date(exam.created_at).toLocaleDateString()}
                             </span>
                           </div>
@@ -805,7 +805,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                     </h3>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1 text-left">
+                      <label className="block text-xs font-bold text-slate-500 mb-1 text-left">
                         {lang === 'zh' ? '试卷名称 *' : 'Title *'}
                       </label>
                       <input
@@ -819,7 +819,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1 text-left">
+                      <label className="block text-xs font-bold text-slate-500 mb-1 text-left">
                         {lang === 'zh' ? '描述信息' : 'Description'}
                       </label>
                       <textarea
@@ -831,7 +831,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1 text-left">
+                      <label className="block text-xs font-bold text-slate-500 mb-1 text-left">
                         {lang === 'zh' ? '最高总分 (满分)' : 'Max Score'}
                       </label>
                       <input

@@ -193,7 +193,7 @@ export function AcademicGrowthTrajectoryChart({ assignments = [], lang = 'en' }:
           <div>
             <h3 className="font-extrabold text-gray-950 text-base flex items-center gap-1.5">
               <span>{t.title}</span>
-              <span className="inline-flex items-center gap-1 bg-emerald-555 bg-emerald-100 text-emerald-800 border border-emerald-200/50 rounded-full px-2 py-0.5 text-[9px] font-black uppercase">
+              <span className="inline-flex items-center gap-1 bg-emerald-555 bg-emerald-100 text-emerald-800 border border-emerald-200/50 rounded-full px-2 py-0.5 text-xs font-black uppercase">
                 <Sparkles size={8} className="animate-spin text-emerald-600" />
                 {lang === 'zh' ? '能力演进' : 'Trajectory'}
               </span>
@@ -225,7 +225,7 @@ export function AcademicGrowthTrajectoryChart({ assignments = [], lang = 'en' }:
           {/* Individual Toggle */}
           <button
             onClick={() => setShowIndividualScores(!showIndividualScores)}
-            className={`px-3 py-1.5 text-[10px] font-bold rounded-lg border flex items-center gap-1.5 cursor-pointer transition-all ${
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg border flex items-center gap-1.5 cursor-pointer transition-all ${
               showIndividualScores
                 ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-bold'
                 : 'bg-white border-gray-200 text-gray-500 hover:text-gray-700'
@@ -242,17 +242,17 @@ export function AcademicGrowthTrajectoryChart({ assignments = [], lang = 'en' }:
       {/* Trajectory Stat Indicators */}
       <div className="px-5 py-3.5 border-b border-gray-100 bg-linear-to-b from-gray-50/30 to-white grid grid-cols-2 md:grid-cols-4 gap-4 select-none">
         <div className="p-3 bg-white hover:bg-slate-50 border border-gray-100 rounded-xl shadow-3xs flex flex-col justify-center">
-          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{t.statsStart}</span>
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t.statsStart}</span>
           <span className="text-lg font-black text-slate-800 font-mono mt-0.5">{stats.startingAvg}%</span>
         </div>
 
         <div className="p-3 bg-white hover:bg-slate-50 border border-gray-100 rounded-xl shadow-3xs flex flex-col justify-center">
-          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{t.statsCurrent}</span>
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t.statsCurrent}</span>
           <span className="text-lg font-black text-emerald-800 font-mono mt-0.5">{stats.currentAvg}%</span>
         </div>
 
         <div className="p-3 bg-white hover:bg-slate-50 border border-gray-100 rounded-xl shadow-3xs flex flex-col justify-center">
-          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{t.statsNet}</span>
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t.statsNet}</span>
           <div className="flex items-center gap-1 mt-0.5">
             <span
               className={`text-lg font-black font-mono ${stats.growthPercentage >= 0 ? 'text-emerald-600' : 'text-red-500'}`}
@@ -265,7 +265,7 @@ export function AcademicGrowthTrajectoryChart({ assignments = [], lang = 'en' }:
         </div>
 
         <div className="p-3 bg-white hover:bg-slate-50 border border-gray-100 rounded-xl shadow-3xs flex flex-col justify-center">
-          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{t.statsPeak}</span>
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t.statsPeak}</span>
           <span className="text-lg font-black text-rose-800 font-mono mt-0.5">{stats.peakAvg}%</span>
         </div>
       </div>
@@ -292,13 +292,13 @@ export function AcademicGrowthTrajectoryChart({ assignments = [], lang = 'en' }:
                 {showGrid && <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />}
                 <XAxis
                   dataKey="dateLabel"
-                  tick={{ fontSize: 9, fill: '#64748b', fontWeight: 'bold' }}
+                  tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={false}
                 />
                 <YAxis
                   domain={[0, 100]}
-                  tick={{ fontSize: 9, fill: '#64748b', fontWeight: 'bold' }}
+                  tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
                   axisLine={{ stroke: '#e2e8f0' }}
                   tickLine={false}
                 />
@@ -309,29 +309,29 @@ export function AcademicGrowthTrajectoryChart({ assignments = [], lang = 'en' }:
                       return (
                         <div className="p-3.5 bg-white/95 border border-emerald-100 rounded-xl shadow-xl max-w-[270px] backdrop-blur-xs font-sans">
                           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5 mb-1.5">
-                            <span className="text-[8px] text-slate-400 font-extrabold uppercase font-mono">
+                            <span className="text-xs text-slate-400 font-extrabold uppercase font-mono">
                               {d.className}
                             </span>
-                            <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-full text-[10px] font-black border border-emerald-100 font-mono">
+                            <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-full text-xs font-black border border-emerald-100 font-mono">
                               {d.runningAverage}% Avg
                             </span>
                           </div>
 
                           <p className="text-xs font-black text-slate-800 leading-tight">{d.fullTitle}</p>
-                          <p className="text-[10px] text-slate-400 mt-1">{d.fullDateLabel}</p>
+                          <p className="text-xs text-slate-400 mt-1">{d.fullDateLabel}</p>
 
                           <div className="mt-2.5 pt-2 border-t border-slate-100 grid grid-cols-2 gap-1.5">
                             <div className="bg-slate-50 p-1 rounded border border-slate-100 text-center">
-                              <span className="block text-[8px] text-gray-400 uppercase font-black">
+                              <span className="block text-xs text-gray-400 uppercase font-black">
                                 {lang === 'zh' ? '当次得分' : 'SESS SCORE'}
                               </span>
-                              <span className="text-[11px] font-bold font-mono text-indigo-700">{d.score}%</span>
+                              <span className="text-xs font-bold font-mono text-indigo-700">{d.score}%</span>
                             </div>
                             <div className="bg-emerald-50/50 p-1 rounded border border-emerald-100/50 text-center">
-                              <span className="block text-[8px] text-emerald-600 uppercase font-black">
+                              <span className="block text-xs text-emerald-600 uppercase font-black">
                                 {lang === 'zh' ? '累积移动平均' : 'RUNNING AVG'}
                               </span>
-                              <span className="text-[11px] font-black font-mono text-emerald-800">
+                              <span className="text-xs font-black font-mono text-emerald-800">
                                 {d.runningAverage}%
                               </span>
                             </div>
@@ -339,7 +339,7 @@ export function AcademicGrowthTrajectoryChart({ assignments = [], lang = 'en' }:
 
                           {d.feedback && (
                             <div className="mt-2 bg-emerald-50/20 p-1.5 rounded-lg border border-emerald-100/30">
-                              <p className="text-[9px] text-emerald-800 italic truncate font-sans">"{d.feedback}"</p>
+                              <p className="text-xs text-emerald-800 italic truncate font-sans">"{d.feedback}"</p>
                             </div>
                           )}
                         </div>
@@ -385,7 +385,7 @@ export function AcademicGrowthTrajectoryChart({ assignments = [], lang = 'en' }:
         <div className="lg:col-span-3 flex flex-col justify-between border-t lg:border-t-0 lg:border-l border-gray-100 pt-5 lg:pt-0 lg:pl-5 min-w-0">
           <div className="flex flex-col h-full justify-between">
             <div>
-              <span className="text-[9px] font-extrabold uppercase text-gray-400 tracking-wider flex items-center gap-1 mb-2.5">
+              <span className="text-xs font-extrabold uppercase text-gray-400 tracking-wider flex items-center gap-1 mb-2.5">
                 <Sparkles size={11} className="text-emerald-500 shrink-0" />
                 {t.recommendationTitle}
               </span>
@@ -413,7 +413,7 @@ export function AcademicGrowthTrajectoryChart({ assignments = [], lang = 'en' }:
                   )}
                 </div>
 
-                <p className="text-[11px] text-gray-650 leading-relaxed font-sans">
+                <p className="text-xs text-gray-650 leading-relaxed font-sans">
                   {lang === 'zh' ? (
                     <>
                       {trendDirection === 'upward' &&
@@ -439,14 +439,14 @@ export function AcademicGrowthTrajectoryChart({ assignments = [], lang = 'en' }:
 
             {/* Helpful legend checklist */}
             <div className="mt-4 pt-3.5 border-t border-gray-100 space-y-2 select-none">
-              <div className="flex items-center gap-2 text-[10px] font-bold text-gray-450">
+              <div className="flex items-center gap-2 text-xs font-bold text-gray-450">
                 <ChevronRight size={10} className="text-emerald-500" />
                 <span>
                   {lang === 'zh' ? '总评测样本数: ' : 'Assessments count: '}
                   <span className="text-slate-800 font-mono">{stats.totalGraded}</span>
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-[10px] font-bold text-gray-450">
+              <div className="flex items-center gap-2 text-xs font-bold text-gray-450">
                 <ChevronRight size={10} className="text-emerald-500" />
                 <span>
                   {lang === 'zh' ? '学力波动幅度: ' : 'Fluctuation envelope: '}

@@ -31,12 +31,12 @@ export function StudentAssignmentsPanel(props: StudentAssignmentsPanelProps) {
                 <div className="flex justify-between items-start mb-1">
                   <div className="font-semibold text-indigo-900">{ast.title}</div>
                   {!ast.submission_status && (
-                    <span className="bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold">
+                    <span className="bg-amber-100 text-amber-800 text-xs px-1.5 py-0.5 rounded uppercase font-bold">
                       Pending
                     </span>
                   )}
                   {ast.submission_status === 'submitted' && (
-                    <span className="bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold">
+                    <span className="bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5 rounded uppercase font-bold">
                       Awaiting Grade
                     </span>
                   )}
@@ -45,7 +45,7 @@ export function StudentAssignmentsPanel(props: StudentAssignmentsPanelProps) {
                       {ast.graded_at && (
                         <div className="text-gray-400 hover:text-indigo-600 transition-colors cursor-help p-0.5">
                           <Clock size={11} />
-                          <div className="absolute right-0 bottom-full mb-1.5 hidden group-hover/ast-badge:block bg-gray-900 text-white text-[10px] p-2 rounded-xl shadow-xl z-25 whitespace-nowrap font-sans font-normal normal-case">
+                          <div className="absolute right-0 bottom-full mb-1.5 hidden group-hover/ast-badge:block bg-gray-900 text-white text-xs p-2 rounded-xl shadow-xl z-25 whitespace-nowrap font-sans font-normal normal-case">
                             {lang === 'zh'
                               ? `评审反馈时间: ${new Date(ast.graded_at).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
                               : `Feedback Hour: ${new Date(ast.graded_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`}
@@ -53,7 +53,7 @@ export function StudentAssignmentsPanel(props: StudentAssignmentsPanelProps) {
                           </div>
                         </div>
                       )}
-                      <span className="bg-green-100 text-green-800 text-[10px] px-1.5 py-0.5 rounded uppercase font-bold text-center">
+                      <span className="bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded uppercase font-bold text-center">
                         Score: {ast.score}%
                       </span>
                     </div>
@@ -71,7 +71,7 @@ export function StudentAssignmentsPanel(props: StudentAssignmentsPanelProps) {
                         <span>{lang === 'zh' ? '教师评审意见' : 'Teacher Feedback'}</span>
                       </div>
                       {ast.graded_at && (
-                        <div className="flex items-center gap-1 text-[9px] text-green-600 font-mono bg-white/70 px-1.5 py-0.5 rounded border border-green-100/50 relative group/ast-time cursor-help">
+                        <div className="flex items-center gap-1 text-xs text-green-600 font-mono bg-white/70 px-1.5 py-0.5 rounded border border-green-100/50 relative group/ast-time cursor-help">
                           <Clock size={10} className="inline" />
                           <span>
                             {new Date(ast.graded_at).toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
@@ -79,7 +79,7 @@ export function StudentAssignmentsPanel(props: StudentAssignmentsPanelProps) {
                               day: 'numeric',
                             })}
                           </span>
-                          <div className="absolute right-0 bottom-full mb-1.5 hidden group-hover/ast-time:block bg-gray-900 text-white text-[10px] p-2 rounded-lg shadow-xl z-20 whitespace-nowrap font-sans font-normal text-left">
+                          <div className="absolute right-0 bottom-full mb-1.5 hidden group-hover/ast-time:block bg-gray-900 text-white text-xs p-2 rounded-lg shadow-xl z-20 whitespace-nowrap font-sans font-normal text-left">
                             {lang === 'zh'
                               ? `评审反馈于: ${new Date(ast.graded_at).toLocaleString('zh-CN')}`
                               : `Feedback provided on: ${new Date(ast.graded_at).toLocaleString('en-US')}`}

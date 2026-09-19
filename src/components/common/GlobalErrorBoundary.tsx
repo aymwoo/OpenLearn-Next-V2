@@ -131,13 +131,13 @@ export class GlobalErrorBoundary extends React.Component<Props, State> {
                     {error?.stack && (
                       <div>
                         <span className="text-rose-400 font-bold block mb-1">Stack Trace:</span>
-                        <pre className="whitespace-pre-wrap text-[11px] opacity-90">{error.stack}</pre>
+                        <pre className="whitespace-pre-wrap text-xs opacity-90">{error.stack}</pre>
                       </div>
                     )}
                     {errorInfo?.componentStack && (
                       <div className="pt-2 border-t border-slate-800">
                         <span className="text-amber-400 font-bold block mb-1">Component Stack:</span>
-                        <pre className="whitespace-pre-wrap text-[11px] opacity-80">{errorInfo.componentStack}</pre>
+                        <pre className="whitespace-pre-wrap text-xs opacity-80">{errorInfo.componentStack}</pre>
                       </div>
                     )}
                   </div>

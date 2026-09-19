@@ -126,7 +126,7 @@ export function SystemResourceLibraryModal(props: SystemResourceLibraryModalProp
                       {/* Single File */}
                       <label className="flex flex-col items-center justify-center p-3 bg-slate-50 hover:bg-indigo-50 border border-dashed border-gray-300 hover:border-indigo-400 rounded-xl cursor-pointer text-center transition-all group">
                         <span className="text-lg mb-1 group-hover:scale-110 transition-transform">📄</span>
-                        <span className="font-bold text-indigo-600 text-[10px] break-all leading-tight">
+                        <span className="font-bold text-indigo-600 text-xs break-all leading-tight">
                           {lang === 'zh' ? '单HTML文件' : 'Single HTML'}
                         </span>
                         <input
@@ -164,7 +164,7 @@ export function SystemResourceLibraryModal(props: SystemResourceLibraryModalProp
                       {/* Folder */}
                       <label className="flex flex-col items-center justify-center p-3 bg-slate-50 hover:bg-teal-50 border border-dashed border-gray-300 hover:border-teal-400 rounded-xl cursor-pointer text-center transition-all group">
                         <span className="text-lg mb-1 group-hover:scale-110 transition-transform">📁</span>
-                        <span className="font-bold text-teal-600 text-[10px] break-all leading-tight">
+                        <span className="font-bold text-teal-600 text-xs break-all leading-tight">
                           {lang === 'zh' ? '完整文件夹' : 'Directory Folder'}
                         </span>
                         <input
@@ -234,7 +234,7 @@ export function SystemResourceLibraryModal(props: SystemResourceLibraryModalProp
 
                   {/* Resource List Items */}
                   <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">
+                    <span className="block text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">
                       {lang === 'zh' ? '当前已存储的资源' : 'Stored Resources'}
                     </span>
 
@@ -271,7 +271,7 @@ export function SystemResourceLibraryModal(props: SystemResourceLibraryModalProp
                               >
                                 {resObj.name}
                               </div>
-                              <div className="text-[9px] text-gray-400 mt-0.5 font-mono">
+                              <div className="text-xs text-gray-400 mt-0.5 font-mono">
                                 {new Date(resObj.created_at).toLocaleDateString()} • {resObj.id}
                               </div>
                             </div>

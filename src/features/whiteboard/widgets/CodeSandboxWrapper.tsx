@@ -9,9 +9,11 @@ export function CodeSandboxWrapper({
   onPointerMove,
   onPointerUp,
   onDelete,
+  readOnly = false,
 }: {
   elementId: string;
   data: any;
+  readOnly?: boolean;
   onElementUpdate?: (id: string, data: any) => Promise<void>;
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerMove: (e: React.PointerEvent) => void;
@@ -85,7 +87,7 @@ export function CodeSandboxWrapper({
   return (
     <div
       className="w-full h-full bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden flex flex-col font-mono text-sm"
-      style={{ pointerEvents: 'auto' }}
+      style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
     >
       <div
         className="bg-gray-800 text-gray-300 px-3 py-1.5 flex justify-between items-center text-xs border-b border-gray-700 cursor-move select-none shrink-0"
@@ -94,21 +96,23 @@ export function CodeSandboxWrapper({
         onPointerUp={onPointerUp}
       >
         <span className="flex items-center gap-1">JS Sandbox</span>
-        <div className="flex items-center gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
-          <button
-            onClick={runCode}
-            className="bg-green-600 hover:bg-green-500 text-white px-2 py-0.5 rounded shadow text-[10px] cursor-pointer"
-          >
-            Run
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-0.5 hover:bg-gray-700 rounded text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
-            title="删除组件"
-          >
-            <Trash2 size={13} />
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="flex items-center gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
+            <button
+              onClick={runCode}
+              className="bg-green-600 hover:bg-green-500 text-white px-2 py-0.5 rounded shadow text-xs cursor-pointer"
+            >
+              Run
+            </button>
+            <button
+              onClick={onDelete}
+              className="p-0.5 hover:bg-gray-700 rounded text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+              title="删除组件"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        )}
       </div>
       <textarea
         value={code}
@@ -124,7 +128,7 @@ export function CodeSandboxWrapper({
         }}
       />
       {output && (
-        <div className="bg-black text-gray-400 p-2 border-t border-gray-800 h-24 overflow-y-auto whitespace-pre-wrap text-[10px] shrink-0">
+        <div className="bg-black text-gray-400 p-2 border-t border-gray-800 h-24 overflow-y-auto whitespace-pre-wrap text-xs shrink-0">
           {output}
         </div>
       )}

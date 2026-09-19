@@ -97,7 +97,7 @@ export function QuizGeneratorModal(props: QuizGeneratorModalProps) {
                         className={`p-3 rounded-lg border text-left flex flex-col transition-all ${quizGenMode === 'scan_lesson' ? 'border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-100' : 'border-gray-200 hover:border-gray-300'}`}
                       >
                         <span className="font-semibold text-sm text-indigo-900">Curriculum Lesson Scanning</span>
-                        <span className="text-[10px] text-gray-500 mt-1">
+                        <span className="text-xs text-gray-500 mt-1">
                           Examines real Markdown content inside virtual lesson modules.
                         </span>
                       </button>
@@ -106,7 +106,7 @@ export function QuizGeneratorModal(props: QuizGeneratorModalProps) {
                         className={`p-3 rounded-lg border text-left flex flex-col transition-all ${quizGenMode === 'topic' ? 'border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-100' : 'border-gray-200 hover:border-gray-300'}`}
                       >
                         <span className="font-semibold text-sm text-indigo-900">Custom Keyword / Topic</span>
-                        <span className="text-[10px] text-gray-500 mt-1">
+                        <span className="text-xs text-gray-500 mt-1">
                           Provide a custom prompt keyword or objective manually.
                         </span>
                       </button>
@@ -249,7 +249,7 @@ export function QuizGeneratorModal(props: QuizGeneratorModalProps) {
                               <span className="w-5 h-5 rounded-full bg-indigo-150 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
                                 {idx + 1}
                               </span>
-                              <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded border border-teal-100">
+                              <span className="text-xs font-semibold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded border border-teal-100">
                                 objective: {q.objective}
                               </span>
                             </div>

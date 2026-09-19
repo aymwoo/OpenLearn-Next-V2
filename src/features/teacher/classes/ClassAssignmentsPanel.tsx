@@ -129,7 +129,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                   e.stopPropagation();
                   handleGeneratePDFReport(cls.id, cls.name);
                 }}
-                className="text-white hover:bg-emerald-750 bg-emerald-600 hover:bg-emerald-700 transition-all font-semibold rounded px-2.5 py-1 text-[10px] items-center flex gap-1.5 shadow-sm cursor-pointer font-sans disabled:opacity-50"
+                className="text-white hover:bg-emerald-750 bg-emerald-600 hover:bg-emerald-700 transition-all font-semibold rounded px-2.5 py-1 text-xs items-center flex gap-1.5 shadow-sm cursor-pointer font-sans disabled:opacity-50"
               >
                 {isGeneratingPDFReport[cls.id] ? (
                   <Loader2 size={10} className="animate-spin" />
@@ -149,7 +149,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                   setCustomCategoryOverrides({});
                   setIsExportWeightModalOpen(true);
                 }}
-                className="text-slate-700 hover:text-slate-900 border border-gray-300 bg-white hover:bg-gray-100 transition-all font-semibold rounded px-2 py-1 text-[10px] items-center flex gap-1 shadow-sm cursor-pointer font-sans"
+                className="text-slate-700 hover:text-slate-900 border border-gray-300 bg-white hover:bg-gray-100 transition-all font-semibold rounded px-2 py-1 text-xs items-center flex gap-1 shadow-sm cursor-pointer font-sans"
               >
                 <Download size={10} /> {lang === 'zh' ? '选项与导出' : 'Export Grades'}
               </button>
@@ -171,7 +171,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
               setSuggestedQuestions([]);
               setIsQuizGeneratorOpen(true);
             }}
-            className="text-white bg-indigo-500 hover:bg-indigo-600 px-2 py-1 rounded text-[10px] items-center flex gap-1 shadow-sm disabled:opacity-50"
+            className="text-white bg-indigo-500 hover:bg-indigo-600 px-2 py-1 rounded text-xs items-center flex gap-1 shadow-sm disabled:opacity-50"
           >
             {isGeneratingAssignment === cls.id ? <Loader2 size={10} className="animate-spin" /> : <Wand2 size={10} />}{' '}
             Generate AI Quiz
@@ -184,17 +184,17 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
           {/* Pending Assignments */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+              <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                 {lang === 'zh' ? '班级作业与测验' : 'Class Assignments & Quizzes'}
               </div>
               <div className="flex items-center gap-1.5 bg-white border border-gray-200 px-2 py-1 rounded-lg shadow-sm">
-                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                   {lang === 'zh' ? '排序：' : 'Sort:'}
                 </span>
                 <select
                   value={assignmentSortOrder}
                   onChange={(e) => setAssignmentSortOrder(e.target.value as any)}
-                  className="bg-transparent border-0 text-[10px] text-gray-750 font-bold focus:outline-none focus:ring-0 p-0 cursor-pointer outline-none font-sans"
+                  className="bg-transparent border-0 text-xs text-gray-750 font-bold focus:outline-none focus:ring-0 p-0 cursor-pointer outline-none font-sans"
                   id="assignment-sort-select"
                 >
                   <option value="dueDate">{lang === 'zh' ? '截止日期' : 'Due Date'}</option>
@@ -264,7 +264,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                           {ast.title}
                         </div>
                         <span
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0 border uppercase tracking-wider font-sans ${
+                          className={`px-1.5 py-0.5 rounded text-xs font-bold shrink-0 border uppercase tracking-wider font-sans ${
                             ast.status === 'graded'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                               : ast.pendingGradingCount > 0
@@ -275,13 +275,13 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                           {ast.statusLabel}
                         </span>
                       </div>
-                      <div className="text-gray-500 text-[10px] line-clamp-2 leading-normal mb-2.5 font-sans">
+                      <div className="text-gray-500 text-xs line-clamp-2 leading-normal mb-2.5 font-sans">
                         {ast.description || ast.content}
                       </div>
                       {/* A button to submit/grade here could be nice, but keeping it simple */}
                       <div className="flex items-center justify-between border-t border-gray-55 pt-2 mt-auto gap-2">
                         <div className="flex items-center gap-1.5 font-sans">
-                          <span className="text-[10px] text-gray-400 font-medium">
+                          <span className="text-xs text-gray-400 font-medium">
                             {lang === 'zh' ? '截止: ' : 'Due: '}
                             <span className="text-gray-600 font-semibold">
                               {new Date(ast.dueDateTimestamp).toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
@@ -291,7 +291,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                             </span>
                           </span>
                           {ast.avgScore !== null && (
-                            <span className="inline-flex items-center gap-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                            <span className="inline-flex items-center gap-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 px-1.5 py-0.5 rounded text-xs font-bold">
                               {lang === 'zh' ? '均分' : 'Avg'}: {ast.avgScore}%
                             </span>
                           )}
@@ -311,7 +311,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                               if (res.ok) await fetchClassDashboard(cls.id);
                             }
                           }}
-                          className="text-[9px] text-indigo-600 border border-indigo-200 hover:border-indigo-300 hover:bg-indigo-50/50 bg-white px-2 py-0.5 rounded font-bold flex items-center gap-1 cursor-pointer transition-all shrink-0 font-sans"
+                          className="text-xs text-indigo-600 border border-indigo-200 hover:border-indigo-300 hover:bg-indigo-50/50 bg-white px-2 py-0.5 rounded font-bold flex items-center gap-1 cursor-pointer transition-all shrink-0 font-sans"
                         >
                           <Send size={8} /> {lang === 'zh' ? '模拟' : 'Simulate'}
                         </button>
@@ -328,7 +328,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
           {/* Recent Submissions */}
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 border-b border-gray-100 pb-1.5 pt-1">
-              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+              <div className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
                 <CalendarIcon size={11} className="text-gray-400" />
                 {lang === 'zh' ? '近期作业提交' : 'Recent Submissions'}
               </div>
@@ -366,7 +366,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                         e.stopPropagation();
                         setClassSubmissionFilters((prev) => ({ ...prev, [cls.id]: filterOpt }));
                       }}
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all cursor-pointer flex items-center gap-1 font-sans ${
+                      className={`px-2 py-0.5 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 font-sans ${
                         isActive
                           ? 'bg-white shadow-sm text-indigo-600 border border-indigo-100'
                           : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent'
@@ -374,7 +374,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                     >
                       <span>{labelLocal}</span>
                       <span
-                        className={`px-1 py-0.1 ml-0.5 rounded-full text-[8.5px] leading-tight ${
+                        className={`px-1 py-0.1 ml-0.5 rounded-full text-xs leading-tight ${
                           isActive
                             ? 'bg-indigo-50 text-indigo-600 font-bold'
                             : 'bg-gray-200/60 text-gray-400 font-medium'
@@ -400,12 +400,12 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                   <div className="flex-1 min-w-0 pr-2">
                     <div className="font-semibold text-gray-800 truncate flex items-center gap-1.5">
                       <span className="max-w-[110px] truncate">{sub.student_name}</span>
-                      <span className="text-[10px] text-gray-400 font-normal">in</span>
+                      <span className="text-xs text-gray-400 font-normal">in</span>
                       <span className="truncate text-gray-500 max-w-[130px]" title={sub.assignment_title}>
                         {sub.assignment_title}
                       </span>
                     </div>
-                    <div className="text-[10px] text-gray-500 truncate italic mt-0.5">
+                    <div className="text-xs text-gray-500 truncate italic mt-0.5">
                       {sub.status === 'pending_student' ? (
                         <span className="text-amber-500 font-medium flex items-center gap-1">
                           <Clock size={10} className="animate-pulse" />
@@ -434,14 +434,14 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                           setStudentViewStatus('assignment');
                           setActiveRole('student');
                         }}
-                        className="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-md text-[9px] flex items-center gap-1 shadow-none font-bold border border-indigo-100 hover:border-indigo-200 transition-all cursor-pointer"
+                        className="text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-md text-xs flex items-center gap-1 shadow-none font-bold border border-indigo-100 hover:border-indigo-200 transition-all cursor-pointer"
                       >
                         <PenTool size={9} /> Live Canvas
                       </button>
                     )}
                     {sub.status === 'graded' ? (
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                        className={`px-1.5 py-0.5 rounded text-xs font-medium ${
                           sub.score >= 85
                             ? 'bg-green-100 text-green-700 border border-green-200'
                             : sub.score >= 70
@@ -466,7 +466,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                             setIsGrading((p) => ({ ...p, [`${sub.assignment_id}-${sub.student_id}`]: false }));
                           }
                         }}
-                        className="text-white bg-green-500 hover:bg-green-600 px-2 py-1 rounded-md text-[9px] flex items-center gap-1 shadow-sm font-bold border border-green-600 hover:border-green-700 hover:-translate-y-0.1 transition-all disabled:opacity-50 cursor-pointer"
+                        className="text-white bg-green-500 hover:bg-green-600 px-2 py-1 rounded-md text-xs flex items-center gap-1 shadow-sm font-bold border border-green-600 hover:border-green-700 hover:-translate-y-0.1 transition-all disabled:opacity-50 cursor-pointer"
                       >
                         {isGrading[`${sub.assignment_id}-${sub.student_id}`] ? (
                           <Loader2 size={10} className="animate-spin" />
@@ -490,7 +490,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
           {/* Heatmap */}
           {classDashboardMap[cls.id].assignments.length > 0 && cStudents.length > 0 && (
             <div>
-              <div className="text-[10px] font-medium text-gray-500 mb-1 uppercase tracking-wider">
+              <div className="text-xs font-medium text-gray-500 mb-1 uppercase tracking-wider">
                 Class Performance Heatmap
               </div>
               <div className="overflow-x-auto border border-gray-200 rounded">
@@ -524,7 +524,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                               if (avg30 !== null) {
                                 return (
                                   <span
-                                    className="inline-flex items-center gap-0.5 bg-red-50 text-red-700 border border-red-200 px-1 py-0.5 rounded text-[9px] font-bold animate-pulse"
+                                    className="inline-flex items-center gap-0.5 bg-red-50 text-red-700 border border-red-200 px-1 py-0.5 rounded text-xs font-bold animate-pulse"
                                     title={
                                       lang === 'zh'
                                         ? `30天平均成绩已降至60%以下 (${avg30}%)`
@@ -554,7 +554,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                             else bgClass = 'bg-red-50 text-red-700';
                           } else if (perf && perf.submission_status === 'submitted') {
                             text = 'Wait';
-                            bgClass = 'bg-blue-50 text-blue-500 text-[9px]';
+                            bgClass = 'bg-blue-50 text-blue-500 text-xs';
                           }
                           return (
                             <td
@@ -580,13 +580,13 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                                       )}
                                     </div>
                                     {perf && perf.score !== null && (
-                                      <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover/cell:block bg-gray-900 border border-gray-800 text-white text-[10px] p-2.5 rounded-xl shadow-2xl z-30 w-44 pointer-events-none text-left leading-normal font-sans font-normal normal-case">
-                                        <div className="font-bold text-[11px] mb-1 text-emerald-400 flex items-center gap-1">
+                                      <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover/cell:block bg-gray-900 border border-gray-800 text-white text-xs p-2.5 rounded-xl shadow-2xl z-30 w-44 pointer-events-none text-left leading-normal font-sans font-normal normal-case">
+                                        <div className="font-bold text-xs mb-1 text-emerald-400 flex items-center gap-1">
                                           <CheckCircle2 size={11} className="shrink-0" />
                                           {lang === 'zh' ? '已完成评分' : 'Graded & Evaluated'}
                                         </div>
                                         {formattedGradedTime && (
-                                          <div className="text-gray-300 flex items-center gap-1 font-semibold text-[9px] mb-1">
+                                          <div className="text-gray-300 flex items-center gap-1 font-semibold text-xs mb-1">
                                             <Clock size={10} className="shrink-0 text-indigo-400" />
                                             <span>
                                               {lang === 'zh'
@@ -596,7 +596,7 @@ export function ClassAssignmentsPanel(props: ClassAssignmentsPanelProps) {
                                           </div>
                                         )}
                                         {perf.feedback && (
-                                          <div className="text-gray-200 mt-1 pt-1 border-t border-gray-800 line-clamp-3 text-[9px] italic">
+                                          <div className="text-gray-200 mt-1 pt-1 border-t border-gray-800 line-clamp-3 text-xs italic">
                                             "{perf.feedback}"
                                           </div>
                                         )}

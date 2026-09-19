@@ -74,7 +74,7 @@ export function PluginDevPanel({
                 ? '开发者工具: 插件旁路加载与实时 Manifest 校验'
                 : 'Developer Tools: Plugin Sideloading & Real-time Manifest Validation'}
             </p>
-            <p className="text-[10px] text-gray-505">
+            <p className="text-xs text-gray-505">
               {lang === 'zh'
                 ? '在安装前系统将进行解析、安全授权与注册接口预览机制'
                 : 'Parse metadata, proposed permissions, and registered triggers before installation'}
@@ -83,7 +83,7 @@ export function PluginDevPanel({
         </div>
         <div className="flex items-center gap-2">
           <div
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] uppercase font-bold rounded-lg cursor-pointer transition-all ${
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs uppercase font-bold rounded-lg cursor-pointer transition-all ${
               zipError
                 ? 'border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20'
                 : zipPreview
@@ -130,7 +130,7 @@ export function PluginDevPanel({
           </div>
           <button
             onClick={() => setPluginCode(DEFAULT_PLUGIN)}
-            className="px-2.5 py-1 text-[10px] uppercase font-bold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+            className="px-2.5 py-1 text-xs uppercase font-bold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg transition-all flex items-center gap-1 cursor-pointer"
             title="Reset to default example"
           >
             <Wand2 size={11} className="text-indigo-450" />
@@ -149,23 +149,23 @@ export function PluginDevPanel({
       <div className="flex-1 flex overflow-hidden min-h-0 bg-gray-950">
         {/* Left Column: Code Editor */}
         <div className="w-7/12 flex flex-col border-r border-gray-800 h-full p-4 min-h-0">
-          <div className="flex justify-between items-center mb-1 text-[10px] uppercase font-bold text-gray-400 select-none shrink-0">
+          <div className="flex justify-between items-center mb-1 text-xs uppercase font-bold text-gray-400 select-none shrink-0">
             <span>{lang === 'zh' ? '⚙️ 插件主程序 JS 源代码' : '⚙️ Plugin Source Code (JavaScript)'}</span>
-            <span className="font-mono text-[9px] text-gray-500">Node Sandbox Ready</span>
+            <span className="font-mono text-xs text-gray-500">Node Sandbox Ready</span>
           </div>
           <textarea
             value={pluginCode}
             onChange={(e) => setPluginCode(e.target.value)}
-            className="w-full flex-1 font-mono text-[11px] p-4 bg-gray-900 border border-gray-800 text-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none leading-relaxed overflow-y-auto"
+            className="w-full flex-1 font-mono text-xs p-4 bg-gray-900 border border-gray-800 text-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none leading-relaxed overflow-y-auto"
           />
         </div>
 
         {/* Right Column: Manifest Verification & Live Preview */}
         <div className="w-5/12 flex flex-col bg-gray-900/40 p-4 h-full overflow-y-auto min-h-0">
           <div className="mb-3">
-            <div className="text-[10px] uppercase font-bold text-gray-400 select-none mb-1.5 flex justify-between items-center">
+            <div className="text-xs uppercase font-bold text-gray-400 select-none mb-1.5 flex justify-between items-center">
               <span>{lang === 'zh' ? '🔍 MANIFEST 实时解析与权限审计' : '🔍 Manifest Extraction & Audit'}</span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-400 border border-indigo-900 font-mono">
+              <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-400 border border-indigo-900 font-mono">
                 Live Static
               </span>
             </div>
@@ -190,7 +190,7 @@ export function PluginDevPanel({
                           <h5 className="text-xs font-bold font-sans">
                             {lang === 'zh' ? '✓ Manifest 静态合法性验证通过' : '✓ Manifest Validation Passed'}
                           </h5>
-                          <p className="text-[10px] text-emerald-400/80 mt-0.5 leading-tight">
+                          <p className="text-xs text-emerald-400/80 mt-0.5 leading-tight">
                             {lang === 'zh'
                               ? '检测到完整的插件标识。可在安全白名单和命令总线中顺利完成挂载。'
                               : 'Completed identifier extraction. Secure initialization is ready to deploy.'}
@@ -204,7 +204,7 @@ export function PluginDevPanel({
                           <h5 className="text-xs font-bold font-sans">
                             {lang === 'zh' ? '⚠️ 未匹配到有效 Manifest 描述符' : '⚠️ Searching for valid Metadata'}
                           </h5>
-                          <p className="text-[10px] text-amber-400/80 mt-0.5 leading-tight">
+                          <p className="text-xs text-amber-400/80 mt-0.5 leading-tight">
                             {lang === 'zh'
                               ? '请在代码段中指定完整的 manifest 包含 id、name 属性，系统才能自动进行预览与权限挂载。'
                               : 'Please provide manifest object inside exports.default with unique id/name properties to active automatic registration.'}
@@ -217,10 +217,10 @@ export function PluginDevPanel({
                   {hasManifest && parsed && parsed.manifest && (
                     <div className="bg-gray-900 border border-gray-800 rounded-xl p-3.5 space-y-2.5">
                       <div className="border-b border-gray-800 pb-2 flex justify-between items-center">
-                        <h6 className="text-[11px] font-bold text-gray-300 uppercase tracking-wider">
+                        <h6 className="text-xs font-bold text-gray-300 uppercase tracking-wider">
                           {lang === 'zh' ? '基本描述元数据' : 'Metadata Details'}
                         </h6>
-                        <span className="text-[9px] text-indigo-400 font-mono px-1 bg-indigo-950 rounded">
+                        <span className="text-xs text-indigo-400 font-mono px-1 bg-indigo-950 rounded">
                           v{parsed.manifest.version || '1.0.0'}
                         </span>
                       </div>
@@ -240,7 +240,7 @@ export function PluginDevPanel({
           </div>
 
           <div className="mt-5 bg-gray-900 border border-gray-800 rounded-xl p-3.5 space-y-3 shrink-0">
-            <h6 className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider pb-1.5 border-b border-gray-800 flex items-center justify-between">
+            <h6 className="text-xs font-bold text-indigo-300 uppercase tracking-wider pb-1.5 border-b border-gray-800 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Puzzle size={11} className="text-indigo-400 animate-pulse" />
                 <span>
@@ -249,7 +249,7 @@ export function PluginDevPanel({
               </span>
               <button
                 onClick={() => setStoreTab('store')}
-                className="text-[9px] text-gray-500 hover:text-indigo-400 transition-colors uppercase tracking-wider font-semibold"
+                className="text-xs text-gray-500 hover:text-indigo-400 transition-colors uppercase tracking-wider font-semibold"
               >
                 {lang === 'zh' ? '管理大图 ➔' : 'View Grid ➔'}
               </button>
@@ -257,7 +257,7 @@ export function PluginDevPanel({
 
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
               {plugins.length === 0 ? (
-                <div className="text-[10px] text-gray-550 italic py-2 text-center">
+                <div className="text-xs text-gray-550 italic py-2 text-center">
                   {lang === 'zh' ? '暂无安装的插件' : 'No plugins sideloaded.'}
                 </div>
               ) : (
@@ -273,13 +273,13 @@ export function PluginDevPanel({
                           className={`w-1.5 h-1.5 rounded-full shrink-0 ${plugin.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-500'}`}
                         />
                       </div>
-                      <span className="text-[10px] text-gray-500 font-mono block truncate select-all">{plugin.id}</span>
+                      <span className="text-xs text-gray-500 font-mono block truncate select-all">{plugin.id}</span>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         onClick={() => onToggle(plugin.id)}
-                        className={`px-2.5 py-1 text-[10px] font-bold rounded transition-colors ${
+                        className={`px-2.5 py-1 text-xs font-bold rounded transition-colors ${
                           plugin.status === 'active'
                             ? 'bg-amber-950/60 border border-amber-900/50 text-amber-400 hover:bg-amber-900/80'
                             : 'bg-emerald-950/60 border border-emerald-900/50 text-emerald-400 hover:bg-emerald-900/80'
@@ -300,13 +300,13 @@ export function PluginDevPanel({
                               setUpdateTargetPluginId(plugin.id);
                               updateFileInputRef.current?.click();
                             }}
-                            className="px-2 py-1 text-[10px] font-bold bg-sky-950/60 border border-sky-900/50 text-sky-300 hover:bg-sky-900/80 rounded transition-colors"
+                            className="px-2 py-1 text-xs font-bold bg-sky-950/60 border border-sky-900/50 text-sky-300 hover:bg-sky-900/80 rounded transition-colors"
                           >
                             {lang === 'zh' ? '更新' : 'Update'}
                           </button>
                           <button
                             onClick={() => onDelete(plugin.id)}
-                            className="px-2 py-1 text-[10px] font-bold bg-red-950/60 border border-red-900/50 text-red-400 hover:bg-red-900/80 rounded transition-colors"
+                            className="px-2 py-1 text-xs font-bold bg-red-950/60 border border-red-900/50 text-red-400 hover:bg-red-900/80 rounded transition-colors"
                           >
                             {lang === 'zh' ? '删除' : 'Delete'}
                           </button>
@@ -323,7 +323,7 @@ export function PluginDevPanel({
 
       {/* Control actions footer */}
       <div className="p-4 border-t border-gray-800 bg-gray-950 flex justify-between items-center shrink-0 select-none">
-        <span className="text-[10px] text-gray-500 font-mono">Secure Sideload Mode &bull; Sandbox Integrity Check</span>
+        <span className="text-xs text-gray-500 font-mono">Secure Sideload Mode &bull; Sandbox Integrity Check</span>
         <div className="flex justify-end gap-3">
           <button
             onClick={onInstall}

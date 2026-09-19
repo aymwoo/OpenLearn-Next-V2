@@ -245,7 +245,7 @@ export async function generateClassPDFReport(options: GeneratePDFReportOptions) 
       },
       bodyStyles: {
         textColor: textColor,
-        fontSize: 8.5,
+        fontSize: 9.5,
       },
       margin: { left: 14, right: 14 },
     });
@@ -284,11 +284,11 @@ export async function generateClassPDFReport(options: GeneratePDFReportOptions) 
         fillColor: accentColor,
         textColor: [255, 255, 255],
         fontStyle: 'bold',
-        fontSize: 8.5,
+        fontSize: 9.5,
       },
       bodyStyles: {
         textColor: textColor,
-        fontSize: 8,
+        fontSize: 9.5,
       },
       alternateRowStyles: {
         fillColor: [248, 250, 252], // light grey slate
@@ -335,11 +335,11 @@ export async function generateClassPDFReport(options: GeneratePDFReportOptions) 
         fillColor: [100, 116, 139], // Slate 500
         textColor: [255, 255, 255],
         fontStyle: 'bold',
-        fontSize: 8.5,
+        fontSize: 9.5,
       },
       bodyStyles: {
         textColor: textColor,
-        fontSize: 8,
+        fontSize: 9.5,
       },
       columnStyles: {
         1: { halign: 'center' },

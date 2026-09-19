@@ -100,7 +100,7 @@ export function ScheduledLessonsProgressChart({
             <Activity className="w-6 h-6 animate-pulse" />
           </div>
           <h4 className="font-bold text-gray-800 text-sm">{t.emptyTitle}</h4>
-          <p className="text-gray-500 text-[11px] mt-2 leading-relaxed">{t.emptyDesc}</p>
+          <p className="text-gray-500 text-xs mt-2 leading-relaxed">{t.emptyDesc}</p>
         </div>
       </div>
     );
@@ -120,12 +120,12 @@ export function ScheduledLessonsProgressChart({
           <div>
             <h4 className="font-bold text-gray-800 text-sm flex items-center gap-1.5 flex-wrap">
               <span>{t.title}</span>
-              <span className="inline-flex items-center gap-1 bg-pink-50 text-pink-700 border border-pink-100 rounded-full px-2 py-0.5 text-[9px] font-bold">
+              <span className="inline-flex items-center gap-1 bg-pink-50 text-pink-700 border border-pink-100 rounded-full px-2 py-0.5 text-xs font-bold">
                 <span className="w-1 h-1 rounded-full bg-pink-500 animate-ping"></span>
                 {lang === 'zh' ? '实时同步' : 'Live Sync'}
               </span>
             </h4>
-            <p className="text-gray-400 text-[10px] mt-0.5 leading-relaxed">{t.subtitle}</p>
+            <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">{t.subtitle}</p>
           </div>
         </div>
       </div>
@@ -137,7 +137,7 @@ export function ScheduledLessonsProgressChart({
             <Activity size={14} />
           </div>
           <div className="min-w-0">
-            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider truncate">
               {t.averageProgress}
             </div>
             <div className="text-xs font-bold text-gray-800 font-mono mt-0.5">{statistics.avgProg}%</div>
@@ -149,7 +149,7 @@ export function ScheduledLessonsProgressChart({
             <CheckCircle2 size={14} />
           </div>
           <div className="min-w-0">
-            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider truncate">
               {t.completedLessons}
             </div>
             <div className="text-xs font-bold text-gray-800 font-mono mt-0.5">
@@ -163,7 +163,7 @@ export function ScheduledLessonsProgressChart({
             <Clock size={14} />
           </div>
           <div className="min-w-0">
-            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider truncate">
               {t.activeLessons}
             </div>
             <div className="text-xs font-bold text-gray-800 font-mono mt-0.5">{statistics.activeCount}</div>
@@ -175,7 +175,7 @@ export function ScheduledLessonsProgressChart({
             <BookOpen size={14} />
           </div>
           <div className="min-w-0">
-            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider truncate">
               {t.pendingLessons}
             </div>
             <div className="text-xs font-bold text-gray-800 font-mono mt-0.5">{statistics.pendingCount}</div>
@@ -185,7 +185,7 @@ export function ScheduledLessonsProgressChart({
 
       {/* Main Area Chart Content Area */}
       <div className="p-4 space-y-4">
-        <div className="text-[10px] font-bold text-pink-900 flex items-center gap-1">
+        <div className="text-xs font-bold text-pink-900 flex items-center gap-1">
           <Calendar size={11} className="text-pink-500" />
           <span>{t.timeline}</span>
         </div>
@@ -202,13 +202,13 @@ export function ScheduledLessonsProgressChart({
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis
                 dataKey="dateLabel"
-                tick={{ fontSize: 8, fill: '#64748b', fontWeight: 'bold' }}
+                tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
                 axisLine={{ stroke: '#e2e8f0' }}
                 tickLine={false}
               />
               <YAxis
                 domain={[0, 100]}
-                tick={{ fontSize: 8, fill: '#64748b', fontWeight: 'bold' }}
+                tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
                 axisLine={{ stroke: '#e2e8f0' }}
                 tickLine={false}
               />
@@ -219,12 +219,12 @@ export function ScheduledLessonsProgressChart({
                     return (
                       <div className="p-2.5 bg-white border border-pink-100 rounded-lg shadow-md max-w-[220px]">
                         <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-1.5 mb-1.5">
-                          <span className="text-[8px] text-gray-400 font-bold font-mono">{d.scheduledDate}</span>
-                          <span className="inline-flex items-center bg-pink-50 text-pink-700 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold font-mono border border-pink-100">
+                          <span className="text-xs text-gray-400 font-bold font-mono">{d.scheduledDate}</span>
+                          <span className="inline-flex items-center bg-pink-50 text-pink-700 px-1.5 py-0.5 rounded-full text-xs font-extrabold font-mono border border-pink-100">
                             {d.progress}%
                           </span>
                         </div>
-                        <p className="text-[10px] font-bold text-gray-800 leading-tight">
+                        <p className="text-xs font-bold text-gray-800 leading-tight">
                           {t.detailsLabel.replace('{idx}', d.index).replace('{title}', d.lessonTitle)}
                         </p>
                       </div>
@@ -241,7 +241,7 @@ export function ScheduledLessonsProgressChart({
                 label={{
                   value: t.over90,
                   fill: '#10b981',
-                  fontSize: 7,
+                  fontSize: 12,
                   fontWeight: 'bold',
                   position: 'top',
                   offset: 2,
@@ -255,7 +255,7 @@ export function ScheduledLessonsProgressChart({
                 label={{
                   value: `${t.averageLine} (${statistics.avgProg}%)`,
                   fill: '#ec4899',
-                  fontSize: 7,
+                  fontSize: 12,
                   fontWeight: 'semibold',
                   position: 'bottom',
                   offset: 2,

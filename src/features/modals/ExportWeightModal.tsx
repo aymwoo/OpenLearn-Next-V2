@@ -143,7 +143,7 @@ export function ExportWeightModal({
                   setQuizzesWeight(50);
                   setAssignmentsWeight(50);
                 }}
-                className="text-[10px] text-gray-500 hover:text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 font-bold px-2.5 py-1 rounded transition-colors cursor-pointer"
+                className="text-xs text-gray-500 hover:text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 font-bold px-2.5 py-1 rounded transition-colors cursor-pointer"
               >
                 {lang === 'zh' ? '均衡配比 50/50' : 'Balance 50/50'}
               </button>
@@ -153,7 +153,7 @@ export function ExportWeightModal({
                   setQuizzesWeight(40);
                   setAssignmentsWeight(60);
                 }}
-                className="text-[10px] text-gray-500 hover:text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 font-bold px-2.5 py-1 rounded transition-colors cursor-pointer"
+                className="text-xs text-gray-500 hover:text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 font-bold px-2.5 py-1 rounded transition-colors cursor-pointer"
               >
                 {lang === 'zh' ? '推荐配比 40/60' : 'Recommend 40/60'}
               </button>
@@ -167,7 +167,7 @@ export function ExportWeightModal({
                 <ListFilter size={16} className="text-indigo-500" />
                 {lang === 'zh' ? '期末考核项目微调' : 'Item Categorization Overrides'}
               </span>
-              <span className="text-[10px] text-gray-400 font-medium font-sans">
+              <span className="text-xs text-gray-400 font-medium font-sans">
                 {lang === 'zh'
                   ? `共 ${classDashboardMap[exportClassId]?.assignments?.length || 0} 项`
                   : `${classDashboardMap[exportClassId]?.assignments?.length || 0} items total`}
@@ -195,7 +195,7 @@ export function ExportWeightModal({
                       <div className="font-semibold text-xs text-gray-800 truncate" title={a.title}>
                         {a.title}
                       </div>
-                      <div className="text-[10px] text-gray-400 truncate mt-0.5">
+                      <div className="text-xs text-gray-400 truncate mt-0.5">
                         {a.description || (lang === 'zh' ? '无描述信息' : 'No description provided')}
                       </div>
                     </div>
@@ -204,7 +204,7 @@ export function ExportWeightModal({
                       <button
                         type="button"
                         onClick={() => setCustomCategoryOverrides((prev) => ({ ...prev, [a.id]: 'quiz' }))}
-                        className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                        className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
                           currentCategory === 'quiz'
                             ? 'bg-indigo-600 text-white shadow'
                             : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
@@ -215,7 +215,7 @@ export function ExportWeightModal({
                       <button
                         type="button"
                         onClick={() => setCustomCategoryOverrides((prev) => ({ ...prev, [a.id]: 'assignment' }))}
-                        className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                        className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
                           currentCategory === 'assignment'
                             ? 'bg-emerald-600 text-white shadow'
                             : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
@@ -244,7 +244,7 @@ export function ExportWeightModal({
                   <Terminal size={16} className="text-emerald-500" />
                   {lang === 'zh' ? 'CSV 实时成绩表预览 (前5行数据)' : 'Live CSV Grade Preview (First 5 Rows)'}
                 </span>
-                <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold px-2 py-0.5 rounded shadow-xs font-sans">
+                <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold px-2 py-0.5 rounded shadow-xs font-sans">
                   {lang === 'zh'
                     ? `展示 5 / ${csvPreviewData.totalStudents} 名学生`
                     : `Showing 5 of ${csvPreviewData.totalStudents} students`}
@@ -263,7 +263,7 @@ export function ExportWeightModal({
                           return (
                             <th
                               key={hIdx}
-                              className={`p-2.5 text-[10px] font-bold tracking-wider uppercase border-r border-gray-150 whitespace-nowrap font-sans font-semibold ${
+                              className={`p-2.5 text-xs font-bold tracking-wider uppercase border-r border-gray-150 whitespace-nowrap font-sans font-semibold ${
                                 isWeighted
                                   ? 'text-indigo-700 bg-indigo-50/70 border-indigo-150 font-bold'
                                   : isCalcCol
@@ -279,7 +279,7 @@ export function ExportWeightModal({
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {csvPreviewData.rows.map((row, rIdx) => (
-                        <tr key={rIdx} className="hover:bg-gray-50/50 transition-colors font-mono text-[10px]">
+                        <tr key={rIdx} className="hover:bg-gray-50/50 transition-colors font-mono text-xs">
                           {row.map((cell, cIdx) => {
                             const hdrName = csvPreviewData.headers[cIdx] || '';
                             const isWeighted = hdrName.includes('Weighted');
@@ -288,7 +288,7 @@ export function ExportWeightModal({
                             return (
                               <td
                                 key={cIdx}
-                                className={`p-2 border-r border-gray-100 font-mono text-[10px] text-gray-700 whitespace-nowrap text-center ${
+                                className={`p-2 border-r border-gray-100 font-mono text-xs text-gray-700 whitespace-nowrap text-center ${
                                   isWeighted
                                     ? 'bg-indigo-50/30 font-bold text-indigo-700 border-indigo-100'
                                     : isCalcCol
@@ -308,7 +308,7 @@ export function ExportWeightModal({
                   </table>
                 </div>
               </div>
-              <p className="text-[10px] text-gray-400 font-sans italic">
+              <p className="text-xs text-gray-400 font-sans italic">
                 {lang === 'zh'
                   ? '* 改变上方权重占比或调整项目分类时，此预览与计算结果会立即实时刷新。'
                   : '* Calculations and layout values in this preview refresh dynamically as you tweak sliders and overrides.'}

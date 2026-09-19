@@ -795,7 +795,7 @@ export function LiveClassroomView({
           <div className="flex items-center gap-2">
             <button
               onClick={handleOpenStudentWindow}
-              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 ${
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 ${
                 isStudentWindowOpen
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400/50 shadow-emerald-500/20'
                   : 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white'
@@ -825,7 +825,7 @@ export function LiveClassroomView({
             <button
               onClick={() => handleToggleClassLock(!isClassLocked)}
               disabled={lockingClass || !selectedLesson || !liveClassSelectedClassId}
-              className={`px-3 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer ${
                 isClassLocked
                   ? 'bg-rose-500 hover:bg-rose-600 text-white'
                   : 'bg-indigo-600 hover:bg-indigo-700 text-white'
@@ -853,7 +853,7 @@ export function LiveClassroomView({
           <div className="w-[220px] shrink-0 bg-surface p-3.5 border-r border-theme flex flex-col gap-4 overflow-y-auto">
             <div>
               <div className="flex items-center justify-between mb-2 select-none">
-                <h3 className="text-[10px] font-black uppercase text-muted tracking-wider">
+                <h3 className="text-xs font-black uppercase text-muted tracking-wider">
                   {lang === 'zh' ? '教学步骤与时间管理' : 'Lesson Segments & Phases'}
                 </h3>
                 <button
@@ -867,7 +867,7 @@ export function LiveClassroomView({
 
               {/* Live Timer status */}
               <div className="bg-surface-secondary border border-theme rounded-xl p-3 flex flex-col items-center justify-center gap-1 shadow-sm">
-                <span className="text-[9.5px] uppercase tracking-widest text-muted font-semibold flex items-center gap-1">
+                <span className="text-xs uppercase tracking-widest text-muted font-semibold flex items-center gap-1">
                   <Clock
                     size={11}
                     className={liveClassIsActive ? 'animate-spin' : ''}
@@ -884,7 +884,7 @@ export function LiveClassroomView({
                   <button
                     onClick={() => setLiveClassIsActive(!liveClassIsActive)}
                     disabled={liveClassTimeRemaining <= 0}
-                    className="flex-1 py-1 rounded bg-surface hover:bg-surface-secondary text-[10px] font-bold text-main transition-all disabled:opacity-40 flex items-center justify-center gap-1 border border-theme"
+                    className="flex-1 py-1 rounded bg-surface hover:bg-surface-secondary text-xs font-bold text-main transition-all disabled:opacity-40 flex items-center justify-center gap-1 border border-theme"
                   >
                     {liveClassIsActive ? <Pause size={10} /> : <Play size={10} />}
                     <span>
@@ -896,7 +896,7 @@ export function LiveClassroomView({
                       setLiveClassIsActive(false);
                       setLiveClassTimeRemaining(0);
                     }}
-                    className="py-1 px-2.5 rounded bg-surface hover:bg-rose-500/10 text-[10px] font-bold text-rose-500 hover:text-rose-600 transition-all flex items-center justify-center border border-theme"
+                    className="py-1 px-2.5 rounded bg-surface hover:bg-rose-500/10 text-xs font-bold text-rose-500 hover:text-rose-600 transition-all flex items-center justify-center border border-theme"
                     title="重置"
                   >
                     <Square size={10} />
@@ -906,7 +906,7 @@ export function LiveClassroomView({
             </div>
 
             <div className="flex-1 flex flex-col gap-2 min-h-0">
-              <h4 className="text-[10px] font-black uppercase text-muted tracking-wider select-none">
+              <h4 className="text-xs font-black uppercase text-muted tracking-wider select-none">
                 {lang === 'zh' ? '教学环节进度表' : 'Timeline Segments'}
               </h4>
 
@@ -924,21 +924,21 @@ export function LiveClassroomView({
                         }`}
                       >
                         <div className="flex justify-between items-start">
-                          <span className={`text-[11.5px] font-bold ${isActive ? 'text-primary-theme' : 'text-main'}`}>
+                          <span className={`text-xs font-bold ${isActive ? 'text-primary-theme' : 'text-main'}`}>
                             {idx + 1}. {seg.title}
                           </span>
-                          <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-surface-secondary text-muted border border-theme">
+                          <span className="text-xs font-mono px-1 py-0.5 rounded bg-surface-secondary text-muted border border-theme">
                             {seg.duration}
                           </span>
                         </div>
                         <div
-                          className={`text-[9.5px] line-clamp-2 leading-relaxed ${isActive ? 'text-primary-theme' : 'text-muted'}`}
+                          className={`text-xs line-clamp-2 leading-relaxed ${isActive ? 'text-primary-theme' : 'text-muted'}`}
                         >
                           {seg.notes || '无步骤描述备注信息。'}
                         </div>
                         <button
                           onClick={() => handleStartSegment(seg)}
-                          className={`w-full py-1 rounded text-[10px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                          className={`w-full py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
                             isActive
                               ? 'bg-primary-theme text-white hover:bg-primary-theme-hover shadow-sm'
                               : 'bg-surface-secondary text-muted hover:text-main hover:bg-surface border border-theme'
@@ -972,7 +972,7 @@ export function LiveClassroomView({
         <div className="flex-1 flex flex-col min-w-0 bg-surface-secondary/40 p-3 gap-3 relative">
           {selectedLesson ? (
             <div className="w-full h-full relative flex flex-col min-h-0">
-              <div className="flex justify-between items-center px-1.5 py-1 select-none text-muted text-[10px] uppercase font-extrabold tracking-wide shrink-0 mb-1">
+              <div className="flex justify-between items-center px-1.5 py-1 select-none text-muted text-xs uppercase font-extrabold tracking-wide shrink-0 mb-1">
                 <div className="flex items-center gap-3">
                   {isLeftSidebarCollapsed && (
                     <button
@@ -981,13 +981,13 @@ export function LiveClassroomView({
                       title={lang === 'zh' ? '展开环节大纲' : 'Expand Sidebar'}
                     >
                       <ChevronRight size={10} />
-                      <span className="text-[9px] font-bold tracking-wider">{lang === 'zh' ? '展开' : 'Expand'}</span>
+                      <span className="text-xs font-bold tracking-wider">{lang === 'zh' ? '展开' : 'Expand'}</span>
                     </button>
                   )}
                   <div className="bg-surface-secondary p-0.5 rounded-lg flex items-center gap-1 border border-theme">
                     <button
                       onClick={() => setMiddleTab('whiteboard')}
-                      className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                         middleTab === 'whiteboard'
                           ? 'bg-surface text-primary-theme shadow-sm'
                           : 'text-muted hover:text-main'
@@ -997,7 +997,7 @@ export function LiveClassroomView({
                     </button>
                     <button
                       onClick={() => setMiddleTab('submissions')}
-                      className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                         middleTab === 'submissions'
                           ? 'bg-surface text-primary-theme shadow-sm'
                           : 'text-muted hover:text-main'
@@ -1008,7 +1008,7 @@ export function LiveClassroomView({
                     <button
                       id="teacher_assignment_eval_tab_btn"
                       onClick={() => setMiddleTab('assignment')}
-                      className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                         middleTab === 'assignment'
                           ? 'bg-surface text-primary-theme shadow-sm'
                           : 'text-muted hover:text-main'
@@ -1068,12 +1068,12 @@ export function LiveClassroomView({
 
                   {/* Classroom Interactive Tool Shelf (Extensible Tools Panel) */}
                   <div className="mt-3 bg-surface border border-theme rounded-xl p-3 shadow-sm shrink-0 flex flex-col gap-2 relative z-30">
-                    <div className="flex items-center justify-between text-[10px] uppercase font-black text-muted tracking-wider select-none">
+                    <div className="flex items-center justify-between text-xs uppercase font-black text-muted tracking-wider select-none">
                       <span className="flex items-center gap-1.5 text-primary-theme">
                         <Shuffle size={12} className="text-primary-theme animate-pulse" />
                         <span>{lang === 'zh' ? '互动工具 (插件扩展)' : 'Classroom Interactive Tools'}</span>
                       </span>
-                      <span className="text-[8.5px] text-muted font-mono">Plugins: {classroomTools.length} Active</span>
+                      <span className="text-xs text-muted font-mono">Plugins: {classroomTools.length} Active</span>
                     </div>
 
                     {classroomTools.length > 0 ? (
@@ -1091,13 +1091,13 @@ export function LiveClassroomView({
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="text-xs font-bold text-main truncate">{tool.name}</div>
-                              <div className="text-[9px] text-muted truncate mt-0.5">{tool.description}</div>
+                              <div className="text-xs text-muted truncate mt-0.5">{tool.description}</div>
                             </div>
                           </button>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-2 text-[10px] text-muted italic">
+                      <div className="text-center py-2 text-xs text-muted italic">
                         {lang === 'zh' ? '暂无可用的互动工具。请在应用商店启用插件。' : 'No plugin tools loaded.'}
                       </div>
                     )}
@@ -1112,7 +1112,7 @@ export function LiveClassroomView({
                         {lang === 'zh' ? '学生互动提交数据列表' : 'Student Submissions'}
                       </span>
                       {attempts.length > 0 && (
-                        <span className="text-[9px] bg-primary-theme/10 text-primary-theme px-2 py-0.5 rounded-full border border-primary-theme/20 font-bold">
+                        <span className="text-xs bg-primary-theme/10 text-primary-theme px-2 py-0.5 rounded-full border border-primary-theme/20 font-bold">
                           {attempts.length} {lang === 'zh' ? '条记录' : 'records'}
                         </span>
                       )}
@@ -1192,7 +1192,7 @@ export function LiveClassroomView({
                                 {lang === 'zh' ? '暂无匹配的提交数据。' : 'No matching submissions found.'}
                               </span>
                               {!liveClassSelectedClassId && (
-                                <span className="text-[10px] text-muted italic">
+                                <span className="text-xs text-muted italic">
                                   {lang === 'zh'
                                     ? '提示：请在顶部选择一个班级进行筛选。'
                                     : 'Tip: Select a class at the top to filter.'}
@@ -1231,7 +1231,7 @@ export function LiveClassroomView({
                                   >
                                     <td className="p-3">
                                       <div className="font-semibold text-main">{a.studentName}</div>
-                                      <div className="text-[10px] text-muted mt-0.5">
+                                      <div className="text-xs text-muted mt-0.5">
                                         {lang === 'zh' ? '时间' : 'Time'}: {formattedTime}
                                       </div>
                                     </td>
@@ -1243,7 +1243,7 @@ export function LiveClassroomView({
                                     </td>
                                     <td className="p-3">
                                       <span
-                                        className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${
+                                        className={`px-2 py-0.5 rounded-full border text-xs font-bold ${
                                           isFinished
                                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                                             : 'bg-blue-50 text-blue-700 border-blue-100 animate-pulse'
@@ -1274,7 +1274,7 @@ export function LiveClassroomView({
                                       <div className="flex justify-end gap-2">
                                         <button
                                           onClick={() => handleViewRaw(a)}
-                                          className="p-1 text-muted hover:text-primary-theme hover:bg-surface-secondary border border-transparent hover:border-theme rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-[10px]"
+                                          className="p-1 text-muted hover:text-primary-theme hover:bg-surface-secondary border border-transparent hover:border-theme rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs"
                                           title={lang === 'zh' ? '查看提交轨迹事件数据' : 'View Raw Data'}
                                         >
                                           <Eye size={12} />
@@ -1282,7 +1282,7 @@ export function LiveClassroomView({
                                         </button>
 
                                         {a.isPromoted > 0 ? (
-                                          <span className="px-2 py-1 text-emerald-650 font-bold text-[10px] flex items-center gap-0.5 bg-emerald-50/50 rounded-lg border border-emerald-100">
+                                          <span className="px-2 py-1 text-emerald-650 font-bold text-xs flex items-center gap-0.5 bg-emerald-50/50 rounded-lg border border-emerald-100">
                                             <Check size={11} />
                                             {lang === 'zh' ? '已归档' : 'Saved'}
                                           </span>
@@ -1290,7 +1290,7 @@ export function LiveClassroomView({
                                           <button
                                             onClick={() => handlePromoteAttempt(a.attemptId)}
                                             disabled={!isFinished}
-                                            className={`px-2 py-1 text-[10px] font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border ${
+                                            className={`px-2 py-1 text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border ${
                                               isFinished
                                                 ? 'bg-primary-theme hover:bg-primary-theme-hover text-white border-primary-theme'
                                                 : 'bg-surface-secondary text-muted border-theme cursor-not-allowed opacity-60'
@@ -1331,7 +1331,7 @@ export function LiveClassroomView({
               <div className="text-sm font-bold text-slate-655">
                 {lang === 'zh' ? '请在顶部栏选择一个授课课节' : 'Please select a lesson to start teaching'}
               </div>
-              <p className="text-[10px] text-slate-400">白板及环节控制面板将在课节载入后自动生成</p>
+              <p className="text-xs text-slate-400">白板及环节控制面板将在课节载入后自动生成</p>
             </div>
           )}
         </div>
@@ -1340,14 +1340,14 @@ export function LiveClassroomView({
         <div className="w-[260px] shrink-0 bg-surface p-3.5 border-l border-theme flex flex-col gap-3.5 overflow-hidden">
           {/* Student attendance grid */}
           <div className="flex-1 flex flex-col min-h-0 gap-2">
-            <h3 className="text-[10px] font-black uppercase text-muted tracking-wider select-none flex justify-between items-center shrink-0">
+            <h3 className="text-xs font-black uppercase text-muted tracking-wider select-none flex justify-between items-center shrink-0">
               <span className="flex items-center gap-1">
                 <span>{lang === 'zh' ? '学生专注力监控' : 'Student Status Console'}</span>
                 {liveClassSelectedClassId && (
                   <button
                     onClick={handleRandomPick}
                     disabled={students.length === 0 || isDrawing}
-                    className="ml-2 text-[9px] font-bold bg-primary-theme/10 text-primary-theme border border-primary-theme/20 px-1.5 py-0.5 rounded hover:bg-primary-theme/20 transition-colors flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+                    className="ml-2 text-xs font-bold bg-primary-theme/10 text-primary-theme border border-primary-theme/20 px-1.5 py-0.5 rounded hover:bg-primary-theme/20 transition-colors flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
                     title={lang === 'zh' ? '随机抽取一名学生提问' : 'Pick a student randomly'}
                   >
                     <Shuffle size={8.5} className={isDrawing ? 'animate-spin' : ''} />
@@ -1355,7 +1355,7 @@ export function LiveClassroomView({
                   </button>
                 )}
               </span>
-              <span className="text-[9px] bg-surface-secondary border border-theme text-muted font-mono px-1.5 py-0.5 rounded-md">
+              <span className="text-xs bg-surface-secondary border border-theme text-muted font-mono px-1.5 py-0.5 rounded-md">
                 {students.filter((s) => s.locked_lesson_id === selectedLesson).length} / {students.length} Locked
               </span>
             </h3>
@@ -1465,7 +1465,7 @@ export function LiveClassroomView({
                         >
                           {/* Name view: Visible by default, hidden on hover */}
                           <span
-                            className={`text-[10px] font-bold tracking-tight truncate max-w-[34px] group-hover:scale-0 group-hover:opacity-0 transition-all duration-200 select-none ${
+                            className={`text-xs font-bold tracking-tight truncate max-w-[34px] group-hover:scale-0 group-hover:opacity-0 transition-all duration-200 select-none ${
                               isSelectedDraw
                                 ? 'text-amber-900 font-extrabold'
                                 : !isOnline
@@ -1522,7 +1522,7 @@ export function LiveClassroomView({
 
                         {/* Top-Right Online/Lesson Badge Indicator or Jackpot winner target badge */}
                         {isSelectedDraw ? (
-                          <span className="absolute -top-1.5 -right-1.5 z-20 text-[9px] bg-amber-500 text-white rounded-full w-4 h-4 flex items-center justify-center font-bold shadow-md animate-bounce">
+                          <span className="absolute -top-1.5 -right-1.5 z-20 text-xs bg-amber-500 text-white rounded-full w-4 h-4 flex items-center justify-center font-bold shadow-md animate-bounce">
                             🎯
                           </span>
                         ) : (
@@ -1547,7 +1547,7 @@ export function LiveClassroomView({
 
                       {/* Small Progress Label or Draw Winner Label */}
                       <span
-                        className={`text-[8.5px] mt-1 truncate max-w-[48px] select-none font-medium ${
+                        className={`text-xs mt-1 truncate max-w-[48px] select-none font-medium ${
                           isSelectedDraw
                             ? 'text-amber-600 font-extrabold animate-bounce'
                             : !isOnline
@@ -1598,16 +1598,16 @@ export function LiveClassroomView({
                           {st.name} ({st.student_number || 'N/A'})
                         </span>
                       </span>
-                      <span className="text-[10px] text-primary-theme font-mono font-black shrink-0">
+                      <span className="text-xs text-primary-theme font-mono font-black shrink-0">
                         {progPercent}%
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-1.5 text-[9.5px] leading-tight shrink-0">
+                    <div className="grid grid-cols-2 gap-1.5 text-xs leading-tight shrink-0">
                       <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
                         <span className="text-muted font-bold">随堂测验</span>
                         <span
-                          className={`font-bold font-mono text-[10px] ${studentProg != null && studentProg.quiz_score !== null ? 'text-primary-theme' : 'text-muted'}`}
+                          className={`font-bold font-mono text-xs ${studentProg != null && studentProg.quiz_score !== null ? 'text-primary-theme' : 'text-muted'}`}
                         >
                           {studentProg != null && studentProg.quiz_score !== null
                             ? `${studentProg.quiz_score} / 100`
@@ -1617,13 +1617,13 @@ export function LiveClassroomView({
 
                       <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
                         <span className="text-muted font-bold">教学环节进度</span>
-                        <span className="font-bold text-main text-[10px]">
+                        <span className="font-bold text-main text-xs">
                           {Array.isArray(completedSegIds) ? completedSegIds.length : 0} / {timelineSegments.length}
                         </span>
                       </div>
                     </div>
 
-                    <div className="text-[9px] text-muted leading-relaxed truncate mt-0.5 shrink-0">
+                    <div className="text-xs text-muted leading-relaxed truncate mt-0.5 shrink-0">
                       环节:{' '}
                       {timelineSegments.length > 0 ? (
                         timelineSegments.map((seg, sIdx) => {
@@ -1652,22 +1652,22 @@ export function LiveClassroomView({
                   <Activity size={12} className="text-primary-theme animate-pulse" />
                   <span>{lang === 'zh' ? '班级学情概况' : 'Class Overview'}</span>
                 </div>
-                <div className="grid grid-cols-3 gap-1.5 text-[9.5px] leading-tight mt-1.5 shrink-0">
+                <div className="grid grid-cols-3 gap-1.5 text-xs leading-tight mt-1.5 shrink-0">
                   <div className="flex flex-col items-center bg-surface py-1 rounded-lg border border-theme">
                     <span className="text-muted font-medium">在线/总数</span>
-                    <span className="font-bold font-mono text-emerald-600 text-[11px] mt-0.5">
+                    <span className="font-bold font-mono text-emerald-600 text-xs mt-0.5">
                       {students.filter((s) => onlineStudentIds.includes(s.id)).length}/{students.length}
                     </span>
                   </div>
                   <div className="flex flex-col items-center bg-surface py-1 rounded-lg border border-theme">
                     <span className="text-muted font-medium">屏幕锁定</span>
-                    <span className="font-bold font-mono text-rose-500 text-[11px] mt-0.5">
+                    <span className="font-bold font-mono text-rose-500 text-xs mt-0.5">
                       {students.filter((s) => s.locked_lesson_id === selectedLesson).length}
                     </span>
                   </div>
                   <div className="flex flex-col items-center bg-surface py-1 rounded-lg border border-theme">
                     <span className="text-muted font-medium">平均进度</span>
-                    <span className="font-bold font-mono text-primary-theme text-[11px] mt-0.5">
+                    <span className="font-bold font-mono text-primary-theme text-xs mt-0.5">
                       {(() => {
                         const inClassStudents = students.filter((s) => onlineStudentIds.includes(s.id));
                         if (inClassStudents.length === 0) return '0%';
@@ -1686,7 +1686,7 @@ export function LiveClassroomView({
 
           {/* Feedback log feed */}
           <div className="h-[160px] flex flex-col border-t border-theme pt-3 min-h-0 gap-2 shrink-0">
-            <h3 className="text-[10px] font-black uppercase text-muted tracking-wider select-none flex justify-between items-center">
+            <h3 className="text-xs font-black uppercase text-muted tracking-wider select-none flex justify-between items-center">
               <span>{lang === 'zh' ? '课堂互动反馈流' : 'Live Classroom Feed'}</span>
               <button
                 onClick={() =>
@@ -1703,19 +1703,19 @@ export function LiveClassroomView({
                     },
                   ])
                 }
-                className="text-[9px] hover:text-main text-muted underline transition-all"
+                className="text-xs hover:text-main text-muted underline transition-all"
               >
                 Clear
               </button>
             </h3>
 
-            <div className="flex-1 bg-surface-secondary border border-theme rounded-xl p-2.5 font-mono text-[9px] leading-relaxed overflow-y-auto space-y-2 select-text text-left text-main shadow-inner scrollbar-thin">
+            <div className="flex-1 bg-surface-secondary border border-theme rounded-xl p-2.5 font-mono text-xs leading-relaxed overflow-y-auto space-y-2 select-text text-left text-main shadow-inner scrollbar-thin">
               {liveClassFeed.map((f) => (
                 <div key={f.id} className="border-b border-theme pb-1.5 last:border-b-0">
                   <div className="flex justify-between items-center text-muted font-bold mb-0.5">
                     <span>{f.time}</span>
                     <span
-                      className={`px-1 rounded uppercase tracking-wide text-[7px] ${
+                      className={`px-1 rounded uppercase tracking-wide text-xs ${
                         f.type === 'success'
                           ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                           : f.type === 'warning'
@@ -1771,7 +1771,7 @@ export function LiveClassroomView({
               {/* Summary Cards */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-surface-secondary p-3 rounded-xl border border-theme">
-                  <div className="text-[10px] text-muted font-bold uppercase tracking-wider">
+                  <div className="text-xs text-muted font-bold uppercase tracking-wider">
                     {lang === 'zh' ? '课件名称' : 'Courseware'}
                   </div>
                   <div className="text-xs font-semibold text-main mt-1 truncate" title={selectedAttempt.coursewareName}>
@@ -1779,7 +1779,7 @@ export function LiveClassroomView({
                   </div>
                 </div>
                 <div className="bg-surface-secondary p-3 rounded-xl border border-theme">
-                  <div className="text-[10px] text-muted font-bold uppercase tracking-wider">
+                  <div className="text-xs text-muted font-bold uppercase tracking-wider">
                     {lang === 'zh' ? '提交成绩' : 'Score'}
                   </div>
                   <div className="text-xs font-bold text-primary-theme mt-1">
@@ -1787,7 +1787,7 @@ export function LiveClassroomView({
                   </div>
                 </div>
                 <div className="bg-surface-secondary p-3 rounded-xl border border-theme">
-                  <div className="text-[10px] text-muted font-bold uppercase tracking-wider">
+                  <div className="text-xs text-muted font-bold uppercase tracking-wider">
                     {lang === 'zh' ? '课件完成度' : 'Completion'}
                   </div>
                   <div className="text-xs font-bold text-emerald-600 mt-1">
@@ -1809,7 +1809,7 @@ export function LiveClassroomView({
                     <span className="text-xs">{lang === 'zh' ? '正在查询原始数据...' : 'Loading raw data...'}</span>
                   </div>
                 ) : Array.isArray(rawPayload) && rawPayload.length > 0 ? (
-                  <div className="space-y-3 font-mono text-[11px] max-h-[40vh] overflow-y-auto pr-1 scrollbar-thin">
+                  <div className="space-y-3 font-mono text-xs max-h-[40vh] overflow-y-auto pr-1 scrollbar-thin">
                     {rawPayload.map((evt, idx) => {
                       let parsedPayload = {};
                       try {
@@ -1822,13 +1822,13 @@ export function LiveClassroomView({
                           key={evt.id || idx}
                           className="p-3 bg-slate-900 text-slate-200 rounded-xl border border-slate-800 flex flex-col gap-1.5"
                         >
-                          <div className="flex justify-between items-center text-[10px] text-slate-400 border-b border-slate-800 pb-1">
+                          <div className="flex justify-between items-center text-xs text-slate-400 border-b border-slate-800 pb-1">
                             <span className="font-bold text-indigo-400 bg-indigo-950/50 border border-indigo-900/50 px-1.5 py-0.5 rounded">
                               {evt.event_type}
                             </span>
                             <span>{new Date(evt.created_at).toLocaleTimeString()}</span>
                           </div>
-                          <pre className="overflow-x-auto text-[10px] leading-relaxed p-1 text-emerald-400/90 whitespace-pre-wrap word-break-all">
+                          <pre className="overflow-x-auto text-xs leading-relaxed p-1 text-emerald-400/90 whitespace-pre-wrap word-break-all">
                             {JSON.stringify(parsedPayload, null, 2)}
                           </pre>
                         </div>
@@ -1845,7 +1845,7 @@ export function LiveClassroomView({
 
             {/* Modal Footer */}
             <div className="bg-surface-secondary px-6 py-4 border-t border-theme flex justify-between gap-3 shrink-0">
-              <div className="text-[10px] text-muted flex items-center gap-1">
+              <div className="text-xs text-muted flex items-center gap-1">
                 <Award size={10} />
                 <span>Powered by LMS Bridge API v1</span>
               </div>

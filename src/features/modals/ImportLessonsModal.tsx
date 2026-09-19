@@ -214,7 +214,7 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                             >
                               {row.title}
                             </td>
-                            <td className="p-3 text-gray-500 font-mono text-[11px] leading-relaxed break-words col-span-2">
+                            <td className="p-3 text-gray-500 font-mono text-xs leading-relaxed break-words col-span-2">
                               {row.content.length > 150
                                 ? row.content.substring(0, 150) + '...'
                                 : row.content || <em className="text-gray-300 italic">None</em>}
@@ -241,7 +241,7 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                 <div className="py-8 flex flex-col items-center justify-center space-y-4">
                   <div className="relative w-20 h-20 flex items-center justify-center">
                     <Loader2 size={36} className="text-indigo-600 animate-spin" />
-                    <span className="absolute text-[11px] font-extrabold text-indigo-700">
+                    <span className="absolute text-xs font-extrabold text-indigo-700">
                       {Math.round((importProgress / importProgressTotal) * 100)}%
                     </span>
                   </div>
@@ -261,7 +261,7 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                       style={{ width: `${(importProgress / importProgressTotal) * 100}%` }}
                     />
                   </div>
-                  <div className="w-full max-w-md bg-gray-50 rounded-xl p-3 border border-gray-150 font-mono text-[10px] text-gray-400 max-h-[140px] overflow-y-auto">
+                  <div className="w-full max-w-md bg-gray-50 rounded-xl p-3 border border-gray-150 font-mono text-xs text-gray-400 max-h-[140px] overflow-y-auto">
                     <div>{'[API] POST /api/lessons -> Request batch transaction...'}</div>
                     {previewImportData.slice(0, importProgress).map((p, idx) => (
                       <div key={idx} className="text-indigo-600 font-bold mt-1">

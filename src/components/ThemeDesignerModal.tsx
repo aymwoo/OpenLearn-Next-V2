@@ -308,7 +308,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                   <Sparkles size={14} className="text-amber-500" />
                   {lang === 'zh' ? '创意预设配色' : 'Creative Presets'}
                 </label>
-                <span className="text-2xs text-muted">一键填入调色板</span>
+                <span className="text-xs text-muted">一键填入调色板</span>
               </div>
               <div className="grid grid-cols-2 gap-2.5">
                 {PRESETS.map((preset) => (
@@ -336,7 +336,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                         />
                       </div>
                     </div>
-                    <p className="text-3xs text-muted mt-1.5 line-clamp-2 leading-relaxed opacity-85">
+                    <p className="text-xs text-muted mt-1.5 line-clamp-2 leading-relaxed opacity-85">
                       {preset.description}
                     </p>
                   </button>
@@ -352,7 +352,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor={`${inputPrefix}-themeId`} className="block text-2xs font-medium text-muted mb-1">
+                  <label htmlFor={`${inputPrefix}-themeId`} className="block text-xs font-medium text-muted mb-1">
                     主题标识 (ID)
                   </label>
                   <input
@@ -365,7 +365,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                   />
                 </div>
                 <div>
-                  <label htmlFor={`${inputPrefix}-label`} className="block text-2xs font-medium text-muted mb-1">
+                  <label htmlFor={`${inputPrefix}-label`} className="block text-xs font-medium text-muted mb-1">
                     主题名称
                   </label>
                   <input
@@ -379,7 +379,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                 </div>
               </div>
               <div>
-                <label htmlFor={`${inputPrefix}-description`} className="block text-2xs font-medium text-muted mb-1">
+                <label htmlFor={`${inputPrefix}-description`} className="block text-xs font-medium text-muted mb-1">
                   主题描述
                 </label>
                 <input
@@ -410,11 +410,11 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                       <div className="flex-1 min-w-0 pr-3">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-medium text-main">{field.labelZh}</span>
-                          <span className="text-3xs font-mono text-muted bg-surface-secondary px-1.5 py-0.5 rounded">
+                          <span className="text-xs font-mono text-muted bg-surface-secondary px-1.5 py-0.5 rounded">
                             {field.key}
                           </span>
                         </div>
-                        <p className="text-3xs text-muted mt-0.5">{field.desc}</p>
+                        <p className="text-xs text-muted mt-0.5">{field.desc}</p>
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
@@ -460,13 +460,13 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                         />
                         <div className="truncate">
                           <div className="text-xs font-semibold text-main truncate">{ct.label}</div>
-                          <div className="text-3xs text-muted truncate">{ct.description}</div>
+                          <div className="text-xs text-muted truncate">{ct.description}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0 ml-2">
                         <button
                           onClick={() => handleLoadCustomTheme(ct)}
-                          className="px-2 py-1 text-2xs rounded-md bg-surface border border-theme hover:bg-surface-secondary text-main transition-colors cursor-pointer"
+                          className="px-2 py-1 text-xs rounded-md bg-surface border border-theme hover:bg-surface-secondary text-main transition-colors cursor-pointer"
                         >
                           编辑
                         </button>
@@ -497,7 +497,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                 <Eye size={14} className="text-primary-theme" />
                 {lang === 'zh' ? '拟真沙盒视口 (Live Sandbox)' : 'Live Sandbox Preview'}
               </div>
-              <span className="text-2xs text-muted font-mono">
+              <span className="text-xs text-muted font-mono">
                 当前预览: {label} ({themeId})
               </span>
             </div>
@@ -532,7 +532,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                 </div>
                 <div className="flex items-center gap-2">
                   <div
-                    className="text-3xs px-2 py-0.5 rounded-md font-mono"
+                    className="text-xs px-2 py-0.5 rounded-md font-mono"
                     style={{
                       backgroundColor: tokens['--bg-surface-secondary'] || '#f1f5f9',
                       color: tokens['--text-muted'] || '#64748b',
@@ -541,7 +541,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                     10:30:00
                   </div>
                   <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-3xs font-bold text-white"
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
                     style={{ backgroundColor: tokens['--color-primary'] || '#4f46e5' }}
                   >
                     T
@@ -569,7 +569,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                       </p>
                     </div>
                     <span
-                      className="text-3xs px-2 py-0.5 rounded-full font-medium"
+                      className="text-xs px-2 py-0.5 rounded-full font-medium"
                       style={{
                         backgroundColor: tokens['--bg-surface-secondary'],
                         color: tokens['--color-primary'],
@@ -583,7 +583,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                   {/* 模拟数据指标格 */}
                   <div className="grid grid-cols-3 gap-2 pt-1">
                     <div className="p-2 rounded-lg" style={{ backgroundColor: tokens['--bg-surface-secondary'] }}>
-                      <div className="text-3xs" style={{ color: tokens['--text-muted'] }}>
+                      <div className="text-xs" style={{ color: tokens['--text-muted'] }}>
                         光电门测速 (v)
                       </div>
                       <div className="text-sm font-bold font-mono mt-0.5" style={{ color: tokens['--text-main'] }}>
@@ -591,7 +591,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                       </div>
                     </div>
                     <div className="p-2 rounded-lg" style={{ backgroundColor: tokens['--bg-surface-secondary'] }}>
-                      <div className="text-3xs" style={{ color: tokens['--text-muted'] }}>
+                      <div className="text-xs" style={{ color: tokens['--text-muted'] }}>
                         动能增量 (ΔEk)
                       </div>
                       <div className="text-sm font-bold font-mono mt-0.5" style={{ color: tokens['--color-primary'] }}>
@@ -599,7 +599,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                       </div>
                     </div>
                     <div className="p-2 rounded-lg" style={{ backgroundColor: tokens['--bg-surface-secondary'] }}>
-                      <div className="text-3xs" style={{ color: tokens['--text-muted'] }}>
+                      <div className="text-xs" style={{ color: tokens['--text-muted'] }}>
                         误差率 (Err)
                       </div>
                       <div className="text-sm font-bold font-mono mt-0.5" style={{ color: tokens['--text-main'] }}>
@@ -644,10 +644,10 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                   }}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-2xs font-semibold" style={{ color: tokens['--text-main'] }}>
+                    <span className="text-xs font-semibold" style={{ color: tokens['--text-main'] }}>
                       互动白板区域 (Whiteboard Canvas)
                     </span>
-                    <span className="text-3xs font-mono" style={{ color: tokens['--text-muted'] }}>
+                    <span className="text-xs font-mono" style={{ color: tokens['--text-muted'] }}>
                       60 FPS
                     </span>
                   </div>
@@ -665,7 +665,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                       <BookOpen size={20} />
                     </div>
                     <div
-                      className="absolute bottom-2 right-2 text-3xs font-mono px-1.5 py-0.5 rounded border"
+                      className="absolute bottom-2 right-2 text-xs font-mono px-1.5 py-0.5 rounded border"
                       style={{
                         backgroundColor: tokens['--bg-surface'],
                         borderColor: tokens['--border-theme'],
@@ -746,7 +746,7 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
                   onChange={(e) => setJsonText(e.target.value)}
                   placeholder={importExportMode === 'import' ? '请在此粘贴主题导出的 JSON 字符串...' : ''}
                   rows={10}
-                  className="w-full p-3 font-mono text-2xs rounded-xl border border-theme bg-surface-secondary text-main focus:outline-none focus:ring-1 focus:ring-primary-theme resize-none"
+                  className="w-full p-3 font-mono text-xs rounded-xl border border-theme bg-surface-secondary text-main focus:outline-none focus:ring-1 focus:ring-primary-theme resize-none"
                 />
               </div>
 

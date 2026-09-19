@@ -44,7 +44,7 @@ export function ImportModal({
             : 'Supports CSV or JSON files. CSV requires a header line with names like:'}
         </p>
 
-        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-[10px] font-mono text-gray-600 mb-4 whitespace-nowrap overflow-x-auto select-all text-left">
+        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 text-xs font-mono text-gray-600 mb-4 whitespace-nowrap overflow-x-auto select-all text-left">
           班级名称, 班级描述, 学生姓名, 学生邮箱
           <br />
           高一A班, 基础英语课程, 李明, liming@example.com
@@ -99,7 +99,7 @@ export function ImportModal({
           <p className="text-xs font-semibold text-gray-700">
             {lang === 'zh' ? '点击选择文件 或 拖拽文件到这里' : 'Click to select file or drag it here'}
           </p>
-          <p className="text-[10px] text-gray-400 mt-1">CSV or JSON (max 5MB)</p>
+          <p className="text-xs text-gray-400 mt-1">CSV or JSON (max 5MB)</p>
         </div>
 
         {importError && (

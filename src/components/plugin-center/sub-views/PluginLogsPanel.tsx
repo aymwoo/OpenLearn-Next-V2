@@ -162,7 +162,7 @@ export function PluginLogsPanel({ lang }: { lang: Language }) {
               <span className="text-slate-200 flex-1 break-all whitespace-pre-wrap">
                 {log.msg}
                 {log.meta && Object.keys(log.meta).length > 0 && (
-                  <span className="text-slate-500 ml-2 font-mono text-[11px]">{JSON.stringify(log.meta)}</span>
+                  <span className="text-slate-500 ml-2 font-mono text-xs">{JSON.stringify(log.meta)}</span>
                 )}
               </span>
             </div>

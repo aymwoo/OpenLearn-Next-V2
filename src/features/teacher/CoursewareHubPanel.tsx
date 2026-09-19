@@ -391,7 +391,7 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
                           <div className="flex items-center gap-2 mb-1">
                             <h4 className="font-bold text-gray-800 truncate">{item.title}</h4>
                             <span
-                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                              className={`text-xs px-2 py-0.5 rounded-full font-bold ${
                                 item.status === 'published'
                                   ? 'bg-green-50 text-green-650 border border-green-200'
                                   : item.status === 'archived'
@@ -405,7 +405,7 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
                                   ? t('已归档', 'Archived')
                                   : t('草稿', 'Draft')}
                             </span>
-                            <span className="text-[10px] text-gray-400 font-mono">v{item.version}</span>
+                            <span className="text-xs text-gray-400 font-mono">v{item.version}</span>
                           </div>
                           {item.description && (
                             <p className="text-xs text-gray-400 line-clamp-2 mb-2">{item.description}</p>

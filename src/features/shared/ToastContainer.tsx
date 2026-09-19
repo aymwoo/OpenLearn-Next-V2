@@ -78,7 +78,7 @@ export function ToastContainer() {
                     <button
                       type="button"
                       onClick={(e) => handleCopyToast(e, toast)}
-                      className={`text-[11px] font-bold px-1.5 py-0.5 rounded transition-all flex items-center gap-1 cursor-pointer shrink-0 ${
+                      className={`text-xs font-bold px-1.5 py-0.5 rounded transition-all flex items-center gap-1 cursor-pointer shrink-0 ${
                         isCopied
                           ? 'bg-emerald-600 text-white'
                           : 'bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-600 dark:text-gray-300'

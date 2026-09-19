@@ -198,7 +198,7 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
           <div>
             <h3 className="font-extrabold text-gray-900 text-base flex items-center gap-2">
               <span>{t.title}</span>
-              <span className="inline-flex items-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full px-2 py-0.5 text-[9px] font-bold">
+              <span className="inline-flex items-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full px-2 py-0.5 text-xs font-bold">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 {lang === 'zh' ? '学期分析' : 'Semester Trend'}
               </span>
@@ -239,13 +239,13 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
             <div className="inline-flex border border-gray-200 rounded-lg p-0.5 bg-white shadow-2xs">
               <button
                 onClick={() => setLineType('monotone')}
-                className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all ${lineType === 'monotone' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-800'}`}
+                className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${lineType === 'monotone' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-800'}`}
               >
                 {t.monotone}
               </button>
               <button
                 onClick={() => setLineType('linear')}
-                className={`px-2 py-1 text-[10px] font-bold rounded-md transition-all ${lineType === 'linear' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-800'}`}
+                className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${lineType === 'linear' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-800'}`}
               >
                 {t.linear}
               </button>
@@ -261,7 +261,7 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
             <TrendingUp size={16} />
           </div>
           <div>
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t.averageScore}</div>
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t.averageScore}</div>
             <div className="text-base font-extrabold text-indigo-950 font-mono mt-0.5">{stats.average}%</div>
           </div>
         </div>
@@ -271,7 +271,7 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
             <Award size={16} />
           </div>
           <div>
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t.highestScore}</div>
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t.highestScore}</div>
             <div className="text-base font-extrabold text-emerald-950 font-mono mt-0.5">{stats.highest}%</div>
           </div>
         </div>
@@ -281,7 +281,7 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
             <AlertCircle size={16} />
           </div>
           <div>
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t.lowestScore}</div>
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t.lowestScore}</div>
             <div className="text-base font-extrabold text-rose-950 font-mono mt-0.5">{stats.lowest}%</div>
           </div>
         </div>
@@ -291,7 +291,7 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
             <CheckCircle2 size={16} />
           </div>
           <div>
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t.passRate}</div>
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t.passRate}</div>
             <div className="text-base font-extrabold text-amber-950 font-mono mt-0.5">{stats.passRate}%</div>
           </div>
         </div>
@@ -301,7 +301,7 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
             <BookOpen size={16} />
           </div>
           <div>
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t.gradedCount}</div>
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">{t.gradedCount}</div>
             <div className="text-base font-extrabold text-sky-950 font-mono mt-0.5">{stats.total}</div>
           </div>
         </div>
@@ -319,8 +319,8 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
             </div>
 
             {/* Layers Configuration inside chart */}
-            <div className="flex items-center gap-3 text-[11px] text-gray-600 font-semibold self-end">
-              <span className="text-gray-400 text-[10px] uppercase font-bold">{t.referenceLines}</span>
+            <div className="flex items-center gap-3 text-xs text-gray-600 font-semibold self-end">
+              <span className="text-gray-400 text-xs uppercase font-bold">{t.referenceLines}</span>
               <label className="flex items-center gap-1 cursor-pointer">
                 <input
                   type="checkbox"
@@ -370,13 +370,13 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
                   {showGrid && <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />}
                   <XAxis
                     dataKey="dateLabel"
-                    tick={{ fontSize: 9, fill: '#64748b', fontWeight: 'bold' }}
+                    tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
                     axisLine={{ stroke: '#e2e8f0' }}
                     tickLine={false}
                   />
                   <YAxis
                     domain={[0, 100]}
-                    tick={{ fontSize: 9, fill: '#64748b', fontWeight: 'bold' }}
+                    tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
                     axisLine={{ stroke: '#e2e8f0' }}
                     tickLine={false}
                   />
@@ -387,23 +387,23 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
                         return (
                           <div className="p-3.5 bg-white/95 border border-indigo-100 rounded-xl shadow-xl max-w-[270px] backdrop-blur-xs transition-all ring-4 ring-indigo-550/10">
                             <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-1.5 mb-1.5">
-                              <span className="text-[9px] text-gray-450 font-extrabold uppercase font-mono">
+                              <span className="text-xs text-gray-450 font-extrabold uppercase font-mono">
                                 Quiz #{d.index} &middot; {d.className}
                               </span>
-                              <span className="inline-flex items-center bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-[10px] font-extrabold font-mono border border-indigo-100 shadow-2xs">
+                              <span className="inline-flex items-center bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-extrabold font-mono border border-indigo-100 shadow-2xs">
                                 {d.score}%
                               </span>
                             </div>
                             <p className="text-xs font-black text-slate-800 leading-snug">{d.fullTitle}</p>
-                            <p className="text-[10px] text-slate-400 mt-1 leading-normal font-medium">
+                            <p className="text-xs text-slate-400 mt-1 leading-normal font-medium">
                               {d.fullDateLabel}
                             </p>
 
                             <div className="mt-2 bg-gradient-to-r from-violet-50/50 to-indigo-50/40 p-2 rounded-lg border border-violet-100/50">
-                              <span className="text-[9px] font-black text-violet-850 uppercase block tracking-wider mb-0.5">
+                              <span className="text-xs font-black text-violet-850 uppercase block tracking-wider mb-0.5">
                                 {t.feedbackTitle}
                               </span>
-                              <p className="text-[10px] text-slate-700 italic font-sans leading-normal">
+                              <p className="text-xs text-slate-700 italic font-sans leading-normal">
                                 "{d.feedback}"
                               </p>
                             </div>
@@ -422,7 +422,7 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
                       label={{
                         value: t.passingBenchmark,
                         fill: '#f43f5e',
-                        fontSize: 8,
+                        fontSize: 12,
                         fontWeight: 'bold',
                         position: 'top',
                         offset: 3,
@@ -438,7 +438,7 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
                       label={{
                         value: `${t.avgLineLabel} (${stats.average}%)`,
                         fill: '#4f46e5',
-                        fontSize: 8,
+                        fontSize: 12,
                         fontWeight: 'bold',
                         position: 'bottom',
                         offset: 3,
@@ -491,18 +491,18 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase font-mono leading-none tracking-wider bg-white shadow-3xs text-slate-500">
+                            <span className="text-xs font-extrabold px-1.5 py-0.5 rounded uppercase font-mono leading-none tracking-wider bg-white shadow-3xs text-slate-500">
                               {isTop ? '🏆 TOP' : `#${index + 1}`}
                             </span>
                             <span
-                              className="text-[9px] text-indigo-600 font-bold max-w-[80px] truncate"
+                              className="text-xs text-indigo-600 font-bold max-w-[80px] truncate"
                               title={d.className}
                             >
                               {d.className}
                             </span>
                           </div>
                           <h5
-                            className="font-extrabold text-[10.5px] text-slate-800 leading-snug truncate mt-1"
+                            className="font-extrabold text-xs text-slate-800 leading-snug truncate mt-1"
                             title={d.fullTitle}
                           >
                             {d.title}
@@ -527,7 +527,7 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
 
             {/* Micro Summary Insight */}
             {stats.total > 0 && (
-              <div className="mt-4 p-3 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-2xl border border-indigo-100/50 text-[10px] text-slate-700 leading-relaxed font-medium">
+              <div className="mt-4 p-3 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-2xl border border-indigo-100/50 text-xs text-slate-700 leading-relaxed font-medium">
                 {lang === 'zh' ? (
                   <>
                     在本学期中，你已完成了 <span className="font-bold text-indigo-805 font-mono">{stats.total}</span>{' '}

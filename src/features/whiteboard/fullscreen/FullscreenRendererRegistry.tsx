@@ -66,7 +66,11 @@ export const FullscreenOverlay: React.FC<{
    * 保证「教师退出最大化之前，学生的屏幕保持同一视图」。
    */
   dismissible?: boolean;
-}> = ({ type, title, data, containerSize, onClose, lessonId, dismissible = true }) => {
+  /**
+   * 只读跟随模式（全班专注锁定）：阻断全屏内容交互，展示只读演示视图徽标
+   */
+  readOnly?: boolean;
+}> = ({ type, title, data, containerSize, onClose, lessonId, dismissible = true, readOnly = false }) => {
   React.useEffect(() => {
     if (!dismissible) return;
     const handleEsc = (e: KeyboardEvent) => {
@@ -108,10 +112,14 @@ export const FullscreenOverlay: React.FC<{
             </button>
           ) : (
             <span
-              className="px-2 py-1 rounded-md bg-indigo-100 text-indigo-600 text-[11px] font-bold flex items-center gap-1 select-none"
-              title="由教师端控制，无法在本地退出"
+              className={`px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 select-none ${
+                readOnly
+                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                  : 'bg-indigo-100 text-indigo-600'
+              }`}
+              title={readOnly ? '教师已开启全班专注锁定，当前为只读演示视图' : '由教师端控制，无法在本地退出'}
             >
-              <Minimize2 size={12} /> 教师同步视图
+              {readOnly ? '🔒 全班专注锁定中 · 演示视图' : <><Minimize2 size={12} /> 教师同步视图</>}
             </span>
           )}
         </div>
@@ -126,7 +134,10 @@ export const FullscreenOverlay: React.FC<{
             </button>
           </div>
         )}
-        <div className="flex-1 overflow-auto p-6">
+        <div
+          className="flex-1 overflow-auto p-6 relative"
+          style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
+        >
           {Renderer ? (
             <Renderer
               elementType={type}
@@ -142,6 +153,22 @@ export const FullscreenOverlay: React.FC<{
               onClose={handleClose}
               containerSize={viewport}
               lessonId={lessonId}
+            />
+          )}
+          {readOnly && (
+            <div
+              data-testid="fullscreen-readonly-lock-cover"
+              className="absolute inset-0 z-50 cursor-not-allowed bg-transparent select-none"
+              style={{ pointerEvents: 'auto' }}
+              title="🔒 全班专注锁定中：组件为只读跟随模式"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+              }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+              }}
             />
           )}
         </div>

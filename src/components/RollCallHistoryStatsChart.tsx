@@ -81,7 +81,7 @@ export function RollCallHistoryStatsChart({ rollcallStats = [], lang = 'en' }: R
         <span className="text-xs font-semibold text-gray-500 font-sans block mb-1">
           {lang === 'zh' ? '暂无提问点名记录' : 'No Random Roll Call Records'}
         </span>
-        <span className="text-[10px] text-gray-400 max-w-sm">
+        <span className="text-xs text-gray-400 max-w-sm">
           {lang === 'zh'
             ? '在互动白板中启动“随机点名”工具抽选并确认学生参与后，统计报表将自动在此关联更新。'
             : 'Analytics will populate once you trigger student pick roll-calls in the interactive whiteboard.'}
@@ -116,11 +116,11 @@ export function RollCallHistoryStatsChart({ rollcallStats = [], lang = 'en' }: R
           <div className="text-left">
             <h4 className="text-sm font-bold text-gray-850 flex items-center gap-2">
               <span>{lang === 'zh' ? '课堂随机提问点名历史统计' : 'Random Pick Roll Call Statistics'}</span>
-              <span className="inline-flex bg-amber-100 text-amber-900 text-[8.5px] px-2 py-0.5 rounded-full font-black uppercase tracking-wide">
+              <span className="inline-flex bg-amber-100 text-amber-900 text-xs px-2 py-0.5 rounded-full font-black uppercase tracking-wide">
                 {lang === 'zh' ? '白板互动数据' : 'Live Interaction Source'}
               </span>
             </h4>
-            <p className="text-[10px] text-gray-400">
+            <p className="text-xs text-gray-400">
               {lang === 'zh'
                 ? '统计全班学生在各课节互动提问中被抽中的总频次及最近时间戳'
                 : 'A review tracking historical selection frequencies and time-stamps of pupils in active lessons'}
@@ -131,20 +131,20 @@ export function RollCallHistoryStatsChart({ rollcallStats = [], lang = 'en' }: R
         {/* Aggregated Summary Row */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <div className="bg-slate-50/50 p-1.5 px-3 rounded-lg border border-slate-100 text-slate-600 flex items-center gap-1">
-            <span className="text-[9.5px] text-slate-400 uppercase font-bold tracking-wider">
+            <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
               {lang === 'zh' ? '总点名次数' : 'Total Drawn'}:
             </span>
             <span className="font-black text-indigo-650 font-mono">{statsSummary.totalPicks}</span>
           </div>
           <div className="bg-slate-50/50 p-1.5 px-3 rounded-lg border border-slate-100 text-slate-600 flex items-center gap-1">
-            <span className="text-[9.5px] text-slate-400 uppercase font-bold tracking-wider">
+            <span className="text-xs text-slate-400 uppercase font-bold tracking-wider">
               {lang === 'zh' ? '峰值次数' : 'Max Count'}:
             </span>
             <span className="font-black text-amber-600 font-mono">{statsSummary.maxPicks}</span>
           </div>
           {statsSummary.neverPickedCount > 0 && (
             <div className="bg-orange-50/60 p-1.5 px-3 rounded-lg border border-orange-100/50 text-orange-700 flex items-center gap-1">
-              <span className="text-[9.5px] text-orange-400 uppercase font-bold tracking-wider">
+              <span className="text-xs text-orange-400 uppercase font-bold tracking-wider">
                 {lang === 'zh' ? '未抽中人数' : 'Unpicked'}:
               </span>
               <span className="font-black font-mono">{statsSummary.neverPickedCount}</span>
@@ -160,10 +160,10 @@ export function RollCallHistoryStatsChart({ rollcallStats = [], lang = 'en' }: R
             <UserCheck size={14} className="stroke-[2.5]" />
           </div>
           <div>
-            <span className="text-[8.5px] font-black uppercase text-gray-400 tracking-wider block">
+            <span className="text-xs font-black uppercase text-gray-400 tracking-wider block">
               {lang === 'zh' ? 'Lucky Coins / 提问热选者' : 'Highest Engagement Spot'}
             </span>
-            <p className="mt-0.5 text-[11px] text-slate-600">
+            <p className="mt-0.5 text-xs text-slate-600">
               {statsSummary.maxPicks > 0 ? (
                 <>
                   {lang === 'zh' ? '本班最常被抽中学生为 ' : 'Most drawn student is '}
@@ -189,10 +189,10 @@ export function RollCallHistoryStatsChart({ rollcallStats = [], lang = 'en' }: R
             <UserPlus size={14} className="stroke-[2.5]" />
           </div>
           <div>
-            <span className="text-[8.5px] font-black uppercase text-gray-400 tracking-wider block">
+            <span className="text-xs font-black uppercase text-gray-400 tracking-wider block">
               {lang === 'zh' ? 'Focus Booster / 重视提醒区' : 'Silent / Spotlight Areas'}
             </span>
-            <p className="mt-0.5 text-[11px] text-slate-600">
+            <p className="mt-0.5 text-xs text-slate-600">
               {statsSummary.neverPickedCount > 0 ? (
                 <>
                   {lang === 'zh' ? '有 ' : 'There are '}
@@ -223,7 +223,7 @@ export function RollCallHistoryStatsChart({ rollcallStats = [], lang = 'en' }: R
           <button
             type="button"
             onClick={() => setSortBy('count-desc')}
-            className={`px-3 py-1.5 text-[10px] font-extrabold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+            className={`px-3 py-1.5 text-xs font-extrabold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
               sortBy === 'count-desc'
                 ? 'bg-white text-indigo-700 shadow-3xs font-black border-indigo-50'
                 : 'text-slate-500 hover:text-slate-850'
@@ -235,7 +235,7 @@ export function RollCallHistoryStatsChart({ rollcallStats = [], lang = 'en' }: R
           <button
             type="button"
             onClick={() => setSortBy('count-asc')}
-            className={`px-3 py-1.5 text-[10px] font-extrabold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+            className={`px-3 py-1.5 text-xs font-extrabold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
               sortBy === 'count-asc'
                 ? 'bg-white text-indigo-700 shadow-3xs font-black border-indigo-50'
                 : 'text-slate-500 hover:text-slate-850'
@@ -247,7 +247,7 @@ export function RollCallHistoryStatsChart({ rollcallStats = [], lang = 'en' }: R
           <button
             type="button"
             onClick={() => setSortBy('name')}
-            className={`px-3 py-1.5 text-[10px] font-extrabold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
+            className={`px-3 py-1.5 text-xs font-extrabold rounded-md transition-all cursor-pointer flex items-center gap-1 ${
               sortBy === 'name'
                 ? 'bg-white text-indigo-700 shadow-3xs font-black border-indigo-50'
                 : 'text-slate-500 hover:text-slate-850'
@@ -258,7 +258,7 @@ export function RollCallHistoryStatsChart({ rollcallStats = [], lang = 'en' }: R
           </button>
         </div>
 
-        <div className="text-[9.5px] text-gray-400 italic font-mono flex items-center gap-1">
+        <div className="text-xs text-gray-400 italic font-mono flex items-center gap-1">
           <Info size={11} className="text-gray-400" />
           <span>
             {lang === 'zh' ? '💡 鼠标悬浮查看最近一次被选日期' : '💡 Hover bar for exact last selection date'}
@@ -273,13 +273,13 @@ export function RollCallHistoryStatsChart({ rollcallStats = [], lang = 'en' }: R
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
             <XAxis
               dataKey="student_name"
-              tick={{ fontSize: 9.5, fill: '#64748b', fontWeight: 'bold' }}
+              tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
               axisLine={{ stroke: '#e2e8f0' }}
               tickLine={false}
             />
             <YAxis
               allowDecimals={false}
-              tick={{ fontSize: 9.5, fill: '#64748b', fontWeight: 'bold' }}
+              tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }}
               axisLine={false}
               tickLine={false}
             />
@@ -292,7 +292,7 @@ export function RollCallHistoryStatsChart({ rollcallStats = [], lang = 'en' }: R
                     <div className="bg-white border border-slate-150 p-2.5 rounded-xl shadow-xl font-sans text-xs flex flex-col gap-1.5 max-w-[260px] text-left">
                       <div className="font-extrabold text-slate-800 border-b border-slate-100 pb-1 mb-1 flex items-center justify-between gap-4">
                         <span className="truncate">{data.student_name}</span>
-                        <span className="text-[8.5px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-black uppercase shrink-0">
+                        <span className="text-xs bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-black uppercase shrink-0">
                           {lang === 'zh' ? '参会指数' : 'Live Index'}
                         </span>
                       </div>
@@ -307,10 +307,10 @@ export function RollCallHistoryStatsChart({ rollcallStats = [], lang = 'en' }: R
                       </div>
 
                       <div className="flex flex-col gap-0.5 text-slate-650 border-t border-slate-100 pt-1.5 mt-0.5 font-sans">
-                        <span className="text-slate-400 font-bold text-[9px] uppercase">
+                        <span className="text-slate-400 font-bold text-xs uppercase">
                           {lang === 'zh' ? '最近被抽中时间' : 'Last Selection Stamp'}:
                         </span>
-                        <span className="font-bold text-indigo-700 text-[10.5px] font-mono leading-tight">
+                        <span className="font-bold text-indigo-700 text-xs font-mono leading-tight">
                           {formatDate(data.last_picked_time)}
                         </span>
                       </div>

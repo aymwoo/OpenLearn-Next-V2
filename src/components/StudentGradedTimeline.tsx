@@ -170,7 +170,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
           <div>
             <h3 className="font-bold text-gray-800 text-sm sm:text-base flex items-center gap-1.5">
               <span>Performance Analytics & Historical Growth Timeline</span>
-              <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-1">
+              <span className="text-xs bg-indigo-100 text-indigo-800 font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-1">
                 <Sparkles size={8} /> Auto-Updated
               </span>
             </h3>
@@ -210,7 +210,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
               <TrendingUp size={16} />
             </div>
             <div>
-              <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Average</div>
+              <div className="text-xs uppercase font-bold text-gray-400 tracking-wider">Average</div>
               <div className="text-lg font-bold text-indigo-950 font-mono">{averageScore}%</div>
             </div>
           </div>
@@ -220,7 +220,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
               <Award size={16} />
             </div>
             <div>
-              <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Highest Score</div>
+              <div className="text-xs uppercase font-bold text-gray-400 tracking-wider">Highest Score</div>
               <div className="text-lg font-bold text-emerald-950 font-mono">{highestScore}%</div>
             </div>
           </div>
@@ -230,7 +230,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
               <Activity size={16} />
             </div>
             <div>
-              <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Completed</div>
+              <div className="text-xs uppercase font-bold text-gray-400 tracking-wider">Completed</div>
               <div className="text-lg font-bold text-cyan-950 font-mono">{totalCount} Quizzes</div>
             </div>
           </div>
@@ -240,7 +240,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
               <FileBadge size={16} />
             </div>
             <div>
-              <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Passing Rate</div>
+              <div className="text-xs uppercase font-bold text-gray-400 tracking-wider">Passing Rate</div>
               <div className="text-lg font-bold text-amber-950 font-mono">{passRate}%</div>
             </div>
           </div>
@@ -259,14 +259,14 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                 />
               </div>
               <div>
-                <div className="text-[10px] uppercase font-bold tracking-wider opacity-75">
+                <div className="text-xs uppercase font-bold tracking-wider opacity-75">
                   Learning Curve & Trajectory
                 </div>
                 <h4 className="text-sm font-extrabold mt-0.5 flex items-center gap-2 text-slate-900">
                   <span>{trajectoryLabel}</span>
                   {trajectoryDelta !== 0 && (
                     <span
-                      className={`inline-flex items-center text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                      className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-bold ${
                         trajectoryDelta > 0
                           ? 'bg-emerald-100/80 text-emerald-850 border border-emerald-250'
                           : 'bg-rose-100/80 text-rose-850 border border-rose-250'
@@ -279,8 +279,8 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                 <p className="text-xs text-slate-600 mt-1 leading-snug">{trajectorySub}</p>
               </div>
             </div>
-            <div className="text-[11px] font-semibold px-3 py-2 bg-white/95 rounded-lg shadow-3xs border border-slate-100 text-slate-700 md:self-center">
-              <div className="text-slate-400 font-bold uppercase text-[8px] mb-0.5 tracking-wider">
+            <div className="text-xs font-semibold px-3 py-2 bg-white/95 rounded-lg shadow-3xs border border-slate-100 text-slate-700 md:self-center">
+              <div className="text-slate-400 font-bold uppercase text-xs mb-0.5 tracking-wider">
                 Growth Comparison
               </div>
               <span className="font-bold text-indigo-900">
@@ -333,13 +333,13 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis
                       dataKey="dateStr"
-                      tick={{ fontSize: 10, fill: '#64748b' }}
+                      tick={{ fontSize: 12, fill: '#64748b' }}
                       axisLine={false}
                       tickLine={false}
                     />
                     <YAxis
                       domain={[0, 100]}
-                      tick={{ fontSize: 10, fill: '#64748b' }}
+                      tick={{ fontSize: 12, fill: '#64748b' }}
                       axisLine={false}
                       tickLine={false}
                     />
@@ -353,15 +353,15 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                             <div
                               className={`p-3 bg-white border rounded-xl shadow-xl border-gray-100 max-w-xs transition-all ${selected ? 'ring-2 ring-indigo-500' : ''}`}
                             >
-                              <p className="text-[10px] text-gray-400 font-bold uppercase">{data.fullDate}</p>
+                              <p className="text-xs text-gray-400 font-bold uppercase">{data.fullDate}</p>
                               <p className="text-xs font-bold text-gray-800 leading-snug mt-0.5">{data.fullTitle}</p>
                               <div className="flex items-center justify-between gap-4 mt-2">
-                                <span className="text-[10px] text-gray-500 bg-gray-50 border px-1.5 py-0.5 rounded font-medium">
+                                <span className="text-xs text-gray-500 bg-gray-50 border px-1.5 py-0.5 rounded font-medium">
                                   {data.className}
                                 </span>
                                 <span className="text-xs font-bold text-indigo-600 font-mono">{data.score}%</span>
                               </div>
-                              <p className="text-[9px] text-gray-400 italic mt-1 bg-gray-50 p-1 rounded">
+                              <p className="text-xs text-gray-400 italic mt-1 bg-gray-50 p-1 rounded">
                                 Click node to pin details below
                               </p>
                             </div>
@@ -374,7 +374,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                       y={70}
                       stroke="#cbd5e1"
                       strokeDasharray="4 4"
-                      label={{ value: 'Passing Benchmark (70%)', fill: '#94a3b8', fontSize: 9, position: 'top' }}
+                      label={{ value: 'Passing Benchmark (70%)', fill: '#94a3b8', fontSize: 12, position: 'top' }}
                     />
                     <Area
                       type="monotone"
@@ -399,13 +399,13 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis
                       dataKey="dateStr"
-                      tick={{ fontSize: 10, fill: '#64748b' }}
+                      tick={{ fontSize: 12, fill: '#64748b' }}
                       axisLine={false}
                       tickLine={false}
                     />
                     <YAxis
                       domain={[0, 100]}
-                      tick={{ fontSize: 10, fill: '#64748b' }}
+                      tick={{ fontSize: 12, fill: '#64748b' }}
                       axisLine={false}
                       tickLine={false}
                     />
@@ -416,10 +416,10 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                           const data = payload[0].payload;
                           return (
                             <div className="p-3 bg-white border border-gray-150 rounded-xl shadow-xl max-w-xs">
-                              <p className="text-[10px] text-gray-400 font-bold uppercase">{data.fullDate}</p>
+                              <p className="text-xs text-gray-400 font-bold uppercase">{data.fullDate}</p>
                               <p className="text-xs font-bold text-gray-800 leading-snug mt-0.5">{data.fullTitle}</p>
                               <div className="flex items-center justify-between gap-4 mt-2">
-                                <span className="text-[10px] text-gray-500 bg-gray-50 border px-1.5 py-0.5 rounded font-medium">
+                                <span className="text-xs text-gray-500 bg-gray-50 border px-1.5 py-0.5 rounded font-medium">
                                   {data.className}
                                 </span>
                                 <span className="text-xs font-bold text-indigo-600 font-mono">{data.score}%</span>
@@ -434,7 +434,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                       y={70}
                       stroke="#cbd5e1"
                       strokeDasharray="4 4"
-                      label={{ value: 'Benchmark', fill: '#94a3b8', fontSize: 9 }}
+                      label={{ value: 'Benchmark', fill: '#94a3b8', fontSize: 12 }}
                     />
                     <Bar dataKey="score" fill="#4f46e5" radius={[4, 4, 0, 0]} maxBarSize={45} />
                   </BarChart>
@@ -449,14 +449,14 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                   <LayoutTemplate size={12} />
                   <span>Selected Node Objective Grade Evaluation:</span>
                 </span>
-                <span className="text-[9px] font-mono text-gray-400 font-semibold uppercase">
+                <span className="text-xs font-mono text-gray-400 font-semibold uppercase">
                   Quiz {activeDetailIndex + 1} of {totalCount}
                 </span>
               </div>
               <div className="flex items-start justify-between gap-3 mt-1.5">
                 <div className="space-y-1">
                   <p className="font-bold text-gray-850 leading-relaxed text-xs">{activeDetail.fullTitle}</p>
-                  <p className="text-[10px] text-gray-500 leading-normal flex items-center flex-wrap gap-1.5">
+                  <p className="text-xs text-gray-500 leading-normal flex items-center flex-wrap gap-1.5">
                     <span>
                       {activeDetail.className} &middot; Submitted on {activeDetail.fullDate}
                     </span>
@@ -470,7 +470,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                 <div
                   className={`px-2.5 py-1 rounded-lg border font-mono font-bold text-center shrink-0 ${getScoreColor(activeDetail.score).bg}`}
                 >
-                  <div className="text-[8px] uppercase tracking-wider font-bold opacity-75">Score</div>
+                  <div className="text-xs uppercase tracking-wider font-bold opacity-75">Score</div>
                   <div className="text-sm font-black leading-none">{activeDetail.score}%</div>
                 </div>
               </div>
@@ -481,7 +481,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
           <div className="lg:col-span-4 flex flex-col">
             <div className="mb-2 text-xs font-semibold uppercase text-gray-400 tracking-wider flex items-center justify-between">
               <span>Interactive Evaluation Log</span>
-              <span className="text-[9px] lowercase bg-amber-50 text-amber-700 px-1 py-0.5 rounded border border-amber-100 font-mono">
+              <span className="text-xs lowercase bg-amber-50 text-amber-700 px-1 py-0.5 rounded border border-amber-100 font-mono">
                 recent first
               </span>
             </div>
@@ -505,11 +505,11 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                       <div className="flex items-start justify-between gap-2">
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[10px] font-bold text-gray-400 font-mono uppercase">
+                            <span className="text-xs font-bold text-gray-400 font-mono uppercase">
                               #{item.index + 1}
                             </span>
-                            <span className="text-[9px] text-gray-500 font-medium font-sans">{item.dateStr}</span>
-                            <span className="text-[9px] font-bold text-indigo-700 px-1.5 py-0.5 bg-indigo-50 rounded bg-indigo-50/50 ml-auto border border-indigo-100">
+                            <span className="text-xs text-gray-500 font-medium font-sans">{item.dateStr}</span>
+                            <span className="text-xs font-bold text-indigo-700 px-1.5 py-0.5 bg-indigo-50 rounded bg-indigo-50/50 ml-auto border border-indigo-100">
                               {item.className}
                             </span>
                           </div>
@@ -518,7 +518,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                           </h4>
                         </div>
                         <div
-                          className={`px-1.5 py-0.5 rounded font-bold font-mono text-[10px] border shrink-0 ${colors.bg}`}
+                          className={`px-1.5 py-0.5 rounded font-bold font-mono text-xs border shrink-0 ${colors.bg}`}
                         >
                           {item.score}%
                         </div>
@@ -526,7 +526,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
 
                       {/* Display brief feedback when collapsed/clicked */}
                       <div
-                        className={`text-[10px] text-gray-500 mt-2 bg-gray-50/80 p-1.5 rounded-lg border border-gray-100 ${isActive ? 'block' : 'line-clamp-1'}`}
+                        className={`text-xs text-gray-500 mt-2 bg-gray-50/80 p-1.5 rounded-lg border border-gray-100 ${isActive ? 'block' : 'line-clamp-1'}`}
                       >
                         <div className="flex flex-col gap-1">
                           <div className="flex items-start gap-1">
@@ -534,7 +534,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                             <span className="leading-snug text-slate-700 italic">"{item.feedback}"</span>
                           </div>
                           {item.gradedAt && isActive && (
-                            <div className="text-[9px] text-gray-400 mt-1 flex items-center justify-end gap-0.5 font-mono italic border-t border-gray-250/50 pt-1">
+                            <div className="text-xs text-gray-400 mt-1 flex items-center justify-end gap-0.5 font-mono italic border-t border-gray-250/50 pt-1">
                               <Clock size={9} /> Graded: {item.gradedAt}
                             </div>
                           )}

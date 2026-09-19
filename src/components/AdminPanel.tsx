@@ -620,7 +620,7 @@ export function AdminPanel({
                             {provider.api_url}
                           </td>
                           <td className="py-4 px-4">
-                            <span className="bg-slate-100 text-slate-800 font-bold px-2 py-1 rounded font-mono text-[11px] border border-slate-200">
+                            <span className="bg-slate-100 text-slate-800 font-bold px-2 py-1 rounded font-mono text-xs border border-slate-200">
                               {provider.model_name}
                             </span>
                           </td>
@@ -675,7 +675,7 @@ export function AdminPanel({
             {/* Health status check card */}
             <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-2xs flex items-center justify-between">
               <div className="space-y-1 text-left">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
                   {lang === 'zh' ? 'SQLite引擎状况' : 'SQLite Health Status'}
                 </span>
                 <span className="text-base font-extrabold text-gray-800 flex items-center gap-1.5">
@@ -690,7 +690,7 @@ export function AdminPanel({
                         : 'Connected'}
                   </span>
                 </span>
-                <span className="text-[9.5px] text-gray-400 block font-mono">SQLite Core v3.x Connected</span>
+                <span className="text-xs text-gray-400 block font-mono">SQLite Core v3.x Connected</span>
               </div>
               <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
                 <Shield size={20} />
@@ -700,13 +700,13 @@ export function AdminPanel({
             {/* Total Tables card */}
             <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-2xs flex items-center justify-between">
               <div className="space-y-1 text-left">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
                   {lang === 'zh' ? '核心实体数据表' : 'Database Table Count'}
                 </span>
                 <span className="text-xl font-black font-mono text-gray-800 block">
                   {sqliteStats?.tableCount ?? '--'}
                 </span>
-                <span className="text-[9.5px] text-gray-400 block">
+                <span className="text-xs text-gray-400 block">
                   {lang === 'zh'
                     ? `包含其外 ${sqliteStats?.systemTableCount ?? 0} 个系统表`
                     : `Plus ${sqliteStats?.systemTableCount ?? 0} system catalogs`}
@@ -720,13 +720,13 @@ export function AdminPanel({
             {/* Total Row counts */}
             <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-2xs flex items-center justify-between">
               <div className="space-y-1 text-left">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
                   {lang === 'zh' ? '系统数据承载行' : 'Total Records Managed'}
                 </span>
                 <span className="text-xl font-black font-mono text-indigo-700 block">
                   {sqliteStats?.totalRows !== undefined ? sqliteStats.totalRows.toLocaleString() : '--'}
                 </span>
-                <span className="text-[9.5px] text-gray-400 block">
+                <span className="text-xs text-gray-400 block">
                   {lang === 'zh' ? '在册全量索引行数总和' : 'Cumulative dataset depth'}
                 </span>
               </div>
@@ -738,13 +738,13 @@ export function AdminPanel({
             {/* Disk space usage */}
             <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-2xs flex items-center justify-between">
               <div className="space-y-1 text-left">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
                   {lang === 'zh' ? '物理文件占用空间' : 'Physical Disk Usage'}
                 </span>
                 <span className="text-xl font-black font-mono text-emerald-600 block">
                   {sqliteStats?.diskUsageFriendly ?? '--'}
                 </span>
-                <span className="text-[9.5px] text-gray-400 block font-mono">
+                <span className="text-xs text-gray-400 block font-mono">
                   {sqliteStats?.diskUsageBytes ? `${sqliteStats.diskUsageBytes.toLocaleString()} Bytes` : ''}
                 </span>
               </div>
@@ -829,7 +829,7 @@ export function AdminPanel({
                                   <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
                                   <span className="font-extrabold text-slate-800 font-mono text-sm">{tbl.name}</span>
                                 </div>
-                                <span className="text-[10px] text-gray-400 block mt-0.5">{desc}</span>
+                                <span className="text-xs text-gray-400 block mt-0.5">{desc}</span>
                               </td>
                               <td className="py-3 px-4 font-mono font-bold text-gray-750 text-left">
                                 {tbl.rows >= 0 ? (
@@ -846,13 +846,13 @@ export function AdminPanel({
                                       style={{ width: `${percentage}%` }}
                                     />
                                   </div>
-                                  <span className="text-[9.5px] font-mono font-bold text-slate-400">
+                                  <span className="text-xs font-mono font-bold text-slate-400">
                                     {Math.round(percentage)}%
                                   </span>
                                 </div>
                               </td>
                               <td className="py-3 px-4 text-left">
-                                <span className="bg-slate-100 text-slate-700 font-bold border border-slate-200 text-[10px] font-mono px-2 py-0.5 rounded uppercase">
+                                <span className="bg-slate-100 text-slate-700 font-bold border border-slate-200 text-xs font-mono px-2 py-0.5 rounded uppercase">
                                   {tbl.name === 'vfs_nodes' || tbl.name === 'whiteboard_strokes'
                                     ? 'BLOB_JSON'
                                     : 'RELATIONAL'}
@@ -884,7 +884,7 @@ export function AdminPanel({
                       <span className="text-xs font-extrabold text-gray-800 block">
                         {lang === 'zh' ? '日志记录模式' : 'Journal Write Mode'}
                       </span>
-                      <span className="text-[9.5px] text-gray-400 block">
+                      <span className="text-xs text-gray-400 block">
                         {lang === 'zh' ? '决定写操作事务隔离行为' : 'Active database write transaction protocol'}
                       </span>
                     </div>
@@ -899,7 +899,7 @@ export function AdminPanel({
                       <span className="text-xs font-extrabold text-gray-800 block">
                         {lang === 'zh' ? '物理扇区页面大小' : 'Database Page Size'}
                       </span>
-                      <span className="text-[9.5px] text-gray-400 block">
+                      <span className="text-xs text-gray-400 block">
                         {lang === 'zh' ? '单次读写磁盘扇区的字节' : 'Bytes per allocated physical sector block'}
                       </span>
                     </div>
@@ -914,7 +914,7 @@ export function AdminPanel({
                       <span className="text-xs font-extrabold text-gray-800 block">
                         {lang === 'zh' ? '逻辑数据页面总数' : 'Allocated Blocks Count'}
                       </span>
-                      <span className="text-[9.5px] text-gray-400 block">
+                      <span className="text-xs text-gray-400 block">
                         {lang === 'zh' ? '物理文件包含的逻辑存储页总数' : 'Total blocks assigned inside database space'}
                       </span>
                     </div>
@@ -929,11 +929,11 @@ export function AdminPanel({
                       <span className="text-xs font-extrabold text-gray-800 block">
                         {lang === 'zh' ? '数据文件完整性自检' : 'Database File Integrity'}
                       </span>
-                      <span className="text-[9.5px] text-gray-400 block">
+                      <span className="text-xs text-gray-400 block">
                         {lang === 'zh' ? '校验物理页面结构是否损坏' : 'Validates internal database consistency'}
                       </span>
                     </div>
-                    <span className="bg-indigo-600 text-white font-mono font-black text-[10px] px-2 py-0.5 rounded-full shadow-xs">
+                    <span className="bg-indigo-600 text-white font-mono font-black text-xs px-2 py-0.5 rounded-full shadow-xs">
                       {sqliteStats?.integrity ? sqliteStats.integrity.toUpperCase() : 'PASS'}
                     </span>
                   </div>
@@ -944,7 +944,7 @@ export function AdminPanel({
                       <span className="text-xs font-extrabold text-gray-800 block">
                         {lang === 'zh' ? '空闲可回收空间块数' : 'Freelist Empty Pages'}
                       </span>
-                      <span className="text-[9.5px] text-gray-400 block">
+                      <span className="text-xs text-gray-400 block">
                         {lang === 'zh' ? '已被清删但未回缩的空间块数' : 'Reclaimable blocks pending database VACUUM'}
                       </span>
                     </div>
@@ -957,7 +957,7 @@ export function AdminPanel({
                       <span className="text-xs font-extrabold text-gray-800 block">
                         {lang === 'zh' ? '自动空间释放 (Auto Vacuum)' : 'Auto Vacuum Mode'}
                       </span>
-                      <span className="text-[9.5px] text-gray-400 block">
+                      <span className="text-xs text-gray-400 block">
                         {lang === 'zh' ? '删除数据是否即时整理碎片' : 'Reclaims file blocks upon record deletions'}
                       </span>
                     </div>
@@ -994,7 +994,7 @@ export function AdminPanel({
                       <span className="text-xs font-bold block text-gray-800">
                         {lang === 'zh' ? '立即执行物理文件自检' : 'Run Consistency self-audit'}
                       </span>
-                      <span className="text-[9px] text-gray-500 block leading-tight mt-0.5">
+                      <span className="text-xs text-gray-500 block leading-tight mt-0.5">
                         {lang === 'zh'
                           ? '核验 educational_os.db 是否有损坏或空页'
                           : 'Runs a full PRAGMA integrity_check cycle'}
@@ -1017,7 +1017,7 @@ export function AdminPanel({
                       <span className="text-xs font-bold block text-gray-800">
                         {lang === 'zh' ? '磁盘碎片整理与空间回缩 (VACUUM)' : 'Defragment Storage (VACUUM)'}
                       </span>
-                      <span className="text-[9px] text-gray-500 block leading-tight mt-0.5">
+                      <span className="text-xs text-gray-500 block leading-tight mt-0.5">
                         {lang === 'zh'
                           ? '物理重排在册物理空间，释放可能存在的空置块'
                           : 'Triggers VACUUM rebuild to compress physical file'}
@@ -1039,7 +1039,7 @@ export function AdminPanel({
                   <Database size={15} className="text-indigo-600" />
                   {lang === 'zh' ? 'SQLite 数据库健康体检' : 'Database Engine Health'}
                 </h3>
-                <span className="text-[9.5px] text-gray-405 block mt-0.5">
+                <span className="text-xs text-gray-405 block mt-0.5">
                   {lang === 'zh'
                     ? '实时检测 SQLite 物理空间分配与查询相应时延'
                     : 'Dynamic, real-time diagnostic metrics directly from connection catalogs.'}
@@ -1050,7 +1050,7 @@ export function AdminPanel({
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                <span className="text-[10px] font-bold text-emerald-600 font-mono uppercase tracking-wider">
+                <span className="text-xs font-bold text-emerald-600 font-mono uppercase tracking-wider">
                   {lang === 'zh' ? '正常运行' : 'Healthy'}
                 </span>
               </div>
@@ -1060,16 +1060,16 @@ export function AdminPanel({
             <div className="grid grid-cols-3 gap-3 mb-4">
               {/* Stat 1: Total Tables */}
               <div className="bg-slate-50 border border-gray-100 p-3 rounded-xl flex flex-col justify-between text-left">
-                <span className="text-[9px] font-black text-gray-450 uppercase tracking-widest block">
+                <span className="text-xs font-black text-gray-450 uppercase tracking-widest block">
                   {lang === 'zh' ? '实体表总数' : 'Total Tables'}
                 </span>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className="text-xl font-extrabold text-slate-800 font-mono">
                     {sqliteStats?.tableCount ?? '--'}
                   </span>
-                  <span className="text-[9px] text-gray-405 font-bold uppercase">{lang === 'zh' ? '个' : 'tbls'}</span>
+                  <span className="text-xs text-gray-405 font-bold uppercase">{lang === 'zh' ? '个' : 'tbls'}</span>
                 </div>
-                <span className="text-[8.5px] text-gray-400 block mt-1 truncate">
+                <span className="text-xs text-gray-400 block mt-1 truncate">
                   {lang === 'zh'
                     ? `外含 ${sqliteStats?.systemTableCount ?? 0} 个系统表`
                     : `+${sqliteStats?.systemTableCount ?? 0} catalogs`}
@@ -1078,32 +1078,32 @@ export function AdminPanel({
 
               {/* Stat 2: Database Size */}
               <div className="bg-slate-50 border border-gray-100 p-3 rounded-xl flex flex-col justify-between text-left">
-                <span className="text-[9px] font-black text-gray-450 uppercase tracking-widest block">
+                <span className="text-xs font-black text-gray-450 uppercase tracking-widest block">
                   {lang === 'zh' ? '文件容量' : 'Disk Size'}
                 </span>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className="text-xl font-extrabold text-indigo-650 font-mono animate-fade-in">
                     {sqliteStats?.sizeMb !== undefined ? sqliteStats.sizeMb : '--'}
                   </span>
-                  <span className="text-[9px] text-gray-455 font-bold uppercase">MB</span>
+                  <span className="text-xs text-gray-455 font-bold uppercase">MB</span>
                 </div>
-                <span className="text-[8.5px] text-gray-400 block mt-1 truncate">
+                <span className="text-xs text-gray-400 block mt-1 truncate">
                   {sqliteStats?.diskUsageFriendly ?? (lang === 'zh' ? '计算空间中...' : 'Evaluating...')}
                 </span>
               </div>
 
               {/* Stat 3: Query Latency */}
               <div className="bg-slate-50 border border-gray-100 p-3 rounded-xl flex flex-col justify-between text-left">
-                <span className="text-[9px] font-black text-gray-455 uppercase tracking-widest block">
+                <span className="text-xs font-black text-gray-455 uppercase tracking-widest block">
                   {lang === 'zh' ? '读取时延/耗时' : 'Query Latency'}
                 </span>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className="text-xl font-extrabold text-emerald-600 font-mono animate-fade-in">
                     {sqliteStats?.latencyMs !== undefined ? sqliteStats.latencyMs : '--'}
                   </span>
-                  <span className="text-[9px] text-gray-450 font-bold uppercase">ms</span>
+                  <span className="text-xs text-gray-450 font-bold uppercase">ms</span>
                 </div>
-                <span className="text-[8.5px] text-gray-400 block mt-1 truncate">
+                <span className="text-xs text-gray-400 block mt-1 truncate">
                   {lang === 'zh' ? '元数据对齐周期' : 'Direct catalog check'}
                 </span>
               </div>
@@ -1111,14 +1111,14 @@ export function AdminPanel({
 
             {/* Quick action bar */}
             <div className="flex items-center justify-between bg-slate-50/50 border border-gray-150/40 p-2 rounded-xl">
-              <span className="text-[9.5px] text-gray-400 font-medium pl-1">
+              <span className="text-xs text-gray-400 font-medium pl-1">
                 {lang === 'zh' ? '自动检测轮询间隔: 5s' : 'Dynamic background poll: 5s'}
               </span>
               <button
                 type="button"
                 onClick={fetchSqliteStats}
                 disabled={loadingSqlite}
-                className="p-1 px-3 text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-black tracking-wider uppercase border border-indigo-250/20 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
+                className="p-1 px-3 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-black tracking-wider uppercase border border-indigo-250/20 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
               >
                 <RefreshCw size={10} className={loadingSqlite ? 'animate-spin' : ''} />
                 {lang === 'zh' ? '实时评测' : 'Benchmark Latency'}
@@ -1135,13 +1135,13 @@ export function AdminPanel({
 
             <div className="grid grid-cols-3 gap-3 mb-5">
               <div className="bg-slate-50 border border-gray-150/65 p-2.5 rounded-xl text-center">
-                <span className="text-[9px] font-bold text-gray-500 block uppercase">
+                <span className="text-xs font-bold text-gray-500 block uppercase">
                   {lang === 'zh' ? '处理器负载' : 'CPU Load'}
                 </span>
                 <span className="text-sm font-black font-mono text-indigo-600 block mt-1">{cpuUsage}%</span>
               </div>
               <div className="bg-slate-50 border border-gray-150/65 p-2.5 rounded-xl text-center">
-                <span className="text-[9px] font-bold text-gray-500 block uppercase">
+                <span className="text-xs font-bold text-gray-500 block uppercase">
                   {lang === 'zh' ? '数据库行数' : 'DB Buffer'}
                 </span>
                 <span className="text-sm font-black font-mono text-emerald-600 block mt-1">
@@ -1149,7 +1149,7 @@ export function AdminPanel({
                 </span>
               </div>
               <div className="bg-slate-50 border border-gray-150/65 p-2.5 rounded-xl text-center">
-                <span className="text-[9px] font-bold text-gray-500 block uppercase">
+                <span className="text-xs font-bold text-gray-500 block uppercase">
                   {lang === 'zh' ? '主数据库延迟' : 'DB Net Delay'}
                 </span>
                 <span className="text-sm font-black font-mono text-amber-600 block mt-1">
@@ -1160,7 +1160,7 @@ export function AdminPanel({
               </div>
             </div>
 
-            <div className="flex-1 min-h-[160px] overflow-y-auto bg-slate-50 border border-gray-150/60 p-3 rounded-xl font-mono text-[10px] space-y-1.5 text-gray-650 scrollbar-none">
+            <div className="flex-1 min-h-[160px] overflow-y-auto bg-slate-50 border border-gray-150/60 p-3 rounded-xl font-mono text-xs space-y-1.5 text-gray-650 scrollbar-none">
               <div className="flex items-center gap-1 text-gray-450 select-none">
                 <Terminal size={11} /> <span>[root@sys-kernel-0] logs --level=info</span>
               </div>
@@ -1270,7 +1270,7 @@ export function AdminPanel({
                   </div>
                 </div>
 
-                <span className="text-[10px] text-gray-400 block">
+                <span className="text-xs text-gray-400 block">
                   {lang === 'zh' ? '也可直接粘贴图片 URL：' : 'Or paste an image URL:'}
                 </span>
                 <input
@@ -1313,14 +1313,14 @@ export function AdminPanel({
                 <span className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
                   {lang === 'zh' ? '在册教师/管理员列表' : 'Registered Staff Accounts'}
                 </span>
-                <span className="bg-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-full text-[10px]">
+                <span className="bg-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-full text-xs">
                   {filteredUsers.length}
                 </span>
               </div>
 
               <button
                 onClick={handleOpenCreate}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
               >
                 <Plus size={12} />
                 {lang === 'zh' ? '添加教职账户' : 'Add Teacher Account'}
@@ -1392,24 +1392,24 @@ export function AdminPanel({
                               {user.name}
                             </span>
                             {isSelectedSelf && (
-                              <span className="bg-indigo-100/80 text-indigo-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-indigo-200">
+                              <span className="bg-indigo-100/80 text-indigo-700 text-xs font-bold px-1.5 py-0.5 rounded-full border border-indigo-200">
                                 {lang === 'zh' ? '你自己' : 'You'}
                               </span>
                             )}
                             <span
-                              className={`text-[8.5px] font-black tracking-wider uppercase px-1.5 py-0.5 rounded-full ${
+                              className={`text-xs font-black tracking-wider uppercase px-1.5 py-0.5 rounded-full ${
                                 isUserAdmin ? 'bg-indigo-950/90 text-indigo-400' : 'bg-slate-100 text-slate-500'
                               }`}
                             >
                               {user.role}
                             </span>
                             {isDisabled && (
-                              <span className="bg-rose-100 text-rose-700 text-[8.5px] font-black px-1.5 py-0.5 rounded-full border border-rose-200">
+                              <span className="bg-rose-100 text-rose-700 text-xs font-black px-1.5 py-0.5 rounded-full border border-rose-200">
                                 {lang === 'zh' ? '已禁用' : 'Disabled'}
                               </span>
                             )}
                           </div>
-                          <div className="text-[10px] text-gray-450 font-mono mt-1 flex items-center gap-1.5">
+                          <div className="text-xs text-gray-450 font-mono mt-1 flex items-center gap-1.5">
                             <span>@{user.username}</span>
                             <span>•</span>
                             <span>
@@ -1427,7 +1427,7 @@ export function AdminPanel({
                           title={lang === 'zh' ? '修改设置' : 'Update settings'}
                         >
                           <Edit2 size={12} />
-                          <span className="hidden md:inline text-[10px]">{lang === 'zh' ? '设置' : 'Edit'}</span>
+                          <span className="hidden md:inline text-xs">{lang === 'zh' ? '设置' : 'Edit'}</span>
                         </button>
                         <button
                           onClick={() => handleDeleteUser(user.id, user.name)}
@@ -1472,14 +1472,14 @@ export function AdminPanel({
             <form onSubmit={handleUserSubmit}>
               <div className="p-5 space-y-4">
                 {formError && (
-                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-[10.5px] rounded-xl flex items-center gap-1.5 animate-pulse">
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-1.5 animate-pulse">
                     <AlertTriangle size={15} className="shrink-0" />
                     <span>{formError}</span>
                   </div>
                 )}
 
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">
                     {lang === 'zh' ? '教工姓名 (展示给学生及白板上) *' : 'Staff Real Name (Shown on roster/boards) *'}
                   </label>
                   <input
@@ -1493,7 +1493,7 @@ export function AdminPanel({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-gray-550 uppercase tracking-wide">
+                  <label className="block text-xs font-bold text-gray-550 uppercase tracking-wide">
                     {lang === 'zh' ? '登录用户名 (唯一标识) *' : 'Access Username (Unique Identifier) *'}
                   </label>
                   <input
@@ -1507,7 +1507,7 @@ export function AdminPanel({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-gray-555 uppercase tracking-wide">
+                  <label className="block text-xs font-bold text-gray-555 uppercase tracking-wide">
                     {lang === 'zh' ? '密码 *' : 'Password *'}
                   </label>
                   <input
@@ -1529,7 +1529,7 @@ export function AdminPanel({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-gray-550 uppercase tracking-wide">
+                  <label className="block text-xs font-bold text-gray-550 uppercase tracking-wide">
                     {lang === 'zh' ? '系统角色 (决定设置编辑权限) *' : 'Assign System Role (Determines access level) *'}
                   </label>
                   <div className="flex gap-4 mt-2">
@@ -1558,7 +1558,7 @@ export function AdminPanel({
                 </div>
 
                 <div className="space-y-1 pt-2">
-                  <label className="block text-[10px] font-bold text-gray-550 uppercase tracking-wide">
+                  <label className="block text-xs font-bold text-gray-550 uppercase tracking-wide">
                     {lang === 'zh' ? '账户状态 (是否允许登录系统) *' : 'Account Status (Active State) *'}
                   </label>
                   <div className="flex gap-4 mt-2">
@@ -1671,7 +1671,7 @@ export function AdminPanel({
                   onChange={(e) => setProviderApiUrl(e.target.value)}
                   className="w-full text-xs sm:text-sm bg-gray-50 hover:bg-gray-100/50 focus:bg-white border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-mono"
                 />
-                <span className="text-[10px] text-gray-400 mt-1 block">
+                <span className="text-xs text-gray-400 mt-1 block">
                   {lang === 'zh'
                     ? '符合 OpenAI 规范的标准 API 统一基准 URL。'
                     : 'OpenAI-compatible base URL (e.g. /v1).'}

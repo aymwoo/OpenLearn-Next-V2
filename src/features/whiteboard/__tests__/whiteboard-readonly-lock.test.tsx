@@ -59,9 +59,17 @@ vi.mock('../../../services/socket-service', () => ({
 import { InteractiveWhiteboard } from '../InteractiveWhiteboard';
 
 beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 1000 });
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 800 });
   // jsdom 没有 ResizeObserver，白板用它测量画布尺寸
   (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
-    observe() {}
+    private cb: (entries: any[]) => void;
+    constructor(cb: (entries: any[]) => void) {
+      this.cb = cb;
+    }
+    observe(target: Element) {
+      this.cb([{ target }]);
+    }
     unobserve() {}
     disconnect() {}
   };
@@ -72,11 +80,13 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function renderBoard(readOnly: boolean) {
+import { FullscreenOverlay } from '../fullscreen/FullscreenRendererRegistry';
+
+function renderBoard(readOnly: boolean, elements: any[] = []) {
   return render(
     <InteractiveWhiteboard
       lessonId="l1"
-      elements={[]}
+      elements={elements}
       userRole="student"
       readOnly={readOnly}
       onElementAdd={vi.fn(async () => {})}
@@ -84,6 +94,28 @@ function renderBoard(readOnly: boolean) {
     />,
   );
 }
+
+const sampleElements = [
+  {
+    id: 'applet-1',
+    type: 'html-applet',
+    data: JSON.stringify({
+      title: '互动几何课件',
+      code: '<h1>Hello Courseware</h1>',
+      width: 400,
+      height: 300,
+    }),
+  },
+  {
+    id: 'sandbox-1',
+    type: 'code-sandbox',
+    data: JSON.stringify({
+      code: "console.log('test');",
+      width: 400,
+      height: 300,
+    }),
+  },
+];
 
 describe('InteractiveWhiteboard readOnly (全班专注锁定)', () => {
   it('renders the authoring toolbar and page bar for a normal student', () => {
@@ -111,5 +143,54 @@ describe('InteractiveWhiteboard readOnly (全班专注锁定)', () => {
     const { container } = renderBoard(false);
     const canvasHost = container.querySelector('.absolute.inset-0.w-full.h-full.overflow-hidden');
     expect((canvasHost as HTMLElement).style.pointerEvents).toBe('auto');
+  });
+
+  it('locks html-applet component with pointer-events: none and displays ReadOnlyLockCover when readOnly', () => {
+    const { container } = renderBoard(true, sampleElements);
+    // 检查只读标签
+    expect(screen.getByText('🔒 只读锁定')).toBeTruthy();
+    // 检查遮罩层存在
+    const covers = screen.getAllByTestId('whiteboard-readonly-lock-cover');
+    expect(covers.length).toBeGreaterThan(0);
+    // 遮罩层有 not-allowed 并且 pointer-events: auto 以拦截事件
+    expect(covers[0].className).toContain('cursor-not-allowed');
+
+    // 检查组件卡片容器设置了 pointer-events: none
+    const appletContainer = container.querySelector('.bg-white.border.border-gray-300.rounded-lg.shadow-xl');
+    expect(appletContainer).toBeTruthy();
+    expect((appletContainer as HTMLElement).style.pointerEvents).toBe('none');
+
+    // 只读锁定时，全屏和删除按钮被隐藏
+    expect(screen.queryByTitle('全屏')).toBeNull();
+    expect(screen.queryByTitle('删除组件')).toBeNull();
+  });
+
+  it('enables html-applet component interaction and fullscreen when not readOnly', () => {
+    const { container } = renderBoard(false, sampleElements);
+    expect(screen.queryByText('🔒 只读锁定')).toBeNull();
+    expect(screen.queryByTestId('whiteboard-readonly-lock-cover')).toBeNull();
+
+    const appletContainer = container.querySelector('.bg-white.border.border-gray-300.rounded-lg.shadow-xl');
+    expect(appletContainer).toBeTruthy();
+    expect((appletContainer as HTMLElement).style.pointerEvents).toBe('auto');
+    expect(screen.getByTitle('全屏')).toBeTruthy();
+  });
+
+  it('locks FullscreenOverlay when readOnly and renders lock cover badge', () => {
+    render(
+      <FullscreenOverlay
+        type="html-applet"
+        title="全屏演示课件"
+        data={{ title: '演示课件' }}
+        containerSize={{ width: 1000, height: 800 }}
+        dismissible={false}
+        onClose={vi.fn()}
+        lessonId="l1"
+        readOnly={true}
+      />,
+    );
+
+    expect(screen.getByText('🔒 全班专注锁定中 · 演示视图')).toBeTruthy();
+    expect(screen.getByTestId('fullscreen-readonly-lock-cover')).toBeTruthy();
   });
 });

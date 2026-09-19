@@ -121,7 +121,7 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                 <span>{cat.name}</span>
                 {cat.id === 'all' ? (
                   <span
-                    className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-indigo-700/80 text-white' : 'bg-gray-100 text-gray-500'}`}
+                    className={`ml-1 text-xs px-1.5 py-0.2 rounded-full ${isActive ? 'bg-indigo-700/80 text-white' : 'bg-gray-100 text-gray-500'}`}
                   >
                     {registeredCommands.length}
                   </span>
@@ -195,7 +195,7 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                             {cmd.commandType}
                           </span>
                           {isHighRisk && (
-                            <span className="text-[10px] bg-red-100 text-red-700 border border-red-200 rounded font-extrabold px-1.5 py-0.5 uppercase tracking-wide flex items-center gap-0.5">
+                            <span className="text-xs bg-red-100 text-red-700 border border-red-200 rounded font-extrabold px-1.5 py-0.5 uppercase tracking-wide flex items-center gap-0.5">
                               ⚠️ 高风险操作
                             </span>
                           )}
@@ -208,7 +208,7 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                     </div>
 
                     <div className="flex items-center gap-3 self-end sm:self-auto">
-                      <span className="text-[10px] text-gray-400 font-mono hidden md:inline">ID: {cmd.id}</span>
+                      <span className="text-xs text-gray-400 font-mono hidden md:inline">ID: {cmd.id}</span>
                       <button
                         className={`text-xs px-3 py-1 bg-gray-100 text-gray-700 rounded-lg font-semibold border hover:bg-gray-200 transition-all flex items-center gap-1 ${
                           isExpanded ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : ''
@@ -233,7 +233,7 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                           </h4>
 
                           {cmd.inputSchema?.properties ? (
-                            <div className="space-y-3 font-mono text-[11px]">
+                            <div className="space-y-3 font-mono text-xs">
                               {Object.keys(cmd.inputSchema.properties).map((propName) => {
                                 const prop = cmd.inputSchema.properties[propName];
                                 const isRequired = cmd.inputSchema.required?.includes(propName);
@@ -244,9 +244,9 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                                   >
                                     <div className="flex items-baseline gap-1.5">
                                       <span className="text-indigo-600 font-semibold">{propName}</span>
-                                      <span className="text-gray-400 text-[10px]">({prop.type})</span>
+                                      <span className="text-gray-400 text-xs">({prop.type})</span>
                                       {isRequired && (
-                                        <span className="text-red-500 text-[9px] font-bold bg-red-50 border border-red-100 rounded px-1">
+                                        <span className="text-red-500 text-xs font-bold bg-red-50 border border-red-100 rounded px-1">
                                           REQUIRED
                                         </span>
                                       )}
@@ -278,13 +278,13 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                                   [cmd.id]: generateInitialPayload(cmd.inputSchema),
                                 }));
                               }}
-                              className="text-[9px] text-indigo-600 hover:underline hover:text-indigo-800 uppercase tracking-wider"
+                              className="text-xs text-indigo-600 hover:underline hover:text-indigo-800 uppercase tracking-wider"
                             >
                               恢复默认模版
                             </button>
                           </h4>
 
-                          <label className="text-[10px] font-semibold text-gray-400 block mb-1">Payload JSON:</label>
+                          <label className="text-xs font-semibold text-gray-400 block mb-1">Payload JSON:</label>
                           <textarea
                             value={commandPayloads[cmd.id] || ''}
                             onChange={(e) => {
@@ -292,7 +292,7 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                               setCommandPayloads((prev) => ({ ...prev, [cmd.id]: val }));
                             }}
                             rows={6}
-                            className="w-full font-mono text-[11px] p-2.5 bg-gray-900 text-indigo-300 border border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none leading-relaxed flex-1 shadow-inner"
+                            className="w-full font-mono text-xs p-2.5 bg-gray-900 text-indigo-300 border border-gray-800 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none leading-relaxed flex-1 shadow-inner"
                           />
 
                           <div className="mt-3 flex justify-end">
@@ -323,7 +323,7 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
 
                       {execResult && (
                         <div
-                          className={`p-4 rounded-xl border flex flex-col font-mono text-[11px] leading-relaxed relative ${
+                          className={`p-4 rounded-xl border flex flex-col font-mono text-xs leading-relaxed relative ${
                             execResult.loading
                               ? 'bg-gray-50 border-gray-200'
                               : execResult.success
@@ -331,7 +331,7 @@ export const CommandBusPlayground: React.FC<CommandBusPlaygroundProps> = ({ regi
                                 : 'bg-red-50/50 border-red-200 text-red-900'
                           }`}
                         >
-                          <div className="absolute top-2 right-3 uppercase text-[10px] font-bold text-gray-400">
+                          <div className="absolute top-2 right-3 uppercase text-xs font-bold text-gray-400">
                             Console Output log
                           </div>
 

@@ -188,6 +188,33 @@ fullscreenRendererRegistry.register('html-applet', ({ data, lessonId }: Fullscre
   <HtmlAppletFrame data={data} lessonId={lessonId} className="w-full h-full rounded-xl border" />
 ));
 
+const ReadOnlyLockCover: React.FC<{ title?: string }> = ({
+  title = '教师已开启全班专注锁定，当前为只读演示视图',
+}) => (
+  <div
+    data-testid="whiteboard-readonly-lock-cover"
+    className="absolute inset-0 z-50 bg-transparent cursor-not-allowed select-none"
+    style={{ pointerEvents: 'auto' }}
+    onClick={(e) => {
+      e.stopPropagation();
+      e.preventDefault();
+    }}
+    onPointerDown={(e) => {
+      e.stopPropagation();
+      e.preventDefault();
+    }}
+    onMouseDown={(e) => {
+      e.stopPropagation();
+      e.preventDefault();
+    }}
+    onTouchStart={(e) => {
+      e.stopPropagation();
+      e.preventDefault();
+    }}
+    title={title}
+  />
+);
+
 interface WhiteboardElement {
   id: string;
   type: string;
@@ -1683,7 +1710,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         const isThisSelected = selectedShapeId === el.id;
 
         const renderResizeHandles = () => {
-          if (!isThisSelected) return null;
+          if (readOnly || !isThisSelected) return null;
           return (
             <>
               {/* Outline highlight */}
@@ -1745,12 +1772,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               >
                 <div
                   onPointerDown={(e) => {
+                    if (readOnly) return;
                     setSelectedShapeId(el.id);
                     e.stopPropagation();
                   }}
                   onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
+                    if (readOnly) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
                     const containerRect = containerRef.current?.getBoundingClientRect();
                     if (containerRect) {
                       setContextMenu({
@@ -1761,25 +1792,32 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     }
                   }}
                   className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative"
-                  style={{ pointerEvents: 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
                   <div
-                    className="bg-indigo-50 text-indigo-750 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-indigo-150 cursor-move select-none shrink-0"
-                    onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
-                    onPointerMove={handleElementDragMove}
-                    onPointerUp={handleElementDragEnd}
+                    className={`bg-indigo-50 text-indigo-750 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-indigo-150 select-none shrink-0 ${readOnly ? 'cursor-default' : 'cursor-move'}`}
+                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
+                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
+                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
                   >
-                    <span>{data.title || 'Plugin Component'}</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => applyFullscreen(el.id)}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-650 hover:text-indigo-900 transition-colors cursor-pointer flex items-center justify-center"
-                        title="全屏"
-                      >
-                        <Maximize2 size={11} />
-                      </button>
-                      {!readOnly && (
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span>{data.title || 'Plugin Component'}</span>
+                      {readOnly && (
+                        <span className="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800 border border-amber-300 font-semibold select-none flex items-center gap-0.5">
+                          🔒 只读锁定
+                        </span>
+                      )}
+                    </div>
+                    {!readOnly && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => applyFullscreen(el.id)}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-650 hover:text-indigo-900 transition-colors cursor-pointer flex items-center justify-center"
+                          title="全屏"
+                        >
+                          <Maximize2 size={11} />
+                        </button>
                         <button
                           onClick={() => handleElementDelete(el.id)}
                           onPointerDown={(e) => e.stopPropagation()}
@@ -1788,8 +1826,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         >
                           <Trash2 size={11} />
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                   {!data.isMinimized && (
                     <div className="flex-grow bg-white overflow-auto relative min-h-0 p-2">
@@ -1802,6 +1840,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       />
                     </div>
                   )}
+                  {readOnly && <ReadOnlyLockCover />}
                   {!data.isMinimized && renderResizeHandles()}
                 </div>
               </Html>
@@ -1825,23 +1864,25 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               >
                 <div
                   onPointerDown={(e) => {
+                    if (readOnly) return;
                     setSelectedShapeId(el.id);
                     e.stopPropagation();
                   }}
-                  className="bg-transparent"
-                  style={{ pointerEvents: 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  className="bg-transparent relative"
+                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
                   <HelloWorldWrapper
                     elementId={el.id}
                     data={data}
                     readOnly={readOnly}
-                    onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
-                    onPointerMove={handleElementDragMove}
-                    onPointerUp={handleElementDragEnd}
+                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
+                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
+                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
                     onDelete={() => handleElementDelete(el.id)}
                     onElementUpdate={onElementUpdate}
                     lessonId={lessonId}
                   />
+                  {readOnly && <ReadOnlyLockCover />}
                   {renderResizeHandles()}
                 </div>
               </Html>
@@ -1865,12 +1906,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               >
                 <div
                   onPointerDown={(e) => {
+                    if (readOnly) return;
                     setSelectedShapeId(el.id);
                     e.stopPropagation();
                   }}
                   onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
+                    if (readOnly) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
                     const containerRect = containerRef.current?.getBoundingClientRect();
                     if (containerRect) {
                       setContextMenu({
@@ -1880,19 +1925,20 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       });
                     }
                   }}
-                  className="bg-transparent"
-                  style={{ pointerEvents: 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  className="bg-transparent relative"
+                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
                   <RollCallWrapper
                     elementId={el.id}
                     data={data}
                     readOnly={readOnly}
                     onElementUpdate={onElementUpdate}
-                    onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
-                    onPointerMove={handleElementDragMove}
-                    onPointerUp={handleElementDragEnd}
+                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
+                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
+                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
                     onDelete={() => handleElementDelete(el.id)}
                   />
+                  {readOnly && <ReadOnlyLockCover />}
                   {renderResizeHandles()}
                 </div>
               </Html>
@@ -1919,12 +1965,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               >
                 <div
                   onPointerDown={(e) => {
+                    if (readOnly) return;
                     setSelectedShapeId(el.id);
                     e.stopPropagation();
                   }}
                   onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
+                    if (readOnly) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
                     const containerRect = containerRef.current?.getBoundingClientRect();
                     if (containerRect) {
                       setContextMenu({
@@ -1935,45 +1985,52 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     }
                   }}
                   className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative select-none"
-                  style={{ pointerEvents: 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
                   <div
-                    className="bg-orange-50 text-orange-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-orange-100 cursor-move select-none shrink-0"
-                    onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
-                    onPointerMove={handleElementDragMove}
-                    onPointerUp={handleElementDragEnd}
+                    className={`bg-orange-50 text-orange-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-orange-100 select-none shrink-0 ${readOnly ? 'cursor-default' : 'cursor-move'}`}
+                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
+                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
+                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
                   >
-                    <span>Assignment Upload Task</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => applyFullscreen(el.id)}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        className="p-1 hover:bg-slate-200/50 rounded-full text-orange-600 hover:text-orange-900 transition-colors cursor-pointer flex items-center justify-center"
-                        title="全屏"
-                      >
-                        <Maximize2 size={11} />
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (onElementUpdate) {
-                            await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
-                            frontendEventBus.publish({
-                              id: uuidv7(),
-                              type: 'whiteboard.element_updated',
-                              source: 'whiteboard',
-                              payload: { lessonId },
-                              timestamp: Date.now(),
-                              correlationId: lessonId,
-                            });
-                          }
-                        }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        className="p-1 hover:bg-slate-200/50 rounded-full text-orange-655 hover:text-orange-900 transition-colors cursor-pointer flex items-center justify-center"
-                        title={data.isMinimized ? '展开组件' : '收起组件'}
-                      >
-                        {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
-                      </button>
-                      {!readOnly && (
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span>Assignment Upload Task</span>
+                      {readOnly && (
+                        <span className="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800 border border-amber-300 font-semibold select-none flex items-center gap-0.5">
+                          🔒 只读锁定
+                        </span>
+                      )}
+                    </div>
+                    {!readOnly && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => applyFullscreen(el.id)}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="p-1 hover:bg-slate-200/50 rounded-full text-orange-600 hover:text-orange-900 transition-colors cursor-pointer flex items-center justify-center"
+                          title="全屏"
+                        >
+                          <Maximize2 size={11} />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (onElementUpdate) {
+                              await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
+                              frontendEventBus.publish({
+                                id: uuidv7(),
+                                type: 'whiteboard.element_updated',
+                                source: 'whiteboard',
+                                payload: { lessonId },
+                                timestamp: Date.now(),
+                                correlationId: lessonId,
+                              });
+                            }
+                          }}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="p-1 hover:bg-slate-200/50 rounded-full text-orange-655 hover:text-orange-900 transition-colors cursor-pointer flex items-center justify-center"
+                          title={data.isMinimized ? '展开组件' : '收起组件'}
+                        >
+                          {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
+                        </button>
                         <button
                           onClick={() => handleElementDelete(el.id)}
                           onPointerDown={(e) => e.stopPropagation()}
@@ -1982,16 +2039,18 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         >
                           <Trash2 size={11} />
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                   {!data.isMinimized && (
                     <div className="p-4 text-center flex-1 overflow-y-auto flex flex-col justify-center min-h-0">
                       <p className="font-semibold text-gray-800 mb-1 text-xs">{data.title}</p>
                       <p className="text-xs text-gray-500 mb-3 line-clamp-3">{data.description}</p>
                       <button
-                        className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-1.5 rounded transition-colors text-xs shadow-sm cursor-pointer"
+                        className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-1.5 rounded transition-colors text-xs shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={readOnly}
                         onClick={() => {
+                          if (readOnly) return;
                           setDialog({
                             type: 'alert',
                             title: '作业文件上传',
@@ -2004,6 +2063,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       </button>
                     </div>
                   )}
+                  {readOnly && <ReadOnlyLockCover />}
                   {!data.isMinimized && renderResizeHandles()}
                 </div>
               </Html>
@@ -2026,12 +2086,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               >
                 <div
                   onPointerDown={(e) => {
+                    if (readOnly) return;
                     setSelectedShapeId(el.id);
                     e.stopPropagation();
                   }}
                   onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
+                    if (readOnly) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
                     const containerRect = containerRef.current?.getBoundingClientRect();
                     if (containerRect) {
                       setContextMenu({
@@ -2042,45 +2106,52 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     }
                   }}
                   className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative"
-                  style={{ pointerEvents: 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
                   <div
-                    className="bg-gray-100 text-gray-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-gray-200 cursor-move select-none shrink-0"
-                    onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
-                    onPointerMove={handleElementDragMove}
-                    onPointerUp={handleElementDragEnd}
+                    className={`bg-gray-100 text-gray-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-gray-200 select-none shrink-0 ${readOnly ? 'cursor-default' : 'cursor-move'}`}
+                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
+                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
+                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
                   >
-                    <span>{data.title || 'Interactive Courseware'}</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => applyFullscreen(el.id)}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        className="p-1 hover:bg-slate-200/50 rounded-full text-gray-600 hover:text-gray-900 transition-colors cursor-pointer flex items-center justify-center"
-                        title="全屏"
-                      >
-                        <Maximize2 size={11} />
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (onElementUpdate) {
-                            await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
-                            frontendEventBus.publish({
-                              id: uuidv7(),
-                              type: 'whiteboard.element_updated',
-                              source: 'whiteboard',
-                              payload: { lessonId },
-                              timestamp: Date.now(),
-                              correlationId: lessonId,
-                            });
-                          }
-                        }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        className="p-1 hover:bg-slate-200/50 rounded-full text-gray-650 hover:text-gray-900 transition-colors cursor-pointer flex items-center justify-center"
-                        title={data.isMinimized ? '展开组件' : '收起组件'}
-                      >
-                        {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
-                      </button>
-                      {!readOnly && (
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span>{data.title || 'Interactive Courseware'}</span>
+                      {readOnly && (
+                        <span className="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800 border border-amber-300 font-semibold select-none flex items-center gap-0.5">
+                          🔒 只读锁定
+                        </span>
+                      )}
+                    </div>
+                    {!readOnly && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => applyFullscreen(el.id)}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="p-1 hover:bg-slate-200/50 rounded-full text-gray-600 hover:text-gray-900 transition-colors cursor-pointer flex items-center justify-center"
+                          title="全屏"
+                        >
+                          <Maximize2 size={11} />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (onElementUpdate) {
+                              await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
+                              frontendEventBus.publish({
+                                id: uuidv7(),
+                                type: 'whiteboard.element_updated',
+                                source: 'whiteboard',
+                                payload: { lessonId },
+                                timestamp: Date.now(),
+                                correlationId: lessonId,
+                              });
+                            }
+                          }}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="p-1 hover:bg-slate-200/50 rounded-full text-gray-650 hover:text-gray-900 transition-colors cursor-pointer flex items-center justify-center"
+                          title={data.isMinimized ? '展开组件' : '收起组件'}
+                        >
+                          {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
+                        </button>
                         <button
                           onClick={() => handleElementDelete(el.id)}
                           onPointerDown={(e) => e.stopPropagation()}
@@ -2089,14 +2160,15 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         >
                           <Trash2 size={11} />
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                   {!data.isMinimized && (
                     <div className="flex-1 bg-white overflow-hidden relative min-h-0">
                       <HtmlAppletFrame data={data} lessonId={lessonId} className="w-full h-full border-none" />
                     </div>
                   )}
+                  {readOnly && <ReadOnlyLockCover />}
                   {!data.isMinimized && renderResizeHandles()}
                 </div>
               </Html>
@@ -2373,12 +2445,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               >
                 <div
                   onPointerDown={(e) => {
+                    if (readOnly) return;
                     setSelectedShapeId(el.id);
                     e.stopPropagation();
                   }}
                   onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
+                    if (readOnly) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
                     const containerRect = containerRef.current?.getBoundingClientRect();
                     if (containerRect) {
                       setContextMenu({
@@ -2389,11 +2465,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     }
                   }}
                   className="relative rounded-lg shadow-xl"
-                  style={{ pointerEvents: 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
                   <CodeSandboxWrapper
                     elementId={el.id}
                     data={data}
+                    readOnly={readOnly}
                     onElementUpdate={
                       onElementUpdate
                         ? async (id, d) => {
@@ -2409,11 +2486,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                           }
                         : undefined
                     }
-                    onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
-                    onPointerMove={handleElementDragMove}
-                    onPointerUp={handleElementDragEnd}
+                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
+                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
+                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
                     onDelete={() => handleElementDelete(el.id)}
                   />
+                  {readOnly && <ReadOnlyLockCover />}
                   {renderResizeHandles()}
                 </div>
               </Html>
@@ -2436,12 +2514,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               >
                 <div
                   onPointerDown={(e) => {
+                    if (readOnly) return;
                     setSelectedShapeId(el.id);
                     e.stopPropagation();
                   }}
                   onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
+                    if (readOnly) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
                     const containerRect = containerRef.current?.getBoundingClientRect();
                     if (containerRect) {
                       setContextMenu({
@@ -2452,11 +2534,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     }
                   }}
                   className="relative rounded-lg shadow-xl"
-                  style={{ pointerEvents: 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
                   <MathGraphWrapper
                     elementId={el.id}
                     data={data}
+                    readOnly={readOnly}
                     onElementUpdate={
                       onElementUpdate
                         ? async (id, d) => {
@@ -2472,11 +2555,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                           }
                         : undefined
                     }
-                    onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
-                    onPointerMove={handleElementDragMove}
-                    onPointerUp={handleElementDragEnd}
+                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
+                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
+                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
                     onDelete={() => handleElementDelete(el.id)}
                   />
+                  {readOnly && <ReadOnlyLockCover />}
                   {renderResizeHandles()}
                 </div>
               </Html>
@@ -2499,12 +2583,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               >
                 <div
                   onPointerDown={(e) => {
+                    if (readOnly) return;
                     setSelectedShapeId(el.id);
                     e.stopPropagation();
                   }}
                   onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
+                    if (readOnly) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
                     const containerRect = containerRef.current?.getBoundingClientRect();
                     if (containerRect) {
                       setContextMenu({
@@ -2515,45 +2603,52 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     }
                   }}
                   className="bg-white border border-gray-305 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative select-none"
-                  style={{ pointerEvents: 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
                   <div
-                    className="bg-purple-100 text-purple-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-purple-200 cursor-move shrink-0"
-                    onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
-                    onPointerMove={handleElementDragMove}
-                    onPointerUp={handleElementDragEnd}
+                    className={`bg-purple-100 text-purple-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-purple-200 select-none shrink-0 ${readOnly ? 'cursor-default' : 'cursor-move'}`}
+                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
+                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
+                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
                   >
-                    <span>Interactive Presentation</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => applyFullscreen(el.id)}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        className="p-1 hover:bg-slate-200/50 rounded-full text-purple-600 hover:text-purple-900 transition-colors cursor-pointer flex items-center justify-center"
-                        title="全屏"
-                      >
-                        <Maximize2 size={11} />
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (onElementUpdate) {
-                            await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
-                            frontendEventBus.publish({
-                              id: uuidv7(),
-                              type: 'whiteboard.element_updated',
-                              source: 'whiteboard',
-                              payload: { lessonId },
-                              timestamp: Date.now(),
-                              correlationId: lessonId,
-                            });
-                          }
-                        }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        className="p-1 hover:bg-slate-200/50 rounded-full text-purple-650 hover:text-purple-900 transition-colors cursor-pointer flex items-center justify-center"
-                        title={data.isMinimized ? '展开组件' : '收起组件'}
-                      >
-                        {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
-                      </button>
-                      {!readOnly && (
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span>Interactive Presentation</span>
+                      {readOnly && (
+                        <span className="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800 border border-amber-300 font-semibold select-none flex items-center gap-0.5">
+                          🔒 只读锁定
+                        </span>
+                      )}
+                    </div>
+                    {!readOnly && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => applyFullscreen(el.id)}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="p-1 hover:bg-slate-200/50 rounded-full text-purple-600 hover:text-purple-900 transition-colors cursor-pointer flex items-center justify-center"
+                          title="全屏"
+                        >
+                          <Maximize2 size={11} />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (onElementUpdate) {
+                              await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
+                              frontendEventBus.publish({
+                                id: uuidv7(),
+                                type: 'whiteboard.element_updated',
+                                source: 'whiteboard',
+                                payload: { lessonId },
+                                timestamp: Date.now(),
+                                correlationId: lessonId,
+                              });
+                            }
+                          }}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="p-1 hover:bg-slate-200/50 rounded-full text-purple-650 hover:text-purple-900 transition-colors cursor-pointer flex items-center justify-center"
+                          title={data.isMinimized ? '展开组件' : '收起组件'}
+                        >
+                          {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
+                        </button>
                         <button
                           onClick={() => handleElementDelete(el.id)}
                           onPointerDown={(e) => e.stopPropagation()}
@@ -2562,11 +2657,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         >
                           <Trash2 size={11} />
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                   {!data.isMinimized && (
-                    <div className="flex-1 min-h-0 relative bg-white" style={{ pointerEvents: 'auto' }}>
+                    <div className="flex-1 min-h-0 relative bg-white" style={{ pointerEvents: readOnly ? 'none' : 'auto' }}>
                       <RevealPresentationWrapper
                         elementId={el.id}
                         data={data}
@@ -2589,6 +2684,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       />
                     </div>
                   )}
+                  {readOnly && <ReadOnlyLockCover />}
                   {!data.isMinimized && renderResizeHandles()}
                 </div>
               </Html>
@@ -2615,12 +2711,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               >
                 <div
                   onPointerDown={(e) => {
+                    if (readOnly) return;
                     setSelectedShapeId(el.id);
                     e.stopPropagation();
                   }}
                   onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
+                    if (readOnly) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
                     const containerRect = containerRef.current?.getBoundingClientRect();
                     if (containerRect) {
                       setContextMenu({
@@ -2631,45 +2731,52 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     }
                   }}
                   className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative"
-                  style={{ pointerEvents: 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
                   <div
-                    className="bg-indigo-50 text-indigo-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-indigo-200 cursor-move select-none shrink-0"
-                    onPointerDown={(e) => handleElementDragStart(e, el.id, data)}
-                    onPointerMove={handleElementDragMove}
-                    onPointerUp={handleElementDragEnd}
+                    className={`bg-indigo-50 text-indigo-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-indigo-200 select-none shrink-0 ${readOnly ? 'cursor-default' : 'cursor-move'}`}
+                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
+                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
+                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
                   >
-                    <span className="truncate pr-2">{data.title || pluginPaletteItem.labelZh || el.type}</span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => applyFullscreen(el.id)}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-600 hover:text-indigo-900 transition-colors cursor-pointer flex items-center justify-center"
-                        title="全屏"
-                      >
-                        <Maximize2 size={11} />
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (onElementUpdate) {
-                            await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
-                            frontendEventBus.publish({
-                              id: uuidv7(),
-                              type: 'whiteboard.element_updated',
-                              source: 'whiteboard',
-                              payload: { lessonId },
-                              timestamp: Date.now(),
-                              correlationId: lessonId,
-                            });
-                          }
-                        }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-600 hover:text-indigo-900 transition-colors cursor-pointer flex items-center justify-center"
-                        title={data.isMinimized ? '展开组件' : '收起组件'}
-                      >
-                        {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
-                      </button>
-                      {!readOnly && (
+                    <div className="flex items-center gap-1.5 truncate pr-2">
+                      <span className="truncate">{data.title || pluginPaletteItem.labelZh || el.type}</span>
+                      {readOnly && (
+                        <span className="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800 border border-amber-300 font-semibold select-none flex items-center gap-0.5 shrink-0">
+                          🔒 只读锁定
+                        </span>
+                      )}
+                    </div>
+                    {!readOnly && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => applyFullscreen(el.id)}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-600 hover:text-indigo-900 transition-colors cursor-pointer flex items-center justify-center"
+                          title="全屏"
+                        >
+                          <Maximize2 size={11} />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (onElementUpdate) {
+                              await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
+                              frontendEventBus.publish({
+                                id: uuidv7(),
+                                type: 'whiteboard.element_updated',
+                                source: 'whiteboard',
+                                payload: { lessonId },
+                                timestamp: Date.now(),
+                                correlationId: lessonId,
+                              });
+                            }
+                          }}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-600 hover:text-indigo-900 transition-colors cursor-pointer flex items-center justify-center"
+                          title={data.isMinimized ? '展开组件' : '收起组件'}
+                        >
+                          {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
+                        </button>
                         <button
                           onClick={() => handleElementDelete(el.id)}
                           onPointerDown={(e) => e.stopPropagation()}
@@ -2678,11 +2785,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         >
                           <Trash2 size={11} />
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                   {!data.isMinimized && (
-                    <div className="flex-1 bg-white overflow-hidden relative min-h-0" style={{ pointerEvents: 'auto' }}>
+                    <div className="flex-1 bg-white overflow-hidden relative min-h-0" style={{ pointerEvents: readOnly ? 'none' : 'auto' }}>
                       {PluginComponent ? (
                         <PluginComponent
                           elementId={el.id}
@@ -2714,6 +2821,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       )}
                     </div>
                   )}
+                  {readOnly && <ReadOnlyLockCover />}
                   {!data.isMinimized && renderResizeHandles()}
                 </div>
               </Html>
@@ -3004,6 +3112,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         dismissible={isFullscreenDismissible}
                         onClose={() => applyFullscreen(null)}
                         lessonId={lessonId}
+                        readOnly={readOnly}
                       />
                     );
                   })()
@@ -3113,7 +3222,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 >
                   {contextMenu.elementId ? (
                     <>
-                      <div className="px-3 py-1 text-[11px] text-muted font-bold uppercase tracking-wider select-none">
+                      <div className="px-3 py-1 text-xs text-muted font-bold uppercase tracking-wider select-none">
                         组件选项
                       </div>
                       <button
@@ -3135,7 +3244,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     </>
                   ) : (
                     <>
-                      <div className="px-3 py-1 text-[11px] text-muted font-bold uppercase tracking-wider select-none">
+                      <div className="px-3 py-1 text-xs text-muted font-bold uppercase tracking-wider select-none">
                         白板操作
                       </div>
                       <button
@@ -3277,7 +3386,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     >
                       <Undo2 size={13} />
                       {(propertyUndoStack[selectedShapeId] || []).length > 0 && (
-                        <span className="text-[10px] font-bold text-muted">
+                        <span className="text-xs font-bold text-muted">
                           {(propertyUndoStack[selectedShapeId] || []).length}
                         </span>
                       )}
@@ -3296,7 +3405,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     >
                       <Redo2 size={13} />
                       {(propertyRedoStack[selectedShapeId] || []).length > 0 && (
-                        <span className="text-[10px] font-bold text-muted">
+                        <span className="text-xs font-bold text-muted">
                           {(propertyRedoStack[selectedShapeId] || []).length}
                         </span>
                       )}
@@ -3319,14 +3428,14 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   {/* 基本标签和信息 */}
                   <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-muted text-[10px] font-bold uppercase tracking-wider">组件类型</span>
-                      <span className="px-2 py-0.5 bg-primary-theme-light text-primary-theme rounded text-[10px] font-bold uppercase tracking-wider">
+                      <span className="text-muted text-xs font-bold uppercase tracking-wider">组件类型</span>
+                      <span className="px-2 py-0.5 bg-primary-theme-light text-primary-theme rounded text-xs font-bold uppercase tracking-wider">
                         {selectedEl.type}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-muted text-[10px] font-bold uppercase tracking-wider">组件标识</span>
-                      <span className="font-mono text-muted text-[10px] truncate max-w-[155px]" title={selectedEl.id}>
+                      <span className="text-muted text-xs font-bold uppercase tracking-wider">组件标识</span>
+                      <span className="font-mono text-muted text-xs truncate max-w-[155px]" title={selectedEl.id}>
                         {selectedEl.id}
                       </span>
                     </div>
@@ -3339,7 +3448,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     </h4>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">X 坐标</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">X 坐标</label>
                         <input
                           type="number"
                           value={Math.round(editingProperties.x ?? 0)}
@@ -3349,7 +3458,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">Y 坐标</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">Y 坐标</label>
                         <input
                           type="number"
                           value={Math.round(editingProperties.y ?? 0)}
@@ -3363,7 +3472,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     {selectedEl.type !== 'pen' && selectedEl.type !== 'circle' && (
                       <div className="grid grid-cols-2 gap-2 mt-2">
                         <div>
-                          <label className="block text-[10px] text-muted font-semibold mb-1">宽度 (Width)</label>
+                          <label className="block text-xs text-muted font-semibold mb-1">宽度 (Width)</label>
                           <input
                             type="number"
                             min="50"
@@ -3374,7 +3483,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] text-muted font-semibold mb-1">高度 (Height)</label>
+                          <label className="block text-xs text-muted font-semibold mb-1">高度 (Height)</label>
                           <input
                             type="number"
                             min="50"
@@ -3389,7 +3498,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
                     {selectedEl.type === 'circle' && (
                       <div className="mt-2">
-                        <label className="block text-[10px] text-muted font-semibold mb-1">半径 (Radius)</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">半径 (Radius)</label>
                         <input
                           type="number"
                           min="5"
@@ -3426,11 +3535,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
                           <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex items-center justify-between">
                             <span>{pluginPaletteConfig.labelZh} 配置</span>
-                            <span className="text-[10px] text-muted font-normal">插件扩展</span>
+                            <span className="text-xs text-muted font-normal">插件扩展</span>
                           </h4>
                           {fields.length === 0 ? (
                             <div>
-                              <label className="block text-[10px] text-muted font-semibold mb-1">标题 (Title)</label>
+                              <label className="block text-xs text-muted font-semibold mb-1">标题 (Title)</label>
                               <input
                                 type="text"
                                 value={editingProperties.title || ''}
@@ -3446,7 +3555,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                               if (field.kind === 'textarea') {
                                 return (
                                   <div key={field.key}>
-                                    <label className="block text-[10px] text-muted font-semibold mb-1">
+                                    <label className="block text-xs text-muted font-semibold mb-1">
                                       {field.labelZh}
                                     </label>
                                     <textarea
@@ -3462,7 +3571,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                               if (field.kind === 'select') {
                                 return (
                                   <div key={field.key}>
-                                    <label className="block text-[10px] text-muted font-semibold mb-1">
+                                    <label className="block text-xs text-muted font-semibold mb-1">
                                       {field.labelZh}
                                     </label>
                                     <select
@@ -3485,7 +3594,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                               }
                               return (
                                 <div key={field.key}>
-                                  <label className="block text-[10px] text-muted font-semibold mb-1">
+                                  <label className="block text-xs text-muted font-semibold mb-1">
                                     {field.labelZh}
                                   </label>
                                   <input
@@ -3512,7 +3621,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
                       <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">随堂测验配置</h4>
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">测验题目 (Question)</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">测验题目 (Question)</label>
                         <textarea
                           value={editingProperties.question || ''}
                           onChange={(e) => handleLocalPropChange('question', e.target.value)}
@@ -3525,7 +3634,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       {/* Correct answer selector */}
                       {(editingProperties.options || []).length > 0 && (
                         <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5">
-                          <label className="block text-[10px] text-amber-500 font-bold mb-1.5">
+                          <label className="block text-xs text-amber-500 font-bold mb-1.5">
                             ⚠️ 正确答案 (Correct Answer)
                           </label>
                           <select
@@ -3548,13 +3657,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                             ))}
                           </select>
                           {!editingProperties.correctAnswer && (
-                            <p className="text-[9px] text-amber-500 mt-1">未设置正确答案将无法自动判分</p>
+                            <p className="text-xs text-amber-500 mt-1">未设置正确答案将无法自动判分</p>
                           )}
                         </div>
                       )}
 
                       <div className="space-y-2">
-                        <label className="block text-[10px] text-muted font-semibold">选项列表 (Options)</label>
+                        <label className="block text-xs text-muted font-semibold">选项列表 (Options)</label>
                         <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                           {(editingProperties.options || []).map((opt: string, idx: number) => {
                             const optionLabels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -3585,7 +3694,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
                         <button
                           onClick={handleAddOption}
-                          className="w-full mt-2 py-1 bg-surface-secondary hover:bg-surface-secondary text-main font-bold border border-theme rounded-lg flex items-center justify-center gap-1 transition-all text-[11px] cursor-pointer"
+                          className="w-full mt-2 py-1 bg-surface-secondary hover:bg-surface-secondary text-main font-bold border border-theme rounded-lg flex items-center justify-center gap-1 transition-all text-xs cursor-pointer"
                         >
                           <Plus size={12} /> 添加选项
                         </button>
@@ -3598,7 +3707,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
                       <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">作业选项配置</h4>
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">作业任务标题 (Title)</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">作业任务标题 (Title)</label>
                         <input
                           type="text"
                           value={editingProperties.title || ''}
@@ -3609,7 +3718,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">详细作业要求描述</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">详细作业要求描述</label>
                         <textarea
                           value={editingProperties.description || ''}
                           onChange={(e) => handleLocalPropChange('description', e.target.value)}
@@ -3627,7 +3736,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5 flex justify-between items-center">
                         <span>动态运行代码定制</span>
                         {selectedEl.type === 'html-applet' && (
-                          <span className="text-[10px] bg-primary-theme-light text-primary-theme px-1.5 py-0.5 rounded-full font-bold">
+                          <span className="text-xs bg-primary-theme-light text-primary-theme px-1.5 py-0.5 rounded-full font-bold">
                             HTML Applet
                           </span>
                         )}
@@ -3636,7 +3745,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       {selectedEl.type === 'html-applet' && (
                         <div className="space-y-3 border-b border-theme pb-3">
                           <div>
-                            <label className="block text-[10px] text-primary-theme font-bold mb-1">
+                            <label className="block text-xs text-primary-theme font-bold mb-1">
                               选择互动网络课件 (ZIP/HTML):
                             </label>
                             <select
@@ -3656,13 +3765,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                             </select>
                           </div>
 
-                          <div className="bg-surface-secondary p-2.5 rounded-xl border border-theme text-[10px] text-muted space-y-2">
+                          <div className="bg-surface-secondary p-2.5 rounded-xl border border-theme text-xs text-muted space-y-2">
                             <span className="font-bold text-main block">上传新课件 (自动生成独立运行实例):</span>
                             <label className="w-full flex flex-col items-center justify-center p-3 bg-indigo-50 hover:bg-indigo-100 border border-dashed border-indigo-300 hover:border-indigo-400 rounded-lg cursor-pointer text-center transition-all">
                               <span className="font-bold text-indigo-700 text-xs">
                                 ✨ 上传互动网络课件 (.zip / .html)
                               </span>
-                              <span className="text-[10px] text-indigo-500 mt-0.5">
+                              <span className="text-xs text-indigo-500 mt-0.5">
                                 支持多文件打包 ZIP 或单页 HTML，自动接入 LMS Bridge
                               </span>
                               <input
@@ -3714,7 +3823,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
                       {(!editingProperties.coursewareUuid || selectedEl.type === 'code-sandbox') && (
                         <div>
-                          <label className="block text-[10px] text-slate-400 font-semibold mb-1">
+                          <label className="block text-xs text-slate-400 font-semibold mb-1">
                             沙箱程序代码 (Source Code)
                           </label>
                           <textarea
@@ -3734,7 +3843,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
                       <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">函数解析拟合</h4>
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">函数表达式 y = f(x)</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">函数表达式 y = f(x)</label>
                         <input
                           type="text"
                           value={editingProperties.equation || ''}
@@ -3742,7 +3851,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                           onBlur={(e) => handlePropBlur('equation', e.target.value)}
                           className="w-full px-2 py-1.5 border border-theme rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary-theme bg-surface text-main"
                         />
-                        <p className="text-[10px] text-muted mt-1 leading-snug">
+                        <p className="text-xs text-muted mt-1 leading-snug">
                           支持标准 JS 表达式。 示例：
                           <br />• <code className="bg-surface-secondary px-1 rounded">Math.sin(x)</code> 正负弦波形
                           <br />• <code className="bg-surface-secondary px-1 rounded">Math.cos(x) * x</code> 振幅衰减
@@ -3756,7 +3865,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
                       <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">幻灯片 Markdown 文案</h4>
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">Markdown 源代码</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">Markdown 源代码</label>
                         <textarea
                           value={editingProperties.markdown || ''}
                           onChange={(e) => handleLocalPropChange('markdown', e.target.value)}
@@ -3773,7 +3882,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
                       <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">文字属性管理</h4>
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">文本内容</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">文本内容</label>
                         <input
                           type="text"
                           value={editingProperties.text || ''}
@@ -3783,7 +3892,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">文字大小 (FontSize)</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">文字大小 (FontSize)</label>
                         <input
                           type="number"
                           min="10"
@@ -3795,7 +3904,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">文字填充颜色</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">文字填充颜色</label>
                         <div className="flex items-center gap-2">
                           <input
                             type="color"
@@ -3804,7 +3913,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                             onBlur={(e) => handlePropBlur('color', e.target.value)}
                             className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                           />
-                          <span className="font-mono text-[11px] text-muted">
+                          <span className="font-mono text-xs text-muted">
                             {editingProperties.color || '#000000'}
                           </span>
                         </div>
@@ -3817,7 +3926,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
                       <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">矩形样式配置</h4>
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">外边框颜色</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">外边框颜色</label>
                         <div className="flex items-center gap-2">
                           <input
                             type="color"
@@ -3826,7 +3935,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                             onBlur={(e) => handlePropBlur('stroke', e.target.value)}
                             className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                           />
-                          <span className="font-mono text-[11px] text-muted">
+                          <span className="font-mono text-xs text-muted">
                             {editingProperties.stroke || '#000000'}
                           </span>
                         </div>
@@ -3839,7 +3948,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
                       <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">圆形样式配置</h4>
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">外边框颜色</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">外边框颜色</label>
                         <div className="flex items-center gap-2">
                           <input
                             type="color"
@@ -3848,7 +3957,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                             onBlur={(e) => handlePropBlur('stroke', e.target.value)}
                             className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                           />
-                          <span className="font-mono text-[11px] text-muted">
+                          <span className="font-mono text-xs text-muted">
                             {editingProperties.stroke || '#000000'}
                           </span>
                         </div>
@@ -3861,7 +3970,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     <div className="bg-surface p-3 rounded-xl border border-theme shadow-sm space-y-3">
                       <h4 className="font-bold text-main text-xs border-b border-theme pb-1.5">线条样式配置</h4>
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">折线颜色</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">折线颜色</label>
                         <div className="flex items-center gap-2">
                           <input
                             type="color"
@@ -3870,7 +3979,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                             onBlur={(e) => handlePropBlur('color', e.target.value)}
                             className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                           />
-                          <span className="font-mono text-[11px] text-muted">
+                          <span className="font-mono text-xs text-muted">
                             {editingProperties.color || '#000000'}
                           </span>
                         </div>
@@ -3885,7 +3994,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         高亮荧光标记 (Highlighter)
                       </h4>
                       <div>
-                        <label className="block text-[10px] text-muted font-semibold mb-1">荧光笔颜色</label>
+                        <label className="block text-xs text-muted font-semibold mb-1">荧光笔颜色</label>
                         <div className="flex items-center gap-2">
                           <input
                             type="color"
@@ -3894,7 +4003,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                             onBlur={(e) => handlePropBlur('color', e.target.value)}
                             className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                           />
-                          <span className="font-mono text-[11px] text-muted">
+                          <span className="font-mono text-xs text-muted">
                             {editingProperties.color || '#facc15'}
                           </span>
                         </div>
@@ -3902,7 +4011,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     </div>
                   )}
 
-                  <div className="text-[10px] text-muted text-center select-none pt-2 font-medium">
+                  <div className="text-xs text-muted text-center select-none pt-2 font-medium">
                     提示：属性在失焦或修改时自动同步，多端可见。
                   </div>
                 </div>

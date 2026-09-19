@@ -30,7 +30,7 @@ export function ClassSchedulesCharts(props: ClassSchedulesChartsProps) {
                 <XAxis dataKey="lesson_title" hide />
                 <YAxis domain={[0, 100]} hide />
                 <Tooltip
-                  contentStyle={{ fontSize: '10px', padding: '4px', borderRadius: '4px' }}
+                  contentStyle={{ fontSize: '12px', padding: '4px', borderRadius: '4px' }}
                   formatter={(value) => [`${Math.round(value as number)}%`, 'Average']}
                 />
                 <Bar dataKey="average_progress" fill="#6366f1" radius={[2, 2, 0, 0]} />

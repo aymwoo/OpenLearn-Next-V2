@@ -43,13 +43,13 @@ export function StudentAssignmentWorkPanel(props: {
                   <div className="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200 text-xs">
                     <button
                       onClick={() => setSubAssignmentTab('quiz')}
-                      className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${subAssignmentTab === 'quiz' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                      className={`px-2.5 py-0.5 rounded text-xs font-bold transition-all ${subAssignmentTab === 'quiz' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
                     >
                       Interactive Test
                     </button>
                     <button
                       onClick={() => setSubAssignmentTab('whiteboard')}
-                      className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition-all ${subAssignmentTab === 'whiteboard' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                      className={`px-2.5 py-0.5 rounded text-xs font-bold transition-all ${subAssignmentTab === 'whiteboard' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
                     >
                       Sketch Whiteboard
                     </button>
@@ -57,7 +57,7 @@ export function StudentAssignmentWorkPanel(props: {
                 )}
               </div>
               {selectedAssignment.submission_status && (
-                <div className="text-[10px] uppercase font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                <div className="text-xs uppercase font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
                   Read Only
                 </div>
               )}
@@ -94,13 +94,13 @@ export function StudentAssignmentWorkPanel(props: {
                                   <span className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center text-xs font-bold ring-1 ring-indigo-100">
                                     {idx + 1}
                                   </span>
-                                  <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-100">
+                                  <span className="text-xs font-semibold text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-100">
                                     evaluates: {q.objective}
                                   </span>
                                 </div>
                                 {isSubmitted && (
                                   <span
-                                    className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
+                                    className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
                                   >
                                     {isCorrect ? 'Correct ✓' : `Incorrect (Correct Option: ${q.correctAnswer})`}
                                   </span>

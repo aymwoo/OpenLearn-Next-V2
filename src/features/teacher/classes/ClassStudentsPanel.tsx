@@ -136,7 +136,7 @@ export function ClassStudentsPanel({
             <>
               <select
                 id={`enroll-student-select-${cls.id}`}
-                className="border border-slate-200 hover:border-slate-300 rounded-lg text-[10px] md:text-xs p-1.5 bg-white text-gray-750 font-sans focus:outline-none focus:ring-1 focus:ring-indigo-500 max-w-[130px]"
+                className="border border-slate-200 hover:border-slate-300 rounded-lg text-xs md:text-xs p-1.5 bg-white text-gray-750 font-sans focus:outline-none focus:ring-1 focus:ring-indigo-500 max-w-[130px]"
                 defaultValue=""
               >
                 <option value="" disabled>
@@ -165,7 +165,7 @@ export function ClassStudentsPanel({
                     }
                   }
                 }}
-                className="text-white bg-indigo-600 hover:bg-indigo-700 text-[10px] px-2 py-1 rounded shadow-sm font-medium transition-colors cursor-pointer"
+                className="text-white bg-indigo-600 hover:bg-indigo-700 text-xs px-2 py-1 rounded shadow-sm font-medium transition-colors cursor-pointer"
               >
                 {lang === 'zh' ? '添加' : 'Enroll'}
               </button>
@@ -218,7 +218,7 @@ export function ClassStudentsPanel({
                 }
               }
             }}
-            className="text-indigo-600 bg-white hover:bg-gray-50 border border-gray-200 text-[10px] px-2 py-1 rounded shadow-sm font-medium transition-colors cursor-pointer"
+            className="text-indigo-600 bg-white hover:bg-gray-50 border border-gray-200 text-xs px-2 py-1 rounded shadow-sm font-medium transition-colors cursor-pointer"
           >
             + {lang === 'zh' ? '注册并加入本班' : 'Register New'}
           </button>
@@ -288,7 +288,7 @@ export function ClassStudentsPanel({
             onClick={() => {
               document.getElementById(`bulk-enroll-csv-${cls.id}`)?.click();
             }}
-            className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[10px] px-2 py-1 rounded shadow-sm font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+            className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-xs px-2 py-1 rounded shadow-sm font-semibold transition-colors flex items-center gap-1 cursor-pointer"
             title={lang === 'zh' ? '通过 CSV 批量加入学生' : 'Bulk Enroll via CSV file'}
           >
             <Upload size={10} />
@@ -339,13 +339,13 @@ export function ClassStudentsPanel({
 
               {/* Quick Note Category Filters */}
               <div className="mb-2.5 flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                <span className="text-[9px] font-bold text-gray-400 mr-1 uppercase tracking-wider">
+                <span className="text-xs font-bold text-gray-400 mr-1 uppercase tracking-wider">
                   {lang === 'zh' ? '备忘分类' : 'Notes Tag'}:
                 </span>
                 <button
                   type="button"
                   onClick={() => setRosterTagFilter('all')}
-                  className={`px-2 py-0.5 text-[9px] font-bold rounded-full border cursor-pointer transition-all ${
+                  className={`px-2 py-0.5 text-xs font-bold rounded-full border cursor-pointer transition-all ${
                     rosterTagFilter === 'all'
                       ? 'bg-slate-700 text-white border-slate-700 shadow-3xs'
                       : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
@@ -356,7 +356,7 @@ export function ClassStudentsPanel({
                 <button
                   type="button"
                   onClick={() => setRosterTagFilter('General')}
-                  className={`px-2 py-0.5 text-[9px] font-bold rounded-full border cursor-pointer transition-all ${
+                  className={`px-2 py-0.5 text-xs font-bold rounded-full border cursor-pointer transition-all ${
                     rosterTagFilter === 'General'
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-3xs'
                       : 'bg-white text-emerald-700 border-emerald-150 hover:bg-emerald-50'
@@ -367,7 +367,7 @@ export function ClassStudentsPanel({
                 <button
                   type="button"
                   onClick={() => setRosterTagFilter('Academic')}
-                  className={`px-2 py-0.5 text-[9px] font-bold rounded-full border cursor-pointer transition-all ${
+                  className={`px-2 py-0.5 text-xs font-bold rounded-full border cursor-pointer transition-all ${
                     rosterTagFilter === 'Academic'
                       ? 'bg-blue-600 text-white border-blue-600 shadow-3xs'
                       : 'bg-white text-blue-700 border-blue-150 hover:bg-blue-50'
@@ -378,7 +378,7 @@ export function ClassStudentsPanel({
                 <button
                   type="button"
                   onClick={() => setRosterTagFilter('Behavioral')}
-                  className={`px-2 py-0.5 text-[9px] font-bold rounded-full border cursor-pointer transition-all ${
+                  className={`px-2 py-0.5 text-xs font-bold rounded-full border cursor-pointer transition-all ${
                     rosterTagFilter === 'Behavioral'
                       ? 'bg-purple-600 text-white border-purple-600 shadow-3xs'
                       : 'bg-white text-purple-700 border-purple-150 hover:bg-purple-50'
@@ -389,7 +389,7 @@ export function ClassStudentsPanel({
                 <button
                   type="button"
                   onClick={() => setRosterTagFilter('SpecialCare')}
-                  className={`px-2 py-0.5 text-[9px] font-bold rounded-full border cursor-pointer transition-all ${
+                  className={`px-2 py-0.5 text-xs font-bold rounded-full border cursor-pointer transition-all ${
                     rosterTagFilter === 'SpecialCare'
                       ? 'bg-rose-600 text-white border-rose-600 shadow-3xs'
                       : 'bg-white text-rose-700 border-rose-150 hover:bg-rose-50'
@@ -500,7 +500,7 @@ export function ClassStudentsPanel({
                                       type="button"
                                       onClick={(e) => handleCopyStudentNumber(e, st.student_number!, st.id)}
                                       title={lang === 'zh' ? '点击复制学号' : 'Click to copy student number'}
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition-colors cursor-pointer group shrink-0"
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-mono font-medium bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition-colors cursor-pointer group shrink-0"
                                     >
                                       <span>{st.student_number}</span>
                                       {copiedStudentId === st.id ? (
@@ -546,7 +546,7 @@ export function ClassStudentsPanel({
                                     }
                                     return (
                                       <span
-                                        className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-bold border ${style}`}
+                                        className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-xs font-bold border ${style}`}
                                         title={
                                           lang === 'zh' ? '有私密备忘录' : 'Confidential teacher observations available'
                                         }
@@ -561,7 +561,7 @@ export function ClassStudentsPanel({
                                     if (avg30 !== null) {
                                       return (
                                         <span
-                                          className="inline-flex items-center gap-0.5 bg-red-50 text-red-700 border border-red-200 px-1 py-0.5 rounded text-[9px] font-bold animate-pulse"
+                                          className="inline-flex items-center gap-0.5 bg-red-50 text-red-700 border border-red-200 px-1 py-0.5 rounded text-xs font-bold animate-pulse"
                                           title={
                                             lang === 'zh'
                                               ? `30天平均成绩已降至60%以下 (${avg30}%)`
@@ -576,7 +576,7 @@ export function ClassStudentsPanel({
                                     return null;
                                   })()}
                                 </div>
-                                {st.email && <span className="text-[9px] text-gray-400">{st.email}</span>}
+                                {st.email && <span className="text-xs text-gray-400">{st.email}</span>}
                               </div>
                             </div>
                             <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -602,7 +602,7 @@ export function ClassStudentsPanel({
                               >
                                 <Trash2 size={13} />
                               </button>
-                              <span className="text-[10px] text-gray-400 font-medium">Student</span>
+                              <span className="text-xs text-gray-400 font-medium">Student</span>
                             </div>
                           </div>
                           {isStExpanded && (
@@ -617,7 +617,7 @@ export function ClassStudentsPanel({
                                     e.stopPropagation();
                                     setStudentActiveTabs((prev) => ({ ...prev, [st.id]: 'progress' }));
                                   }}
-                                  className={`flex-1 py-1 px-2 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
+                                  className={`flex-1 py-1 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
                                     stActiveTab === 'progress'
                                       ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/50'
                                       : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
@@ -631,7 +631,7 @@ export function ClassStudentsPanel({
                                     e.stopPropagation();
                                     setStudentActiveTabs((prev) => ({ ...prev, [st.id]: 'settings' }));
                                   }}
-                                  className={`flex-1 py-1 px-2 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
+                                  className={`flex-1 py-1 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
                                     stActiveTab === 'settings'
                                       ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/50'
                                       : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
@@ -645,7 +645,7 @@ export function ClassStudentsPanel({
                                     e.stopPropagation();
                                     setStudentActiveTabs((prev) => ({ ...prev, [st.id]: 'notes' }));
                                   }}
-                                  className={`flex-1 py-1 px-2 rounded-lg text-[10px] font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
+                                  className={`flex-1 py-1 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
                                     stActiveTab === 'notes'
                                       ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/50'
                                       : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
@@ -658,12 +658,12 @@ export function ClassStudentsPanel({
 
                               {stActiveTab === 'settings' ? (
                                 <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
-                                  <div className="mt-1 flex items-center justify-between text-[11px] p-1.5 bg-gray-150/35 rounded border border-gray-100">
+                                  <div className="mt-1 flex items-center justify-between text-xs p-1.5 bg-gray-150/35 rounded border border-gray-100">
                                     <span className="font-semibold text-gray-600">
                                       {lang === 'zh' ? '专注模式锁定(强制课程):' : 'Focus Mode Lock (Force Lesson):'}
                                     </span>
                                     <select
-                                      className="border rounded text-[11px] p-1 bg-white focus:ring-1 focus:ring-indigo-500 font-sans cursor-pointer text-gray-700"
+                                      className="border rounded text-xs p-1 bg-white focus:ring-1 focus:ring-indigo-500 font-sans cursor-pointer text-gray-700"
                                       value={st.locked_lesson_id || ''}
                                       onChange={async (e) => {
                                         const val = e.target.value === '' ? null : e.target.value;
@@ -687,14 +687,14 @@ export function ClassStudentsPanel({
                                     </select>
                                   </div>
 
-                                  <div className="flex items-center justify-between text-[11px] p-1.5 bg-gray-150/35 rounded border border-gray-100 mt-1">
+                                  <div className="flex items-center justify-between text-xs p-1.5 bg-gray-150/35 rounded border border-gray-100 mt-1">
                                     <span className="font-semibold text-gray-600">
                                       {lang === 'zh' ? '该生学号 (登录账号):' : 'Student Number (Login ID):'}
                                     </span>
                                     <div className="flex items-center gap-1">
                                       <input
                                         type="text"
-                                        className="border rounded text-[11px] p-1 bg-white focus:ring-1 focus:ring-indigo-500 font-mono w-28 text-center select-all text-gray-750"
+                                        className="border rounded text-xs p-1 bg-white focus:ring-1 focus:ring-indigo-500 font-mono w-28 text-center select-all text-gray-750"
                                         value={st.student_number || ''}
                                         placeholder={lang === 'zh' ? '未分配学号' : 'No number'}
                                         onChange={async (e) => {
@@ -741,13 +741,13 @@ export function ClassStudentsPanel({
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center justify-between text-[11px] p-1.5 bg-gray-150/35 rounded border border-gray-100 mt-1">
+                                  <div className="flex items-center justify-between text-xs p-1.5 bg-gray-150/35 rounded border border-gray-100 mt-1">
                                     <span className="font-semibold text-gray-600">
                                       {lang === 'zh' ? '该生个人登录密码:' : 'Personal Login Password:'}
                                     </span>
                                     <input
                                       type="text"
-                                      className="border rounded text-[11px] p-1 bg-white focus:ring-1 focus:ring-indigo-500 font-mono w-28 text-center select-all text-gray-750"
+                                      className="border rounded text-xs p-1 bg-white focus:ring-1 focus:ring-indigo-500 font-mono w-28 text-center select-all text-gray-750"
                                       value={st.password || '123456'}
                                       onChange={async (e) => {
                                         const newPwd = e.target.value;
@@ -767,7 +767,7 @@ export function ClassStudentsPanel({
                                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                                     <select
                                       id={`assign-lesson-class-${st.id}`}
-                                      className="border rounded text-[11px] p-1 flex-1 bg-white focus:ring-1 focus:ring-indigo-500 font-sans cursor-pointer text-gray-700"
+                                      className="border rounded text-xs p-1 flex-1 bg-white focus:ring-1 focus:ring-indigo-500 font-sans cursor-pointer text-gray-700"
                                     >
                                       <option value="">
                                         -- {lang === 'zh' ? '分配独立拓展课程' : 'Assign Independent Course'} --
@@ -866,7 +866,7 @@ export function ClassStudentsPanel({
                                               style={{ width: `${p.progress_percent}%` }}
                                             ></div>
                                           </div>
-                                          <span className="text-[9px] text-gray-400 w-6 text-right shrink-0 font-medium font-sans">
+                                          <span className="text-xs text-gray-400 w-6 text-right shrink-0 font-medium font-sans">
                                             {p.progress_percent}%
                                           </span>
                                         </div>

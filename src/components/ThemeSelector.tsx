@@ -59,7 +59,7 @@ export function ThemeSelector({ lang = 'zh' }: ThemeSelectorProps) {
               <div className="text-xs font-semibold text-main uppercase tracking-wider">
                 {lang === 'zh' ? '界面主题模式' : 'Interface Theme'}
               </div>
-              <div className="text-2xs text-muted mt-0.5">
+              <div className="text-xs text-muted mt-0.5">
                 {lang === 'zh' ? '针对不同教学采光与场景优化' : 'Optimized for diverse lighting'}
               </div>
             </div>
@@ -88,7 +88,7 @@ export function ThemeSelector({ lang = 'zh' }: ThemeSelectorProps) {
                       />
                       <div>
                         <div className="font-medium text-main leading-none">{item.label}</div>
-                        <div className="text-3xs text-muted mt-1 leading-tight opacity-80">{item.description}</div>
+                        <div className="text-xs text-muted mt-1 leading-tight opacity-80">{item.description}</div>
                       </div>
                     </div>
                     {isActive && <Check size={14} className="text-primary-theme shrink-0" />}

@@ -291,7 +291,7 @@ export function StudentPrivateNotesEditor({
   return (
     <div className="flex flex-col bg-slate-50 rounded-xl border border-slate-200/60 overflow-hidden shadow-xs h-full text-gray-800">
       {/* Informational Warning Alert */}
-      <div className="bg-amber-50/70 border-b border-amber-100 px-3 py-2 text-[10px] md:text-xs text-amber-800 flex items-center justify-between shrink-0 select-none">
+      <div className="bg-amber-50/70 border-b border-amber-100 px-3 py-2 text-xs md:text-xs text-amber-800 flex items-center justify-between shrink-0 select-none">
         <span className="flex items-center gap-1.5 font-medium">
           <EyeOff size={13} className="text-amber-600 animate-pulse" />
           <span className="font-semibold text-amber-900">
@@ -302,7 +302,7 @@ export function StudentPrivateNotesEditor({
             ? '此内容仅对教师端可见，学生端完全屏蔽/不呈现'
             : 'Notes are secure, strictly hidden from the student portal.'}
         </span>
-        <span className="flex items-center gap-1 text-[10px] bg-amber-100/65 text-amber-905 px-1.5 py-0.5 rounded-md border border-amber-200">
+        <span className="flex items-center gap-1 text-xs bg-amber-100/65 text-amber-905 px-1.5 py-0.5 rounded-md border border-amber-200">
           <Lock size={10} />
           {lang === 'zh' ? '已加密' : 'Confidential'}
         </span>
@@ -312,7 +312,7 @@ export function StudentPrivateNotesEditor({
       <div className="bg-slate-55 border-b border-gray-150 p-2 px-3 flex flex-col md:flex-row md:items-center justify-between gap-1.5 shrink-0 select-none">
         <div className="flex items-center gap-1.5">
           <Tag size={12} className="text-slate-400" />
-          <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-slate-500">
+          <span className="text-xs md:text-xs font-bold uppercase tracking-wider text-slate-500">
             {lang === 'zh' ? '选择备忘分类' : 'Observation Category'}:
           </span>
         </div>
@@ -323,7 +323,7 @@ export function StudentPrivateNotesEditor({
               <button
                 key={cat.key}
                 onClick={() => handleCategoryChange(cat.key)}
-                className={`px-2.5 py-0.5 text-[10px] font-semibold rounded-full border flex items-center gap-1 cursor-pointer transition-all duration-200 ${
+                className={`px-2.5 py-0.5 text-xs font-semibold rounded-full border flex items-center gap-1 cursor-pointer transition-all duration-200 ${
                   isSelected
                     ? `${cat.color.split(' ')[0]} ${cat.color.split(' ')[1]} border-indigo-400 ring-2 ring-indigo-50 font-bold scale-[1.03]`
                     : 'bg-white text-gray-500 border-gray-200/80 hover:bg-gray-50 hover:text-gray-700'
@@ -369,14 +369,14 @@ export function StudentPrivateNotesEditor({
           {/* Heading structures */}
           <button
             onClick={() => format('formatBlock', '<h2>')}
-            className="p-1 px-1.5 text-[10px] font-bold text-gray-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors flex items-center"
+            className="p-1 px-1.5 text-xs font-bold text-gray-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors flex items-center"
             title={lang === 'zh' ? '大标题 H2' : 'Heading 2'}
           >
             <Heading1 size={13} />
           </button>
           <button
             onClick={() => format('formatBlock', '<h3>')}
-            className="p-1 px-1.5 text-[10px] font-bold text-gray-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors flex items-center"
+            className="p-1 px-1.5 text-xs font-bold text-gray-500 hover:text-slate-900 hover:bg-slate-100 rounded transition-colors flex items-center"
             title={lang === 'zh' ? '中标题 H3' : 'Heading 3'}
           >
             <Heading2 size={13} />
@@ -426,7 +426,7 @@ export function StudentPrivateNotesEditor({
           </button>
           <button
             onClick={() => format('removeFormat')}
-            className="p-1 px-1.5 text-[9px] font-bold text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all"
+            className="p-1 px-1.5 text-xs font-bold text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all"
             title={lang === 'zh' ? '清除格式' : 'Clear Formatting'}
           >
             Txt
@@ -436,7 +436,7 @@ export function StudentPrivateNotesEditor({
         {/* Clear block */}
         <button
           onClick={clearEditor}
-          className="text-[10px] text-gray-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors font-medium flex items-center gap-1 cursor-pointer"
+          className="text-xs text-gray-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition-colors font-medium flex items-center gap-1 cursor-pointer"
           title={lang === 'zh' ? '清空所有文档' : 'Clear Dossier'}
         >
           <Trash2 size={12} />
@@ -448,7 +448,7 @@ export function StudentPrivateNotesEditor({
       <div className="flex-1 flex min-h-0 divide-x divide-gray-150">
         {/* WYSIWYG Editable Sheet */}
         <div className="flex-1 flex flex-col p-3 bg-white overflow-hidden relative">
-          <div className="text-[10px] font-bold text-gray-450 tracking-wider flex items-center gap-1.5 mb-2 select-none border-b border-gray-50 pb-1">
+          <div className="text-xs font-bold text-gray-450 tracking-wider flex items-center gap-1.5 mb-2 select-none border-b border-gray-50 pb-1">
             <FileText size={11} className="text-indigo-400" />
             <span>
               {studentName} — {lang === 'zh' ? '专属备忘档案' : 'Confidential Profile Notes'}
@@ -476,7 +476,7 @@ export function StudentPrivateNotesEditor({
 
         {/* Quick Insert Templates Panel */}
         <div className="w-48 bg-slate-50 flex flex-col p-2.5 overflow-y-auto shrink-0 select-none">
-          <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-2.5 border-b border-slate-200 pb-1.5">
+          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1 mb-2.5 border-b border-slate-200 pb-1.5">
             <Sparkles size={11} className="text-amber-500 animate-pulse" />
             <span>{lang === 'zh' ? '课堂评估模板' : 'Observation Templates'}</span>
           </div>
@@ -488,15 +488,15 @@ export function StudentPrivateNotesEditor({
                 onClick={() => insertTemplate(tpl.content)}
                 className="w-full text-left bg-white hover:bg-indigo-50/70 border border-slate-200 hover:border-indigo-200 rounded-lg p-2 transition-all duration-200 shadow-3xs cursor-pointer flex flex-col gap-1 hover:shadow-xs hover:translate-x-0.5"
               >
-                <span className="text-[11px] font-semibold text-slate-700 truncate w-full">{tpl.title}</span>
-                <span className="text-[9px] text-slate-400 line-clamp-2 leading-tight">
+                <span className="text-xs font-semibold text-slate-700 truncate w-full">{tpl.title}</span>
+                <span className="text-xs text-slate-400 line-clamp-2 leading-tight">
                   {lang === 'zh' ? '一键置入预设段落结构' : 'Insert observation scaffolding.'}
                 </span>
               </button>
             ))}
           </div>
 
-          <div className="mt-auto pt-3 border-t border-slate-200 text-[9px] text-slate-400 leading-tight">
+          <div className="mt-auto pt-3 border-t border-slate-200 text-xs text-slate-400 leading-tight">
             <Clock size={10} className="inline mr-1" />
             {lang === 'zh' ? '备注采用实时保存' : 'Save draft manually or auto.'}
           </div>
@@ -507,19 +507,19 @@ export function StudentPrivateNotesEditor({
       <div className="bg-slate-100 border-t border-slate-200 p-2 px-3 flex items-center justify-between shrink-0 select-none">
         <div className="flex items-center gap-1.5">
           {hasUnsavedChanges ? (
-            <div className="flex items-center gap-1 text-[10px] text-amber-600 font-semibold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+            <div className="flex items-center gap-1 text-xs text-amber-600 font-semibold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
               <SquareDot size={10} className="animate-ping" />
               <span>{lang === 'zh' ? '未保存的编辑' : 'Unsaved Changes'}</span>
             </div>
           ) : (
-            <div className="flex items-center gap-1 text-[10px] text-emerald-600 font-semibold bg-emerald-50 border border-emerald-150 px-1.5 py-0.5 rounded-full">
+            <div className="flex items-center gap-1 text-xs text-emerald-600 font-semibold bg-emerald-50 border border-emerald-150 px-1.5 py-0.5 rounded-full">
               <Check size={11} />
               <span>{lang === 'zh' ? '所有更改已同步' : 'Changes Synchronized'}</span>
             </div>
           )}
 
           {saveSuccess && (
-            <span className="text-[10px] text-green-600 font-bold animate-pulse">
+            <span className="text-xs text-green-600 font-bold animate-pulse">
               ✓ {lang === 'zh' ? '保存成功!' : 'Saved successfully!'}
             </span>
           )}

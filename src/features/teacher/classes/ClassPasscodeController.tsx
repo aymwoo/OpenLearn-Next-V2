@@ -19,7 +19,7 @@ export function ClassPasscodeController({ cls, lang, fetchClasses }: ClassPassco
             {lang === 'zh' ? '临时班级密码 (支持学生快速一键密码登录)' : 'Temporary Class Passcode'}
           </span>
         </div>
-        <p className="text-[10px] text-indigo-600/80 font-semibold leading-relaxed text-left block">
+        <p className="text-xs text-indigo-600/80 font-semibold leading-relaxed text-left block">
           {lang === 'zh'
             ? '开始课堂后，全班学生均可使用此特定临时密码统一安全登录，无需强制输入个人自设密码。'
             : 'Once set, any pupil in this class can use this temporary passcode to log in directly.'}
@@ -55,7 +55,7 @@ export function ClassPasscodeController({ cls, lang, fetchClasses }: ClassPassco
             });
             await fetchClasses();
           }}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] p-2 py-1.5 font-black shadow-xs transition-all hover:shadow-sm cursor-pointer shrink-0"
+          className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs p-2 py-1.5 font-black shadow-xs transition-all hover:shadow-sm cursor-pointer shrink-0"
           title={lang === 'zh' ? '随机生成班级密码' : 'Generate random passcode'}
         >
           {lang === 'zh' ? '随机生成' : 'Random Gen'}
@@ -71,7 +71,7 @@ export function ClassPasscodeController({ cls, lang, fetchClasses }: ClassPassco
               });
               await fetchClasses();
             }}
-            className="bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-[10px] p-2 py-1.5 font-bold shadow-xs transition-colors cursor-pointer shrink-0"
+            className="bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs p-2 py-1.5 font-bold shadow-xs transition-colors cursor-pointer shrink-0"
             title={lang === 'zh' ? '清除临时密码' : 'Clear temporary passcode'}
           >
             {lang === 'zh' ? '清除' : 'Clear'}

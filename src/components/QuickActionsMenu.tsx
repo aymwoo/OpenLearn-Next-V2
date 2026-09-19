@@ -249,7 +249,7 @@ export function QuickActionsMenu({
             <div className="p-5 max-h-[480px] overflow-y-auto bg-gray-50/50">
               {currentView === 'menu' && (
                 <div className="space-y-4">
-                  <p className="text-[11px] text-gray-500 leading-relaxed font-medium bg-indigo-50/50 border border-indigo-100 p-2.5 rounded-lg mb-4">
+                  <p className="text-xs text-gray-500 leading-relaxed font-medium bg-indigo-50/50 border border-indigo-100 p-2.5 rounded-lg mb-4">
                     {t.quickDesc}
                   </p>
 
@@ -266,7 +266,7 @@ export function QuickActionsMenu({
                       <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1 group-hover:text-indigo-600 transition-colors uppercase tracking-wider">
                         {t.scheduleClass}
                       </h4>
-                      <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{t.scheduleDesc}</p>
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t.scheduleDesc}</p>
                     </div>
                   </div>
 
@@ -283,7 +283,7 @@ export function QuickActionsMenu({
                       <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1 group-hover:text-purple-600 transition-colors uppercase tracking-wider">
                         {t.generateAssignment}
                       </h4>
-                      <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{t.generateDesc}</p>
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t.generateDesc}</p>
                     </div>
                   </div>
 
@@ -300,7 +300,7 @@ export function QuickActionsMenu({
                       <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1 group-hover:text-emerald-600 transition-colors uppercase tracking-wider">
                         {t.createLesson}
                       </h4>
-                      <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{t.createDesc}</p>
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">{t.createDesc}</p>
                     </div>
                   </div>
                 </div>
@@ -326,7 +326,7 @@ export function QuickActionsMenu({
                     >
                       <CheckCircle2 size={48} className="text-green-500 animate-bounce mb-3" />
                       <h4 className="font-bold text-green-800 text-sm">{currentSuccessMsg()}</h4>
-                      <p className="text-[11px] text-gray-400 mt-1">Returning to action console...</p>
+                      <p className="text-xs text-gray-400 mt-1">Returning to action console...</p>
                     </motion.div>
                   ) : (
                     <form onSubmit={handleSubmit} className="space-y-4">
