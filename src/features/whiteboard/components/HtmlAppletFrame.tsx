@@ -3,7 +3,8 @@ import { wrapSrcDocWithBridge } from '../utils/bridgeUtils';
 import { coursewareSourceRegistry } from '../courseware/courseware-source-registry';
 import { useCoursewareFrameMount } from '../courseware/courseware-frame-limiter';
 import { useThemeStore, getThemeTokens } from '../../../store/themeStore';
-import { broadcastThemeToIframes } from '../../../services/lms-bridge';
+import { useFontSizeStore } from '../../../store/fontSizeStore';
+import { broadcastThemeToIframes, broadcastFontScaleToIframes } from '../../../services/lms-bridge';
 import type { HtmlAppletPayload } from '../canvas-model/types';
 
 export interface HtmlAppletFrameProps {
@@ -28,9 +29,11 @@ export function HtmlAppletFrame({ data, lessonId, className, title, lazy = true 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const mounted = useCoursewareFrameMount(lazy, containerRef);
   const { theme } = useThemeStore();
+  const { scale } = useFontSizeStore();
 
   const handleIframeLoad = () => {
     broadcastThemeToIframes(theme, getThemeTokens(theme));
+    broadcastFontScaleToIframes(scale);
   };
 
   const customSrc = coursewareSourceRegistry.resolve(data, { lessonId });
@@ -50,7 +53,7 @@ export function HtmlAppletFrame({ data, lessonId, className, title, lazy = true 
           sandbox="allow-scripts allow-forms allow-downloads"
           referrerPolicy="no-referrer"
           title={title ?? data.title ?? 'Interactive Courseware'}
-          credentialless={true}
+          credentialless="true"
           onLoad={handleIframeLoad}
         />
       ) : (

@@ -127,6 +127,7 @@ export function LiveClassroomView({
   const studentWindowRef = useRef<Window | null>(null);
   const [isStudentWindowOpen, setIsStudentWindowOpen] = useState(false);
   const syncChannelRef = useRef<ClassroomSyncChannel | null>(null);
+  const [liveClassFullscreenElementId, setLiveClassFullscreenElementId] = useState<string | null>(null);
 
   // Interactive courseware submission states
   const [middleTab, setMiddleTab] = useState<'whiteboard' | 'submissions' | 'assignment'>('whiteboard');
@@ -307,6 +308,7 @@ export function LiveClassroomView({
           liveClassTimeRemaining,
           liveClassSelectedClassId,
           liveClassIsActive,
+          fullscreenElementId: liveClassFullscreenElementId,
         });
       } else if (msg.type === 'STUDENT_ACKNOWLEDGE_PICK') {
         const studentId = msg.payload.studentId;
@@ -1031,6 +1033,10 @@ export function LiveClassroomView({
                       isEditMode={false}
                       broadcastFullscreen
                       fullscreenBroadcastClassId={liveClassSelectedClassId}
+                      onFullscreenSync={(elId: string | null) => {
+                        setLiveClassFullscreenElementId(elId);
+                        syncChannelRef.current?.broadcastFullscreen(elId, selectedLesson || undefined);
+                      }}
                       elements={elements}
                       activeSegmentId={activeSegmentId}
                       onSegmentSync={(segId: string) => setActiveSegmentId(segId)}

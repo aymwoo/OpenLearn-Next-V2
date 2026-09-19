@@ -133,3 +133,31 @@
 @utility border-primary-theme {
   border-color: var(--color-primary);
 }
+
+/* ── 全局字体缩放响应规则 (支持像素级类名与微型字号等比缩放) ── */
+:root {
+  --app-font-scale: 1;
+}
+
+[data-font-scale] [class*='text-[6px]'] { font-size: calc(6px * var(--app-font-scale, 1)) !important; }
+[data-font-scale] [class*='text-[7px]'] { font-size: calc(7px * var(--app-font-scale, 1)) !important; }
+[data-font-scale] [class*='text-[8px]'] { font-size: calc(8px * var(--app-font-scale, 1)) !important; }
+[data-font-scale] [class*='text-[8.5px]'] { font-size: calc(8.5px * var(--app-font-scale, 1)) !important; }
+[data-font-scale] [class*='text-[9px]'] { font-size: calc(9px * var(--app-font-scale, 1)) !important; }
+[data-font-scale] [class*='text-[9.5px]'] { font-size: calc(9.5px * var(--app-font-scale, 1)) !important; }
+[data-font-scale] [class*='text-[10px]'] { font-size: calc(10px * var(--app-font-scale, 1)) !important; }
+[data-font-scale] [class*='text-[11px]'] { font-size: calc(11px * var(--app-font-scale, 1)) !important; }
+[data-font-scale] [class*='text-[11.5px]'] { font-size: calc(11.5px * var(--app-font-scale, 1)) !important; }
+[data-font-scale] [class*='text-[12px]'] { font-size: calc(12px * var(--app-font-scale, 1)) !important; }
+[data-font-scale] [class*='text-[13px]'] { font-size: calc(13px * var(--app-font-scale, 1)) !important; }
+[data-font-scale] [class*='text-[14px]'] { font-size: calc(14px * var(--app-font-scale, 1)) !important; }
+[data-font-scale] [class*='text-[15px]'] { font-size: calc(15px * var(--app-font-scale, 1)) !important; }
+
+@utility text-2xs {
+  font-size: calc(0.6875rem * var(--app-font-scale, 1));
+}
+
+@utility text-3xs {
+  font-size: calc(0.5625rem * var(--app-font-scale, 1));
+}
+

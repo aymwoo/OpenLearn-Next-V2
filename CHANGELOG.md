@@ -10,7 +10,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **全局字体缩放无障碍辅助功能 (Global Font Size Scaling & Accessibility)**:
+  - **全局字号状态管理 (`fontSizeStore`)**：基于 Zustand 构建字号缩放状态机（支持 80%、90%、100%、110%、125%、150%），状态自动持久化至 `localStorage`；
+  - **全站 CSS 变量与视图穿透生效**：通过 `--font-scale` 变量联动根节点 `html` 与主要工作区样式，并向所有沙箱课件 `iframe` 广播字号缩放指令（`broadcastFontScaleToIframes`）；
+  - **顶栏统一控制交互 (`FontSizeSelector`)**：在系统全局顶栏集成快捷调节器，并移除非顶部的冗余按钮（如白板与课程编辑器工具栏），保障操作界面纯净统一。
+
 ### Fixes
+
+- **交互网页课件任意文件名 404 与自愈恢复机制 (Arbitrary HTML Courseware Entry & Self-Healing)**:
+  - **缺陷**：在属性编辑器中选择单文件 HTML 课件时，系统固定寻址 `index.html`；若课件文件名为中文或自定义命名（如 `自适应五子棋.html`、`约翰·斯诺的霍乱地图.html`），运行时报错 `File not found: index.html`；且仅存放在 `system_resources` 原生表的课件在磁盘缺少物理文件时无法直接运行；
+  - **修复**：
+    - `bridge.ts`: 增加智能入口扫描与回退机制，当指定 `subpath`（如 `index.html`）不存在时，智能扫描目标根目录与首层子目录下的 `.html` 文件并正常直出；自动在磁盘生成 `index.html` 镜像并自愈更新数据库 `courseware.entry`；若磁盘目录不存在，自动回溯至 `system_resources` 原生表还原物理文件；
+    - `resources.ts`: 单页 HTML 动态登记时保留原始 `.html` 文件名作为 `entry` 并向磁盘双写；
+    - `builtin.ts`: 课件上传与 AI 改写版本生成时保留真实文件名并双写 `index.html` 软副本；
+    - `bootstrap-db.ts`: 启动时执行自愈迁移，自动将 `system_resources` 同步至 `courseware` 并纠正历史硬编码。
+  - **测试覆盖**：新增 `server/__tests__/bridge.test.ts`，覆盖任意命名直出、入口自愈、系统资源还原与 404 兜底场景。
+
+- **Iframe credentialless 属性 React 渲染警告修复**:
+  - `HtmlAppletFrame.tsx`: 将 `credentialless` 属性从布尔值 `true` 调整为字符串 `"true"`，彻底消除 React 19 控制台关于 `Received true for a non-boolean attribute credentialless` 的警告。
+
+- **白板组件最大化学生端实时同步 (Whiteboard Fullscreen Component Student Sync)**:
+  - 教师在课堂白板中最大化展示特定教学组件（如互动课件、代码沙箱）时，状态经由 `ClassroomSyncChannel` 与 Socket.IO 即时广播，学生端（包括独立标签页）实时同步全屏展示，并支持取消还原；
+  - 补齐回归测试用例 `whiteboard-fullscreen-sync.test.tsx`。
 
 - **CI 与发布流水线假绿修复 (CI & Publish Pipeline Integrity)**:
   - **`ci.yml` 从未真正运行过检查**：`cache: 'npm'` + `npm ci` 用在 pnpm workspace 上（仓库只有 `pnpm-lock.yaml`，无 `package-lock.json`），每次都在第一步以 `ENOLOCK` 失败，`tsc` / `vitest` 根本没跑。现改为 `pnpm/action-setup@v4` + `cache: 'pnpm'` + `pnpm install --frozen-lockfile`，并改用 `pnpm lint` / `pnpm test`；

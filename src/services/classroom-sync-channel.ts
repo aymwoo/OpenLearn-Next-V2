@@ -15,6 +15,7 @@ export interface LiveClassSyncState {
   liveClassTimeRemaining: number;
   liveClassSelectedClassId: string | null;
   liveClassIsActive: boolean;
+  fullscreenElementId?: string | null;
 }
 
 export type ClassroomSyncMessage =
@@ -26,6 +27,7 @@ export type ClassroomSyncMessage =
   | { type: 'TEACHER_PICK_STUDENT'; payload: { studentId: string; studentName: string } }
   | { type: 'TEACHER_SYNC_TIMER'; payload: { timeRemaining: number; isRunning: boolean } }
   | { type: 'TEACHER_PING_STUDENT'; payload: { studentId: string; message?: string } }
+  | { type: 'TEACHER_BROADCAST_FULLSCREEN'; payload: { elementId: string | null; lessonId?: string } }
   | { type: 'STUDENT_HANDSHAKE_REQUEST' }
   | { type: 'STUDENT_ACKNOWLEDGE_PICK'; payload: { studentId: string } }
   | { type: 'STUDENT_HEARTBEAT'; payload: { studentId: string; timestamp: number } };
@@ -107,6 +109,10 @@ export class ClassroomSyncChannel {
 
   public broadcastPingStudent(studentId: string, message?: string): void {
     this.postMessage({ type: 'TEACHER_PING_STUDENT', payload: { studentId, message } });
+  }
+
+  public broadcastFullscreen(elementId: string | null, lessonId?: string): void {
+    this.postMessage({ type: 'TEACHER_BROADCAST_FULLSCREEN', payload: { elementId, lessonId } });
   }
 
   // ── 学生端快捷回传方法 ───────────────────────────────────────────────

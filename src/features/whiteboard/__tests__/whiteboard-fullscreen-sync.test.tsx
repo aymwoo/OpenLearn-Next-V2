@@ -170,12 +170,65 @@ describe('教师端最大化 → 学生端同步', () => {
       expect(fullscreenEmissions()).toEqual([null]);
     });
 
+    it('calls onFullscreenSync callback with elementId on maximize and null on close', () => {
+      const onFullscreenSync = vi.fn();
+      renderBoard({ userRole: 'teacher', broadcastFullscreen: true, onFullscreenSync });
+
+      fireEvent.click(screen.getByTitle('全屏'));
+      expect(onFullscreenSync).toHaveBeenCalledWith('el-assign-1');
+
+      fireEvent.click(screen.getByText('退出全屏'));
+      expect(onFullscreenSync).toHaveBeenCalledWith(null);
+    });
+
     it('does not broadcast when broadcastFullscreen is not enabled (e.g. lesson editor)', () => {
       renderBoard({ userRole: 'teacher' });
 
       fireEvent.click(screen.getByTitle('全屏'));
 
       expect(fullscreenEmissions()).toEqual([]);
+    });
+
+    it('does not re-broadcast a null reset when the parent merely re-renders', () => {
+      // 回归：调用方多以 inline arrow 传入 onFullscreenSync（见 LiveClassroomView），
+      // 每次渲染都是新引用。它原本位于 cleanup effect 的依赖数组中，导致父组件
+      // **每次重渲染**都会拆解重跑 effect、反复广播 elementId: null，
+      // 把教师刚建立的最大化视图在学生端取消掉。
+      const onFullscreenSync = vi.fn();
+
+      function Host() {
+        const [, force] = React.useState(0);
+        return (
+          <>
+            <button onClick={() => force((n) => n + 1)}>force-parent-rerender</button>
+            <InteractiveWhiteboard
+              lessonId="l1"
+              elements={ELEMENTS}
+              userRole="teacher"
+              broadcastFullscreen
+              // 每次渲染都是新函数引用，复刻 LiveClassroomView 的写法
+              onFullscreenSync={(elId: string | null) => onFullscreenSync(elId)}
+              onElementAdd={vi.fn(async () => {})}
+              onRefresh={vi.fn()}
+            />
+          </>
+        );
+      }
+
+      render(<Host />);
+      act(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
+
+      fireEvent.click(screen.getByTitle('全屏'));
+      fakeSocket.emit.mockClear();
+      onFullscreenSync.mockClear();
+
+      // 一次与最大化无关的父组件重渲染（LiveClassroomView 的计时器/进度 tick 就是这种）
+      fireEvent.click(screen.getByText('force-parent-rerender'));
+
+      expect(fullscreenEmissions()).toEqual([]);
+      expect(onFullscreenSync).not.toHaveBeenCalledWith(null);
     });
   });
 

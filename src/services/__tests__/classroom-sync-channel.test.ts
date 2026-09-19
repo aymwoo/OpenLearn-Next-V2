@@ -120,4 +120,42 @@ describe('ClassroomSyncChannel', () => {
 
     channel.destroy();
   });
+
+  it('broadcasts and receives fullscreen synchronization messages', () => {
+    const channel = new ClassroomSyncChannel();
+    const received: any[] = [];
+    channel.onMessage((msg) => received.push(msg));
+
+    // 1. Fullscreen broadcast
+    channel.broadcastFullscreen('el-quiz-1', 'L1');
+    expect(received).toHaveLength(1);
+    expect(received[0]).toEqual({
+      type: 'TEACHER_BROADCAST_FULLSCREEN',
+      payload: { elementId: 'el-quiz-1', lessonId: 'L1' },
+    });
+
+    // 2. Exit fullscreen broadcast
+    channel.broadcastFullscreen(null, 'L1');
+    expect(received).toHaveLength(2);
+    expect(received[1]).toEqual({
+      type: 'TEACHER_BROADCAST_FULLSCREEN',
+      payload: { elementId: null, lessonId: 'L1' },
+    });
+
+    // 3. Handshake init state containing fullscreenElementId
+    channel.broadcastInitState({
+      selectedLesson: 'L1',
+      activeSegmentId: 'seg-1',
+      activeTab: 'whiteboard',
+      isClassLocked: true,
+      liveClassTimeRemaining: 240,
+      liveClassSelectedClassId: 'C1',
+      liveClassIsActive: true,
+      fullscreenElementId: 'el-quiz-1',
+    });
+    expect(received).toHaveLength(3);
+    expect(received[2].payload.fullscreenElementId).toBe('el-quiz-1');
+
+    channel.destroy();
+  });
 });

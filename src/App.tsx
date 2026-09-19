@@ -5,7 +5,9 @@ import { translations } from './i18n';
 import { LoginPage } from './components/LoginPage';
 import { AppHeader } from './components/AppHeader';
 import { ClassroomSyncChannel } from './services/classroom-sync-channel';
+import { whiteboardViewStore } from './store/whiteboardViewStore';
 import { ProfileModal } from './components/ProfileModal';
+import { FontSizeSelector } from './components/FontSizeSelector';
 import { PALETTE_ITEM_MAP, getPaletteItemConfig } from './features/teacher/lesson-editor/paletteConfig';
 import { generateTemplateContent } from './features/teacher/HelpView';
 
@@ -27,6 +29,7 @@ registerTeacherActivityCenter();
 import { PluginState } from './plugin-host/types';
 import { useAppStore, appStore } from './store/appStore';
 import { useThemeStore } from './store/themeStore';
+import { useFontSizeStore } from './store/fontSizeStore';
 import type {
   AIProvider,
   PluginType,
@@ -135,6 +138,25 @@ export default function App() {
 
   React.useEffect(() => {
     useThemeStore.getState().initTheme();
+    useFontSizeStore.getState().initFontSize();
+
+    // 全局快捷键支持：Ctrl + Alt + +/- 放大/缩小，Ctrl + Alt + 0 恢复标准字号
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.altKey) {
+        if (e.key === '+' || e.key === '=') {
+          e.preventDefault();
+          useFontSizeStore.getState().increaseScale();
+        } else if (e.key === '-' || e.key === '_') {
+          e.preventDefault();
+          useFontSizeStore.getState().decreaseScale();
+        } else if (e.key === '0') {
+          e.preventDefault();
+          useFontSizeStore.getState().resetScale();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   React.useEffect(() => {
@@ -1465,6 +1487,12 @@ export default function App() {
           if (s.liveClassTimeRemaining !== undefined) {
             setLiveClassTimeRemaining(s.liveClassTimeRemaining);
           }
+          if (s.fullscreenElementId !== undefined) {
+            whiteboardViewStore.getState().setRemoteFullscreenElementId(s.fullscreenElementId);
+            if (s.fullscreenElementId) {
+              setStudentLessonTab('whiteboard');
+            }
+          }
           setStudentViewStatus('lesson');
           break;
         }
@@ -1528,6 +1556,19 @@ export default function App() {
                 (lang === 'zh' ? '老师提醒您集中注意力跟上教学进度！' : 'Please keep up with class!'),
               'warning',
             );
+          }
+          break;
+        }
+        case 'TEACHER_BROADCAST_FULLSCREEN': {
+          const { elementId, lessonId } = msg.payload;
+          whiteboardViewStore.getState().setRemoteFullscreenElementId(elementId);
+          if (elementId) {
+            if (lessonId && lessonId !== selectedLesson) {
+              setSelectedLesson(lessonId);
+              fetchElements(lessonId);
+            }
+            setStudentViewStatus('lesson');
+            setStudentLessonTab('whiteboard');
           }
           break;
         }
@@ -1653,6 +1694,8 @@ export default function App() {
                       : `Follow Teacher: ${isFollowingTeacher ? 'ON' : 'OFF'}`}
                   </span>
                 </button>
+
+                <FontSizeSelector lang={lang} />
 
                 <button
                   type="button"

@@ -97,7 +97,7 @@ export async function runStartupMigrations(db: MigrationDb): Promise<void> {
     /* 列已存在 */
   }
 
-  // SEC-AUTH-03: 启动时清理过�? session
+  // SEC-AUTH-03: 启动时清理过? session
   try {
     const now = Date.now();
     const idleTimeout = 24 * 60 * 60 * 1000;
@@ -113,5 +113,29 @@ export async function runStartupMigrations(db: MigrationDb): Promise<void> {
     }
   } catch (e) {
     console.warn('[Session] Could not clean up expired sessions:', e);
+  }
+
+  // Self-heal: 自动同步 system_resources 到 courseware，并纠正历史记录中误将任意名 HTML 硬编码为 index.html 的问题
+  try {
+    db.exec(`
+      INSERT OR IGNORE INTO courseware (id, uuid, name, type, entry, created_at)
+      SELECT id, id, name, type,
+        CASE
+          WHEN name LIKE '%.html' OR name LIKE '%.htm' THEN name
+          ELSE 'index.html'
+        END,
+        created_at
+      FROM system_resources;
+    `);
+
+    db.exec(`
+      UPDATE courseware
+      SET entry = name
+      WHERE (entry = 'index.html' OR entry IS NULL OR entry = '')
+        AND (name LIKE '%.html' OR name LIKE '%.htm');
+    `);
+    console.log('[Courseware] Courseware entries and system_resources synced successfully.');
+  } catch (e) {
+    console.warn('[Courseware] Could not self-heal courseware entries:', e);
   }
 }

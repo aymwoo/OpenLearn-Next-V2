@@ -5,6 +5,7 @@ import { WhiteboardToolbar } from '../components/WhiteboardToolbar';
 import { WhiteboardDialog } from '../components/WhiteboardDialog';
 import { RollCallWrapper } from '../widgets/RollCallWrapper';
 import { wrapSrcDocWithBridge } from '../utils/bridgeUtils';
+import { HtmlAppletFrame } from '../components/HtmlAppletFrame';
 
 // Mock ExtensionPointRenderer to avoid needing full PluginHostContext in unit test
 vi.mock('../../../plugin-host/extension-point-renderer', () => ({
@@ -140,6 +141,22 @@ describe('Whiteboard Extracted Components & Utilities', () => {
       expect(within(container).getByText(/随机点名助手/)).toBeDefined();
       expect(within(container).getByText('开始随机点名')).toBeDefined();
       expect(within(container).queryByTitle('删除组件')).toBeNull();
+    });
+  });
+
+  describe('HtmlAppletFrame', () => {
+    it('should render iframe with credentialless="true" attribute', () => {
+      const { container } = render(
+        <HtmlAppletFrame
+          data={{ title: 'Test Applet', code: '<div>Test</div>' }}
+          lessonId="lesson-1"
+        />,
+      );
+      const iframe = container.querySelector('iframe');
+      expect(iframe).not.toBeNull();
+      expect(iframe?.getAttribute('credentialless')).toBe('true');
+      expect(iframe?.getAttribute('sandbox')).toContain('allow-scripts');
+      expect(iframe?.getAttribute('referrerpolicy')).toBe('no-referrer');
     });
   });
 });

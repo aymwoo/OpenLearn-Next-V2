@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { UserMenu } from './UserMenu';
 import { ThemeSelector } from './ThemeSelector';
+import { FontSizeSelector } from './FontSizeSelector';
 
 export interface AppHeaderProps {
   activeRole: 'teacher' | 'student';
@@ -318,6 +319,7 @@ export function AppHeader(props: AppHeaderProps) {
           <Globe size={16} />
         </button>
 
+        <FontSizeSelector lang={lang} />
         <ThemeSelector lang={lang} />
 
         {/* Database Connection Status Icon Indicator */}

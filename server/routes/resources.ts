@@ -34,12 +34,35 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       if (!resource) return res.status(404).send('Resource not found');
 
       if (resource.type === 'html') {
+        const entryName =
+          resource.name && (resource.name.endsWith('.html') || resource.name.endsWith('.htm'))
+            ? path.basename(resource.name.replace(/\\/g, '/'))
+            : 'index.html';
+
         // Dynamic registration into courseware
         const existingCw = kernelContainer.db.prepare('SELECT id FROM courseware WHERE id = ?').get(resource.id);
         if (!existingCw) {
           kernelContainer.db
             .prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-            .run(resource.id, resource.id, resource.name, 'html', 'index.html', resource.created_at || Date.now());
+            .run(resource.id, resource.id, resource.name, 'html', entryName, resource.created_at || Date.now());
+        }
+
+        // 确保 storage/courseware 物理目录就绪，同时写入命名文件与 index.html 双重兜底
+        try {
+          const storageDir = path.resolve(process.cwd(), 'storage', 'courseware', resource.id);
+          if (!fs.existsSync(storageDir)) {
+            fs.mkdirSync(storageDir, { recursive: true });
+          }
+          const namedPath = path.resolve(storageDir, entryName);
+          if (!fs.existsSync(namedPath)) {
+            fs.writeFileSync(namedPath, resource.content || '', 'utf8');
+          }
+          const indexHtmlPath = path.resolve(storageDir, 'index.html');
+          if (!fs.existsSync(indexHtmlPath)) {
+            fs.writeFileSync(indexHtmlPath, resource.content || '', 'utf8');
+          }
+        } catch (storageErr) {
+          console.warn('[resources] Failed to write courseware storage cache:', storageErr);
         }
 
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -89,6 +112,32 @@ export function registerResourcesRoutes(ctx: ServerContext) {
         kernelContainer.db
           .prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)')
           .run(resource.id, resource.id, resource.name, 'folder', indexFile.path, resource.created_at || Date.now());
+      }
+
+      // 确保 storage/courseware 物理目录就绪
+      try {
+        const storageDir = path.resolve(process.cwd(), 'storage', 'courseware', resource.id);
+        if (!fs.existsSync(storageDir)) {
+          fs.mkdirSync(storageDir, { recursive: true });
+          for (const f of files) {
+            if (f.path && f.content !== undefined) {
+              const cleanRel = f.path.replace(/\\/g, '/').replace(/^\/+/, '');
+              const target = path.resolve(storageDir, cleanRel);
+              if (target.startsWith(storageDir)) {
+                fs.mkdirSync(path.dirname(target), { recursive: true });
+                const isBin = /\.(png|jpe?g|gif|webp|ico)$/i.test(cleanRel);
+                if (isBin) {
+                  const cleanBase64 = f.content.replace(/^data:[^;]+;base64,/, '');
+                  fs.writeFileSync(target, Buffer.from(cleanBase64, 'base64'));
+                } else {
+                  fs.writeFileSync(target, f.content, 'utf8');
+                }
+              }
+            }
+          }
+        }
+      } catch (storageErr) {
+        console.warn('[resources] Failed to unpack folder to storage cache:', storageErr);
       }
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');

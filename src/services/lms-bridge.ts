@@ -258,3 +258,39 @@ export function broadcastThemeToIframes(theme: string, tokens: Record<string, st
     // 忽略异常
   }
 }
+
+/**
+ * 向页面中所有已加载的课件 / 微前端 iframe 广播当前界面字号缩放比例
+ */
+export function broadcastFontScaleToIframes(scale: number): void {
+  if (typeof document === 'undefined') return;
+  try {
+    const clampedScale = Math.min(140, Math.max(85, Math.round(scale)));
+    const iframes = document.querySelectorAll('iframe');
+    iframes.forEach((iframe) => {
+      try {
+        iframe.contentWindow?.postMessage(
+          {
+            type: 'LMS_HOST_COMMAND',
+            event: 'font-scale:changed',
+            payload: { scale: clampedScale, fontScale: (clampedScale / 100).toFixed(2) },
+          },
+          '*',
+        );
+        iframe.contentWindow?.postMessage(
+          {
+            type: 'LMS_FONT_SCALE_CHANGED',
+            scale: clampedScale,
+            fontScale: (clampedScale / 100).toFixed(2),
+          },
+          '*',
+        );
+      } catch {
+        // 忽略跨域错误
+      }
+    });
+  } catch {
+    // 忽略异常
+  }
+}
+

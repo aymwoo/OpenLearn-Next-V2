@@ -1265,6 +1265,10 @@ export const BuiltinPlugin = {
             throw new Error(`Path traversal attempt in HTML courseware upload: ${filename}`);
           }
           fs.writeFileSync(destPath, fileBuffer);
+          if (entryName !== 'index.html') {
+            const indexDestPath = path.resolve(storageDir, 'index.html');
+            fs.writeFileSync(indexDestPath, fileBuffer);
+          }
 
           const coursewareId = 'cw_' + crypto.randomBytes(8).toString('hex');
           db.prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
@@ -1310,6 +1314,9 @@ export const BuiltinPlugin = {
                 const newStorageDir = path.resolve(process.cwd(), 'storage', 'courseware', newUuid);
                 fs.mkdirSync(newStorageDir, { recursive: true });
                 fs.writeFileSync(path.join(newStorageDir, entryName), modified);
+                if (entryName !== 'index.html') {
+                  fs.writeFileSync(path.join(newStorageDir, 'index.html'), modified);
+                }
 
                 db.prepare(
                   'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',

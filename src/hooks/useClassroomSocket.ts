@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { FrontendAPIService } from '../services/frontend-api';
-import { SocketService } from '../services/socket-service';
+import { SocketService, setSocketInstance } from '../services/socket-service';
 import { UIService } from '../services/ui-service';
 import { StorageService } from '../services/storage-service';
 import { whiteboardViewStore } from '../store/whiteboardViewStore';
@@ -123,6 +123,7 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     if (!session) return;
     const socket = io();
     socketRef.current = socket;
+    setSocketInstance(socket);
 
     // Initialize frontend PluginHost services after socket connection
     if (!host.isInitialized()) {

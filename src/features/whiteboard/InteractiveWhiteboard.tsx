@@ -54,6 +54,7 @@ import { getSocketInstance } from '../../services/socket-service';
 import { frontendEventBus } from '../../services/event-bus';
 import { appStore } from '../../store/appStore';
 import { useThemeStore } from '../../store/themeStore';
+import { useFontSizeStore } from '../../store/fontSizeStore';
 import { useWhiteboardViewStore } from '../../store/whiteboardViewStore';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
@@ -226,6 +227,10 @@ export interface InteractiveWhiteboardProps {
    * （关闭按钮隐藏、ESC 不生效，仅教师退出最大化时退出）。
    */
   followRemoteFullscreen?: boolean;
+  /**
+   * 白板全屏/最大化状态变化回调（通知外层容器，如 LiveClassroomView 跨窗口信道广播）
+   */
+  onFullscreenSync?: (elementId: string | null) => void;
 }
 
 export interface WhiteboardPageItem {
@@ -265,6 +270,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       broadcastFullscreen = false,
       fullscreenBroadcastClassId = null,
       followRemoteFullscreen = false,
+      onFullscreenSync,
     }: InteractiveWhiteboardProps,
     ref,
   ) => {
@@ -273,6 +279,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
     // 全局主题系统响应与白板引擎桥接
     const currentGlobalTheme = useThemeStore((s) => s.theme);
+    const fontScale = useFontSizeStore((s) => s.scale) / 100;
     useEffect(() => {
       themeManager.setTheme(currentGlobalTheme);
     }, [currentGlobalTheme]);
@@ -526,8 +533,20 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
      * null 表示退出最大化，学生端据此收起同步视图并恢复被中断的视图。
      * 同时投递到课节房间与班级房间，保证学生在任意视图下都能收到。
      */
+    /**
+     * `onFullscreenSync` 多为调用方内联传入（如 LiveClassroomView 的 inline arrow），
+     * 每次渲染都是新引用。若直接把它放进下面 cleanup effect 的依赖数组，effect 会在父组件
+     * **每次重渲染**时都拆解重跑，从而反复广播 `elementId: null`，把刚建立的最大化视图取消掉。
+     * 因此只保留在 ref 里供 cleanup 读取，依赖数组仅保留稳定基础值。
+     */
+    const onFullscreenSyncRef = useRef(onFullscreenSync);
+    useEffect(() => {
+      onFullscreenSyncRef.current = onFullscreenSync;
+    }, [onFullscreenSync]);
+
     const applyFullscreen = (elementId: string | null) => {
       setFullscreenElementId(elementId);
+      onFullscreenSync?.(elementId);
       if (broadcastFullscreen && socketRef.current) {
         socketRef.current.emit('teacher-broadcast-fullscreen', {
           classId: fullscreenBroadcastClassId,
@@ -542,6 +561,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     useEffect(() => {
       if (!broadcastFullscreen) return;
       return () => {
+        onFullscreenSyncRef.current?.(null);
         socketRef.current?.emit('teacher-broadcast-fullscreen', {
           classId: fullscreenBroadcastClassId,
           lessonId,
@@ -559,6 +579,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     useEffect(() => {
       if (!fullscreenElementMissing || isRemoteFullscreen) return;
       setFullscreenElementId(null);
+      onFullscreenSync?.(null);
       if (broadcastFullscreen && socketRef.current) {
         socketRef.current.emit('teacher-broadcast-fullscreen', {
           classId: fullscreenBroadcastClassId,
@@ -566,7 +587,14 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           elementId: null,
         });
       }
-    }, [fullscreenElementMissing, isRemoteFullscreen, broadcastFullscreen, fullscreenBroadcastClassId, lessonId]);
+    }, [
+      fullscreenElementMissing,
+      isRemoteFullscreen,
+      broadcastFullscreen,
+      fullscreenBroadcastClassId,
+      lessonId,
+      onFullscreenSync,
+    ]);
 
     const [activeDragElement, setActiveDragElement] = useState<{
       id: string;
@@ -1590,7 +1618,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       }
       if (drawing.type === 'text') {
         return (
-          <KonvaText x={drawing.x} y={drawing.y} text={drawing.text} fontSize={drawing.fontSize} fill={drawing.color} />
+          <KonvaText
+            x={drawing.x}
+            y={drawing.y}
+            text={drawing.text}
+            fontSize={Math.round((drawing.fontSize || 16) * fontScale)}
+            fill={drawing.color}
+          />
         );
       }
       return null;
@@ -2278,7 +2312,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               x={data.x}
               y={data.y}
               text={data.text}
-              fontSize={data.fontSize || 16}
+              fontSize={Math.round((data.fontSize || 16) * fontScale)}
               fill={
                 isSelected
                   ? themeTokens.selectionBorder || '#3b82f6'
@@ -2935,8 +2969,15 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   (() => {
                     const fsEl = safeElements.find((e) => e.id === effectiveFullscreenElementId);
                     if (!fsEl) {
-                      // 元素尚未加载到学生端，或已在教师端被删除：
-                      // 状态收敛交给上面的 reconciliation effect，避免在渲染期写状态 / 发 socket
+                      // 元素尚未加载到学生端（异步网络拉取中）：显示优雅加载占位，避免白屏
+                      if (isRemoteFullscreen) {
+                        return (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-xs text-white">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400 mb-3" />
+                            <p className="text-xs font-medium text-slate-200">正在同步教师端全屏组件...</p>
+                          </div>
+                        );
+                      }
                       return null;
                     }
                     let fsData: any = {};
