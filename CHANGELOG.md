@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Tests & Reliability
+
+- **测试套件时间预算加固 (Test-suite Timing Robustness)**：
+  - **背景诊断**：全量测试曾在部分运行中出现“每次失败文件都不同、单独跑又全绿”的抖动。实测定位为**环境性**问题——在 IDE / MCP server / 其他 agent 同时跑重活的机器上，`PSI io full avg300` 达 18%、16 核 loadavg 达 52–72，磁盘停顿令各测试的时间预算先后被击穿；环境回落（loadavg 1.2 / `PSI io` 1%）后全量 43s 稳定通过。因此该抖动**不是仓库代码缺陷**，但下面三处测试本身确实存在可被击穿的脆弱点；
+  - **`worker-runtime/integration.test.ts`**：三处硬编码 `setTimeout(..., 5000)` 守卫（失败信息仅 `Timeout A`/`Timeout B`，且条件满足后不清理定时器）抽为具名 `WORKER_ACTIVATION_BUDGET_MS = 30_000` 的 `activateAndWait()` 辅助函数，并在 resolve/reject 时 `clearTimeout`。注意 vitest 的 `testTimeout` **不**管辖测试内部的 `setTimeout`；
+  - **`AppShell.test.tsx`**：`beforeAll` 预热 `StudentView`/`TeacherView` 动态 chunk，使 `React.lazy` 命中模块缓存——实测首个用例 **939ms → 322ms（−66%）**，把 vitest 的 transform 开销移出断言窗口；
+  - **`LazyCourseware.test.tsx`**：三处 `await waitFor(...)` 补齐显式预算（原为 1000ms 默认值，而实测已消耗 ~320ms，仅约 3× 余量），并同样预热 `InteractiveCoursewareViewer` chunk；
+  - **验证**：修复后 6 次全量运行全绿——空闲 ×3、合成 CPU 压力（`PSI cpu` 32.7%）×1、dev server 运行中 ×2（其中一次 `PSI cpu` 44%）。
+
 ### Features
 
 - **全局字体缩放无障碍辅助功能 (Global Font Size Scaling & Accessibility)**:

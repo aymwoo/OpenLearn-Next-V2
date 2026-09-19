@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach, beforeAll } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { PluginHostProvider } from '../../plugin-host/plugin-host-context';
 import { FrontendPluginHost } from '../../plugin-host/plugin-host';
@@ -290,11 +290,16 @@ const renderAppShell = (overrides: Record<string, unknown> = {}) =>
   );
 
 describe('AppShell', () => {
-  // AppShell uses React.lazy to load StudentView/TeacherView. In jsdom the
-  // dynamic ES import resolves asynchronously and StudentView's transitive
-  // lazy children (StudentLessonView/StudentAssignmentView) can stretch the
-  // import chain past the default findByText timeout. Use a generous timeout
-  // so the test waits for Suspense to resolve.
+  // AppShell uses React.lazy to load StudentView/TeacherView. On first render React
+  // suspends until the dynamic import resolves, which puts vitest's transform cost
+  // (~940ms measured) inside the asserted window. Pre-warm both chunks so React.lazy
+  // hits the module cache and only a microtask remains.
+  beforeAll(async () => {
+    await Promise.all([import('../../features/student/StudentView'), import('../../features/teacher/TeacherView')]);
+  });
+
+  // Keep a generous budget as well: Suspense must still resolve, and CI runners are
+  // much slower than a warm local cache.
   const LAZY_TIMEOUT = 10_000;
 
   it('renders StudentView (and the "No Student Selected" panel) when activeRole is "student"', async () => {

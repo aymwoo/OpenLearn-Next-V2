@@ -476,6 +476,45 @@ describe('EventForwarder — cross-boundary event forwarding', () => {
 
 describe('Worker lifecycle — end-to-end', () => {
   /**
+   * 真实 Worker 线程 spawn 后的激活等待预算。
+   *
+   * 这里原来是三处硬编码的 `setTimeout(..., 5000)`：既有魔法数，又不会在条件满足后
+   * 取消定时器。在慢速 runner（CI 通常 2–4 vCPU、共享 I/O）上这个隐式 5s 预算很容易
+   * 被击穿，而且失败信息（`Timeout A`）完全没说明在等什么。
+   * 注意：vitest 的 `testTimeout`（本项目 60s）**不**管辖测试内部的 `setTimeout`，
+   * 所以这个预算必须在这里显式给出。
+   */
+  const WORKER_ACTIVATION_BUDGET_MS = 30_000;
+
+  /** 发送 activate 并等待 Worker 回报 activated / error；超时以显式预算兜底。 */
+  function activateAndWait(
+    transport: Pick<IWorkerTransport, 'onMessage' | 'postMessage'>,
+    pluginCode: string,
+    manifestId: string,
+  ): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () =>
+          reject(
+            new Error(`Timeout waiting for "activated" from ${manifestId} after ${WORKER_ACTIVATION_BUDGET_MS}ms`),
+          ),
+        WORKER_ACTIVATION_BUDGET_MS,
+      );
+      transport.onMessage((msg: any) => {
+        if (msg.type === 'activated') {
+          clearTimeout(timer);
+          resolve();
+        }
+        if (msg.type === 'error') {
+          clearTimeout(timer);
+          reject(new Error(msg.message));
+        }
+      });
+      transport.postMessage({ type: 'activate', pluginCode, manifest: { id: manifestId } });
+    });
+  }
+
+  /**
    * Helper: create a real Worker thread with inline bootstrap code.
    * We use the same pattern as WorkerManager.generateBootstrapCode()
    * but with a simplified version that uses inlined EventBusProxy.
@@ -601,24 +640,7 @@ export default {
     const { transport, exitCode } = await createWorkerAndActivate(pluginCode);
 
     // Wait for 'activated' response
-    const activated = new Promise<void>((resolve, reject) => {
-      transport.onMessage((msg: any) => {
-        if (msg.type === 'activated') resolve();
-        if (msg.type === 'error') reject(new Error(msg.message));
-      });
-      // Send activate message
-      transport.postMessage({
-        type: 'activate',
-        pluginCode,
-        manifest: { id: 'test' },
-      });
-
-      // Timeout
-      setTimeout(() => reject(new Error('Timeout waiting for activated')), 5000);
-    });
-
-    await activated;
-    expect(activated).resolves.toBeUndefined();
+    await activateAndWait(transport, pluginCode, 'test');
 
     // Clean up
     await transport.terminate();
@@ -640,36 +662,12 @@ export default {
     const { transport: transportA, exitCode: exitCodeA } = await createWorkerAndActivate(pluginCode);
 
     // Activate Worker A
-    const activatedA = new Promise<void>((resolve, reject) => {
-      transportA.onMessage((msg: any) => {
-        if (msg.type === 'activated') resolve();
-        if (msg.type === 'error') reject(new Error(msg.message));
-      });
-      transportA.postMessage({
-        type: 'activate',
-        pluginCode,
-        manifest: { id: 'plugin-a' },
-      });
-      setTimeout(() => reject(new Error('Timeout A')), 5000);
-    });
-    await activatedA;
+    await activateAndWait(transportA, pluginCode, 'plugin-a');
 
     // Create Worker B
     const { transport: transportB, exitCode: exitCodeB } = await createWorkerAndActivate(pluginCode);
 
-    const activatedB = new Promise<void>((resolve, reject) => {
-      transportB.onMessage((msg: any) => {
-        if (msg.type === 'activated') resolve();
-        if (msg.type === 'error') reject(new Error(msg.message));
-      });
-      transportB.postMessage({
-        type: 'activate',
-        pluginCode,
-        manifest: { id: 'plugin-b' },
-      });
-      setTimeout(() => reject(new Error('Timeout B')), 5000);
-    });
-    await activatedB;
+    await activateAndWait(transportB, pluginCode, 'plugin-b');
 
     // Terminate Worker A (simulate crash)
     await transportA.terminate();
