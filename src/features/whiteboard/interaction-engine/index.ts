@@ -1,6 +1,6 @@
 /**
  * Interaction Engine — Barrel Export
- * 
+ *
  * Modular, State-Machine Driven Whiteboard Interaction Subsystem.
  */
 

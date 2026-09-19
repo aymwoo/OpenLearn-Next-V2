@@ -1,10 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
-import {
-  AITeacherWorkspaceWidget,
-  AITeacherWorkspaceRegistry,
-} from '../index.js';
+import { AITeacherWorkspaceWidget, AITeacherWorkspaceRegistry } from '../index.js';
 
 describe('Sprint P5-05 AI Teacher Workspace Test Suite', () => {
   beforeEach(() => {

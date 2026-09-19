@@ -110,9 +110,7 @@ export class BrowserWorkerManager {
 
     // 2. T-09-09: DoS limit
     if (this.workerRegistry.size >= MAX_WORKERS) {
-      throw new Error(
-        `Cannot create Worker: maximum active Workers (${MAX_WORKERS}) reached`,
-      );
+      throw new Error(`Cannot create Worker: maximum active Workers (${MAX_WORKERS}) reached`);
     }
 
     // 3. Build Worker bootstrap Blob URL
@@ -124,9 +122,7 @@ export class BrowserWorkerManager {
       worker = new Worker(blobUrl, { type: 'module' });
     } catch (err) {
       throw new Error(
-        `Failed to create Worker for plugin "${pluginId}": ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        `Failed to create Worker for plugin "${pluginId}": ${err instanceof Error ? err.message : String(err)}`,
       );
     }
 
@@ -136,12 +132,7 @@ export class BrowserWorkerManager {
     // 6. Create ServiceHost
     const actorId = `plugin:${manifest.id}`;
     const manifestCaps = manifest.capabilitiesProposed ?? [];
-    const serviceHost = new ServiceHost(
-      this.registry,
-      actorId,
-      manifestCaps,
-      socketService,
-    );
+    const serviceHost = new ServiceHost(this.registry, actorId, manifestCaps, socketService);
 
     // 7. Register and setup message routing
     this.workerRegistry.set(pluginId, { pluginId, worker, transport, serviceHost });
@@ -160,11 +151,7 @@ export class BrowserWorkerManager {
         }
       } else if (typed.type === 'error') {
         if (activationReject) {
-          activationReject(
-            new Error(
-              (msg as { message?: string }).message ?? 'Unknown Worker error',
-            ),
-          );
+          activationReject(new Error((msg as { message?: string }).message ?? 'Unknown Worker error'));
           activationResolve = null;
           activationReject = null;
         }
@@ -199,7 +186,11 @@ export class BrowserWorkerManager {
     } catch (err) {
       // Activation failed — clean up
       serviceHost.dispose();
-      try { worker.terminate(); } catch { /* ignore */ }
+      try {
+        worker.terminate();
+      } catch {
+        /* ignore */
+      }
       this.workerRegistry.delete(pluginId);
       throw err;
     }
@@ -250,17 +241,12 @@ export class BrowserWorkerManager {
       ]);
     } catch {
       // Timeout or error — log warning, continue with force termination
-      console.warn(
-        `[BrowserWorkerManager] Graceful deactivate failed for "${pluginId}", force terminating`,
-      );
+      console.warn(`[BrowserWorkerManager] Graceful deactivate failed for "${pluginId}", force terminating`);
     } finally {
       try {
         instance.worker.terminate();
       } catch (termErr) {
-        console.error(
-          `[BrowserWorkerManager] Worker terminate error for "${pluginId}":`,
-          termErr,
-        );
+        console.error(`[BrowserWorkerManager] Worker terminate error for "${pluginId}":`, termErr);
       }
       this.workerRegistry.delete(pluginId);
     }

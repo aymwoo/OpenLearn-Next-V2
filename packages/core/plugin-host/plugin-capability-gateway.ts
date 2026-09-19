@@ -6,10 +6,7 @@
 
 import type { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
 import type { IAICapability } from '../ai-capability/types/index.js';
-import type {
-  IntegrationHealthStatus,
-  IntegrationDescriptor,
-} from '../bootstrap/integration/integration-types.js';
+import type { IntegrationHealthStatus, IntegrationDescriptor } from '../bootstrap/integration/integration-types.js';
 import { PLATFORM_VERSION } from '../version.js';
 
 export interface CapabilityMetadata {
@@ -27,11 +24,7 @@ export interface IPluginCapabilityGateway {
   listCapabilities(): ReadonlyArray<CapabilityMetadata>;
   hasCapability(capabilityId: string): boolean;
   resolveCapability<T extends IAICapability = IAICapability>(capabilityId: string): T;
-  executeCapability<T = unknown>(
-    capabilityId: string,
-    methodName: string,
-    ...args: unknown[]
-  ): Promise<T>;
+  executeCapability<T = unknown>(capabilityId: string, methodName: string, ...args: unknown[]): Promise<T>;
   health(): IntegrationHealthStatus;
   metadata(): IntegrationDescriptor;
 }
@@ -72,9 +65,7 @@ export class PluginCapabilityGateway implements IPluginCapabilityGateway {
     const fn = (cap as unknown as Record<string, unknown>)[methodName];
 
     if (typeof fn !== 'function') {
-      throw new Error(
-        `Capability "${capabilityId}" does not export method "${methodName}"`,
-      );
+      throw new Error(`Capability "${capabilityId}" does not export method "${methodName}"`);
     }
 
     return (fn as (...a: unknown[]) => Promise<T>).apply(cap, args);

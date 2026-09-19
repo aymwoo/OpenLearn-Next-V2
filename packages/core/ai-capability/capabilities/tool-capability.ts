@@ -26,7 +26,7 @@ export class ToolCapability implements IToolCapability {
 
   public async executeToolCall(
     toolName: string,
-    args: Record<string, unknown>
+    args: Record<string, unknown>,
   ): Promise<{ success: boolean; result?: unknown; error?: string }> {
     const startTime = Date.now();
     const result = await this.runtimeKernel.toolRegistry.executeTool(toolName, args);

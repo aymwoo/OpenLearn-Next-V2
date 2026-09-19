@@ -16,9 +16,11 @@ export default defineConfig({
       'src/plugin-host/__tests__/**/*.test.{ts,tsx}',
       'src/mfe/__tests__/**/*.test.{ts,tsx}',
       'src/features/**/__tests__/**/*.test.{ts,tsx}',
-      'src/components/__tests__/**/*.test.{ts,tsx}',
+      'src/components/**/__tests__/**/*.test.{ts,tsx}',
       'src/utils/__tests__/**/*.test.{ts,tsx}',
+      'src/services/__tests__/**/*.test.{ts,tsx}',
       'src/store/__tests__/**/*.test.{ts,tsx}',
+      'src/hooks/**/__tests__/**/*.test.{ts,tsx}',
     ],
 
     environment: 'jsdom',
@@ -26,11 +28,10 @@ export default defineConfig({
     alias: {
       '@openlearn/plugin-sdk': '/home/wuxf/Develop/openlearnv2/packages/plugin-sdk/index.ts',
       '@openlearn/plugin-test-kit': '/home/wuxf/Develop/openlearnv2/packages/plugin-test-kit/index.ts',
-      'xlsx': '/home/wuxf/Develop/openlearnv2/packages/core/__mocks__/xlsx.ts'
+      xlsx: '/home/wuxf/Develop/openlearnv2/packages/core/__mocks__/xlsx.ts',
     },
     // Kernel integration tests include ZIP plugin seeding which can take >5s
     testTimeout: 60000,
     fileParallelism: true,
   },
 });
-

@@ -2,20 +2,10 @@
  * OpenLearn Platform Kernel - Composition Root Types & Interfaces (PI-006)
  */
 
-import {
-  IPlatformContext,
-  PlatformBootstrapConfig,
-  IPlatformLogger,
-  EnvironmentType,
-} from '../types/index.js';
+import { IPlatformContext, PlatformBootstrapConfig, IPlatformLogger, EnvironmentType } from '../types/index.js';
 import { BootstrapPipeline } from '../pipeline/bootstrap-pipeline.js';
 
-export type CompositionState =
-  | 'Created'
-  | 'Validating'
-  | 'Composing'
-  | 'Composed'
-  | 'Disposed';
+export type CompositionState = 'Created' | 'Validating' | 'Composing' | 'Composed' | 'Disposed';
 
 export interface CompositionValidationError {
   readonly code: string;

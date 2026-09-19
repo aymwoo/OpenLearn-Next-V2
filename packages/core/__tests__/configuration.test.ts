@@ -103,10 +103,13 @@ describe('Platform Configuration — validation', () => {
 
   it('applies descriptor default values for missing keys', async () => {
     const cfg = makeConfig();
-    cfg.registerMemory({}, {
-      id: 'd',
-      descriptors: [{ path: 'feature.flag', scope: 'Platform' as const, type: 'boolean' as const, default: true }],
-    });
+    cfg.registerMemory(
+      {},
+      {
+        id: 'd',
+        descriptors: [{ path: 'feature.flag', scope: 'Platform' as const, type: 'boolean' as const, default: true }],
+      },
+    );
     await cfg.load();
     expect(cfg.get('feature.flag')).toBe(true);
   });
@@ -169,11 +172,14 @@ describe('Platform Configuration — environment source', () => {
 describe('Platform Configuration — scope', () => {
   it('honors scope filtering when a descriptor exists', async () => {
     const cfg = makeConfig();
-    cfg.registerMemory({ x: 1 }, {
-      id: 'kp',
-      scope: 'Kernel',
-      descriptors: [{ path: 'x', scope: 'Kernel' as const, type: 'number' as const }],
-    });
+    cfg.registerMemory(
+      { x: 1 },
+      {
+        id: 'kp',
+        scope: 'Kernel',
+        descriptors: [{ path: 'x', scope: 'Kernel' as const, type: 'number' as const }],
+      },
+    );
     await cfg.load();
     expect(cfg.get<number>('x', 'Kernel')).toBe(1);
     expect(cfg.get('x', 'Infrastructure')).toBeUndefined();
@@ -199,7 +205,11 @@ describe('Platform Configuration — regression: integration', () => {
 
   it('publishes a ConfigurationLoaded event on the EventBus', async () => {
     let published: unknown;
-    const bus = { publishConfigurationLoaded: (config?: Record<string, unknown>) => { published = config; } };
+    const bus = {
+      publishConfigurationLoaded: (config?: Record<string, unknown>) => {
+        published = config;
+      },
+    };
     const cfg = makeConfig({ eventBus: bus });
     await cfg.load();
     expect(published).toBeDefined();

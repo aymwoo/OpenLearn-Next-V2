@@ -9,13 +9,7 @@
 
 import { EventContext } from './EventContext.js';
 import { EventError } from './EventError.js';
-import type {
-  EventFilter,
-  EventHandlerFn,
-  EventHandlerMode,
-  EventHandlerOptions,
-  HandlerResult,
-} from './types.js';
+import type { EventFilter, EventHandlerFn, EventHandlerMode, EventHandlerOptions, HandlerResult } from './types.js';
 
 function withTimeout(promise: Promise<void>, ms: number, eventId: string): Promise<void> {
   return new Promise<void>((resolve, reject) => {

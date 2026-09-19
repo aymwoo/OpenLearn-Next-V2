@@ -121,16 +121,17 @@ describe('AiPlannerPlugin', () => {
     pluginHost.registerPreloadedPlugin(pluginId, AiPlannerPlugin);
 
     // Setup initial DB entry
-    db.prepare('INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(pluginId, 'AI Planner', JSON.stringify(AiPlannerPlugin.manifest), '', 'installed', Date.now(), 'esm');
+    db.prepare(
+      'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(pluginId, 'AI Planner', JSON.stringify(AiPlannerPlugin.manifest), '', 'installed', Date.now(), 'esm');
 
     await pluginHost.activatePlugin(pluginId);
 
     // Verify actions registered
     const actions = await actionRegistry.getAllActions();
-    expect(actions.find(a => a.commandType === 'ai.start_generation')).toBeDefined();
-    expect(actions.find(a => a.commandType === 'ai.apply_recommendation')).toBeDefined();
-    expect(actions.find(a => a.commandType === 'ai.apply_grade')).toBeDefined();
+    expect(actions.find((a) => a.commandType === 'ai.start_generation')).toBeDefined();
+    expect(actions.find((a) => a.commandType === 'ai.apply_recommendation')).toBeDefined();
+    expect(actions.find((a) => a.commandType === 'ai.apply_grade')).toBeDefined();
 
     // Verify process task handler registered
     expect(mockProcessManager.registerHandler).toHaveBeenCalledWith('ai_planner_task', expect.any(Function));
@@ -152,10 +153,11 @@ describe('AiPlannerPlugin', () => {
       processId: 'mock-process-id',
       message: 'Process started in the background.',
     });
-    expect(mockProcessManager.spawn).toHaveBeenCalledWith(
-      'AI Generator: AI Ethics',
-      'ai_planner_task',
-      { taskType: 'lesson_material', topic: 'AI Ethics', classId: undefined, duration: 3 }
-    );
+    expect(mockProcessManager.spawn).toHaveBeenCalledWith('AI Generator: AI Ethics', 'ai_planner_task', {
+      taskType: 'lesson_material',
+      topic: 'AI Ethics',
+      classId: undefined,
+      duration: 3,
+    });
   });
 });

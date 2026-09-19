@@ -56,11 +56,7 @@ export class PluginHttpRouter implements IPluginHttpRouter {
   /**
    * 注册指定动词与路径的 Handler
    */
-  route<TBody = unknown, TRes = unknown>(
-    method: string,
-    path: string,
-    handler: PluginApiHandler<TBody, TRes>,
-  ): void {
+  route<TBody = unknown, TRes = unknown>(method: string, path: string, handler: PluginApiHandler<TBody, TRes>): void {
     const upperMethod = method.toUpperCase();
     const normalized = path.startsWith('/') ? path : '/' + path;
     const { regex, paramNames } = compileRoutePattern(normalized);
@@ -117,11 +113,7 @@ export class PluginHttpRouter implements IPluginHttpRouter {
     }
   }
 
-  private registerStream<TBody = unknown>(
-    method: string,
-    path: string,
-    handler: PluginStreamHandler<TBody>,
-  ): void {
+  private registerStream<TBody = unknown>(method: string, path: string, handler: PluginStreamHandler<TBody>): void {
     const normalized = path.startsWith('/') ? path : '/' + path;
     const { regex, paramNames } = compileRoutePattern(normalized);
     this.routes.push({

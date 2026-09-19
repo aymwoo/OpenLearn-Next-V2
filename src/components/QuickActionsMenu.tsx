@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Plus, 
-  X, 
-  Calendar, 
-  Wand2, 
-  BookOpen, 
-  Send, 
-  Loader2, 
-  CheckCircle2, 
-  ArrowLeft, 
-  Users, 
-  FileText, 
+import {
+  Plus,
+  X,
+  Calendar,
+  Wand2,
+  BookOpen,
+  Send,
+  Loader2,
+  CheckCircle2,
+  ArrowLeft,
+  Users,
+  FileText,
   Sparkles,
-  Command
+  Command,
 } from 'lucide-react';
 
 interface ClassType {
@@ -44,11 +44,11 @@ export function QuickActionsMenu({
   lang,
   onScheduleClass,
   onGenerateAssignment,
-  onCreateLesson
+  onCreateLesson,
 }: QuickActionsMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [currentView, setCurrentView] = useState<'menu' | 'schedule' | 'assignment' | 'lesson'>('menu');
-  
+
   // Schedule state
   const [scheduleClassId, setScheduleClassId] = useState('');
   const [scheduleLessonId, setScheduleLessonId] = useState('');
@@ -93,7 +93,7 @@ export function QuickActionsMenu({
       emptyClasses: '未检测到活跃班级',
       emptyLessons: '未检测到可用课件',
       loadingBus: '内核微服务运行中...',
-      genericError: '网络或核指令总线调用失败，请重试'
+      genericError: '网络或核指令总线调用失败，请重试',
     },
     en: {
       quickActions: 'Quick Actions',
@@ -120,8 +120,8 @@ export function QuickActionsMenu({
       emptyClasses: 'No classes discovered',
       emptyLessons: 'No lessons discovered',
       loadingBus: 'Interfacing core services...',
-      genericError: 'System bus execute command failure, please retry'
-    }
+      genericError: 'System bus execute command failure, please retry',
+    },
   }[lang];
 
   const resetForm = () => {
@@ -138,18 +138,22 @@ export function QuickActionsMenu({
   };
 
   const currentSuccessMsg = () => {
-    switch(currentView) {
-      case 'schedule': return t.successScheduled;
-      case 'assignment': return t.successAssignment;
-      case 'lesson': return t.successLesson;
-      default: return '';
+    switch (currentView) {
+      case 'schedule':
+        return t.successScheduled;
+      case 'assignment':
+        return t.successAssignment;
+      case 'lesson':
+        return t.successLesson;
+      default:
+        return '';
     }
   };
 
   const handleActionClick = (view: 'schedule' | 'assignment' | 'lesson') => {
     resetForm();
     setCurrentView(view);
-    
+
     // Auto populate state defaults where possible
     if (classes.length > 0) {
       setScheduleClassId(classes[0].id);
@@ -159,7 +163,9 @@ export function QuickActionsMenu({
       setScheduleLessonId(lessons[0].id);
     }
     if (view === 'lesson') {
-      setLessonContent(`# 新课件名称\n\n## 教学目标\n- 掌握核心考点\n- 熟练完成基础物理实验\n\n## 课堂探究\n这里写课本的主要讲授要点。`);
+      setLessonContent(
+        `# 新课件名称\n\n## 教学目标\n- 掌握核心考点\n- 熟练完成基础物理实验\n\n## 课堂探究\n这里写课本的主要讲授要点。`,
+      );
     }
   };
 
@@ -227,8 +233,11 @@ export function QuickActionsMenu({
                 <Command size={18} className="animate-pulse" />
                 <h3 className="font-bold text-sm tracking-wide">{t.quickActions}</h3>
               </div>
-              <button 
-                onClick={() => { setIsOpen(false); setCurrentView('menu'); }}
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  setCurrentView('menu');
+                }}
                 className="text-white/80 hover:text-white hover:bg-white/15 p-1 rounded-full transition-all focus:outline-none"
                 title="Close Portal"
               >
@@ -243,9 +252,9 @@ export function QuickActionsMenu({
                   <p className="text-[11px] text-gray-500 leading-relaxed font-medium bg-indigo-50/50 border border-indigo-100 p-2.5 rounded-lg mb-4">
                     {t.quickDesc}
                   </p>
-                  
+
                   {/* Action 1: Schedule Class */}
-                  <div 
+                  <div
                     onClick={() => handleActionClick('schedule')}
                     className="flex items-start gap-3.5 p-3.5 bg-white border border-gray-200 hover:border-indigo-400 hover:shadow-md rounded-xl cursor-pointer transition-all hover:scale-101 group"
                     id="action-schedule-class"
@@ -254,13 +263,15 @@ export function QuickActionsMenu({
                       <Calendar size={18} />
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1 group-hover:text-indigo-600 transition-colors uppercase tracking-wider">{t.scheduleClass}</h4>
+                      <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1 group-hover:text-indigo-600 transition-colors uppercase tracking-wider">
+                        {t.scheduleClass}
+                      </h4>
                       <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{t.scheduleDesc}</p>
                     </div>
                   </div>
 
                   {/* Action 2: Generate Assignment / Quiz */}
-                  <div 
+                  <div
                     onClick={() => handleActionClick('assignment')}
                     className="flex items-start gap-3.5 p-3.5 bg-white border border-gray-200 hover:border-purple-400 hover:shadow-md rounded-xl cursor-pointer transition-all hover:scale-101 group"
                     id="action-generate-assignment"
@@ -269,13 +280,15 @@ export function QuickActionsMenu({
                       <Wand2 size={18} />
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1 group-hover:text-purple-600 transition-colors uppercase tracking-wider">{t.generateAssignment}</h4>
+                      <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1 group-hover:text-purple-600 transition-colors uppercase tracking-wider">
+                        {t.generateAssignment}
+                      </h4>
                       <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{t.generateDesc}</p>
                     </div>
                   </div>
 
                   {/* Action 3: Create Lesson Curriculum */}
-                  <div 
+                  <div
                     onClick={() => handleActionClick('lesson')}
                     className="flex items-start gap-3.5 p-3.5 bg-white border border-gray-200 hover:border-emerald-400 hover:shadow-md rounded-xl cursor-pointer transition-all hover:scale-101 group"
                     id="action-create-lesson"
@@ -284,7 +297,9 @@ export function QuickActionsMenu({
                       <BookOpen size={18} />
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1 group-hover:text-emerald-600 transition-colors uppercase tracking-wider">{t.createLesson}</h4>
+                      <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1 group-hover:text-emerald-600 transition-colors uppercase tracking-wider">
+                        {t.createLesson}
+                      </h4>
                       <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{t.createDesc}</p>
                     </div>
                   </div>
@@ -294,7 +309,7 @@ export function QuickActionsMenu({
               {currentView !== 'menu' && (
                 <div className="relative">
                   {/* Back button */}
-                  <button 
+                  <button
                     onClick={() => setCurrentView('menu')}
                     className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 font-semibold mb-4 cursor-pointer focus:outline-none"
                     id="action-back-button"
@@ -304,7 +319,7 @@ export function QuickActionsMenu({
                   </button>
 
                   {success ? (
-                    <motion.div 
+                    <motion.div
                       initial={{ scale: 0.95 }}
                       animate={{ scale: 1 }}
                       className="flex flex-col items-center justify-center py-10 text-center"
@@ -325,45 +340,55 @@ export function QuickActionsMenu({
                       {currentView === 'schedule' && (
                         <>
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1"><Users size={12} /> {t.classSelect}</label>
+                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1">
+                              <Users size={12} /> {t.classSelect}
+                            </label>
                             {classes.length === 0 ? (
                               <p className="text-xs italic text-red-500">{t.emptyClasses}</p>
                             ) : (
-                              <select 
-                                value={scheduleClassId} 
-                                onChange={e => setScheduleClassId(e.target.value)}
+                              <select
+                                value={scheduleClassId}
+                                onChange={(e) => setScheduleClassId(e.target.value)}
                                 className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 text-gray-700 font-medium"
                               >
-                                {classes.map(c => (
-                                  <option key={c.id} value={c.id}>{c.name}</option>
+                                {classes.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.name}
+                                  </option>
                                 ))}
                               </select>
                             )}
                           </div>
 
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1"><BookOpen size={12} /> {t.lessonSelect}</label>
+                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1">
+                              <BookOpen size={12} /> {t.lessonSelect}
+                            </label>
                             {lessons.length === 0 ? (
                               <p className="text-xs italic text-red-500">{t.emptyLessons}</p>
                             ) : (
-                              <select 
-                                value={scheduleLessonId} 
-                                onChange={e => setScheduleLessonId(e.target.value)}
+                              <select
+                                value={scheduleLessonId}
+                                onChange={(e) => setScheduleLessonId(e.target.value)}
                                 className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 text-gray-700 font-medium"
                               >
-                                {lessons.map(l => (
-                                  <option key={l.id} value={l.id}>{l.title}</option>
+                                {lessons.map((l) => (
+                                  <option key={l.id} value={l.id}>
+                                    {l.title}
+                                  </option>
                                 ))}
                               </select>
                             )}
                           </div>
 
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1"><Calendar size={12} /> {t.dateSelect}</label>
-                            <input 
-                              type="date" 
-                              value={scheduleDate} 
-                              onChange={e => setScheduleDate(e.target.value)}
+                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1">
+                              <Calendar size={12} /> {t.dateSelect}
+                            </label>
+                            <input
+                              type="date"
+                              value={scheduleDate}
+                              onChange={(e) => setScheduleDate(e.target.value)}
                               className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 text-gray-700 font-medium"
                               required
                             />
@@ -375,28 +400,34 @@ export function QuickActionsMenu({
                       {currentView === 'assignment' && (
                         <>
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1"><Users size={12} /> {t.classSelect}</label>
+                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1">
+                              <Users size={12} /> {t.classSelect}
+                            </label>
                             {classes.length === 0 ? (
                               <p className="text-xs italic text-red-500">{t.emptyClasses}</p>
                             ) : (
-                              <select 
-                                value={assignmentClassId} 
-                                onChange={e => setAssignmentClassId(e.target.value)}
+                              <select
+                                value={assignmentClassId}
+                                onChange={(e) => setAssignmentClassId(e.target.value)}
                                 className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 text-gray-700 font-medium"
                               >
-                                {classes.map(c => (
-                                  <option key={c.id} value={c.id}>{c.name}</option>
+                                {classes.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.name}
+                                  </option>
                                 ))}
                               </select>
                             )}
                           </div>
 
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1"><Sparkles size={12} /> {t.assignmentTopic}</label>
-                            <input 
-                              type="text" 
-                              value={assignmentTopic} 
-                              onChange={e => setAssignmentTopic(e.target.value)}
+                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1">
+                              <Sparkles size={12} /> {t.assignmentTopic}
+                            </label>
+                            <input
+                              type="text"
+                              value={assignmentTopic}
+                              onChange={(e) => setAssignmentTopic(e.target.value)}
                               placeholder={t.assignmentTopicPlaceholder}
                               className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 text-gray-700 font-medium"
                               required
@@ -409,11 +440,13 @@ export function QuickActionsMenu({
                       {currentView === 'lesson' && (
                         <>
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1"><FileText size={12} /> {t.lessonTitle}</label>
-                            <input 
-                              type="text" 
-                              value={lessonTitle} 
-                              onChange={e => setLessonTitle(e.target.value)}
+                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1">
+                              <FileText size={12} /> {t.lessonTitle}
+                            </label>
+                            <input
+                              type="text"
+                              value={lessonTitle}
+                              onChange={(e) => setLessonTitle(e.target.value)}
                               placeholder={t.lessonTitlePlaceholder}
                               className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 text-gray-700 font-medium"
                               required
@@ -421,10 +454,12 @@ export function QuickActionsMenu({
                           </div>
 
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1"><BookOpen size={12} /> {t.lessonContent}</label>
-                            <textarea 
-                              value={lessonContent} 
-                              onChange={e => setLessonContent(e.target.value)}
+                            <label className="text-xs font-bold text-gray-600 flex items-center gap-1">
+                              <BookOpen size={12} /> {t.lessonContent}
+                            </label>
+                            <textarea
+                              value={lessonContent}
+                              onChange={(e) => setLessonContent(e.target.value)}
                               rows={5}
                               className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 font-mono text-gray-700"
                               required
@@ -434,9 +469,13 @@ export function QuickActionsMenu({
                       )}
 
                       {/* Submit */}
-                      <button 
+                      <button
                         type="submit"
-                        disabled={loading || (currentView === 'schedule' && (classes.length === 0 || lessons.length === 0)) || (currentView === 'assignment' && classes.length === 0)}
+                        disabled={
+                          loading ||
+                          (currentView === 'schedule' && (classes.length === 0 || lessons.length === 0)) ||
+                          (currentView === 'assignment' && classes.length === 0)
+                        }
                         className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-md active:scale-98 disabled:opacity-50"
                       >
                         {loading ? (

@@ -48,10 +48,7 @@ export class CapabilityRuntime implements CapabilityResolutionHost {
   private readonly resolvedContexts = new Map<string, CapabilityContext>();
   private builderSource?: BuilderIntegrationSource;
 
-  public constructor(
-    serviceRegistry: PlatformServiceRegistry,
-    options?: CapabilityRuntimeOptions,
-  ) {
+  public constructor(serviceRegistry: PlatformServiceRegistry, options?: CapabilityRuntimeOptions) {
     this.serviceRegistry = serviceRegistry;
     this.container = options?.container;
     this.builderSource = options?.builder;
@@ -91,9 +88,7 @@ export class CapabilityRuntime implements CapabilityResolutionHost {
     providerInit?: CapabilityProviderInit,
   ): PlatformCapability {
     const resolvedDescriptor =
-      descriptor instanceof CapabilityDescriptor
-        ? descriptor
-        : new CapabilityDescriptor(descriptor);
+      descriptor instanceof CapabilityDescriptor ? descriptor : new CapabilityDescriptor(descriptor);
     const provider = this.makeProvider(resolvedDescriptor, providerInit);
 
     const capability = this.registry.register(resolvedDescriptor, provider);
@@ -120,9 +115,7 @@ export class CapabilityRuntime implements CapabilityResolutionHost {
     providerInit?: CapabilityProviderInit,
   ): PlatformCapability {
     const resolvedDescriptor =
-      descriptor instanceof CapabilityDescriptor
-        ? descriptor
-        : new CapabilityDescriptor(descriptor);
+      descriptor instanceof CapabilityDescriptor ? descriptor : new CapabilityDescriptor(descriptor);
     const provider = this.makeProvider(resolvedDescriptor, providerInit);
     const capability = this.registry.replace(resolvedDescriptor, provider);
     this.mirrorToContainer(resolvedDescriptor);
@@ -150,10 +143,7 @@ export class CapabilityRuntime implements CapabilityResolutionHost {
 
   // ── Resolution (public API) ──────────────────────────────────────────
 
-  public resolve<T = unknown>(
-    capabilityId: string,
-    options?: CapabilityResolutionOptions,
-  ): T {
+  public resolve<T = unknown>(capabilityId: string, options?: CapabilityResolutionOptions): T {
     return this.resolveCapability(capabilityId, options) as T;
   }
 
@@ -250,9 +240,7 @@ export class CapabilityRuntime implements CapabilityResolutionHost {
     if (this.builderSource) {
       const unmatched = capabilities.filter((c) => !this.isBuilderAware(c.id));
       if (unmatched.length) {
-        warnings.push(
-          `${unmatched.length} capability(ies) not declared on the attached builder.`,
-        );
+        warnings.push(`${unmatched.length} capability(ies) not declared on the attached builder.`);
       }
     }
 
@@ -272,19 +260,12 @@ export class CapabilityRuntime implements CapabilityResolutionHost {
   private require(capabilityId: string): PlatformCapability {
     const capability = this.registry.find(capabilityId);
     if (!capability) {
-      throw new CapabilityError(
-        `Capability '${capabilityId}' is not registered.`,
-        'MISSING_CAPABILITY',
-        capabilityId,
-      );
+      throw new CapabilityError(`Capability '${capabilityId}' is not registered.`, 'MISSING_CAPABILITY', capabilityId);
     }
     return capability;
   }
 
-  private makeProvider(
-    descriptor: CapabilityDescriptor,
-    providerInit?: CapabilityProviderInit,
-  ): CapabilityProvider {
+  private makeProvider(descriptor: CapabilityDescriptor, providerInit?: CapabilityProviderInit): CapabilityProvider {
     if (providerInit) {
       return new CapabilityProvider({ capabilityId: descriptor.id, ...providerInit });
     }
@@ -331,10 +312,7 @@ export class CapabilityRuntime implements CapabilityResolutionHost {
     }
   }
 
-  private detectCycles(
-    capabilities: ReadonlyArray<PlatformCapability>,
-    errors: CapabilityValidationError[],
-  ): void {
+  private detectCycles(capabilities: ReadonlyArray<PlatformCapability>, errors: CapabilityValidationError[]): void {
     const byId = new Map(capabilities.map((c) => [c.id, c]));
     const visited = new Set<string>();
     const stack: string[] = [];

@@ -3,12 +3,7 @@
  * Decoupled event pipeline for Presence status changes, signals, and alerts.
  */
 
-import {
-  PresenceEventType,
-  PresenceEventMap,
-  PresenceEventEnvelope,
-  PresenceEventSubscriber,
-} from './types.js';
+import { PresenceEventType, PresenceEventMap, PresenceEventEnvelope, PresenceEventSubscriber } from './types.js';
 
 export class PresenceEventBus {
   private subscribers = new Map<string, Set<PresenceEventSubscriber<any>>>();
@@ -18,7 +13,7 @@ export class PresenceEventBus {
    */
   public subscribe<K extends PresenceEventType>(
     eventType: K | '*',
-    subscriber: PresenceEventSubscriber<K>
+    subscriber: PresenceEventSubscriber<K>,
   ): () => void {
     const key = String(eventType);
     if (!this.subscribers.has(key)) {
@@ -38,7 +33,7 @@ export class PresenceEventBus {
   public async publish<K extends PresenceEventType>(
     type: K,
     payload: PresenceEventMap[K],
-    source = 'presence.engine'
+    source = 'presence.engine',
   ): Promise<PresenceEventEnvelope<K>> {
     const envelope: PresenceEventEnvelope<K> = {
       id: `pevt_${globalThis.crypto.randomUUID()}`,
@@ -57,8 +52,8 @@ export class PresenceEventBus {
       allSubs.map((sub) =>
         Promise.resolve(sub(envelope)).catch((err: unknown) => {
           console.error(`[PresenceEventBus] Error in subscriber for ${String(type)}:`, err);
-        })
-      )
+        }),
+      ),
     );
 
     return envelope;

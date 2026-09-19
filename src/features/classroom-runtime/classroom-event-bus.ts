@@ -31,11 +31,7 @@ export class ClassroomEventBus {
     this.eventBus = eventBus ?? new EventBus();
   }
 
-  public publish<T = Record<string, unknown>>(
-    type: ClassroomEventType,
-    classroomId: string,
-    payload?: T
-  ): void {
+  public publish<T = Record<string, unknown>>(type: ClassroomEventType, classroomId: string, payload?: T): void {
     const event: ClassroomNamespacedEvent<T> = {
       id: `evt_cls_${type.replace('.', '_')}_${Date.now()}`,
       type,
@@ -54,10 +50,7 @@ export class ClassroomEventBus {
     });
   }
 
-  public subscribe(
-    type: ClassroomEventType | '*',
-    handler: (event: ClassroomNamespacedEvent) => void
-  ): () => void {
+  public subscribe(type: ClassroomEventType | '*', handler: (event: ClassroomNamespacedEvent) => void): () => void {
     const subscriber = this.eventBus.subscribe(type, (evt) => {
       handler(evt.payload as unknown as ClassroomNamespacedEvent);
     });

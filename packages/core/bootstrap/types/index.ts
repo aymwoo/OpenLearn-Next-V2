@@ -32,7 +32,6 @@ export type EnvironmentType = 'development' | 'production' | 'test';
 /** Platform execution mode. */
 export type PlatformMode = 'standalone' | 'cluster' | 'embedded';
 
-
 // ── ① Bootstrap Lifecycle Enum ───────────────────────────────────────────
 
 /**
@@ -53,13 +52,7 @@ export enum PlatformStage {
 export type StartupStageType = `${PlatformStage}`;
 
 /** Lifecycle state of the bootstrap process. */
-export type BootstrapState =
-  | 'Uninitialized'
-  | 'Bootstrapping'
-  | 'Active'
-  | 'Failed'
-  | 'Terminated';
-
+export type BootstrapState = 'Uninitialized' | 'Bootstrapping' | 'Active' | 'Failed' | 'Terminated';
 
 // ── ② Bootstrap Error Hierarchy ──────────────────────────────────────────
 
@@ -68,7 +61,7 @@ export class PlatformBootstrapError extends Error {
   constructor(
     message: string,
     public readonly stage?: PlatformStage,
-    public readonly cause?: unknown
+    public readonly cause?: unknown,
   ) {
     super(`[PlatformBootstrapError${stage ? `:${stage}` : ''}] ${message}`);
     this.name = 'PlatformBootstrapError';
@@ -117,7 +110,6 @@ export class StartupTimeoutError extends PlatformBootstrapError {
 
 /** Legacy alias for backward compatibility. */
 export const BootstrapError = PlatformBootstrapError;
-
 
 // ── ③ Platform Constants ─────────────────────────────────────────────────
 
@@ -171,7 +163,6 @@ export const DEFAULT_BOOTSTRAP_CONFIG: PlatformBootstrapConfig = Object.freeze({
   dbPath: './packages/core/db/educational_os.db',
 });
 
-
 // ── ⑥ Lifecycle Contracts ────────────────────────────────────────────────
 
 /** Disposable resource contract. */
@@ -193,7 +184,6 @@ export interface IPlatformShutdown {
 export interface IPlatformLifecycle extends IPlatformStartup, IPlatformShutdown, IPlatformDisposable {
   readonly currentStage: PlatformStage;
 }
-
 
 // ── PI-002: Bootstrap Context Contracts ─────────────────────────────────
 
@@ -226,7 +216,11 @@ export interface IFeatureFlags {
 /** Platform diagnostics contract for system metrics and status checks. */
 export interface IPlatformDiagnostics {
   getMetrics(): Readonly<Record<string, number>>;
-  getSystemStatus(): { readonly isHealthy: boolean; readonly activeServicesCount: number; readonly uptimeSeconds: number };
+  getSystemStatus(): {
+    readonly isHealthy: boolean;
+    readonly activeServicesCount: number;
+    readonly uptimeSeconds: number;
+  };
 }
 
 /** Service Locator interface contract. */
@@ -340,7 +334,6 @@ export interface IBootstrapPipeline {
   readonly stages: ReadonlyArray<IBootstrapStage>;
   run(context: IBootstrapContext): Promise<void>;
 }
-
 
 // ── ⑤ PlatformBuilder Interface ───────────────────────────────────────────
 

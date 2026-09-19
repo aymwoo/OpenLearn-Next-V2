@@ -18,10 +18,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  createMethodProxy,
-  createServicesProxy,
-} from '../service-proxy.js';
+import { createMethodProxy, createServicesProxy } from '../service-proxy.js';
 import type { IWorkerTransport, PendingCall } from '../types.js';
 import { WorkerTimeoutError, WorkerTransportError } from '../errors.js';
 
@@ -56,10 +53,7 @@ function createMockTransport(): MockTransport {
  * incoming result/error messages against a pendingCalls Map.
  * This replicates the onMessage logic from createServicesProxy.
  */
-function registerResponseHandler(
-  transport: MockTransport,
-  pendingCalls: Map<string, PendingCall>,
-): void {
+function registerResponseHandler(transport: MockTransport, pendingCalls: Map<string, PendingCall>): void {
   transport.onMessage((msg: unknown) => {
     const typed = msg as { type?: string; invokeId?: string };
     const invokeId = typed?.invokeId;
@@ -70,9 +64,7 @@ function registerResponseHandler(
     pendingCalls.delete(invokeId);
 
     if (typed.type === 'error') {
-      const err = new Error(
-        (msg as { message?: string }).message ?? 'RPC error',
-      );
+      const err = new Error((msg as { message?: string }).message ?? 'RPC error');
       err.name = (msg as { code?: string }).code ?? 'RpcError';
       err.stack = (msg as { stack?: string }).stack;
       pending.reject(err);
@@ -179,12 +171,7 @@ describe('createMethodProxy', () => {
   });
 
   it('should timeout with WorkerTimeoutError', async () => {
-    const proxy = createMethodProxy(
-      transport,
-      'test:Service',
-      pendingCalls,
-      50,
-    );
+    const proxy = createMethodProxy(transport, 'test:Service', pendingCalls, 50);
     // No response handler needed — timeout fires automatically
     const promise = proxy.slowOp();
 
@@ -197,12 +184,7 @@ describe('createMethodProxy', () => {
   });
 
   it('should not timeout when timeoutMs is 0', async () => {
-    const proxy = createMethodProxy(
-      transport,
-      'test:Service',
-      pendingCalls,
-      0,
-    );
+    const proxy = createMethodProxy(transport, 'test:Service', pendingCalls, 0);
     registerResponseHandler(transport, pendingCalls);
 
     const promise = proxy.noTimeout();
@@ -243,21 +225,13 @@ describe('createServicesProxy', () => {
       '@openlearn/core:IEventBusService',
     ]);
 
-    expect(result.services).toHaveProperty(
-      '@openlearn/core:ICommandBusService',
-    );
-    expect(result.services).toHaveProperty(
-      '@openlearn/core:IEventBusService',
-    );
-    expect(
-      typeof result.services['@openlearn/core:ICommandBusService'],
-    ).toBe('object');
+    expect(result.services).toHaveProperty('@openlearn/core:ICommandBusService');
+    expect(result.services).toHaveProperty('@openlearn/core:IEventBusService');
+    expect(typeof result.services['@openlearn/core:ICommandBusService']).toBe('object');
   });
 
   it('should return a callable function for each service method', () => {
-    const result = createServicesProxy(transport, [
-      '@openlearn/core:ICommandBusService',
-    ]);
+    const result = createServicesProxy(transport, ['@openlearn/core:ICommandBusService']);
     const svc = result.services['@openlearn/core:ICommandBusService'];
     expect(typeof svc.execute).toBe('function');
     expect(typeof svc.registerHandler).toBe('function');
@@ -326,11 +300,7 @@ describe('createServicesProxy', () => {
     });
 
     // All promises should resolve with correct values
-    const [resultA, resultB, resultC] = await Promise.all([
-      promiseA,
-      promiseB,
-      promiseC,
-    ]);
+    const [resultA, resultB, resultC] = await Promise.all([promiseA, promiseB, promiseC]);
     expect(resultA).toBe('A-result');
     expect(resultB).toBe('B-result');
     expect(resultC).toBe('C-result');

@@ -7,6 +7,7 @@ OpenLearn V2 是一套全栈、分布式、基于插件化微前端架构的智�
 ## 核心设计理念
 
 ### 1. 架构分层 (Layered Architecture)
+
 OpenLearn V2 采用分层解耦的模块化设计，平台内核（Kernel）清晰地划分为 4 个初始化层级（Layer 0 ~ Layer 3）：
 
 - **Layer 0（基础设施）**: 提供零依赖的 EventBus 事件总线、CapabilityGuard 权限防护、ServiceRegistry 服务容器、StorageService 存储服务以及 AIService 基础服务。
@@ -17,14 +18,18 @@ OpenLearn V2 采用分层解耦的模块化设计，平台内核（Kernel）清�
 > 详细内核分层规范请参阅权威页面：[Platform Kernel 内核规范](../core/platform-kernel)
 
 ### 2. 组合根与依赖注入 (Composition Root & Dependency Injection)
+
 平台通过统一的 DI Container (`ServiceRegistry`) 和类型安全的 `Token<T>` 实现零硬编码耦合：
+
 - 所有底层服务和高层引擎均显式注册至 DI 容器。
 - 宿主与插件之间通过类型安全的 Token 进行依赖解算（Dependency Resolution）与服务共享。
 
 > 详细依赖注入机制请参阅权威页面：[Dependency Injection 依赖注入](../core/dependency-injection) 与 [Composition Root 服务组装](../architecture/composition-root)
 
 ### 3. 引导流水线 (Bootstrap Pipeline)
+
 系统启动遵循严格的 5 阶段引导流水线：
+
 1. **Startup**: 初始化基础基础设施与环境变量。
 2. **Registration**: 注册系统核心服务 Token 与扩展点。
 3. **Initialization**: 执行各子系统与引擎的异步初始化。
@@ -34,6 +39,7 @@ OpenLearn V2 采用分层解耦的模块化设计，平台内核（Kernel）清�
 > 详细启动流程请参阅权威页面：[Bootstrap Pipeline 引导流水线](../core/bootstrap-pipeline)
 
 ### 4. 沙箱隔离的插件生态 (Plugin Ecosystem)
+
 - 插件以 Worker Thread 沙箱隔离模式运行，主进程与插件线程安全隔离。
 - 插件通过 `@openlearn/plugin-sdk@3.5.2` 提供的 `PluginContext` 交互，无法直接触碰全局 DOM 或私有 Core API。
 
@@ -43,14 +49,14 @@ OpenLearn V2 采用分层解耦的模块化设计，平台内核（Kernel）清�
 
 ## 平台技术栈
 
-| 模块 | 选型与技术 |
-|---|---|
+| 模块           | 选型与技术                                                   |
+| -------------- | ------------------------------------------------------------ |
 | **后端运行时** | Node.js (ESM), Express, Socket.IO, SQLite (`better-sqlite3`) |
-| **前端框架** | React 19, TypeScript, Vite |
-| **核心内核** | Custom Micro-kernel (`packages/core`) with DI Container |
-| **插件 SDK** | `@openlearn/plugin-sdk` (v3.5.2) |
-| **测试框架** | Vitest with jsdom environment |
-| **文档引擎** | Sphinx with MyST Parser, Mermaid, RTD Theme |
+| **前端框架**   | React 19, TypeScript, Vite                                   |
+| **核心内核**   | Custom Micro-kernel (`packages/core`) with DI Container      |
+| **插件 SDK**   | `@openlearn/plugin-sdk` (v3.5.2)                             |
+| **测试框架**   | Vitest with jsdom environment                                |
+| **文档引擎**   | Sphinx with MyST Parser, Mermaid, RTD Theme                  |
 
 ---
 
@@ -60,13 +66,13 @@ OpenLearn V2 采用分层解耦的模块化设计，平台内核（Kernel）清�
 graph TD
     A["OpenLearn V2 Platform Kernel"] --> B["Kernel Layer 0-3"]
     A --> C["Composition Root & server.ts"]
-    
+
     B --> D["Lesson Engine"]
     B --> E["Whiteboard Engine"]
     B --> F["AI Runtime & Capability"]
     B --> G["Plugin Host (Worker Sandboxing)"]
     B --> H["Analytics Engine"]
-    
+
     G --> I["Builtin Plugins"]
     G --> J["Third-Party Plugins (SDK V3.5.2)"]
 ```

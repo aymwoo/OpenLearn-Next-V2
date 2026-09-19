@@ -31,7 +31,7 @@ export interface ExportWeightModalProps {
     className: string,
     qWeight?: number,
     aWeight?: number,
-    overrides?: Record<string, 'quiz' | 'assignment'>
+    overrides?: Record<string, 'quiz' | 'assignment'>,
   ) => void;
 }
 
@@ -71,8 +71,8 @@ export function ExportWeightModal({
               {lang === 'zh' ? '导出成绩权重设置' : 'Grade Export & Weighting Settings'}
             </h2>
           </div>
-          <button 
-            onClick={() => setIsExportWeightModalOpen(false)} 
+          <button
+            onClick={() => setIsExportWeightModalOpen(false)}
             className="text-gray-400 hover:text-gray-600 font-bold p-1 hover:bg-gray-200 rounded transition-colors text-lg"
           >
             &times;
@@ -82,8 +82,8 @@ export function ExportWeightModal({
         {/* Modal Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           <div className="bg-indigo-50 border border-indigo-150 rounded-xl p-4 text-indigo-800 text-xs font-sans leading-relaxed">
-            {lang === 'zh' 
-              ? '您可以自定义测验与作业在期末成绩(平均分)中的计算权重。系统已根据测验名和内容自动对课程内容进行分类，您可以在下方手动微调分类。' 
+            {lang === 'zh'
+              ? '您可以自定义测验与作业在期末成绩(平均分)中的计算权重。系统已根据测验名和内容自动对课程内容进行分类，您可以在下方手动微调分类。'
               : 'Customize the calculation weight of quizzes and assignments in the calculated average score. The system automatically classifies items, but you can manually override categorized groups below.'}
           </div>
 
@@ -93,7 +93,7 @@ export function ExportWeightModal({
               <Percent size={16} className="text-indigo-500 font-sans" />
               {lang === 'zh' ? '定义成绩占比权重' : 'Define Weighting Percentages'}
             </h3>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100 font-sans">
               {/* Quizzes Weight */}
               <div className="space-y-2">
@@ -139,14 +139,20 @@ export function ExportWeightModal({
             <div className="flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => { setQuizzesWeight(50); setAssignmentsWeight(50); }}
+                onClick={() => {
+                  setQuizzesWeight(50);
+                  setAssignmentsWeight(50);
+                }}
                 className="text-[10px] text-gray-500 hover:text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 font-bold px-2.5 py-1 rounded transition-colors cursor-pointer"
               >
                 {lang === 'zh' ? '均衡配比 50/50' : 'Balance 50/50'}
               </button>
               <button
                 type="button"
-                onClick={() => { setQuizzesWeight(40); setAssignmentsWeight(60); }}
+                onClick={() => {
+                  setQuizzesWeight(40);
+                  setAssignmentsWeight(60);
+                }}
                 className="text-[10px] text-gray-500 hover:text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 font-bold px-2.5 py-1 rounded transition-colors cursor-pointer"
               >
                 {lang === 'zh' ? '推荐配比 40/60' : 'Recommend 40/60'}
@@ -162,19 +168,29 @@ export function ExportWeightModal({
                 {lang === 'zh' ? '期末考核项目微调' : 'Item Categorization Overrides'}
               </span>
               <span className="text-[10px] text-gray-400 font-medium font-sans">
-                {lang === 'zh' ? `共 ${classDashboardMap[exportClassId]?.assignments?.length || 0} 项` : `${classDashboardMap[exportClassId]?.assignments?.length || 0} items total`}
+                {lang === 'zh'
+                  ? `共 ${classDashboardMap[exportClassId]?.assignments?.length || 0} 项`
+                  : `${classDashboardMap[exportClassId]?.assignments?.length || 0} items total`}
               </span>
             </h3>
 
             <div className="border border-gray-150 rounded-xl overflow-hidden divide-y divide-gray-100 max-h-60 overflow-y-auto bg-white shadow-inner">
               {(classDashboardMap[exportClassId]?.assignments || []).map((a: any) => {
                 const isMcq = a.content && a.content.startsWith('{"quizType":"mcq_learning_objectives"');
-                const hasQuizInTitle = a.title && (a.title.toLowerCase().includes('quiz') || a.title.toLowerCase().includes('test') || a.title.includes('测验') || a.title.includes('测试'));
-                const defaultCategory = (isMcq || hasQuizInTitle) ? 'quiz' : 'assignment';
+                const hasQuizInTitle =
+                  a.title &&
+                  (a.title.toLowerCase().includes('quiz') ||
+                    a.title.toLowerCase().includes('test') ||
+                    a.title.includes('测验') ||
+                    a.title.includes('测试'));
+                const defaultCategory = isMcq || hasQuizInTitle ? 'quiz' : 'assignment';
                 const currentCategory = customCategoryOverrides[a.id] || defaultCategory;
 
                 return (
-                  <div key={a.id} className="p-3 flex items-center justify-between gap-4 font-sans hover:bg-gray-50/50 transition-colors">
+                  <div
+                    key={a.id}
+                    className="p-3 flex items-center justify-between gap-4 font-sans hover:bg-gray-50/50 transition-colors"
+                  >
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-xs text-gray-800 truncate" title={a.title}>
                         {a.title}
@@ -187,7 +203,7 @@ export function ExportWeightModal({
                     <div className="flex border border-gray-200 rounded-lg p-0.5 bg-gray-50 shrink-0">
                       <button
                         type="button"
-                        onClick={() => setCustomCategoryOverrides(prev => ({ ...prev, [a.id]: 'quiz' }))}
+                        onClick={() => setCustomCategoryOverrides((prev) => ({ ...prev, [a.id]: 'quiz' }))}
                         className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
                           currentCategory === 'quiz'
                             ? 'bg-indigo-600 text-white shadow'
@@ -198,7 +214,7 @@ export function ExportWeightModal({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setCustomCategoryOverrides(prev => ({ ...prev, [a.id]: 'assignment' }))}
+                        onClick={() => setCustomCategoryOverrides((prev) => ({ ...prev, [a.id]: 'assignment' }))}
                         className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
                           currentCategory === 'assignment'
                             ? 'bg-emerald-600 text-white shadow'
@@ -211,7 +227,8 @@ export function ExportWeightModal({
                   </div>
                 );
               })}
-              {(!classDashboardMap[exportClassId]?.assignments || classDashboardMap[exportClassId].assignments.length === 0) && (
+              {(!classDashboardMap[exportClassId]?.assignments ||
+                classDashboardMap[exportClassId].assignments.length === 0) && (
                 <div className="p-8 text-center text-xs text-gray-400 italic">
                   {lang === 'zh' ? '此班级暂未创建任何考核项目' : 'No graded items exist in this class.'}
                 </div>
@@ -228,10 +245,12 @@ export function ExportWeightModal({
                   {lang === 'zh' ? 'CSV 实时成绩表预览 (前5行数据)' : 'Live CSV Grade Preview (First 5 Rows)'}
                 </span>
                 <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold px-2 py-0.5 rounded shadow-xs font-sans">
-                  {lang === 'zh' ? `展示 5 / ${csvPreviewData.totalStudents} 名学生` : `Showing 5 of ${csvPreviewData.totalStudents} students`}
+                  {lang === 'zh'
+                    ? `展示 5 / ${csvPreviewData.totalStudents} 名学生`
+                    : `Showing 5 of ${csvPreviewData.totalStudents} students`}
                 </span>
               </h3>
-              
+
               <div className="border border-gray-150 rounded-xl overflow-hidden bg-white shadow-xs max-w-full">
                 <div className="overflow-x-auto max-h-56 overflow-y-auto">
                   <table className="w-full border-collapse text-left">
@@ -242,14 +261,14 @@ export function ExportWeightModal({
                           const isCalcCol = hdr.includes('Average') || hdr.includes('Avg') || hdr.includes('Score');
                           const isWeighted = hdr.includes('Weighted');
                           return (
-                            <th 
-                              key={hIdx} 
+                            <th
+                              key={hIdx}
                               className={`p-2.5 text-[10px] font-bold tracking-wider uppercase border-r border-gray-150 whitespace-nowrap font-sans font-semibold ${
-                                isWeighted 
-                                  ? 'text-indigo-700 bg-indigo-50/70 border-indigo-150 font-bold' 
-                                  : isCalcCol 
-                                  ? 'text-emerald-700 bg-emerald-50/70' 
-                                  : 'text-gray-500'
+                                isWeighted
+                                  ? 'text-indigo-700 bg-indigo-50/70 border-indigo-150 font-bold'
+                                  : isCalcCol
+                                    ? 'text-emerald-700 bg-emerald-50/70'
+                                    : 'text-gray-500'
                               }`}
                             >
                               {hdr}
@@ -264,18 +283,19 @@ export function ExportWeightModal({
                           {row.map((cell, cIdx) => {
                             const hdrName = csvPreviewData.headers[cIdx] || '';
                             const isWeighted = hdrName.includes('Weighted');
-                            const isCalcCol = hdrName.includes('Average') || hdrName.includes('Avg') || hdrName.includes('Score');
+                            const isCalcCol =
+                              hdrName.includes('Average') || hdrName.includes('Avg') || hdrName.includes('Score');
                             return (
-                              <td 
-                                key={cIdx} 
+                              <td
+                                key={cIdx}
                                 className={`p-2 border-r border-gray-100 font-mono text-[10px] text-gray-700 whitespace-nowrap text-center ${
-                                  isWeighted 
-                                    ? 'bg-indigo-50/30 font-bold text-indigo-700 border-indigo-100' 
-                                    : isCalcCol 
-                                    ? 'bg-emerald-50/10 font-semibold text-emerald-800' 
-                                    : cIdx < 2 
-                                    ? 'text-left font-sans font-medium' 
-                                    : ''
+                                  isWeighted
+                                    ? 'bg-indigo-50/30 font-bold text-indigo-700 border-indigo-100'
+                                    : isCalcCol
+                                      ? 'bg-emerald-50/10 font-semibold text-emerald-800'
+                                      : cIdx < 2
+                                        ? 'text-left font-sans font-medium'
+                                        : ''
                                 }`}
                               >
                                 {cell}
@@ -289,8 +309,8 @@ export function ExportWeightModal({
                 </div>
               </div>
               <p className="text-[10px] text-gray-400 font-sans italic">
-                {lang === 'zh' 
-                  ? '* 改变上方权重占比或调整项目分类时，此预览与计算结果会立即实时刷新。' 
+                {lang === 'zh'
+                  ? '* 改变上方权重占比或调整项目分类时，此预览与计算结果会立即实时刷新。'
                   : '* Calculations and layout values in this preview refresh dynamically as you tweak sliders and overrides.'}
               </p>
             </div>
@@ -308,9 +328,18 @@ export function ExportWeightModal({
           </button>
           <button
             type="button"
-            disabled={!classDashboardMap[exportClassId]?.assignments || classDashboardMap[exportClassId].assignments.length === 0}
+            disabled={
+              !classDashboardMap[exportClassId]?.assignments ||
+              classDashboardMap[exportClassId].assignments.length === 0
+            }
             onClick={() => {
-              handleExportGrades(exportClassId, exportClassName, quizzesWeight, assignmentsWeight, customCategoryOverrides);
+              handleExportGrades(
+                exportClassId,
+                exportClassName,
+                quizzesWeight,
+                assignmentsWeight,
+                customCategoryOverrides,
+              );
               setIsExportWeightModalOpen(false);
             }}
             className="px-4 py-2 text-xs font-bold bg-indigo-600 text-white border border-indigo-700 rounded-lg hover:bg-indigo-700 hover:shadow shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"

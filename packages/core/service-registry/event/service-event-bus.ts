@@ -3,20 +3,12 @@
  * Typed event bus for service lifecycle events.
  */
 
-import {
-  ServiceEventType,
-  ServiceEventMap,
-  ServiceEventEnvelope,
-  ServiceEventSubscriber,
-} from '../types/index.js';
+import { ServiceEventType, ServiceEventMap, ServiceEventEnvelope, ServiceEventSubscriber } from '../types/index.js';
 
 export class ServiceEventBus {
   private subscribers = new Map<string, Set<ServiceEventSubscriber<any>>>();
 
-  public subscribe<K extends ServiceEventType>(
-    eventType: K | '*',
-    subscriber: ServiceEventSubscriber<K>
-  ): () => void {
+  public subscribe<K extends ServiceEventType>(eventType: K | '*', subscriber: ServiceEventSubscriber<K>): () => void {
     const key = String(eventType);
     if (!this.subscribers.has(key)) {
       this.subscribers.set(key, new Set());
@@ -31,7 +23,7 @@ export class ServiceEventBus {
 
   public async publish<K extends ServiceEventType>(
     type: K,
-    payload: ServiceEventMap[K]
+    payload: ServiceEventMap[K],
   ): Promise<ServiceEventEnvelope<K>> {
     const envelope: ServiceEventEnvelope<K> = {
       id: `svcevt_${globalThis.crypto.randomUUID()}`,
@@ -49,8 +41,8 @@ export class ServiceEventBus {
       allSubs.map((sub) =>
         Promise.resolve(sub(envelope)).catch((err: unknown) => {
           console.error(`[ServiceEventBus] Error in subscriber for ${String(type)}:`, err);
-        })
-      )
+        }),
+      ),
     );
 
     return envelope;

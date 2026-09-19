@@ -11,7 +11,10 @@ import type { ServerContext } from '../context.js';
  * - 教师仅可修改/删除本人创建的课程 (creator_id === session.userId)
  * - 兼容历史未记录 creator_id 的课程
  */
-export function checkLessonOwnership(req: any, lessonId: string): { allowed: boolean; status: number; error?: string; lesson?: any } {
+export function checkLessonOwnership(
+  req: any,
+  lessonId: string,
+): { allowed: boolean; status: number; error?: string; lesson?: any } {
   const token = getCookieToken(req);
   const session = req.session || (token ? getValidSession(token) : null);
   if (!session) {
@@ -45,7 +48,7 @@ export function checkLessonOwnership(req: any, lessonId: string): { allowed: boo
   return {
     allowed: false,
     status: 403,
-    error: 'Forbidden: You do not have permission to modify this lesson because it was created by another teacher'
+    error: 'Forbidden: You do not have permission to modify this lesson because it was created by another teacher',
   };
 }
 
@@ -90,7 +93,7 @@ export function requireWhiteboardWriteAccess() {
         }
         return res.status(403).json({
           success: false,
-          error: 'Forbidden: You do not have permission to modify another student\'s assignment whiteboard'
+          error: "Forbidden: You do not have permission to modify another student's assignment whiteboard",
         });
       }
       return res.status(403).json({ success: false, error: 'Forbidden: Invalid role for whiteboard write' });
@@ -101,7 +104,7 @@ export function requireWhiteboardWriteAccess() {
     if (!isTeacherOrAdmin) {
       return res.status(403).json({
         success: false,
-        error: 'Forbidden: Students cannot modify classroom whiteboards'
+        error: 'Forbidden: Students cannot modify classroom whiteboards',
       });
     }
 
@@ -110,13 +113,19 @@ export function requireWhiteboardWriteAccess() {
       return res.status(404).json({ success: false, error: 'Lesson not found' });
     }
 
-    if (isAdmin || !lesson.creator_id || lesson.creator_id === session.userId || lesson.creator_id === session.username) {
+    if (
+      isAdmin ||
+      !lesson.creator_id ||
+      lesson.creator_id === session.userId ||
+      lesson.creator_id === session.username
+    ) {
       return next();
     }
 
     return res.status(403).json({
       success: false,
-      error: 'Forbidden: You do not have permission to modify this lesson whiteboard because it was created by another teacher'
+      error:
+        'Forbidden: You do not have permission to modify this lesson whiteboard because it was created by another teacher',
     });
   };
 }
@@ -125,13 +134,17 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   const { app, io } = ctx;
 
   app.get('/api/lessons', (req, res) => {
-    const lessons = kernelContainer.db.prepare(`
+    const lessons = kernelContainer.db
+      .prepare(
+        `
       SELECT l.*, u.name as creator_name,
         (SELECT COUNT(*) FROM student_lesson_progress WHERE lesson_id = l.id) as enrollment_count
       FROM lessons l
       LEFT JOIN users u ON l.creator_id = u.id
       ORDER BY l.created_at DESC
-    `).all();
+    `,
+      )
+      .all();
     res.json(lessons);
   });
 
@@ -139,12 +152,16 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.get('/api/lessons/:lessonId/eval-submissions', (req, res) => {
     try {
       const { lessonId } = req.params;
-      const rows = kernelContainer.db.prepare(`
+      const rows = kernelContainer.db
+        .prepare(
+          `
         SELECT ps.*, s.name as student_name
         FROM plugin_submissions ps
         LEFT JOIN students s ON ps.student_id = s.id
         WHERE ps.lesson_id = ?
-      `).all(lessonId);
+      `,
+        )
+        .all(lessonId);
       res.json(rows);
     } catch (err: any) {
       sendSafeError(res, err);
@@ -154,22 +171,30 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.get('/api/lessons/:lessonId/eval-grades', (req, res) => {
     try {
       const { lessonId } = req.params;
-      const submissions = kernelContainer.db.prepare(`
+      const submissions = kernelContainer.db
+        .prepare(
+          `
         SELECT ps.*, s.name as student_name
         FROM plugin_submissions ps
         LEFT JOIN students s ON ps.student_id = s.id
         WHERE ps.lesson_id = ?
-      `).all(lessonId) as any[];
+      `,
+        )
+        .all(lessonId) as any[];
 
       const result = [];
       for (const sub of submissions) {
         // Query peer reviews with reviewer names
-        const reviews = kernelContainer.db.prepare(`
+        const reviews = kernelContainer.db
+          .prepare(
+            `
           SELECT pr.*, s.name as reviewer_name
           FROM plugin_peer_reviews pr
           LEFT JOIN students s ON pr.reviewer_id = s.id
           WHERE pr.submission_id = ?
-        `).all(sub.id) as any[];
+        `,
+          )
+          .all(sub.id) as any[];
 
         let peerAverageScore = 0;
         if (reviews.length > 0) {
@@ -178,9 +203,13 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         }
 
         // Query grade details
-        const grade = kernelContainer.db.prepare(`
+        const grade = kernelContainer.db
+          .prepare(
+            `
           SELECT * FROM plugin_grades WHERE submission_id = ?
-        `).get(sub.id) as any;
+        `,
+          )
+          .get(sub.id) as any;
 
         result.push({
           id: sub.id,
@@ -193,7 +222,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
           updatedAt: sub.updated_at,
           peerReviews: reviews,
           peerAverageScore,
-          grade: grade || null
+          grade: grade || null,
         });
       }
 
@@ -206,12 +235,16 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.get('/api/eval-submissions/:submissionId/reviews', (req, res) => {
     try {
       const { submissionId } = req.params;
-      const rows = kernelContainer.db.prepare(`
+      const rows = kernelContainer.db
+        .prepare(
+          `
         SELECT pr.*, s.name as reviewer_name
         FROM plugin_peer_reviews pr
         LEFT JOIN students s ON pr.reviewer_id = s.id
         WHERE pr.submission_id = ?
-      `).all(submissionId);
+      `,
+        )
+        .all(submissionId);
       res.json(rows);
     } catch (err: any) {
       sendSafeError(res, err);
@@ -221,39 +254,55 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.get('/api/lessons/:lessonId/students/:studentId/eval-status', (req, res) => {
     try {
       const { lessonId, studentId } = req.params;
-      const submission = kernelContainer.db.prepare(`
+      const submission = kernelContainer.db
+        .prepare(
+          `
         SELECT * FROM plugin_submissions WHERE lesson_id = ? AND student_id = ?
-      `).get(lessonId, studentId) as any;
+      `,
+        )
+        .get(lessonId, studentId) as any;
 
       let reviewsWritten = [];
       let grade = null;
 
       if (submission) {
-        reviewsWritten = kernelContainer.db.prepare(`
+        reviewsWritten = kernelContainer.db
+          .prepare(
+            `
           SELECT pr.*, s.name as student_name 
           FROM plugin_peer_reviews pr
           LEFT JOIN plugin_submissions ps ON pr.submission_id = ps.id
           LEFT JOIN students s ON ps.student_id = s.id
           WHERE pr.reviewer_id = ? AND ps.lesson_id = ?
-        `).all(studentId, lessonId);
+        `,
+          )
+          .all(studentId, lessonId);
 
-        grade = kernelContainer.db.prepare(`
+        grade = kernelContainer.db
+          .prepare(
+            `
           SELECT * FROM plugin_grades WHERE submission_id = ?
-        `).get(submission.id) as any;
+        `,
+          )
+          .get(submission.id) as any;
       } else {
-        reviewsWritten = kernelContainer.db.prepare(`
+        reviewsWritten = kernelContainer.db
+          .prepare(
+            `
           SELECT pr.*, s.name as student_name 
           FROM plugin_peer_reviews pr
           LEFT JOIN plugin_submissions ps ON pr.submission_id = ps.id
           LEFT JOIN students s ON ps.student_id = s.id
           WHERE pr.reviewer_id = ? AND ps.lesson_id = ?
-        `).all(studentId, lessonId);
+        `,
+          )
+          .all(studentId, lessonId);
       }
 
       res.json({
         submission,
         reviewsWritten,
-        grade
+        grade,
       });
     } catch (err: any) {
       sendSafeError(res, err);
@@ -266,12 +315,9 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const session = (req as any).session;
       const creatorId = session?.userId || session?.username || 'usr_teacher';
       const actorId = getActorId(req) || 'teacher';
-      const cmd = kernelContainer.commandBus.createCommand(
-         'lesson.create',
-         { title, content, creatorId },
-         actorId,
-         { approved: true }
-      );
+      const cmd = kernelContainer.commandBus.createCommand('lesson.create', { title, content, creatorId }, actorId, {
+        approved: true,
+      });
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json({ success: true, result });
     } catch (e: any) {
@@ -290,10 +336,10 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const { timeline } = req.body;
       const actorId = getActorId(req) || 'teacher';
       const cmd = kernelContainer.commandBus.createCommand(
-         'lesson.update_timeline',
-         { lessonId: id, timeline },
-         actorId,
-         { approved: true }
+        'lesson.update_timeline',
+        { lessonId: id, timeline },
+        actorId,
+        { approved: true },
       );
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json({ success: true, result });
@@ -311,17 +357,17 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       }
 
       const { progressMode, progressConditions } = req.body;
-      const conditionsStr = typeof progressConditions === 'string'
-        ? progressConditions
-        : JSON.stringify(progressConditions || null);
+      const conditionsStr =
+        typeof progressConditions === 'string' ? progressConditions : JSON.stringify(progressConditions || null);
 
-      kernelContainer.db.prepare('UPDATE lessons SET progress_mode = ?, progress_conditions = ?, updated_at = ? WHERE id = ?')
+      kernelContainer.db
+        .prepare('UPDATE lessons SET progress_mode = ?, progress_conditions = ?, updated_at = ? WHERE id = ?')
         .run(progressMode || 'manual', conditionsStr, Date.now(), id);
 
       io.emit('lesson-progress-mode-changed', {
         lessonId: id,
         progressMode: progressMode || 'manual',
-        progressConditions: progressConditions || null
+        progressConditions: progressConditions || null,
       });
 
       res.json({ success: true });
@@ -329,30 +375,31 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       sendSafeError(res, e);
     }
   });
-  
+
   // Auth helper functions imported from server/middleware/auth.js
   // (getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId are now module-level imports)
-
 
   app.get('/api/lessons/:id/whiteboard', (req, res) => {
     const id = req.params.id;
     const elements = kernelContainer.db.prepare('SELECT * FROM whiteboard_elements WHERE lesson_id = ?').all(id);
-    
+
     // Take a snapshot on first load if it's a regular lesson and no snapshot exists yet
     if (!id.startsWith('assignment-') && !id.startsWith('snapshot-')) {
       try {
         const snapshotId = `snapshot-${id}`;
-        const markerCheck = kernelContainer.db.prepare('SELECT count(*) as count FROM whiteboard_elements WHERE lesson_id = ?').get(snapshotId) as any;
+        const markerCheck = kernelContainer.db
+          .prepare('SELECT count(*) as count FROM whiteboard_elements WHERE lesson_id = ?')
+          .get(snapshotId) as any;
         const count = markerCheck ? markerCheck.count : 0;
         if (count === 0) {
           // Take snapshot
           const insertStmt = kernelContainer.db.prepare(
-            'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)'
+            'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
           );
-          
+
           // Insert marker
           insertStmt.run(`marker-${id}-${Date.now()}`, snapshotId, 'snapshot_marker', '{}', Date.now());
-          
+
           // Insert copies of all current elements
           for (const el of elements as any[]) {
             insertStmt.run(`snapshot-${el.id}`, snapshotId, el.type, el.data, el.created_at);
@@ -362,38 +409,40 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         console.error('Failed to create whiteboard snapshot:', err);
       }
     }
-    
+
     res.json(elements);
   });
 
   app.post('/api/lessons/:id/whiteboard/reset', requireWhiteboardWriteAccess(), async (req, res) => {
     try {
       const id = req.params.id;
-      
+
       // If it's an assignment whiteboard, reset means clearing it (making it empty)
       if (id.startsWith('assignment-')) {
         const deleteStmt = kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?');
         deleteStmt.run(id);
         return res.json({ success: true, message: 'Assignment whiteboard reset to empty' });
       }
-      
+
       const snapshotId = `snapshot-${id}`;
-      const hasSnapshot = kernelContainer.db.prepare('SELECT count(*) as count FROM whiteboard_elements WHERE lesson_id = ?').get(snapshotId) as any;
+      const hasSnapshot = kernelContainer.db
+        .prepare('SELECT count(*) as count FROM whiteboard_elements WHERE lesson_id = ?')
+        .get(snapshotId) as any;
       const count = hasSnapshot ? hasSnapshot.count : 0;
-      
+
       if (count > 0) {
         // Revert to snapshot
         // 1. Delete all current elements for this lesson
         kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
-        
+
         // 2. Fetch all snapshot elements (excluding the marker)
-        const snapshotElements = kernelContainer.db.prepare(
-          "SELECT * FROM whiteboard_elements WHERE lesson_id = ? AND type != 'snapshot_marker'"
-        ).all(snapshotId) as any[];
-        
+        const snapshotElements = kernelContainer.db
+          .prepare("SELECT * FROM whiteboard_elements WHERE lesson_id = ? AND type != 'snapshot_marker'")
+          .all(snapshotId) as any[];
+
         // 3. Re-insert them into the active lesson whiteboard
         const insertStmt = kernelContainer.db.prepare(
-          'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)'
+          'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
         );
         for (const el of snapshotElements) {
           const originalId = el.id.startsWith('snapshot-') ? el.id.substring('snapshot-'.length) : el.id;
@@ -415,12 +464,17 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const { id } = req.params;
       const { type, data } = req.body;
       const actorId = getActorId(req) || 'user-frontend';
-      const cmd = kernelContainer.commandBus.createCommand('whiteboard.draw', {
-        lessonId: id,
-        type,
-        data: JSON.stringify(data)
-      }, actorId, { approved: true });
-      
+      const cmd = kernelContainer.commandBus.createCommand(
+        'whiteboard.draw',
+        {
+          lessonId: id,
+          type,
+          data: JSON.stringify(data),
+        },
+        actorId,
+        { approved: true },
+      );
+
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -433,12 +487,17 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const { id, elementId } = req.params;
       const { data } = req.body;
       const actorId = getActorId(req) || 'user-frontend';
-      const cmd = kernelContainer.commandBus.createCommand('whiteboard.update', {
-        lessonId: id,
-        elementId,
-        data: JSON.stringify(data)
-      }, actorId, { approved: true });
-      
+      const cmd = kernelContainer.commandBus.createCommand(
+        'whiteboard.update',
+        {
+          lessonId: id,
+          elementId,
+          data: JSON.stringify(data),
+        },
+        actorId,
+        { approved: true },
+      );
+
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -450,10 +509,15 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     try {
       const { id } = req.params;
       const actorId = getActorId(req) || 'user-frontend';
-      const cmd = kernelContainer.commandBus.createCommand('whiteboard.clear', {
-        lessonId: id
-      }, actorId, { approved: true });
-      
+      const cmd = kernelContainer.commandBus.createCommand(
+        'whiteboard.clear',
+        {
+          lessonId: id,
+        },
+        actorId,
+        { approved: true },
+      );
+
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -465,11 +529,16 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     try {
       const { id, elementId } = req.params;
       const actorId = getActorId(req) || 'user-frontend';
-      const cmd = kernelContainer.commandBus.createCommand('whiteboard.delete', {
-        lessonId: id,
-        elementId
-      }, actorId, { approved: true });
-      
+      const cmd = kernelContainer.commandBus.createCommand(
+        'whiteboard.delete',
+        {
+          lessonId: id,
+          elementId,
+        },
+        actorId,
+        { approved: true },
+      );
+
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -490,9 +559,9 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const studentId = session.studentId || session.userId || 'guest';
 
       // Retrieve the quiz element
-      const row = kernelContainer.db.prepare(
-        'SELECT data FROM whiteboard_elements WHERE id = ? AND lesson_id = ?'
-      ).get(elementId, lessonId) as { data: string } | undefined;
+      const row = kernelContainer.db
+        .prepare('SELECT data FROM whiteboard_elements WHERE id = ? AND lesson_id = ?')
+        .get(elementId, lessonId) as { data: string } | undefined;
       if (!row) {
         return res.status(404).json({ error: 'Quiz element not found' });
       }
@@ -514,9 +583,9 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       dataObj.submissions[studentId] = { answer, score, time: Date.now() };
 
       // Persist updated data
-      kernelContainer.db.prepare(
-        'UPDATE whiteboard_elements SET data = ? WHERE id = ?'
-      ).run(JSON.stringify(dataObj), elementId);
+      kernelContainer.db
+        .prepare('UPDATE whiteboard_elements SET data = ? WHERE id = ?')
+        .run(JSON.stringify(dataObj), elementId);
 
       // Broadcast refresh to whiteboard room
       io.to(`lesson-${lessonId}`).emit('whiteboard-sync', { type: 'element-updated', elementId });
@@ -532,20 +601,22 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     try {
       const { id: lessonId } = req.params;
 
-      const elements = kernelContainer.db.prepare(
-        'SELECT id, type, data FROM whiteboard_elements WHERE lesson_id = ? AND type = ?'
-      ).all(lessonId, 'quiz') as { id: string; type: string; data: string }[];
+      const elements = kernelContainer.db
+        .prepare('SELECT id, type, data FROM whiteboard_elements WHERE lesson_id = ? AND type = ?')
+        .all(lessonId, 'quiz') as { id: string; type: string; data: string }[];
 
-      const quizzes = elements.map(el => {
+      const quizzes = elements.map((el) => {
         let parsed: any = {};
-        try { parsed = JSON.parse(el.data); } catch (_) {}
+        try {
+          parsed = JSON.parse(el.data);
+        } catch (_) {}
         return {
           elementId: el.id,
           question: parsed.question || '',
           options: parsed.options || [],
           correctAnswer: parsed.correctAnswer || null,
           submissions: parsed.submissions || {},
-          submissionCount: Object.keys(parsed.submissions || {}).length
+          submissionCount: Object.keys(parsed.submissions || {}).length,
         };
       });
 
@@ -559,8 +630,10 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     try {
       const { elements } = req.body;
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const elementsSummary = elements.map((e: any, i: number) => `Element ${i+1}: type=${e.type}, content=${JSON.stringify(e.data)}`).join('\n');
-      
+      const elementsSummary = elements
+        .map((e: any, i: number) => `Element ${i + 1}: type=${e.type}, content=${JSON.stringify(e.data)}`)
+        .join('\n');
+
       const prompt = `You are a real-time AI Tutor monitoring a student's interactive whiteboard.
 The student has pressed the "Ask AI" button for help.
 Current Whiteboard Elements:
@@ -571,19 +644,24 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
       const hint = response.text || "I'm here to help! Let me know what you're working on.";
 
-      const cmd = kernelContainer.commandBus.createCommand('whiteboard.draw', {
-        lessonId: req.params.id,
-        type: 'text',
-        data: JSON.stringify({
-          text: `🤖 AI Tutor: ${hint}`,
-          x: 50,
-          y: 50,
-          fontSize: 20,
-          color: '#8b5cf6',
-          page: 0
-        })
-      }, 'system-ai', { approved: true });
-      
+      const cmd = kernelContainer.commandBus.createCommand(
+        'whiteboard.draw',
+        {
+          lessonId: req.params.id,
+          type: 'text',
+          data: JSON.stringify({
+            text: `🤖 AI Tutor: ${hint}`,
+            x: 50,
+            y: 50,
+            fontSize: 20,
+            color: '#8b5cf6',
+            page: 0,
+          }),
+        },
+        'system-ai',
+        { approved: true },
+      );
+
       await kernelContainer.commandBus.execute(cmd);
 
       // In a real system, the socket.io broadcast would happen here or within the command handler.
@@ -626,21 +704,25 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
     try {
       const { id } = req.params;
 
-      const whiteboardCount = (kernelContainer.db.prepare(
-        'SELECT COUNT(*) as count FROM whiteboard_elements WHERE lesson_id = ?'
-      ).get(id) as any).count;
+      const whiteboardCount = (
+        kernelContainer.db
+          .prepare('SELECT COUNT(*) as count FROM whiteboard_elements WHERE lesson_id = ?')
+          .get(id) as any
+      ).count;
 
-      const scheduleCount = (kernelContainer.db.prepare(
-        'SELECT COUNT(*) as count FROM schedules WHERE lesson_id = ?'
-      ).get(id) as any).count;
+      const scheduleCount = (
+        kernelContainer.db.prepare('SELECT COUNT(*) as count FROM schedules WHERE lesson_id = ?').get(id) as any
+      ).count;
 
-      const enrollmentCount = (kernelContainer.db.prepare(
-        'SELECT COUNT(*) as count FROM student_lesson_progress WHERE lesson_id = ?'
-      ).get(id) as any).count;
+      const enrollmentCount = (
+        kernelContainer.db
+          .prepare('SELECT COUNT(*) as count FROM student_lesson_progress WHERE lesson_id = ?')
+          .get(id) as any
+      ).count;
 
-      const assignmentCount = (kernelContainer.db.prepare(
-        'SELECT COUNT(*) as count FROM assignments WHERE lesson_id = ?'
-      ).get(id) as any).count;
+      const assignmentCount = (
+        kernelContainer.db.prepare('SELECT COUNT(*) as count FROM assignments WHERE lesson_id = ?').get(id) as any
+      ).count;
 
       res.json({ whiteboardCount, scheduleCount, enrollmentCount, assignmentCount });
     } catch (e: any) {
@@ -664,28 +746,44 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       const now = Date.now();
       const newTitle = `副本-${original.title}`;
 
-      kernelContainer.db.prepare(
-        'INSERT INTO lessons (id, title, content, timeline, progress_mode, progress_conditions, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(newId, newTitle, original.content, original.timeline, original.progress_mode, original.progress_conditions, creatorId, now, now);
+      kernelContainer.db
+        .prepare(
+          'INSERT INTO lessons (id, title, content, timeline, progress_mode, progress_conditions, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          newId,
+          newTitle,
+          original.content,
+          original.timeline,
+          original.progress_mode,
+          original.progress_conditions,
+          creatorId,
+          now,
+          now,
+        );
 
-      const whiteboardElements = kernelContainer.db.prepare(
-        'SELECT * FROM whiteboard_elements WHERE lesson_id = ?'
-      ).all(id) as any[];
+      const whiteboardElements = kernelContainer.db
+        .prepare('SELECT * FROM whiteboard_elements WHERE lesson_id = ?')
+        .all(id) as any[];
 
       const insertElement = kernelContainer.db.prepare(
-        'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)'
+        'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
       );
 
       for (const el of whiteboardElements) {
         insertElement.run(uuidv7(), newId, el.type, el.data, now);
       }
 
-      const cloned = kernelContainer.db.prepare(`
+      const cloned = kernelContainer.db
+        .prepare(
+          `
         SELECT l.*, u.name as creator_name, 0 as enrollment_count 
         FROM lessons l 
         LEFT JOIN users u ON l.creator_id = u.id
         WHERE l.id = ?
-      `).get(newId);
+      `,
+        )
+        .get(newId);
 
       res.json({ success: true, lesson: cloned });
     } catch (e: any) {

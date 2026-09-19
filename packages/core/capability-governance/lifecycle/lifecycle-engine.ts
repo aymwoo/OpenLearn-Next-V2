@@ -17,11 +17,13 @@ export class LifecycleEngine {
 
   public static transition(
     currentStatus: CapabilityLifecycleStatus,
-    targetStatus: CapabilityLifecycleStatus
+    targetStatus: CapabilityLifecycleStatus,
   ): CapabilityLifecycleStatus {
     const allowed = this.ALLOWED_TRANSITIONS[currentStatus] || [];
     if (!allowed.includes(targetStatus)) {
-      throw new Error(`Invalid Lifecycle Transition: Cannot transition from '${currentStatus}' to '${targetStatus}'. Allowed: [${allowed.join(', ')}]`);
+      throw new Error(
+        `Invalid Lifecycle Transition: Cannot transition from '${currentStatus}' to '${targetStatus}'. Allowed: [${allowed.join(', ')}]`,
+      );
     }
     return targetStatus;
   }

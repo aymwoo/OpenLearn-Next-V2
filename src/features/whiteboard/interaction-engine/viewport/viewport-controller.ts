@@ -17,9 +17,10 @@ export class ViewportController {
   }
 
   public setViewport(patch: Partial<ViewportState>): ViewportState {
-    const nextZoom = patch.zoom !== undefined 
-      ? Math.max(this.state.minZoom, Math.min(this.state.maxZoom, patch.zoom)) 
-      : this.state.zoom;
+    const nextZoom =
+      patch.zoom !== undefined
+        ? Math.max(this.state.minZoom, Math.min(this.state.maxZoom, patch.zoom))
+        : this.state.zoom;
 
     this.state = {
       ...this.state,

@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  PlatformServiceRegistry,
-  ServiceDescriptor,
-  ServiceScope,
-} from '../service-registry/index.js';
+import { PlatformServiceRegistry, ServiceDescriptor, ServiceScope } from '../service-registry/index.js';
 
 describe('Kernel PI-007 Platform Service Registry Test Suite', () => {
   interface ITestService {
@@ -11,7 +7,9 @@ describe('Kernel PI-007 Platform Service Registry Test Suite', () => {
   }
 
   class TestServiceImpl implements ITestService {
-    getName() { return 'TestService'; }
+    getName() {
+      return 'TestService';
+    }
   }
 
   const singletonDesc: ServiceDescriptor<ITestService> = {

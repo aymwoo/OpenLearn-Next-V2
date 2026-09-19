@@ -9,7 +9,9 @@ export class NamespaceManager {
   public registerNamespace(namespace: string): void {
     const sanitized = namespace.trim().toLowerCase();
     if (!/^[a-z0-9]+(\.[a-z0-9_-]+)+$/.test(sanitized)) {
-      throw new Error(`Invalid Namespace Format: '${namespace}'. Must be dot-separated lowercase (e.g. 'lesson.generate.quiz').`);
+      throw new Error(
+        `Invalid Namespace Format: '${namespace}'. Must be dot-separated lowercase (e.g. 'lesson.generate.quiz').`,
+      );
     }
     if (this.namespaces.has(sanitized)) {
       throw new Error(`Namespace Collision: Namespace '${sanitized}' is already registered.`);

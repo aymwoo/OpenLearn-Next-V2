@@ -14,11 +14,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { ExtensionPointRegistry } from '../extension-points';
 import type { ExtensionPointConfig } from '../types';
 
-function makeConfig(
-  id: string,
-  pluginId: string = 'test-plugin',
-  position?: number,
-): ExtensionPointConfig {
+function makeConfig(id: string, pluginId: string = 'test-plugin', position?: number): ExtensionPointConfig {
   return {
     id,
     label: `Extension ${id}`,

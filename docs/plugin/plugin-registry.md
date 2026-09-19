@@ -56,15 +56,15 @@ export interface IPluginRepositoryAdapter {
 
 主进程 Express 路由位于 [`server/routes/plugins.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/plugins.ts)：
 
-| HTTP 方法 | 路径 | 描述 |
-| :--- | :--- | :--- |
-| `GET` | `/api/plugins` | 获取当前已安装插件列表及其实时状态。 |
-| `POST` | `/api/plugins/upload` | 上传 ZIP 插件包并执行安装。 |
-| `POST` | `/api/plugins/:id/toggle` | 切换插件的激活/停用状态。 |
-| `DELETE` | `/api/plugins/:id` | 停用并彻底卸载指定插件。 |
-| `GET` | `/api/plugins/:id/config` | 读取指定插件的运行时配置声明与当前值。 |
-| `POST` | `/api/plugins/:id/config` | 更新指定插件的运行时配置项。 |
-| `GET` | `/api/plugins/store` | 检索插件市场中的离线 ZIP 资源与可安装列表。 |
+| HTTP 方法 | 路径                      | 描述                                        |
+| :-------- | :------------------------ | :------------------------------------------ |
+| `GET`     | `/api/plugins`            | 获取当前已安装插件列表及其实时状态。        |
+| `POST`    | `/api/plugins/upload`     | 上传 ZIP 插件包并执行安装。                 |
+| `POST`    | `/api/plugins/:id/toggle` | 切换插件的激活/停用状态。                   |
+| `DELETE`  | `/api/plugins/:id`        | 停用并彻底卸载指定插件。                    |
+| `GET`     | `/api/plugins/:id/config` | 读取指定插件的运行时配置声明与当前值。      |
+| `POST`    | `/api/plugins/:id/config` | 更新指定插件的运行时配置项。                |
+| `GET`     | `/api/plugins/store`      | 检索插件市场中的离线 ZIP 资源与可安装列表。 |
 
 ---
 
@@ -73,7 +73,7 @@ export interface IPluginRepositoryAdapter {
 为了方便 API 调用与控制台管理，`PluginHost` 提供了优雅的标识符解析机制（定义于 [`packages/core/plugin-host/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/index.ts#L630)）：
 
 ```typescript
-const realUuid = pluginHost.resolvePluginUuid("@openlearn/plugin-vfs");
+const realUuid = pluginHost.resolvePluginUuid('@openlearn/plugin-vfs');
 ```
 
 - **第一优先级**：直接匹配 `plugins.id` 主键 UUID（$O(1)$ 复杂度）。

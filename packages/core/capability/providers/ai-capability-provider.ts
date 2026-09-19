@@ -3,11 +3,7 @@
  * Adapts AI Capability Layer into standard Capability Framework Handlers.
  */
 
-import {
-  CapabilityDescriptor,
-  ICapabilityProviderHandler,
-  InvocationRequest,
-} from '../types/index.js';
+import { CapabilityDescriptor, ICapabilityProviderHandler, InvocationRequest } from '../types/index.js';
 import { AICapabilityKernel } from '../../ai-capability/index.js';
 
 export class AICapabilityProviderHandler implements ICapabilityProviderHandler {
@@ -32,7 +28,10 @@ export class AICapabilityProviderHandler implements ICapabilityProviderHandler {
 
   public async execute(request: InvocationRequest): Promise<unknown> {
     const prompt = (request.payload.prompt as string) || '';
-    const completionCap = this.aiCapabilityKernel.registry.resolveCapability<import('../../ai-capability/index.js').ICompletionCapability>('capability_completion');
+    const completionCap =
+      this.aiCapabilityKernel.registry.resolveCapability<import('../../ai-capability/index.js').ICompletionCapability>(
+        'capability_completion',
+      );
     return completionCap.complete(prompt);
   }
 }

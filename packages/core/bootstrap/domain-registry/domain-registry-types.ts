@@ -4,19 +4,9 @@
 
 import { Version } from '../types/index.js';
 
-export type DomainStatus =
-  | 'Unknown'
-  | 'Registered'
-  | 'Active'
-  | 'Inactive'
-  | 'Error';
+export type DomainStatus = 'Unknown' | 'Registered' | 'Active' | 'Inactive' | 'Error';
 
-export type DomainCategory =
-  | 'Core'
-  | 'Business'
-  | 'Infrastructure'
-  | 'AI'
-  | 'Extension';
+export type DomainCategory = 'Core' | 'Business' | 'Infrastructure' | 'AI' | 'Extension';
 
 export interface DomainHealth {
   readonly isHealthy: boolean;

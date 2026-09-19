@@ -93,41 +93,42 @@ describe('ProcessPlugin', () => {
     const pluginId = '@openlearn/plugin-process';
     pluginHost.registerPreloadedPlugin(pluginId, ProcessPlugin);
 
-    db.prepare('INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(pluginId, 'Process', JSON.stringify(ProcessPlugin.manifest), '', 'installed', Date.now(), 'esm');
+    db.prepare(
+      'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(pluginId, 'Process', JSON.stringify(ProcessPlugin.manifest), '', 'installed', Date.now(), 'esm');
 
     await pluginHost.activatePlugin(pluginId);
 
     const actions = await actionRegistry.getAllActions();
-    expect(actions.map(a => a.commandType)).toContain('process.spawn');
-    expect(actions.map(a => a.commandType)).toContain('process.kill');
+    expect(actions.map((a) => a.commandType)).toContain('process.spawn');
+    expect(actions.map((a) => a.commandType)).toContain('process.kill');
 
     const actorId = `plugin:${ProcessPlugin.manifest.id}`;
     capabilityGuard.grant(actorId, 'process:write');
     capabilityGuard.grant(actorId, 'process:read');
 
     // Spawn a process
-    const spawnRes = await commandBus.execute({
+    const spawnRes = (await commandBus.execute({
       id: 'cmd-spawn',
       type: 'process.spawn',
       actorId,
       payload: {
         name: 'test-process',
-        duration: 1
+        duration: 1,
       },
-      timestamp: Date.now()
-    }) as any;
+      timestamp: Date.now(),
+    })) as any;
 
     expect(spawnRes.processId).toBeDefined();
 
     // List processes
-    const listRes = await commandBus.execute({
+    const listRes = (await commandBus.execute({
       id: 'cmd-list',
       type: 'process.list',
       actorId,
       payload: {},
-      timestamp: Date.now()
-    }) as any;
+      timestamp: Date.now(),
+    })) as any;
 
     expect(listRes.processes.length).toBe(1);
     expect(listRes.processes[0].name).toBe('test-process');

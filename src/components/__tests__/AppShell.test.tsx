@@ -299,9 +299,7 @@ describe('AppShell', () => {
 
   it('renders StudentView (and the "No Student Selected" panel) when activeRole is "student"', async () => {
     renderAppShell({ activeRole: 'student', activeStudentId: null });
-    expect(
-      await screen.findByText('No Student Selected', undefined, { timeout: LAZY_TIMEOUT })
-    ).toBeTruthy();
+    expect(await screen.findByText('No Student Selected', undefined, { timeout: LAZY_TIMEOUT })).toBeTruthy();
     // The teacher-only branch must NOT be present.
     expect(screen.queryByText('Live Class')).toBeNull();
   });
@@ -309,9 +307,7 @@ describe('AppShell', () => {
   it('renders TeacherView (NavigationSidebar) when activeRole is "teacher"', async () => {
     renderAppShell({ activeRole: 'teacher' });
     // TeacherView carries the bg-gray-50 branch root and always renders the nav sidebar.
-    expect(
-      await screen.findByText('Live Class', undefined, { timeout: LAZY_TIMEOUT })
-    ).toBeTruthy();
+    expect(await screen.findByText('Live Class', undefined, { timeout: LAZY_TIMEOUT })).toBeTruthy();
     // The student-only branch must NOT be present.
     expect(screen.queryByText('No Student Selected')).toBeNull();
   });

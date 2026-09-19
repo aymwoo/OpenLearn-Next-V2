@@ -6,20 +6,18 @@
 import { CapabilityHealthMetrics } from '../types/index.js';
 
 export class HealthMonitor {
-  private metrics = new Map<string, {
-    invocationCount: number;
-    successCount: number;
-    failureCount: number;
-    totalLatencyMs: number;
-    providerUsage: Map<string, number>;
-  }>();
+  private metrics = new Map<
+    string,
+    {
+      invocationCount: number;
+      successCount: number;
+      failureCount: number;
+      totalLatencyMs: number;
+      providerUsage: Map<string, number>;
+    }
+  >();
 
-  public recordInvocation(
-    capabilityId: string,
-    success: boolean,
-    latencyMs: number,
-    providerId = 'default'
-  ): void {
+  public recordInvocation(capabilityId: string, success: boolean, latencyMs: number, providerId = 'default'): void {
     if (!this.metrics.has(capabilityId)) {
       this.metrics.set(capabilityId, {
         invocationCount: 0,

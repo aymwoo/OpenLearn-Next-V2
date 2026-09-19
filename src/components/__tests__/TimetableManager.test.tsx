@@ -62,8 +62,8 @@ describe('Timetable Utilities & Components', () => {
               time_slot: '09:00 - 10:30',
               status: 'scheduled',
               class_name: '高一(1)班',
-              lesson_title: '高等数学第一讲'
-            }
+              lesson_title: '高等数学第一讲',
+            },
           ]}
           currentWeekMonday={new Date(2026, 6, 27)}
           setCurrentWeekMonday={vi.fn()}
@@ -86,7 +86,7 @@ describe('Timetable Utilities & Components', () => {
           setFormStatus={vi.fn()}
           setFormNotes={vi.fn()}
           setIsAddOpen={vi.fn()}
-        />
+        />,
       );
 
       expect(screen.getByText('本周')).toBeDefined();
@@ -109,7 +109,7 @@ describe('Timetable Utilities & Components', () => {
           setHolNotes={vi.fn()}
           handleBatchHolidayAdjustment={vi.fn()}
           loading={false}
-        />
+        />,
       );
 
       expect(screen.getByText('批量节假日调休排班')).toBeDefined();
@@ -132,7 +132,7 @@ describe('Timetable Utilities & Components', () => {
           setCsvText={vi.fn()}
           importMessage={null}
           handleImportData={vi.fn()}
-        />
+        />,
       );
 
       expect(screen.getByText('导出系统课表')).toBeDefined();

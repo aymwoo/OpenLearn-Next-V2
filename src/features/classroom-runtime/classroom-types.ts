@@ -3,15 +3,7 @@
  */
 
 export type ClassroomStage =
-  | 'Create'
-  | 'Prepare'
-  | 'Ready'
-  | 'Teaching'
-  | 'Paused'
-  | 'Resumed'
-  | 'Finished'
-  | 'Archived'
-  | 'Disposed';
+  'Create' | 'Prepare' | 'Ready' | 'Teaching' | 'Paused' | 'Resumed' | 'Finished' | 'Archived' | 'Disposed';
 
 export interface ClassroomEvent {
   readonly id: string;

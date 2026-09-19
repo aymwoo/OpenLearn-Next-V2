@@ -164,15 +164,23 @@ describe('OpenLearn Classroom Runtime Core Test Suite', () => {
 
       kernel.scheduler.start();
 
-      const pLow = kernel.scheduleTask('low_task', async () => {
-        executed.push('low');
-        return 'low';
-      }, TaskPriority.Low);
+      const pLow = kernel.scheduleTask(
+        'low_task',
+        async () => {
+          executed.push('low');
+          return 'low';
+        },
+        TaskPriority.Low,
+      );
 
-      const pImmediate = kernel.scheduleTask('immediate_task', async () => {
-        executed.push('immediate');
-        return 'immediate';
-      }, TaskPriority.Immediate);
+      const pImmediate = kernel.scheduleTask(
+        'immediate_task',
+        async () => {
+          executed.push('immediate');
+          return 'immediate';
+        },
+        TaskPriority.Immediate,
+      );
 
       const [resLow, resImm] = await Promise.all([pLow, pImmediate]);
 

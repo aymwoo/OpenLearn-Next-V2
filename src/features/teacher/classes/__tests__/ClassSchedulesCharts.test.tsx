@@ -51,13 +51,8 @@ afterEach(() => {
 describe('ClassSchedulesCharts', () => {
   it('renders the Class Avg Completion chart and renders without throwing', () => {
     // ClassAttendanceSummaryChart fetches on mount; stub fetch for jsdom.
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
     render(<ClassSchedulesCharts {...baseProps()} />);
-    expect(
-      screen.getByText((c) => (c || '').includes('Class Avg Completion')),
-    ).toBeTruthy();
+    expect(screen.getByText((c) => (c || '').includes('Class Avg Completion'))).toBeTruthy();
   });
 });

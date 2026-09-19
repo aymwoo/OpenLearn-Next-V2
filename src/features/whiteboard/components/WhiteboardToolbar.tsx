@@ -16,7 +16,7 @@ import {
   Wand2,
   UserCheck,
   Grid,
-  RotateCcw
+  RotateCcw,
 } from 'lucide-react';
 import { v7 as uuidv7 } from 'uuid';
 import { frontendEventBus } from '../../../services/event-bus';
@@ -69,13 +69,16 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
   handleElementDelete,
   setDialog,
   setDialogInput,
-  onRefresh
+  onRefresh,
 }) => {
   return (
     <div className="flex items-center justify-start gap-1.5 px-3 py-1.5 bg-surface border-b border-theme shrink-0 font-sans select-none text-main">
       {/* Group 1: Selection */}
       <button
-        onClick={() => { setTool('cursor'); setSelectedShapeId(null); }}
+        onClick={() => {
+          setTool('cursor');
+          setSelectedShapeId(null);
+        }}
         className={`p-1.5 rounded-xl transition-all cursor-pointer ${tool === 'cursor' ? 'bg-primary-theme text-white shadow-2xs' : 'text-muted hover:bg-surface-secondary hover:text-main'}`}
         title="选择工具 (Pointer / Selector)"
       >
@@ -105,7 +108,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
             { hex: '#facc15', label: 'Yellow' },
             { hex: '#4ade80', label: 'Green' },
             { hex: '#f472b6', label: 'Pink' },
-            { hex: '#60a5fa', label: 'Blue' }
+            { hex: '#60a5fa', label: 'Blue' },
           ].map((col) => (
             <button
               key={col.hex}
@@ -147,44 +150,44 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
 
       {/* Group 4: Media & Applets */}
       <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:presentation" placement="before" />
-      <button 
+      <button
         onClick={() => {
-           setDialogInput('# Title Slide\n---\n## Slide 2');
-           setDialog({
-              type: 'prompt',
-              title: '添加演示文稿',
-              message: '请输入演示文稿的 Markdown 内容 (使用 --- 拆分新幻灯片):',
-              placeholder: '# Title Slide\n---\n## Slide 2',
-              onConfirm: async (inputValue: string) => {
-                 const md = inputValue || '# Title Slide\n---\n## Slide 2';
-                 setIsSyncing(true);
-                 try {
-                    await onElementAdd('presentation', {
-                        markdown: md,
-                        x: 50,
-                        y: 50,
-                        width: 600,
-                        height: 400,
-                        slideX: 0,
-                        slideY: 0,
-                        page: currentPage,
-                        segmentId: activeSegmentId
-                    });
-                    frontendEventBus.publish({
-                      id: uuidv7(),
-                      type: 'whiteboard.element_updated',
-                      source: 'whiteboard',
-                      payload: { lessonId },
-                      timestamp: Date.now(),
-                      correlationId: lessonId,
-                    });
-                 } finally {
-                    setIsSyncing(false);
-                    setDialog(null);
-                 }
+          setDialogInput('# Title Slide\n---\n## Slide 2');
+          setDialog({
+            type: 'prompt',
+            title: '添加演示文稿',
+            message: '请输入演示文稿的 Markdown 内容 (使用 --- 拆分新幻灯片):',
+            placeholder: '# Title Slide\n---\n## Slide 2',
+            onConfirm: async (inputValue: string) => {
+              const md = inputValue || '# Title Slide\n---\n## Slide 2';
+              setIsSyncing(true);
+              try {
+                await onElementAdd('presentation', {
+                  markdown: md,
+                  x: 50,
+                  y: 50,
+                  width: 600,
+                  height: 400,
+                  slideX: 0,
+                  slideY: 0,
+                  page: currentPage,
+                  segmentId: activeSegmentId,
+                });
+                frontendEventBus.publish({
+                  id: uuidv7(),
+                  type: 'whiteboard.element_updated',
+                  source: 'whiteboard',
+                  payload: { lessonId },
+                  timestamp: Date.now(),
+                  correlationId: lessonId,
+                });
+              } finally {
+                setIsSyncing(false);
+                setDialog(null);
               }
-           });
-        }} 
+            },
+          });
+        }}
         className="p-1.5 rounded-xl text-muted hover:bg-surface-secondary hover:text-main transition-all cursor-pointer"
         title="插入演示幻灯片 (Presentation)"
       >
@@ -194,27 +197,27 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:code-sandbox" placement="before" />
       <button
         onClick={async () => {
-           setIsSyncing(true);
-           try {
-              await onElementAdd('code-sandbox', {
-                  code: "console.log('Hello Sandbox!');",
-                  x: 100,
-                  y: 100,
-                  page: currentPage,
-                  segmentId: activeSegmentId
-              });
-              frontendEventBus.publish({
-                id: uuidv7(),
-                type: 'whiteboard.element_updated',
-                source: 'whiteboard',
-                payload: { lessonId },
-                timestamp: Date.now(),
-                correlationId: lessonId,
-              });
-           } finally {
-              setIsSyncing(false);
-           }
-        }} 
+          setIsSyncing(true);
+          try {
+            await onElementAdd('code-sandbox', {
+              code: "console.log('Hello Sandbox!');",
+              x: 100,
+              y: 100,
+              page: currentPage,
+              segmentId: activeSegmentId,
+            });
+            frontendEventBus.publish({
+              id: uuidv7(),
+              type: 'whiteboard.element_updated',
+              source: 'whiteboard',
+              payload: { lessonId },
+              timestamp: Date.now(),
+              correlationId: lessonId,
+            });
+          } finally {
+            setIsSyncing(false);
+          }
+        }}
         className="p-1.5 rounded-xl text-muted hover:bg-surface-secondary hover:text-main transition-all cursor-pointer"
         title="插入代码沙箱 (Code Sandbox)"
       >
@@ -224,27 +227,27 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:math-graph" placement="before" />
       <button
         onClick={async () => {
-           setIsSyncing(true);
-           try {
-              await onElementAdd('math-graph', {
-                  equation: "Math.sin(x)",
-                  x: 100,
-                  y: 150,
-                  page: currentPage,
-                  segmentId: activeSegmentId
-              });
-              frontendEventBus.publish({
-                id: uuidv7(),
-                type: 'whiteboard.element_updated',
-                source: 'whiteboard',
-                payload: { lessonId },
-                timestamp: Date.now(),
-                correlationId: lessonId,
-              });
-           } finally {
-              setIsSyncing(false);
-           }
-        }} 
+          setIsSyncing(true);
+          try {
+            await onElementAdd('math-graph', {
+              equation: 'Math.sin(x)',
+              x: 100,
+              y: 150,
+              page: currentPage,
+              segmentId: activeSegmentId,
+            });
+            frontendEventBus.publish({
+              id: uuidv7(),
+              type: 'whiteboard.element_updated',
+              source: 'whiteboard',
+              payload: { lessonId },
+              timestamp: Date.now(),
+              correlationId: lessonId,
+            });
+          } finally {
+            setIsSyncing(false);
+          }
+        }}
         className="p-1.5 rounded-xl text-muted hover:bg-surface-secondary hover:text-main transition-all cursor-pointer"
         title="插入数学函数图表 (Math Graph)"
       >
@@ -255,27 +258,27 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:courseware" placement="before" />
       <button
         onClick={async () => {
-           setIsSyncing(true);
-           try {
-              await onElementAdd('html-applet', {
-                  code: `<!-- Interactive Web Courseware -->\n<div style='padding:20px; text-align:center;'>\n  <h2>Interactive Web Courseware</h2>\n  <p>可在右侧属性栏中选择本地 ZIP/HTML 部署包。</p>\n</div>`,
-                  x: 100,
-                  y: 150,
-                  page: currentPage,
-                  segmentId: activeSegmentId
-              });
-              frontendEventBus.publish({
-                id: uuidv7(),
-                type: 'whiteboard.element_updated',
-                source: 'whiteboard',
-                payload: { lessonId },
-                timestamp: Date.now(),
-                correlationId: lessonId,
-              });
-           } finally {
-              setIsSyncing(false);
-           }
-        }} 
+          setIsSyncing(true);
+          try {
+            await onElementAdd('html-applet', {
+              code: `<!-- Interactive Web Courseware -->\n<div style='padding:20px; text-align:center;'>\n  <h2>Interactive Web Courseware</h2>\n  <p>可在右侧属性栏中选择本地 ZIP/HTML 部署包。</p>\n</div>`,
+              x: 100,
+              y: 150,
+              page: currentPage,
+              segmentId: activeSegmentId,
+            });
+            frontendEventBus.publish({
+              id: uuidv7(),
+              type: 'whiteboard.element_updated',
+              source: 'whiteboard',
+              payload: { lessonId },
+              timestamp: Date.now(),
+              correlationId: lessonId,
+            });
+          } finally {
+            setIsSyncing(false);
+          }
+        }}
         className="p-1.5 rounded-xl text-muted hover:bg-surface-secondary hover:text-main transition-all cursor-pointer"
         title="插入交互网页课件 (Interactive Courseware)"
       >
@@ -289,26 +292,26 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:rollcall" placement="before" />
       <button
         onClick={async () => {
-           setIsSyncing(true);
-           try {
-              await onElementAdd('rollcall', {
-                  title: "随机点名助手",
-                  x: 120,
-                  y: 120,
-                  page: currentPage,
-                  segmentId: activeSegmentId
-              });
-              frontendEventBus.publish({
-                id: uuidv7(),
-                type: 'whiteboard.element_updated',
-                source: 'whiteboard',
-                payload: { lessonId },
-                timestamp: Date.now(),
-                correlationId: lessonId,
-              });
-           } finally {
-              setIsSyncing(false);
-           }
+          setIsSyncing(true);
+          try {
+            await onElementAdd('rollcall', {
+              title: '随机点名助手',
+              x: 120,
+              y: 120,
+              page: currentPage,
+              segmentId: activeSegmentId,
+            });
+            frontendEventBus.publish({
+              id: uuidv7(),
+              type: 'whiteboard.element_updated',
+              source: 'whiteboard',
+              payload: { lessonId },
+              timestamp: Date.now(),
+              correlationId: lessonId,
+            });
+          } finally {
+            setIsSyncing(false);
+          }
         }}
         className="p-1.5 rounded-xl text-primary-theme hover:bg-primary-theme-light transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
         title="插入随机点名组件 (Roll Call)"
@@ -325,34 +328,34 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
       <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:ai-tutor" placement="before" />
       <button
         onClick={async () => {
-           setIsSyncing(true);
-           try {
-              const res = await fetch(`/api/lessons/${lessonId}/ai-tutor`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ elements: safeElements.map(e => ({ type: e.type, data: JSON.parse(e.data) })) })
+          setIsSyncing(true);
+          try {
+            const res = await fetch(`/api/lessons/${lessonId}/ai-tutor`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ elements: safeElements.map((e) => ({ type: e.type, data: JSON.parse(e.data) })) }),
+            });
+            if (res.ok) {
+              frontendEventBus.publish({
+                id: uuidv7(),
+                type: 'whiteboard.element_updated',
+                source: 'whiteboard',
+                payload: { lessonId },
+                timestamp: Date.now(),
+                correlationId: lessonId,
               });
-              if (res.ok) {
-                 frontendEventBus.publish({
-                    id: uuidv7(),
-                    type: 'whiteboard.element_updated',
-                    source: 'whiteboard',
-                    payload: { lessonId },
-                    timestamp: Date.now(),
-                    correlationId: lessonId,
-                  });
-                 if (onRefresh) onRefresh();
-              } else {
-                 setDialog({
-                    type: 'alert',
-                    title: 'AI 辅导提示',
-                    message: '无法获取 AI 授课助手的帮助，请稍后再试。',
-                    onConfirm: () => setDialog(null)
-                  });
-              }
-           } finally {
-              setIsSyncing(false);
-           }
+              if (onRefresh) onRefresh();
+            } else {
+              setDialog({
+                type: 'alert',
+                title: 'AI 辅导提示',
+                message: '无法获取 AI 授课助手的帮助，请稍后再试。',
+                onConfirm: () => setDialog(null),
+              });
+            }
+          } finally {
+            setIsSyncing(false);
+          }
         }}
         className="p-1.5 rounded-xl text-purple-600 hover:bg-purple-500/10 transition-all cursor-pointer"
         title="请求 AI 助教建议 (Ask AI Tutor)"

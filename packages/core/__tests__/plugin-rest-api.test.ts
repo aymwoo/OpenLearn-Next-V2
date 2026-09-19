@@ -240,10 +240,12 @@ describe('Plugin RESTful API & Security Gateway Tests (V5.2)', () => {
         };
       `;
 
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
+      `,
+      ).run(
         'uuid-worker-rest-1',
         manifest.name,
         JSON.stringify(manifest),
@@ -252,7 +254,7 @@ describe('Plugin RESTful API & Security Gateway Tests (V5.2)', () => {
         'installed',
         Date.now(),
         'esm',
-        'worker'
+        'worker',
       );
 
       await pluginHost.activatePlugin('uuid-worker-rest-1', { mode: 'worker' });
@@ -300,9 +302,7 @@ describe('Plugin RESTful API & Security Gateway Tests (V5.2)', () => {
         version: '1.0.0',
         main: 'index.js',
         api: {
-          routes: [
-            { method: 'GET', path: '/private-data', auth: true },
-          ],
+          routes: [{ method: 'GET', path: '/private-data', auth: true }],
         },
       };
       pluginHost.registerPreloadedPlugin('ext-secure-hub', {
@@ -333,9 +333,7 @@ describe('Plugin RESTful API & Security Gateway Tests (V5.2)', () => {
         version: '1.0.0',
         main: 'index.js',
         api: {
-          routes: [
-            { method: 'POST', path: '/grade', auth: true, roles: ['teacher', 'administrator'] },
-          ],
+          routes: [{ method: 'POST', path: '/grade', auth: true, roles: ['teacher', 'administrator'] }],
         },
       };
       pluginHost.registerPreloadedPlugin('ext-grade-hub', {
@@ -346,14 +344,16 @@ describe('Plugin RESTful API & Security Gateway Tests (V5.2)', () => {
 
       // 模拟学生登录会话
       const studentToken = 'session_student_01';
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO client_sessions (id, session_data, expires_at, updated_at)
         VALUES (?, ?, ?, ?)
-      `).run(
+      `,
+      ).run(
         studentToken,
         JSON.stringify({ userId: 'u_student_1', username: 'student1', role: 'student' }),
         Date.now() + 3600000,
-        Date.now()
+        Date.now(),
       );
 
       const req: Partial<Request> = {
@@ -377,9 +377,7 @@ describe('Plugin RESTful API & Security Gateway Tests (V5.2)', () => {
         version: '1.0.0',
         main: 'index.js',
         api: {
-          routes: [
-            { method: 'GET', path: '/public-status', auth: false },
-          ],
+          routes: [{ method: 'GET', path: '/public-status', auth: false }],
         },
       };
       pluginHost.registerPreloadedPlugin('ext-public-hub', {

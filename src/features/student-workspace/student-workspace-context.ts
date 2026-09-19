@@ -15,9 +15,7 @@ import type {
 } from '../../../packages/core/classroom-runtime/types.js';
 import type { StudentView, StudentWorkspaceInit } from './student-workspace-types.js';
 
-export type StudentEventCallback<K extends RuntimeEventType> = (
-  payload: RuntimeEventMap[K]
-) => void | Promise<void>;
+export type StudentEventCallback<K extends RuntimeEventType> = (payload: RuntimeEventMap[K]) => void | Promise<void>;
 
 export class StudentWorkspaceContext {
   private readonly kernel: ClassroomRuntimeKernel;
@@ -61,13 +59,8 @@ export class StudentWorkspaceContext {
    * Subscribe to a runtime classroom event. Returns an unsubscribe function.
    * Reuses the kernel event bus — no new event system is introduced.
    */
-  public subscribe<K extends RuntimeEventType>(
-    eventType: K,
-    callback: StudentEventCallback<K>
-  ): () => void {
-    return this.kernel.eventBus.subscribe(eventType, (envelope) =>
-      callback(envelope.payload as RuntimeEventMap[K])
-    );
+  public subscribe<K extends RuntimeEventType>(eventType: K, callback: StudentEventCallback<K>): () => void {
+    return this.kernel.eventBus.subscribe(eventType, (envelope) => callback(envelope.payload as RuntimeEventMap[K]));
   }
 
   public takeSnapshot() {

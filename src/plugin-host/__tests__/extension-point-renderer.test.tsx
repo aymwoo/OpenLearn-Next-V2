@@ -121,13 +121,27 @@ describe('ExtensionPointRenderer — anchor slot placement filtering (v0.2.6)', 
 
     // 乱序注册：position 90、10、缺省（默认 100）
     register('anchor:test:btn', {
-      id: 'b', label: 'B', pluginId: 'p1', placement: 'before', position: 90, component: comp,
+      id: 'b',
+      label: 'B',
+      pluginId: 'p1',
+      placement: 'before',
+      position: 90,
+      component: comp,
     });
     register('anchor:test:btn', {
-      id: 'a', label: 'A', pluginId: 'p2', placement: 'before', position: 10, component: comp,
+      id: 'a',
+      label: 'A',
+      pluginId: 'p2',
+      placement: 'before',
+      position: 10,
+      component: comp,
     });
     register('anchor:test:btn', {
-      id: 'c', label: 'C', pluginId: 'p3', placement: 'before', component: comp,
+      id: 'c',
+      label: 'C',
+      pluginId: 'p3',
+      placement: 'before',
+      component: comp,
     });
 
     const sorted = usePluginHostStore.getState().getExtensions('anchor:test:btn');

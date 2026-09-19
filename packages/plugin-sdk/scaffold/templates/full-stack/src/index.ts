@@ -20,12 +20,14 @@ export default {
       '@openlearn/core:IDatabase@^1.0.0',
     ],
     capabilitiesProposed: ['lesson:read', 'lesson:write'],
-    classroomTools: [{
-      id: '{{pluginId}}-tool',
-      name: '{{pluginName}}',
-      icon: 'Puzzle',
-      commandType: '{{pluginId}}.open_tool',
-    }],
+    classroomTools: [
+      {
+        id: '{{pluginId}}-tool',
+        name: '{{pluginName}}',
+        icon: 'Puzzle',
+        commandType: '{{pluginId}}.open_tool',
+      },
+    ],
     engines: { openlearn: '>=0.2.5' },
   },
 
@@ -36,11 +38,14 @@ export default {
     const db = await ctx.resolve(IDatabaseToken);
 
     // Create plugin table
-    await ctx.db.ensureTable('data', `
+    await ctx.db.ensureTable(
+      'data',
+      `
       id TEXT PRIMARY KEY,
       content TEXT NOT NULL,
       created_at INTEGER NOT NULL
-    `);
+    `,
+    );
 
     // Register AI tool
     await actionRegistry.register({
@@ -65,8 +70,7 @@ export default {
 
         const tableName = ctx.db.table('data');
         const id = crypto.randomUUID();
-        db.prepare(`INSERT INTO ${tableName} (id, content, created_at) VALUES (?, ?, ?)`)
-          .run(id, input, Date.now());
+        db.prepare(`INSERT INTO ${tableName} (id, content, created_at) VALUES (?, ?, ?)`).run(id, input, Date.now());
 
         await eventBus.publish({
           id: crypto.randomUUID(),

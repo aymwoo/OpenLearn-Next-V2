@@ -21,12 +21,7 @@ function expectNoThrow(fn: () => void): void {
 }
 
 /** 验证调用抛出 IllegalStateTransitionError */
-function expectIllegalTransition(
-  fn: () => void,
-  from: PluginState,
-  to: PluginState,
-  pluginId: string,
-): void {
+function expectIllegalTransition(fn: () => void, from: PluginState, to: PluginState, pluginId: string): void {
   try {
     fn();
     expect.fail(`Expected IllegalStateTransitionError for ${from} → ${to}`);
@@ -43,45 +38,31 @@ function expectIllegalTransition(
 
 describe('validatePluginStateTransition — 合法转换', () => {
   it('Test 1: INSTALLED → ACTIVATING 通过', () => {
-    expectNoThrow(() =>
-      validatePluginStateTransition(PluginState.INSTALLED, PluginState.ACTIVATING, 'p1'),
-    );
+    expectNoThrow(() => validatePluginStateTransition(PluginState.INSTALLED, PluginState.ACTIVATING, 'p1'));
   });
 
   it('Test 2: ACTIVE → DEACTIVATING 通过', () => {
-    expectNoThrow(() =>
-      validatePluginStateTransition(PluginState.ACTIVE, PluginState.DEACTIVATING, 'p2'),
-    );
+    expectNoThrow(() => validatePluginStateTransition(PluginState.ACTIVE, PluginState.DEACTIVATING, 'p2'));
   });
 
   it('Test 3: DEACTIVATING → INACTIVE 通过', () => {
-    expectNoThrow(() =>
-      validatePluginStateTransition(PluginState.DEACTIVATING, PluginState.INACTIVE, 'p3'),
-    );
+    expectNoThrow(() => validatePluginStateTransition(PluginState.DEACTIVATING, PluginState.INACTIVE, 'p3'));
   });
 
   it('Test 4: INACTIVE → ACTIVATING 通过（停用后重新激活）', () => {
-    expectNoThrow(() =>
-      validatePluginStateTransition(PluginState.INACTIVE, PluginState.ACTIVATING, 'p4'),
-    );
+    expectNoThrow(() => validatePluginStateTransition(PluginState.INACTIVE, PluginState.ACTIVATING, 'p4'));
   });
 
   it('Test 5: INACTIVE → UNINSTALLED 通过', () => {
-    expectNoThrow(() =>
-      validatePluginStateTransition(PluginState.INACTIVE, PluginState.UNINSTALLED, 'p5'),
-    );
+    expectNoThrow(() => validatePluginStateTransition(PluginState.INACTIVE, PluginState.UNINSTALLED, 'p5'));
   });
 
   it('Test 6: ERROR → ACTIVATING 通过（错误后重试）', () => {
-    expectNoThrow(() =>
-      validatePluginStateTransition(PluginState.ERROR, PluginState.ACTIVATING, 'p6'),
-    );
+    expectNoThrow(() => validatePluginStateTransition(PluginState.ERROR, PluginState.ACTIVATING, 'p6'));
   });
 
   it('Test 7: ERROR → UNINSTALLED 通过（清理错误插件）', () => {
-    expectNoThrow(() =>
-      validatePluginStateTransition(PluginState.ERROR, PluginState.UNINSTALLED, 'p7'),
-    );
+    expectNoThrow(() => validatePluginStateTransition(PluginState.ERROR, PluginState.UNINSTALLED, 'p7'));
   });
 });
 
@@ -122,18 +103,12 @@ describe('validatePluginStateTransition — 瞬态状态解析', () => {
   it('Test 11: ACTIVATING 的合法目标包含 ACTIVE 和 ERROR', () => {
     // 验证 ACTIVATING 必须解析到 ACTIVE 或 ERROR（瞬态状态）
     // 直接测试函数的行为：ACTIVATING → ACTIVE 和 ACTIVATING → ERROR 都不应抛出
-    expectNoThrow(() =>
-      validatePluginStateTransition(PluginState.ACTIVATING, PluginState.ACTIVE, 'p11a'),
-    );
-    expectNoThrow(() =>
-      validatePluginStateTransition(PluginState.ACTIVATING, PluginState.ERROR, 'p11b'),
-    );
+    expectNoThrow(() => validatePluginStateTransition(PluginState.ACTIVATING, PluginState.ACTIVE, 'p11a'));
+    expectNoThrow(() => validatePluginStateTransition(PluginState.ACTIVATING, PluginState.ERROR, 'p11b'));
   });
 
   it('Test 12: DEACTIVATING 的合法目标包含 INACTIVE', () => {
     // 验证 DEACTIVATING 必须解析到 INACTIVE（瞬态状态）
-    expectNoThrow(() =>
-      validatePluginStateTransition(PluginState.DEACTIVATING, PluginState.INACTIVE, 'p12'),
-    );
+    expectNoThrow(() => validatePluginStateTransition(PluginState.DEACTIVATING, PluginState.INACTIVE, 'p12'));
   });
 });

@@ -198,9 +198,7 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
   if (mode === 'status') {
     // Brief skeleton only while the first load is in flight — never perpetual.
     if (statusLoading) {
-      return (
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm h-24 animate-pulse" />
-      );
+      return <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm h-24 animate-pulse" />;
     }
     // No running activities (or a transient error) → hide the card entirely.
     if (statusError || running.length === 0) return null;
@@ -231,25 +229,15 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
                 <ActivityIcon name={a.icon} className="text-indigo-600 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="font-bold text-slate-800 truncate">{a.name}</div>
-                  {a.category && (
-                    <div className="text-[11px] text-slate-500 truncate">{a.category}</div>
-                  )}
+                  {a.category && <div className="text-[11px] text-slate-500 truncate">{a.category}</div>}
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">
                   <span
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      isRunning
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-amber-100 text-amber-700'
+                      isRunning ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                     }`}
                   >
-                    {isRunning
-                      ? lang === 'zh'
-                        ? '进行中'
-                        : 'Running'
-                      : lang === 'zh'
-                        ? '已暂停'
-                        : 'Paused'}
+                    {isRunning ? (lang === 'zh' ? '进行中' : 'Running') : lang === 'zh' ? '已暂停' : 'Paused'}
                   </span>
                   <span className="text-[10px] text-slate-400 flex items-center gap-1">
                     <Clock size={10} /> {formatElapsed(a.startedAt, lang)}
@@ -265,10 +253,7 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
             onClick={() => setManageId(null)}
           >
-            <div
-              className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5"
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-bold text-slate-800">{managed.name}</h3>
                 <button
@@ -317,13 +302,7 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
                   onClick={handleFinish}
                   className="flex-1 flex items-center justify-center gap-1 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white rounded-lg py-2 text-sm font-bold"
                 >
-                  {actionBusy
-                    ? lang === 'zh'
-                      ? '处理中…'
-                      : 'Working…'
-                    : lang === 'zh'
-                      ? '结束'
-                      : 'End'}
+                  {actionBusy ? (lang === 'zh' ? '处理中…' : 'Working…') : lang === 'zh' ? '结束' : 'End'}
                 </button>
               </div>
               <button
@@ -346,11 +325,7 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
   const handleLaunch = async (activity: ActivityProviderDescriptor) => {
     setLauncherStatus((s) => ({ ...s, [activity.id]: lang === 'zh' ? '启动中…' : 'Starting…' }));
     try {
-      const res = await startActivity(
-        activity.id,
-        { classroomId, role },
-        actorId,
-      );
+      const res = await startActivity(activity.id, { classroomId, role }, actorId);
       setLauncherStatus((s) => ({
         ...s,
         [activity.id]: res.dispatched
@@ -375,23 +350,26 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
   if (error) {
     return (
       <div style={panelBase}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>
-          🧩 {lang === 'zh' ? '活动中心' : 'Activity Center'}
-        </div>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>🧩 {lang === 'zh' ? '活动中心' : 'Activity Center'}</div>
         <div style={{ opacity: 0.7 }}>{error}</div>
       </div>
     );
   }
 
-  const title = role === 'teacher' ? (lang === 'zh' ? '活动中心（教师）' : 'Activity Center') : lang === 'zh' ? '活动（学生）' : 'Activities';
+  const title =
+    role === 'teacher'
+      ? lang === 'zh'
+        ? '活动中心（教师）'
+        : 'Activity Center'
+      : lang === 'zh'
+        ? '活动（学生）'
+        : 'Activities';
 
   if (activities.length === 0) {
     return (
       <div style={panelBase}>
         <div style={{ fontWeight: 600, marginBottom: 6 }}>🧩 {title}</div>
-        <div style={{ opacity: 0.7 }}>
-          {lang === 'zh' ? '暂无可用活动。' : 'No activities available.'}
-        </div>
+        <div style={{ opacity: 0.7 }}>{lang === 'zh' ? '暂无可用活动。' : 'No activities available.'}</div>
       </div>
     );
   }
@@ -401,9 +379,7 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
       <div style={{ fontWeight: 600, marginBottom: 8 }}>🧩 {title}</div>
       {byCategory.map(([category, items]) => (
         <div key={category} style={{ marginBottom: 10 }}>
-          <div style={{ opacity: 0.6, fontSize: 11, textTransform: 'uppercase', marginBottom: 4 }}>
-            {category}
-          </div>
+          <div style={{ opacity: 0.6, fontSize: 11, textTransform: 'uppercase', marginBottom: 4 }}>{category}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {items.map((a) => (
               <div
@@ -421,9 +397,7 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
                   {a.name}
                 </div>
                 {a.description && (
-                  <div style={{ opacity: 0.7, fontSize: 11, margin: '2px 0 6px' }}>
-                    {a.description}
-                  </div>
+                  <div style={{ opacity: 0.7, fontSize: 11, margin: '2px 0 6px' }}>{a.description}</div>
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <button
@@ -438,17 +412,9 @@ export const ActivityWorkspaceWidget: React.FC<ActivityWorkspaceWidgetProps> = (
                       fontSize: 12,
                     }}
                   >
-                    {role === 'teacher'
-                      ? lang === 'zh'
-                        ? '启动'
-                        : 'Start'
-                      : lang === 'zh'
-                        ? '参与'
-                        : 'Open'}
+                    {role === 'teacher' ? (lang === 'zh' ? '启动' : 'Start') : lang === 'zh' ? '参与' : 'Open'}
                   </button>
-                  {launcherStatus[a.id] && (
-                    <span style={{ fontSize: 11, opacity: 0.85 }}>{launcherStatus[a.id]}</span>
-                  )}
+                  {launcherStatus[a.id] && <span style={{ fontSize: 11, opacity: 0.85 }}>{launcherStatus[a.id]}</span>}
                 </div>
                 <div style={{ opacity: 0.5, fontSize: 10, marginTop: 4 }}>
                   {a.provider === 'official' ? 'official' : a.provider}

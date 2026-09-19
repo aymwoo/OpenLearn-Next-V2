@@ -11,7 +11,11 @@ export class ExportService {
   /**
    * Export Stage HTML Canvas element as Data URL image (PNG / JPEG)
    */
-  public exportImage(stageCanvasElement: HTMLCanvasElement, format: 'png' | 'jpeg' = 'png', quality: number = 0.92): string {
+  public exportImage(
+    stageCanvasElement: HTMLCanvasElement,
+    format: 'png' | 'jpeg' = 'png',
+    quality: number = 0.92,
+  ): string {
     const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
     return stageCanvasElement.toDataURL(mimeType, quality);
   }
@@ -20,7 +24,10 @@ export class ExportService {
    * Download image snapshot file directly in browser
    */
   public downloadImage(stageCanvasElement: HTMLCanvasElement, filename: string = 'openlearn-whiteboard.png'): void {
-    const dataUrl = this.exportImage(stageCanvasElement, filename.endsWith('.jpg') || filename.endsWith('.jpeg') ? 'jpeg' : 'png');
+    const dataUrl = this.exportImage(
+      stageCanvasElement,
+      filename.endsWith('.jpg') || filename.endsWith('.jpeg') ? 'jpeg' : 'png',
+    );
     const link = document.createElement('a');
     link.download = filename;
     link.href = dataUrl;

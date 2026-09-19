@@ -4,14 +4,7 @@
  */
 
 export type RuntimeLifecycleState =
-  | 'Create'
-  | 'Initialize'
-  | 'Prepare'
-  | 'Running'
-  | 'Pause'
-  | 'Resume'
-  | 'Stop'
-  | 'Dispose';
+  'Create' | 'Initialize' | 'Prepare' | 'Running' | 'Pause' | 'Resume' | 'Stop' | 'Dispose';
 
 export type RuntimeRole = 'Teacher' | 'Assistant' | 'Student' | 'Observer' | 'Plugin' | 'AI';
 
@@ -105,14 +98,27 @@ export interface RuntimeEventMap {
   StudentJoined: { readonly student: UserParticipant; readonly timestamp: number };
   StudentLeft: { readonly studentId: string; readonly timestamp: number };
   LessonStarted: { readonly lessonId: string; readonly timestamp: number };
-  StageChanged: { readonly fromStageId?: string; readonly toStageId: string; readonly index: number; readonly timestamp: number };
-  ObjectUpdated: { readonly objectId: string; readonly action: 'create' | 'update' | 'delete'; readonly timestamp: number };
+  StageChanged: {
+    readonly fromStageId?: string;
+    readonly toStageId: string;
+    readonly index: number;
+    readonly timestamp: number;
+  };
+  ObjectUpdated: {
+    readonly objectId: string;
+    readonly action: 'create' | 'update' | 'delete';
+    readonly timestamp: number;
+  };
   QuizSubmitted: { readonly studentId: string; readonly score: number; readonly timestamp: number };
   PluginLoaded: { readonly pluginId: string; readonly name: string; readonly timestamp: number };
   AIFinished: { readonly prompt: string; readonly response: string; readonly timestamp: number };
   NetworkDisconnected: { readonly actorId: string; readonly timestamp: number };
   RuntimePaused: { readonly elapsedTime: number; readonly timestamp: number };
-  LifecycleChanged: { readonly from: RuntimeLifecycleState; readonly to: RuntimeLifecycleState; readonly timestamp: number };
+  LifecycleChanged: {
+    readonly from: RuntimeLifecycleState;
+    readonly to: RuntimeLifecycleState;
+    readonly timestamp: number;
+  };
 }
 
 export type RuntimeEventType = keyof RuntimeEventMap;
@@ -126,7 +132,7 @@ export interface RuntimeEventEnvelope<K extends RuntimeEventType = RuntimeEventT
 }
 
 export type RuntimeEventSubscriber<K extends RuntimeEventType> = (
-  event: RuntimeEventEnvelope<K>
+  event: RuntimeEventEnvelope<K>,
 ) => void | Promise<void>;
 
 // ── Service Interfaces ─────────────────────────────────────────────────────
@@ -224,7 +230,7 @@ export type RuntimeHookName =
 
 export type RuntimeHookCallback<T = Record<string, unknown>> = (
   payload: T,
-  context: RuntimeContextData
+  context: RuntimeContextData,
 ) => void | Promise<void>;
 
 // ── Context Interface ──────────────────────────────────────────────────────

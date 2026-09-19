@@ -45,7 +45,8 @@ export class AIContextProviderRegistry {
 
     for (const provider of this.providers.values()) {
       try {
-        const provided = provider.provideContext(classroomCtx) as (Partial<AIClassroomContextSnapshot> & { extensionData?: Record<string, unknown> }) | undefined;
+        const provided = provider.provideContext(classroomCtx) as
+          (Partial<AIClassroomContextSnapshot> & { extensionData?: Record<string, unknown> }) | undefined;
         if (provided) {
           if (provided.lesson) lesson = { ...lesson, ...provided.lesson };
           if (provided.teacher) teacher = { ...teacher, ...provided.teacher };

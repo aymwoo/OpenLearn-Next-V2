@@ -22,13 +22,7 @@ export type CapabilityCategory = string;
  *  - `Optional`  — resolution may return `undefined` instead of throwing.
  *  - `Validation`— no activation; only descriptor/dependency validation runs.
  */
-export type CapabilityResolutionMode =
-  | 'Single'
-  | 'Multiple'
-  | 'Priority'
-  | 'Default'
-  | 'Optional'
-  | 'Validation';
+export type CapabilityResolutionMode = 'Single' | 'Multiple' | 'Priority' | 'Default' | 'Optional' | 'Validation';
 
 /** Factory that materializes a capability instance from a resolution context. */
 export type CapabilityActivator = (context: CapabilityContext) => unknown;

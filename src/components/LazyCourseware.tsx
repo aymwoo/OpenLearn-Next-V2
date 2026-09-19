@@ -1,8 +1,13 @@
 import { Suspense, lazy } from 'react';
 
-const CoursewareViewer = lazy(() => import('../features/courseware/index').then((m) => ({ default: m.CoursewareViewer })));
+const CoursewareViewer = lazy(() => import('../features/courseware/InteractiveCoursewareViewer'));
 
-export function LazyCourseware(props: any) {
+export interface LazyCoursewareProps {
+  coursewareId: string | null;
+  onClose?: () => void;
+}
+
+export function LazyCourseware(props: LazyCoursewareProps) {
   return (
     <Suspense
       fallback={

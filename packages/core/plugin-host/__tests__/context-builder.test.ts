@@ -25,7 +25,7 @@ import {
   IStorageServiceToken,
   IAIServiceToken,
 } from '../../di/interfaces.js';
-import { Token } from "../../di/token.js";
+import { Token } from '../../di/token.js';
 import type { Manifest } from '../../esm-loader/manifest-schema.js';
 import type { PluginContext } from '../types.js';
 
@@ -286,11 +286,7 @@ describe('buildContext', () => {
     const ctx = await setupContext({ registry, tracker });
 
     // 注册 interval — 应自动 tracker.track()
-    const processId = await ctx.services.processManager.registerInterval(
-      'test-interval',
-      1000,
-      vi.fn(),
-    );
+    const processId = await ctx.services.processManager.registerInterval('test-interval', 1000, vi.fn());
 
     expect(processId).toBe('interval-456');
     expect(mockProcessService.registerInterval).toHaveBeenCalled();
@@ -344,10 +340,7 @@ describe('buildContext', () => {
     interface IMyService {
       doWork(): number;
     }
-    const MyToken = new Token<IMyService>(
-      'ext-my-service:IMyService',
-      '2.3.1',
-    );
+    const MyToken = new Token<IMyService>('ext-my-service:IMyService', '2.3.1');
 
     const instance: IMyService = { doWork: () => 42 };
 
@@ -384,9 +377,7 @@ describe('buildContext', () => {
     const MyToken = new Token<IMyService>('ext-something:IMyService', '1.0.0');
     const instance: IMyService = { doWork: () => {} };
 
-    await expect(ctx.provide(MyToken, instance)).rejects.toThrow(
-      'not declared in manifest.provides',
-    );
+    await expect(ctx.provide(MyToken, instance)).rejects.toThrow('not declared in manifest.provides');
   });
 
   // ── Test 10 ──────────────────────────────────────────────────────────

@@ -8,16 +8,9 @@
  */
 
 export { type CapabilityStatus, CAPABILITY_STATUS_TRANSITIONS, canTransition } from './CapabilityStatus.js';
-export {
-  CapabilityError,
-  type CapabilityErrorCode,
-} from './CapabilityError.js';
+export { CapabilityError, type CapabilityErrorCode } from './CapabilityError.js';
 export { CapabilityDescriptor } from './CapabilityDescriptor.js';
-export {
-  CapabilityProvider,
-  type CapabilityProviderInit,
-  type CapabilityProviderMode,
-} from './CapabilityProvider.js';
+export { CapabilityProvider, type CapabilityProviderInit, type CapabilityProviderMode } from './CapabilityProvider.js';
 export { CapabilityContext } from './CapabilityContext.js';
 export { PlatformCapability } from './PlatformCapability.js';
 export { CapabilityRegistry } from './CapabilityRegistry.js';

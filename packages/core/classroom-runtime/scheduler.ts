@@ -18,7 +18,7 @@ export class RuntimeScheduler {
     taskFn: () => Promise<T>,
     priority: TaskPriority = TaskPriority.Normal,
     delayMs = 0,
-    maxRetries = 3
+    maxRetries = 3,
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const task: ScheduledTask<T> = {
@@ -50,7 +50,6 @@ export class RuntimeScheduler {
       });
     });
   }
-
 
   /**
    * Start queue processor loop.

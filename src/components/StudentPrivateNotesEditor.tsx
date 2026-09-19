@@ -1,21 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Bold, 
-  Italic, 
-  Underline, 
-  List, 
-  ListOrdered, 
-  Save, 
-  Check, 
-  Trash2, 
-  EyeOff, 
-  Lock, 
-  Sparkles, 
-  Type, 
-  Highlighter, 
-  Heading1, 
-  Heading2, 
-  Quote, 
+import {
+  Bold,
+  Italic,
+  Underline,
+  List,
+  ListOrdered,
+  Save,
+  Check,
+  Trash2,
+  EyeOff,
+  Lock,
+  Sparkles,
+  Type,
+  Highlighter,
+  Heading1,
+  Heading2,
+  Quote,
   SquareDot,
   FileText,
   Clock,
@@ -23,7 +23,7 @@ import {
   GraduationCap,
   Brain,
   Bookmark,
-  AlertCircle
+  AlertCircle,
 } from 'lucide-react';
 
 interface StudentPrivateNotesEditorProps {
@@ -36,25 +36,69 @@ interface StudentPrivateNotesEditorProps {
 
 const CATEGORIES = {
   zh: [
-    { key: 'General', label: '日常备忘', color: 'bg-emerald-50 text-emerald-700 border-emerald-250 hover:bg-emerald-100', icon: 'Bookmark' },
-    { key: 'Academic', label: '学术表现', color: 'bg-blue-50 text-blue-700 border-blue-250 hover:bg-blue-100', icon: 'GraduationCap' },
-    { key: 'Behavioral', label: '行为状态', color: 'bg-purple-50 text-purple-700 border-purple-250 hover:bg-purple-100', icon: 'Brain' },
-    { key: 'SpecialCare', label: '特别关注', color: 'bg-rose-50 text-rose-700 border-rose-250 hover:bg-rose-100', icon: 'AlertCircle' },
+    {
+      key: 'General',
+      label: '日常备忘',
+      color: 'bg-emerald-50 text-emerald-700 border-emerald-250 hover:bg-emerald-100',
+      icon: 'Bookmark',
+    },
+    {
+      key: 'Academic',
+      label: '学术表现',
+      color: 'bg-blue-50 text-blue-700 border-blue-250 hover:bg-blue-100',
+      icon: 'GraduationCap',
+    },
+    {
+      key: 'Behavioral',
+      label: '行为状态',
+      color: 'bg-purple-50 text-purple-700 border-purple-250 hover:bg-purple-100',
+      icon: 'Brain',
+    },
+    {
+      key: 'SpecialCare',
+      label: '特别关注',
+      color: 'bg-rose-50 text-rose-700 border-rose-250 hover:bg-rose-100',
+      icon: 'AlertCircle',
+    },
   ],
   en: [
-    { key: 'General', label: 'General', color: 'bg-emerald-50 text-emerald-700 border-emerald-250 hover:bg-emerald-100', icon: 'Bookmark' },
-    { key: 'Academic', label: 'Academic', color: 'bg-blue-50 text-blue-700 border-blue-250 hover:bg-blue-100', icon: 'GraduationCap' },
-    { key: 'Behavioral', label: 'Behavioral', color: 'bg-purple-50 text-purple-700 border-purple-250 hover:bg-purple-100', icon: 'Brain' },
-    { key: 'SpecialCare', label: 'Special Care', color: 'bg-rose-50 text-rose-700 border-rose-250 hover:bg-rose-100', icon: 'AlertCircle' },
-  ]
+    {
+      key: 'General',
+      label: 'General',
+      color: 'bg-emerald-50 text-emerald-700 border-emerald-250 hover:bg-emerald-100',
+      icon: 'Bookmark',
+    },
+    {
+      key: 'Academic',
+      label: 'Academic',
+      color: 'bg-blue-50 text-blue-700 border-blue-250 hover:bg-blue-100',
+      icon: 'GraduationCap',
+    },
+    {
+      key: 'Behavioral',
+      label: 'Behavioral',
+      color: 'bg-purple-50 text-purple-700 border-purple-250 hover:bg-purple-100',
+      icon: 'Brain',
+    },
+    {
+      key: 'SpecialCare',
+      label: 'Special Care',
+      color: 'bg-rose-50 text-rose-700 border-rose-250 hover:bg-rose-100',
+      icon: 'AlertCircle',
+    },
+  ],
 };
 
 const getCategoryIcon = (iconName: string, size = 12) => {
   switch (iconName) {
-    case 'GraduationCap': return <GraduationCap size={size} />;
-    case 'Brain': return <Brain size={size} />;
-    case 'AlertCircle': return <AlertCircle size={size} />;
-    default: return <Bookmark size={size} />;
+    case 'GraduationCap':
+      return <GraduationCap size={size} />;
+    case 'Brain':
+      return <Brain size={size} />;
+    case 'AlertCircle':
+      return <AlertCircle size={size} />;
+    default:
+      return <Bookmark size={size} />;
   }
 };
 
@@ -65,22 +109,22 @@ const TEMPLATES = {
       content: `<div><strong>【学术表现观察 (Academic Observation)】</strong></div>
 <div>• <strong>课堂参与:</strong> 在讨论中表现活跃，能够主动提出有深度的问题。</div>
 <div>• <strong>理解与熟练度:</strong> 对于今天教授的核心概念理解迅速，但在算法步骤上仍有一些小失误。</div>
-<div>• <strong>随堂练习完成度:</strong> 练习题完成度 100%，正确率约 90%。</div>`
+<div>• <strong>随堂练习完成度:</strong> 练习题完成度 100%，正确率约 90%。</div>`,
     },
     {
       title: '🧠 心理/行为表现',
       content: `<div><strong>【学生行为与专注力评估 (Behavioral Assessment)】</strong></div>
 <div>• <strong>专注状态:</strong> 课堂前20分钟非常专注，但在后半段自由练习时容易分心说话。</div>
 <div>• <strong>合作与沟通:</strong> 小组协作中展现了良好的领导力，积极帮助同伴。</div>
-<div>• <strong>特别关注事项:</strong> 需要在未来课堂中通过设立子任务来帮助他们保持全流程专注。</div>`
+<div>• <strong>特别关注事项:</strong> 需要在未来课堂中通过设立子任务来帮助他们保持全流程专注。</div>`,
     },
     {
       title: '🎯 改进促进行动方案',
       content: `<div><strong>【个性化促进行动方案 (Action Plan)】</strong></div>
 <div>1. 在随堂环节分配进阶难度（分层教学）。</div>
 <div>2. 将大任务拆解为 5 分钟周期的微任务，并予以高频反馈。</div>
-<div>3. 在下次评估前进行 1 对 1 简短辅导，强化薄弱知识点。</div>`
-    }
+<div>3. 在下次评估前进行 1 对 1 简短辅导，强化薄弱知识点。</div>`,
+    },
   ],
   en: [
     {
@@ -88,37 +132,37 @@ const TEMPLATES = {
       content: `<div><strong>[Academic Observation]</strong></div>
 <div>• <strong>Class Engagement:</strong> Heavily engaged during interactive quizzes. Quick to formulate answers.</div>
 <div>• <strong>Concept Mastery:</strong> Grasped the core framework immediately, but struggled with syntax detail.</div>
-<div>• <strong>Practice Performance:</strong> Handled 100% of standard questions, needs challenge tasks.</div>`
+<div>• <strong>Practice Performance:</strong> Handled 100% of standard questions, needs challenge tasks.</div>`,
     },
     {
       title: '🧠 Behavior & Focus',
       content: `<div><strong>[Behavioral & Focus Assessment]</strong></div>
 <div>• <strong>Focus Span:</strong> Exceptionally focused first 15m. Slightly distracted during independent lab.</div>
 <div>• <strong>Collaboration:</strong> Helpful peer-mentoring. Communicates thoughts with clarity.</div>
-<div>• <strong>Intervention Needed:</strong> Guide them back and reward milestones to increase sustained focus.</div>`
+<div>• <strong>Intervention Needed:</strong> Guide them back and reward milestones to increase sustained focus.</div>`,
     },
     {
       title: '🎯 Individual Action Plan',
       content: `<div><strong>[Customized Action Plan]</strong></div>
 <div>1. Assign intermediate/advanced problem sheets to foster interest.</div>
 <div>2. Set a visual 10-minute target schedule on their student desk module.</div>
-<div>3. Follow up with private chat/review session on unresolved concepts.</div>`
-    }
-  ]
+<div>3. Follow up with private chat/review session on unresolved concepts.</div>`,
+    },
+  ],
 };
 
-export function StudentPrivateNotesEditor({ 
-  studentId, 
-  studentName, 
-  initialValue, 
-  onSave, 
-  lang = 'zh' 
+export function StudentPrivateNotesEditor({
+  studentId,
+  studentName,
+  initialValue,
+  onSave,
+  lang = 'zh',
 }: StudentPrivateNotesEditorProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
-  
+
   const [loadedCategory, setLoadedCategory] = useState<string>('General');
   const [selectedCategory, setSelectedCategory] = useState<string>('General');
   const [lastSavedContent, setLastSavedContent] = useState('');
@@ -142,7 +186,7 @@ export function StudentPrivateNotesEditor({
     if (editorRef.current) {
       editorRef.current.innerHTML = htmlContent;
     }
-    
+
     setLoadedCategory(parsedCategory);
     setSelectedCategory(parsedCategory);
     setLastSavedContent(htmlContent);
@@ -186,7 +230,7 @@ export function StudentPrivateNotesEditor({
       const notesHTML = editorRef.current.innerHTML;
       const normalizedHTML = notesHTML === '<br>' ? '' : notesHTML;
       const serialized = JSON.stringify({ category: selectedCategory, html: normalizedHTML });
-      
+
       setIsSaving(true);
       setSaveSuccess(false);
       try {
@@ -210,12 +254,13 @@ export function StudentPrivateNotesEditor({
     if (editorRef.current) {
       const editor = editorRef.current;
       editor.focus();
-      
+
       // Inject at current selection cursor or append if none
       const selection = window.getSelection();
       if (!selection || selection.rangeCount === 0 || !editor.contains(selection.anchorNode)) {
         // Append to the end
-        editor.innerHTML += (editor.innerHTML === '' || editor.innerHTML === '<br>' ? '' : '<br><br>') + templateContent;
+        editor.innerHTML +=
+          (editor.innerHTML === '' || editor.innerHTML === '<br>' ? '' : '<br><br>') + templateContent;
       } else {
         const range = selection.getRangeAt(0);
         range.deleteContents();
@@ -228,16 +273,14 @@ export function StudentPrivateNotesEditor({
         }
         range.insertNode(frag);
       }
-      
+
       handleInput();
     }
   };
 
   const clearEditor = () => {
     const confirmClear = window.confirm(
-      lang === 'zh' 
-        ? '您确定要清空编辑器中的内容吗？' 
-        : 'Are you sure you want to clear the editor contents?'
+      lang === 'zh' ? '您确定要清空编辑器中的内容吗？' : 'Are you sure you want to clear the editor contents?',
     );
     if (confirmClear && editorRef.current) {
       editorRef.current.innerHTML = '';
@@ -254,10 +297,13 @@ export function StudentPrivateNotesEditor({
           <span className="font-semibold text-amber-900">
             {lang === 'zh' ? '私密教师备忘档案' : 'Confidential Teacher Dossier'}
           </span>
-          • {lang === 'zh' ? '此内容仅对教师端可见，学生端完全屏蔽/不呈现' : 'Notes are secure, strictly hidden from the student portal.'}
+          •{' '}
+          {lang === 'zh'
+            ? '此内容仅对教师端可见，学生端完全屏蔽/不呈现'
+            : 'Notes are secure, strictly hidden from the student portal.'}
         </span>
         <span className="flex items-center gap-1 text-[10px] bg-amber-100/65 text-amber-905 px-1.5 py-0.5 rounded-md border border-amber-200">
-          <Lock size={10} /> 
+          <Lock size={10} />
           {lang === 'zh' ? '已加密' : 'Confidential'}
         </span>
       </div>
@@ -271,14 +317,14 @@ export function StudentPrivateNotesEditor({
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          {(lang === 'zh' ? CATEGORIES.zh : CATEGORIES.en).map(cat => {
+          {(lang === 'zh' ? CATEGORIES.zh : CATEGORIES.en).map((cat) => {
             const isSelected = selectedCategory === cat.key;
             return (
               <button
                 key={cat.key}
                 onClick={() => handleCategoryChange(cat.key)}
                 className={`px-2.5 py-0.5 text-[10px] font-semibold rounded-full border flex items-center gap-1 cursor-pointer transition-all duration-200 ${
-                  isSelected 
+                  isSelected
                     ? `${cat.color.split(' ')[0]} ${cat.color.split(' ')[1]} border-indigo-400 ring-2 ring-indigo-50 font-bold scale-[1.03]`
                     : 'bg-white text-gray-500 border-gray-200/80 hover:bg-gray-50 hover:text-gray-700'
                 }`}
@@ -400,12 +446,13 @@ export function StudentPrivateNotesEditor({
 
       {/* Editor Main Content & Preset Templates Side Pane */}
       <div className="flex-1 flex min-h-0 divide-x divide-gray-150">
-        
         {/* WYSIWYG Editable Sheet */}
         <div className="flex-1 flex flex-col p-3 bg-white overflow-hidden relative">
           <div className="text-[10px] font-bold text-gray-450 tracking-wider flex items-center gap-1.5 mb-2 select-none border-b border-gray-50 pb-1">
             <FileText size={11} className="text-indigo-400" />
-            <span>{studentName} — {lang === 'zh' ? '专属备忘档案' : 'Confidential Profile Notes'}</span>
+            <span>
+              {studentName} — {lang === 'zh' ? '专属备忘档案' : 'Confidential Profile Notes'}
+            </span>
           </div>
           <div
             ref={editorRef}
@@ -415,13 +462,13 @@ export function StudentPrivateNotesEditor({
             style={{
               backgroundImage: 'radial-gradient(#e5e7eb 1.1px, transparent 1.1px)',
               backgroundSize: '16px 16px',
-              minHeight: '100px'
+              minHeight: '100px',
             }}
           />
-          {(!initialValue && (!editorRef.current || editorRef.current.innerHTML === '')) && (
+          {!initialValue && (!editorRef.current || editorRef.current.innerHTML === '') && (
             <div className="absolute pointer-events-none top-[44px] left-3.5 pr-8 text-xs text-slate-400 italic font-sans max-w-[85%] leading-relaxed select-none">
-              {lang === 'zh' 
-                ? '输入私有备忘档案，或选用右侧课堂观察模板...' 
+              {lang === 'zh'
+                ? '输入私有备忘档案，或选用右侧课堂观察模板...'
                 : 'Enter details... Click templates on the right for swift assessment log structures.'}
             </div>
           )}
@@ -482,8 +529,8 @@ export function StudentPrivateNotesEditor({
           onClick={saveNotes}
           disabled={isSaving}
           className={`px-3 py-1 text-xs font-semibold rounded-lg shadow-sm border transition-all flex items-center gap-1.5 cursor-pointer ${
-            hasUnsavedChanges 
-              ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 hover:shadow-md' 
+            hasUnsavedChanges
+              ? 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700 hover:shadow-md'
               : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-55 hover:text-gray-700'
           }`}
         >

@@ -38,7 +38,12 @@
  * @module
  */
 
-import type { IWorkerTransport, InvokeMessage, SubscribeMessage, UnsubscribeMessage } from '../../packages/core/worker-runtime/types';
+import type {
+  IWorkerTransport,
+  InvokeMessage,
+  SubscribeMessage,
+  UnsubscribeMessage,
+} from '../../packages/core/worker-runtime/types';
 import type { FrontendServiceRegistry } from './service-registry';
 import type { ISocketService } from './types';
 
@@ -94,10 +99,7 @@ export class ServiceHost {
    * @param msg - The raw message from the Worker
    * @param transport - The transport to send responses back through
    */
-  async handleMessage(
-    msg: unknown,
-    transport: IWorkerTransport,
-  ): Promise<void> {
+  async handleMessage(msg: unknown, transport: IWorkerTransport): Promise<void> {
     try {
       const typed = msg as { type?: string };
       switch (typed.type) {
@@ -124,10 +126,7 @@ export class ServiceHost {
       }
     } catch (err: unknown) {
       // Never let handler exception crash the message loop
-      console.error(
-        `[ServiceHost] Unhandled error in handleMessage for ${this.pluginActorId}:`,
-        err,
-      );
+      console.error(`[ServiceHost] Unhandled error in handleMessage for ${this.pluginActorId}:`, err);
     }
   }
 
@@ -147,9 +146,7 @@ export class ServiceHost {
    */
   private handleSubscribe(msg: SubscribeMessage, transport: IWorkerTransport): void {
     if (!this.socketService) {
-      console.warn(
-        `[ServiceHost] No ISocketService available -- cannot subscribe for actor ${this.pluginActorId}`,
-      );
+      console.warn(`[ServiceHost] No ISocketService available -- cannot subscribe for actor ${this.pluginActorId}`);
       return;
     }
 
@@ -167,10 +164,7 @@ export class ServiceHost {
           },
         });
       } catch (err) {
-        console.error(
-          `[ServiceHost] Failed to forward event "${msg.eventType}" to Worker:`,
-          err,
-        );
+        console.error(`[ServiceHost] Failed to forward event "${msg.eventType}" to Worker:`, err);
       }
     };
 
@@ -208,10 +202,7 @@ export class ServiceHost {
    * @param msg - The parsed invoke message with token, method, args
    * @param transport - The transport to send the result/error back through
    */
-  async handleInvoke(
-    msg: InvokeMessage,
-    transport: IWorkerTransport,
-  ): Promise<void> {
+  async handleInvoke(msg: InvokeMessage, transport: IWorkerTransport): Promise<void> {
     try {
       // ── Capability guard (simplified frontend version) ──────────────
       // If manifestCapabilities is empty, the Worker plugin has no
@@ -229,9 +220,7 @@ export class ServiceHost {
       // ── Get the method from the service instance ───────────────────
       const method = (service as Record<string, unknown>)[msg.method];
       if (typeof method !== 'function') {
-        throw new Error(
-          `Method "${msg.method}" not found on service "${msg.token}"`,
-        );
+        throw new Error(`Method "${msg.method}" not found on service "${msg.token}"`);
       }
 
       // ── Execute the method ─────────────────────────────────────────
@@ -246,10 +235,7 @@ export class ServiceHost {
     } catch (err: unknown) {
       // ── Serialize error with stack capped at STACK_CAP ──────────────
       const error = err instanceof Error ? err : new Error(String(err));
-      const stack =
-        error.stack && error.stack.length > STACK_CAP
-          ? error.stack.slice(0, STACK_CAP)
-          : error.stack;
+      const stack = error.stack && error.stack.length > STACK_CAP ? error.stack.slice(0, STACK_CAP) : error.stack;
 
       transport.postMessage({
         type: 'error',
@@ -277,10 +263,7 @@ export class ServiceHost {
       try {
         cleanup();
       } catch (err) {
-        console.error(
-          `[ServiceHost] Error cleaning up subscription:`,
-          err,
-        );
+        console.error(`[ServiceHost] Error cleaning up subscription:`, err);
       }
     }
     this.subscriptions.clear();

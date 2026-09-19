@@ -3,20 +3,12 @@
  * Typed event pipeline for AI telemetry, model calls, tool executions, and prompt builds.
  */
 
-import {
-  AIEventType,
-  AIEventMap,
-  AIEventEnvelope,
-  AIEventSubscriber,
-} from '../types/index.js';
+import { AIEventType, AIEventMap, AIEventEnvelope, AIEventSubscriber } from '../types/index.js';
 
 export class AIEventBus {
   private subscribers = new Map<string, Set<AIEventSubscriber<any>>>();
 
-  public subscribe<K extends AIEventType>(
-    eventType: K | '*',
-    subscriber: AIEventSubscriber<K>
-  ): () => void {
+  public subscribe<K extends AIEventType>(eventType: K | '*', subscriber: AIEventSubscriber<K>): () => void {
     const key = String(eventType);
     if (!this.subscribers.has(key)) {
       this.subscribers.set(key, new Set());
@@ -29,10 +21,7 @@ export class AIEventBus {
     };
   }
 
-  public async publish<K extends AIEventType>(
-    type: K,
-    payload: AIEventMap[K]
-  ): Promise<AIEventEnvelope<K>> {
+  public async publish<K extends AIEventType>(type: K, payload: AIEventMap[K]): Promise<AIEventEnvelope<K>> {
     const envelope: AIEventEnvelope<K> = {
       id: `aievt_${globalThis.crypto.randomUUID()}`,
       type,
@@ -49,8 +38,8 @@ export class AIEventBus {
       allSubs.map((sub) =>
         Promise.resolve(sub(envelope)).catch((err: unknown) => {
           console.error(`[AIEventBus] Error in subscriber for ${String(type)}:`, err);
-        })
-      )
+        }),
+      ),
     );
 
     return envelope;

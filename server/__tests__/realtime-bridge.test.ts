@@ -82,7 +82,8 @@ const TITLE_SQL = 'SELECT title FROM assignments WHERE id = ?';
 const ELEMENT_SQL = 'SELECT * FROM whiteboard_elements WHERE id = ?';
 const SCHEDULE_SQL = 'SELECT class_id FROM schedules WHERE lesson_id = ? LIMIT 1';
 const ROLLCALL_EXISTS_SQL = 'SELECT id FROM student_rollcalls WHERE id = ?';
-const ROLLCALL_INSERT_SQL = 'INSERT INTO student_rollcalls (id, student_id, class_id, lesson_id, picked_time) VALUES (?, ?, ?, ?, ?)';
+const ROLLCALL_INSERT_SQL =
+  'INSERT INTO student_rollcalls (id, student_id, class_id, lesson_id, picked_time) VALUES (?, ?, ?, ?, ?)';
 
 describe('setupRealtimeBridge', () => {
   it('forwards assignment.graded to a toast with the resolved assignment title', () => {
@@ -119,7 +120,12 @@ describe('setupRealtimeBridge', () => {
 
     expect(m.emitted).toEqual([
       { scope: 'room', room: 'L1', event: 'whiteboard-sync', payload: { roomId: 'L1', type: 'refresh' } },
-      { scope: 'room', room: 'whiteboard-broadcast', event: 'whiteboard-sync', payload: { roomId: 'L1', type: 'refresh' } },
+      {
+        scope: 'room',
+        room: 'whiteboard-broadcast',
+        event: 'whiteboard-sync',
+        payload: { roomId: 'L1', type: 'refresh' },
+      },
     ]);
   });
 
@@ -160,7 +166,12 @@ describe('setupRealtimeBridge', () => {
     m.seedGet.set(ELEMENT_SQL, {
       type: 'rollcall',
       lesson_id: 'L1',
-      data: JSON.stringify({ selectedStudent: { id: 's1', name: 'Stu' }, status: 'picked', classId: 'C1', pickedTime: '2026-01-02T03:04:05.000Z' }),
+      data: JSON.stringify({
+        selectedStudent: { id: 's1', name: 'Stu' },
+        status: 'picked',
+        classId: 'C1',
+        pickedTime: '2026-01-02T03:04:05.000Z',
+      }),
     });
     m.seedGet.set(ROLLCALL_EXISTS_SQL, { id: 'existing' });
 

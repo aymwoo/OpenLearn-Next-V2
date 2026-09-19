@@ -10,5 +10,5 @@
 export * from './types';
 export * from './service-registry';
 export * from './plugin-host-store';
-export * from './plugin-host';              // Created in Task 3
-export * from './plugin-host-context';      // Created in Task 3
+export * from './plugin-host'; // Created in Task 3
+export * from './plugin-host-context'; // Created in Task 3

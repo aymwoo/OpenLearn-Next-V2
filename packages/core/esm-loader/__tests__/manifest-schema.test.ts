@@ -68,12 +68,8 @@ describe('manifestSchema', () => {
       version: '1.0.0',
       main: 'index.js',
       contributes: {
-        'classroom.tool': [
-          { id: 't1', name: 'T1', commandType: 't1.cmd' },
-        ],
-        'anchor:whiteboard-toolbar:rollcall': [
-          { id: 'my-btn', label: 'My Button', placement: 'before' },
-        ],
+        'classroom.tool': [{ id: 't1', name: 'T1', commandType: 't1.cmd' }],
+        'anchor:whiteboard-toolbar:rollcall': [{ id: 'my-btn', label: 'My Button', placement: 'before' }],
       },
     };
     const parsed = manifestSchema.parse(manifest);

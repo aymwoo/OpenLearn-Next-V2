@@ -14,7 +14,7 @@ describe('StudentAssignmentQuestionPanel', () => {
         selectedAssignment={{ content: '# Q', submission_status: null }}
         quizStudentAnswers={{}}
         submitQuizAssignment={submitQuizAssignment}
-      />
+      />,
     );
     expect(screen.getByText('Ready to submit?')).toBeTruthy();
     expect(screen.getByText('Submit')).toBeTruthy();

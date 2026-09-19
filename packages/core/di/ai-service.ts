@@ -36,18 +36,13 @@ export class AIService implements IAIService {
     this.gateway = new AIProviderGateway(new AIEventBus());
   }
 
-  async generateText(
-    prompt: string,
-    options?: { systemInstruction?: string; temperature?: number },
-  ): Promise<string> {
+  async generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string> {
     // Query active third-party provider from DB
     const provider = this.db
       .prepare(
         "SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != '' LIMIT 1",
       )
-      .get() as
-      | { id: string; name: string; api_url: string; api_key: string; model_name: string }
-      | undefined;
+      .get() as { id: string; name: string; api_url: string; api_key: string; model_name: string } | undefined;
 
     let config: AIProviderConfig | undefined;
     if (provider) {

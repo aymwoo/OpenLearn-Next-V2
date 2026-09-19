@@ -10,7 +10,7 @@ export const createDefaultAISkill = (
   name: string,
   description: string,
   requiredContext: string[],
-  supportedModels: string[]
+  supportedModels: string[],
 ): IAISkillProvider => ({
   metadata: {
     id,
@@ -35,8 +35,8 @@ export const registerDefaultAISkills = (registry: AISkillRegistry): void => {
       'AI Tutor Assistant',
       'Provides real-time Q&A and learning guidance for students',
       ['lesson', 'students'],
-      ['gemini-1.5-pro', 'gpt-4o', '*']
-    )
+      ['gemini-1.5-pro', 'gpt-4o', '*'],
+    ),
   );
 
   registry.registerSkill(
@@ -45,8 +45,8 @@ export const registerDefaultAISkills = (registry: AISkillRegistry): void => {
       'AI Whiteboard Visual Explainer',
       'Interprets multi-modal whiteboard drawings, formulas, and diagrams',
       ['whiteboard', 'resources'],
-      ['gemini-1.5-flash', '*']
-    )
+      ['gemini-1.5-flash', '*'],
+    ),
   );
 
   registry.registerSkill(
@@ -55,8 +55,8 @@ export const registerDefaultAISkills = (registry: AISkillRegistry): void => {
       'AI Quiz & Exercise Generator',
       'Generates adaptive pop quizzes based on classroom lesson flow',
       ['lesson', 'activities'],
-      ['*']
-    )
+      ['*'],
+    ),
   );
 
   registry.registerSkill(
@@ -65,7 +65,7 @@ export const registerDefaultAISkills = (registry: AISkillRegistry): void => {
       'AI Student Engagement Insight',
       'Analyzes telemetry logs to generate student participation insights',
       ['analyticsSummary'],
-      ['*']
-    )
+      ['*'],
+    ),
   );
 };

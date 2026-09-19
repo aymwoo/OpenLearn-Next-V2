@@ -29,11 +29,7 @@ export class InteractionRuntimeService {
   }
 
   // Domain Dispatch Helpers
-  public emitEvent<T = Record<string, unknown>>(
-    domain: InteractionDomain,
-    payload: T,
-    targetId?: string
-  ): boolean {
+  public emitEvent<T = Record<string, unknown>>(domain: InteractionDomain, payload: T, targetId?: string): boolean {
     const event: InteractionEvent<T> = {
       id: `evt_${domain.toLowerCase()}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       domain,
@@ -50,22 +46,41 @@ export class InteractionRuntimeService {
   }
 
   // 2. Mouse Domain
-  public dispatchMouse(type: 'click' | 'dblclick' | 'move' | 'down' | 'up', x: number, y: number, targetId?: string): boolean {
+  public dispatchMouse(
+    type: 'click' | 'dblclick' | 'move' | 'down' | 'up',
+    x: number,
+    y: number,
+    targetId?: string,
+  ): boolean {
     return this.emitEvent('Mouse', { type, x, y }, targetId);
   }
 
   // 3. Touch Domain
-  public dispatchTouch(type: 'start' | 'move' | 'end', touches: Array<{ x: number; y: number }>, targetId?: string): boolean {
+  public dispatchTouch(
+    type: 'start' | 'move' | 'end',
+    touches: Array<{ x: number; y: number }>,
+    targetId?: string,
+  ): boolean {
     return this.emitEvent('Touch', { type, touches }, targetId);
   }
 
   // 4. Gesture Domain
-  public dispatchGesture(type: 'pinch' | 'rotate' | 'swipe', scale?: number, rotation?: number, targetId?: string): boolean {
+  public dispatchGesture(
+    type: 'pinch' | 'rotate' | 'swipe',
+    scale?: number,
+    rotation?: number,
+    targetId?: string,
+  ): boolean {
     return this.emitEvent('Gesture', { type, scale, rotation }, targetId);
   }
 
   // 5. Drag Domain
-  public dispatchDrag(phase: 'start' | 'drag' | 'drop' | 'cancel', deltaX: number, deltaY: number, targetId?: string): boolean {
+  public dispatchDrag(
+    phase: 'start' | 'drag' | 'drop' | 'cancel',
+    deltaX: number,
+    deltaY: number,
+    targetId?: string,
+  ): boolean {
     return this.emitEvent('Drag', { phase, deltaX, deltaY }, targetId);
   }
 
@@ -85,7 +100,12 @@ export class InteractionRuntimeService {
   }
 
   // 8. ContextMenu Domain
-  public openContextMenu(x: number, y: number, menuItems?: Array<{ id: string; label: string }>, targetId?: string): boolean {
+  public openContextMenu(
+    x: number,
+    y: number,
+    menuItems?: Array<{ id: string; label: string }>,
+    targetId?: string,
+  ): boolean {
     return this.emitEvent('ContextMenu', { x, y, menuItems }, targetId);
   }
 

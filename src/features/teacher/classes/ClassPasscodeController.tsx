@@ -8,27 +8,34 @@ export interface ClassPasscodeControllerProps {
 
 export function ClassPasscodeController({ cls, lang, fetchClasses }: ClassPasscodeControllerProps) {
   return (
-    <div className="mb-4 bg-gradient-to-r from-indigo-50/70 to-violet-50/70 p-3.5 rounded-2xl border border-indigo-150/40 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-sans text-left" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="mb-4 bg-gradient-to-r from-indigo-50/70 to-violet-50/70 p-3.5 rounded-2xl border border-indigo-150/40 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-sans text-left"
+      onClick={(e) => e.stopPropagation()}
+    >
       <div className="space-y-1 text-left">
         <div className="flex items-center gap-1.5 justify-start">
           <span className="inline-block w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0" />
-          <span className="text-xs font-black text-indigo-950 uppercase tracking-wider">{lang === 'zh' ? '临时班级密码 (支持学生快速一键密码登录)' : 'Temporary Class Passcode'}</span>
+          <span className="text-xs font-black text-indigo-950 uppercase tracking-wider">
+            {lang === 'zh' ? '临时班级密码 (支持学生快速一键密码登录)' : 'Temporary Class Passcode'}
+          </span>
         </div>
         <p className="text-[10px] text-indigo-600/80 font-semibold leading-relaxed text-left block">
-          {lang === 'zh' ? '开始课堂后，全班学生均可使用此特定临时密码统一安全登录，无需强制输入个人自设密码。' : 'Once set, any pupil in this class can use this temporary passcode to log in directly.'}
+          {lang === 'zh'
+            ? '开始课堂后，全班学生均可使用此特定临时密码统一安全登录，无需强制输入个人自设密码。'
+            : 'Once set, any pupil in this class can use this temporary passcode to log in directly.'}
         </p>
       </div>
       <div className="flex items-center gap-1.5 shrink-0 justify-end">
         <input
           id={`class-passcode-${cls.id}`}
           type="text"
-          value={cls.class_passcode || ""}
+          value={cls.class_passcode || ''}
           onChange={async (e) => {
             const val = e.target.value;
             await fetch(`/api/classes/${cls.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ class_passcode: val })
+              body: JSON.stringify({ class_passcode: val }),
             });
             await fetchClasses();
           }}
@@ -44,7 +51,7 @@ export function ClassPasscodeController({ cls, lang, fetchClasses }: ClassPassco
             await fetch(`/api/classes/${cls.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ class_passcode: randomPin })
+              body: JSON.stringify({ class_passcode: randomPin }),
             });
             await fetchClasses();
           }}
@@ -60,7 +67,7 @@ export function ClassPasscodeController({ cls, lang, fetchClasses }: ClassPassco
               await fetch(`/api/classes/${cls.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ class_passcode: null })
+                body: JSON.stringify({ class_passcode: null }),
               });
               await fetchClasses();
             }}

@@ -54,18 +54,66 @@ export function useLessonTimeline(options: UseLessonTimelineOptions) {
             segments = typeof lesson.timeline === 'string' ? JSON.parse(lesson.timeline) : lesson.timeline;
           } catch (e) {
             segments = [
-              { id: 'seg-1', title: '开场准备', type: 'intro', duration: '5m', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
-              { id: 'seg-2', title: '讲授新课', type: 'lecture', duration: '20m', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
-              { id: 'seg-3', title: '互动练习', type: 'practice', duration: '15m', color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' },
-              { id: 'seg-4', title: '课堂总结', type: 'summary', duration: '5m', color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' },
+              {
+                id: 'seg-1',
+                title: '开场准备',
+                type: 'intro',
+                duration: '5m',
+                color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
+              },
+              {
+                id: 'seg-2',
+                title: '讲授新课',
+                type: 'lecture',
+                duration: '20m',
+                color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
+              },
+              {
+                id: 'seg-3',
+                title: '互动练习',
+                type: 'practice',
+                duration: '15m',
+                color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100',
+              },
+              {
+                id: 'seg-4',
+                title: '课堂总结',
+                type: 'summary',
+                duration: '5m',
+                color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
+              },
             ];
           }
         } else {
           segments = [
-            { id: 'seg-1', title: '开场准备', type: 'intro', duration: '5m', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
-            { id: 'seg-2', title: '讲授新课', type: 'lecture', duration: '20m', color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100' },
-            { id: 'seg-3', title: '互动练习', type: 'practice', duration: '15m', color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' },
-            { id: 'seg-4', title: '课堂总结', type: 'summary', duration: '5m', color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100' },
+            {
+              id: 'seg-1',
+              title: '开场准备',
+              type: 'intro',
+              duration: '5m',
+              color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
+            },
+            {
+              id: 'seg-2',
+              title: '讲授新课',
+              type: 'lecture',
+              duration: '20m',
+              color: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
+            },
+            {
+              id: 'seg-3',
+              title: '互动练习',
+              type: 'practice',
+              duration: '15m',
+              color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100',
+            },
+            {
+              id: 'seg-4',
+              title: '课堂总结',
+              type: 'summary',
+              duration: '5m',
+              color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
+            },
           ];
         }
         setTimelineSegments(segments);

@@ -1,5 +1,19 @@
 import React, { useState } from 'react';
-import { BookOpen, Upload, Plus, Search, X, Users, Edit3, Copy, Trash2, Loader2, AlertTriangle, UserCheck, Eye } from 'lucide-react';
+import {
+  BookOpen,
+  Upload,
+  Plus,
+  Search,
+  X,
+  Users,
+  Edit3,
+  Copy,
+  Trash2,
+  Loader2,
+  AlertTriangle,
+  UserCheck,
+  Eye,
+} from 'lucide-react';
 import Markdown from 'react-markdown';
 import type { Lesson, SessionType } from '../../types/app';
 import { useAppStore } from '../../store/appStore';
@@ -35,13 +49,25 @@ interface CourseManagementProps {
 }
 
 export function CourseManagement({
-  lang, session, lessons, lessonsSearchQuery, setLessonsSearchQuery,
-  lessonsSortOrder, setLessonsSortOrder, filteredLessons,
-  onOpenImportLessons, onOpenCourseWizard, onViewCourse,
-  onDeleteCourse, onCopyCourse,
-  filterEnrollment, setFilterEnrollment,
-  filterHasContent, setFilterHasContent,
-  filterThisMonth, setFilterThisMonth,
+  lang,
+  session,
+  lessons,
+  lessonsSearchQuery,
+  setLessonsSearchQuery,
+  lessonsSortOrder,
+  setLessonsSortOrder,
+  filteredLessons,
+  onOpenImportLessons,
+  onOpenCourseWizard,
+  onViewCourse,
+  onDeleteCourse,
+  onCopyCourse,
+  filterEnrollment,
+  setFilterEnrollment,
+  filterHasContent,
+  setFilterHasContent,
+  filterThisMonth,
+  setFilterThisMonth,
   copyingLessonId,
 }: CourseManagementProps) {
   const appSession = useAppStore((s) => s.session);
@@ -129,13 +155,18 @@ export function CourseManagement({
                   className="w-full pl-9 pr-8 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800 shadow-sm"
                 />
                 {lessonsSearchQuery && (
-                  <button onClick={() => setLessonsSearchQuery('')} className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-400 hover:text-gray-600">
+                  <button
+                    onClick={() => setLessonsSearchQuery('')}
+                    className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-400 hover:text-gray-600"
+                  >
                     <X size={12} className="bg-gray-100 hover:bg-gray-200 rounded-full p-0.5" />
                   </button>
                 )}
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">{lang === 'zh' ? '排序方式：' : 'Sort by:'}</span>
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                  {lang === 'zh' ? '排序方式：' : 'Sort by:'}
+                </span>
                 <select
                   value={lessonsSortOrder}
                   onChange={(e) => setLessonsSortOrder(e.target.value as any)}
@@ -196,7 +227,9 @@ export function CourseManagement({
                 </button>
               </div>
               <div className="text-xs font-semibold text-gray-500">
-                Found <span className="text-indigo-650 font-bold">{filteredLessons.length}</span> of <span className="text-gray-700 font-bold">{lessons.length}</span> course{lessons.length === 1 ? '' : 's'}
+                Found <span className="text-indigo-650 font-bold">{filteredLessons.length}</span> of{' '}
+                <span className="text-gray-700 font-bold">{lessons.length}</span> course
+                {lessons.length === 1 ? '' : 's'}
               </div>
             </div>
           </div>
@@ -205,9 +238,19 @@ export function CourseManagement({
           {lessons.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 min-h-[300px]">
               <BookOpen size={48} className="mb-4 opacity-30 text-indigo-500" />
-              <h3 className="text-lg font-bold text-gray-800">{lang === 'zh' ? '暂无可用课程' : 'No Courses Available'}</h3>
-              <p className="mt-2 text-sm text-gray-500 text-center max-w-xs">{lang === 'zh' ? '系统中暂未部署任何课程。请通过下方按钮启动添加向导指南。' : 'There are no courses active in the system yet. Build your first curriculum!'}</p>
-              <button id="empty-add-course-btn" onClick={onOpenCourseWizard} className="mt-5 flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all cursor-pointer">
+              <h3 className="text-lg font-bold text-gray-800">
+                {lang === 'zh' ? '暂无可用课程' : 'No Courses Available'}
+              </h3>
+              <p className="mt-2 text-sm text-gray-500 text-center max-w-xs">
+                {lang === 'zh'
+                  ? '系统中暂未部署任何课程。请通过下方按钮启动添加向导指南。'
+                  : 'There are no courses active in the system yet. Build your first curriculum!'}
+              </p>
+              <button
+                id="empty-add-course-btn"
+                onClick={onOpenCourseWizard}
+                className="mt-5 flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all cursor-pointer"
+              >
                 <Plus size={16} />
                 {lang === 'zh' ? '使用向导指南来创建新课程' : 'Create Course via Wizard'}
               </button>
@@ -216,8 +259,13 @@ export function CourseManagement({
             <div className="flex flex-col items-center justify-center h-full py-12 text-gray-450 text-center">
               <Search size={44} className="mb-3 opacity-30 text-gray-450" />
               <h4 className="font-semibold text-gray-700 text-sm">No Courses Match "{lessonsSearchQuery}"</h4>
-              <p className="text-xs text-gray-500 mt-1 max-w-xs">Double-check the spelling or try searching for another curriculum keyword.</p>
-              <button onClick={() => setLessonsSearchQuery('')} className="mt-3 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-3 py-1.5 rounded-lg transition-colors">
+              <p className="text-xs text-gray-500 mt-1 max-w-xs">
+                Double-check the spelling or try searching for another curriculum keyword.
+              </p>
+              <button
+                onClick={() => setLessonsSearchQuery('')}
+                className="mt-3 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-3 py-1.5 rounded-lg transition-colors"
+              >
                 Clear Search Filter
               </button>
             </div>
@@ -241,9 +289,18 @@ export function CourseManagement({
                   const canManage = isAdmin || isOwner;
 
                   return (
-                    <div key={lesson.id} className={`border border-gray-200 hover:border-indigo-300 rounded-xl p-4 flex flex-col bg-gray-50/50 hover:shadow-md transition-all ${isCopying ? 'opacity-60 pointer-events-none' : ''}`}>
+                    <div
+                      key={lesson.id}
+                      className={`border border-gray-200 hover:border-indigo-300 rounded-xl p-4 flex flex-col bg-gray-50/50 hover:shadow-md transition-all ${isCopying ? 'opacity-60 pointer-events-none' : ''}`}
+                    >
                       <div className="flex items-center justify-between mb-2 gap-2">
-                        <div className="font-semibold text-gray-800 text-lg truncate cursor-pointer hover:text-indigo-600 transition-colors" title={lesson.title} onClick={() => onViewCourse(lesson.id)}>{lesson.title}</div>
+                        <div
+                          className="font-semibold text-gray-800 text-lg truncate cursor-pointer hover:text-indigo-600 transition-colors"
+                          title={lesson.title}
+                          onClick={() => onViewCourse(lesson.id)}
+                        >
+                          {lesson.title}
+                        </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           {lesson.creator_name ? (
                             <span
@@ -252,9 +309,14 @@ export function CourseManagement({
                                   ? 'bg-indigo-50 text-indigo-700 border-indigo-200 font-semibold'
                                   : 'bg-slate-100 text-slate-600 border-slate-200'
                               }`}
-                              title={lang === 'zh' ? `创建教师: ${lesson.creator_name}` : `Created by: ${lesson.creator_name}`}
+                              title={
+                                lang === 'zh'
+                                  ? `创建教师: ${lesson.creator_name}`
+                                  : `Created by: ${lesson.creator_name}`
+                              }
                             >
-                              {isOwner ? '👑 ' : '👤 '}{lesson.creator_name}
+                              {isOwner ? '👑 ' : '👤 '}
+                              {lesson.creator_name}
                             </span>
                           ) : null}
                           <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 px-1.5 py-0.5 border border-indigo-100 rounded text-[10px] font-bold">
@@ -272,7 +334,15 @@ export function CourseManagement({
                           <button
                             onClick={() => onViewCourse(lesson.id)}
                             className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors cursor-pointer"
-                            title={canManage ? (lang === 'zh' ? '查看与编辑' : 'View & Edit') : (lang === 'zh' ? '查看只读 (他人课程)' : 'View Read-Only')}
+                            title={
+                              canManage
+                                ? lang === 'zh'
+                                  ? '查看与编辑'
+                                  : 'View & Edit'
+                                : lang === 'zh'
+                                  ? '查看只读 (他人课程)'
+                                  : 'View Read-Only'
+                            }
                           >
                             {canManage ? <Edit3 size={15} /> : <Eye size={15} />}
                           </button>
@@ -322,13 +392,20 @@ export function CourseManagement({
             <div className="p-5 space-y-3">
               <p className="text-sm text-gray-700">
                 {lang === 'zh' ? (
-                  <>确定要删除课程 <span className="font-bold text-red-600">{deleteTarget.title}</span> 吗？</>
+                  <>
+                    确定要删除课程 <span className="font-bold text-red-600">{deleteTarget.title}</span> 吗？
+                  </>
                 ) : (
-                  <>Are you sure you want to delete <span className="font-bold text-red-600">{deleteTarget.title}</span>?</>
+                  <>
+                    Are you sure you want to delete <span className="font-bold text-red-600">{deleteTarget.title}</span>
+                    ?
+                  </>
                 )}
               </p>
               <p className="text-xs text-red-600 font-medium">
-                {lang === 'zh' ? '此操作不可撤销，将删除课程的所有关联数据。' : 'This action is irreversible and will delete all associated data.'}
+                {lang === 'zh'
+                  ? '此操作不可撤销，将删除课程的所有关联数据。'
+                  : 'This action is irreversible and will delete all associated data.'}
               </p>
               {deleteStatsLoading ? (
                 <div className="flex items-center gap-2 text-xs text-gray-500 py-2">
@@ -358,7 +435,10 @@ export function CourseManagement({
             </div>
             <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
               <button
-                onClick={() => { setDeleteTarget(null); setDeleteStats(null); }}
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setDeleteStats(null);
+                }}
                 className="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors cursor-pointer"
               >
                 {lang === 'zh' ? '取消' : 'Cancel'}

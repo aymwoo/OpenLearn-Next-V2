@@ -117,9 +117,13 @@ describe('EventForwarder subscribe/forward', () => {
       eventType: 'test.event',
     });
 
-    const event = createTestEvent('test.event', { key: 'val' }, {
-      correlationId: 'corr-123',
-    });
+    const event = createTestEvent(
+      'test.event',
+      { key: 'val' },
+      {
+        correlationId: 'corr-123',
+      },
+    );
     eventBus.publish(event);
 
     expect(transport.postMessage).toHaveBeenCalledTimes(1);

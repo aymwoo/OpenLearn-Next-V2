@@ -24,11 +24,7 @@ export class LessonCapability implements ILessonCapability {
     this.logger = logger;
   }
 
-  public async generateLessonPlan(
-    subject: string,
-    grade: string,
-    topic: string
-  ): Promise<Record<string, unknown>> {
+  public async generateLessonPlan(subject: string, grade: string, topic: string): Promise<Record<string, unknown>> {
     const startTime = Date.now();
     const prompt = this.runtimeKernel.promptRegistry.buildPrompt('lesson_plan_generation', {
       subject,
@@ -73,7 +69,7 @@ export class LessonCapability implements ILessonCapability {
   public async generateQuiz(
     stageTitle: string,
     knowledgePoints: ReadonlyArray<string>,
-    count = 3
+    count = 3,
   ): Promise<ReadonlyArray<Record<string, unknown>>> {
     const startTime = Date.now();
     const prompt = this.runtimeKernel.promptRegistry.buildPrompt('stage_quiz_generation', {

@@ -1,22 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  Cell
-} from 'recharts';
-import { 
-  Sparkles, 
-  UserCheck, 
-  History, 
-  Info,
-  ArrowUpDown,
-  UserPlus
-} from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { Sparkles, UserCheck, History, Info, ArrowUpDown, UserPlus } from 'lucide-react';
 
 interface RollCallStat {
   student_id: string;
@@ -30,10 +14,7 @@ interface RollCallHistoryStatsChartProps {
   lang?: 'en' | 'zh';
 }
 
-export function RollCallHistoryStatsChart({ 
-  rollcallStats = [], 
-  lang = 'en' 
-}: RollCallHistoryStatsChartProps) {
+export function RollCallHistoryStatsChart({ rollcallStats = [], lang = 'en' }: RollCallHistoryStatsChartProps) {
   const [sortBy, setSortBy] = useState<'count-desc' | 'count-asc' | 'name'>('count-desc');
 
   // Process data based on sorting preference
@@ -51,13 +32,13 @@ export function RollCallHistoryStatsChart({
   // Aggregate values
   const statsSummary = useMemo(() => {
     if (rollcallStats.length === 0) return { totalPicks: 0, maxPicks: 0, minPicks: 0, neverPickedCount: 0 };
-    
+
     let totalPicks = 0;
     let maxPicks = 0;
     let minPicks = Infinity;
     let neverPickedCount = 0;
 
-    rollcallStats.forEach(item => {
+    rollcallStats.forEach((item) => {
       totalPicks += item.count;
       if (item.count > maxPicks) maxPicks = item.count;
       if (item.count < minPicks) minPicks = item.count;
@@ -68,7 +49,7 @@ export function RollCallHistoryStatsChart({
       totalPicks,
       maxPicks,
       minPicks: minPicks === Infinity ? 0 : minPicks,
-      neverPickedCount
+      neverPickedCount,
     };
   }, [rollcallStats]);
 
@@ -86,7 +67,7 @@ export function RollCallHistoryStatsChart({
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
-        hour12: false
+        hour12: false,
       });
     } catch {
       return lang === 'zh' ? '从未被抽中' : 'Never picked';
@@ -101,7 +82,9 @@ export function RollCallHistoryStatsChart({
           {lang === 'zh' ? '暂无提问点名记录' : 'No Random Roll Call Records'}
         </span>
         <span className="text-[10px] text-gray-400 max-w-sm">
-          {lang === 'zh' ? '在互动白板中启动“随机点名”工具抽选并确认学生参与后，统计报表将自动在此关联更新。' : 'Analytics will populate once you trigger student pick roll-calls in the interactive whiteboard.'}
+          {lang === 'zh'
+            ? '在互动白板中启动“随机点名”工具抽选并确认学生参与后，统计报表将自动在此关联更新。'
+            : 'Analytics will populate once you trigger student pick roll-calls in the interactive whiteboard.'}
         </span>
       </div>
     );
@@ -116,12 +99,19 @@ export function RollCallHistoryStatsChart({
   };
 
   return (
-    <div className="bg-white border border-slate-100 rounded-xl p-4 shadow-xs flex flex-col gap-4 font-sans mt-2 mb-6" id="rollcall-stats-tracker-card">
+    <div
+      className="bg-white border border-slate-100 rounded-xl p-4 shadow-xs flex flex-col gap-4 font-sans mt-2 mb-6"
+      id="rollcall-stats-tracker-card"
+    >
       {/* Header Info */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-amber-50 text-amber-600 rounded-lg shrink-0">
-            <Sparkles size={16} className="animate-spin text-amber-500 stroke-[2.5]" style={{ animationDuration: '3s' }} />
+            <Sparkles
+              size={16}
+              className="animate-spin text-amber-500 stroke-[2.5]"
+              style={{ animationDuration: '3s' }}
+            />
           </div>
           <div className="text-left">
             <h4 className="text-sm font-bold text-gray-850 flex items-center gap-2">
@@ -131,7 +121,9 @@ export function RollCallHistoryStatsChart({
               </span>
             </h4>
             <p className="text-[10px] text-gray-400">
-              {lang === 'zh' ? '统计全班学生在各课节互动提问中被抽中的总频次及最近时间戳' : 'A review tracking historical selection frequencies and time-stamps of pupils in active lessons'}
+              {lang === 'zh'
+                ? '统计全班学生在各课节互动提问中被抽中的总频次及最近时间戳'
+                : 'A review tracking historical selection frequencies and time-stamps of pupils in active lessons'}
             </p>
           </div>
         </div>
@@ -139,16 +131,22 @@ export function RollCallHistoryStatsChart({
         {/* Aggregated Summary Row */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <div className="bg-slate-50/50 p-1.5 px-3 rounded-lg border border-slate-100 text-slate-600 flex items-center gap-1">
-            <span className="text-[9.5px] text-slate-400 uppercase font-bold tracking-wider">{lang === 'zh' ? '总点名次数' : 'Total Drawn'}:</span>
+            <span className="text-[9.5px] text-slate-400 uppercase font-bold tracking-wider">
+              {lang === 'zh' ? '总点名次数' : 'Total Drawn'}:
+            </span>
             <span className="font-black text-indigo-650 font-mono">{statsSummary.totalPicks}</span>
           </div>
           <div className="bg-slate-50/50 p-1.5 px-3 rounded-lg border border-slate-100 text-slate-600 flex items-center gap-1">
-            <span className="text-[9.5px] text-slate-400 uppercase font-bold tracking-wider">{lang === 'zh' ? '峰值次数' : 'Max Count'}:</span>
+            <span className="text-[9.5px] text-slate-400 uppercase font-bold tracking-wider">
+              {lang === 'zh' ? '峰值次数' : 'Max Count'}:
+            </span>
             <span className="font-black text-amber-600 font-mono">{statsSummary.maxPicks}</span>
           </div>
           {statsSummary.neverPickedCount > 0 && (
             <div className="bg-orange-50/60 p-1.5 px-3 rounded-lg border border-orange-100/50 text-orange-700 flex items-center gap-1">
-              <span className="text-[9.5px] text-orange-400 uppercase font-bold tracking-wider">{lang === 'zh' ? '未抽中人数' : 'Unpicked'}:</span>
+              <span className="text-[9.5px] text-orange-400 uppercase font-bold tracking-wider">
+                {lang === 'zh' ? '未抽中人数' : 'Unpicked'}:
+              </span>
               <span className="font-black font-mono">{statsSummary.neverPickedCount}</span>
             </div>
           )}
@@ -171,14 +169,16 @@ export function RollCallHistoryStatsChart({
                   {lang === 'zh' ? '本班最常被抽中学生为 ' : 'Most drawn student is '}
                   <span className="font-extrabold text-indigo-700">
                     {rollcallStats
-                      .filter(s => s.count === statsSummary.maxPicks)
-                      .map(s => s.student_name)
+                      .filter((s) => s.count === statsSummary.maxPicks)
+                      .map((s) => s.student_name)
                       .join(', ')}
                   </span>
                   {lang === 'zh' ? `（${statsSummary.maxPicks}次）` : ` (${statsSummary.maxPicks} times)`}
                 </>
+              ) : lang === 'zh' ? (
+                '暂未触发点名记录'
               ) : (
-                lang === 'zh' ? '暂未触发点名记录' : 'No selections recorded yet'
+                'No selections recorded yet'
               )}
             </p>
           </div>
@@ -200,15 +200,17 @@ export function RollCallHistoryStatsChart({
                   {lang === 'zh' ? ' 位学生还未被点过，包括: ' : ' student(s) never selected, including: '}
                   <span className="font-bold text-slate-700">
                     {rollcallStats
-                      .filter(s => s.count === 0)
+                      .filter((s) => s.count === 0)
                       .slice(0, 4)
-                      .map(s => s.student_name)
+                      .map((s) => s.student_name)
                       .join(', ')}
                   </span>
                   {statsSummary.neverPickedCount > 4 && '...'}
                 </>
+              ) : lang === 'zh' ? (
+                '全班所有学生均已在白板互动中被抽中提问！达成完美均衡。'
               ) : (
-                lang === 'zh' ? '全班所有学生均已在白板互动中被抽中提问！达成完美均衡。' : 'All students have been selected in the whiteboard sessions!'
+                'All students have been selected in the whiteboard sessions!'
               )}
             </p>
           </div>
@@ -258,7 +260,9 @@ export function RollCallHistoryStatsChart({
 
         <div className="text-[9.5px] text-gray-400 italic font-mono flex items-center gap-1">
           <Info size={11} className="text-gray-400" />
-          <span>{lang === 'zh' ? '💡 鼠标悬浮查看最近一次被选日期' : '💡 Hover bar for exact last selection date'}</span>
+          <span>
+            {lang === 'zh' ? '💡 鼠标悬浮查看最近一次被选日期' : '💡 Hover bar for exact last selection date'}
+          </span>
         </div>
       </div>
 
@@ -267,13 +271,13 @@ export function RollCallHistoryStatsChart({
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={processedData} margin={{ top: 15, right: 10, left: -25, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-            <XAxis 
-              dataKey="student_name" 
+            <XAxis
+              dataKey="student_name"
               tick={{ fontSize: 9.5, fill: '#64748b', fontWeight: 'bold' }}
               axisLine={{ stroke: '#e2e8f0' }}
               tickLine={false}
             />
-            <YAxis 
+            <YAxis
               allowDecimals={false}
               tick={{ fontSize: 9.5, fill: '#64748b', fontWeight: 'bold' }}
               axisLine={false}
@@ -292,14 +296,20 @@ export function RollCallHistoryStatsChart({
                           {lang === 'zh' ? '参会指数' : 'Live Index'}
                         </span>
                       </div>
-                      
+
                       <div className="flex justify-between gap-4 text-slate-600 font-sans">
-                        <span className="text-slate-400 font-medium">{lang === 'zh' ? '累计抽中提问' : 'Selection Counts'}:</span>
-                        <span className="font-black text-slate-800 font-mono">{data.count} {lang === 'zh' ? '次' : 'times'}</span>
+                        <span className="text-slate-400 font-medium">
+                          {lang === 'zh' ? '累计抽中提问' : 'Selection Counts'}:
+                        </span>
+                        <span className="font-black text-slate-800 font-mono">
+                          {data.count} {lang === 'zh' ? '次' : 'times'}
+                        </span>
                       </div>
 
                       <div className="flex flex-col gap-0.5 text-slate-650 border-t border-slate-100 pt-1.5 mt-0.5 font-sans">
-                        <span className="text-slate-400 font-bold text-[9px] uppercase">{lang === 'zh' ? '最近被抽中时间' : 'Last Selection Stamp'}:</span>
+                        <span className="text-slate-400 font-bold text-[9px] uppercase">
+                          {lang === 'zh' ? '最近被抽中时间' : 'Last Selection Stamp'}:
+                        </span>
                         <span className="font-bold text-indigo-700 text-[10.5px] font-mono leading-tight">
                           {formatDate(data.last_picked_time)}
                         </span>
@@ -310,11 +320,7 @@ export function RollCallHistoryStatsChart({
                 return null;
               }}
             />
-            <Bar 
-              dataKey="count" 
-              radius={[3, 3, 0, 0]}
-              maxBarSize={32}
-            >
+            <Bar dataKey="count" radius={[3, 3, 0, 0]} maxBarSize={32}>
               {processedData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={getBarColor(entry.count)} />
               ))}

@@ -26,11 +26,7 @@ import { EventEmitter } from 'events';
 import { EventBus } from '../../event-bus/index.js';
 import { EventForwarder } from '../event-forwarder.js';
 import { ServiceHost } from '../service-host.js';
-import {
-  createServicesProxy,
-  createMethodProxy,
-  EventBusProxy,
-} from '../service-proxy.js';
+import { createServicesProxy, createMethodProxy, EventBusProxy } from '../service-proxy.js';
 import type { IWorkerTransport } from '../types.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -92,9 +88,7 @@ function createMockTransportPair(): {
 /**
  * Create a minimal mock ServiceRegistry with controlled services.
  */
-function createMockServiceRegistry(
-  services: Record<string, unknown> = {},
-) {
+function createMockServiceRegistry(services: Record<string, unknown> = {}) {
   return {
     resolveByName: vi.fn(async (name: string) => {
       const svc = services[name];
@@ -219,12 +213,7 @@ describe('ServiceProxy + ServiceHost — RPC roundtrip', () => {
     const capGuard = createMockCapGuard(true);
 
     // Main thread: create ServiceHost
-    const host = new ServiceHost(
-      serviceRegistry,
-      capGuard,
-      'plugin:test',
-      ['lesson:write'],
-    );
+    const host = new ServiceHost(serviceRegistry, capGuard, 'plugin:test', ['lesson:write']);
 
     // Wire main transport messages to ServiceHost
     mainTransport.onMessage((msg: any) => {
@@ -232,9 +221,7 @@ describe('ServiceProxy + ServiceHost — RPC roundtrip', () => {
     });
 
     // Worker side: create services proxy
-    const proxy = createServicesProxy(workerTransport, [
-      '@openlearn/core:ICommandBusService',
-    ]);
+    const proxy = createServicesProxy(workerTransport, ['@openlearn/core:ICommandBusService']);
 
     // Wire worker transport to proxy (results/events)
     workerTransport.onMessage((msg: any) => {
@@ -327,12 +314,7 @@ describe('ServiceProxy + ServiceHost — RPC roundtrip', () => {
     });
     const capGuard = createMockCapGuard(true);
 
-    const host = new ServiceHost(
-      serviceRegistry,
-      capGuard,
-      'plugin:test',
-      ['read'],
-    );
+    const host = new ServiceHost(serviceRegistry, capGuard, 'plugin:test', ['read']);
 
     // Route messages through the mock transport pair
     transportPair.main.onMessage((msg: any) => {
@@ -366,11 +348,7 @@ describe('ServiceProxy + ServiceHost — RPC roundtrip', () => {
     const promiseB = proxy.services['test:Service'].getB();
     const promiseC = proxy.services['test:Service'].getC();
 
-    const [resultA, resultB, resultC] = await Promise.all([
-      promiseA,
-      promiseB,
-      promiseC,
-    ]);
+    const [resultA, resultB, resultC] = await Promise.all([promiseA, promiseB, promiseC]);
     expect(resultA).toBe('A-result');
     expect(resultB).toBe('B-result');
     expect(resultC).toBe('C-result');
@@ -502,9 +480,7 @@ describe('Worker lifecycle — end-to-end', () => {
    * We use the same pattern as WorkerManager.generateBootstrapCode()
    * but with a simplified version that uses inlined EventBusProxy.
    */
-  async function createWorkerAndActivate(
-    pluginCode: string,
-  ): Promise<{
+  async function createWorkerAndActivate(pluginCode: string): Promise<{
     worker: import('node:worker_threads').Worker;
     transport: IWorkerTransport;
     exitCode: Promise<number | null>;
@@ -593,7 +569,9 @@ parentPort.on('message', async function(msg) {
       onMessage: (handler: (msg: any) => void) => {
         worker.on('message', handler);
       },
-      terminate: async () => { await worker.terminate(); },
+      terminate: async () => {
+        await worker.terminate();
+      },
       id: `worker:${worker.threadId}`,
     };
 
@@ -659,8 +637,7 @@ export default {
 `;
 
     // Create Worker A
-    const { transport: transportA, exitCode: exitCodeA } =
-      await createWorkerAndActivate(pluginCode);
+    const { transport: transportA, exitCode: exitCodeA } = await createWorkerAndActivate(pluginCode);
 
     // Activate Worker A
     const activatedA = new Promise<void>((resolve, reject) => {
@@ -678,8 +655,7 @@ export default {
     await activatedA;
 
     // Create Worker B
-    const { transport: transportB, exitCode: exitCodeB } =
-      await createWorkerAndActivate(pluginCode);
+    const { transport: transportB, exitCode: exitCodeB } = await createWorkerAndActivate(pluginCode);
 
     const activatedB = new Promise<void>((resolve, reject) => {
       transportB.onMessage((msg: any) => {

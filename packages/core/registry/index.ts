@@ -3,7 +3,7 @@ export interface ActionDescriptor {
   readonly commandType: string;
   readonly description: string;
   readonly inputSchema: any; // JSON Schema directly matching GenAI tool parameters
-  readonly capabilityRequired: string; 
+  readonly capabilityRequired: string;
   readonly isHighRisk?: boolean;
 }
 
@@ -27,33 +27,31 @@ export class ActionRegistry {
 
   // Returns tools formatted for @google/genai
   public getAgentTools(): any[] {
-    const functionDeclarations = Array.from(this.actions.values()).map(action => {
+    const functionDeclarations = Array.from(this.actions.values()).map((action) => {
       // Safely replace non-word chars with underscore for function names
-      const SafeName = action.commandType.replace(/[^a-zA-Z0-9_\-]/g, "_");
-      
+      const SafeName = action.commandType.replace(/[^a-zA-Z0-9_\-]/g, '_');
+
       return {
         name: SafeName,
         description: action.description,
-        parameters: action.inputSchema
+        parameters: action.inputSchema,
       };
     });
 
     if (functionDeclarations.length === 0) return [];
-    
+
     return [
       {
-        functionDeclarations
-      }
+        functionDeclarations,
+      },
     ];
   }
-  
+
   public getActionByToolName(toolName: string): ActionDescriptor | undefined {
-    return Array.from(this.actions.values()).find(
-      a => a.commandType.replace(/[^a-zA-Z0-9_\-]/g, "_") === toolName
-    );
+    return Array.from(this.actions.values()).find((a) => a.commandType.replace(/[^a-zA-Z0-9_\-]/g, '_') === toolName);
   }
 
   public getActionByCommandType(commandType: string): ActionDescriptor | undefined {
-    return Array.from(this.actions.values()).find(a => a.commandType === commandType);
+    return Array.from(this.actions.values()).find((a) => a.commandType === commandType);
   }
 }

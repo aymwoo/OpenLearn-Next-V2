@@ -16,12 +16,14 @@ if (fs.existsSync(dbPath)) {
   console.log(`Updating database at: ${dbPath}`);
   const db = new Database(dbPath);
   try {
-    const updateStmt = db.prepare("UPDATE mfe_remotes SET entry = ? WHERE name = ?");
+    const updateStmt = db.prepare('UPDATE mfe_remotes SET entry = ? WHERE name = ?');
     updateStmt.run('/mfe/whiteboard/remoteEntry.js', 'mfe_whiteboard');
     updateStmt.run('/mfe/courseware/remoteEntry.js', 'mfe_courseware');
-    console.log("✅ Successfully updated mfe_remotes entries to relative paths '/mfe/whiteboard/...' and '/mfe/courseware/...'");
+    console.log(
+      "✅ Successfully updated mfe_remotes entries to relative paths '/mfe/whiteboard/...' and '/mfe/courseware/...'",
+    );
   } catch (err) {
-    console.error("❌ Failed to update database:", err.message);
+    console.error('❌ Failed to update database:', err.message);
   } finally {
     db.close();
   }

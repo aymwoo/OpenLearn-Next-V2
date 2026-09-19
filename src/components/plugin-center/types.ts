@@ -45,14 +45,17 @@ export interface PluginCenterProps {
   onDelete: (id: string) => void;
 }
 
-export const CAPABILITY_INFO: Record<string, {
-  labelZh: string;
-  labelEn: string;
-  iconName: string;
-  risk: 'low' | 'medium' | 'high';
-  riskDescZh: string;
-  riskDescEn: string;
-}> = {
+export const CAPABILITY_INFO: Record<
+  string,
+  {
+    labelZh: string;
+    labelEn: string;
+    iconName: string;
+    risk: 'low' | 'medium' | 'high';
+    riskDescZh: string;
+    riskDescEn: string;
+  }
+> = {
   'whiteboard:write': {
     labelZh: '写入交互白板内容',
     labelEn: 'Whiteboard Write Access',

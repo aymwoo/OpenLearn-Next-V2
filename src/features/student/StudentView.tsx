@@ -4,12 +4,16 @@ import { Users, Loader2 } from 'lucide-react';
 import type { StudentType, Lesson } from '../../types/app';
 import { StudentDashboardPanel } from './StudentDashboardPanel';
 
-const StudentLessonView = lazy(() => import('./StudentLessonView').then(m => ({ default: m.StudentLessonView })));
-const StudentAssignmentView = lazy(() => import('./StudentAssignmentView').then(m => ({ default: m.StudentAssignmentView })));
+const StudentLessonView = lazy(() => import('./StudentLessonView').then((m) => ({ default: m.StudentLessonView })));
+const StudentAssignmentView = lazy(() =>
+  import('./StudentAssignmentView').then((m) => ({ default: m.StudentAssignmentView })),
+);
 
 export interface StudentViewProps {
   students: StudentType[];
   activeStudentId: string | null;
+  /** 全班专注锁定中：学生端进入只读跟随模式 */
+  isStudentLocked?: boolean;
   studentViewStatus: 'dashboard' | 'lesson' | 'assignment';
   studentDashboardData: any;
   readNotifications: Set<string>;
@@ -55,6 +59,7 @@ export function StudentView(props: StudentViewProps) {
   const {
     students,
     activeStudentId,
+    isStudentLocked = false,
     studentViewStatus,
     studentDashboardData,
     readNotifications,
@@ -119,6 +124,7 @@ export function StudentView(props: StudentViewProps) {
             <StudentLessonView
               students={students}
               activeStudentId={activeStudentId}
+              isStudentLocked={isStudentLocked}
               setStudentViewStatus={setStudentViewStatus}
               setSelectedLesson={setSelectedLesson}
               lessons={lessons}

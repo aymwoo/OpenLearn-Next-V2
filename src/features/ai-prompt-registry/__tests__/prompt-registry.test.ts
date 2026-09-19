@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  PromptRegistry,
-  registerDefaultPrompts,
-  IPromptProvider,
-} from '../index.js';
+import { PromptRegistry, registerDefaultPrompts, IPromptProvider } from '../index.js';
 
 describe('Sprint P5-05 AI Prompt Registry Test Suite', () => {
   let registry: PromptRegistry;

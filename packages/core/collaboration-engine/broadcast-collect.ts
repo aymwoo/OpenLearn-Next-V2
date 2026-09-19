@@ -34,7 +34,7 @@ export class BroadcastCollectManager {
     broadcastType: 'teacher' | 'group' | 'student' | 'object' | 'whiteboard',
     sourceId: string,
     targetGroupIds: ReadonlyArray<string>,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
   ): BroadcastSession {
     const session: BroadcastSession = Object.freeze({
       id: `brd_${globalThis.crypto.randomUUID()}`,

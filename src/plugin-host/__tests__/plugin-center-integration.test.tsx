@@ -54,9 +54,7 @@ describe('PluginCenter grid rendering', () => {
       createPlugin({ id: 'plugin-b' }),
       createPlugin({ id: 'plugin-c' }),
     ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />,
-    );
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
 
     // Each plugin name appears
     expect(html).toContain('plugin-a');
@@ -67,32 +65,20 @@ describe('PluginCenter grid rendering', () => {
   });
 
   it('renders plugin status badge for active plugins', () => {
-    const plugins: PluginType[] = [
-      createPlugin({ id: 'active-plugin', status: 'active' }),
-    ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />,
-    );
+    const plugins: PluginType[] = [createPlugin({ id: 'active-plugin', status: 'active' })];
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
     expect(html).toContain('active');
   });
 
   it('renders plugin status badge for disabled plugins', () => {
-    const plugins: PluginType[] = [
-      createPlugin({ id: 'disabled-plugin', status: 'disabled' }),
-    ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />,
-    );
+    const plugins: PluginType[] = [createPlugin({ id: 'disabled-plugin', status: 'disabled' })];
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
     expect(html).toContain('disabled');
   });
 
   it('renders Enable/Disable and Delete buttons for each plugin card', () => {
-    const plugins: PluginType[] = [
-      createPlugin({ id: 'test-plugin', status: 'active' }),
-    ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />,
-    );
+    const plugins: PluginType[] = [createPlugin({ id: 'test-plugin', status: 'active' })];
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
     // Active plugin shows "Disable" button
     expect(html).toContain('Disable');
     // Delete button present
@@ -102,26 +88,14 @@ describe('PluginCenter grid rendering', () => {
 
 describe('PluginCenter tab switching', () => {
   it('renders Discover tab by default', () => {
-    const html = renderToString(
-      <PluginCenter
-        {...defaultProps}
-        plugins={[]}
-        storeTab="store"
-      />,
-    );
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={[]} storeTab="store" />);
     expect(html).toContain('Edu OS App Store');
     // store tab active
     expect(html).toContain('Discover');
   });
 
   it('renders Developer tab when storeTab is dev', () => {
-    const html = renderToString(
-      <PluginCenter
-        {...defaultProps}
-        plugins={[]}
-        storeTab="dev"
-      />,
-    );
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={[]} storeTab="dev" />);
     // Developer tab header
     expect(html).toContain('Developer Tools');
     expect(html).toContain('Plugin Sideloading');
@@ -142,45 +116,29 @@ describe('PluginCenter tab switching', () => {
 
 describe('Legacy plugin card features', () => {
   it('renders LegacyPluginBadge inside legacy plugin cards in store tab', () => {
-    const plugins: PluginType[] = [
-      createPlugin({ id: 'legacy-p', execution_mode: 'legacy' }),
-    ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />,
-    );
+    const plugins: PluginType[] = [createPlugin({ id: 'legacy-p', execution_mode: 'legacy' })];
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
     // Legacy badge should be visible
     expect(html).toContain('Migratable');
   });
 
   it('renders Migrate button for legacy plugins', () => {
-    const plugins: PluginType[] = [
-      createPlugin({ id: 'legacy-p', execution_mode: 'legacy' }),
-    ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />,
-    );
+    const plugins: PluginType[] = [createPlugin({ id: 'legacy-p', execution_mode: 'legacy' })];
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
     // Migrate button text
     expect(html).toContain('Migrate');
   });
 
   it('does not render Migrate button for modern plugins', () => {
-    const plugins: PluginType[] = [
-      createPlugin({ id: 'modern-p', execution_mode: 'inline' }),
-    ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />,
-    );
+    const plugins: PluginType[] = [createPlugin({ id: 'modern-p', execution_mode: 'inline' })];
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
     // Migrate button should not appear for non-legacy plugins
     expect(html).not.toContain('Migrate');
   });
 
   it('renders Migrate button for worker-mode plugins (not legacy)', () => {
-    const plugins: PluginType[] = [
-      createPlugin({ id: 'worker-p', execution_mode: 'worker' }),
-    ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />,
-    );
+    const plugins: PluginType[] = [createPlugin({ id: 'worker-p', execution_mode: 'worker' })];
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
     // Worker mode is not legacy, so Migrate button should not appear
     expect(html).not.toContain('Migrate');
   });

@@ -102,13 +102,11 @@ export function runClean(options = {}) {
   if (isAll || isOnlyDb || isDefault) {
     const dataDir = options.customDataDir
       ? resolve(options.customDataDir)
-      : (process.env.OPENLEARN_DB_PATH
-          ? dirname(resolve(process.env.OPENLEARN_DB_PATH))
-          : join(os.homedir(), 'openlearn-next'));
+      : process.env.OPENLEARN_DB_PATH
+        ? dirname(resolve(process.env.OPENLEARN_DB_PATH))
+        : join(os.homedir(), 'openlearn-next');
 
-    const dbPath = process.env.OPENLEARN_DB_PATH
-      ? resolve(process.env.OPENLEARN_DB_PATH)
-      : join(dataDir, 'data.db');
+    const dbPath = process.env.OPENLEARN_DB_PATH ? resolve(process.env.OPENLEARN_DB_PATH) : join(dataDir, 'data.db');
 
     const walPath = `${dbPath}-wal`;
     const shmPath = `${dbPath}-shm`;

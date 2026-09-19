@@ -24,10 +24,7 @@ export class ChatCapability implements IChatCapability {
     this.logger = logger;
   }
 
-  public async chat(
-    message: string,
-    sessionId?: string
-  ): Promise<{ reply: string; sessionId: string }> {
+  public async chat(message: string, sessionId?: string): Promise<{ reply: string; sessionId: string }> {
     const startTime = Date.now();
 
     let session = sessionId ? this.runtimeKernel.conversationService.getSession(sessionId) : undefined;

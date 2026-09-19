@@ -170,8 +170,9 @@ export async function runResetAdmin(newPassword = 'admin', options = {}) {
 
     if (updateRes.changes === 0) {
       // 若数据库中无 admin 用户，则插入
-      db.prepare('INSERT INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(`usr_admin_${Date.now()}`, 'admin', hash, 'administrator', 'System Admin', Date.now());
+      db.prepare(
+        'INSERT INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      ).run(`usr_admin_${Date.now()}`, 'admin', hash, 'administrator', 'System Admin', Date.now());
       log(`✓ 管理员账号不存在，已新建管理员账号: admin (密码: ${newPassword})`);
     } else {
       log(`✓ 管理员 (admin) 密码已成功重置为: ${newPassword}`);
@@ -240,7 +241,9 @@ export async function runPluginsList(options = {}) {
 
       console.log(`\n${bold}${cyan}已安装插件清单 (${plugins.length} 个):${reset}`);
       console.log(`┌──────────────────────────────────────────────┬─────────┬──────────┬──────────┐`);
-      console.log(`│ ${bold}Plugin ID${reset}${' '.repeat(37)}│ ${bold}Version${reset} │ ${bold}Status${reset}   │ ${bold}Mode${reset}     │`);
+      console.log(
+        `│ ${bold}Plugin ID${reset}${' '.repeat(37)}│ ${bold}Version${reset} │ ${bold}Status${reset}   │ ${bold}Mode${reset}     │`,
+      );
       console.log(`├──────────────────────────────────────────────┼─────────┼──────────┼──────────┤`);
 
       for (const p of plugins) {

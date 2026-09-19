@@ -9,11 +9,7 @@
  */
 
 import { CapabilityError } from './CapabilityError.js';
-import type {
-  CapabilityResolutionDiagnostic,
-  CapabilityResolutionHost,
-  CapabilityResolutionMode,
-} from './types.js';
+import type { CapabilityResolutionDiagnostic, CapabilityResolutionHost, CapabilityResolutionMode } from './types.js';
 import type { CapabilityStatus } from './CapabilityStatus.js';
 
 export class CapabilityContext {

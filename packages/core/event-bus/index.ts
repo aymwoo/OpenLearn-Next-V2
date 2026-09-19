@@ -1,10 +1,10 @@
 export interface PlatformEvent<T = unknown> {
   readonly id: string;
-  readonly type: string;        // Past tense, e.g., "lesson.created"
-  readonly source: string;      // Source plugin/module
+  readonly type: string; // Past tense, e.g., "lesson.created"
+  readonly source: string; // Source plugin/module
   readonly payload: T;
   readonly timestamp: number;
-  readonly correlationId?: string; 
+  readonly correlationId?: string;
 }
 
 export type EventSubscriber = (event: PlatformEvent) => void | Promise<void>;
@@ -41,12 +41,16 @@ export class EventBus {
     };
     const subs = this.subscribers.get(fullEvent.type) || new Set();
     const wildcards = this.subscribers.get('*') || new Set();
-    
+
     const allSubs = [...subs, ...wildcards];
-    
+
     // Asynchronously resolve all subscribers
-    await Promise.all(allSubs.map(sub => Promise.resolve(sub(fullEvent)).catch(err => {
-      console.error(`Error in event subscriber for ${fullEvent.type}:`, err);
-    })));
+    await Promise.all(
+      allSubs.map((sub) =>
+        Promise.resolve(sub(fullEvent)).catch((err) => {
+          console.error(`Error in event subscriber for ${fullEvent.type}:`, err);
+        }),
+      ),
+    );
   }
 }

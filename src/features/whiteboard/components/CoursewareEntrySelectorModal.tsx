@@ -20,7 +20,7 @@ export const CoursewareEntrySelectorModal: React.FC<CoursewareEntrySelectorModal
   zipUploadInfo,
   zipCandidates,
   handlePropsUpdate,
-  fetchCoursewares
+  fetchCoursewares,
 }) => {
   if (!showEntrySelector || !zipUploadInfo) return null;
 
@@ -29,12 +29,19 @@ export const CoursewareEntrySelectorModal: React.FC<CoursewareEntrySelectorModal
       <div className="bg-white rounded-xl shadow-2xl overflow-hidden max-w-sm w-full border border-gray-100 flex flex-col scale-100 pointer-events-auto">
         <div className="px-5 py-4 border-b border-gray-150/60 bg-gray-50 flex justify-between items-center shrink-0">
           <h3 className="font-bold text-gray-800 text-sm">选择课件入口页面</h3>
-          <button onClick={() => setShowEntrySelector(false)} className="text-gray-400 hover:text-gray-650 transition-colors text-xl font-light cursor-pointer">×</button>
+          <button
+            onClick={() => setShowEntrySelector(false)}
+            className="text-gray-400 hover:text-gray-650 transition-colors text-xl font-light cursor-pointer"
+          >
+            ×
+          </button>
         </div>
         <div className="p-5 flex-1 min-h-0 space-y-3">
-          <p className="text-xs text-gray-600 leading-relaxed font-medium">ZIP压缩包中含有多个HTML文件，请选择一个作为课件入口：</p>
+          <p className="text-xs text-gray-600 leading-relaxed font-medium">
+            ZIP压缩包中含有多个HTML文件，请选择一个作为课件入口：
+          </p>
           <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50 space-y-1">
-            {zipCandidates.map(c => (
+            {zipCandidates.map((c) => (
               <button
                 key={c}
                 onClick={async () => {
@@ -45,8 +52,8 @@ export const CoursewareEntrySelectorModal: React.FC<CoursewareEntrySelectorModal
                       body: JSON.stringify({
                         uuid: zipUploadInfo.uuid,
                         name: zipUploadInfo.name,
-                        entry: c
-                      })
+                        entry: c,
+                      }),
                     });
                     if (res.ok) {
                       const data = await res.json();

@@ -24,41 +24,62 @@ const classroomToolSchema = z.object({
   payload: z.record(z.string(), z.unknown()).optional(),
 });
 
-const contributesSchema = z.object({
-  'classroom.tool': z.array(classroomToolSchema).optional(),
-  'teacher.tab': z.array(z.object({
-    id: z.string().min(1),
-    label: z.string().min(1),
-    icon: z.string().optional(),
-    position: z.number().int().optional(),
-  })).optional(),
-  'teacher.dashboard.widget': z.array(z.object({
-    id: z.string().min(1),
-    label: z.string().min(1),
-    icon: z.string().optional(),
-    position: z.number().int().optional(),
-  })).optional(),
-  'student.view': z.array(z.object({
-    id: z.string().min(1),
-    label: z.string().min(1),
-    icon: z.string().optional(),
-    route: z.string().optional(),
-  })).optional(),
-  'student.lesson.tool': z.array(z.object({
-    id: z.string().min(1),
-    label: z.string().min(1),
-    icon: z.string().optional(),
-  })).optional(),
-  // v0.2.6: 锚点槽位（anchor:*）为开放命名空间，由宿主公布锚点 id。
-  // .passthrough() 保留任意 anchor:* 键（运行时透传），避免被 zod 默认 strip。
-  // 锚点条目的运行时校验由前端注册时（ExtensionPointConfig）完成。
-}).passthrough().optional();
+const contributesSchema = z
+  .object({
+    'classroom.tool': z.array(classroomToolSchema).optional(),
+    'teacher.tab': z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          label: z.string().min(1),
+          icon: z.string().optional(),
+          position: z.number().int().optional(),
+        }),
+      )
+      .optional(),
+    'teacher.dashboard.widget': z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          label: z.string().min(1),
+          icon: z.string().optional(),
+          position: z.number().int().optional(),
+        }),
+      )
+      .optional(),
+    'student.view': z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          label: z.string().min(1),
+          icon: z.string().optional(),
+          route: z.string().optional(),
+        }),
+      )
+      .optional(),
+    'student.lesson.tool': z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          label: z.string().min(1),
+          icon: z.string().optional(),
+        }),
+      )
+      .optional(),
+    // v0.2.6: 锚点槽位（anchor:*）为开放命名空间，由宿主公布锚点 id。
+    // .passthrough() 保留任意 anchor:* 键（运行时透传），避免被 zod 默认 strip。
+    // 锚点条目的运行时校验由前端注册时（ExtensionPointConfig）完成。
+  })
+  .passthrough()
+  .optional();
 
-const deploySchema = z.object({
-  script: z.string().min(1, { error: 'deploy.script 不能为空' }).optional(),
-  staticRoute: z.string().optional(),
-  staticDir: z.string().optional(),
-}).optional();
+const deploySchema = z
+  .object({
+    script: z.string().min(1, { error: 'deploy.script 不能为空' }).optional(),
+    staticRoute: z.string().optional(),
+    staticDir: z.string().optional(),
+  })
+  .optional();
 
 // ── V5.2: RESTful API schema ──────────────────────────────────────────
 
@@ -67,17 +88,20 @@ export const apiRouteSchema = z.object({
   path: z.string().min(1, { error: 'api route path 不能为空' }),
   auth: z.boolean().optional(),
   roles: z.array(z.string()).optional(),
-  rateLimit: z.object({
-    windowMs: z.number().optional(),
-    max: z.number().optional(),
-  }).optional(),
+  rateLimit: z
+    .object({
+      windowMs: z.number().optional(),
+      max: z.number().optional(),
+    })
+    .optional(),
 });
 
-export const apiSchema = z.object({
-  baseRoute: z.string().optional(),
-  routes: z.array(apiRouteSchema).optional(),
-}).optional();
-
+export const apiSchema = z
+  .object({
+    baseRoute: z.string().optional(),
+    routes: z.array(apiRouteSchema).optional(),
+  })
+  .optional();
 
 // ── Version 4 schema (Phase 6+) ──────────────────────────────────────────
 
@@ -91,10 +115,11 @@ export const apiSchema = z.object({
  * 版本范围支持：^x.y.z, ~x.y.z, x.y.z（精确）, x.y.z-pre（pre-release）
  * 正则模式为线性（无嵌套量词），无 ReDoS 风险。
  */
-const requiresItemSchema = z.string().regex(
-  /^@[\w-]+\/[\w-]+:I\w+(?:@[\^~]?\d+\.\d+\.\d+(?:-[\w.]+)?)?$/,
-  { message: 'requires/optional 条目格式无效。需要 @scope/domain:IServiceName 或 @scope/domain:IServiceName@^x.y.z' }
-);
+const requiresItemSchema = z
+  .string()
+  .regex(/^@[\w-]+\/[\w-]+:I\w+(?:@[\^~]?\d+\.\d+\.\d+(?:-[\w.]+)?)?$/, {
+    message: 'requires/optional 条目格式无效。需要 @scope/domain:IServiceName 或 @scope/domain:IServiceName@^x.y.z',
+  });
 
 /**
  * manifestSchema — 插件 manifest.json 的 zod 运行时校验 schema（Phase 6+ 增强版）。
@@ -103,34 +128,45 @@ const requiresItemSchema = z.string().regex(
  * - requires/optional 条目通过 requiresItemSchema 正则约束，支持 @version
  * - 其他字段与 V3 完全一致
  */
-export const manifestSchema = z.object({
-  id: z.string().min(1, { error: 'manifest.id 不能为空' }),
-  name: z.string().min(1, { error: 'manifest.name 不能为空' }),
-  version: z.string().min(1, { error: 'manifest.version 不能为空' }),
-  main: z.string().min(1, { error: 'manifest.main 必须指定入口文件路径' }),
-  requires: z.array(requiresItemSchema).optional(),
-  optional: z.array(requiresItemSchema).optional(),
-  capabilitiesProposed: z.array(z.string()).optional(),
-  engines: z.object({
-    openlearn: z.string().min(1),
-  }).optional(),
-  pluginDependencies: z.array(z.string().min(1)).optional(),
-  provides: z.array(z.string().min(1)).optional(),
-  configuration: z.object({
-    properties: z.record(z.string(), z.object({
-      type: z.enum(['string', 'number', 'boolean', 'integer']),
-      default: z.unknown().optional(),
-      description: z.string().optional(),
-      enum: z.array(z.unknown()).optional(),
-      minimum: z.number().optional(),
-      maximum: z.number().optional(),
-    })).optional(),
-  }).optional(),
-  contributes: contributesSchema,
-  classroomTools: z.array(z.unknown()).optional(),
-  deploy: deploySchema,
-  api: apiSchema,
-}).passthrough();
+export const manifestSchema = z
+  .object({
+    id: z.string().min(1, { error: 'manifest.id 不能为空' }),
+    name: z.string().min(1, { error: 'manifest.name 不能为空' }),
+    version: z.string().min(1, { error: 'manifest.version 不能为空' }),
+    main: z.string().min(1, { error: 'manifest.main 必须指定入口文件路径' }),
+    requires: z.array(requiresItemSchema).optional(),
+    optional: z.array(requiresItemSchema).optional(),
+    capabilitiesProposed: z.array(z.string()).optional(),
+    engines: z
+      .object({
+        openlearn: z.string().min(1),
+      })
+      .optional(),
+    pluginDependencies: z.array(z.string().min(1)).optional(),
+    provides: z.array(z.string().min(1)).optional(),
+    configuration: z
+      .object({
+        properties: z
+          .record(
+            z.string(),
+            z.object({
+              type: z.enum(['string', 'number', 'boolean', 'integer']),
+              default: z.unknown().optional(),
+              description: z.string().optional(),
+              enum: z.array(z.unknown()).optional(),
+              minimum: z.number().optional(),
+              maximum: z.number().optional(),
+            }),
+          )
+          .optional(),
+      })
+      .optional(),
+    contributes: contributesSchema,
+    classroomTools: z.array(z.unknown()).optional(),
+    deploy: deploySchema,
+    api: apiSchema,
+  })
+  .passthrough();
 
 /**
  * Manifest 类型 — 由 manifestSchema 推导出的 TypeScript 类型。
@@ -145,10 +181,9 @@ export type Manifest = z.infer<typeof manifestSchema>;
  * 仅匹配 @scope:IServiceName（无 @version 后缀）。
  * 供 Phase 8 迁移完成前的遗留代码使用。
  */
-const requiresItemV3Schema = z.string().regex(
-  /^@[\w-]+\/[\w-]+:I\w+$/,
-  { message: 'requires/optional 条目格式无效。需要 @scope/domain:IServiceName' }
-);
+const requiresItemV3Schema = z
+  .string()
+  .regex(/^@[\w-]+\/[\w-]+:I\w+$/, { message: 'requires/optional 条目格式无效。需要 @scope/domain:IServiceName' });
 
 /**
  * manifestSchemaV3 — Phase 3-5 的旧版 manifest schema（无 @version 支持）。
@@ -160,15 +195,17 @@ const requiresItemV3Schema = z.string().regex(
  * - Phase 3-5 的代码和测试继续使用此 schema
  * - Phase 8 迁移完成后可移除
  */
-export const manifestSchemaV3 = z.object({
-  id: z.string().min(1, { error: 'manifest.id 不能为空' }),
-  name: z.string().min(1, { error: 'manifest.name 不能为空' }),
-  version: z.string().min(1, { error: 'manifest.version 不能为空' }),
-  main: z.string().min(1, { error: 'manifest.main 必须指定入口文件路径' }),
-  requires: z.array(requiresItemV3Schema).optional(),
-  optional: z.array(requiresItemV3Schema).optional(),
-  capabilitiesProposed: z.array(z.string()).optional(),
-}).passthrough();
+export const manifestSchemaV3 = z
+  .object({
+    id: z.string().min(1, { error: 'manifest.id 不能为空' }),
+    name: z.string().min(1, { error: 'manifest.name 不能为空' }),
+    version: z.string().min(1, { error: 'manifest.version 不能为空' }),
+    main: z.string().min(1, { error: 'manifest.main 必须指定入口文件路径' }),
+    requires: z.array(requiresItemV3Schema).optional(),
+    optional: z.array(requiresItemV3Schema).optional(),
+    capabilitiesProposed: z.array(z.string()).optional(),
+  })
+  .passthrough();
 
 /**
  * ManifestV3 类型 — 由 manifestSchemaV3 推导的类型，保留供引用。

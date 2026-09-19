@@ -6,13 +6,7 @@ export type ServiceLifetime = 'Singleton' | 'Scoped' | 'Transient';
 
 export type ServiceScopeType = 'Singleton' | 'Session' | 'Lesson' | 'Plugin' | 'Transient' | 'Scoped';
 
-export type ServiceLifecycleState =
-  | 'Registered'
-  | 'Initialized'
-  | 'Started'
-  | 'Ready'
-  | 'Stopped'
-  | 'Disposed';
+export type ServiceLifecycleState = 'Registered' | 'Initialized' | 'Started' | 'Ready' | 'Stopped' | 'Disposed';
 
 export interface ServiceDescriptor<T = unknown> {
   readonly id: string;
@@ -86,5 +80,5 @@ export interface ServiceEventEnvelope<K extends ServiceEventType = ServiceEventT
 }
 
 export type ServiceEventSubscriber<K extends ServiceEventType> = (
-  event: ServiceEventEnvelope<K>
+  event: ServiceEventEnvelope<K>,
 ) => void | Promise<void>;

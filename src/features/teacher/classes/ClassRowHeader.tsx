@@ -78,7 +78,11 @@ export function ClassRowHeader({
         >
           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
-        <div className={`text-sm font-medium ${batchMode && selectedClassIds.has(cls.id) ? 'text-amber-700' : 'text-gray-800'}`}>{cls.name}</div>
+        <div
+          className={`text-sm font-medium ${batchMode && selectedClassIds.has(cls.id) ? 'text-amber-700' : 'text-gray-800'}`}
+        >
+          {cls.name}
+        </div>
       </div>
       <div className="flex items-center gap-3 text-[11px] text-gray-500 shrink-0">
         <span className="flex items-center gap-1" title={lang === 'zh' ? '学生人数' : 'Students'}>

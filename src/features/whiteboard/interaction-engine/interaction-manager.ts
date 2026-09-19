@@ -40,7 +40,10 @@ export class InteractionManager {
   /**
    * Main Pipeline Entry: Handle PointerDown
    */
-  public handlePointerDown(ctx: PointerEventContext, page: CanvasPage): { nextState: PointerState; patchPage?: CanvasPage } {
+  public handlePointerDown(
+    ctx: PointerEventContext,
+    page: CanvasPage,
+  ): { nextState: PointerState; patchPage?: CanvasPage } {
     const activeTool = this.toolManager.getActiveTool();
     if (!activeTool || !activeTool.onPointerDown) {
       return { nextState: this.stateMachine.getState() };
@@ -59,7 +62,10 @@ export class InteractionManager {
   /**
    * Main Pipeline Entry: Handle PointerMove
    */
-  public handlePointerMove(ctx: PointerEventContext, page: CanvasPage): { nextState: PointerState; patchPage?: CanvasPage } {
+  public handlePointerMove(
+    ctx: PointerEventContext,
+    page: CanvasPage,
+  ): { nextState: PointerState; patchPage?: CanvasPage } {
     const activeTool = this.toolManager.getActiveTool();
     if (!activeTool || !activeTool.onPointerMove) {
       return { nextState: this.stateMachine.getState() };
@@ -76,7 +82,10 @@ export class InteractionManager {
   /**
    * Main Pipeline Entry: Handle PointerUp
    */
-  public handlePointerUp(ctx: PointerEventContext, page: CanvasPage): { nextState: PointerState; patchPage?: CanvasPage } {
+  public handlePointerUp(
+    ctx: PointerEventContext,
+    page: CanvasPage,
+  ): { nextState: PointerState; patchPage?: CanvasPage } {
     const activeTool = this.toolManager.getActiveTool();
     let resultNextState: PointerState = 'Idle';
     let patchPage: CanvasPage | undefined = undefined;

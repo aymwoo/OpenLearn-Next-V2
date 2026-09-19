@@ -13,4 +13,3 @@ export * from './service-collection.js';
 export * from './service-scope.js';
 export * from './service-resolver.js';
 export * from './service-registry-kernel.js';
-

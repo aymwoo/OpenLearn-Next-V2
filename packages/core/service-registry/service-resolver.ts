@@ -9,7 +9,7 @@ export class ServiceResolver {
   public static resolve<T = unknown>(
     desc: ServiceDescriptor<T>,
     singletonInstances: Map<string, unknown>,
-    scope?: ServiceScope
+    scope?: ServiceScope,
   ): T {
     const serviceId = desc.id;
 

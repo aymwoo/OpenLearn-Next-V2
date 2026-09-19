@@ -29,11 +29,7 @@
  */
 
 import { Token } from './token.js';
-import type {
-  PlatformCommand,
-  CommandHandler,
-  CommandMetadata,
-} from '../command-bus/index.js';
+import type { PlatformCommand, CommandHandler, CommandMetadata } from '../command-bus/index.js';
 import type { PlatformEvent, EventSubscriber } from '../event-bus/index.js';
 import type { ActionDescriptor } from '../registry/index.js';
 import type { ProcessHandler } from '../process-manager/index.js';
@@ -77,9 +73,7 @@ export interface ICommandBusService {
    * Set a command interceptor (capability check, high-risk approval, etc.).
    * Corresponds to CommandBus.setInterceptor() — made async for cross-runtime compatibility.
    */
-  setInterceptor(
-    interceptor: (command: PlatformCommand) => Promise<void>,
-  ): void | Promise<void>;
+  setInterceptor(interceptor: (command: PlatformCommand) => Promise<void>): void | Promise<void>;
 }
 
 // ── 2. IEventBusService ───────────────────────────────────────────────────
@@ -136,17 +130,13 @@ export interface IActionRegistryService {
    * Find an action descriptor by its tool name (sanitized command type).
    * Corresponds to ActionRegistry.getActionByToolName() — made async for cross-runtime compatibility.
    */
-  getActionByToolName(
-    toolName: string,
-  ): ActionDescriptor | undefined | Promise<ActionDescriptor | undefined>;
+  getActionByToolName(toolName: string): ActionDescriptor | undefined | Promise<ActionDescriptor | undefined>;
 
   /**
    * Find an action descriptor by its exact command type string.
    * Corresponds to ActionRegistry.getActionByCommandType() — made async for cross-runtime compatibility.
    */
-  getActionByCommandType(
-    commandType: string,
-  ): ActionDescriptor | undefined | Promise<ActionDescriptor | undefined>;
+  getActionByCommandType(commandType: string): ActionDescriptor | undefined | Promise<ActionDescriptor | undefined>;
 }
 
 // ── 4. ICapabilityService ─────────────────────────────────────────────────
@@ -191,10 +181,7 @@ export interface IProcessService {
    * Register a handler for a task type.
    * Corresponds to ProcessManager.registerHandler() — made async for cross-runtime compatibility.
    */
-  registerHandler(
-    taskType: string,
-    handler: ProcessHandler,
-  ): void | Promise<void>;
+  registerHandler(taskType: string, handler: ProcessHandler): void | Promise<void>;
 
   /**
    * Unregister a handler for a task type.
@@ -255,10 +242,7 @@ export interface IAIService {
    * @param options - Optional system instruction and temperature.
    * @returns The trimmed response text.
    */
-  generateText(
-    prompt: string,
-    options?: { systemInstruction?: string; temperature?: number },
-  ): Promise<string>;
+  generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string>;
 }
 
 // ── Token instances (D-13) ────────────────────────────────────────────────
@@ -267,58 +251,44 @@ export interface IAIService {
  * Token for ICommandBusService.
  * Identifier: @openlearn/core:ICommandBusService
  */
-export const ICommandBusServiceToken = new Token<ICommandBusService>(
-  '@openlearn/core:ICommandBusService',
-);
+export const ICommandBusServiceToken = new Token<ICommandBusService>('@openlearn/core:ICommandBusService');
 
 /**
  * Token for IEventBusService.
  * Identifier: @openlearn/core:IEventBusService
  */
-export const IEventBusServiceToken = new Token<IEventBusService>(
-  '@openlearn/core:IEventBusService',
-);
+export const IEventBusServiceToken = new Token<IEventBusService>('@openlearn/core:IEventBusService');
 
 /**
  * Token for IActionRegistryService.
  * Identifier: @openlearn/core:IActionRegistryService
  */
-export const IActionRegistryServiceToken = new Token<IActionRegistryService>(
-  '@openlearn/core:IActionRegistryService',
-);
+export const IActionRegistryServiceToken = new Token<IActionRegistryService>('@openlearn/core:IActionRegistryService');
 
 /**
  * Token for ICapabilityService.
  * Identifier: @openlearn/core:ICapabilityService
  * Capability ID: cap_plugin_management
  */
-export const ICapabilityServiceToken = new Token<ICapabilityService>(
-  '@openlearn/core:ICapabilityService',
-);
+export const ICapabilityServiceToken = new Token<ICapabilityService>('@openlearn/core:ICapabilityService');
 
 /**
  * Token for IProcessService.
  * Identifier: @openlearn/core:IProcessService
  */
-export const IProcessServiceToken = new Token<IProcessService>(
-  '@openlearn/core:IProcessService',
-);
+export const IProcessServiceToken = new Token<IProcessService>('@openlearn/core:IProcessService');
 
 /**
  * Token for IStorageService.
  * Identifier: @openlearn/core:IStorageService
  */
-export const IStorageServiceToken = new Token<IStorageService>(
-  '@openlearn/core:IStorageService',
-);
+export const IStorageServiceToken = new Token<IStorageService>('@openlearn/core:IStorageService');
 
 /**
  * Token for IAIService.
  * Identifier: @openlearn/core:IAIService
  */
-export const IAIServiceToken = new Token<IAIService>(
-  '@openlearn/core:IAIService',
-);
+export const IAIServiceToken = new Token<IAIService>('@openlearn/core:IAIService');
 
 // Self-contained SQLite surface so consumers (plugins) get a concrete type
 // without needing `better-sqlite3` type declarations reachable in their package.
@@ -342,9 +312,7 @@ export interface SqliteDatabase {
  * Token for Database.
  * Identifier: @openlearn/core:IDatabase
  */
-export const IDatabaseToken = new Token<SqliteDatabase>(
-  '@openlearn/core:IDatabase',
-);
+export const IDatabaseToken = new Token<SqliteDatabase>('@openlearn/core:IDatabase');
 
 import type { PluginHost } from '../plugin-host/index.js';
 import type { PluginRuntimeComposition } from '../plugin-host/plugin-runtime-composition.js';
@@ -358,9 +326,7 @@ import type { CapabilityRegistry } from '../ai-capability/registry/capability-re
  * Token for PluginHost.
  * Identifier: @openlearn/core:IPluginHost
  */
-export const IPluginHostToken = new Token<PluginHost>(
-  '@openlearn/core:IPluginHost',
-);
+export const IPluginHostToken = new Token<PluginHost>('@openlearn/core:IPluginHost');
 
 /**
  * Token for Unified Plugin Lifecycle Manager (P7-A2 Stage 3).
@@ -406,9 +372,7 @@ export const IPluginCapabilityGatewayToken = new Token<PluginCapabilityGateway>(
  * Token for Capability Registry (P7-A2 Stage 3).
  * Identifier: @openlearn/core:ICapabilityRegistry
  */
-export const ICapabilityRegistryToken = new Token<CapabilityRegistry>(
-  '@openlearn/core:ICapabilityRegistry',
-);
+export const ICapabilityRegistryToken = new Token<CapabilityRegistry>('@openlearn/core:ICapabilityRegistry');
 
 /**
  * 用户会话桥接数据传输对象
@@ -456,19 +420,17 @@ export interface ISemesterGradeService {
  * Token for ISemesterGradeService.
  * Identifier: @openlearn/core:ISemesterGradeService
  */
-export const ISemesterGradeServiceToken = new Token<ISemesterGradeService>(
-  '@openlearn/core:ISemesterGradeService'
-);
+export const ISemesterGradeServiceToken = new Token<ISemesterGradeService>('@openlearn/core:ISemesterGradeService');
 
 /**
  * Specification for a Student Learning Points Dimension.
  */
 export interface PointsDimensionSpec {
-  id: string;              // e.g. 'attendance', 'assignment', 'interactive_quiz', 'ai_practice'
-  name: string;            // e.g. '课堂互动打卡', 'AI练习积分'
+  id: string; // e.g. 'attendance', 'assignment', 'interactive_quiz', 'ai_practice'
+  name: string; // e.g. '课堂互动打卡', 'AI练习积分'
   category: 'builtin' | 'plugin';
-  defaultWeight: number;   // e.g. 0.15 (15%)
-  maxScore?: number;       // e.g. 100
+  defaultWeight: number; // e.g. 0.15 (15%)
+  maxScore?: number; // e.g. 100
   description?: string;
   pluginId?: string;
 }
@@ -483,7 +445,7 @@ export interface IPointsDimensionRegistry {
 }
 
 export const IPointsDimensionRegistryToken = new Token<IPointsDimensionRegistry>(
-  '@openlearn/core:IPointsDimensionRegistry'
+  '@openlearn/core:IPointsDimensionRegistry',
 );
 
 /**
@@ -510,16 +472,14 @@ export interface IPointsLedgerService {
     dimensionId: string,
     deltaPoints: number,
     reason: string,
-    pluginId?: string
+    pluginId?: string,
   ): Promise<PointLogItem>;
   getLogs(studentId: string, classId?: string): Promise<PointLogItem[]>;
   getStudentTotalByDimension(studentId: string, classId: string, dimensionId: string): Promise<number>;
   getStudentDimensionSummary(studentId: string, classId: string): Promise<Record<string, number>>;
 }
 
-export const IPointsLedgerServiceToken = new Token<IPointsLedgerService>(
-  '@openlearn/core:IPointsLedgerService'
-);
+export const IPointsLedgerServiceToken = new Token<IPointsLedgerService>('@openlearn/core:IPointsLedgerService');
 
 /**
  * Interface for LessonEngineService.
@@ -532,9 +492,7 @@ export interface ILessonEngineService {
  * Token for ILessonEngineService.
  * Identifier: @openlearn/core:ILessonEngineService
  */
-export const ILessonEngineServiceToken = new Token<ILessonEngineService>(
-  '@openlearn/core:ILessonEngineService'
-);
+export const ILessonEngineServiceToken = new Token<ILessonEngineService>('@openlearn/core:ILessonEngineService');
 
 /**
  * Interface for ClassroomRuntimeService.
@@ -548,7 +506,7 @@ export interface IClassroomRuntimeService {
  * Identifier: @openlearn/core:IClassroomRuntimeService
  */
 export const IClassroomRuntimeServiceToken = new Token<IClassroomRuntimeService>(
-  '@openlearn/core:IClassroomRuntimeService'
+  '@openlearn/core:IClassroomRuntimeService',
 );
 
 /**
@@ -562,9 +520,7 @@ export interface IPresenceEngineService {
  * Token for IPresenceEngineService.
  * Identifier: @openlearn/core:IPresenceEngineService
  */
-export const IPresenceEngineServiceToken = new Token<IPresenceEngineService>(
-  '@openlearn/core:IPresenceEngineService'
-);
+export const IPresenceEngineServiceToken = new Token<IPresenceEngineService>('@openlearn/core:IPresenceEngineService');
 
 /**
  * Interface for TeachingCollaborationService.
@@ -578,7 +534,7 @@ export interface ITeachingCollaborationService {
  * Identifier: @openlearn/core:ITeachingCollaborationService
  */
 export const ITeachingCollaborationServiceToken = new Token<ITeachingCollaborationService>(
-  '@openlearn/core:ITeachingCollaborationService'
+  '@openlearn/core:ITeachingCollaborationService',
 );
 
 /**
@@ -593,7 +549,7 @@ export interface ILearningAnalyticsService {
  * Identifier: @openlearn/core:ILearningAnalyticsService
  */
 export const ILearningAnalyticsServiceToken = new Token<ILearningAnalyticsService>(
-  '@openlearn/core:ILearningAnalyticsService'
+  '@openlearn/core:ILearningAnalyticsService',
 );
 
 /**
@@ -607,9 +563,7 @@ export interface IAICapabilityService {
  * Token for IAICapabilityService.
  * Identifier: @openlearn/core:IAICapabilityService
  */
-export const IAICapabilityServiceToken = new Token<IAICapabilityService>(
-  '@openlearn/core:IAICapabilityService'
-);
+export const IAICapabilityServiceToken = new Token<IAICapabilityService>('@openlearn/core:IAICapabilityService');
 
 /**
  * Interface for CapabilityRuntimeService.
@@ -623,7 +577,7 @@ export interface ICapabilityRuntimeService {
  * Identifier: @openlearn/core:ICapabilityRuntimeService
  */
 export const ICapabilityRuntimeServiceToken = new Token<ICapabilityRuntimeService>(
-  '@openlearn/core:ICapabilityRuntimeService'
+  '@openlearn/core:ICapabilityRuntimeService',
 );
 
 /**
@@ -638,7 +592,7 @@ export interface ICapabilityGovernanceService {
  * Identifier: @openlearn/core:ICapabilityGovernanceService
  */
 export const ICapabilityGovernanceServiceToken = new Token<ICapabilityGovernanceService>(
-  '@openlearn/core:ICapabilityGovernanceService'
+  '@openlearn/core:ICapabilityGovernanceService',
 );
 
 /**
@@ -653,16 +607,5 @@ export interface IPlatformServiceRegistryService {
  * Identifier: @openlearn/core:IPlatformServiceRegistryService
  */
 export const IPlatformServiceRegistryToken = new Token<IPlatformServiceRegistryService>(
-  '@openlearn/core:IPlatformServiceRegistryService'
+  '@openlearn/core:IPlatformServiceRegistryService',
 );
-
-
-
-
-
-
-
-
-
-
-

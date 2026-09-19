@@ -10,7 +10,10 @@ export function StudentAssignmentHeader(props: {
   return (
     <div className="flex items-center justify-between">
       <button
-        onClick={() => { setStudentViewStatus('dashboard'); setSelectedAssignment(null); }}
+        onClick={() => {
+          setStudentViewStatus('dashboard');
+          setSelectedAssignment(null);
+        }}
         className="flex items-center gap-2 text-indigo-600 hover:text-indigo-800 transition-colors font-medium text-sm"
       >
         <ChevronRight className="rotate-180" size={16} /> Back to Dashboard

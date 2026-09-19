@@ -20,7 +20,7 @@ describe('Worker RPC and Event Forwarding', () => {
       kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-alias-resolve%'").run();
       kernel.db.prepare("DELETE FROM plugins WHERE manifest LIKE '%ext-test-watchdog%'").run();
     } catch (e) {
-      console.error("beforeEach cleanup error:", e);
+      console.error('beforeEach cleanup error:', e);
     }
   });
 
@@ -48,9 +48,9 @@ describe('Worker RPC and Event Forwarding', () => {
       requires: [
         '@openlearn/core:ICommandBusService@^1.0.0',
         '@openlearn/core:IEventBusService@^1.0.0',
-        '@openlearn/core:IDatabase@^1.0.0'
+        '@openlearn/core:IDatabase@^1.0.0',
       ],
-      capabilitiesProposed: ['management:write']
+      capabilitiesProposed: ['management:write'],
     };
 
     const pluginCode = `
@@ -88,10 +88,10 @@ export default {
 
     // Install zip
     await kernel.pluginHost.installPluginFromZip(zipBuffer);
-    
+
     // Find the UUID of the installed plugin
     const list = kernel.pluginHost.listPlugins();
-    const testPlugin = list.find(p => p.name === 'Test Worker RPC');
+    const testPlugin = list.find((p) => p.name === 'Test Worker RPC');
     expect(testPlugin).toBeDefined();
 
     // Set execution mode to worker and activate
@@ -107,11 +107,11 @@ export default {
       type: 'test.trigger',
       source: 'test.main',
       payload: {},
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
 
     // Wait a little bit for worker thread to process event and complete database writes/commands
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Verify database write succeeded (RPC database access checked!)
     const node = kernel.db.prepare('SELECT * FROM vfs_nodes WHERE id = ?').get('node-rpc-test-id') as any;
@@ -132,13 +132,11 @@ export default {
       version: '1.0.0',
       description: 'Tests dynamic npm dependencies auto-installation and loading inside Worker sandbox',
       main: 'index.js',
-      requires: [
-        '@openlearn/core:ICommandBusService@^1.0.0'
-      ],
+      requires: ['@openlearn/core:ICommandBusService@^1.0.0'],
       capabilitiesProposed: ['vfs:write'],
       dependencies: {
-        'cookie': '^0.5.0'
-      }
+        cookie: '^0.5.0',
+      },
     };
 
     const pluginCode = `
@@ -177,7 +175,7 @@ export default {
 
     // Find the UUID of the installed plugin
     const list = kernel.pluginHost.listPlugins();
-    const testPlugin = list.find(p => p.name === 'Test Dynamic Dependency');
+    const testPlugin = list.find((p) => p.name === 'Test Dynamic Dependency');
     expect(testPlugin).toBeDefined();
 
     // Set execution mode to worker and activate
@@ -188,10 +186,12 @@ export default {
     expect(kernel.pluginHost.getPluginState(testPlugin!.id)).toBe('active');
 
     // Wait a little bit for worker thread to process and write to VFS
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // Verify that the file was written to VFS with the expected content
-    const fileResult = kernel.db.prepare("SELECT content FROM vfs_nodes WHERE name = 'cookie_test_result.txt'").get() as { content: string } | undefined;
+    const fileResult = kernel.db
+      .prepare("SELECT content FROM vfs_nodes WHERE name = 'cookie_test_result.txt'")
+      .get() as { content: string } | undefined;
     expect(fileResult).toBeDefined();
     expect(fileResult!.content).toBe('Parsed foo=bar');
   }, 120000);
@@ -204,10 +204,8 @@ export default {
       version: '1.0.0',
       description: 'Tests memory state inheritance during worker hot reload',
       main: 'index.js',
-      requires: [
-        '@openlearn/core:ICommandBusService@^1.0.0'
-      ],
-      capabilitiesProposed: ['vfs:write']
+      requires: ['@openlearn/core:ICommandBusService@^1.0.0'],
+      capabilitiesProposed: ['vfs:write'],
     };
 
     const pluginCodeV1 = `
@@ -245,7 +243,7 @@ export default {
 
     // Find the UUID of the installed plugin
     const list = kernel.pluginHost.listPlugins();
-    const testPlugin = list.find(p => p.name === 'Test State Inheritance');
+    const testPlugin = list.find((p) => p.name === 'Test State Inheritance');
     expect(testPlugin).toBeDefined();
 
     // Set execution mode to worker and activate
@@ -256,12 +254,12 @@ export default {
     expect(kernel.pluginHost.getPluginState(testPlugin!.id)).toBe('active');
 
     // Run increment command to modify the count state in Worker (0 -> 10)
-    const result1 = await kernel.commandBus.execute({
+    const result1 = (await kernel.commandBus.execute({
       id: 'cmd-inc-1',
       type: 'ext-test-state-inherit.increment',
       actorId: 'user-teacher',
-      payload: {}
-    }) as any;
+      payload: {},
+    })) as any;
     expect(result1.count).toBe(10);
 
     // Prepare updated source code (version 2.0.0)
@@ -294,15 +292,15 @@ export default {
     await kernel.pluginHost.reloadPlugin(testPlugin!.id, pluginCodeV2);
 
     // Wait a little bit for the new worker thread to boot and register its handler
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Run increment command again on the reloaded worker (should increment from 10 to 15)
-    const result2 = await kernel.commandBus.execute({
+    const result2 = (await kernel.commandBus.execute({
       id: 'cmd-inc-2',
       type: 'ext-test-state-inherit.increment',
       actorId: 'user-teacher',
-      payload: {}
-    }) as any;
+      payload: {},
+    })) as any;
     expect(result2.count).toBe(15);
   }, 40000);
 
@@ -342,22 +340,22 @@ export default {
 
     // 3. plugin.info command should work with manifest ID alias
     //    (plugin:read is open to all authenticated actors, so no capability grant needed)
-    const infoResult = await kernel.commandBus.execute({
+    const infoResult = (await kernel.commandBus.execute({
       id: 'cmd-alias-info',
       type: 'plugin.info',
       actorId: 'agent-system-0',
-      payload: { pluginId: manifestId }
-    }) as any;
+      payload: { pluginId: manifestId },
+    })) as any;
     expect(infoResult.id).toBe(dbUuid);
     expect(infoResult.manifestId).toBe(manifestId);
 
     // 4. plugin.info command should also work with DB UUID
-    const infoByUuid = await kernel.commandBus.execute({
+    const infoByUuid = (await kernel.commandBus.execute({
       id: 'cmd-uuid-info',
       type: 'plugin.info',
       actorId: 'agent-system-0',
-      payload: { pluginId: dbUuid }
-    }) as any;
+      payload: { pluginId: dbUuid },
+    })) as any;
     expect(infoByUuid.manifestId).toBe(manifestId);
 
     // Cleanup
@@ -375,10 +373,8 @@ export default {
       version: '1.0.0',
       description: 'Tests worker automatic crash recovery and circuit breaker',
       main: 'index.js',
-      requires: [
-        '@openlearn/core:ICommandBusService@^1.0.0'
-      ],
-      capabilitiesProposed: ['vfs:write']
+      requires: ['@openlearn/core:ICommandBusService@^1.0.0'],
+      capabilitiesProposed: ['vfs:write'],
     };
 
     const pluginCode = `
@@ -423,7 +419,7 @@ export default {
 
     // Find the UUID of the installed plugin
     const list = kernel.pluginHost.listPlugins();
-    const testPlugin = list.find(p => p.name === 'Test Watchdog Supervisor');
+    const testPlugin = list.find((p) => p.name === 'Test Watchdog Supervisor');
     expect(testPlugin).toBeDefined();
 
     // Set execution mode to worker and activate
@@ -434,12 +430,12 @@ export default {
     expect(kernel.pluginHost.getPluginState(testPlugin!.id)).toBe('active');
 
     // Query status
-    const res1 = await kernel.commandBus.execute({
+    const res1 = (await kernel.commandBus.execute({
       id: 'cmd-watchdog-rc1',
       type: 'ext-test-watchdog.get_run_status',
       actorId: 'user-teacher',
-      payload: {}
-    }) as any;
+      payload: {},
+    })) as any;
     expect(res1.status).toBe('ok');
 
     // Register event listener for plugin.crashed
@@ -457,19 +453,19 @@ export default {
       id: 'cmd-watchdog-crash1',
       type: 'ext-test-watchdog.crash_now',
       actorId: 'user-teacher',
-      payload: {}
+      payload: {},
     });
 
     // Wait for watchdog to auto-recover it (first crash has 1000ms delay + buffer)
-    await new Promise(resolve => setTimeout(resolve, 2500));
+    await new Promise((resolve) => setTimeout(resolve, 2500));
 
     // Verify it recovered and registered handlers again!
-    const res2 = await kernel.commandBus.execute({
+    const res2 = (await kernel.commandBus.execute({
       id: 'cmd-watchdog-rc2',
       type: 'ext-test-watchdog.get_run_status',
       actorId: 'user-teacher',
-      payload: {}
-    }) as any;
+      payload: {},
+    })) as any;
     expect(res2.status).toBe('ok');
 
     // Trigger crash 2
@@ -477,19 +473,19 @@ export default {
       id: 'cmd-watchdog-crash2',
       type: 'ext-test-watchdog.crash_now',
       actorId: 'user-teacher',
-      payload: {}
+      payload: {},
     });
 
     // Wait for watchdog (2nd crash has 2000ms delay + buffer)
-    await new Promise(resolve => setTimeout(resolve, 3500));
+    await new Promise((resolve) => setTimeout(resolve, 3500));
 
     // Verify it recovered again
-    const res3 = await kernel.commandBus.execute({
+    const res3 = (await kernel.commandBus.execute({
       id: 'cmd-watchdog-rc3',
       type: 'ext-test-watchdog.get_run_status',
       actorId: 'user-teacher',
-      payload: {}
-    }) as any;
+      payload: {},
+    })) as any;
     expect(res3.status).toBe('ok');
 
     // Trigger crash 3
@@ -497,19 +493,19 @@ export default {
       id: 'cmd-watchdog-crash3',
       type: 'ext-test-watchdog.crash_now',
       actorId: 'user-teacher',
-      payload: {}
+      payload: {},
     });
 
     // Wait for watchdog (3rd crash has 4000ms delay + buffer)
-    await new Promise(resolve => setTimeout(resolve, 5500));
+    await new Promise((resolve) => setTimeout(resolve, 5500));
 
     // Verify it recovered again
-    const res4 = await kernel.commandBus.execute({
+    const res4 = (await kernel.commandBus.execute({
       id: 'cmd-watchdog-rc4',
       type: 'ext-test-watchdog.get_run_status',
       actorId: 'user-teacher',
-      payload: {}
-    }) as any;
+      payload: {},
+    })) as any;
     expect(res4.status).toBe('ok');
 
     // Trigger crash 4 (this should trigger the circuit breaker since count is 4 > 3)
@@ -517,14 +513,16 @@ export default {
       id: 'cmd-watchdog-crash4',
       type: 'ext-test-watchdog.crash_now',
       actorId: 'user-teacher',
-      payload: {}
+      payload: {},
     });
 
     // Wait for breaker (circuit breaker fires immediately)
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Verify plugin is now marked as 'error' state in DB
-    const finalRow = kernel.db.prepare("SELECT status FROM plugins WHERE id = ?").get(testPlugin!.id) as { status: string };
+    const finalRow = kernel.db.prepare('SELECT status FROM plugins WHERE id = ?').get(testPlugin!.id) as {
+      status: string;
+    };
     expect(finalRow.status).toBe('error');
 
     // Verify that the eventBus received the crashed event!
@@ -532,6 +530,6 @@ export default {
 
     // Cleanup
     eventBus.unsubscribe('plugin.crashed', subscriber);
-    kernel.db.prepare("DELETE FROM plugins WHERE id = ?").run(testPlugin!.id);
+    kernel.db.prepare('DELETE FROM plugins WHERE id = ?').run(testPlugin!.id);
   }, 40000);
 });

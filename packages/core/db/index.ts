@@ -469,7 +469,9 @@ try {
 
 try {
   db.prepare('ALTER TABLE students ADD COLUMN student_number TEXT').run();
-  db.prepare("UPDATE students SET student_number = 'ST_' || id WHERE student_number IS NULL OR student_number = ''").run();
+  db.prepare(
+    "UPDATE students SET student_number = 'ST_' || id WHERE student_number IS NULL OR student_number = ''",
+  ).run();
 } catch (e) {
   // column already exists
 }
@@ -568,11 +570,13 @@ try {
   const countObj = db.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number };
   if (countObj && countObj.cnt === 0) {
     console.log('Seeding default users (admin & teacher) with bcrypt...');
-    const insertStmt = db.prepare('INSERT INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+    const insertStmt = db.prepare(
+      'INSERT INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    );
     insertStmt.run('usr_admin', 'admin', hashPassword('admin'), 'administrator', 'System Admin', Date.now());
     insertStmt.run('usr_teacher', 'teacher', hashPassword('teacher'), 'teacher', 'Regular Teacher', Date.now());
     console.warn(
-      '[SECURITY WARNING] Default users initialized (admin/admin, teacher/teacher). In production environments, immediately change these passwords via POST /api/auth/change-password!'
+      '[SECURITY WARNING] Default users initialized (admin/admin, teacher/teacher). In production environments, immediately change these passwords via POST /api/auth/change-password!',
     );
   }
 } catch (e) {
@@ -583,9 +587,27 @@ try {
   const countObj = db.prepare('SELECT COUNT(*) as cnt FROM ai_providers').get() as { cnt: number };
   if (countObj && countObj.cnt === 0) {
     console.log('Seeding default AI Providers...');
-    const insertStmt = db.prepare('INSERT INTO ai_providers (id, name, api_url, api_key, model_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    insertStmt.run('prov_deepseek', 'Deepseek', 'https://api.deepseek.com/v1', '', 'deepseek-chat', Date.now(), Date.now());
-    insertStmt.run('prov_minimax', 'Minimax', 'https://api.minimax.chat/v1', '', 'abab6.5-chat', Date.now(), Date.now());
+    const insertStmt = db.prepare(
+      'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    );
+    insertStmt.run(
+      'prov_deepseek',
+      'Deepseek',
+      'https://api.deepseek.com/v1',
+      '',
+      'deepseek-chat',
+      Date.now(),
+      Date.now(),
+    );
+    insertStmt.run(
+      'prov_minimax',
+      'Minimax',
+      'https://api.minimax.chat/v1',
+      '',
+      'abab6.5-chat',
+      Date.now(),
+      Date.now(),
+    );
   }
 } catch (e) {
   console.error('Failed to seed default AI Providers:', e);

@@ -1,6 +1,7 @@
 # 统一扩展点与 UI 贡献点注册表 (Extension & Contribution Registry)
 
 OpenLearn V2 提供了双层扩展点架构：
+
 1. **`ContributionRegistry` (静态声明式)**：在插件未激活时解析 `manifest.json` 中的 `contributes` 配置，用于管理后台和主界面静态呈现图标与菜单。
 2. **`UnifiedExtensionRegistry` (内核统一索引)**：对所有类型的扩展点（UI 插件组件、Activity 活动提供者、AI Actions、命令与 Capability）进行统一分类聚合索引。
 
@@ -12,18 +13,19 @@ OpenLearn V2 提供了双层扩展点架构：
 
 ### 槽位分类 (Slots)
 
-| 槽位 Identifier | UI 挂载位置 | 配置字段说明 |
-| :--- | :--- | :--- |
-| `classroom.tool` | 课堂交互工具箱 | `id`, `name`, `icon`, `commandType`, `payload` |
-| `teacher.tab` | 教师端主导航 Tab 标签 | `id`, `label`, `icon`, `position` |
-| `teacher.dashboard.widget` | 教师端工作区仪表盘小组件 | `id`, `label`, `icon`, `position` |
-| `student.view` | 学生端主导航视图路线 | `id`, `label`, `icon`, `route` |
-| `student.lesson.tool` | 学生端课中互动小工具 | `id`, `label`, `icon` |
-| `anchor:*` | 宿主原生按钮/元素前后（锚点槽位，v0.2.6+） | `id`, `label`, `icon`, `placement`（`before`/`after`） |
+| 槽位 Identifier            | UI 挂载位置                                | 配置字段说明                                           |
+| :------------------------- | :----------------------------------------- | :----------------------------------------------------- |
+| `classroom.tool`           | 课堂交互工具箱                             | `id`, `name`, `icon`, `commandType`, `payload`         |
+| `teacher.tab`              | 教师端主导航 Tab 标签                      | `id`, `label`, `icon`, `position`                      |
+| `teacher.dashboard.widget` | 教师端工作区仪表盘小组件                   | `id`, `label`, `icon`, `position`                      |
+| `student.view`             | 学生端主导航视图路线                       | `id`, `label`, `icon`, `route`                         |
+| `student.lesson.tool`      | 学生端课中互动小工具                       | `id`, `label`, `icon`                                  |
+| `anchor:*`                 | 宿主原生按钮/元素前后（锚点槽位，v0.2.6+） | `id`, `label`, `icon`, `placement`（`before`/`after`） |
 
 > 锚点槽位是开放命名空间，具体锚点 id 由宿主定义并公布，见 [`anchor-slots.md`](./anchor-slots.md)。
 
 ### API 使用示例
+
 ```typescript
 const contributions = pluginHost.getContributionRegistry();
 
@@ -53,6 +55,7 @@ export interface IUnifiedExtensionRegistry {
 ```
 
 ### 与 `ContributionRegistry` 的双向同步
+
 当插件初始化或平台启动时，`UnifiedExtensionRegistry` 自动调用 `syncContributionRegistry()`，将所有声明式的 UI 贡献自动提升并归纳为统一分类，使得前端和 AI 智能体能以同一视角检索系统中的全量扩展组件。
 
 ---

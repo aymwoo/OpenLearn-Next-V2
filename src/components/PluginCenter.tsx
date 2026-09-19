@@ -10,7 +10,7 @@ import {
   Sparkles,
   ExternalLink,
   Github,
-  RefreshCw
+  RefreshCw,
 } from 'lucide-react';
 import type { PluginCenterProps } from './plugin-center/types';
 import { PluginSettingsModal } from './PluginSettingsModal';
@@ -66,7 +66,9 @@ export function PluginCenter({
         }
       })
       .catch(() => {});
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleCheckUpdate = async (pluginId: string, manifestId: string) => {
@@ -91,7 +93,9 @@ export function PluginCenter({
 
   const handleOneClickUpdate = async (pluginId: string, marketItem?: any) => {
     setOneClickUpdatingId(pluginId);
-    setUpdateToast(lang === 'zh' ? '正在连接市场执行一键无缝热更新...' : 'Connecting to market for one-click hot update...');
+    setUpdateToast(
+      lang === 'zh' ? '正在连接市场执行一键无缝热更新...' : 'Connecting to market for one-click hot update...',
+    );
 
     try {
       const body = marketItem?.downloadUrl ? JSON.stringify({ downloadUrl: marketItem.downloadUrl }) : undefined;
@@ -102,10 +106,18 @@ export function PluginCenter({
       }).then((r) => r.json());
 
       if (res?.success) {
-        setUpdateToast(lang === 'zh' ? `🎉 插件已成功热更新至 v${res.newVersion || '1.2.0'}！` : `🎉 Hot updated to v${res.newVersion || '1.2.0'}!`);
+        setUpdateToast(
+          lang === 'zh'
+            ? `🎉 插件已成功热更新至 v${res.newVersion || '1.2.0'}！`
+            : `🎉 Hot updated to v${res.newVersion || '1.2.0'}!`,
+        );
         setTimeout(() => window.location.reload(), 1200);
       } else if (res?.fallbackToClient && marketItem?.downloadUrl) {
-        setUpdateToast(lang === 'zh' ? '服务端下载超时，切换至浏览器直传...' : 'Server download timed out, switching to browser transfer...');
+        setUpdateToast(
+          lang === 'zh'
+            ? '服务端下载超时，切换至浏览器直传...'
+            : 'Server download timed out, switching to browser transfer...',
+        );
         try {
           const zipResp = await fetch(marketItem.downloadUrl);
           const blob = await zipResp.blob();
@@ -156,7 +168,7 @@ export function PluginCenter({
     }
   };
 
-  const hasLegacyPlugins = plugins.some(p => (p as any).execution_mode === 'legacy');
+  const hasLegacyPlugins = plugins.some((p) => (p as any).execution_mode === 'legacy');
 
   function MigrationPromptBanner() {
     return (
@@ -417,10 +429,13 @@ export function PluginCenter({
 
             <div className="flex flex-col gap-2">
               <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                {lang === 'zh' ? '新特性与优化变更清单 (Changelog)' : 'What\'s New'}
+                {lang === 'zh' ? '新特性与优化变更清单 (Changelog)' : "What's New"}
               </h4>
               <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 text-xs text-slate-700 leading-relaxed font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">
-                {changelogModalPlugin.marketItem?.changelog || (lang === 'zh' ? '1. 阶段式任务逻辑与自动化测试增强\n2. 前端轻量化与高可用平滑升级' : '1. General enhancements and bug fixes')}
+                {changelogModalPlugin.marketItem?.changelog ||
+                  (lang === 'zh'
+                    ? '1. 阶段式任务逻辑与自动化测试增强\n2. 前端轻量化与高可用平滑升级'
+                    : '1. General enhancements and bug fixes')}
               </div>
             </div>
 

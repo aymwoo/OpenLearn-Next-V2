@@ -13,28 +13,28 @@ describe('Lesson Ownership & IDOR Protection Suite', () => {
     userId: teacherAliceId,
     username: 'alice',
     role: 'teacher',
-    name: 'Alice Teacher'
+    name: 'Alice Teacher',
   };
 
   const bobSession = {
     userId: teacherBobId,
     username: 'bob',
     role: 'teacher',
-    name: 'Bob Teacher'
+    name: 'Bob Teacher',
   };
 
   const adminSession = {
     userId: adminId,
     username: 'admin',
     role: 'administrator',
-    name: 'System Admin'
+    name: 'System Admin',
   };
 
   const studentSession = {
     userId: studentId,
     username: 'charlie',
     role: 'student',
-    name: 'Charlie Student'
+    name: 'Charlie Student',
   };
 
   let aliceLessonId: string;
@@ -45,16 +45,33 @@ describe('Lesson Ownership & IDOR Protection Suite', () => {
     legacyLessonId = `lesson-legacy-${uuidv7()}`;
 
     // Seed Alice's lesson
-    kernelContainer.db.prepare(`
+    kernelContainer.db
+      .prepare(
+        `
       INSERT INTO lessons (id, title, content, timeline, progress_mode, creator_id, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(aliceLessonId, 'Alice Physics 101', 'Newtonian Mechanics', '[]', 'manual', teacherAliceId, Date.now(), Date.now());
+    `,
+      )
+      .run(
+        aliceLessonId,
+        'Alice Physics 101',
+        'Newtonian Mechanics',
+        '[]',
+        'manual',
+        teacherAliceId,
+        Date.now(),
+        Date.now(),
+      );
 
     // Seed a legacy lesson without creator_id
-    kernelContainer.db.prepare(`
+    kernelContainer.db
+      .prepare(
+        `
       INSERT INTO lessons (id, title, content, timeline, progress_mode, creator_id, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
-    `).run(legacyLessonId, 'Legacy Math 101', 'Algebra', '[]', 'manual', Date.now(), Date.now());
+    `,
+      )
+      .run(legacyLessonId, 'Legacy Math 101', 'Algebra', '[]', 'manual', Date.now(), Date.now());
   });
 
   afterAll(() => {
@@ -130,10 +147,24 @@ describe('Lesson Ownership & IDOR Protection Suite', () => {
       const now = Date.now();
       const clonedTitle = `副本-${original.title}`;
 
-      kernelContainer.db.prepare(`
+      kernelContainer.db
+        .prepare(
+          `
         INSERT INTO lessons (id, title, content, timeline, progress_mode, progress_conditions, creator_id, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(clonedId, clonedTitle, original.content, original.timeline, original.progress_mode, original.progress_conditions, teacherBobId, now, now);
+      `,
+        )
+        .run(
+          clonedId,
+          clonedTitle,
+          original.content,
+          original.timeline,
+          original.progress_mode,
+          original.progress_conditions,
+          teacherBobId,
+          now,
+          now,
+        );
 
       // Verify Bob is owner of the cloned lesson
       const reqBob: any = { headers: {}, session: bobSession };
@@ -156,13 +187,13 @@ describe('Lesson Ownership & IDOR Protection Suite', () => {
         {
           title: 'Chemistry Lab 101',
           content: 'Chemical reactions',
-          creatorId: 'usr_teacher_chemist'
+          creatorId: 'usr_teacher_chemist',
         },
         'user:usr_teacher_chemist:teacher',
-        { approved: true }
+        { approved: true },
       );
 
-      const res = await kernelContainer.commandBus.execute(cmd) as any;
+      const res = (await kernelContainer.commandBus.execute(cmd)) as any;
       expect(res.lessonId).toBeDefined();
 
       const savedLesson = kernelContainer.db.prepare('SELECT * FROM lessons WHERE id = ?').get(res.lessonId) as any;
@@ -184,13 +215,13 @@ describe('Lesson Ownership & IDOR Protection Suite', () => {
               json: (b: any) => {
                 body = b;
                 resolve({ status, body, nextCalled });
-              }
+              },
             };
           },
           json: (b: any) => {
             body = b;
             resolve({ status, body, nextCalled });
-          }
+          },
         };
         const next = () => {
           nextCalled = true;
@@ -241,7 +272,7 @@ describe('Lesson Ownership & IDOR Protection Suite', () => {
       const req = {
         headers: {},
         session: { ...studentSession, studentId: 'usr_student_charlie' },
-        params: { id: 'assignment-asg1-student-usr_student_charlie' }
+        params: { id: 'assignment-asg1-student-usr_student_charlie' },
       };
       const res = await executeMiddleware(mw, req);
       expect(res.nextCalled).toBe(true);

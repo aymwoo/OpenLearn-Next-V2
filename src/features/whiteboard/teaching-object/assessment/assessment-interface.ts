@@ -9,7 +9,13 @@ export class AssessmentInterface {
     this.resultsMap.set(result.objectId, arr);
   }
 
-  public score(objectId: string, studentId: string, score: number, maxScore: number, feedback?: string): AssessmentResult {
+  public score(
+    objectId: string,
+    studentId: string,
+    score: number,
+    maxScore: number,
+    feedback?: string,
+  ): AssessmentResult {
     const result: AssessmentResult = {
       objectId,
       studentId,

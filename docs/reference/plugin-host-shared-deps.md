@@ -14,6 +14,7 @@ react, react-dom, react-dom/client, react/jsx-runtime, recharts, lucide-react
 ```
 
 ### 多层保障机制：
+
 - **运行时 `window.HostSharedDeps`**（[`src/main.tsx`](file:///home/wuxf/Develop/openlearnv2/src/main.tsx)）：
   ```ts
   (window as any).HostSharedDeps = {
@@ -23,11 +24,11 @@ react, react-dom, react-dom/client, react/jsx-runtime, recharts, lucide-react
     Recharts,
     LucideReact,
     jsxRuntime: JsxRuntime,
-    'react': React,
+    react: React,
     'react-dom': ReactDOM,
     'react-dom/client': ReactDOMClient,
     'react/jsx-runtime': JsxRuntime,
-    'recharts': Recharts,
+    recharts: Recharts,
     'lucide-react': LucideReact,
   };
   ```
@@ -50,14 +51,14 @@ react, react-dom, react-dom/client, react/jsx-runtime, recharts, lucide-react
 
 版本取自 `package.json`（声明范围）与 `node_modules`（实际安装）。
 
-| 库 | 声明范围 | 实际安装 | 宿主共享？ | 说明 |
-|---|---|---|---|---|
-| `react` | `^19.0.1` | `19.2.7` | ✅ 是 | React 核心与 Hooks |
-| `react-dom` | `^19.0.1` | `19.2.7` | ✅ 是 | DOM 渲染与 Portal (`createPortal`) |
-| `react-dom/client` | `^19.0.1` | `19.2.7` | ✅ 是 | 现代 Root API (`createRoot`) |
-| `react/jsx-runtime` | `^19.0.1` | `19.2.7` | ✅ 是 | 现代 JSX 运行时 (`jsx`, `jsxs`) |
-| `recharts` | `^3.8.1` | `3.8.1` | ✅ 是 | Recharts 图表库 |
-| `lucide-react` | `^0.546.0` | `0.546.0` | ✅ 是 | Lucide 图标库 |
+| 库                  | 声明范围   | 实际安装  | 宿主共享？ | 说明                               |
+| ------------------- | ---------- | --------- | ---------- | ---------------------------------- |
+| `react`             | `^19.0.1`  | `19.2.7`  | ✅ 是      | React 核心与 Hooks                 |
+| `react-dom`         | `^19.0.1`  | `19.2.7`  | ✅ 是      | DOM 渲染与 Portal (`createPortal`) |
+| `react-dom/client`  | `^19.0.1`  | `19.2.7`  | ✅ 是      | 现代 Root API (`createRoot`)       |
+| `react/jsx-runtime` | `^19.0.1`  | `19.2.7`  | ✅ 是      | 现代 JSX 运行时 (`jsx`, `jsxs`)    |
+| `recharts`          | `^3.8.1`   | `3.8.1`   | ✅ 是      | Recharts 图表库                    |
+| `lucide-react`      | `^0.546.0` | `0.546.0` | ✅ 是      | Lucide 图标库                      |
 
 ---
 
@@ -65,20 +66,20 @@ react, react-dom, react-dom/client, react/jsx-runtime, recharts, lucide-react
 
 以下宿主依赖但**不**共享给插件，插件若使用需打进 bundle（版本取自 `package.json`）：
 
-| 库 | 声明范围 | 实际安装 | 宿主共享？ |
-|---|---|---|---|
-| `react-konva` | `^19.2.4` | `19.2.5` | ❌ 否 |
-| `konva` | `^10.3.0` | `10.3.0` | ❌ 否 |
-| `socket.io-client` | `^4.8.3` | `4.8.3` | ❌ 否 |
-| `motion` | `^12.23.24` | `12.40.0` | ❌ 否 |
-| `react-markdown` | `^10.1.0` | `10.1.0` | ❌ 否 |
-| `@lucide/lab` | —（未声明） | **未安装** | ❌ 否（宿主根本不依赖） |
-| `react-konva-utils` | `^2.0.0` | — | ❌ 否 |
-| `reveal.js` | `^6.0.1` | — | ❌ 否 |
-| `pptx-preview` | `^0.0.5` | — | ❌ 否 |
-| `xlsx` | `^0.18.5` | — | ❌ 否 |
-| `jspdf` | `^4.2.1` | — | ❌ 否 |
-| `zustand` | `^5.0.14` | — | ❌ 否 |
+| 库                  | 声明范围    | 实际安装   | 宿主共享？              |
+| ------------------- | ----------- | ---------- | ----------------------- |
+| `react-konva`       | `^19.2.4`   | `19.2.5`   | ❌ 否                   |
+| `konva`             | `^10.3.0`   | `10.3.0`   | ❌ 否                   |
+| `socket.io-client`  | `^4.8.3`    | `4.8.3`    | ❌ 否                   |
+| `motion`            | `^12.23.24` | `12.40.0`  | ❌ 否                   |
+| `react-markdown`    | `^10.1.0`   | `10.1.0`   | ❌ 否                   |
+| `@lucide/lab`       | —（未声明） | **未安装** | ❌ 否（宿主根本不依赖） |
+| `react-konva-utils` | `^2.0.0`    | —          | ❌ 否                   |
+| `reveal.js`         | `^6.0.1`    | —          | ❌ 否                   |
+| `pptx-preview`      | `^0.0.5`    | —          | ❌ 否                   |
+| `xlsx`              | `^0.18.5`   | —          | ❌ 否                   |
+| `jspdf`             | `^4.2.1`    | —          | ❌ 否                   |
+| `zustand`           | `^5.0.14`   | —          | ❌ 否                   |
 
 > ⚠️ **文档口径纠正**：部分旧文档（`docs_plugin_guide.md:708`）提及 `window.HostSharedDeps.socketService` / `uiService`，但运行时仅暴露 React 生态基础库（`React` / `ReactDOM` / `ReactDOMClient` / `Recharts` / `LucideReact` / `jsxRuntime`），**无** `socketService` / `uiService` 键。宿主虽依赖 `socket.io-client`，但未将其暴露为全局。插件获取通信和 UI 服务必须通过 `hostCtx.services` 或 `hostCtx.ui`。
 
@@ -101,4 +102,3 @@ react, react-dom, react-dom/client, react/jsx-runtime, recharts, lucide-react
 - **事实白名单**：包含 `react`、`react-dom`、`react-dom/client`、`react/jsx-runtime`、`recharts` 与 `lucide-react`。
 
 > 最后更新：2026-09-18
-

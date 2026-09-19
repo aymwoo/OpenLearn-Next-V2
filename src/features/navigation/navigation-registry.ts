@@ -5,14 +5,7 @@
  */
 
 import React from 'react';
-import {
-  BookOpen,
-  Presentation,
-  Users,
-  Calendar as CalendarIcon,
-  Home,
-  BarChart2,
-} from 'lucide-react';
+import { BookOpen, Presentation, Users, Calendar as CalendarIcon, Home, BarChart2 } from 'lucide-react';
 import type { ExtensionPointConfig } from '../../plugin-host/types';
 
 export type NavigationGroupKey = 'teaching' | 'management' | 'analytics' | 'extension';
@@ -92,7 +85,7 @@ export const BUILTIN_NAV_ITEMS: BuiltinNavItem[] = [
     group: 'management',
     rolesAllowed: ['admin', 'teacher'],
     position: 10,
-    lazyComponent: () => import('../../components/TimetableManager').then(m => ({ default: m.TimetableManager })),
+    lazyComponent: () => import('../../components/TimetableManager').then((m) => ({ default: m.TimetableManager })),
   },
   {
     id: 'computer-lab',
@@ -101,7 +94,7 @@ export const BUILTIN_NAV_ITEMS: BuiltinNavItem[] = [
     group: 'management',
     rolesAllowed: ['admin', 'teacher'],
     position: 20,
-    lazyComponent: () => import('../../components/ComputerLabManager').then(m => ({ default: m.ComputerLabManager })),
+    lazyComponent: () => import('../../components/ComputerLabManager').then((m) => ({ default: m.ComputerLabManager })),
   },
   {
     id: 'semester-grades',
@@ -110,7 +103,8 @@ export const BUILTIN_NAV_ITEMS: BuiltinNavItem[] = [
     group: 'analytics',
     rolesAllowed: ['admin', 'teacher'],
     position: 10,
-    lazyComponent: () => import('../../components/SemesterGradeManager').then(m => ({ default: m.SemesterGradeManager })),
+    lazyComponent: () =>
+      import('../../components/SemesterGradeManager').then((m) => ({ default: m.SemesterGradeManager })),
   },
 ];
 

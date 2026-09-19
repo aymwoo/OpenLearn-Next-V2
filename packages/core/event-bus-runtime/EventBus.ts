@@ -81,19 +81,11 @@ export class EventBus {
 
   // ── Subscription ─────────────────────────────────────────────────────────
 
-  public subscribe(
-    eventType: string,
-    fn: EventHandlerFn,
-    options?: EventHandlerOptions,
-  ): EventSubscriber {
+  public subscribe(eventType: string, fn: EventHandlerFn, options?: EventHandlerOptions): EventSubscriber {
     return this.registry.subscribe(eventType, fn, options);
   }
 
-  public subscribeOnce(
-    eventType: string,
-    fn: EventHandlerFn,
-    options?: EventHandlerOptions,
-  ): EventSubscriber {
+  public subscribeOnce(eventType: string, fn: EventHandlerFn, options?: EventHandlerOptions): EventSubscriber {
     return this.registry.subscribeOnce(eventType, fn, options);
   }
 
@@ -151,9 +143,7 @@ export class EventBus {
   }
 
   public publishServiceRemoved(serviceId: string, source = 'service-registry'): Promise<EventResult> {
-    return this.publish(
-      this.createEvent({ type: PlatformEventType.ServiceRemoved, source, payload: { serviceId } }),
-    );
+    return this.publish(this.createEvent({ type: PlatformEventType.ServiceRemoved, source, payload: { serviceId } }));
   }
 
   public publishCapabilityRegistered(capabilityId: string, source = 'capability-runtime'): Promise<EventResult> {
@@ -216,9 +206,7 @@ export class EventBus {
     config?: Record<string, unknown>,
     source = 'platform-builder',
   ): Promise<EventResult> {
-    return this.publish(
-      this.createEvent({ type: PlatformEventType.ConfigurationLoaded, source, payload: { config } }),
-    );
+    return this.publish(this.createEvent({ type: PlatformEventType.ConfigurationLoaded, source, payload: { config } }));
   }
 
   // ── Integration bridges ───────────────────────────────────────────────────
@@ -245,11 +233,7 @@ export class EventBus {
       if (event.type === 'StageStarted') {
         void this.publishBootstrapStageStarted(event.stageName ?? 'unknown', event.stageId);
       } else if (event.type === 'StageCompleted') {
-        void this.publishBootstrapStageCompleted(
-          event.stageName ?? 'unknown',
-          event.stageId,
-          event.durationMs,
-        );
+        void this.publishBootstrapStageCompleted(event.stageName ?? 'unknown', event.stageId, event.durationMs);
       } else if (event.type === 'StageFailed') {
         void this.publishBootstrapStageFailed(event.stageName ?? 'unknown', event.stageId, event.error);
       }

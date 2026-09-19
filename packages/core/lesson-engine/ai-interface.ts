@@ -46,7 +46,10 @@ Stages Count: ${activeFlow?.stages.length || 0}`;
   /**
    * AI-generated Quiz based on current Stage knowledge points & goals.
    */
-  public async generateQuizForStage(stage: Stage, count = 3): Promise<Array<{ question: string; options: string[]; answerIndex: number; explanation: string }>> {
+  public async generateQuizForStage(
+    stage: Stage,
+    count = 3,
+  ): Promise<Array<{ question: string; options: string[]; answerIndex: number; explanation: string }>> {
     const prompt = `Based on the teaching stage "${stage.title}" with knowledge points [${stage.knowledgePoints.join(', ')}] and goals [${stage.teachingGoals.join(', ')}], generate ${count} multiple choice questions in JSON array format with fields: question, options (array of 4 strings), answerIndex (0-3), explanation. Return ONLY JSON.`;
 
     if (this.aiService) {
@@ -62,12 +65,7 @@ Stages Count: ${activeFlow?.stages.length || 0}`;
     // Fallback template-based quiz generation
     return stage.knowledgePoints.map((kp, idx) => ({
       question: `关于 ${kp}，下列哪项说法是正确的？`,
-      options: [
-        `${kp} 是本阶段核心学习要点A`,
-        `${kp} 的定义与逻辑推导B`,
-        `${kp} 的实际应用场景C`,
-        `以上说法均正确`,
-      ],
+      options: [`${kp} 是本阶段核心学习要点A`, `${kp} 的定义与逻辑推导B`, `${kp} 的实际应用场景C`, `以上说法均正确`],
       answerIndex: 3,
       explanation: `本题考查${stage.title}中关于${kp}的基础理解。`,
     }));
@@ -120,8 +118,22 @@ Stages Count: ${activeFlow?.stages.length || 0}`;
           completionStatus: 'pending',
           assignee: 'teacher',
           activities: [
-            { id: `act_img_${Date.now()}`, type: 'image', title: '情境图片展示', config: {}, status: 'idle', teachingObjects: [] },
-            { id: `act_vid_${Date.now()}`, type: 'video', title: '导入短视频', config: {}, status: 'idle', teachingObjects: [] },
+            {
+              id: `act_img_${Date.now()}`,
+              type: 'image',
+              title: '情境图片展示',
+              config: {},
+              status: 'idle',
+              teachingObjects: [],
+            },
+            {
+              id: `act_vid_${Date.now()}`,
+              type: 'video',
+              title: '导入短视频',
+              config: {},
+              status: 'idle',
+              teachingObjects: [],
+            },
           ],
         },
         {
@@ -133,7 +145,14 @@ Stages Count: ${activeFlow?.stages.length || 0}`;
           completionStatus: 'pending',
           assignee: 'teacher',
           activities: [
-            { id: `act_ppt_${Date.now()}`, type: 'image', title: '知识点课件讲解', config: {}, status: 'idle', teachingObjects: [] },
+            {
+              id: `act_ppt_${Date.now()}`,
+              type: 'image',
+              title: '知识点课件讲解',
+              config: {},
+              status: 'idle',
+              teachingObjects: [],
+            },
           ],
         },
         {
@@ -145,8 +164,22 @@ Stages Count: ${activeFlow?.stages.length || 0}`;
           completionStatus: 'pending',
           assignee: 'teacher',
           activities: [
-            { id: `act_geo_${Date.now()}`, type: 'geogebra', title: '动态模型演示', config: {}, status: 'idle', teachingObjects: [] },
-            { id: `act_py_${Date.now()}`, type: 'python', title: 'Python代码验证', config: {}, status: 'idle', teachingObjects: [] },
+            {
+              id: `act_geo_${Date.now()}`,
+              type: 'geogebra',
+              title: '动态模型演示',
+              config: {},
+              status: 'idle',
+              teachingObjects: [],
+            },
+            {
+              id: `act_py_${Date.now()}`,
+              type: 'python',
+              title: 'Python代码验证',
+              config: {},
+              status: 'idle',
+              teachingObjects: [],
+            },
           ],
         },
         {
@@ -158,7 +191,14 @@ Stages Count: ${activeFlow?.stages.length || 0}`;
           completionStatus: 'pending',
           assignee: 'student',
           activities: [
-            { id: `act_quiz_${Date.now()}`, type: 'quiz', title: '随堂测验Quiz', config: {}, status: 'idle', teachingObjects: [] },
+            {
+              id: `act_quiz_${Date.now()}`,
+              type: 'quiz',
+              title: '随堂测验Quiz',
+              config: {},
+              status: 'idle',
+              teachingObjects: [],
+            },
           ],
         },
         {
@@ -170,7 +210,14 @@ Stages Count: ${activeFlow?.stages.length || 0}`;
           completionStatus: 'pending',
           assignee: 'teacher',
           activities: [
-            { id: `act_mind_${Date.now()}`, type: 'mindmap', title: '思维导图总结', config: {}, status: 'idle', teachingObjects: [] },
+            {
+              id: `act_mind_${Date.now()}`,
+              type: 'mindmap',
+              title: '思维导图总结',
+              config: {},
+              status: 'idle',
+              teachingObjects: [],
+            },
           ],
         },
       ],

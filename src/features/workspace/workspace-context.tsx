@@ -20,10 +20,7 @@ export interface WorkspaceProviderProps {
   readonly children: React.ReactNode;
 }
 
-export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({
-  registry: externalRegistry,
-  children,
-}) => {
+export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ registry: externalRegistry, children }) => {
   const [internalRegistry] = useState(() => externalRegistry ?? new WorkspaceSlotRegistry());
   const [, setRevision] = useState(0);
 
@@ -36,7 +33,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({
       internalRegistry.register(provider);
       forceUpdate();
     },
-    [internalRegistry, forceUpdate]
+    [internalRegistry, forceUpdate],
   );
 
   const unregisterSlotProvider = useCallback(
@@ -46,14 +43,14 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({
         forceUpdate();
       }
     },
-    [internalRegistry, forceUpdate]
+    [internalRegistry, forceUpdate],
   );
 
   const getSlotProviders = useCallback(
     (slot: WorkspaceSlotType) => {
       return internalRegistry.getProviders(slot);
     },
-    [internalRegistry]
+    [internalRegistry],
   );
 
   const value = useMemo(
@@ -63,7 +60,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({
       unregisterSlotProvider,
       getSlotProviders,
     }),
-    [internalRegistry, registerSlotProvider, unregisterSlotProvider, getSlotProviders]
+    [internalRegistry, registerSlotProvider, unregisterSlotProvider, getSlotProviders],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

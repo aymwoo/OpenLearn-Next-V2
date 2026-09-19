@@ -3,16 +3,7 @@
  * Master orchestration engine for Lessons, Flows, Stages, Timeline, Teacher Control, Student Sync, AI, and Replay.
  */
 
-import {
-  Lesson,
-  Flow,
-  Stage,
-  Activity,
-  LessonSnapshot,
-  UserRef,
-  StageAnalytics,
-  StudentAction,
-} from './types.js';
+import { Lesson, Flow, Stage, Activity, LessonSnapshot, UserRef, StageAnalytics, StudentAction } from './types.js';
 import { ActivityRegistry } from './activity-registry.js';
 import { TeachingTimeline } from './teaching-timeline.js';
 import { StageRuntime } from './stage-runtime.js';
@@ -64,7 +55,7 @@ export class LessonRuntime {
           state.currentStage,
           this.currentLesson.id,
           this.activeFlow.id,
-          state.currentStageIndex
+          state.currentStageIndex,
         );
       }
 
@@ -150,10 +141,7 @@ export class LessonRuntime {
     this.isLive = false;
 
     this.timeline.stopTimer();
-    const analytics = await this.stageRuntime.exitStage(
-      this.currentLesson.id,
-      this.activeFlow?.id || ''
-    );
+    const analytics = await this.stageRuntime.exitStage(this.currentLesson.id, this.activeFlow?.id || '');
 
     await this.publishEvent('LessonEnded', {
       lessonId: this.currentLesson.id,
@@ -233,7 +221,6 @@ export class LessonRuntime {
     }
     return false;
   }
-
 
   public jumpStage(stageTarget: string | number, activityTarget?: string | number): boolean {
     const success = this.timeline.jump(stageTarget, activityTarget);

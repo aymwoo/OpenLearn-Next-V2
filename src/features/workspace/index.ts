@@ -9,4 +9,3 @@ export * from './workspace-layout.js';
 export * from './workspace-region.js';
 export * from './layout-store.js';
 export * from './workspace-layout-manager.js';
-

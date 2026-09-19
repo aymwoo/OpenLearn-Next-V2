@@ -2,13 +2,7 @@
  * OpenLearn Whiteboard Tool System - Tool Types & Contracts (Sprint P2-01)
  */
 
-export type WhiteboardToolCategory =
-  | 'Selection'
-  | 'Drawing'
-  | 'Shape'
-  | 'Annotation'
-  | 'Media'
-  | 'Extension';
+export type WhiteboardToolCategory = 'Selection' | 'Drawing' | 'Shape' | 'Annotation' | 'Media' | 'Extension';
 
 export interface WhiteboardToolMetadata {
   readonly id: string;

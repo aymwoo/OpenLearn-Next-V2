@@ -30,7 +30,7 @@ export class AIActionRegistry {
   public async executeAction(
     actionId: string,
     params: Record<string, unknown> = {},
-    context?: unknown
+    context?: unknown,
   ): Promise<unknown> {
     const action = this.actions.get(actionId);
     if (!action) {

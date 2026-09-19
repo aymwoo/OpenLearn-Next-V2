@@ -17,25 +17,25 @@ import {
   FileText,
 } from 'lucide-react';
 
-export function RevealPresentationWrapper({ 
-  elementId, 
-  data, 
+export function RevealPresentationWrapper({
+  elementId,
+  data,
   userRole = 'teacher',
-  onElementUpdate 
-}: { 
-  elementId: string; 
-  data: any; 
+  onElementUpdate,
+}: {
+  elementId: string;
+  data: any;
   userRole?: 'teacher' | 'student';
-  onElementUpdate?: (id: string, data: any) => Promise<void>; 
+  onElementUpdate?: (id: string, data: any) => Promise<void>;
 }) {
   const [mode, setMode] = useState<'ppt' | 'doc' | 'edit'>('ppt');
-  const [markdown, setMarkdown] = useState(data.markdown || "# Title Slide\n---\n## Slide 2");
+  const [markdown, setMarkdown] = useState(data.markdown || '# Title Slide\n---\n## Slide 2');
   const [slideIndex, setSlideIndex] = useState(data.slideX || 0);
   const [autoplay, setAutoplay] = useState(false);
   const [autoplayInterval, setAutoplayInterval] = useState(4); // seconds
   const [isFullscreen, setIsFullscreen] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  
+
   // Custom presentations (PDF/PPTX) state
   const isTeacher = userRole === 'teacher';
   const isStudent = userRole === 'student';
@@ -45,7 +45,7 @@ export function RevealPresentationWrapper({
   const isFileLoaded = !!fileUrl;
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const pptxContainerRef = useRef<HTMLDivElement>(null);
   const previewerInstanceRef = useRef<any>(null);
 
@@ -56,10 +56,10 @@ export function RevealPresentationWrapper({
   // Parse slides
   const slides = markdown
     .split(/(?:\r?\n|^)---(?:\r?\n|$)/)
-    .map(s => s.trim())
-    .filter(s => s.length > 0);
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 
-  const totalSlides = fileType === 'md' ? Math.max(1, slides.length) : (data.slideCount || 1);
+  const totalSlides = fileType === 'md' ? Math.max(1, slides.length) : data.slideCount || 1;
 
   // Auto reset mode to 'ppt' if an external file is loaded
   useEffect(() => {
@@ -94,7 +94,7 @@ export function RevealPresentationWrapper({
 
     let active = true;
     fetch(fileUrl)
-      .then(res => res.arrayBuffer())
+      .then((res) => res.arrayBuffer())
       .then(async (ab) => {
         if (!active) return;
         if (previewerInstanceRef.current) {
@@ -107,22 +107,22 @@ export function RevealPresentationWrapper({
             const previewer = initPptxPreview(pptxContainerRef.current, { mode: 'slide' } as any);
             previewerInstanceRef.current = previewer;
             await previewer.load(ab);
-            
+
             if (active) {
               if (isTeacher && onElementUpdate && data.slideCount !== previewer.slideCount) {
                 onElementUpdate(elementId, {
                   ...data,
-                  slideCount: previewer.slideCount
+                  slideCount: previewer.slideCount,
                 });
               }
               previewer.renderSingleSlide(slideIndex);
             }
           } catch (e) {
-            console.error("PPTX preview init failed", e);
+            console.error('PPTX preview init failed', e);
           }
         }
       })
-      .catch(err => console.error("Fetch PPTX failed", err));
+      .catch((err) => console.error('Fetch PPTX failed', err));
 
     return () => {
       active = false;
@@ -139,7 +139,7 @@ export function RevealPresentationWrapper({
       try {
         previewerInstanceRef.current.renderSingleSlide(slideIndex);
       } catch (e) {
-        console.error("PPTX renderSingleSlide failed", e);
+        console.error('PPTX renderSingleSlide failed', e);
       }
     }
   }, [slideIndex, fileType]);
@@ -148,7 +148,7 @@ export function RevealPresentationWrapper({
   useEffect(() => {
     if (!autoplay || mode !== 'ppt' || fileType !== 'md') return;
     const interval = setInterval(() => {
-      setSlideIndex(prev => {
+      setSlideIndex((prev) => {
         const next = (prev + 1) % Math.max(1, slides.length);
         if (onElementUpdate) {
           onElementUpdate(elementId, { ...data, slideX: next });
@@ -210,14 +210,14 @@ export function RevealPresentationWrapper({
       reader.onload = async (event) => {
         const base64String = event.target?.result as string;
         const base64Data = base64String.split(',')[1];
-        
+
         const response = await fetch('/api/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             filename: file.name,
-            base64Data: base64Data
-          })
+            base64Data: base64Data,
+          }),
         });
 
         if (!response.ok) {
@@ -225,7 +225,7 @@ export function RevealPresentationWrapper({
         }
 
         const resData = await response.json();
-        
+
         if (onElementUpdate) {
           await onElementUpdate(elementId, {
             ...data,
@@ -235,7 +235,7 @@ export function RevealPresentationWrapper({
             slideX: 0,
             slideCount: resData.pageCount || 1,
             isFullscreenSynced: data.isFullscreenSynced !== undefined ? data.isFullscreenSynced : true,
-            isFullscreenForced: false
+            isFullscreenForced: false,
           });
           setSlideIndex(0);
         }
@@ -259,7 +259,7 @@ export function RevealPresentationWrapper({
           fileType: 'md',
           slideX: 0,
           slideCount: 0,
-          isFullscreenForced: false
+          isFullscreenForced: false,
         });
         setSlideIndex(0);
       }
@@ -271,7 +271,7 @@ export function RevealPresentationWrapper({
     if (isTeacher && onElementUpdate) {
       onElementUpdate(elementId, {
         ...data,
-        isFullscreenForced: val
+        isFullscreenForced: val,
       });
     }
   };
@@ -281,7 +281,7 @@ export function RevealPresentationWrapper({
       onElementUpdate(elementId, {
         ...data,
         isFullscreenSynced: val,
-        isFullscreenForced: val ? isFullscreen : false
+        isFullscreenForced: val ? isFullscreen : false,
       });
     }
   };
@@ -291,18 +291,18 @@ export function RevealPresentationWrapper({
     {
       name: '基础通用课件',
       desc: '标准的课件 structure',
-      content: `# 物理学原理与探究\n---\n## 课程介绍\n1. 经典力学基础\n2. 能量守恒定律\n3. 万有引力应用\n---\n## 科学探究要素\n- 观察与提问\n- 制定计划与设计实验\n- 进行实验与收集证据\n- 交流、评估及得出结论\n---\n## 物理课后思考一\n> 牛顿第一定律是否可以在地球上直接通过实验完全验证？请结合摩擦力阐述。`
+      content: `# 物理学原理与探究\n---\n## 课程介绍\n1. 经典力学基础\n2. 能量守恒定律\n3. 万有引力应用\n---\n## 科学探究要素\n- 观察与提问\n- 制定计划与设计实验\n- 进行实验与收集证据\n- 交流、评估及得出结论\n---\n## 物理课后思考一\n> 牛顿第一定律是否可以在地球上直接通过实验完全验证？请结合摩擦力阐述。`,
     },
     {
       name: '英语词汇互动',
       desc: '交互式英文闪卡',
-      content: `# Topic: Smart Education\n---\n## Key Vocabulary\n- **Orchestration**: Arrangement or cooperation of system systems.\n- **Heuristic**: Practical method not guaranteed to be perfect.\n- **Applet**: Lightweight interactive program.\n---\n## Reading Passage\nModern class orchestration allows instructors to dispatch customized applets directly onto the virtual desk interfaces of student endpoints instantly!\n---\n## Fill in the Blank\nThe teacher used the virtual whiteboard to ___ classroom active learning slides.\n*(Answer: orchestrate)*`
+      content: `# Topic: Smart Education\n---\n## Key Vocabulary\n- **Orchestration**: Arrangement or cooperation of system systems.\n- **Heuristic**: Practical method not guaranteed to be perfect.\n- **Applet**: Lightweight interactive program.\n---\n## Reading Passage\nModern class orchestration allows instructors to dispatch customized applets directly onto the virtual desk interfaces of student endpoints instantly!\n---\n## Fill in the Blank\nThe teacher used the virtual whiteboard to ___ classroom active learning slides.\n*(Answer: orchestrate)*`,
     },
     {
       name: '微课探究文档',
       desc: '一页式大纲微课',
-      content: `# 探究牛顿第三定律\n在本节微课中，我们将探讨作用力与反作用力的核心性质。\n\n## 概念要点\n- 作用力与反作用力**大小相等**\n- 作用力与反作用力**方向相反**\n- 作用力与反作用力作用在**不同的物体上**\n- 它们伴随发生，同时消失。\n\n---\n\n## 经典实验设计\n1. 准备两个完全相同的弹簧测力计 A 与 B。\n2. 将它们对拉，观察两者的示数变化。\n3. 会发现：不管拉力如何变化，A 的读数总是等于 B 的读数。\n\n## 问题思考\n当马拉着车在水平路面上加速前进时，马拉车的力与车拉马的力，哪一个更大？`
-    }
+      content: `# 探究牛顿第三定律\n在本节微课中，我们将探讨作用力与反作用力的核心性质。\n\n## 概念要点\n- 作用力与反作用力**大小相等**\n- 作用力与反作用力**方向相反**\n- 作用力与反作用力作用在**不同的物体上**\n- 它们伴随发生，同时消失。\n\n---\n\n## 经典实验设计\n1. 准备两个完全相同的弹簧测力计 A 与 B。\n2. 将它们对拉，观察两者的示数变化。\n3. 会发现：不管拉力如何变化，A 的读数总是等于 B 的读数。\n\n## 问题思考\n当马拉着车在水平路面上加速前进时，马拉车的力与车拉马的力，哪一个更大？`,
+    },
   ];
 
   // Extracts headers from markdown text for Outline sidebar in Doc mode
@@ -315,7 +315,7 @@ export function RevealPresentationWrapper({
         headers.push({
           text: match[2].trim(),
           level: match[1].length,
-          lineIndex: index
+          lineIndex: index,
         });
       }
     });
@@ -337,25 +337,28 @@ export function RevealPresentationWrapper({
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="font-bold text-xs tracking-wider uppercase">
-                  {fileType === 'md' ? 'Markdown Slides' : `${fileType.toUpperCase()} Presentation`} {isStudent && '(Synced)'}
+                  {fileType === 'md' ? 'Markdown Slides' : `${fileType.toUpperCase()} Presentation`}{' '}
+                  {isStudent && '(Synced)'}
                 </span>
               </div>
-              
+
               <div className="flex items-center gap-4">
-                <span className="text-xs font-mono text-white/50">Slide {slideIndex + 1} / {totalSlides}</span>
-                
+                <span className="text-xs font-mono text-white/50">
+                  Slide {slideIndex + 1} / {totalSlides}
+                </span>
+
                 {/* Teacher controls */}
                 {isTeacher && (
                   <>
                     {fileType === 'md' && (
                       <button
-                        onClick={() => setAutoplay(p => !p)}
+                        onClick={() => setAutoplay((p) => !p)}
                         className={`px-2.5 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider transition-colors border cursor-pointer ${autoplay ? 'bg-emerald-50 border-emerald-400 text-white animate-pulse' : 'bg-transparent border-neutral-700 text-neutral-400 hover:bg-neutral-850'}`}
                       >
                         {autoplay ? 'Autoplay Live' : 'Autoplay'}
                       </button>
                     )}
-                    
+
                     <label className="flex items-center gap-1.5 text-xs text-white/70 cursor-pointer">
                       <input
                         type="checkbox"
@@ -393,9 +396,9 @@ export function RevealPresentationWrapper({
                 </div>
               ) : fileType === 'pptx' ? (
                 <div className="w-full h-full flex items-center justify-center p-2 bg-slate-900/5 max-w-[90vw] max-h-[82vh] aspect-video rounded-2xl overflow-hidden shadow-2xl border border-neutral-850">
-                  <div 
-                    ref={pptxContainerRef} 
-                    className="w-full h-full overflow-auto rounded-xl bg-white border border-slate-100 shadow-md flex items-center justify-center" 
+                  <div
+                    ref={pptxContainerRef}
+                    className="w-full h-full overflow-auto rounded-xl bg-white border border-slate-100 shadow-md flex items-center justify-center"
                   />
                 </div>
               ) : (
@@ -404,7 +407,9 @@ export function RevealPresentationWrapper({
                   <div className="w-full bg-white rounded-xl shadow-md border border-slate-100 flex flex-col overflow-y-auto p-6 md:p-8 aspect-video relative transition-all duration-300 hover:shadow-lg max-h-[82vh] max-w-none p-12 md:p-16 border-neutral-850 rounded-3xl shadow-2xl">
                     <div className="flex justify-between items-center text-[10px] font-semibold text-slate-400 border-b border-slate-100 pb-2 mb-4 shrink-0">
                       <span className="tracking-wide uppercase text-indigo-650">SMART CLASS SLIDE DECK</span>
-                      <span className="font-mono">SLIDE {slideIndex + 1} / {totalSlides}</span>
+                      <span className="font-mono">
+                        SLIDE {slideIndex + 1} / {totalSlides}
+                      </span>
                     </div>
 
                     <div className="flex-1 min-h-0 overflow-y-auto pr-1">
@@ -412,7 +417,9 @@ export function RevealPresentationWrapper({
                         {slides[slideIndex] ? (
                           <Markdown>{slides[slideIndex]}</Markdown>
                         ) : (
-                          <div className="text-center text-slate-400 italic py-8">幻灯片没有内容，请在“编辑文档”中添加。</div>
+                          <div className="text-center text-slate-400 italic py-8">
+                            幻灯片没有内容，请在“编辑文档”中添加。
+                          </div>
                         )}
                       </div>
                     </div>
@@ -464,15 +471,15 @@ export function RevealPresentationWrapper({
               </div>
             )}
           </div>,
-          document.body
+          document.body,
         )}
       </div>
     );
   }
 
   const viewerClassName = isContainerFullscreen
-    ? "fixed inset-0 z-[99999] bg-neutral-950 flex flex-col items-center justify-center font-sans p-6"
-    : "flex-1 flex flex-col items-center justify-between p-4 bg-slate-900/5 relative min-w-0";
+    ? 'fixed inset-0 z-[99999] bg-neutral-950 flex flex-col items-center justify-center font-sans p-6'
+    : 'flex-1 flex flex-col items-center justify-between p-4 bg-slate-900/5 relative min-w-0';
 
   return (
     <div className="w-full h-full flex flex-col bg-slate-50 text-slate-800 overflow-hidden text-xs relative font-sans">
@@ -491,7 +498,7 @@ export function RevealPresentationWrapper({
                   <Play size={11} />
                   <span>PPT 播放</span>
                 </button>
-                
+
                 <button
                   onClick={() => setMode('doc')}
                   className={`px-2 py-1 rounded flex items-center gap-1 font-medium transition-colors cursor-pointer ${mode === 'doc' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'}`}
@@ -530,7 +537,10 @@ export function RevealPresentationWrapper({
                   </div>
                 ) : isFileLoaded ? (
                   <div className="flex items-center gap-1.5 bg-slate-200/50 pl-2 pr-1.5 py-0.5 rounded border border-slate-300/30">
-                    <span className="text-[10px] font-medium text-slate-600 max-w-[120px] truncate font-mono" title={fileName}>
+                    <span
+                      className="text-[10px] font-medium text-slate-600 max-w-[120px] truncate font-mono"
+                      title={fileName}
+                    >
                       {fileName}
                     </span>
                     <button
@@ -567,14 +577,14 @@ export function RevealPresentationWrapper({
             {mode === 'ppt' && fileType === 'md' && (
               <div className="flex items-center gap-1.5">
                 <button
-                  onClick={() => setAutoplay(p => !p)}
+                  onClick={() => setAutoplay((p) => !p)}
                   className={`p-1 rounded flex items-center gap-1 font-semibold text-[10px] transition-colors border cursor-pointer ${autoplay ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
                   title="开启/关闭幻灯片自动播放"
                 >
                   {autoplay ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" /> : null}
                   <span>{autoplay ? '自动播放中' : '自动播放'}</span>
                 </button>
-                
+
                 {autoplay && (
                   <select
                     value={autoplayInterval}
@@ -627,25 +637,28 @@ export function RevealPresentationWrapper({
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="font-bold text-xs tracking-wider uppercase">
-                    {fileType === 'md' ? 'Markdown Slides' : `${fileType.toUpperCase()} Presentation`} {isStudent && '(Synced)'}
+                    {fileType === 'md' ? 'Markdown Slides' : `${fileType.toUpperCase()} Presentation`}{' '}
+                    {isStudent && '(Synced)'}
                   </span>
                 </div>
-                
+
                 <div className="flex items-center gap-4">
-                  <span className="text-xs font-mono text-white/50">Slide {slideIndex + 1} / {totalSlides}</span>
-                  
+                  <span className="text-xs font-mono text-white/50">
+                    Slide {slideIndex + 1} / {totalSlides}
+                  </span>
+
                   {/* Teacher controls */}
                   {isTeacher && (
                     <>
                       {fileType === 'md' && (
                         <button
-                          onClick={() => setAutoplay(p => !p)}
+                          onClick={() => setAutoplay((p) => !p)}
                           className={`px-2.5 py-1 rounded-md text-[10px] uppercase font-bold tracking-wider transition-colors border cursor-pointer ${autoplay ? 'bg-emerald-50 border-emerald-400 text-white animate-pulse' : 'bg-transparent border-neutral-700 text-neutral-400 hover:bg-neutral-850'}`}
                         >
                           {autoplay ? 'Autoplay Live' : 'Autoplay'}
                         </button>
                       )}
-                      
+
                       <label className="flex items-center gap-1.5 text-xs text-white/70 cursor-pointer">
                         <input
                           type="checkbox"
@@ -655,7 +668,7 @@ export function RevealPresentationWrapper({
                         />
                         <span>同步学生全屏</span>
                       </label>
-                      
+
                       <button
                         onClick={() => handleToggleFullscreen(false)}
                         className="p-1 px-2.5 bg-red-655 text-white text-xs font-bold rounded-md transition-colors cursor-pointer border-0"
@@ -672,7 +685,9 @@ export function RevealPresentationWrapper({
             {/* Main Presentation Contents */}
             <div className="w-full flex-1 min-h-0 flex items-center justify-center relative">
               {fileType === 'pdf' ? (
-                <div className={`w-full h-full flex items-center justify-center p-2 bg-slate-100 ${isContainerFullscreen ? 'max-w-5xl aspect-video rounded-2xl overflow-hidden shadow-2xl border border-neutral-850' : ''}`}>
+                <div
+                  className={`w-full h-full flex items-center justify-center p-2 bg-slate-100 ${isContainerFullscreen ? 'max-w-5xl aspect-video rounded-2xl overflow-hidden shadow-2xl border border-neutral-850' : ''}`}
+                >
                   <iframe
                     key={`${fileUrl}-${isContainerFullscreen ? 'fs' : 'card'}-${slideIndex}`}
                     src={`${fileUrl}#page=${slideIndex + 1}&toolbar=0&navpanes=0`}
@@ -680,19 +695,25 @@ export function RevealPresentationWrapper({
                   />
                 </div>
               ) : fileType === 'pptx' ? (
-                <div className={`w-full h-full flex items-center justify-center p-2 bg-slate-900/5 ${isContainerFullscreen ? 'max-w-5xl aspect-video rounded-2xl overflow-hidden shadow-2xl border border-neutral-850' : ''}`}>
-                  <div 
-                    ref={pptxContainerRef} 
-                    className="w-full h-full overflow-auto rounded-xl bg-white border border-slate-100 shadow-md flex items-center justify-center" 
+                <div
+                  className={`w-full h-full flex items-center justify-center p-2 bg-slate-900/5 ${isContainerFullscreen ? 'max-w-5xl aspect-video rounded-2xl overflow-hidden shadow-2xl border border-neutral-850' : ''}`}
+                >
+                  <div
+                    ref={pptxContainerRef}
+                    className="w-full h-full overflow-auto rounded-xl bg-white border border-slate-100 shadow-md flex items-center justify-center"
                   />
                 </div>
               ) : (
                 // Markdown mode
                 <div className="flex-1 w-full flex items-center justify-center max-w-2xl min-h-0">
-                  <div className={`w-full bg-white rounded-xl shadow-md border border-slate-100 flex flex-col overflow-y-auto p-6 md:p-8 aspect-video relative transition-all duration-300 hover:shadow-lg max-h-full ${isContainerFullscreen ? 'max-w-4xl p-12 md:p-16 border-neutral-850 rounded-3xl shadow-2xl' : ''}`}>
+                  <div
+                    className={`w-full bg-white rounded-xl shadow-md border border-slate-100 flex flex-col overflow-y-auto p-6 md:p-8 aspect-video relative transition-all duration-300 hover:shadow-lg max-h-full ${isContainerFullscreen ? 'max-w-4xl p-12 md:p-16 border-neutral-850 rounded-3xl shadow-2xl' : ''}`}
+                  >
                     <div className="flex justify-between items-center text-[10px] font-semibold text-slate-400 border-b border-slate-100 pb-2 mb-4 shrink-0">
                       <span className="tracking-wide uppercase text-indigo-650">SMART CLASS SLIDE DECK</span>
-                      <span className="font-mono">SLIDE {slideIndex + 1} / {totalSlides}</span>
+                      <span className="font-mono">
+                        SLIDE {slideIndex + 1} / {totalSlides}
+                      </span>
                     </div>
 
                     <div className="flex-1 min-h-0 overflow-y-auto pr-1">
@@ -700,7 +721,9 @@ export function RevealPresentationWrapper({
                         {slides[slideIndex] ? (
                           <Markdown>{slides[slideIndex]}</Markdown>
                         ) : (
-                          <div className="text-center text-slate-400 italic py-8">幻灯片没有内容，请在“编辑文档”中添加。</div>
+                          <div className="text-center text-slate-400 italic py-8">
+                            幻灯片没有内容，请在“编辑文档”中添加。
+                          </div>
                         )}
                       </div>
                     </div>
@@ -717,26 +740,36 @@ export function RevealPresentationWrapper({
             {/* Controllers */}
             {/* If Student and Force Screen active, hides page controller completely to lock them */}
             {!(isStudent && isFullscreenSynced && isFullscreenForced) && (
-              <div className={`mt-4 flex items-center justify-center gap-3 select-none shrink-0 ${
-                isContainerFullscreen 
-                  ? 'absolute bottom-6 bg-neutral-900/80 backdrop-blur-md px-6 py-2.5 rounded-full border border-neutral-800 shadow-2xl z-[100001]' 
-                  : 'bg-white px-4 py-2 rounded-full border border-slate-200/80 shadow-md relative z-10'
-              }`}>
+              <div
+                className={`mt-4 flex items-center justify-center gap-3 select-none shrink-0 ${
+                  isContainerFullscreen
+                    ? 'absolute bottom-6 bg-neutral-900/80 backdrop-blur-md px-6 py-2.5 rounded-full border border-neutral-800 shadow-2xl z-[100001]'
+                    : 'bg-white px-4 py-2 rounded-full border border-slate-200/80 shadow-md relative z-10'
+                }`}
+              >
                 <button
                   disabled={slideIndex === 0 || (isStudent && isFullscreenSynced && isFullscreenForced)}
                   onClick={() => handleSlideChange(slideIndex - 1)}
                   className={`p-1.5 rounded-full border transition-colors cursor-pointer ${
                     slideIndex === 0 || (isStudent && isFullscreenSynced && isFullscreenForced)
-                      ? (isContainerFullscreen ? 'border-neutral-800 text-neutral-600 bg-neutral-950/20 cursor-not-allowed' : 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed') 
-                      : (isContainerFullscreen ? 'border-neutral-700 text-neutral-300 hover:bg-neutral-800' : 'border-slate-205 text-slate-655 hover:bg-slate-50')
+                      ? isContainerFullscreen
+                        ? 'border-neutral-800 text-neutral-600 bg-neutral-950/20 cursor-not-allowed'
+                        : 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
+                      : isContainerFullscreen
+                        ? 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
+                        : 'border-slate-205 text-slate-655 hover:bg-slate-50'
                   }`}
                   title="上一张 (ArrowLeft)"
                 >
                   <ChevronLeft size={isContainerFullscreen ? 18 : 14} />
                 </button>
 
-                <div className={`flex items-center gap-1.5 px-1 font-mono text-xs ${isContainerFullscreen ? 'text-neutral-200' : 'text-slate-700'}`}>
-                  <span className={`font-bold ${isContainerFullscreen ? 'text-white text-base' : 'text-slate-900'}`}>{slideIndex + 1}</span>
+                <div
+                  className={`flex items-center gap-1.5 px-1 font-mono text-xs ${isContainerFullscreen ? 'text-neutral-200' : 'text-slate-700'}`}
+                >
+                  <span className={`font-bold ${isContainerFullscreen ? 'text-white text-base' : 'text-slate-900'}`}>
+                    {slideIndex + 1}
+                  </span>
                   <span className={isContainerFullscreen ? 'text-neutral-600' : 'text-slate-350'}>/</span>
                   <span>{totalSlides}</span>
                 </div>
@@ -746,8 +779,12 @@ export function RevealPresentationWrapper({
                   onClick={() => handleSlideChange(slideIndex + 1)}
                   className={`p-1.5 rounded-full border transition-colors cursor-pointer ${
                     slideIndex >= totalSlides - 1 || (isStudent && isFullscreenSynced && isFullscreenForced)
-                      ? (isContainerFullscreen ? 'border-neutral-800 text-neutral-600 bg-neutral-950/20 cursor-not-allowed' : 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed') 
-                      : (isContainerFullscreen ? 'border-neutral-700 text-neutral-300 hover:bg-neutral-800' : 'border-slate-205 text-slate-655 hover:bg-slate-50')
+                      ? isContainerFullscreen
+                        ? 'border-neutral-800 text-neutral-600 bg-neutral-950/20 cursor-not-allowed'
+                        : 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
+                      : isContainerFullscreen
+                        ? 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
+                        : 'border-slate-205 text-slate-655 hover:bg-slate-50'
                   }`}
                   title="下一张 (ArrowRight)"
                 >
@@ -772,7 +809,9 @@ export function RevealPresentationWrapper({
                     <button
                       key={idx}
                       onClick={() => {
-                        const targetEl = scrollContainerRef.current?.querySelector(`[data-line-index="${o.lineIndex}"]`);
+                        const targetEl = scrollContainerRef.current?.querySelector(
+                          `[data-line-index="${o.lineIndex}"]`,
+                        );
                         if (targetEl) {
                           targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
@@ -797,14 +836,19 @@ export function RevealPresentationWrapper({
                     const level = headerMatch[1].length;
                     const text = headerMatch[2].trim();
                     const HeaderTag = level === 1 ? 'h1' : level === 2 ? 'h2' : 'h3';
-                    const sizeClass = level === 1 ? 'text-lg font-bold text-indigo-900 border-b pb-1 mt-4 mb-2' : level === 2 ? 'text-base font-bold text-slate-800 mt-3 mb-1.5' : 'text-sm font-semibold text-slate-700 mt-2 mb-1';
+                    const sizeClass =
+                      level === 1
+                        ? 'text-lg font-bold text-indigo-900 border-b pb-1 mt-4 mb-2'
+                        : level === 2
+                          ? 'text-base font-bold text-slate-800 mt-3 mb-1.5'
+                          : 'text-sm font-semibold text-slate-700 mt-2 mb-1';
                     return (
                       <HeaderTag key={idx} data-line-index={idx} className={sizeClass}>
                         {text}
                       </HeaderTag>
                     );
                   }
-                  
+
                   if (line.trim() === '---') {
                     return <hr key={idx} className="my-4 border-slate-200" />;
                   }
@@ -834,21 +878,26 @@ export function RevealPresentationWrapper({
                     key={idx}
                     type="button"
                     onClick={() => {
-                      if (window.confirm(`确定要加载模板 “${preset.name}” 吗？这将会覆盖当前白板课件中的所有编辑内容。`)) {
+                      if (
+                        window.confirm(`确定要加载模板 “${preset.name}” 吗？这将会覆盖当前白板课件中的所有编辑内容。`)
+                      ) {
                         handleMarkdownChange(preset.content);
                         setSlideIndex(0);
                       }
                     }}
                     className="w-full text-left p-2.5 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-sm transition-all focus:outline-none cursor-pointer group"
                   >
-                    <div className="font-bold text-[11px] text-slate-800 group-hover:text-indigo-700 whitespace-nowrap overflow-hidden text-ellipsis">{preset.name}</div>
+                    <div className="font-bold text-[11px] text-slate-800 group-hover:text-indigo-700 whitespace-nowrap overflow-hidden text-ellipsis">
+                      {preset.name}
+                    </div>
                     <div className="text-[9px] text-slate-400 mt-0.5">{preset.desc}</div>
                   </button>
                 ))}
               </div>
 
               <div className="mt-4 p-2 bg-amber-50 rounded border border-amber-100 text-[10px] text-amber-700 font-sans leading-relaxed">
-                <strong>💡 使用提示</strong><br />
+                <strong>💡 使用提示</strong>
+                <br />
                 在任意位置插入一行 <code>---</code> 即可分割出一个新的幻灯片（PPT）页面。
               </div>
             </div>

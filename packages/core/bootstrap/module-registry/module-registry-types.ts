@@ -4,20 +4,9 @@
 
 import { Version } from '../types/index.js';
 
-export type ModuleStatus =
-  | 'Unknown'
-  | 'Registered'
-  | 'Active'
-  | 'Inactive'
-  | 'Error';
+export type ModuleStatus = 'Unknown' | 'Registered' | 'Active' | 'Inactive' | 'Error';
 
-export type ModuleCategory =
-  | 'Core'
-  | 'Runtime'
-  | 'Infrastructure'
-  | 'Feature'
-  | 'Extension'
-  | 'AI';
+export type ModuleCategory = 'Core' | 'Runtime' | 'Infrastructure' | 'Feature' | 'Extension' | 'AI';
 
 export interface ModuleHealth {
   readonly isHealthy: boolean;

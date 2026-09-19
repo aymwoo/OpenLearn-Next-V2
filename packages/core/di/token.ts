@@ -46,16 +46,11 @@ export class Token<T> {
 
   constructor(name: string, version: string = '1.0.0') {
     if (!name || typeof name !== 'string') {
-      throw new TokenError(
-        `Token name must be a non-empty string, got: ${String(name)}`
-      );
+      throw new TokenError(`Token name must be a non-empty string, got: ${String(name)}`);
     }
 
     if (!TOKEN_NAME_RE.test(name)) {
-      throw new TokenError(
-        `Invalid Token name format: "${name}". ` +
-          `Expected: @scope/domain:ServiceName`
-      );
+      throw new TokenError(`Invalid Token name format: "${name}". ` + `Expected: @scope/domain:ServiceName`);
     }
 
     this.name = name;

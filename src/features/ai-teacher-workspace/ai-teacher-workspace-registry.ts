@@ -77,4 +77,3 @@ export class AITeacherWorkspaceRegistry {
     this.registeredWidgets.clear();
   }
 }
-

@@ -10,7 +10,10 @@ declare var __dirname: string | undefined;
 // Auto-fallback NODE_ENV to production if executing the bundled output
 if (!process.env.NODE_ENV) {
   const isCjs = typeof __filename !== 'undefined' && __filename.endsWith('.cjs');
-  const isDist = process.cwd().endsWith('/dist') || (typeof __dirname !== 'undefined' && __dirname.includes('/dist')) || (typeof __filename !== 'undefined' && __filename.includes('/dist'));
+  const isDist =
+    process.cwd().endsWith('/dist') ||
+    (typeof __dirname !== 'undefined' && __dirname.includes('/dist')) ||
+    (typeof __filename !== 'undefined' && __filename.includes('/dist'));
   if (isCjs || isDist) {
     process.env.NODE_ENV = 'production';
   }
@@ -27,7 +30,11 @@ import bcrypt from 'bcryptjs';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { filterXSS } from 'xss';
-import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './packages/plugins/ai-submit-injector.js';
+import {
+  hasDataSubmission,
+  hasScoreDisplay,
+  injectScoreSubmissionUsingAI,
+} from './packages/plugins/ai-submit-injector.js';
 import { setupRealtimeBridge } from './server/realtime-bridge.js';
 import { setupPresence } from './server/presence.js';
 import { runStartupMigrations } from './server/bootstrap-db.js';
@@ -45,7 +52,13 @@ import {
 } from './server/ai-agent.js';
 import { verifyPassword, hashPassword as bcryptHashPassword } from './packages/core/db/index.js';
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from './server/utils/crypto.js';
-import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from './server/middleware/auth.js';
+import {
+  getCookieToken,
+  getValidSession,
+  checkIsTeacherOrAdmin,
+  getActorId,
+  requireAuth,
+} from './server/middleware/auth.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
 
@@ -56,7 +69,13 @@ import {
   createActivityContext,
   IActivityRegistryToken,
 } from './packages/activity-ecosystem/index.js';
-import type { ServerContext, AgentChatAttachment, AgentChatRequest, AgentToolExecution, StoredAIProvider } from './server/context.js';
+import type {
+  ServerContext,
+  AgentChatAttachment,
+  AgentChatRequest,
+  AgentToolExecution,
+  StoredAIProvider,
+} from './server/context.js';
 import { registerOsRoutes } from './server/routes/os.js';
 import { registerResourcesRoutes } from './server/routes/resources.js';
 import { registerCoursewareRoutes } from './server/routes/courseware.js';
@@ -70,9 +89,6 @@ import { registerAssignmentsRoutes } from './server/routes/assignments.js';
 import { registerSchedulesRoutes } from './server/routes/schedules.js';
 import { registerGradingRoutes } from './server/routes/grading.js';
 import { registerPluginsRoutes } from './server/routes/plugins.js';
-
-
-
 
 async function startServer() {
   // Bridge server startup through Platform Kernel Bootstrap Adapter (PI-005)
@@ -117,38 +133,49 @@ async function startServer() {
   // ── 安全中间? ────────────────────────────────────────────────────
   // SEC-NET-02: HTTP 安全头（helmet）— 严格 CSP 配置
   const frameAllowedOrigins = process.env.ALLOWED_FRAME_ORIGINS
-    ? process.env.ALLOWED_FRAME_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
+    ? process.env.ALLOWED_FRAME_ORIGINS.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
     : ['http://localhost:*', 'http://127.0.0.1:*'];
 
   const ltiAllowedOrigins = process.env.LTI_ALLOWED_LMS_ORIGINS
-    ? process.env.LTI_ALLOWED_LMS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
+    ? process.env.LTI_ALLOWED_LMS_ORIGINS.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
     : [];
 
-  app.use(helmet({
-    // SEC-LTI: 若配置了允许嵌入的 LMS 平台域名，禁用全局 X-Frame-Options，由 CSP frame-ancestors 严格精细化管控
-    xFrameOptions: ltiAllowedOrigins.length > 0 ? false : { action: 'sameorigin' },
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        // 移除通配 https: 与 data:，禁止加载全网任意第三方未授权脚本
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "blob:"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        imgSrc: ["'self'", "data:", "blob:", "https:"],
-        connectSrc: ["'self'", "ws:", "wss:", "https:"],
-        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
-        // 移除通配 http: 和 https:，限制 iframe 仅能加载本地、沙箱或受信任课件源
-        frameSrc: ["'self'", "blob:", "data:", ...frameAllowedOrigins],
-        frameAncestors: ltiAllowedOrigins.length > 0 ? ["'self'", ...ltiAllowedOrigins] : ["'self'"],
-        objectSrc: ["'none'"],
-        baseUri: ["'self'"],
+  app.use(
+    helmet({
+      // SEC-LTI: 若配置了允许嵌入的 LMS 平台域名，禁用全局 X-Frame-Options，由 CSP frame-ancestors 严格精细化管控
+      xFrameOptions: ltiAllowedOrigins.length > 0 ? false : { action: 'sameorigin' },
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          // 移除通配 https: 与 data:，禁止加载全网任意第三方未授权脚本
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'blob:'],
+          // 允许内联事件属性（onclick 等）及扩展/课件内联脚本执行，防止 Helmet 默认 'none' 阻断
+          scriptSrcAttr: ["'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+          styleSrcAttr: ["'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+          connectSrc: ["'self'", 'ws:', 'wss:', 'https:'],
+          fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
+          // 移除通配 http: 和 https:，限制 iframe 仅能加载本地、沙箱或受信任课件源
+          frameSrc: ["'self'", 'blob:', 'data:', ...frameAllowedOrigins],
+          frameAncestors: ltiAllowedOrigins.length > 0 ? ["'self'", ...ltiAllowedOrigins] : ["'self'"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          // 针对 HTTP 部署，不强制将 HTTP 升级至 HTTPS
+          upgradeInsecureRequests: null,
+        },
       },
-    },
-    crossOriginOpenerPolicy: false,
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: { policy: "cross-origin" }, // 允许沙箱 iframe（opaque origin）加载静态资源
-    originAgentCluster: false,
-    strictTransportSecurity: false, // 针对 HTTP 部署，禁用 HSTS（否则浏览器缓存后强制 HTTPS，导致 ERR_CONNECTION_REFUSED）
-  }));
+      crossOriginOpenerPolicy: false,
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' }, // 允许沙箱 iframe（opaque origin）加载静态资源
+      originAgentCluster: false,
+      strictTransportSecurity: false, // 针对 HTTP 部署，禁用 HSTS（否则浏览器缓存后强制 HTTPS，导致 ERR_CONNECTION_REFUSED）
+    }),
+  );
 
   // SEC-AUTH-04: 登录频率限制?5?/IP/分钟?
   const loginLimiter = rateLimit({
@@ -167,7 +194,9 @@ async function startServer() {
 
   // SEC-NET-01: CORS 白名单化与 Same-Origin 智能放行
   const configuredOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
+    ? process.env.ALLOWED_ORIGINS.split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
     : [];
 
   const isOriginAllowed = (origin: string | undefined, hostHeader?: string): boolean => {
@@ -231,11 +260,18 @@ async function startServer() {
 
   // ── Build route context for extracted route modules ──
   const ctx: ServerContext = {
-    app, loginLimiter,
-    MF_REMOTE_CACHE, lessonActiveSegments,
-    buildAgentSystemInstruction, buildAgentFinalMessage, normalizeToolSchema,
-    buildOpenAITools, executeAgentToolCall, buildOpenAIChatUrl,
-    runGeminiAgentChat, runOpenAIAgentChat,
+    app,
+    loginLimiter,
+    MF_REMOTE_CACHE,
+    lessonActiveSegments,
+    buildAgentSystemInstruction,
+    buildAgentFinalMessage,
+    normalizeToolSchema,
+    buildOpenAITools,
+    executeAgentToolCall,
+    buildOpenAIChatUrl,
+    runGeminiAgentChat,
+    runOpenAIAgentChat,
     activityRegistry,
   } as ServerContext;
 
@@ -247,7 +283,7 @@ async function startServer() {
       const host = req.headers.host;
       const allowed = isOriginAllowed(origin, host);
       callback(null, {
-        origin: allowed ? (origin || true) : false,
+        origin: allowed ? origin || true : false,
         methods: ['GET', 'POST'],
         credentials: true,
       });
@@ -316,14 +352,23 @@ async function startServer() {
   registerGradingRoutes(ctx);
   registerPluginsRoutes(ctx);
 
-
   // Realtime bridge: forward kernel domain events to Socket.IO clients.
   // Extracted to server/realtime-bridge.ts so the monolith can be decomposed
   // without changing broadcast behavior. See server/__tests__/realtime-bridge.test.ts.
   setupRealtimeBridge({ eventBus: kernelContainer.eventBus, io, db: kernelContainer.db });
 
-
-  setupPresence({ io, eventBus: kernelContainer.eventBus });
+  setupPresence({
+    io,
+    eventBus: kernelContainer.eventBus,
+    // 学生 socket 加入所属班级房间，使课堂广播（白板最大化视图同步等）
+    // 不再依赖学生停留在哪个视图（作业工作区会 leave-lesson）
+    lookupStudentClassIds: (studentId: string) =>
+      (
+        kernelContainer.db.prepare('SELECT class_id FROM class_students WHERE student_id = ?').all(studentId) as {
+          class_id: string;
+        }[]
+      ).map((row) => row.class_id),
+  });
 
   // ── 健康检查端点 (OBS-HEALTH-01) ──────────────────────────────────
   const startTime = Date.now();
@@ -348,7 +393,10 @@ async function startServer() {
     const mem = process.memoryUsage();
     res.json({
       uptime: Math.floor((Date.now() - startTime) / 1000),
-      memory: { rss: Math.round(mem.rss / 1024 / 1024) + 'MB', heapUsed: Math.round(mem.heapUsed / 1024 / 1024) + 'MB' },
+      memory: {
+        rss: Math.round(mem.rss / 1024 / 1024) + 'MB',
+        heapUsed: Math.round(mem.heapUsed / 1024 / 1024) + 'MB',
+      },
       nodeVersion: process.version,
     });
   });
@@ -434,13 +482,17 @@ async function startServer() {
     const dim = '\x1b[2m';
 
     console.log(`\n  ${bold}${green}Educational OS Kernel${reset} v${PLATFORM_VERSION} ready:\n`);
-    console.log(`  ${dim}➜${reset}  ${bold}Local:${reset}   ${bold}${cyan}${OSC}${localUrl}${ST}${localUrl}${OSC}${ST}${reset}`);
+    console.log(
+      `  ${dim}➜${reset}  ${bold}Local:${reset}   ${bold}${cyan}${OSC}${localUrl}${ST}${localUrl}${OSC}${ST}${reset}`,
+    );
 
     if (isAnyHost) {
       const netIps = getNetworkIps();
       for (const ip of netIps) {
         const netUrl = `http://${ip}:${PORT}`;
-        console.log(`  ${dim}➜${reset}  ${bold}Network:${reset} ${bold}${cyan}${OSC}${netUrl}${ST}${netUrl}${OSC}${ST}${reset}`);
+        console.log(
+          `  ${dim}➜${reset}  ${bold}Network:${reset} ${bold}${cyan}${OSC}${netUrl}${ST}${netUrl}${OSC}${ST}${reset}`,
+        );
       }
     }
     console.log('');

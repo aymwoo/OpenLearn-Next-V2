@@ -23,7 +23,7 @@ describe('Legacy Cleanup (Phase 8)', () => {
     // Verify we have at least the 6 system plugins
     expect(plugins.length).toBeGreaterThanOrEqual(6);
 
-    const ids = plugins.map(p => p.id);
+    const ids = plugins.map((p) => p.id);
     expect(ids).toContain('@openlearn/plugin-vfs');
     expect(ids).toContain('@openlearn/plugin-process');
     expect(ids).toContain('@openlearn/plugin-management');
@@ -38,11 +38,11 @@ describe('Legacy Cleanup (Phase 8)', () => {
       '@openlearn/plugin-management',
       '@openlearn/plugin-builtin',
       '@openlearn/plugin-ai-planner',
-      '@openlearn/plugin-ai-submit-injector'
+      '@openlearn/plugin-ai-submit-injector',
     ];
 
     for (const sysId of systemIds) {
-      const p = plugins.find(pl => pl.id === sysId);
+      const p = plugins.find((pl) => pl.id === sysId);
       expect(p).toBeDefined();
       expect(p!.state).toBe('active');
     }

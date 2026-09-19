@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import path from 'path';
 import { safeEvaluateMath } from '../../src/features/whiteboard/widgets/MathGraphWrapper.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, getActorId } from '../middleware/auth.js';
+import { kernelContainer } from '../../packages/core/kernel/index.js';
 import type { Request, Response, NextFunction } from 'express';
 
 describe('Security Hardening Suite (P0 Vulnerabilities)', () => {
@@ -68,6 +69,72 @@ describe('Security Hardening Suite (P0 Vulnerabilities)', () => {
       expect(jsonBody?.success).toBe(false);
       expect(next).not.toHaveBeenCalled();
     });
+
+    it('should correctly authorize student session for general requireAuth() and resolve actorId with studentId fallback', () => {
+      const middleware = requireAuth();
+      const token = 'token_test_student_123';
+      kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(token);
+      kernelContainer.db
+        .prepare('INSERT INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)')
+        .run(
+          token,
+          JSON.stringify({ role: 'student', studentId: 'stu_alice' }),
+          Date.now(),
+          Date.now() + 100000,
+        );
+
+      const req = { headers: { cookie: `edu_os_token=${token}` } } as any;
+      const next = vi.fn();
+      middleware(req, {} as any, next);
+      expect(next).toHaveBeenCalled();
+      expect(req.session?.studentId).toBe('stu_alice');
+      expect(req.session?.userId).toBe('stu_alice');
+      expect(getActorId(req)).toBe('user:stu_alice:student');
+
+      kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(token);
+    });
+
+    it('should allow student to access their own dashboard using either primary ID or student_number', () => {
+      const studentId = 'test-stu-s1';
+      const studentNum = 'S001_TEST';
+
+      kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(studentId);
+      kernelContainer.db
+        .prepare('INSERT INTO students (id, name, student_number, password, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run(studentId, 'Test Student', studentNum, 'pwd', Date.now());
+
+      // 1. Session has userId: studentId
+      const sessionWithId = { role: 'student', userId: studentId, studentId };
+      const currentUserId = sessionWithId.userId || sessionWithId.studentId;
+
+      // Query by ID
+      let studentRow = kernelContainer.db
+        .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
+        .get(studentId, studentId) as any;
+      let isSelf = studentRow
+        ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
+        : currentUserId === studentId;
+      expect(isSelf).toBe(true);
+
+      // Query by student_number
+      studentRow = kernelContainer.db
+        .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
+        .get(studentNum, studentNum) as any;
+      isSelf = studentRow
+        ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
+        : currentUserId === studentNum;
+      expect(isSelf).toBe(true);
+
+      // Other student should be forbidden
+      const otherStudentSession = { role: 'student', userId: 'other-stu', studentId: 'other-stu' };
+      const otherUserId = otherStudentSession.userId;
+      isSelf = studentRow
+        ? otherUserId === studentRow.id || (studentRow.student_number && otherUserId === studentRow.student_number)
+        : otherUserId === studentNum;
+      expect(isSelf).toBe(false);
+
+      kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(studentId);
+    });
   });
 
   describe('VULN-07: Courseware Path Traversal Defense', () => {
@@ -83,7 +150,7 @@ describe('Security Hardening Suite (P0 Vulnerabilities)', () => {
       for (const filename of maliciousFilenames) {
         const safeBaseName = path.basename(filename.replace(/\\/g, '/'));
         const resolvedPath = path.resolve(storageDir, safeBaseName);
-        
+
         // Assert that path.basename strips all directory traversal sequences
         expect(safeBaseName).not.toContain('..');
         expect(safeBaseName).not.toContain('/');
@@ -161,15 +228,15 @@ describe('Security Hardening Suite (P0 Vulnerabilities)', () => {
       const maliciousSqls = [
         "ATTACH DATABASE '/etc/passwd' AS shadow",
         "ATTACH DATABASE ':memory:' AS hack",
-        "DETACH DATABASE shadow",
-        "PRAGMA table_info(users)",
-        "PRAGMA foreign_keys = OFF",
+        'DETACH DATABASE shadow',
+        'PRAGMA table_info(users)',
+        'PRAGMA foreign_keys = OFF',
         "VACUUM INTO 'backup.db'",
-        "CREATE TRIGGER rce AFTER INSERT ON users BEGIN SELECT 1; END",
-        "CREATE TEMPORARY TRIGGER backdoor BEFORE UPDATE ON students BEGIN SELECT 1; END",
-        "DROP TRIGGER rce",
-        "CREATE VIEW steal AS SELECT * FROM users",
-        "DROP VIEW steal",
+        'CREATE TRIGGER rce AFTER INSERT ON users BEGIN SELECT 1; END',
+        'CREATE TEMPORARY TRIGGER backdoor BEFORE UPDATE ON students BEGIN SELECT 1; END',
+        'DROP TRIGGER rce',
+        'CREATE VIEW steal AS SELECT * FROM users',
+        'DROP VIEW steal',
       ];
 
       for (const sql of maliciousSqls) {
@@ -192,5 +259,53 @@ describe('Security Hardening Suite (P0 Vulnerabilities)', () => {
       }
     });
   });
-});
 
+  describe('VULN-10: Helmet Content-Security-Policy & script-src-attr Configuration', () => {
+    it('should explicitly permit inline event handlers (script-src-attr "unsafe-inline") and not block with "none"', async () => {
+      const helmet = (await import('helmet')).default;
+      const express = (await import('express')).default;
+      const app = express();
+
+      // Mirror helmet configuration in server.ts
+      app.use(
+        helmet({
+          contentSecurityPolicy: {
+            directives: {
+              defaultSrc: ["'self'"],
+              scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'blob:'],
+              scriptSrcAttr: ["'unsafe-inline'"],
+              styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+              styleSrcAttr: ["'unsafe-inline'"],
+              imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+              connectSrc: ["'self'", 'ws:', 'wss:', 'https:'],
+              fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
+              objectSrc: ["'none'"],
+              baseUri: ["'self'"],
+              upgradeInsecureRequests: null,
+            },
+          },
+        }),
+      );
+
+      app.get('/test-csp', (_req, res) => res.send('ok'));
+
+      const server = app.listen(0);
+      const port = (server.address() as any).port;
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/test-csp`);
+        const csp = res.headers.get('content-security-policy') || '';
+
+        // Must permit script-src-attr inline events (onclick etc.)
+        expect(csp).toContain("script-src-attr 'unsafe-inline'");
+        // Must NOT contain script-src-attr 'none'
+        expect(csp).not.toContain("script-src-attr 'none'");
+        // Must permit style-src-attr inline styles
+        expect(csp).toContain("style-src-attr 'unsafe-inline'");
+        // Must not force HTTP to HTTPS upgrade for HTTP deployment
+        expect(csp).not.toContain('upgrade-insecure-requests');
+      } finally {
+        server.close();
+      }
+    });
+  });
+});

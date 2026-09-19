@@ -3,11 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { v7 as uuidv7 } from 'uuid';
-import {
-  IEventBusServiceToken,
-  IDatabaseToken,
-  IAIServiceToken,
-} from '@openlearn/plugin-sdk';
+import { IEventBusServiceToken, IDatabaseToken, IAIServiceToken } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
 
 interface StoredAIProvider {
@@ -20,7 +16,9 @@ interface StoredAIProvider {
 
 export function hasDataSubmission(htmlContent: string): boolean {
   // Check for LMS methods or postMessage calls
-  return /LMS\.submit|LMS\.finish|LMS_SUBMIT|LMS_FINISH|parent\.postMessage|window\.parent\.postMessage/i.test(htmlContent);
+  return /LMS\.submit|LMS\.finish|LMS_SUBMIT|LMS_FINISH|parent\.postMessage|window\.parent\.postMessage/i.test(
+    htmlContent,
+  );
 }
 
 export function hasScoreDisplay(htmlContent: string): boolean {
@@ -53,7 +51,11 @@ ${htmlContent}
 `;
 
   let text = '';
-  const provider = db.prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != "" LIMIT 1').get() as StoredAIProvider | undefined;
+  const provider = db
+    .prepare(
+      'SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != "" LIMIT 1',
+    )
+    .get() as StoredAIProvider | undefined;
 
   if (provider && provider.api_key && provider.api_key.trim()) {
     let chatUrl = provider.api_url.trim();
@@ -63,7 +65,7 @@ ${htmlContent}
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${provider.api_key.trim()}`
+      Authorization: `Bearer ${provider.api_key.trim()}`,
     };
 
     const response = await fetch(chatUrl, {
@@ -73,8 +75,8 @@ ${htmlContent}
         model: provider.model_name,
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.2,
-        max_tokens: 8192
-      })
+        max_tokens: 8192,
+      }),
     });
 
     if (!response.ok) {
@@ -94,7 +96,7 @@ ${htmlContent}
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: { temperature: 0.2 }
+      config: { temperature: 0.2 },
     });
     text = response.text?.trim() || '';
   }
@@ -159,7 +161,7 @@ ${htmlContent}
             fs.writeFileSync(path.join(newStorageDir, payload.entry), modified);
 
             db.prepare(
-              'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+              'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',
             ).run(newCwId, newUuid, `[自动提交版] ${payload.name}`, 'html', payload.entry, Date.now() + 10);
 
             await eventBus.publish({
@@ -168,7 +170,7 @@ ${htmlContent}
               source: 'ai.submit-injector',
               payload: { id: newCwId, uuid: newUuid, name: `[自动提交版] ${payload.name}`, entry: payload.entry },
               timestamp: Date.now() + 10,
-              correlationId: event.id
+              correlationId: event.id,
             });
           }
         }
@@ -179,5 +181,5 @@ ${htmlContent}
   },
   deactivate: async () => {
     // Handlers automatically disposed by ResourceTracker
-  }
+  },
 };

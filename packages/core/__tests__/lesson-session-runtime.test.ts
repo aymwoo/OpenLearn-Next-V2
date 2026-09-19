@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  LessonSessionManager,
-  LessonSessionContext,
-} from '../bootstrap/lesson-session/index.js';
+import { LessonSessionManager, LessonSessionContext } from '../bootstrap/lesson-session/index.js';
 
 describe('Sprint A2 Lesson Session Runtime Test Suite', () => {
   const mockContext: LessonSessionContext = {

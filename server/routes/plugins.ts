@@ -77,14 +77,8 @@ function isSafeExternalUrl(urlStr: string): { safe: boolean; reason?: string } {
 }
 
 export function registerPluginsRoutes(ctx: ServerContext) {
-  const {
-    app,
-    buildOpenAITools,
-    executeAgentToolCall,
-    buildOpenAIChatUrl,
-    runGeminiAgentChat,
-    runOpenAIAgentChat,
-  } = ctx;
+  const { app, buildOpenAITools, executeAgentToolCall, buildOpenAIChatUrl, runGeminiAgentChat, runOpenAIAgentChat } =
+    ctx;
 
   app.get('/api/docs/plugin-guide', (req, res) => {
     try {
@@ -113,8 +107,8 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
       const content = fs.readFileSync(logFile, 'utf-8');
       const lines = content.split('\n').filter(Boolean);
-      
-      let parsedLogs = lines.map(line => {
+
+      let parsedLogs = lines.map((line) => {
         try {
           return JSON.parse(line);
         } catch {
@@ -128,20 +122,22 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         30: 'info',
         40: 'warn',
         50: 'error',
-        60: 'fatal'
+        60: 'fatal',
       };
 
-      parsedLogs = parsedLogs.map(log => ({
+      parsedLogs = parsedLogs.map((log) => ({
         ...log,
-        level: typeof log.level === 'number' ? (PINO_LEVELS[log.level] || 'info') : (log.level || 'info'),
-        time: log.time ? new Date(log.time).toISOString() : new Date().toISOString()
+        level: typeof log.level === 'number' ? PINO_LEVELS[log.level] || 'info' : log.level || 'info',
+        time: log.time ? new Date(log.time).toISOString() : new Date().toISOString(),
       }));
 
       if (component) {
-        parsedLogs = parsedLogs.filter(log => log.component === component || (log.component && log.component.includes(component)));
+        parsedLogs = parsedLogs.filter(
+          (log) => log.component === component || (log.component && log.component.includes(component)),
+        );
       }
       if (levelFilter) {
-        parsedLogs = parsedLogs.filter(log => log.level === levelFilter);
+        parsedLogs = parsedLogs.filter((log) => log.level === levelFilter);
       }
 
       const sliceStart = Math.max(0, parsedLogs.length - limit);
@@ -181,7 +177,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     }
   });
 
- // 插件市场列表与版本更新检测 API
+  // 插件市场列表与版本更新检测 API
   app.get('/api/plugins/market', async (req, res) => {
     // Return update info for all installed plugins that declare updateSource
     try {
@@ -203,7 +199,11 @@ export function registerPluginsRoutes(ctx: ServerContext) {
 
       for (const p of plugins) {
         let manifest: any;
-        try { manifest = JSON.parse(p.manifest); } catch { continue; }
+        try {
+          manifest = JSON.parse(p.manifest);
+        } catch {
+          continue;
+        }
         const src: UpdateSource | undefined = manifest.updateSource;
         if (!src?.type || !src?.repo) continue;
         const result = await checkVersion(src, manifest.version || '0.0.0');
@@ -226,13 +226,14 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     try {
       const rawId = decodeURIComponent(req.params.id);
       const pluginId = kernelContainer.pluginHost.resolvePluginUuid(rawId);
-      const row = kernelContainer.db
-        .prepare('SELECT manifest FROM plugins WHERE id = ?')
-        .get(pluginId) as { manifest: string } | undefined;
+      const row = kernelContainer.db.prepare('SELECT manifest FROM plugins WHERE id = ?').get(pluginId) as
+        { manifest: string } | undefined;
       if (!row) return res.status(404).json({ success: false, error: 'Plugin not found' });
 
       let manifest: any;
-      try { manifest = JSON.parse(row.manifest); } catch {
+      try {
+        manifest = JSON.parse(row.manifest);
+      } catch {
         return res.status(400).json({ success: false, error: 'Invalid manifest JSON' });
       }
 
@@ -350,9 +351,8 @@ export function registerPluginsRoutes(ctx: ServerContext) {
     try {
       const rawId = decodeURIComponent(req.params.id);
       const pluginId = kernelContainer.pluginHost.resolvePluginUuid(rawId);
-      const row = kernelContainer.db
-        .prepare('SELECT manifest FROM plugins WHERE id = ?')
-        .get(pluginId) as { manifest: string } | undefined;
+      const row = kernelContainer.db.prepare('SELECT manifest FROM plugins WHERE id = ?').get(pluginId) as
+        { manifest: string } | undefined;
       if (!row) {
         return res.status(404).json({ success: false, error: 'Plugin not found' });
       }
@@ -378,9 +378,8 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       if (!updates || typeof updates !== 'object') {
         return res.status(400).json({ success: false, error: 'Body must be an object of key-value pairs' });
       }
-      const row = kernelContainer.db
-        .prepare('SELECT manifest FROM plugins WHERE id = ?')
-        .get(pluginId) as { manifest: string } | undefined;
+      const row = kernelContainer.db.prepare('SELECT manifest FROM plugins WHERE id = ?').get(pluginId) as
+        { manifest: string } | undefined;
       if (!row) {
         return res.status(404).json({ success: false, error: 'Plugin not found' });
       }
@@ -395,11 +394,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   app.post('/api/plugins/:id(*)/toggle', requireAuth('administrator'), async (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
-      const cmd = kernelContainer.commandBus.createCommand(
-        'plugin.toggle',
-        { pluginId: rawId },
-        getActorId(req)
-      );
+      const cmd = kernelContainer.commandBus.createCommand('plugin.toggle', { pluginId: rawId }, getActorId(req));
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (err: any) {
@@ -410,11 +405,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   app.delete('/api/plugins/:id(*)', requireAuth('administrator'), async (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
-      const cmd = kernelContainer.commandBus.createCommand(
-        'plugin.uninstall',
-        { pluginId: rawId },
-        getActorId(req)
-      );
+      const cmd = kernelContainer.commandBus.createCommand('plugin.uninstall', { pluginId: rawId }, getActorId(req));
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (err: any) {
@@ -426,11 +417,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   app.get('/api/plugins/:id(*)', async (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
-      const cmd = kernelContainer.commandBus.createCommand(
-        'plugin.info',
-        { pluginId: rawId },
-        getActorId(req)
-      );
+      const cmd = kernelContainer.commandBus.createCommand('plugin.info', { pluginId: rawId }, getActorId(req));
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (err: any) {
@@ -441,11 +428,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   app.post('/api/plugins', requireAuth('administrator'), async (req, res) => {
     try {
       const { sourceCode } = req.body;
-      const cmd = kernelContainer.commandBus.createCommand(
-        'plugin.install',
-        { sourceCode },
-        getActorId(req)
-      );
+      const cmd = kernelContainer.commandBus.createCommand('plugin.install', { sourceCode }, getActorId(req));
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (err: any) {
@@ -460,7 +443,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const cmd = kernelContainer.commandBus.createCommand(
         'plugin.install_zip',
         { base64Data, filename, executionMode },
-        getActorId(req)
+        getActorId(req),
       );
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
@@ -471,56 +454,63 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // Raw binary upload — avoids base64 overhead for large plugin zips
-  app.post('/api/plugins/upload-zip-raw', requireAuth('administrator'), express.raw({ type: 'application/octet-stream', limit: '400mb' }), async (req, res) => {
-    try {
-      const zipBuffer = req.body;
-      const filename = req.headers['x-filename'] ? decodeURIComponent(req.headers['x-filename'] as string) : 'plugin.zip';
-      const executionModeHeader = String(req.headers['x-execution-mode'] || '').toLowerCase();
-      const executionMode =
-        executionModeHeader === 'worker' || executionModeHeader === 'inline'
-          ? (executionModeHeader as 'worker' | 'inline')
+  app.post(
+    '/api/plugins/upload-zip-raw',
+    requireAuth('administrator'),
+    express.raw({ type: 'application/octet-stream', limit: '400mb' }),
+    async (req, res) => {
+      try {
+        const zipBuffer = req.body;
+        const filename = req.headers['x-filename']
+          ? decodeURIComponent(req.headers['x-filename'] as string)
+          : 'plugin.zip';
+        const executionModeHeader = String(req.headers['x-execution-mode'] || '').toLowerCase();
+        const executionMode =
+          executionModeHeader === 'worker' || executionModeHeader === 'inline'
+            ? (executionModeHeader as 'worker' | 'inline')
+            : undefined;
+        const modeHeader = String(req.headers['x-install-mode'] || 'install').toLowerCase();
+        const allowDowngrade = String(req.headers['x-allow-downgrade'] || '').toLowerCase() === 'true';
+        const targetPluginId = req.headers['x-target-plugin-id']
+          ? decodeURIComponent(String(req.headers['x-target-plugin-id']))
           : undefined;
-      const modeHeader = String(req.headers['x-install-mode'] || 'install').toLowerCase();
-      const allowDowngrade = String(req.headers['x-allow-downgrade'] || '').toLowerCase() === 'true';
-      const targetPluginId = req.headers['x-target-plugin-id']
-        ? decodeURIComponent(String(req.headers['x-target-plugin-id']))
-        : undefined;
-      if (!Buffer.isBuffer(zipBuffer) || zipBuffer.length === 0) {
-        return res.status(400).json({ success: false, error: 'Empty or invalid zip file' });
-      }
+        if (!Buffer.isBuffer(zipBuffer) || zipBuffer.length === 0) {
+          return res.status(400).json({ success: false, error: 'Empty or invalid zip file' });
+        }
 
-      if (modeHeader === 'update') {
-        const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipBuffer, {
-          targetPluginId,
-          executionMode,
-          allowDowngrade,
-        });
-        return res.json({
+        if (modeHeader === 'update') {
+          const result = await kernelContainer.pluginDistributionManager.updateFromZip(zipBuffer, {
+            targetPluginId,
+            executionMode,
+            allowDowngrade,
+          });
+          return res.json({
+            success: true,
+            updated: true,
+            pluginId: result.pluginId,
+            manifest: result.manifest,
+            oldVersion: result.oldVersion,
+            newVersion: result.newVersion,
+            wasActive: result.wasActive,
+            filename,
+          });
+        }
+
+        const result = await kernelContainer.pluginDistributionManager.installFromZip(zipBuffer, executionMode);
+        // result.pluginId is DB UUID; result.manifest keeps package metadata
+        res.json({
           success: true,
-          updated: true,
+          updated: false,
           pluginId: result.pluginId,
           manifest: result.manifest,
-          oldVersion: result.oldVersion,
-          newVersion: result.newVersion,
-          wasActive: result.wasActive,
           filename,
         });
+      } catch (err: any) {
+        console.error(err);
+        sendSafeError(res, err);
       }
-
-      const result = await kernelContainer.pluginDistributionManager.installFromZip(zipBuffer, executionMode);
-      // result.pluginId is DB UUID; result.manifest keeps package metadata
-      res.json({
-        success: true,
-        updated: false,
-        pluginId: result.pluginId,
-        manifest: result.manifest,
-        filename,
-      });
-    } catch (err: any) {
-      console.error(err);
-      sendSafeError(res, err);
-    }
-  });
+    },
+  );
 
   // Explicit update endpoint (card "Update" button)
   app.post(
@@ -595,17 +585,15 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       // Debug: log all registered handlers when lookup fails
       if (!handlersMap?.has?.(resolvedType) && !legacyMap?.has?.(resolvedType)) {
         console.error('[execute-command] Handler NOT FOUND for type:', resolvedType);
-        console.error('[execute-command] Registered handlers:', 
-          [...(handlersMap?.keys?.() ?? [])].join(', ') || '(none)');
-        const matching = [...(handlersMap?.keys?.() ?? [])].filter(k => k.includes('courseware'));
+        console.error(
+          '[execute-command] Registered handlers:',
+          [...(handlersMap?.keys?.() ?? [])].join(', ') || '(none)',
+        );
+        const matching = [...(handlersMap?.keys?.() ?? [])].filter((k) => k.includes('courseware'));
         console.error('[execute-command] Matching courseware keys:', matching.join(', ') || '(none)');
       }
 
-      const cmd = await kernelContainer.commandBus.createCommand(
-        resolvedType,
-        payload ?? {},
-        getActorId(req),
-      );
+      const cmd = await kernelContainer.commandBus.createCommand(resolvedType, payload ?? {}, getActorId(req));
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json({ success: true, result });
     } catch (err: any) {
@@ -621,9 +609,11 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   // AI Provider Endpoints (仅教师和管理员有权查看配置的模型提供方)
   app.get('/api/ai-providers', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      const providers = kernelContainer.db.prepare('SELECT * FROM ai_providers ORDER BY created_at DESC').all() as any[];
+      const providers = kernelContainer.db
+        .prepare('SELECT * FROM ai_providers ORDER BY created_at DESC')
+        .all() as any[];
       // SEC-DATA-01: 掩码 API Key 后返?
-      const masked = providers.map(p => ({
+      const masked = providers.map((p) => ({
         ...p,
         api_key: maskApiKey(decryptApiKey(p.api_key || '')),
       }));
@@ -643,7 +633,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       const now = Date.now();
       // SEC-DATA-01: 加密存储 API Key
       const encryptedKey = api_key ? encryptApiKey(api_key) : '';
-      kernelContainer.db.prepare('INSERT INTO ai_providers (id, name, api_url, api_key, model_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      kernelContainer.db
+        .prepare(
+          'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        )
         .run(id, name, api_url, encryptedKey, model_name, now, now);
       res.json({ success: true, id });
     } catch (e: any) {
@@ -663,10 +656,15 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       if (api_key && api_key.trim() !== '' && !api_key.includes('****')) {
         finalKey = encryptApiKey(api_key);
       } else {
-        const existing = kernelContainer.db.prepare('SELECT api_key FROM ai_providers WHERE id = ?').get(req.params.id) as any;
+        const existing = kernelContainer.db
+          .prepare('SELECT api_key FROM ai_providers WHERE id = ?')
+          .get(req.params.id) as any;
         finalKey = existing?.api_key || '';
       }
-      kernelContainer.db.prepare('UPDATE ai_providers SET name = ?, api_url = ?, api_key = ?, model_name = ?, updated_at = ? WHERE id = ?')
+      kernelContainer.db
+        .prepare(
+          'UPDATE ai_providers SET name = ?, api_url = ?, api_key = ?, model_name = ?, updated_at = ? WHERE id = ?',
+        )
         .run(name, api_url, finalKey, model_name, now, req.params.id);
       res.json({ success: true });
     } catch (e: any) {
@@ -705,7 +703,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       kernelContainer.db
         .prepare(
           `INSERT INTO site_settings (id, site_name, slogan, logo_url) VALUES ('global', ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET site_name = excluded.site_name, slogan = excluded.slogan, logo_url = excluded.logo_url`
+           ON CONFLICT(id) DO UPDATE SET site_name = excluded.site_name, slogan = excluded.slogan, logo_url = excluded.logo_url`,
         )
         .run(siteName || '', slogan || '', logoUrl || null);
       res.json({
@@ -728,9 +726,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       let api_key = '';
       if (providedKey && providedKey.includes('****')) {
         // 掩码密钥：用户未输入新 key，尝试从 DB 查询
-        const existing = kernelContainer.db.prepare(
-          'SELECT api_key FROM ai_providers WHERE api_url = ? AND model_name = ? LIMIT 1'
-        ).get(api_url, model_name) as { api_key: string } | undefined;
+        const existing = kernelContainer.db
+          .prepare('SELECT api_key FROM ai_providers WHERE api_url = ? AND model_name = ? LIMIT 1')
+          .get(api_url, model_name) as { api_key: string } | undefined;
         api_key = existing ? decryptApiKey(existing.api_key) : '';
       } else if (providedKey) {
         api_key = providedKey.includes(':') ? decryptApiKey(providedKey) : providedKey;
@@ -753,14 +751,14 @@ export function registerPluginsRoutes(ctx: ServerContext) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${api_key || ''}`
+          Authorization: `Bearer ${api_key || ''}`,
         },
         body: JSON.stringify({
           model: model_name,
           messages: [{ role: 'user', content: 'Say connected' }],
-          max_tokens: 5
+          max_tokens: 5,
         }),
-        signal: controller.signal
+        signal: controller.signal,
       });
       clearTimeout(timeoutId);
 
@@ -768,7 +766,12 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       if (response.ok) {
         res.json({ success: true, message: 'Successfully connected and received response.' });
       } else {
-        res.status(response.status).json({ success: false, error: `API responded with status ${response.status}: ${responseText.slice(0, 200)}` });
+        res
+          .status(response.status)
+          .json({
+            success: false,
+            error: `API responded with status ${response.status}: ${responseText.slice(0, 200)}`,
+          });
       }
     } catch (e: any) {
       sendSafeError(res, e, 500, 'Connection failed');

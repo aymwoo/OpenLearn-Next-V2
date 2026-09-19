@@ -21,13 +21,7 @@ export class RuntimePermissionManager {
     ],
     [
       'Assistant',
-      new Set<RuntimePermission>([
-        'stage:navigate',
-        'whiteboard:draw',
-        'quiz:submit',
-        'plugin:execute',
-        'ai:invoke',
-      ]),
+      new Set<RuntimePermission>(['stage:navigate', 'whiteboard:draw', 'quiz:submit', 'plugin:execute', 'ai:invoke']),
     ],
     [
       'Student',
@@ -38,18 +32,9 @@ export class RuntimePermissionManager {
         'plugin:execute', // student-facing plugin usage
       ]),
     ],
-    [
-      'Observer',
-      new Set<RuntimePermission>([]),
-    ],
-    [
-      'Plugin',
-      new Set<RuntimePermission>(['whiteboard:draw', 'plugin:execute', 'ai:invoke']),
-    ],
-    [
-      'AI',
-      new Set<RuntimePermission>(['stage:navigate', 'whiteboard:draw', 'ai:invoke']),
-    ],
+    ['Observer', new Set<RuntimePermission>([])],
+    ['Plugin', new Set<RuntimePermission>(['whiteboard:draw', 'plugin:execute', 'ai:invoke'])],
+    ['AI', new Set<RuntimePermission>(['stage:navigate', 'whiteboard:draw', 'ai:invoke'])],
   ]);
 
   /**

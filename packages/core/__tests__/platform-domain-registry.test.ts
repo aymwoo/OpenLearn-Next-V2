@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  PlatformDomainRegistry,
-  PlatformDomainDescriptor,
-} from '../bootstrap/domain-registry/index.js';
+import { PlatformDomainRegistry, PlatformDomainDescriptor } from '../bootstrap/domain-registry/index.js';
 
 describe('Sprint A2 Platform Domain Registry Test Suite', () => {
   const mockTeachingDomain: PlatformDomainDescriptor = {

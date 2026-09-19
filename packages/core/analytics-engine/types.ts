@@ -167,8 +167,5 @@ export interface CustomIndicatorDefinition {
 
 export interface CustomInsightRule {
   readonly id: string;
-  readonly evaluateFn: (
-    metrics: RawAnalyticsMetrics,
-    indicators: HighLevelIndicators
-  ) => AnalyticsInsight | null;
+  readonly evaluateFn: (metrics: RawAnalyticsMetrics, indicators: HighLevelIndicators) => AnalyticsInsight | null;
 }

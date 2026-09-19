@@ -59,12 +59,15 @@ async function createMockZip(manifestId: string, name: string): Promise<Buffer> 
     requires: [],
   };
   zip.file('manifest.json', JSON.stringify(manifest));
-  zip.file('index.js', `
+  zip.file(
+    'index.js',
+    `
     export const manifest = ${JSON.stringify(manifest)};
     export async function activate(ctx) {
       ctx._activated = true;
     }
-  `);
+  `,
+  );
   return await zip.generateAsync({ type: 'nodebuffer' });
 }
 
@@ -80,7 +83,7 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
   beforeEach(async () => {
     db = createTestDb();
     registry = new ServiceRegistry();
-    
+
     // Register mock services
     await registry.register(ICommandBusServiceToken, {
       registerHandler: vi.fn(),
@@ -118,10 +121,12 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
         return {
           default: {
             manifest: { id: 'ext-test', name: 'Test Plugin', version: '1.0.0', main: 'index.js' },
-            activate: async (ctx: any) => { ctx._activated = true; },
-          }
+            activate: async (ctx: any) => {
+              ctx._activated = true;
+            },
+          },
         };
-      })
+      }),
     };
 
     host = new PluginHost(registry, loader, db, tempDir);
@@ -136,9 +141,9 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
   // 1. ZIP Installation returns UUID
   it('should return manifest containing generated pluginId (UUID) upon ZIP installation', async () => {
     const zipBuffer = await createMockZip('ext-test-zip', 'Zip Test Plugin');
-    
+
     const manifest = await host.installPluginFromZip(zipBuffer);
-    
+
     expect(manifest.id).toBe('ext-test-zip');
     expect((manifest as any).pluginId).toBeDefined();
     expect(typeof (manifest as any).pluginId).toBe('string');
@@ -179,14 +184,9 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
   it('should intercept IStorageService in ServiceHost to enforce namespace isolation for Worker plugins', async () => {
     const mockDb = createTestDb();
     const guard = new CapabilityGuard();
-    
+
     // Create ServiceHost bound to plugin:ext-test-isolated
-    const serviceHost = new ServiceHost(
-      registry,
-      guard,
-      'plugin:ext-test-isolated',
-      ['whiteboard:write']
-    );
+    const serviceHost = new ServiceHost(registry, guard, 'plugin:ext-test-isolated', ['whiteboard:write']);
 
     const transport = {
       postMessage: vi.fn(),
@@ -194,46 +194,58 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
     };
 
     // Simulate Worker calling storage.set('theme', 'dark')
-    await serviceHost.handleMessage({
-      type: 'invoke',
-      token: '@openlearn/core:IStorageService',
-      method: 'set',
-      args: ['theme', 'dark'],
-      invokeId: 'inv-1',
-    }, transport as any);
+    await serviceHost.handleMessage(
+      {
+        type: 'invoke',
+        token: '@openlearn/core:IStorageService',
+        method: 'set',
+        args: ['theme', 'dark'],
+        invokeId: 'inv-1',
+      },
+      transport as any,
+    );
 
     // Verify message response back to worker was success
-    expect(transport.postMessage).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'result',
-      invokeId: 'inv-1',
-      value: undefined,
-    }));
+    expect(transport.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'result',
+        invokeId: 'inv-1',
+        value: undefined,
+      }),
+    );
 
     // Verify SQLite storage entries
     // A. Plugin namespace row must exist with the correct isolated plugin_id
-    const row = db.prepare('SELECT value FROM plugin_storage WHERE plugin_id = ? AND key = ?')
+    const row = db
+      .prepare('SELECT value FROM plugin_storage WHERE plugin_id = ? AND key = ?')
       .get('ext-test-isolated', 'theme') as any;
     expect(row).toBeDefined();
     expect(JSON.parse(row.value)).toBe('dark');
 
     // B. Global kernel namespace '__kernel__' must NOT have this key
-    const kernelRow = db.prepare('SELECT value FROM plugin_storage WHERE plugin_id = ? AND key = ?')
+    const kernelRow = db
+      .prepare('SELECT value FROM plugin_storage WHERE plugin_id = ? AND key = ?')
       .get('__kernel__', 'theme');
     expect(kernelRow).toBeUndefined();
 
     // Simulate Worker calling storage.get('theme')
-    await serviceHost.handleMessage({
-      type: 'invoke',
-      token: '@openlearn/core:IStorageService',
-      method: 'get',
-      args: ['theme'],
-      invokeId: 'inv-2',
-    }, transport as any);
+    await serviceHost.handleMessage(
+      {
+        type: 'invoke',
+        token: '@openlearn/core:IStorageService',
+        method: 'get',
+        args: ['theme'],
+        invokeId: 'inv-2',
+      },
+      transport as any,
+    );
 
-    expect(transport.postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
-      type: 'result',
-      invokeId: 'inv-2',
-      value: 'dark',
-    }));
+    expect(transport.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'result',
+        invokeId: 'inv-2',
+        value: 'dark',
+      }),
+    );
   });
 });

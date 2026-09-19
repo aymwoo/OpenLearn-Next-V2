@@ -12,7 +12,11 @@ describe('StudentAssignmentWorkPanel', () => {
     render(
       <Suspense fallback={null}>
         <StudentAssignmentWorkPanel
-          selectedAssignment={{ content: '{"quizType":"mcq_learning_objectives","timeLimit":0,"questions":[]}', submission_status: null, id: 'a1' }}
+          selectedAssignment={{
+            content: '{"quizType":"mcq_learning_objectives","timeLimit":0,"questions":[]}',
+            submission_status: null,
+            id: 'a1',
+          }}
           subAssignmentTab="whiteboard"
           setSubAssignmentTab={() => {}}
           quizStudentAnswers={{}}
@@ -23,7 +27,7 @@ describe('StudentAssignmentWorkPanel', () => {
           activeStudentId="s1"
           fetchElements={() => {}}
         />
-      </Suspense>
+      </Suspense>,
     );
     expect(screen.getByText('Sketch Whiteboard')).toBeTruthy();
   });

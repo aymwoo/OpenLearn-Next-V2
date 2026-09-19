@@ -20,20 +20,24 @@ import './index.css';
   Recharts,
   LucideReact,
   jsxRuntime: JsxRuntime,
-  'react': React,
+  react: React,
   'react-dom': ReactDOM,
   'react-dom/client': ReactDOMClient,
   'react/jsx-runtime': JsxRuntime,
-  'recharts': Recharts,
+  recharts: Recharts,
   'lucide-react': LucideReact,
 };
+
+import { GlobalErrorBoundary } from './components/common/GlobalErrorBoundary';
 
 const pluginHost = new FrontendPluginHost();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <PluginHostProvider host={pluginHost}>
-      <App />
-    </PluginHostProvider>
+    <GlobalErrorBoundary>
+      <PluginHostProvider host={pluginHost}>
+        <App />
+      </PluginHostProvider>
+    </GlobalErrorBoundary>
   </StrictMode>,
 );

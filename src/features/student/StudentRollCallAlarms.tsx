@@ -50,17 +50,19 @@ export function StudentRollCallAlarms(props: StudentRollCallAlarmsProps) {
                   await fetch(`/api/students/${activeStudentId}/read_notifications`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ notificationId: r.id })
+                    body: JSON.stringify({ notificationId: r.id }),
                   });
-                  setReadNotifications(prev => {
+                  setReadNotifications((prev) => {
                     const next = new Set(prev);
                     next.add(r.id);
                     return next;
                   });
                   addToast(
                     lang === 'zh' ? '已确认参与状态' : 'Presence confirmed',
-                    lang === 'zh' ? '成功！已安全同步并确认在线。' : 'Successfully synchronized and confirmed active presence.',
-                    'success'
+                    lang === 'zh'
+                      ? '成功！已安全同步并确认在线。'
+                      : 'Successfully synchronized and confirmed active presence.',
+                    'success',
                   );
                 } catch (e) {
                   console.error('Failed to acknowledge rollcall', e);

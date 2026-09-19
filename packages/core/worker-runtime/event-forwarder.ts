@@ -64,10 +64,7 @@ export class EventForwarder {
    *   unsubscribe reference equality)
    * - unsubscribe: function that removes the handler from EventBus
    */
-  private subscriptions = new Map<
-    string,
-    Map<string, { handler: EventSubscriber; unsubscribe: () => void }>
-  >();
+  private subscriptions = new Map<string, Map<string, { handler: EventSubscriber; unsubscribe: () => void }>>();
 
   /**
    * @param eventBus - The real EventBus instance to subscribe to
@@ -109,10 +106,7 @@ export class EventForwarder {
         });
       } catch (err) {
         // Worker may already be terminated -- log and continue
-        console.error(
-          `[EventForwarder] Failed to forward event "${eventType}" to Worker "${this.transport.id}":`,
-          err,
-        );
+        console.error(`[EventForwarder] Failed to forward event "${eventType}" to Worker "${this.transport.id}":`, err);
       }
     };
 
@@ -169,10 +163,7 @@ export class EventForwarder {
       try {
         entry.unsubscribe();
       } catch (err) {
-        console.error(
-          `[EventForwarder] Error unsubscribing for Worker "${this.transport.id}":`,
-          err,
-        );
+        console.error(`[EventForwarder] Error unsubscribing for Worker "${this.transport.id}":`, err);
       }
     }
 

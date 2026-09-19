@@ -194,10 +194,7 @@ function createMockServices(): Record<string, unknown> {
 }
 
 /** 向 ServiceRegistry 注册所有 7 个 mock services */
-async function registerMockServices(
-  sr: ServiceRegistry,
-  services: Record<string, unknown>,
-): Promise<void> {
+async function registerMockServices(sr: ServiceRegistry, services: Record<string, unknown>): Promise<void> {
   await sr.register(ICommandBusServiceToken, services.commandBus as ICommandBusService);
   await sr.register(IEventBusServiceToken, services.eventBus as IEventBusService);
   await sr.register(IActionRegistryServiceToken, services.actionRegistry as IActionRegistryService);
@@ -214,9 +211,7 @@ async function registerMockServices(
  * 支持每种测试场景的不同行为。
  */
 class TestEsmLoader extends EsmLoader {
-  constructor(
-    private loadMap: Map<string, PluginModule>,
-  ) {
+  constructor(private loadMap: Map<string, PluginModule>) {
     super();
   }
 
@@ -234,7 +229,12 @@ class TestEsmLoader extends EsmLoader {
 }
 
 /** 创建简单的 PluginModule（用于 EsmLoader） */
-function makePluginModule(manifestId: string, manifestName: string, activate?: (ctx: any) => Promise<void>, deactivate?: () => Promise<void>): PluginModule {
+function makePluginModule(
+  manifestId: string,
+  manifestName: string,
+  activate?: (ctx: any) => Promise<void>,
+  deactivate?: () => Promise<void>,
+): PluginModule {
   const m = {
     id: manifestId,
     name: manifestName,
@@ -244,11 +244,19 @@ function makePluginModule(manifestId: string, manifestName: string, activate?: (
   return {
     default: {
       manifest: m,
-      activate: activate ?? (async (ctx: any) => { ctx._activated = true; }),
+      activate:
+        activate ??
+        (async (ctx: any) => {
+          ctx._activated = true;
+        }),
       ...(deactivate ? { deactivate } : {}),
     },
     manifest: m,
-    activate: activate ?? (async (ctx: any) => { ctx._activated = true; }),
+    activate:
+      activate ??
+      (async (ctx: any) => {
+        ctx._activated = true;
+      }),
     ...(deactivate ? { deactivate } : {}),
   };
 }
@@ -386,9 +394,14 @@ describe('PluginHost — 完整生命周期', () => {
     const deactivateNever = async () => {
       await new Promise(() => {}); // never resolves
     };
-    const module = makePluginModule('hang-deactivate', 'Hang Deactivate', async (ctx) => {
-      ctx._activated = true;
-    }, deactivateNever);
+    const module = makePluginModule(
+      'hang-deactivate',
+      'Hang Deactivate',
+      async (ctx) => {
+        ctx._activated = true;
+      },
+      deactivateNever,
+    );
     loadMap.set(sourceCode, module);
 
     await host.installPlugin(sourceCode);
@@ -422,9 +435,14 @@ describe('PluginHost — 完整生命周期', () => {
     const deactivateThrow = async () => {
       throw new Error('deactivate error');
     };
-    const module = makePluginModule('throw-deactivate', 'Throw Deactivate', async (ctx) => {
-      ctx._activated = true;
-    }, deactivateThrow);
+    const module = makePluginModule(
+      'throw-deactivate',
+      'Throw Deactivate',
+      async (ctx) => {
+        ctx._activated = true;
+      },
+      deactivateThrow,
+    );
     loadMap.set(sourceCode, module);
 
     await host.installPlugin(sourceCode);
@@ -517,10 +535,14 @@ describe('PluginHost — 完整生命周期', () => {
     const moduleA: PluginModule = {
       default: {
         manifest: { id: 'fail-a', name: 'Fail A', version: '1.0.0', main: 'index.ts' },
-        activate: async () => { throw new Error('A failed'); },
+        activate: async () => {
+          throw new Error('A failed');
+        },
       },
       manifest: { id: 'fail-a', name: 'Fail A', version: '1.0.0', main: 'index.ts' },
-      activate: async () => { throw new Error('A failed'); },
+      activate: async () => {
+        throw new Error('A failed');
+      },
     };
     loadMap.set(sourceA, moduleA);
 
@@ -561,10 +583,10 @@ describe('PluginHost — 完整生命周期', () => {
 
     const plugins = host.listPlugins();
     expect(plugins).toHaveLength(3);
-    expect(plugins.map(p => p.name)).toEqual(
+    expect(plugins.map((p) => p.name)).toEqual(
       expect.arrayContaining(['List Plugin A', 'List Plugin B', 'List Plugin C']),
     );
-    expect(plugins.every(p => p.state === PluginState.INSTALLED)).toBe(true);
+    expect(plugins.every((p) => p.state === PluginState.INSTALLED)).toBe(true);
   });
 
   // ── Test 13: getPluginState 返回正确的状态 ───────────────────────────
@@ -664,7 +686,11 @@ describe('PluginHost — 完整生命周期', () => {
     };
     if (requires) m.requires = requires;
     if (optional) m.optional = optional;
-    const activateFn = activate ?? (async (ctx: any) => { ctx._activated = true; });
+    const activateFn =
+      activate ??
+      (async (ctx: any) => {
+        ctx._activated = true;
+      });
     return {
       default: { manifest: m, activate: activateFn },
       manifest: m,
@@ -673,13 +699,9 @@ describe('PluginHost — 完整生命周期', () => {
   }
 
   describe('SemVer compatibility check (Phase 6)', () => {
-
     it('Test 1: should pass when required Token version matches range', async () => {
       const src = 'semver-pass-source';
-      const module = makeModuleWithDeps(
-        'semver-pass', 'SemVer Pass',
-        ['@openlearn/core:ICommandBusService@^1.0.0'],
-      );
+      const module = makeModuleWithDeps('semver-pass', 'SemVer Pass', ['@openlearn/core:ICommandBusService@^1.0.0']);
       loadMap.set(src, module);
 
       // Install should succeed
@@ -694,10 +716,7 @@ describe('PluginHost — 完整生命周期', () => {
 
     it('Test 2: should throw SemverMismatchError when required Token version is incompatible', async () => {
       const src = 'semver-fail-source';
-      const module = makeModuleWithDeps(
-        'semver-fail', 'SemVer Fail',
-        ['@openlearn/core:ICommandBusService@^2.0.0'],
-      );
+      const module = makeModuleWithDeps('semver-fail', 'SemVer Fail', ['@openlearn/core:ICommandBusService@^2.0.0']);
       loadMap.set(src, module);
 
       // installPlugin should throw because of install-time pre-check — no DB INSERT occurs
@@ -710,10 +729,7 @@ describe('PluginHost — 完整生命周期', () => {
 
     it('Test 3: should throw SemverMismatchError when required Token is not registered', async () => {
       const src = 'semver-unreg-source';
-      const module = makeModuleWithDeps(
-        'semver-unreg', 'SemVer Unreg',
-        ['@openlearn/core:INonExistentService@^1.0.0'],
-      );
+      const module = makeModuleWithDeps('semver-unreg', 'SemVer Unreg', ['@openlearn/core:INonExistentService@^1.0.0']);
       loadMap.set(src, module);
 
       // installPlugin throws immediately — install-time pre-check blocks unregistered Token
@@ -726,10 +742,7 @@ describe('PluginHost — 完整生命周期', () => {
 
     it('Test 4: should pass when required Token has no version range', async () => {
       const src = 'semver-norange-source';
-      const module = makeModuleWithDeps(
-        'semver-norange', 'SemVer NoRange',
-        ['@openlearn/core:ICommandBusService'],
-      );
+      const module = makeModuleWithDeps('semver-norange', 'SemVer NoRange', ['@openlearn/core:ICommandBusService']);
       loadMap.set(src, module);
 
       await host.installPlugin(src);
@@ -745,9 +758,10 @@ describe('PluginHost — 完整生命周期', () => {
 
       const src = 'semver-opt-source';
       const module = makeModuleWithDeps(
-        'semver-opt', 'SemVer Opt',
+        'semver-opt',
+        'SemVer Opt',
         undefined, // no requires
-        ['@openlearn/core:IAIService@^2.0.0'],  // incompatible with host 1.0.0
+        ['@openlearn/core:IAIService@^2.0.0'], // incompatible with host 1.0.0
       );
       loadMap.set(src, module);
 
@@ -774,13 +788,19 @@ describe('PluginHost — 完整生命周期', () => {
       const module: PluginModule = {
         default: {
           manifest: {
-            id: 'd12-inject', name: 'D12 Inject', version: '1.0.0', main: 'index.ts',
+            id: 'd12-inject',
+            name: 'D12 Inject',
+            version: '1.0.0',
+            main: 'index.ts',
             optional: ['@openlearn/core:IStorageService@^2.0.0'],
           },
           activate: activateWithCapture,
         },
         manifest: {
-          id: 'd12-inject', name: 'D12 Inject', version: '1.0.0', main: 'index.ts',
+          id: 'd12-inject',
+          name: 'D12 Inject',
+          version: '1.0.0',
+          main: 'index.ts',
           optional: ['@openlearn/core:IStorageService@^2.0.0'],
         },
         activate: activateWithCapture,
@@ -804,13 +824,10 @@ describe('PluginHost — 完整生命周期', () => {
 
     it('Test 7: should reject installation when any required dependency fails (mixed compatibility)', async () => {
       const src = 'semver-mixed-source';
-      const module = makeModuleWithDeps(
-        'semver-mixed', 'SemVer Mixed',
-        [
-          '@openlearn/core:ICommandBusService@^1.0.0',  // matches host 1.0.0
-          '@openlearn/core:IEventBusService@^2.0.0',    // incompatible with host 1.0.0
-        ],
-      );
+      const module = makeModuleWithDeps('semver-mixed', 'SemVer Mixed', [
+        '@openlearn/core:ICommandBusService@^1.0.0', // matches host 1.0.0
+        '@openlearn/core:IEventBusService@^2.0.0', // incompatible with host 1.0.0
+      ]);
       loadMap.set(src, module);
 
       // installPlugin throws because second required dep is incompatible

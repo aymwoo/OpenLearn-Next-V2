@@ -68,6 +68,8 @@ describe('StudentWidgetRegistry', () => {
 
   it('throws on a widget descriptor without an id', () => {
     const reg = new StudentWidgetRegistry();
-    expect(() => reg.registerWidget({ id: '', name: 'x', slot: 'TopBar', component: () => null, provider: 'official' })).toThrow();
+    expect(() =>
+      reg.registerWidget({ id: '', name: 'x', slot: 'TopBar', component: () => null, provider: 'official' }),
+    ).toThrow();
   });
 });

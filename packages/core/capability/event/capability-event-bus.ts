@@ -15,7 +15,7 @@ export class CapabilityEventBus {
 
   public subscribe<K extends CapabilityEventType>(
     eventType: K | '*',
-    subscriber: CapabilityEventSubscriber<K>
+    subscriber: CapabilityEventSubscriber<K>,
   ): () => void {
     const key = String(eventType);
     if (!this.subscribers.has(key)) {
@@ -31,7 +31,7 @@ export class CapabilityEventBus {
 
   public async publish<K extends CapabilityEventType>(
     type: K,
-    payload: CapabilityEventMap[K]
+    payload: CapabilityEventMap[K],
   ): Promise<CapabilityEventEnvelope<K>> {
     const envelope: CapabilityEventEnvelope<K> = {
       id: `capevt_${globalThis.crypto.randomUUID()}`,
@@ -49,8 +49,8 @@ export class CapabilityEventBus {
       allSubs.map((sub) =>
         Promise.resolve(sub(envelope)).catch((err: unknown) => {
           console.error(`[CapabilityEventBus] Error in subscriber for ${String(type)}:`, err);
-        })
-      )
+        }),
+      ),
     );
 
     return envelope;

@@ -2,19 +2,9 @@
  * OpenLearn Platform Kernel - Server Bootstrap Adapter Types (PI-005)
  */
 
-import {
-  PlatformBootstrapConfig,
-  IPlatformLogger,
-  EnvironmentType,
-  IRuntimeMetadata,
-} from '../types/index.js';
+import { PlatformBootstrapConfig, IPlatformLogger, EnvironmentType, IRuntimeMetadata } from '../types/index.js';
 
-export type AdapterState =
-  | 'Created'
-  | 'Configuring'
-  | 'PipelineRegistered'
-  | 'Bootstrapped'
-  | 'Shutdown';
+export type AdapterState = 'Created' | 'Configuring' | 'PipelineRegistered' | 'Bootstrapped' | 'Shutdown';
 
 export interface StartupAdapterContext {
   readonly config?: Partial<PlatformBootstrapConfig>;

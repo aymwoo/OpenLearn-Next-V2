@@ -22,10 +22,15 @@ const parsePluginSource = (sourceCode: string) => {
     const manifestScope = manifestBlockMatch ? manifestBlockMatch[1] : sourceCode;
 
     const idMatch = manifestScope.match(/id\s*:\s*['"]([^'"]+)['"]/) || sourceCode.match(/id\s*:\s*['"]([^'"]+)['"]/);
-    const nameMatch = manifestScope.match(/name\s*:\s*['"]([^'"]+)['"]/) || sourceCode.match(/name\s*:\s*['"]([^'"]+)['"]/);
-    const verMatch = manifestScope.match(/version\s*:\s*['"]([^'"]+)['"]/) || sourceCode.match(/version\s*:\s*['"]([^'"]+)['"]/);
-    const descMatch = manifestScope.match(/description\s*:\s*['"]([^'"]+)['"]/) || sourceCode.match(/description\s*:\s*['"]([^'"]+)['"]/);
-    const authorMatch = manifestScope.match(/author\s*:\s*['"]([^'"]+)['"]/) || sourceCode.match(/author\s*:\s*['"]([^'"]+)['"]/);
+    const nameMatch =
+      manifestScope.match(/name\s*:\s*['"]([^'"]+)['"]/) || sourceCode.match(/name\s*:\s*['"]([^'"]+)['"]/);
+    const verMatch =
+      manifestScope.match(/version\s*:\s*['"]([^'"]+)['"]/) || sourceCode.match(/version\s*:\s*['"]([^'"]+)['"]/);
+    const descMatch =
+      manifestScope.match(/description\s*:\s*['"]([^'"]+)['"]/) ||
+      sourceCode.match(/description\s*:\s*['"]([^'"]+)['"]/);
+    const authorMatch =
+      manifestScope.match(/author\s*:\s*['"]([^'"]+)['"]/) || sourceCode.match(/author\s*:\s*['"]([^'"]+)['"]/);
 
     let capabilities: string[] = [];
     const capsMatch =
@@ -34,8 +39,8 @@ const parsePluginSource = (sourceCode: string) => {
     if (capsMatch) {
       capabilities = capsMatch[1]
         .split(',')
-        .map(s => s.replace(/['"\s]/g, ''))
-        .filter(s => s.length > 0);
+        .map((s) => s.replace(/['"\s]/g, ''))
+        .filter((s) => s.length > 0);
     }
 
     const mergedManifest: ParsedManifest = {
@@ -44,7 +49,7 @@ const parsePluginSource = (sourceCode: string) => {
       version: verMatch?.[1] || undefined,
       description: descMatch?.[1] || undefined,
       author: authorMatch?.[1] || undefined,
-      capabilitiesProposed: capabilities.length > 0 ? capabilities : undefined
+      capabilitiesProposed: capabilities.length > 0 ? capabilities : undefined,
     };
 
     const actionBlockRegex = /actionRegistry\.register\s*\(\s*\{([\s\S]*?)\}\s*\)/g;
@@ -60,7 +65,7 @@ const parsePluginSource = (sourceCode: string) => {
         actions.push({
           id: cmdIdLoc ? cmdIdLoc[1] : 'unknown',
           commandType: cmdTypeLoc ? cmdTypeLoc[1] : 'unknown',
-          description: cmdDescLoc ? cmdDescLoc[1] : ''
+          description: cmdDescLoc ? cmdDescLoc[1] : '',
         });
       }
     }
@@ -68,18 +73,18 @@ const parsePluginSource = (sourceCode: string) => {
     return {
       manifest: mergedManifest,
       actions: actions,
-      error: null
+      error: null,
     };
   } catch (err: any) {
     return {
       manifest: null,
       actions: [],
-      error: err.toString()
+      error: err.toString(),
     };
   }
 };
 
-const parseCSV = (text: string): { name: string; email: string }[] => {
+const parseCSV = (text: string): { name: string; email: string; student_number?: string }[] => {
   const lines = text.split(/\r?\n/);
   if (lines.length < 2) return [];
 
@@ -87,7 +92,7 @@ const parseCSV = (text: string): { name: string; email: string }[] => {
   const separators = [',', ';', '\t'];
   let sep = ',';
   let maxCount = 0;
-  separators.forEach(s => {
+  separators.forEach((s) => {
     const count = headerLine.split(s).length;
     if (count > maxCount) {
       maxCount = count;
@@ -114,26 +119,46 @@ const parseCSV = (text: string): { name: string; email: string }[] => {
     return result;
   };
 
-  const headers = parseRow(headerLine).map(h => h.toLowerCase().replace(/["'\r]/g, '').trim());
+  const headers = parseRow(headerLine).map((h) =>
+    h
+      .toLowerCase()
+      .replace(/["'\r]/g, '')
+      .trim(),
+  );
 
-  const nameIdx = headers.findIndex(h =>
-    h.includes('name') || h.includes('student') || h.includes('姓名') || h.includes('学生')
+  const studentNumIdx = headers.findIndex(
+    (h) =>
+      h.includes('student_number') ||
+      h.includes('studentnumber') ||
+      h.includes('student_id') ||
+      h.includes('studentid') ||
+      h.includes('学号') ||
+      h.includes('编号') ||
+      (h.includes('id') && !h.includes('class') && !h.includes('lesson')),
   );
-  const emailIdx = headers.findIndex(h =>
-    h.includes('email') || h.includes('mail') || h.includes('邮箱')
+
+  const nameIdx = headers.findIndex(
+    (h) =>
+      h.includes('name') ||
+      h.includes('姓名') ||
+      (h.includes('student') && !h.includes('num') && !h.includes('id')) ||
+      (h.includes('学生') && !h.includes('号')),
   );
+  const emailIdx = headers.findIndex((h) => h.includes('email') || h.includes('mail') || h.includes('邮箱'));
 
   const finalNameIdx = nameIdx >= 0 ? nameIdx : 0;
   const finalEmailIdx = emailIdx >= 0 ? emailIdx : 1;
 
-  const list: { name: string; email: string }[] = [];
+  const list: { name: string; email: string; student_number?: string }[] = [];
   for (let i = 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
     const cols = parseRow(lines[i]);
     const name = cols[finalNameIdx] ? cols[finalNameIdx].replace(/["'\r]/g, '').trim() : '';
     const email = cols[finalEmailIdx] ? cols[finalEmailIdx].replace(/["'\r]/g, '').trim() : '';
+    const student_number =
+      studentNumIdx >= 0 && cols[studentNumIdx] ? cols[studentNumIdx].replace(/["'\r]/g, '').trim() : undefined;
     if (name) {
-      list.push({ name, email });
+      list.push({ name, email, ...(student_number ? { student_number } : {}) });
     }
   }
   return list;

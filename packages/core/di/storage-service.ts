@@ -25,9 +25,7 @@ export class StorageService implements IStorageService {
 
   async get(key: string): Promise<unknown> {
     const row = this.db
-      .prepare(
-        'SELECT value FROM plugin_storage WHERE plugin_id = ? AND key = ?',
-      )
+      .prepare('SELECT value FROM plugin_storage WHERE plugin_id = ? AND key = ?')
       .get('__kernel__', key) as { value: string } | undefined;
     return row ? JSON.parse(row.value) : null;
   }
@@ -44,8 +42,6 @@ export class StorageService implements IStorageService {
   }
 
   async delete(key: string): Promise<void> {
-    this.db
-      .prepare('DELETE FROM plugin_storage WHERE plugin_id = ? AND key = ?')
-      .run('__kernel__', key);
+    this.db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ? AND key = ?').run('__kernel__', key);
   }
 }

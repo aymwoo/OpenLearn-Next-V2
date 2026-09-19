@@ -15,7 +15,7 @@ export class PointsLedgerService implements IPointsLedgerService {
     dimensionId: string,
     deltaPoints: number,
     reason: string,
-    pluginId?: string
+    pluginId?: string,
   ): Promise<PointLogItem> {
     if (!studentId || !classId || !dimensionId) {
       throw new Error('studentId, classId, and dimensionId are required to log points');
@@ -32,21 +32,25 @@ export class PointsLedgerService implements IPointsLedgerService {
       createdAt: Date.now(),
     };
 
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO student_point_logs (
         id, student_id, class_id, dimension_id, plugin_id, delta_points, reason, created_at
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      logItem.id,
-      logItem.studentId,
-      logItem.classId,
-      logItem.dimensionId,
-      logItem.pluginId,
-      logItem.deltaPoints,
-      logItem.reason,
-      logItem.createdAt
-    );
+    `,
+      )
+      .run(
+        logItem.id,
+        logItem.studentId,
+        logItem.classId,
+        logItem.dimensionId,
+        logItem.pluginId,
+        logItem.deltaPoints,
+        logItem.reason,
+        logItem.createdAt,
+      );
 
     return logItem;
   }
@@ -79,20 +83,28 @@ export class PointsLedgerService implements IPointsLedgerService {
   }
 
   async getStudentTotalByDimension(studentId: string, classId: string, dimensionId: string): Promise<number> {
-    const row = this.db.prepare(`
+    const row = this.db
+      .prepare(
+        `
       SELECT SUM(delta_points) as total FROM student_point_logs
       WHERE student_id = ? AND class_id = ? AND dimension_id = ?
-    `).get(studentId, classId, dimensionId) as { total: number | null } | undefined;
+    `,
+      )
+      .get(studentId, classId, dimensionId) as { total: number | null } | undefined;
 
     return row?.total ?? 0;
   }
 
   async getStudentDimensionSummary(studentId: string, classId: string): Promise<Record<string, number>> {
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(
+        `
       SELECT dimension_id, SUM(delta_points) as total FROM student_point_logs
       WHERE student_id = ? AND class_id = ?
       GROUP BY dimension_id
-    `).all(studentId, classId) as { dimension_id: string; total: number }[];
+    `,
+      )
+      .all(studentId, classId) as { dimension_id: string; total: number }[];
 
     const summary: Record<string, number> = {};
     rows.forEach((r) => {

@@ -4,11 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import {
-  QuickInsertMenuProps,
-  QuickInsertCategory,
-  QuickInsertItemDescriptor,
-} from './quick-insert-types.js';
+import { QuickInsertMenuProps, QuickInsertCategory, QuickInsertItemDescriptor } from './quick-insert-types.js';
 import { QuickInsertRegistry } from './quick-insert-registry.js';
 
 export const globalQuickInsertRegistry = new QuickInsertRegistry();
@@ -48,7 +44,7 @@ export const QuickInsertMenu: React.FC<QuickInsertMenuProps> = ({
         onClose();
       }
     },
-    [filteredItems, selectedIndex, registry, onClose]
+    [filteredItems, selectedIndex, registry, onClose],
   );
 
   useEffect(() => {

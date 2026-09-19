@@ -1,9 +1,33 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Calendar, Check, X, Clock, Edit2, Trash2, CalendarDays, Download, Upload, 
-  Plus, AlertCircle, FileSpreadsheet, RotateCcw, Filter, Search, Loader2, Sparkles,
-  Camera, ImagePlus, ScanLine, CheckCircle2, XCircle, ArrowRight, Eye, Grid, List,
-  ChevronLeft, ChevronRight
+import {
+  Calendar,
+  Check,
+  X,
+  Clock,
+  Edit2,
+  Trash2,
+  CalendarDays,
+  Download,
+  Upload,
+  Plus,
+  AlertCircle,
+  FileSpreadsheet,
+  RotateCcw,
+  Filter,
+  Search,
+  Loader2,
+  Sparkles,
+  Camera,
+  ImagePlus,
+  ScanLine,
+  CheckCircle2,
+  XCircle,
+  ArrowRight,
+  Eye,
+  Grid,
+  List,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import type { ClassType, LessonType, ScheduleType, TimetableManagerProps } from './timetable/types';
 import { getMonday, getWeekRangeString, getWeekDates, getIsAfternoon } from './timetable/utils/timetableUtils';
@@ -19,12 +43,12 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   lessons,
   lang,
   onSchedulesUpdated,
-  onClassesUpdated
+  onClassesUpdated,
 }) => {
   // Navigation states
   const [activeTab, setActiveTab] = useState<'view' | 'adjust' | 'import_export' | 'ocr_import'>('view');
   const [viewMode, setViewMode] = useState<'list' | 'week' | 'cycle'>('week');
-  
+
   // Weekly calendar states
   const getMonday = (d: Date): Date => {
     const date = new Date(d.getTime());
@@ -72,7 +96,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
 
   const renderScheduleCard = (sch: ScheduleType) => {
     const isCancel = sch.status === 'cancelled' || sch.status === 'holiday';
-    
+
     // Status color classes with left border
     let statusColorClass = 'border-l-green-500 bg-green-50/5 hover:bg-green-50/10 hover:border-l-green-600';
     if (sch.status === 'cancelled') {
@@ -84,8 +108,8 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     }
 
     return (
-      <div 
-        key={sch.id} 
+      <div
+        key={sch.id}
         className={`p-2.5 rounded-xl border border-slate-150 border-l-4 ${statusColorClass} transition-all hover:shadow-xs relative group flex flex-col justify-between min-h-[85px]`}
       >
         <div>
@@ -100,7 +124,10 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               </span>
             )}
           </div>
-          <div className={`font-extrabold text-sm text-slate-805 tracking-tight leading-snug mt-1 ${isCancel ? 'line-through opacity-60 text-slate-400' : ''}`} title={sch.lesson_title || ''}>
+          <div
+            className={`font-extrabold text-sm text-slate-805 tracking-tight leading-snug mt-1 ${isCancel ? 'line-through opacity-60 text-slate-400' : ''}`}
+            title={sch.lesson_title || ''}
+          >
             {sch.class_name}
           </div>
           {sch.notes && (
@@ -109,35 +136,45 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
             </div>
           )}
         </div>
-        
+
         <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100/50">
-          <span className={`inline-block text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
-            sch.status === 'cancelled' 
-              ? 'bg-red-50 border-red-100 text-red-600'
+          <span
+            className={`inline-block text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide border ${
+              sch.status === 'cancelled'
+                ? 'bg-red-50 border-red-100 text-red-600'
+                : sch.status === 'holiday'
+                  ? 'bg-amber-50 border-amber-100 text-amber-600'
+                  : sch.status === 'swap'
+                    ? 'bg-blue-50 border-blue-100 text-blue-600'
+                    : 'bg-green-50 border-green-100 text-green-600'
+            }`}
+          >
+            {sch.status === 'cancelled'
+              ? lang === 'zh'
+                ? '停课'
+                : 'Cancelled'
               : sch.status === 'holiday'
-                ? 'bg-amber-50 border-amber-100 text-amber-600'
+                ? lang === 'zh'
+                  ? '假期'
+                  : 'Holiday'
                 : sch.status === 'swap'
-                  ? 'bg-blue-50 border-blue-100 text-blue-600'
-                  : 'bg-green-50 border-green-100 text-green-600'
-          }`}>
-            {sch.status === 'cancelled' 
-              ? (lang === 'zh' ? '停课' : 'Cancelled')
-              : sch.status === 'holiday'
-                ? (lang === 'zh' ? '假期' : 'Holiday')
-                : sch.status === 'swap'
-                  ? (lang === 'zh' ? '代课' : 'Swapped')
-                  : (lang === 'zh' ? '正常' : 'Active')}
+                  ? lang === 'zh'
+                    ? '代课'
+                    : 'Swapped'
+                  : lang === 'zh'
+                    ? '正常'
+                    : 'Active'}
           </span>
 
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button 
+            <button
               onClick={() => openEditModal(sch)}
               className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 p-1 rounded-md transition-colors cursor-pointer"
               title={lang === 'zh' ? '微调' : 'Edit'}
             >
               <Edit2 size={11} />
             </button>
-            <button 
+            <button
               onClick={() => handleDeleteSchedule(sch.id, sch.class_id, sch.isRepeating, sch.scheduled_date)}
               className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-1 rounded-md transition-colors cursor-pointer"
               title={lang === 'zh' ? '删除' : 'Delete'}
@@ -157,19 +194,19 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   const [overrideTargetDow, setOverrideTargetDow] = useState<string>('');
   const [dateOverrides, setDateOverrides] = useState<Record<string, string>>({});
   const [showWeekend, setShowWeekend] = useState<boolean>(false);
-  
+
   // Filtering states
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [schedules, setSchedules] = useState<ScheduleType[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  
+
   // Custom dialogs & form states
   const [isAddOpen, setIsAddOpen] = useState<boolean>(false);
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
   const [selectedSchedule, setSelectedSchedule] = useState<ScheduleType | null>(null);
-  
+
   // New schedule form state
   const [formClassId, setFormClassId] = useState<string>('');
   const [formLessonId, setFormLessonId] = useState<string>('');
@@ -177,11 +214,11 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   const [formTimeSlot, setFormTimeSlot] = useState<string>('09:00 - 10:30');
   const [formStatus, setFormStatus] = useState<string>('scheduled');
   const [formNotes, setFormNotes] = useState<string>('');
-  
+
   // Import/Export States
   const [csvText, setCsvText] = useState<string>('');
   const [importClassId, setImportClassId] = useState<string>('');
-  const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Holiday range adjustment states
   const [holStartDate, setHolStartDate] = useState<string>('');
@@ -196,15 +233,15 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   const [ocrProgress, setOcrProgress] = useState<number>(0);
   const [ocrProgressStatus, setOcrProgressStatus] = useState<string>('');
   const [ocrEntries, setOcrEntries] = useState<any[]>([]);
-  const [ocrMessage, setOcrMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
+  const [ocrMessage, setOcrMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [ocrClassId, setOcrClassId] = useState<string>('');
   const [ocrWeekStartDate, setOcrWeekStartDate] = useState<string>('');
   const [ocrImporting, setOcrImporting] = useState<boolean>(false);
   const [ocrSelectedEntries, setOcrSelectedEntries] = useState<Set<number>>(new Set());
   const ocrFileInputRef = useRef<HTMLInputElement>(null);
-  const [aiProviders, setAiProviders] = useState<{id: string; name: string; model_name: string}[]>([]);
+  const [aiProviders, setAiProviders] = useState<{ id: string; name: string; model_name: string }[]>([]);
   const [ocrProviderId, setOcrProviderId] = useState<string>('');
-  
+
   // Time slots suggestions
   const presetTimeSlots = [
     '08:00 - 09:30',
@@ -212,7 +249,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     '11:30 - 13:00',
     '13:30 - 15:00',
     '15:15 - 16:45',
-    '19:00 - 20:30'
+    '19:00 - 20:30',
   ];
 
   const prevClassesKeyRef = useRef<string>('');
@@ -240,28 +277,28 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       if (selectedClassId === 'all') {
         const res = await fetch('/api/schedules');
         if (res.ok) {
-          all = await res.json() as ScheduleType[];
+          all = (await res.json()) as ScheduleType[];
         }
       } else {
-        const cls = classes.find(c => c.id === selectedClassId);
+        const cls = classes.find((c) => c.id === selectedClassId);
         if (cls) {
           const res = await fetch(`/api/classes/${cls.id}/schedules`);
           if (res.ok) {
-            all = await res.json() as ScheduleType[];
-            all.forEach(sch => {
+            all = (await res.json()) as ScheduleType[];
+            all.forEach((sch) => {
               sch.class_name = cls.name;
             });
           }
         }
       }
-      
+
       // Sort by scheduledDate (descending) and timeSlot (ascending)
       all.sort((a, b) => {
         const dateComp = b.scheduled_date.localeCompare(a.scheduled_date);
         if (dateComp !== 0) return dateComp;
         return (a.time_slot || '').localeCompare(b.time_slot || '');
       });
-      
+
       setSchedules(all);
     } catch (e) {
       console.error(e);
@@ -271,10 +308,10 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   };
 
   useEffect(() => {
-    const classesKey = classes.map(c => `${c.id}:${c.name}`).join(',');
+    const classesKey = classes.map((c) => `${c.id}:${c.name}`).join(',');
     const hasClassChanged = classesKey !== prevClassesKeyRef.current;
     const hasSelectedClassChanged = selectedClassId !== prevSelectedClassIdRef.current;
-    
+
     if (classes.length > 0 && (hasClassChanged || hasSelectedClassChanged)) {
       prevClassesKeyRef.current = classesKey;
       prevSelectedClassIdRef.current = selectedClassId;
@@ -285,8 +322,8 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   // Fetch AI providers for OCR feature
   useEffect(() => {
     fetch('/api/ai-providers')
-      .then(r => r.ok ? r.json() : [])
-      .then(data => setAiProviders(Array.isArray(data) ? data : []))
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setAiProviders(Array.isArray(data) ? data : []))
       .catch(() => setAiProviders([]));
   }, []);
 
@@ -297,7 +334,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       alert(lang === 'zh' ? '请填写所有必填字段' : 'Please fill all required fields');
       return;
     }
-    
+
     try {
       const response = await fetch(`/api/classes/${formClassId}/schedules`, {
         method: 'POST',
@@ -307,10 +344,10 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
           scheduledDate: formDate,
           timeSlot: formTimeSlot,
           status: formStatus,
-          notes: formNotes
-        })
+          notes: formNotes,
+        }),
       });
-      
+
       if (response.ok) {
         setIsAddOpen(false);
         // Reset form
@@ -334,11 +371,11 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   const handleUpdateSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSchedule) return;
-    
+
     try {
       const isRepeating = selectedSchedule.isRepeating;
-      const url = isRepeating 
-        ? `/api/classes/${selectedSchedule.class_id}/schedules` 
+      const url = isRepeating
+        ? `/api/classes/${selectedSchedule.class_id}/schedules`
         : `/api/classes/${selectedSchedule.class_id}/schedules/${selectedSchedule.id}`;
       const method = isRepeating ? 'POST' : 'PUT';
 
@@ -350,10 +387,10 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
           scheduledDate: formDate,
           timeSlot: formTimeSlot,
           status: formStatus,
-          notes: formNotes
-        })
+          notes: formNotes,
+        }),
       });
-      
+
       if (response.ok) {
         setIsEditOpen(false);
         setSelectedSchedule(null);
@@ -369,17 +406,22 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   };
 
   // Handle schedule deletion
-  const handleDeleteSchedule = async (scheduleId: string, classId: string, isRepeating?: boolean, targetDate?: string) => {
+  const handleDeleteSchedule = async (
+    scheduleId: string,
+    classId: string,
+    isRepeating?: boolean,
+    targetDate?: string,
+  ) => {
     if (isRepeating && targetDate) {
       const confirmation = confirm(
         lang === 'zh'
           ? '该课程是由上周循环生成的。您确定要取消（停课）本周这一天的课程安排吗？'
-          : 'This is a repeating class. Do you want to cancel (set to Cancelled) this class for this week?'
+          : 'This is a repeating class. Do you want to cancel (set to Cancelled) this class for this week?',
       );
       if (!confirmation) return;
-      
+
       try {
-        const sch = schedules.find(s => s.id === scheduleId);
+        const sch = schedules.find((s) => s.id === scheduleId);
         const response = await fetch(`/api/classes/${classId}/schedules`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -388,8 +430,8 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
             scheduledDate: targetDate,
             timeSlot: sch?.time_slot || '',
             status: 'cancelled',
-            notes: lang === 'zh' ? '循环排课取消' : 'Repeating schedule cancelled'
-          })
+            notes: lang === 'zh' ? '循环排课取消' : 'Repeating schedule cancelled',
+          }),
         });
         if (response.ok) {
           fetchAllSchedules();
@@ -404,17 +446,17 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     }
 
     const confirmation = confirm(
-      lang === 'zh' 
-        ? '您确定要完全删除该条课表排课记录吗？关联的考勤记录也将一并清除！' 
-        : 'Are you sure you want to completely delete this schedule record? Associated attendance logs will be cleared as well!'
+      lang === 'zh'
+        ? '您确定要完全删除该条课表排课记录吗？关联的考勤记录也将一并清除！'
+        : 'Are you sure you want to completely delete this schedule record? Associated attendance logs will be cleared as well!',
     );
     if (!confirmation) return;
-    
+
     try {
       const response = await fetch(`/api/classes/${classId}/schedules/${scheduleId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       });
-      
+
       if (response.ok) {
         fetchAllSchedules();
         onSchedulesUpdated();
@@ -444,20 +486,25 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       alert(lang === 'zh' ? '请选择开始日期和结束日期' : 'Please select both start and end dates');
       return;
     }
-    
-    const countToUpdate = schedules.filter(s => {
+
+    const countToUpdate = schedules.filter((s) => {
       const d = s.scheduled_date;
       return d >= holStartDate && d <= holEndDate && s.status !== holType;
     });
 
     if (countToUpdate.length === 0) {
-      alert(lang === 'zh' ? '在此日期范围内没有找到可调整的研究课表记录！' : 'No schedules found in the selected date range to adjust!');
+      alert(
+        lang === 'zh'
+          ? '在此日期范围内没有找到可调整的研究课表记录！'
+          : 'No schedules found in the selected date range to adjust!',
+      );
       return;
     }
 
-    const confirmText = lang === 'zh'
-      ? `此操作将会把 ${holStartDate} 到 ${holEndDate} 之间的共 ${countToUpdate.length} 个课时记录一键标记为 [${holType === 'holiday' ? '假日停课' : '异常停课'}]。确认执行吗？`
-      : `This will mark ${countToUpdate.length} active classes between ${holStartDate} and ${holEndDate} as [${holType}]. Continue?`;
+    const confirmText =
+      lang === 'zh'
+        ? `此操作将会把 ${holStartDate} 到 ${holEndDate} 之间的共 ${countToUpdate.length} 个课时记录一键标记为 [${holType === 'holiday' ? '假日停课' : '异常停课'}]。确认执行吗？`
+        : `This will mark ${countToUpdate.length} active classes between ${holStartDate} and ${holEndDate} as [${holType}]. Continue?`;
 
     if (!confirm) return;
     if (!confirm(confirmText)) return;
@@ -474,13 +521,15 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
             scheduledDate: sch.scheduled_date,
             timeSlot: sch.time_slot,
             status: holType,
-            notes: holNotes || (lang === 'zh' ? '假期统一调休' : 'Holiday adjustments')
-          })
+            notes: holNotes || (lang === 'zh' ? '假期统一调休' : 'Holiday adjustments'),
+          }),
         });
         if (res.ok) successCount++;
       }
-      
-      alert(lang === 'zh' ? `调整成功！共更新 ${successCount} 个课表安排。` : `Success! Updated ${successCount} entries.`);
+
+      alert(
+        lang === 'zh' ? `调整成功！共更新 ${successCount} 个课表安排。` : `Success! Updated ${successCount} entries.`,
+      );
       setHolStartDate('');
       setHolEndDate('');
       setHolNotes('');
@@ -496,7 +545,10 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   // OCR Image Recognition handler
   const processOcrImageFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
-      setOcrMessage({ type: 'error', text: lang === 'zh' ? '请选择图片文件（PNG, JPG, JPEG）' : 'Please select an image file (PNG, JPG, JPEG)' });
+      setOcrMessage({
+        type: 'error',
+        text: lang === 'zh' ? '请选择图片文件（PNG, JPG, JPEG）' : 'Please select an image file (PNG, JPG, JPEG)',
+      });
       return;
     }
     if (file.size > 20 * 1024 * 1024) {
@@ -553,14 +605,21 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
 
   const handleOcrRecognize = async () => {
     if (!ocrImageBase64) {
-      setOcrMessage({ type: 'error', text: lang === 'zh' ? '请先上传课表图片' : 'Please upload a timetable image first' });
+      setOcrMessage({
+        type: 'error',
+        text: lang === 'zh' ? '请先上传课表图片' : 'Please upload a timetable image first',
+      });
       return;
     }
-    
+
     setOcrLoading(true);
     setOcrProgress(0);
     setOcrProgressStatus(lang === 'zh' ? '📤 正在上传并优化图像...' : '📤 Uploading and optimizing image...');
-    setOcrMessage({ type: 'info', text: lang === 'zh' ? '🔍 AI 正在分析课表图片，请稍候...' : '🔍 AI is analyzing the timetable image, please wait...' });
+    setOcrMessage({
+      type: 'info',
+      text:
+        lang === 'zh' ? '🔍 AI 正在分析课表图片，请稍候...' : '🔍 AI is analyzing the timetable image, please wait...',
+    });
     setOcrEntries([]);
 
     let currentProgress = 0;
@@ -578,47 +637,62 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       } else if (currentProgress < 50) {
         setOcrProgressStatus(lang === 'zh' ? '🧠 AI 正在分析表格排版与单元格...' : '🧠 AI analyzing table layout...');
       } else if (currentProgress < 75) {
-        setOcrProgressStatus(lang === 'zh' ? '📝 提取课程、班级及教师信息...' : '📝 Extracting lesson and teacher info...');
+        setOcrProgressStatus(
+          lang === 'zh' ? '📝 提取课程、班级及教师信息...' : '📝 Extracting lesson and teacher info...',
+        );
       } else {
         setOcrProgressStatus(lang === 'zh' ? '🔮 正在进行最终数据格式校验...' : '🔮 Verifying data formats...');
       }
     }, 400);
-    
+
     try {
       const response = await fetch('/api/timetable/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: ocrImageBase64, lang, providerId: ocrProviderId || undefined })
+        body: JSON.stringify({ imageBase64: ocrImageBase64, lang, providerId: ocrProviderId || undefined }),
       });
-      
+
       const responseText = await response.text();
       let data: any;
       try {
         data = JSON.parse(responseText);
       } catch {
-        throw new Error(lang === 'zh' ? `服务端返回了无效响应: ${responseText.substring(0, 150)}` : `Server returned invalid response: ${responseText.substring(0, 150)}`);
+        throw new Error(
+          lang === 'zh'
+            ? `服务端返回了无效响应: ${responseText.substring(0, 150)}`
+            : `Server returned invalid response: ${responseText.substring(0, 150)}`,
+        );
       }
-      
+
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'OCR recognition failed');
       }
-      
+
       clearInterval(interval);
       setOcrProgress(100);
-      setOcrProgressStatus(lang === 'zh' ? '✅ 识别成功，正在载入结果...' : '✅ Recognition complete, loading results...');
+      setOcrProgressStatus(
+        lang === 'zh' ? '✅ 识别成功，正在载入结果...' : '✅ Recognition complete, loading results...',
+      );
 
       if (data.entries && data.entries.length > 0) {
         setOcrEntries(data.entries);
         // Select all by default
         setOcrSelectedEntries(new Set(data.entries.map((_: any, i: number) => i)));
-        setOcrMessage({ 
-          type: 'success', 
-          text: lang === 'zh' 
-            ? `✅ 识别成功！共检测到 ${data.entries.length} 节课程安排，请审核后导入。` 
-            : `✅ Success! Detected ${data.entries.length} class entries. Review and import below.` 
+        setOcrMessage({
+          type: 'success',
+          text:
+            lang === 'zh'
+              ? `✅ 识别成功！共检测到 ${data.entries.length} 节课程安排，请审核后导入。`
+              : `✅ Success! Detected ${data.entries.length} class entries. Review and import below.`,
         });
       } else {
-        setOcrMessage({ type: 'error', text: lang === 'zh' ? '未能从图片中识别出课程信息，请尝试更清晰的图片。' : 'No class entries detected. Try a clearer image.' });
+        setOcrMessage({
+          type: 'error',
+          text:
+            lang === 'zh'
+              ? '未能从图片中识别出课程信息，请尝试更清晰的图片。'
+              : 'No class entries detected. Try a clearer image.',
+        });
       }
     } catch (e: any) {
       clearInterval(interval);
@@ -642,7 +716,13 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
           else if (dayOfWeek.includes('四') || dayOfWeek.includes('4') || dayOfWeek.includes('Thu')) dayNum = 4;
           else if (dayOfWeek.includes('五') || dayOfWeek.includes('5') || dayOfWeek.includes('Fri')) dayNum = 5;
           else if (dayOfWeek.includes('六') || dayOfWeek.includes('6') || dayOfWeek.includes('Sat')) dayNum = 6;
-          else if (dayOfWeek.includes('日') || dayOfWeek.includes('天') || dayOfWeek.includes('7') || dayOfWeek.includes('Sun')) dayNum = 7;
+          else if (
+            dayOfWeek.includes('日') ||
+            dayOfWeek.includes('天') ||
+            dayOfWeek.includes('7') ||
+            dayOfWeek.includes('Sun')
+          )
+            dayNum = 7;
         }
       }
       if (isNaN(dayNum) || dayNum < 1 || dayNum > 7) {
@@ -703,12 +783,25 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       else if (clean.includes('五') || clean.includes('5')) grade = 5;
       else if (clean.includes('六') || clean.includes('6')) grade = 6;
     } else {
-      if (clean.startsWith('一') || clean.startsWith('1')) { segment = '小'; grade = 1; }
-      else if (clean.startsWith('二') || clean.startsWith('2')) { segment = '小'; grade = 2; }
-      else if (clean.startsWith('三') || clean.startsWith('3')) { segment = '小'; grade = 3; }
-      else if (clean.startsWith('四') || clean.startsWith('4')) { segment = '小'; grade = 4; }
-      else if (clean.startsWith('五') || clean.startsWith('5')) { segment = '小'; grade = 5; }
-      else if (clean.startsWith('六') || clean.startsWith('6')) { segment = '小'; grade = 6; }
+      if (clean.startsWith('一') || clean.startsWith('1')) {
+        segment = '小';
+        grade = 1;
+      } else if (clean.startsWith('二') || clean.startsWith('2')) {
+        segment = '小';
+        grade = 2;
+      } else if (clean.startsWith('三') || clean.startsWith('3')) {
+        segment = '小';
+        grade = 3;
+      } else if (clean.startsWith('四') || clean.startsWith('4')) {
+        segment = '小';
+        grade = 4;
+      } else if (clean.startsWith('五') || clean.startsWith('5')) {
+        segment = '小';
+        grade = 5;
+      } else if (clean.startsWith('六') || clean.startsWith('6')) {
+        segment = '小';
+        grade = 6;
+      }
     }
 
     if (!segment || grade === 0) {
@@ -719,7 +812,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     const currentDate = new Date();
     const currentYear = currentDate.getFullYear();
     const currentMonth = currentDate.getMonth() + 1;
-    const baseYear = (currentMonth >= 9) ? currentYear : (currentYear - 1);
+    const baseYear = currentMonth >= 9 ? currentYear : currentYear - 1;
     const entryYear = baseYear - (grade - 1);
 
     return `${segment}${entryYear}级${classNum}班`;
@@ -747,15 +840,13 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       return lang === 'zh' ? '未开学' : 'Not Started';
     }
 
-    const maxGrade = (segment === '高' || segment === '初') ? 3 : 6;
+    const maxGrade = segment === '高' || segment === '初' ? 3 : 6;
     if (grade > maxGrade) {
       return lang === 'zh' ? '已毕业' : 'Graduated';
     }
 
     const chineseNumbers = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
-    const gradeStr = lang === 'zh' 
-      ? (chineseNumbers[grade] || grade.toString()) 
-      : grade.toString();
+    const gradeStr = lang === 'zh' ? chineseNumbers[grade] || grade.toString() : grade.toString();
 
     return `${segment}${gradeStr}(${classNum})`;
   };
@@ -771,9 +862,9 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   const findMatchedClass = (ocrClassName: string) => {
     if (!ocrClassName) return null;
     const cleanOcr = ocrClassName.replace(/\s+/g, '').toLowerCase();
-    
+
     // 1. Try exact/substring match
-    let found = classes.find(c => {
+    let found = classes.find((c) => {
       if (!c || !c.name) return false;
       const cleanDb = c.name.replace(/\s+/g, '').toLowerCase();
       return cleanDb === cleanOcr || cleanDb.includes(cleanOcr) || cleanOcr.includes(cleanDb);
@@ -782,9 +873,12 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     // 2. Try robust alphanumeric-only fallback match
     if (!found) {
       const ocrNum = cleanOcr.replace(/[^0-9a-zA-Z\u4e00-\u9fa5]/g, '');
-      found = classes.find(c => {
+      found = classes.find((c) => {
         if (!c || !c.name) return false;
-        const dbNum = c.name.replace(/\s+/g, '').toLowerCase().replace(/[^0-9a-zA-Z\u4e00-\u9fa5]/g, '');
+        const dbNum = c.name
+          .replace(/\s+/g, '')
+          .toLowerCase()
+          .replace(/[^0-9a-zA-Z\u4e00-\u9fa5]/g, '');
         return dbNum === ocrNum || dbNum.includes(ocrNum) || ocrNum.includes(dbNum);
       });
     }
@@ -794,7 +888,10 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   const handleOcrImport = async () => {
     try {
       if (ocrSelectedEntries.size === 0) {
-        setOcrMessage({ type: 'error', text: lang === 'zh' ? '请至少选择一条课程记录' : 'Please select at least one entry' });
+        setOcrMessage({
+          type: 'error',
+          text: lang === 'zh' ? '请至少选择一条课程记录' : 'Please select at least one entry',
+        });
         return;
       }
 
@@ -807,7 +904,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
         6: '14:20 - 15:00',
         7: '15:10 - 15:50',
         8: '16:20 - 17:00',
-        9: '19:00 - 20:30'
+        9: '19:00 - 20:30',
       };
 
       // Calculate current Monday automatically
@@ -821,10 +918,10 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       setOcrMessage(null);
 
       const selectedItems = ocrEntries.filter((_, i) => ocrSelectedEntries.has(i));
-      
+
       // Determine which classes need to be created dynamically
       const classesToCreate = new Set<string>();
-      selectedItems.forEach(entry => {
+      selectedItems.forEach((entry) => {
         if (entry.className) {
           const normalized = normalizeClassName(entry.className) || entry.className.trim();
           const matched = findMatchedClass(normalized);
@@ -838,12 +935,12 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       const createdClassMap: Record<string, string> = {};
       if (classesToCreate.size > 0) {
         await Promise.all(
-          Array.from(classesToCreate).map(async className => {
+          Array.from(classesToCreate).map(async (className) => {
             try {
               const res = await fetch('/api/classes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: className, description: 'OCR自动生成规范班级' })
+                body: JSON.stringify({ name: className, description: 'OCR自动生成规范班级' }),
               });
               if (res.ok) {
                 const data = await res.json();
@@ -854,7 +951,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
             } catch (err) {
               console.error(`Failed to dynamically create class ${className}:`, err);
             }
-          })
+          }),
         );
 
         // Notify parent to refetch classes
@@ -867,13 +964,13 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       const groupedSchedules: Record<string, any[]> = {};
       const unmatchedClasses = new Set<string>();
 
-      selectedItems.forEach(entry => {
+      selectedItems.forEach((entry) => {
         const scheduledDate = dayOfWeekToDate(entry.dayOfWeek || 1, autoWeekStartDate);
         const timeSlot = entry.timeSlot || defaultTimeSlots[entry.periodNumber] || '09:00 - 10:30';
-        
-        const normalized = entry.className ? (normalizeClassName(entry.className) || entry.className.trim()) : '';
+
+        const normalized = entry.className ? normalizeClassName(entry.className) || entry.className.trim() : '';
         const matchedClass = findMatchedClass(normalized);
-        const classId = matchedClass ? matchedClass.id : (normalized ? createdClassMap[normalized] : null);
+        const classId = matchedClass ? matchedClass.id : normalized ? createdClassMap[normalized] : null;
 
         if (!classId) {
           if (entry.className) unmatchedClasses.add(entry.className);
@@ -881,7 +978,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
         }
 
         // Try matching a lesson from the system by className/subject
-        const matchedLesson = lessons.find(l => {
+        const matchedLesson = lessons.find((l) => {
           const title = l.title.toLowerCase();
           const className = normalized.toLowerCase();
           const subject = (entry.subject || '').toLowerCase();
@@ -897,17 +994,19 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
           scheduledDate,
           timeSlot,
           status: 'scheduled',
-          notes: `${entry.className || ''} ${entry.subject || ''} ${entry.location ? '教室:' + entry.location : ''} ${entry.teacherName ? '教师:' + entry.teacherName : ''}`.trim()
+          notes:
+            `${entry.className || ''} ${entry.subject || ''} ${entry.location ? '教室:' + entry.location : ''} ${entry.teacherName ? '教师:' + entry.teacherName : ''}`.trim(),
         });
       });
 
       const matchedClassIds = Object.keys(groupedSchedules);
       if (matchedClassIds.length === 0) {
-        setOcrMessage({ 
-          type: 'error', 
-          text: lang === 'zh' 
-            ? '无法导入：没有解析出任何有效的班级名称。' 
-            : 'Could not match or create any classes for import.'
+        setOcrMessage({
+          type: 'error',
+          text:
+            lang === 'zh'
+              ? '无法导入：没有解析出任何有效的班级名称。'
+              : 'Could not match or create any classes for import.',
         });
         setOcrImporting(false);
         return;
@@ -916,11 +1015,11 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       // Fire parallel batch requests for each class
       let totalCount = 0;
       await Promise.all(
-        matchedClassIds.map(async classId => {
+        matchedClassIds.map(async (classId) => {
           const response = await fetch(`/api/classes/${classId}/schedules/batch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ schedules: groupedSchedules[classId] })
+            body: JSON.stringify({ schedules: groupedSchedules[classId] }),
           });
           if (response.ok) {
             const resData = await response.json();
@@ -929,7 +1028,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
             const errData = await response.json().catch(() => ({}));
             throw new Error(errData.error || `Failed to import schedules for class ${classId}`);
           }
-        })
+        }),
       );
 
       // Reset OCR state upon success
@@ -937,17 +1036,19 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       setOcrSelectedEntries(new Set());
       setOcrImagePreview(null);
       setOcrImageBase64(null);
-      
-      let successMsg = lang === 'zh' 
-        ? `🎉 导入成功！共写入 ${totalCount} 节课时安排。` 
-        : `🎉 Import successful! Saved ${totalCount} schedule entries.`;
+
+      let successMsg =
+        lang === 'zh'
+          ? `🎉 导入成功！共写入 ${totalCount} 节课时安排。`
+          : `🎉 Import successful! Saved ${totalCount} schedule entries.`;
 
       if (classesToCreate.size > 0) {
-        const successfullyCreated = Array.from(classesToCreate).filter(name => createdClassMap[name]);
+        const successfullyCreated = Array.from(classesToCreate).filter((name) => createdClassMap[name]);
         if (successfullyCreated.length > 0) {
-          successMsg += lang === 'zh'
-            ? `（自动创建并规范了新班级：${successfullyCreated.join(', ')}）`
-            : ` (Automatically created classes: ${successfullyCreated.join(', ')})`;
+          successMsg +=
+            lang === 'zh'
+              ? `（自动创建并规范了新班级：${successfullyCreated.join(', ')}）`
+              : ` (Automatically created classes: ${successfullyCreated.join(', ')})`;
         }
       }
 
@@ -964,7 +1065,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   };
 
   const toggleOcrEntry = (index: number) => {
-    setOcrSelectedEntries(prev => {
+    setOcrSelectedEntries((prev) => {
       const next = new Set(prev);
       if (next.has(index)) next.delete(index);
       else next.add(index);
@@ -980,15 +1081,16 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
     }
   };
 
-  const dayNames = lang === 'zh' 
-    ? ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日']
-    : ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dayNames =
+    lang === 'zh'
+      ? ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日']
+      : ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   // General CSV Export
   const handleExportCSV = () => {
     // Columns: Date, Class Name, Lesson Title, Time Slot, Status, Notes, Class ID, Lesson ID
     const headers = ['Date', 'Class Name', 'Lesson Title', 'Time Slot', 'Status', 'Notes', 'Class ID', 'Lesson ID'];
-    const rows = schedules.map(s => [
+    const rows = schedules.map((s) => [
       s.scheduled_date,
       s.class_name || '',
       s.lesson_title || '',
@@ -996,16 +1098,19 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       s.status || 'scheduled',
       s.notes || '',
       s.class_id,
-      s.lesson_id
+      s.lesson_id,
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(','), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
-    
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      [headers.join(','), ...rows.map((e) => e.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(','))].join(
+        '\n',
+      );
+
     const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `timetable_export_${new Date().toISOString().split('T')[0]}.csv`);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `timetable_export_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1013,10 +1118,10 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
 
   // General JSON Export
   const handleExportJSON = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(schedules, null, 2));
-    const link = document.createElement("a");
-    link.setAttribute("href", dataStr);
-    link.setAttribute("download", `timetable_export_${new Date().toISOString().split('T')[0]}.json`);
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(schedules, null, 2));
+    const link = document.createElement('a');
+    link.setAttribute('href', dataStr);
+    link.setAttribute('download', `timetable_export_${new Date().toISOString().split('T')[0]}.json`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1025,11 +1130,17 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
   // Handle CSV/JSON string import
   const handleImportData = async () => {
     if (!importClassId) {
-      setImportMessage({ type: 'error', text: lang === 'zh' ? '请先选择需要导入的班级！' : 'Please select a Class first!' });
+      setImportMessage({
+        type: 'error',
+        text: lang === 'zh' ? '请先选择需要导入的班级！' : 'Please select a Class first!',
+      });
       return;
     }
     if (!csvText.trim()) {
-      setImportMessage({ type: 'error', text: lang === 'zh' ? '请在框中输入或粘贴数据内容' : 'Please paste formatting data content!' });
+      setImportMessage({
+        type: 'error',
+        text: lang === 'zh' ? '请在框中输入或粘贴数据内容' : 'Please paste formatting data content!',
+      });
       return;
     }
 
@@ -1044,17 +1155,20 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       } else {
         // Assume CSV Format
         // Header example: date, lesson_id, time_slot, status, notes
-        const lines = trimmed.split('\n').map(l => l.trim()).filter(Boolean);
+        const lines = trimmed
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean);
         if (lines.length <= 1) {
           throw new Error(lang === 'zh' ? 'CSV 数据行不足（必须包含表头与内容行）' : 'Insufficient CSV rows!');
         }
 
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
-        
+        const headers = lines[0].split(',').map((h) => h.trim().toLowerCase().replace(/"/g, ''));
+
         for (let i = 1; i < lines.length; i++) {
-          const colVals = lines[i].split(',').map(c => c.trim().replace(/"/g, ''));
+          const colVals = lines[i].split(',').map((c) => c.trim().replace(/"/g, ''));
           const item: any = {};
-          
+
           headers.forEach((hdr, idx) => {
             const val = colVals[idx];
             if (hdr === 'date' || hdr === 'scheduled_date') item.scheduledDate = val;
@@ -1072,20 +1186,26 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       }
 
       if (itemsToImport.length === 0) {
-        throw new Error(lang === 'zh' ? '未解析到合法的课时数据记录。请保证包含日期字段！' : 'No valid schedules parsed. Date is required!');
+        throw new Error(
+          lang === 'zh'
+            ? '未解析到合法的课时数据记录。请保证包含日期字段！'
+            : 'No valid schedules parsed. Date is required!',
+        );
       }
 
       // Verify that parsed lesson_ids exist or we search and maps properly
       // Match lessonIds to existing system lessons
-      const verifiedItems = itemsToImport.map(item => {
+      const verifiedItems = itemsToImport.map((item) => {
         // Try exact match on lesson_id or title match
-        const found = item.lessonId ? lessons.find(l => l.id === item.lessonId || l.title.toLowerCase() === item.lessonId.toLowerCase()) : null;
+        const found = item.lessonId
+          ? lessons.find((l) => l.id === item.lessonId || l.title.toLowerCase() === item.lessonId.toLowerCase())
+          : null;
         return {
           lessonId: found ? found.id : '',
           scheduledDate: item.scheduledDate,
           timeSlot: item.timeSlot || '09:00 - 10:30',
           status: item.status || 'scheduled',
-          notes: item.notes || ''
+          notes: item.notes || '',
         };
       });
 
@@ -1093,16 +1213,17 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       const response = await fetch(`/api/classes/${importClassId}/schedules/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schedules: verifiedItems })
+        body: JSON.stringify({ schedules: verifiedItems }),
       });
 
       if (response.ok) {
         const resData = await response.json();
-        setImportMessage({ 
-          type: 'success', 
-          text: lang === 'zh' 
-            ? `👍 导入成功！共写入 ${resData.count} 节课时安排至所选班级。` 
-            : `Success! Imported ${resData.count} schedules layout.` 
+        setImportMessage({
+          type: 'success',
+          text:
+            lang === 'zh'
+              ? `👍 导入成功！共写入 ${resData.count} 节课时安排至所选班级。`
+              : `Success! Imported ${resData.count} schedules layout.`,
         });
         setCsvText('');
         fetchAllSchedules();
@@ -1111,20 +1232,19 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
         const errorData = await response.json();
         throw new Error(errorData.error || 'Batch insert error');
       }
-
     } catch (e: any) {
       setImportMessage({ type: 'error', text: `${lang === 'zh' ? '导入失败: ' : 'Import failed: '}${e.message}` });
     }
   };
 
   // Filtered schedules for view list
-  const filteredSchedules = schedules.filter(sch => {
+  const filteredSchedules = schedules.filter((sch) => {
     // Class filter (already applied at fetch but check safe)
     if (selectedClassId !== 'all' && sch.class_id !== selectedClassId) return false;
-    
+
     // Status filter
     if (statusFilter !== 'all' && sch.status !== statusFilter) return false;
-    
+
     // Search query (matches lesson title, class name, notes)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -1133,12 +1253,15 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
       const matchNotes = (sch.notes || '').toLowerCase().includes(q);
       return matchTitle || matchClass || matchNotes;
     }
-    
+
     return true;
   });
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm font-sans" id="timetable_manager_container">
+    <div
+      className="flex-1 flex flex-col min-h-0 bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm font-sans"
+      id="timetable_manager_container"
+    >
       {/* Header and top tab selections */}
       <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
         <div>
@@ -1147,30 +1270,32 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
             {lang === 'zh' ? '班级课表中心 & 动态调整' : 'Timetable Center & Adjustments'}
           </h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            {lang === 'zh' ? '统一管理日常排课，支持节假日批量停课、讲师临时换课、换班及 CSV 导入导出。' : 'Orchestrate routines schedules, holidays exclusions, and instructors swapping items.'}
+            {lang === 'zh'
+              ? '统一管理日常排课，支持节假日批量停课、讲师临时换课、换班及 CSV 导入导出。'
+              : 'Orchestrate routines schedules, holidays exclusions, and instructors swapping items.'}
           </p>
         </div>
-        
+
         <div className="flex bg-gray-100 p-1 rounded-xl shrink-0 self-start sm:self-auto shadow-inner border border-slate-200/50">
-          <button 
+          <button
             onClick={() => setActiveTab('view')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'view' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
           >
             {lang === 'zh' ? '🗓️ 课表看板' : 'Schedule Grid'}
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('adjust')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'adjust' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
           >
             {lang === 'zh' ? '🛠️ 临时调休调课' : 'Holiday Adjusts'}
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('import_export')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'import_export' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
           >
             {lang === 'zh' ? '📥 快速导入导出' : 'Import / Export'}
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('ocr_import')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === 'ocr_import' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
           >
@@ -1294,57 +1419,80 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 <CalendarDays className="text-indigo-600" size={18} />
                 {lang === 'zh' ? '为班级排排定课次' : 'Arrange Timetable Scheduled'}
               </h3>
-              <button onClick={() => setIsAddOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-150 transition-colors">
+              <button
+                onClick={() => setIsAddOpen(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-150 transition-colors"
+              >
                 <X size={16} />
               </button>
             </div>
 
             <form onSubmit={handleCreateSchedule} className="p-4 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '选择对应上课班级 *' : 'Target Class *'}</label>
-                <select 
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  {lang === 'zh' ? '选择对应上课班级 *' : 'Target Class *'}
+                </label>
+                <select
                   title="Form Class ID"
                   className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white select-none cursor-pointer focus:outline-hidden"
                   value={formClassId}
-                  onChange={e => setFormClassId(e.target.value)}
+                  onChange={(e) => setFormClassId(e.target.value)}
                   required
                 >
                   <option value="">{lang === 'zh' ? '请选择班级...' : 'Select Class...'}</option>
-                  {classes.map(c => <option key={c.id} value={c.id}>{getClassDisplayName(c.name)}</option>)}
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {getClassDisplayName(c.name)}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '对应授课课题 / 课时 (可空，上课时自选)' : 'Syllabus Lesson (Optional, select during class)'}</label>
-                <select 
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  {lang === 'zh'
+                    ? '对应授课课题 / 课时 (可空，上课时自选)'
+                    : 'Syllabus Lesson (Optional, select during class)'}
+                </label>
+                <select
                   title="Form Lesson ID"
                   className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white select-none cursor-pointer focus:outline-hidden rounded-lg"
                   value={formLessonId}
-                  onChange={e => setFormLessonId(e.target.value)}
+                  onChange={(e) => setFormLessonId(e.target.value)}
                 >
-                  <option value="">{lang === 'zh' ? '暂不设定内容 (上课时自由选择)' : 'No fixed content (select during class)'}</option>
-                  {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+                  <option value="">
+                    {lang === 'zh' ? '暂不设定内容 (上课时自由选择)' : 'No fixed content (select during class)'}
+                  </option>
+                  {lessons.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.title}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '公历排定日期 *' : 'Scheduled Date *'}</label>
-                  <input 
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    {lang === 'zh' ? '公历排定日期 *' : 'Scheduled Date *'}
+                  </label>
+                  <input
                     type="date"
                     className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden"
                     value={formDate}
-                    onChange={e => setFormDate(e.target.value)}
+                    onChange={(e) => setFormDate(e.target.value)}
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '日常状态' : 'Daily Status'}</label>
-                  <select 
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    {lang === 'zh' ? '日常状态' : 'Daily Status'}
+                  </label>
+                  <select
                     title="Form Status"
                     className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden"
                     value={formStatus}
-                    onChange={e => setFormStatus(e.target.value)}
+                    onChange={(e) => setFormStatus(e.target.value)}
                   >
                     <option value="scheduled">{lang === 'zh' ? '正常授课' : 'Scheduled'}</option>
                     <option value="cancelled">{lang === 'zh' ? '停课' : 'Cancelled'}</option>
@@ -1355,46 +1503,60 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '具体上课时间段' : 'Class Period / Time Slot'}</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  {lang === 'zh' ? '具体上课时间段' : 'Class Period / Time Slot'}
+                </label>
                 <div className="flex gap-1.5 items-center">
-                  <input 
+                  <input
                     type="text"
                     className="flex-1 border border-gray-200 rounded-lg text-xs p-2 bg-white text-gray-750 focus:outline-hidden"
                     value={formTimeSlot}
-                    onChange={e => setFormTimeSlot(e.target.value)}
+                    onChange={(e) => setFormTimeSlot(e.target.value)}
                     placeholder="e.g. 09:00 - 10:30"
                   />
-                  <select 
+                  <select
                     title="Preset Time Slot"
                     className="border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden"
-                    onChange={e => { if (e.target.value) setFormTimeSlot(e.target.value); }}
+                    onChange={(e) => {
+                      if (e.target.value) setFormTimeSlot(e.target.value);
+                    }}
                   >
                     <option value="">{lang === 'zh' ? '建议课时...' : 'Presets...'}</option>
-                    {presetTimeSlots.map(t => <option key={t} value={t}>{t}</option>)}
+                    {presetTimeSlots.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '调课备注说明' : 'Schedule Notes'}</label>
-                <input 
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  {lang === 'zh' ? '调课备注说明' : 'Schedule Notes'}
+                </label>
+                <input
                   type="text"
-                  placeholder={lang === 'zh' ? '例如：节假日补课、更替老师讲义，不填则无' : 'e.g. Substitute instructor lesson outline'}
+                  placeholder={
+                    lang === 'zh'
+                      ? '例如：节假日补课、更替老师讲义，不填则无'
+                      : 'e.g. Substitute instructor lesson outline'
+                  }
                   className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden"
                   value={formNotes}
-                  onChange={e => setFormNotes(e.target.value)}
+                  onChange={(e) => setFormNotes(e.target.value)}
                 />
               </div>
 
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-3 mt-4">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setIsAddOpen(false)}
                   className="px-3 py-1.5 rounded-lg border text-xs font-medium text-gray-500 hover:bg-gray-150 transition-colors"
                 >
                   {lang === 'zh' ? '取消' : 'Cancel'}
                 </button>
-                <button 
+                <button
                   type="submit"
                   className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-colors"
                 >
@@ -1415,8 +1577,11 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 <Edit2 className="text-indigo-600" size={18} />
                 {lang === 'zh' ? '微调/临时变动排课记录' : 'Custom Adjust Schedule'}
               </h3>
-              <button 
-                onClick={() => { setIsEditOpen(false); setSelectedSchedule(null); }} 
+              <button
+                onClick={() => {
+                  setIsEditOpen(false);
+                  setSelectedSchedule(null);
+                }}
                 className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-150 transition-colors"
               >
                 <X size={16} />
@@ -1425,43 +1590,64 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
 
             <form onSubmit={handleUpdateSchedule} className="p-4 space-y-4">
               <div className="p-2.5 bg-indigo-50 border border-indigo-100 rounded-lg text-xs leading-5">
-                <div className="font-semibold text-indigo-850">{lang === 'zh' ? '提示：课表的临时变动将实时更新至今日课程气泡及学生白板客户端。' : 'Changes will load instantly on students whiteboards and dashboards.'}</div>
-                <div className="text-gray-600 mt-1">{lang === 'zh' ? '目标班级：' : 'Target Class: '} <span className="font-bold">{selectedSchedule.class_name}</span></div>
+                <div className="font-semibold text-indigo-850">
+                  {lang === 'zh'
+                    ? '提示：课表的临时变动将实时更新至今日课程气泡及学生白板客户端。'
+                    : 'Changes will load instantly on students whiteboards and dashboards.'}
+                </div>
+                <div className="text-gray-600 mt-1">
+                  {lang === 'zh' ? '目标班级：' : 'Target Class: '}{' '}
+                  <span className="font-bold">{selectedSchedule.class_name}</span>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '换课：关联授课主体 (可空，上课时自选)' : 'Swap Topic / Lesson (Optional, select during class)'}</label>
-                <select 
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  {lang === 'zh'
+                    ? '换课：关联授课主体 (可空，上课时自选)'
+                    : 'Swap Topic / Lesson (Optional, select during class)'}
+                </label>
+                <select
                   id="edit_lesson_select"
                   title="Edit Lesson"
                   className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white select-none cursor-pointer focus:outline-hidden rounded-lg"
                   value={formLessonId}
-                  onChange={e => setFormLessonId(e.target.value)}
+                  onChange={(e) => setFormLessonId(e.target.value)}
                 >
-                  <option value="">{lang === 'zh' ? '暂不设定内容 (上课时自由选择)' : 'No fixed content (select during class)'}</option>
-                  {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+                  <option value="">
+                    {lang === 'zh' ? '暂不设定内容 (上课时自由选择)' : 'No fixed content (select during class)'}
+                  </option>
+                  {lessons.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.title}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '换时间：上课日期 *' : 'Scheduled Date *'}</label>
-                  <input 
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    {lang === 'zh' ? '换时间：上课日期 *' : 'Scheduled Date *'}
+                  </label>
+                  <input
                     type="date"
                     className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden"
                     value={formDate}
-                    onChange={e => setFormDate(e.target.value)}
+                    onChange={(e) => setFormDate(e.target.value)}
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '临时教务状态' : 'Ad-hoc Status'}</label>
-                  <select 
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    {lang === 'zh' ? '临时教务状态' : 'Ad-hoc Status'}
+                  </label>
+                  <select
                     id="edit_status_select"
                     title="Edit Status"
                     className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden"
                     value={formStatus}
-                    onChange={e => setFormStatus(e.target.value)}
+                    onChange={(e) => setFormStatus(e.target.value)}
                   >
                     <option value="scheduled">{lang === 'zh' ? '正常授课 (Scheduled)' : 'Scheduled'}</option>
                     <option value="cancelled">{lang === 'zh' ? '临时停课 (Cancelled)' : 'Cancelled'}</option>
@@ -1472,46 +1658,59 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '具体上课时段' : 'Class Time Slot'}</label>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  {lang === 'zh' ? '具体上课时段' : 'Class Time Slot'}
+                </label>
                 <div className="flex gap-1.5 items-center">
-                  <input 
+                  <input
                     type="text"
                     className="flex-1 border border-gray-200 rounded-lg text-xs p-2 bg-white text-gray-750 focus:outline-hidden"
                     value={formTimeSlot}
-                    onChange={e => setFormTimeSlot(e.target.value)}
+                    onChange={(e) => setFormTimeSlot(e.target.value)}
                     placeholder="e.g. 09:00 - 10:30"
                   />
-                  <select 
+                  <select
                     title="Edit Preset Time"
                     className="border border-gray-250 text-xs p-2 rounded-lg bg-white cursor-pointer focus:outline-hidden"
-                    onChange={e => { if (e.target.value) setFormTimeSlot(e.target.value); }}
+                    onChange={(e) => {
+                      if (e.target.value) setFormTimeSlot(e.target.value);
+                    }}
                   >
                     <option value="">{lang === 'zh' ? '建议时段...' : 'Presets...'}</option>
-                    {presetTimeSlots.map(t => <option key={t} value={t}>{t}</option>)}
+                    {presetTimeSlots.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">{lang === 'zh' ? '微调备注（说明换课/放假原因）' : 'Notes/Adjustments Reason'}</label>
-                <input 
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  {lang === 'zh' ? '微调备注（说明换课/放假原因）' : 'Notes/Adjustments Reason'}
+                </label>
+                <input
                   type="text"
                   placeholder={lang === 'zh' ? '例：国庆假停课 / 本课更替为第二节' : 'Explain reasons of ad-hoc swaps'}
                   className="w-full border border-gray-250 text-xs p-2 rounded-lg bg-white focus:outline-hidden"
                   value={formNotes}
-                  onChange={e => setFormNotes(e.target.value)}
+                  onChange={(e) => setFormNotes(e.target.value)}
                 />
               </div>
 
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-3 mt-4">
-                <button 
-                  type="button" 
-                  onClick={() => { setIsEditOpen(false); setSelectedSchedule(null); }}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditOpen(false);
+                    setSelectedSchedule(null);
+                  }}
                   className="px-3 py-1.5 rounded-lg border text-xs font-medium text-gray-500 hover:bg-gray-150 transition-colors"
                 >
                   {lang === 'zh' ? '取消' : 'Cancel'}
                 </button>
-                <button 
+                <button
                   type="submit"
                   className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-colors"
                 >
@@ -1532,7 +1731,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 <RotateCcw size={16} className="text-amber-500" />
                 {lang === 'zh' ? '临时切换显示课程日期' : 'Temporarily Override Date'}
               </h3>
-              <button 
+              <button
                 onClick={() => {
                   setOverridingDateKey(null);
                   setOverrideTargetDate('');
@@ -1546,13 +1745,13 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
 
             <div className="text-xs text-slate-500 leading-relaxed">
               <p>
-                {lang === 'zh' 
-                  ? `您正在设置 [${overridingDateKey}] 的课程显示。` 
+                {lang === 'zh'
+                  ? `您正在设置 [${overridingDateKey}] 的课程显示。`
                   : `You are overriding schedules displayed for [${overridingDateKey}].`}
               </p>
               <p className="mt-1">
-                {lang === 'zh' 
-                  ? '您可以将某一个日期的课临时指定为星期几的常规课表，或者指定为系统内的任意其他具体日期课程。' 
+                {lang === 'zh'
+                  ? '您可以将某一个日期的课临时指定为星期几的常规课表，或者指定为系统内的任意其他具体日期课程。'
                   : 'Specify a day of the week or another target date to temporarily view its lessons.'}
               </p>
             </div>
@@ -1563,9 +1762,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 type="button"
                 onClick={() => setOverrideMode('dow')}
                 className={`flex-1 text-center py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                  overrideMode === 'dow'
-                    ? 'bg-white text-indigo-700 shadow-3xs'
-                    : 'text-slate-500 hover:text-slate-700'
+                  overrideMode === 'dow' ? 'bg-white text-indigo-700 shadow-3xs' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
                 {lang === 'zh' ? '常规星期几' : 'Day of Week'}
@@ -1590,7 +1787,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 </label>
                 <select
                   value={overrideTargetDow}
-                  onChange={e => setOverrideTargetDow(e.target.value)}
+                  onChange={(e) => setOverrideTargetDow(e.target.value)}
                   className="w-full border border-gray-250 rounded-lg text-xs p-2.5 bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-all font-sans text-gray-750 cursor-pointer"
                 >
                   <option value="">{lang === 'zh' ? '-- 请选择星期 --' : '-- Select Day --'}</option>
@@ -1608,17 +1805,17 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   {lang === 'zh' ? '选择具体日期 *' : 'Select Target Date *'}
                 </label>
-                <input 
+                <input
                   type="date"
                   className="w-full border border-gray-250 rounded-lg text-xs p-2.5 bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-all font-sans text-gray-750 cursor-pointer"
                   value={overrideTargetDate}
-                  onChange={e => setOverrideTargetDate(e.target.value)}
+                  onChange={(e) => setOverrideTargetDate(e.target.value)}
                 />
               </div>
             )}
 
             <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
-              <button 
+              <button
                 onClick={() => {
                   setOverridingDateKey(null);
                   setOverrideTargetDate('');
@@ -1628,7 +1825,7 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
               >
                 {lang === 'zh' ? '取消' : 'Cancel'}
               </button>
-              <button 
+              <button
                 onClick={() => {
                   let val = '';
                   if (overrideMode === 'dow') {
@@ -1644,9 +1841,9 @@ export const TimetableManager: React.FC<TimetableManagerProps> = ({
                     }
                     val = overrideTargetDate;
                   }
-                  setDateOverrides(prev => ({
+                  setDateOverrides((prev) => ({
                     ...prev,
-                    [overridingDateKey]: val
+                    [overridingDateKey]: val,
                   }));
                   setOverridingDateKey(null);
                   setOverrideTargetDate('');

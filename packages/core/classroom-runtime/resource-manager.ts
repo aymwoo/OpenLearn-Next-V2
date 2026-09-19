@@ -11,11 +11,7 @@ export class RuntimeResourceManager {
   /**
    * Register or update a resource in the manager.
    */
-  public registerResource(
-    url: string,
-    type: ResourceType,
-    sizeBytes?: number
-  ): RuntimeResource {
+  public registerResource(url: string, type: ResourceType, sizeBytes?: number): RuntimeResource {
     const existing = Array.from(this.resources.values()).find((r) => r.url === url);
     if (existing) return existing;
 

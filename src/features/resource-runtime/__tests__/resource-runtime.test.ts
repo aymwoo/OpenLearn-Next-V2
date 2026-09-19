@@ -1,10 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  ResourceRegistry,
-  ResourceType,
-  ResourceDescriptor,
-  asWorkspaceWidget,
-} from '../index.js';
+import { ResourceRegistry, ResourceType, ResourceDescriptor, asWorkspaceWidget } from '../index.js';
 
 describe('Sprint P3-01 Teaching Resource Runtime Test Suite', () => {
   let registry: ResourceRegistry;
@@ -56,8 +51,13 @@ describe('Sprint P3-01 Teaching Resource Runtime Test Suite', () => {
 
     expect(registry.executeAction('res_pdf_101', 'pin')).toEqual({ pinned: true });
     expect(registry.executeAction('res_pdf_101', 'favorite')).toEqual({ favorited: true });
-    expect(registry.executeAction('res_pdf_101', 'share')).toEqual({ shareUrl: 'https://storage.openlearn.org/algebra.pdf' });
-    expect(registry.executeAction('res_pdf_101', 'fullscreen')).toEqual({ fullscreen: true, resourceId: 'res_pdf_101' });
+    expect(registry.executeAction('res_pdf_101', 'share')).toEqual({
+      shareUrl: 'https://storage.openlearn.org/algebra.pdf',
+    });
+    expect(registry.executeAction('res_pdf_101', 'fullscreen')).toEqual({
+      fullscreen: true,
+      resourceId: 'res_pdf_101',
+    });
   });
 
   it('should support plugin custom ResourceProvider (Preview/Open override)', () => {

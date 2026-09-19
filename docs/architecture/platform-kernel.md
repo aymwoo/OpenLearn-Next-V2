@@ -54,6 +54,7 @@ graph TD
 ## 核心组件定义
 
 ### 1. `Kernel` 类属性与接口
+
 `Kernel` 类导出了底层核心服务的引用：
 
 ```typescript
@@ -85,6 +86,7 @@ export class Kernel {
 ```
 
 ### 2. 单例暴露与 Container 导出
+
 为确保全局共享唯一的 Kernel 实体与组合根容器，`packages/core/kernel/index.ts` 暴露了单例与注册导引：
 
 ```typescript
@@ -97,6 +99,7 @@ export const kernelContainer = kernel.serviceRegistry;
 ## 内核生命周期与 Ready 机制
 
 `kernel.ready` 是一个全局 `Promise<void>`，用于追踪系统加载状态：
+
 1. **构建就绪阶段**: 完成 Layer 0 ~ Layer 3 实例构建与依赖注入 Token 绑定。
 2. **插件激活阶段**: 自动加载内置插件（`BuiltinPlugin`, `VfsPlugin`, `ProcessPlugin`, `ManagementPlugin`, `AiPlannerPlugin`, `AiSubmitInjectorPlugin`, `AssignmentEvalPlugin`）。
 3. **完成阶段**: 触发 `kernel.ready` 解析，通知 Composition Root (`server.ts`) 启动 HTTP 与 WebSockets 服务。

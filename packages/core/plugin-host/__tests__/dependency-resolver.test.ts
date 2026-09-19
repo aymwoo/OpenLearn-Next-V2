@@ -66,10 +66,7 @@ describe('topologicalSort', () => {
     graph.set('ext-a', ['ext-missing']); // 未安装的依赖
     graph.set('ext-b', []);
 
-    const { sorted, blocked } = topologicalSort(
-      graph,
-      ['ext-a', 'ext-b'],
-    );
+    const { sorted, blocked } = topologicalSort(graph, ['ext-a', 'ext-b']);
     expect(sorted).toEqual(['ext-b']);
     expect(blocked).toHaveLength(1);
     expect(blocked[0].pluginId).toBe('ext-a');
@@ -173,7 +170,7 @@ describe('computeActivationOrder', () => {
 
 function makeManifestWithRequires(
   id: string,
-  opts?: { deps?: string[]; requires?: string[]; provides?: string[] }
+  opts?: { deps?: string[]; requires?: string[]; provides?: string[] },
 ): Manifest {
   return {
     id,
@@ -187,7 +184,6 @@ function makeManifestWithRequires(
 }
 
 describe('parseServiceRequirement', () => {
-
   it('kernel token → 返回 null', () => {
     expect(parseServiceRequirement('@openlearn/core:ICommandBusService')).toBeNull();
     expect(parseServiceRequirement('@openlearn/core:ICommandBusService@^1.0.0')).toBeNull();
@@ -218,10 +214,7 @@ describe('buildDepGraph with service dependencies', () => {
     manifests.set(
       'ext-consumer',
       makeManifestWithRequires('ext-consumer', {
-        requires: [
-          '@openlearn/core:ICommandBusService@^1.0.0',
-          'ext-provider:IMyService',
-        ],
+        requires: ['@openlearn/core:ICommandBusService@^1.0.0', 'ext-provider:IMyService'],
       }),
     );
     manifests.set('ext-provider', makeManifest('ext-provider'));
@@ -254,6 +247,6 @@ describe('buildDepGraph with service dependencies', () => {
     const graph = buildDepGraph(manifests);
     const deps = graph.get('ext-consumer')!;
     // 去重后 ext-provider 只出现一次
-    expect(deps.filter(d => d === 'ext-provider')).toHaveLength(1);
+    expect(deps.filter((d) => d === 'ext-provider')).toHaveLength(1);
   });
 });

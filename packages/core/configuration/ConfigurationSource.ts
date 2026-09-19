@@ -59,9 +59,7 @@ export class EnvironmentSource extends ConfigurationSource {
     const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(this.env)) {
       if (value === undefined) continue;
-      const mapped = this.map
-        ? this.map(key, value)
-        : defaultEnvMap(key, value, this.prefix);
+      const mapped = this.map ? this.map(key, value) : defaultEnvMap(key, value, this.prefix);
       if (!mapped) continue;
       const [path, val] = mapped;
       setByPath(out, path, val);
@@ -129,19 +127,11 @@ export class YamlFileSource extends ConfigurationSource {
 }
 
 /** Default env-var → dotted-path mapping (strip prefix, split on `_`/`.`). */
-function defaultEnvMap(
-  key: string,
-  value: string,
-  prefix?: string,
-): [string, unknown] | null {
+function defaultEnvMap(key: string, value: string, prefix?: string): [string, unknown] | null {
   let name = key;
   if (prefix && name.startsWith(prefix)) name = name.slice(prefix.length);
   if (!name) return null;
-  const path = name
-    .toLowerCase()
-    .split(/[_.]/)
-    .filter(Boolean)
-    .join('.');
+  const path = name.toLowerCase().split(/[_.]/).filter(Boolean).join('.');
   if (!path) return null;
   return [path, coerceEnvValue(value)];
 }

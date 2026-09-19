@@ -9,7 +9,7 @@ import {
   Trash2,
   Plus,
   X,
-  FileText
+  FileText,
 } from 'lucide-react';
 import type { WhiteboardPageItem } from '../InteractiveWhiteboard';
 
@@ -50,7 +50,7 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
   handleDuplicatePage,
   handleMovePage,
   handleDeletePage,
-  handleAddPage
+  handleAddPage,
 }) => {
   return (
     <>
@@ -60,7 +60,9 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
         <button
           onClick={() => setShowPageDrawer(!showPageDrawer)}
           className={`p-1.5 rounded-full transition-colors cursor-pointer flex items-center gap-1 text-xs font-medium ${
-            showPageDrawer ? 'bg-primary-theme-light text-primary-theme' : 'text-muted hover:bg-surface-secondary hover:text-main'
+            showPageDrawer
+              ? 'bg-primary-theme-light text-primary-theme'
+              : 'text-muted hover:bg-surface-secondary hover:text-main'
           }`}
           title="页面大纲与预览 (Pages Outline)"
         >
@@ -258,14 +260,18 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 py-4 overflow-y-auto max-h-[50vh]">
               {pages.map((p, idx) => {
                 const isActive = idx === currentPage;
-                const pageElementCount = safeElements.filter((el) => el.type !== 'page_meta' && (() => {
-                  try {
-                    const d = JSON.parse(el.data);
-                    return (d.page ?? 0) === idx || d.pageId === p.id;
-                  } catch {
-                    return idx === 0;
-                  }
-                })()).length;
+                const pageElementCount = safeElements.filter(
+                  (el) =>
+                    el.type !== 'page_meta' &&
+                    (() => {
+                      try {
+                        const d = JSON.parse(el.data);
+                        return (d.page ?? 0) === idx || d.pageId === p.id;
+                      } catch {
+                        return idx === 0;
+                      }
+                    })(),
+                ).length;
 
                 return (
                   <div
@@ -281,9 +287,11 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md ${
-                        isActive ? 'bg-primary-theme text-white' : 'bg-surface-secondary text-muted'
-                      }`}>
+                      <span
+                        className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md ${
+                          isActive ? 'bg-primary-theme text-white' : 'bg-surface-secondary text-muted'
+                        }`}
+                      >
                         P{idx + 1}
                       </span>
                       {isActive && (
@@ -295,16 +303,17 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
 
                     <div className="h-20 bg-surface-secondary border border-theme rounded-lg flex flex-col items-center justify-center mb-2 overflow-hidden relative">
                       <FileText size={24} className={isActive ? 'text-primary-theme' : 'text-subtle'} />
-                      <span className="text-[10px] text-muted font-medium mt-1">
-                        {pageElementCount} 个组件/笔画
-                      </span>
+                      <span className="text-[10px] text-muted font-medium mt-1">{pageElementCount} 个组件/笔画</span>
                     </div>
 
                     <div className="font-bold text-xs text-main truncate mb-1" title={p.title}>
                       {p.title}
                     </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-theme text-muted text-[11px]" onClick={(e) => e.stopPropagation()}>
+                    <div
+                      className="flex items-center justify-between pt-2 border-t border-theme text-muted text-[11px]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <button
                         onClick={() => {
                           setEditingPageIdx(idx);

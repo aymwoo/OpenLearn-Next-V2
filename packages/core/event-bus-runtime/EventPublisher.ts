@@ -50,9 +50,7 @@ export class EventPublisher {
           `succeeded=${result.succeeded} failed=${result.failed} cancelled=${result.cancelled}`,
       );
     } else {
-      this.logger.info(
-        `[PlatformEventBus] '${result.type}' ok (${result.succeeded}/${result.dispatched})`,
-      );
+      this.logger.info(`[PlatformEventBus] '${result.type}' ok (${result.succeeded}/${result.dispatched})`);
     }
   }
 }

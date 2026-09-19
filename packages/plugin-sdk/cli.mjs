@@ -14,7 +14,16 @@
  *   npx @openlearn/plugin-sdk build --watch        # watch mode
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, copyFileSync, statSync, rmSync } from 'node:fs';
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  copyFileSync,
+  statSync,
+  rmSync,
+} from 'node:fs';
 import { join, dirname, relative, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync, spawnSync } from 'node:child_process';
@@ -25,7 +34,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCAFFOLD_DIR = join(__dirname, 'scaffold', 'templates');
 
 // ── Color helpers ────────────────────────────────────────────────────────
-const c = { reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m', green: '\x1b[32m', cyan: '\x1b[36m', yellow: '\x1b[33m', red: '\x1b[31m' };
+const c = {
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  green: '\x1b[32m',
+  cyan: '\x1b[36m',
+  yellow: '\x1b[33m',
+  red: '\x1b[31m',
+};
 const tick = `${c.green}✔${c.reset}`;
 const info = `${c.cyan}ℹ${c.reset}`;
 const warn = `${c.yellow}⚠${c.reset}`;
@@ -68,15 +85,18 @@ function replaceInDir(dir, vars) {
 }
 
 async function ask(rl, question) {
-  return new Promise(resolve => {
-    rl.question(`${c.cyan}?${c.reset} ${question} `, answer => resolve(answer.trim()));
+  return new Promise((resolve) => {
+    rl.question(`${c.cyan}?${c.reset} ${question} `, (answer) => resolve(answer.trim()));
   });
 }
 
 // ── Commands ─────────────────────────────────────────────────────────────
 
 async function cmdInit(args) {
-  let name = '', description = '', author = '', template = 'server-only';
+  let name = '',
+    description = '',
+    author = '',
+    template = 'server-only';
 
   // Parse non-interactive args
   for (let i = 0; i < args.length; i++) {
@@ -94,7 +114,10 @@ async function cmdInit(args) {
     console.log(`\n${c.bold}OpenLearn Plugin Scaffolder${c.reset}  v${sv()}\n`);
 
     name = await ask(rl, 'Plugin package name (kebab-case):');
-    if (!name) { console.error(`${c.red}Error:${c.reset} name is required`); process.exit(1); }
+    if (!name) {
+      console.error(`${c.red}Error:${c.reset} name is required`);
+      process.exit(1);
+    }
 
     description = await ask(rl, `Description (default: "${name} plugin"):`);
     if (!description) description = `${name} plugin`;
@@ -114,7 +137,9 @@ async function cmdInit(args) {
   }
 
   if (!['server-only', 'full-stack', 'frontend-only'].includes(template)) {
-    console.error(`${c.red}Error:${c.reset} unknown template "${template}". Use: server-only, full-stack, frontend-only`);
+    console.error(
+      `${c.red}Error:${c.reset} unknown template "${template}". Use: server-only, full-stack, frontend-only`,
+    );
     process.exit(1);
   }
 
@@ -143,14 +168,20 @@ async function cmdInit(args) {
 
   const pluginId = `@${author.toLowerCase().replace(/[^a-z0-9]/g, '-')}/${name}`;
   const sdkVersion = sv();
-  const componentName = name.split('-').map(s => s[0].toUpperCase() + s.slice(1)).join('');
+  const componentName = name
+    .split('-')
+    .map((s) => s[0].toUpperCase() + s.slice(1))
+    .join('');
 
   const vars = {
     name,
     description,
     author,
     pluginId,
-    pluginName: name.split('-').map(s => s[0].toUpperCase() + s.slice(1)).join(' '),
+    pluginName: name
+      .split('-')
+      .map((s) => s[0].toUpperCase() + s.slice(1))
+      .join(' '),
     sdkVersion,
     componentName,
   };
@@ -174,7 +205,7 @@ async function cmdInit(args) {
 }
 
 function listDir(dir, depth, prefix = '') {
-  const entries = readdirSync(dir).filter(e => e !== 'node_modules');
+  const entries = readdirSync(dir).filter((e) => e !== 'node_modules');
   for (const entry of entries.slice(0, 12)) {
     const fp = join(dir, entry);
     const isDir = statSync(fp).isDirectory();
@@ -304,12 +335,23 @@ async function cmdBuild(args) {
         if (m) {
           const start = m.index + m[0].length;
           if (builtCode[start] === '{') {
-            let depth = 0, inString = false, escaped = false;
+            let depth = 0,
+              inString = false,
+              escaped = false;
             for (let i = start; i < builtCode.length; i++) {
               const ch = builtCode[i];
-              if (escaped) { escaped = false; continue; }
-              if (ch === '\\') { escaped = true; continue; }
-              if (ch === '"') { inString = !inString; continue; }
+              if (escaped) {
+                escaped = false;
+                continue;
+              }
+              if (ch === '\\') {
+                escaped = true;
+                continue;
+              }
+              if (ch === '"') {
+                inString = !inString;
+                continue;
+              }
               if (inString) continue;
               if (ch === '{') depth++;
               else if (ch === '}') {
@@ -318,7 +360,7 @@ async function cmdBuild(args) {
                   try {
                     // esbuild preserves JS object syntax (unquoted keys), not JSON
                     // Use Function constructor to evaluate safely
-                    manifest = (new Function('return ' + builtCode.substring(start, i + 1)))();
+                    manifest = new Function('return ' + builtCode.substring(start, i + 1))();
                   } catch (_) {}
                   break;
                 }

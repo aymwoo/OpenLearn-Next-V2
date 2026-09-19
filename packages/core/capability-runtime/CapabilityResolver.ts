@@ -28,11 +28,7 @@ export class CapabilityResolver {
     this.registry = registry;
   }
 
-  public resolve(
-    capabilityId: string,
-    context: CapabilityContext,
-    options?: CapabilityResolutionOptions,
-  ): unknown {
+  public resolve(capabilityId: string, context: CapabilityContext, options?: CapabilityResolutionOptions): unknown {
     const mode: CapabilityResolutionMode = options?.mode ?? 'Single';
     const start = Date.now();
 
@@ -73,9 +69,7 @@ export class CapabilityResolver {
           capabilityId,
         );
       }
-      const best = caps.reduce((a, b) =>
-        b.descriptor.priority > a.descriptor.priority ? b : a,
-      );
+      const best = caps.reduce((a, b) => (b.descriptor.priority > a.descriptor.priority ? b : a));
       return this.activate(best, context, mode);
     }
 
@@ -83,9 +77,7 @@ export class CapabilityResolver {
     let capability = this.registry.find(capabilityId);
 
     if (!capability && mode === 'Default') {
-      capability = this.registry
-        .list()
-        .find((c) => c.provider.isDefault && c.descriptor.contract === capabilityId);
+      capability = this.registry.list().find((c) => c.provider.isDefault && c.descriptor.contract === capabilityId);
     }
 
     if (!capability) {
@@ -93,11 +85,7 @@ export class CapabilityResolver {
         context.record(capabilityId, 'skip', mode, 'Registered', Date.now() - start);
         return options?.fallback;
       }
-      throw new CapabilityError(
-        `Capability '${capabilityId}' is not registered.`,
-        'MISSING_CAPABILITY',
-        capabilityId,
-      );
+      throw new CapabilityError(`Capability '${capabilityId}' is not registered.`, 'MISSING_CAPABILITY', capabilityId);
     }
 
     return this.activate(capability, context, mode);

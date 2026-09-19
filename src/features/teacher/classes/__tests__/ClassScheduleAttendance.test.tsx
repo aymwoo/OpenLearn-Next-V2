@@ -43,16 +43,9 @@ afterEach(() => {
 
 describe('ClassScheduleAttendance', () => {
   it('renders the Schedule & Attendance header and Schedule button without throwing', () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }));
     render(<ClassScheduleAttendance {...baseProps()} />);
-    expect(
-      screen.getByText((c) => (c || '').includes('Schedule & Attendance')),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Schedule' }),
-    ).toBeTruthy();
+    expect(screen.getByText((c) => (c || '').includes('Schedule & Attendance'))).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Schedule' })).toBeTruthy();
   });
 });

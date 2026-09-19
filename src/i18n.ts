@@ -22,7 +22,8 @@ export const translations = {
 
     agentTitle: '内核助手',
     agentSubtitle: '自主 Shell 控制器',
-    agentIntro: '你好！我是你的教育系统 OS 内核助手。你可以让我“创建一节物理课并在白板上画一个圆”，我将通过底层总线为你构建。',
+    agentIntro:
+      '你好！我是你的教育系统 OS 内核助手。你可以让我“创建一节物理课并在白板上画一个圆”，我将通过底层总线为你构建。',
     placeholder: '例如：创建一节历史课并画一张地图...',
     dashboard: '系统总览',
     kernelRunning: '系统正常运行',
@@ -66,9 +67,11 @@ export const translations = {
     migratableBadge: 'Migratable',
     migrateToFormat: 'Migrate to New Format',
     migrationPromptHeading: 'Legacy Plugin Detected',
-    migrationPromptBody: 'This plugin runs in legacy mode. Upload a new-format ZIP package to migrate. The old version can be safely uninstalled afterwards.',
+    migrationPromptBody:
+      'This plugin runs in legacy mode. Upload a new-format ZIP package to migrate. The old version can be safely uninstalled afterwards.',
     zipParseError: 'Failed to parse ZIP file. Ensure the package contains a valid manifest.json.',
-    workerActivationError: 'Plugin activation in Worker environment failed. Check plugin code and browser compatibility.',
+    workerActivationError:
+      'Plugin activation in Worker environment failed. Check plugin code and browser compatibility.',
     extensionLoadError: 'Extension failed to load',
     retry: 'Retry Load',
     noExtensionPoints: 'No extension points registered',
@@ -82,7 +85,8 @@ export const translations = {
 
     agentTitle: 'Kernel Agent',
     agentSubtitle: 'Autonomous Shell Controller',
-    agentIntro: 'Hello! I am your Educational OS Kernel Agent. You can ask me to "create a physics lesson and draw a circle on its whiteboard" and I will use the Command Bus to build it.',
+    agentIntro:
+      'Hello! I am your Educational OS Kernel Agent. You can ask me to "create a physics lesson and draw a circle on its whiteboard" and I will use the Command Bus to build it.',
     placeholder: 'e.g. Create a history lesson and draw a map...',
     dashboard: 'OS Dashboard',
     kernelRunning: 'Kernel Running',
@@ -120,5 +124,5 @@ export const translations = {
     students: 'Students',
     noClasses: 'No classes found',
     noStudents: 'No students found',
-  }
+  },
 };

@@ -78,49 +78,67 @@ export function useAppPolling(options: UseAppPollingOptions): void {
   useEffect(() => {
     if (!session) return;
 
+    const isStudent = session.role === 'student';
+    const isTeacher = session.role === 'teacher';
+    const isAdmin =
+      isTeacher &&
+      (session.subRole === 'administrator' || session.username === 'admin' || session.userId === 'usr_admin');
+
     fetchLessons();
     fetchPlugins();
     fetchRegisteredCommands();
-    fetchEvents();
-    fetchApprovals();
-    fetchProcesses();
-    fetchClasses();
-    fetchTodaySchedules();
-    fetchStudents();
-    fetchLabs();
-    fetchVfs(currentVfsParentRef.current);
+    fetchTodaySchedules().catch(() => {});
+
+    if (isAdmin) {
+      fetchEvents();
+      fetchApprovals();
+      fetchProcesses();
+    }
+
+    if (isTeacher) {
+      fetchClasses();
+      fetchStudents();
+      fetchLabs();
+      fetchVfs(currentVfsParentRef.current);
+    } else if (isStudent && currentVfsParentRef.current) {
+      fetchVfs(currentVfsParentRef.current);
+    }
 
     let isFetching = false;
     const intervalId = setInterval(async () => {
       if (isFetching) return;
       isFetching = true;
       try {
-        await fetchEvents();
-        await fetchLessons();
-        await fetchApprovals();
-        await fetchProcesses();
-        await fetchClasses();
-        await fetchTodaySchedules().catch(() => {});
-        await fetchStudents();
-        await fetchLabs();
-        await fetchVfs(currentVfsParentRef.current);
-        await fetchRegisteredCommands();
+        if (isAdmin) {
+          await fetchEvents();
+          await fetchApprovals();
+          await fetchProcesses();
+          if (showProcessLogs) {
+            await fetchProcessLogs(showProcessLogs);
+          }
+        }
 
-        if (showProcessLogs) {
-          await fetchProcessLogs(showProcessLogs);
+        await fetchLessons();
+        await fetchRegisteredCommands();
+        await fetchTodaySchedules().catch(() => {});
+
+        if (isTeacher) {
+          await fetchClasses();
+          await fetchStudents();
+          await fetchLabs();
+          await fetchVfs(currentVfsParentRef.current);
+
+          if (expandedClassIdRef.current) {
+            await fetchClassStudents(expandedClassIdRef.current);
+          }
         }
-        if (expandedClassIdRef.current) {
-          await fetchClassStudents(expandedClassIdRef.current);
-        }
+
         if (selectedLessonRef.current) {
           await fetchElements(selectedLessonRef.current);
         }
         if (selectedAssignmentRef.current) {
-          const studentId =
-            activeStudentId || selectedAssignmentRef.current.student_id;
-          await fetchElements(
-            `assignment-${selectedAssignmentRef.current.id}-student-${studentId}`,
-          );
+          const studentId = activeStudentId || selectedAssignmentRef.current.student_id;
+          await fetchElements(`assignment-${selectedAssignmentRef.current.id}-student-${studentId}`);
         }
       } finally {
         isFetching = false;
@@ -131,8 +149,11 @@ export function useAppPolling(options: UseAppPollingOptions): void {
   }, [session, showProcessLogs, activeStudentId]);
 
   useEffect(() => {
-    fetchVfs(currentVfsParent);
-  }, [currentVfsParent]);
+    if (!session) return;
+    if (session.role === 'teacher' || currentVfsParent) {
+      fetchVfs(currentVfsParent);
+    }
+  }, [currentVfsParent, session]);
 
   useEffect(() => {
     if (selectedLesson) {

@@ -33,10 +33,7 @@ function subscribeFrameSlots(cb: () => void): () => void {
 /**
  * 课件 iframe 挂载 hook：结合可视区检测与并发槽位，返回是否应挂载 iframe。
  */
-export function useCoursewareFrameMount(
-  lazy: boolean,
-  containerRef: RefObject<HTMLDivElement | null>,
-): boolean {
+export function useCoursewareFrameMount(lazy: boolean, containerRef: RefObject<HTMLDivElement | null>): boolean {
   const [visible, setVisible] = useState(!lazy);
   const [mounted, setMounted] = useState(false);
   const releaseRef = useRef<(() => void) | null>(null);

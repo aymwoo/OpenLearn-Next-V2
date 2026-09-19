@@ -17,7 +17,7 @@ import {
 export class DomainAnalyticsEngine {
   public computeStudentAnalytics(
     studentId: string,
-    events: ReadonlyArray<NormalizedAnalyticsEvent>
+    events: ReadonlyArray<NormalizedAnalyticsEvent>,
   ): StudentAnalyticsModel {
     const studentEvents = events.filter((e) => e.actor.id === studentId);
     let quizSubmits = 0;
@@ -51,10 +51,7 @@ export class DomainAnalyticsEngine {
     });
   }
 
-  public computeGroupAnalytics(
-    groupId: string,
-    events: ReadonlyArray<NormalizedAnalyticsEvent>
-  ): GroupAnalyticsModel {
+  public computeGroupAnalytics(groupId: string, events: ReadonlyArray<NormalizedAnalyticsEvent>): GroupAnalyticsModel {
     const groupEvents = events.filter((e) => (e.metadata as Record<string, unknown>)?.groupId === groupId);
     const memberCounts: Record<string, number> = {};
 
@@ -76,7 +73,7 @@ export class DomainAnalyticsEngine {
 
   public computeLessonAnalytics(
     lessonId: string,
-    events: ReadonlyArray<NormalizedAnalyticsEvent>
+    events: ReadonlyArray<NormalizedAnalyticsEvent>,
   ): LessonAnalyticsModel {
     const lessonEvents = events.filter((e) => e.lessonId === lessonId || !e.lessonId);
     const stageDurationMap: Record<string, number> = {};

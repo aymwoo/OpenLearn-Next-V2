@@ -13,11 +13,7 @@
  */
 
 import { EsmLoader, type PluginModule } from './esm-loader.js';
-import {
-  EsmLoaderError,
-  EsmSyntaxError,
-  EsmModuleNotFoundError,
-} from './errors.js';
+import { EsmLoaderError, EsmSyntaxError, EsmModuleNotFoundError } from './errors.js';
 
 export class NodeEsmLoader extends EsmLoader {
   /**
@@ -58,19 +54,12 @@ export class NodeEsmLoader extends EsmLoader {
           ? String((err as { message: unknown }).message)
           : String(err);
 
-    if (
-      msg.includes('Unexpected token') ||
-      msg.includes('Unexpected end of input') ||
-      msg.includes('SyntaxError')
-    ) {
+    if (msg.includes('Unexpected token') || msg.includes('Unexpected end of input') || msg.includes('SyntaxError')) {
       return new EsmSyntaxError(msg, {
         cause: err instanceof Error ? err : undefined,
       });
     }
-    if (
-      msg.includes('Failed to resolve module specifier') ||
-      msg.includes('Cannot find module')
-    ) {
+    if (msg.includes('Failed to resolve module specifier') || msg.includes('Cannot find module')) {
       return new EsmModuleNotFoundError(msg, {
         cause: err instanceof Error ? err : undefined,
       });

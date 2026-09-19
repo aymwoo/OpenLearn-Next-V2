@@ -176,14 +176,15 @@ describe('ManagementPlugin', () => {
     pluginHost.registerPreloadedPlugin(pluginId, ManagementPlugin);
 
     // Setup initial DB entry
-    db.prepare('INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(pluginId, 'Management', JSON.stringify(ManagementPlugin.manifest), '', 'installed', Date.now(), 'esm');
+    db.prepare(
+      'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(pluginId, 'Management', JSON.stringify(ManagementPlugin.manifest), '', 'installed', Date.now(), 'esm');
 
     await pluginHost.activatePlugin(pluginId);
 
     // Verify actions registered
     const actions = await actionRegistry.getAllActions();
-    const actionTypes = actions.map(a => a.commandType);
+    const actionTypes = actions.map((a) => a.commandType);
     expect(actionTypes).toContain('class.create');
     expect(actionTypes).toContain('student.create');
     expect(actionTypes).toContain('class.add_student');
@@ -195,59 +196,59 @@ describe('ManagementPlugin', () => {
     capabilityGuard.grant(actorId, 'management:read');
 
     // 1. Create a class
-    const createClassRes = await commandBus.execute({
+    const createClassRes = (await commandBus.execute({
       id: 'cmd-class-create',
       type: 'class.create',
       actorId,
       payload: {
         name: 'Math 101',
-        description: 'Basic Mathematics'
+        description: 'Basic Mathematics',
       },
-      timestamp: Date.now()
-    }) as any;
+      timestamp: Date.now(),
+    })) as any;
 
     expect(createClassRes.classId).toBeDefined();
     const classId = createClassRes.classId;
 
     // 2. Create a student
-    const createStudentRes = await commandBus.execute({
+    const createStudentRes = (await commandBus.execute({
       id: 'cmd-student-create',
       type: 'student.create',
       actorId,
       payload: {
         name: 'Alice',
-        email: 'alice@openlearn.org'
+        email: 'alice@openlearn.org',
       },
-      timestamp: Date.now()
-    }) as any;
+      timestamp: Date.now(),
+    })) as any;
 
     expect(createStudentRes.studentId).toBeDefined();
     const studentId = createStudentRes.studentId;
 
     // 3. Add student to class
-    const addStudentRes = await commandBus.execute({
+    const addStudentRes = (await commandBus.execute({
       id: 'cmd-add-student',
       type: 'class.add_student',
       actorId,
       payload: {
         classId,
-        studentId
+        studentId,
       },
-      timestamp: Date.now()
-    }) as any;
+      timestamp: Date.now(),
+    })) as any;
 
     expect(addStudentRes.success).toBe(true);
 
     // 4. Get students in class
-    const getStudentsRes = await commandBus.execute({
+    const getStudentsRes = (await commandBus.execute({
       id: 'cmd-get-students',
       type: 'class.get_students',
       actorId,
       payload: {
-        classId
+        classId,
       },
-      timestamp: Date.now()
-    }) as any;
+      timestamp: Date.now(),
+    })) as any;
 
     expect(getStudentsRes.students).toBeDefined();
     expect(getStudentsRes.students.length).toBe(1);

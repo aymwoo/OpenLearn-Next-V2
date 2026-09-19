@@ -84,11 +84,15 @@ sudo systemctl enable --now openlearn
 OpenLearn 内置了免启动服务、免 Web 界面的完整命令行数据运维能力。
 
 ### 3.1 环境健康诊断与防版本漂移 (`doctor`)
+
 在首次部署、平台升级或系统排错时，使用自检工具快速排查潜在问题：
+
 ```bash
 npx openlearn-next doctor
 ```
+
 自检覆盖全方位运行状态：
+
 - **基础设施**：Node.js 运行时版本（>=20）、CPU 与内存余量、数据库目录写权限、目标服务端口探活与局域网接入点探测；
 - **SDK Suite 综合检测**：同步校验 `@openlearn/plugin-sdk` 与 `@openlearn/plugin-test-kit` 的解析版本与依赖形态（workspace 链接 / 精确 pin / caret 范围）；
 - **核心版本防漂移**：校验宿主内核单一真理源与 `package.json` 的版本强一致性；
@@ -102,7 +106,9 @@ npx openlearn-next doctor
   自动清理 NPX 历史旧版本缓存、自动创建数据存储目录，消除运行期版本漂移与目录缺失隐患。
 
 ### 3.2 在线数据冷备 (`backup`)
+
 系统依托 SQLite WAL 预写日志机制，可在**业务不中断、数据库读写零阻塞**的情况下毫秒级生成一致性快照：
+
 ```bash
 # 生成自动带时间戳的备份文件 (如 openlearn_backup_20260906_120000.db)
 npx openlearn-next backup
@@ -112,21 +118,27 @@ npx openlearn-next backup /backup/openlearn_daily.db
 ```
 
 > **建议**：通过 Crontab 配置每日凌晨定时冷备：
+>
 > ```bash
 > 0 3 * * * npx openlearn-next backup /backup/openlearn_$(date +\%Y\%m\%d).db > /dev/null 2>&1
 > ```
 
 ### 3.3 数据安全回滚与还原 (`restore`)
+
 当遭遇误操作、数据损坏或灾备演练时，通过还原命令一键切换主库：
+
 ```bash
 npx openlearn-next restore /backup/openlearn_daily.db
 ```
+
 - **Magic Header 校验**：还原前自动校验文件头是否以 `SQLite format 3\0` 开头，杜绝坏文件注入；
 - **自动生成回滚镜像**：覆盖前系统自动为现有数据库生成 `.bak_<timestamp>` 副本，确保二次容错安全；
 - **日志清理**：自动清理旧库的 WAL 与 SHM 预写日志。
 
 ### 3.4 管理员密码应急重置 (`reset-admin`)
+
 若管理人员遗忘密码或系统受锁，无需启动 Web 界面，直接在宿主机重置：
+
 ```bash
 # 默认重置密码为 admin
 npx openlearn-next reset-admin
@@ -136,7 +148,9 @@ npx openlearn-next reset-admin --password 'YourStrongPasswd#2026'
 ```
 
 ### 3.5 远端包与运行缓存清理 (`clean`)
+
 针对 NPX 历史旧版本缓存或本地调试日志堆积：
+
 ```bash
 # 仅清理 ~/.npm/_npx 中的远端包缓存
 npx openlearn-next clean --npx

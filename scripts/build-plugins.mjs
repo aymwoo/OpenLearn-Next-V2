@@ -17,7 +17,7 @@ async function build() {
   for (const plugin of plugins) {
     try {
       console.log(`Building plugin from ${plugin.entry}...`);
-      
+
       // 1. esbuild bundle backend in memory
       // SDK 必须保持 external（与 SDK CLI / token-enforcer 策略一致）：
       // 打进 ZIP 会把构建时刻的 SDK 代码冻结在产物里，运行时与宿主解析到的
@@ -80,7 +80,7 @@ async function build() {
   }
 }
 
-build().catch(err => {
+build().catch((err) => {
   console.error(err);
   process.exit(1);
 });

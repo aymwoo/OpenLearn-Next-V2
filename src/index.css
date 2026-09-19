@@ -1,10 +1,11 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @plugin "@tailwindcss/typography";
 
 @source "../packages/mfe-*/**/*.{ts,tsx}";
 
 @layer base {
-  :root, [data-theme="light"] {
+  :root,
+  [data-theme='light'] {
     --bg-app: #f8fafc;
     --bg-surface: #ffffff;
     --bg-surface-secondary: #f1f5f9;
@@ -20,7 +21,7 @@
     --color-primary-text: #ffffff;
   }
 
-  [data-theme="dark"] {
+  [data-theme='dark'] {
     --bg-app: #0b0f19;
     --bg-surface: #111827;
     --bg-surface-secondary: #1f2937;
@@ -36,7 +37,7 @@
     --color-primary-text: #ffffff;
   }
 
-  [data-theme="eyecare"] {
+  [data-theme='eyecare'] {
     --bg-app: #f2f7f4;
     --bg-surface: #ffffff;
     --bg-surface-secondary: #e6f0ea;
@@ -52,7 +53,7 @@
     --color-primary-text: #ffffff;
   }
 
-  [data-theme="chalkboard"] {
+  [data-theme='chalkboard'] {
     --bg-app: #0e1713;
     --bg-surface: #16261f;
     --bg-surface-secondary: #1d332a;

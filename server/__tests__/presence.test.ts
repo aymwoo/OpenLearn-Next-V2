@@ -18,7 +18,7 @@ type Emitted = {
  * clear it between tests so the enter-lesson / teacher-broadcast-segment paths
  * are isolated.
  */
-function buildMocks() {
+function buildMocks(opts: { studentClassIds?: Record<string, string[]>; lookupThrows?: boolean } = {}) {
   const globalEmitted: Emitted[] = [];
   const connectionHandlers: ((socket: any) => void)[] = [];
 
@@ -41,11 +41,19 @@ function buildMocks() {
     subscribe: vi.fn(),
   } as any;
 
-  const deps = { io, eventBus };
+  const deps = {
+    io,
+    eventBus,
+    lookupStudentClassIds: (studentId: string) => {
+      if (opts.lookupThrows) throw new Error('db unavailable');
+      return opts.studentClassIds?.[studentId] ?? [];
+    },
+  } as any;
   setupPresence(deps);
 
   function connect() {
     const socketEmitted: Emitted[] = [];
+    const joinedRooms: string[] = [];
     const socketHandlers = new Map<string, (data: any) => void>();
     const socket = {
       id: 'sock-1',
@@ -54,7 +62,7 @@ function buildMocks() {
       to: (room: string) => ({
         emit: (event: string, payload: unknown) => socketEmitted.push({ scope: 'socket-room', room, event, payload }),
       }),
-      join: () => {},
+      join: (room: string) => joinedRooms.push(room),
       leave: () => {},
       trigger: (event: string, data: unknown) => {
         const h = socketHandlers.get(event);
@@ -62,6 +70,7 @@ function buildMocks() {
         h(data);
       },
       _emitted: socketEmitted,
+      _joinedRooms: joinedRooms,
       _handlers: socketHandlers,
     } as any;
     const cb = connectionHandlers[connectionHandlers.length - 1];
@@ -136,7 +145,12 @@ describe('setupPresence', () => {
 
     // Emit goes to the raw lessonId ('L1'), NOT the `lesson-L1` roomName.
     expect(socket._emitted).toEqual([
-      { scope: 'socket-room', room: 'L1', event: 'whiteboard-sync', payload: { type: 'refresh', sourceEvent: 'whiteboard.element_drawn' } },
+      {
+        scope: 'socket-room',
+        room: 'L1',
+        event: 'whiteboard-sync',
+        payload: { type: 'refresh', sourceEvent: 'whiteboard.element_drawn' },
+      },
     ]);
   });
 
@@ -147,7 +161,12 @@ describe('setupPresence', () => {
 
     expect(lessonActiveSegments.get('L1')).toBe('seg1');
     expect(m.globalEmitted).toEqual([
-      { scope: 'room', room: 'L1', event: 'student-active-segment-changed', payload: { lessonId: 'L1', activeSegmentId: 'seg1' } },
+      {
+        scope: 'room',
+        room: 'L1',
+        event: 'student-active-segment-changed',
+        payload: { lessonId: 'L1', activeSegmentId: 'seg1' },
+      },
     ]);
   });
 
@@ -173,5 +192,68 @@ describe('setupPresence', () => {
     expect(m.globalEmitted).toEqual([
       { scope: 'global', event: 'presence-update', payload: { onlineStudentIds: [], activeStudentLessons: {} } },
     ]);
+  });
+
+  describe('班级房间（课堂广播不依赖学生当前视图）', () => {
+    it('joins one class-<id> room per class the student belongs to on register-student', () => {
+      const m = buildMocks({ studentClassIds: { s1: ['c1', 'c2'] } });
+      const socket = m.connect();
+
+      socket.trigger('register-student', { studentId: 's1', name: 'Stu' });
+
+      expect(socket._joinedRooms).toEqual(['class-c1', 'class-c2']);
+    });
+
+    it('still registers presence when the class lookup fails', () => {
+      const m = buildMocks({ lookupThrows: true });
+      const socket = m.connect();
+      socket._emitted.length = 0;
+
+      socket.trigger('register-student', { studentId: 's1', name: 'Stu' });
+
+      expect(m.globalEmitted).toEqual([
+        { scope: 'global', event: 'presence-update', payload: { onlineStudentIds: ['s1'], activeStudentLessons: {} } },
+      ]);
+    });
+
+    it('teacher-broadcast-fullscreen reaches both the lesson room and the class room', () => {
+      const m = buildMocks();
+      const socket = m.connect();
+      m.globalEmitted.length = 0;
+
+      socket.trigger('teacher-broadcast-fullscreen', { classId: 'c1', lessonId: 'L1', elementId: 'el-1' });
+
+      expect(m.globalEmitted).toEqual([
+        {
+          scope: 'room',
+          room: 'L1',
+          event: 'whiteboard-fullscreen-changed',
+          payload: { lessonId: 'L1', elementId: 'el-1' },
+        },
+        {
+          scope: 'room',
+          room: 'class-c1',
+          event: 'whiteboard-fullscreen-changed',
+          payload: { lessonId: 'L1', elementId: 'el-1' },
+        },
+      ]);
+    });
+
+    it('teacher-broadcast-fullscreen falls back to the lesson room when no class is given', () => {
+      const m = buildMocks();
+      const socket = m.connect();
+      m.globalEmitted.length = 0;
+
+      socket.trigger('teacher-broadcast-fullscreen', { lessonId: 'L1', elementId: null });
+
+      expect(m.globalEmitted).toEqual([
+        {
+          scope: 'room',
+          room: 'L1',
+          event: 'whiteboard-fullscreen-changed',
+          payload: { lessonId: 'L1', elementId: null },
+        },
+      ]);
+    });
   });
 });

@@ -43,7 +43,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = (props) => {
         teacherId,
         teacherName,
         lang,
-      })
+      }),
   );
   const [slotRegistry] = useState(() => new WorkspaceSlotRegistry());
   const [widgetRegistry] = useState(() => {
@@ -107,11 +107,7 @@ export const StudentWorkspace: React.FC<StudentWorkspaceProps> = (props) => {
   );
 
   if (pluginHost) {
-    return (
-      <PluginHostProvider host={pluginHost as any}>
-        {content}
-      </PluginHostProvider>
-    );
+    return <PluginHostProvider host={pluginHost as any}>{content}</PluginHostProvider>;
   }
   return content;
 };

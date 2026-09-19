@@ -5,7 +5,24 @@ import { lessonActiveSegments } from './shared-state.js';
 export interface PresenceDeps {
   io: Server;
   eventBus: EventBusPort;
+  /**
+   * 查询学生所属的班级 id 列表。
+   *
+   * 学生 socket 在 `register-student` 时会被加入每个 `class-<classId>` 房间，
+   * 使教师端的课堂广播（如白板最大化视图同步）**不再依赖学生当前停留在哪个视图**：
+   * 学生在作业工作区时会 `leave-lesson`，互动课件/作业标签页也随时可能卸载白板，
+   * 仅靠课节房间会让这些学生收不到广播。
+   *
+   * 缺省不传时退化为“仅课节房间投递”，保持向后兼容。
+   */
+  lookupStudentClassIds?: (studentId: string) => string[];
 }
+
+/** 班级房间名。与课节房间（直接用 lessonId）互不冲突。 */
+export const classRoom = (classId: string): string => `class-${classId}`;
+
+/** 教师端广播白板最大化视图时下发给学生的 Socket.IO 事件名 */
+export const WHITEBOARD_FULLSCREEN_CHANGED = 'whiteboard-fullscreen-changed';
 
 /**
  * Socket.IO presence + whiteboard realtime handlers.
@@ -19,7 +36,7 @@ export interface PresenceDeps {
  *
  * Characterization test: `server/__tests__/presence.test.ts`.
  */
-export function setupPresence({ io, eventBus }: PresenceDeps): void {
+export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceDeps): void {
   // In-memory status maps
   const onlineStudents = new Map<string, { socketId: string; name: string }>();
   const activeStudentLessons = new Map<string, string>(); // studentId -> lessonId
@@ -45,6 +62,17 @@ export function setupPresence({ io, eventBus }: PresenceDeps): void {
       registeredStudentId = data.studentId;
       onlineStudents.set(data.studentId, { socketId: socket.id, name: data.name });
       console.log(`[Presence] Student online: ${data.name} (${data.studentId})`);
+
+      // 加入所属班级房间：课堂广播（白板最大化视图等）需要在学生处于
+      // 任意视图（含作业工作区）时都能送达
+      try {
+        for (const classId of lookupStudentClassIds?.(data.studentId) ?? []) {
+          socket.join(classRoom(classId));
+        }
+      } catch (err) {
+        console.warn(`[Presence] Failed to resolve classes for student ${data.studentId}`, err);
+      }
+
       broadcastPresence();
     });
 
@@ -117,6 +145,29 @@ export function setupPresence({ io, eventBus }: PresenceDeps): void {
             type: 'refresh',
             sourceEvent: data.type,
           });
+        }
+      },
+    );
+
+    socket.on(
+      'teacher-broadcast-fullscreen',
+      (data: { classId?: string | null; lessonId: string; elementId: string | null }) => {
+        // SEC-AUTH: 仅教师或管理员可广播授课白板的最大化视图
+        if (session && !isTeacherOrAdmin) {
+          console.warn(`[Presence Security] Unauthorized teacher-broadcast-fullscreen by ${session?.userId}`);
+          return socket.emit('error', {
+            message: 'Forbidden: Only teachers or administrators can broadcast fullscreen',
+          });
+        }
+        if (!data?.lessonId) return;
+
+        const payload = { lessonId: data.lessonId, elementId: data.elementId ?? null };
+        // 投递到课节房间：学生正停留在该课节的任意标签页（白板/课件/作业）
+        io.to(data.lessonId).emit(WHITEBOARD_FULLSCREEN_CHANGED, payload);
+        // 再投递到班级房间：学生可能在作业工作区（已 leave-lesson）
+        // 或从学习面板直接打开了作业，此时不在课节房间里
+        if (data.classId) {
+          io.to(classRoom(data.classId)).emit(WHITEBOARD_FULLSCREEN_CHANGED, payload);
         }
       },
     );

@@ -90,9 +90,7 @@ export class WorkerCapabilityError extends WorkerRuntimeError {
     public readonly capabilityRequired: string,
     message?: string,
   ) {
-    super(
-      message ?? `Capability ${capabilityRequired} denied for actor ${actorId}`,
-    );
+    super(message ?? `Capability ${capabilityRequired} denied for actor ${actorId}`);
     this.name = 'WorkerCapabilityError';
   }
 }

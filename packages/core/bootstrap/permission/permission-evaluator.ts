@@ -3,12 +3,7 @@
  * Evaluates policies (Allow, Deny, Default, Inherited) for infrastructure authorization.
  */
 
-import {
-  PermissionPolicy,
-  PermissionResult,
-  PermissionDescriptor,
-  IPermissionProvider,
-} from './permission-types.js';
+import { PermissionPolicy, PermissionResult, PermissionDescriptor, IPermissionProvider } from './permission-types.js';
 
 export class PermissionEvaluator {
   public static async evaluate(
@@ -16,7 +11,7 @@ export class PermissionEvaluator {
     permission: string,
     explicitGrants: Map<string, PermissionPolicy>,
     descriptor?: PermissionDescriptor,
-    providers?: ReadonlyArray<IPermissionProvider>
+    providers?: ReadonlyArray<IPermissionProvider>,
   ): Promise<PermissionResult> {
     const evaluatedAt = Date.now();
     const grantKey = `${subject}::${permission}`;

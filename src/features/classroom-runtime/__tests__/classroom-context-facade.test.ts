@@ -1,8 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  ClassroomService,
-  ClassroomContextFacade,
-} from '../index.js';
+import { ClassroomService, ClassroomContextFacade } from '../index.js';
 
 describe('Sprint P4-02 Classroom Context Facade Test Suite', () => {
   let service: ClassroomService;

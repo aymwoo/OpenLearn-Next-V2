@@ -15,7 +15,7 @@ describe('StudentAssignmentHeader', () => {
         setStudentViewStatus={setStudentViewStatus}
         setSelectedAssignment={setSelectedAssignment}
         selectedAssignment={{ title: 'HW' }}
-      />
+      />,
     );
     expect(screen.getByText('Assignment: HW')).toBeTruthy();
     expect(screen.getByText('Back to Dashboard')).toBeTruthy();

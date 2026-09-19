@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Upload, 
-  FileText, 
-  CheckCircle, 
-  MessageSquare, 
-  Star, 
-  User, 
-  RefreshCw, 
-  AlertCircle, 
-  FileCheck, 
-  Award, 
-  Clock 
+import {
+  Upload,
+  FileText,
+  CheckCircle,
+  MessageSquare,
+  Star,
+  User,
+  RefreshCw,
+  AlertCircle,
+  FileCheck,
+  Award,
+  Clock,
 } from 'lucide-react';
 
 interface StudentAssignmentEvalPanelProps {
@@ -20,17 +20,12 @@ interface StudentAssignmentEvalPanelProps {
   addToast: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
-export function StudentAssignmentEvalPanel({
-  lessonId,
-  studentId,
-  lang,
-  addToast
-}: StudentAssignmentEvalPanelProps) {
+export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast }: StudentAssignmentEvalPanelProps) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [myStatus, setMyStatus] = useState<any>(null);
   const [allSubmissions, setAllSubmissions] = useState<any[]>([]);
-  
+
   // Submit state
   const [filePath, setFilePath] = useState('/files/my-homework.pdf');
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -61,7 +56,7 @@ export function StudentAssignmentEvalPanel({
       addToast(
         zh ? '数据加载失败' : 'Failed to Load Data',
         zh ? '请检查网络连接或刷新页面。' : 'Please check your connection and try again.',
-        'warning'
+        'warning',
       );
     } finally {
       setLoading(false);
@@ -89,9 +84,9 @@ export function StudentAssignmentEvalPanel({
           payload: {
             lessonId,
             studentId,
-            filePath: filePath.trim()
-          }
-        })
+            filePath: filePath.trim(),
+          },
+        }),
       });
 
       const data = await res.json();
@@ -99,18 +94,14 @@ export function StudentAssignmentEvalPanel({
         addToast(
           zh ? '作业提交成功' : 'Assignment Submitted',
           zh ? `成功提交版本 ${data.result.version}！` : `Successfully submitted version ${data.result.version}!`,
-          'success'
+          'success',
         );
         fetchData(true);
       } else {
         throw new Error(data.error || 'Failed to submit assignment');
       }
     } catch (err: any) {
-      addToast(
-        zh ? '提交失败' : 'Submission Failed',
-        err.message,
-        'warning'
-      );
+      addToast(zh ? '提交失败' : 'Submission Failed', err.message, 'warning');
     } finally {
       setSubmitLoading(false);
     }
@@ -124,12 +115,12 @@ export function StudentAssignmentEvalPanel({
       addToast(
         zh ? '评分无效' : 'Invalid Score',
         zh ? '分数必须在 0 到 100 之间！' : 'Score must be between 0 and 100!',
-        'warning'
+        'warning',
       );
       return;
     }
 
-    setReviewLoading(prev => ({ ...prev, [submissionId]: true }));
+    setReviewLoading((prev) => ({ ...prev, [submissionId]: true }));
     try {
       const res = await fetch('/api/commands', {
         method: 'POST',
@@ -140,9 +131,9 @@ export function StudentAssignmentEvalPanel({
             submissionId,
             reviewerId: studentId,
             score: Number(score),
-            comment
-          }
-        })
+            comment,
+          },
+        }),
       });
 
       const data = await res.json();
@@ -150,10 +141,10 @@ export function StudentAssignmentEvalPanel({
         addToast(
           zh ? '互评提交成功' : 'Review Submitted',
           zh ? '成功对同学的作品完成了评价！' : 'Successfully completed review for classmate!',
-          'success'
+          'success',
         );
         // Clear inputs for this submission
-        setReviewComments(prev => {
+        setReviewComments((prev) => {
           const next = { ...prev };
           delete next[submissionId];
           return next;
@@ -163,13 +154,9 @@ export function StudentAssignmentEvalPanel({
         throw new Error(data.error || 'Failed to submit review');
       }
     } catch (err: any) {
-      addToast(
-        zh ? '评价提交失败' : 'Review Failed',
-        err.message,
-        'warning'
-      );
+      addToast(zh ? '评价提交失败' : 'Review Failed', err.message, 'warning');
     } finally {
-      setReviewLoading(prev => ({ ...prev, [submissionId]: false }));
+      setReviewLoading((prev) => ({ ...prev, [submissionId]: false }));
     }
   };
 
@@ -185,15 +172,14 @@ export function StudentAssignmentEvalPanel({
   const mySubmission = myStatus?.submission;
   const myGrade = myStatus?.grade;
   const myReviewsWritten = myStatus?.reviewsWritten || [];
-  
+
   // Classmate submissions (exclude current student)
-  const peerSubmissions = allSubmissions.filter(sub => sub.student_id !== studentId);
+  const peerSubmissions = allSubmissions.filter((sub) => sub.student_id !== studentId);
 
   return (
     <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-y-auto pr-2">
       {/* Left Column: My Submission & Grade */}
       <div className="w-full lg:w-5/12 flex flex-col gap-6">
-        
         {/* Panel A: Submission upload */}
         <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 shadow-3xs text-left">
           <div className="flex justify-between items-center mb-4">
@@ -201,7 +187,7 @@ export function StudentAssignmentEvalPanel({
               <Upload size={16} className="text-indigo-650" />
               {zh ? '我的作业提交' : 'My Assignment Submission'}
             </h3>
-            <button 
+            <button
               onClick={() => fetchData(true)}
               className="p-1 hover:bg-slate-200/50 rounded transition-colors text-slate-550"
               title={zh ? '刷新数据' : 'Refresh Data'}
@@ -234,7 +220,10 @@ export function StudentAssignmentEvalPanel({
                   <Clock size={11} />
                   {zh ? '更新时间:' : 'Updated At:'} {new Date(mySubmission.updated_at).toLocaleString()}
                 </span>
-                <span className="font-mono text-slate-350 select-all truncate max-w-[120px]" title={mySubmission.file_path}>
+                <span
+                  className="font-mono text-slate-350 select-all truncate max-w-[120px]"
+                  title={mySubmission.file_path}
+                >
                   {mySubmission.file_path}
                 </span>
               </div>
@@ -244,7 +233,11 @@ export function StudentAssignmentEvalPanel({
               <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={16} />
               <div className="text-xs text-amber-700">
                 <p className="font-bold">{zh ? '未提交作业' : 'No Submission Yet'}</p>
-                <p className="mt-1">{zh ? '在此上传提交后，其他同学将可以对您的作业进行评分互评。' : 'Once submitted, other students can view and peer-review your work.'}</p>
+                <p className="mt-1">
+                  {zh
+                    ? '在此上传提交后，其他同学将可以对您的作业进行评分互评。'
+                    : 'Once submitted, other students can view and peer-review your work.'}
+                </p>
               </div>
             </div>
           )}
@@ -256,8 +249,8 @@ export function StudentAssignmentEvalPanel({
                 {zh ? '输入作品文件路径 / 虚拟路径' : 'Simulated File Path'}
               </label>
               <div className="flex gap-2">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={filePath}
                   onChange={(e) => setFilePath(e.target.value)}
                   placeholder="/files/homework.pdf"
@@ -269,12 +262,8 @@ export function StudentAssignmentEvalPanel({
                   disabled={submitLoading}
                   className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shadow-3xs"
                 >
-                  {submitLoading ? (
-                    <RefreshCw className="animate-spin" size={13} />
-                  ) : (
-                    <Upload size={13} />
-                  )}
-                  {mySubmission ? (zh ? '重新提交' : 'Re-submit') : (zh ? '上传作品' : 'Submit')}
+                  {submitLoading ? <RefreshCw className="animate-spin" size={13} /> : <Upload size={13} />}
+                  {mySubmission ? (zh ? '重新提交' : 'Re-submit') : zh ? '上传作品' : 'Submit'}
                 </button>
               </div>
             </div>
@@ -302,20 +291,24 @@ export function StudentAssignmentEvalPanel({
                   </div>
 
                   <div className="text-right">
-                    <span className={`inline-block px-2.5 py-1 text-[10px] font-bold rounded-lg border ${
-                      myGrade.status === 'confirmed' 
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                        : 'bg-amber-50 text-amber-700 border-amber-100'
-                    }`}>
-                      {myGrade.status === 'confirmed' 
-                        ? (zh ? '已确认同步' : 'Synced') 
-                        : (zh ? '教师评分草稿' : 'Draft')}
+                    <span
+                      className={`inline-block px-2.5 py-1 text-[10px] font-bold rounded-lg border ${
+                        myGrade.status === 'confirmed'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                          : 'bg-amber-50 text-amber-700 border-amber-100'
+                      }`}
+                    >
+                      {myGrade.status === 'confirmed' ? (zh ? '已确认同步' : 'Synced') : zh ? '教师评分草稿' : 'Draft'}
                     </span>
                     <p className="text-[9px] text-slate-400 mt-1.5 font-medium">
-                      {zh ? `教师分 ${myGrade.teacher_score} (占 ${(myGrade.teacher_weight*100).toFixed(0)}%)` : `Teacher ${myGrade.teacher_score} (${(myGrade.teacher_weight*100).toFixed(0)}%)`}
+                      {zh
+                        ? `教师分 ${myGrade.teacher_score} (占 ${(myGrade.teacher_weight * 100).toFixed(0)}%)`
+                        : `Teacher ${myGrade.teacher_score} (${(myGrade.teacher_weight * 100).toFixed(0)}%)`}
                     </p>
                     <p className="text-[9px] text-slate-400 mt-0.5 font-medium">
-                      {zh ? `学生互评 (占 ${(myGrade.peer_weight*100).toFixed(0)}%)` : `Peer Review (${(myGrade.peer_weight*100).toFixed(0)}%)`}
+                      {zh
+                        ? `学生互评 (占 ${(myGrade.peer_weight * 100).toFixed(0)}%)`
+                        : `Peer Review (${(myGrade.peer_weight * 100).toFixed(0)}%)`}
                     </p>
                   </div>
                 </div>
@@ -355,18 +348,27 @@ export function StudentAssignmentEvalPanel({
             {peerSubmissions.map((peerSub) => {
               // Check if current student already reviewed this classmate
               const existingReview = myReviewsWritten.find((r: any) => r.submission_id === peerSub.id);
-              
+
               // Load form inputs
-              const score = reviewScores[peerSub.id] !== undefined 
-                ? reviewScores[peerSub.id] 
-                : (existingReview ? existingReview.score : 85);
-              const comment = reviewComments[peerSub.id] !== undefined 
-                ? reviewComments[peerSub.id] 
-                : (existingReview ? existingReview.comment : '');
+              const score =
+                reviewScores[peerSub.id] !== undefined
+                  ? reviewScores[peerSub.id]
+                  : existingReview
+                    ? existingReview.score
+                    : 85;
+              const comment =
+                reviewComments[peerSub.id] !== undefined
+                  ? reviewComments[peerSub.id]
+                  : existingReview
+                    ? existingReview.comment
+                    : '';
               const submittingReview = reviewLoading[peerSub.id] || false;
 
               return (
-                <div key={peerSub.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-3xs flex flex-col gap-3">
+                <div
+                  key={peerSub.id}
+                  className="bg-white border border-slate-200 rounded-xl p-4 shadow-3xs flex flex-col gap-3"
+                >
                   {/* Classmate metadata */}
                   <div className="flex justify-between items-start border-b border-slate-100 pb-2">
                     <div className="flex items-center gap-2">
@@ -377,16 +379,19 @@ export function StudentAssignmentEvalPanel({
                         <h4 className="text-xs font-bold text-slate-700">
                           {peerSub.student_name || peerSub.student_id}
                         </h4>
-                        <p className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5 truncate max-w-[200px]" title={peerSub.file_path}>
+                        <p
+                          className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5 truncate max-w-[200px]"
+                          title={peerSub.file_path}
+                        >
                           <FileText size={11} className="text-slate-350" />
                           {peerSub.file_path.split('/').pop()} (V{peerSub.version})
                         </p>
                       </div>
                     </div>
 
-                    <a 
-                      href={peerSub.file_path} 
-                      target="_blank" 
+                    <a
+                      href={peerSub.file_path}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="text-[10px] font-bold text-indigo-650 hover:text-indigo-800 transition-colors border border-indigo-100 px-2 py-1 rounded bg-indigo-50/50 hover:bg-indigo-50"
                     >
@@ -403,9 +408,7 @@ export function StudentAssignmentEvalPanel({
                           {zh ? `我已评分：${existingReview.score} 分` : `My Score: ${existingReview.score} pts`}
                         </p>
                         {existingReview.comment && (
-                          <p className="text-[11px] text-emerald-700/80 mt-0.5 italic">
-                            "{existingReview.comment}"
-                          </p>
+                          <p className="text-[11px] text-emerald-700/80 mt-0.5 italic">"{existingReview.comment}"</p>
                         )}
                       </div>
                     </div>
@@ -425,7 +428,7 @@ export function StudentAssignmentEvalPanel({
                           value={score}
                           onChange={(e) => {
                             const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
-                            setReviewScores(prev => ({ ...prev, [peerSub.id]: val }));
+                            setReviewScores((prev) => ({ ...prev, [peerSub.id]: val }));
                           }}
                           className="w-12 text-center text-xs font-bold font-mono border border-slate-200 rounded px-1 py-0.5 bg-white text-indigo-750"
                         />
@@ -433,14 +436,14 @@ export function StudentAssignmentEvalPanel({
                       </div>
                     </div>
 
-                    <input 
+                    <input
                       type="range"
                       min="0"
                       max="100"
                       value={score}
                       onChange={(e) => {
                         const val = parseInt(e.target.value);
-                        setReviewScores(prev => ({ ...prev, [peerSub.id]: val }));
+                        setReviewScores((prev) => ({ ...prev, [peerSub.id]: val }));
                       }}
                       className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-650"
                     />
@@ -450,7 +453,7 @@ export function StudentAssignmentEvalPanel({
                         rows={1}
                         value={comment}
                         onChange={(e) => {
-                          setReviewComments(prev => ({ ...prev, [peerSub.id]: e.target.value }));
+                          setReviewComments((prev) => ({ ...prev, [peerSub.id]: e.target.value }));
                         }}
                         placeholder={zh ? '简要评语反馈...' : 'Brief feedback comment...'}
                         className="flex-1 bg-white border border-slate-200 px-2 py-1 text-xs rounded-lg text-slate-700 focus:outline-none focus:border-indigo-400 resize-none transition-colors"
@@ -460,12 +463,10 @@ export function StudentAssignmentEvalPanel({
                         disabled={submittingReview}
                         className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs px-3 rounded-lg transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center"
                       >
-                        {submittingReview ? (
-                          <RefreshCw className="animate-spin" size={13} />
-                        ) : (
-                          <Star size={13} />
-                        )}
-                        <span className="ml-1 shrink-0">{existingReview ? (zh ? '修改评分' : 'Update') : (zh ? '确认提交' : 'Submit')}</span>
+                        {submittingReview ? <RefreshCw className="animate-spin" size={13} /> : <Star size={13} />}
+                        <span className="ml-1 shrink-0">
+                          {existingReview ? (zh ? '修改评分' : 'Update') : zh ? '确认提交' : 'Submit'}
+                        </span>
                       </button>
                     </div>
                   </div>

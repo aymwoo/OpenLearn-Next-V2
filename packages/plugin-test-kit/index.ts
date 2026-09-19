@@ -80,12 +80,7 @@ export class MockCommandBus implements ICommandBusService {
     return undefined;
   }
 
-  async createCommand<T>(
-    type: string,
-    payload: T,
-    actorId: string,
-    metadata?: any,
-  ): Promise<PlatformCommand<T>> {
+  async createCommand<T>(type: string, payload: T, actorId: string, metadata?: any): Promise<PlatformCommand<T>> {
     return {
       id: crypto.randomUUID?.() ?? `cmd-${Date.now()}`,
       type,
@@ -166,9 +161,7 @@ export class MockActionRegistry implements IActionRegistryService {
   }
 
   async getActionByToolName(toolName: string): Promise<ActionDescriptor | undefined> {
-    return Array.from(this.actions.values()).find(
-      (a) => a.commandType.replace(/[^a-zA-Z0-9_-]/g, '_') === toolName,
-    );
+    return Array.from(this.actions.values()).find((a) => a.commandType.replace(/[^a-zA-Z0-9_-]/g, '_') === toolName);
   }
 
   async getActionByCommandType(commandType: string): Promise<ActionDescriptor | undefined> {
@@ -280,10 +273,7 @@ export class MockAI implements IAIService {
   /** 可配置的响应生成函数，默认返回空字符串 */
   generateTextFn: (prompt: string, options?: any) => string = () => '';
 
-  async generateText(
-    prompt: string,
-    options?: { systemInstruction?: string; temperature?: number },
-  ): Promise<string> {
+  async generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string> {
     return this.generateTextFn(prompt, options);
   }
 }
@@ -405,11 +395,15 @@ export function createMockContext(opts: CreateMockContextOptions = {}): PluginCo
       }
     },
     async migrate(targetVersion: number, upgradeFn: (d: any) => Promise<void> | void) {
-      const row = db.prepare(`SELECT version FROM plugin_migrations WHERE plugin_id = ?`).get(pluginId) as { version: number } | undefined;
+      const row = db.prepare(`SELECT version FROM plugin_migrations WHERE plugin_id = ?`).get(pluginId) as
+        { version: number } | undefined;
       const currentVersion = row ? row.version : 0;
       if (currentVersion < targetVersion) {
         await upgradeFn(db);
-        db.prepare(`INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)`).run(pluginId, targetVersion);
+        db.prepare(`INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)`).run(
+          pluginId,
+          targetVersion,
+        );
       }
     },
   };
@@ -459,14 +453,18 @@ export function createMockContext(opts: CreateMockContextOptions = {}): PluginCo
       get: <T = unknown>(_key: string): T => undefined as T,
       getAll: (): Record<string, unknown> => ({}),
       set: async (_key: string, _value: unknown): Promise<void> => {},
-      onChange: (_cb: (key: string, newValue: unknown, oldValue: unknown) => void): () => void => () => {},
+      onChange:
+        (_cb: (key: string, newValue: unknown, oldValue: unknown) => void): (() => void) =>
+        () => {},
     },
     contributions: {
       list: () => [],
     },
     http: new PluginHttpRouter(),
     require: (moduleName: string): any => {
-      throw new Error(`[MockContext] require("${moduleName}") is not available in test context. Use customTokens to inject mock modules.`);
+      throw new Error(
+        `[MockContext] require("${moduleName}") is not available in test context. Use customTokens to inject mock modules.`,
+      );
     },
   };
 }

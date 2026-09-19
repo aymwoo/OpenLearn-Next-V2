@@ -3,14 +3,7 @@
  */
 
 export type PromptCategory =
-  | 'Lesson'
-  | 'Whiteboard'
-  | 'Resource'
-  | 'Activity'
-  | 'Student'
-  | 'Assessment'
-  | 'Summary'
-  | 'Plugin';
+  'Lesson' | 'Whiteboard' | 'Resource' | 'Activity' | 'Student' | 'Assessment' | 'Summary' | 'Plugin';
 
 export interface PromptMetadata {
   readonly id: string;

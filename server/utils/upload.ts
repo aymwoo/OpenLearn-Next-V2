@@ -14,15 +14,13 @@ const MAGIC_BYTES: Record<string, number[][]> = {
   '.webp': [[0x52, 0x49, 0x46, 0x46]],
 };
 
-export const BLOCKED_EXTENSIONS = [
-  '.exe', '.sh', '.bat', '.cmd', '.dll', '.so', '.dylib', '.scr', '.msi', '.ps1',
-];
+export const BLOCKED_EXTENSIONS = ['.exe', '.sh', '.bat', '.cmd', '.dll', '.so', '.dylib', '.scr', '.msi', '.ps1'];
 
 export function validateMagicBytes(buffer: Buffer, fileName: string): boolean {
   const ext = path.extname(fileName || '').toLowerCase();
   const signatures = MAGIC_BYTES[ext];
   if (!signatures) return true;
-  return signatures.some(sig => sig.every((byte, i) => buffer[i] === byte));
+  return signatures.some((sig) => sig.every((byte, i) => buffer[i] === byte));
 }
 
 export const SIZE_LIMITS: Record<string, number> = {

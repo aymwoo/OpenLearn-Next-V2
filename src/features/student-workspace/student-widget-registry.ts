@@ -80,38 +80,10 @@ export class StudentWidgetRegistry {
   public registerDefaultWidgets(init: StudentDefaultWidgetInit): void {
     const { studentId, lessonId, lang = 'en', context, pluginHost } = init;
 
-    this.mountWidget(
-      'widget_student_whiteboard',
-      'Whiteboard',
-      'MainCanvas',
-      StudentWhiteboardWidget,
-      {},
-      'official',
-    );
-    this.mountWidget(
-      'widget_student_lesson',
-      'Lesson',
-      'LeftSidebar',
-      StudentLessonWidget,
-      { context },
-      'official',
-    );
-    this.mountWidget(
-      'widget_student_resources',
-      'Resources',
-      'LeftSidebar',
-      StudentResourcesWidget,
-      {},
-      'official',
-    );
-    this.mountWidget(
-      'widget_student_activities',
-      'Activities',
-      'BottomPanel',
-      StudentActivitiesWidget,
-      {},
-      'official',
-    );
+    this.mountWidget('widget_student_whiteboard', 'Whiteboard', 'MainCanvas', StudentWhiteboardWidget, {}, 'official');
+    this.mountWidget('widget_student_lesson', 'Lesson', 'LeftSidebar', StudentLessonWidget, { context }, 'official');
+    this.mountWidget('widget_student_resources', 'Resources', 'LeftSidebar', StudentResourcesWidget, {}, 'official');
+    this.mountWidget('widget_student_activities', 'Activities', 'BottomPanel', StudentActivitiesWidget, {}, 'official');
     this.mountWidget(
       'widget_student_assignments',
       'Assignments',
@@ -149,14 +121,7 @@ export class StudentWidgetRegistry {
 
     // Plugin-extensible widgets only when a plugin host is provided.
     if (pluginHost) {
-      this.mountWidget(
-        'widget_student_plugins',
-        'Plugin Widgets',
-        'FloatingArea',
-        StudentPluginWidgets,
-        {},
-        'plugin',
-      );
+      this.mountWidget('widget_student_plugins', 'Plugin Widgets', 'FloatingArea', StudentPluginWidgets, {}, 'plugin');
     }
   }
 

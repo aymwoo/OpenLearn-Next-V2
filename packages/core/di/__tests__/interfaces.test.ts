@@ -42,7 +42,11 @@ import { CapabilityRegistry } from '../../ai-capability/registry/capability-regi
 const tokens = [
   { name: 'ICommandBusServiceToken', token: ICommandBusServiceToken, expected: '@openlearn/core:ICommandBusService' },
   { name: 'IEventBusServiceToken', token: IEventBusServiceToken, expected: '@openlearn/core:IEventBusService' },
-  { name: 'IActionRegistryServiceToken', token: IActionRegistryServiceToken, expected: '@openlearn/core:IActionRegistryService' },
+  {
+    name: 'IActionRegistryServiceToken',
+    token: IActionRegistryServiceToken,
+    expected: '@openlearn/core:IActionRegistryService',
+  },
   { name: 'ICapabilityServiceToken', token: ICapabilityServiceToken, expected: '@openlearn/core:ICapabilityService' },
   { name: 'IProcessServiceToken', token: IProcessServiceToken, expected: '@openlearn/core:IProcessService' },
   { name: 'IStorageServiceToken', token: IStorageServiceToken, expected: '@openlearn/core:IStorageService' },
@@ -97,47 +101,27 @@ describe('Kernel IService 注册', () => {
 
   it('resolve 返回的实例应与 kernelContainer 直接属性一致（5 个直接注册的子系统，SC-4）', async () => {
     // verify resolve === kernel direct property (same reference, toBe)
-    expect(
-      await kernel.serviceRegistry.resolve(ICommandBusServiceToken),
-    ).toBe(kernel.commandBus);
-    expect(
-      await kernel.serviceRegistry.resolve(IEventBusServiceToken),
-    ).toBe(kernel.eventBus);
-    expect(
-      await kernel.serviceRegistry.resolve(IActionRegistryServiceToken),
-    ).toBe(kernel.actionRegistry);
-    expect(
-      await kernel.serviceRegistry.resolve(ICapabilityServiceToken),
-    ).toBe(kernel.capabilityGuard);
-    expect(
-      await kernel.serviceRegistry.resolve(IProcessServiceToken),
-    ).toBe(kernel.processManager);
+    expect(await kernel.serviceRegistry.resolve(ICommandBusServiceToken)).toBe(kernel.commandBus);
+    expect(await kernel.serviceRegistry.resolve(IEventBusServiceToken)).toBe(kernel.eventBus);
+    expect(await kernel.serviceRegistry.resolve(IActionRegistryServiceToken)).toBe(kernel.actionRegistry);
+    expect(await kernel.serviceRegistry.resolve(ICapabilityServiceToken)).toBe(kernel.capabilityGuard);
+    expect(await kernel.serviceRegistry.resolve(IProcessServiceToken)).toBe(kernel.processManager);
   });
 
   // P7-A2 Stage 3: 6 个统一插件 facade 注册进 DI，resolve 返回与 kernel 直接属性同一引用
   it('resolve 返回的 facade 应与 kernel 直接属性一致（P7-A2 Stage 3）', async () => {
-    expect(await kernel.serviceRegistry.resolve(IPluginLifecycleManagerToken)).toBe(
-      kernel.pluginLifecycleManager,
-    );
+    expect(await kernel.serviceRegistry.resolve(IPluginLifecycleManagerToken)).toBe(kernel.pluginLifecycleManager);
     expect(await kernel.serviceRegistry.resolve(IPluginDistributionManagerToken)).toBe(
       kernel.pluginDistributionManager,
     );
-    expect(await kernel.serviceRegistry.resolve(IPluginRuntimeCompositionToken)).toBe(
-      kernel.pluginRuntimeComposition,
-    );
-    expect(await kernel.serviceRegistry.resolve(IUnifiedExtensionRegistryToken)).toBe(
-      kernel.unifiedExtensionRegistry,
-    );
-    expect(await kernel.serviceRegistry.resolve(IPluginCapabilityGatewayToken)).toBe(
-      kernel.pluginCapabilityGateway,
-    );
+    expect(await kernel.serviceRegistry.resolve(IPluginRuntimeCompositionToken)).toBe(kernel.pluginRuntimeComposition);
+    expect(await kernel.serviceRegistry.resolve(IUnifiedExtensionRegistryToken)).toBe(kernel.unifiedExtensionRegistry);
+    expect(await kernel.serviceRegistry.resolve(IPluginCapabilityGatewayToken)).toBe(kernel.pluginCapabilityGateway);
     expect(await kernel.serviceRegistry.resolve(ICapabilityRegistryToken)).toBe(kernel.capabilityRegistry);
   });
 
   it('resolve 出的 facade 是各自类的真实实例（P7-A2 Stage 3）', async () => {
-    expect(await kernel.serviceRegistry.resolve(IPluginLifecycleManagerToken)).toBeInstanceOf(
-      PluginLifecycleManager,
-    );
+    expect(await kernel.serviceRegistry.resolve(IPluginLifecycleManagerToken)).toBeInstanceOf(PluginLifecycleManager);
     expect(await kernel.serviceRegistry.resolve(IPluginDistributionManagerToken)).toBeInstanceOf(
       PluginDistributionManager,
     );
@@ -147,9 +131,7 @@ describe('Kernel IService 注册', () => {
     expect(await kernel.serviceRegistry.resolve(IUnifiedExtensionRegistryToken)).toBeInstanceOf(
       UnifiedExtensionRegistry,
     );
-    expect(await kernel.serviceRegistry.resolve(IPluginCapabilityGatewayToken)).toBeInstanceOf(
-      PluginCapabilityGateway,
-    );
+    expect(await kernel.serviceRegistry.resolve(IPluginCapabilityGatewayToken)).toBeInstanceOf(PluginCapabilityGateway);
     expect(await kernel.serviceRegistry.resolve(ICapabilityRegistryToken)).toBeInstanceOf(CapabilityRegistry);
   });
 

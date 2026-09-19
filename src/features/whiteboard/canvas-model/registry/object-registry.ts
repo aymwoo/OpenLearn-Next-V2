@@ -3,7 +3,7 @@ import type { CanvasObject, ObjectTypeDescriptor, Size2D } from '../types.js';
 
 /**
  * ObjectRegistry & Factory
- * 
+ *
  * Central registry for all Canvas Object types.
  * Enables core features and external plugins to register custom object types
  * without modifying Whiteboard Core source code.
@@ -58,7 +58,7 @@ export class ObjectRegistry {
    */
   public createObject<T = Record<string, unknown>>(
     type: string,
-    overrides?: Partial<CanvasObject<T>>
+    overrides?: Partial<CanvasObject<T>>,
   ): CanvasObject<T> {
     const descriptor = this.descriptors.get(type);
     const defaultPayload = descriptor ? (descriptor.createDefaultPayload() as T) : ({} as T);
@@ -95,7 +95,7 @@ export class ObjectRegistry {
    */
   public cloneObject<T = Record<string, unknown>>(
     obj: CanvasObject<T>,
-    positionOffset: { x: number; y: number } = { x: 20, y: 20 }
+    positionOffset: { x: number; y: number } = { x: 20, y: 20 },
   ): CanvasObject<T> {
     const now = Date.now();
     return {
@@ -123,7 +123,7 @@ export class ObjectRegistry {
    */
   public deserializeObject<T = Record<string, unknown>>(data: string | Record<string, unknown>): CanvasObject<T> {
     const parsed: CanvasObject<T> = typeof data === 'string' ? JSON.parse(data) : (data as unknown as CanvasObject<T>);
-    
+
     // Ensure base structural fallback values
     return {
       id: parsed.id || uuidv7(),

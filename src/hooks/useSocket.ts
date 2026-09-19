@@ -64,9 +64,7 @@ export function useSocket(options: UseSocketOptions = {}): UseSocketResult {
     subscriptionsRef.current.push({ event, handler });
     return () => {
       socket.off(event, handler);
-      subscriptionsRef.current = subscriptionsRef.current.filter(
-        s => s.event !== event || s.handler !== handler,
-      );
+      subscriptionsRef.current = subscriptionsRef.current.filter((s) => s.event !== event || s.handler !== handler);
     };
   }, []);
 

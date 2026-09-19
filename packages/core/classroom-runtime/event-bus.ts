@@ -3,12 +3,7 @@
  * Type-safe decoupled event pipeline for all classroom components.
  */
 
-import {
-  RuntimeEventType,
-  RuntimeEventMap,
-  RuntimeEventEnvelope,
-  RuntimeEventSubscriber,
-} from './types.js';
+import { RuntimeEventType, RuntimeEventMap, RuntimeEventEnvelope, RuntimeEventSubscriber } from './types.js';
 
 export class RuntimeEventBus {
   private subscribers = new Map<string, Set<RuntimeEventSubscriber<any>>>();
@@ -16,10 +11,7 @@ export class RuntimeEventBus {
   /**
    * Subscribe to a specific runtime event channel.
    */
-  public subscribe<K extends RuntimeEventType>(
-    eventType: K | '*',
-    subscriber: RuntimeEventSubscriber<K>
-  ): () => void {
+  public subscribe<K extends RuntimeEventType>(eventType: K | '*', subscriber: RuntimeEventSubscriber<K>): () => void {
     const key = String(eventType);
     if (!this.subscribers.has(key)) {
       this.subscribers.set(key, new Set());
@@ -38,7 +30,7 @@ export class RuntimeEventBus {
   public async publish<K extends RuntimeEventType>(
     type: K,
     payload: RuntimeEventMap[K],
-    source = 'runtime.system'
+    source = 'runtime.system',
   ): Promise<RuntimeEventEnvelope<K>> {
     const envelope: RuntimeEventEnvelope<K> = {
       id: `evt_${globalThis.crypto.randomUUID()}`,
@@ -57,8 +49,8 @@ export class RuntimeEventBus {
       allSubs.map((sub) =>
         Promise.resolve(sub(envelope)).catch((err: unknown) => {
           console.error(`[RuntimeEventBus] Error in subscriber for ${String(type)}:`, err);
-        })
-      )
+        }),
+      ),
     );
 
     return envelope;

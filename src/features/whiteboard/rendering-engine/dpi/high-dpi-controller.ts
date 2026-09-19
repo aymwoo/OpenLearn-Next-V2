@@ -6,7 +6,11 @@ export class HighDPIController {
     return 1;
   }
 
-  public setupCanvas(canvas: HTMLCanvasElement, width: number, height: number): { dpr: number; cssWidth: number; cssHeight: number } {
+  public setupCanvas(
+    canvas: HTMLCanvasElement,
+    width: number,
+    height: number,
+  ): { dpr: number; cssWidth: number; cssHeight: number } {
     const dpr = this.getDPR();
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);

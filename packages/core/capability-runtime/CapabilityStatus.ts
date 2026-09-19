@@ -6,13 +6,7 @@
  * state machine so lifecycle transitions cannot be applied arbitrarily.
  */
 
-export type CapabilityStatus =
-  | 'Registered'
-  | 'Resolved'
-  | 'Active'
-  | 'Inactive'
-  | 'Disabled'
-  | 'Disposed';
+export type CapabilityStatus = 'Registered' | 'Resolved' | 'Active' | 'Inactive' | 'Disabled' | 'Disposed';
 
 export const CAPABILITY_STATUS_TRANSITIONS: Record<CapabilityStatus, CapabilityStatus[]> = {
   Registered: ['Resolved', 'Disabled', 'Disposed'],

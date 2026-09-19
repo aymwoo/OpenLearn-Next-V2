@@ -2,11 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import betterSqlite3 from 'better-sqlite3';
 import { PointsDimensionRegistry } from '../points-dimension-registry.js';
 import { PointsLedgerService } from '../points-ledger-service.js';
-import {
-  IPointsDimensionRegistryToken,
-  IPointsLedgerServiceToken,
-  PointsDimensionSpec,
-} from '../interfaces.js';
+import { IPointsDimensionRegistryToken, IPointsLedgerServiceToken, PointsDimensionSpec } from '../interfaces.js';
 import { Token } from '../token.js';
 
 describe('Student Points Ledger & Dimension Registry (Wave 1)', () => {
@@ -78,21 +74,14 @@ describe('PointsLedgerService Integration (Wave 2)', () => {
     const studentId = 'student-alice';
     const classId = 'class-101';
 
-    const item1 = await ledgerService.addPoints(
-      studentId,
-      classId,
-      'attendance',
-      10,
-      '全勤卡扣打卡奖励',
-      'builtin'
-    );
+    const item1 = await ledgerService.addPoints(studentId, classId, 'attendance', 10, '全勤卡扣打卡奖励', 'builtin');
     const item2 = await ledgerService.addPoints(
       studentId,
       classId,
       'ai_practice',
       15,
       '完成 AI 对话强化练习',
-      'prov_openai'
+      'prov_openai',
     );
 
     expect(item1.id).toBeDefined();
@@ -101,7 +90,7 @@ describe('PointsLedgerService Integration (Wave 2)', () => {
 
     const logs = await ledgerService.getLogs(studentId, classId);
     expect(logs.length).toBe(2);
-    const dimIds = logs.map(l => l.dimensionId);
+    const dimIds = logs.map((l) => l.dimensionId);
     expect(dimIds).toContain('ai_practice');
     expect(dimIds).toContain('attendance');
   });

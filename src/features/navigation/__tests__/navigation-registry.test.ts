@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  BUILTIN_NAV_ITEMS,
-  NAVIGATION_GROUPS,
-  resolveUnifiedNavigationItems,
-} from '../navigation-registry';
+import { BUILTIN_NAV_ITEMS, NAVIGATION_GROUPS, resolveUnifiedNavigationItems } from '../navigation-registry';
 import type { ExtensionPointConfig } from '../../../plugin-host/types';
 
 describe('Navigation System Registry Adapter (PF-02)', () => {
@@ -20,20 +16,12 @@ describe('Navigation System Registry Adapter (PF-02)', () => {
 
     // Teacher should see timetable, lab, and grades under management/analytics
     expect(teacherNav.management.some((i) => i.id === 'timetable')).toBe(true);
-    expect(teacherNav.management.some((i) => i.id === 'computer-lab')).toBe(
-      true,
-    );
-    expect(
-      teacherNav.analytics.some((i) => i.id === 'semester-grades'),
-    ).toBe(true);
+    expect(teacherNav.management.some((i) => i.id === 'computer-lab')).toBe(true);
+    expect(teacherNav.analytics.some((i) => i.id === 'semester-grades')).toBe(true);
 
     // Student should NOT see timetable or lab in built-in list
-    expect(studentNav.management.some((i) => i.id === 'timetable')).toBe(
-      false,
-    );
-    expect(
-      studentNav.management.some((i) => i.id === 'computer-lab'),
-    ).toBe(false);
+    expect(studentNav.management.some((i) => i.id === 'timetable')).toBe(false);
+    expect(studentNav.management.some((i) => i.id === 'computer-lab')).toBe(false);
   });
 
   it('should properly categorize plugin contributions into group and handle badge/roles', () => {
@@ -57,28 +45,16 @@ describe('Navigation System Registry Adapter (PF-02)', () => {
       },
     ];
 
-    const teacherNav = resolveUnifiedNavigationItems(
-      'teacher',
-      'zh',
-      mockPlugins,
-    );
+    const teacherNav = resolveUnifiedNavigationItems('teacher', 'zh', mockPlugins);
     const adminNav = resolveUnifiedNavigationItems('admin', 'zh', mockPlugins);
 
-    expect(teacherNav.extension.some((i) => i.id === 'custom-tool')).toBe(
-      true,
-    );
-    expect(teacherNav.extension.find((i) => i.id === 'custom-tool')?.badge).toBe(
-      3,
-    );
+    expect(teacherNav.extension.some((i) => i.id === 'custom-tool')).toBe(true);
+    expect(teacherNav.extension.find((i) => i.id === 'custom-tool')?.badge).toBe(3);
 
     // Teacher should NOT see admin-only tool
-    expect(
-      teacherNav.management.some((i) => i.id === 'admin-only-tool'),
-    ).toBe(false);
+    expect(teacherNav.management.some((i) => i.id === 'admin-only-tool')).toBe(false);
 
     // Admin SHOULD see admin-only tool under management group
-    expect(adminNav.management.some((i) => i.id === 'admin-only-tool')).toBe(
-      true,
-    );
+    expect(adminNav.management.some((i) => i.id === 'admin-only-tool')).toBe(true);
   });
 });

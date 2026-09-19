@@ -83,9 +83,7 @@ export function parseServiceRequirement(req: string): ServiceRequirement | null 
  * manifest.pluginDependencies. Kernel plugins (@openlearn/*) are
  * implicitly excluded (they have no plugin dependencies).
  */
-export function buildDepGraph(
-  manifests: Map<string, Manifest>,
-): Map<string, string[]> {
+export function buildDepGraph(manifests: Map<string, Manifest>): Map<string, string[]> {
   const graph = new Map<string, string[]>();
 
   for (const [pluginId, manifest] of manifests) {
@@ -166,9 +164,7 @@ export function topologicalSort(
       // Check if this plugin has missing deps
       const deps = graph.get(id) ?? [];
       const missing = deps.filter((d) => !installedIds.includes(d));
-      const failed = activeIds
-        ? deps.filter((d) => installedIds.includes(d) && !activeIds.has(d))
-        : [];
+      const failed = activeIds ? deps.filter((d) => installedIds.includes(d) && !activeIds.has(d)) : [];
 
       if (missing.length > 0 || failed.length > 0) {
         blocked.push({
@@ -203,9 +199,7 @@ export function topologicalSort(
         // Re-check deps for this dependent
         const deps = graph.get(dependent) ?? [];
         const missing = deps.filter((d) => !installedIds.includes(d));
-        const failed = activeIds
-          ? deps.filter((d) => installedIds.includes(d) && !activeIds.has(d))
-          : [];
+        const failed = activeIds ? deps.filter((d) => installedIds.includes(d) && !activeIds.has(d)) : [];
 
         if (missing.length > 0 || failed.length > 0) {
           blocked.push({
@@ -258,10 +252,7 @@ export function topologicalSort(
  * Called at install time and activation time. Returns the list of
  * missing dependencies (empty = all satisfied).
  */
-export function checkMissingDeps(
-  pluginDependencies: string[],
-  installedIds: Set<string>,
-): string[] {
+export function checkMissingDeps(pluginDependencies: string[], installedIds: Set<string>): string[] {
   return pluginDependencies.filter((dep) => !installedIds.has(dep));
 }
 
@@ -271,10 +262,7 @@ export function checkMissingDeps(
  * Returns the cycle path if found, or null if the graph is acyclic
  * for this plugin's dependency chain.
  */
-export function detectCycle(
-  pluginId: string,
-  graph: Map<string, string[]>,
-): string[] | null {
+export function detectCycle(pluginId: string, graph: Map<string, string[]>): string[] | null {
   const visited = new Set<string>();
   const path: string[] = [];
 
@@ -314,10 +302,7 @@ export function detectCycle(
  * @param activeIds - Set of pluginIds that are currently active
  * @returns DepResult with sorted order and diagnostics
  */
-export function computeActivationOrder(
-  manifests: Map<string, Manifest>,
-  activeIds: Set<string>,
-): DepResult {
+export function computeActivationOrder(manifests: Map<string, Manifest>, activeIds: Set<string>): DepResult {
   const graph = buildDepGraph(manifests);
   const installedIds = Array.from(manifests.keys());
   return topologicalSort(graph, installedIds, activeIds);

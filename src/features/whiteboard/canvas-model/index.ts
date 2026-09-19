@@ -1,6 +1,6 @@
 /**
  * Canvas Object Model — Barrel Export
- * 
+ *
  * Object-Oriented Canvas Architecture for OpenLearn Whiteboard Engine.
  */
 

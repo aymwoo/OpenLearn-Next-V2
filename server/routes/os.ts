@@ -12,12 +12,7 @@ import { sendSafeError } from '../utils/error-handler.js';
 import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
 
 export function registerOsRoutes(ctx: ServerContext) {
-  const {
-    app,
-    runGeminiAgentChat,
-    runOpenAIAgentChat,
-    activityRegistry,
-  } = ctx;
+  const { app, runGeminiAgentChat, runOpenAIAgentChat, activityRegistry } = ctx;
 
   app.post('/api/upload', async (req, res) => {
     try {
@@ -63,7 +58,7 @@ export function registerOsRoutes(ctx: ServerContext) {
                 return resolve();
               }
               const lines = stdout.split('\n');
-              const pagesLine = lines.find(line => line.startsWith('Pages:'));
+              const pagesLine = lines.find((line) => line.startsWith('Pages:'));
               if (pagesLine) {
                 const match = pagesLine.match(/Pages:\s+(\d+)/);
                 if (match) {
@@ -83,7 +78,7 @@ export function registerOsRoutes(ctx: ServerContext) {
         fileUrl: `/uploads/${uniqueName}`,
         fileName: filename,
         fileType: ext.substring(1),
-        slideCount
+        slideCount,
       });
     } catch (e: any) {
       console.error('Upload error:', e);
@@ -95,13 +90,9 @@ export function registerOsRoutes(ctx: ServerContext) {
   app.post('/api/commands', requireAuth(), async (req, res) => {
     try {
       const { commandType, payload } = req.body;
-      
-      const cmd = kernelContainer.commandBus.createCommand(
-        commandType, 
-        payload, 
-        getActorId(req)
-      );
-      
+
+      const cmd = kernelContainer.commandBus.createCommand(commandType, payload, getActorId(req));
+
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json({ success: true, result });
     } catch (err: any) {
@@ -118,7 +109,7 @@ export function registerOsRoutes(ctx: ServerContext) {
     }
   });
 
-  //  Activity Ecosystem REST (Sprint P7-01) 
+  //  Activity Ecosystem REST (Sprint P7-01)
   // List registered activity providers, filtered by role. Reuses the same
   // registry the Workspace and plugins share. No business logic is duplicated.
   app.get('/api/activities', async (req, res) => {
@@ -147,12 +138,7 @@ export function registerOsRoutes(ctx: ServerContext) {
         capability: kernelContainer.capabilityGuard as any,
         ai: kernelContainer.aiService,
       });
-      const result = await activityRegistry.startActivity(
-        req.params.id,
-        context,
-        payload ?? {},
-        actorId,
-      );
+      const result = await activityRegistry.startActivity(req.params.id, context, payload ?? {}, actorId);
       res.json({ ok: true, ...result });
     } catch (err: any) {
       const status = err?.code === 'PERMISSION_DENIED' ? 403 : 500;
@@ -266,9 +252,10 @@ export function registerOsRoutes(ctx: ServerContext) {
       if (detectPromptInjection(message)) {
         return res.status(400).json({
           success: false,
-          error: lang === 'zh'
-            ? '检测到潜在�? prompt 注入尝试，请修改您的输入�?'
-            : 'Potential prompt injection detected. Please rephrase your input.',
+          error:
+            lang === 'zh'
+              ? '检测到潜在�? prompt 注入尝试，请修改您的输入�?'
+              : 'Potential prompt injection detected. Please rephrase your input.',
         });
       }
 
@@ -287,12 +274,12 @@ export function registerOsRoutes(ctx: ServerContext) {
       // Build a per-user / per-lesson memory key and load prior turns
       const convKey = `agent:${userId || 'anonymous'}:${currentLessonId || 'global'}`;
       const MEMORY_TURNS = 20;
-      const historyRows = kernelContainer.db.prepare(
-        'SELECT role, content FROM agent_conversations WHERE conv_key = ? ORDER BY created_at ASC LIMIT ?'
-      ).all(convKey, MEMORY_TURNS) as { role: string; content: string }[];
-      const history = historyRows.map(r => ({
+      const historyRows = kernelContainer.db
+        .prepare('SELECT role, content FROM agent_conversations WHERE conv_key = ? ORDER BY created_at ASC LIMIT ?')
+        .all(convKey, MEMORY_TURNS) as { role: string; content: string }[];
+      const history = historyRows.map((r) => ({
         role: (r.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
-        content: r.content
+        content: r.content,
       }));
 
       // Resolve which AI backend handles this request. Precedence:
@@ -303,9 +290,15 @@ export function registerOsRoutes(ctx: ServerContext) {
       //      backward compatibility)
       let provider: StoredAIProvider | undefined;
       if (providerId) {
-        provider = kernelContainer.db.prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?').get(providerId) as StoredAIProvider | undefined;
+        provider = kernelContainer.db
+          .prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?')
+          .get(providerId) as StoredAIProvider | undefined;
       } else {
-        provider = kernelContainer.db.prepare("SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != '' LIMIT 1").get() as StoredAIProvider | undefined;
+        provider = kernelContainer.db
+          .prepare(
+            "SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != '' LIMIT 1",
+          )
+          .get() as StoredAIProvider | undefined;
       }
 
       // SEC-DATA-01: 解密 API Key
@@ -318,9 +311,11 @@ export function registerOsRoutes(ctx: ServerContext) {
       // Persist this exchange so the kernel assistant remembers it next time
       if (result && typeof result.agentText === 'string') {
         const now = Date.now();
-        kernelContainer.db.prepare('INSERT INTO agent_conversations (id, conv_key, role, content, created_at) VALUES (?, ?, ?, ?, ?)')
+        kernelContainer.db
+          .prepare('INSERT INTO agent_conversations (id, conv_key, role, content, created_at) VALUES (?, ?, ?, ?, ?)')
           .run('ac_' + crypto.randomUUID(), convKey, 'user', message, now);
-        kernelContainer.db.prepare('INSERT INTO agent_conversations (id, conv_key, role, content, created_at) VALUES (?, ?, ?, ?, ?)')
+        kernelContainer.db
+          .prepare('INSERT INTO agent_conversations (id, conv_key, role, content, created_at) VALUES (?, ?, ?, ?, ?)')
           .run('ac_' + crypto.randomUUID(), convKey, 'assistant', result.agentText, now + 1);
       }
 
@@ -329,7 +324,7 @@ export function registerOsRoutes(ctx: ServerContext) {
         ...result,
         providerUsed: provider
           ? { id: provider.id, name: provider.name, model_name: provider.model_name }
-          : { id: 'system', name: 'Gemini', model_name: 'gemini-3.5-flash' }
+          : { id: 'system', name: 'Gemini', model_name: 'gemini-3.5-flash' },
       });
     } catch (err: any) {
       console.error(err);
@@ -348,11 +343,11 @@ export function registerOsRoutes(ctx: ServerContext) {
       }
       const currentLessonId = (req.query.lessonId as string) || undefined;
       const convKey = `agent:${userId || 'anonymous'}:${currentLessonId || 'global'}`;
-      const rows = kernelContainer.db.prepare(
-        'SELECT role, content, created_at FROM agent_conversations WHERE conv_key = ? ORDER BY created_at ASC'
-      ).all(convKey) as { role: string; content: string; created_at: number }[];
+      const rows = kernelContainer.db
+        .prepare('SELECT role, content, created_at FROM agent_conversations WHERE conv_key = ? ORDER BY created_at ASC')
+        .all(convKey) as { role: string; content: string; created_at: number }[];
       res.json({
-        messages: rows.map(r => ({ role: r.role, content: r.content, createdAt: r.created_at }))
+        messages: rows.map((r) => ({ role: r.role, content: r.content, createdAt: r.created_at })),
       });
     } catch (e: any) {
       sendSafeError(res, e);

@@ -33,11 +33,11 @@ export default {
 
 ## 提供的内容
 
-| 类别 | 导出 |
-|------|------|
-| 上下文 | `PluginContext`, `PluginDatabaseAPI`, `PluginInfo`, `IPluginLogger` |
-| Manifest | `Manifest`, `ManifestV3` |
-| 服务接口 | `ICommandBusService`, `IEventBusService`, `IActionRegistryService`, `ICapabilityService`, `IProcessService`, `IStorageService`, `IAIService` |
-| Token | `ICommandBusServiceToken`, `IEventBusServiceToken`, ... (10 个 Token) |
-| 命令/事件 | `PlatformCommand`, `PlatformEvent`, `CommandHandler`, `EventSubscriber` |
-| 动作注册 | `ActionDescriptor` |
+| 类别      | 导出                                                                                                                                         |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 上下文    | `PluginContext`, `PluginDatabaseAPI`, `PluginInfo`, `IPluginLogger`                                                                          |
+| Manifest  | `Manifest`, `ManifestV3`                                                                                                                     |
+| 服务接口  | `ICommandBusService`, `IEventBusService`, `IActionRegistryService`, `ICapabilityService`, `IProcessService`, `IStorageService`, `IAIService` |
+| Token     | `ICommandBusServiceToken`, `IEventBusServiceToken`, ... (10 个 Token)                                                                        |
+| 命令/事件 | `PlatformCommand`, `PlatformEvent`, `CommandHandler`, `EventSubscriber`                                                                      |
+| 动作注册  | `ActionDescriptor`                                                                                                                           |

@@ -61,7 +61,7 @@ export interface ServerContext {
     args: any,
     allExecutedTools: AgentToolExecution[],
     callerRole?: string,
-    currentLessonId?: string | null
+    currentLessonId?: string | null,
   ) => Promise<any>;
   buildOpenAIChatUrl: (apiUrl: string) => string;
   runGeminiAgentChat: (request: AgentChatRequest) => Promise<any>;

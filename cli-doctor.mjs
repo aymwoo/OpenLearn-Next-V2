@@ -129,7 +129,8 @@ export function checkSdkConsistency(_fix = false, _fixes = []) {
     }
 
     const installed = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf-8')).version;
-    const isWorkspace = fs.existsSync(path.join(__dirname, 'pnpm-workspace.yaml')) && pkgDir.includes('packages/plugin-sdk');
+    const isWorkspace =
+      fs.existsSync(path.join(__dirname, 'pnpm-workspace.yaml')) && pkgDir.includes('packages/plugin-sdk');
 
     // 尝试识别 @openlearn/plugin-test-kit 版本
     let testKitInfo = '';
@@ -163,7 +164,11 @@ export function checkSdkConsistency(_fix = false, _fixes = []) {
     if (compareVersions(installed, spec) === 0) {
       return check('ok', `v${installed} 与精确 pin ${spec} 一致${testKitInfo}`);
     }
-    return check('err', `解析到 v${installed}，与精确 pin ${spec} 不一致（版本漂移）— server.cjs 构建所用 SDK 与运行时不符，请 npm install 修复`, true);
+    return check(
+      'err',
+      `解析到 v${installed}，与精确 pin ${spec} 不一致（版本漂移）— server.cjs 构建所用 SDK 与运行时不符，请 npm install 修复`,
+      true,
+    );
   } catch (e) {
     return check('err', `无法解析 ${SDK}: ${e.message}`);
   }
@@ -179,13 +184,43 @@ export function checkCorePluginsCompatibility() {
     const curVer = fs.existsSync(pkgPath) ? JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version : '0.3.9';
 
     const CORE_PLUGINS = [
-      { id: '@openlearn/plugin-builtin', name: 'Classroom Builtin Plugin', file: 'builtin.ts', defaultEngine: '>=0.2.5' },
+      {
+        id: '@openlearn/plugin-builtin',
+        name: 'Classroom Builtin Plugin',
+        file: 'builtin.ts',
+        defaultEngine: '>=0.2.5',
+      },
       { id: '@openlearn/plugin-vfs', name: 'Virtual File System Plugin', file: 'vfs.ts', defaultEngine: '>=0.2.5' },
-      { id: '@openlearn/plugin-process', name: 'Background Process Plugin', file: 'process.ts', defaultEngine: '>=0.2.5' },
-      { id: '@openlearn/plugin-management', name: 'LMS Management Plugin', file: 'management.ts', defaultEngine: '>=0.2.5' },
-      { id: '@openlearn/plugin-ai-planner', name: 'AI Planner Plugin', file: 'ai-planner.ts', defaultEngine: '>=0.2.5' },
-      { id: '@openlearn/plugin-ai-submit-injector', name: 'AI Submit Injector Plugin', file: 'ai-submit-injector.ts', defaultEngine: '>=0.2.5' },
-      { id: '@openlearn/plugin-assignment-eval', name: 'Assignment Evaluation Plugin', file: 'assignment-eval.ts', defaultEngine: '>=0.2.5' },
+      {
+        id: '@openlearn/plugin-process',
+        name: 'Background Process Plugin',
+        file: 'process.ts',
+        defaultEngine: '>=0.2.5',
+      },
+      {
+        id: '@openlearn/plugin-management',
+        name: 'LMS Management Plugin',
+        file: 'management.ts',
+        defaultEngine: '>=0.2.5',
+      },
+      {
+        id: '@openlearn/plugin-ai-planner',
+        name: 'AI Planner Plugin',
+        file: 'ai-planner.ts',
+        defaultEngine: '>=0.2.5',
+      },
+      {
+        id: '@openlearn/plugin-ai-submit-injector',
+        name: 'AI Submit Injector Plugin',
+        file: 'ai-submit-injector.ts',
+        defaultEngine: '>=0.2.5',
+      },
+      {
+        id: '@openlearn/plugin-assignment-eval',
+        name: 'Assignment Evaluation Plugin',
+        file: 'assignment-eval.ts',
+        defaultEngine: '>=0.2.5',
+      },
     ];
 
     const incompatible = [];
@@ -242,9 +277,9 @@ export async function checkInstalledPluginsCompatibility(options = {}) {
 
     const dbPath = options.dbPath
       ? path.resolve(options.dbPath)
-      : (process.env.OPENLEARN_DB_PATH
-          ? path.resolve(process.env.OPENLEARN_DB_PATH)
-          : path.join(os.homedir(), 'openlearn-next', 'data.db'));
+      : process.env.OPENLEARN_DB_PATH
+        ? path.resolve(process.env.OPENLEARN_DB_PATH)
+        : path.join(os.homedir(), 'openlearn-next', 'data.db');
 
     const plugins = [];
     const incompatible = [];
@@ -257,7 +292,9 @@ export async function checkInstalledPluginsCompatibility(options = {}) {
         const db = new Database(dbPath, { readonly: true });
         const tableCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='plugins'").get();
         if (tableCheck) {
-          const rows = db.prepare("SELECT id, name, manifest, status FROM plugins WHERE id NOT LIKE '@openlearn/plugin-%'").all();
+          const rows = db
+            .prepare("SELECT id, name, manifest, status FROM plugins WHERE id NOT LIKE '@openlearn/plugin-%'")
+            .all();
           for (const row of rows) {
             let manifest = null;
             if (row.manifest) {
@@ -341,7 +378,10 @@ export async function checkInstalledPluginsCompatibility(options = {}) {
       return check('warn', `发现 ${incompatible.length} 个插件与当前平台版本不兼容: ${incompatible.join('; ')}`);
     }
 
-    const sample = plugins.slice(0, 2).map((p) => `${p.id} v${p.version}`).join(', ');
+    const sample = plugins
+      .slice(0, 2)
+      .map((p) => `${p.id} v${p.version}`)
+      .join(', ');
     const more = plugins.length > 2 ? ` 等 ${plugins.length} 个` : '';
     return check('ok', `${plugins.length} 个扩展插件 (${sample}${more}) 全部与平台 v${curVer} 兼容`);
   } catch (e) {
@@ -377,16 +417,17 @@ export function checkCoreVersionDrift(fix = false, fixes = []) {
     }
 
     if (fix) {
-      const updated = coreContent.replace(
-        /PLATFORM_VERSION\s*=\s*['"][^'"]+['"]/,
-        `PLATFORM_VERSION = '${pkgVer}'`
-      );
+      const updated = coreContent.replace(/PLATFORM_VERSION\s*=\s*['"][^'"]+['"]/, `PLATFORM_VERSION = '${pkgVer}'`);
       fs.writeFileSync(coreVersionFile, updated, 'utf-8');
       fixes.push(`已自动将 packages/core/version.ts 同步为 v${pkgVer}`);
       return check('ok', `v${pkgVer} (已自动修复版本漂移: 从 v${coreVer} 同步为 v${pkgVer})`);
     }
 
-    return check('err', `检测到内核版本漂移: package.json (v${pkgVer}) 与 packages/core/version.ts (v${coreVer}) 不一致！`, true);
+    return check(
+      'err',
+      `检测到内核版本漂移: package.json (v${pkgVer}) 与 packages/core/version.ts (v${coreVer}) 不一致！`,
+      true,
+    );
   } catch (e) {
     return check('err', `版本一致性检查失败: ${e.message}`);
   }
@@ -420,7 +461,7 @@ export function checkNpxCacheDrift(fix = false, fixes = []) {
     return check(
       'warn',
       `发现 ${stale.length} 个旧版 NPX 缓存 (${staleVersions.join(', ')})，npx 执行可能因缓存发生版本漂移`,
-      true
+      true,
     );
   } catch (e) {
     return check('warn', `NPX 缓存扫描失败: ${e.message}`);
@@ -522,9 +563,9 @@ export async function runDoctor(options = {}) {
   // 3. 数据库目录与读写权限
   const dbPath = options.dbPath
     ? path.resolve(options.dbPath)
-    : (process.env.OPENLEARN_DB_PATH
-        ? path.resolve(process.env.OPENLEARN_DB_PATH)
-        : path.join(os.homedir(), 'openlearn-next', 'data.db'));
+    : process.env.OPENLEARN_DB_PATH
+      ? path.resolve(process.env.OPENLEARN_DB_PATH)
+      : path.join(os.homedir(), 'openlearn-next', 'data.db');
   const dbDir = path.dirname(dbPath);
 
   try {
@@ -632,7 +673,9 @@ export async function runDoctor(options = {}) {
 
     const hasFixableIssues = checks.some((c) => c.status !== 'ok' && c.fixable);
     if (!fix && hasFixableIssues) {
-      console.log(`\n  ${yellow}💡 提示: 检测到可通过自愈修复的问题，运行 'npx openlearn-next doctor --fix' 即可一键自动修复。${reset}`);
+      console.log(
+        `\n  ${yellow}💡 提示: 检测到可通过自愈修复的问题，运行 'npx openlearn-next doctor --fix' 即可一键自动修复。${reset}`,
+      );
     }
 
     console.log(`\n${cyan}───────────────────────────────────────────────────────────────${reset}`);
@@ -645,4 +688,3 @@ export async function runDoctor(options = {}) {
 
   return { ok: allOk, checks, fixes };
 }
-

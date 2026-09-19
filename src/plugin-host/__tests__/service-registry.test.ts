@@ -13,16 +13,12 @@ describe('FrontendServiceRegistry', () => {
   it('throws on duplicate registration (T-09-01)', async () => {
     const registry = new FrontendServiceRegistry();
     await registry.register('test-token', { value: 1 });
-    await expect(registry.register('test-token', { value: 2 })).rejects.toThrow(
-      'already registered',
-    );
+    await expect(registry.register('test-token', { value: 2 })).rejects.toThrow('already registered');
   });
 
   it('throws on resolve of unregistered token', async () => {
     const registry = new FrontendServiceRegistry();
-    await expect(registry.resolve('nonexistent')).rejects.toThrow(
-      'No provider registered for token: nonexistent',
-    );
+    await expect(registry.resolve('nonexistent')).rejects.toThrow('No provider registered for token: nonexistent');
   });
 
   it('unregisters a token', async () => {

@@ -6,12 +6,12 @@ Platform Kernel 在 `packages/core/kernel/index.ts` 中实现了明确的 4 层�
 
 ## 4 层拓扑映射表
 
-| 层级 | 职责描述 | 核心组件 / 类 | 无依赖保证 |
-|---|---|---|---|
-| **Layer 0** | 零依赖基础设施 | `EventBus`, `CapabilityGuard`, `ServiceRegistry`, `StorageService`, `AIService` | ✅ 零内部依赖 |
-| **Layer 1** | 能力与 AI 内核 | `AIRuntimeKernel`, `AICapabilityKernel`, `CapabilityRuntimeKernel`, `CapabilityGovernanceKernel`, `ServiceRegistryKernel` | 依赖 Layer 0 |
+| 层级        | 职责描述           | 核心组件 / 类                                                                                                                                                             | 无依赖保证     |
+| ----------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **Layer 0** | 零依赖基础设施     | `EventBus`, `CapabilityGuard`, `ServiceRegistry`, `StorageService`, `AIService`                                                                                           | ✅ 零内部依赖  |
+| **Layer 1** | 能力与 AI 内核     | `AIRuntimeKernel`, `AICapabilityKernel`, `CapabilityRuntimeKernel`, `CapabilityGovernanceKernel`, `ServiceRegistryKernel`                                                 | 依赖 Layer 0   |
 | **Layer 2** | 指令总线与领域引擎 | `CommandBus`, `ActionRegistry`, `ProcessManager`, `LessonRuntime`, `ClassroomRuntimeKernel`, `PresenceEngineKernel`, `CollaborationEngineKernel`, `AnalyticsEngineKernel` | 依赖 Layer 0-1 |
-| **Layer 3** | 宿主与线程隔离管理 | `PluginHost`, `WorkerManager`, `HotReloadController` | 依赖 Layer 0-2 |
+| **Layer 3** | 宿主与线程隔离管理 | `PluginHost`, `WorkerManager`, `HotReloadController`                                                                                                                      | 依赖 Layer 0-2 |
 
 ---
 

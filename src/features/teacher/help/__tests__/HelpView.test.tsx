@@ -7,7 +7,7 @@ import { UserGuideViewer } from '../UserGuideViewer';
 import { PluginDocsViewer } from '../PluginDocsViewer';
 
 vi.mock('../../../../plugin-host/extension-point-renderer', () => ({
-  ExtensionPointRenderer: () => <div data-testid="extension-point">Mock Extension Point</div>
+  ExtensionPointRenderer: () => <div data-testid="extension-point">Mock Extension Point</div>,
 }));
 
 describe('HelpView Sub-components', () => {
@@ -22,11 +22,11 @@ describe('HelpView Sub-components', () => {
               description: '创建新课时',
               capabilityRequired: 'lesson:write',
               isHighRisk: false,
-              inputSchema: { type: 'OBJECT', properties: { title: { type: 'STRING' } } }
-            }
+              inputSchema: { type: 'OBJECT', properties: { title: { type: 'STRING' } } },
+            },
           ]}
           onRefresh={vi.fn()}
-        />
+        />,
       );
 
       expect(screen.getByPlaceholderText('通过命令类型、描述或 Action ID 搜索活跃指令...')).toBeDefined();
@@ -46,7 +46,7 @@ describe('HelpView Sub-components', () => {
           pluginBoilerplateCode="const hello = true;"
           pluginInteractiveCode="const interactive = true;"
           pluginExamCode="const exam = true;"
-        />
+        />,
       );
 
       expect(screen.getByText('Edu-OS 插件开发指南 & API 参考')).toBeDefined();
@@ -56,12 +56,7 @@ describe('HelpView Sub-components', () => {
 
   describe('UserGuideViewer', () => {
     it('should render system user guide sections', () => {
-      render(
-        <UserGuideViewer
-          copiedId={null}
-          handleCopy={vi.fn()}
-        />
-      );
+      render(<UserGuideViewer copiedId={null} handleCopy={vi.fn()} />);
 
       expect(screen.getByText('Edu-OS 核心系统主要特性使用教程')).toBeDefined();
       expect(screen.getByText('1. 使用核心指令管理班级与学生')).toBeDefined();

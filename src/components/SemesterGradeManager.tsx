@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ClipboardList, 
-  Settings2, 
-  Plus, 
-  Trash2, 
-  Award, 
-  Sparkles, 
-  Loader2, 
-  Check, 
-  X, 
-  BookOpen, 
-  ArrowRight, 
-  Save, 
+import {
+  ClipboardList,
+  Settings2,
+  Plus,
+  Trash2,
+  Award,
+  Sparkles,
+  Loader2,
+  Check,
+  X,
+  BookOpen,
+  ArrowRight,
+  Save,
   AlertCircle,
   TrendingUp,
-  AwardIcon
+  AwardIcon,
 } from 'lucide-react';
 
 interface Student {
@@ -64,18 +64,18 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
   // Tab states: 'overview' | 'exams' | 'weights'
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'exams' | 'weights'>('overview');
   const [semesterName, setSemesterName] = useState('2026年春季学期');
-  
+
   // Loading & Message states
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
-  
+
   // Grade reports & weights states
   const [gradeReports, setGradeReports] = useState<StudentGradeReport[]>([]);
   const [weights, setWeights] = useState<GradeWeights>({
     attendance_weight: 0.15,
     progress_weight: 0.25,
     assignment_weight: 0.35,
-    exam_weight: 0.25
+    exam_weight: 0.25,
   });
 
   // Weights configuration inputs (temporary percentages)
@@ -83,7 +83,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
     attendance: '15',
     progress: '25',
     assignment: '35',
-    exam: '25'
+    exam: '25',
   });
 
   // Exams states
@@ -92,7 +92,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
   const [newExamTitle, setNewExamTitle] = useState('');
   const [newExamDesc, setNewExamDesc] = useState('');
   const [newExamMaxScore, setNewExamMaxScore] = useState(100);
-  
+
   // Enter exam score states
   const [activeScoreExam, setActiveScoreExam] = useState<Exam | null>(null);
   const [examStudentScores, setExamStudentScores] = useState<Record<string, { score: string; notes: string }>>({});
@@ -109,7 +109,9 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
   const fetchGradesAndWeights = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/classes/${classId}/semester-grades?semesterName=${encodeURIComponent(semesterName)}`);
+      const response = await fetch(
+        `/api/classes/${classId}/semester-grades?semesterName=${encodeURIComponent(semesterName)}`,
+      );
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -119,7 +121,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
             attendance: Math.round(data.weights.attendance_weight * 100).toString(),
             progress: Math.round(data.weights.progress_weight * 100).toString(),
             assignment: Math.round(data.weights.assignment_weight * 100).toString(),
-            exam: Math.round(data.weights.exam_weight * 100).toString()
+            exam: Math.round(data.weights.exam_weight * 100).toString(),
           });
         }
       }
@@ -154,7 +156,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
     if (sum !== 100) {
       setMessage({
         type: 'error',
-        text: lang === 'zh' ? '四项权重比例相加必须等于 100%' : 'All four weights must sum up to 100%'
+        text: lang === 'zh' ? '四项权重比例相加必须等于 100%' : 'All four weights must sum up to 100%',
       });
       return;
     }
@@ -167,14 +169,14 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
           attendance_weight: att / 100,
           progress_weight: prog / 100,
           assignment_weight: assign / 100,
-          exam_weight: ex / 100
-        })
+          exam_weight: ex / 100,
+        }),
       });
 
       if (response.ok) {
         setMessage({
           type: 'success',
-          text: lang === 'zh' ? '🎉 权重设置保存成功！' : '🎉 Grade weights saved successfully!'
+          text: lang === 'zh' ? '🎉 权重设置保存成功！' : '🎉 Grade weights saved successfully!',
         });
         fetchGradesAndWeights();
       } else {
@@ -197,8 +199,8 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
         body: JSON.stringify({
           title: newExamTitle,
           description: newExamDesc,
-          max_score: newExamMaxScore
-        })
+          max_score: newExamMaxScore,
+        }),
       });
 
       if (response.ok) {
@@ -224,13 +226,13 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
       if (response.ok) {
         const scoresData = await response.json();
         const scoreMap: Record<string, { score: string; notes: string }> = {};
-        students.forEach(s => {
+        students.forEach((s) => {
           scoreMap[s.id] = { score: '', notes: '' };
         });
         scoresData.forEach((s: any) => {
           scoreMap[s.student_id] = {
             score: s.score !== null && s.score !== undefined ? s.score.toString() : '',
-            notes: s.notes || ''
+            notes: s.notes || '',
           };
         });
         setExamStudentScores(scoreMap);
@@ -249,7 +251,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
       return {
         studentId,
         score: data.score.trim() === '' ? null : Number(data.score),
-        notes: data.notes
+        notes: data.notes,
       };
     });
 
@@ -257,11 +259,14 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
       const response = await fetch(`/api/exams/${activeScoreExam.id}/scores`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scores: payload })
+        body: JSON.stringify({ scores: payload }),
       });
 
       if (response.ok) {
-        setMessage({ type: 'success', text: lang === 'zh' ? '🎉 分数录入保存成功！' : '🎉 Scores saved successfully!' });
+        setMessage({
+          type: 'success',
+          text: lang === 'zh' ? '🎉 分数录入保存成功！' : '🎉 Scores saved successfully!',
+        });
         setActiveScoreExam(null);
         fetchGradesAndWeights();
       }
@@ -273,27 +278,29 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
 
   // Generate AI comment for a student
   const handleGenerateAIComment = async (studentId: string) => {
-    setAiLoading(prev => ({ ...prev, [studentId]: true }));
+    setAiLoading((prev) => ({ ...prev, [studentId]: true }));
     try {
       const response = await fetch(`/api/classes/${classId}/students/${studentId}/semester-ai-evaluation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ semesterName })
+        body: JSON.stringify({ semesterName }),
       });
 
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.aiEvaluation) {
           // Update AI comment in local state
-          setGradeReports(prev => prev.map(report => {
-            if (report.studentId === studentId) {
-              return { ...report, aiEvaluation: data.aiEvaluation };
-            }
-            return report;
-          }));
+          setGradeReports((prev) =>
+            prev.map((report) => {
+              if (report.studentId === studentId) {
+                return { ...report, aiEvaluation: data.aiEvaluation };
+              }
+              return report;
+            }),
+          );
           setMessage({
             type: 'success',
-            text: lang === 'zh' ? '✨ AI 评语已成功生成！' : '✨ AI evaluation generated!'
+            text: lang === 'zh' ? '✨ AI 评语已成功生成！' : '✨ AI evaluation generated!',
           });
         }
       } else {
@@ -304,23 +311,26 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
       console.error(e);
       setMessage({
         type: 'error',
-        text: lang === 'zh' 
-          ? `AI 生成评语失败: ${e.message || '请确保已配置 AI Provider'}` 
-          : `AI Generation failed: ${e.message || 'Check AI configurations'}`
+        text:
+          lang === 'zh'
+            ? `AI 生成评语失败: ${e.message || '请确保已配置 AI Provider'}`
+            : `AI Generation failed: ${e.message || 'Check AI configurations'}`,
       });
     } finally {
-      setAiLoading(prev => ({ ...prev, [studentId]: false }));
+      setAiLoading((prev) => ({ ...prev, [studentId]: false }));
     }
   };
 
   // Update teacher manual comment
   const handleTeacherCommentChange = (studentId: string, value: string) => {
-    setGradeReports(prev => prev.map(report => {
-      if (report.studentId === studentId) {
-        return { ...report, teacherEvaluation: value };
-      }
-      return report;
-    }));
+    setGradeReports((prev) =>
+      prev.map((report) => {
+        if (report.studentId === studentId) {
+          return { ...report, teacherEvaluation: value };
+        }
+        return report;
+      }),
+    );
   };
 
   // Save/Archive all reports
@@ -332,14 +342,14 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           semesterName,
-          reports: gradeReports
-        })
+          reports: gradeReports,
+        }),
       });
 
       if (response.ok) {
         setMessage({
           type: 'success',
-          text: lang === 'zh' ? '💾 学期成绩与评语已归档保存成功！' : '💾 Semester reports saved and archived!'
+          text: lang === 'zh' ? '💾 学期成绩与评语已归档保存成功！' : '💾 Semester reports saved and archived!',
         });
         fetchGradesAndWeights();
       }
@@ -351,7 +361,11 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
     }
   };
 
-  const currentTotalWeight = Number(weightInputs.attendance) + Number(weightInputs.progress) + Number(weightInputs.assignment) + Number(weightInputs.exam);
+  const currentTotalWeight =
+    Number(weightInputs.attendance) +
+    Number(weightInputs.progress) +
+    Number(weightInputs.assignment) +
+    Number(weightInputs.exam);
 
   return (
     <div className="flex-1 flex flex-col font-sans p-4 bg-white select-none">
@@ -366,7 +380,9 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
               {lang === 'zh' ? `【${className}】期末综合总评与计算` : `Semester Grade: ${className}`}
             </h2>
             <p className="text-[10px] text-slate-400 mt-0.5 text-left">
-              {lang === 'zh' ? '多维度评估学生考勤率、课程进度、作业以及考试分数' : 'Assess attendance, progress, assignments, and test scores'}
+              {lang === 'zh'
+                ? '多维度评估学生考勤率、课程进度、作业以及考试分数'
+                : 'Assess attendance, progress, assignments, and test scores'}
             </p>
           </div>
         </div>
@@ -389,10 +405,15 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
 
       {/* Message Banner */}
       {message && (
-        <div className={`p-3 text-xs mb-4 rounded-xl border flex items-center justify-between animate-in slide-in-from-top-2 duration-200 shrink-0 ${
-          message.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
-          message.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-blue-50 border-blue-200 text-blue-800'
-        }`}>
+        <div
+          className={`p-3 text-xs mb-4 rounded-xl border flex items-center justify-between animate-in slide-in-from-top-2 duration-200 shrink-0 ${
+            message.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : message.type === 'error'
+                ? 'bg-rose-50 border-rose-200 text-rose-800'
+                : 'bg-blue-50 border-blue-200 text-blue-800'
+          }`}
+        >
           <div className="flex items-center gap-2">
             <AlertCircle size={14} />
             <span>{message.text}</span>
@@ -406,7 +427,10 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
       {/* Mode Switches */}
       <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl mb-4 self-start border border-slate-200/20 shrink-0">
         <button
-          onClick={() => { setActiveSubTab('overview'); setActiveScoreExam(null); }}
+          onClick={() => {
+            setActiveSubTab('overview');
+            setActiveScoreExam(null);
+          }}
           className={`py-1 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
             activeSubTab === 'overview'
               ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/30'
@@ -417,7 +441,10 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
           <span>{lang === 'zh' ? '成绩总览与评语' : 'Grades & Evaluatons'}</span>
         </button>
         <button
-          onClick={() => { setActiveSubTab('exams'); setActiveScoreExam(null); }}
+          onClick={() => {
+            setActiveSubTab('exams');
+            setActiveScoreExam(null);
+          }}
           className={`py-1 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
             activeSubTab === 'exams'
               ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/30'
@@ -428,7 +455,10 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
           <span>{lang === 'zh' ? '测试卷录分' : 'Exams & Quizzes'}</span>
         </button>
         <button
-          onClick={() => { setActiveSubTab('weights'); setActiveScoreExam(null); }}
+          onClick={() => {
+            setActiveSubTab('weights');
+            setActiveScoreExam(null);
+          }}
           className={`py-1 px-3 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
             activeSubTab === 'weights'
               ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/30'
@@ -445,27 +475,45 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
         {loading ? (
           <div className="h-48 flex items-center justify-center gap-2">
             <Loader2 className="animate-spin text-indigo-600" size={20} />
-            <span className="text-xs text-slate-500">{lang === 'zh' ? '正在计算中，请稍候...' : 'Computing semester grades...'}</span>
+            <span className="text-xs text-slate-500">
+              {lang === 'zh' ? '正在计算中，请稍候...' : 'Computing semester grades...'}
+            </span>
           </div>
         ) : activeSubTab === 'overview' ? (
           <div className="flex flex-col gap-4 h-full">
             {/* Grid stats overview */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 shrink-0 text-left">
               <div className="bg-slate-50/50 border border-slate-200/40 p-3 rounded-2xl">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-left">{lang === 'zh' ? '出勤均分权重' : 'Attendance Weight'}</div>
-                <div className="text-base font-black text-slate-800 mt-1 text-left">{Math.round(weights.attendance_weight * 100)}%</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-left">
+                  {lang === 'zh' ? '出勤均分权重' : 'Attendance Weight'}
+                </div>
+                <div className="text-base font-black text-slate-800 mt-1 text-left">
+                  {Math.round(weights.attendance_weight * 100)}%
+                </div>
               </div>
               <div className="bg-slate-50/50 border border-slate-200/40 p-3 rounded-2xl">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-left">{lang === 'zh' ? '课程进度权重' : 'Progress Weight'}</div>
-                <div className="text-base font-black text-slate-800 mt-1 text-left">{Math.round(weights.progress_weight * 100)}%</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-left">
+                  {lang === 'zh' ? '课程进度权重' : 'Progress Weight'}
+                </div>
+                <div className="text-base font-black text-slate-800 mt-1 text-left">
+                  {Math.round(weights.progress_weight * 100)}%
+                </div>
               </div>
               <div className="bg-slate-50/50 border border-slate-200/40 p-3 rounded-2xl">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-left">{lang === 'zh' ? '作业成绩权重' : 'Assignments Weight'}</div>
-                <div className="text-base font-black text-slate-800 mt-1 text-left">{Math.round(weights.assignment_weight * 100)}%</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-left">
+                  {lang === 'zh' ? '作业成绩权重' : 'Assignments Weight'}
+                </div>
+                <div className="text-base font-black text-slate-800 mt-1 text-left">
+                  {Math.round(weights.assignment_weight * 100)}%
+                </div>
               </div>
               <div className="bg-slate-50/50 border border-slate-200/40 p-3 rounded-2xl">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-left">{lang === 'zh' ? '测验考试权重' : 'Exams Weight'}</div>
-                <div className="text-base font-black text-slate-800 mt-1 text-left">{Math.round(weights.exam_weight * 100)}%</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-left">
+                  {lang === 'zh' ? '测验考试权重' : 'Exams Weight'}
+                </div>
+                <div className="text-base font-black text-slate-800 mt-1 text-left">
+                  {Math.round(weights.exam_weight * 100)}%
+                </div>
               </div>
             </div>
 
@@ -483,12 +531,14 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                       <th className="p-3 text-center w-[75px]">{lang === 'zh' ? '测验分' : 'Exam'}</th>
                       <th className="p-3 text-center w-[80px]">{lang === 'zh' ? '总评得分' : 'Total'}</th>
                       <th className="p-3 text-center w-[60px]">{lang === 'zh' ? '等级' : 'Grade'}</th>
-                      <th className="p-3">{lang === 'zh' ? '手写评语 / AI 温馨期末评语' : 'Teacher & AI Evaluation Comments'}</th>
+                      <th className="p-3">
+                        {lang === 'zh' ? '手写评语 / AI 温馨期末评语' : 'Teacher & AI Evaluation Comments'}
+                      </th>
                       <th className="p-3 text-center w-[100px]">{lang === 'zh' ? 'AI 评价' : 'AI Bot'}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {gradeReports.map(report => (
+                    {gradeReports.map((report) => (
                       <tr key={report.studentId} className="hover:bg-slate-50/40 transition-colors">
                         <td className="p-3 font-mono text-slate-400 text-[10px]">{report.studentNumber || '-'}</td>
                         <td className="p-3 font-bold text-slate-800">{report.studentName}</td>
@@ -496,14 +546,23 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                         <td className="p-3 text-center font-medium text-slate-600">{report.progressScore}分</td>
                         <td className="p-3 text-center font-medium text-slate-600">{report.assignmentScore}分</td>
                         <td className="p-3 text-center font-medium text-slate-600">{report.examScore}分</td>
-                        <td className="p-3 text-center font-extrabold text-indigo-700 bg-indigo-50/20">{report.totalScore}分</td>
+                        <td className="p-3 text-center font-extrabold text-indigo-700 bg-indigo-50/20">
+                          {report.totalScore}分
+                        </td>
                         <td className="p-3 text-center">
-                          <span className={`inline-block w-6 h-6 leading-6 text-center rounded-lg font-black text-xs ${
-                            report.gradeLevel === 'A' ? 'bg-emerald-100 text-emerald-800' :
-                            report.gradeLevel === 'B' ? 'bg-sky-100 text-sky-800' :
-                            report.gradeLevel === 'C' ? 'bg-amber-100 text-amber-800' :
-                            report.gradeLevel === 'D' ? 'bg-orange-100 text-orange-800' : 'bg-rose-100 text-rose-800'
-                          }`}>
+                          <span
+                            className={`inline-block w-6 h-6 leading-6 text-center rounded-lg font-black text-xs ${
+                              report.gradeLevel === 'A'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : report.gradeLevel === 'B'
+                                  ? 'bg-sky-100 text-sky-800'
+                                  : report.gradeLevel === 'C'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : report.gradeLevel === 'D'
+                                      ? 'bg-orange-100 text-orange-800'
+                                      : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
                             {report.gradeLevel}
                           </span>
                         </td>
@@ -512,7 +571,9 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                             type="text"
                             value={report.teacherEvaluation}
                             onChange={(e) => handleTeacherCommentChange(report.studentId, e.target.value)}
-                            placeholder={lang === 'zh' ? '输入老师手写附加评语...' : 'Write custom teacher evaluation...'}
+                            placeholder={
+                              lang === 'zh' ? '输入老师手写附加评语...' : 'Write custom teacher evaluation...'
+                            }
                             className="w-full bg-slate-50 border border-slate-150 rounded-lg p-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans text-gray-750"
                           />
                           {report.aiEvaluation && (
@@ -575,10 +636,16 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                   <div className="text-left">
                     <h3 className="text-xs font-black text-slate-800 flex items-center gap-1 justify-start">
                       <BookOpen size={14} className="text-indigo-600 shrink-0" />
-                      <span>{lang === 'zh' ? `录分中: 【${activeScoreExam.title}】` : `Entering scores: ${activeScoreExam.title}`}</span>
+                      <span>
+                        {lang === 'zh'
+                          ? `录分中: 【${activeScoreExam.title}】`
+                          : `Entering scores: ${activeScoreExam.title}`}
+                      </span>
                     </h3>
                     <p className="text-[10px] text-slate-400 mt-1 text-left">
-                      {lang === 'zh' ? `满分：${activeScoreExam.max_score} 分` : `Max score: ${activeScoreExam.max_score}`}
+                      {lang === 'zh'
+                        ? `满分：${activeScoreExam.max_score} 分`
+                        : `Max score: ${activeScoreExam.max_score}`}
                     </p>
                   </div>
                   <button
@@ -600,7 +667,7 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {students.map(s => {
+                      {students.map((s) => {
                         const studentScore = examStudentScores[s.id] || { score: '', notes: '' };
                         return (
                           <tr key={s.id} className="hover:bg-slate-50/20">
@@ -615,9 +682,9 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                                   value={studentScore.score}
                                   onChange={(e) => {
                                     const val = e.target.value;
-                                    setExamStudentScores(prev => ({
+                                    setExamStudentScores((prev) => ({
                                       ...prev,
-                                      [s.id]: { ...prev[s.id], score: val }
+                                      [s.id]: { ...prev[s.id], score: val },
                                     }));
                                   }}
                                   className="w-16 bg-white border border-gray-200 rounded-lg p-1.5 text-center text-xs focus:ring-1 focus:ring-indigo-500 text-gray-800 font-bold"
@@ -631,12 +698,16 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                                 value={studentScore.notes}
                                 onChange={(e) => {
                                   const val = e.target.value;
-                                  setExamStudentScores(prev => ({
+                                  setExamStudentScores((prev) => ({
                                     ...prev,
-                                    [s.id]: { ...prev[s.id], notes: val }
+                                    [s.id]: { ...prev[s.id], notes: val },
                                   }));
                                 }}
-                                placeholder={lang === 'zh' ? '记入平时发挥、缺考、复习等备注...' : 'Enter note (e.g. absent, late)...'}
+                                placeholder={
+                                  lang === 'zh'
+                                    ? '记入平时发挥、缺考、复习等备注...'
+                                    : 'Enter note (e.g. absent, late)...'
+                                }
                                 className="w-full bg-slate-50 border border-slate-150 rounded-lg p-1.5 text-xs focus:outline-none text-gray-700"
                               />
                             </td>
@@ -682,8 +753,11 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                   </div>
 
                   <div className="flex flex-col gap-3 max-h-96 overflow-y-auto">
-                    {exams.map(exam => (
-                      <div key={exam.id} className="bg-slate-50/50 border border-slate-200 rounded-2xl p-4 flex justify-between items-center hover:bg-slate-50 hover:border-slate-350 transition-all text-left">
+                    {exams.map((exam) => (
+                      <div
+                        key={exam.id}
+                        className="bg-slate-50/50 border border-slate-200 rounded-2xl p-4 flex justify-between items-center hover:bg-slate-50 hover:border-slate-350 transition-all text-left"
+                      >
                         <div className="space-y-1 text-left">
                           <h4 className="text-xs font-bold text-slate-800 text-left">{exam.title}</h4>
                           {exam.description && (
@@ -711,7 +785,9 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
 
                     {exams.length === 0 && (
                       <div className="text-center p-8 border border-dashed border-slate-250 rounded-2xl text-xs text-slate-400">
-                        {lang === 'zh' ? '本学期暂未建立任何测试卷，请点击上方“创建测试卷”新增。' : 'No exam records yet. Click Add Test to get started.'}
+                        {lang === 'zh'
+                          ? '本学期暂未建立任何测试卷，请点击上方“创建测试卷”新增。'
+                          : 'No exam records yet. Click Add Test to get started.'}
                       </div>
                     )}
                   </div>
@@ -719,14 +795,19 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
 
                 {/* Add Exam panel */}
                 {showAddExam && (
-                  <form onSubmit={handleAddExam} className="bg-slate-50/50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-4 animate-in slide-in-from-right-3 duration-200 h-fit text-left">
+                  <form
+                    onSubmit={handleAddExam}
+                    className="bg-slate-50/50 border border-slate-200 p-4 rounded-2xl flex flex-col gap-4 animate-in slide-in-from-right-3 duration-200 h-fit text-left"
+                  >
                     <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1 pb-2 border-b border-slate-200 justify-start">
                       <Plus size={14} className="text-indigo-600" />
                       <span>{lang === 'zh' ? '创建新测试卷/期中试卷' : 'Add New Exam'}</span>
                     </h3>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1 text-left">{lang === 'zh' ? '试卷名称 *' : 'Title *'}</label>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1 text-left">
+                        {lang === 'zh' ? '试卷名称 *' : 'Title *'}
+                      </label>
                       <input
                         type="text"
                         required
@@ -738,7 +819,9 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1 text-left">{lang === 'zh' ? '描述信息' : 'Description'}</label>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1 text-left">
+                        {lang === 'zh' ? '描述信息' : 'Description'}
+                      </label>
                       <textarea
                         value={newExamDesc}
                         onChange={(e) => setNewExamDesc(e.target.value)}
@@ -748,7 +831,9 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-500 mb-1 text-left">{lang === 'zh' ? '最高总分 (满分)' : 'Max Score'}</label>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1 text-left">
+                        {lang === 'zh' ? '最高总分 (满分)' : 'Max Score'}
+                      </label>
                       <input
                         type="number"
                         min={1}
@@ -788,14 +873,16 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
 
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-150">
-                <div className="text-xs font-bold text-slate-700">{lang === 'zh' ? '📅 考勤率占比' : 'Attendance Weight'}</div>
+                <div className="text-xs font-bold text-slate-700">
+                  {lang === 'zh' ? '📅 考勤率占比' : 'Attendance Weight'}
+                </div>
                 <div className="flex items-center gap-1.5">
                   <input
                     type="number"
                     min={0}
                     max={100}
                     value={weightInputs.attendance}
-                    onChange={(e) => setWeightInputs(prev => ({ ...prev, attendance: e.target.value }))}
+                    onChange={(e) => setWeightInputs((prev) => ({ ...prev, attendance: e.target.value }))}
                     className="w-16 bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-center text-xs focus:ring-1 focus:ring-indigo-500 font-bold text-gray-800"
                   />
                   <span className="text-xs text-slate-400">%</span>
@@ -803,14 +890,16 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
               </div>
 
               <div className="flex items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-150">
-                <div className="text-xs font-bold text-slate-700">{lang === 'zh' ? '📈 学习进度占比' : 'Progress Weight'}</div>
+                <div className="text-xs font-bold text-slate-700">
+                  {lang === 'zh' ? '📈 学习进度占比' : 'Progress Weight'}
+                </div>
                 <div className="flex items-center gap-1.5">
                   <input
                     type="number"
                     min={0}
                     max={100}
                     value={weightInputs.progress}
-                    onChange={(e) => setWeightInputs(prev => ({ ...prev, progress: e.target.value }))}
+                    onChange={(e) => setWeightInputs((prev) => ({ ...prev, progress: e.target.value }))}
                     className="w-16 bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-center text-xs focus:ring-1 focus:ring-indigo-500 font-bold text-gray-800"
                   />
                   <span className="text-xs text-slate-400">%</span>
@@ -818,14 +907,16 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
               </div>
 
               <div className="flex items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-150">
-                <div className="text-xs font-bold text-slate-700">{lang === 'zh' ? '📝 作业平均分占比' : 'Assignments Weight'}</div>
+                <div className="text-xs font-bold text-slate-700">
+                  {lang === 'zh' ? '📝 作业平均分占比' : 'Assignments Weight'}
+                </div>
                 <div className="flex items-center gap-1.5">
                   <input
                     type="number"
                     min={0}
                     max={100}
                     value={weightInputs.assignment}
-                    onChange={(e) => setWeightInputs(prev => ({ ...prev, assignment: e.target.value }))}
+                    onChange={(e) => setWeightInputs((prev) => ({ ...prev, assignment: e.target.value }))}
                     className="w-16 bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-center text-xs focus:ring-1 focus:ring-indigo-500 font-bold text-gray-800"
                   />
                   <span className="text-xs text-slate-400">%</span>
@@ -833,14 +924,16 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
               </div>
 
               <div className="flex items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-150">
-                <div className="text-xs font-bold text-slate-700">{lang === 'zh' ? '💯 考试测验分占比' : 'Exams Weight'}</div>
+                <div className="text-xs font-bold text-slate-700">
+                  {lang === 'zh' ? '💯 考试测验分占比' : 'Exams Weight'}
+                </div>
                 <div className="flex items-center gap-1.5">
                   <input
                     type="number"
                     min={0}
                     max={100}
                     value={weightInputs.exam}
-                    onChange={(e) => setWeightInputs(prev => ({ ...prev, exam: e.target.value }))}
+                    onChange={(e) => setWeightInputs((prev) => ({ ...prev, exam: e.target.value }))}
                     className="w-16 bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-center text-xs focus:ring-1 focus:ring-indigo-500 font-bold text-gray-800"
                   />
                   <span className="text-xs text-slate-400">%</span>
@@ -851,7 +944,9 @@ export function SemesterGradeManager({ classId, className, students, lang }: Sem
             <div className="mt-5 pt-3 border-t border-slate-200 flex items-center justify-between">
               <div className="text-xs">
                 <span className="text-slate-400">{lang === 'zh' ? '当前总权重和：' : 'Total sum: '}</span>
-                <span className={`font-black text-sm ${currentTotalWeight === 100 ? 'text-emerald-600' : 'text-rose-500'}`}>
+                <span
+                  className={`font-black text-sm ${currentTotalWeight === 100 ? 'text-emerald-600' : 'text-rose-500'}`}
+                >
                   {currentTotalWeight}%
                 </span>
               </div>

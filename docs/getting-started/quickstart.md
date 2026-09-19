@@ -44,5 +44,6 @@ OpenLearn V2 Platform Server listening on port 9000
 ```
 
 访问 `http://localhost:9000` 即可进入系统控制台。默认内置初始账户：
+
 - 管理员：`admin` / `admin`
 - 教师：`teacher` / `teacher`

@@ -75,7 +75,7 @@ export const PLUGIN_SHARED_MODULES = [
   'react-markdown',
   'jspdf',
   'jspdf-autotable',
-  'xlsx',            // 可选：需在 package.json dependencies 中
+  'xlsx', // 可选：需在 package.json dependencies 中
   'lucide-react',
   'uuid',
 ] as const;
@@ -202,11 +202,7 @@ export interface IPluginHttpRouter {
   put<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
   patch<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
   delete<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>): void;
-  route<TBody = unknown, TRes = unknown>(
-    method: string,
-    path: string,
-    handler: PluginApiHandler<TBody, TRes>,
-  ): void;
+  route<TBody = unknown, TRes = unknown>(method: string, path: string, handler: PluginApiHandler<TBody, TRes>): void;
 
   /**
    * 注册 Server-Sent Events (SSE) 流式响应端点（默认支持 GET 和 POST）
@@ -303,12 +299,7 @@ export type HotReloadCallback = (event: HotReloadEvent) => Promise<void>;
  * LifecyclePhase — 中间件挂载的生命周期阶段。
  */
 export type LifecyclePhase =
-  | 'beforeActivate'
-  | 'afterActivate'
-  | 'beforeDeactivate'
-  | 'afterDeactivate'
-  | 'beforeCommand'
-  | 'afterCommand';
+  'beforeActivate' | 'afterActivate' | 'beforeDeactivate' | 'afterDeactivate' | 'beforeCommand' | 'afterCommand';
 
 /**
  * MiddlewareContext — 传递给每个中间件的不可变上下文。
@@ -326,7 +317,4 @@ export interface MiddlewareContext {
  * 在 next() 之前做预处理，next() 之后做后处理。
  * 不调用 next() 则终止管道。
  */
-export type Middleware = (
-  ctx: MiddlewareContext,
-  next: () => Promise<void>,
-) => Promise<void>;
+export type Middleware = (ctx: MiddlewareContext, next: () => Promise<void>) => Promise<void>;

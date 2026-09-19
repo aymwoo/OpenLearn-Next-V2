@@ -167,7 +167,7 @@ export class ClassroomRuntimeKernel {
 
   public registerRuntimeHook<T = Record<string, unknown>>(
     hookName: RuntimeHookName,
-    callback: RuntimeHookCallback<T>
+    callback: RuntimeHookCallback<T>,
   ): () => void {
     return this.hooksManager.registerHook(hookName, callback);
   }
@@ -176,7 +176,7 @@ export class ClassroomRuntimeKernel {
     name: string,
     taskFn: () => Promise<T>,
     priority: TaskPriority = TaskPriority.Normal,
-    delayMs = 0
+    delayMs = 0,
   ): Promise<T> {
     return this.scheduler.schedule(name, taskFn, priority, delayMs);
   }
@@ -199,7 +199,7 @@ export class ClassroomRuntimeKernel {
       this.stateManager.getState(),
       this.serviceRegistry.listServices(),
       this.moduleRegistry.listModules().map((m) => m.id),
-      this.resourceManager.listResources()
+      this.resourceManager.listResources(),
     );
   }
 
@@ -218,7 +218,7 @@ export class ClassroomRuntimeKernel {
       this.stateManager.getState(),
       this.serviceRegistry.listServices().length,
       this.moduleRegistry.listModules().length,
-      this.scheduler.getPendingTaskCount()
+      this.scheduler.getPendingTaskCount(),
     );
   }
 }

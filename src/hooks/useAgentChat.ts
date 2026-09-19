@@ -41,9 +41,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
     fetchElements,
   } = options;
 
-  const [chatLog, setChatLog] = useState<ChatMessage[]>([
-    { role: 'agent', content: t.agentIntro || '' },
-  ]);
+  const [chatLog, setChatLog] = useState<ChatMessage[]>([{ role: 'agent', content: t.agentIntro || '' }]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
@@ -59,9 +57,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
   const restoreAgentMemory = useCallback(
     async (lessonId?: string | null) => {
       try {
-        const res = await fetch(
-          `/api/agent/conversations?lessonId=${encodeURIComponent(lessonId || '')}`,
-        );
+        const res = await fetch(`/api/agent/conversations?lessonId=${encodeURIComponent(lessonId || '')}`);
         if (!res.ok) return;
         const data = await res.json();
         const msgs = Array.isArray(data.messages) ? data.messages : [];
@@ -84,12 +80,9 @@ export function useAgentChat(options: UseAgentChatOptions) {
 
   const handleClearAgentMemory = useCallback(async () => {
     try {
-      await fetch(
-        `/api/agent/conversations?lessonId=${encodeURIComponent(selectedLesson || '')}`,
-        {
-          method: 'DELETE',
-        },
-      );
+      await fetch(`/api/agent/conversations?lessonId=${encodeURIComponent(selectedLesson || '')}`, {
+        method: 'DELETE',
+      });
     } catch {
       /* best-effort */
     }
@@ -107,10 +100,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
-          setChatAttachments((prev) => [
-            ...prev,
-            { name: file.name, content: event.target!.result as string },
-          ]);
+          setChatAttachments((prev) => [...prev, { name: file.name, content: event.target!.result as string }]);
         }
       };
       if (file.name.endsWith('.zip')) {
@@ -128,10 +118,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
-          setChatAttachments((prev) => [
-            ...prev,
-            { name: file.name, content: event.target!.result as string },
-          ]);
+          setChatAttachments((prev) => [...prev, { name: file.name, content: event.target!.result as string }]);
         }
       };
       if (file.name.endsWith('.zip')) {
@@ -166,10 +153,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
           lang,
           currentLessonId: selectedLesson,
           attachments: attachmentsToSend,
-          providerId:
-            effectiveAgentProviderId === 'system'
-              ? null
-              : effectiveAgentProviderId,
+          providerId: effectiveAgentProviderId === 'system' ? null : effectiveAgentProviderId,
         }),
       });
       const data = await res.json();
@@ -180,9 +164,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
       } else {
         replyContent = data.agentText || '';
         if (data.toolResults && data.toolResults.length > 0) {
-          replyContent +=
-            `\n\n${t.executedCommands}` +
-            data.toolResults.map((r: any) => r.callName).join(', ');
+          replyContent += `\n\n${t.executedCommands}` + data.toolResults.map((r: any) => r.callName).join(', ');
         }
       }
 
@@ -199,10 +181,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
       }
       if (selectedLesson) await fetchElements(selectedLesson);
     } catch {
-      setChatLog((prev) => [
-        ...prev,
-        { role: 'agent', content: t.simulationError },
-      ]);
+      setChatLog((prev) => [...prev, { role: 'agent', content: t.simulationError }]);
     } finally {
       setLoading(false);
     }

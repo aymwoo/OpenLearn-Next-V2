@@ -34,7 +34,7 @@ export class ClassroomSessionManager {
     sessionId: string,
     teacher: UserParticipant,
     courseId?: string,
-    lessonId?: string
+    lessonId?: string,
   ): Promise<ClassroomSessionData> {
     if (this.activeSession && this.activeSession.status === 'active') {
       await this.destroySession();
@@ -73,7 +73,10 @@ export class ClassroomSessionManager {
   public async joinSession(student: UserParticipant): Promise<boolean> {
     if (!this.activeSession || this.activeSession.status !== 'active') return false;
 
-    const updatedStudents = [...this.activeSession.students.filter((s) => s.id !== student.id), { ...student, isOnline: true }];
+    const updatedStudents = [
+      ...this.activeSession.students.filter((s) => s.id !== student.id),
+      { ...student, isOnline: true },
+    ];
     this.activeSession = {
       ...this.activeSession,
       students: Object.freeze(updatedStudents),
@@ -96,7 +99,7 @@ export class ClassroomSessionManager {
     if (!this.activeSession || this.activeSession.status !== 'active') return false;
 
     const updatedStudents = this.activeSession.students.map((s) =>
-      s.id === studentId ? { ...s, isOnline: false } : s
+      s.id === studentId ? { ...s, isOnline: false } : s,
     );
 
     this.activeSession = {

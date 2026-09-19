@@ -36,7 +36,7 @@
 export function parseRequiresEntry(entry: string): { tokenName: string; versionRange: string | null } {
   // The first '@' is always the scope prefix (e.g., @openlearn).
   // Find the second '@' which indicates the start of the version range.
-  const firstAt = entry.indexOf('@');  // scope prefix @
+  const firstAt = entry.indexOf('@'); // scope prefix @
   if (firstAt === -1) {
     // No @ at all — invalid but handle gracefully
     return { tokenName: entry, versionRange: null };

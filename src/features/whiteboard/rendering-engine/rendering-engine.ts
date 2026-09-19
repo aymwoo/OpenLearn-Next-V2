@@ -41,7 +41,7 @@ export class RenderingEngine {
     page: CanvasPage,
     viewport: Viewport,
     containerSize: { width: number; height: number },
-    selectedIds: string[] = []
+    selectedIds: string[] = [],
   ): { visibleObjects: CanvasObject[]; stats: PerformanceStats } {
     const startTime = performance.now();
 
@@ -55,20 +55,11 @@ export class RenderingEngine {
     });
 
     // 3. Viewport Culling
-    const { visible: visibleObjects } = this.virtualization.cullObjects(
-      sortedObjects,
-      viewport,
-      containerSize
-    );
+    const { visible: visibleObjects } = this.virtualization.cullObjects(sortedObjects, viewport, containerSize);
 
     // 4. Record Performance Stats
     const renderTimeMs = performance.now() - startTime;
-    this.perf.recordFrame(
-      renderTimeMs,
-      visibleObjects.length,
-      visibleObjects.length,
-      sortedObjects.length
-    );
+    this.perf.recordFrame(renderTimeMs, visibleObjects.length, visibleObjects.length, sortedObjects.length);
 
     return {
       visibleObjects,

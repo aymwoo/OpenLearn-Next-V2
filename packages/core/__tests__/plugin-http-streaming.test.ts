@@ -36,7 +36,7 @@ describe('Plugin HTTP SSE Streaming & Safety Defense Tests (V5.3)', () => {
 
     try {
       kernel.db.prepare("DELETE FROM plugins WHERE id LIKE 'uuid-worker-stream-%'").run();
-      kernel.db.prepare("DROP TABLE IF EXISTS plugin_ext_worker_stream_abort_abort_log").run();
+      kernel.db.prepare('DROP TABLE IF EXISTS plugin_ext_worker_stream_abort_abort_log').run();
     } catch {}
     cleanupTestDirs();
   });
@@ -326,10 +326,12 @@ describe('Plugin HTTP SSE Streaming & Safety Defense Tests (V5.3)', () => {
       `;
 
       kernel.db
-        .prepare(`
+        .prepare(
+          `
           INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `)
+        `,
+        )
         .run(
           pluginId,
           manifest.name,
@@ -414,10 +416,12 @@ describe('Plugin HTTP SSE Streaming & Safety Defense Tests (V5.3)', () => {
       `;
 
       kernel.db
-        .prepare(`
+        .prepare(
+          `
           INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `)
+        `,
+        )
         .run(
           pluginId,
           manifest.name,
@@ -459,7 +463,9 @@ describe('Plugin HTTP SSE Streaming & Safety Defense Tests (V5.3)', () => {
       // 等待反向中止消息到达 Worker 并写入数据库
       await new Promise((resolve) => setTimeout(resolve, 400));
 
-      const logRow = kernel.db.prepare("SELECT status FROM plugin_ext_worker_stream_abort_abort_log LIMIT 1").get() as any;
+      const logRow = kernel.db
+        .prepare('SELECT status FROM plugin_ext_worker_stream_abort_abort_log LIMIT 1')
+        .get() as any;
       expect(logRow?.status).toBe('aborted_successfully');
     });
   });
@@ -478,9 +484,7 @@ describe('Plugin HTTP SSE Streaming & Safety Defense Tests (V5.3)', () => {
           main: 'index.js',
           engines: { openlearn: '>=0.2.5' },
           api: {
-            routes: [
-              { method: 'POST', path: '/events', auth: false, streaming: true },
-            ],
+            routes: [{ method: 'POST', path: '/events', auth: false, streaming: true }],
           },
         },
         activate: async (ctx: any) => {
@@ -536,9 +540,7 @@ describe('Plugin HTTP SSE Streaming & Safety Defense Tests (V5.3)', () => {
           main: 'index.js',
           engines: { openlearn: '>=0.2.5' },
           api: {
-            routes: [
-              { method: 'GET', path: '/hang', auth: false, streaming: true },
-            ],
+            routes: [{ method: 'GET', path: '/hang', auth: false, streaming: true }],
           },
         },
         activate: async (ctx: any) => {
@@ -617,9 +619,7 @@ describe('Plugin HTTP SSE Streaming & Safety Defense Tests (V5.3)', () => {
           main: 'index.js',
           engines: { openlearn: '>=0.2.5' },
           api: {
-            routes: [
-              { method: 'GET', path: '/fail', auth: false, streaming: true },
-            ],
+            routes: [{ method: 'GET', path: '/fail', auth: false, streaming: true }],
           },
         },
         activate: async (ctx: any) => {
@@ -679,10 +679,12 @@ describe('Plugin HTTP SSE Streaming & Safety Defense Tests (V5.3)', () => {
       `;
 
       kernel.db
-        .prepare(`
+        .prepare(
+          `
           INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `)
+        `,
+        )
         .run(
           pluginId,
           manifest.name,

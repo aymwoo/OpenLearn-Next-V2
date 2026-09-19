@@ -132,7 +132,7 @@ export class WorkerRegistry {
     sourceCode: string,
     serviceTokens: string[],
     eventBus?: EventBus,
-    pluginDir?: string
+    pluginDir?: string,
   ) => Promise<any>;
 
   public onCircuitBreakerTriggered?: (pluginId: string) => void;
@@ -157,10 +157,7 @@ export class WorkerRegistry {
 
     // T-05-13: 自动崩溃检测 — 非零退出码且仍在追踪中时标记 crashed
     instance.worker.on('error', (err) => {
-      console.error(
-        `[WorkerRegistry] Worker for "${pluginId}" encountered error:`,
-        err
-      );
+      console.error(`[WorkerRegistry] Worker for "${pluginId}" encountered error:`, err);
     });
 
     instance.worker.on('exit', (code) => {
@@ -175,9 +172,7 @@ export class WorkerRegistry {
           // Mark as crashed, clean up, but DO NOT trigger watchdog restarts.
           // The activation promise in createWorker will reject with WorkerActivateError.
           entry.status = 'crashed';
-          console.error(
-            `[WorkerRegistry] Worker for "${pluginId}" exited with code ${code} during activation`,
-          );
+          console.error(`[WorkerRegistry] Worker for "${pluginId}" exited with code ${code} during activation`);
           if (entry.serviceHost && typeof entry.serviceHost.dispose === 'function') {
             entry.serviceHost.dispose().catch((err) => {
               console.error(
@@ -191,69 +186,67 @@ export class WorkerRegistry {
         }
         if (code !== 0) {
           entry.status = 'crashed';
-          console.error(
-            `[WorkerRegistry] Worker for "${pluginId}" exited with code ${code}`,
-          );
+          console.error(`[WorkerRegistry] Worker for "${pluginId}" exited with code ${code}`);
 
-        const manifest = entry.manifest;
-        const sourceCode = entry.sourceCode;
-        const serviceTokens = entry.serviceTokens;
-        const eventBus = entry.eventBus;
-        const pluginDir = entry.pluginDir;
+          const manifest = entry.manifest;
+          const sourceCode = entry.sourceCode;
+          const serviceTokens = entry.serviceTokens;
+          const eventBus = entry.eventBus;
+          const pluginDir = entry.pluginDir;
 
-        // Clean up registered commands and resources on the host side
-        if (entry.serviceHost && typeof entry.serviceHost.dispose === 'function') {
-          entry.serviceHost.dispose().catch(err => {
-            console.error(`[WorkerRegistry] Failed to dispose serviceHost on crash for "${pluginId}":`, err);
-          });
-        }
-
-        this.cleanup(pluginId);
-
-        if (manifest && sourceCode && serviceTokens) {
-          let stats = this.crashStats.get(pluginId) || { count: 0, lastTime: 0 };
-          const now = Date.now();
-          if (now - stats.lastTime > 300000) {
-            stats.count = 0;
+          // Clean up registered commands and resources on the host side
+          if (entry.serviceHost && typeof entry.serviceHost.dispose === 'function') {
+            entry.serviceHost.dispose().catch((err) => {
+              console.error(`[WorkerRegistry] Failed to dispose serviceHost on crash for "${pluginId}":`, err);
+            });
           }
-          stats.count += 1;
-          stats.lastTime = now;
-          this.crashStats.set(pluginId, stats);
 
-          if (stats.count <= 3) {
-            const delay = Math.pow(2, stats.count - 1) * 1000;
-            console.warn(
-              `[WorkerRegistry] Worker for "${pluginId}" crashed. Watchdog restarting (attempt ${stats.count}/3) in ${delay}ms...`
-            );
-            setTimeout(async () => {
-              try {
-                if (this.recreateWorkerCallback) {
-                  await this.recreateWorkerCallback(
-                    pluginId,
-                    manifest,
-                    sourceCode,
-                    serviceTokens,
-                    eventBus,
-                    pluginDir
-                  );
+          this.cleanup(pluginId);
+
+          if (manifest && sourceCode && serviceTokens) {
+            let stats = this.crashStats.get(pluginId) || { count: 0, lastTime: 0 };
+            const now = Date.now();
+            if (now - stats.lastTime > 300000) {
+              stats.count = 0;
+            }
+            stats.count += 1;
+            stats.lastTime = now;
+            this.crashStats.set(pluginId, stats);
+
+            if (stats.count <= 3) {
+              const delay = Math.pow(2, stats.count - 1) * 1000;
+              console.warn(
+                `[WorkerRegistry] Worker for "${pluginId}" crashed. Watchdog restarting (attempt ${stats.count}/3) in ${delay}ms...`,
+              );
+              setTimeout(async () => {
+                try {
+                  if (this.recreateWorkerCallback) {
+                    await this.recreateWorkerCallback(
+                      pluginId,
+                      manifest,
+                      sourceCode,
+                      serviceTokens,
+                      eventBus,
+                      pluginDir,
+                    );
+                  }
+                } catch (err) {
+                  console.error(`[WorkerRegistry] Watchdog recovery failed for "${pluginId}":`, err);
                 }
-              } catch (err) {
-                console.error(`[WorkerRegistry] Watchdog recovery failed for "${pluginId}":`, err);
+              }, delay);
+            } else {
+              console.error(
+                `[WorkerRegistry] Worker for "${pluginId}" crashed ${stats.count} times in 5 mins. Circuit breaker triggered.`,
+              );
+              if (this.onCircuitBreakerTriggered) {
+                this.onCircuitBreakerTriggered(pluginId);
               }
-            }, delay);
-          } else {
-            console.error(
-              `[WorkerRegistry] Worker for "${pluginId}" crashed ${stats.count} times in 5 mins. Circuit breaker triggered.`
-            );
-            if (this.onCircuitBreakerTriggered) {
-              this.onCircuitBreakerTriggered(pluginId);
             }
           }
         }
       }
-    }
-  });
-}
+    });
+  }
 
   /**
    * 通过 pluginId 获取 WorkerInstance。
@@ -292,9 +285,8 @@ export class WorkerRegistry {
       state = await Promise.race([
         new Promise<any>((resolve, reject) => {
           // 注册一次性消息处理器等待 deactivated 响应
-          const originalHandler = (
-            instance.transport as unknown as { messageHandler?: (msg: unknown) => void }
-          ).messageHandler;
+          const originalHandler = (instance.transport as unknown as { messageHandler?: (msg: unknown) => void })
+            .messageHandler;
 
           instance.transport.onMessage((msg: unknown) => {
             const typed = msg as { type?: string; state?: any };
@@ -317,18 +309,13 @@ export class WorkerRegistry {
       ]);
     } catch {
       // 超时或错误 — 记录警告，继续强制终止
-      console.warn(
-        `[WorkerRegistry] Graceful deactivate failed for "${pluginId}", force terminating`,
-      );
+      console.warn(`[WorkerRegistry] Graceful deactivate failed for "${pluginId}", force terminating`);
     } finally {
       // T-05-11: finally 块保证 Worker 终止
       try {
         await instance.worker.terminate();
       } catch (termErr) {
-        console.error(
-          `[WorkerRegistry] Worker terminate error for "${pluginId}":`,
-          termErr,
-        );
+        console.error(`[WorkerRegistry] Worker terminate error for "${pluginId}":`, termErr);
       }
       this.cleanup(pluginId);
     }
@@ -1144,11 +1131,7 @@ export class WorkerManager {
   private capabilityGuard: CapabilityGuard;
   private db: Database;
 
-  constructor(
-    serviceRegistry: ServiceRegistry,
-    capabilityGuard: CapabilityGuard,
-    db: Database,
-  ) {
+  constructor(serviceRegistry: ServiceRegistry, capabilityGuard: CapabilityGuard, db: Database) {
     this.serviceRegistry = serviceRegistry;
     this.capabilityGuard = capabilityGuard;
     this.db = db;
@@ -1163,20 +1146,13 @@ export class WorkerManager {
       pluginDir,
     ) => {
       console.log(`[WorkerManager] Watchdog supervisor restarting worker for plugin "${pluginId}"`);
-      await this.createWorker(
-        pluginId,
-        manifest,
-        sourceCode,
-        serviceTokens,
-        eventBus,
-        pluginDir,
-      );
+      await this.createWorker(pluginId, manifest, sourceCode, serviceTokens, eventBus, pluginDir);
     };
 
     this.registry.onCircuitBreakerTriggered = async (pluginId) => {
       // Set plugin status to ERROR in database
-      this.db.prepare("UPDATE plugins SET status = ? WHERE id = ?").run('error', pluginId);
-      
+      this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('error', pluginId);
+
       // Also publish plugin.crashed event to the EventBus
       try {
         const eventBusService = await this.serviceRegistry.resolve(IEventBusServiceToken);
@@ -1238,24 +1214,18 @@ export class WorkerManager {
 
     // 2. T-05-09: DoS 上限控制
     if (this.registry.activeCount >= MAX_WORKERS) {
-      throw new Error(
-        `Cannot create Worker: maximum active Workers (${MAX_WORKERS}) reached`,
-      );
+      throw new Error(`Cannot create Worker: maximum active Workers (${MAX_WORKERS}) reached`);
     }
 
     // 3. 生成引导代码
     const bootstrapCode = generateBootstrapCode();
-    const encodedBootstrap = Buffer.from(bootstrapCode, 'utf-8').toString(
-      'base64',
-    );
+    const encodedBootstrap = Buffer.from(bootstrapCode, 'utf-8').toString('base64');
     const bootstrapDataUrl = `data:text/javascript;base64,${encodedBootstrap}`;
 
     // 4. 创建 Worker
     let worker: Worker;
     try {
-      const resolvedPluginDir = (pluginDir && fs.existsSync(path.join(pluginDir, 'index.js')))
-        ? pluginDir
-        : undefined;
+      const resolvedPluginDir = pluginDir && fs.existsSync(path.join(pluginDir, 'index.js')) ? pluginDir : undefined;
       worker = new Worker(new URL(bootstrapDataUrl), {
         // Pass both the DB id (`pluginId` — used as the actor/registry key)
         // and `manifestId` (used as the namespace prefix for command types).
@@ -1278,11 +1248,9 @@ export class WorkerManager {
         pluginLogger.error(chunk.toString().trim());
       });
     } catch (err) {
-      throw new WorkerActivateError(
-        pluginId,
-        'Worker constructor failed',
-        { cause: err instanceof Error ? err : undefined },
-      );
+      throw new WorkerActivateError(pluginId, 'Worker constructor failed', {
+        cause: err instanceof Error ? err : undefined,
+      });
     }
 
     // 5. 创建 Transport
@@ -1296,7 +1264,7 @@ export class WorkerManager {
       this.capabilityGuard,
       actorId,
       manifestCaps,
-      eventBus,  // optional: enables event forwarding
+      eventBus, // optional: enables event forwarding
       undefined,
       // 7th arg is the namespace prefix used by the host-side
       // registerHandler/unregisterHandler intercept. It must be
@@ -1423,12 +1391,7 @@ export class WorkerManager {
         clearActivationTimer();
         cleanupActivationWorkerListeners();
         if (activationReject) {
-          activationReject(
-            new WorkerActivateError(
-              pluginId,
-              (msg as { message?: string }).message ?? 'Unknown error',
-            ),
-          );
+          activationReject(new WorkerActivateError(pluginId, (msg as { message?: string }).message ?? 'Unknown error'));
           activationResolve = null;
           activationReject = null;
         } else {
@@ -1528,23 +1491,12 @@ export class WorkerManager {
       try {
         const manifest: Manifest = JSON.parse(row.manifest);
         // 优先从文件系统读取，fallback 到 DB source_code
-        const code = (row.file_path && fs.existsSync(row.file_path))
-          ? fs.readFileSync(row.file_path, 'utf-8')
-          : row.source_code;
-        await this.createWorker(
-          row.id,
-          manifest,
-          code,
-          ALL_SERVICE_TOKENS,
-        );
-        console.log(
-          `[WorkerManager] Restored worker for plugin "${manifest.id}" (${row.id})`,
-        );
+        const code =
+          row.file_path && fs.existsSync(row.file_path) ? fs.readFileSync(row.file_path, 'utf-8') : row.source_code;
+        await this.createWorker(row.id, manifest, code, ALL_SERVICE_TOKENS);
+        console.log(`[WorkerManager] Restored worker for plugin "${manifest.id}" (${row.id})`);
       } catch (err) {
-        console.error(
-          `[WorkerManager] Failed to restore worker for plugin "${row.id}":`,
-          err,
-        );
+        console.error(`[WorkerManager] Failed to restore worker for plugin "${row.id}":`, err);
       }
     }
   }

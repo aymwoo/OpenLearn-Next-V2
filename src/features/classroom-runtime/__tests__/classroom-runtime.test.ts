@@ -1,8 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  ClassroomService,
-  ClassroomSession,
-} from '../index.js';
+import { ClassroomService, ClassroomSession } from '../index.js';
 
 describe('Sprint P4-01 Classroom Runtime Test Suite', () => {
   let service: ClassroomService;

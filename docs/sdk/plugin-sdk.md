@@ -26,7 +26,9 @@ import {
 ### 属性列表
 
 #### `ctx.services`
+
 包含 7 个受控内核核心服务的预解析代理：
+
 - **`commandBus`**: `ICommandBusService` —— 注册与触发系统命令。
 - **`eventBus`**: `IEventBusService` —— 订阅与发布跨系统事件。
 - **`actionRegistry`**: `IActionRegistryService` —— 注册可被 AI 智能体调用的 Action 描述符。
@@ -36,35 +38,46 @@ import {
 - **`ai`**: `IAIService` —— 调用大语言模型（Gemini / OpenAI）。
 
 #### `ctx.pluginId`
+
 `string`，插件在宿主中的唯一实例 UUID。
 
 #### `ctx.manifest`
+
 `Manifest`，插件当前激活的 `manifest.json` 只读元数据对象。
 
 #### `ctx.db`
+
 `PluginDatabaseAPI`，插件自建表数据库 API。自动为所有表名添加 `plugin_${pluginId}_` 命名空间前缀：
+
 - **`ensureTable(tableName: string, schema: string): Promise<void>`**: 保证表结构存在（幂等）。
 - **`table(tableName: string): string`**: 获取带前缀的完整物理表名。
 - **`migrate(targetVersion: number, upgradeFn: (db: any) => void): Promise<void>`**: 声明式版本迁移。
 
 #### `ctx.log`
+
 `IPluginLogger`，结构化日志工具。自动注入 `pluginId` 与高精度时间戳：
+
 - `ctx.log.debug(msg, meta?)`
 - `ctx.log.info(msg, meta?)`
 - `ctx.log.warn(msg, meta?)`
 - `ctx.log.error(msg, meta?)`
 
 #### `ctx.contributions`
+
 `ContributionAccessor`，只读内省工具。`ctx.contributions.list()` 可列出该插件声明的所有 UI 贡献点。
 
 #### `ctx.config`
+
 `IConfigService`，类型安全的配置服务。通过 `ctx.config.get("key")` 读取在 `manifest.configuration` 中声明的参数。
 
 #### `ctx.require(moduleName: string)`
+
 引用主应用共享模块白名单。仅允许引用：`recharts`, `react-markdown`, `jspdf`, `jspdf-autotable`, `xlsx`, `lucide-react`, `uuid`。
 
 #### `ctx.http`（v0.3.11 / v0.3.12 新增）
+
 `IPluginHttpRouter`，插件内置的 RESTful & SSE 流式 HTTP 路由器。所有端点均被平台安全网关统一挂载至 `/api/plugins/:pluginId/*`：
+
 - **`ctx.http.get(path, handler)`**: 注册 HTTP GET 请求处理函数。
 - **`ctx.http.post(path, handler)`**: 注册 HTTP POST 请求处理函数。
 - **`ctx.http.put(path, handler)`**: 注册 HTTP PUT 请求处理函数。
@@ -74,6 +87,7 @@ import {
 - **`ctx.http.stream(path, handler)`**: **（v0.3.12 新增）** 注册 Server-Sent Events (SSE) 流式响应端点（支持大模型流式生成，内置反向中断与看门狗超时保护）。
 
 ##### `PluginApiRequest` 请求对象接口：
+
 - `method: string`: HTTP 动词（`GET`, `POST` 等大写字符串）。
 - `path: string`: 匹配的相对路径。
 - `params: Record<string, string>`: 动态路由路径参数提取（如 `:studentId`）。
@@ -84,12 +98,14 @@ import {
 - `actor: PluginApiActor`: 当前调用方身份上下文（`actorId`, `userId`, `username`, `role`, `permissions`）。
 
 ##### `PluginApiResponse` 返回对象接口：
+
 - `status?: number`: HTTP 状态码（默认 200）。
 - `headers?: Record<string, string>`: 自定义响应头（高危头如 `Set-Cookie` 会被网关安全剔除）。
 - `body?: any`: 响应内容。若 Handler 直接返回普通对象或基本类型，会自动被包装为 `{ status: 200, body: 返回值 }`。
 - `sessionToken?: string`: **（v0.3.15 新增）** 可选的 SSO 会话凭证（配合 `IAuthSessionBridgeToken` 签发，由安全网关自动写入跨域安全 Cookie）。
 
 #### `ctx.reportProgress(stage?, message?)`（v0.3.15+ 新增）
+
 激活期心跳上报与超时滑动续期函数。耗时初始化（如大模型加载、数据结构批量迁移）期间周期性调用，向宿主汇报阶段状态并自动延长激活等待窗口，防止被误判超时。
 
 ---
@@ -102,55 +118,57 @@ import {
 
 > 完整 29 个 Token 的方法签名与标识字符串，请以 [DI Token 字典](../api/di-tokens) 为权威。下表列出最常用的 Token 速查。
 
-| Token 常量名 | 服务接口类型 | 说明 |
-| :--- | :--- | :--- |
-| `IAuthSessionBridgeToken` | `IAuthSessionBridgeService` | 统一安全会话桥接（LTI 1.3 / SSO 单点登录，v0.3.15+） |
-| `IDatabaseToken` | `Database` | 原生 SQLite 数据库只读/写连接 |
-| `ICommandBusServiceToken` | `ICommandBusService` | 命令总线服务 |
-| `IEventBusServiceToken` | `IEventBusService` | 事件总线服务 |
-| `IActionRegistryServiceToken` | `IActionRegistryService` | AI Action 注册表 |
-| `ICapabilityServiceToken` | `ICapabilityService` | 权限能力服务 |
-| `IProcessServiceToken` | `IProcessService` | 受控后台进程 |
-| `IStorageServiceToken` | `IStorageService` | 键值存储 |
-| `IAIServiceToken` | `IAIService` | AI 文本生成 |
-| `IPluginHostToken` | `PluginHost` | 插件宿主对象（仅限管理插件） |
-| `ILessonEngineServiceToken` | `ILessonEngineService` | 课程引擎控制接口 |
-| `IClassroomRuntimeServiceToken` | `IClassroomRuntimeService` | 课堂实时运行时 |
-| `IPresenceEngineServiceToken` | `IPresenceEngineService` | 在线状态感知引擎 |
-| `ITeachingCollaborationServiceToken` | `ITeachingCollaborationService` | 协同教学引擎 |
-| `ILearningAnalyticsServiceToken` | `ILearningAnalyticsService` | 学习分析与指标引擎 |
-| `IPluginLifecycleManagerToken` | `PluginLifecycleManager` | 插件生命周期统一接口 |
-| `IPluginDistributionManagerToken` | `PluginDistributionManager` | 插件分发与仓库管理 |
-| `IPluginRuntimeCompositionToken` | `PluginRuntimeComposition` | 插件运行时组合 |
-| `IUnifiedExtensionRegistryToken` | `UnifiedExtensionRegistry` | 统一扩展注册表 |
-| `IPluginCapabilityGatewayToken` | `PluginCapabilityGateway` | 插件能力网关 |
-| `ICapabilityRegistryToken` | `CapabilityRegistry` | AI 能力注册表 |
-| `ISemesterGradeServiceToken` | `ISemesterGradeService` | 学期成绩 |
-| `IPointsDimensionRegistryToken` | `IPointsDimensionRegistry` | 积分维度注册表 |
-| `IPointsLedgerServiceToken` | `IPointsLedgerService` | 积分流水 |
-| `IAICapabilityServiceToken` | `IAICapabilityService` | AI 能力网关 |
-| `ICapabilityRuntimeServiceToken` | `ICapabilityRuntimeService` | 能力运行时内核（见[能力 Provider 框架](../reference/capability-provider-framework)） |
-| `ICapabilityGovernanceServiceToken` | `ICapabilityGovernanceService` | 能力治理内核 |
-| `IPlatformServiceRegistryToken` | `IPlatformServiceRegistryService` | 平台服务注册表 |
-| `IActivityRegistryToken` | `ActivityRegistry` | 活动生态（见[活动生态开发指南](../reference/activity-ecosystem)） |
+| Token 常量名                         | 服务接口类型                      | 说明                                                                                 |
+| :----------------------------------- | :-------------------------------- | :----------------------------------------------------------------------------------- |
+| `IAuthSessionBridgeToken`            | `IAuthSessionBridgeService`       | 统一安全会话桥接（LTI 1.3 / SSO 单点登录，v0.3.15+）                                 |
+| `IDatabaseToken`                     | `Database`                        | 原生 SQLite 数据库只读/写连接                                                        |
+| `ICommandBusServiceToken`            | `ICommandBusService`              | 命令总线服务                                                                         |
+| `IEventBusServiceToken`              | `IEventBusService`                | 事件总线服务                                                                         |
+| `IActionRegistryServiceToken`        | `IActionRegistryService`          | AI Action 注册表                                                                     |
+| `ICapabilityServiceToken`            | `ICapabilityService`              | 权限能力服务                                                                         |
+| `IProcessServiceToken`               | `IProcessService`                 | 受控后台进程                                                                         |
+| `IStorageServiceToken`               | `IStorageService`                 | 键值存储                                                                             |
+| `IAIServiceToken`                    | `IAIService`                      | AI 文本生成                                                                          |
+| `IPluginHostToken`                   | `PluginHost`                      | 插件宿主对象（仅限管理插件）                                                         |
+| `ILessonEngineServiceToken`          | `ILessonEngineService`            | 课程引擎控制接口                                                                     |
+| `IClassroomRuntimeServiceToken`      | `IClassroomRuntimeService`        | 课堂实时运行时                                                                       |
+| `IPresenceEngineServiceToken`        | `IPresenceEngineService`          | 在线状态感知引擎                                                                     |
+| `ITeachingCollaborationServiceToken` | `ITeachingCollaborationService`   | 协同教学引擎                                                                         |
+| `ILearningAnalyticsServiceToken`     | `ILearningAnalyticsService`       | 学习分析与指标引擎                                                                   |
+| `IPluginLifecycleManagerToken`       | `PluginLifecycleManager`          | 插件生命周期统一接口                                                                 |
+| `IPluginDistributionManagerToken`    | `PluginDistributionManager`       | 插件分发与仓库管理                                                                   |
+| `IPluginRuntimeCompositionToken`     | `PluginRuntimeComposition`        | 插件运行时组合                                                                       |
+| `IUnifiedExtensionRegistryToken`     | `UnifiedExtensionRegistry`        | 统一扩展注册表                                                                       |
+| `IPluginCapabilityGatewayToken`      | `PluginCapabilityGateway`         | 插件能力网关                                                                         |
+| `ICapabilityRegistryToken`           | `CapabilityRegistry`              | AI 能力注册表                                                                        |
+| `ISemesterGradeServiceToken`         | `ISemesterGradeService`           | 学期成绩                                                                             |
+| `IPointsDimensionRegistryToken`      | `IPointsDimensionRegistry`        | 积分维度注册表                                                                       |
+| `IPointsLedgerServiceToken`          | `IPointsLedgerService`            | 积分流水                                                                             |
+| `IAICapabilityServiceToken`          | `IAICapabilityService`            | AI 能力网关                                                                          |
+| `ICapabilityRuntimeServiceToken`     | `ICapabilityRuntimeService`       | 能力运行时内核（见[能力 Provider 框架](../reference/capability-provider-framework)） |
+| `ICapabilityGovernanceServiceToken`  | `ICapabilityGovernanceService`    | 能力治理内核                                                                         |
+| `IPlatformServiceRegistryToken`      | `IPlatformServiceRegistryService` | 平台服务注册表                                                                       |
+| `IActivityRegistryToken`             | `ActivityRegistry`                | 活动生态（见[活动生态开发指南](../reference/activity-ecosystem)）                    |
 
 ### 代码使用范例
 
 #### 1. 解析内置服务 (`ctx.resolve`)
+
 ```typescript
 import { IDatabaseToken } from '@openlearn/plugin-sdk';
 
 export const MyPlugin = {
-  manifest: { /* ... */ },
+  manifest: {/* ... */},
   activate: async (ctx: PluginContext) => {
     const db = await ctx.resolve(IDatabaseToken);
-    const rows = db.prepare("SELECT * FROM users").all();
+    const rows = db.prepare('SELECT * FROM users').all();
     ctx.log.info(`Fetched ${rows.length} users`);
-  }
+  },
 };
 ```
 
 #### 2. 自定义服务声明与共享 (`ctx.provide`)
+
 ```typescript
 import { Token } from '@openlearn/plugin-sdk';
 
@@ -162,17 +180,17 @@ export const IAnalyticsCustomServiceToken = new Token<IAnalyticsCustomService>('
 
 export const ServiceProviderPlugin = {
   manifest: {
-    id: "provider-plugin",
-    provides: ["IAnalyticsCustomService"],
+    id: 'provider-plugin',
+    provides: ['IAnalyticsCustomService'],
     // ...
   },
   activate: async (ctx: PluginContext) => {
     await ctx.provide(IAnalyticsCustomServiceToken, {
       calculateScore(studentId: string) {
         return 95;
-      }
+      },
     });
-  }
+  },
 };
 ```
 
@@ -194,9 +212,9 @@ export default {
     api: {
       routes: [
         { method: 'GET', path: '/feedbacks', auth: true, roles: ['teacher', 'administrator'] },
-        { method: 'POST', path: '/submit', auth: false, rateLimit: { max: 20, windowMs: 60000 } }
-      ]
-    }
+        { method: 'POST', path: '/submit', auth: false, rateLimit: { max: 20, windowMs: 60000 } },
+      ],
+    },
   },
   activate: async (ctx: PluginContext) => {
     // 1. 公开端点：无需登录直接提交
@@ -212,10 +230,9 @@ export default {
       ctx.log.info('教师查询反馈列表', { user: req.actor.username });
       return {
         total: 1,
-        items: [{ score: 5, comment: '讲得很好' }]
+        items: [{ score: 5, comment: '讲得很好' }],
       };
     });
-  }
+  },
 };
 ```
-

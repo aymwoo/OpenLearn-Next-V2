@@ -2,7 +2,7 @@ import type { IRenderer } from '../types.js';
 
 /**
  * Renderer Registry
- * 
+ *
  * Central registry for object renderers.
  * Enables core developers and third-party plugins to register custom renderers
  * or override existing ones without mutating Whiteboard Core.

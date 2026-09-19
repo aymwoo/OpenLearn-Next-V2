@@ -2,14 +2,19 @@
  * OpenLearn Platform Kernel - Composition Validator (PI-006)
  */
 
-import { CompositionValidation, CompositionValidationError, CompositionContextOptions, CompositionModule } from './composition-types.js';
+import {
+  CompositionValidation,
+  CompositionValidationError,
+  CompositionContextOptions,
+  CompositionModule,
+} from './composition-types.js';
 import { BootstrapPipeline } from '../pipeline/bootstrap-pipeline.js';
 
 export class CompositionValidator {
   public static validate(
     options: CompositionContextOptions,
     pipeline: BootstrapPipeline,
-    modules: ReadonlyArray<CompositionModule>
+    modules: ReadonlyArray<CompositionModule>,
   ): CompositionValidation {
     const errors: CompositionValidationError[] = [];
     const warnings: string[] = [];

@@ -31,10 +31,7 @@ export class EsmLoaderError extends Error {
  * 可携带 line/column 信息，辅助定位语法错误的具体位置。
  */
 export class EsmSyntaxError extends EsmLoaderError {
-  constructor(
-    message: string,
-    options?: { cause?: Error; line?: number; column?: number }
-  ) {
+  constructor(message: string, options?: { cause?: Error; line?: number; column?: number }) {
     super(message, options);
     this.name = 'EsmSyntaxError';
   }
@@ -48,7 +45,7 @@ export class EsmSyntaxError extends EsmLoaderError {
 export class EsmModuleNotFoundError extends EsmLoaderError {
   constructor(
     public readonly specifier: string,
-    options?: { cause?: Error }
+    options?: { cause?: Error },
   ) {
     super(`Module not found: "${specifier}"`, options);
     this.name = 'EsmModuleNotFoundError';
@@ -63,7 +60,7 @@ export class EsmModuleNotFoundError extends EsmLoaderError {
 export class EsmLoadTimeoutError extends EsmLoaderError {
   constructor(
     public readonly timeoutMs: number,
-    options?: { cause?: Error }
+    options?: { cause?: Error },
   ) {
     super(`Module load timed out after ${timeoutMs}ms`, options);
     this.name = 'EsmLoadTimeoutError';
@@ -79,7 +76,7 @@ export class EsmActivationError extends EsmLoaderError {
   constructor(
     public readonly pluginId: string,
     message: string,
-    options?: { cause?: Error }
+    options?: { cause?: Error },
   ) {
     super(`Plugin "${pluginId}" activation failed: ${message}`, options);
     this.name = 'EsmActivationError';

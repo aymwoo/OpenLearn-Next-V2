@@ -43,6 +43,7 @@ import type {
 import { fullscreenRendererRegistry } from '../features/whiteboard/fullscreen/FullscreenRendererRegistry';
 import { propertyEditorRegistry } from '../features/whiteboard/properties/PropertyEditorRegistry';
 import { coursewareSourceRegistry } from '../features/whiteboard/courseware/courseware-source-registry';
+import { paletteItemRegistry } from '../features/teacher/lesson-editor/palette-item-registry';
 
 // ── Module Loader type ───────────────────────────────────────────────────
 
@@ -173,18 +174,14 @@ export class FrontendPluginHost {
   /**
    * Activate a remote plugin by fetching and executing its frontend.js script.
    */
-  async activateRemotePlugin(
-    pluginId: string,
-    manifest: FrontendPluginManifest,
-  ): Promise<void> {
+  async activateRemotePlugin(pluginId: string, manifest: FrontendPluginManifest): Promise<void> {
     const store = usePluginHostStore.getState();
 
     // Idempotency guard: if plugin is already activating or active, skip
     const existingPlugin = store.activePlugins.find((p) => p.id === pluginId);
     if (
       existingPlugin &&
-      (existingPlugin.state === PluginState.ACTIVE ||
-        existingPlugin.state === PluginState.ACTIVATING)
+      (existingPlugin.state === PluginState.ACTIVE || existingPlugin.state === PluginState.ACTIVATING)
     ) {
       return;
     }
@@ -224,9 +221,7 @@ export class FrontendPluginHost {
       // 5s activation timeout
       await Promise.race([
         plugin.activate(ctx),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Activation timeout (5000ms)')), 5000),
-        ),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Activation timeout (5000ms)')), 5000)),
       ]);
 
       this.pluginModules.set(pluginId, {
@@ -272,17 +267,14 @@ export class FrontendPluginHost {
       const manifest: FrontendPluginManifest | undefined = plugin.manifest ?? (mod as any).manifest;
       const activate: ((ctx: FrontendPluginContext) => Promise<void>) | undefined =
         plugin.activate ?? (mod as any).activate;
-      const deactivate: (() => Promise<void>) | undefined =
-        plugin.deactivate ?? (mod as any).deactivate;
+      const deactivate: (() => Promise<void>) | undefined = plugin.deactivate ?? (mod as any).deactivate;
 
       if (!manifest || typeof activate !== 'function') {
         throw new Error('Invalid plugin: missing manifest or activate function');
       }
 
       if (manifest.id !== pluginId) {
-        throw new Error(
-          `Manifest id mismatch: expected "${pluginId}", got "${manifest.id}"`,
-        );
+        throw new Error(`Manifest id mismatch: expected "${pluginId}", got "${manifest.id}"`);
       }
 
       // Automatically register classroomTools as extension points
@@ -303,9 +295,7 @@ export class FrontendPluginHost {
       // 5s activation timeout
       await Promise.race([
         activate(ctx),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Activation timeout (5000ms)')), 5000),
-        ),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Activation timeout (5000ms)')), 5000)),
       ]);
 
       this.pluginModules.set(pluginId, {
@@ -328,10 +318,7 @@ export class FrontendPluginHost {
    * Creates a Web Worker, loads the plugin inside it, and sets up
    * the ServiceProxy RPC channel.
    */
-  private async activateWorkerPlugin(
-    pluginId: string,
-    pluginInfo: FrontendPluginInfo,
-  ): Promise<void> {
+  private async activateWorkerPlugin(pluginId: string, pluginInfo: FrontendPluginInfo): Promise<void> {
     if (!this.workerManager) {
       throw new Error(
         `Cannot activate plugin "${pluginId}" in worker mode: BrowserWorkerManager not set. ` +
@@ -359,9 +346,7 @@ export class FrontendPluginHost {
       let socketService: ISocketService | undefined;
       if (this.registry) {
         try {
-          socketService = await this.registry.resolve<ISocketService>(
-            '@openlearn/frontend:ISocketService',
-          );
+          socketService = await this.registry.resolve<ISocketService>('@openlearn/frontend:ISocketService');
         } catch {
           // No socket service registered — event forwarding disabled
         }
@@ -410,16 +395,11 @@ export class FrontendPluginHost {
       if (instance?.deactivate) {
         await Promise.race([
           instance.deactivate(),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Deactivation timeout (5000ms)')), 5000),
-          ),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Deactivation timeout (5000ms)')), 5000)),
         ]);
       }
     } catch (err) {
-      console.error(
-        `[FrontendPluginHost] Deactivation error for "${pluginId}":`,
-        err,
-      );
+      console.error(`[FrontendPluginHost] Deactivation error for "${pluginId}":`, err);
     } finally {
       this.unregisterPluginResources(pluginId);
       this.pluginModules.delete(pluginId);
@@ -444,10 +424,7 @@ export class FrontendPluginHost {
     try {
       await fetch(`/api/plugins/${pluginId}`, { method: 'DELETE' });
     } catch (err) {
-      console.error(
-        `[FrontendPluginHost] Failed to DELETE plugin "${pluginId}" on server:`,
-        err,
-      );
+      console.error(`[FrontendPluginHost] Failed to DELETE plugin "${pluginId}" on server:`, err);
     }
 
     this.sourceCodes.delete(pluginId);
@@ -474,11 +451,12 @@ export class FrontendPluginHost {
    * v3.5: whiteboard registries are host singletons; plugins reach them only
    * through ctx.ui, so the host must evict their registrations here.
    */
-  private unregisterPluginResources(pluginId: string): void {
+  public unregisterPluginResources(pluginId: string): void {
     usePluginHostStore.getState().unregisterPluginExtensionPoints(pluginId);
     fullscreenRendererRegistry.unregisterPlugin(pluginId);
     propertyEditorRegistry.unregisterPlugin(pluginId);
     coursewareSourceRegistry.unregisterPlugin(pluginId);
+    paletteItemRegistry.unregisterPlugin(pluginId);
   }
 
   /**
@@ -504,10 +482,7 @@ export class FrontendPluginHost {
    * Resolves all four frontend services from the registry and wraps
    * the extension point registration methods to update the zustand store.
    */
-  private async buildContext(
-    pluginId: string,
-    manifest: FrontendPluginManifest,
-  ): Promise<FrontendPluginContext> {
+  private async buildContext(pluginId: string, manifest: FrontendPluginManifest): Promise<FrontendPluginContext> {
     if (!this.registry) {
       throw new Error('FrontendPluginHost not initialized');
     }
@@ -554,6 +529,12 @@ export class FrontendPluginHost {
         unregisterCoursewareSource: (id) => {
           coursewareSourceRegistry.unregister(id, pluginId);
         },
+        registerPaletteItem: (item) => {
+          paletteItemRegistry.register(item, pluginId);
+        },
+        unregisterPaletteItem: (type) => {
+          paletteItemRegistry.unregister(type, pluginId);
+        },
       },
       navigation: {
         getTeacherTab: () => appStore.getState().teacherTab,
@@ -568,7 +549,7 @@ export class FrontendPluginHost {
               callback(nextTab);
             }
           });
-        }
+        },
       },
       context: {
         get: () => {
@@ -588,7 +569,10 @@ export class FrontendPluginHost {
         },
       },
       invokeCommand: async <T = any>(type: string, payload?: any): Promise<T> => {
-        if (!frontendApi) throw new Error(`Plugin "${pluginId}" cannot invoke command: frontendApi is not available. Has FrontendPluginHost initialized?`);
+        if (!frontendApi)
+          throw new Error(
+            `Plugin "${pluginId}" cannot invoke command: frontendApi is not available. Has FrontendPluginHost initialized?`,
+          );
         // Use the same namespace rule as the worker runtime so the main
         // CommandBus can find the handler that the worker's
         // registerHandler call stored under the prefixed key.
@@ -645,11 +629,11 @@ class SemesterGradeServiceProxy implements ISemesterGradeService {
  * Map of bare module specifiers to their global host shared dependencies expression.
  */
 export const SHARED_MODULE_MAP: Record<string, string> = {
-  'react': 'window.HostSharedDeps.React',
+  react: 'window.HostSharedDeps.React',
   'react-dom': 'window.HostSharedDeps.ReactDOM',
   'react-dom/client': '(window.HostSharedDeps.ReactDOMClient || window.HostSharedDeps.ReactDOM)',
   'react/jsx-runtime': 'window.HostSharedDeps.jsxRuntime',
-  'recharts': 'window.HostSharedDeps.Recharts',
+  recharts: 'window.HostSharedDeps.Recharts',
   'lucide-react': 'window.HostSharedDeps.LucideReact',
 };
 
@@ -751,16 +735,12 @@ export function transformBareModuleImports(sourceCode: string): string {
   });
 
   // 2. Replace import clauses: `import ... from "specifier";`
-  transformed = transformed.replace(
-    /import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"];?/g,
-    (match, clause, specifier) => {
-      const depExpr = SHARED_MODULE_MAP[specifier];
-      if (!depExpr) return match;
-      const replacement = transformImportClause(clause, depExpr);
-      return replacement ? replacement : match;
-    },
-  );
+  transformed = transformed.replace(/import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"];?/g, (match, clause, specifier) => {
+    const depExpr = SHARED_MODULE_MAP[specifier];
+    if (!depExpr) return match;
+    const replacement = transformImportClause(clause, depExpr);
+    return replacement ? replacement : match;
+  });
 
   return transformed;
 }
-

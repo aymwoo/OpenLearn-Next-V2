@@ -19,7 +19,7 @@ export const WhiteboardDialog: React.FC<WhiteboardDialogProps> = ({
   dialog,
   dialogInput,
   setDialogInput,
-  setDialog
+  setDialog,
 }) => {
   if (!dialog) return null;
 
@@ -28,7 +28,12 @@ export const WhiteboardDialog: React.FC<WhiteboardDialogProps> = ({
       <div className="bg-white rounded-xl shadow-2xl overflow-hidden max-w-sm w-full border border-gray-100 flex flex-col scale-100 pointer-events-auto">
         <div className="px-5 py-4 border-b border-gray-150/60 bg-gray-50 flex justify-between items-center shrink-0">
           <h3 className="font-bold text-gray-800 text-sm">{dialog.title}</h3>
-          <button onClick={() => setDialog(null)} className="text-gray-400 hover:text-gray-650 transition-colors text-xl font-light cursor-pointer">×</button>
+          <button
+            onClick={() => setDialog(null)}
+            className="text-gray-400 hover:text-gray-650 transition-colors text-xl font-light cursor-pointer"
+          >
+            ×
+          </button>
         </div>
         <div className="p-5 flex-1 min-h-0">
           <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap mb-4 font-medium">{dialog.message}</p>
@@ -56,7 +61,7 @@ export const WhiteboardDialog: React.FC<WhiteboardDialogProps> = ({
               try {
                 await dialog.onConfirm(dialogInput);
               } catch (e) {
-                console.error("Dialog action error:", e);
+                console.error('Dialog action error:', e);
               }
             }}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-all shadow-sm cursor-pointer"

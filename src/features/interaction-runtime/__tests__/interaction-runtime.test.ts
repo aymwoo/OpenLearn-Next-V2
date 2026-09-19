@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  InteractionRuntimeService,
-  InteractionRegistry,
-  InteractionHandler,
-} from '../index.js';
+import { InteractionRuntimeService, InteractionRegistry, InteractionHandler } from '../index.js';
 
 describe('Sprint P2-09 Interaction Runtime Test Suite', () => {
   let runtime: InteractionRuntimeService;

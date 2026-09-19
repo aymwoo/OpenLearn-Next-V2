@@ -55,10 +55,7 @@ export function deepClone<T>(value: T): T {
 }
 
 /** Deep merge `source` into `target` (plain objects merge; arrays/scalars replace). */
-export function deepMerge(
-  target: Record<string, unknown>,
-  source: Record<string, unknown>,
-): Record<string, unknown> {
+export function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
   const out = deepClone(target);
   for (const [key, value] of Object.entries(source)) {
     const existing = out[key];

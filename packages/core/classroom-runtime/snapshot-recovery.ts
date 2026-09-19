@@ -16,7 +16,7 @@ export class RuntimeSnapshotManager {
     stateTree: RuntimeStateTree,
     activeServices: ReadonlyArray<string>,
     loadedModules: ReadonlyArray<string>,
-    resources: ReadonlyArray<RuntimeResource>
+    resources: ReadonlyArray<RuntimeResource>,
   ): RuntimeSnapshot {
     const snapshot: RuntimeSnapshot = {
       snapshotId: `snap_${globalThis.crypto.randomUUID()}`,

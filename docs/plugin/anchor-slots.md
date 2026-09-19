@@ -20,15 +20,15 @@ anchor:{页面或区域}:{锚点 id}
 
 白板顶部工具栏（`src/features/whiteboard/components/WhiteboardToolbar.tsx`）已埋设以下锚点：
 
-| 锚点槽位 | 锚点目标（原生按钮） | 说明 |
-| :--- | :--- | :--- |
+| 锚点槽位                                 | 锚点目标（原生按钮）                         | 说明                     |
+| :--------------------------------------- | :------------------------------------------- | :----------------------- |
 | `anchor:whiteboard-toolbar:presentation` | 「插入演示幻灯片」按钮 (`Presentation` 图标) | 前后各可插入一个插件按钮 |
-| `anchor:whiteboard-toolbar:code-sandbox` | 「插入代码沙箱」按钮 (`Terminal` 图标) | 前后各可插入一个插件按钮 |
-| `anchor:whiteboard-toolbar:math-graph` | 「插入数学函数图表」按钮 (`Activity` 图标) | 前后各可插入一个插件按钮 |
-| `anchor:whiteboard-toolbar:courseware` | 「插入交互网页课件」按钮 (`Globe` 图标) | 前后各可插入一个插件按钮 |
-| `anchor:whiteboard-toolbar:rollcall` | 「随机点名」按钮 (`UserCheck` 图标) | 前后各可插入一个插件按钮 |
-| `anchor:whiteboard-toolbar:ai-tutor` | 「请求 AI 助教建议」按钮 (`Wand2` 图标) | 前后各可插入一个插件按钮 |
-| `anchor:whiteboard-toolbar:grid` | 「开启/关闭网格背景」按钮 (`Grid` 图标) | 前后各可插入一个插件按钮 |
+| `anchor:whiteboard-toolbar:code-sandbox` | 「插入代码沙箱」按钮 (`Terminal` 图标)       | 前后各可插入一个插件按钮 |
+| `anchor:whiteboard-toolbar:math-graph`   | 「插入数学函数图表」按钮 (`Activity` 图标)   | 前后各可插入一个插件按钮 |
+| `anchor:whiteboard-toolbar:courseware`   | 「插入交互网页课件」按钮 (`Globe` 图标)      | 前后各可插入一个插件按钮 |
+| `anchor:whiteboard-toolbar:rollcall`     | 「随机点名」按钮 (`UserCheck` 图标)          | 前后各可插入一个插件按钮 |
+| `anchor:whiteboard-toolbar:ai-tutor`     | 「请求 AI 助教建议」按钮 (`Wand2` 图标)      | 前后各可插入一个插件按钮 |
+| `anchor:whiteboard-toolbar:grid`         | 「开启/关闭网格背景」按钮 (`Grid` 图标)      | 前后各可插入一个插件按钮 |
 
 ## 3. 插件使用方式
 
@@ -40,8 +40,8 @@ anchor:{页面或区域}:{锚点 id}
 ctx.ui.registerExtensionPoint('anchor:whiteboard-toolbar:rollcall', {
   id: 'my-button',
   label: '我的按钮',
-  placement: 'before',            // 'before' | 'after'，缺省 'after'
-  position: 50,                   // 同侧多插件按钮的排序权重（缺省 100，升序）
+  placement: 'before', // 'before' | 'after'，缺省 'after'
+  position: 50, // 同侧多插件按钮的排序权重（缺省 100，升序）
   component: () => import('./MyButton'),
 });
 ```
@@ -52,11 +52,15 @@ ctx.ui.registerExtensionPoint('anchor:whiteboard-toolbar:rollcall', {
 
 ```ts
 ctx.ui.registerExtensionPoint('anchor:whiteboard-toolbar:rollcall', {
-  id: 'btn-a', placement: 'before', position: 10,  // 排在前面
+  id: 'btn-a',
+  placement: 'before',
+  position: 10, // 排在前面
   component: () => import('./A'),
 });
 ctx.ui.registerExtensionPoint('anchor:whiteboard-toolbar:rollcall', {
-  id: 'btn-b', placement: 'before', position: 90,  // 排在后面
+  id: 'btn-b',
+  placement: 'before',
+  position: 90, // 排在后面
   component: () => import('./B'),
 });
 ```

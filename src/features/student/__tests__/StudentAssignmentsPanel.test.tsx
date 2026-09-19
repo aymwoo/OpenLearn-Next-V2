@@ -17,7 +17,7 @@ describe('StudentAssignmentsPanel', () => {
         setQuizStudentAnswers={vi.fn()}
         setSubAssignmentTab={vi.fn()}
         lang="zh"
-      />
+      />,
     );
     expect(screen.getByText('My Assignments')).toBeTruthy();
     expect(screen.getByText('Open Canvas')).toBeTruthy();

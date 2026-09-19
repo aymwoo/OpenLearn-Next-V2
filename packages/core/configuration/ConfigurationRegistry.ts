@@ -87,9 +87,7 @@ export class ConfigurationRegistry {
     this.currentConfig = config;
     this.currentSnapshot = new ConfigurationSnapshot(config, { timestamp: ctx.timestamp });
     this.lastReport = report;
-    this.logger.info(
-      `[PlatformConfiguration] Load complete: valid=${report.isValid}, errors=${report.errors.length}.`,
-    );
+    this.logger.info(`[PlatformConfiguration] Load complete: valid=${report.isValid}, errors=${report.errors.length}.`);
     return { config, report, snapshot: this.currentSnapshot };
   }
 
@@ -110,12 +108,7 @@ export class ConfigurationRegistry {
     }
     const value = getByPath(this.currentConfig, path);
     if (value === undefined) {
-      throw new ConfigurationError(
-        `Configuration path '${path}' was not found.`,
-        'NOT_FOUND',
-        path,
-        scope,
-      );
+      throw new ConfigurationError(`Configuration path '${path}' was not found.`, 'NOT_FOUND', path, scope);
     }
     return value as T;
   }

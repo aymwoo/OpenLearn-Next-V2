@@ -1,8 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  PlatformCompositionRoot,
-  PluginCompositionModule,
-} from '../bootstrap/composition/index.js';
+import { PlatformCompositionRoot, PluginCompositionModule } from '../bootstrap/composition/index.js';
 import { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
 import { PluginCapability } from '../ai-capability/capabilities/plugin-capability.js';
 import { CapabilityLogger } from '../ai-capability/logging/capability-logger.js';
@@ -33,7 +30,6 @@ describe('Sprint A2 Step 2 Plugin Platform Integration Test Suite', () => {
     expect(registry.hasCapability('capability_plugin')).toBe(true);
     expect(registry.resolveCapability('capability_plugin')?.meta.name).toBe('Plugin AI Invocation Capability');
   });
-
 
   it('should register and enforce plugin infrastructure permissions via PermissionManager', async () => {
     const permissionManager = new PermissionManager();

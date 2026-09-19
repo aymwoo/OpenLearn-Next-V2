@@ -27,15 +27,7 @@ export function parseCliArgs(rawArgs) {
     }
   }
 
-  const KNOWN_COMMANDS = new Set([
-    'doctor',
-    'backup',
-    'restore',
-    'reset-admin',
-    'plugins',
-    'clean',
-    'clean-cache',
-  ]);
+  const KNOWN_COMMANDS = new Set(['doctor', 'backup', 'restore', 'reset-admin', 'plugins', 'clean', 'clean-cache']);
 
   const ALIAS_COMMAND_MAP = {
     '--doctor': 'doctor',
@@ -136,9 +128,8 @@ export function parseCliArgs(rawArgs) {
   }
 
   // 兼容 plugins list 子参数
-  const subcommandArgs = command === 'plugins' && positionalArgs[0] === 'list'
-    ? positionalArgs.slice(1)
-    : positionalArgs;
+  const subcommandArgs =
+    command === 'plugins' && positionalArgs[0] === 'list' ? positionalArgs.slice(1) : positionalArgs;
 
   return { command, subcommandArgs, flags };
 }
@@ -343,4 +334,3 @@ const isMain =
 if (isMain) {
   runCli();
 }
-

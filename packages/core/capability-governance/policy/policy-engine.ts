@@ -14,7 +14,10 @@ export class PolicyEngine {
   public static evaluatePolicies(spec: GovernanceSpecification): GovernancePolicyResult {
     // 1. Security Policy: Disallow unrestricted execute permissions for untrusted plugins
     if (spec.category === 'Plugin' && spec.approvalTier === 'Internal' && spec.permission.includes('System')) {
-      return { allowed: false, reason: 'Security Policy Violation: Internal plugins cannot claim System role permissions.' };
+      return {
+        allowed: false,
+        reason: 'Security Policy Violation: Internal plugins cannot claim System role permissions.',
+      };
     }
 
     // 2. AI Policy: AI capabilities must specify maximum tokens or temperature limit

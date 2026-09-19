@@ -10,9 +10,77 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.3.17] - 2026-09-19
+
+### Features & Plugin Ecosystem
+
+- **课程设计备课画板组件插件扩展插槽 (Palette Item Extension Slot for Lesson Design)**:
+  - **画板组件注册表 (`paletteItemRegistry`)**：基于 Zustand Vanilla Store 构建响应式注册单例，开放 `register`、`unregister`、`unregisterPlugin(pluginId)` 与 `usePluginPaletteItems` 响应式 Hook；
+  - **插件上下文契约扩展 (`FrontendPluginContext.ui`)**：在前端插件上下文中新增 `ctx.ui.registerPaletteItem(config)` 与 `ctx.ui.unregisterPaletteItem(type)`，支持第三方插件向备课画板贡献专属教学组件（如学科仿真实验、3D 分子模型、乐谱、编程评测沙箱等）；
+  - **备课组件库无缝聚合 (`LessonPalette.tsx`)**：左侧画板面板动态聚合并实时响应插件组件，新增“插件扩展”专属分组，自动享受中英文检索、拼音首字母匹配、分类折叠、收藏置顶与最近使用机制；
+  - **初始参数声明式配置弹窗 (`PaletteCardEditModal`)**：支持插件声明 `editFields`（`input`、`textarea`、`select`、`options` 等），教师点击卡片时自动唤起配置表单并支持动态/异步加载选项；
+  - **白板画布标准教学卡片容器 (`InteractiveWhiteboard.tsx`)**：白板自动为插件组件提供统一的标准教学卡片外壳，集成标题栏拖拽手柄、平滑缩放 handles、最小化折叠、全屏放大以及删除控制，并无缝挂载插件自定义 React 视图组件；
+  - **属性侧边栏自动映射与回退**：选中插件组件时，若未注册专属 `propertyEditor`，右侧属性检查器自动基于 `editFields` 生成即时响应的通用配置表单；
+  - **生命周期自动回收**：插件宿主 `unregisterPluginResources(pluginId)` 与插件停用/卸载联动，自动清理插件注册的画板组件，防止内存泄漏或残留脏配置；
+  - **文档与 SDK 声明同步**：更新 [`docs/reference/plugin-ui-extension-slots.md`](docs/reference/plugin-ui-extension-slots.md)、[`docs/tutorials/plugin-development-tutorial.md`](docs/tutorials/plugin-development-tutorial.md) 以及 `@openlearn/plugin-sdk` 类型定义。
+
+- **互动课堂独立标签页学生端与多端实时同步 (Independent Tab Student Preview & Realtime Sync)**:
+  - **独立浏览器标签页学生端 (`/student/live?lessonId=...`)**：互动课堂的学生视角从页面内弹窗/抽屉改造为弹出独立的浏览器标签页，便于教师在多屏或分屏环境下双端实时对照教学效果；
+  - **双向广播联动通道 (`ClassroomSyncChannel`)**：基于 `BroadcastChannel` 与 Socket.IO 构建低延迟双向联动通信通道，教师端的页面切换、白板标注涂写、组件缩放移动与课件交互实时毫秒级同步至独立学生端 tab；
+  - **多端状态感知与生命周期管理**：支持主动心跳检测、掉线重连感知与独立窗口关闭状态同步。
+
+- **全局系统错误诊断中心与一键复制 (Global System Error Diagnostic Center & One-Click Copy)**:
+  - **全局未捕获异常监听 (`useGlobalErrorCapture`)**：统一捕获 `window.onerror`、`unhandledrejection` 以及 React 渲染 ErrorBoundary 异常；
+  - **系统级错误诊断模态框 (`SystemErrorCenterModal`)**：当系统发生错误时通过全局 Toast 提供快速入口，打开“系统错误诊断中心”，智能提取错误分类、发生时间、课程/班级上下文以及格式化调用堆栈；
+  - **智能排查建议与一键复制**：针对常见网络中断、插件执行异常、CSP 拦截提供分类排查建议，并提供带 Markdown 格式诊断报告的一键复制功能，极大简化运维排错与技术支持沟通成本。
+
+### Refactor & Architecture
+
+- **白板与备课互动课件属性模型统一 (Courseware Property Unification)**:
+  - 备课画板与互动上课白板中，“互动网络课件”属性面板重构，统一使用 `coursewareUuid` 资产标识，移除冗余的 `resourceId` 字段；
+  - 统一关联课件列表选择器与本地课件压缩包文件上传流程，规避参数歧义。
+
+### Fixes & Security
+
+- **CSP 内容安全策略内联脚本告警修复 (CSP script-src-attr Directive Hardening)**:
+  - 规范内联事件处理器编写，消除浏览器控制台中关于 `script-src-attr 'none'` 的 Content Security Policy 告警。
+
+### Fixes
+
+- **课程编辑器无限重渲染导致崩溃 (Lesson Editor Infinite Render Loop / `Maximum update depth exceeded`)**:
+  - **缺陷机理**：`usePluginPaletteItems` 的选择器体 `Array.from(state.items.values()).map(...)` 每次 `getSnapshot()` 都会分配一个新数组，而 `useStore` 底层是 `useSyncExternalStore`（用 `Object.is` 比较连续快照），于是 React 永远判定快照已变化、每次提交都强制重渲染，直到抛 `Maximum update depth exceeded`；只要渲染到备课组件库（`LessonPalette`）就会触发，教师端「课程编辑器」完全不可用；
+  - **修复**：用 `useShallow`（`zustand/react/shallow`）包裹选择器，把不稳定数组收敛为引用稳定的结果；空列表与未安装插件场景下也不再重渲染；
+  - **全仓扫描**：审查了 42 处 store 选择器，其余均返回单一字段（引用天然稳定），并确认仓库内无手写 `useSyncExternalStore`，此类缺陷仅此一处；
+  - **范围说明**：该缺陷由本次未发布的「插件备课画板组件扩展插槽」一并引入（文件尚未提交），未影响任何已发布版本；
+  - **回归测试**：新增 `palette-item-registry.test.tsx`，以“单组件 + 单 Hook + 空 Store、零写入”的最小场景锁定重渲染次数，直接复现并防住该缺陷。
+
+- **全班专注锁定只读跟随模式 (Class Focus Lock — Read-only Follow Mode)**:
+  - **视图切换唯一收口 (`setStudentViewStatus`)**：锁定期间学生端只放行 `lesson` 视图，其余跳转（Dashboard、作业工作区、通知直达等）统一拦截并弹出提示，修复此前“只禁用了返回学习面板按钮”导致学生仍可自由切换页面的问题；
+  - **顶部导航与品牌区拦截 (`AppHeader`)**：`isStudentLocked` 下系统总览按钮与站点 Logo 不再跳转，改显锁图标与提示文案；
+  - **标签页与教学环节锁定 (`StudentLessonInteractionPanel` / `StudentLessonContentPanel`)**：白板/互动课件/作业标签页与时间线环节切换在锁定期间禁用并提示，仅允许跟随教师端广播；
+  - **白板只读模式 (`InteractiveWhiteboard readOnly`)**：隐藏顶部工具栏与页面栏，画布 `pointer-events: none` 禁止绘制，禁用右键菜单、浮动删除胶囊与元素删除，同时保留测验、随机点名、演示文稿等插件组件本体的交互能力；
+  - **底层写入兜底**：`handleElementDelete` / `handleClearBoard` / `handleResetBoard` 与 `onElementDelete` / `onClearBoard` 在只读模式下直接拒绝，防止绕过 UI 触发白板清空；
+  - **强制跟随教师步调**：锁定期间自动开启并禁用“跟随教师步调”开关，同时确保学生落在课节视图，不会被困在其他页面。
+
+- **教师端组件最大化视图同步至学生端 (Teacher Fullscreen Component Sync)**:
+  - **白板视图广播 (`broadcastFullscreen`)**：互动课堂中教师最大化/退出最大化白板组件时，通过 `teacher-broadcast-fullscreen` 将组件 id 与课节连同广播给授课班级；仅实时授课中控台启用，备课编辑器不打扰学生；
+  - **班级房间投递 (`class-<classId>`)**：`register-student` 时服务端按 `class_students` 将学生 socket 加入其所属班级房间，教师端同时投递到课节房间与班级房间；因此学生无论处于课节白板、互动课件、作业标签页、**作业工作区**（此前会 `leave-lesson`）还是**从学习面板直接打开作业**，都能收到同步（先前仅靠课节房间会让这些学生漏收）；
+  - **远程视图状态中心 (`whiteboardViewStore`)**：最大化状态提升至独立 Zustand Store，避免学生切到「互动课件/作业」标签页导致白板卸载后同步视图丢失；
+  - **强制切回白板并全屏 (`useClassroomSocket`)**：学生收到广播后强制切换到交互式白板标签页并进入全屏遮罩，确保教师展示的组件可见；学生在自学其他课节或停留在学习面板时不会被打断；
+  - **原路返回 (`interruptedViewRef`)**：中断前记录学生的视图状态、标签页、课节与被打开的作业，教师退出最大化后恢复原位（同一次中断只捕获一次，反复 maximize 不会覆盖最初位置）；作业答题状态位于 App 层因此原样保留；被拉出作业工作区期间会暂存并清空作业上下文，避免 `useAppPolling` 同时拉取两个房间的 `elements` 互相覆盖；
+  - **不可本地退出 (`FullscreenOverlay dismissible`)**：教师同步视图隐藏关闭按钮、ESC 不生效，且插件自定义全屏渲染器拿到的 `onClose` 亦为空操作；
+  - **防卡死收敛**：教师端离开白板（切中控台 Tab / 换课节 / 卸载）或被最大化元素被删除时广播 `elementId: null`，学生端重连时同样恢复被中断的视图，避免学生被永久困在不可退出的全屏中。
+
+### Docs
+
+- **Sphinx 文档零告警编译修复 (Zero-Warning Docs Build)**：
+  - 将 `docs/reference/plugin-ui-extension-slots.md` 与 `docs/tutorials/plugin-development-tutorial.md` 中含 JSX 的代码块语言标记由 `typescript` 修正为 `tsx`，消除 `misc.highlighting_failure` 告警（TypeScript 词法器无法处理 JSX 语法，Pygments 回退到纯文本模式）；
+  - 新增 `docs/release-notes/v0.3.17.md` 并挂载到 `docs/index.md` 发布日志 toctree 顶部。
+
 ## [0.3.16] - 2026-09-18
 
 ### Fixes & Frontend Plugin Host
+
 - **修复前端插件加载器（`FrontendPluginHost`）裸模块导入解析缺失导致扩展点（如 `teacher.tab`）未注册缺陷**:
   - **裸模块导入转换器 (`transformBareModuleImports`)**：重构 `src/plugin-host/plugin-host.ts` 中针对动态 Blob URL 的 ESM 裸模块导入替换逻辑，由原本单一简单正则升级为全形态 ESM 导入解析转换器；
   - **覆盖复合导入与别名语法**：完整支持复合默认+具名导入（如 `import React, { useState, useEffect } from "react"`）、别名转换（如 `import { useState as useState2 }` 转为对象解构 `{ useState: useState2 }`，避免 `SyntaxError`）、命名空间导入（`* as React`）及多行/带注释语句；
@@ -20,6 +88,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **解决插件左侧导航与控制台挂载异常**：修复如恋云课程 (`lianyun-course` / `019fa0e6-5f59-7718-b86e-b35c93ba39aa`) 等插件在启用后前端未能正常执行 `activate(ctx)` 的问题，使得 `teacher.tab`（恋云课程管理）在左侧导航栏的“扩展应用”列表和 `teacher.dashboard.widget` 正常生效。
 
 ### Fixes & Worker Runtime
+
 - **修复 Worker 激活期异常导致 60 秒假超时挂起 (`WorkerTimeoutError`) 与 Watchdog 误熔断缺陷**:
   - **激活期快速失败机制 (Fail-Fast)**：在 `WorkerManager.createWorker()` 中对底层 `worker` 绑定激活期单次 `exit` 与 `error` 监听；当插件在初始化/激活初期发生未捕获异常、语法错误或进程退出时，主线程由原先盲等 60 秒改为在 5ms 内立即拒绝并抛出精准的 `WorkerActivateError`，彻底消除假超时误报；
   - **WorkerInstance 生命周期细化 (`status: activating`)**：将 `WorkerInstance.status` 扩展为包含 `'activating'` 状态，仅在收到 `'activated'` 消息后提升为 `'running'`；当 Worker 在激活期意外退出时，`WorkerRegistry` 仅清理资源并标记 `crashed`，严禁触发 Watchdog 自动重启风暴，避免并发争用与误触熔断器 (Circuit Breaker)；
@@ -31,6 +100,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
     - 修复机房插件 `@aymwoo/plugin-lab-seat` 在 `activate()` 中异步 DDL 操作未捕获 Promise Rejection 导致的崩溃问题。
 
 ### Docs & Engineering
+
 - **Sphinx 技术文档严苛零告警编译与全量同步**:
   - 修复 `docs/conf.py` 静态目录配置缺失引发的 `_static` 警告，补全 `docs/_static/.gitkeep`；
   - 修复 `docs/plugin/anchor-slots.md` 中未包裹 TSX 语法导致的 Pygments 词法分析器异常；
@@ -40,6 +110,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.15] - 2026-09-17
 
 ### Features & Security
+
 - **LTI 1.3 协议支持与安全会话桥接体系 (LTI 1.3 Advantage & Safe SSO Integration)**:
   - **Iframe 嵌入安全管控 (`server.ts`)**: 新增 `LTI_ALLOWED_LMS_ORIGINS` 环境变量支持，配置后动态放行 CSP `frame-ancestors` 并自动关闭 `X-Frame-Options: SAMEORIGIN`，使平台可在受信任的 Canvas/Moodle 等 LMS 平台的 iframe 中无缝内嵌运行，未配置时保持原有严格同源防点击劫持策略；
   - **平台统一会话桥接服务 (`IAuthSessionBridgeService`)**: 在 DI 容器中注册统一会话创建服务，供特权认证插件安全同步用户并生成 `client_sessions`；
@@ -49,11 +120,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.14] - 2026-09-09
 
 ### Fixes & Packaging
+
 - **修复 `npx openlearn-next` 运行时无法解析可选依赖 `xlsx` 的告警 (Cannot find package 'xlsx')**:
   - **根因分析**：`xlsx` 被误声明为 devDependency，但服务端 bundle 以 `--packages=external` 构建，`import('xlsx')` 被保留为运行时动态导入；devDependency 不会随发布包安装到消费者环境（含 npx 缓存目录），导致动态导入失败并打印 `[PluginHost] xlsx not available (optional)` 告警；
   - **修复**：将 `xlsx` 从 devDependencies 移至 dependencies，确保运行时动态导入可正常解析，插件共享模块正确注册 Excel 导入导出能力。
 
 ### Fixes & UI
+
 - **修复教师端模拟学生（Student View）后无法返回教师端的交互缺失缺陷**:
   - 在 `App.tsx` 页面最顶部新增常驻醒目的全局模拟学生横幅（Top Impersonation Banner），提示当前模拟学生并提供常驻【退出模拟并返回教师端】操作；
   - 在 `AppHeader.tsx` 顶部导航栏的 `View as: [选择学生]` 下拉框旁接入 `setActiveRole` 并增加【返回教师端】快捷操作按钮；
@@ -62,6 +135,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.13] - 2026-09-06
 
 ### Fixes & Packaging
+
 - **修复 NPM 发布包中 `workspace:*` 协议未展开导致的 npx 无法运行异常 (EUNSUPPORTEDPROTOCOL)**:
   - **根因分析**：由于发包流程使用了原生 `npm publish`，原生 npm 不支持 pnpm monorepo 的 `workspace:*` 依赖协议，导致打入 tarball 的 `package.json` 中 `@openlearn/plugin-sdk` 依赖未展开为真实版本号；终端执行 `npx openlearn-next` 时报错 `npm error Unsupported URL Type "workspace:": workspace:*` 并退出；
   - **发布修复**：切换发布脚本为 `pnpm publish --no-git-checks`，打包阶段由 pnpm 自动将 `workspace:*` 解析并转译替换为真实版本号（`3.6.0`）；
@@ -70,6 +144,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.12] - 2026-09-06
 
 ### Features & Security
+
 - **插件 HTTP SSE 流式长连接通信体系 (`Plugin HTTP SSE Streaming & Safety Defense`)**:
   - **极简流式 API 契约 (`ctx.http.stream`)**:
     - 在 `IPluginHttpRouter` 中新增 `stream(path, handler)`（支持缺省动词匹配 GET/POST）与 `stream(method, path, handler)`（显式动词匹配）；
@@ -94,6 +169,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.11] - 2026-09-06
 
 ### Features & Security
+
 - **插件安全 RESTful API 体系 (`Plugin RESTful API & Security Gateway`)**:
   - **声明与注册双轨模型**：
     - 在 `manifest.json` 中支持 `api.routes` 静态规则声明（支持 `method`, `path`, `auth`, `roles`, `rateLimit`），便于平台前置进行静态安全合规审计与网关路由规则初始化；
@@ -117,12 +193,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.10] - 2026-09-06
 
 ### Features & CLI Utilities
+
 - **`doctor` 增加 SDK 套件与插件版本全方位兼容性检测**：
   - **SDK Suite 综合检测**：同步校验 `@openlearn/plugin-sdk` 与 `@openlearn/plugin-test-kit` 的解析版本与安装形态；
   - **内置核心插件平台兼容性 (`Core Plugins`)**：零外部依赖校验全部 7 个核心内置插件的 `engines.openlearn` 约束是否被当前平台版本满足，防范版本互锁；
   - **已安装扩展插件引擎约束检测 (`Installed Plugins`)**：自研轻量级 SemVer 范围判定引擎，扫描 SQLite 数据库与本地插件清单，校验各扩展插件与平台版本（`engines.openlearn`）的兼容性，精准识别不兼容插件并提出预警。
 
 ### Fixes
+
 - **SDK 依赖版本漂移治理**：根 `package.json` 的 `@openlearn/plugin-sdk` 从 `^3.5.2` 改为 `workspace:*` 并刷新锁文件（此前锁文件冻结在 npm 3.5.2 快照、`.pnpm` 残留 3.4.3，与 workspace 3.6.0 三版本并存，宿主实际解析版本随安装历史漂移）；移除 `pnpm-workspace.yaml` 中过期的 `minimumReleaseAgeExclude`（SDK 3.5.2）与不存在的 `packages/mfe-courseware` workspace 条目。
 - **发布流程防漂移（npx 确定性依赖）**：`scripts/publish.sh` 与 CI `publish.yml` 在发布 `openlearn-next` 前将 `workspace:*` 重写为精确 SDK 版本并发布后还原——`server.cjs` 以 `--packages=external` 构建、运行时从消费者 `node_modules` 解析 SDK，精确 pin 保证 npx/npm 用户装到的 SDK 与构建时版本强一致。
 - **`build-plugins.mjs` 与 SDK CLI / token-enforcer 策略对齐**：插件 ZIP 构建改为 `external: ['@openlearn/plugin-sdk']`，不再把构建时刻的 SDK 代码打进产物（否则运行时与宿主解析的 SDK 脱节，且可能被 token-enforcer 拒绝）。
@@ -143,11 +221,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **`openlearn-next doctor` 新增 SDK Version 一致性检查**：对比 `package.json` 声明与 `node_modules` 实际解析版本（支持 workspace 链接 / 精确 pin / caret 三种形态，零依赖实现），不一致时报错并给出修复指引。
 
 ### Docs
+
 - `docs/index.md` 去除硬编码的 `@openlearn/plugin-sdk@3.5.2` 版本号，改为跟随平台 release。
 
 ## [0.3.9] - 2026-09-06
 
 ### Fixes
+
 - **Worker 插件 DB 代理补齐 `exec` 转发**：`ctx.resolve(IDatabaseToken)` 的 worker 侧 stub 只暴露 `prepare/{run,get,all}`，worker 插件调用 `exec` 报 `rawDb.exec is not a function`。主侧 exec RPC 本就经过 `assertDatabaseAccessAllowed` 守卫（DDL 命名空间 + 核心表黑名单），此处补齐转发；返回 Promise（异步 RPC），与 `prepare*` 语义一致。
 - **脚手架 CLI 不再把 SDK 自身打进插件 bundle**（随 `@openlearn/plugin-sdk` **3.6.0** 发布，详见其 CHANGELOG）：SDK dist 引用宿主侧 pino/express/uuid/semver，此前被整体打进插件产物导致脚手架项目构建失败、产物在宿主被 token-enforcer 拒绝；现保持 external，与平台官方 `build-plugins.mjs` 一致，独立脚手架无需手动补装依赖。
 - 同步发布 `@openlearn/plugin-test-kit` **3.3.2**。
@@ -155,6 +235,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.8] - 2026-09-06
 
 ### Features & CLI Utilities (CLI 运维诊断与便捷体验全景增强)
+
 - **多网卡局域网 IP 自动侦测与终端直显 (`-H, --host`)**：
   - 启动服务时自动扫描全量本地网卡 IPv4 地址，终端同时以明亮高亮及可点击超链接形式输出 `Local` (http://localhost:PORT) 与 `Network` (http://192.168.x.x:PORT) 访问地址，极大简化教师多设备与局域网移动端机房联调流程；
   - 支持 `-H, --host <host>` 参数自定义监听网卡。
@@ -185,6 +266,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.7] - 2026-09-06
 
 ### Features & CLI Utilities
+
 - **NPX 缓存与运行数据安全清理命令 (CLI Cache Cleaner Command)**：
   - 在 [`cli.mjs`](file:///home/wuxf/Develop/openlearnv2/cli.mjs) 及 [`cli-cleaner.mjs`](file:///home/wuxf/Develop/openlearnv2/cli-cleaner.mjs) 中新增 `clean` / `clean-cache`（以及 `--clean` / `--clean-cache`）命令行工具；
   - **精准清理 NPX 历史旧包**：自动扫描 `~/.npm/_npx/` 下的所有散列子目录，精准清理历史残留的旧版本 `openlearn-next` 临时目录，彻底杜绝 NPX 因缓存命中旧版本的问题；
@@ -196,6 +278,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.6] - 2026-09-06
 
 ### Quality & Governance (防版本漂移质量加固)
+
 - **内核导出版本定义强收敛 (Kernel Definition Convergence)**：
   - 将 [`packages/core/bootstrap/types/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/bootstrap/types/index.ts) 中的 `PLATFORM_VERSION` 改为直接从单一真理源 [`packages/core/version.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/version.ts) 导入，彻底消除内核内部出现双重硬编码字面量的隐患。
 - **全自动防版本漂移质量门禁测试 (Anti-Drift Test Gate)**：
@@ -219,6 +302,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.5] - 2026-09-06
 
 ### Fixes & Architecture Alignment
+
 - **平台版本单一真理源 (Single Source of Truth) 与漂移消除**：
   - 新建 [`packages/core/version.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/version.ts)，统一导出 `PLATFORM_VERSION` 与 `OPENLEARN_VERSION`；
   - 消除 [`packages/core/plugin-host/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/index.ts) 中历史滞留的 `OPENLEARN_VERSION = '0.2.5'` 硬编码；
@@ -234,6 +318,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.3] - 2026-09-06
 
 ### Fixes & Network Hardening
+
 - **Socket.IO & Express Same-Origin CORS 智能放行 (Same-Origin Auto-Allowance & CORS Fix)**：
   - 在 [`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 引入统一的 `isOriginAllowed(origin, hostHeader)` 判定算法；
   - 修复生产环境（未显式配 `ALLOWED_ORIGINS` 时）CORS 回调对同源浏览器请求（如 `http://localhost:9000`）抛出 `new Error('CORS not allowed')` 导致底层 Engine.IO 响应 `HTTP 400 Bad Request {"code": 3, "message": "Bad request"}` 的问题；
@@ -243,6 +328,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.2] - 2026-09-06
 
 ### Fixes & Runtime Hardening
+
 - **Vite 依赖动态按需解耦 (Vite Decoupling & Module Loader Fix)**：
   - 移除 [`server.ts`](file:///home/wuxf/Develop/openlearnv2/server.ts) 顶层静态 `import { createServer as createViteServer } from 'vite'`，消除 esbuild 打包 CJS 时在 `dist/server.cjs` 顶层生成的 `require("vite")` 提升语句；
   - 将开发期 Vite 中间件初始化改为在 `if (process.env.NODE_ENV !== 'production')` 分支内执行异步 `await import('vite')`，彻底解决在纯生产环境（零 `devDependencies` 安装）及 `npx openlearn-next@latest` 启动时由于缺失 vite 引发的 `Cannot find module 'vite'` 崩溃异常。
@@ -256,9 +342,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.3.1] - 2026-09-06
 
 ### Features
+
 - **插件导航 API 扩展**：`FrontendPluginContext.navigation` 新增 `setSelectedLesson(lessonId: string | null)` 方法，转发到 `appStore.setSelectedLesson`，供第三方插件在 `activate(ctx)` 中切换当前课节。
 
 ### Security & Multi-Teacher Authorization (Round 4)
+
 - **IDOR 课程水平越权防护与教师专属所有权 (Lesson Ownership & IDOR Protection)**：
   - **数据层升级**：在 [`packages/core/db/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/db/index.ts) 与 [`migrations/000_initial_schema.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/000_initial_schema.sql) 中的 `lessons` 表增加 `creator_id TEXT` 字段，并在系统启动时平滑执行 `ALTER TABLE lessons ADD COLUMN creator_id TEXT`，全面兼容历史老版本未标记创建人的课程；
   - **内核指令绑定**：在 [`packages/plugins/builtin.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugins/builtin.ts) 的 `lesson.create` 命令执行时，优先解析 `payload.creatorId` 或提取 `command.actorId`（自动解析 `user:usr_id:teacher` 前缀），并在发出的 `lesson.created` 领域事件中携带创建人 ID；
@@ -274,6 +362,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **自动化测试套件**：编写 [`server/__tests__/lesson_ownership.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/lesson_ownership.test.ts)，全方位覆盖未登录拦截 (401)、学生越权阻断 (403)、跨学生作业白板篡改拦截 (403)、跨教师越权拦截 (403)、管理员放行、老旧课程兼容以及克隆后属主流转等核心用例，全平台 177 个测试套件（1011 个测试用例）持续 100% 绿灯。
 
 ### Security & Engineering Governance (Round 3)
+
 - **SEC-01 传输安全与 Cookie 策略加固 (Cookie Secure & Nginx TLS Best Practice)**：
   - 在 [`server/routes/roster.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/roster.ts) 中对身份凭据 Cookie `edu_os_token` 进行安全改造，根据请求来源及环境协议动态注入 `; Secure` 标识，并将超长有效期缩短并精准对齐服务端会话有效期（7 天 / 604,800 秒）。
   - 在 [`nginx.conf`](file:///home/wuxf/Develop/openlearnv2/nginx.conf) 与 [`nginx.generated.conf`](file:///home/wuxf/Develop/openlearnv2/nginx.generated.conf) 增补全链路 HTTPS 443 SSL 规范配置（TLS 1.2/1.3、强加密套件、HSTS），并提供 80 端口强跳 443 的最佳实践指导。
@@ -290,6 +379,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 校准 [`AGENTS.md`](file:///home/wuxf/Develop/openlearnv2/AGENTS.md) 描述，阐明 Vitest 启用 `fileParallelism: true` 的真实原理（通过环境变量 `VITEST_POOL_ID` 隔离于独立 SQLite 库文件），修复文档失真；全量 176 个测试套件、993 个用例持续 100% 绿灯通过。
 
 ### Security
+
 - **VULN-06 白板协同投毒阻断 (RCE & XSS Defense)**：
   - 彻底移除 [`MathGraphWrapper.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/widgets/MathGraphWrapper.tsx) 中的原生 `eval`，自研实现算术 AST 递归下降求值器 `safeEvaluateMath`，严格限定白名单数学运算与常用函数，彻底阻断 JS 语法、属性与原型链穿透。
   - 重构 [`CodeSandboxWrapper.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/widgets/CodeSandboxWrapper.tsx)，将代码执行迁移至独立 Web Worker Blob 沙箱环境，隔离 DOM、Cookie、`localStorage` 访问，并配置 3 秒看门狗超时中断。
@@ -330,10 +420,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **自动化安全回归验证**：
   - 扩充 [`server/__tests__/security_hardening.test.ts`](file:///home/wuxf/Develop/openlearnv2/server/__tests__/security_hardening.test.ts) 与 [`src/utils/__tests__/pluginParsers.test.ts`](file:///home/wuxf/Develop/openlearnv2/src/utils/__tests__/pluginParsers.test.ts)，全量 176 个测试套件、993 个用例持续保持 100% 绿灯通过。
 
-
 ## [0.3.0] - 2026-09-06
 
 ### Features
+
 - **现代教育 OS 主题系统 (Theming System Engine - Phase 3)**：
   - **主题可视化设计器 (`ThemeDesignerModal.tsx`)**：开发沉浸式调色板设计器，内置 4 套创意预设（高雅墨蓝、暮樱柔粉、复古秋叶、深海极客），提供核心主色/背景/卡片/边框/文字等色值微调、实时拟真沙箱视口微缩预览、配置 JSON 导入/导出与复制，支持本地自定义主题管理与一键激活。
   - **微前端沙箱与互动课件主题同步 (MFE & Courseware Theme Bridge)**：升级 [`src/services/lms-bridge.ts`](file:///home/wuxf/Develop/openlearnv2/src/services/lms-bridge.ts) 与 [`server/utils/bridge-sdk.ts`](file:///home/wuxf/Develop/openlearnv2/server/utils/bridge-sdk.ts)，宿主向所有课件沙箱 `iframe` 跨域广播 `theme:changed` 与 `LMS_THEME_CHANGED` 消息；沙箱内部自动响应式写入 `data-theme` 属性与 CSS 变量，并为第三方课件提供 `window.LMS.getTheme()` 查询 API。
@@ -354,6 +444,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 落地首批标准迁移：[`000_initial_schema.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/000_initial_schema.sql)（30+ 核心数据表与索引）、[`001_add_execution_mode.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/001_add_execution_mode.sql)、[`002_add_client_session_expiry.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/002_add_client_session_expiry.sql)、[`003_classroom_runtime.sql`](file:///home/wuxf/Develop/openlearnv2/migrations/003_classroom_runtime.sql)。
 
 ### Fixes
+
 - **Worker 插件自建表 DDL 安全白名单修复**：
   - [`ServiceHost`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/service-host.ts) 构造函数与方法支持同时校验 `dbPluginId`（DB UUID）与 `pluginId`（manifest.id）双重合法命名空间前缀，转义特殊字符为下划线，彻底修复 `@ext/class-manager` 等插件在 worker 内部建表时触发 `not permitted to perform DDL` 导致的 Watchdog 重启崩溃循环。
 - **自定义 AI 提供商首屏列表加载修复**：
@@ -362,6 +453,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 修复 [`PluginCardRenderer.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/whiteboard/widgets/PluginCardRenderer.tsx)（`useRef`/`useEffect` 条件调用）与 [`ActivityWorkspaceWidget.tsx`](file:///home/wuxf/Develop/openlearnv2/src/features/activity-ecosystem/ActivityWorkspaceWidget.tsx)（`useMemo` 条件调用）中的 3 处致命 Hook 违规，消除了组件卸载/挂载时 Fiber 链条错乱的运行时风险。
 
 ### Refactor / Performance
+
 - **测试套件多 Worker 数据库隔离与 Vitest 并发提速**：
   - [`packages/core/db/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/db/index.ts) 在 `process.env.VITEST` 下按 Worker Pool ID / PID 分配隔离的临时 SQLite 实例，彻底消除跨测试文件数据库死锁竞争。
   - [`vitest.config.ts`](file:///home/wuxf/Develop/openlearnv2/vitest.config.ts) 开启 `fileParallelism: true`，全量 172 个测试文件、965 个测试用例运行时间从 **204 秒极限压缩至 37.45 秒**（提速 **5.4 倍**）。
@@ -369,6 +461,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 修正 [`eslint.config.js`](file:///home/wuxf/Develop/openlearnv2/eslint.config.js) 全局 ignores，排除 `.venv`、构建产物与 Sphinx 文档静态脚本，调整非关键警告级别，`pnpm lint:eslint` 达成 0 Error 绿灯基线。
 
 ### Features (v0.2.9)
+
 - **html-applet 组件增强**：
   - 抽取统一 `<HtmlAppletFrame>` 组件（画布内嵌/全屏/兜底三处复用），按优先级解析四种内容源：`coursewareUuid` → `resourceId` → 插件自定义内容源 → `code`（`srcDoc`）。
   - `HtmlAppletPayload` 补齐 `resourceId` / `sourceType` / `sourceId`，并修复 `buildElementData` 字段丢失与 `title` 渲染。
@@ -379,20 +472,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **备课画板组件配置增强**：`EditFieldKind` 新增 `select`（静态 `options` + 动态 `loadOptions`），`PaletteCardEditModal` 支持下拉选择；html-applet 的 `coursewareUuid` / `resourceId` 可在备课画板直接选择。
 
 ### Security (v0.2.9)
+
 - html-applet iframe 新增 `credentialless` 与 `referrerPolicy="no-referrer"`；`injectLmsSdk` 防御性移除 `<base>` 与 `<meta http-equiv=refresh>` 导航逃逸向量。
 
 ### Fixes (v0.2.9)
+
 - Worker 插件自建表前缀改用 `manifestId`（与命令命名空间及 ServiceHost 的 DDL 守卫一致），避免 Worker 插件在自己命名空间建表被误判为越权 DDL。
 
 ### Refactor / Performance (v0.2.9)
+
 - html-applet iframe 懒挂载（IntersectionObserver，200px 预加载边距）+ 同时挂载上限 4 个（`courseware-frame-limiter.ts`）。
 
 ### Docs (v0.2.9)
+
 - `docs/reference/plugin-ui-extension-slots.md` 新增 §7 课件内容源、§8 LMS Bridge 双向通信；`docs/architecture/whiteboard-runtime.md` 同步 html-applet 渲染管线说明。
 
 ## [0.2.8] - 2026-09-04
 
 ### Features
+
 - **第三方插件白板扩展能力（v3.5）**：
   - `ctx.ui.registerFullscreenRenderer(type, renderer)` / `ctx.ui.registerPropertyEditor(type, editor)` 允许插件为自定义白板元素类型注册全屏渲染器与属性编辑器；`fullscreenRendererRegistry` / `propertyEditorRegistry` 增加所有权感知的 `unregister` / `unregisterPlugin`，插件停用/卸载/激活失败时宿主自动清理其注册。
   - SDK `@openlearn/plugin-sdk` 新增 `FullscreenRendererProps` / `FullscreenRenderer` / `PropertyEditorProps` / `PropertyEditorComponent` 四个 type-only 导出。
@@ -401,34 +499,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `FrontendPluginContext` 新增 `ctx.context.get()` / `ctx.context.subscribe()` 只读快照与订阅，供非渲染场景读取当前课程/班级。
 
 ### Security
+
 - **Worker 插件数据库安全屏障**：`ServiceHost` 拦截 IDatabase RPC，禁止 Worker 插件访问核心安全表（`users` / `client_sessions` / `plugins` / `ai_providers` 等），并将 DDL 操作限制在插件自身命名空间（`plugin_<id>_` 前缀）内。
 
 ### Docs
+
 - 更新 [`docs/reference/plugin-ui-extension-slots.md`](docs/reference/plugin-ui-extension-slots.md)：明确各槽位注入的 `slotProps` 字段契约与 `ctx.context` 用法，纠正 `@/` 宿主内部导入对第三方插件不可达的误区，并将 `fullscreenRendererRegistry` / `propertyEditorRegistry` 用法改为 `ctx.ui.register*`。
 - 新增 [`docs/release-notes/v0.2.8.md`](docs/release-notes/v0.2.8.md) 发布说明。
 
 ## [0.2.7] - 2026-08-31
 
 ### Security
+
 - **严格无同源沙箱隔离（Strict Sandboxing）**：
   - 彻底移除 `src/features/whiteboard/InteractiveWhiteboard.tsx`、`src/features/courseware/InteractiveCoursewareViewer.tsx` 与 `src/features/whiteboard/fullscreen/FullscreenRendererRegistry.tsx` 中所有 iframe 的 `allow-same-origin` 声明。
   - 统一确立 `sandbox="allow-scripts allow-forms allow-downloads"` 严格沙箱隔离，完全依托 LMS Bridge Proxy 代理跨域消息，对齐平台架构最高安全标准。
 
 ### Refactor / Performance
+
 - **数据库外键强制开启（Database Integrity）**：
   - 在 `packages/core/db/index.ts` 初始化连接配置中显式启用 `db.pragma('foreign_keys = ON');`，在 SQLite 引擎层强制激活外键级联检查，杜绝孤儿数据。
 
 ### Tooling
+
 - **ESLint TypeScript 规则优化**：
   - 在 `eslint.config.js` 的 `**/*.{ts,tsx}` 配置段加入 `'no-undef': 'off'`，避免 ESLint 重复校验 TypeScript 编译器类型定义导致的假报错。
 
 ### Docs
+
 - 新增 [`docs/release-notes/v0.2.7.md`](docs/release-notes/v0.2.7.md) 发布说明，更新 Sphinx toctree 并完成 HTML 文档生成。
 - 全量自动化测试回归 169 / 169 套件（941 个用例）100% 通过。
 
 ## [0.2.6] - 2026-08-30
 
 ### Features
+
 - **插件锚点扩展槽（Anchor Slots）—— 支持在宿主原生按钮前后插入插件按钮**：
   - 新增 `anchor:*` 开放槽位：宿主在原生按钮/元素前后各渲染一次 `<ExtensionPointRenderer slot="anchor:..." placement="before|after" />`，插件通过 `placement` 声明插入侧。
   - `ExtensionPointConfig` 新增 `placement?: 'before' | 'after'`（缺省 `'after'`）；`ExtensionPointRenderer` 新增同名 prop 用于按侧过滤渲染。
@@ -438,6 +543,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 白板工具栏已埋七个锚点：`presentation`、`code-sandbox`、`math-graph`、`courseware`、`rollcall`、`ai-tutor`、`grid`（槽位前缀 `anchor:whiteboard-toolbar:`）。
 
 ### Security
+
 - **权限边界与最小特权原则加固**：
   - 在 `packages/core/capability-system/index.ts` 中移除 `'user-frontend': ['*:*:*']` 全局通配符特权，改为按用户角色（`:teacher` / `:student`）授予最小能力，未登录用户回退为 `anonymous: []` 零特权。
   - `server/middleware/auth.ts` 中 `getActorId(req)` 未登录回退修正为 `'anonymous'`。
@@ -452,6 +558,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `server/routes/os.ts` 中对 `POST /api/commands` 挂载 `requireAuth()` 中间件。
 
 ### Fixes
+
 - **TypeScript 全量类型编译错误清零 (72 Errors -> 0)**：
   - **前端主壳 TDZ 修复**：重构 `src/App.tsx` 中的 Hook 拓扑声明顺序，引入 `chatLogUpdaterRef` 解决 `useCourseWizard`、`usePluginManagement`、`useAgentChat` 的循环与延迟依赖，彻底清除 8 处变量在使用前引用错误。
   - **组件与服务契约对齐**：
@@ -470,19 +577,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `plugin-host-store.getExtensions` 按 `position` 升序（缺省 `100`）稳定排序。
 
 ### Refactor / Performance
+
 - **数据库 9 处核心高频业务索引**：
   - 在 `packages/core/db/index.ts` 中新增 9 个针对性复合与二级索引（`idx_whiteboard_lesson`、`idx_class_students_class`、`idx_class_students_student`、`idx_schedules_class_date`、`idx_courseware_attempt_cw_st`、`idx_submission_result_attempt`、`idx_events_type_time`、`idx_assignments_class`、`idx_attendance_schedule`），消除面授课堂、排课及成绩导出时的全表扫描。
 
 ### Docs
+
 - 新增锚点目录 [`docs/plugin/anchor-slots.md`](docs/plugin/anchor-slots.md) 并更新相关扩展点规范。
 - 新增 [`docs/release-notes/v0.2.6.md`](docs/release-notes/v0.2.6.md) 发布说明。
 - 全量自动化测试回归 169 / 169 套件（941 个用例）全绿通过。
 
 ### Security
+
 - **从仓库跟踪中移除 `scratch/` 目录（17 个文件）**：该目录包含本地开发脚本、playwright 验证脚本、49KB dashboard 截图等。最严重的是 `scratch/test_logs_api.ts` —— 一个会在 SQLite 中插入伪造 admin session token 的脚本。如果随 main 分支泄露，会成为种子式攻击向量。现已 `.gitignore` 排除并 `git rm --cached` 取消跟踪。
 - **`server/utils/crypto.ts` 禁止原地覆盖现有 ENCRYPTION_KEY**：旧逻辑检测到 .env 中存在 `ENCRYPTION_KEY=` 空值时会生成新密钥**原地替换**——这会让已用旧密钥加密的全部 AI Provider Key 不可解密（数据级不可回滚故障）。现改为：检测到现有 ENCRYPTION_KEY 行（含空值）时绝不动它，转用 ephemeral in-memory key + 警告日志，强制运维显式备份、轮换密钥。
 
 ### Fixes
+
 - **TypeScript 编译错误修复（12 个，全部在未提交修改中）**：
   - `src/components/plugin-center/types.ts`：将 `export type { Language } from '../../i18n'`（re-export 不创建本地绑定）改为 `import type + export type`，修复 `TS2304 Cannot find name 'Language'`。
   - `packages/core/capability-runtime/CapabilityProvider.ts`：`CapabilityContext` 从 `./types.js` 导入但 types 未 re-export；改为从 `./CapabilityContext.js` 直接导入。
@@ -498,12 +609,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **全量回归 951 passed / 1 skipped**（170/170 测试文件），`pnpm lint` 通过。
 
 ### Refactor / Performance
+
 - **`server.ts` health 端点版本号硬编码清理**：原代码返回 `version: '4.0.0'`，与 `package.json` 0.2.5 严重漂移。改为启动时从 `package.json` 读取 `version` 字段，**单一版本来源**，避免版本发布时手工同步遗漏。
 - **`vite.config.ts` 移除 `framer-motion` 死代码 chunk 规则**：项目已迁移到 `motion`（`framer-motion` 仅作为其间接依赖存在）；删除针对 `/framer-motion/` 的 chunk 分桶规则，保留对 `/motion-dom/` 的归类（`vendor-motion`）。
 
 ## [0.2.5] - 2026-08-29
 
 ### Refactor / Performance
+
 - **Vite Fine-grained Bundle Chunking & 90.1% Entry Bundle Reduction**:
   - Entry bundle `index.js` shrank from **2,181.47 kB (2.18 MB)** down to **216.43 kB (gzip: 66.69 kB)** — a **90.1% reduction** in initial download size.
   - Implemented modular `manualChunks` in `vite.config.ts` separating third-party dependencies into categorized vendor chunks: `vendor-react`, `vendor-charts` (Recharts & D3), `vendor-pdf` (jsPDF & html2canvas), `vendor-konva`, `vendor-reveal`, `vendor-pptx`, `vendor-icons` (Lucide), `vendor-motion` (Framer Motion), `vendor-content` (Marked & DOMPurify), and `vendor-utils`.
@@ -514,6 +627,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **`StudentView`**: Implemented lazy loading for `StudentLessonView` and `StudentAssignmentView`.
 
 ### Fixes
+
 - **Asynchronous Unit Test Compatibility**:
   - Updated `TeacherView`, `StudentView`, and `AppShell` unit tests to support async DOM querying (`await screen.findByText`) with `Suspense` hydration.
   - Added jsDOM `ResizeObserver` mock and mock socket instance in test harnesses.
@@ -521,6 +635,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.2.4] - 2026-08-29
 
 ### Refactor / Performance
+
 - **Frontend Architecture & `App.tsx` Decoupling**:
   - Slimmed `src/App.tsx` down from **3,974 lines** to **1,722 lines** (a total reduction of **-2,252 lines, -56.7%**), transforming the monolithic root into a clean routing and context coordinator.
   - **`useLabAndSchedule`**: Encapsulated computer lab management, classroom seating layouts, timetable scheduling, and rollcall attendance tracking.
@@ -536,21 +651,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **`AppModals` Adapter Pattern**: Refactored modal props into structured hook bundle adapters, eliminating dozens of top-level prop drilling lines.
 
 ### Features
+
 - **Enhanced Hook & Service Layer**:
   - Pure modular services for grade reporting (`gradeReportService.ts`) and bulk imports (`bulkImportService.ts`).
   - Unified adapter support in `AppModals` allowing direct composition of domain hook bundles.
 
 ### Fixes
+
 - **Redundant State & Shadowing Fixes**:
   - Cleaned up shadowed state declarations and duplicate fetcher calls across `App.tsx`.
   - Fixed PDF report generation state conflict between single-class and multi-class tracking.
 
 ### Docs
+
 - Generated comprehensive architecture audit reports and stage-by-stage refactoring blueprints (`p0~p4` reports in artifact history).
 
 ## [0.2.3] - 2026-07-30
 
 ### Features
+
 - **Course Management Enhancement (`CourseManagement.tsx`)**:
   - Add **icon toolbar** on each course card: View/Edit, Copy, Delete, replacing the single "View Interactive" button.
   - Add **filter chips**: filter by enrollment (>0 students), content (non-empty), and creation date (this month).
@@ -574,21 +693,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - Plugins import via `@/features/whiteboard/properties`.
 
 ### Fixes
+
 - **Course navigation always redirects to the same course**: Fix stale closure in `fetchLessons()` polling interval where `selectedLesson` was read from the React closure instead of the Zustand store, causing the 2-second poll to reset `selectedLesson` to `data[0].id`. Changed to `appStore.getState().selectedLesson`.
 - **Drag-and-drop from palette to whiteboard fails when existing components are present**: Add `pointer-events: none` to the Konva Stage container during `isDragOverBoard` state, allowing native HTML5 `drop` events to pass through to the outer container div.
 
 ### Refactor / Performance
+
 - **Fullscreen system refactored from hardcoded type switch** (90+ lines of if/else) to `FullscreenRendererRegistry` lookup with extensible registration.
 - **View/Edit icon** changed from `Eye` to `Edit3` for better "enter editor" affordance.
 - **Delete lesson route** now uses direct REST `DELETE /api/lessons/:id` instead of the command bus for simplicity.
 
 ### Docs
+
 - Update `docs/reference/plugin-ui-extension-slots.md` with `whiteboard.fullscreen` and `whiteboard.property-editor` registry APIs.
 - Expand `docs/whiteboard/whiteboard-runtime.md` with fullscreen renderer architecture and property editor extensibility documentation.
 
 ## [0.2.1] - 2026-07-29
 
 ### Features
+
 - **Whiteboard Interactive Courseware Entry & Plugin Palette Integration**:
   - Add direct **Interactive Web Courseware / HTML Applet (Globe)** button immediately following **Math Function (Math Graph)** in `WhiteboardToolbar.tsx`.
   - Reorder `html-applet` in `paletteConfig.ts` to appear right after `math-graph` under the `present` group as "交互网页课件 (Interactive Courseware)".
@@ -598,11 +721,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - Apply risk-severity container and text color coding (`rose` for high risk, `amber` for medium risk, `emerald` for low risk) across requested capability rows in the permission audit step.
 
 ### Fixes
+
 - **Fix Duplicate Toast Notifications (`appStore.ts`)**: Resolve duplicate toast card popups (e.g., plugin installation, course deployment) in `ToastContainer` by removing redundant `set(...)` array mutations in `appStore.ts`'s `addToast`/`removeToast` and delegating to `uiStore.subscribe` state synchronization. Locked by unit test suite `src/store/__tests__/appStoreToast.test.ts`.
 - **Universal `postMessage` TargetOrigin `'null'` Fault Tolerance**: Implement three-layer protection (`server/utils/bridge-sdk.ts`, `src/features/whiteboard/utils/bridgeUtils.ts`, and `src/App.tsx`) that catches and normalizes invalid `targetOrigin: 'null'` calls from sandboxed third-party iframe applets into `'*'` with `[LMS Bridge Notice]` warnings, utilizing the `Object.defineProperty + Proxy` technique for shadowing `window.parent`/`window.top` on cross-origin WindowProxy. Covered by unit tests in `whiteboard-components.test.tsx`.
 - **Helmet CSP `frame-src` Configuration (`server.ts`)**: Configure Content Security Policy `frame-src` directive to allow `'self'`, `blob:`, `data:`, `http://localhost`, `http://127.0.0.1`, `http:`, and `https:` origins for iframe courseware embedding.
 
 ### Docs
+
 - **Plugin Developer Documentation (`/docs`)**: Update `docs/reference/plugin-ui-extension-slots.md` and `docs/tutorials/plugin-development-tutorial.md` detailing `classroom.tool` slot rendering targets across both `WhiteboardToolbar` and `LessonPalette`.
 
 - **Decompose Remaining "God Components" (`TimetableManager.tsx`, `HelpView.tsx`, `PluginCenter.tsx`)**:
@@ -626,25 +751,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Frontend monolith decomposition — Phase 6 (cont.: `AppShell` role-switch wrapper)**: Extract the `{activeRole === 'student' ? <StudentView/> : <TeacherView/>}` switch (App.tsx lines ~3646–3886) into `src/components/AppShell.tsx` behind `AppShellProps = StudentViewProps & TeacherViewProps` (both existing interfaces are reused; the 5 shared identifiers with differing function signatures — `setActiveSegmentId`, `addToast`, `setSelectedAssignment`, `setStudentViewStatus`, `fetchElements` — resolve via intersection assignability, and `tsc` stays at 116). `AppShell` branches on `activeRole` and spreads all props to the chosen view, so `src/App.tsx` now renders a single `<AppShell .../>` (the merged union of all StudentView + TeacherView props) instead of the ternary. Swapped the now-dead `StudentView`/`TeacherView` imports for `AppShell`. Locked by `src/components/__tests__/AppShell.test.tsx` (2 cases: `activeRole:'student'` renders StudentView's "No Student Selected", `activeRole:'teacher'` renders TeacherView's nav "Live Class", each absent in the other). `tsc` stays at the 116-error type-debt baseline.
 
 ### Fixes
+
 - **Type cleanup — `addToast` now accepts `'error'`**: Broaden the `addToast` / `showToast` type union from `'info' | 'success' | 'warning'` to `'info' | 'success' | 'warning' | 'error'` across the whole contract — `src/App.tsx` (the `addToast` definition, which rejected the `'error'` passed at lines 3359/3419), `src/services/ui-service.ts` (`UIService` wrapper), `src/components/TeacherAssignmentGradePanel.tsx`, `src/components/StudentAssignmentEvalPanel.tsx`, `src/components/LiveClassroomView.tsx`, `src/features/modals/CourseWizardModal.tsx`, `src/features/teacher/TeacherView.tsx`, `src/plugin-host/types.ts`, and the `IUIService.showToast` doc in `docs/tutorials/plugin-development-tutorial.md`. This resolves the two `TS2345` type errors that were part of the 116-`tsc` baseline (now **114**); `src/types/app.ts` already allowed `'error'` on the `Toast` type, so only the `addToast` signature was the blocker. Pure type-widening — no runtime behavior change. Affected component/modal/teacher tests (15 cases) still pass.
 
 - **Type cleanup — `setLessons` accepts an updater function**: The `setLessons` store action in `src/store/appStore.ts` was typed `(lessons: Lesson[]) => void` and only took a plain value, so the two `setLessons(prev => prev.map(...))` updater calls in `src/App.tsx` (lines 2485, 2880) failed with `TS2345`. Widened the signature to `Lesson[] | ((prev: Lesson[]) => Lesson[])` and updated the implementation to branch on `typeof lessons === 'function'` (delegating to zustand `set((state) => …)`), mirroring React's `SetStateAction` convention. The value form at `src/App.tsx:1656` is unaffected. Resolves the 2 `TS2345` errors (tsc baseline **114 → 112**). No runtime behavior change; 58 component/feature tests pass.
 
 ### Next-round backlog
+
 - **Frontend monolith (`src/App.tsx`)** is the active decomposition target for `0.3.0` — extracted incrementally by feature area with characterization tests. Phases 1–5 are done: `lesson_editor`, `classes`, `student`, and the entire `teacher` branch are decomposed behind `LessonEditorView` / `ClassesView` / `StudentView` / `TeacherView`, and seven inline modals (`CourseWizard`, `ImportLessons`, `QuizGenerator`, `StudentPreview`, `SystemResourceLibrary`, `BatchPicker`, `ExportWeight`) behind `CourseWizardModal` / `ImportLessonsModal` / `QuizGeneratorModal` / `StudentPreviewModal` / `SystemResourceLibraryModal` / `BatchPickerModal` / `ExportWeightModal`. **All raw `<div className="fixed inset-0 …">` inline modal blocks are now extracted**, the top navigation `<header>` is extracted into `src/components/AppHeader.tsx`, and the student/teacher role-switch is extracted into `src/components/AppShell.tsx` (Phase 6). The remaining inline regions in `src/App.tsx` are only: the outer app-shell wrapper `<div className="flex h-screen …">` plus component prop-forwarding calls that are already their own components (`RightSidebar`, `CoursewareHubPanel` via `showCoursewareHub`, `ProfileModal`, `ImportModal`, `ProcessLogsModal`, `CloudDriveModal`, `NotificationDetailModal`, `ToastContainer`, `HelpTour`), and the large prop list forwarded to `<AppShell/>` (unavoidable — `App.tsx` owns all the shared state). `src/App.tsx` is now ~4080 lines (down from ~8938); the net shrink from the shell extractions is modest because the merged prop-forwarding list stays in `App.tsx`, while the inline JSX/logic (header markup, notifications dropdown, role-switch ternary) is now isolated in `AppHeader` / `AppShell`. The decomposition is at a natural close: `App.tsx` is the central state store + prop-forwarding hub wiring `AppHeader` / `AppShell` (→ `StudentView`/`TeacherView`) / `RightSidebar` / the 7 modal components / the misc panels, each behind its own characterization test, with the 116-`tsc` baseline preserved throughout.
 - **Type/lint debt**: ~116 `tsc` + ~1471 `eslint` errors carried as backlog from the `tsc` root-cause fix; not blocking.
 
 ## [0.1.16] - 2026-07-28
 
 ### Fixes
+
 - **npm Compatibility**: Replace `workspace:*` protocol with `^3.4.3` for `@openlearn/plugin-sdk` dependency to fix `npx openlearn-next` installation failure (`EUNSUPPORTEDPROTOCOL`).
 
 ## [0.2.0] - 2026-07-28
 
 ### Fixes
+
 - **Hidden type errors surfaced & systematic roots fixed**: `tsc` was aborting early on an invalid `tsconfig` `exclude`, masking **389 real type errors**. Fixed: added `tsconfig` `exclude` for fixtures/templates; corrected 17 wrong relative-import depths (incl. a missing `student-workspace-registry`); added the missing `@testing-library/react` dev dependency; fixed two missing name imports. Made `PluginContext.resolve<T>` infer token types across the core↔SDK boundary (public phantom on `Token`). Tightened `@openlearn/plugin-sdk` to **3.5.0**: service tokens typed concretely (was `Token<unknown>`) and service interfaces accept sync-or-async (`void | Promise<void>`). Remaining ~116 genuine per-file type errors tracked as a type-debt backlog.
 
 ### Refactor / Performance
+
 - **Server monolith decomposition — Phase 1 (realtime bridge)**: Extract the EventBus→Socket.IO forwarding block (`server.ts` lines 652–803: `assignment.graded` toast, `handleRollcallElement` rollcall persistence, and `whiteboard.*` / `spotlight.*` sync relays) into a standalone `server/realtime-bridge.ts` module behind `setupRealtimeBridge({ eventBus, io, db })`. Behavior preserved verbatim and locked by a new characterization test (`server/__tests__/realtime-bridge.test.ts`, 7 cases). Introduces a structural `BridgeDb` port and reuses the existing `EventBusPort`, keeping the server's `kernelContainer` as the composition root. No new `tsc` errors beyond the type-debt baseline.
 - **Server monolith decomposition — Phase 2 (AI agent + shared cache)**: Extract the AI chat orchestration (`buildAgentSystemInstruction`, `buildAgentFinalMessage`, `normalizeToolSchema`, `buildOpenAITools`, `executeAgentToolCall`, `buildOpenAIChatUrl`, `runGeminiAgentChat`, `runOpenAIAgentChat`) into `server/ai-agent.ts`, and the two shared module-level state Maps (`MF_REMOTE_CACHE`, `lessonActiveSegments`) into `server/shared-state.ts`. Both are consumed by `server/routes/*.ts` through `ServerContext`. Pure helpers (`buildAgentSystemInstruction`, `buildAgentFinalMessage`, `normalizeToolSchema`, `buildOpenAITools`) are covered by `server/__tests__/ai-agent.test.ts`; network-dependent handlers are skipped with a documented reason.
 - **Server monolith decomposition — Phase 2 (presence / socket handlers)**: Extract the Socket.IO connection lifecycle (`io.on('connection', …)` — `register-student`, `enter-lesson`, `leave-lesson`, `join-room`, `whiteboard-update`, `whiteboard-event`, `teacher-broadcast-segment`, `teacher-ping-student`, `disconnect`, and presence broadcasting) into `server/presence.ts` behind `setupPresence({ io, eventBus })`. The shared `lessonActiveSegments` singleton is reused from `server/shared-state.ts`. Behavior (incl. the `whiteboard-event` detail that emits to the raw `lessonId`, not `lesson-<id>`) is locked by `server/__tests__/presence.test.ts` (7 cases).
@@ -654,6 +784,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.1.15] - 2026-07-27
 
 ### Features
+
 - **Remote Plugin Update Detection**: Replace hardcoded market data with dynamic version checking via `git ls-remote` (fallback to GitHub/Gitee Releases API) and semver comparison; add `updateSource` field to plugin manifest (`@openlearn/plugin-sdk@3.4.3`); add per-plugin "检查更新" button with server-first download and client-side fallback; support pre-release version badges.
 - **Dashboard Quick Access**: Make the brand logo/name area clickable to return to the dashboard; add an explicit "系统总览" / "Dashboard" nav button in the top header bar with active-state highlighting.
 - **Whiteboard Toolbar Docked**: Move the interactive whiteboard drawing toolbar from a centered floating overlay into the top white area as a docked, left-aligned bar with a bottom border separator.
@@ -661,12 +792,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Plugin Center ZIP Install Relocated**: Move the ZIP drag-and-drop install area from the plugin store grid into the "发现" tab header bar, placed inline to the right of the "显示系统核心插件" toggle with matching compact styling and a teal/emerald color palette.
 
 ### Fixes
+
 - **Agent Intro Crash**: Fix `Cannot read properties of undefined (reading 'agentIntro')` crash by adding a safe fallback (`?? translations['zh']`) when the language key is unrecognized; fix `toggleLanguage` to pass the current `lang` value directly instead of a function reference causing store corruption.
 - **Repository URL**: Fix incorrect repository URL in package.json from `github.com/openlearn/openlearnv2` to `github.com/aymwoo/OpenLearn-Next-V2`.
 
 ## [0.1.14] - 2026-07-26
 
 ### Features
+
 - **Nav & Header Cleanup**: Remove obsolete "系统总览" (Dashboard) from sidebar navigation and header; set default teacher homepage tab to `courses` (Course Library); simplify language switcher to a single compact `Globe` icon button.
 - **SQLite Status Badge Refactoring**: Refactor database status indicator to a compact 32x32px icon badge with dynamic status colors (🟢 Green for normal connection, 🟠 Orange for latency/warning, 🔴 Red for error/disconnect) and interactive tooltips.
 - **Contextual Role Switcher**: Remove global `Teacher Mode / Student Mode` toggle buttons from top header; embed contextual `[ 👨‍🏫 教师模式 | 🎓 学生模式 ]` segmented role switchers directly inside Lesson Editor (`lesson_editor`) toolbar and Live Classroom (`live_class`) control center.
@@ -675,18 +808,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ## [0.1.13] - 2026-07-26
 
 ### Features
+
 - **In-Place Plugin Update**: Add `plugin.update_zip` command and `updatePluginFromZip` API that preserve the plugin UUID, configuration and business data on upgrade (`42f8759`); add server endpoints `POST /api/plugins/:id/update-zip-raw` and `GET /api/plugins/by-manifest/:manifestId`, plus `x-install-mode: update` on install (`c10b123`); the Plugin Install Wizard gains update mode with SemVer compare, downgrade/in-use guards and a locked target plugin (`53a8658`).
 
 ### Fixes
+
 - **Resilient Worker Activation Timeout**: Default activation timeout raised to 60s with a sliding `activate-progress` heartbeat; tunable via `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` / `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_PROGRESS_SLIDE_MS` (`c6a9730`).
 - **Plugin SDK Sync**: Make facade re-exports type-only and sync the published `dist/index.d.ts` token exports; published `@openlearn/plugin-sdk@3.4.2` (`9d0d793`).
 
 ### Docs
+
 - **Plugin-Dev Reference**: Add authoritative DI token & Service API dictionary, capabilities/permission matrix, UI extension-slot Props, database API & migration spec, host shared-deps whitelist, and the in-place update & distribution guide (`37b1474`, `4d9ef54`).
 
 ## [0.1.12] - 2026-07-26
 
 ### Features
+
 - **Plugin Update Detection & One-Click Hot Update**: Add online market update feed (`/api/plugins/market`), automatic SemVer comparison (`⚡ 发现新版本`), Git repository links (GitHub/Gitee) on plugin cards, release notes preview modal (`📋 新特性`), and one-click atomic hot update with state preservation & rollback (`🚀 一键热更新`).
 - **Plugin Card UI Refactoring**: Redesign plugin dashboard toggle button into a standard-sized, modern iOS/Tailwind Switch toggle (`w-7 h-3.5`).
 - **Plugin Namespace Migration**: Migrate third-party research workflow plugin from core namespace `@openlearn/` to third-party author namespace `@aymwoo/plugin-research-workflow`.
@@ -697,12 +834,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **Light Theme Alignment**: Refactor plugin UI to OpenLearn Next Light Theme palette (`slate-50`, `#ffffff` cards, `#2563eb` accents).
 
 ### Fixes
+
 - **Worker Timeout Fix**: Optimize plugin `activate(ctx)` function to be non-blocking (< 10ms) with async 500ms race timeout, completely resolving `[WorkerRuntime] Worker operation timed out after 10000ms` during plugin installation/activation.
 - **Workflow State Machine Guards**: Fix same-phase click transition error (`无法直接从 DRAFT 切换至 DRAFT`) and support teacher manual phase override flag.
 
 ## [0.1.11] - 2026-07-25
 
 ### Features
+
 - **Plugin system (P7-A2)**: complete the unified plugin runtime refactor — wire real
   capabilities into `PluginCapabilityGateway`, integrate plugin lifecycle via unified
   facades, surface unified plugin facades (`IPluginLifecycleManager`,
@@ -723,11 +862,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   the plugin-development AI Skill guide to the latest V2 architecture. (#7e62138, #cd31c3a)
 
 ### Fixes
+
 - **Dashboard Activity Center**: resolve perpetual loading of the widget. (#cca16b9)
 - **plugin-sdk build**: externalize npm dependencies in the SDK bundle so it no longer
   throws `Dynamic require of "path"` at runtime. (#b50392e)
 
 ### Chores / Docs
+
 - Purge non-system plugin artifacts and clean up the plugin build manifest
   (remove quiz-pro and other purged plugin entries). (#1b71c21, #690c704, #1ff7f59)
 - Bump `@openlearn/plugin-sdk` references to **3.4.1** and document the P7-A2 unified

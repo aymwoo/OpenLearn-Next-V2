@@ -162,11 +162,7 @@ export function useGradeExport(options: UseGradeExportOptions) {
       const studentPerf = dashData.performance.filter((p: any) => p.student_id === studentId);
 
       const recentSubmissions = studentPerf.filter(
-        (p: any) =>
-          p.submitted_at &&
-          p.submitted_at >= thirtyDaysAgo &&
-          p.score !== null &&
-          p.score !== undefined,
+        (p: any) => p.submitted_at && p.submitted_at >= thirtyDaysAgo && p.score !== null && p.score !== undefined,
       );
 
       if (recentSubmissions.length === 0) return null;

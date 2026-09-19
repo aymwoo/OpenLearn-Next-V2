@@ -27,7 +27,7 @@ export class DuplicateRegistrationError extends Error {
   constructor(public readonly tokenName: string) {
     super(
       `[ServiceRegistry] Duplicate registration: "${tokenName}" is already registered. ` +
-        `Use registerOrReplace() to overwrite.`
+        `Use registerOrReplace() to overwrite.`,
     );
     this.name = 'DuplicateRegistrationError';
   }
@@ -40,12 +40,9 @@ export class DuplicateRegistrationError extends Error {
 export class MissingDependencyError extends Error {
   constructor(
     public readonly tokenName: string,
-    public readonly missingDeps: string[]
+    public readonly missingDeps: string[],
   ) {
-    super(
-      `[ServiceRegistry] Cannot register "${tokenName}": missing dependencies: ` +
-        `${missingDeps.join(', ')}`
-    );
+    super(`[ServiceRegistry] Cannot register "${tokenName}": missing dependencies: ` + `${missingDeps.join(', ')}`);
     this.name = 'MissingDependencyError';
   }
 }
@@ -58,10 +55,7 @@ export class MissingDependencyError extends Error {
  */
 export class CircularDependencyError extends Error {
   constructor(public readonly cycleTokens: string[]) {
-    super(
-      `[ServiceRegistry] Circular dependency detected involving: ` +
-        `${cycleTokens.join(' → ')}`
-    );
+    super(`[ServiceRegistry] Circular dependency detected involving: ` + `${cycleTokens.join(' → ')}`);
     this.name = 'CircularDependencyError';
   }
 }
@@ -73,11 +67,11 @@ export class CircularDependencyError extends Error {
 export class HasDependentError extends Error {
   constructor(
     public readonly tokenName: string,
-    public readonly dependents: string[]
+    public readonly dependents: string[],
   ) {
     super(
       `[ServiceRegistry] Cannot unregister "${tokenName}": still has dependents: ` +
-        `${dependents.join(', ')}. Unregister them first.`
+        `${dependents.join(', ')}. Unregister them first.`,
     );
     this.name = 'HasDependentError';
   }

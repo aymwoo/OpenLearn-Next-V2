@@ -30,7 +30,7 @@ interface LoginSiteInfo {
 export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }: LoginPageProps) {
   const [activeTab, setActiveTab] = useState<'teacher' | 'student'>('teacher');
   const [siteInfo, setSiteInfo] = useState<LoginSiteInfo | null>(null);
-  
+
   // Teacher credentials state
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -96,8 +96,8 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
         body: JSON.stringify({
           entrance: 'teacher',
           username: username.trim(),
-          password: password
-        })
+          password: password,
+        }),
       });
 
       if (res.ok) {
@@ -122,7 +122,11 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
       return;
     }
     if (!studentPassword.trim()) {
-      setStudentError(lang === 'zh' ? '请输入个人密码或临时班级密码。' : 'Please enter your personal password or temporary class passcode.');
+      setStudentError(
+        lang === 'zh'
+          ? '请输入个人密码或临时班级密码。'
+          : 'Please enter your personal password or temporary class passcode.',
+      );
       return;
     }
 
@@ -135,8 +139,8 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
         body: JSON.stringify({
           entrance: 'student',
           studentId: finalStudentId,
-          password: studentPassword.trim()
-        })
+          password: studentPassword.trim(),
+        }),
       });
 
       if (res.ok) {
@@ -154,12 +158,18 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans" id="login_page_container">
+    <div
+      className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans"
+      id="login_page_container"
+    >
       {/* Background Decorative Blobs */}
       <div className="absolute top-[-10%] left-[-10%] w-[40rem] h-[40rem] rounded-full bg-indigo-500/10 blur-3xl -z-10" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[35rem] h-[35rem] rounded-full bg-violet-500/10 blur-3xl -z-10" />
 
-      <div className="w-full max-w-md bg-slate-950/85 backdrop-blur-md rounded-2xl border border-slate-800 shadow-2xl p-6 sm:p-8" id="login_card">
+      <div
+        className="w-full max-w-md bg-slate-950/85 backdrop-blur-md rounded-2xl border border-slate-800 shadow-2xl p-6 sm:p-8"
+        id="login_card"
+      >
         {/* App Greeting/Branding */}
         <div className="text-center mb-8">
           {siteInfo?.logoUrl ? (
@@ -174,10 +184,14 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
             </div>
           )}
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight flex items-center justify-center gap-2">
-            {siteInfo?.siteName || 'OpenLearn Next'} <span className="text-indigo-400 font-medium text-xs bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-400/20">V2.0</span>
+            {siteInfo?.siteName || 'OpenLearn Next'}{' '}
+            <span className="text-indigo-400 font-medium text-xs bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-400/20">
+              V2.0
+            </span>
           </h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-2">
-            {siteInfo?.slogan || (lang === 'zh' ? '下一代智能数字化学习系统' : 'Next-Generation Intelligent Digital Learning Platform')}
+            {siteInfo?.slogan ||
+              (lang === 'zh' ? '下一代智能数字化学习系统' : 'Next-Generation Intelligent Digital Learning Platform')}
           </p>
         </div>
 
@@ -194,7 +208,7 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
             <Shield size={14} />
             {lang === 'zh' ? '教师与管理端' : 'Teacher / Staff Portal'}
           </button>
-          
+
           <button
             onClick={() => setActiveTab('student')}
             className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none ${
@@ -253,7 +267,15 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
               disabled={teacherSubmitting}
               className="w-full mt-6 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 text-white font-bold py-3 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer shadow-lg shadow-indigo-600/20 active:scale-[0.98]"
             >
-              <span>{teacherSubmitting ? (lang === 'zh' ? '鉴权登录中...' : 'Authorizing...') : (lang === 'zh' ? '安全验证登录' : 'Authorized Sign In')}</span>
+              <span>
+                {teacherSubmitting
+                  ? lang === 'zh'
+                    ? '鉴权登录中...'
+                    : 'Authorizing...'
+                  : lang === 'zh'
+                    ? '安全验证登录'
+                    : 'Authorized Sign In'}
+              </span>
               <ArrowRight size={15} />
             </button>
           </form>
@@ -288,14 +310,18 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
                   ))}
                 </select>
                 <p className="text-[10px] text-slate-500 font-medium">
-                  {lang === 'zh' ? '✨ 在沙盒调试中，你可以直接下拉选择已有的学生账户一键登录为该生。' : '✨ Sandbox help: Quick select existing students on file to simulate as student.'}
+                  {lang === 'zh'
+                    ? '✨ 在沙盒调试中，你可以直接下拉选择已有的学生账户一键登录为该生。'
+                    : '✨ Sandbox help: Quick select existing students on file to simulate as student.'}
                 </p>
               </div>
             ) : null}
 
             <div className="relative flex py-2 items-center">
               <div className="flex-grow border-t border-slate-850"></div>
-              <span className="flex-shrink mx-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">{lang === 'zh' ? '或手动输入学号' : 'Or input key manually'}</span>
+              <span className="flex-shrink mx-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                {lang === 'zh' ? '或手动输入学号' : 'Or input key manually'}
+              </span>
               <div className="flex-grow border-t border-slate-850"></div>
             </div>
 
@@ -336,13 +362,19 @@ export const LoginPage = React.memo(function LoginPage({ onLoginSuccess, lang }:
               disabled={studentSubmitting}
               className="w-full mt-6 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-50 text-white font-bold py-3 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer shadow-lg shadow-indigo-600/20 active:scale-[0.98]"
             >
-              <span>{studentSubmitting ? (lang === 'zh' ? '正在连接学生终端...' : 'Entering Desk...') : (lang === 'zh' ? '登录学生智慧桌面' : 'Login Interactive Desk')}</span>
+              <span>
+                {studentSubmitting
+                  ? lang === 'zh'
+                    ? '正在连接学生终端...'
+                    : 'Entering Desk...'
+                  : lang === 'zh'
+                    ? '登录学生智慧桌面'
+                    : 'Login Interactive Desk'}
+              </span>
               <ArrowRight size={15} />
             </button>
           </form>
         )}
-
-
       </div>
     </div>
   );

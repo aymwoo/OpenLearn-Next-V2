@@ -68,9 +68,7 @@ export class IllegalStateTransitionError extends PluginHostError {
     public readonly from: PluginState,
     public readonly to: PluginState,
   ) {
-    super(
-      `Illegal state transition for plugin "${pluginId}": ${from} → ${to}`,
-    );
+    super(`Illegal state transition for plugin "${pluginId}": ${from} → ${to}`);
     this.name = 'IllegalStateTransitionError';
   }
 }
@@ -92,8 +90,8 @@ export class SemverMismatchError extends PluginHostError {
   ) {
     super(
       `Plugin "${pluginName}" (${pluginId}) requires ${tokenName}@${requiredRange}, ` +
-      `but host provides ${actualVersion}. ` +
-      `Please upgrade the host or use a compatible plugin version.`
+        `but host provides ${actualVersion}. ` +
+        `Please upgrade the host or use a compatible plugin version.`,
     );
     this.name = 'SemverMismatchError';
   }

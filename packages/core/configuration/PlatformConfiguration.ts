@@ -11,10 +11,7 @@
  * It manages ONLY platform/kernel/infrastructure configuration.
  */
 
-import {
-  DEFAULT_BOOTSTRAP_CONFIG,
-  type IPlatformLogger,
-} from '../bootstrap/types/index.js';
+import { DEFAULT_BOOTSTRAP_CONFIG, type IPlatformLogger } from '../bootstrap/types/index.js';
 import { DefaultPlatformLogger } from '../bootstrap/builder/platform-builder.js';
 import { ConfigurationRegistry } from './ConfigurationRegistry.js';
 import { ConfigurationContext } from './ConfigurationContext.js';
@@ -119,17 +116,15 @@ export class PlatformConfiguration {
     });
   }
 
-  public registerEnvironment(
-    options?: {
-      id?: string;
-      scope?: ConfigurationScope;
-      priority?: number;
-      prefix?: string;
-      env?: Record<string, string | undefined>;
-      map?: (key: string, value: string) => [string, unknown] | null;
-      descriptors?: ConfigurationDescriptorInit[];
-    },
-  ): this {
+  public registerEnvironment(options?: {
+    id?: string;
+    scope?: ConfigurationScope;
+    priority?: number;
+    prefix?: string;
+    env?: Record<string, string | undefined>;
+    map?: (key: string, value: string) => [string, unknown] | null;
+    descriptors?: ConfigurationDescriptorInit[];
+  }): this {
     const source: ConfigurationSourceInit = {
       kind: 'environment',
       id: options?.id,

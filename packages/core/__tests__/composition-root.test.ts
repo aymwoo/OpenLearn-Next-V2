@@ -1,8 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  PlatformCompositionRoot,
-  CompositionModule,
-} from '../bootstrap/composition/index.js';
+import { PlatformCompositionRoot, CompositionModule } from '../bootstrap/composition/index.js';
 import { ConfigurationError } from '../bootstrap/types/index.js';
 
 describe('PI-006 Platform Composition Root Test Suite', () => {
@@ -34,9 +31,7 @@ describe('PI-006 Platform Composition Root Test Suite', () => {
     const mod1: CompositionModule = { id: 'dup_mod', name: 'Module 1', compose: () => {} };
     const mod2: CompositionModule = { id: 'dup_mod', name: 'Module 2', compose: () => {} };
 
-    const root = PlatformCompositionRoot.create()
-      .registerModule(mod1)
-      .registerModule(mod2);
+    const root = PlatformCompositionRoot.create().registerModule(mod1).registerModule(mod2);
 
     expect(() => root.compose()).toThrow(ConfigurationError);
   });

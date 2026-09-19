@@ -259,7 +259,6 @@ describe('Lesson Flow Engine Unit & Integration Test Suite', () => {
       runtime.reorderStagesInFlow('flw_standard', 0, 1);
       expect(runtime.getActiveFlow()?.stages[0].id).toBe(clonedStage?.id);
 
-
       // Copy flow
       const copiedFlow = runtime.copyFlow('flw_standard', '副本工作流');
       expect(copiedFlow).not.toBeNull();
@@ -273,9 +272,7 @@ describe('Lesson Flow Engine Unit & Integration Test Suite', () => {
 
       // Create view for Stage 1
       adapter.updateStageView('stg_1', {
-        elements: [
-          { id: 'elem_1', type: 'text', x: 10, y: 10, content: 'Stage 1 Text' },
-        ],
+        elements: [{ id: 'elem_1', type: 'text', x: 10, y: 10, content: 'Stage 1 Text' }],
       });
 
       const view1 = adapter.getStageView('stg_1');
@@ -324,7 +321,7 @@ describe('Lesson Flow Engine Unit & Integration Test Suite', () => {
           payload: {},
           timestamp: startTime + 100,
         },
-        startTime
+        startTime,
       );
 
       const frames = replayer.getFrames();

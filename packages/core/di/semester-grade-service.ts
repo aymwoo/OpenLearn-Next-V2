@@ -14,7 +14,8 @@ export class SemesterGradeService implements ISemesterGradeService {
     }
 
     // 1. Get classId from schedules using lessonId
-    const schedule = this.db.prepare('SELECT class_id FROM schedules WHERE lesson_id = ?').get(lessonId) as { class_id: string } | undefined;
+    const schedule = this.db.prepare('SELECT class_id FROM schedules WHERE lesson_id = ?').get(lessonId) as
+      { class_id: string } | undefined;
     if (!schedule) {
       throw new Error(`No scheduled class found for lesson: ${lessonId}`);
     }
@@ -22,22 +23,28 @@ export class SemesterGradeService implements ISemesterGradeService {
     const assignmentId = `plugin-lesson-${lessonId}`;
 
     // 2. Ensure representative assignment exists in host assignments table
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO NOTHING
-    `).run(
-      assignmentId,
-      classId,
-      lessonId,
-      `平时作业 - 课时 ${lessonId}`,
-      '上传与互评插件确认自动同步的平时成绩代表作业',
-      '',
-      Date.now()
-    );
+    `,
+      )
+      .run(
+        assignmentId,
+        classId,
+        lessonId,
+        `平时作业 - 课时 ${lessonId}`,
+        '上传与互评插件确认自动同步的平时成绩代表作业',
+        '',
+        Date.now(),
+      );
 
     // 3. Write or update assignment_submissions score
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO assignment_submissions (
         assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status
       )
@@ -47,15 +54,17 @@ export class SemesterGradeService implements ISemesterGradeService {
         feedback = excluded.feedback,
         graded_at = excluded.graded_at,
         status = excluded.status
-    `).run(
-      assignmentId,
-      studentId,
-      '[微应用插件同步平时成绩]',
-      grade,
-      '平时作业互评与评分系统确认成绩',
-      Date.now(),
-      Date.now(),
-      'graded'
-    );
+    `,
+      )
+      .run(
+        assignmentId,
+        studentId,
+        '[微应用插件同步平时成绩]',
+        grade,
+        '平时作业互评与评分系统确认成绩',
+        Date.now(),
+        Date.now(),
+        'graded',
+      );
   }
 }

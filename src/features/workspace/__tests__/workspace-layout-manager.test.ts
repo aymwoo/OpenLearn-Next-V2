@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  WorkspaceLayoutManager,
-  LayoutStore,
-  LAYOUT_STORAGE_KEY,
-} from '../index.js';
+import { WorkspaceLayoutManager, LayoutStore, LAYOUT_STORAGE_KEY } from '../index.js';
 
 describe('Sprint P1-05 Workspace Layout Manager Test Suite', () => {
   let manager: WorkspaceLayoutManager;

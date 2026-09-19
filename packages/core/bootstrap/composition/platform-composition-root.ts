@@ -53,7 +53,7 @@ export class PlatformCompositionRoot {
 
     if (!validation.isValid) {
       throw new ConfigurationError(
-        `CompositionRoot validation failed: ${validation.errors.map((e) => e.message).join('; ')}`
+        `CompositionRoot validation failed: ${validation.errors.map((e) => e.message).join('; ')}`,
       );
     }
 

@@ -8,7 +8,7 @@ import { GovernanceSpecification } from '../types/index.js';
 export class CapabilityValidator {
   public static validate(
     spec: GovernanceSpecification,
-    existingIds: Set<string>
+    existingIds: Set<string>,
   ): { valid: boolean; errors: ReadonlyArray<string> } {
     const errors: string[] = [];
 

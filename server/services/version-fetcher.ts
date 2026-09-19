@@ -81,9 +81,7 @@ function latestSemver(tags: string[], installed: string): { version: string | nu
 
   // Find latest stable
   const stable = valid.filter((t) => !t.parsed.prerelease.length);
-  const latestStable = stable.length > 0
-    ? stable.reduce((a, b) => (semver.gt(b.parsed, a.parsed) ? b : a))
-    : null;
+  const latestStable = stable.length > 0 ? stable.reduce((a, b) => (semver.gt(b.parsed, a.parsed) ? b : a)) : null;
 
   if (latestStable && semver.gt(latestStable.parsed, installed)) {
     return { version: latestStable.cleaned, isPrerelease: false };
@@ -91,9 +89,7 @@ function latestSemver(tags: string[], installed: string): { version: string | nu
 
   // If no newer stable, check prereleases
   const prerelease = valid.filter((t) => t.parsed.prerelease.length > 0);
-  const latestPre = prerelease.length > 0
-    ? prerelease.reduce((a, b) => (semver.gt(b.parsed, a.parsed) ? b : a))
-    : null;
+  const latestPre = prerelease.length > 0 ? prerelease.reduce((a, b) => (semver.gt(b.parsed, a.parsed) ? b : a)) : null;
 
   if (latestPre && semver.gt(latestPre.parsed, installed)) {
     return { version: latestPre.cleaned, isPrerelease: true };
@@ -129,9 +125,7 @@ function latestFromReleases(
 
   // Stable first
   const stable = parsed.filter((r) => !r.prerelease);
-  const latestStable = stable.length > 0
-    ? stable.reduce((a, b) => (semver.gt(b.parsed, a.parsed) ? b : a))
-    : null;
+  const latestStable = stable.length > 0 ? stable.reduce((a, b) => (semver.gt(b.parsed, a.parsed) ? b : a)) : null;
 
   if (latestStable && semver.gt(latestStable.parsed, installed)) {
     const zipAsset = latestStable.assets?.find((a) => a.name.endsWith('.zip'));
@@ -145,9 +139,7 @@ function latestFromReleases(
 
   // Prerelease
   const pre = parsed.filter((r) => r.prerelease);
-  const latestPre = pre.length > 0
-    ? pre.reduce((a, b) => (semver.gt(b.parsed, a.parsed) ? b : a))
-    : null;
+  const latestPre = pre.length > 0 ? pre.reduce((a, b) => (semver.gt(b.parsed, a.parsed) ? b : a)) : null;
 
   if (latestPre && semver.gt(latestPre.parsed, installed)) {
     const zipAsset = latestPre.assets?.find((a) => a.name.endsWith('.zip'));
@@ -164,10 +156,7 @@ function latestFromReleases(
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
-export async function checkVersion(
-  source: UpdateSource,
-  installedVersion: string,
-): Promise<VersionCheckResult> {
+export async function checkVersion(source: UpdateSource, installedVersion: string): Promise<VersionCheckResult> {
   const key = cacheKey(source);
   const hit = cached(key);
   if (hit) return { ...hit, installedVersion };
@@ -230,9 +219,10 @@ export async function checkVersion(
     setCache(key, result);
     return result;
   } catch (e: any) {
-    const msg = e.cause?.code === 'ENOTFOUND' || e.message?.includes('fetch')
-      ? '无法连接到更新源：网络不可达'
-      : `更新源请求失败: ${e.message}`;
+    const msg =
+      e.cause?.code === 'ENOTFOUND' || e.message?.includes('fetch')
+        ? '无法连接到更新源：网络不可达'
+        : `更新源请求失败: ${e.message}`;
     return { ...base, error: msg };
   }
 }

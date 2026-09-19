@@ -3,12 +3,7 @@
  * Central facade for infrastructure permission management.
  */
 
-import {
-  PermissionDescriptor,
-  PermissionPolicy,
-  PermissionContext,
-  IPermissionProvider,
-} from './permission-types.js';
+import { PermissionDescriptor, PermissionPolicy, PermissionContext, IPermissionProvider } from './permission-types.js';
 import { PermissionRegistry } from './permission-registry.js';
 import { PermissionEvaluator } from './permission-evaluator.js';
 
@@ -57,18 +52,12 @@ export class PermissionManager {
     subject: string,
     target: string,
     permissionId: string,
-    metadata?: Readonly<Record<string, unknown>>
+    metadata?: Readonly<Record<string, unknown>>,
   ): Promise<PermissionContext> {
     const timestamp = Date.now();
     const descriptor = this.registry.get(permissionId);
 
-    const result = await PermissionEvaluator.evaluate(
-      subject,
-      permissionId,
-      this.grants,
-      descriptor,
-      this.providers
-    );
+    const result = await PermissionEvaluator.evaluate(subject, permissionId, this.grants, descriptor, this.providers);
 
     const context: PermissionContext = {
       subject,
@@ -86,13 +75,13 @@ export class PermissionManager {
     subject: string,
     target: string,
     permissionId: string,
-    metadata?: Readonly<Record<string, unknown>>
+    metadata?: Readonly<Record<string, unknown>>,
   ): Promise<PermissionContext> {
     const context = await this.check(subject, target, permissionId, metadata);
     if (!context.result || !context.result.allowed) {
       const reason = context.result?.reason || 'Permission Denied';
       throw new Error(
-        `Infrastructure Permission Exception: Subject '${subject}' is denied '${permissionId}' on target '${target}'. Reason: ${reason}`
+        `Infrastructure Permission Exception: Subject '${subject}' is denied '${permissionId}' on target '${target}'. Reason: ${reason}`,
       );
     }
     return context;

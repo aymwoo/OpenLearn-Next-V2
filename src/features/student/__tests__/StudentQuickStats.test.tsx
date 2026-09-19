@@ -8,11 +8,7 @@ afterEach(() => {
 
 describe('StudentQuickStats', () => {
   it('renders the four quick stat labels', () => {
-    render(
-      <StudentQuickStats
-        studentDashboardData={{ classes: [], assignments: [], schedules: [] }}
-      />
-    );
+    render(<StudentQuickStats studentDashboardData={{ classes: [], assignments: [], schedules: [] }} />);
     expect(screen.getByText('Enrolled Classes')).toBeTruthy();
     expect(screen.getByText('Completed Assignments')).toBeTruthy();
     expect(screen.getByText('Pending Assignments')).toBeTruthy();

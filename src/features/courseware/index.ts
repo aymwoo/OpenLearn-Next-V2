@@ -1,5 +1,2 @@
-import { lazy } from 'react';
-
-export const CoursewareViewer = lazy(() =>
-  import('./InteractiveCoursewareViewer').then((m) => ({ default: m.InteractiveCoursewareViewer })),
-);
+export { InteractiveCoursewareViewer, default as CoursewareViewer } from './InteractiveCoursewareViewer';
+export { default } from './InteractiveCoursewareViewer';

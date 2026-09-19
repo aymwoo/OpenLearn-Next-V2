@@ -1,9 +1,5 @@
 import type { PluginContext } from '@openlearn/plugin-sdk';
-import {
-  ICommandBusServiceToken,
-  IActionRegistryServiceToken,
-  IEventBusServiceToken,
-} from '@openlearn/plugin-sdk';
+import { ICommandBusServiceToken, IActionRegistryServiceToken, IEventBusServiceToken } from '@openlearn/plugin-sdk';
 
 export default {
   manifest: {

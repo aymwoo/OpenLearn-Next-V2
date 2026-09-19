@@ -1,25 +1,7 @@
-import {
-  Terminal,
-  Activity,
-  Presentation,
-  Puzzle,
-  Globe,
-  ClipboardList,
-  Shuffle,
-  Sparkles,
-} from 'lucide-react';
+import { Terminal, Activity, Presentation, Puzzle, Globe, ClipboardList, Shuffle, Sparkles } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-export type PaletteColorKey =
-  | 'slate'
-  | 'blue'
-  | 'violet'
-  | 'amber'
-  | 'rose'
-  | 'emerald'
-  | 'cyan'
-  | 'pink'
-  | 'indigo';
+export type PaletteColorKey = 'slate' | 'blue' | 'violet' | 'amber' | 'rose' | 'emerald' | 'cyan' | 'pink' | 'indigo';
 
 export type EditFieldKind = 'input' | 'textarea' | 'options' | 'select';
 
@@ -47,11 +29,19 @@ export interface PaletteItemConfig {
   labelEn: string;
   descriptionZh: string;
   descriptionEn: string;
-  icon: LucideIcon;
+  icon?: LucideIcon | React.ComponentType<any>;
   color: PaletteColorKey;
   group: string;
   defaultData: Record<string, any>;
   editFields: EditField[];
+  pluginId?: string;
+  component?: React.ComponentType<{
+    elementId: string;
+    lessonId: string;
+    data: Record<string, any>;
+    userRole?: 'teacher' | 'student';
+    onElementUpdate?: (elementId: string, data: Record<string, any>) => Promise<void>;
+  }>;
 }
 
 export interface PaletteGroup {
@@ -160,6 +150,7 @@ export const PALETTE_GROUPS: PaletteGroup[] = [
   { id: 'present', labelZh: '内容呈现', labelEn: 'Content' },
   { id: 'assess', labelZh: '评估互动', labelEn: 'Assessment' },
   { id: 'manage', labelZh: '课堂管理', labelEn: 'Classroom' },
+  { id: 'extension', labelZh: '插件扩展', labelEn: 'Extensions' },
 ];
 
 export const PALETTE_ITEMS: PaletteItemConfig[] = [
@@ -247,7 +238,7 @@ export const PALETTE_ITEMS: PaletteItemConfig[] = [
       },
       {
         key: 'coursewareUuid',
-        labelZh: '互动课件',
+        labelZh: '互动课件 (Courseware)',
         labelEn: 'Courseware',
         kind: 'select',
         loadOptions: async () => {
@@ -255,21 +246,6 @@ export const PALETTE_ITEMS: PaletteItemConfig[] = [
             const res = await fetch('/api/courseware');
             const data = (await res.json()) as Array<{ uuid: string; name: string }>;
             return data.map((c) => ({ value: c.uuid, label: c.name }));
-          } catch {
-            return [];
-          }
-        },
-      },
-      {
-        key: 'resourceId',
-        labelZh: '系统资源',
-        labelEn: 'System Resource',
-        kind: 'select',
-        loadOptions: async () => {
-          try {
-            const res = await fetch('/api/resources');
-            const data = (await res.json()) as Array<{ id: string; name: string; type: string }>;
-            return data.map((r) => ({ value: r.id, label: `[${r.type}] ${r.name}` }));
           } catch {
             return [];
           }
@@ -370,3 +346,12 @@ export const PALETTE_ITEM_MAP: Record<string, PaletteItemConfig> = PALETTE_ITEMS
   },
   {} as Record<string, PaletteItemConfig>,
 );
+
+import { paletteItemRegistry } from './palette-item-registry';
+
+/**
+ * 获取组件配置（先查内置常量表，再查插件动态注册表）
+ */
+export function getPaletteItemConfig(type: string): PaletteItemConfig | undefined {
+  return PALETTE_ITEM_MAP[type] || paletteItemRegistry.get(type);
+}

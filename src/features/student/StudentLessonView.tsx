@@ -7,6 +7,8 @@ import { StudentLessonInteractionPanel } from './StudentLessonInteractionPanel';
 export interface StudentLessonViewProps {
   students: StudentType[];
   activeStudentId: string | null;
+  /** 全班专注锁定中：学生端进入只读跟随模式 */
+  isStudentLocked?: boolean;
   setStudentViewStatus: (status: 'dashboard' | 'lesson' | 'assignment') => void;
   setSelectedLesson: (id: string | null) => void;
   lessons: Lesson[];
@@ -39,6 +41,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
   const {
     students,
     activeStudentId,
+    isStudentLocked = false,
     setStudentViewStatus,
     setSelectedLesson,
     lessons,
@@ -71,6 +74,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
       <StudentLessonHeader
         students={students}
         activeStudentId={activeStudentId}
+        isStudentLocked={isStudentLocked}
         setStudentViewStatus={setStudentViewStatus}
         setSelectedLesson={setSelectedLesson}
         lessons={lessons}
@@ -80,6 +84,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
         <StudentLessonContentPanel
           students={students}
           activeStudentId={activeStudentId}
+          isStudentLocked={isStudentLocked}
           studentFullscreenPanel={studentFullscreenPanel}
           setStudentFullscreenPanel={setStudentFullscreenPanel}
           timelineSegments={timelineSegments}
@@ -94,6 +99,7 @@ export function StudentLessonView(props: StudentLessonViewProps) {
           isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
         />
         <StudentLessonInteractionPanel
+          isStudentLocked={isStudentLocked}
           studentLessonTab={studentLessonTab}
           setStudentLessonTab={setStudentLessonTab}
           isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}

@@ -20,10 +20,10 @@ graph TD
     L["Lesson (课程)"] --> F1["Flow 1: 导学与讲解"]
     L --> F2["Flow 2: 随堂互动与分组练习"]
     L --> F3["Flow 3: 总结与评测"]
-    
+
     F2 --> S1["Stage 1: 个人独立答题 (5 min)"]
     F2 --> S2["Stage 2: 小组讨论 (10 min)"]
-    
+
     S2 --> A1["Activity 1: 协作白板绘图"]
     S2 --> A2["Activity 2: AI 自动评估批改"]
 ```

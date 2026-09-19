@@ -14,11 +14,7 @@ export class EventRegistry {
   private readonly byType = new Map<string, Set<EventHandler>>();
   private readonly handlers = new Map<string, EventHandler>();
 
-  public subscribe(
-    eventType: string,
-    fn: EventHandlerFn,
-    options?: EventHandlerOptions,
-  ): EventSubscriber {
+  public subscribe(eventType: string, fn: EventHandlerFn, options?: EventHandlerOptions): EventSubscriber {
     const handler = new EventHandler(eventType, fn, options);
     this.handlers.set(handler.id, handler);
     let set = this.byType.get(eventType);
@@ -34,11 +30,7 @@ export class EventRegistry {
     });
   }
 
-  public subscribeOnce(
-    eventType: string,
-    fn: EventHandlerFn,
-    options?: EventHandlerOptions,
-  ): EventSubscriber {
+  public subscribeOnce(eventType: string, fn: EventHandlerFn, options?: EventHandlerOptions): EventSubscriber {
     return this.subscribe(eventType, fn, { ...options, once: true });
   }
 

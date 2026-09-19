@@ -87,104 +87,103 @@ function saveDashboardVisibility(map: Map<string, boolean>): void {
   } catch {}
 }
 
-export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreActions>()(
-  (set, get) => ({
-    // ── Initial state ──────────────────────────────────────────────────
-    activePlugins: [],
-    extensionPoints: new Map(),
-    services: null,
-    dashboardVisibility: loadDashboardVisibility(),
-    initialized: false,
+export const usePluginHostStore = create<PluginHostStoreState & PluginHostStoreActions>()((set, get) => ({
+  // ── Initial state ──────────────────────────────────────────────────
+  activePlugins: [],
+  extensionPoints: new Map(),
+  services: null,
+  dashboardVisibility: loadDashboardVisibility(),
+  initialized: false,
 
-    // ── Actions ────────────────────────────────────────────────────────
+  // ── Actions ────────────────────────────────────────────────────────
 
-    initialize: (services) => set({ services, initialized: true }),
+  initialize: (services) => set({ services, initialized: true }),
 
-    addPlugin: (plugin) =>
-      set((state) => ({
-        activePlugins: [...state.activePlugins, plugin],
-      })),
+  addPlugin: (plugin) =>
+    set((state) => ({
+      activePlugins: [...state.activePlugins, plugin],
+    })),
 
-    removePlugin: (id) =>
-      set((state) => ({
-        activePlugins: state.activePlugins.filter((p) => p.id !== id),
-      })),
+  removePlugin: (id) =>
+    set((state) => ({
+      activePlugins: state.activePlugins.filter((p) => p.id !== id),
+    })),
 
-    updatePluginState: (id, state) =>
-      set((prev) => ({
-        activePlugins: prev.activePlugins.map((p) =>
-          p.id === id ? { ...p, state } : p,
-        ),
-      })),
+  updatePluginState: (id, state) =>
+    set((prev) => ({
+      activePlugins: prev.activePlugins.map((p) => (p.id === id ? { ...p, state } : p)),
+    })),
 
-    registerExtensionPoint: (slot, config) =>
-      set((state) => {
-        const existing = state.extensionPoints.get(slot) ?? [];
-        const dup = existing.find((e) => e.id === config.id);
-        if (dup) {
-          // Widget IDs are globally unique per slot by convention.
-          // Always overwrite on duplicate to handle re-registration after
-          // server restart (new DB UUID) or HMR without crashing.
-          const updated = new Map(state.extensionPoints);
-          updated.set(slot, existing.map(e => e.id === config.id ? config : e));
-          return { extensionPoints: updated };
-        }
+  registerExtensionPoint: (slot, config) =>
+    set((state) => {
+      const existing = state.extensionPoints.get(slot) ?? [];
+      const dup = existing.find((e) => e.id === config.id);
+      if (dup) {
+        // Widget IDs are globally unique per slot by convention.
+        // Always overwrite on duplicate to handle re-registration after
+        // server restart (new DB UUID) or HMR without crashing.
         const updated = new Map(state.extensionPoints);
-        updated.set(slot, [...existing, config]);
+        updated.set(
+          slot,
+          existing.map((e) => (e.id === config.id ? config : e)),
+        );
         return { extensionPoints: updated };
-      }),
+      }
+      const updated = new Map(state.extensionPoints);
+      updated.set(slot, [...existing, config]);
+      return { extensionPoints: updated };
+    }),
 
-    unregisterExtensionPoint: (slot, id) =>
-      set((state) => {
-        const existing = state.extensionPoints.get(slot);
-        if (!existing) return state;
-        const filtered = existing.filter((e) => e.id !== id);
-        const updated = new Map(state.extensionPoints);
+  unregisterExtensionPoint: (slot, id) =>
+    set((state) => {
+      const existing = state.extensionPoints.get(slot);
+      if (!existing) return state;
+      const filtered = existing.filter((e) => e.id !== id);
+      const updated = new Map(state.extensionPoints);
+      if (filtered.length === 0) {
+        updated.delete(slot);
+      } else {
+        updated.set(slot, filtered);
+      }
+      return { extensionPoints: updated };
+    }),
+
+  unregisterPluginExtensionPoints: (pluginId) =>
+    set((state) => {
+      const updated = new Map(state.extensionPoints);
+      for (const [slot, configs] of updated) {
+        const filtered = configs.filter((c) => c.pluginId !== pluginId);
         if (filtered.length === 0) {
           updated.delete(slot);
         } else {
           updated.set(slot, filtered);
         }
-        return { extensionPoints: updated };
-      }),
+      }
+      return { extensionPoints: updated };
+    }),
 
-    unregisterPluginExtensionPoints: (pluginId) =>
-      set((state) => {
-        const updated = new Map(state.extensionPoints);
-        for (const [slot, configs] of updated) {
-          const filtered = configs.filter((c) => c.pluginId !== pluginId);
-          if (filtered.length === 0) {
-            updated.delete(slot);
-          } else {
-            updated.set(slot, filtered);
-          }
-        }
-        return { extensionPoints: updated };
-      }),
+  getExtensions: (slot) => {
+    const list = get().extensionPoints.get(slot) ?? [];
+    // 按 position 升序排序（缺省 100），同一 slot 内跨插件稳定排序。
+    // 锚点槽位（anchor:*）同样适用：同侧多个插件按钮按 position 排列。
+    return [...list].sort((a, b) => (a.position ?? 100) - (b.position ?? 100));
+  },
 
-    getExtensions: (slot) => {
-      const list = get().extensionPoints.get(slot) ?? [];
-      // 按 position 升序排序（缺省 100），同一 slot 内跨插件稳定排序。
-      // 锚点槽位（anchor:*）同样适用：同侧多个插件按钮按 position 排列。
-      return [...list].sort((a, b) => (a.position ?? 100) - (b.position ?? 100));
-    },
+  setDashboardVisibility: (pluginId, visible) =>
+    set((state) => {
+      const next = new Map(state.dashboardVisibility);
+      next.set(pluginId, visible);
+      saveDashboardVisibility(next);
+      return { dashboardVisibility: next };
+    }),
 
-    setDashboardVisibility: (pluginId, visible) =>
-      set((state) => {
-        const next = new Map(state.dashboardVisibility);
+  setDashboardVisibilityBatch: (entries) =>
+    set((state) => {
+      const next = new Map(state.dashboardVisibility);
+      for (const [pluginId, visible] of entries) {
         next.set(pluginId, visible);
-        saveDashboardVisibility(next);
-        return { dashboardVisibility: next };
-      }),
-
-    setDashboardVisibilityBatch: (entries) =>
-      set((state) => {
-        const next = new Map(state.dashboardVisibility);
-        for (const [pluginId, visible] of entries) {
-          next.set(pluginId, visible);
-        }
-        saveDashboardVisibility(next);
-        return { dashboardVisibility: next };
-      }),
-  }),
-);
+      }
+      saveDashboardVisibility(next);
+      return { dashboardVisibility: next };
+    }),
+}));

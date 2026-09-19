@@ -20,11 +20,7 @@ export class CapabilitySDK {
   private engine: InvocationEngine;
   private eventBus: CapabilityEventBus;
 
-  constructor(
-    registry: CapabilityFrameworkRegistry,
-    engine: InvocationEngine,
-    eventBus: CapabilityEventBus
-  ) {
+  constructor(registry: CapabilityFrameworkRegistry, engine: InvocationEngine, eventBus: CapabilityEventBus) {
     this.registry = registry;
     this.engine = engine;
     this.eventBus = eventBus;
@@ -37,7 +33,7 @@ export class CapabilitySDK {
   public async invokeCapability<T = unknown>(
     capabilityId: string,
     payload: Record<string, unknown>,
-    context: CapabilityContext
+    context: CapabilityContext,
   ): Promise<CapabilityResult<T>> {
     const request = {
       id: `inv_${globalThis.crypto.randomUUID()}`,
@@ -50,7 +46,7 @@ export class CapabilitySDK {
 
   public watchCapability<K extends CapabilityEventType>(
     eventType: K | '*',
-    subscriber: CapabilityEventSubscriber<K>
+    subscriber: CapabilityEventSubscriber<K>,
   ): () => void {
     return this.eventBus.subscribe(eventType, subscriber);
   }

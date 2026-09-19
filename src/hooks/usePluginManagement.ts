@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import type { AIProvider, PluginType } from '../types/app';
+import type { AIProvider, PluginType, SessionType } from '../types/app';
 
 export const DEFAULT_PLUGIN_CODE = `exports.default = {
   manifest: {
@@ -14,6 +14,7 @@ export const DEFAULT_PLUGIN_CODE = `exports.default = {
 };`;
 
 export interface UsePluginManagementOptions {
+  session?: SessionType | null;
   host: any;
   lang: 'zh' | 'en';
   addToast: (title: string, msg: string, type: 'info' | 'success' | 'warning' | 'error') => void;
@@ -23,7 +24,7 @@ export interface UsePluginManagementOptions {
 }
 
 export function usePluginManagement(options: UsePluginManagementOptions) {
-  const { host, lang, addToast, setChatLog, setTeacherTab, fetchLessons } = options;
+  const { session, host, lang, addToast, setChatLog, setTeacherTab, fetchLessons } = options;
 
   const [plugins, setPlugins] = useState<PluginType[]>([]);
   const [aiProviders, setAiProviders] = useState<AIProvider[]>([]);
@@ -72,8 +73,10 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
 
   useEffect(() => {
     fetchPlugins();
-    fetchAIProviders();
-  }, [fetchPlugins, fetchAIProviders]);
+    if (session && session.role !== 'student') {
+      fetchAIProviders();
+    }
+  }, [fetchPlugins, fetchAIProviders, session?.role]);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -152,11 +155,7 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
       }
     } catch (err: any) {
       console.error(err);
-      addToast(
-        lang === 'zh' ? '保存异常' : 'Execution Error',
-        err.message || 'Error occurred',
-        'warning',
-      );
+      addToast(lang === 'zh' ? '保存异常' : 'Execution Error', err.message || 'Error occurred', 'warning');
     }
   };
 
@@ -183,19 +182,11 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
         );
         fetchAIProviders();
       } else {
-        addToast(
-          lang === 'zh' ? '删除失败' : 'Failed to Delete',
-          'Database error',
-          'warning',
-        );
+        addToast(lang === 'zh' ? '删除失败' : 'Failed to Delete', 'Database error', 'warning');
       }
     } catch (err: any) {
       console.error(err);
-      addToast(
-        lang === 'zh' ? '操作异常' : 'Execution Error',
-        err.message || 'Error occurred',
-        'warning',
-      );
+      addToast(lang === 'zh' ? '操作异常' : 'Execution Error', err.message || 'Error occurred', 'warning');
     }
   };
 
@@ -215,23 +206,17 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
       if (res.ok && data.success) {
         addToast(
           lang === 'zh' ? '测试通过' : 'Test Succeeded',
-          lang === 'zh' ? `成功连接至 [${provider.name}]。${data.message}` : `Successfully connected to [${provider.name}]. ${data.message}`,
+          lang === 'zh'
+            ? `成功连接至 [${provider.name}]。${data.message}`
+            : `Successfully connected to [${provider.name}]. ${data.message}`,
           'success',
         );
       } else {
-        addToast(
-          lang === 'zh' ? '测试失败' : 'Test Failed',
-          data.error || 'Connection error',
-          'warning',
-        );
+        addToast(lang === 'zh' ? '测试失败' : 'Test Failed', data.error || 'Connection error', 'warning');
       }
     } catch (err: any) {
       console.error(err);
-      addToast(
-        lang === 'zh' ? '连接异常' : 'Connection Exception',
-        err.message || 'Error occurred',
-        'warning',
-      );
+      addToast(lang === 'zh' ? '连接异常' : 'Connection Exception', err.message || 'Error occurred', 'warning');
     } finally {
       setTestingProviderId(null);
     }
@@ -252,7 +237,10 @@ export function usePluginManagement(options: UsePluginManagementOptions) {
         setShowPluginModal(false);
         setChatLog((prev) => [
           ...prev,
-          { role: 'agent', content: `[System] Plugin "${data.manifest.name}" installed successfully. You can now prompt me to use it.` },
+          {
+            role: 'agent',
+            content: `[System] Plugin "${data.manifest.name}" installed successfully. You can now prompt me to use it.`,
+          },
         ]);
       } else {
         alert('Plugin installation failed: ' + data.error);

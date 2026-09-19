@@ -69,7 +69,7 @@ describe('ServiceRegistry — basic register and resolve', () => {
     const token = new Token<IServiceA>('@openlearn/core:IServiceA');
 
     await expect(registry.resolve(token)).rejects.toThrow(
-      /No provider registered for token: @openlearn\/core:IServiceA/
+      /No provider registered for token: @openlearn\/core:IServiceA/,
     );
   });
 });
@@ -86,9 +86,7 @@ describe('ServiceRegistry — duplicate registration', () => {
 
     await registry.register(token, instance);
 
-    await expect(registry.register(token, instance)).rejects.toThrow(
-      DuplicateRegistrationError
-    );
+    await expect(registry.register(token, instance)).rejects.toThrow(DuplicateRegistrationError);
   });
 });
 
@@ -220,11 +218,7 @@ describe('ServiceRegistry — circular dependency detection', () => {
     });
 
     expect(() => {
-      (registry as any).topologicalOrder([
-        tokenA.name,
-        tokenB.name,
-        tokenC.name,
-      ]);
+      (registry as any).topologicalOrder([tokenA.name, tokenB.name, tokenC.name]);
     }).toThrow(CircularDependencyError);
   });
 });
@@ -277,7 +271,7 @@ describe('ServiceRegistry — unregister', () => {
     await registry.unregister(token);
 
     await expect(registry.resolve(token)).rejects.toThrow(
-      /No provider registered for token: @openlearn\/core:IServiceA/
+      /No provider registered for token: @openlearn\/core:IServiceA/,
     );
   });
 
@@ -339,10 +333,7 @@ describe('ServiceRegistry — introspection API', () => {
 
     const list = registry.list();
     expect(list).toHaveLength(2);
-    expect(list.map((e) => e.name).sort()).toEqual([
-      '@openlearn/core:IServiceA',
-      '@openlearn/core:IServiceB',
-    ]);
+    expect(list.map((e) => e.name).sort()).toEqual(['@openlearn/core:IServiceA', '@openlearn/core:IServiceB']);
   });
 
   it('should return correct has() status', async () => {
@@ -390,7 +381,7 @@ describe('ServiceRegistry — optional dependencies', () => {
     await expect(
       registry.register(token, makeService('serviceA'), {
         optional: ['@openlearn/core:INotRegistered'],
-      })
+      }),
     ).resolves.toBeUndefined();
   });
 });
@@ -433,8 +424,8 @@ describe('ServiceRegistry — version tracking + resolveByName (Phase 6)', () =>
 
   it('should throw "No provider" for resolveByName with unregistered name', async () => {
     const registry = new ServiceRegistry();
-    await expect(
-      registry.resolveByName('@openlearn/core:INonExistent')
-    ).rejects.toThrow(/No provider registered for token name/);
+    await expect(registry.resolveByName('@openlearn/core:INonExistent')).rejects.toThrow(
+      /No provider registered for token name/,
+    );
   });
 });

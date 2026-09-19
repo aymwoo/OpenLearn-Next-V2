@@ -35,8 +35,7 @@ export const liveClassStore = createStore<LiveClassState>((set) => ({
   setLiveClassSelectedClassId: (liveClassSelectedClassId) => set({ liveClassSelectedClassId }),
   setLiveClassIsActive: (liveClassIsActive) => set({ liveClassIsActive }),
   setLiveClassFeed: (liveClassFeed) => set({ liveClassFeed }),
-  appendLiveClassFeed: (entry) =>
-    set((s) => ({ liveClassFeed: [...s.liveClassFeed.slice(-49), entry] })),
+  appendLiveClassFeed: (entry) => set((s) => ({ liveClassFeed: [...s.liveClassFeed.slice(-49), entry] })),
   setLiveClassTimeRemaining: (liveClassTimeRemaining) => set({ liveClassTimeRemaining }),
   setLiveClassAcknowledgedMap: (liveClassAcknowledgedMap) => set({ liveClassAcknowledgedMap }),
   setLiveClassStudentProgress: (liveClassStudentProgress) => set({ liveClassStudentProgress }),
@@ -44,5 +43,4 @@ export const liveClassStore = createStore<LiveClassState>((set) => ({
   setActiveStudentLessons: (activeStudentLessons) => set({ activeStudentLessons }),
 }));
 
-export const useLiveClassStore = <T>(selector: (state: LiveClassState) => T) =>
-  useStore(liveClassStore, selector);
+export const useLiveClassStore = <T>(selector: (state: LiveClassState) => T) => useStore(liveClassStore, selector);

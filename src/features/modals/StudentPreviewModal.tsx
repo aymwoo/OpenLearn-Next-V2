@@ -1,15 +1,6 @@
 import { Dispatch, SetStateAction } from 'react';
 import { motion } from 'motion/react';
-import {
-  Eye,
-  X,
-  BookOpen,
-  Minimize2,
-  Maximize2,
-  ChevronRight,
-  Folder,
-  Globe,
-} from 'lucide-react';
+import { Eye, X, BookOpen, Minimize2, Maximize2, ChevronRight, Folder, Globe, ExternalLink } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { LazyWhiteboard } from '../../components/LazyWhiteboard';
 import { LazyCourseware } from '../../components/LazyCourseware';
@@ -79,30 +70,51 @@ export function StudentPreviewModal(props: StudentPreviewModalProps) {
                     学生视角预览 (Student Perspective Preview)
                   </h2>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    正在预览课程: <span className="font-semibold text-gray-700">{lessons.find(l => l.id === selectedLesson)?.title}</span> • 演示同步与交互
+                    正在预览课程:{' '}
+                    <span className="font-semibold text-gray-700">
+                      {lessons.find((l) => l.id === selectedLesson)?.title}
+                    </span>{' '}
+                    • 演示同步与交互
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setIsLessonPreviewVisible(false)}
-                className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1 border border-gray-200"
-              >
-                <X size={14} /> 退出预览
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const studentUrl = `${window.location.origin}${window.location.pathname}?mode=student_live&lessonId=${encodeURIComponent(selectedLesson || '')}#/student_live`;
+                    window.open(studentUrl, '_blank');
+                  }}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                  title="在独立浏览器新Tab中打开学生端，支持双屏或分屏预览"
+                >
+                  <ExternalLink size={13} />
+                  <span>独立Tab预览</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsLessonPreviewVisible(false)}
+                  className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-800 text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1 border border-gray-200"
+                >
+                  <X size={14} /> 退出预览
+                </button>
+              </div>
             </div>
 
             {/* Split Workspace */}
             <div className="flex-1 flex min-h-0 bg-slate-50/50 p-4 gap-4">
               {/* Left Column: Lesson markdown course materials */}
-              <div className={`${previewFullscreenPanel === 'left' ? 'w-full' : 'w-1/3'} bg-white border border-gray-200 rounded-xl p-4 flex flex-col min-h-0 shadow-sm ${previewFullscreenPanel === 'right' ? 'hidden' : ''} transition-all duration-300`}>
+              <div
+                className={`${previewFullscreenPanel === 'left' ? 'w-full' : 'w-1/3'} bg-white border border-gray-200 rounded-xl p-4 flex flex-col min-h-0 shadow-sm ${previewFullscreenPanel === 'right' ? 'hidden' : ''} transition-all duration-300`}
+              >
                 <div className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3 border-b border-gray-100 pb-2 flex items-center justify-between shrink-0 select-none">
                   <span className="flex items-center gap-1">
                     <BookOpen size={14} className="text-indigo-500" /> Lesson Content (课程内容)
                   </span>
                   <button
-                    onClick={() => setPreviewFullscreenPanel(p => p === 'left' ? 'none' : 'left')}
+                    onClick={() => setPreviewFullscreenPanel((p) => (p === 'left' ? 'none' : 'left'))}
                     className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-700 rounded transition-colors cursor-pointer flex items-center gap-1"
-                    title={previewFullscreenPanel === 'left' ? "退出全屏" : "全屏"}
+                    title={previewFullscreenPanel === 'left' ? '退出全屏' : '全屏'}
                   >
                     {previewFullscreenPanel === 'left' ? (
                       <>
@@ -118,12 +130,14 @@ export function StudentPreviewModal(props: StudentPreviewModalProps) {
                   </button>
                 </div>
                 <div className="flex-1 overflow-y-auto prose prose-sm prose-indigo max-w-none text-gray-700 pr-1">
-                  <Markdown>{lessons.find(l => l.id === selectedLesson)?.content || ''}</Markdown>
+                  <Markdown>{lessons.find((l) => l.id === selectedLesson)?.content || ''}</Markdown>
                 </div>
               </div>
 
               {/* Right Column: Custom interactive whiteboard or cloud drive viewer */}
-              <div className={`${previewFullscreenPanel === 'right' ? 'w-full flex-grow' : 'flex-1'} bg-white border border-gray-200 rounded-xl p-4 flex flex-col min-h-0 shadow-sm ${previewFullscreenPanel === 'left' ? 'hidden' : ''} transition-all duration-300`}>
+              <div
+                className={`${previewFullscreenPanel === 'right' ? 'w-full flex-grow' : 'flex-1'} bg-white border border-gray-200 rounded-xl p-4 flex flex-col min-h-0 shadow-sm ${previewFullscreenPanel === 'left' ? 'hidden' : ''} transition-all duration-300`}
+              >
                 {/* Switcher tabs */}
                 <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-3 shrink-0">
                   <div className="flex items-center gap-1.5">
@@ -148,11 +162,11 @@ export function StudentPreviewModal(props: StudentPreviewModalProps) {
                       Cloud Apps Viewer
                     </button>
                   </div>
-                  
+
                   <button
-                    onClick={() => setPreviewFullscreenPanel(p => p === 'right' ? 'none' : 'right')}
+                    onClick={() => setPreviewFullscreenPanel((p) => (p === 'right' ? 'none' : 'right'))}
                     className="p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-700 rounded transition-colors cursor-pointer flex items-center gap-1"
-                    title={previewFullscreenPanel === 'right' ? "退出全屏" : "全屏"}
+                    title={previewFullscreenPanel === 'right' ? '退出全屏' : '全屏'}
                   >
                     {previewFullscreenPanel === 'right' ? (
                       <>
@@ -173,41 +187,41 @@ export function StudentPreviewModal(props: StudentPreviewModalProps) {
                   {previewLessonTab === 'whiteboard' ? (
                     <div className="flex-grow flex-1 min-h-0 w-full h-full relative rounded-lg overflow-hidden border border-gray-100 flex flex-col">
                       <LazyWhiteboard
-lessonId={selectedLesson}
-userRole={activeRole}
-elements={elements}
-activeSegmentId={activeSegmentId}
-onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
-onElementAdd={async (type: string, data: any) => {
-                            await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ type, data })
-                            });
-                            fetchElements(selectedLesson);
-                          }}
-onElementUpdate={async (elementId: string, data: any) => {
-                            await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                              method: 'PUT',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ data })
-                            });
-                            fetchElements(selectedLesson);
-                          }}
-onElementDelete={async (elementId: string) => {
-                            await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                              method: 'DELETE'
-                            });
-                            fetchElements(selectedLesson);
-                          }}
-onClearBoard={async () => {
-                            await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                              method: 'DELETE'
-                            });
-                            fetchElements(selectedLesson);
-                          }}
-onRefresh={() => fetchElements(selectedLesson)}
-/>
+                        lessonId={selectedLesson}
+                        userRole={activeRole}
+                        elements={elements}
+                        activeSegmentId={activeSegmentId}
+                        onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
+                        onElementAdd={async (type: string, data: any) => {
+                          await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ type, data }),
+                          });
+                          fetchElements(selectedLesson);
+                        }}
+                        onElementUpdate={async (elementId: string, data: any) => {
+                          await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ data }),
+                          });
+                          fetchElements(selectedLesson);
+                        }}
+                        onElementDelete={async (elementId: string) => {
+                          await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                            method: 'DELETE',
+                          });
+                          fetchElements(selectedLesson);
+                        }}
+                        onClearBoard={async () => {
+                          await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                            method: 'DELETE',
+                          });
+                          fetchElements(selectedLesson);
+                        }}
+                        onRefresh={() => fetchElements(selectedLesson)}
+                      />
                     </div>
                   ) : (
                     <div className="flex-grow flex-1 flex gap-4 min-h-0 w-full h-full">
@@ -225,35 +239,49 @@ onRefresh={() => fetchElements(selectedLesson)}
                               <ChevronRight className="rotate-180" size={14} /> Back to Root
                             </button>
                           )}
-                          {vfsNodes.filter(n => n.type === 'dir').map(node => (
-                            <button
-                              key={node.id}
-                              onClick={() => setCurrentVfsParent(node.id)}
-                              className="w-full text-left p-1.5 rounded-lg text-xs text-gray-700 hover:bg-gray-250 hover:bg-gray-200 flex items-center gap-2 group truncate cursor-pointer font-medium"
-                              title={node.name}
-                            >
-                              <Folder size={14} className="text-indigo-400 shrink-0 group-hover:text-indigo-600" />
-                              <span className="truncate">{node.name}</span>
-                            </button>
-                          ))}
-                          {vfsNodes.filter(n => n.type === 'file' && (n.name.endsWith('.html') || n.name.endsWith('.htm') || n.content?.includes('<html'))).length === 0 ? (
-                            <div className="text-xs text-center text-gray-400 italic py-4">No interactive HTML apps found.</div>
-                          ) : (
-                            vfsNodes.filter(n => n.type === 'file' && (n.name.endsWith('.html') || n.name.endsWith('.htm') || n.content?.includes('<html'))).map(node => (
+                          {vfsNodes
+                            .filter((n) => n.type === 'dir')
+                            .map((node) => (
                               <button
                                 key={node.id}
-                                onClick={() => setPreviewSelectedCourseware(node.id)}
-                                className={`w-full text-left p-2 rounded-lg text-xs flex items-center gap-2 truncate transition-colors cursor-pointer font-medium ${
-                                  previewSelectedCourseware === node.id 
-                                    ? 'bg-indigo-100 text-indigo-700 font-semibold shadow-xs' 
-                                    : 'text-gray-600 hover:bg-gray-100'
-                                }`}
+                                onClick={() => setCurrentVfsParent(node.id)}
+                                className="w-full text-left p-1.5 rounded-lg text-xs text-gray-700 hover:bg-gray-250 hover:bg-gray-200 flex items-center gap-2 group truncate cursor-pointer font-medium"
                                 title={node.name}
                               >
-                                <Globe size={14} className="shrink-0 text-indigo-500" />
+                                <Folder size={14} className="text-indigo-400 shrink-0 group-hover:text-indigo-600" />
                                 <span className="truncate">{node.name}</span>
                               </button>
-                            ))
+                            ))}
+                          {vfsNodes.filter(
+                            (n) =>
+                              n.type === 'file' &&
+                              (n.name.endsWith('.html') || n.name.endsWith('.htm') || n.content?.includes('<html')),
+                          ).length === 0 ? (
+                            <div className="text-xs text-center text-gray-400 italic py-4">
+                              No interactive HTML apps found.
+                            </div>
+                          ) : (
+                            vfsNodes
+                              .filter(
+                                (n) =>
+                                  n.type === 'file' &&
+                                  (n.name.endsWith('.html') || n.name.endsWith('.htm') || n.content?.includes('<html')),
+                              )
+                              .map((node) => (
+                                <button
+                                  key={node.id}
+                                  onClick={() => setPreviewSelectedCourseware(node.id)}
+                                  className={`w-full text-left p-2 rounded-lg text-xs flex items-center gap-2 truncate transition-colors cursor-pointer font-medium ${
+                                    previewSelectedCourseware === node.id
+                                      ? 'bg-indigo-100 text-indigo-700 font-semibold shadow-xs'
+                                      : 'text-gray-600 hover:bg-gray-100'
+                                  }`}
+                                  title={node.name}
+                                >
+                                  <Globe size={14} className="shrink-0 text-indigo-500" />
+                                  <span className="truncate">{node.name}</span>
+                                </button>
+                              ))
                           )}
                         </div>
                         <div className="mt-2 text-[10px] text-gray-400 leading-tight">
@@ -264,9 +292,9 @@ onRefresh={() => fetchElements(selectedLesson)}
                       {/* Embed Viewer */}
                       <div className="flex-1 relative bg-white border border-gray-100 rounded-xl overflow-hidden min-h-0 h-full shadow-inner flex flex-col">
                         <LazyCourseware
-coursewareId={previewSelectedCourseware}
-onClose={() => setPreviewSelectedCourseware(null)}
-/>
+                          coursewareId={previewSelectedCourseware}
+                          onClose={() => setPreviewSelectedCourseware(null)}
+                        />
                       </div>
                     </div>
                   )}

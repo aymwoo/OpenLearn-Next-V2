@@ -57,7 +57,7 @@ describe('Capability Runtime — registration', () => {
     };
     const cap = runtime.replace(replacement);
     expect(cap.descriptor.version).toBe('1.0.0');
-    expect((runtime.resolve<{ greet: () => string }>('cap.greeter')).greet()).toBe('replaced');
+    expect(runtime.resolve<{ greet: () => string }>('cap.greeter').greet()).toBe('replaced');
   });
 
   it('unregisters a capability', () => {

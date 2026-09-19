@@ -37,10 +37,7 @@ await esbuild.build({
 });
 
 // 2. Copy standalone type declarations
-fs.copyFileSync(
-  path.join(__dirname, 'openlearn.d.ts'),
-  path.join(distDir, 'index.d.ts'),
-);
+fs.copyFileSync(path.join(__dirname, 'openlearn.d.ts'), path.join(distDir, 'index.d.ts'));
 
 console.log('✅ @openlearn/plugin-sdk built to dist/');
 console.log(`   dist/index.js   (${(fs.statSync(path.join(distDir, 'index.js')).size / 1024).toFixed(1)} KB)`);

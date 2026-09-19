@@ -22,9 +22,15 @@ describe('PI-007 Platform Integration Layer Test Suite', () => {
     async activate(): Promise<void> {}
     async deactivate(): Promise<void> {}
     async dispose(): Promise<void> {}
-    async health() { return { isHealthy: true }; }
-    metadata() { return { id: this.id, name: this.name, version: this.version, description: 'Mock AI Adapter' }; }
-    async generateText(prompt: string): Promise<string> { return `Mock text for: ${prompt}`; }
+    async health() {
+      return { isHealthy: true };
+    }
+    metadata() {
+      return { id: this.id, name: this.name, version: this.version, description: 'Mock AI Adapter' };
+    }
+    async generateText(prompt: string): Promise<string> {
+      return `Mock text for: ${prompt}`;
+    }
   }
 
   class MockPluginAdapter implements IPluginHostAdapter {
@@ -36,9 +42,15 @@ describe('PI-007 Platform Integration Layer Test Suite', () => {
     async activate(): Promise<void> {}
     async deactivate(): Promise<void> {}
     async dispose(): Promise<void> {}
-    async health() { return { isHealthy: true }; }
-    metadata() { return { id: this.id, name: this.name, version: this.version, description: 'Mock Plugin Adapter' }; }
-    async getActivePlugins() { return []; }
+    async health() {
+      return { isHealthy: true };
+    }
+    metadata() {
+      return { id: this.id, name: this.name, version: this.version, description: 'Mock Plugin Adapter' };
+    }
+    async getActivePlugins() {
+      return [];
+    }
   }
 
   it('should register and retrieve domain integration adapters', () => {

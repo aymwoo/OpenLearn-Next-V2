@@ -6,15 +6,15 @@
 
 ## 常用开发命令
 
-| 命令 | 描述 |
-|---|---|
-| `pnpm dev` | 启动开发服务器（Express + Vite HMR），监听 9000 端口 |
-| `pnpm build` | 执行完整构建（前端 Vite 构建 -> 插件打包 -> esbuild 服务端 bundle） |
-| `pnpm start` | 启动生产环境 bundle (`dist/server.cjs`) |
-| `pnpm lint` | TypeScript 类型检查 (`tsc --noEmit`) |
-| `pnpm lint:eslint` | 全局 ESLint 检查 (`.ts` / `.tsx`) |
-| `pnpm format` | Prettier 代码自动格式化 |
-| `pnpm test` | 执行 Vitest 测试套件 |
+| 命令               | 描述                                                                |
+| ------------------ | ------------------------------------------------------------------- |
+| `pnpm dev`         | 启动开发服务器（Express + Vite HMR），监听 9000 端口                |
+| `pnpm build`       | 执行完整构建（前端 Vite 构建 -> 插件打包 -> esbuild 服务端 bundle） |
+| `pnpm start`       | 启动生产环境 bundle (`dist/server.cjs`)                             |
+| `pnpm lint`        | TypeScript 类型检查 (`tsc --noEmit`)                                |
+| `pnpm lint:eslint` | 全局 ESLint 检查 (`.ts` / `.tsx`)                                   |
+| `pnpm format`      | Prettier 代码自动格式化                                             |
+| `pnpm test`        | 执行 Vitest 测试套件                                                |
 
 ---
 

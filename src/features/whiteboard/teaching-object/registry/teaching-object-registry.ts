@@ -39,24 +39,25 @@ export class TeachingObjectRegistry {
 
   public createTeachingObject<T = Record<string, unknown>>(
     type: string,
-    overrides?: Partial<TeachingObject<T>>
+    overrides?: Partial<TeachingObject<T>>,
   ): TeachingObject<T> {
     const baseCanvasObj = objectRegistry.createObject<T>(type, overrides);
     const descriptor = this.descriptors.get(type);
 
     const category: TeachingCategory = overrides?.category || descriptor?.category || 'content';
-    const capabilities: TeachingCapabilities = overrides?.capabilities || descriptor?.defaultCapabilities || {
-      editable: true,
-      runnable: false,
-      answerable: false,
-      scorable: false,
-      collaborative: true,
-      presentable: true,
-      replayable: true,
-      evaluatable: false,
-      aiEditable: true,
-      pluginExtendable: true,
-    };
+    const capabilities: TeachingCapabilities = overrides?.capabilities ||
+      descriptor?.defaultCapabilities || {
+        editable: true,
+        runnable: false,
+        answerable: false,
+        scorable: false,
+        collaborative: true,
+        presentable: true,
+        replayable: true,
+        evaluatable: false,
+        aiEditable: true,
+        pluginExtendable: true,
+      };
 
     const teachingMetadata: TeachingMetadata = overrides?.teachingMetadata || {
       title: descriptor?.displayName || baseCanvasObj.name,
@@ -97,7 +98,18 @@ export class TeachingObjectRegistry {
       type: 'presentation',
       displayName: '演示文稿 Markdown 幻灯片',
       category: 'content',
-      defaultCapabilities: { editable: true, runnable: false, answerable: false, scorable: false, collaborative: true, presentable: true, replayable: true, evaluatable: false, aiEditable: true, pluginExtendable: true },
+      defaultCapabilities: {
+        editable: true,
+        runnable: false,
+        answerable: false,
+        scorable: false,
+        collaborative: true,
+        presentable: true,
+        replayable: true,
+        evaluatable: false,
+        aiEditable: true,
+        pluginExtendable: true,
+      },
       createDefaultPayload: () => ({ markdown: '# Slide Title\n---\n## Content' }),
     });
 
@@ -106,7 +118,18 @@ export class TeachingObjectRegistry {
       type: 'code-sandbox',
       displayName: '交互代码沙箱',
       category: 'programming',
-      defaultCapabilities: { editable: true, runnable: true, answerable: true, scorable: true, collaborative: true, presentable: true, replayable: true, evaluatable: true, aiEditable: true, pluginExtendable: true },
+      defaultCapabilities: {
+        editable: true,
+        runnable: true,
+        answerable: true,
+        scorable: true,
+        collaborative: true,
+        presentable: true,
+        replayable: true,
+        evaluatable: true,
+        aiEditable: true,
+        pluginExtendable: true,
+      },
       createDefaultPayload: () => ({ code: "console.log('Hello OpenLearn!');", language: 'javascript' }),
     });
 
@@ -115,7 +138,18 @@ export class TeachingObjectRegistry {
       type: 'quiz',
       displayName: '随堂互动测验',
       category: 'interactive',
-      defaultCapabilities: { editable: true, runnable: true, answerable: true, scorable: true, collaborative: true, presentable: true, replayable: true, evaluatable: true, aiEditable: true, pluginExtendable: true },
+      defaultCapabilities: {
+        editable: true,
+        runnable: true,
+        answerable: true,
+        scorable: true,
+        collaborative: true,
+        presentable: true,
+        replayable: true,
+        evaluatable: true,
+        aiEditable: true,
+        pluginExtendable: true,
+      },
       createDefaultPayload: () => ({ question: '本节课的核心概念？', options: ['A', 'B', 'C', 'D'], correctIndex: 0 }),
     });
 
@@ -124,7 +158,18 @@ export class TeachingObjectRegistry {
       type: 'assignment',
       displayName: '课堂作业任务',
       category: 'learning',
-      defaultCapabilities: { editable: true, runnable: false, answerable: true, scorable: true, collaborative: true, presentable: true, replayable: true, evaluatable: true, aiEditable: true, pluginExtendable: true },
+      defaultCapabilities: {
+        editable: true,
+        runnable: false,
+        answerable: true,
+        scorable: true,
+        collaborative: true,
+        presentable: true,
+        replayable: true,
+        evaluatable: true,
+        aiEditable: true,
+        pluginExtendable: true,
+      },
       createDefaultPayload: () => ({ title: '课堂作业', description: '请按要求提交代码或文件' }),
     });
 
@@ -133,7 +178,18 @@ export class TeachingObjectRegistry {
       type: 'ai-tutor',
       displayName: 'AI 智能助教 Widget',
       category: 'ai',
-      defaultCapabilities: { editable: true, runnable: true, answerable: true, scorable: false, collaborative: true, presentable: true, replayable: true, evaluatable: true, aiEditable: true, pluginExtendable: true },
+      defaultCapabilities: {
+        editable: true,
+        runnable: true,
+        answerable: true,
+        scorable: false,
+        collaborative: true,
+        presentable: true,
+        replayable: true,
+        evaluatable: true,
+        aiEditable: true,
+        pluginExtendable: true,
+      },
       createDefaultPayload: () => ({ prompt: '请解答学生疑问' }),
     });
 
@@ -142,7 +198,18 @@ export class TeachingObjectRegistry {
       type: 'plugin',
       displayName: '第三方教学插件对象',
       category: 'plugin',
-      defaultCapabilities: { editable: true, runnable: true, answerable: true, scorable: true, collaborative: true, presentable: true, replayable: true, evaluatable: true, aiEditable: true, pluginExtendable: true },
+      defaultCapabilities: {
+        editable: true,
+        runnable: true,
+        answerable: true,
+        scorable: true,
+        collaborative: true,
+        presentable: true,
+        replayable: true,
+        evaluatable: true,
+        aiEditable: true,
+        pluginExtendable: true,
+      },
       createDefaultPayload: () => ({ pluginId: '', widgetId: '' }),
     });
   }

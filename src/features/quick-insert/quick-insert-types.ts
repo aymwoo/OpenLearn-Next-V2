@@ -2,13 +2,7 @@
  * OpenLearn Quick Insert - Data Types & Contracts (Sprint P2-07)
  */
 
-export type QuickInsertCategory =
-  | 'Media'
-  | 'Shape'
-  | 'Tool'
-  | 'AI'
-  | 'Widget'
-  | 'Plugin';
+export type QuickInsertCategory = 'Media' | 'Shape' | 'Tool' | 'AI' | 'Widget' | 'Plugin';
 
 export interface QuickInsertItemDescriptor {
   readonly id: string;

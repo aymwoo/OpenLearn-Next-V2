@@ -19,9 +19,9 @@ describe('PluginCenter Sub-components', () => {
                 id: 'ext-test',
                 name: '测试测试插件',
                 version: '1.0.0',
-                description: '这是一个测试插件'
-              })
-            }
+                description: '这是一个测试插件',
+              }),
+            },
           ]}
           lang="zh"
           showSystemPlugins={false}
@@ -36,7 +36,7 @@ describe('PluginCenter Sub-components', () => {
           updateFileInputRef={{ current: null }}
           onToggle={vi.fn()}
           onDelete={vi.fn()}
-        />
+        />,
       );
 
       expect(screen.getByText('测试测试插件')).toBeDefined();

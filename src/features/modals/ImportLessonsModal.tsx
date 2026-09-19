@@ -69,7 +69,9 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                     {lang === 'zh' ? '批量导入课程 (CSV)' : 'Bulk-Import Courses (CSV)'}
                   </h2>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {lang === 'zh' ? '上传包含标准表头的 CSV 教案，一键实现秒级批量底库写入。' : 'Upload a standard CSV file matching our predefined schema to perform instantaneous bulk curriculum imports.'}
+                    {lang === 'zh'
+                      ? '上传包含标准表头的 CSV 教案，一键实现秒级批量底库写入。'
+                      : 'Upload a standard CSV file matching our predefined schema to perform instantaneous bulk curriculum imports.'}
                   </p>
                 </div>
               </div>
@@ -88,7 +90,6 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
 
             {/* Modal Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-5">
-              
               {/* IDLE state -> Drag and Drop zone */}
               {importStatus === 'idle' && (
                 <div className="space-y-4">
@@ -99,13 +100,23 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                       {lang === 'zh' ? '预定义数据格式说明' : 'Predefined Schema Information'}
                     </h4>
                     <p className="text-xs text-indigo-900 mt-1 leading-relaxed">
-                      {lang === 'zh' 
-                        ? 'CSV 文件的首行必须 define 列标题（分大小写且无多余空格），包含以下两项必需内容：' 
+                      {lang === 'zh'
+                        ? 'CSV 文件的首行必须 define 列标题（分大小写且无多余空格），包含以下两项必需内容：'
                         : 'Your CSV file must include exactly these header columns on the first row (case-insensitive):'}
                     </p>
                     <ul className="list-disc pl-5 mt-2 text-xs text-indigo-950 space-y-1">
-                      <li><strong>title</strong>: {lang === 'zh' ? '课程名 (非空，例如 "代数几何")' : 'Course title (Required, e.g. "Linear Algebra")'}</li>
-                      <li><strong>content</strong>: {lang === 'zh' ? '教学大纲 / Markdown 格式的课堂细目' : 'Syllabus content supporting rich markdown.'}</li>
+                      <li>
+                        <strong>title</strong>:{' '}
+                        {lang === 'zh'
+                          ? '课程名 (非空，例如 "代数几何")'
+                          : 'Course title (Required, e.g. "Linear Algebra")'}
+                      </li>
+                      <li>
+                        <strong>content</strong>:{' '}
+                        {lang === 'zh'
+                          ? '教学大纲 / Markdown 格式的课堂细目'
+                          : 'Syllabus content supporting rich markdown.'}
+                      </li>
                     </ul>
                     <div className="mt-3.5 flex justify-start">
                       <button
@@ -170,7 +181,10 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
-                      ✓ {lang === 'zh' ? `解析成功：查找到 ${previewImportData.length} 门课程` : `Parsed Successfully: Found ${previewImportData.length} records`}
+                      ✓{' '}
+                      {lang === 'zh'
+                        ? `解析成功：查找到 ${previewImportData.length} 门课程`
+                        : `Parsed Successfully: Found ${previewImportData.length} records`}
                     </span>
                     <button
                       onClick={() => {
@@ -194,11 +208,16 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                       <tbody className="divide-y divide-gray-100 bg-white">
                         {previewImportData.map((row, rIdx) => (
                           <tr key={rIdx} className="hover:bg-slate-50/50">
-                            <td className="p-3 font-semibold text-gray-800 align-top truncate max-w-[150px]" title={row.title}>
+                            <td
+                              className="p-3 font-semibold text-gray-800 align-top truncate max-w-[150px]"
+                              title={row.title}
+                            >
                               {row.title}
                             </td>
                             <td className="p-3 text-gray-500 font-mono text-[11px] leading-relaxed break-words col-span-2">
-                              {row.content.length > 150 ? row.content.substring(0, 150) + '...' : row.content || <em className="text-gray-300 italic">None</em>}
+                              {row.content.length > 150
+                                ? row.content.substring(0, 150) + '...'
+                                : row.content || <em className="text-gray-300 italic">None</em>}
                             </td>
                           </tr>
                         ))}
@@ -209,8 +228,8 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                   <div className="bg-amber-50 border border-amber-100 text-amber-900 text-xs rounded-xl p-3 flex gap-2.5 items-start">
                     <span className="text-base leading-none">⚠️</span>
                     <p className="leading-relaxed">
-                      {lang === 'zh' 
-                        ? '请确认课程名称没有与系统已有的课程同名。确认无误后点击下方"开始导入"写入 SQLite。' 
+                      {lang === 'zh'
+                        ? '请确认课程名称没有与系统已有的课程同名。确认无误后点击下方"开始导入"写入 SQLite。'
                         : 'Please ensure column details are accurate. Clicking Import will instantly commit all parsed courses into the server SQLite backend.'}
                     </p>
                   </div>
@@ -231,22 +250,22 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                       {lang === 'zh' ? '正在写入数据库' : 'Populating Database Records'}
                     </h3>
                     <p className="text-xs text-gray-500 mt-1">
-                      {lang === 'zh' 
-                        ? `正在导入第 ${importProgress} / ${importProgressTotal} 项...` 
+                      {lang === 'zh'
+                        ? `正在导入第 ${importProgress} / ${importProgressTotal} 项...`
                         : `Importing item ${importProgress} of ${importProgressTotal}...`}
                     </p>
                   </div>
                   <div className="w-full max-w-sm bg-gray-100 h-2 rounded-full overflow-hidden border border-gray-200">
-                    <div 
-                      className="bg-indigo-600 h-full transition-all duration-300 rounded-full" 
+                    <div
+                      className="bg-indigo-600 h-full transition-all duration-300 rounded-full"
                       style={{ width: `${(importProgress / importProgressTotal) * 100}%` }}
                     />
                   </div>
                   <div className="w-full max-w-md bg-gray-50 rounded-xl p-3 border border-gray-150 font-mono text-[10px] text-gray-400 max-h-[140px] overflow-y-auto">
-                    <div>{"[API] POST /api/lessons -> Request batch transaction..."}</div>
+                    <div>{'[API] POST /api/lessons -> Request batch transaction...'}</div>
                     {previewImportData.slice(0, importProgress).map((p, idx) => (
                       <div key={idx} className="text-indigo-600 font-bold mt-1">
-                        {`✓ [${idx+1}] "${p.title}" -> status 200 (Success)`}
+                        {`✓ [${idx + 1}] "${p.title}" -> status 200 (Success)`}
                       </div>
                     ))}
                   </div>
@@ -264,8 +283,8 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                       {lang === 'zh' ? '🎉 批量导入大功告成' : '🎉 Bulk-Import Complete'}
                     </h3>
                     <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
-                      {lang === 'zh' 
-                        ? `所有 ${previewImportData.length} 门学科教案数据已顺畅写入系统底层 SQLite 数据仓库，现在已可以用于备课。` 
+                      {lang === 'zh'
+                        ? `所有 ${previewImportData.length} 门学科教案数据已顺畅写入系统底层 SQLite 数据仓库，现在已可以用于备课。`
                         : `All ${previewImportData.length} curriculum lessons records have been successfully saved into security logs and SQLite storage.`}
                     </p>
                   </div>
@@ -282,7 +301,10 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                         {lang === 'zh' ? '数据导入或解析中断' : 'Import or Parsing Error'}
                       </h4>
                       <p className="text-xs text-rose-900 mt-1 leading-relaxed">
-                        {importErrorMsg || (lang === 'zh' ? '未知异常或文件破损。' : 'An unknown exception or corrupted CSV formatting occurred.')}
+                        {importErrorMsg ||
+                          (lang === 'zh'
+                            ? '未知异常或文件破损。'
+                            : 'An unknown exception or corrupted CSV formatting occurred.')}
                       </p>
                     </div>
                   </div>
@@ -306,7 +328,6 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                   </div>
                 </div>
               )}
-
             </div>
 
             {/* Footer */}
@@ -336,7 +357,9 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                       className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
                     >
                       <Check size={12} />
-                      {lang === 'zh' ? `开始导入 (${previewImportData.length} 类)` : `Proceed and Import (${previewImportData.length})`}
+                      {lang === 'zh'
+                        ? `开始导入 (${previewImportData.length} 类)`
+                        : `Proceed and Import (${previewImportData.length})`}
                     </button>
                   )}
                   {importStatus === 'success' && (
@@ -350,7 +373,6 @@ export function ImportLessonsModal(props: ImportLessonsModalProps) {
                 </div>
               </div>
             )}
-
           </motion.div>
         </div>
       )}

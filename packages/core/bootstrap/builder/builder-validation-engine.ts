@@ -10,7 +10,7 @@ export class BuilderValidationEngine {
   public static validate(
     config: PlatformBootstrapConfig,
     environment: EnvironmentType,
-    stages: ReadonlyArray<IBootstrapStage>
+    stages: ReadonlyArray<IBootstrapStage>,
   ): BuilderValidation {
     const errors: ValidationError[] = [];
     const warnings: string[] = [];

@@ -28,10 +28,7 @@ export class ShortcutEngine {
   public handleKeyDown(event: KeyboardEvent, page: CanvasPage): CanvasPage | void {
     // Skip if target is inside an input, textarea, or contenteditable element
     const target = event.target as HTMLElement;
-    if (
-      target &&
-      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
-    ) {
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
       return;
     }
 

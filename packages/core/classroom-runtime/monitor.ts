@@ -31,7 +31,7 @@ export class RuntimeMonitor {
     stateTree: RuntimeStateTree,
     activeServicesCount: number,
     registeredModulesCount: number,
-    pendingTasksCount: number
+    pendingTasksCount: number,
   ): RuntimeDiagnostics {
     const mem = process.memoryUsage ? process.memoryUsage().heapUsed / (1024 * 1024) : 0;
 

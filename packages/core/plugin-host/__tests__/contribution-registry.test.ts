@@ -66,9 +66,7 @@ describe('ContributionRegistry', () => {
   });
 
   it('registerClassroomTools 自动桥接 classroomTools → contributes', () => {
-    registry.registerClassroomTools('ext-legacy', [
-      { id: 'old-tool', name: 'Old Tool', commandType: 'old.cmd' },
-    ]);
+    registry.registerClassroomTools('ext-legacy', [{ id: 'old-tool', name: 'Old Tool', commandType: 'old.cmd' }]);
 
     const items = registry.getBySlot('classroom.tool');
     expect(items).toHaveLength(1);

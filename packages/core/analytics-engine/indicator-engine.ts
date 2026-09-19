@@ -12,8 +12,14 @@ export class IndicatorEngine {
     const participationIndex = metrics.participationRate;
     const focusIndex = Math.min(100, Math.round((metrics.activeCount / Math.max(1, metrics.onlineCount)) * 100));
     const paceIndex = Math.min(100, Math.round(metrics.averageTimeSeconds > 0 ? 85 : 50));
-    const collaborationIndex = Math.min(100, Math.round((metrics.whiteboardEditCount + metrics.codeExecutionCount) * 5));
-    const thinkingActivityIndex = Math.min(100, Math.round(metrics.quizAccuracyRate * 0.6 + metrics.codeExecutionCount * 4));
+    const collaborationIndex = Math.min(
+      100,
+      Math.round((metrics.whiteboardEditCount + metrics.codeExecutionCount) * 5),
+    );
+    const thinkingActivityIndex = Math.min(
+      100,
+      Math.round(metrics.quizAccuracyRate * 0.6 + metrics.codeExecutionCount * 4),
+    );
     const knowledgeMasteryIndex = metrics.quizAccuracyRate;
     const teacherPatrolIndex = Math.min(100, Math.round(metrics.totalInteractions > 0 ? 90 : 30));
     const aiAssistanceIndex = Math.min(100, metrics.aiInvocationCount * 10);

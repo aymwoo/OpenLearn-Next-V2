@@ -18,7 +18,9 @@ export function StudentQuickStats(props: StudentQuickStatsProps) {
         <span className="text-3xl font-bold text-indigo-600">
           <AnimatedCounter value={studentDashboardData.classes?.length || 0} />
         </span>
-        <span className="text-sm font-medium text-gray-500 mt-1 uppercase tracking-wider text-center select-none">Enrolled Classes</span>
+        <span className="text-sm font-medium text-gray-500 mt-1 uppercase tracking-wider text-center select-none">
+          Enrolled Classes
+        </span>
       </motion.div>
 
       <motion.div
@@ -28,9 +30,13 @@ export function StudentQuickStats(props: StudentQuickStatsProps) {
         className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center hover:border-teal-300 hover:shadow-md transition-all duration-300"
       >
         <span className="text-3xl font-bold text-teal-600">
-          <AnimatedCounter value={studentDashboardData.assignments?.filter((a: any) => a.submission_status === 'graded').length || 0} />
+          <AnimatedCounter
+            value={studentDashboardData.assignments?.filter((a: any) => a.submission_status === 'graded').length || 0}
+          />
         </span>
-        <span className="text-sm font-medium text-gray-500 mt-1 uppercase tracking-wider text-center select-none">Completed Assignments</span>
+        <span className="text-sm font-medium text-gray-500 mt-1 uppercase tracking-wider text-center select-none">
+          Completed Assignments
+        </span>
       </motion.div>
 
       <motion.div
@@ -40,9 +46,13 @@ export function StudentQuickStats(props: StudentQuickStatsProps) {
         className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center hover:border-amber-300 hover:shadow-md transition-all duration-300"
       >
         <span className="text-3xl font-bold text-amber-500">
-          <AnimatedCounter value={studentDashboardData.assignments?.filter((a: any) => !a.submission_status).length || 0} />
+          <AnimatedCounter
+            value={studentDashboardData.assignments?.filter((a: any) => !a.submission_status).length || 0}
+          />
         </span>
-        <span className="text-sm font-medium text-gray-500 mt-1 uppercase tracking-wider text-center select-none">Pending Assignments</span>
+        <span className="text-sm font-medium text-gray-500 mt-1 uppercase tracking-wider text-center select-none">
+          Pending Assignments
+        </span>
       </motion.div>
 
       <motion.div
@@ -54,7 +64,9 @@ export function StudentQuickStats(props: StudentQuickStatsProps) {
         <span className="text-3xl font-bold text-pink-600">
           <AnimatedCounter value={studentDashboardData.schedules?.length || 0} />
         </span>
-        <span className="text-sm font-medium text-gray-500 mt-1 uppercase tracking-wider text-center select-none">Upcoming Lessons</span>
+        <span className="text-sm font-medium text-gray-500 mt-1 uppercase tracking-wider text-center select-none">
+          Upcoming Lessons
+        </span>
       </motion.div>
     </div>
   );

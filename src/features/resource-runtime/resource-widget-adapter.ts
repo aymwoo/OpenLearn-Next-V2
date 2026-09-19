@@ -8,7 +8,7 @@ import { WorkspaceWidgetDescriptor, WorkspaceRegionType } from '../workspace/ind
 
 export const asWorkspaceWidget = (
   resource: ResourceDescriptor,
-  targetRegion: WorkspaceRegionType = 'CenterWorkspace'
+  targetRegion: WorkspaceRegionType = 'CenterWorkspace',
 ): WorkspaceWidgetDescriptor => {
   if (!resource || !resource.id) {
     throw new Error('ResourceWidgetAdapter Error: Resource must have a valid ID.');

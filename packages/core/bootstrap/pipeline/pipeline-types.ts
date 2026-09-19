@@ -23,11 +23,7 @@ export interface PipelineResult {
 }
 
 export type PipelineDiagnosticEventType =
-  | 'PipelineStarted'
-  | 'StageStarted'
-  | 'StageCompleted'
-  | 'StageFailed'
-  | 'PipelineCompleted';
+  'PipelineStarted' | 'StageStarted' | 'StageCompleted' | 'StageFailed' | 'PipelineCompleted';
 
 export interface PipelineDiagnosticEvent {
   readonly type: PipelineDiagnosticEventType;

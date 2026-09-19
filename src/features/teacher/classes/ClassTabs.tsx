@@ -12,7 +12,10 @@ export interface ClassTabsProps {
 
 export function ClassTabs({ cls, lang, classActiveTabs, setClassActiveTabs }: ClassTabsProps) {
   return (
-    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl mb-4 max-w-md border border-slate-200/40" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl mb-4 max-w-md border border-slate-200/40"
+      onClick={(e) => e.stopPropagation()}
+    >
       <button
         onClick={(e) => {
           e.stopPropagation();

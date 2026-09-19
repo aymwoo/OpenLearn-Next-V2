@@ -12,13 +12,15 @@ export default {
     author: '{{author}}',
     requires: [],
     capabilitiesProposed: [],
-    classroomTools: [{
-      id: '{{pluginId}}-tool',
-      name: '{{pluginName}}',
-      icon: 'Palette',
-      commandType: '{{pluginId}}.open',
-      payload: {},
-    }],
+    classroomTools: [
+      {
+        id: '{{pluginId}}-tool',
+        name: '{{pluginName}}',
+        icon: 'Palette',
+        commandType: '{{pluginId}}.open',
+        payload: {},
+      },
+    ],
     engines: { openlearn: '>=0.2.5' },
   },
 

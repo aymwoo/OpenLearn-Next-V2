@@ -55,8 +55,7 @@ export class PlatformContainer {
     this.applicationScope = new InjectionScope('Application', 'application');
     this.scopeRegistry.set(this.applicationScope.scopeId, this.applicationScope);
     this.resolver = new DependencyResolver({
-      resolve: ((id: string, scope?: InjectionScope) =>
-        this.resolve(id, scope ?? undefined)) as ResolveFn,
+      resolve: ((id: string, scope?: InjectionScope) => this.resolve(id, scope ?? undefined)) as ResolveFn,
       getDescriptor: (id) => this.descriptors.get(id),
       policy: this.policy,
     });
@@ -79,9 +78,7 @@ export class PlatformContainer {
     implementation: new (...args: unknown[]) => unknown,
     options?: DependencyDescriptorOptions,
   ): void {
-    this.registerDescriptor(
-      new DependencyDescriptor({ id, implementation, ...options }),
-    );
+    this.registerDescriptor(new DependencyDescriptor({ id, implementation, ...options }));
   }
 
   registerInstance(id: string, instance: unknown, options?: DependencyDescriptorOptions): void {
@@ -97,16 +94,9 @@ export class PlatformContainer {
   }
 
   /** Register a named variant of a service instance; resolvable later by `name`. */
-  registerNamed(
-    name: string,
-    id: string,
-    instance: unknown,
-    options?: DependencyDescriptorOptions,
-  ): void {
+  registerNamed(name: string, id: string, instance: unknown, options?: DependencyDescriptorOptions): void {
     this.named.set(name, id);
-    this.registerDescriptor(
-      new DependencyDescriptor({ id, instance, ...options, named: name }),
-    );
+    this.registerDescriptor(new DependencyDescriptor({ id, instance, ...options, named: name }));
   }
 
   private registerDescriptor(desc: DependencyDescriptor): void {
@@ -205,11 +195,7 @@ export class PlatformContainer {
 
   disposeScope(scope: InjectionScope): void {
     if (!this.scopeRegistry.has(scope.scopeId)) {
-      throw new InjectionException(
-        `Cannot dispose unknown scope '${scope.scopeId}'.`,
-        'SCOPE_DISPOSED',
-        scope.scopeId,
-      );
+      throw new InjectionException(`Cannot dispose unknown scope '${scope.scopeId}'.`, 'SCOPE_DISPOSED', scope.scopeId);
     }
     scope.dispose();
     this.scopeRegistry.delete(scope.scopeId);

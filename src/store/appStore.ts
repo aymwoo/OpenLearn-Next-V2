@@ -208,10 +208,7 @@ export const appStore = createStore<AppState>((set) => ({
   setSession: (session) => set({ session }),
   setLessons: (lessons) =>
     set((state) => ({
-      lessons:
-        typeof lessons === 'function'
-          ? (lessons as (prev: Lesson[]) => Lesson[])(state.lessons)
-          : lessons,
+      lessons: typeof lessons === 'function' ? (lessons as (prev: Lesson[]) => Lesson[])(state.lessons) : lessons,
     })),
   setSelectedLesson: (selectedLesson) => set({ selectedLesson }),
   setElements: (elements) => set({ elements }),
@@ -265,8 +262,7 @@ export const appStore = createStore<AppState>((set) => ({
   // ── Live class setters ────────────────────────────────────────────────
 
   setLiveClassFeed: (liveClassFeed) => set({ liveClassFeed }),
-  appendLiveClassFeed: (entry) =>
-    set((s) => ({ liveClassFeed: [...s.liveClassFeed.slice(-49), entry] })),
+  appendLiveClassFeed: (entry) => set((s) => ({ liveClassFeed: [...s.liveClassFeed.slice(-49), entry] })),
   setLiveClassTimeRemaining: (liveClassTimeRemaining) => set({ liveClassTimeRemaining }),
   setLiveClassAcknowledgedMap: (liveClassAcknowledgedMap) => set({ liveClassAcknowledgedMap }),
   setLiveClassStudentProgress: (liveClassStudentProgress) => set({ liveClassStudentProgress }),
@@ -356,11 +352,6 @@ studentStore.subscribe((studentState) => {
     notifications: studentState.notifications,
   });
 });
-
-
-
-
-
 
 // ── React-bound hook ───────────────────────────────────────────────────────
 

@@ -9,10 +9,7 @@
  */
 
 import type { IActionRegistryService } from '../core/di/interfaces.js';
-import type {
-  ActivityProvider,
-  ActivityProviderDescriptor,
-} from './types.js';
+import type { ActivityProvider, ActivityProviderDescriptor } from './types.js';
 
 /**
  * Register an activity's AI Action into the existing ActionRegistry. The AI
@@ -42,9 +39,7 @@ export function registerActivityAIActions(
  * can be merged into the classroom AI context snapshot. Reuses the descriptor
  * metadata — no bespoke context system.
  */
-export function buildActivityAIContext(
-  providers: ReadonlyArray<ActivityProvider>,
-): Record<string, unknown> {
+export function buildActivityAIContext(providers: ReadonlyArray<ActivityProvider>): Record<string, unknown> {
   return {
     activities: providers.map((p) => ({
       id: p.descriptor.id,

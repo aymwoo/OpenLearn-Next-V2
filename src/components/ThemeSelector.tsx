@@ -114,11 +114,7 @@ export function ThemeSelector({ lang = 'zh' }: ThemeSelectorProps) {
         )}
       </div>
 
-      <ThemeDesignerModal
-        isOpen={isDesignerOpen}
-        onClose={() => setIsDesignerOpen(false)}
-        lang={lang}
-      />
+      <ThemeDesignerModal isOpen={isDesignerOpen} onClose={() => setIsDesignerOpen(false)} lang={lang} />
     </>
   );
 }

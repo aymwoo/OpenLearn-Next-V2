@@ -72,9 +72,7 @@ export class TeachingTimeline {
     const currentActivity = currentStage?.activities?.[this.activityIndex];
 
     const isLastStage = this.stageIndex >= this.flow.stages.length - 1;
-    const isLastActivity = currentStage?.activities
-      ? this.activityIndex >= currentStage.activities.length - 1
-      : true;
+    const isLastActivity = currentStage?.activities ? this.activityIndex >= currentStage.activities.length - 1 : true;
 
     const canNext = !isLastStage || !isLastActivity;
     const canPrevious = this.stageIndex > 0 || this.activityIndex > 0;
@@ -142,9 +140,8 @@ export class TeachingTimeline {
     } else if (this.stageIndex > 0) {
       this.stageIndex -= 1;
       const prevStage = this.flow.stages[this.stageIndex];
-      this.activityIndex = prevStage.activities && prevStage.activities.length > 0
-        ? prevStage.activities.length - 1
-        : 0;
+      this.activityIndex =
+        prevStage.activities && prevStage.activities.length > 0 ? prevStage.activities.length - 1 : 0;
       this.stageElapsedSeconds = 0;
     } else {
       return false; // Reached start of timeline

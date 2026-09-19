@@ -17,11 +17,11 @@ graph TD
     A["Workspace Shell (App.tsx)"] --> B["Header & Navigation"]
     A --> C["Main Workspace Area"]
     A --> D["Command Palette & Modals"]
-    
+
     C --> E["Teacher Workspace"]
     C --> F["Student Workspace"]
     C --> G["Group Workspace"]
-    
+
     E --> H["Courseware Panel"]
     E --> I["Teacher Patrol Watcher"]
     F --> J["Interactive Canvas"]

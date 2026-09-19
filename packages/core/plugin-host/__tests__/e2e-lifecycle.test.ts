@@ -169,7 +169,9 @@ describe('E2E Plugin Lifecycle', () => {
 
   afterEach(() => {
     db.close();
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {}
   });
 
   // ══════════════════════════════════════════════════════════════════════
@@ -254,9 +256,7 @@ describe('E2E Plugin Lifecycle', () => {
       loadMap.set('src-orphan', orphan);
       await pluginHost.installPlugin('src-orphan');
 
-      await expect(
-        pluginHost.activatePlugin('ext-orphan'),
-      ).rejects.toThrow();
+      await expect(pluginHost.activatePlugin('ext-orphan')).rejects.toThrow();
     });
   });
 

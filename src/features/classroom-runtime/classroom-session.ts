@@ -100,10 +100,7 @@ export class ClassroomSession {
     };
   }
 
-  private emitEvent(
-    type: ClassroomEvent['type'],
-    payload?: Record<string, unknown>
-  ): void {
+  private emitEvent(type: ClassroomEvent['type'], payload?: Record<string, unknown>): void {
     const event: ClassroomEvent = {
       id: `evt_cls_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       type,
@@ -120,8 +117,8 @@ export class ClassroomSession {
     if (!allowedFrom.includes(this.context.stage)) {
       throw new Error(
         `ClassroomSession Error: Invalid state transition from '${this.context.stage}' to '${target}'. Allowed from: [${allowedFrom.join(
-          ', '
-        )}].`
+          ', ',
+        )}].`,
       );
     }
   }

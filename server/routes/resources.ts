@@ -2,7 +2,11 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from '../../packages/plugins/ai-submit-injector.js';
+import {
+  hasDataSubmission,
+  hasScoreDisplay,
+  injectScoreSubmissionUsingAI,
+} from '../../packages/plugins/ai-submit-injector.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
 import { injectLmsSdk } from './shared.js';
@@ -13,7 +17,9 @@ export function registerResourcesRoutes(ctx: ServerContext) {
 
   app.get('/api/resources', (req, res) => {
     try {
-      const resources = kernelContainer.db.prepare('SELECT id, name, type, created_at FROM system_resources ORDER BY created_at DESC').all();
+      const resources = kernelContainer.db
+        .prepare('SELECT id, name, type, created_at FROM system_resources ORDER BY created_at DESC')
+        .all();
       res.json(resources);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -22,21 +28,26 @@ export function registerResourcesRoutes(ctx: ServerContext) {
 
   app.get('/api/resources/:id', (req, res) => {
     try {
-      const resource = kernelContainer.db.prepare('SELECT * FROM system_resources WHERE id = ?').get(req.params.id) as any;
+      const resource = kernelContainer.db
+        .prepare('SELECT * FROM system_resources WHERE id = ?')
+        .get(req.params.id) as any;
       if (!resource) return res.status(404).send('Resource not found');
 
       if (resource.type === 'html') {
         // Dynamic registration into courseware
         const existingCw = kernelContainer.db.prepare('SELECT id FROM courseware WHERE id = ?').get(resource.id);
         if (!existingCw) {
-          kernelContainer.db.prepare(
-            'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-          ).run(resource.id, resource.id, resource.name, 'html', 'index.html', resource.created_at || Date.now());
+          kernelContainer.db
+            .prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+            .run(resource.id, resource.id, resource.name, 'html', 'index.html', resource.created_at || Date.now());
         }
 
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        // SEC-FIX: 防止首方存储型 XSS，为独立直出的 HTML 强制声明沙箱隔离策略
-        res.setHeader('Content-Security-Policy', "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' data: blob: https:;");
+        // SEC-FIX: 防止首方存储型 XSS，为独立直出的 HTML 强制声明沙箱隔离策略，显式放行内联事件
+        res.setHeader(
+          'Content-Security-Policy',
+          "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline';",
+        );
         let html = resource.content || '';
         const baseTag = `<base href="/api/resources/${req.params.id}/">`;
         if (html.toLowerCase().includes('<head>')) {
@@ -46,7 +57,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
         } else {
           html = baseTag + html;
         }
-        
+
         html = injectLmsSdk(html, req, { id: resource.id, name: resource.name, uuid: resource.id });
         return res.send(html);
       }
@@ -60,10 +71,13 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       }
 
       // Find index file
-      const indexFile = files.find(f => {
-        const p = f.path.toLowerCase();
-        return p === 'index.html' || p === 'index.htm' || p.endsWith('/index.html') || p.endsWith('/index.htm');
-      }) || files.find(f => f.path.toLowerCase().endsWith('.html') || f.path.toLowerCase().endsWith('.htm')) || files[0];
+      const indexFile =
+        files.find((f) => {
+          const p = f.path.toLowerCase();
+          return p === 'index.html' || p === 'index.htm' || p.endsWith('/index.html') || p.endsWith('/index.htm');
+        }) ||
+        files.find((f) => f.path.toLowerCase().endsWith('.html') || f.path.toLowerCase().endsWith('.htm')) ||
+        files[0];
 
       if (!indexFile) {
         return res.status(404).send('No index.html or entrypoint found in resource folder');
@@ -72,9 +86,9 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       // Dynamic registration into courseware
       const existingCw = kernelContainer.db.prepare('SELECT id FROM courseware WHERE id = ?').get(resource.id);
       if (!existingCw) {
-        kernelContainer.db.prepare(
-          'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-        ).run(resource.id, resource.id, resource.name, 'folder', indexFile.path, resource.created_at || Date.now());
+        kernelContainer.db
+          .prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(resource.id, resource.id, resource.name, 'folder', indexFile.path, resource.created_at || Date.now());
       }
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -87,7 +101,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       } else {
         html = baseTag + html;
       }
-      
+
       html = injectLmsSdk(html, req, { id: resource.id, name: resource.name, uuid: resource.id });
       return res.send(html);
     } catch (e: any) {
@@ -97,7 +111,9 @@ export function registerResourcesRoutes(ctx: ServerContext) {
 
   app.get('/api/resources/:id/*', (req, res) => {
     try {
-      const resource = kernelContainer.db.prepare('SELECT * FROM system_resources WHERE id = ?').get(req.params.id) as any;
+      const resource = kernelContainer.db
+        .prepare('SELECT * FROM system_resources WHERE id = ?')
+        .get(req.params.id) as any;
       if (!resource) return res.status(404).send('Resource not found');
 
       let subpath = req.params[0] || '';
@@ -126,10 +142,13 @@ export function registerResourcesRoutes(ctx: ServerContext) {
 
       // If no subpath is specified, serve index.html or first html file
       if (!subpath || subpath === '') {
-        const indexFile = files.find(f => {
-          const p = f.path.toLowerCase();
-          return p === 'index.html' || p === 'index.htm' || p.endsWith('/index.html') || p.endsWith('/index.htm');
-        }) || files.find(f => f.path.toLowerCase().endsWith('.html') || f.path.toLowerCase().endsWith('.htm')) || files[0];
+        const indexFile =
+          files.find((f) => {
+            const p = f.path.toLowerCase();
+            return p === 'index.html' || p === 'index.htm' || p.endsWith('/index.html') || p.endsWith('/index.htm');
+          }) ||
+          files.find((f) => f.path.toLowerCase().endsWith('.html') || f.path.toLowerCase().endsWith('.htm')) ||
+          files[0];
 
         if (!indexFile) {
           return res.status(404).send('No index.html or entrypoint found in resource folder');
@@ -150,7 +169,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
 
       // Search for the requested subpath file
       const normSubpath = subpath.toLowerCase().replace(/\\/g, '/');
-      const fileObj = files.find(f => {
+      const fileObj = files.find((f) => {
         const p = f.path.toLowerCase().replace(/\\/g, '/');
         return p === normSubpath || p.endsWith('/' + normSubpath);
       });
@@ -184,7 +203,13 @@ export function registerResourcesRoutes(ctx: ServerContext) {
         contentType = 'image/x-icon';
       }
 
-      const isBinary = filename.endsWith('.png') || filename.endsWith('.jpg') || filename.endsWith('.jpeg') || filename.endsWith('.gif') || filename.endsWith('.webp') || filename.endsWith('.ico');
+      const isBinary =
+        filename.endsWith('.png') ||
+        filename.endsWith('.jpg') ||
+        filename.endsWith('.jpeg') ||
+        filename.endsWith('.gif') ||
+        filename.endsWith('.webp') ||
+        filename.endsWith('.ico');
       res.setHeader('Content-Type', contentType);
 
       if (isBinary) {
@@ -193,7 +218,10 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       } else {
         let content = fileObj.content;
         if (contentType.startsWith('text/html')) {
-          res.setHeader('Content-Security-Policy', "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' data: blob: https:;");
+          res.setHeader(
+            'Content-Security-Policy',
+            "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline';",
+          );
           content = injectLmsSdk(content, req, { id: resource.id, name: resource.name, uuid: resource.id });
         }
         return res.send(content);
@@ -213,9 +241,9 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       const id = 'res_' + Math.random().toString(36).substring(2, 10);
       const createdAt = Date.now();
 
-      kernelContainer.db.prepare(
-        'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)'
-      ).run(id, name, type, content, createdAt);
+      kernelContainer.db
+        .prepare('INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run(id, name, type, content, createdAt);
 
       // Try calling AI provider to create an auto-submit version if needed
       try {
@@ -225,9 +253,9 @@ export function registerResourcesRoutes(ctx: ServerContext) {
             if (modified && modified !== content) {
               const newId = 'res_' + Math.random().toString(36).substring(2, 10);
               const newName = `[自动提交版] ${name}`;
-              kernelContainer.db.prepare(
-                'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)'
-              ).run(newId, newName, type, modified, createdAt + 10);
+              kernelContainer.db
+                .prepare('INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)')
+                .run(newId, newName, type, modified, createdAt + 10);
             }
           }
         } else if (type === 'folder') {
@@ -235,16 +263,19 @@ export function registerResourcesRoutes(ctx: ServerContext) {
           try {
             files = JSON.parse(content || '[]');
           } catch (err) {}
-          const indexFile = files.find(f => {
-            const p = f.path.toLowerCase();
-            return p === 'index.html' || p === 'index.htm' || p.endsWith('/index.html') || p.endsWith('/index.htm');
-          }) || files.find(f => f.path.toLowerCase().endsWith('.html') || f.path.toLowerCase().endsWith('.htm')) || files[0];
+          const indexFile =
+            files.find((f) => {
+              const p = f.path.toLowerCase();
+              return p === 'index.html' || p === 'index.htm' || p.endsWith('/index.html') || p.endsWith('/index.htm');
+            }) ||
+            files.find((f) => f.path.toLowerCase().endsWith('.html') || f.path.toLowerCase().endsWith('.htm')) ||
+            files[0];
 
           if (indexFile && indexFile.content) {
             if (!hasDataSubmission(indexFile.content) && hasScoreDisplay(indexFile.content)) {
               const modified = await injectScoreSubmissionUsingAI(kernelContainer.db, indexFile.content);
               if (modified && modified !== indexFile.content) {
-                const modifiedFiles = files.map(f => {
+                const modifiedFiles = files.map((f) => {
                   if (f.path === indexFile.path) {
                     return { ...f, content: modified };
                   }
@@ -252,9 +283,9 @@ export function registerResourcesRoutes(ctx: ServerContext) {
                 });
                 const newId = 'res_' + Math.random().toString(36).substring(2, 10);
                 const newName = `[自动提交版] ${name}`;
-                kernelContainer.db.prepare(
-                  'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)'
-                ).run(newId, newName, type, JSON.stringify(modifiedFiles), createdAt + 10);
+                kernelContainer.db
+                  .prepare('INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)')
+                  .run(newId, newName, type, JSON.stringify(modifiedFiles), createdAt + 10);
               }
             }
           }
@@ -278,26 +309,25 @@ export function registerResourcesRoutes(ctx: ServerContext) {
     }
   });
 
-
   // ── Resource command bus handlers (plugin accessible) ─────────────────
   // Plugins call ctx.services.commandBus.execute('resource.list', {}) etc.
   const RESOURCE_HANDLERS = {
     'resource.list': {
       execute: async (cmd: any) => {
-        const rows = kernelContainer.db.prepare(
-          'SELECT id, name, type, created_at FROM system_resources ORDER BY created_at DESC'
-        ).all();
+        const rows = kernelContainer.db
+          .prepare('SELECT id, name, type, created_at FROM system_resources ORDER BY created_at DESC')
+          .all();
         return { resources: rows };
-      }
+      },
     },
     'resource.get': {
       execute: async (cmd: any) => {
-        const row = kernelContainer.db.prepare(
-          'SELECT * FROM system_resources WHERE id = ?'
-        ).get(cmd.payload?.id) as any;
+        const row = kernelContainer.db
+          .prepare('SELECT * FROM system_resources WHERE id = ?')
+          .get(cmd.payload?.id) as any;
         if (!row) return { error: 'not_found' };
         return { resource: row };
-      }
+      },
     },
     'resource.create': {
       execute: async (cmd: any) => {
@@ -305,18 +335,18 @@ export function registerResourcesRoutes(ctx: ServerContext) {
         if (!name || !type || content === undefined)
           return { error: 'invalid_params', message: 'name, type, content required' };
         const id = globalThis.crypto.randomUUID();
-        kernelContainer.db.prepare(
-          'INSERT INTO system_resources(id,name,type,content,created_at) VALUES(?,?,?,?,datetime(\'now\'))'
-        ).run(id, name, type, content);
+        kernelContainer.db
+          .prepare("INSERT INTO system_resources(id,name,type,content,created_at) VALUES(?,?,?,?,datetime('now'))")
+          .run(id, name, type, content);
         return { success: true, id, name, type };
-      }
+      },
     },
     'resource.delete': {
       execute: async (cmd: any) => {
         if (!cmd.payload?.id) return { error: 'invalid_params', message: 'id required' };
         kernelContainer.db.prepare('DELETE FROM system_resources WHERE id = ?').run(cmd.payload.id);
         return { success: true };
-      }
+      },
     },
   };
   for (const [type, handler] of Object.entries(RESOURCE_HANDLERS)) {

@@ -64,10 +64,7 @@ const handlerRegistry = new Map<string, (...args: any[]) => Promise<any>>();
 const cbRegistry = new Map<string, Map<number, (...a: unknown[]) => unknown>>();
 
 /** Recursively walk args, replace function values with { __rpc_cb: N } markers. */
-function serializeCallbacks(
-  args: unknown[],
-  invokeId: string,
-): void {
+function serializeCallbacks(args: unknown[], invokeId: string): void {
   let nextCbId = 1;
   const cbMap = new Map<number, (...a: unknown[]) => unknown>();
 
@@ -103,10 +100,7 @@ export function createMethodProxy(
   timeoutMs: number = 30000,
 ): Record<string, Function> {
   return new Proxy({} as Record<string, Function>, {
-    get(
-      _target: Record<string, Function>,
-      method: string | symbol,
-    ): Function {
+    get(_target: Record<string, Function>, method: string | symbol): Function {
       // Return an async invoke function for any property access
       return (...args: unknown[]) => {
         const invokeId = crypto.randomUUID();
@@ -328,10 +322,7 @@ export interface ServicesProxyResult {
  * @param serviceTokens - Array of service token strings to create proxies for
  * @returns {@link ServicesProxyResult} with services, pendingCalls, and dispose
  */
-export function createServicesProxy(
-  transport: IWorkerTransport,
-  serviceTokens: string[],
-): ServicesProxyResult {
+export function createServicesProxy(transport: IWorkerTransport, serviceTokens: string[]): ServicesProxyResult {
   const pendingCalls = new Map<string, PendingCall>();
   const eventBusProxy = new EventBusProxy(transport);
 
@@ -366,7 +357,11 @@ export function createServicesProxy(
           transport.postMessage({ type: 'error', invokeId: execMsg.invokeId, message: e.message, code: e.name });
         }
       } else {
-        transport.postMessage({ type: 'error', invokeId: execMsg.invokeId, message: `No handler for command: ${execMsg.commandType}` });
+        transport.postMessage({
+          type: 'error',
+          invokeId: execMsg.invokeId,
+          message: `No handler for command: ${execMsg.commandType}`,
+        });
       }
       return;
     }
@@ -376,7 +371,11 @@ export function createServicesProxy(
       const cbMap = cbRegistry.get(cbMsg.invokeId);
       const cb = cbMap?.get(cbMsg.cbId);
       if (cb) {
-        try { cb(...(cbMsg.args || [])); } catch (e) { console.error('[RPC] cb error:', e); }
+        try {
+          cb(...(cbMsg.args || []));
+        } catch (e) {
+          console.error('[RPC] cb error:', e);
+        }
       }
       return;
     }
@@ -389,9 +388,7 @@ export function createServicesProxy(
     pendingCalls.delete(invokeId);
 
     if (typed.type === 'error') {
-      const err = new Error(
-        (msg as { message?: string }).message ?? 'RPC error',
-      );
+      const err = new Error((msg as { message?: string }).message ?? 'RPC error');
       err.name = (msg as { code?: string }).code ?? 'RpcError';
       err.stack = (msg as { stack?: string }).stack;
       pending.reject(err);
@@ -421,9 +418,7 @@ export function createServicesProxy(
 
     // Reject all pending calls with transport disposed error
     for (const [, pending] of pendingCalls) {
-      pending.reject(
-        new WorkerTransportError('Transport disposed'),
-      );
+      pending.reject(new WorkerTransportError('Transport disposed'));
     }
     pendingCalls.clear();
     handlerRegistry.clear();

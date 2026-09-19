@@ -33,7 +33,7 @@ describe('CreateClassButton', () => {
     await waitFor(() => expect(fetchClasses).toHaveBeenCalledTimes(1));
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/classes',
-      expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Math 101' }) })
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Math 101' }) }),
     );
   });
 

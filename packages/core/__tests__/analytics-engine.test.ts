@@ -204,7 +204,6 @@ describe('OpenLearn Learning Analytics Engine Core Test Suite', () => {
         actor: { id: 'usr_s1', role: 'Student' },
       });
 
-
       const events = kernel.eventStream.replay();
       const metrics = kernel.metricsEngine.computeMetrics(events);
       const indicators = kernel.indicatorEngine.computeIndicators(metrics);

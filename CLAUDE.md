@@ -144,9 +144,11 @@ const ctx = createMockContext({ pluginId: 'ext-test', capabilities: ['lesson:rea
 await myPlugin.activate(ctx);
 expect((ctx.services.commandBus as MockCommandBus).handlers.has('my.command')).toBe(true);
 ```
-  }
+
 }
-```
+}
+
+````
 
 插件通过 Worker Thread（Node.js）或 inline ESM import（浏览器）隔离执行，内核 API 通过 Proxy 包装保护（冻结原型链、超时限制、Token 版本检查）。
 
@@ -394,74 +396,97 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 
 ## System Overview
 ```text
-```
+````
+
 ## Component Responsibilities
-| Component | Responsibility | File |
-|-----------|----------------|------|
-| Kernel | Global singleton container, assembles all 6 subsystems, sets up interceptor pipeline for capability check + high-risk approval | `packages/core/kernel/index.ts` |
-| CommandBus | Command execution pipeline: register handler, execute command via interceptor chain | `packages/core/command-bus/index.ts` |
-| EventBus | Publish/subscribe event system, supports wildcard subscriptions (`*`) | `packages/core/event-bus/index.ts` |
-| ActionRegistry | Registers tools discoverable by AI Agent, generates `functionDeclarations` for @google/genai | `packages/core/registry/index.ts` |
-| CapabilityGuard | String-based capability RBAC: grant/revoke per actorId, supports wildcard matching (`lesson:*`) | `packages/core/capability-system/index.ts` |
-| PluginRuntime | VM sandbox lifecycle manager: install, activate, deactivate, uninstall plugins from SQLite | `packages/core/plugin-runtime/index.ts` |
-| ProcessManager | Background task & interval management: spawn, kill, restore, logs | `packages/core/process-manager/index.ts` |
-| DB | SQLite initialization, 30+ tables, default user/AI-provider seeding | `packages/core/db/index.ts` |
-| Express Server | HTTP server + Socket.IO, all REST APIs, auth, AI agent chat orchestration, Vite integration | `server.ts` |
-| Built-in Plugins | Lesson CRUD, whiteboard, courseware, plugin install | `packages/plugins/builtin.ts` |
-| VFS Plugins | Virtual file system: write_file, read_file, list_dir, mkdir | `packages/plugins/vfs.ts` |
-| Process Plugins | Process management: spawn, kill, list, logs | `packages/plugins/process.ts` |
-| Management Plugins | Class, student, assignment, schedule, attendance CRUD | `packages/plugins/management.ts` |
-| AI Planner Plugins | Background AI generation tasks + high-risk approval flow | `packages/plugins/ai-planner.ts` |
-| AI Submit Injector | Auto-injects LMS SDK bridge into uploaded courseware HTML | `packages/plugins/ai-submit-injector.ts` |
-| Frontend App | Single-page application, all UI, teacher/student views, REST API calls | `src/App.tsx` |
+
+| Component          | Responsibility                                                                                                                 | File                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| Kernel             | Global singleton container, assembles all 6 subsystems, sets up interceptor pipeline for capability check + high-risk approval | `packages/core/kernel/index.ts`            |
+| CommandBus         | Command execution pipeline: register handler, execute command via interceptor chain                                            | `packages/core/command-bus/index.ts`       |
+| EventBus           | Publish/subscribe event system, supports wildcard subscriptions (`*`)                                                          | `packages/core/event-bus/index.ts`         |
+| ActionRegistry     | Registers tools discoverable by AI Agent, generates `functionDeclarations` for @google/genai                                   | `packages/core/registry/index.ts`          |
+| CapabilityGuard    | String-based capability RBAC: grant/revoke per actorId, supports wildcard matching (`lesson:*`)                                | `packages/core/capability-system/index.ts` |
+| PluginRuntime      | VM sandbox lifecycle manager: install, activate, deactivate, uninstall plugins from SQLite                                     | `packages/core/plugin-runtime/index.ts`    |
+| ProcessManager     | Background task & interval management: spawn, kill, restore, logs                                                              | `packages/core/process-manager/index.ts`   |
+| DB                 | SQLite initialization, 30+ tables, default user/AI-provider seeding                                                            | `packages/core/db/index.ts`                |
+| Express Server     | HTTP server + Socket.IO, all REST APIs, auth, AI agent chat orchestration, Vite integration                                    | `server.ts`                                |
+| Built-in Plugins   | Lesson CRUD, whiteboard, courseware, plugin install                                                                            | `packages/plugins/builtin.ts`              |
+| VFS Plugins        | Virtual file system: write_file, read_file, list_dir, mkdir                                                                    | `packages/plugins/vfs.ts`                  |
+| Process Plugins    | Process management: spawn, kill, list, logs                                                                                    | `packages/plugins/process.ts`              |
+| Management Plugins | Class, student, assignment, schedule, attendance CRUD                                                                          | `packages/plugins/management.ts`           |
+| AI Planner Plugins | Background AI generation tasks + high-risk approval flow                                                                       | `packages/plugins/ai-planner.ts`           |
+| AI Submit Injector | Auto-injects LMS SDK bridge into uploaded courseware HTML                                                                      | `packages/plugins/ai-submit-injector.ts`   |
+| Frontend App       | Single-page application, all UI, teacher/student views, REST API calls                                                         | `src/App.tsx`                              |
+
 ## Pattern Overview
+
 - Monolithic kernel singleton (`kernelContainer`) centralizes all subsystem access
 - Commands are namespaced strings (e.g., `lesson.create`, `vfs.write_file`) routed through CommandBus
 - All commands pass through a single kernel-level interceptor for capability check + high-risk approval gating
 - Plugins are stored as source files on disk (`plugins/{uuid}/index.js`) with metadata in SQLite, executed via Worker Thread or inline ESM import
 - AI Agent (Gemini/OpenAI) acts as autonomous Shell, calling tools via CommandBus
 - Frontend is a monolith `App.tsx` with conditional rendering of 11 teacher tabs and 3 student views
+
 ## Layers
+
 ### 1. Frontend Presentation Layer
+
 - Purpose: Render UI, handle user interactions, make REST API calls and WebSocket connections
 - Location: `src/App.tsx`, `src/components/`, `src/main.tsx`
 - Contains: React components, i18n, CSS, zustand state (minimal), Socket.IO client
 - Depends on: REST API endpoints in server.ts, Socket.IO server
 - Used by: End users (teacher/student/administrator)
+
 ### 2. Server Transport Layer
+
 - Purpose: HTTP request handling, WebSocket management, session auth, Vite dev middleware, static file serving
 - Location: `server.ts` (lines 591-5006)
 - Contains: Express app, Socket.IO server, 40+ REST routes, cooke-based auth, AI agent chat orchestration
 - Depends on: OS Kernel, @google/genai, OpenAI-compatible API
 - Used by: Frontend, courseware runtime clients
+
 ### 3. OS Kernel Layer
+
 - Purpose: Core execution engine, command routing, event propagation, plugin lifecycle, security
 - Location: `packages/core/`
 - Contains: Kernel, CommandBus, EventBus, ActionRegistry, CapabilityGuard, PluginRuntime, ProcessManager
 - Depends on: SQLite (better-sqlite3), Node.js `vm` module
 - Used by: Server layer, plugins
+
 ### 4. Plugin Layer
+
 - Purpose: Implement business logic as registered command handlers and actions
 - Location: `packages/plugins/`
 - Contains: builtin.ts, vfs.ts, process.ts, management.ts, ai-planner.ts, ai-submit-injector.ts
 - Depends on: OS Kernel (commandBus, actionRegistry, db, eventBus)
 - Used by: OS Kernel (loaded at startup via bootstrap functions)
+
 ### 5. Data Layer
+
 - Purpose: Persistent storage
 - Location: `packages/core/db/index.ts` (schema), `packages/core/db/educational_os.db` (data), `storage/courseware/` (files)
 - Contains: SQLite with 30+ tables, file-based courseware storage
 - Depends on: better-sqlite3
 - Used by: All layers via kernelContainer.db
+
 ## Data Flow
+
 ### Primary Request Path: Agent Chat
+
 ### REST API Direct Path
+
 ### Socket.IO Real-Time Path
+
 ### Courseware Runtime Path
+
 - Server: In-memory Maps for online students, active lessons, active segments (ephemeral, not persisted)
 - Frontend: React `useState` in App.tsx for tab, lesson, session, etc.; zustand used minimally
 - Plugin: Plugin storage via `plugin_storage` SQLite table (key-value)
 - Kernel: All state in SQLite; EventBus, CommandBus, ActionRegistry hold in-memory registrations that must be rebuilt on server restart
+
 ## Key Abstractions
+
 - Purpose: Normalized command envelope for all operations
 - Examples: All command handlers receive this type
 - Pattern: `{ id, type, actorId, payload, timestamp, metadata }` from `packages/core/command-bus/index.ts`
@@ -477,7 +502,9 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - Purpose: Identity that executes commands, subject to capability checks
 - Examples: `'agent-system-0'` (AI Agent), `'plugin:ext-my-service'` (plugin), `'user-demo'`, `'teacher-demo'`
 - Pattern: String identifier assigned at command time, checked against CapabilityGuard
+
 ## Entry Points
+
 - Location: `server.ts` function `startServer()`, invoked at bottom via `startServer().catch(console.error)`
 - Triggers: `npm run dev` (tsx) or `npm start` (node dist/server.cjs)
 - Responsibilities: Bootstrap built-in plugins, load DB plugins, initialize Express + Socket.IO, setup Vite middleware, start HTTP server on port 9000
@@ -487,7 +514,9 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - Location: `server.ts:689` — `POST /api/agent/chat`
 - Triggers: User sends message in agent panel
 - Responsibilities: Orchestrate AI chat loop with tool calling, execute commands through CommandBus
+
 ## Architectural Constraints
+
 - **Single-threaded event loop:** Node.js default model. Long-running tasks use `ProcessManager` (simulated with `setTimeout`, not real workers)
 - **Global state:** `kernelContainer` is a module-level singleton instantiated at import time in `packages/core/kernel/index.ts:77`. All subsystems in memory. Server restart wipes all registrations and must re-bootstrap.
 - **No database migrations:** Schema evolves through `CREATE TABLE IF NOT EXISTS` and incremental `ALTER TABLE ADD COLUMN` in `db/index.ts`. No migration framework — all schema changes are manual and additive.
@@ -496,31 +525,43 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - **Monolithic frontend:** `App.tsx` (11159 lines) contains all business logic, API calls, state management, and UI rendering. Component extraction is partial (components/ for sub-widgets only).
 - **No formal API versioning:** All routes under `/api/` with no version prefix.
 - **Circular dependency concern:** Kernel imports depend on subsystem modules, subsystems import Kernel type. PluginRuntime constructor takes `Kernel` instance, creating a tight coupling.
+
 ## Anti-Patterns
+
 ### Monolithic Entry Points
+
 ### Direct DB Access Bypassing CommandBus
+
 ### Inline Plugin Source Code
+
 ### Schema Evolution via ALTER TABLE
+
 ## Error Handling
+
 - API routes: `try { ... } catch (e: any) { res.status(500).json({ success: false, error: e.message }) }`
 - CommandBus execution: `try { const result = await handler.execute(command); return result; } catch (error) { console.error(...); throw error; }`
 - Event subscribers: `Promise.resolve(sub(event)).catch(err => { console.error(...) })` — errors silently logged
 - Plugin activation: Errors trigger full rollback (unregister actions, handlers, events, processes)
+
 ## Cross-Cutting Concerns
+
 <!-- GSD:architecture-end -->
 
 <!-- GSD:skills-start source:skills/ -->
+
 ## Project Skills
 
 No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, `.github/skills/`, or `.codex/skills/` with a `SKILL.md` index file.
 <!-- GSD:skills-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->
+
 ## GSD Workflow Enforcement
 
 Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
 
 Use these entry points:
+
 - `/gsd-quick` for small fixes, doc updates, and ad-hoc tasks
 - `/gsd-debug` for investigation and bug fixing
 - `/gsd-execute-phase` for planned phase work
@@ -529,8 +570,10 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 <!-- GSD:workflow-end -->
 
 <!-- GSD:profile-start -->
+
 ## Developer Profile
 
 > Profile not yet configured. Run `/gsd-profile-user` to generate your developer profile.
 > This section is managed by `generate-claude-profile` -- do not edit manually.
+
 <!-- GSD:profile-end -->

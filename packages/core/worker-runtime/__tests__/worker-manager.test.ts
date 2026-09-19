@@ -136,9 +136,7 @@ describe('WorkerRegistry', () => {
     const b = createMockWorkerInstance('plugin-a');
 
     registry.register('plugin-a', a);
-    expect(() => registry.register('plugin-a', b)).toThrow(
-      'Worker already registered for plugin "plugin-a"',
-    );
+    expect(() => registry.register('plugin-a', b)).toThrow('Worker already registered for plugin "plugin-a"');
   });
 
   it('should detect crash via exit event with non-zero code', () => {
@@ -202,12 +200,10 @@ describe('WorkerRegistry', () => {
 
     // Set up the onMessage to respond with 'deactivated'
     const originalOnMessage = instance.transport.onMessage;
-    (originalOnMessage as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      (handler: (msg: unknown) => void) => {
-        // Simulate 'deactivated' response on deactivate-request
-        (instance.transport as any)._onDeactivate = handler;
-      },
-    );
+    (originalOnMessage as unknown as ReturnType<typeof vi.fn>).mockImplementation((handler: (msg: unknown) => void) => {
+      // Simulate 'deactivated' response on deactivate-request
+      (instance.transport as any)._onDeactivate = handler;
+    });
 
     // Patch postMessage to trigger deactivated response
     (postMessageFn as any).mockImplementation((msg: unknown) => {
@@ -260,12 +256,9 @@ describe('WorkerManager', () => {
   });
 
   it('should create a Worker and return transport + serviceHost', async () => {
-    const result = await wm.createWorker(
-      'test-plugin',
-      MOCK_MANIFEST,
-      MINIMAL_PLUGIN_CODE,
-      ['@openlearn/core:ICommandBusService'],
-    );
+    const result = await wm.createWorker('test-plugin', MOCK_MANIFEST, MINIMAL_PLUGIN_CODE, [
+      '@openlearn/core:ICommandBusService',
+    ]);
 
     expect(result.transport).toBeDefined();
     expect(result.serviceHost).toBeDefined();
@@ -274,25 +267,15 @@ describe('WorkerManager', () => {
   });
 
   it('should reject duplicate Worker creation', async () => {
-    await wm.createWorker(
-      'dup-plugin',
-      MOCK_MANIFEST,
-      MINIMAL_PLUGIN_CODE,
-      [],
-    );
+    await wm.createWorker('dup-plugin', MOCK_MANIFEST, MINIMAL_PLUGIN_CODE, []);
 
-    await expect(
-      wm.createWorker('dup-plugin', MOCK_MANIFEST, MINIMAL_PLUGIN_CODE, []),
-    ).rejects.toThrow('Worker already exists for plugin "dup-plugin"');
+    await expect(wm.createWorker('dup-plugin', MOCK_MANIFEST, MINIMAL_PLUGIN_CODE, [])).rejects.toThrow(
+      'Worker already exists for plugin "dup-plugin"',
+    );
   });
 
   it('should terminate a running Worker', async () => {
-    await wm.createWorker(
-      'term-test',
-      MOCK_MANIFEST,
-      MINIMAL_PLUGIN_CODE,
-      [],
-    );
+    await wm.createWorker('term-test', MOCK_MANIFEST, MINIMAL_PLUGIN_CODE, []);
 
     expect(wm.registry.list()).toContain('term-test');
 
@@ -303,20 +286,10 @@ describe('WorkerManager', () => {
   it('should track active count', async () => {
     expect(wm.registry.activeCount).toBe(0);
 
-    await wm.createWorker(
-      'count-test-1',
-      MOCK_MANIFEST,
-      MINIMAL_PLUGIN_CODE,
-      [],
-    );
+    await wm.createWorker('count-test-1', MOCK_MANIFEST, MINIMAL_PLUGIN_CODE, []);
     expect(wm.registry.activeCount).toBe(1);
 
-    await wm.createWorker(
-      'count-test-2',
-      MOCK_MANIFEST,
-      MINIMAL_PLUGIN_CODE,
-      [],
-    );
+    await wm.createWorker('count-test-2', MOCK_MANIFEST, MINIMAL_PLUGIN_CODE, []);
     expect(wm.registry.activeCount).toBe(2);
 
     await wm.terminateWorker('count-test-1');
@@ -346,9 +319,9 @@ describe('WorkerManager', () => {
     } as Manifest;
 
     const start = Date.now();
-    await expect(
-      wm.createWorker('exit-plugin', manifest, exitingPluginCode, []),
-    ).rejects.toThrow(/Worker process exited with code 1/);
+    await expect(wm.createWorker('exit-plugin', manifest, exitingPluginCode, [])).rejects.toThrow(
+      /Worker process exited with code 1/,
+    );
     const elapsed = Date.now() - start;
     expect(elapsed).toBeLessThan(5000);
   });
@@ -371,9 +344,9 @@ describe('WorkerManager', () => {
     } as Manifest;
 
     const start = Date.now();
-    await expect(
-      wm.createWorker('rejection-plugin', manifest, unhandledRejectionCode, []),
-    ).rejects.toThrow(/Unhandled rejection in worker: Simulated async explosion in worker/);
+    await expect(wm.createWorker('rejection-plugin', manifest, unhandledRejectionCode, [])).rejects.toThrow(
+      /Unhandled rejection in worker: Simulated async explosion in worker/,
+    );
     const elapsed = Date.now() - start;
     expect(elapsed).toBeLessThan(5000);
   });

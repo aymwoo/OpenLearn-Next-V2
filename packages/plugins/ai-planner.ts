@@ -50,16 +50,16 @@ export const AiPlannerPlugin = {
           log(`Process was killed.`);
           return;
         }
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise((r) => setTimeout(r, 1000));
         updateState({ step: i + 1 });
-        log(`[AI Planner] Analyzing payload... step ${i+1}/${duration}`);
+        log(`[AI Planner] Analyzing payload... step ${i + 1}/${duration}`);
       }
-      
+
       log(`[AI Planner] Analysis complete. Generating proposal...`);
-      
+
       const proposalTitle = `AI Suggested ${payload.taskType === 'quiz' ? 'Quiz' : 'Plan'}: ${payload.topic}`;
       const proposalContent = `This is an auto-generated content/extension for ${payload.topic} produced by the AI Agent. Please review and approve.`;
-      
+
       try {
         await commandBus.execute({
           id: uuidv7(),
@@ -71,8 +71,8 @@ export const AiPlannerPlugin = {
             topic: payload.topic,
             classId: payload.classId,
             title: proposalTitle,
-            content: proposalContent
-          }
+            content: proposalContent,
+          },
         });
         log(`[AI Planner] Proposal automatically approved and applied.`);
       } catch (e: any) {
@@ -85,30 +85,35 @@ export const AiPlannerPlugin = {
     await actionRegistry.register({
       id: 'ai-planner-generate',
       commandType: 'ai.start_generation',
-      description: '指示 AI Agent 在后台自动规划课程表、作业或测验，返回进程 ID。AI 将生成方案并在审批网关中等待教师审批。',
+      description:
+        '指示 AI Agent 在后台自动规划课程表、作业或测验，返回进程 ID。AI 将生成方案并在审批网关中等待教师审批。',
       capabilityRequired: 'process:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          taskType: { type: 'STRING', description: '生成类型："schedule"（排课）、"quiz"（测验）或 "lesson_material"（课程资料）' },
+          taskType: {
+            type: 'STRING',
+            description: '生成类型："schedule"（排课）、"quiz"（测验）或 "lesson_material"（课程资料）',
+          },
           topic: { type: 'STRING', description: '要生成的主题/科目' },
           classId: { type: 'STRING', description: '班级 ID（如适用）' },
-          duration: { type: 'NUMBER', description: '预计所需时间（秒）' }
+          duration: { type: 'NUMBER', description: '预计所需时间（秒）' },
         },
-        required: ['taskType', 'topic', 'duration']
-      }
+        required: ['taskType', 'topic', 'duration'],
+      },
     });
 
     await commandBus.registerHandler('ai.start_generation', {
       async execute(command) {
         const payload = command.payload as any;
-        const processId = await processManager.spawn(
-          `AI Generator: ${payload.topic}`,
-          'ai_planner_task',
-          { taskType: payload.taskType, topic: payload.topic, classId: payload.classId, duration: payload.duration }
-        );
+        const processId = await processManager.spawn(`AI Generator: ${payload.topic}`, 'ai_planner_task', {
+          taskType: payload.taskType,
+          topic: payload.topic,
+          classId: payload.classId,
+          duration: payload.duration,
+        });
         return { processId, message: 'Process started in the background.' };
-      }
+      },
     });
 
     // 3. High-Risk Action to apply recommendation (caught by Approval)
@@ -125,19 +130,21 @@ export const AiPlannerPlugin = {
           topic: { type: 'STRING' },
           classId: { type: 'STRING' },
           title: { type: 'STRING' },
-          content: { type: 'STRING' }
+          content: { type: 'STRING' },
         },
-        required: ['taskType', 'topic']
-      }
+        required: ['taskType', 'topic'],
+      },
     });
 
     await commandBus.registerHandler('ai.apply_recommendation', {
       async execute(command) {
         const payload = command.payload as any;
         const id = uuidv7();
-        
+
         if (payload.taskType === 'lesson_material') {
-          const stmt = db.prepare('INSERT INTO lessons (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)');
+          const stmt = db.prepare(
+            'INSERT INTO lessons (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+          );
           stmt.run(id, payload.title, payload.content, Date.now(), Date.now());
         } else if (payload.taskType === 'quiz' || payload.taskType === 'assignment') {
           let cid = payload.classId;
@@ -146,7 +153,9 @@ export const AiPlannerPlugin = {
             cid = firstClass ? firstClass.id : null;
           }
           if (cid) {
-            const stmt = db.prepare('INSERT INTO assignments (id, class_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+            const stmt = db.prepare(
+              'INSERT INTO assignments (id, class_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            );
             stmt.run(id, cid, payload.title, 'AI Generated Quiz/Assignment', payload.content, Date.now());
           }
         } else if (payload.taskType === 'schedule') {
@@ -156,16 +165,18 @@ export const AiPlannerPlugin = {
             cid = firstClass ? firstClass.id : null;
           }
           if (cid) {
-            const stmt = db.prepare('INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, created_at) VALUES (?, ?, ?, ?, ?)');
+            const stmt = db.prepare(
+              'INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, created_at) VALUES (?, ?, ?, ?, ?)',
+            );
             const firstLesson = db.prepare('SELECT id FROM lessons LIMIT 1').get() as any;
             const lessonId = firstLesson ? firstLesson.id : null;
             const nextDay = new Date(Date.now() + 86400000).toISOString().split('T')[0];
             stmt.run(id, cid, lessonId, nextDay, Date.now());
           }
         }
-        
+
         return { success: true, appliedId: id, details: `Applied ${payload.taskType} AI recommendation successfully.` };
-      }
+      },
     });
 
     // 4. High-Risk Action for Grading (Teacher must approve and can edit score)
@@ -181,20 +192,22 @@ export const AiPlannerPlugin = {
           assignmentId: { type: 'STRING' },
           studentId: { type: 'STRING' },
           score: { type: 'NUMBER' },
-          feedback: { type: 'STRING' }
+          feedback: { type: 'STRING' },
         },
-        required: ['assignmentId', 'studentId', 'score', 'feedback']
-      }
+        required: ['assignmentId', 'studentId', 'score', 'feedback'],
+      },
     });
 
     await commandBus.registerHandler('ai.apply_grade', {
       async execute(command) {
         const payload = command.payload as any;
-        db.prepare(`
+        db.prepare(
+          `
           UPDATE assignment_submissions 
           SET score = ?, feedback = ?, graded_at = ?, status = 'graded'
           WHERE assignment_id = ? AND student_id = ?
-        `).run(payload.score, payload.feedback, Date.now(), payload.assignmentId, payload.studentId);
+        `,
+        ).run(payload.score, payload.feedback, Date.now(), payload.assignmentId, payload.studentId);
 
         await eventBus.publish({
           id: uuidv7(),
@@ -204,19 +217,19 @@ export const AiPlannerPlugin = {
             assignmentId: payload.assignmentId,
             studentId: payload.studentId,
             score: payload.score,
-            feedback: payload.feedback || ''
+            feedback: payload.feedback || '',
           },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { success: true, details: `Applied grade ${payload.score} successfully.` };
-      }
+      },
     });
   },
   deactivate: async () => {
     // Handlers automatically disposed by ResourceTracker
-  }
+  },
 };
 
 /** @deprecated Deprecated in Phase 8. Built-in plugins are auto-loaded by the Kernel using PluginHost. */

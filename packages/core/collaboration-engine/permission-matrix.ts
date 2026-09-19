@@ -49,37 +49,10 @@ export class PermissionMatrixManager {
         'Create Object',
       ]),
     ],
-    [
-      'Observer',
-      new Set<CollaborationPermission>(['Whiteboard View']),
-    ],
-    [
-      'AI Tutor',
-      new Set<CollaborationPermission>([
-        'Whiteboard View',
-        'Comment',
-        'Annotation',
-        'AI Operation',
-      ]),
-    ],
-    [
-      'AI Assistant',
-      new Set<CollaborationPermission>([
-        'Whiteboard View',
-        'Comment',
-        'Annotation',
-        'AI Operation',
-      ]),
-    ],
-    [
-      'Plugin',
-      new Set<CollaborationPermission>([
-        'Whiteboard Edit',
-        'Whiteboard View',
-        'Create Object',
-        'Run Code',
-      ]),
-    ],
+    ['Observer', new Set<CollaborationPermission>(['Whiteboard View'])],
+    ['AI Tutor', new Set<CollaborationPermission>(['Whiteboard View', 'Comment', 'Annotation', 'AI Operation'])],
+    ['AI Assistant', new Set<CollaborationPermission>(['Whiteboard View', 'Comment', 'Annotation', 'AI Operation'])],
+    ['Plugin', new Set<CollaborationPermission>(['Whiteboard Edit', 'Whiteboard View', 'Create Object', 'Run Code'])],
   ]);
 
   public hasPermission(role: ParticipantRole, permission: CollaborationPermission): boolean {

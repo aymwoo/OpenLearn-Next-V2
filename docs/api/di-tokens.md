@@ -15,9 +15,9 @@
    ```typescript
    import { IPluginLifecycleManagerToken, IDatabaseToken, IAuthSessionBridgeToken } from '@openlearn/plugin-sdk';
 
-   const lifecycle  = await ctx.resolve(IPluginLifecycleManagerToken); // 类型: PluginLifecycleManager
-   const db         = await ctx.resolve(IDatabaseToken);               // 类型: better-sqlite3.Database
-   const authBridge = await ctx.resolve(IAuthSessionBridgeToken);      // 类型: IAuthSessionBridgeService
+   const lifecycle = await ctx.resolve(IPluginLifecycleManagerToken); // 类型: PluginLifecycleManager
+   const db = await ctx.resolve(IDatabaseToken); // 类型: better-sqlite3.Database
+   const authBridge = await ctx.resolve(IAuthSessionBridgeToken); // 类型: IAuthSessionBridgeService
    ```
 
 2. **`ctx.services.X` —— 仅 7 个核心服务的便捷代理**（与对应 Token 解析出的实例相同）。
@@ -43,11 +43,11 @@ interface PluginContext {
   // (c) 向容器注入插件自有服务
   provide<T>(token: Token<T>, instance: T): Promise<void>;
   // (d) 其它上下文能力（非 Token）
-  db: PluginDatabaseAPI;          // 插件命名空间隔离表
-  log: IPluginLogger;             // ctx.log.info(...)
+  db: PluginDatabaseAPI; // 插件命名空间隔离表
+  log: IPluginLogger; // ctx.log.info(...)
   config: IConfigService;
   contributions: ContributionAccessor;
-  http: IPluginHttpRouter;        // RESTful & SSE 流式路由
+  http: IPluginHttpRouter; // RESTful & SSE 流式路由
   require(moduleName: string): unknown; // 仅白名单内的共享模块
   reportProgress?(stage?: string, message?: string): void; // 激活期进度心跳与超时续期
 }
@@ -61,66 +61,66 @@ interface PluginContext {
 
 ### A. 核心 7 服务 Token（`interfaces.ts:267-318`）
 
-| 导出 Token | 解析类型 | 标识字符串 |
-|---|---|---|
-| `ICommandBusServiceToken` | `ICommandBusService` | `@openlearn/core:ICommandBusService` |
-| `IEventBusServiceToken` | `IEventBusService` | `@openlearn/core:IEventBusService` |
+| 导出 Token                    | 解析类型                 | 标识字符串                               |
+| ----------------------------- | ------------------------ | ---------------------------------------- |
+| `ICommandBusServiceToken`     | `ICommandBusService`     | `@openlearn/core:ICommandBusService`     |
+| `IEventBusServiceToken`       | `IEventBusService`       | `@openlearn/core:IEventBusService`       |
 | `IActionRegistryServiceToken` | `IActionRegistryService` | `@openlearn/core:IActionRegistryService` |
-| `ICapabilityServiceToken` | `ICapabilityService` | `@openlearn/core:ICapabilityService` |
-| `IProcessServiceToken` | `IProcessService` | `@openlearn/core:IProcessService` |
-| `IStorageServiceToken` | `IStorageService` | `@openlearn/core:IStorageService` |
-| `IAIServiceToken` | `IAIService` | `@openlearn/core:IAIService` |
+| `ICapabilityServiceToken`     | `ICapabilityService`     | `@openlearn/core:ICapabilityService`     |
+| `IProcessServiceToken`        | `IProcessService`        | `@openlearn/core:IProcessService`        |
+| `IStorageServiceToken`        | `IStorageService`        | `@openlearn/core:IStorageService`        |
+| `IAIServiceToken`             | `IAIService`             | `@openlearn/core:IAIService`             |
 
 ### B. 内核 / 基础设施 Token
 
-| 导出 Token | 解析类型 | 标识字符串 |
-|---|---|---|
-| `IDatabaseToken` | `better-sqlite3.Database`（**原始句柄，无包装**） | `@openlearn/core:IDatabase` |
-| `IPluginHostToken` | `PluginHost`（**类，非纯接口**） | `@openlearn/core:IPluginHost` |
+| 导出 Token         | 解析类型                                          | 标识字符串                    |
+| ------------------ | ------------------------------------------------- | ----------------------------- |
+| `IDatabaseToken`   | `better-sqlite3.Database`（**原始句柄，无包装**） | `@openlearn/core:IDatabase`   |
+| `IPluginHostToken` | `PluginHost`（**类，非纯接口**）                  | `@openlearn/core:IPluginHost` |
 
 ### C. P7-A2 统一插件平台 Token（`interfaces.ts:348-390`）
 
-| 导出 Token | 解析类型 | 标识字符串 |
-|---|---|---|
-| `IPluginLifecycleManagerToken` | `PluginLifecycleManager` | `@openlearn/core:IPluginLifecycleManager` |
+| 导出 Token                        | 解析类型                    | 标识字符串                                   |
+| --------------------------------- | --------------------------- | -------------------------------------------- |
+| `IPluginLifecycleManagerToken`    | `PluginLifecycleManager`    | `@openlearn/core:IPluginLifecycleManager`    |
 | `IPluginDistributionManagerToken` | `PluginDistributionManager` | `@openlearn/core:IPluginDistributionManager` |
-| `IPluginRuntimeCompositionToken` | `PluginRuntimeComposition` | `@openlearn/core:IPluginRuntimeComposition` |
-| `IUnifiedExtensionRegistryToken` | `UnifiedExtensionRegistry` | `@openlearn/core:IUnifiedExtensionRegistry` |
-| `IPluginCapabilityGatewayToken` | `PluginCapabilityGateway` | `@openlearn/core:IPluginCapabilityGateway` |
-| `ICapabilityRegistryToken` | `CapabilityRegistry` | `@openlearn/core:ICapabilityRegistry` |
+| `IPluginRuntimeCompositionToken`  | `PluginRuntimeComposition`  | `@openlearn/core:IPluginRuntimeComposition`  |
+| `IUnifiedExtensionRegistryToken`  | `UnifiedExtensionRegistry`  | `@openlearn/core:IUnifiedExtensionRegistry`  |
+| `IPluginCapabilityGatewayToken`   | `PluginCapabilityGateway`   | `@openlearn/core:IPluginCapabilityGateway`   |
+| `ICapabilityRegistryToken`        | `CapabilityRegistry`        | `@openlearn/core:ICapabilityRegistry`        |
 
 ### D. 积分 / 学期 / 领域 Token
 
-| 导出 Token | 解析类型 | 标识字符串 |
-|---|---|---|
-| `ISemesterGradeServiceToken` | `ISemesterGradeService` | `@openlearn/core:ISemesterGradeService` |
+| 导出 Token                      | 解析类型                   | 标识字符串                                 |
+| ------------------------------- | -------------------------- | ------------------------------------------ |
+| `ISemesterGradeServiceToken`    | `ISemesterGradeService`    | `@openlearn/core:ISemesterGradeService`    |
 | `IPointsDimensionRegistryToken` | `IPointsDimensionRegistry` | `@openlearn/core:IPointsDimensionRegistry` |
-| `IPointsLedgerServiceToken` | `IPointsLedgerService` | `@openlearn/core:IPointsLedgerService` |
+| `IPointsLedgerServiceToken`     | `IPointsLedgerService`     | `@openlearn/core:IPointsLedgerService`     |
 
 ### E. 引擎访问 Token（薄封装 `getX(): Promise<unknown>` 门面）
 
-| 导出 Token | 解析类型 | 标识字符串 |
-|---|---|---|
-| `ILessonEngineServiceToken` | `ILessonEngineService` | `@openlearn/core:ILessonEngineService` |
-| `IClassroomRuntimeServiceToken` | `IClassroomRuntimeService` | `@openlearn/core:IClassroomRuntimeService` |
-| `IPresenceEngineServiceToken` | `IPresenceEngineService` | `@openlearn/core:IPresenceEngineService` |
-| `ITeachingCollaborationServiceToken` | `ITeachingCollaborationService` | `@openlearn/core:ITeachingCollaborationService` |
-| `ILearningAnalyticsServiceToken` | `ILearningAnalyticsService` | `@openlearn/core:ILearningAnalyticsService` |
-| `IAICapabilityServiceToken` | `IAICapabilityService` | `@openlearn/core:IAICapabilityService` |
-| `ICapabilityRuntimeServiceToken` | `ICapabilityRuntimeService` | `@openlearn/core:ICapabilityRuntimeService` |
-| `ICapabilityGovernanceServiceToken` | `ICapabilityGovernanceService` | `@openlearn/core:ICapabilityGovernanceService` |
-| `IPlatformServiceRegistryToken` | `IPlatformServiceRegistryService` | `@openlearn/core:IPlatformServiceRegistryService` |
+| 导出 Token                           | 解析类型                          | 标识字符串                                        |
+| ------------------------------------ | --------------------------------- | ------------------------------------------------- |
+| `ILessonEngineServiceToken`          | `ILessonEngineService`            | `@openlearn/core:ILessonEngineService`            |
+| `IClassroomRuntimeServiceToken`      | `IClassroomRuntimeService`        | `@openlearn/core:IClassroomRuntimeService`        |
+| `IPresenceEngineServiceToken`        | `IPresenceEngineService`          | `@openlearn/core:IPresenceEngineService`          |
+| `ITeachingCollaborationServiceToken` | `ITeachingCollaborationService`   | `@openlearn/core:ITeachingCollaborationService`   |
+| `ILearningAnalyticsServiceToken`     | `ILearningAnalyticsService`       | `@openlearn/core:ILearningAnalyticsService`       |
+| `IAICapabilityServiceToken`          | `IAICapabilityService`            | `@openlearn/core:IAICapabilityService`            |
+| `ICapabilityRuntimeServiceToken`     | `ICapabilityRuntimeService`       | `@openlearn/core:ICapabilityRuntimeService`       |
+| `ICapabilityGovernanceServiceToken`  | `ICapabilityGovernanceService`    | `@openlearn/core:ICapabilityGovernanceService`    |
+| `IPlatformServiceRegistryToken`      | `IPlatformServiceRegistryService` | `@openlearn/core:IPlatformServiceRegistryService` |
 
 ### F. 活动生态 Token
 
-| 导出 Token | 解析类型 | 标识字符串 |
-|---|---|---|
+| 导出 Token               | 解析类型           | 标识字符串                                           |
+| ------------------------ | ------------------ | ---------------------------------------------------- |
 | `IActivityRegistryToken` | `ActivityRegistry` | （定义于 `packages/activity-ecosystem/index.ts:28`） |
 
 ### G. 认证与会话桥接 Token (v0.3.15+)
 
-| 导出 Token | 解析类型 | 标识字符串 |
-|---|---|---|
+| 导出 Token                | 解析类型                    | 标识字符串                                  |
+| ------------------------- | --------------------------- | ------------------------------------------- |
 | `IAuthSessionBridgeToken` | `IAuthSessionBridgeService` | `@openlearn/core:IAuthSessionBridgeService` |
 
 ---
@@ -130,6 +130,7 @@ interface PluginContext {
 > 行号指向 `packages/core/di/interfaces.ts` 与对应实现文件。
 
 ### `ICommandBusService`（`interfaces.ts:43-80`）
+
 ```typescript
 execute<T extends PlatformCommand>(command: T): Promise<unknown>;
 registerHandler(commandType: string, handler: CommandHandler): Promise<void>;
@@ -139,6 +140,7 @@ setInterceptor(interceptor: (command: PlatformCommand) => Promise<void>): Promis
 ```
 
 ### `IEventBusService`（`interfaces.ts:84-102`）
+
 ```typescript
 publish(event: PlatformEvent): Promise<void>;
 subscribe(eventType: string, subscriber: EventSubscriber): Promise<void>;
@@ -146,6 +148,7 @@ unsubscribe(eventType: string, subscriber: EventSubscriber): Promise<void>;
 ```
 
 ### `IActionRegistryService`（`interfaces.ts:106-147`）
+
 ```typescript
 register(descriptor: ActionDescriptor): Promise<void>;
 unregister(id: string): Promise<void>;
@@ -156,6 +159,7 @@ getActionByCommandType(commandType: string): Promise<ActionDescriptor | undefine
 ```
 
 ### `ICapabilityService`（`interfaces.ts:151-169`）
+
 ```typescript
 grant(actorId: string, cap: string): Promise<void>;
 revokeAll(actorId: string): Promise<void>;
@@ -163,6 +167,7 @@ check(actorId: string, requiredCap: string): Promise<boolean>;
 ```
 
 ### `IProcessService`（`interfaces.ts:173-217`）
+
 ```typescript
 spawn(name: string, taskType: string, payload: unknown): Promise<string>;
 kill(processId: string): Promise<void>;
@@ -174,23 +179,29 @@ restore(): Promise<void>;
 ```
 
 ### `IStorageService`（`interfaces.ts:228-237`，实现 `packages/core/di/storage-service.ts:23-51`）
+
 ```typescript
 get(key: string): Promise<unknown>;
 set(key: string, value: unknown): Promise<void>;
 delete(key: string): Promise<void>;
 ```
+
 > 后端为 SQLite `plugin_storage` 表，按 `plugin_id` 自动命名空间隔离。
 
 ### `IAIService`（`interfaces.ts:247-259`，实现 `packages/core/di/ai-service.ts:32-65`）
+
 ```typescript
 generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string>;
 ```
+
 > 两级回退：数据库配置的 OpenAI 兼容 Provider → Gemini。
 
 ### `IDatabaseToken` → 原始 `better-sqlite3.Database`
+
 无接口包装，插件直接拿到原始 `Database` 对象。查询/插入/更新/删除/事务请使用 better-sqlite3 原生 API（详见 [插件数据库 API 与 Migration 规范](../reference/plugin-database-api)）。
 
 ### `IPluginHostToken` → `PluginHost` 类（`packages/core/plugin-host/index.ts:105`）
+
 ```typescript
 setExpressApp(app: any): void;
 setSocketIO(io: any): void;
@@ -204,6 +215,7 @@ reloadPlugin(pluginId: string, newSourceCode: string): Promise<void>;
 ```
 
 ### `IPluginLifecycleManagerToken` → `PluginLifecycleManager`（`plugin-lifecycle-manager.ts:14-24`）
+
 ```typescript
 readonly pluginHost: PluginHost;
 getPluginState(pluginId: string): PluginState | undefined;
@@ -217,6 +229,7 @@ metadata(): IntegrationDescriptor;
 ```
 
 ### `IPluginDistributionManagerToken` → `PluginDistributionManager`（`plugin-distribution-manager.ts:63-74`）
+
 ```typescript
 readonly pluginHost: PluginHost;
 registerRepository(repo: IPluginRepositoryAdapter): void;
@@ -231,6 +244,7 @@ metadata(): IntegrationDescriptor;
 ```
 
 ### `IPluginRuntimeCompositionToken` → `PluginRuntimeComposition`（`plugin-runtime-composition.ts:20-87`）
+
 ```typescript
 readonly id: string;
 readonly name: string;
@@ -245,6 +259,7 @@ metadata(): IntegrationDescriptor;
 ```
 
 ### `IUnifiedExtensionRegistryToken` → `UnifiedExtensionRegistry`（`unified-extension-registry.ts:22-35`）
+
 ```typescript
 registerExtension(category: string, id: string, impl: unknown, meta?: Partial<ExtensionItemMetadata>): void;
 hasExtension(category: string, id: string): boolean;
@@ -256,6 +271,7 @@ metadata(): IntegrationDescriptor;
 ```
 
 ### `IPluginCapabilityGatewayToken` → `PluginCapabilityGateway`（`plugin-capability-gateway.ts:24-36`）
+
 ```typescript
 readonly capabilityRegistry: CapabilityRegistry;
 listCapabilities(): ReadonlyArray<CapabilityMetadata>;
@@ -267,14 +283,17 @@ metadata(): IntegrationDescriptor;
 ```
 
 ### `ICapabilityRegistryToken` → `CapabilityRegistry`
+
 AI 能力注册表（与 `resource:action` 权限字符串无关，见 [能力权限矩阵](../reference/plugin-capability-matrix)）。
 
 ### `ISemesterGradeServiceToken` → `ISemesterGradeService`（`interfaces.ts:396-403`）
+
 ```typescript
 saveSemesterGrade(lessonId: string, studentId: string, grade: number): Promise<void>;
 ```
 
 ### `IPointsDimensionRegistryToken` → `IPointsDimensionRegistry`（`interfaces.ts:450-458`）
+
 ```typescript
 registerDimension(spec: PointsDimensionSpec): void;
 getDimension(id: string): PointsDimensionSpec | undefined;
@@ -282,19 +301,21 @@ listDimensions(): PointsDimensionSpec[];
 ```
 
 **`PointsDimensionSpec` 字段**（`interfaces.ts:437-448`）：
+
 ```typescript
 interface PointsDimensionSpec {
-  id: string;              // e.g. 'attendance', 'assignment', 'interactive_quiz', 'ai_practice'
-  name: string;            // e.g. '课堂互动打卡', 'AI练习积分'
+  id: string; // e.g. 'attendance', 'assignment', 'interactive_quiz', 'ai_practice'
+  name: string; // e.g. '课堂互动打卡', 'AI练习积分'
   category: 'builtin' | 'plugin';
-  defaultWeight: number;   // e.g. 0.15 (15%)
-  maxScore?: number;       // e.g. 100
+  defaultWeight: number; // e.g. 0.15 (15%)
+  maxScore?: number; // e.g. 100
   description?: string;
   pluginId?: string;
 }
 ```
 
 ### `IPointsLedgerServiceToken` → `IPointsLedgerService`（`interfaces.ts:477-492`，实现 `points-ledger-service.ts:5-104`）
+
 ```typescript
 addPoints(studentId: string, classId: string, dimensionId: string, deltaPoints: number, reason: string, pluginId?: string): Promise<PointLogItem>;
 getLogs(studentId: string, classId?: string): Promise<PointLogItem[]>;
@@ -303,6 +324,7 @@ getStudentDimensionSummary(studentId: string, classId: string): Promise<Record<s
 ```
 
 **`PointLogItem` 字段**（`interfaces.ts:463-475`）：
+
 ```typescript
 interface PointLogItem {
   id: string;
@@ -315,9 +337,11 @@ interface PointLogItem {
   createdAt: number;
 }
 ```
+
 > 后端表为 `student_point_logs`，列对应关系见[平台数据表参考](../reference/platform-data-tables)。
 
 ### 引擎门面接口（均为单方法，`interfaces.ts`）
+
 ```typescript
 ILessonEngineService          { getRuntime(): Promise<unknown>; }
 IClassroomRuntimeService      { getRuntimeKernel(): Promise<unknown>; }
@@ -331,6 +355,7 @@ IPlatformServiceRegistryService { getServiceRegistryKernel(): Promise<unknown>; 
 ```
 
 ### `IActivityRegistryToken` → `ActivityRegistry`（`activity-ecosystem/registry.ts:27-128`）
+
 ```typescript
 registerProvider(provider: ActivityProvider): void;
 unregisterProvider(id: string): boolean;
@@ -344,10 +369,13 @@ clear(): void;
 ```
 
 ### `IAuthSessionBridgeToken` → `IAuthSessionBridgeService`（`interfaces.ts:426-440`，v0.3.15+）
+
 ```typescript
 createSession(user: AuthBridgeUser): Promise<{ token: string; maxAge: number }>;
 ```
+
 **`AuthBridgeUser` 字段**（`interfaces.ts:416-424`）：
+
 ```typescript
 interface AuthBridgeUser {
   userId: string;
@@ -359,9 +387,11 @@ interface AuthBridgeUser {
   classId?: string;
 }
 ```
+
 > 特权认证服务，用于 LTI 1.3、SAML 等第三方 SSO 认证插件即时建档、生成会话并由安全网关自动写入跨域安全 Cookie。
 
 ### 日志（`ctx.log`，无 Token）
+
 ```typescript
 interface IPluginLogger {
   debug(message: string, meta?: Record<string, unknown>): void;

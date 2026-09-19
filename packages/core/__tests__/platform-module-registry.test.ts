@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  PlatformModuleRegistry,
-  PlatformModuleDescriptor,
-} from '../bootstrap/module-registry/index.js';
+import { PlatformModuleRegistry, PlatformModuleDescriptor } from '../bootstrap/module-registry/index.js';
 
 describe('Sprint A1 Platform Module Registry Test Suite', () => {
   const mockAIModule: PlatformModuleDescriptor = {

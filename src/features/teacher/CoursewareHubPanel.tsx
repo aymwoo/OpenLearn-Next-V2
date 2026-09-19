@@ -1,5 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Upload, Search, Eye, Trash2, CheckCircle2, XCircle, BarChart3, Globe, RefreshCw, FileText } from 'lucide-react';
+import {
+  X,
+  Upload,
+  Search,
+  Eye,
+  Trash2,
+  CheckCircle2,
+  XCircle,
+  BarChart3,
+  Globe,
+  RefreshCw,
+  FileText,
+} from 'lucide-react';
 
 const MANIFEST_ID = '@courseware-hub/plugin';
 const CT = (cmd: string) => `${MANIFEST_ID}.${cmd}`;
@@ -82,7 +94,9 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
     }
   }, [callCmd, statusFilter, search]);
 
-  useEffect(() => { fetchList(); }, [fetchList]);
+  useEffect(() => {
+    fetchList();
+  }, [fetchList]);
 
   const handleUpload = async () => {
     if (!uploadTitle.trim() || !uploadHtml.trim()) return;
@@ -117,15 +131,26 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
     try {
       await callCmd('courseware.publish', { id, status: newStatus });
       await fetchList();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   const handleDelete = async (id: string, title: string) => {
-    if (!confirm(lang === 'zh' ? `确认删除课件「${title}」及其所有版本和成绩数据？` : `Delete "${title}" and all versions/scores?`)) return;
+    if (
+      !confirm(
+        lang === 'zh'
+          ? `确认删除课件「${title}」及其所有版本和成绩数据？`
+          : `Delete "${title}" and all versions/scores?`,
+      )
+    )
+      return;
     try {
       await callCmd('courseware.delete', { id });
       await fetchList();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   const handleViewDetail = async (id: string) => {
@@ -135,7 +160,9 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
       setDetail(d);
       setScores(s?.items ?? []);
       setDetailId(id);
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   const handleStartEdit = (item: CoursewareItem) => {
@@ -150,22 +177,26 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
       await callCmd('courseware.upload', {
         title: editingTitle.trim(),
         html_content: '',
-        courseware_key: items.find(i => i.id === editingId)?.courseware_key,
+        courseware_key: items.find((i) => i.id === editingId)?.courseware_key,
         pass_score: editingPassScore,
       });
       setEditingId(null);
       await fetchList();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
   const handleUpdateExtraction = async (id: string, mode: string) => {
     try {
       await callCmd('courseware.update_extraction', { id, extraction_config: { mode } as any });
       await fetchList();
-    } catch (e: any) { alert(e.message); }
+    } catch (e: any) {
+      alert(e.message);
+    }
   };
 
-  const t = (zh: string, en: string) => lang === 'zh' ? zh : en;
+  const t = (zh: string, en: string) => (lang === 'zh' ? zh : en);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -178,7 +209,9 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-800">{t('课件管理', 'Courseware Hub')}</h2>
-              <p className="text-xs text-gray-400">{t('上传 HTML 课件 · 成绩采集 · 版本管理', 'Upload · Score Collection · Versioning')}</p>
+              <p className="text-xs text-gray-400">
+                {t('上传 HTML 课件 · 成绩采集 · 版本管理', 'Upload · Score Collection · Versioning')}
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
@@ -189,7 +222,10 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
         {detailId ? (
           /* Detail / Scores View */
           <div className="flex-1 overflow-y-auto p-6">
-            <button onClick={() => setDetailId(null)} className="text-sm text-indigo-600 hover:underline mb-4 inline-flex items-center gap-1">
+            <button
+              onClick={() => setDetailId(null)}
+              className="text-sm text-indigo-600 hover:underline mb-4 inline-flex items-center gap-1"
+            >
               ← {t('返回列表', 'Back to list')}
             </button>
             {detail && (
@@ -197,12 +233,34 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
                 <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
                   <h3 className="font-bold text-gray-800 mb-3">{detail.title}</h3>
                   <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                    <div><span className="text-gray-400">{t('版本', 'Version')}:</span> <span className="font-mono text-gray-700">{detail.version}</span></div>
-                    <div><span className="text-gray-400">{t('状态', 'Status')}:</span> <span className={`font-bold ${detail.status === 'published' ? 'text-green-600' : 'text-amber-600'}`}>{detail.status}</span></div>
-                    <div><span className="text-gray-400">{t('及格线', 'Pass Score')}:</span> <span className="font-mono">{detail.pass_score}</span></div>
-                    <div><span className="text-gray-400">{t('提交数', 'Submissions')}:</span> <span className="font-mono">{detail.stats?.submissions ?? 0}</span></div>
-                    <div><span className="text-gray-400">{t('平均分', 'Avg Score')}:</span> <span className="font-mono text-indigo-600 font-bold">{detail.stats?.avg_score ?? '-'}</span></div>
-                    <div><span className="text-gray-400">{t('通过率', 'Pass Rate')}:</span> <span className="font-mono">{detail.stats?.pass_rate ?? '-'}%</span></div>
+                    <div>
+                      <span className="text-gray-400">{t('版本', 'Version')}:</span>{' '}
+                      <span className="font-mono text-gray-700">{detail.version}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">{t('状态', 'Status')}:</span>{' '}
+                      <span
+                        className={`font-bold ${detail.status === 'published' ? 'text-green-600' : 'text-amber-600'}`}
+                      >
+                        {detail.status}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">{t('及格线', 'Pass Score')}:</span>{' '}
+                      <span className="font-mono">{detail.pass_score}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">{t('提交数', 'Submissions')}:</span>{' '}
+                      <span className="font-mono">{detail.stats?.submissions ?? 0}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">{t('平均分', 'Avg Score')}:</span>{' '}
+                      <span className="font-mono text-indigo-600 font-bold">{detail.stats?.avg_score ?? '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">{t('通过率', 'Pass Rate')}:</span>{' '}
+                      <span className="font-mono">{detail.stats?.pass_rate ?? '-'}%</span>
+                    </div>
                   </div>
                 </div>
 
@@ -223,12 +281,18 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {scores.map(s => (
+                          {scores.map((s) => (
                             <tr key={s.id} className="hover:bg-gray-50">
                               <td className="px-4 py-2 font-medium text-gray-700">{s.student_name || s.student_id}</td>
-                              <td className={`px-4 py-2 text-right font-mono font-bold ${s.score >= (detail?.pass_score ?? 60) ? 'text-green-600' : 'text-red-500'}`}>{s.score}/{s.total}</td>
+                              <td
+                                className={`px-4 py-2 text-right font-mono font-bold ${s.score >= (detail?.pass_score ?? 60) ? 'text-green-600' : 'text-red-500'}`}
+                              >
+                                {s.score}/{s.total}
+                              </td>
                               <td className="px-4 py-2 text-right text-gray-500">{s.time_spent}</td>
-                              <td className="px-4 py-2 text-right text-gray-400 text-xs">{new Date(s.submitted_at).toLocaleString()}</td>
+                              <td className="px-4 py-2 text-right text-gray-400 text-xs">
+                                {new Date(s.submitted_at).toLocaleString()}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -248,14 +312,14 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
                 <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
                 <input
                   value={search}
-                  onChange={e => setSearch(e.target.value)}
+                  onChange={(e) => setSearch(e.target.value)}
                   placeholder={t('搜索课件...', 'Search courseware...')}
                   className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-1 focus:ring-indigo-500 outline-none"
                 />
               </div>
               <select
                 value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
+                onChange={(e) => setStatusFilter(e.target.value)}
                 className="text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
               >
                 <option value="">{t('全部状态', 'All Status')}</option>
@@ -263,7 +327,11 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
                 <option value="draft">{t('草稿', 'Draft')}</option>
                 <option value="archived">{t('已归档', 'Archived')}</option>
               </select>
-              <button onClick={fetchList} className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title={t('刷新', 'Refresh')}>
+              <button
+                onClick={fetchList}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title={t('刷新', 'Refresh')}
+              >
                 <RefreshCw size={16} className="text-gray-400" />
               </button>
             </div>
@@ -274,14 +342,14 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
                 <span className="text-sm font-bold text-gray-600 shrink-0">{t('上传课件', 'Upload')}:</span>
                 <input
                   value={uploadTitle}
-                  onChange={e => setUploadTitle(e.target.value)}
+                  onChange={(e) => setUploadTitle(e.target.value)}
                   placeholder={t('课件标题', 'Title')}
                   className="text-sm border border-gray-200 rounded-lg px-3 py-2 w-40 outline-none focus:ring-1 focus:ring-indigo-500"
                 />
                 <input
                   type="number"
                   value={uploadPassScore}
-                  onChange={e => setUploadPassScore(Number(e.target.value))}
+                  onChange={(e) => setUploadPassScore(Number(e.target.value))}
                   placeholder={t('及格线', 'Pass')}
                   className="text-sm border border-gray-200 rounded-lg px-3 py-2 w-20 outline-none focus:ring-1 focus:ring-indigo-500"
                 />
@@ -307,44 +375,84 @@ export function CoursewareHubPanel({ onClose, lang }: Props) {
               ) : items.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
                   <FileText size={40} className="mx-auto mb-3 opacity-30" />
-                  <p>{t('暂无课件，请上传您的第一个 HTML 课件', 'No courseware yet. Upload your first HTML courseware.')}</p>
+                  <p>
+                    {t('暂无课件，请上传您的第一个 HTML 课件', 'No courseware yet. Upload your first HTML courseware.')}
+                  </p>
                 </div>
               ) : (
                 <div className="grid gap-4">
-                  {items.map(item => (
-                    <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-4 hover:border-indigo-200 transition-colors shadow-sm">
+                  {items.map((item) => (
+                    <div
+                      key={item.id}
+                      className="bg-white border border-gray-200 rounded-xl p-4 hover:border-indigo-200 transition-colors shadow-sm"
+                    >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <h4 className="font-bold text-gray-800 truncate">{item.title}</h4>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                              item.status === 'published' ? 'bg-green-50 text-green-650 border border-green-200' :
-                              item.status === 'archived' ? 'bg-gray-50 text-gray-500 border border-gray-200' :
-                              'bg-amber-50 text-amber-650 border border-amber-200'
-                            }`}>
-                              {item.status === 'published' ? t('已发布', 'Published') : item.status === 'archived' ? t('已归档', 'Archived') : t('草稿', 'Draft')}
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                item.status === 'published'
+                                  ? 'bg-green-50 text-green-650 border border-green-200'
+                                  : item.status === 'archived'
+                                    ? 'bg-gray-50 text-gray-500 border border-gray-200'
+                                    : 'bg-amber-50 text-amber-650 border border-amber-200'
+                              }`}
+                            >
+                              {item.status === 'published'
+                                ? t('已发布', 'Published')
+                                : item.status === 'archived'
+                                  ? t('已归档', 'Archived')
+                                  : t('草稿', 'Draft')}
                             </span>
                             <span className="text-[10px] text-gray-400 font-mono">v{item.version}</span>
                           </div>
-                          {item.description && <p className="text-xs text-gray-400 line-clamp-2 mb-2">{item.description}</p>}
+                          {item.description && (
+                            <p className="text-xs text-gray-400 line-clamp-2 mb-2">{item.description}</p>
+                          )}
                           <div className="flex items-center gap-4 text-xs text-gray-400">
-                            <span className="flex items-center gap-1"><BarChart3 size={12} />{t('提交', 'Subs')}: {item.stats?.submissions ?? 0}</span>
-                            <span className="flex items-center gap-1"><CheckCircle2 size={12} />{t('均分', 'Avg')}: {item.stats?.avg_score ?? '-'}</span>
+                            <span className="flex items-center gap-1">
+                              <BarChart3 size={12} />
+                              {t('提交', 'Subs')}: {item.stats?.submissions ?? 0}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <CheckCircle2 size={12} />
+                              {t('均分', 'Avg')}: {item.stats?.avg_score ?? '-'}
+                            </span>
                             {item.security_warnings?.length > 0 && (
-                              <span className="text-amber-500 flex items-center gap-1" title={item.security_warnings.join(', ')}>
+                              <span
+                                className="text-amber-500 flex items-center gap-1"
+                                title={item.security_warnings.join(', ')}
+                              >
                                 ⚠ {item.security_warnings.length}
                               </span>
                             )}
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => handleViewDetail(item.id)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title={t('详情', 'Details')}>
+                          <button
+                            onClick={() => handleViewDetail(item.id)}
+                            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                            title={t('详情', 'Details')}
+                          >
                             <Eye size={15} className="text-gray-400" />
                           </button>
-                          <button onClick={() => handlePublish(item.id, item.status)} className={`p-1.5 hover:bg-gray-100 rounded-lg transition-colors`} title={item.status === 'published' ? t('下架', 'Unpublish') : t('发布', 'Publish')}>
-                            {item.status === 'published' ? <XCircle size={15} className="text-amber-500" /> : <Globe size={15} className="text-green-500" />}
+                          <button
+                            onClick={() => handlePublish(item.id, item.status)}
+                            className={`p-1.5 hover:bg-gray-100 rounded-lg transition-colors`}
+                            title={item.status === 'published' ? t('下架', 'Unpublish') : t('发布', 'Publish')}
+                          >
+                            {item.status === 'published' ? (
+                              <XCircle size={15} className="text-amber-500" />
+                            ) : (
+                              <Globe size={15} className="text-green-500" />
+                            )}
                           </button>
-                          <button onClick={() => handleDelete(item.id, item.title)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" title={t('删除', 'Delete')}>
+                          <button
+                            onClick={() => handleDelete(item.id, item.title)}
+                            className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"
+                            title={t('删除', 'Delete')}
+                          >
                             <Trash2 size={15} className="text-red-400" />
                           </button>
                         </div>

@@ -41,7 +41,8 @@ export class AnimationManager {
       const rawProgress = Math.min(1, elapsed / task.durationMs);
 
       // EaseInOutQuad easing
-      const easedProgress = rawProgress < 0.5 ? 2 * rawProgress * rawProgress : 1 - Math.pow(-2 * rawProgress + 2, 2) / 2;
+      const easedProgress =
+        rawProgress < 0.5 ? 2 * rawProgress * rawProgress : 1 - Math.pow(-2 * rawProgress + 2, 2) / 2;
 
       task.onUpdate(easedProgress);
 

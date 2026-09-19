@@ -59,10 +59,9 @@ export class NodeWorkerTransport implements IWorkerTransport {
     try {
       this.worker.postMessage(msg);
     } catch (err) {
-      throw new WorkerTransportError(
-        `Failed to postMessage: ${err instanceof Error ? err.message : String(err)}`,
-        { cause: err instanceof Error ? err : undefined },
-      );
+      throw new WorkerTransportError(`Failed to postMessage: ${err instanceof Error ? err.message : String(err)}`, {
+        cause: err instanceof Error ? err : undefined,
+      });
     }
   }
 
@@ -145,10 +144,9 @@ export class BrowserWorkerTransport implements IWorkerTransport {
     try {
       this.worker.postMessage(msg);
     } catch (err) {
-      throw new WorkerTransportError(
-        `Failed to postMessage: ${err instanceof Error ? err.message : String(err)}`,
-        { cause: err instanceof Error ? err : undefined },
-      );
+      throw new WorkerTransportError(`Failed to postMessage: ${err instanceof Error ? err.message : String(err)}`, {
+        cause: err instanceof Error ? err : undefined,
+      });
     }
   }
 

@@ -47,9 +47,7 @@ describe('LessonEditorView', () => {
     expect(screen.getByText('课程编辑器: 未选择课程')).toBeTruthy();
     // Empty-state body copy
     expect(screen.getByText('No active lesson selected')).toBeTruthy();
-    expect(
-      screen.getByText('Please select a lesson from the Dashboard to orchestrate.'),
-    ).toBeTruthy();
+    expect(screen.getByText('Please select a lesson from the Dashboard to orchestrate.')).toBeTruthy();
   });
 
   it('renders the English header and fallback when lang is en', () => {
@@ -62,5 +60,31 @@ describe('LessonEditorView', () => {
     render(<LessonEditorView {...makeProps({ selectedLesson: 'lesson-1', editorSaveStatus: 'saving' })} />);
 
     expect(screen.getByText('同步 SQLite...')).toBeTruthy();
+  });
+
+  it('opens student preview in independent tab when "学生视角预览 (独立Tab)" is clicked', () => {
+    const openMock = vi.fn();
+    vi.stubGlobal('open', openMock);
+
+    render(
+      <LessonEditorView
+        {...makeProps({
+          selectedLesson: 'lesson-42',
+          lessons: [{ id: 'lesson-42', title: '物理实验课' } as any],
+        })}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
+    expect(button).toBeDefined();
+
+    button.click();
+
+    expect(openMock).toHaveBeenCalledWith(
+      expect.stringContaining('mode=student_live&lessonId=lesson-42#/student_live'),
+      '_blank',
+    );
+
+    vi.unstubAllGlobals();
   });
 });

@@ -146,14 +146,15 @@ describe('BuiltinPlugin', () => {
     pluginHost.registerPreloadedPlugin(pluginId, BuiltinPlugin);
 
     // Setup initial DB entry
-    db.prepare('INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(pluginId, 'Builtin', JSON.stringify(BuiltinPlugin.manifest), '', 'installed', Date.now(), 'esm');
+    db.prepare(
+      'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(pluginId, 'Builtin', JSON.stringify(BuiltinPlugin.manifest), '', 'installed', Date.now(), 'esm');
 
     await pluginHost.activatePlugin(pluginId);
 
     // Verify actions registered
     const actions = await actionRegistry.getAllActions();
-    const actionTypes = actions.map(a => a.commandType);
+    const actionTypes = actions.map((a) => a.commandType);
     expect(actionTypes).toContain('lesson.create');
     expect(actionTypes).toContain('whiteboard.draw');
 
@@ -165,16 +166,16 @@ describe('BuiltinPlugin', () => {
     capabilityGuard.grant(actorId, 'whiteboard:read');
 
     // 1. Create a lesson
-    const createLessonRes = await commandBus.execute({
+    const createLessonRes = (await commandBus.execute({
       id: 'cmd-lesson-create',
       type: 'lesson.create',
       actorId,
       payload: {
         title: 'Introduction to Physics',
-        content: 'This is the first lesson of Physics.'
+        content: 'This is the first lesson of Physics.',
       },
-      timestamp: Date.now()
-    }) as any;
+      timestamp: Date.now(),
+    })) as any;
 
     expect(createLessonRes.lessonId).toBeDefined();
     const lessonId = createLessonRes.lessonId;
@@ -185,17 +186,17 @@ describe('BuiltinPlugin', () => {
     expect(lesson.title).toBe('Introduction to Physics');
 
     // 2. Draw on whiteboard
-    const drawRes = await commandBus.execute({
+    const drawRes = (await commandBus.execute({
       id: 'cmd-whiteboard-draw',
       type: 'whiteboard.draw',
       actorId,
       payload: {
         lessonId,
         type: 'rectangle',
-        data: JSON.stringify({ points: [0, 0, 100, 100] })
+        data: JSON.stringify({ points: [0, 0, 100, 100] }),
       },
-      timestamp: Date.now()
-    }) as any;
+      timestamp: Date.now(),
+    })) as any;
 
     expect(drawRes.elementId).toBeDefined();
     const elementId = drawRes.elementId;

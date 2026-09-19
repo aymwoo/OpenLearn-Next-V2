@@ -35,7 +35,7 @@ export class ConversationService {
     role: ConversationMessage['role'],
     content: string,
     toolCalls?: ReadonlyArray<Record<string, unknown>>,
-    toolResults?: ReadonlyArray<import('../types/index.js').ToolExecutionResult>
+    toolResults?: ReadonlyArray<import('../types/index.js').ToolExecutionResult>,
   ): ConversationMessage {
     let session = this.sessions.get(sessionId);
     if (!session) {

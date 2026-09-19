@@ -13,7 +13,9 @@ export const PluginDocsViewer: React.FC = () => {
             </div>
             <div>
               <h3 className="text-base font-bold text-gray-900">已安装插件的使用文档</h3>
-              <p className="text-xs text-gray-500 mt-0.5">插件开发者可在 manifest.contributes 中声明 help.plugin_docs 贡献项，或通过扩展点注册文档组件。</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                插件开发者可在 manifest.contributes 中声明 help.plugin_docs 贡献项，或通过扩展点注册文档组件。
+              </p>
             </div>
           </div>
           <ExtensionPointRenderer slot="help.plugin_docs" />

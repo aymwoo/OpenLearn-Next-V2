@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  AIActionRegistry,
-  registerDefaultAIActions,
-  AIActionDescriptor,
-} from '../index.js';
+import { AIActionRegistry, registerDefaultAIActions, AIActionDescriptor } from '../index.js';
 
 describe('Sprint P5-02 AI Action API Test Suite', () => {
   let registry: AIActionRegistry;

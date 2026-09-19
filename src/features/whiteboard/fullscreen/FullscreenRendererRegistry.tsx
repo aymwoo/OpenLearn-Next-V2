@@ -60,14 +60,24 @@ export const FullscreenOverlay: React.FC<{
   containerSize: { width: number; height: number };
   onClose: () => void;
   lessonId: string;
-}> = ({ type, title, data, containerSize, onClose, lessonId }) => {
+  /**
+   * 是否允许本地关闭。教师端同步过来的最大化视图为 false：
+   * 不渲染关闭按钮、ESC 不生效、下发给渲染器的 onClose 也为空操作，
+   * 保证「教师退出最大化之前，学生的屏幕保持同一视图」。
+   */
+  dismissible?: boolean;
+}> = ({ type, title, data, containerSize, onClose, lessonId, dismissible = true }) => {
   React.useEffect(() => {
+    if (!dismissible) return;
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [onClose]);
+  }, [onClose, dismissible]);
+
+  // 不可关闭时，即便插件自定义渲染器主动调用 onClose 也不生效
+  const handleClose = dismissible ? onClose : () => {};
 
   const Renderer = fullscreenRendererRegistry.get(type);
 
@@ -79,31 +89,60 @@ export const FullscreenOverlay: React.FC<{
   }, []);
 
   const overlay = (
-    <div className="fixed inset-0 z-[99999] bg-black/60 flex items-center justify-center" style={{ pointerEvents: 'auto' }}>
-      <div className="relative bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col" style={{ width: Math.max(400, viewport.width - 32), height: Math.max(300, viewport.height - 32) }}>
+    <div
+      className="fixed inset-0 z-[99999] bg-black/60 flex items-center justify-center"
+      style={{ pointerEvents: 'auto' }}
+    >
+      <div
+        className="relative bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col"
+        style={{ width: Math.max(400, viewport.width - 32), height: Math.max(300, viewport.height - 32) }}
+      >
         <div className="bg-indigo-50 text-indigo-700 px-4 py-2 flex justify-between items-center text-sm font-semibold border-b border-indigo-100 shrink-0">
           <span className="truncate">{title}</span>
-          <button
-            onClick={onClose}
-            className="p-1.5 hover:bg-indigo-200/50 rounded-lg text-indigo-600 hover:text-indigo-900 transition-colors cursor-pointer flex items-center gap-1 text-xs"
-          >
-            <Minimize2 size={14} /> 退出全屏
-          </button>
+          {dismissible ? (
+            <button
+              onClick={onClose}
+              className="p-1.5 hover:bg-indigo-200/50 rounded-lg text-indigo-600 hover:text-indigo-900 transition-colors cursor-pointer flex items-center gap-1 text-xs"
+            >
+              <Minimize2 size={14} /> 退出全屏
+            </button>
+          ) : (
+            <span
+              className="px-2 py-1 rounded-md bg-indigo-100 text-indigo-600 text-[11px] font-bold flex items-center gap-1 select-none"
+              title="由教师端控制，无法在本地退出"
+            >
+              <Minimize2 size={12} /> 教师同步视图
+            </span>
+          )}
         </div>
-        <div className="absolute top-3 right-3 z-10">
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors cursor-pointer"
-            title="关闭 (ESC)"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        {dismissible && (
+          <div className="absolute top-3 right-3 z-10">
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors cursor-pointer"
+              title="关闭 (ESC)"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
         <div className="flex-1 overflow-auto p-6">
           {Renderer ? (
-            <Renderer elementType={type} data={data} onClose={onClose} containerSize={viewport} lessonId={lessonId} />
+            <Renderer
+              elementType={type}
+              data={data}
+              onClose={handleClose}
+              containerSize={viewport}
+              lessonId={lessonId}
+            />
           ) : (
-            <DefaultFullscreenRenderer elementType={type} data={data} onClose={onClose} containerSize={viewport} lessonId={lessonId} />
+            <DefaultFullscreenRenderer
+              elementType={type}
+              data={data}
+              onClose={handleClose}
+              containerSize={viewport}
+              lessonId={lessonId}
+            />
           )}
         </div>
       </div>
@@ -127,7 +166,9 @@ const PRIORITY_FIELDS = [
 ];
 
 function DefaultFullscreenRenderer({ data, lessonId }: FullscreenRendererProps) {
-  const matched = PRIORITY_FIELDS.find(f => data[f.field] !== undefined && data[f.field] !== null && data[f.field] !== '');
+  const matched = PRIORITY_FIELDS.find(
+    (f) => data[f.field] !== undefined && data[f.field] !== null && data[f.field] !== '',
+  );
 
   if (!matched) {
     return (
@@ -189,7 +230,12 @@ function DefaultFullscreenRenderer({ data, lessonId }: FullscreenRendererProps) 
   if (field === 'url') {
     return (
       <div className="flex items-center justify-center h-full">
-        <a href={String(data.url)} target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline text-lg">
+        <a
+          href={String(data.url)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-indigo-600 underline text-lg"
+        >
           {String(data.url)}
         </a>
       </div>

@@ -43,7 +43,9 @@ export class ServerBootstrapAdapter {
     return this;
   }
 
-  public async runBootstrap(context: StartupAdapterContext): Promise<{ builderResult: PlatformBuilderResult; pipelineResult: PipelineResult }> {
+  public async runBootstrap(
+    context: StartupAdapterContext,
+  ): Promise<{ builderResult: PlatformBuilderResult; pipelineResult: PipelineResult }> {
     if (this._state === 'Created') {
       this.configure(context);
     }
@@ -68,14 +70,19 @@ export class ServerBootstrapAdapter {
     });
 
     if (pipelineResult.status === 'Failed') {
-      throw pipelineResult.error || new Error(`ServerBootstrapAdapter pipeline failed at stage: ${pipelineResult.failedStage}`);
+      throw (
+        pipelineResult.error ||
+        new Error(`ServerBootstrapAdapter pipeline failed at stage: ${pipelineResult.failedStage}`)
+      );
     }
 
     this._state = 'Bootstrapped';
     return { builderResult, pipelineResult };
   }
 
-  public static async bootstrap(context: StartupAdapterContext): Promise<{ builderResult: PlatformBuilderResult; pipelineResult: PipelineResult }> {
+  public static async bootstrap(
+    context: StartupAdapterContext,
+  ): Promise<{ builderResult: PlatformBuilderResult; pipelineResult: PipelineResult }> {
     const adapter = ServerBootstrapAdapter.create(context);
     return adapter.runBootstrap(context);
   }

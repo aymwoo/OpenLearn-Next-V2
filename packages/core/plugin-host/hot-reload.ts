@@ -36,10 +36,7 @@ export class FileWatcher {
    * @param watchDir - 要监听的目录（绝对路径）
    * @param onPluginChanged - 插件文件变更回调
    */
-  async startWatch(
-    watchDir: string,
-    onPluginChanged: HotReloadCallback,
-  ): Promise<void> {
+  async startWatch(watchDir: string, onPluginChanged: HotReloadCallback): Promise<void> {
     if (this.watching) return;
 
     this.onChangeCallback = onPluginChanged;
@@ -200,10 +197,7 @@ export class HotReloadController {
   /**
    * 处理文件变更事件 — debounce + 触发 reload。
    */
-  private async handleFileChange(
-    pluginId: string,
-    filePath: string,
-  ): Promise<void> {
+  private async handleFileChange(pluginId: string, filePath: string): Promise<void> {
     // 清除旧的 debounce timer
     const existingTimer = this.debounceTimers.get(pluginId);
     if (existingTimer) {
@@ -219,17 +213,12 @@ export class HotReloadController {
         const fs = await import('fs/promises');
         const newSourceCode = await fs.readFile(filePath, 'utf-8');
 
-        console.log(
-          `[HotReload] File changed: ${filePath} → triggering reload for "${pluginId}"`,
-        );
+        console.log(`[HotReload] File changed: ${filePath} → triggering reload for "${pluginId}"`);
 
         // 触发 reload
         await this.pluginHost.reloadPlugin(pluginId, newSourceCode);
       } catch (err) {
-        console.error(
-          `[HotReload] Reload failed for "${pluginId}" (file: ${filePath}):`,
-          (err as Error).message,
-        );
+        console.error(`[HotReload] Reload failed for "${pluginId}" (file: ${filePath}):`, (err as Error).message);
         // 不重新抛出 — 保持监听器存活
       }
     }, DEBOUNCE_MS);

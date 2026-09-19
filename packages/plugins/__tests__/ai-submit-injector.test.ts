@@ -66,7 +66,9 @@ describe('AiSubmitInjectorPlugin', () => {
     capabilityGuard = new CapabilityGuard();
 
     mockAIService = {
-      generateText: vi.fn().mockResolvedValue('<html><body>Score: 100 <script>LMS.submit({score: 100})</script></body></html>'),
+      generateText: vi
+        .fn()
+        .mockResolvedValue('<html><body>Score: 100 <script>LMS.submit({score: 100})</script></body></html>'),
     };
 
     serviceRegistry.register(IEventBusServiceToken, eventBus as any);
@@ -108,8 +110,17 @@ describe('AiSubmitInjectorPlugin', () => {
     pluginHost.registerPreloadedPlugin(pluginId, AiSubmitInjectorPlugin);
 
     // Setup initial DB entry
-    db.prepare('INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(pluginId, 'AI Submit Injector', JSON.stringify(AiSubmitInjectorPlugin.manifest), '', 'installed', Date.now(), 'esm');
+    db.prepare(
+      'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(
+      pluginId,
+      'AI Submit Injector',
+      JSON.stringify(AiSubmitInjectorPlugin.manifest),
+      '',
+      'installed',
+      Date.now(),
+      'esm',
+    );
 
     await pluginHost.activatePlugin(pluginId);
 

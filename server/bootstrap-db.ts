@@ -19,13 +19,21 @@ export interface MigrationDb {
 
 export async function runStartupMigrations(db: MigrationDb): Promise<void> {
   try {
-
-    const existingQuiz = db.prepare('SELECT id, manifest, source_code FROM plugins WHERE name = ?').get('Quiz Component Plugin') as any;
-    if (existingQuiz && (!existingQuiz.manifest || !existingQuiz.manifest.includes('classroomTools') || !existingQuiz.source_code.includes('actorId:'))) {
+    const existingQuiz = db
+      .prepare('SELECT id, manifest, source_code FROM plugins WHERE name = ?')
+      .get('Quiz Component Plugin') as any;
+    if (
+      existingQuiz &&
+      (!existingQuiz.manifest ||
+        !existingQuiz.manifest.includes('classroomTools') ||
+        !existingQuiz.source_code.includes('actorId:'))
+    ) {
       console.log('Upgrading old Quiz Component Plugin to add classroomTools and fix Actor...');
       db.prepare('DELETE FROM plugins WHERE id = ?').run(existingQuiz.id);
     }
-    const existingRollCall = db.prepare('SELECT id, manifest FROM plugins WHERE name = ?').get('Random Student Picker (随机点名小工具)') as any;
+    const existingRollCall = db
+      .prepare('SELECT id, manifest FROM plugins WHERE name = ?')
+      .get('Random Student Picker (随机点名小工具)') as any;
     if (existingRollCall && (!existingRollCall.manifest || !existingRollCall.manifest.includes('classroomTools'))) {
       console.log('Upgrading old Random Student Picker Plugin to add classroomTools...');
       db.prepare('DELETE FROM plugins WHERE id = ?').run(existingRollCall.id);
@@ -75,9 +83,7 @@ export async function runStartupMigrations(db: MigrationDb): Promise<void> {
         created_at INTEGER NOT NULL
       );
     `);
-    db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_agent_conv_key ON agent_conversations(conv_key, created_at);`
-    );
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_conv_key ON agent_conversations(conv_key, created_at);`);
     console.log('agent_conversations table successfully ensured.');
   } catch (e) {
     console.error('Error creating agent_conversations table:', e);
@@ -87,18 +93,20 @@ export async function runStartupMigrations(db: MigrationDb): Promise<void> {
   try {
     db.exec(`ALTER TABLE client_sessions ADD COLUMN expires_at INTEGER`);
     console.log('client_sessions.expires_at column ensured.');
-  } catch { /* 列已存在 */ }
+  } catch {
+    /* 列已存在 */
+  }
 
   // SEC-AUTH-03: 启动时清理过�? session
   try {
     const now = Date.now();
     const idleTimeout = 24 * 60 * 60 * 1000;
-    const deletedExpired = db.prepare(
-      'DELETE FROM client_sessions WHERE expires_at IS NOT NULL AND expires_at < ?'
-    ).run(now);
-    const deletedIdle = db.prepare(
-      'DELETE FROM client_sessions WHERE updated_at IS NOT NULL AND (? - updated_at) > ?'
-    ).run(now, idleTimeout);
+    const deletedExpired = db
+      .prepare('DELETE FROM client_sessions WHERE expires_at IS NOT NULL AND expires_at < ?')
+      .run(now);
+    const deletedIdle = db
+      .prepare('DELETE FROM client_sessions WHERE updated_at IS NOT NULL AND (? - updated_at) > ?')
+      .run(now, idleTimeout);
     const totalDeleted = (deletedExpired.changes || 0) + (deletedIdle.changes || 0);
     if (totalDeleted > 0) {
       console.log(`[Session] Cleaned up ${totalDeleted} expired sessions on startup.`);

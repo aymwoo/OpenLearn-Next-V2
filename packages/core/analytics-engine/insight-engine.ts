@@ -3,19 +3,14 @@
  * Rule-based automated insight generator producing actionable classroom alerts without AI dependencies.
  */
 
-import {
-  RawAnalyticsMetrics,
-  HighLevelIndicators,
-  AnalyticsInsight,
-  CustomInsightRule,
-} from './types.js';
+import { RawAnalyticsMetrics, HighLevelIndicators, AnalyticsInsight, CustomInsightRule } from './types.js';
 
 export class InsightEngine {
   private customRules: CustomInsightRule[] = [];
 
   public generateInsights(
     metrics: RawAnalyticsMetrics,
-    indicators: HighLevelIndicators
+    indicators: HighLevelIndicators,
   ): ReadonlyArray<AnalyticsInsight> {
     const insights: AnalyticsInsight[] = [];
     const now = Date.now();

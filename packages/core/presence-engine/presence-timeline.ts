@@ -11,12 +11,7 @@ export class PresenceTimelineLogger {
   /**
    * Append a frame to the timeline log.
    */
-  public logChange(
-    entityId: string,
-    previousStatus: string,
-    currentStatus: string,
-    activity: string
-  ): void {
+  public logChange(entityId: string, previousStatus: string, currentStatus: string, activity: string): void {
     this.frames.push({
       timestamp: Date.now(),
       entityId,

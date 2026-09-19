@@ -52,10 +52,7 @@ export class ResourceTracker {
       try {
         disposable.dispose();
       } catch (e) {
-        console.error(
-          `[PluginHost] Error disposing resource for plugin "${pluginId}":`,
-          e,
-        );
+        console.error(`[PluginHost] Error disposing resource for plugin "${pluginId}":`, e);
       }
     }
 
@@ -92,7 +89,7 @@ export class ResourceTracker {
     if (!list || disposables.length === 0) return;
 
     const toRemove = new Set(disposables);
-    const remaining = list.filter(d => !toRemove.has(d));
+    const remaining = list.filter((d) => !toRemove.has(d));
 
     if (remaining.length > 0) {
       this.resources.set(pluginId, remaining);

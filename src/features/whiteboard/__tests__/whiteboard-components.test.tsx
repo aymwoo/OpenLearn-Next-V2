@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { WhiteboardToolbar } from '../components/WhiteboardToolbar';
 import { WhiteboardDialog } from '../components/WhiteboardDialog';
 import { RollCallWrapper } from '../widgets/RollCallWrapper';
@@ -8,7 +8,7 @@ import { wrapSrcDocWithBridge } from '../utils/bridgeUtils';
 
 // Mock ExtensionPointRenderer to avoid needing full PluginHostContext in unit test
 vi.mock('../../../plugin-host/extension-point-renderer', () => ({
-  ExtensionPointRenderer: () => <div data-testid="mock-extension-point" />
+  ExtensionPointRenderer: () => <div data-testid="mock-extension-point" />,
 }));
 
 describe('Whiteboard Extracted Components & Utilities', () => {
@@ -59,7 +59,7 @@ describe('Whiteboard Extracted Components & Utilities', () => {
           handleElementDelete={vi.fn()}
           setDialog={vi.fn()}
           setDialogInput={vi.fn()}
-        />
+        />,
       );
 
       const penButton = screen.getByTitle('画笔工具 (Pen)');
@@ -80,12 +80,12 @@ describe('Whiteboard Extracted Components & Utilities', () => {
             type: 'alert',
             title: '测试提示',
             message: '这是一个测试消息',
-            onConfirm
+            onConfirm,
           }}
           dialogInput=""
           setDialogInput={vi.fn()}
           setDialog={setDialog}
-        />
+        />,
       );
 
       expect(screen.getByText('测试提示')).toBeDefined();
@@ -106,19 +106,40 @@ describe('Whiteboard Extracted Components & Utilities', () => {
           data={{
             allStudents: [
               { id: 's1', name: '张三', email: 'zhangsan@edu.org' },
-              { id: 's2', name: '李四', email: 'lisi@edu.org' }
-            ]
+              { id: 's2', name: '李四', email: 'lisi@edu.org' },
+            ],
           }}
           onPointerDown={vi.fn()}
           onPointerMove={vi.fn()}
           onPointerUp={vi.fn()}
           onDelete={onDelete}
-        />
+        />,
       );
 
       expect(screen.getByText(/随机点名助手/)).toBeDefined();
       const pickBtn = screen.getByText('开始随机点名');
       expect(pickBtn).toBeDefined();
+      // 编辑模式（默认）下提供删除入口
+      expect(screen.getByTitle('删除组件')).toBeDefined();
+    });
+
+    it('should hide the delete button in readOnly (全班专注锁定) mode', () => {
+      const { container } = render(
+        <RollCallWrapper
+          elementId="el-rollcall-1"
+          data={{ allStudents: [{ id: 's1', name: '张三', email: 'zhangsan@edu.org' }] }}
+          onPointerDown={vi.fn()}
+          onPointerMove={vi.fn()}
+          onPointerUp={vi.fn()}
+          onDelete={vi.fn()}
+          readOnly
+        />,
+      );
+
+      // 只读跟随模式下组件本体仍可见可交互，但不再暴露删除按钮
+      expect(within(container).getByText(/随机点名助手/)).toBeDefined();
+      expect(within(container).getByText('开始随机点名')).toBeDefined();
+      expect(within(container).queryByTitle('删除组件')).toBeNull();
     });
   });
 });

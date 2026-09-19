@@ -57,7 +57,8 @@ export class PromptRegistry {
       name: 'OS Agent 中文系统提示词',
       category: 'agent',
       version: 1,
-      template: '你是一个教育系统底层的 OS Agent。你需要理解老师的指令，并调用可用的工具（命令）去执行这些操作。如果老师让你创建一节课，请务必利用工具生成详细的初始课程内容。如果老师要求管理进程/任务，请使用 process.spawn, process.kill, process.list。如果需存储文件、素材或创建目录，请使用 vfs.* 并在需要时管理班级和学生。你支持通过 class_create 创建班级, student_create 创建学生, class_add_student 将学生加入班级。当老师要求从提供的数据（如CSV、JSON、Markdown或对话中）创建班级或学生时，请依次发出这些指令。如果上一阶段返回了创建成功的班级ID或学生ID，你需要在后续的 functionCall 中引用这些ID（例如：把刚创建的学生ID加入到刚创建的班级ID中）。通过往复的工具调用，你可以自动完成完整的流程。',
+      template:
+        '你是一个教育系统底层的 OS Agent。你需要理解老师的指令，并调用可用的工具（命令）去执行这些操作。如果老师让你创建一节课，请务必利用工具生成详细的初始课程内容。如果老师要求管理进程/任务，请使用 process.spawn, process.kill, process.list。如果需存储文件、素材或创建目录，请使用 vfs.* 并在需要时管理班级和学生。你支持通过 class_create 创建班级, student_create 创建学生, class_add_student 将学生加入班级。当老师要求从提供的数据（如CSV、JSON、Markdown或对话中）创建班级或学生时，请依次发出这些指令。如果上一阶段返回了创建成功的班级ID或学生ID，你需要在后续的 functionCall 中引用这些ID（例如：把刚创建的学生ID加入到刚创建的班级ID中）。通过往复的工具调用，你可以自动完成完整的流程。',
       tags: ['agent', 'system', 'zh'],
     });
 
@@ -66,7 +67,8 @@ export class PromptRegistry {
       name: 'OS Agent English System Instruction',
       category: 'agent',
       version: 1,
-      template: 'You are an educational OS kernel agent. You interpret teacher instructions and use your available tools (commands) to execute them. If the teacher asks to create a lesson, always generate some detailed initial content for it. If the teacher asks to spawn or kill processes, use process tools. Use vfs tools to store assets, and manage classes/students as necessary. You support class_create, student_create, class_add_student. Always use tool chaining if you need to create a class and enroll students: first call class_create/student_create, receive their returned IDs, and then call class_add_student in the next turn. Always answer with a helpful summary.',
+      template:
+        'You are an educational OS kernel agent. You interpret teacher instructions and use your available tools (commands) to execute them. If the teacher asks to create a lesson, always generate some detailed initial content for it. If the teacher asks to spawn or kill processes, use process tools. Use vfs tools to store assets, and manage classes/students as necessary. You support class_create, student_create, class_add_student. Always use tool chaining if you need to create a class and enroll students: first call class_create/student_create, receive their returned IDs, and then call class_add_student in the next turn. Always answer with a helpful summary.',
       tags: ['agent', 'system', 'en'],
     });
 
@@ -76,7 +78,8 @@ export class PromptRegistry {
       name: '阶段 Quiz 选择题生成 Prompt',
       category: 'lesson',
       version: 1,
-      template: 'Based on the teaching stage "{{title}}" with knowledge points [{{knowledgePoints}}] and goals [{{teachingGoals}}], generate {{count}} multiple choice questions in JSON array format with fields: question, options (array of 4 strings), answerIndex (0-3), explanation. Return ONLY JSON.',
+      template:
+        'Based on the teaching stage "{{title}}" with knowledge points [{{knowledgePoints}}] and goals [{{teachingGoals}}], generate {{count}} multiple choice questions in JSON array format with fields: question, options (array of 4 strings), answerIndex (0-3), explanation. Return ONLY JSON.',
       tags: ['lesson', 'quiz'],
     });
 
@@ -86,7 +89,8 @@ export class PromptRegistry {
       name: '教学环节总结 Prompt',
       category: 'lesson',
       version: 1,
-      template: 'Summarize the educational activity "{{title}}" (Type: {{type}}) for teacher recap. Keep it under 100 words.',
+      template:
+        'Summarize the educational activity "{{title}}" (Type: {{type}}) for teacher recap. Keep it under 100 words.',
       tags: ['lesson', 'summary'],
     });
 
@@ -96,7 +100,8 @@ export class PromptRegistry {
       name: '5阶段教案规划 Prompt',
       category: 'lesson',
       version: 1,
-      template: 'Generate a structured lesson flow for {{grade}} {{subject}} topic "{{topic}}". Include 5 stages: 导入, 新知学习, 课堂演示, 课堂练习, 课堂总结. Return standard JSON.',
+      template:
+        'Generate a structured lesson flow for {{grade}} {{subject}} topic "{{topic}}". Include 5 stages: 导入, 新知学习, 课堂演示, 课堂练习, 课堂总结. Return standard JSON.',
       tags: ['lesson', 'plan'],
     });
   }

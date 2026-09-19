@@ -14,7 +14,7 @@ export function CreateClassButton({ lang, fetchClasses }: CreateClassButtonProps
           const res = await fetch('/api/classes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
+            body: JSON.stringify({ name }),
           });
           if (res.ok) await fetchClasses();
         }

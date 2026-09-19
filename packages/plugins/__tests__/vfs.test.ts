@@ -91,15 +91,16 @@ describe('VfsPlugin', () => {
     pluginHost.registerPreloadedPlugin(pluginId, VfsPlugin);
 
     // Setup initial DB entry
-    db.prepare('INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(pluginId, 'VFS', JSON.stringify(VfsPlugin.manifest), '', 'installed', Date.now(), 'esm');
+    db.prepare(
+      'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(pluginId, 'VFS', JSON.stringify(VfsPlugin.manifest), '', 'installed', Date.now(), 'esm');
 
     await pluginHost.activatePlugin(pluginId);
 
     // Verify actions registered
     const actions = await actionRegistry.getAllActions();
-    expect(actions.map(a => a.commandType)).toContain('vfs.write_file');
-    expect(actions.map(a => a.commandType)).toContain('vfs.read_file');
+    expect(actions.map((a) => a.commandType)).toContain('vfs.write_file');
+    expect(actions.map((a) => a.commandType)).toContain('vfs.read_file');
 
     // Grant capabilities to allow execution
     const actorId = `plugin:${VfsPlugin.manifest.id}`;
@@ -107,29 +108,29 @@ describe('VfsPlugin', () => {
     capabilityGuard.grant(actorId, 'vfs:read');
 
     // Execute vfs.write_file
-    const writeResult = await commandBus.execute({
+    const writeResult = (await commandBus.execute({
       id: 'cmd-1',
       type: 'vfs.write_file',
       actorId,
       payload: {
         path: '/test.txt',
-        content: 'hello world'
+        content: 'hello world',
       },
-      timestamp: Date.now()
-    }) as any;
+      timestamp: Date.now(),
+    })) as any;
 
     expect(writeResult.fileId).toBeDefined();
 
     // Execute vfs.read_file
-    const readResult = await commandBus.execute({
+    const readResult = (await commandBus.execute({
       id: 'cmd-2',
       type: 'vfs.read_file',
       actorId,
       payload: {
-        path: '/test.txt'
+        path: '/test.txt',
       },
-      timestamp: Date.now()
-    }) as any;
+      timestamp: Date.now(),
+    })) as any;
 
     expect(readResult.content).toBe('hello world');
   });

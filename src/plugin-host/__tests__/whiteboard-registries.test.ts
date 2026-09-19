@@ -182,14 +182,12 @@ describe('ctx.ui.registerCoursewareSource', () => {
     await host.installPlugin(manifest, 'export default {}');
     await host.activatePlugin(manifest.id);
 
-    expect(
-      coursewareSourceRegistry.resolve({ sourceType: 'moodle', sourceId: '42' }, { lessonId: 'L1' }),
-    ).toBe('https://moodle.example.com/course/42?lesson=L1');
+    expect(coursewareSourceRegistry.resolve({ sourceType: 'moodle', sourceId: '42' }, { lessonId: 'L1' })).toBe(
+      'https://moodle.example.com/course/42?lesson=L1',
+    );
     expect(coursewareSourceRegistry.resolve({ code: '<div/>' }, { lessonId: 'L1' })).toBeNull();
 
     await host.deactivatePlugin(manifest.id);
-    expect(
-      coursewareSourceRegistry.resolve({ sourceType: 'moodle', sourceId: '42' }, { lessonId: 'L1' }),
-    ).toBeNull();
+    expect(coursewareSourceRegistry.resolve({ sourceType: 'moodle', sourceId: '42' }, { lessonId: 'L1' })).toBeNull();
   });
 });

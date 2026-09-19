@@ -26,14 +26,7 @@ import type {
 } from '../core/di/interfaces.js';
 
 /** Functional grouping used by the Workspace catalogue. */
-export type ActivityCategory =
-  | 'assessment'
-  | 'engagement'
-  | 'collaboration'
-  | 'management'
-  | 'ai'
-  | 'media'
-  | 'custom';
+export type ActivityCategory = 'assessment' | 'engagement' | 'collaboration' | 'management' | 'ai' | 'media' | 'custom';
 
 /** Roles that may see / launch / participate in an activity. */
 export type ActivityRole = 'teacher' | 'student' | 'assistant' | 'observer' | 'all';
@@ -42,13 +35,7 @@ export type ActivityRole = 'teacher' | 'student' | 'assistant' | 'observer' | 'a
 export type ActivityDevice = 'desktop' | 'tablet' | 'mobile' | 'all';
 
 /** Lifecycle state of a registered activity provider instance. */
-export type ActivityLifecycleState =
-  | 'registered'
-  | 'initialized'
-  | 'running'
-  | 'paused'
-  | 'finished'
-  | 'disposed';
+export type ActivityLifecycleState = 'registered' | 'initialized' | 'running' | 'paused' | 'finished' | 'disposed';
 
 /**
  * Read-only projection of the existing Classroom Context / Session.

@@ -3,11 +3,7 @@
  * Public entry point for assembling the Platform Kernel without auto-starting execution.
  */
 
-import {
-  BuilderState,
-  PlatformBuilderOptions,
-  PlatformBuilderResult,
-} from './builder-types.js';
+import { BuilderState, PlatformBuilderOptions, PlatformBuilderResult } from './builder-types.js';
 import { BuilderValidationEngine } from './builder-validation-engine.js';
 import {
   IPlatformBuilder,
@@ -144,18 +140,14 @@ export class PlatformBuilder implements IPlatformBuilder {
     this.transitionTo('Validating');
     this._logger.info('Validation Started');
 
-    const validation = BuilderValidationEngine.validate(
-      this._config,
-      this._environment,
-      this._pipeline.stages
-    );
+    const validation = BuilderValidationEngine.validate(this._config, this._environment, this._pipeline.stages);
 
     this._logger.info('Validation Completed');
 
     if (!validation.isValid) {
       this._logger.error(`Validation Failed with ${validation.errors.length} errors.`);
       throw new ConfigurationError(
-        `PlatformBuilder validation failed: ${validation.errors.map((e) => e.message).join('; ')}`
+        `PlatformBuilder validation failed: ${validation.errors.map((e) => e.message).join('; ')}`,
       );
     }
 

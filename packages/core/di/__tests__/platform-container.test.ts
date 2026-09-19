@@ -48,7 +48,7 @@ describe('PlatformContainer — factory injection', () => {
     const c = makeContainer();
     c.registerInstance('cfg', { port: 8080 });
     c.registerFactory('built', (_ctx: InjectionContext) => ({
-      port: (c.resolve<{ port: number }>('cfg')).port,
+      port: c.resolve<{ port: number }>('cfg').port,
     }));
     expect(c.resolve<{ port: number }>('built').port).toBe(8080);
   });

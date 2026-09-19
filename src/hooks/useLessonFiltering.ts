@@ -14,9 +14,7 @@ export function useLessonFiltering(lessons: Lesson[]) {
     if (lessonsSearchQuery.trim()) {
       const q = lessonsSearchQuery.toLowerCase();
       result = result.filter(
-        (lesson) =>
-          lesson.title.toLowerCase().includes(q) ||
-          lesson.content.toLowerCase().includes(q),
+        (lesson) => lesson.title.toLowerCase().includes(q) || lesson.content.toLowerCase().includes(q),
       );
     }
 

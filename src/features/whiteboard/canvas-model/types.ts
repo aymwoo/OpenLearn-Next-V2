@@ -1,6 +1,6 @@
 /**
  * Canvas Object Model — Core Type Definitions
- * 
+ *
  * Provides unified interfaces for Object-Oriented Canvas Architecture.
  * All whiteboard content (text, image, shapes, code, quiz, plugins, etc.)
  * is abstracted as a generic `CanvasObject<T>`.

@@ -1,12 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import {
-  WorkspaceSlotRegistry,
-  WorkspaceProvider,
-  WorkspaceLayout,
-  useWorkspaceSlot,
-} from '../index.js';
+import { WorkspaceSlotRegistry, WorkspaceProvider, WorkspaceLayout, useWorkspaceSlot } from '../index.js';
 
 describe('Sprint P1-01 Workspace Shell Test Suite', () => {
   it('should register, sort by priority, and unregister slot providers in WorkspaceSlotRegistry', () => {
@@ -52,7 +47,7 @@ describe('Sprint P1-01 Workspace Shell Test Suite', () => {
     render(
       <WorkspaceProvider registry={registry}>
         <WorkspaceLayout />
-      </WorkspaceProvider>
+      </WorkspaceProvider>,
     );
 
     expect(screen.getByTestId('official-topbar')).toBeDefined();
@@ -76,7 +71,7 @@ describe('Sprint P1-01 Workspace Shell Test Suite', () => {
     const { rerender } = render(
       <WorkspaceProvider registry={registry}>
         <TestComponent />
-      </WorkspaceProvider>
+      </WorkspaceProvider>,
     );
 
     expect(screen.queryByTestId('status-bar-item')).toBeNull();
@@ -90,7 +85,7 @@ describe('Sprint P1-01 Workspace Shell Test Suite', () => {
     rerender(
       <WorkspaceProvider registry={registry}>
         <TestComponent />
-      </WorkspaceProvider>
+      </WorkspaceProvider>,
     );
 
     expect(screen.getByTestId('status-bar-item')).toBeDefined();

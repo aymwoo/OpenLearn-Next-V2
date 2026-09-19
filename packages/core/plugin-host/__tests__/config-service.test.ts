@@ -138,9 +138,12 @@ describe('ConfigService', () => {
 
   it('loadFromDB 从持久化存储恢复值', async () => {
     // Pre-populate DB
-    db.prepare(
-      'INSERT INTO plugin_storage (plugin_id, key, value, updated_at) VALUES (?, ?, ?, ?)',
-    ).run('ext-test', 'config:maxQuestions', JSON.stringify(75), Date.now());
+    db.prepare('INSERT INTO plugin_storage (plugin_id, key, value, updated_at) VALUES (?, ?, ?, ?)').run(
+      'ext-test',
+      'config:maxQuestions',
+      JSON.stringify(75),
+      Date.now(),
+    );
 
     const manifest = makeManifest({
       maxQuestions: { type: 'number', default: 50 },

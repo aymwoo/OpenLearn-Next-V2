@@ -13,11 +13,7 @@ export class AIProviderGateway {
     this.eventBus = eventBus;
   }
 
-  public async generateText(
-    prompt: string,
-    options?: AIGenerateOptions,
-    config?: AIProviderConfig
-  ): Promise<string> {
+  public async generateText(prompt: string, options?: AIGenerateOptions, config?: AIProviderConfig): Promise<string> {
     const startTime = Date.now();
     const providerId = config?.id || 'system-gemini';
     const modelName = config?.modelName || 'gemini-3.5-flash';
@@ -55,13 +51,11 @@ export class AIProviderGateway {
   private async callOpenAICompatible(
     prompt: string,
     options?: AIGenerateOptions,
-    config?: AIProviderConfig
+    config?: AIProviderConfig,
   ): Promise<string> {
     let cleanUrl = config!.apiUrl.trim();
     if (!cleanUrl.endsWith('/chat/completions')) {
-      cleanUrl = cleanUrl.endsWith('/')
-        ? cleanUrl + 'chat/completions'
-        : cleanUrl + '/chat/completions';
+      cleanUrl = cleanUrl.endsWith('/') ? cleanUrl + 'chat/completions' : cleanUrl + '/chat/completions';
     }
 
     const headers: Record<string, string> = {

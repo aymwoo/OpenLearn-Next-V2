@@ -6,10 +6,7 @@
  * reuse the existing Classroom Context / Session through it.
  */
 
-import type {
-  ActivityContext,
-  ActivityClassroomContext,
-} from './types.js';
+import type { ActivityContext, ActivityClassroomContext } from './types.js';
 
 export interface CreateActivityContextOptions {
   commandBus: ActivityContext['commandBus'];

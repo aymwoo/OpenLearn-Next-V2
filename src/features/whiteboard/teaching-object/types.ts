@@ -1,12 +1,6 @@
 import type { CanvasObject } from '../canvas-model/types.js';
 
-export type TeachingCategory =
-  | 'content'
-  | 'programming'
-  | 'interactive'
-  | 'learning'
-  | 'ai'
-  | 'plugin';
+export type TeachingCategory = 'content' | 'programming' | 'interactive' | 'learning' | 'ai' | 'plugin';
 
 export interface TeachingCapabilities {
   editable: boolean;
@@ -43,30 +37,12 @@ export interface TeachingMetadata {
 export type TeachingRole = 'teacher' | 'student' | 'observer';
 
 export type PresentationMode =
-  | 'present'
-  | 'hide'
-  | 'focus'
-  | 'highlight'
-  | 'lock_student'
-  | 'teacher_only'
-  | 'student_only';
+  'present' | 'hide' | 'focus' | 'highlight' | 'lock_student' | 'teacher_only' | 'student_only';
 
 export type TeachingLifecycleStage =
-  | 'Create'
-  | 'Initialize'
-  | 'Mount'
-  | 'Activate'
-  | 'Update'
-  | 'Deactivate'
-  | 'Destroy';
+  'Create' | 'Initialize' | 'Mount' | 'Activate' | 'Update' | 'Deactivate' | 'Destroy';
 
-export type TeachingRuntimeStatus =
-  | 'idle'
-  | 'running'
-  | 'paused'
-  | 'stopped'
-  | 'error'
-  | 'finished';
+export type TeachingRuntimeStatus = 'idle' | 'running' | 'paused' | 'stopped' | 'error' | 'finished';
 
 /**
  * Teaching Object — High-Level Extension of CanvasObject<T>

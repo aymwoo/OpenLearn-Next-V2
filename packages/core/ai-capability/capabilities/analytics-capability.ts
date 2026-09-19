@@ -33,9 +33,7 @@ export class AnalyticsCapability implements IAnalyticsCapability {
     try {
       insights = JSON.parse(resultText.replace(/```json|```/g, '').trim());
     } catch {
-      insights = [
-        { title: '课堂总体状况良好', description: '学生参与度适中，建议按原计划推进', severity: 'info' },
-      ];
+      insights = [{ title: '课堂总体状况良好', description: '学生参与度适中，建议按原计划推进', severity: 'info' }];
     }
 
     this.logger.log({

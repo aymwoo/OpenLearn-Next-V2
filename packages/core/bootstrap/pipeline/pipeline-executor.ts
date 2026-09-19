@@ -32,10 +32,7 @@ export class PipelineExecutor {
     }
   }
 
-  public async execute(
-    stages: ReadonlyArray<IBootstrapStage>,
-    context: IBootstrapContext
-  ): Promise<PipelineResult> {
+  public async execute(stages: ReadonlyArray<IBootstrapStage>, context: IBootstrapContext): Promise<PipelineResult> {
     const startTime = Date.now();
     const results: StageExecutionResult[] = [];
     const executedStages: IBootstrapStage[] = [];
@@ -155,7 +152,7 @@ export class PipelineExecutor {
   private async executeWithTimeout(
     stage: IBootstrapStage,
     context: IBootstrapContext,
-    timeoutMs: number
+    timeoutMs: number,
   ): Promise<void> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -173,10 +170,7 @@ export class PipelineExecutor {
     }
   }
 
-  private async rollbackExecutedStages(
-    executedStages: IBootstrapStage[],
-    context: IBootstrapContext
-  ): Promise<void> {
+  private async rollbackExecutedStages(executedStages: IBootstrapStage[], context: IBootstrapContext): Promise<void> {
     console.log('[Platform] Triggering stage rollbacks...');
     for (let i = executedStages.length - 1; i >= 0; i--) {
       const stage = executedStages[i];

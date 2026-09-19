@@ -24,6 +24,7 @@ export interface ServiceDescriptor {
 ## 核心接口契约 (`service-registry/index.ts`)
 
 `ServiceRegistryKernel` 支持服务契约检验：
+
 - `IAIServiceContract`
 - `ILessonServiceContract`
 - `IWhiteboardServiceContract`

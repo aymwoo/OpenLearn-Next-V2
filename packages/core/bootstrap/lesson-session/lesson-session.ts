@@ -3,11 +3,7 @@
  * Primary runtime object managed by Platform Kernel.
  */
 
-import {
-  LessonSessionState,
-  LessonSessionContext,
-  LessonSessionDescriptor,
-} from './lesson-session-types.js';
+import { LessonSessionState, LessonSessionContext, LessonSessionDescriptor } from './lesson-session-types.js';
 
 export class LessonSession {
   private _state: LessonSessionState = 'Created';
@@ -106,7 +102,7 @@ export class LessonSession {
     }
     if (!allowedStates.includes(this._state)) {
       throw new Error(
-        `Invalid state transition for LessonSession '${this.sessionId}'. Current: '${this._state}', Allowed: [${allowedStates.join(', ')}]`
+        `Invalid state transition for LessonSession '${this.sessionId}'. Current: '${this._state}', Allowed: [${allowedStates.join(', ')}]`,
       );
     }
   }

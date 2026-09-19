@@ -14,10 +14,11 @@ function makeClass(overrides: Partial<ClassType> = {}): ClassType {
   };
 }
 
-function makeStudent(id: string, name: string): StudentType {
+function makeStudent(id: string, name: string, student_number?: string): StudentType {
   return {
     id,
     name,
+    student_number,
     email: `${id}@example.com`,
     password: '123456',
     private_notes: '',
@@ -32,8 +33,17 @@ function baseProps(overrides: Partial<ReturnType<typeof buildProps>> = {}) {
 function buildProps() {
   return {
     cls: makeClass(),
-    classStudentsMap: { 'class-1': [makeStudent('s-1', 'Alice'), makeStudent('s-2', 'Bob')] },
-    students: [makeStudent('s-1', 'Alice'), makeStudent('s-2', 'Bob'), makeStudent('s-3', 'Carol')],
+    classStudentsMap: {
+      'class-1': [
+        makeStudent('s-1', 'Alice', 'STU2026001'),
+        makeStudent('s-2', 'Bob', 'STU2026002'),
+      ],
+    },
+    students: [
+      makeStudent('s-1', 'Alice', 'STU2026001'),
+      makeStudent('s-2', 'Bob', 'STU2026002'),
+      makeStudent('s-3', 'Carol', 'STU2026003'),
+    ],
     lang: 'en' as 'zh' | 'en',
     selectedStudentIds: new Set<string>(),
     rosterViewMode: 'grid' as 'grid' | 'list',
@@ -76,6 +86,39 @@ describe('ClassStudentsPanel', () => {
     expect(screen.getByText('Class Student Roster')).toBeTruthy();
     expect(screen.getByText('Alice')).toBeTruthy();
     expect(screen.getByText('Bob')).toBeTruthy();
+  });
+
+  it('renders student_number badges and copies to clipboard on click', () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText: writeTextMock },
+    });
+
+    render(<ClassStudentsPanel {...baseProps()} />);
+    const badge = screen.getByText('STU2026001');
+    expect(badge).toBeTruthy();
+
+    fireEvent.click(badge);
+    expect(writeTextMock).toHaveBeenCalledWith('STU2026001');
+  });
+
+  it('filters students by student_number query', () => {
+    const props = baseProps({ rosterSearchQuery: 'STU2026002' });
+    render(<ClassStudentsPanel {...props} />);
+    expect(screen.queryByText('Alice')).toBeNull();
+    expect(screen.getByText('Bob')).toBeTruthy();
+    expect(screen.getByText('STU2026002')).toBeTruthy();
+  });
+
+  it('renders student_number input in settings tab when student is expanded', () => {
+    const props = baseProps({
+      expandedStudentId: 's-1',
+      studentActiveTabs: { 's-1': 'settings' },
+    });
+    render(<ClassStudentsPanel {...props} />);
+    expect(screen.getByText('Student Number (Login ID):')).toBeTruthy();
+    const input = screen.getByDisplayValue('STU2026001') as HTMLInputElement;
+    expect(input).toBeTruthy();
   });
 
   it('toggles a student checkbox via toggleStudentSelection', () => {

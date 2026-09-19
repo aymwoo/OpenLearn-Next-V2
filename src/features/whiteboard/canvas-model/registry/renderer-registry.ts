@@ -15,7 +15,7 @@ export type ObjectRenderer<T = Record<string, unknown>> = React.ComponentType<Ob
 
 /**
  * Renderer Registry
- * 
+ *
  * Decouples object rendering from monolithic if/else or switch/case statements.
  * Allows plugins or new object definitions to register custom React / Konva renderers.
  */
@@ -25,10 +25,7 @@ export class RendererRegistry {
   /**
    * Register a Renderer Component for a given Object Type
    */
-  public registerRenderer<T = Record<string, unknown>>(
-    type: string,
-    renderer: ObjectRenderer<T>
-  ): void {
+  public registerRenderer<T = Record<string, unknown>>(type: string, renderer: ObjectRenderer<T>): void {
     if (this.renderers.has(type)) {
       console.warn(`[RendererRegistry] Overwriting renderer for type: "${type}"`);
     }

@@ -74,23 +74,23 @@ propertyEditorRegistry.register(type, (props) => <JSX />);
 
 ## 插件扩展点
 
-| 扩展槽位 | 用途 | 映射文件 |
-|----------|------|----------|
-| `classroom.tool` | 工具栏按钮 & 备课画板组件卡片 | `WhiteboardToolbar.tsx`, `LessonPalette.tsx` |
-| `fullscreenRendererRegistry` | 全屏渲染覆盖 | `FullscreenRendererRegistry.tsx` |
-| `propertyEditorRegistry` | 属性面板编辑 | `PropertyEditorRegistry.tsx` |
+| 扩展槽位                     | 用途                          | 映射文件                                     |
+| ---------------------------- | ----------------------------- | -------------------------------------------- |
+| `classroom.tool`             | 工具栏按钮 & 备课画板组件卡片 | `WhiteboardToolbar.tsx`, `LessonPalette.tsx` |
+| `fullscreenRendererRegistry` | 全屏渲染覆盖                  | `FullscreenRendererRegistry.tsx`             |
+| `propertyEditorRegistry`     | 属性面板编辑                  | `PropertyEditorRegistry.tsx`                 |
 
 ## 白板组件类型
 
-| 类型 | Canvas 渲染 | 全屏模式 | 属性编辑器 |
-|------|-----------|---------|-----------|
-| `text` | `Text`+`Html` | 智能默认（text 字段） | 文本/字体/颜色 |
-| `quiz` | `Html`（题目标题+选项） | 注册表（quiz renderer） | 问题/选项/正确答案 |
-| `timer` | `Html`（数码管计时） | 注册表（timer renderer） | 时长/标签 |
-| `assignment` | `Html`（作业卡片） | 注册表（assignment renderer） | 标题/描述 |
-| `code-sandbox` | `CodeSandboxWrapper`（IFrame） | 智能默认（code 字段） | 代码编辑 |
-| `html-applet` | `<iframe>`（Bridge SDK） | 注册表（html-applet renderer） | UUID/资源/代码/ZIP 上传 |
-| `math-graph` | `MathGraphWrapper`（Canvas） | 智能默认（equation 字段） | 公式输入 |
-| `presentation` | `RevealPresentationWrapper` | 智能默认（markdown 字段） | Markdown 编辑 |
-| `rollcall` | `RollCallWrapper`（点名面板） | 注册表（rollcall renderer） | 点名按钮 |
-| `plugin-*` | `PluginCardRenderer` | 可注册/智能默认 | 可注册/通用属性 |
+| 类型           | Canvas 渲染                    | 全屏模式                       | 属性编辑器              |
+| -------------- | ------------------------------ | ------------------------------ | ----------------------- |
+| `text`         | `Text`+`Html`                  | 智能默认（text 字段）          | 文本/字体/颜色          |
+| `quiz`         | `Html`（题目标题+选项）        | 注册表（quiz renderer）        | 问题/选项/正确答案      |
+| `timer`        | `Html`（数码管计时）           | 注册表（timer renderer）       | 时长/标签               |
+| `assignment`   | `Html`（作业卡片）             | 注册表（assignment renderer）  | 标题/描述               |
+| `code-sandbox` | `CodeSandboxWrapper`（IFrame） | 智能默认（code 字段）          | 代码编辑                |
+| `html-applet`  | `<iframe>`（Bridge SDK）       | 注册表（html-applet renderer） | UUID/资源/代码/ZIP 上传 |
+| `math-graph`   | `MathGraphWrapper`（Canvas）   | 智能默认（equation 字段）      | 公式输入                |
+| `presentation` | `RevealPresentationWrapper`    | 智能默认（markdown 字段）      | Markdown 编辑           |
+| `rollcall`     | `RollCallWrapper`（点名面板）  | 注册表（rollcall renderer）    | 点名按钮                |
+| `plugin-*`     | `PluginCardRenderer`           | 可注册/智能默认                | 可注册/通用属性         |

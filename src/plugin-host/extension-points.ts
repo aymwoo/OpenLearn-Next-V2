@@ -34,9 +34,7 @@ export class ExtensionPointRegistry {
     // Dedup check: throw on duplicate id for same slot (Pitfall 3, T-09-04)
     const dup = items.find((item) => item.id === config.id);
     if (dup) {
-      throw new Error(
-        `Extension point already registered for slot "${slot}" with id "${config.id}"`,
-      );
+      throw new Error(`Extension point already registered for slot "${slot}" with id "${config.id}"`);
     }
 
     items.push(config);

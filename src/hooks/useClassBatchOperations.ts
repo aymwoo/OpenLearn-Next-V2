@@ -11,14 +11,7 @@ export interface UseClassBatchOperationsOptions {
 }
 
 export function useClassBatchOperations(options: UseClassBatchOperationsOptions) {
-  const {
-    lang,
-    classes,
-    expandedClassId,
-    fetchClasses,
-    fetchClassStudents,
-    handleExportAllClassesCombined,
-  } = options;
+  const { lang, classes, expandedClassId, fetchClasses, fetchClassStudents, handleExportAllClassesCombined } = options;
 
   const [batchMode, setBatchMode] = useState<boolean>(false);
   const [selectedClassIds, setSelectedClassIds] = useState<Set<string>>(new Set());
@@ -40,9 +33,7 @@ export function useClassBatchOperations(options: UseClassBatchOperationsOptions)
 
   const toggleSelectAllClasses = () => {
     setSelectedClassIds((prev) =>
-      prev.size === classes.length && classes.length > 0
-        ? new Set()
-        : new Set(classes.map((c) => c.id)),
+      prev.size === classes.length && classes.length > 0 ? new Set() : new Set(classes.map((c) => c.id)),
     );
   };
 
@@ -57,9 +48,7 @@ export function useClassBatchOperations(options: UseClassBatchOperationsOptions)
 
   const toggleSelectAllStudents = (list: StudentType[]) => {
     setSelectedStudentIds((prev) =>
-      prev.size === list.length && list.length > 0
-        ? new Set()
-        : new Set(list.map((s) => s.id)),
+      prev.size === list.length && list.length > 0 ? new Set() : new Set(list.map((s) => s.id)),
     );
   };
 
@@ -82,17 +71,13 @@ export function useClassBatchOperations(options: UseClassBatchOperationsOptions)
 
   const handleBatchExportClasses = async () => {
     if (selectedClassIds.size === 0) return;
-    await handleExportAllClassesCombined(
-      classes.filter((c) => selectedClassIds.has(c.id)),
-    );
+    await handleExportAllClassesCombined(classes.filter((c) => selectedClassIds.has(c.id)));
   };
 
   const handleBatchSetPasscode = async () => {
     if (selectedClassIds.size === 0) return;
     const val = window.prompt(
-      lang === 'zh'
-        ? '请输入临时班级密码（留空则清除）:'
-        : 'Enter temporary passcode (leave empty to clear):',
+      lang === 'zh' ? '请输入临时班级密码（留空则清除）:' : 'Enter temporary passcode (leave empty to clear):',
     );
     if (val === null) return;
     for (const id of selectedClassIds) {
@@ -133,9 +118,7 @@ export function useClassBatchOperations(options: UseClassBatchOperationsOptions)
   const handleBatchResetPassword = async () => {
     if (selectedStudentIds.size === 0 || !expandedClassId) return;
     const val = window.prompt(
-      lang === 'zh'
-        ? '请输入要为选中学生设置的新密码:'
-        : 'Enter new password for selected students:',
+      lang === 'zh' ? '请输入要为选中学生设置的新密码:' : 'Enter new password for selected students:',
     );
     if (val === null || val.trim() === '') return;
     for (const id of selectedStudentIds) {
@@ -195,11 +178,7 @@ export function useClassBatchOperations(options: UseClassBatchOperationsOptions)
       setSelectedStudentIds(new Set());
     } else if (batchPicker === 'transfer') {
       if (!batchPickerTargetClass || batchPickerTargetClass === expandedClassId) {
-        alert(
-          lang === 'zh'
-            ? '请选择不同的目标班级'
-            : 'Please select a different target class',
-        );
+        alert(lang === 'zh' ? '请选择不同的目标班级' : 'Please select a different target class');
         return;
       }
       for (const id of selectedStudentIds) {

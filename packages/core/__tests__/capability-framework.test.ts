@@ -108,8 +108,18 @@ describe('OpenLearn Capability Invocation Framework Test Suite', () => {
 
       frameworkKernel.registry.register(handler);
 
-      const req1: InvocationRequest = { id: 'inv_b1', capabilityId: 'cap_mock_task', payload: { a: 1 }, context: { actorRole: 'Student' } };
-      const req2: InvocationRequest = { id: 'inv_b2', capabilityId: 'cap_mock_task', payload: { b: 2 }, context: { actorRole: 'Student' } };
+      const req1: InvocationRequest = {
+        id: 'inv_b1',
+        capabilityId: 'cap_mock_task',
+        payload: { a: 1 },
+        context: { actorRole: 'Student' },
+      };
+      const req2: InvocationRequest = {
+        id: 'inv_b2',
+        capabilityId: 'cap_mock_task',
+        payload: { b: 2 },
+        context: { actorRole: 'Student' },
+      };
 
       const batchResults = await frameworkKernel.engine.batch([req1, req2]);
       expect(batchResults.length).toBe(2);
@@ -126,7 +136,11 @@ describe('OpenLearn Capability Invocation Framework Test Suite', () => {
       const pluginAdapter = new PluginCapabilityProviderHandler(commandBus, 'lesson.create', 'Create Lesson Command');
       frameworkKernel.sdk.registerCapability(pluginAdapter);
 
-      const res = await frameworkKernel.sdk.invokeCapability('cap_cmd_lesson.create', { title: 'Algebra' }, { actorRole: 'Teacher' });
+      const res = await frameworkKernel.sdk.invokeCapability(
+        'cap_cmd_lesson.create',
+        { title: 'Algebra' },
+        { actorRole: 'Teacher' },
+      );
 
       expect(res.success).toBe(true);
       expect(res.data).toEqual({ status: 'Command Executed' });

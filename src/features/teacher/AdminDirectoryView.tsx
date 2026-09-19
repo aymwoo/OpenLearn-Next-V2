@@ -15,7 +15,17 @@ interface AdminDirectoryViewProps {
   onSiteInfoChanged?: (info: SiteInfo) => void;
 }
 
-export function AdminDirectoryView({ session, lang, onLogout, aiProviders, testingProviderId, onAIProvidersChanged, onTriggerTour, siteInfo, onSiteInfoChanged }: AdminDirectoryViewProps) {
+export function AdminDirectoryView({
+  session,
+  lang,
+  onLogout,
+  aiProviders,
+  testingProviderId,
+  onAIProvidersChanged,
+  onTriggerTour,
+  siteInfo,
+  onSiteInfoChanged,
+}: AdminDirectoryViewProps) {
   if (session?.subRole !== 'administrator') {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-rose-500">

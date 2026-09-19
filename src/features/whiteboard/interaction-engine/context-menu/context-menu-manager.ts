@@ -12,7 +12,12 @@ export class ContextMenuManager {
   private state: ContextMenuState | null = null;
   private listeners: Array<(state: ContextMenuState | null) => void> = [];
 
-  public openContextMenu(x: number, y: number, targetObjectId?: string | null, customItems: ContextMenuItem[] = []): void {
+  public openContextMenu(
+    x: number,
+    y: number,
+    targetObjectId?: string | null,
+    customItems: ContextMenuItem[] = [],
+  ): void {
     this.state = {
       x,
       y,

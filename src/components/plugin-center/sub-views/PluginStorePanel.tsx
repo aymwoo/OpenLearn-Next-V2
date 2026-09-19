@@ -1,13 +1,5 @@
 import React from 'react';
-import {
-  Blocks,
-  Shield,
-  Users,
-  Github,
-  RefreshCw,
-  FileText,
-  Settings
-} from 'lucide-react';
+import { Blocks, Shield, Users, Github, RefreshCw, FileText, Settings } from 'lucide-react';
 import { LegacyPluginBadge } from '../../LegacyPluginBadge';
 import { usePluginHostStore } from '../../../plugin-host/plugin-host-store';
 import type { PluginType } from '../types';
@@ -44,7 +36,7 @@ export function PluginStorePanel({
   setUpdateTargetPluginId,
   updateFileInputRef,
   onToggle,
-  onDelete
+  onDelete,
 }: PluginStorePanelProps) {
   const dashboardVisibilityMap = usePluginHostStore((s) => s.dashboardVisibility);
 
@@ -90,7 +82,8 @@ export function PluginStorePanel({
               if (parsed.version) manifestInfo.version = parsed.version;
               if (parsed.id) manifestInfo.manifestId = parsed.id;
               if (parsed.repository) {
-                manifestInfo.repository = typeof parsed.repository === 'string' ? parsed.repository : (parsed.repository.url || '');
+                manifestInfo.repository =
+                  typeof parsed.repository === 'string' ? parsed.repository : parsed.repository.url || '';
               }
               if (parsed.homepage) manifestInfo.homepage = parsed.homepage;
               if (parsed.capabilitiesProposed) manifestInfo.capabilities = parsed.capabilitiesProposed;
@@ -117,7 +110,11 @@ export function PluginStorePanel({
             }
 
             const installDate = plugin.created_at
-              ? new Date(plugin.created_at).toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+              ? new Date(plugin.created_at).toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                })
               : '—';
 
             const isSystem = plugin.id.startsWith('@openlearn/');
@@ -137,9 +134,11 @@ export function PluginStorePanel({
                 <div className="absolute top-0 right-0 p-3 flex items-center gap-1.5 flex-wrap justify-end">
                   {hasUpdate && (
                     <span
-                      title={lang === 'zh'
-                        ? `点击查看新特性${marketItem.isPrerelease ? '（预发布版本）' : ''}并升级至 v${marketItem.latestVersion}`
-                        : `Upgradeable to v${marketItem.latestVersion}${marketItem.isPrerelease ? ' (pre-release)' : ''}`}
+                      title={
+                        lang === 'zh'
+                          ? `点击查看新特性${marketItem.isPrerelease ? '（预发布版本）' : ''}并升级至 v${marketItem.latestVersion}`
+                          : `Upgradeable to v${marketItem.latestVersion}${marketItem.isPrerelease ? ' (pre-release)' : ''}`
+                      }
                       className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-sm flex items-center gap-1 shrink-0 cursor-pointer ${
                         marketItem.isPrerelease
                           ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white animate-pulse'
@@ -170,12 +169,17 @@ export function PluginStorePanel({
                         : 'bg-slate-100 text-slate-500 border-slate-200'
                     }`}
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full ${plugin.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${plugin.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}
+                    />
                     <span>
                       {plugin.status === 'active'
-                        ? (lang === 'zh' ? '已启用' : 'ACTIVE')
-                        : (lang === 'zh' ? '已停用' : 'INACTIVE')
-                      }
+                        ? lang === 'zh'
+                          ? '已启用'
+                          : 'ACTIVE'
+                        : lang === 'zh'
+                          ? '已停用'
+                          : 'INACTIVE'}
                     </span>
                   </span>
                   {plugin.execution_mode === 'esm' && (
@@ -183,9 +187,7 @@ export function PluginStorePanel({
                       ESM
                     </span>
                   )}
-                  {(plugin as any).execution_mode === 'legacy' && (
-                    <LegacyPluginBadge lang={lang} />
-                  )}
+                  {(plugin as any).execution_mode === 'legacy' && <LegacyPluginBadge lang={lang} />}
                   {isSystem && (
                     <span className="text-[10px] font-bold bg-violet-50 text-violet-700 border border-violet-200 px-1.5 py-0.5 rounded uppercase tracking-wider">
                       {lang === 'zh' ? '系统' : 'SYSTEM'}
@@ -208,7 +210,10 @@ export function PluginStorePanel({
                       )}
                     </div>
                     {manifestInfo.manifestId && (
-                      <p className="text-[10px] text-gray-400 font-mono truncate mt-0.5" title={manifestInfo.manifestId}>
+                      <p
+                        className="text-[10px] text-gray-400 font-mono truncate mt-0.5"
+                        title={manifestInfo.manifestId}
+                      >
                         {manifestInfo.manifestId}
                       </p>
                     )}
@@ -216,35 +221,43 @@ export function PluginStorePanel({
                 </div>
 
                 {/* Description */}
-                <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">
-                  {manifestInfo.description}
-                </p>
+                <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{manifestInfo.description}</p>
 
                 {/* Contribution points */}
-                {(manifestInfo.toolCount > 0 || manifestInfo.studentViewCount > 0 || manifestInfo.teacherWidgetCount > 0) && (
+                {(manifestInfo.toolCount > 0 ||
+                  manifestInfo.studentViewCount > 0 ||
+                  manifestInfo.teacherWidgetCount > 0) && (
                   <div className="flex flex-wrap gap-1.5">
                     {manifestInfo.toolCount > 0 && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-0.5 rounded-full">
                         <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-                        {lang === 'zh' ? `${manifestInfo.toolCount} 个课堂工具` : `${manifestInfo.toolCount} classroom tool${manifestInfo.toolCount > 1 ? 's' : ''}`}
+                        {lang === 'zh'
+                          ? `${manifestInfo.toolCount} 个课堂工具`
+                          : `${manifestInfo.toolCount} classroom tool${manifestInfo.toolCount > 1 ? 's' : ''}`}
                       </span>
                     )}
                     {manifestInfo.studentViewCount > 0 && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-sky-50 text-sky-600 border border-sky-100 px-2 py-0.5 rounded-full">
                         <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-                        {lang === 'zh' ? `${manifestInfo.studentViewCount} 个学生视图` : `${manifestInfo.studentViewCount} student view${manifestInfo.studentViewCount > 1 ? 's' : ''}`}
+                        {lang === 'zh'
+                          ? `${manifestInfo.studentViewCount} 个学生视图`
+                          : `${manifestInfo.studentViewCount} student view${manifestInfo.studentViewCount > 1 ? 's' : ''}`}
                       </span>
                     )}
                     {manifestInfo.teacherWidgetCount > 0 && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-amber-50 text-amber-600 border border-amber-100 px-2 py-0.5 rounded-full">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                        {lang === 'zh' ? `${manifestInfo.teacherWidgetCount} 个教师组件` : `${manifestInfo.teacherWidgetCount} teacher widget${manifestInfo.teacherWidgetCount > 1 ? 's' : ''}`}
+                        {lang === 'zh'
+                          ? `${manifestInfo.teacherWidgetCount} 个教师组件`
+                          : `${manifestInfo.teacherWidgetCount} teacher widget${manifestInfo.teacherWidgetCount > 1 ? 's' : ''}`}
                       </span>
                     )}
                     {manifestInfo.capabilities.length > 0 && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded-full">
                         <Shield size={9} />
-                        {lang === 'zh' ? `${manifestInfo.capabilities.length} 项权限` : `${manifestInfo.capabilities.length} permission${manifestInfo.capabilities.length > 1 ? 's' : ''}`}
+                        {lang === 'zh'
+                          ? `${manifestInfo.capabilities.length} 项权限`
+                          : `${manifestInfo.capabilities.length} permission${manifestInfo.capabilities.length > 1 ? 's' : ''}`}
                       </span>
                     )}
                   </div>
@@ -268,7 +281,10 @@ export function PluginStorePanel({
                         >
                           <Github size={10} />
                           <span className="truncate max-w-[130px]">
-                            {(manifestInfo.repository || manifestInfo.homepage || marketItem?.repository).replace(/^https?:\/\//, '')}
+                            {(manifestInfo.repository || manifestInfo.homepage || marketItem?.repository).replace(
+                              /^https?:\/\//,
+                              '',
+                            )}
                           </span>
                         </a>
                       )}
@@ -289,8 +305,8 @@ export function PluginStorePanel({
                           hasUpdate
                             ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
                             : updateError
-                            ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                            : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
+                              ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                              : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
                         }`}
                         title={lang === 'zh' ? '手动检查远端更新' : 'Check for updates'}
                       >
@@ -312,7 +328,12 @@ export function PluginStorePanel({
                           {oneClickUpdatingId === plugin.id ? (
                             <RefreshCw size={12} className="animate-spin" />
                           ) : (
-                            <span>🚀 {lang === 'zh' ? `一键热更新 v${marketItem.latestVersion}` : `Update v${marketItem.latestVersion}`}</span>
+                            <span>
+                              🚀{' '}
+                              {lang === 'zh'
+                                ? `一键热更新 v${marketItem.latestVersion}`
+                                : `Update v${marketItem.latestVersion}`}
+                            </span>
                           )}
                         </button>
                         <button
@@ -333,17 +354,26 @@ export function PluginStorePanel({
                       }`}
                     >
                       {plugin.status === 'active'
-                        ? lang === 'zh' ? '禁用' : 'Disable'
-                        : lang === 'zh' ? '启用' : 'Enable'}
+                        ? lang === 'zh'
+                          ? '禁用'
+                          : 'Disable'
+                        : lang === 'zh'
+                          ? '启用'
+                          : 'Enable'}
                     </button>
                     <button
                       onClick={() => {
                         const next = !dashboardVisible;
                         usePluginHostStore.getState().setDashboardVisibility(plugin.id, next);
                       }}
-                      title={dashboardVisible
-                        ? (lang === 'zh' ? '在系统总览中隐藏' : 'Hide from Dashboard')
-                        : (lang === 'zh' ? '在系统总览中显示' : 'Show in Dashboard')
+                      title={
+                        dashboardVisible
+                          ? lang === 'zh'
+                            ? '在系统总览中隐藏'
+                            : 'Hide from Dashboard'
+                          : lang === 'zh'
+                            ? '在系统总览中显示'
+                            : 'Show in Dashboard'
                       }
                       className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
                         dashboardVisible
@@ -366,7 +396,9 @@ export function PluginStorePanel({
                     </button>
                     {manifestInfo.hasConfig && (
                       <button
-                        onClick={() => setSettingsPlugin({ id: plugin.id, name: plugin.name, manifest: plugin.manifest })}
+                        onClick={() =>
+                          setSettingsPlugin({ id: plugin.id, name: plugin.name, manifest: plugin.manifest })
+                        }
                         className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors flex items-center gap-1"
                       >
                         <Settings size={12} />
@@ -396,7 +428,9 @@ export function PluginStorePanel({
                       <button
                         onClick={() => document.getElementById('zip-plugin-uploader')?.click()}
                         className="px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors"
-                        title={lang === 'zh' ? '上传新格式 ZIP 包以完成迁移' : 'Upload new-format ZIP package to migrate'}
+                        title={
+                          lang === 'zh' ? '上传新格式 ZIP 包以完成迁移' : 'Upload new-format ZIP package to migrate'
+                        }
                       >
                         {lang === 'zh' ? '迁移' : 'Migrate'}
                       </button>

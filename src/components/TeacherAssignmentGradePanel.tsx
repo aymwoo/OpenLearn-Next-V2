@@ -13,7 +13,7 @@ import {
   Save,
   Send,
   Database,
-  ExternalLink
+  ExternalLink,
 } from 'lucide-react';
 
 interface TeacherAssignmentGradePanelProps {
@@ -22,11 +22,7 @@ interface TeacherAssignmentGradePanelProps {
   addToast: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
-export function TeacherAssignmentGradePanel({
-  lessonId,
-  lang,
-  addToast
-}: TeacherAssignmentGradePanelProps) {
+export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: TeacherAssignmentGradePanelProps) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -63,7 +59,7 @@ export function TeacherAssignmentGradePanel({
         const initialTeacherWeights: Record<string, number> = {};
         const initialPeerWeights: Record<string, number> = {};
 
-        data.forEach(sub => {
+        data.forEach((sub) => {
           if (sub.grade) {
             initialScores[sub.id] = sub.grade.teacher_score;
             initialComments[sub.id] = sub.grade.teacher_comment;
@@ -73,15 +69,16 @@ export function TeacherAssignmentGradePanel({
             // Default value from local state if not set previously
             initialScores[sub.id] = scores[sub.id] !== undefined ? scores[sub.id] : 80;
             initialComments[sub.id] = comments[sub.id] !== undefined ? comments[sub.id] : '';
-            initialTeacherWeights[sub.id] = teacherWeights[sub.id] !== undefined ? teacherWeights[sub.id] : defaultTeacherWeight;
+            initialTeacherWeights[sub.id] =
+              teacherWeights[sub.id] !== undefined ? teacherWeights[sub.id] : defaultTeacherWeight;
             initialPeerWeights[sub.id] = peerWeights[sub.id] !== undefined ? peerWeights[sub.id] : defaultPeerWeight;
           }
         });
 
-        setScores(prev => ({ ...initialScores, ...prev }));
-        setComments(prev => ({ ...initialComments, ...prev }));
-        setTeacherWeights(prev => ({ ...initialTeacherWeights, ...prev }));
-        setPeerWeights(prev => ({ ...initialPeerWeights, ...prev }));
+        setScores((prev) => ({ ...initialScores, ...prev }));
+        setComments((prev) => ({ ...initialComments, ...prev }));
+        setTeacherWeights((prev) => ({ ...initialTeacherWeights, ...prev }));
+        setPeerWeights((prev) => ({ ...initialPeerWeights, ...prev }));
       } else {
         throw new Error('Invalid submissions data format');
       }
@@ -90,7 +87,7 @@ export function TeacherAssignmentGradePanel({
       addToast(
         zh ? '数据加载失败' : 'Failed to Load Data',
         zh ? '请检查网络连接或刷新页面。' : 'Please check your connection and try again.',
-        'warning'
+        'warning',
       );
     } finally {
       setLoading(false);
@@ -110,9 +107,9 @@ export function TeacherAssignmentGradePanel({
     setDefaultPeerWeight(100 - val);
 
     // Update individual students' weights for those not confirmed/saved
-    setTeacherWeights(prev => {
+    setTeacherWeights((prev) => {
       const next = { ...prev };
-      submissions.forEach(sub => {
+      submissions.forEach((sub) => {
         if (!sub.grade || sub.grade.status !== 'confirmed') {
           next[sub.id] = val;
         }
@@ -120,9 +117,9 @@ export function TeacherAssignmentGradePanel({
       return next;
     });
 
-    setPeerWeights(prev => {
+    setPeerWeights((prev) => {
       const next = { ...prev };
-      submissions.forEach(sub => {
+      submissions.forEach((sub) => {
         if (!sub.grade || sub.grade.status !== 'confirmed') {
           next[sub.id] = 100 - val;
         }
@@ -132,8 +129,8 @@ export function TeacherAssignmentGradePanel({
   };
 
   const handleIndividualTeacherWeightChange = (subId: string, val: number) => {
-    setTeacherWeights(prev => ({ ...prev, [subId]: val }));
-    setPeerWeights(prev => ({ ...prev, [subId]: 100 - val }));
+    setTeacherWeights((prev) => ({ ...prev, [subId]: val }));
+    setPeerWeights((prev) => ({ ...prev, [subId]: 100 - val }));
   };
 
   const handleGrade = async (subId: string, status: 'draft' | 'confirmed') => {
@@ -146,7 +143,7 @@ export function TeacherAssignmentGradePanel({
       addToast(
         zh ? '评分无效' : 'Invalid Score',
         zh ? '教师评分必须在 0 到 100 之间！' : 'Teacher score must be between 0 and 100!',
-        'warning'
+        'warning',
       );
       return;
     }
@@ -160,7 +157,7 @@ export function TeacherAssignmentGradePanel({
       }
     }
 
-    setSubmitting(prev => ({ ...prev, [subId]: status }));
+    setSubmitting((prev) => ({ ...prev, [subId]: status }));
     try {
       const res = await fetch('/api/commands', {
         method: 'POST',
@@ -173,39 +170,43 @@ export function TeacherAssignmentGradePanel({
             teacherComment,
             teacherWeight: tWeight,
             peerWeight: pWeight,
-            status
-          }
-        })
+            status,
+          },
+        }),
       });
 
       const data = await res.json();
       if (data.success) {
         addToast(
           status === 'confirmed'
-            ? (zh ? '平时成绩同步成功' : 'Semester Grade Synced')
-            : (zh ? '平时成绩草稿已保存' : 'Grade Draft Saved'),
+            ? zh
+              ? '平时成绩同步成功'
+              : 'Semester Grade Synced'
+            : zh
+              ? '平时成绩草稿已保存'
+              : 'Grade Draft Saved',
           status === 'confirmed'
-            ? (zh ? `已将平时成绩 ${data.result.calculatedFinalScore} 分同步至学期报告！` : `Successfully synced grade ${data.result.calculatedFinalScore}!`)
-            : (zh ? '成功保存了教师打分与评语草稿。' : 'Successfully saved score and comment draft.'),
-          'success'
+            ? zh
+              ? `已将平时成绩 ${data.result.calculatedFinalScore} 分同步至学期报告！`
+              : `Successfully synced grade ${data.result.calculatedFinalScore}!`
+            : zh
+              ? '成功保存了教师打分与评语草稿。'
+              : 'Successfully saved score and comment draft.',
+          'success',
         );
         fetchData(true);
       } else {
         throw new Error(data.error || 'Failed to submit grade');
       }
     } catch (e: any) {
-      addToast(
-        zh ? '操作失败' : 'Operation Failed',
-        e.message,
-        'warning'
-      );
+      addToast(zh ? '操作失败' : 'Operation Failed', e.message, 'warning');
     } finally {
-      setSubmitting(prev => ({ ...prev, [subId]: null }));
+      setSubmitting((prev) => ({ ...prev, [subId]: null }));
     }
   };
 
   const toggleReviews = (subId: string) => {
-    setExpandedReviews(prev => ({ ...prev, [subId]: !prev[subId] }));
+    setExpandedReviews((prev) => ({ ...prev, [subId]: !prev[subId] }));
   };
 
   if (loading) {
@@ -245,9 +246,13 @@ export function TeacherAssignmentGradePanel({
         <div className="flex items-start gap-2.5">
           <Settings2 className="text-indigo-500 shrink-0 mt-0.5" size={16} />
           <div>
-            <h4 className="text-xs font-bold text-slate-700">{zh ? '全局默认折算权重设置' : 'Default Grading Weights Configuration'}</h4>
+            <h4 className="text-xs font-bold text-slate-700">
+              {zh ? '全局默认折算权重设置' : 'Default Grading Weights Configuration'}
+            </h4>
             <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
-              {zh ? '调整权重分配，所有尚未锁定成绩的学生将自动应用此默认权重比例。' : 'Setting global default weights. Changes will automatically apply to non-confirmed grades.'}
+              {zh
+                ? '调整权重分配，所有尚未锁定成绩的学生将自动应用此默认权重比例。'
+                : 'Setting global default weights. Changes will automatically apply to non-confirmed grades.'}
             </p>
           </div>
         </div>
@@ -281,7 +286,9 @@ export function TeacherAssignmentGradePanel({
         {submissions.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center py-12 text-slate-400 gap-2">
             <AlertCircle size={32} className="text-slate-350" />
-            <p className="text-xs">{zh ? '本节课目前没有任何学生提交作业。' : 'No students have submitted assignments yet for this lesson.'}</p>
+            <p className="text-xs">
+              {zh ? '本节课目前没有任何学生提交作业。' : 'No students have submitted assignments yet for this lesson.'}
+            </p>
           </div>
         ) : (
           submissions.map((sub) => {
@@ -291,14 +298,17 @@ export function TeacherAssignmentGradePanel({
             const pWeight = peerWeights[sub.id] ?? defaultPeerWeight;
 
             const isConfirmed = sub.grade?.status === 'confirmed';
-            
+
             // Calculate final total preview
             const finalScorePreview = Math.round(
-              currentScore * (tWeight / 100) + sub.peerAverageScore * (pWeight / 100)
+              currentScore * (tWeight / 100) + sub.peerAverageScore * (pWeight / 100),
             );
 
             return (
-              <div key={sub.id} className={`bg-white border rounded-xl shadow-3xs overflow-hidden transition-all ${isConfirmed ? 'border-emerald-200 bg-emerald-50/5' : 'border-slate-200'}`}>
+              <div
+                key={sub.id}
+                className={`bg-white border rounded-xl shadow-3xs overflow-hidden transition-all ${isConfirmed ? 'border-emerald-200 bg-emerald-50/5' : 'border-slate-200'}`}
+              >
                 {/* Top strip */}
                 <div className="px-4 py-3 bg-slate-50/50 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
@@ -323,10 +333,10 @@ export function TeacherAssignmentGradePanel({
                       </span>
                     ) : (
                       <span className="bg-amber-50 text-amber-805 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-200/60 select-none">
-                        {sub.grade ? (zh ? '草稿状态' : 'Draft') : (zh ? '未评定' : 'Ungraded')}
+                        {sub.grade ? (zh ? '草稿状态' : 'Draft') : zh ? '未评定' : 'Ungraded'}
                       </span>
                     )}
-                    
+
                     <a
                       href={sub.filePath}
                       target="_blank"
@@ -358,13 +368,19 @@ export function TeacherAssignmentGradePanel({
                     <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-center gap-3">
                       <div className="bg-white border border-slate-200 w-12 h-12 rounded-lg flex flex-col items-center justify-center shrink-0 shadow-3xs">
                         <span className="text-[9px] text-slate-405 select-none font-bold">{zh ? '均分' : 'Avg'}</span>
-                        <span className="text-sm font-extrabold text-slate-700 leading-none mt-0.5">{sub.peerAverageScore}</span>
+                        <span className="text-sm font-extrabold text-slate-700 leading-none mt-0.5">
+                          {sub.peerAverageScore}
+                        </span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] text-slate-450 leading-normal font-medium">
-                          {sub.peerReviews.length > 0 
-                            ? (zh ? `根据同学互评分数得出的平均值。` : `Average score computed from classmate evaluations.`)
-                            : (zh ? `暂无同学对此作业给出评分。` : `No classmate peer reviews received yet.`)}
+                          {sub.peerReviews.length > 0
+                            ? zh
+                              ? `根据同学互评分数得出的平均值。`
+                              : `Average score computed from classmate evaluations.`
+                            : zh
+                              ? `暂无同学对此作业给出评分。`
+                              : `No classmate peer reviews received yet.`}
                         </p>
                         {sub.peerReviews.length > 0 && (
                           <button
@@ -389,7 +405,10 @@ export function TeacherAssignmentGradePanel({
                     {expandedReviews[sub.id] && sub.peerReviews.length > 0 && (
                       <div className="mt-2 space-y-2 border-t border-slate-100 pt-2.5 max-h-40 overflow-y-auto scrollbar-thin">
                         {sub.peerReviews.map((rev: any) => (
-                          <div key={rev.id} className="bg-white border border-slate-200 rounded-lg p-2.5 text-xs text-left shadow-4xs">
+                          <div
+                            key={rev.id}
+                            className="bg-white border border-slate-200 rounded-lg p-2.5 text-xs text-left shadow-4xs"
+                          >
                             <div className="flex justify-between items-center font-bold text-slate-700">
                               <span className="flex items-center gap-1 font-semibold text-slate-655">
                                 <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
@@ -426,7 +445,12 @@ export function TeacherAssignmentGradePanel({
                             max="100"
                             disabled={isConfirmed}
                             value={currentScore}
-                            onChange={(e) => setScores(prev => ({ ...prev, [sub.id]: Math.min(100, Math.max(0, Number(e.target.value))) }))}
+                            onChange={(e) =>
+                              setScores((prev) => ({
+                                ...prev,
+                                [sub.id]: Math.min(100, Math.max(0, Number(e.target.value))),
+                              }))
+                            }
                             className="bg-white border border-slate-250 rounded-lg text-xs font-bold text-slate-700 px-3 py-1.5 focus:ring-1 focus:ring-indigo-500 outline-none w-20 shadow-4xs disabled:opacity-50 disabled:bg-slate-50"
                           />
                           <input
@@ -435,7 +459,7 @@ export function TeacherAssignmentGradePanel({
                             max="100"
                             disabled={isConfirmed}
                             value={currentScore}
-                            onChange={(e) => setScores(prev => ({ ...prev, [sub.id]: Number(e.target.value) }))}
+                            onChange={(e) => setScores((prev) => ({ ...prev, [sub.id]: Number(e.target.value) }))}
                             className="flex-1 accent-indigo-650 disabled:opacity-40 cursor-pointer"
                           />
                         </div>
@@ -477,8 +501,12 @@ export function TeacherAssignmentGradePanel({
                         id={`teacher_comment_input_${sub.id}`}
                         disabled={isConfirmed}
                         value={currentComment}
-                        placeholder={zh ? '在此输入对学生作业作品的改进指导意见及评语。' : 'Enter guiding feedback for this student.'}
-                        onChange={(e) => setComments(prev => ({ ...prev, [sub.id]: e.target.value }))}
+                        placeholder={
+                          zh
+                            ? '在此输入对学生作业作品的改进指导意见及评语。'
+                            : 'Enter guiding feedback for this student.'
+                        }
+                        onChange={(e) => setComments((prev) => ({ ...prev, [sub.id]: e.target.value }))}
                         rows={2}
                         className="w-full bg-white border border-slate-250 rounded-lg text-xs p-2 focus:ring-1 focus:ring-indigo-500 outline-none shadow-4xs disabled:opacity-50 disabled:bg-slate-50 resize-none font-medium text-slate-700"
                       />
@@ -488,19 +516,25 @@ export function TeacherAssignmentGradePanel({
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2 border-t border-slate-100 mt-1">
                       {/* Formula preview */}
                       <div className="flex items-center gap-2">
-                        <div className={`p-1.5 rounded-lg border flex items-center justify-center shrink-0 ${isConfirmed ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
+                        <div
+                          className={`p-1.5 rounded-lg border flex items-center justify-center shrink-0 ${isConfirmed ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}
+                        >
                           <Database size={14} />
                         </div>
                         <div className="text-[10px] text-slate-500 font-medium">
-                          <div>
-                            {zh ? '平时总分计算公式' : 'Calculated Final Grade'}:
-                          </div>
+                          <div>{zh ? '平时总分计算公式' : 'Calculated Final Grade'}:</div>
                           <div className="font-bold text-slate-700 mt-0.5 animate-formula">
                             {tWeight}% × <span className="text-indigo-650 font-bold">{currentScore}</span>
                             {sub.peerReviews.length > 0 && ` + ${pWeight}% × ${sub.peerAverageScore}`}
                             {` = `}
-                            <span className={isConfirmed ? 'text-emerald-700 font-black text-xs' : 'text-indigo-700 font-black text-xs'}>
-                              {isConfirmed ? (sub.grade?.calculated_final_score || finalScorePreview) : finalScorePreview}
+                            <span
+                              className={
+                                isConfirmed
+                                  ? 'text-emerald-700 font-black text-xs'
+                                  : 'text-indigo-700 font-black text-xs'
+                              }
+                            >
+                              {isConfirmed ? sub.grade?.calculated_final_score || finalScorePreview : finalScorePreview}
                             </span>
                             {zh ? '分' : ' pts'}
                           </div>
@@ -518,7 +552,13 @@ export function TeacherAssignmentGradePanel({
                             className="px-3 py-1.5 bg-white border border-slate-350 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-55 flex items-center gap-1.5 shadow-4xs cursor-pointer select-none disabled:opacity-50"
                           >
                             <Save size={12} />
-                            {submitting[sub.id] === 'draft' ? (zh ? '保存中...' : 'Saving...') : (zh ? '暂存草稿' : 'Save Draft')}
+                            {submitting[sub.id] === 'draft'
+                              ? zh
+                                ? '保存中...'
+                                : 'Saving...'
+                              : zh
+                                ? '暂存草稿'
+                                : 'Save Draft'}
                           </button>
                           <button
                             id={`teacher_confirm_btn_${sub.id}`}
@@ -528,7 +568,13 @@ export function TeacherAssignmentGradePanel({
                             className="px-3.5 py-1.5 bg-indigo-600 border border-indigo-700 rounded-lg text-xs font-bold text-white hover:bg-indigo-700 flex items-center gap-1.5 shadow-3xs cursor-pointer select-none disabled:opacity-50"
                           >
                             <Send size={12} />
-                            {submitting[sub.id] === 'confirmed' ? (zh ? '同步中...' : 'Syncing...') : (zh ? '确认并同步' : 'Confirm & Sync')}
+                            {submitting[sub.id] === 'confirmed'
+                              ? zh
+                                ? '同步中...'
+                                : 'Syncing...'
+                              : zh
+                                ? '确认并同步'
+                                : 'Confirm & Sync'}
                           </button>
                         </div>
                       )}

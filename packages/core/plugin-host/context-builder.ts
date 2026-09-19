@@ -55,17 +55,19 @@ export function registerSharedModule(name: string, mod: any): void {
 export async function bootstrapSharedModules(): Promise<void> {
   // 服务端共享模块：排除前端专属库（konva/react-konva 是 Canvas 2D 库，CJS bundle 无法加载 ESM 模块）
   const modules = await Promise.allSettled([
-    import('recharts').then(m => ({ name: 'recharts', mod: m })),
-    import('react-markdown').then(m => ({ name: 'react-markdown', mod: m })),
-    import('jspdf').then(m => ({ name: 'jspdf', mod: m })),
-    import('jspdf-autotable').then(m => ({ name: 'jspdf-autotable', mod: m })),
-    import('lucide-react').then(m => ({ name: 'lucide-react', mod: m })),
-    import('uuid').then(m => ({ name: 'uuid', mod: m })),
+    import('recharts').then((m) => ({ name: 'recharts', mod: m })),
+    import('react-markdown').then((m) => ({ name: 'react-markdown', mod: m })),
+    import('jspdf').then((m) => ({ name: 'jspdf', mod: m })),
+    import('jspdf-autotable').then((m) => ({ name: 'jspdf-autotable', mod: m })),
+    import('lucide-react').then((m) => ({ name: 'lucide-react', mod: m })),
+    import('uuid').then((m) => ({ name: 'uuid', mod: m })),
     // xlsx 按需可选，失败不阻塞
-    import('xlsx').then(m => ({ name: 'xlsx', mod: m })).catch(err => {
-      console.warn('[PluginHost] xlsx not available (optional):', err.message);
-      return null;
-    }),
+    import('xlsx')
+      .then((m) => ({ name: 'xlsx', mod: m }))
+      .catch((err) => {
+        console.warn('[PluginHost] xlsx not available (optional):', err.message);
+        return null;
+      }),
   ]);
   for (const result of modules) {
     if (result.status === 'fulfilled' && result.value !== null) {
@@ -138,7 +140,7 @@ function wrapCommandBus(
       if (!isKernelPlugin && UUID_V7_PREFIX.test(commandType) && !commandType.startsWith(pluginId + '.')) {
         throw new Error(
           `[PluginHost] Plugin "${pluginId}" attempted to register command "${commandType}" ` +
-          `which belongs to another plugin's UUID namespace.`,
+            `which belongs to another plugin's UUID namespace.`,
         );
       }
 
@@ -160,11 +162,9 @@ function wrapCommandBus(
         });
       });
     }),
-    createCommand: createSafeFunction(
-      (type: string, payload: any, actorId: string, metadata?: any) => {
-        return commandBus.createCommand(resolveType(type), payload, actorId, metadata);
-      },
-    ),
+    createCommand: createSafeFunction((type: string, payload: any, actorId: string, metadata?: any) => {
+      return commandBus.createCommand(resolveType(type), payload, actorId, metadata);
+    }),
     execute: createSafeFunction(async (command: any) => {
       // Normalize command type: plugins may use either 'type' or 'commandType'
       const rawType = command.type || command.commandType;
@@ -174,7 +174,8 @@ function wrapCommandBus(
       } catch (e: any) {
         // If the prefixed type doesn't exist in CommandBus, try fallback to the unprefixed type
         // (e.g. kernel system commands like whiteboard.draw, vfs.write_file that plugins call)
-        const isNoHandler = typeof e?.message === 'string' && e.message.startsWith('No handler registered for command:');
+        const isNoHandler =
+          typeof e?.message === 'string' && e.message.startsWith('No handler registered for command:');
         if (isNoHandler) {
           const unprefixedType = stripPluginCommandPrefix(rawType, manifestId || pluginId);
           if (unprefixedType !== prefixedCmd.type) {
@@ -198,11 +199,7 @@ function wrapCommandBus(
  *
  * 迁移自 PluginRuntime lines 266-296。
  */
-function wrapEventBus(
-  eventBus: IEventBusService,
-  tracker: ResourceTracker,
-  pluginId: string,
-): IEventBusService {
+function wrapEventBus(eventBus: IEventBusService, tracker: ResourceTracker, pluginId: string): IEventBusService {
   return {
     subscribe: createSafeFunction((eventType: string, subscriber: any) => {
       const safeSubscriber = (event: any) => {
@@ -247,13 +244,7 @@ function wrapProcessManager(
 ): IProcessService {
   return {
     registerHandler: createSafeFunction((taskType: string, handler: any) => {
-      const safeHandler = async (
-        processId: string,
-        payload: any,
-        state: any,
-        log: any,
-        updateState: any,
-      ) => {
+      const safeHandler = async (processId: string, payload: any, state: any, log: any, updateState: any) => {
         try {
           await handler(processId, payload, state, log, updateState);
         } catch (e: any) {
@@ -269,26 +260,24 @@ function wrapProcessManager(
         });
       });
     }),
-    registerInterval: createSafeFunction(
-      (name: string, intervalMs: number, tickFn: any) => {
-        return Promise.resolve(
-          processService.registerInterval(name, intervalMs, (log) => {
-            try {
-              tickFn(log);
-            } catch (e) {
-              console.error(`[Plugin:${pluginId}] Error in interval task ${name}:`, e);
-            }
-          }),
-        ).then((processId) => {
-            tracker.track(pluginId, {
-              dispose: () => {
-                Promise.resolve(processService.kill(processId)).catch(() => {});
-              },
-            });
-            return processId;
-          });
-      },
-    ),
+    registerInterval: createSafeFunction((name: string, intervalMs: number, tickFn: any) => {
+      return Promise.resolve(
+        processService.registerInterval(name, intervalMs, (log) => {
+          try {
+            tickFn(log);
+          } catch (e) {
+            console.error(`[Plugin:${pluginId}] Error in interval task ${name}:`, e);
+          }
+        }),
+      ).then((processId) => {
+        tracker.track(pluginId, {
+          dispose: () => {
+            Promise.resolve(processService.kill(processId)).catch(() => {});
+          },
+        });
+        return processId;
+      });
+    }),
     kill: createSafeFunction((processId: string) => {
       return processService.kill(processId);
     }),
@@ -368,11 +357,7 @@ function wrapCapability(capabilityService: ICapabilityService): ICapabilityServi
  * 迁移自 PluginRuntime lines 392-427。
  * 将 `this.kernel.db` 替换为函数参数 `db`。
  */
-function wrapStorage(
-  storageService: IStorageService,
-  db: any,
-  manifestId: string,
-): IStorageService {
+function wrapStorage(storageService: IStorageService, db: any, manifestId: string): IStorageService {
   return {
     get: createSafeFunction(async (key: string) => {
       try {
@@ -400,9 +385,7 @@ function wrapStorage(
     }),
     delete: createSafeFunction(async (key: string) => {
       try {
-        db.prepare(
-          'DELETE FROM plugin_storage WHERE plugin_id = ? AND key = ?',
-        ).run(manifestId, key);
+        db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ? AND key = ?').run(manifestId, key);
       } catch (e) {
         console.error(`[Plugin:${manifestId}] Error deleting storage key "${key}":`, e);
         throw e;
@@ -455,8 +438,8 @@ export async function buildContext(
   pluginId: string,
   manifest: Manifest,
   db: any,
-  skipTokens?: Set<string>,  // Phase 6 (D-12): incompatible optional token names
-  contributionRegistry?: ContributionRegistry,  // V3.0: 贡献点注册表引用
+  skipTokens?: Set<string>, // Phase 6 (D-12): incompatible optional token names
+  contributionRegistry?: ContributionRegistry, // V3.0: 贡献点注册表引用
 ): Promise<PluginContext> {
   // 1. 从 DI 容器解析 7 个 IService
   const commandBusService = await serviceRegistry.resolve(ICommandBusServiceToken);
@@ -548,11 +531,15 @@ export async function buildContext(
     },
     async migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | void) {
       db.exec(`CREATE TABLE IF NOT EXISTS plugin_migrations (plugin_id TEXT PRIMARY KEY, version INTEGER NOT NULL)`);
-      const row = db.prepare(`SELECT version FROM plugin_migrations WHERE plugin_id = ?`).get(pluginId) as { version: number } | undefined;
+      const row = db.prepare(`SELECT version FROM plugin_migrations WHERE plugin_id = ?`).get(pluginId) as
+        { version: number } | undefined;
       const currentVersion = row ? row.version : 0;
       if (currentVersion < targetVersion) {
         await upgradeFn(db);
-        db.prepare(`INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)`).run(pluginId, targetVersion);
+        db.prepare(`INSERT OR REPLACE INTO plugin_migrations (plugin_id, version) VALUES (?, ?)`).run(
+          pluginId,
+          targetVersion,
+        );
       }
     },
   };
@@ -623,8 +610,8 @@ export async function buildContext(
       if (!declared || !declared.includes(token.name)) {
         throw new Error(
           `[PluginHost] Plugin "${pluginId}" attempted to provide "${token.name}" ` +
-          `which is not declared in manifest.provides. ` +
-          `Add it to manifest.provides: [${declared?.join(', ') ?? ''}]`,
+            `which is not declared in manifest.provides. ` +
+            `Add it to manifest.provides: [${declared?.join(', ') ?? ''}]`,
         );
       }
       // V3.2: 使用插件传入的 Token（含 version），不再硬编码 '1.0.0'
@@ -644,7 +631,7 @@ export async function buildContext(
       if (!PLUGIN_SHARED_MODULES.includes(moduleName as any)) {
         throw new Error(
           `Plugin "${pluginId}" cannot require "${moduleName}". ` +
-          `Allowed modules: ${PLUGIN_SHARED_MODULES.join(', ')}`,
+            `Allowed modules: ${PLUGIN_SHARED_MODULES.join(', ')}`,
         );
       }
       if (!sharedModules[moduleName]) {

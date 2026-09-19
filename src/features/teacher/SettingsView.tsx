@@ -17,7 +17,9 @@ export function SettingsView({ lang, onNavigateToAdmin }: SettingsViewProps) {
             {lang === 'zh' ? '全局系统设置' : 'Global System Settings'}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            {lang === 'zh' ? '管理大语言模型 AI 服务商、全局接口及教育操作系统基础配置。' : 'Orchestrate LLM providers, API keys, and classroom OS variables.'}
+            {lang === 'zh'
+              ? '管理大语言模型 AI 服务商、全局接口及教育操作系统基础配置。'
+              : 'Orchestrate LLM providers, API keys, and classroom OS variables.'}
           </p>
         </div>
       </div>
@@ -31,7 +33,9 @@ export function SettingsView({ lang, onNavigateToAdmin }: SettingsViewProps) {
               {lang === 'zh' ? 'AI 模型提供商管理' : 'AI Provider Management'}
             </h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              {lang === 'zh' ? 'AI 提供商配置已移至管理后台，仅管理员可访问。' : 'AI Provider configuration has been moved to the Admin Panel (admin only).'}
+              {lang === 'zh'
+                ? 'AI 提供商配置已移至管理后台，仅管理员可访问。'
+                : 'AI Provider configuration has been moved to the Admin Panel (admin only).'}
             </p>
           </div>
           <button
@@ -52,9 +56,17 @@ export function SettingsView({ lang, onNavigateToAdmin }: SettingsViewProps) {
       {/* System Specs Overview Box */}
       <div className="bg-slate-100 border border-slate-200/60 rounded-xl p-5 block sm:flex sm:items-center justify-between text-left gap-4 space-y-3 sm:space-y-0">
         <div className="space-y-1">
-          <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-wider">{lang === 'zh' ? '环境自检指标' : 'ENVIRONMENT DIAGNOSTICS'}</span>
-          <h4 className="font-extrabold text-gray-800 text-sm">{lang === 'zh' ? 'SQLite 内核连接通过' : 'Core SQLite DB Connection Active'}</h4>
-          <p className="text-xs text-gray-500">{lang === 'zh' ? '核心 educational_os.db 独立加载中，AI 提供服务商热切链路工作状态完美正常。' : 'Connected. Dynamic queries to active AI service providers are routed natively.'}</p>
+          <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-wider">
+            {lang === 'zh' ? '环境自检指标' : 'ENVIRONMENT DIAGNOSTICS'}
+          </span>
+          <h4 className="font-extrabold text-gray-800 text-sm">
+            {lang === 'zh' ? 'SQLite 内核连接通过' : 'Core SQLite DB Connection Active'}
+          </h4>
+          <p className="text-xs text-gray-500">
+            {lang === 'zh'
+              ? '核心 educational_os.db 独立加载中，AI 提供服务商热切链路工作状态完美正常。'
+              : 'Connected. Dynamic queries to active AI service providers are routed natively.'}
+          </p>
         </div>
         <div className="shrink-0 flex items-center gap-2 bg-white rounded-lg px-3 py-1.5 border border-slate-200 shadow-xs">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shrink-0" />

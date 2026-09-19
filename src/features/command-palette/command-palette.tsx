@@ -43,7 +43,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         onClose();
       }
     },
-    [filteredCommands, selectedIndex, registry, onClose]
+    [filteredCommands, selectedIndex, registry, onClose],
   );
 
   useEffect(() => {
@@ -95,7 +95,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               >
                 {cat}
               </button>
-            )
+            ),
           )}
         </div>
 

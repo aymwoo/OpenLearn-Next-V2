@@ -14,8 +14,14 @@ interface NotificationsDropdownProps {
 }
 
 export function NotificationsDropdown({
-  isOpen, lang, activeStudentId, studentNotifications, readNotifications,
-  setReadNotifications, studentDashboardData, setIsNotificationsOpen,
+  isOpen,
+  lang,
+  activeStudentId,
+  studentNotifications,
+  readNotifications,
+  setReadNotifications,
+  studentDashboardData,
+  setIsNotificationsOpen,
   setSelectedNotificationForModal,
 }: NotificationsDropdownProps) {
   if (!isOpen) return null;
@@ -32,13 +38,17 @@ export function NotificationsDropdown({
               try {
                 const promises = studentNotifications
                   .filter((n: any) => !readNotifications.has(n.id))
-                  .map((n: any) => fetch(`/api/students/${activeStudentId}/read_notifications`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ notificationId: n.id }),
-                  }));
+                  .map((n: any) =>
+                    fetch(`/api/students/${activeStudentId}/read_notifications`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ notificationId: n.id }),
+                    }),
+                  );
                 await Promise.all(promises);
-              } catch (e) { console.error(e); }
+              } catch (e) {
+                console.error(e);
+              }
               const newRead = new Set(readNotifications);
               studentNotifications.forEach((n: any) => newRead.add(n.id));
               setReadNotifications(newRead);
@@ -89,8 +99,14 @@ export function NotificationsDropdown({
                       )}
                     </div>
                     <div className="flex-1">
-                      <div className={`text-sm ${isUnread ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>{notif.title}</div>
-                      <div className={`text-xs mt-0.5 ${isUnread ? 'text-gray-600' : 'text-gray-500'}`}>{notif.message}</div>
+                      <div
+                        className={`text-sm ${isUnread ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}
+                      >
+                        {notif.title}
+                      </div>
+                      <div className={`text-xs mt-0.5 ${isUnread ? 'text-gray-600' : 'text-gray-500'}`}>
+                        {notif.message}
+                      </div>
                     </div>
                     {isUnread && <div className="w-2 h-2 rounded-full bg-indigo-500 mt-1"></div>}
                   </div>

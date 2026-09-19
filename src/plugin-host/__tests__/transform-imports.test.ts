@@ -67,7 +67,9 @@ describe('transformBareModuleImports', () => {
   it('transforms react-dom/client imports', () => {
     const input = 'import { createRoot } from "react-dom/client";';
     const output = transformBareModuleImports(input);
-    expect(output).toBe('const { createRoot } = (window.HostSharedDeps.ReactDOMClient || window.HostSharedDeps.ReactDOM);');
+    expect(output).toBe(
+      'const { createRoot } = (window.HostSharedDeps.ReactDOMClient || window.HostSharedDeps.ReactDOM);',
+    );
   });
 
   it('leaves non-shared local imports untouched', () => {

@@ -9,17 +9,13 @@ import { GoogleGenAI } from '@google/genai';
 import crypto from 'crypto';
 import { kernelContainer } from '../packages/core/kernel/index.js';
 import { lessonActiveSegments } from './shared-state.js';
-import type {
-  AgentChatAttachment,
-  AgentChatRequest,
-  AgentToolExecution,
-  StoredAIProvider,
-} from './context.js';
+import type { AgentChatAttachment, AgentChatRequest, AgentToolExecution, StoredAIProvider } from './context.js';
 
 export const buildAgentSystemInstruction = (lang: 'zh' | 'en', currentLessonId?: string | null) => {
-  let systemInstruction = lang === 'zh'
-    ? '你是一个教育系统底层的 OS Agent。你需要理解老师的指令，并调用可用的工具（命令）去执行这些操作。如果老师让你创建一节课，请务必利用工具生成详细的初始课程内容。如果老师要求管理进程/任务，请使用 process.spawn, process.kill, process.list。如果需存储文件、素材或创建目录，请使用 vfs.* 并在需要时管理班级和学生。你支持通过 class_create 创建班级, student_create 创建学生, class_add_student 将学生加入班级。当老师要求从提供的数据（如CSV、JSON、Markdown或对话中）创建班级或学生时，请依次发出这些指令。如果上一阶段返回了创建成功的班级ID或学生ID，你需要在后续�? functionCall 中引用这些ID（例如：把刚创建的学生ID加入到刚创建的班级ID中）。通过往复的工具调用，你可以自动完成完整的流程�?'
-    : 'You are an educational OS kernel agent. You interpret teacher instructions and use your available tools (commands) to execute them. If the teacher asks to create a lesson, always generate some detailed initial content for it. If the teacher asks to spawn or kill processes, use process tools. Use vfs tools to store assets, and manage classes/students as necessary. You support class_create, student_create, class_add_student. Always use tool chaining if you need to create a class and enroll students: first call class_create/student_create, receive their returned IDs, and then call class_add_student in the next turn. Always answer with a helpful summary.';
+  let systemInstruction =
+    lang === 'zh'
+      ? '你是一个教育系统底层的 OS Agent。你需要理解老师的指令，并调用可用的工具（命令）去执行这些操作。如果老师让你创建一节课，请务必利用工具生成详细的初始课程内容。如果老师要求管理进程/任务，请使用 process.spawn, process.kill, process.list。如果需存储文件、素材或创建目录，请使用 vfs.* 并在需要时管理班级和学生。你支持通过 class_create 创建班级, student_create 创建学生, class_add_student 将学生加入班级。当老师要求从提供的数据（如CSV、JSON、Markdown或对话中）创建班级或学生时，请依次发出这些指令。如果上一阶段返回了创建成功的班级ID或学生ID，你需要在后续�? functionCall 中引用这些ID（例如：把刚创建的学生ID加入到刚创建的班级ID中）。通过往复的工具调用，你可以自动完成完整的流程�?'
+      : 'You are an educational OS kernel agent. You interpret teacher instructions and use your available tools (commands) to execute them. If the teacher asks to create a lesson, always generate some detailed initial content for it. If the teacher asks to spawn or kill processes, use process tools. Use vfs tools to store assets, and manage classes/students as necessary. You support class_create, student_create, class_add_student. Always use tool chaining if you need to create a class and enroll students: first call class_create/student_create, receive their returned IDs, and then call class_add_student in the next turn. Always answer with a helpful summary.';
 
   if (currentLessonId) {
     systemInstruction += `\n[Context] The current selected lesson ID is "${currentLessonId}". Use this ID if the teacher's instruction is about modifying or adding to the current lesson.\n\nAvailable tools (functions) can be used multiple times in sequence if needed.`;
@@ -56,7 +52,7 @@ export const normalizeToolSchema = (schema: any): any => {
         ARRAY: 'array',
         INTEGER: 'integer',
         NUMBER: 'number',
-        BOOLEAN: 'boolean'
+        BOOLEAN: 'boolean',
       };
       normalized.type = typeMap[value.toUpperCase()] || value.toLowerCase();
       continue;
@@ -64,7 +60,7 @@ export const normalizeToolSchema = (schema: any): any => {
 
     if (key === 'properties' && value && typeof value === 'object' && !Array.isArray(value)) {
       normalized.properties = Object.fromEntries(
-        Object.entries(value).map(([propKey, propSchema]) => [propKey, normalizeToolSchema(propSchema)])
+        Object.entries(value).map(([propKey, propSchema]) => [propKey, normalizeToolSchema(propSchema)]),
       );
       continue;
     }
@@ -82,13 +78,13 @@ export const normalizeToolSchema = (schema: any): any => {
 
 export const buildOpenAITools = () => {
   const actions = kernelContainer.actionRegistry.getAllActions();
-  return actions.map(action => ({
+  return actions.map((action) => ({
     type: 'function',
     function: {
       name: action.commandType.replace(/[^a-zA-Z0-9_\-]/g, '_'),
       description: action.description,
-      parameters: normalizeToolSchema(action.inputSchema)
-    }
+      parameters: normalizeToolSchema(action.inputSchema),
+    },
   }));
 };
 
@@ -97,7 +93,7 @@ export const executeAgentToolCall = async (
   args: any,
   allExecutedTools: AgentToolExecution[],
   callerRole?: string,
-  currentLessonId?: string | null
+  currentLessonId?: string | null,
 ) => {
   const actionDesc = kernelContainer.actionRegistry.getActionByToolName(toolName);
   let actionResult: any;
@@ -109,42 +105,44 @@ export const executeAgentToolCall = async (
   const metadata = isAdmin ? { approved: true } : undefined;
 
   if (actionDesc) {
-    const cmd = kernelContainer.commandBus.createCommand(
-      actionDesc.commandType,
-      args,
-      actorId,
-      metadata
-    );
+    const cmd = kernelContainer.commandBus.createCommand(actionDesc.commandType, args, actorId, metadata);
     try {
-      const cmdResult = await kernelContainer.commandBus.execute(cmd) as any;
+      const cmdResult = (await kernelContainer.commandBus.execute(cmd)) as any;
       actionResult = cmdResult;
       allExecutedTools.push({ callName: toolName, success: true, result: cmdResult });
 
-      // If a whiteboard element was successfully drawn, let's make sure it is associated 
+      // If a whiteboard element was successfully drawn, let's make sure it is associated
       // with the current active segment so it isn't filtered out by the frontend!
       if (cmdResult && cmdResult.elementId && currentLessonId) {
         const activeSeg = lessonActiveSegments.get(currentLessonId);
         if (activeSeg) {
-          const row = kernelContainer.db.prepare('SELECT data FROM whiteboard_elements WHERE id = ?').get(cmdResult.elementId) as { data: string } | undefined;
+          const row = kernelContainer.db
+            .prepare('SELECT data FROM whiteboard_elements WHERE id = ?')
+            .get(cmdResult.elementId) as { data: string } | undefined;
           if (row) {
             try {
               const dataObj = JSON.parse(row.data);
               if (!dataObj.segmentId) {
                 dataObj.segmentId = activeSeg;
-                kernelContainer.db.prepare('UPDATE whiteboard_elements SET data = ? WHERE id = ?')
+                kernelContainer.db
+                  .prepare('UPDATE whiteboard_elements SET data = ? WHERE id = ?')
                   .run(JSON.stringify(dataObj), cmdResult.elementId);
-                console.log(`[Agent Tool Sync] Injected active segment "${activeSeg}" into element "${cmdResult.elementId}"`);
+                console.log(
+                  `[Agent Tool Sync] Injected active segment "${activeSeg}" into element "${cmdResult.elementId}"`,
+                );
 
                 // 方案 A1：注入完成后发布二次事件，通知前端重新获取元素数据�?
                 // 确保携带 segmentId 的元素能被正确渲染�?
-                kernelContainer.eventBus.publish({
-                  id: crypto.randomUUID(),
-                  type: 'whiteboard.element_updated',
-                  source: 'agent-tool-sync',
-                  payload: { elementId: cmdResult.elementId, lessonId: currentLessonId },
-                  timestamp: Date.now(),
-                  correlationId: cmd.id
-                }).catch(e => console.error('[Agent Tool Sync] Failed to publish element_updated event:', e));
+                kernelContainer.eventBus
+                  .publish({
+                    id: crypto.randomUUID(),
+                    type: 'whiteboard.element_updated',
+                    source: 'agent-tool-sync',
+                    payload: { elementId: cmdResult.elementId, lessonId: currentLessonId },
+                    timestamp: Date.now(),
+                    correlationId: cmd.id,
+                  })
+                  .catch((e) => console.error('[Agent Tool Sync] Failed to publish element_updated event:', e));
               }
             } catch (e) {
               console.error('[Agent Tool Sync] Failed to parse/update element data:', e);
@@ -179,7 +177,7 @@ export const runGeminiAgentChat = async (request: AgentChatRequest) => {
     throw new Error(
       lang === 'zh'
         ? '未配置可用的 AI 服务。请在管理后台的「AI 提供商管理」中添加一个 AI 提供商（或设置 GEMINI_API_KEY 作为兼容回退）。'
-        : 'No AI service is configured. Please add an AI Provider in the admin dashboard\'s "AI Provider Management" (or set `GEMINI_API_KEY` as a compatible fallback).'
+        : 'No AI service is configured. Please add an AI Provider in the admin dashboard\'s "AI Provider Management" (or set `GEMINI_API_KEY` as a compatible fallback).',
     );
   }
   const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
@@ -187,9 +185,9 @@ export const runGeminiAgentChat = async (request: AgentChatRequest) => {
   const systemInstruction = buildAgentSystemInstruction(lang, currentLessonId);
   const finalMessage = buildAgentFinalMessage(message, attachments);
 
-  const historyContents: any[] = (history || []).map(h => ({
+  const historyContents: any[] = (history || []).map((h) => ({
     role: h.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: h.content }]
+    parts: [{ text: h.content }],
   }));
   const contents: any[] = [...historyContents, { role: 'user', parts: [{ text: finalMessage }] }];
   let loopCount = 0;
@@ -204,13 +202,13 @@ export const runGeminiAgentChat = async (request: AgentChatRequest) => {
       config: {
         systemInstruction,
         tools: tools,
-        temperature: 0.1
-      }
+        temperature: 0.1,
+      },
     });
 
     const candidate = response.candidates?.[0];
     const contentParts = candidate?.content?.parts || [];
-    const functionCalls = contentParts.filter(p => 'functionCall' in p);
+    const functionCalls = contentParts.filter((p) => 'functionCall' in p);
 
     if (functionCalls.length === 0) {
       finalResponseText = response.text || '';
@@ -219,7 +217,7 @@ export const runGeminiAgentChat = async (request: AgentChatRequest) => {
 
     contents.push({
       role: 'model',
-      parts: contentParts
+      parts: contentParts,
     });
 
     const toolParts: any[] = [];
@@ -237,32 +235,40 @@ export const runGeminiAgentChat = async (request: AgentChatRequest) => {
             }
           }
         }
-        const actionResult = await executeAgentToolCall(call.name, call.args, allExecutedTools, callerRole, currentLessonId);
+        const actionResult = await executeAgentToolCall(
+          call.name,
+          call.args,
+          allExecutedTools,
+          callerRole,
+          currentLessonId,
+        );
 
         toolParts.push({
           functionResponse: {
             name: call.name,
-            response: typeof actionResult === 'object' && actionResult !== null ? actionResult : { value: actionResult }
-          }
+            response:
+              typeof actionResult === 'object' && actionResult !== null ? actionResult : { value: actionResult },
+          },
         });
       }
     }
 
     contents.push({
       role: 'tool',
-      parts: toolParts
+      parts: toolParts,
     });
 
     loopCount++;
   }
 
   if (loopCount >= MAX_LOOPS && !finalResponseText) {
-    finalResponseText = 'I have executed several internal commands to create or link resources, but reached the iteration limit. Please double-check the interface to confirm.';
+    finalResponseText =
+      'I have executed several internal commands to create or link resources, but reached the iteration limit. Please double-check the interface to confirm.';
   }
 
   return {
     agentText: finalResponseText,
-    toolResults: allExecutedTools
+    toolResults: allExecutedTools,
   };
 };
 
@@ -273,18 +279,18 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
   const tools = buildOpenAITools();
   const chatUrl = buildOpenAIChatUrl(provider.api_url);
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
   };
 
   if (provider.api_key && provider.api_key.trim()) {
     headers.Authorization = `Bearer ${provider.api_key.trim()}`;
   }
 
-  const historyMessages: any[] = (history || []).map(h => ({ role: h.role, content: h.content }));
+  const historyMessages: any[] = (history || []).map((h) => ({ role: h.role, content: h.content }));
   const messages: any[] = [
     { role: 'system', content: systemInstruction },
     ...historyMessages,
-    { role: 'user', content: finalMessage }
+    { role: 'user', content: finalMessage },
   ];
 
   const allExecutedTools: AgentToolExecution[] = [];
@@ -301,8 +307,8 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
         messages,
         tools,
         tool_choice: tools.length > 0 ? 'auto' : undefined,
-        temperature: 0.1
-      })
+        temperature: 0.1,
+      }),
     });
 
     if (!response.ok) {
@@ -322,7 +328,7 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
     messages.push({
       role: 'assistant',
       content: assistantMessage.content ?? '',
-      tool_calls: toolCalls
+      tool_calls: toolCalls,
     });
 
     if (toolCalls.length === 0) {
@@ -353,11 +359,17 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
           }
         }
       }
-      const actionResult = await executeAgentToolCall(toolName, parsedArgs, allExecutedTools, callerRole, currentLessonId);
+      const actionResult = await executeAgentToolCall(
+        toolName,
+        parsedArgs,
+        allExecutedTools,
+        callerRole,
+        currentLessonId,
+      );
       messages.push({
         role: 'tool',
         tool_call_id: call.id,
-        content: JSON.stringify(actionResult)
+        content: JSON.stringify(actionResult),
       });
     }
 
@@ -365,11 +377,12 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
   }
 
   if (loopCount >= MAX_LOOPS && !finalResponseText) {
-    finalResponseText = 'I have executed several internal commands, but reached the iteration limit. Please review the assistant panel for the latest state.';
+    finalResponseText =
+      'I have executed several internal commands, but reached the iteration limit. Please review the assistant panel for the latest state.';
   }
 
   return {
     agentText: finalResponseText,
-    toolResults: allExecutedTools
+    toolResults: allExecutedTools,
   };
 };

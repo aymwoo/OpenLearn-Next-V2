@@ -38,4 +38,29 @@ describe('StudentPreviewModal', () => {
     render(<StudentPreviewModal {...makeProps({ isLessonPreviewVisible: false })} />);
     expect(screen.queryByText(/学生视角预览 \(Student Perspective Preview\)/)).toBeNull();
   });
+
+  it('renders "独立Tab预览" button and triggers window.open with _blank', () => {
+    const openMock = vi.fn();
+    vi.stubGlobal('open', openMock);
+
+    render(
+      <StudentPreviewModal
+        {...makeProps({
+          selectedLesson: 'lesson-99',
+          lessons: [{ id: 'lesson-99', title: '探究课' } as any],
+        })}
+      />,
+    );
+
+    const tabBtn = screen.getByRole('button', { name: /独立Tab预览/ });
+    expect(tabBtn).toBeTruthy();
+
+    tabBtn.click();
+    expect(openMock).toHaveBeenCalledWith(
+      expect.stringContaining('mode=student_live&lessonId=lesson-99#/student_live'),
+      '_blank',
+    );
+
+    vi.unstubAllGlobals();
+  });
 });

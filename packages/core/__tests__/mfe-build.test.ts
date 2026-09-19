@@ -10,7 +10,7 @@ describe('Microfrontend Build Configurations Checks', () => {
     expect(fs.existsSync(hostConfigPath)).toBe(true);
 
     const configContent = fs.readFileSync(hostConfigPath, 'utf-8');
-    
+
     const isImplemented = configContent.includes('@module-federation/vite');
     if (!isImplemented) {
       // Wave 0 placeholder assertion

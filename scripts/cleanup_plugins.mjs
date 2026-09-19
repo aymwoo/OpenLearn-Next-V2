@@ -26,7 +26,7 @@ db.prepare("DELETE FROM plugins WHERE id NOT LIKE '@openlearn/%' AND status != '
 
 // Query all currently registered plugin IDs from database
 const rows = db.prepare('SELECT id, file_path FROM plugins').all();
-const registeredIds = new Set(rows.map(r => r.id));
+const registeredIds = new Set(rows.map((r) => r.id));
 
 console.log('Registered plugins in DB:', Array.from(registeredIds));
 
@@ -35,14 +35,14 @@ let deletedCount = 0;
 
 for (const entry of entries) {
   if (!entry.isDirectory()) continue;
-  
+
   const dirName = entry.name;
-  
+
   // Skip core namespace
   if (dirName === '@openlearn') {
     continue;
   }
-  
+
   // If the directory name is not in registeredIds, it is an orphan (likely from tests) and can be deleted safely
   if (!registeredIds.has(dirName)) {
     const fullPath = path.join(pluginsDir, dirName);

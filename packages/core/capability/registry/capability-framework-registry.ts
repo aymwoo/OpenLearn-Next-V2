@@ -3,10 +3,7 @@
  * Supports dynamic capability registration, resolution, listing, and auto-discovery.
  */
 
-import {
-  CapabilityDescriptor,
-  ICapabilityProviderHandler,
-} from '../types/index.js';
+import { CapabilityDescriptor, ICapabilityProviderHandler } from '../types/index.js';
 
 export class CapabilityFrameworkRegistry {
   private handlers = new Map<string, ICapabilityProviderHandler>();

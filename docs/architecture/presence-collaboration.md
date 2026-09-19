@@ -9,6 +9,7 @@ OpenLearn V2 在 `packages/core/presence-engine/` 与 `packages/core/collaborati
 `PresenceEngineKernel` 负责捕捉与分析课堂中所有参与实体（实体类型包括 `Teacher`, `Student`, `AI`, `Plugin`, `Whiteboard`, `Stage`, `Group`）的状态变化。
 
 ### 核心指标与感知维度
+
 - **FocusState**: 专注于课堂（`Focused`）、离屏/掉线（`Unfocused`）、离开界面（`Background`）。
 - **ConnectionState**: 在线（`Connected`）、重连中（`Reconnecting`）、离线（`Disconnected`）。
 - **Presence Dashboard Metrics**: 实时计算全班专注率、离屏人数、在路线率。

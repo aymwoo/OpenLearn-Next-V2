@@ -23,15 +23,15 @@ export function HelpView({ registeredCommands, onRefresh }: HelpViewProps) {
     if (activeTab === 'sdk_guide' && !pluginGuideMd) {
       setLoadingMd(true);
       fetch('/api/docs/plugin-guide')
-        .then(res => res.json())
-        .then(data => {
+        .then((res) => res.json())
+        .then((data) => {
           if (data.success) {
             setPluginGuideMd(data.content);
           } else {
             setPluginGuideMd('加载失败: ' + (data.error || '未知错误'));
           }
         })
-        .catch(err => {
+        .catch((err) => {
           setPluginGuideMd('加载出错: ' + err.message);
         })
         .finally(() => {
@@ -235,7 +235,7 @@ db.prepare(\`INSERT INTO \${tableName} ...\`).run(...);
             本页提供 OpenLearn 插件开发的快速入口：脚手架工具、交互式代码范例、完整的 API 参考文档。
           </p>
         </div>
-        
+
         {/* 子标签页选项卡 */}
         <div className="flex bg-neutral-100 p-0.5 rounded-xl border border-neutral-200 self-start md:self-center shrink-0 shadow-inner">
           <button
@@ -289,10 +289,7 @@ db.prepare(\`INSERT INTO \${tableName} ...\`).run(...);
       </div>
 
       {activeTab === 'commands' && (
-        <CommandBusPlayground
-          registeredCommands={registeredCommands}
-          onRefresh={onRefresh}
-        />
+        <CommandBusPlayground registeredCommands={registeredCommands} onRefresh={onRefresh} />
       )}
 
       {activeTab === 'sdk_guide' && (
@@ -307,16 +304,9 @@ db.prepare(\`INSERT INTO \${tableName} ...\`).run(...);
         />
       )}
 
-      {activeTab === 'user_guide' && (
-        <UserGuideViewer
-          copiedId={copiedId}
-          handleCopy={handleCopy}
-        />
-      )}
+      {activeTab === 'user_guide' && <UserGuideViewer copiedId={copiedId} handleCopy={handleCopy} />}
 
-      {activeTab === 'plugin_docs' && (
-        <PluginDocsViewer />
-      )}
+      {activeTab === 'plugin_docs' && <PluginDocsViewer />}
     </div>
   );
 }

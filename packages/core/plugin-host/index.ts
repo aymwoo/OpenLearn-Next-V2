@@ -32,12 +32,27 @@ import { buildContext } from './context-builder.js';
 import { ContributionRegistry } from './contribution-registry.js';
 import type { ContributionSummary, ClassroomToolConfig } from './contribution-registry.js';
 import { ConfigService } from './config-service.js';
-import { checkMissingDeps, topologicalSort, buildDepGraph, parseServiceRequirement, CrossPluginServiceCheck } from './dependency-resolver.js';
+import {
+  checkMissingDeps,
+  topologicalSort,
+  buildDepGraph,
+  parseServiceRequirement,
+  CrossPluginServiceCheck,
+} from './dependency-resolver.js';
 import semver from 'semver';
 import { parseRequiresEntry } from '../esm-loader/manifest-utils.js';
 import { compose } from './middleware.js';
 import { PluginState } from './types.js';
-import type { PluginContext, PluginInfo, LifecyclePhase, Middleware, MiddlewareContext, PluginApiRequest, PluginApiResponse, PluginStreamResponse } from './types.js';
+import type {
+  PluginContext,
+  PluginInfo,
+  LifecyclePhase,
+  Middleware,
+  MiddlewareContext,
+  PluginApiRequest,
+  PluginApiResponse,
+  PluginStreamResponse,
+} from './types.js';
 import { PluginHttpRouter, compileRoutePattern } from './http-router.js';
 import {
   IllegalStateTransitionError,
@@ -106,8 +121,11 @@ export { OPENLEARN_VERSION };
 function createPluginStaticMiddleware(absDir: string) {
   return [
     (_req: any, res: any, next: any) => {
-      // SEC-SANDBOX: 强制沙箱隔离，禁止访问宿主 Cookie、localStorage 及发起同源特权请求
-      res.setHeader('Content-Security-Policy', "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' blob: data:");
+      // SEC-SANDBOX: 强制沙箱隔离，禁止访问宿主 Cookie、localStorage 及发起同源特权请求，放行内联事件属性
+      res.setHeader(
+        'Content-Security-Policy',
+        "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' blob: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data:; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline';",
+      );
       res.setHeader('X-Content-Type-Options', 'nosniff');
       next();
     },
@@ -161,7 +179,7 @@ export class PluginHost {
    */
   registerPreloadedPlugin(
     pluginId: string,
-    plugin: { manifest: any; activate: (ctx: PluginContext) => Promise<void>; deactivate?: () => Promise<void> }
+    plugin: { manifest: any; activate: (ctx: PluginContext) => Promise<void>; deactivate?: () => Promise<void> },
   ): void {
     this.preloadedPlugins.set(pluginId, plugin);
   }
@@ -191,7 +209,10 @@ export class PluginHost {
   setExpressApp(app: any): void {
     this.expressApp = app;
     // Restore static routes from installed plugins (survives server restart)
-    const allPlugins = this.db.prepare("SELECT id, manifest FROM plugins").all() as Array<{ id: string; manifest: string }>;
+    const allPlugins = this.db.prepare('SELECT id, manifest FROM plugins').all() as Array<{
+      id: string;
+      manifest: string;
+    }>;
     for (const p of allPlugins) {
       try {
         const m = JSON.parse(p.manifest);
@@ -204,7 +225,9 @@ export class PluginHost {
             console.log(`[PluginHost] Restored static route "${m.deploy.staticRoute}" for plugin "${m.id}"`);
           }
         }
-      } catch { /* skip malformed */ }
+      } catch {
+        /* skip malformed */
+      }
     }
   }
 
@@ -276,11 +299,7 @@ export class PluginHost {
 
     // 1. Worker 模式派发
     if (instance.workerRef) {
-      return instance.workerRef.serviceHost.dispatchHttpRequest(
-        instance.workerRef.transport,
-        req,
-        timeoutMs,
-      );
+      return instance.workerRef.serviceHost.dispatchHttpRequest(instance.workerRef.transport, req, timeoutMs);
     }
 
     // 2. Inline 模式派发
@@ -393,9 +412,8 @@ export class PluginHost {
     if (preloaded?.manifest) return preloaded.manifest;
 
     try {
-      const row = this.db
-        .prepare('SELECT manifest FROM plugins WHERE id = ?')
-        .get(resolvedId) as { manifest: string } | undefined;
+      const row = this.db.prepare('SELECT manifest FROM plugins WHERE id = ?').get(resolvedId) as
+        { manifest: string } | undefined;
       if (row?.manifest) {
         return JSON.parse(row.manifest);
       }
@@ -419,7 +437,9 @@ export class PluginHost {
   /** Internal getter — throws if WorkerManager was not set. */
   private get workerManager(): WorkerManager {
     if (!this._workerManager) {
-      throw new Error('[PluginHost] WorkerManager not set — call setWorkerManager before activating worker-mode plugins');
+      throw new Error(
+        '[PluginHost] WorkerManager not set — call setWorkerManager before activating worker-mode plugins',
+      );
     }
     return this._workerManager;
   }
@@ -464,8 +484,8 @@ export class PluginHost {
    */
   private getExecutionMode(pluginId: string): string {
     try {
-      const row = this.db.prepare('SELECT execution_mode FROM plugins WHERE id = ?')
-        .get(pluginId) as { execution_mode: string } | undefined;
+      const row = this.db.prepare('SELECT execution_mode FROM plugins WHERE id = ?').get(pluginId) as
+        { execution_mode: string } | undefined;
       return row?.execution_mode ?? 'inline';
     } catch {
       // Column may not exist yet in test databases — fall back to 'inline'
@@ -506,9 +526,8 @@ export class PluginHost {
     for (const [id, state] of this.pluginStates) {
       if (state === PluginState.ACTIVE) {
         // Resolve to manifest.id
-        const row = this.db
-          .prepare('SELECT manifest FROM plugins WHERE id = ?')
-          .get(id) as { manifest: string } | undefined;
+        const row = this.db.prepare('SELECT manifest FROM plugins WHERE id = ?').get(id) as
+          { manifest: string } | undefined;
         if (row) {
           try {
             const m = JSON.parse(row.manifest);
@@ -564,9 +583,8 @@ export class PluginHost {
         continue;
       }
 
-      const mRow = this.db
-        .prepare('SELECT manifest FROM plugins WHERE id = ?')
-        .get(providerRow.id) as { manifest: string } | undefined;
+      const mRow = this.db.prepare('SELECT manifest FROM plugins WHERE id = ?').get(providerRow.id) as
+        { manifest: string } | undefined;
       if (!mRow) {
         unsatisfied.push({ required: req, providerId: parsed.pluginId });
         continue;
@@ -602,28 +620,19 @@ export class PluginHost {
       const actualVersion = this.serviceRegistry.getVersion(tokenName);
 
       if (!actualVersion) {
-        throw new SemverMismatchError(
-          pluginId, pluginName,
-          tokenName, versionRange ?? '*', 'unregistered'
-        );
+        throw new SemverMismatchError(pluginId, pluginName, tokenName, versionRange ?? '*', 'unregistered');
       }
 
       if (!versionRange) continue; // No version range = accept any version
 
       try {
         if (!semver.satisfies(actualVersion, versionRange)) {
-          throw new SemverMismatchError(
-            pluginId, pluginName,
-            tokenName, versionRange, actualVersion
-          );
+          throw new SemverMismatchError(pluginId, pluginName, tokenName, versionRange, actualVersion);
         }
       } catch (semverErr) {
         if (semverErr instanceof SemverMismatchError) throw semverErr;
         // Invalid version range string — wrap in SemverMismatchError
-        throw new SemverMismatchError(
-          pluginId, pluginName,
-          tokenName, versionRange, actualVersion
-        );
+        throw new SemverMismatchError(pluginId, pluginName, tokenName, versionRange, actualVersion);
       }
     }
 
@@ -635,7 +644,7 @@ export class PluginHost {
       if (!actualVersion || (versionRange && !semver.satisfies(actualVersion, versionRange))) {
         console.warn(
           `[PluginHost] Optional dependency ${tokenName}${versionRange ? '@' + versionRange : ''} not satisfied ` +
-          `(host: ${actualVersion ?? 'unregistered'}) — skipping injection for plugin "${pluginId}" (${phase})`
+            `(host: ${actualVersion ?? 'unregistered'}) — skipping injection for plugin "${pluginId}" (${phase})`,
         );
         incompatibleOptionalTokens.add(tokenName);
         continue;
@@ -657,11 +666,7 @@ export class PluginHost {
    * @param nextState - 目标状态
    * @throws IllegalStateTransitionError 当转换不合法时
    */
-  private validateTransition(
-    pluginId: string,
-    currentState: PluginState,
-    nextState: PluginState,
-  ): void {
+  private validateTransition(pluginId: string, currentState: PluginState, nextState: PluginState): void {
     validatePluginStateTransition(currentState, nextState, pluginId);
   }
 
@@ -676,7 +681,14 @@ export class PluginHost {
   listPlugins(): PluginInfo[] {
     const rows = this.db
       .prepare('SELECT id, manifest, execution_mode, status, loader_version, created_at FROM plugins')
-      .all() as Array<{ id: string; manifest: string; execution_mode: string; status: string; loader_version: string; created_at: number }>;
+      .all() as Array<{
+      id: string;
+      manifest: string;
+      execution_mode: string;
+      status: string;
+      loader_version: string;
+      created_at: number;
+    }>;
 
     return rows.map((row) => {
       let parsed: { name?: string; version?: string } = {};
@@ -736,7 +748,9 @@ export class PluginHost {
    * 无需激活插件即可枚举。用于管理后台预览插件将添加哪些 UI 元素。
    * 若未指定 pluginId，返回所有插件的贡献摘要。
    */
-  listContributions(pluginId?: string): ContributionSummary[] | Array<{ pluginId: string; contributions: ContributionSummary[] }> {
+  listContributions(
+    pluginId?: string,
+  ): ContributionSummary[] | Array<{ pluginId: string; contributions: ContributionSummary[] }> {
     if (pluginId) {
       const resolved = this.resolvePluginUuid(pluginId);
       return this.contributionRegistry.summary(resolved);
@@ -749,17 +763,17 @@ export class PluginHost {
    * V3.0: 用于插件依赖解析。
    */
   listInstalledPluginIds(): string[] {
-    const rows = this.db
-      .prepare('SELECT manifest FROM plugins')
-      .all() as Array<{ manifest: string }>;
-    return rows.map((row) => {
-      try {
-        const m = JSON.parse(row.manifest);
-        return m.id as string;
-      } catch {
-        return '';
-      }
-    }).filter(Boolean);
+    const rows = this.db.prepare('SELECT manifest FROM plugins').all() as Array<{ manifest: string }>;
+    return rows
+      .map((row) => {
+        try {
+          const m = JSON.parse(row.manifest);
+          return m.id as string;
+        } catch {
+          return '';
+        }
+      })
+      .filter(Boolean);
   }
 
   /**
@@ -769,9 +783,8 @@ export class PluginHost {
   getPluginConfig(pluginId: string, manifest?: Record<string, any>): Record<string, unknown> {
     let m = manifest;
     if (!m) {
-      const row = this.db
-        .prepare('SELECT manifest FROM plugins WHERE id = ?')
-        .get(pluginId) as { manifest: string } | undefined;
+      const row = this.db.prepare('SELECT manifest FROM plugins WHERE id = ?').get(pluginId) as
+        { manifest: string } | undefined;
       if (!row) return {};
       m = JSON.parse(row.manifest);
     }
@@ -802,9 +815,8 @@ export class PluginHost {
   resolvePluginUuid(idOrManifestId: string): string {
     try {
       // 1. 优先：直接作为 DB 主键查找（最常见路径）
-      const byId = this.db
-        .prepare('SELECT id FROM plugins WHERE id = ?')
-        .get(idOrManifestId) as { id: string } | undefined;
+      const byId = this.db.prepare('SELECT id FROM plugins WHERE id = ?').get(idOrManifestId) as
+        { id: string } | undefined;
       if (byId) return byId.id;
 
       // 2. 回退：通过 SQLite json_extract 匹配 manifest.id 别名（无需全表 JSON 解析）
@@ -827,9 +839,10 @@ export class PluginHost {
    * @throws Error 如果 manifest id 已存在
    */
   private ensureUniqueManifestId(manifestId: string): void {
-    const existing = this.db
-      .prepare('SELECT id, manifest FROM plugins')
-      .all() as Array<{ id: string; manifest: string }>;
+    const existing = this.db.prepare('SELECT id, manifest FROM plugins').all() as Array<{
+      id: string;
+      manifest: string;
+    }>;
     for (const plugin of existing) {
       try {
         const manifest = JSON.parse(plugin.manifest);
@@ -909,7 +922,7 @@ export class PluginHost {
       if (!semver.satisfies(OPENLEARN_VERSION, manifest.engines.openlearn)) {
         throw new Error(
           `[PluginHost] Plugin "${manifest.id}" requires OpenLearn ${manifest.engines.openlearn}, ` +
-          `but host is running ${OPENLEARN_VERSION}.`,
+            `but host is running ${OPENLEARN_VERSION}.`,
         );
       }
     }
@@ -928,11 +941,10 @@ export class PluginHost {
       if (missing.length > 0) {
         console.warn(
           `[PluginHost] Plugin "${manifest.id}" depends on: ${missing.join(', ')}, ` +
-          `which are not installed. The plugin will fail to activate until dependencies are satisfied.`,
+            `which are not installed. The plugin will fail to activate until dependencies are satisfied.`,
         );
       }
     }
-
 
     // 2e. V3.2: 检查跨插件服务依赖（warn，不阻塞安装）
     const serviceCheck = this.checkCrossPluginServices(manifest);
@@ -940,7 +952,7 @@ export class PluginHost {
       for (const u of serviceCheck.unsatisfied) {
         console.warn(
           `[PluginHost] Plugin "${manifest.id}" requires service "${u.required}" from "${u.providerId}", ` +
-          `but the provider has not declared it in manifest.provides. The plugin will fail to activate.`,
+            `but the provider has not declared it in manifest.provides. The plugin will fail to activate.`,
         );
       }
     }
@@ -960,16 +972,7 @@ export class PluginHost {
       const stmt = this.db.prepare(
         'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       );
-      stmt.run(
-        pluginId,
-        manifest.name,
-        JSON.stringify(manifest),
-        '',
-        filePath,
-        'installed',
-        Date.now(),
-        'esm',
-      );
+      stmt.run(pluginId, manifest.name, JSON.stringify(manifest), '', filePath, 'installed', Date.now(), 'esm');
 
       // 6. 设置状态为 INSTALLED
       this.pluginStates.set(pluginId, PluginState.INSTALLED);
@@ -1034,15 +1037,10 @@ export class PluginHost {
     }
   }
 
-  private async activatePluginExclusive(
-    pluginId: string,
-    options?: { mode?: 'inline' | 'worker' },
-  ): Promise<void> {
+  private async activatePluginExclusive(pluginId: string, options?: { mode?: 'inline' | 'worker' }): Promise<void> {
     // Recover orphaned transient state left by a crashed/aborted previous attempt
     if (this.pluginStates.get(pluginId) === PluginState.ACTIVATING) {
-      console.warn(
-        `[PluginHost] Recovering stuck ACTIVATING state for "${pluginId}" → ERROR before retry`,
-      );
+      console.warn(`[PluginHost] Recovering stuck ACTIVATING state for "${pluginId}" → ERROR before retry`);
       this.pluginStates.set(pluginId, PluginState.ERROR);
     }
 
@@ -1076,12 +1074,14 @@ export class PluginHost {
           throw new PluginActivateError(pluginId, depCheck);
         }
 
-
         // V3.2: 检查跨插件服务依赖（阻塞激活）
         const serviceCheck = this.checkCrossPluginServices(manifest);
         if (serviceCheck) {
-          const items = serviceCheck.unsatisfied.map(u => `"${u.required}" from ${u.providerId}`).join(", ");
-          throw new PluginActivateError(pluginId, `Plugin "${manifest.id}" requires cross-plugin services: ${items} (not provided)`);
+          const items = serviceCheck.unsatisfied.map((u) => `"${u.required}" from ${u.providerId}`).join(', ');
+          throw new PluginActivateError(
+            pluginId,
+            `Plugin "${manifest.id}" requires cross-plugin services: ${items} (not provided)`,
+          );
         }
         const skipTokens = this.checkSemVerCompatibility(manifest, pluginId, 'activate');
         const ctx = await buildContext(
@@ -1094,9 +1094,7 @@ export class PluginHost {
           this.contributionRegistry,
         );
 
-        const capService = await this.serviceRegistry.resolve<ICapabilityService>(
-          ICapabilityServiceToken,
-        );
+        const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
         const caps = manifest.capabilitiesProposed ?? [];
         for (const cap of caps) {
           await capService.grant(actorId, cap);
@@ -1143,9 +1141,7 @@ export class PluginHost {
         this.pluginStates.set(pluginId, PluginState.ERROR);
         this.resourceTracker.disposeAll(pluginId);
         try {
-          const capService = await this.serviceRegistry.resolve<ICapabilityService>(
-            ICapabilityServiceToken,
-          );
+          const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
           await capService.revokeAll(actorId);
         } catch {
           // ignore
@@ -1156,9 +1152,8 @@ export class PluginHost {
     }
 
     // 3. 从 DB 加载插件
-    const row = this.db
-      .prepare('SELECT file_path, source_code, manifest FROM plugins WHERE id = ?')
-      .get(pluginId) as { file_path?: string; source_code: string; manifest: string } | undefined;
+    const row = this.db.prepare('SELECT file_path, source_code, manifest FROM plugins WHERE id = ?').get(pluginId) as
+      { file_path?: string; source_code: string; manifest: string } | undefined;
     if (!row) {
       this.pluginStates.set(pluginId, currentState); // 回滚状态
       throw new PluginActivateError(pluginId, 'plugin not found in database');
@@ -1231,8 +1226,11 @@ export class PluginHost {
       // V3.2: 检查跨插件服务依赖（阻塞激活）
       const serviceCheck = this.checkCrossPluginServices(mergedManifest);
       if (serviceCheck) {
-        const items = serviceCheck.unsatisfied.map(u => `"${u.required}" from ${u.providerId}`).join(", ");
-        throw new PluginActivateError(pluginId, `Plugin "${mergedManifest.id}" requires cross-plugin services: ${items} (not provided)`);
+        const items = serviceCheck.unsatisfied.map((u) => `"${u.required}" from ${u.providerId}`).join(', ');
+        throw new PluginActivateError(
+          pluginId,
+          `Plugin "${mergedManifest.id}" requires cross-plugin services: ${items} (not provided)`,
+        );
       }
       const skipTokens = this.checkSemVerCompatibility(mergedManifest, pluginId, 'activate');
 
@@ -1243,15 +1241,13 @@ export class PluginHost {
         pluginId,
         mergedManifest,
         this.db,
-        skipTokens,  // NEW: Phase 6 — incompatible optional token names
+        skipTokens, // NEW: Phase 6 — incompatible optional token names
         this.contributionRegistry,
       );
 
       // 8. 授予能力（T-04-19: 仅授予 manifest.capabilitiesProposed 中声明的能力）
       try {
-        const capService = await this.serviceRegistry.resolve<ICapabilityService>(
-          ICapabilityServiceToken,
-        );
+        const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
         const caps = mergedManifest.capabilitiesProposed ?? [];
         for (const cap of caps) {
           await capService.grant(actorId, cap);
@@ -1301,9 +1297,7 @@ export class PluginHost {
           deactivate: typeof deactivate === 'function' ? deactivate : undefined,
           context: ctx,
         });
-        this.db
-          .prepare('UPDATE plugins SET status = ? WHERE id = ?')
-          .run('active', pluginId);
+        this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('active', pluginId);
 
         // 热重载接线：注册到 FileWatcher
         if (this._hotReloadController) {
@@ -1324,9 +1318,7 @@ export class PluginHost {
 
       // 撤销能力（T-04-19: 即使激活失败也撤销）
       try {
-        const capService = await this.serviceRegistry.resolve<ICapabilityService>(
-          ICapabilityServiceToken,
-        );
+        const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
         await capService.revokeAll(actorId);
       } catch {
         // revokeAll 静默失败
@@ -1350,36 +1342,32 @@ export class PluginHost {
     this.validateTransition(pluginId, currentState, PluginState.ACTIVATING);
     this.pluginStates.set(pluginId, PluginState.ACTIVATING);
 
-    const row = this.db
-      .prepare('SELECT file_path, source_code, manifest FROM plugins WHERE id = ?')
-      .get(pluginId) as { file_path?: string; source_code: string; manifest: string } | undefined;
+    const row = this.db.prepare('SELECT file_path, source_code, manifest FROM plugins WHERE id = ?').get(pluginId) as
+      { file_path?: string; source_code: string; manifest: string } | undefined;
     if (!row) {
       this.pluginStates.set(pluginId, currentState);
       throw new PluginActivateError(pluginId, 'plugin not found in database');
     }
 
     // 读取源码 — 优先文件系统，fallback DB
-    const sourceCode: string = (row.file_path && fs.existsSync(row.file_path))
-      ? fs.readFileSync(row.file_path, 'utf-8')
-      : row.source_code;
+    const sourceCode: string =
+      row.file_path && fs.existsSync(row.file_path) ? fs.readFileSync(row.file_path, 'utf-8') : row.source_code;
 
     const manifest: Manifest = JSON.parse(row.manifest);
     const actorId = `plugin:${manifest.id}`;
 
     try {
       // Grant capabilities (same as inline mode activation)
-      const capService = await this.serviceRegistry.resolve<ICapabilityService>(
-        ICapabilityServiceToken,
-      );
+      const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
       const caps = manifest.capabilitiesProposed ?? [];
       for (const cap of caps) {
         await capService.grant(actorId, cap);
       }
 
       // Resolve EventBus for event forwarding to Worker
-      const eventBus = await this.serviceRegistry.resolve<IEventBusService>(
+      const eventBus = (await this.serviceRegistry.resolve<IEventBusService>(
         IEventBusServiceToken,
-      ) as unknown as import('../event-bus/index.js').EventBus;
+      )) as unknown as import('../event-bus/index.js').EventBus;
 
       const { transport, serviceHost } = await this.workerManager.createWorker(
         pluginId,
@@ -1397,20 +1385,14 @@ export class PluginHost {
         deactivate: undefined,
         workerRef: { transport, serviceHost },
       });
-      this.db
-        .prepare('UPDATE plugins SET status = ? WHERE id = ?')
-        .run('active', pluginId);
-      console.log(
-        `[PluginHost] Plugin "${manifest.id}" activated in WORKER mode (${pluginId})`,
-      );
+      this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('active', pluginId);
+      console.log(`[PluginHost] Plugin "${manifest.id}" activated in WORKER mode (${pluginId})`);
     } catch (err) {
       this.pluginStates.set(pluginId, PluginState.ERROR);
       this.resourceTracker.disposeAll(pluginId);
       this.pluginInstances.delete(pluginId);
       try {
-        const capService = await this.serviceRegistry.resolve<ICapabilityService>(
-          ICapabilityServiceToken,
-        );
+        const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
         await capService.revokeAll(actorId);
       } catch {
         // revokeAll 静默失败
@@ -1461,9 +1443,7 @@ export class PluginHost {
   private async deactivatePluginExclusive(pluginId: string): Promise<void> {
     // Heal orphaned DEACTIVATING
     if (this.pluginStates.get(pluginId) === PluginState.DEACTIVATING) {
-      console.warn(
-        `[PluginHost] Recovering stuck DEACTIVATING state for "${pluginId}" → INACTIVE before retry`,
-      );
+      console.warn(`[PluginHost] Recovering stuck DEACTIVATING state for "${pluginId}" → INACTIVE before retry`);
       this.pluginStates.set(pluginId, PluginState.INACTIVE);
       return;
     }
@@ -1550,22 +1530,15 @@ export class PluginHost {
           }
 
           // DB UPDATE
-          this.db
-            .prepare('UPDATE plugins SET status = ? WHERE id = ?')
-            .run('inactive', pluginId);
+          this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('inactive', pluginId);
 
           // 撤销能力（T-04-20: finally 中强制撤销）
           if (actorId) {
             try {
-              const capService = await this.serviceRegistry.resolve<ICapabilityService>(
-                ICapabilityServiceToken,
-              );
+              const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
               await capService.revokeAll(actorId);
             } catch (capErr) {
-              console.error(
-                `[PluginHost] Failed to revoke capabilities for "${pluginId}":`,
-                capErr,
-              );
+              console.error(`[PluginHost] Failed to revoke capabilities for "${pluginId}":`, capErr);
             }
           }
         }
@@ -1573,18 +1546,17 @@ export class PluginHost {
         console.log(`[PluginHost] Plugin "${pluginId}" deactivated`);
       });
     } catch (pipelineErr) {
-      console.warn(`[PluginHost] Onion deactivation pipeline crashed for "${pluginId}", executing safety fallback:`, pipelineErr);
+      console.warn(
+        `[PluginHost] Onion deactivation pipeline crashed for "${pluginId}", executing safety fallback:`,
+        pipelineErr,
+      );
       this.resourceTracker.disposeAll(pluginId);
       this.pluginStates.set(pluginId, PluginState.INACTIVE);
       this.pluginInstances.delete(pluginId);
-      this.db
-        .prepare('UPDATE plugins SET status = ? WHERE id = ?')
-        .run('inactive', pluginId);
+      this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('inactive', pluginId);
       if (actorId) {
         try {
-          const capService = await this.serviceRegistry.resolve<ICapabilityService>(
-            ICapabilityServiceToken,
-          );
+          const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
           await capService.revokeAll(actorId);
         } catch {}
       }
@@ -1623,15 +1595,11 @@ export class PluginHost {
     } finally {
       this.pluginStates.set(pluginId, PluginState.INACTIVE);
       this.pluginInstances.delete(pluginId);
-      this.db
-        .prepare('UPDATE plugins SET status = ? WHERE id = ?')
-        .run('inactive', pluginId);
+      this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('inactive', pluginId);
 
       if (actorId) {
         try {
-          const capService = await this.serviceRegistry.resolve<ICapabilityService>(
-            ICapabilityServiceToken,
-          );
+          const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
           await capService.revokeAll(actorId);
         } catch (capErr) {
           console.error(`[PluginHost] Failed to revoke capabilities for "${pluginId}":`, capErr);
@@ -1650,7 +1618,8 @@ export class PluginHost {
    */
   async togglePlugin(pluginId: string): Promise<string> {
     pluginId = this.resolvePluginUuid(pluginId);
-    const row = this.db.prepare('SELECT status FROM plugins WHERE id = ?').get(pluginId) as { status: string } | undefined;
+    const row = this.db.prepare('SELECT status FROM plugins WHERE id = ?').get(pluginId) as
+      { status: string } | undefined;
     if (!row) {
       throw new Error(`Plugin not found: ${pluginId}`);
     }
@@ -1736,9 +1705,8 @@ export class PluginHost {
     this.validateTransition(pluginId, state, PluginState.UNINSTALLED);
 
     // 3. 查询 file_path 和 manifest（DELETE 之前必须获取）
-    const row = this.db
-      .prepare('SELECT manifest, file_path FROM plugins WHERE id = ?')
-      .get(pluginId) as { manifest: string; file_path?: string } | undefined;
+    const row = this.db.prepare('SELECT manifest, file_path FROM plugins WHERE id = ?').get(pluginId) as
+      { manifest: string; file_path?: string } | undefined;
     const manifestId = (() => {
       if (!row) return pluginId;
       try {
@@ -1748,9 +1716,7 @@ export class PluginHost {
         return pluginId;
       }
     })();
-    const pluginDir = row?.file_path
-      ? this.getPluginDir(pluginId)
-      : null;
+    const pluginDir = row?.file_path ? this.getPluginDir(pluginId) : null;
 
     // 4. 从 DB 删除
     this.db.prepare('DELETE FROM plugins WHERE id = ?').run(pluginId);
@@ -1846,7 +1812,7 @@ export class PluginHost {
       if (!semver.satisfies(OPENLEARN_VERSION, manifest.engines.openlearn)) {
         throw new Error(
           `[PluginHost] Plugin "${manifest.id}" requires OpenLearn ${manifest.engines.openlearn}, ` +
-          `but host is running ${OPENLEARN_VERSION}.`,
+            `but host is running ${OPENLEARN_VERSION}.`,
         );
       }
     }
@@ -1864,8 +1830,7 @@ export class PluginHost {
       const missing = checkMissingDeps(manifest.pluginDependencies, installedIds);
       if (missing.length > 0) {
         console.warn(
-          `[PluginHost] Plugin "${manifest.id}" depends on: ${missing.join(', ')}, ` +
-          `which are not installed.`,
+          `[PluginHost] Plugin "${manifest.id}" depends on: ${missing.join(', ')}, ` + `which are not installed.`,
         );
       }
     }
@@ -1908,10 +1873,12 @@ export class PluginHost {
       this.emitProgress(manifest.id, 'extracting', 'Extracting assets...');
       // Extract storage/ directory if present in ZIP (for static assets bundled with plugin)
       const storageEntries = Object.keys(zip.files).filter(
-        name => name.startsWith('storage/') && !zip.files[name].dir
+        (name) => name.startsWith('storage/') && !zip.files[name].dir,
       );
       if (storageEntries.length > 0) {
-        console.log(`[PluginHost] Extracting ${storageEntries.length} static asset files for plugin "${manifest.id}"...`);
+        console.log(
+          `[PluginHost] Extracting ${storageEntries.length} static asset files for plugin "${manifest.id}"...`,
+        );
         // SEC-ZIPSLIP: 严密校验所有条目路径，防止通过 .. 实施 Zip Slip 穿越写任意文件
         const dirs = new Set<string>();
         for (const rawName of storageEntries) {
@@ -1929,18 +1896,20 @@ export class PluginHost {
         const BATCH_SIZE = 10;
         for (let i = 0; i < storageEntries.length; i += BATCH_SIZE) {
           const batch = storageEntries.slice(i, i + BATCH_SIZE);
-          await Promise.all(batch.map(async (name) => {
-            const normalized = name.replace(/\\/g, '/');
-            const destPath = path.resolve(pluginDir, normalized);
-            if (normalized.includes('..') || !destPath.startsWith(pluginDir + path.sep)) {
-              throw new Error(`Security Violation: Zip Slip detected in asset path "${name}"`);
-            }
-            const file = zip.file(name);
-            if (file) {
-              const content = await file.async('nodebuffer');
-              fs.writeFileSync(destPath, content);
-            }
-          }));
+          await Promise.all(
+            batch.map(async (name) => {
+              const normalized = name.replace(/\\/g, '/');
+              const destPath = path.resolve(pluginDir, normalized);
+              if (normalized.includes('..') || !destPath.startsWith(pluginDir + path.sep)) {
+                throw new Error(`Security Violation: Zip Slip detected in asset path "${name}"`);
+              }
+              const file = zip.file(name);
+              if (file) {
+                const content = await file.async('nodebuffer');
+                fs.writeFileSync(destPath, content);
+              }
+            }),
+          );
         }
         console.log(`[PluginHost] Static assets extracted for plugin "${manifest.id}"`);
       }
@@ -1959,10 +1928,13 @@ export class PluginHost {
 
           const { execSync } = await import('node:child_process');
           // SEC-RCE-01: 始终添加 --ignore-scripts 防止恶意 npm 包通过 postinstall 钩子执行任意命令
-          execSync('npm install --production --no-audit --no-fund --legacy-peer-deps --ignore-scripts --registry=https://registry.npmmirror.com', {
-            cwd: pluginDir,
-            stdio: 'ignore',
-          });
+          execSync(
+            'npm install --production --no-audit --no-fund --legacy-peer-deps --ignore-scripts --registry=https://registry.npmmirror.com',
+            {
+              cwd: pluginDir,
+              stdio: 'ignore',
+            },
+          );
           console.log(`[PluginHost] Dependencies successfully installed for plugin "${manifest.id}"`);
         } catch (installErr) {
           console.error(`[PluginHost] Failed to install dependencies for plugin "${manifest.id}":`, installErr);
@@ -1974,7 +1946,7 @@ export class PluginHost {
         // SEC-RCE-02: 默认禁止执行外部 deploy 脚本，需显式设置 ALLOW_UNSAFE_PLUGIN_SCRIPTS=true 环境变量
         if (process.env.ALLOW_UNSAFE_PLUGIN_SCRIPTS !== 'true') {
           console.warn(
-            `[SECURITY WARNING] Deploy script "${manifest.deploy.script}" for plugin "${manifest.id}" blocked by default security policy. Set ALLOW_UNSAFE_PLUGIN_SCRIPTS=true to enable.`
+            `[SECURITY WARNING] Deploy script "${manifest.deploy.script}" for plugin "${manifest.id}" blocked by default security policy. Set ALLOW_UNSAFE_PLUGIN_SCRIPTS=true to enable.`,
           );
         } else {
           // Try running from plugin dir; fall back to v2_plugins source dir
@@ -1994,7 +1966,9 @@ export class PluginHost {
               throw new Error(`Deploy script "${manifest.deploy.script}" failed: ${deployErr.message}`);
             }
           } else {
-            console.warn(`[PluginHost] Deploy script "${manifest.deploy.script}" not found for plugin "${manifest.id}"`);
+            console.warn(
+              `[PluginHost] Deploy script "${manifest.deploy.script}" not found for plugin "${manifest.id}"`,
+            );
           }
         }
       }
@@ -2015,7 +1989,8 @@ export class PluginHost {
       this.emitProgress(manifest.id, 'registering', 'Registering routes and saving...');
       // 5. INSERT 到 DB（源码和 ZIP 已迁移到文件系统，DB 仅存元数据）
       // Read executionMode from manifest (default: 'inline'), override if administrator specifies
-      const executionMode = overrideExecutionMode ?? ((manifest as any).executionMode === 'worker' ? 'worker' : 'inline');
+      const executionMode =
+        overrideExecutionMode ?? ((manifest as any).executionMode === 'worker' ? 'worker' : 'inline');
       const stmt = this.db.prepare(
         'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       );
@@ -2132,9 +2107,8 @@ export class PluginHost {
     let pluginId: string;
     if (options.targetPluginId) {
       pluginId = this.resolvePluginUuid(options.targetPluginId);
-      const row = this.db
-        .prepare('SELECT id, manifest, status FROM plugins WHERE id = ?')
-        .get(pluginId) as { id: string; manifest: string; status: string } | undefined;
+      const row = this.db.prepare('SELECT id, manifest, status FROM plugins WHERE id = ?').get(pluginId) as
+        { id: string; manifest: string; status: string } | undefined;
       if (!row) {
         throw new Error(`Plugin "${options.targetPluginId}" is not installed`);
       }
@@ -2145,9 +2119,7 @@ export class PluginHost {
         throw new Error(`Plugin "${pluginId}" has a corrupt manifest`);
       }
       if (existingManifest.id !== manifest.id) {
-        throw new Error(
-          `Manifest id mismatch: card/target is "${existingManifest.id}", ZIP declares "${manifest.id}"`,
-        );
+        throw new Error(`Manifest id mismatch: card/target is "${existingManifest.id}", ZIP declares "${manifest.id}"`);
       }
     } else {
       const found = this.findByManifestId(manifest.id);
@@ -2197,8 +2169,7 @@ export class PluginHost {
     const wasActive = currentState === PluginState.ACTIVE ? true : previousStatus === 'active';
     const oldMode = (this.getExecutionMode(pluginId) as 'worker' | 'inline') || 'inline';
     const executionMode =
-      options.executionMode ??
-      ((manifest as any).executionMode === 'worker' ? 'worker' : oldMode || 'inline');
+      options.executionMode ?? ((manifest as any).executionMode === 'worker' ? 'worker' : oldMode || 'inline');
 
     const pluginDir = this.getPluginDir(pluginId);
     const filePath = this.getPluginFilePath(pluginId);
@@ -2276,10 +2247,13 @@ export class PluginHost {
             'utf-8',
           );
           const { execSync } = await import('node:child_process');
-          execSync('npm install --production --no-audit --no-fund --legacy-peer-deps --registry=https://registry.npmmirror.com', {
-            cwd: pluginDir,
-            stdio: 'ignore',
-          });
+          execSync(
+            'npm install --production --no-audit --no-fund --legacy-peer-deps --registry=https://registry.npmmirror.com',
+            {
+              cwd: pluginDir,
+              stdio: 'ignore',
+            },
+          );
         } catch (installErr) {
           console.error(`[PluginHost] Failed to install dependencies during update of "${manifest.id}":`, installErr);
         }
@@ -2390,9 +2364,7 @@ export class PluginHost {
       .prepare("SELECT * FROM plugins WHERE status = 'active' AND loader_version = 'esm'")
       .all() as Array<{ id: string; name?: string; execution_mode?: string; [key: string]: unknown }>;
 
-    console.log(
-      `[PluginHost] Restoring ${plugins.length} active ESM plugin(s) from database`,
-    );
+    console.log(`[PluginHost] Restoring ${plugins.length} active ESM plugin(s) from database`);
 
     // Ensure frontend.js is extracted for all active plugins if missing
     for (const p of plugins) {
@@ -2420,9 +2392,8 @@ export class PluginHost {
     const manifests = new Map<string, Manifest>();
     for (const p of plugins) {
       try {
-        const row = this.db
-          .prepare('SELECT manifest FROM plugins WHERE id = ?')
-          .get(p.id) as { manifest: string } | undefined;
+        const row = this.db.prepare('SELECT manifest FROM plugins WHERE id = ?').get(p.id) as
+          { manifest: string } | undefined;
         if (row) {
           manifests.set(p.id, JSON.parse(row.manifest));
         }
@@ -2436,8 +2407,10 @@ export class PluginHost {
     const { sorted, blocked, cycles } = topologicalSort(graph, installedIds);
 
     if (cycles.length > 0) {
-      console.warn(`[PluginHost] Dependency cycles detected during restore:`,
-        cycles.map((c) => c.join(' → ')).join(', '));
+      console.warn(
+        `[PluginHost] Dependency cycles detected during restore:`,
+        cycles.map((c) => c.join(' → ')).join(', '),
+      );
       console.warn(`[PluginHost] Cyclic plugins will be activated without ordering guarantees.`);
     }
 
@@ -2445,7 +2418,7 @@ export class PluginHost {
       for (const b of blocked) {
         console.warn(
           `[PluginHost] Plugin "${b.pluginId}" blocked during restore: ` +
-          `missing dependencies: ${b.missingDeps.join(', ')}`,
+            `missing dependencies: ${b.missingDeps.join(', ')}`,
         );
       }
     }
@@ -2470,10 +2443,7 @@ export class PluginHost {
         await this.activatePlugin(p.id, { mode });
       } catch (err) {
         // D-10: 单个插件激活失败不影响其他插件
-        console.error(
-          `[PluginHost] Failed to restore plugin "${p.name ?? p.id}" (${p.id}):`,
-          err,
-        );
+        console.error(`[PluginHost] Failed to restore plugin "${p.name ?? p.id}" (${p.id}):`, err);
       }
     }
 
@@ -2519,11 +2489,7 @@ export class PluginHost {
 
     // 1. 状态检查
     if (currentState !== PluginState.ACTIVE) {
-      throw new IllegalStateTransitionError(
-        pluginId,
-        currentState ?? PluginState.UNINSTALLED,
-        PluginState.ACTIVE,
-      );
+      throw new IllegalStateTransitionError(pluginId, currentState ?? PluginState.UNINSTALLED, PluginState.ACTIVE);
     }
 
     const oldInstance = this.pluginInstances.get(pluginId);
@@ -2540,10 +2506,7 @@ export class PluginHost {
     try {
       newManifest = await this.extractManifest(newSourceCode);
     } catch (err) {
-      throw new HotReloadActivationError(
-        pluginId, filePath,
-        err instanceof Error ? err : new Error(String(err)),
-      );
+      throw new HotReloadActivationError(pluginId, filePath, err instanceof Error ? err : new Error(String(err)));
     }
 
     // 2a. 验证 manifest.id 一致性
@@ -2595,7 +2558,10 @@ export class PluginHost {
 
       // Phase 7: middleware wrapping for reload
       const middlewareCtx: MiddlewareContext = {
-        pluginId, manifest: newManifest, phase: 'beforeActivate', timestamp: Date.now(),
+        pluginId,
+        manifest: newManifest,
+        phase: 'beforeActivate',
+        timestamp: Date.now(),
       };
       const before = this.getMiddleware('beforeActivate');
       const after = this.getMiddleware('afterActivate');
@@ -2615,10 +2581,7 @@ export class PluginHost {
     } catch (err) {
       // 激活失败 — 清理新注册的临时 disposables，restore old manifest
       this.resourceTracker.disposeAll(pluginId);
-      throw new HotReloadActivationError(
-        pluginId, filePath,
-        err instanceof Error ? err : new Error(String(err)),
-      );
+      throw new HotReloadActivationError(pluginId, filePath, err instanceof Error ? err : new Error(String(err)));
     }
 
     // 7. 激活成功 — 停用旧版本
@@ -2643,7 +2606,9 @@ export class PluginHost {
 
     // 8. 精确清理旧资源（仅快照中的，不碰新注册的）
     for (const d of oldDisposables) {
-      try { d.dispose(); } catch (e) {
+      try {
+        d.dispose();
+      } catch (e) {
         console.error(`[PluginHost] Error disposing old resource for "${pluginId}":`, e);
       }
     }
@@ -2653,9 +2618,9 @@ export class PluginHost {
     this.pluginInstances.set(pluginId, newInstance);
 
     // 10. 更新 DB
-    this.db.prepare(
-      'UPDATE plugins SET source_code = ?, manifest = ?, updated_at = ? WHERE id = ?',
-    ).run(newSourceCode, JSON.stringify(newManifest), Date.now(), pluginId);
+    this.db
+      .prepare('UPDATE plugins SET source_code = ?, manifest = ?, updated_at = ? WHERE id = ?')
+      .run(newSourceCode, JSON.stringify(newManifest), Date.now(), pluginId);
 
     const newVersion = newManifest.version ?? 'unknown';
     console.log(`[PluginHost] Hot reload succeeded for "${pluginId}" — old: ${oldVersion} → new: ${newVersion}`);
@@ -2690,8 +2655,7 @@ export class PluginHost {
   ): Promise<void> {
     // 1. Save old source code for rollback
     const oldRow = this.db.prepare('SELECT source_code FROM plugins WHERE id = ?').get(pluginId) as
-      | { source_code: string }
-      | undefined;
+      { source_code: string } | undefined;
     const oldSourceCode = oldRow?.source_code ?? '';
 
     // 2. Terminate old worker
@@ -2718,9 +2682,9 @@ export class PluginHost {
         this.getPluginDir(pluginId),
         prevState,
       );
-      this.db.prepare(
-        'UPDATE plugins SET source_code = ?, updated_at = ? WHERE id = ?',
-      ).run(newSourceCode, Date.now(), pluginId);
+      this.db
+        .prepare('UPDATE plugins SET source_code = ?, updated_at = ? WHERE id = ?')
+        .run(newSourceCode, Date.now(), pluginId);
       console.log(`[PluginHost] Worker-mode reload succeeded for "${pluginId}"`);
     } catch (err) {
       // Failed — try to restore old worker
@@ -2738,10 +2702,7 @@ export class PluginHost {
           console.error(`[PluginHost] Worker-mode reload: failed to restore old worker for "${pluginId}"`);
         }
       }
-      throw new HotReloadActivationError(
-        pluginId, filePath,
-        err instanceof Error ? err : new Error(String(err)),
-      );
+      throw new HotReloadActivationError(pluginId, filePath, err instanceof Error ? err : new Error(String(err)));
     }
   }
 }
@@ -2753,8 +2714,16 @@ export { PluginRuntimeAdapter, type IPluginRuntime } from './plugin-runtime-adap
 export { PluginRuntimeComposition } from './plugin-runtime-composition.js';
 export { PluginContextAdapter, type IUnifiedPluginContext } from './plugin-context-adapter.js';
 export { PluginLifecycleManager, type IPluginLifecycleManager } from './plugin-lifecycle-manager.js';
-export { PluginCapabilityGateway, type IPluginCapabilityGateway, type CapabilityMetadata } from './plugin-capability-gateway.js';
-export { UnifiedExtensionRegistry, type IUnifiedExtensionRegistry, type ExtensionItemMetadata } from './unified-extension-registry.js';
+export {
+  PluginCapabilityGateway,
+  type IPluginCapabilityGateway,
+  type CapabilityMetadata,
+} from './plugin-capability-gateway.js';
+export {
+  UnifiedExtensionRegistry,
+  type IUnifiedExtensionRegistry,
+  type ExtensionItemMetadata,
+} from './unified-extension-registry.js';
 export {
   PluginDistributionManager,
   LocalRepositoryAdapter,
@@ -2764,16 +2733,4 @@ export {
 } from './plugin-distribution-manager.js';
 
 export { PluginHttpRouter, compileRoutePattern } from './http-router.js';
-export type {
-  PluginApiRequest,
-  PluginApiResponse,
-  PluginApiHandler,
-  IPluginHttpRouter,
-} from './types.js';
-
-
-
-
-
-
-
+export type { PluginApiRequest, PluginApiResponse, PluginApiHandler, IPluginHttpRouter } from './types.js';

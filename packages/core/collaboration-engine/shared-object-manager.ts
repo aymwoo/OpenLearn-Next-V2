@@ -12,7 +12,7 @@ export class SharedObjectManager {
     content: Record<string, unknown>,
     targetGroupIds: ReadonlyArray<string>,
     mode: 'sync' | 'copy' | 'mirror' | 'reference' = 'sync',
-    sourceGroupId?: string
+    sourceGroupId?: string,
   ): SharedObjectData {
     const id = `shobj_${globalThis.crypto.randomUUID()}`;
     const sharedObj: SharedObjectData = Object.freeze({

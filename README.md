@@ -55,31 +55,31 @@ chmod +x deploy.sh
 
 ## npm 脚本
 
-| 命令 | 说明 |
-|------|------|
-| `npm run dev` | 启动开发服务（端口 9000） |
+| 命令            | 说明                       |
+| --------------- | -------------------------- |
+| `npm run dev`   | 启动开发服务（端口 9000）  |
 | `npm run build` | 生产构建（Vite + esbuild） |
-| `npm start` | 运行生产构建 |
-| `npm test` | 运行测试 |
-| `npm run lint` | TypeScript 类型检查 |
+| `npm start`     | 运行生产构建               |
+| `npm test`      | 运行测试                   |
+| `npm run lint`  | TypeScript 类型检查        |
 
 ## 环境变量
 
-| 变量 | 必需 | 说明 |
-|------|:--:|------|
-| `ENCRYPTION_KEY` | ✅ | 64 位 hex，AI Provider API Key 加密密钥（`deploy.sh` 自动生成） |
-| `PORT` | — | 服务端口，默认 9000 |
-| `OPENLEARN_DB_PATH` | — | SQLite 数据库路径（npx 默认 `~/openlearn-next/data.db`，本地开发默认项目目录） |
-| `GEMINI_API_KEY` | — | 可选。AI 服务回退密钥；推荐在管理面板「AI Provider 管理」配置 |
-| `ALLOWED_ORIGINS` | — | CORS 白名单，逗号分隔 |
-| `LOG_LEVEL` | — | 日志级别（debug / info / warn / error），默认 info |
+| 变量                | 必需 | 说明                                                                           |
+| ------------------- | :--: | ------------------------------------------------------------------------------ |
+| `ENCRYPTION_KEY`    |  ✅  | 64 位 hex，AI Provider API Key 加密密钥（`deploy.sh` 自动生成）                |
+| `PORT`              |  —   | 服务端口，默认 9000                                                            |
+| `OPENLEARN_DB_PATH` |  —   | SQLite 数据库路径（npx 默认 `~/openlearn-next/data.db`，本地开发默认项目目录） |
+| `GEMINI_API_KEY`    |  —   | 可选。AI 服务回退密钥；推荐在管理面板「AI Provider 管理」配置                  |
+| `ALLOWED_ORIGINS`   |  —   | CORS 白名单，逗号分隔                                                          |
+| `LOG_LEVEL`         |  —   | 日志级别（debug / info / warn / error），默认 info                             |
 
 ## 文档链接
 
-| 主题 | 链接 |
-|------|------|
-| 📖 文档中心 | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/> |
-| 🚀 快速开始 | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/getting-started/quickstart.html> |
-| 🎓 插件开发 | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/tutorials/plugin-development-tutorial.html> |
-| 🛠 插件开发参考 | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/reference/plugin-database-api.html> |
-| 🔄 版本迁移 | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/migration/version-migration.html> |
+| 主题           | 链接                                                                                               |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| 📖 文档中心    | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/>                                           |
+| 🚀 快速开始    | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/getting-started/quickstart.html>            |
+| 🎓 插件开发    | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/tutorials/plugin-development-tutorial.html> |
+| 🛠 插件开发参考 | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/reference/plugin-database-api.html>         |
+| 🔄 版本迁移    | <https://openlearn-next-v2.readthedocs.io/zh-cn/latest/migration/version-migration.html>           |

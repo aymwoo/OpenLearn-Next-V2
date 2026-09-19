@@ -3,15 +3,7 @@
  */
 
 export type InteractionDomain =
-  | 'Keyboard'
-  | 'Mouse'
-  | 'Touch'
-  | 'Gesture'
-  | 'Drag'
-  | 'Clipboard'
-  | 'Focus'
-  | 'ContextMenu'
-  | 'Selection';
+  'Keyboard' | 'Mouse' | 'Touch' | 'Gesture' | 'Drag' | 'Clipboard' | 'Focus' | 'ContextMenu' | 'Selection';
 
 export interface InteractionEvent<T = Record<string, unknown>> {
   readonly id: string;

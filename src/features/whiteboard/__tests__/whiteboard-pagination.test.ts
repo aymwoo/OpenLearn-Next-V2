@@ -64,7 +64,9 @@ describe('Interactive Whiteboard Pagination System', () => {
     const temp = nextPages[0];
     nextPages[0] = nextPages[1];
     nextPages[1] = temp;
-    nextPages.forEach((p, i) => { p.order = i; });
+    nextPages.forEach((p, i) => {
+      p.order = i;
+    });
 
     expect(nextPages[0].title).toContain('P2');
     expect(nextPages[1].title).toContain('P1');
@@ -74,7 +76,11 @@ describe('Interactive Whiteboard Pagination System', () => {
     const elements = [
       { id: 'el-1', type: 'quiz', data: JSON.stringify({ page: 0, segmentId: 'seg-1', question: 'P1 Quiz' }) },
       { id: 'el-2', type: 'pen', data: JSON.stringify({ page: 1, segmentId: 'seg-1', color: '#ff0000' }) },
-      { id: 'el-3', type: 'code-sandbox', data: JSON.stringify({ page: 2, segmentId: 'seg-1', code: 'console.log(3)' }) },
+      {
+        id: 'el-3',
+        type: 'code-sandbox',
+        data: JSON.stringify({ page: 2, segmentId: 'seg-1', code: 'console.log(3)' }),
+      },
     ];
 
     const pages = DEFAULT_WHITEBOARD_PAGES;
@@ -87,7 +93,7 @@ describe('Interactive Whiteboard Pagination System', () => {
           const d = JSON.parse(el.data);
           const elPage = d.page ?? 0;
           const currentObj = pages[currentPage];
-          const pageMatches = (d.pageId && currentObj?.id) ? d.pageId === currentObj.id : elPage === currentPage;
+          const pageMatches = d.pageId && currentObj?.id ? d.pageId === currentObj.id : elPage === currentPage;
           if (!pageMatches) return false;
           if (activeSegmentId && d.segmentId && d.segmentId !== activeSegmentId) return false;
           return true;

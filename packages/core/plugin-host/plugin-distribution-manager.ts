@@ -6,10 +6,7 @@
 
 import type { PluginHost } from './index.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
-import type {
-  IntegrationHealthStatus,
-  IntegrationDescriptor,
-} from '../bootstrap/integration/integration-types.js';
+import type { IntegrationHealthStatus, IntegrationDescriptor } from '../bootstrap/integration/integration-types.js';
 import { PLATFORM_VERSION } from '../version.js';
 
 export interface PluginPackageMetadata {
@@ -161,10 +158,7 @@ export class PluginDistributionManager implements IPluginDistributionManager {
     await this.pluginHost.reloadPlugin(pluginId, code);
   }
 
-  public async updateFromZip(
-    zipBuffer: Buffer,
-    options: PluginUpdateOptions = {},
-  ): Promise<PluginUpdateResult> {
+  public async updateFromZip(zipBuffer: Buffer, options: PluginUpdateOptions = {}): Promise<PluginUpdateResult> {
     return this.pluginHost.updatePluginFromZip(zipBuffer, options);
   }
 

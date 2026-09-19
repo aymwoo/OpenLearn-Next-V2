@@ -58,11 +58,7 @@ export type {
 
 // ── Configuration Service (V3.2) ────────────────────────────────────────
 
-export type {
-  IConfigService,
-  ConfigProperty,
-  ConfigDeclaration,
-} from '../core/plugin-host/config-service.js';
+export type { IConfigService, ConfigProperty, ConfigDeclaration } from '../core/plugin-host/config-service.js';
 
 // ── Contribution Registry (V3.2) ────────────────────────────────────────
 
@@ -194,10 +190,6 @@ export type {
   IRuntimeServiceContract,
 } from '../core/service-registry/index.js';
 
-
-
-
-
 // ── Learning Analytics Engine ───────────────────────────────────────────
 
 export type {
@@ -221,7 +213,6 @@ export type {
 
 // ── Teaching Collaboration Engine ───────────────────────────────────────
 
-
 export type {
   Participant,
   ParticipantRole,
@@ -239,7 +230,6 @@ export type {
 } from '../core/collaboration-engine/index.js';
 
 // ── Presence Engine ─────────────────────────────────────────────────────
-
 
 export type {
   PresenceEntity,
@@ -266,7 +256,6 @@ export type {
 
 // ── Classroom Runtime ───────────────────────────────────────────────────
 
-
 export type {
   RuntimeLifecycleState,
   RuntimeRole,
@@ -284,7 +273,6 @@ export type {
 } from '../core/classroom-runtime/index.js';
 
 // ── Lesson Engine ───────────────────────────────────────────────────────
-
 
 export type {
   Lesson,
@@ -331,4 +319,3 @@ export {
   BaseActivityProvider,
   defineActivityProvider,
 } from '../activity-ecosystem/index.js';
-

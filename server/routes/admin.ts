@@ -19,7 +19,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
         .all(DEMO_CLASS_ID) as { id: string }[];
       for (const oc of oldClasses) {
         db.prepare('DELETE FROM class_students WHERE class_id = ?').run(oc.id);
-        db.prepare("DELETE FROM schedules WHERE class_id = ?").run(oc.id);
+        db.prepare('DELETE FROM schedules WHERE class_id = ?').run(oc.id);
         db.prepare('DELETE FROM classes WHERE id = ?').run(oc.id);
       }
 
@@ -27,7 +27,10 @@ export function registerAdminRoutes(ctx: ServerContext) {
       const existingClass = db.prepare('SELECT id FROM classes WHERE id = ?').get(DEMO_CLASS_ID);
       if (!existingClass) {
         db.prepare('INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)').run(
-          DEMO_CLASS_ID, '人工智能与创意编程示范班', '这是系统初始化的示例课程班级，用于教学体验?', Date.now()
+          DEMO_CLASS_ID,
+          '人工智能与创意编程示范班',
+          '这是系统初始化的示例课程班级，用于教学体验?',
+          Date.now(),
         );
       }
 
@@ -40,8 +43,12 @@ export function registerAdminRoutes(ctx: ServerContext) {
         { id: 'demo-s5', name: '小强', num: 'S005' },
       ];
       const getStudentByNum = db.prepare('SELECT id FROM students WHERE student_number = ?');
-      const insertStudent = db.prepare('INSERT INTO students (id, name, student_number, created_at) VALUES (?, ?, ?, ?)');
-      const linkStudent = db.prepare('INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)');
+      const insertStudent = db.prepare(
+        'INSERT INTO students (id, name, student_number, created_at) VALUES (?, ?, ?, ?)',
+      );
+      const linkStudent = db.prepare(
+        'INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)',
+      );
 
       for (const s of demoStudents) {
         const row = getStudentByNum.get(s.num) as { id: string } | undefined;
@@ -58,15 +65,26 @@ export function registerAdminRoutes(ctx: ServerContext) {
       if (!lessonId) {
         lessonId = 'demo-lesson';
         db.prepare('INSERT INTO lessons (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
-          lessonId, '初识 Python：智能白板创意编?', JSON.stringify({ elements: [] }), Date.now(), Date.now()
+          lessonId,
+          '初识 Python：智能白板创意编?',
+          JSON.stringify({ elements: [] }),
+          Date.now(),
+          Date.now(),
         );
       }
 
       // 4. Demo schedule (reuse if already present)
       const existingSchedule = db.prepare('SELECT id FROM schedules WHERE id = ?').get(DEMO_SCHEDULE_ID);
       if (!existingSchedule) {
-        db.prepare('INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, status, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-          DEMO_SCHEDULE_ID, DEMO_CLASS_ID, lessonId, new Date().toISOString().split('T')[0] + ' 09:00:00', 'scheduled', Date.now()
+        db.prepare(
+          'INSERT INTO schedules (id, class_id, lesson_id, scheduled_date, status, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        ).run(
+          DEMO_SCHEDULE_ID,
+          DEMO_CLASS_ID,
+          lessonId,
+          new Date().toISOString().split('T')[0] + ' 09:00:00',
+          'scheduled',
+          Date.now(),
         );
       }
 
@@ -87,10 +105,14 @@ export function registerAdminRoutes(ctx: ServerContext) {
       }
 
       const db = kernelContainer.db;
-      
+
       const insertClass = db.prepare('INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)');
-      const insertStudent = db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)');
-      const insertClassStudent = db.prepare('INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)');
+      const insertStudent = db.prepare(
+        'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
+      );
+      const insertClassStudent = db.prepare(
+        'INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)',
+      );
       const findStudentByEmail = db.prepare('SELECT id FROM students WHERE email = ?');
 
       const imported = [];
@@ -133,7 +155,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
         imported.push({
           id: classId,
           name: clsName,
-          studentsCount: importedStudents.length
+          studentsCount: importedStudents.length,
         });
       }
 
@@ -151,7 +173,9 @@ export function registerAdminRoutes(ctx: ServerContext) {
       }
 
       const db = kernelContainer.db;
-      const insertStudent = db.prepare('INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)');
+      const insertStudent = db.prepare(
+        'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
+      );
       const findStudentByEmail = db.prepare('SELECT id FROM students WHERE email = ?');
 
       const imported = [];
@@ -184,5 +208,4 @@ export function registerAdminRoutes(ctx: ServerContext) {
       sendSafeError(res, e);
     }
   });
-
 }

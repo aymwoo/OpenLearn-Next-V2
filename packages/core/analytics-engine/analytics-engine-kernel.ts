@@ -13,11 +13,7 @@ import { DefaultPredictionProvider } from './prediction-provider.js';
 import { AnalyticsPrivacyStorage } from './privacy-storage.js';
 import { AnalyticsCollector } from './analytics-collector.js';
 import { AnalyticsPublisher } from './analytics-publisher.js';
-import {
-  CustomMetricDefinition,
-  CustomIndicatorDefinition,
-  CustomInsightRule,
-} from './types.js';
+import { CustomMetricDefinition, CustomIndicatorDefinition, CustomInsightRule } from './types.js';
 
 export class AnalyticsEngineKernel {
   public readonly normalizer: EventNormalizer;
@@ -42,21 +38,17 @@ export class AnalyticsEngineKernel {
     this.insightEngine = new InsightEngine();
     this.privacyStorage = new AnalyticsPrivacyStorage();
 
-    this.collector = new AnalyticsCollector(
-      this.normalizer,
-      this.privacyStorage,
-      this.eventStream
-    );
+    this.collector = new AnalyticsCollector(this.normalizer, this.privacyStorage, this.eventStream);
 
     this.publisher = new AnalyticsPublisher(
       this.eventStream,
       this.metricsEngine,
       this.indicatorEngine,
-      this.insightEngine
+      this.insightEngine,
     );
 
     this.predictionProvider = new DefaultPredictionProvider(() =>
-      this.metricsEngine.computeMetrics(this.eventStream.replay())
+      this.metricsEngine.computeMetrics(this.eventStream.replay()),
     );
   }
 

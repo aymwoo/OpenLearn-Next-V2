@@ -105,18 +105,16 @@ describe('Database Migration Runner (DB-MIG-01)', () => {
       runMigrations(db, migrations);
 
       // Verify table exists
-      const tableInfo = db.prepare("PRAGMA table_info(test_tbl)").all() as any[];
-      expect(tableInfo.some(col => col.name === 'extra')).toBe(true);
+      const tableInfo = db.prepare('PRAGMA table_info(test_tbl)').all() as any[];
+      expect(tableInfo.some((col) => col.name === 'extra')).toBe(true);
 
       // Verify _migrations has 2 records
       const applied = db.prepare('SELECT name FROM _migrations ORDER BY name').all() as any[];
-      expect(applied.map(a => a.name)).toEqual(['001_test', '002_test']);
+      expect(applied.map((a) => a.name)).toEqual(['001_test', '002_test']);
     });
 
     it('is idempotent on subsequent runs', () => {
-      const migrations = [
-        sqlMigration('001_test', 'CREATE TABLE test_tbl (id INT);', 'DROP TABLE test_tbl;'),
-      ];
+      const migrations = [sqlMigration('001_test', 'CREATE TABLE test_tbl (id INT);', 'DROP TABLE test_tbl;')];
 
       runMigrations(db, migrations);
       // Run again - should not throw table already exists
@@ -131,9 +129,7 @@ describe('Database Migration Runner (DB-MIG-01)', () => {
       db.exec('CREATE TABLE test_col (id INT, status TEXT);');
 
       // Migration attempts to add status column
-      const migrations = [
-        sqlMigration('001_add_status', 'ALTER TABLE test_col ADD COLUMN status TEXT;', ''),
-      ];
+      const migrations = [sqlMigration('001_add_status', 'ALTER TABLE test_col ADD COLUMN status TEXT;', '')];
 
       expect(() => runMigrations(db, migrations)).not.toThrow();
       const applied = db.prepare('SELECT name FROM _migrations WHERE name = ?').get('001_add_status');
@@ -141,9 +137,7 @@ describe('Database Migration Runner (DB-MIG-01)', () => {
     });
 
     it('throws error and halts on invalid SQL', () => {
-      const migrations = [
-        sqlMigration('001_bad', 'INVALID SQL COMMAND HERE;', ''),
-      ];
+      const migrations = [sqlMigration('001_bad', 'INVALID SQL COMMAND HERE;', '')];
 
       expect(() => runMigrations(db, migrations)).toThrow();
       // Should not record in _migrations
@@ -181,20 +175,22 @@ describe('Database Migration Runner (DB-MIG-01)', () => {
       const migrations = loadMigrationsFromDirectory(projectMigrationsDir);
 
       expect(migrations.length).toBeGreaterThanOrEqual(4);
-      expect(migrations.map(m => m.name)).toEqual(
+      expect(migrations.map((m) => m.name)).toEqual(
         expect.arrayContaining([
           '000_initial_schema',
           '001_add_execution_mode',
           '002_add_client_session_expiry',
           '003_classroom_runtime',
-        ])
+        ]),
       );
 
       // Run on fresh database
       expect(() => runMigrations(db, migrations)).not.toThrow();
 
       // Check key tables
-      const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[]).map(t => t.name);
+      const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as any[]).map(
+        (t) => t.name,
+      );
       expect(tables).toContain('lessons');
       expect(tables).toContain('plugins');
       expect(tables).toContain('student_rollcalls');
@@ -203,10 +199,10 @@ describe('Database Migration Runner (DB-MIG-01)', () => {
       expect(tables).toContain('_migrations');
 
       // Check key columns added by later migrations
-      const pluginCols = (db.prepare('PRAGMA table_info(plugins)').all() as any[]).map(c => c.name);
+      const pluginCols = (db.prepare('PRAGMA table_info(plugins)').all() as any[]).map((c) => c.name);
       expect(pluginCols).toContain('execution_mode');
 
-      const sessionCols = (db.prepare('PRAGMA table_info(client_sessions)').all() as any[]).map(c => c.name);
+      const sessionCols = (db.prepare('PRAGMA table_info(client_sessions)').all() as any[]).map((c) => c.name);
       expect(sessionCols).toContain('expires_at');
     });
   });

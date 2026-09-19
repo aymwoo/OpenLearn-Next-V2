@@ -8,19 +8,41 @@ import type { useQuizGenerator } from '../hooks/useQuizGenerator';
 import type { useClassBatchOperations } from '../hooks/useClassBatchOperations';
 import type { useStudentNotifications } from '../hooks/useStudentNotifications';
 
-const ImportModal = lazy(() => import('../features/modals/ImportModal').then(m => ({ default: m.ImportModal })));
-const CourseWizardModal = lazy(() => import('../features/modals/CourseWizardModal').then(m => ({ default: m.CourseWizardModal })));
-const ImportLessonsModal = lazy(() => import('../features/modals/ImportLessonsModal').then(m => ({ default: m.ImportLessonsModal })));
-const QuizGeneratorModal = lazy(() => import('../features/modals/QuizGeneratorModal').then(m => ({ default: m.QuizGeneratorModal })));
-const StudentPreviewModal = lazy(() => import('../features/modals/StudentPreviewModal').then(m => ({ default: m.StudentPreviewModal })));
-const ProcessLogsModal = lazy(() => import('../features/modals/ProcessLogsModal').then(m => ({ default: m.ProcessLogsModal })));
-const CloudDriveModal = lazy(() => import('../features/modals/CloudDriveModal').then(m => ({ default: m.CloudDriveModal })));
-const SystemResourceLibraryModal = lazy(() => import('../features/modals/SystemResourceLibraryModal').then(m => ({ default: m.SystemResourceLibraryModal })));
-const BatchPickerModal = lazy(() => import('../features/modals/BatchPickerModal').then(m => ({ default: m.BatchPickerModal })));
-const ExportWeightModal = lazy(() => import('../features/modals/ExportWeightModal').then(m => ({ default: m.ExportWeightModal })));
-const NotificationDetailModal = lazy(() => import('../features/modals/NotificationDetailModal').then(m => ({ default: m.NotificationDetailModal })));
-const HelpTour = lazy(() => import('./HelpTour').then(m => ({ default: m.HelpTour })));
-const CoursewareHubPanel = lazy(() => import('../features/teacher/CoursewareHubPanel').then(m => ({ default: m.CoursewareHubPanel })));
+const ImportModal = lazy(() => import('../features/modals/ImportModal').then((m) => ({ default: m.ImportModal })));
+const CourseWizardModal = lazy(() =>
+  import('../features/modals/CourseWizardModal').then((m) => ({ default: m.CourseWizardModal })),
+);
+const ImportLessonsModal = lazy(() =>
+  import('../features/modals/ImportLessonsModal').then((m) => ({ default: m.ImportLessonsModal })),
+);
+const QuizGeneratorModal = lazy(() =>
+  import('../features/modals/QuizGeneratorModal').then((m) => ({ default: m.QuizGeneratorModal })),
+);
+const StudentPreviewModal = lazy(() =>
+  import('../features/modals/StudentPreviewModal').then((m) => ({ default: m.StudentPreviewModal })),
+);
+const ProcessLogsModal = lazy(() =>
+  import('../features/modals/ProcessLogsModal').then((m) => ({ default: m.ProcessLogsModal })),
+);
+const CloudDriveModal = lazy(() =>
+  import('../features/modals/CloudDriveModal').then((m) => ({ default: m.CloudDriveModal })),
+);
+const SystemResourceLibraryModal = lazy(() =>
+  import('../features/modals/SystemResourceLibraryModal').then((m) => ({ default: m.SystemResourceLibraryModal })),
+);
+const BatchPickerModal = lazy(() =>
+  import('../features/modals/BatchPickerModal').then((m) => ({ default: m.BatchPickerModal })),
+);
+const ExportWeightModal = lazy(() =>
+  import('../features/modals/ExportWeightModal').then((m) => ({ default: m.ExportWeightModal })),
+);
+const NotificationDetailModal = lazy(() =>
+  import('../features/modals/NotificationDetailModal').then((m) => ({ default: m.NotificationDetailModal })),
+);
+const HelpTour = lazy(() => import('./HelpTour').then((m) => ({ default: m.HelpTour })));
+const CoursewareHubPanel = lazy(() =>
+  import('../features/teacher/CoursewareHubPanel').then((m) => ({ default: m.CoursewareHubPanel })),
+);
 
 export interface AppModalsProps {
   lang: 'zh' | 'en';
@@ -343,7 +365,8 @@ export function AppModals(props: AppModalsProps) {
   // Student Notifications Resolution
   const sn = props.studentNotificationsHook;
   const selectedNotificationForModal = sn?.selectedNotificationForModal ?? props.selectedNotificationForModal ?? null;
-  const setSelectedNotificationForModal = sn?.setSelectedNotificationForModal ?? props.setSelectedNotificationForModal ?? (() => {});
+  const setSelectedNotificationForModal =
+    sn?.setSelectedNotificationForModal ?? props.setSelectedNotificationForModal ?? (() => {});
 
   return (
     <Suspense fallback={null}>
@@ -534,12 +557,7 @@ export function AppModals(props: AppModalsProps) {
         onJumpTab={(tab) => setTeacherTab(tab)}
       />
 
-      {showCoursewareHub && (
-        <CoursewareHubPanel
-          onClose={() => setShowCoursewareHub(false)}
-          lang={lang}
-        />
-      )}
+      {showCoursewareHub && <CoursewareHubPanel onClose={() => setShowCoursewareHub(false)} lang={lang} />}
     </Suspense>
   );
 }

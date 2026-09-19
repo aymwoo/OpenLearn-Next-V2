@@ -1,8 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  ServerBootstrapAdapter,
-  StartupAdapterContext,
-} from '../bootstrap/adapter/index.js';
+import { ServerBootstrapAdapter, StartupAdapterContext } from '../bootstrap/adapter/index.js';
 
 describe('PI-005 Server Bootstrap Adapter Test Suite', () => {
   it('should instantiate ServerBootstrapAdapter in Created state', () => {

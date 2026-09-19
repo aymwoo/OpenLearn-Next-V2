@@ -25,11 +25,7 @@ export class StudentSyncService {
     this.isListening = true;
   }
 
-  private handleStudentSynced(payload: {
-    lessonId: string;
-    stageId: string;
-    activityId?: string;
-  }): void {
+  private handleStudentSynced(payload: { lessonId: string; stageId: string; activityId?: string }): void {
     const store = useLessonEngineStore.getState();
     // Only auto-jump if user is student or student sync is enabled
     if (store.currentUser.role === 'student' && payload.stageId) {
@@ -37,11 +33,7 @@ export class StudentSyncService {
     }
   }
 
-  private handleTeacherJump(payload: {
-    lessonId: string;
-    targetStageId: string;
-    targetActivityId?: string;
-  }): void {
+  private handleTeacherJump(payload: { lessonId: string; targetStageId: string; targetActivityId?: string }): void {
     const store = useLessonEngineStore.getState();
     if (store.currentUser.role === 'student') {
       store.jumpStage(payload.targetStageId, payload.targetActivityId);

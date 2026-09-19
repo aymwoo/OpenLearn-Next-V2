@@ -52,7 +52,7 @@ describe('Migration detection', () => {
       createPlugin({ id: 'modern-1', execution_mode: 'inline' }),
       createPlugin({ id: 'legacy-1', execution_mode: 'legacy' }),
     ];
-    const hasLegacy = plugins.some(p => p.execution_mode === 'legacy');
+    const hasLegacy = plugins.some((p) => p.execution_mode === 'legacy');
     expect(hasLegacy).toBe(true);
   });
 
@@ -61,13 +61,13 @@ describe('Migration detection', () => {
       createPlugin({ id: 'modern-1', execution_mode: 'inline' }),
       createPlugin({ id: 'modern-2', execution_mode: 'worker' }),
     ];
-    const hasLegacy = plugins.some(p => p.execution_mode === 'legacy');
+    const hasLegacy = plugins.some((p) => p.execution_mode === 'legacy');
     expect(hasLegacy).toBe(false);
   });
 
   it('returns false for empty plugin list', () => {
     const plugins: PluginType[] = [];
-    const hasLegacy = plugins.some(p => p.execution_mode === 'legacy');
+    const hasLegacy = plugins.some((p) => p.execution_mode === 'legacy');
     expect(hasLegacy).toBe(false);
   });
 });
@@ -78,69 +78,47 @@ describe('MigrationPrompt banner visibility', () => {
       createPlugin({ id: 'modern-1', execution_mode: 'inline' }),
       createPlugin({ id: 'legacy-1', execution_mode: 'legacy' }),
     ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={plugins} />,
-    );
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} />);
     // Should render without throwing — basic smoke test
     expect(html).toContain('Edu OS App Store');
   });
 
   it('renders PluginCenter with legacy plugins in store tab', () => {
-    const plugins: PluginType[] = [
-      createPlugin({ id: 'legacy-1', execution_mode: 'legacy' }),
-    ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />,
-    );
+    const plugins: PluginType[] = [createPlugin({ id: 'legacy-1', execution_mode: 'legacy' })];
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
     expect(html).toContain('Edu OS App Store');
     // Legacy badge should be rendered in store tab
     expect(html).toContain('Migratable');
   });
 
   it('renders PluginCenter in dev tab without error', () => {
-    const plugins: PluginType[] = [
-      createPlugin({ id: 'modern-1', execution_mode: 'inline' }),
-    ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={plugins} storeTab="dev" />,
-    );
+    const plugins: PluginType[] = [createPlugin({ id: 'modern-1', execution_mode: 'inline' })];
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="dev" />);
     expect(html).toContain('Developer Tools');
   });
 
   it('renders PluginCenter with empty plugin list', () => {
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={[]} />,
-    );
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={[]} />);
     expect(html).toContain('Edu OS App Store');
   });
 
   it('renders in en language', () => {
-    const plugins: PluginType[] = [
-      createPlugin({ id: 'modern-1', execution_mode: 'inline' }),
-    ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} lang="en" plugins={plugins} />,
-    );
+    const plugins: PluginType[] = [createPlugin({ id: 'modern-1', execution_mode: 'inline' })];
+    const html = renderToString(<PluginCenter {...defaultProps} lang="en" plugins={plugins} />);
     expect(html).toContain('Discover');
   });
 
   it('renders in zh language', () => {
     const plugins: PluginType[] = [];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} lang="zh" plugins={[]} />,
-    );
+    const html = renderToString(<PluginCenter {...defaultProps} lang="zh" plugins={[]} />);
     expect(html).toContain('Edu OS 插件中心');
   });
 });
 
 describe('LegacyPluginBadge in PluginCenter', () => {
   it('renders LegacyPluginBadge for legacy plugins in store tab', () => {
-    const plugins: PluginType[] = [
-      createPlugin({ id: 'legacy-1', execution_mode: 'legacy' }),
-    ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />,
-    );
+    const plugins: PluginType[] = [createPlugin({ id: 'legacy-1', execution_mode: 'legacy' })];
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
     // LegacyPluginBadge renders "Migratable" text
     expect(html).toContain('Migratable');
     // It uses AlertTriangle icon
@@ -148,12 +126,8 @@ describe('LegacyPluginBadge in PluginCenter', () => {
   });
 
   it('does not render LegacyPluginBadge for non-legacy plugins', () => {
-    const plugins: PluginType[] = [
-      createPlugin({ id: 'modern-1', execution_mode: 'inline' }),
-    ];
-    const html = renderToString(
-      <PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />,
-    );
+    const plugins: PluginType[] = [createPlugin({ id: 'modern-1', execution_mode: 'inline' })];
+    const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
     // The word "Migratable" should not appear for non-legacy plugins
     expect(html).not.toContain('Migratable');
   });

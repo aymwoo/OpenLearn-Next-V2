@@ -71,8 +71,7 @@ describe('Version Consistency Gate (防版本漂移自动化质量门禁)', () =
     const confContent = readFileSync(confPyPath, 'utf-8');
     const hasDynamicRead = confContent.includes('package.json');
     const hasStaticMatch =
-      confContent.includes(`version = '${currentVersion}'`) ||
-      confContent.includes(`version = "${currentVersion}"`);
+      confContent.includes(`version = '${currentVersion}'`) || confContent.includes(`version = "${currentVersion}"`);
 
     expect(
       hasDynamicRead || hasStaticMatch,

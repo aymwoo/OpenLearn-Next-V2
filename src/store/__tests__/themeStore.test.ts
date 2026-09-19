@@ -159,4 +159,3 @@ describe('themeStore (Theming System Engine)', () => {
     expect(document.getElementById('openlearn-custom-theme-restored-theme')).not.toBeNull();
   });
 });
-

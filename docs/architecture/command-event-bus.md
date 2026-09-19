@@ -9,6 +9,7 @@ OpenLearn V2 采用 CQRS（Command Query Responsibility Segregation）与 EDA（
 CommandBus 用于处理有且仅有一个处理者（Handler）的同步/异步操作逻辑。
 
 ### 命名规范
+
 指令采用点号分隔命名法：`domain.action`（例如 `lesson.create`, `whiteboard.draw`, `vfs.write_file`）。
 
 ### 指令定义与分发
@@ -39,6 +40,7 @@ const result = await kernel.commandBus.dispatch(createLessonCmd);
 EventBus 用于广播状态变更通知。一个事件可被零个或多个订阅者（Subscribers）监听。
 
 ### 命名规范
+
 事件采用过去时命名法：`domain.verb_past`（例如 `lesson.created`, `assignment.graded`, `user.joined`）。
 
 ### 事件发布与订阅
@@ -64,9 +66,9 @@ kernel.eventBus.publish({
 
 ## 架构对比总结
 
-| 特性 | CommandBus | EventBus |
-|---|---|---|
-| **模式** | 1-to-1 (Command -> Handler) | 1-to-N (Pub / Sub) |
-| **命名契约** | 祈使句 (`lesson.create`) | 过去时 (`lesson.created`) |
-| **返回值** | 返回执行结果 Promise | 无返回值（广播通知） |
-| **失败处理** | 报错直接抛给调用方 | 单个订阅者异常不影响其他订阅者 |
+| 特性         | CommandBus                  | EventBus                       |
+| ------------ | --------------------------- | ------------------------------ |
+| **模式**     | 1-to-1 (Command -> Handler) | 1-to-N (Pub / Sub)             |
+| **命名契约** | 祈使句 (`lesson.create`)    | 过去时 (`lesson.created`)      |
+| **返回值**   | 返回执行结果 Promise        | 无返回值（广播通知）           |
+| **失败处理** | 报错直接抛给调用方          | 单个订阅者异常不影响其他订阅者 |

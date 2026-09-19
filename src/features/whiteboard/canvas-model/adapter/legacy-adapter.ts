@@ -12,7 +12,7 @@ export interface LegacyWhiteboardElement {
 
 /**
  * Legacy Adapter
- * 
+ *
  * Provides seamless bidirectional conversion between old DB `WhiteboardElement`
  * (raw JSON string `data`) and the unified `CanvasObject<T>` model.
  * Guarantees 100% backward compatibility with existing backend APIs and frontend stores.
@@ -37,7 +37,25 @@ export class LegacyAdapter {
     const height = typeof parsedData.height === 'number' ? parsedData.height : defaultSize.height;
 
     // Extract payload fields vs base object fields
-    const { x, y, width: w, height: h, rotation, scaleX, scaleY, opacity, visible, locked, zIndex, layerId, parentId, groupId, segmentId, page, ...payloadFields } = parsedData;
+    const {
+      x,
+      y,
+      width: w,
+      height: h,
+      rotation,
+      scaleX,
+      scaleY,
+      opacity,
+      visible,
+      locked,
+      zIndex,
+      layerId,
+      parentId,
+      groupId,
+      segmentId,
+      page,
+      ...payloadFields
+    } = parsedData;
 
     const now = Date.now();
     return {
@@ -69,7 +87,10 @@ export class LegacyAdapter {
   /**
    * Convert a modern CanvasObject<T> back to a legacy WhiteboardElement for DB persistence
    */
-  public toLegacyElement<T = Record<string, unknown>>(canvasObj: CanvasObject<T>, lessonId?: string): LegacyWhiteboardElement {
+  public toLegacyElement<T = Record<string, unknown>>(
+    canvasObj: CanvasObject<T>,
+    lessonId?: string,
+  ): LegacyWhiteboardElement {
     const combinedData = {
       x: canvasObj.position.x,
       y: canvasObj.position.y,
@@ -104,7 +125,11 @@ export class LegacyAdapter {
   /**
    * Convert an array of legacy WhiteboardElements into a unified CanvasPage
    */
-  public toCanvasPage(elements: LegacyWhiteboardElement[], pageId: string = 'page-default', pageTitle: string = 'Default Page'): CanvasPage {
+  public toCanvasPage(
+    elements: LegacyWhiteboardElement[],
+    pageId: string = 'page-default',
+    pageTitle: string = 'Default Page',
+  ): CanvasPage {
     const objects: Record<string, CanvasObject> = {};
     elements.forEach((el) => {
       const obj = this.toCanvasObject(el);

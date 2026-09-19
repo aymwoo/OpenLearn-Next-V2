@@ -34,9 +34,7 @@ describe('PI-004 PlatformBuilder Test Suite', () => {
       execute: async () => {},
     };
 
-    const builder = PlatformBuilder.create()
-      .addBootstrapStage(stage1)
-      .addBootstrapStage(stage2);
+    const builder = PlatformBuilder.create().addBootstrapStage(stage1).addBootstrapStage(stage2);
 
     expect(() => builder.buildResult()).toThrow(ConfigurationError);
   });

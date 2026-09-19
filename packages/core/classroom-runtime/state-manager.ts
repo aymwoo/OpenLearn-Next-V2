@@ -61,9 +61,13 @@ export class RuntimeStateManager {
       lesson: partial.lesson ? { ...this.currentState.lesson, ...partial.lesson } : this.currentState.lesson,
       stage: partial.stage ? { ...this.currentState.stage, ...partial.stage } : this.currentState.stage,
       activity: partial.activity ? { ...this.currentState.activity, ...partial.activity } : this.currentState.activity,
-      whiteboard: partial.whiteboard ? { ...this.currentState.whiteboard, ...partial.whiteboard } : this.currentState.whiteboard,
+      whiteboard: partial.whiteboard
+        ? { ...this.currentState.whiteboard, ...partial.whiteboard }
+        : this.currentState.whiteboard,
       ai: partial.ai ? { ...this.currentState.ai, ...partial.ai } : this.currentState.ai,
-      analytics: partial.analytics ? { ...this.currentState.analytics, ...partial.analytics } : this.currentState.analytics,
+      analytics: partial.analytics
+        ? { ...this.currentState.analytics, ...partial.analytics }
+        : this.currentState.analytics,
     });
     this.notify();
   }

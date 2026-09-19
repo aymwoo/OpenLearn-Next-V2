@@ -34,10 +34,7 @@ export class CapabilityDescriptor implements CapabilityDescriptorInit {
 
   public constructor(init: CapabilityDescriptorInit) {
     if (!init || init.id.trim() === '') {
-      throw new CapabilityError(
-        'Capability descriptor requires a non-empty id.',
-        'INVALID_DESCRIPTOR',
-      );
+      throw new CapabilityError('Capability descriptor requires a non-empty id.', 'INVALID_DESCRIPTOR');
     }
     if (!init.activator && init.contract === undefined && init.provider === undefined) {
       throw new CapabilityError(

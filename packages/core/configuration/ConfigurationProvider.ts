@@ -9,15 +9,8 @@
 
 import { ConfigurationError } from './ConfigurationError.js';
 import { ConfigurationDescriptor } from './ConfigurationDescriptor.js';
-import {
-  buildSource,
-  ConfigurationSource,
-} from './ConfigurationSource.js';
-import {
-  ALL_CONFIGURATION_SCOPES,
-  type ConfigurationProviderInit,
-  type ConfigurationScope,
-} from './types.js';
+import { buildSource, ConfigurationSource } from './ConfigurationSource.js';
+import { ALL_CONFIGURATION_SCOPES, type ConfigurationProviderInit, type ConfigurationScope } from './types.js';
 import type { ConfigurationContext } from './ConfigurationContext.js';
 
 export class ConfigurationProvider {
@@ -38,11 +31,8 @@ export class ConfigurationProvider {
     this.id = init.id;
     this.scope = init.scope;
     this.priority = init.priority ?? 0;
-    this.source =
-      init.source instanceof ConfigurationSource ? init.source : buildSource(init.source);
-    this.descriptors = Object.freeze(
-      (init.descriptors ?? []).map((d) => new ConfigurationDescriptor(d)),
-    );
+    this.source = init.source instanceof ConfigurationSource ? init.source : buildSource(init.source);
+    this.descriptors = Object.freeze((init.descriptors ?? []).map((d) => new ConfigurationDescriptor(d)));
     this.description = init.description;
   }
 

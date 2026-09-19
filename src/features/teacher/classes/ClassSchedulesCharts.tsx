@@ -49,10 +49,7 @@ export function ClassSchedulesCharts(props: ClassSchedulesChartsProps) {
       </div>
 
       <div className="mb-4">
-        <ClassAttendanceSummaryChart
-          classId={cls.id}
-          lang={lang}
-        />
+        <ClassAttendanceSummaryChart classId={cls.id} lang={lang} />
       </div>
 
       {classDashboardMap[cls.id] && (

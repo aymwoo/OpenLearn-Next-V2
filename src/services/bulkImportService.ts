@@ -5,17 +5,19 @@ export function downloadCSVTemplate(type: 'class' | 'student', lang: 'zh' | 'en'
   if (type === 'class') {
     filename = lang === 'zh' ? '班级及学生批量导入模板.csv' : 'class_import_template.csv';
     headers = 'Class Name,Class Desc,Student Name,Student Email';
-    sampleRow = lang === 'zh' 
-      ? '高一A班,基础英语课程,李明,liming@example.com\n高一A班,基础英语课程,王华,wanghua@example.com' 
-      : 'Class 101,Introduction to English,John Doe,john@example.com\nClass 101,Introduction to English,Jane Smith,jane@example.com';
+    sampleRow =
+      lang === 'zh'
+        ? '高一A班,基础英语课程,李明,liming@example.com\n高一A班,基础英语课程,王华,wanghua@example.com'
+        : 'Class 101,Introduction to English,John Doe,john@example.com\nClass 101,Introduction to English,Jane Smith,jane@example.com';
   } else {
     filename = lang === 'zh' ? '学生批量导入模板.csv' : 'student_import_template.csv';
     headers = 'Student Name,Student Email';
-    sampleRow = lang === 'zh'
-      ? '张三,zhangsan@example.com\n李四,lisi@example.com'
-      : 'Alice Cooper,alice@example.com\nBob Dylan,bob@example.com';
+    sampleRow =
+      lang === 'zh'
+        ? '张三,zhangsan@example.com\n李四,lisi@example.com'
+        : 'Alice Cooper,alice@example.com\nBob Dylan,bob@example.com';
   }
-  
+
   const blob = new Blob(['\uFEFF' + headers + '\n' + sampleRow], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -55,9 +57,7 @@ export async function parseAndImportClassesOrStudents(
             throw new Error('JSON structure must be an array');
           }
           const hasClassElement = data.some(
-            (item: any) =>
-              item.className ||
-              (item.name && (item.students || item.classDescription)),
+            (item: any) => item.className || (item.name && (item.students || item.classDescription)),
           );
 
           if (hasClassElement) {
@@ -65,12 +65,9 @@ export async function parseAndImportClassesOrStudents(
             parsedData = data
               .map((cls) => {
                 const name = cls.name || cls.className || cls.class_name;
-                const description =
-                  cls.description || cls.classDescription || '';
+                const description = cls.description || cls.classDescription || '';
                 const rawStudents = cls.students || cls.studentList || [];
-                const students = (
-                  Array.isArray(rawStudents) ? rawStudents : []
-                )
+                const students = (Array.isArray(rawStudents) ? rawStudents : [])
                   .map((st: any) => ({
                     name: st.name || st.studentName || '',
                     email: st.email || st.studentEmail || '',
@@ -83,10 +80,8 @@ export async function parseAndImportClassesOrStudents(
             isClassImport = false;
             parsedStudents = data
               .map((st: any) => ({
-                name:
-                  st.name || st.studentName || st.student_name || '',
-                email:
-                  st.email || st.studentEmail || st.student_email || '',
+                name: st.name || st.studentName || st.student_name || '',
+                email: st.email || st.studentEmail || st.student_email || '',
               }))
               .filter((st: any) => st.name);
           }
@@ -106,11 +101,7 @@ export async function parseAndImportClassesOrStudents(
               h.includes('class_name'),
           );
           const classDescIdx = headers.findIndex(
-            (h) =>
-              h.includes('class desc') ||
-              h.includes('班级描述') ||
-              h.includes('描述') ||
-              h.includes('class_desc'),
+            (h) => h.includes('class desc') || h.includes('班级描述') || h.includes('描述') || h.includes('class_desc'),
           );
           const studentNameIdx = headers.findIndex(
             (h) =>
@@ -149,19 +140,15 @@ export async function parseAndImportClassesOrStudents(
               const line = lines[i].trim();
               if (!line) continue;
 
-              const parts =
-                line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || line.split(',');
+              const parts = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || line.split(',');
               const cleanParts = parts.map((p) => p.replace(/^"|"$/g, '').trim());
 
               const className = cleanParts[classNameIdx];
               if (!className) continue;
 
-              const classDesc =
-                classDescIdx !== -1 ? cleanParts[classDescIdx] || '' : '';
-              const studentName =
-                studentNameIdx !== -1 ? cleanParts[studentNameIdx] || '' : '';
-              const studentEmail =
-                studentEmailIdx !== -1 ? cleanParts[studentEmailIdx] || '' : '';
+              const classDesc = classDescIdx !== -1 ? cleanParts[classDescIdx] || '' : '';
+              const studentName = studentNameIdx !== -1 ? cleanParts[studentNameIdx] || '' : '';
+              const studentEmail = studentEmailIdx !== -1 ? cleanParts[studentEmailIdx] || '' : '';
 
               if (!classesMap[className]) {
                 classesMap[className] = {
@@ -185,14 +172,11 @@ export async function parseAndImportClassesOrStudents(
               const line = lines[i].trim();
               if (!line) continue;
 
-              const parts =
-                line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || line.split(',');
+              const parts = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || line.split(',');
               const cleanParts = parts.map((p) => p.replace(/^"|"$/g, '').trim());
 
-              const studentName =
-                studentNameIdx !== -1 ? cleanParts[studentNameIdx] || '' : '';
-              const studentEmail =
-                studentEmailIdx !== -1 ? cleanParts[studentEmailIdx] || '' : '';
+              const studentName = studentNameIdx !== -1 ? cleanParts[studentNameIdx] || '' : '';
+              const studentEmail = studentEmailIdx !== -1 ? cleanParts[studentEmailIdx] || '' : '';
 
               if (studentName) {
                 parsedStudents.push({
@@ -281,12 +265,16 @@ export function parseLessonCSV(file: File, lang: 'zh' | 'en'): Promise<{ title: 
 
         const lines = text.split(/\r?\n/);
         if (lines.length < 2) {
-          throw new Error(lang === 'zh' ? 'CSV 文件行数不足，请包含标题和至少一行数据。' : 'CSV is missing content or headers.');
+          throw new Error(
+            lang === 'zh' ? 'CSV 文件行数不足，请包含标题和至少一行数据。' : 'CSV is missing content or headers.',
+          );
         }
 
         const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
         const titleIndex = headers.findIndex((h) => h.includes('title') || h.includes('标题') || h.includes('课程'));
-        const contentIndex = headers.findIndex((h) => h.includes('content') || h.includes('内容') || h.includes('正文'));
+        const contentIndex = headers.findIndex(
+          (h) => h.includes('content') || h.includes('内容') || h.includes('正文'),
+        );
 
         if (titleIndex === -1 || contentIndex === -1) {
           throw new Error(

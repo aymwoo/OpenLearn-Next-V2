@@ -3,11 +3,7 @@
  * Adapts ActionRegistry Actions & Commands into standard Capability Framework Handlers.
  */
 
-import {
-  CapabilityDescriptor,
-  ICapabilityProviderHandler,
-  InvocationRequest,
-} from '../types/index.js';
+import { CapabilityDescriptor, ICapabilityProviderHandler, InvocationRequest } from '../types/index.js';
 import { CommandBus } from '../../command-bus/index.js';
 
 export class PluginCapabilityProviderHandler implements ICapabilityProviderHandler {

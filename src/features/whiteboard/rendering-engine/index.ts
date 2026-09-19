@@ -1,6 +1,6 @@
 /**
  * Rendering Engine — Barrel Export
- * 
+ *
  * High-Performance, Viewport-Culled, Plugin-Friendly Whiteboard Rendering Engine.
  */
 

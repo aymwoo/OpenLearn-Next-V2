@@ -41,10 +41,7 @@ const MAX_UNCOMPRESSED_SIZE = 300 * 1024 * 1024;
  * @param resolveDir - 解析相对导入的基准目录（临时解压目录）
  * @returns 打包后的单 ESM bundle 代码字符串
  */
-export async function bundlePlugin(
-  entryCode: string,
-  resolveDir: string,
-): Promise<string> {
+export async function bundlePlugin(entryCode: string, resolveDir: string): Promise<string> {
   const esbuild = await import('esbuild');
   const result = await esbuild.build({
     stdin: {
@@ -119,9 +116,7 @@ export async function bundlePlugin(
  * @returns {{ manifest, bundledCode, entryFileName }}
  * @throws {Error} ZIP bomb 检测、路径穿越、manifest 缺失/校验失败、入口文件缺失、esbuild 打包失败
  */
-export async function validateAndBundleZip(
-  zipBuffer: Buffer,
-): Promise<{
+export async function validateAndBundleZip(zipBuffer: Buffer): Promise<{
   manifest: Manifest;
   bundledCode: string;
   entryFileName: string;
@@ -148,9 +143,7 @@ export async function validateAndBundleZip(
   // Step 3: 路径穿越检查 — 拒绝 ".." 或以 "/" 开头的路径
   for (const name of Object.keys(zip.files)) {
     if (name.includes('..') || name.startsWith('/')) {
-      throw new Error(
-        `Security: path traversal detected in ZIP entry: "${name}"`,
-      );
+      throw new Error(`Security: path traversal detected in ZIP entry: "${name}"`);
     }
   }
 
@@ -169,9 +162,7 @@ export async function validateAndBundleZip(
   // Step 6: 读取入口文件
   const entryFile = zip.file(manifest.main);
   if (!entryFile) {
-    throw new Error(
-      `Entry file "${manifest.main}" specified in manifest not found in ZIP package`,
-    );
+    throw new Error(`Entry file "${manifest.main}" specified in manifest not found in ZIP package`);
   }
   const entryCode = await entryFile.async('string');
 
@@ -214,8 +205,6 @@ export async function validateAndBundleZip(
  * @param _bundledCode - 打包后的 bundle 代码（当前未使用）
  * @returns Promise<Manifest> 当前实现抛出 "not implemented"
  */
-export async function extractManifestFromBundle(
-  _bundledCode: string,
-): Promise<Manifest> {
+export async function extractManifestFromBundle(_bundledCode: string): Promise<Manifest> {
   throw new Error('extractManifestFromBundle is not yet implemented');
 }

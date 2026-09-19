@@ -8,11 +8,12 @@ import type { PluginHost } from '../index.js';
 import { PluginCompositionModule } from '../../bootstrap/composition/plugin-composition-module.js';
 
 describe('PluginDistributionManager (P7-B7 EU-01)', () => {
-  const createMockPluginHost = () => ({
-    installPluginFromZip: vi.fn().mockResolvedValue({ id: 'ext-quiz-test', name: 'Quiz Test' }),
-    reloadPlugin: vi.fn().mockResolvedValue(undefined),
-    uninstallPlugin: vi.fn().mockResolvedValue(undefined),
-  }) as unknown as PluginHost;
+  const createMockPluginHost = () =>
+    ({
+      installPluginFromZip: vi.fn().mockResolvedValue({ id: 'ext-quiz-test', name: 'Quiz Test' }),
+      reloadPlugin: vi.fn().mockResolvedValue(undefined),
+      uninstallPlugin: vi.fn().mockResolvedValue(undefined),
+    }) as unknown as PluginHost;
 
   it('should register repository adapters and aggregate available packages', async () => {
     const mockHost = createMockPluginHost();

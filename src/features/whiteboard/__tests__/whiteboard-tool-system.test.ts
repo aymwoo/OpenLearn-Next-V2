@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  WhiteboardToolRegistry,
-  registerDefaultWhiteboardTools,
-  IWhiteboardTool,
-} from '../tool-system/index.js';
+import { WhiteboardToolRegistry, registerDefaultWhiteboardTools, IWhiteboardTool } from '../tool-system/index.js';
 
 describe('Sprint P2-01 Whiteboard Tool System Test Suite', () => {
   let registry: WhiteboardToolRegistry;

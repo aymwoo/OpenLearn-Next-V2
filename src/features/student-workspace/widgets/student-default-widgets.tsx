@@ -61,7 +61,9 @@ export const StudentResourcesWidget: React.FC = () => {
       ) : (
         <ul>
           {resources.map((r) => (
-            <li key={r.id}>{r.type}: {r.url}</li>
+            <li key={r.id}>
+              {r.type}: {r.url}
+            </li>
           ))}
         </ul>
       )}
@@ -154,6 +156,4 @@ export const StudentNotificationsWidget: React.FC<{ studentId: string; lang?: st
 };
 
 // ── Plugin Widgets (reuses ExtensionPointRenderer for 'student.view') ────
-export const StudentPluginWidgets: React.FC = () => (
-  <ExtensionPointRenderer slot="student.view" />
-);
+export const StudentPluginWidgets: React.FC = () => <ExtensionPointRenderer slot="student.view" />;

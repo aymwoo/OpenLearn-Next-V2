@@ -26,7 +26,7 @@ export class AnalyticsPublisher {
     eventStream: EventStream,
     metricsEngine: MetricsEngine,
     indicatorEngine: IndicatorEngine,
-    insightEngine: InsightEngine
+    insightEngine: InsightEngine,
   ) {
     this.eventStream = eventStream;
     this.metricsEngine = metricsEngine;

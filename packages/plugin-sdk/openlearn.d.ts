@@ -49,14 +49,17 @@ interface Manifest {
   pluginDependencies?: string[];
   provides?: string[];
   configuration?: {
-    properties?: Record<string, {
-      type: 'string' | 'number' | 'boolean' | 'integer';
-      default?: unknown;
-      description?: string;
-      enum?: unknown[];
-      minimum?: number;
-      maximum?: number;
-    }>;
+    properties?: Record<
+      string,
+      {
+        type: 'string' | 'number' | 'boolean' | 'integer';
+        default?: unknown;
+        description?: string;
+        enum?: unknown[];
+        minimum?: number;
+        maximum?: number;
+      }
+    >;
   };
   contributes?: Record<string, any>;
   updateSource?: {
@@ -130,7 +133,12 @@ interface ICommandBusService {
   execute<T extends PlatformCommand>(command: T): Promise<unknown>;
   registerHandler(commandType: string, handler: CommandHandler): void | Promise<void>;
   unregisterHandler(commandType: string): void | Promise<void>;
-  createCommand<T>(type: string, payload: T, actorId: string, metadata?: CommandMetadata): PlatformCommand<T> | Promise<PlatformCommand<T>>;
+  createCommand<T>(
+    type: string,
+    payload: T,
+    actorId: string,
+    metadata?: CommandMetadata,
+  ): PlatformCommand<T> | Promise<PlatformCommand<T>>;
   setInterceptor(interceptor: (command: PlatformCommand) => Promise<void>): void | Promise<void>;
 }
 
@@ -160,7 +168,11 @@ interface IProcessService {
   kill(processId: string): void | Promise<void>;
   registerHandler(taskType: string, handler: ProcessHandler): void | Promise<void>;
   unregisterHandler(taskType: string): void | Promise<void>;
-  registerInterval(name: string, intervalMs: number, tickFn: (log: (msg: string) => void) => void): string | Promise<string>;
+  registerInterval(
+    name: string,
+    intervalMs: number,
+    tickFn: (log: (msg: string) => void) => void,
+  ): string | Promise<string>;
   restore(): void | Promise<void>;
 }
 
@@ -341,11 +353,7 @@ interface IPluginHttpRouter {
   put<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
   patch<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
   delete<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>): void;
-  route<TBody = unknown, TRes = unknown>(
-    method: string,
-    path: string,
-    handler: PluginApiHandler<TBody, TRes>,
-  ): void;
+  route<TBody = unknown, TRes = unknown>(method: string, path: string, handler: PluginApiHandler<TBody, TRes>): void;
   stream<TBody = unknown>(path: string, handler: PluginStreamHandler<TBody>): void;
   stream<TBody = unknown>(method: string, path: string, handler: PluginStreamHandler<TBody>): void;
 }
@@ -356,14 +364,18 @@ declare class PluginHttpRouter implements IPluginHttpRouter {
   put<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
   patch<TBody = unknown, TRes = unknown>(path: string, handler: PluginApiHandler<TBody, TRes>): void;
   delete<TRes = unknown>(path: string, handler: PluginApiHandler<unknown, TRes>): void;
-  route<TBody = unknown, TRes = unknown>(
-    method: string,
-    path: string,
-    handler: PluginApiHandler<TBody, TRes>,
-  ): void;
+  route<TBody = unknown, TRes = unknown>(method: string, path: string, handler: PluginApiHandler<TBody, TRes>): void;
   stream<TBody = unknown>(path: string, handler: PluginStreamHandler<TBody>): void;
   stream<TBody = unknown>(method: string, path: string, handler: PluginStreamHandler<TBody>): void;
-  match(method: string, path: string): { handler?: PluginApiHandler; streamHandler?: PluginStreamHandler; isStream?: boolean; params: Record<string, string> } | null;
+  match(
+    method: string,
+    path: string,
+  ): {
+    handler?: PluginApiHandler;
+    streamHandler?: PluginStreamHandler;
+    isStream?: boolean;
+    params: Record<string, string>;
+  } | null;
   handle(req: PluginApiRequest): Promise<PluginApiResponse>;
   handleStream(req: PluginApiRequest, stream: PluginStreamResponse): Promise<void>;
   getRegisteredRoutes(): Array<{ method: string; pattern: string; isStream?: boolean }>;
@@ -473,26 +485,13 @@ interface ILearningAnalyticsService {
 }
 
 // Activity ecosystem types (referenced by IActivityRegistryToken).
-type ActivityCategory =
-  | 'assessment'
-  | 'engagement'
-  | 'collaboration'
-  | 'management'
-  | 'ai'
-  | 'media'
-  | 'custom';
+type ActivityCategory = 'assessment' | 'engagement' | 'collaboration' | 'management' | 'ai' | 'media' | 'custom';
 
 type ActivityRole = 'teacher' | 'student' | 'assistant' | 'observer' | 'all';
 
 type ActivityDevice = 'desktop' | 'tablet' | 'mobile' | 'all';
 
-type ActivityLifecycleState =
-  | 'registered'
-  | 'initialized'
-  | 'running'
-  | 'paused'
-  | 'finished'
-  | 'disposed';
+type ActivityLifecycleState = 'registered' | 'initialized' | 'running' | 'paused' | 'finished' | 'disposed';
 
 interface ActivityClassroomContext {
   readonly classroomId?: string;
@@ -656,6 +655,45 @@ declare interface CoursewareSourceLoader {
   ): string | null;
 }
 
+// ── Frontend Lesson Palette Registries (V5.1) ───────────────────────────
+declare interface PaletteSelectOption {
+  value: string;
+  label: string;
+}
+
+declare interface PaletteEditField {
+  key: string;
+  labelZh: string;
+  labelEn: string;
+  kind: 'input' | 'textarea' | 'options' | 'select';
+  placeholderZh?: string;
+  placeholderEn?: string;
+  options?: PaletteSelectOption[];
+  loadOptions?: () => Promise<PaletteSelectOption[]>;
+}
+
+declare interface PaletteItemComponentProps {
+  elementId: string;
+  lessonId: string;
+  data: Record<string, any>;
+  userRole?: 'teacher' | 'student';
+  onElementUpdate?: (elementId: string, data: Record<string, any>) => Promise<void>;
+}
+
+declare interface PaletteItemConfig {
+  type: string;
+  labelZh: string;
+  labelEn: string;
+  descriptionZh: string;
+  descriptionEn: string;
+  icon?: any;
+  color?: 'slate' | 'blue' | 'violet' | 'amber' | 'rose' | 'emerald' | 'cyan' | 'pink' | 'indigo';
+  group?: string;
+  defaultData?: Record<string, any>;
+  editFields?: PaletteEditField[];
+  component?: (props: PaletteItemComponentProps) => unknown;
+}
+
 export type {
   PluginContext,
   PluginDatabaseAPI,
@@ -702,6 +740,10 @@ export type {
   PropertyEditorProps,
   PropertyEditorComponent,
   CoursewareSourceLoader,
+  PaletteSelectOption,
+  PaletteEditField,
+  PaletteItemComponentProps,
+  PaletteItemConfig,
   PluginApiRequest,
   PluginApiResponse,
   PluginApiHandler,
@@ -752,9 +794,3 @@ interface AuthBridgeUser {
 interface IAuthSessionBridgeService {
   createSession(user: AuthBridgeUser): Promise<{ token: string; maxAge: number }>;
 }
-
-
-
-
-
-

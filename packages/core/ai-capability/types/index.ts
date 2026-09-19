@@ -57,12 +57,19 @@ export interface ICompletionCapability extends IAICapability {
 }
 
 export interface IToolCapability extends IAICapability {
-  executeToolCall(toolName: string, args: Record<string, unknown>): Promise<{ success: boolean; result?: unknown; error?: string }>;
+  executeToolCall(
+    toolName: string,
+    args: Record<string, unknown>,
+  ): Promise<{ success: boolean; result?: unknown; error?: string }>;
 }
 
 export interface ILessonCapability extends IAICapability {
   generateLessonPlan(subject: string, grade: string, topic: string): Promise<Record<string, unknown>>;
-  generateQuiz(stageTitle: string, knowledgePoints: ReadonlyArray<string>, count?: number): Promise<ReadonlyArray<Record<string, unknown>>>;
+  generateQuiz(
+    stageTitle: string,
+    knowledgePoints: ReadonlyArray<string>,
+    count?: number,
+  ): Promise<ReadonlyArray<Record<string, unknown>>>;
   generateSummary(activityTitle: string, activityType: string): Promise<string>;
 }
 

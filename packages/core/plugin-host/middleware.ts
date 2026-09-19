@@ -57,10 +57,7 @@ export function compose(
         // index === i 意味着 next() 未被调用
         // → 中间件自己的 pre-processing 抛异常
         // → 记录日志，跳到下一个中间件
-        console.error(
-          `[PluginHost] Middleware error in phase "${ctx.phase}" for plugin "${ctx.pluginId}":`,
-          err,
-        );
+        console.error(`[PluginHost] Middleware error in phase "${ctx.phase}" for plugin "${ctx.pluginId}":`, err);
         return dispatch(i + 1);
       }
     };
@@ -87,10 +84,7 @@ export async function safeInvoke(
   try {
     await middleware(ctx, next);
   } catch (err) {
-    console.error(
-      `[PluginHost] Middleware error in phase "${ctx.phase}" for plugin "${ctx.pluginId}":`,
-      err,
-    );
+    console.error(`[PluginHost] Middleware error in phase "${ctx.phase}" for plugin "${ctx.pluginId}":`, err);
     // 完全吞没 — 仅用于独立场景
   }
 }

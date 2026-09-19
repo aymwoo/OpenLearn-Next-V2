@@ -55,10 +55,7 @@ describe('FrontendAPIService', () => {
 
     const result = await api.del('/api/test/1');
     expect(result).toEqual(mockResponse);
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/test/1',
-      expect.objectContaining({ method: 'DELETE' }),
-    );
+    expect(fetch).toHaveBeenCalledWith('/api/test/1', expect.objectContaining({ method: 'DELETE' }));
   });
 
   it('returns error object on network failure', async () => {
@@ -179,7 +176,7 @@ describe('StorageService', () => {
     expect(storage.get('key1')).toBeNull();
   });
 
-  it('clear removes only this plugin\'s keys', () => {
+  it("clear removes only this plugin's keys", () => {
     localStorage.setItem('other-key', 'keep');
 
     storage.set('a', '1');

@@ -62,6 +62,7 @@ export interface PipelineResult {
 ```
 
 ### 诊断事件监听
+
 开发与运维人员可通过 `addListener` 接入启动诊断日志：
 
 ```typescript

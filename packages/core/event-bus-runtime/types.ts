@@ -25,9 +25,7 @@ export const PlatformEventType = {
   ConfigurationLoaded: 'ConfigurationLoaded',
 } as const;
 
-export type PlatformEventTypeValue =
-  | (typeof PlatformEventType)[keyof typeof PlatformEventType]
-  | (string & {});
+export type PlatformEventTypeValue = (typeof PlatformEventType)[keyof typeof PlatformEventType] | (string & {});
 
 /** Seed used to construct a {@link PlatformEvent}. */
 export interface PlatformEventInit<T = unknown> {

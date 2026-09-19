@@ -1,24 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  Legend
-} from 'recharts';
-import { 
-  Calendar, 
-  Users, 
-  CheckCircle2, 
-  Clock, 
-  XCircle, 
-  Loader2,
-  TrendingUp,
-  AlertCircle
-} from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { Calendar, Users, CheckCircle2, Clock, XCircle, Loader2, TrendingUp, AlertCircle } from 'lucide-react';
 
 interface AttendanceSummaryItem {
   id: string;
@@ -36,10 +18,7 @@ interface ClassAttendanceSummaryChartProps {
   lang?: 'en' | 'zh';
 }
 
-export function ClassAttendanceSummaryChart({ 
-  classId, 
-  lang = 'en' 
-}: ClassAttendanceSummaryChartProps) {
+export function ClassAttendanceSummaryChart({ classId, lang = 'en' }: ClassAttendanceSummaryChartProps) {
   const [data, setData] = useState<AttendanceSummaryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,29 +35,29 @@ export function ClassAttendanceSummaryChart({
   // Generate 35 days (5 full columns of Mon-Sun) aligned to Monday
   const heatmapGrid = useMemo(() => {
     const today = new Date();
-    
+
     // Go back approx 5 weeks (34 days)
     const startDay = new Date();
     startDay.setDate(today.getDate() - 34);
-    
+
     // Find nearest preceding Monday
     const dOfWeek = startDay.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
     const diffToMonday = dOfWeek === 0 ? 6 : dOfWeek - 1;
     startDay.setDate(startDay.getDate() - diffToMonday);
-    
+
     const grid = [];
     const current = new Date(startDay);
-    
+
     // End limit is Sunday of current week to complete the Mon-Sun matrix grid
     const endLimit = new Date(today);
-    const endDOfWeek = endLimit.getDay(); 
+    const endDOfWeek = endLimit.getDay();
     const diffToSunday = endDOfWeek === 0 ? 0 : 7 - endDOfWeek;
     endLimit.setDate(endLimit.getDate() + diffToSunday);
-    
+
     while (current <= endLimit) {
       const dateStr = current.toISOString().split('T')[0];
-      const match = data.find(item => item.date === dateStr);
-      
+      const match = data.find((item) => item.date === dateStr);
+
       grid.push({
         dateStr,
         dayOfMonth: current.getDate(),
@@ -86,12 +65,12 @@ export function ClassAttendanceSummaryChart({
         isToday: dateStr === today.toISOString().split('T')[0],
         isFuture: current > today,
         dayOfWeek: current.getDay(),
-        match
+        match,
       });
-      
+
       current.setDate(current.getDate() + 1);
     }
-    
+
     return grid;
   }, [data, lang]);
 
@@ -100,7 +79,7 @@ export function ClassAttendanceSummaryChart({
     if (data && data.length > 0 && heatmapGrid && heatmapGrid.length > 0) {
       const lowestRateItem = [...data].sort((a, b) => a.attendanceRate - b.attendanceRate)[0];
       if (lowestRateItem) {
-        const matchInGrid = heatmapGrid.find(day => day.dateStr === lowestRateItem.date);
+        const matchInGrid = heatmapGrid.find((day) => day.dateStr === lowestRateItem.date);
         if (matchInGrid) {
           setSelectedDay(matchInGrid);
         }
@@ -142,13 +121,13 @@ export function ClassAttendanceSummaryChart({
   // Compute aggregate stats across the last 30 days
   const stats = useMemo(() => {
     if (data.length === 0) return { avgRate: 0, totalPresent: 0, totalLate: 0, totalAbsent: 0, totalSchedules: 0 };
-    
+
     let sumRates = 0;
     let totalPresent = 0;
     let totalLate = 0;
     let totalAbsent = 0;
-    
-    data.forEach(item => {
+
+    data.forEach((item) => {
       sumRates += item.attendanceRate;
       totalPresent += item.present;
       totalLate += item.late;
@@ -160,7 +139,7 @@ export function ClassAttendanceSummaryChart({
       totalPresent,
       totalLate,
       totalAbsent,
-      totalSchedules: data.length
+      totalSchedules: data.length,
     };
   }, [data]);
 
@@ -194,23 +173,25 @@ export function ClassAttendanceSummaryChart({
           {lang === 'zh' ? '近30天内没有出勤记录' : 'No Attendance Records in Last 30 Days'}
         </span>
         <span className="text-[10px] text-gray-400 max-w-sm">
-          {lang === 'zh' ? '在新日程安排中为学生记录出勤后，统计数据将自动在此处生成。' : 'Attendance stats will generate automatically once you schedule lessons and register student statuses.'}
+          {lang === 'zh'
+            ? '在新日程安排中为学生记录出勤后，统计数据将自动在此处生成。'
+            : 'Attendance stats will generate automatically once you schedule lessons and register student statuses.'}
         </span>
       </div>
     );
   }
 
   // Format date labels (e.g. "Jun 08")
-  const formattedData = data.map(item => {
+  const formattedData = data.map((item) => {
     try {
       const dateObj = new Date(item.date);
       if (isNaN(dateObj.getTime())) return { ...item, displayDate: item.date };
-      
+
       const day = dateObj.getDate();
       const month = dateObj.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', { month: 'short' });
       return {
         ...item,
-        displayDate: lang === 'zh' ? `${month}${day}日` : `${month} ${day}`
+        displayDate: lang === 'zh' ? `${month}${day}日` : `${month} ${day}`,
       };
     } catch {
       return { ...item, displayDate: item.date };
@@ -229,18 +210,22 @@ export function ClassAttendanceSummaryChart({
               {lang === 'zh' ? '近30天班级出勤率分析' : '30-Day Class Attendance Rates'}
             </h4>
             <p className="text-[10px] text-gray-400">
-              {lang === 'zh' ? '基于最近30天内的课程日程和已记录的出勤状态' : 'Based on scheduled lessons and submitted attendance records'}
+              {lang === 'zh'
+                ? '基于最近30天内的课程日程和已记录的出勤状态'
+                : 'Based on scheduled lessons and submitted attendance records'}
             </p>
           </div>
         </div>
-        
+
         {/* Aggregated Stats Row */}
         <div className="flex items-center gap-4 bg-gray-50/50 p-1.5 px-3 rounded-lg border border-gray-100/60 text-xs text-gray-600">
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">
               {lang === 'zh' ? '平均率' : 'Avg Rate'}:
             </span>
-            <span className={`font-black ${stats.avgRate >= 90 ? 'text-green-600' : stats.avgRate >= 75 ? 'text-amber-500' : 'text-red-500'}`}>
+            <span
+              className={`font-black ${stats.avgRate >= 90 ? 'text-green-600' : stats.avgRate >= 75 ? 'text-amber-500' : 'text-red-500'}`}
+            >
               {stats.avgRate}%
             </span>
           </div>
@@ -249,9 +234,7 @@ export function ClassAttendanceSummaryChart({
             <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">
               {lang === 'zh' ? '总课时' : 'Schedules'}:
             </span>
-            <span className="font-extrabold text-slate-800">
-              {stats.totalSchedules}
-            </span>
+            <span className="font-extrabold text-slate-800">{stats.totalSchedules}</span>
           </div>
         </div>
       </div>
@@ -298,9 +281,7 @@ export function ClassAttendanceSummaryChart({
           type="button"
           onClick={() => setActiveTab('chart')}
           className={`px-3 py-1.5 text-xs font-black rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
-            activeTab === 'chart'
-              ? 'bg-white text-indigo-700 shadow-md font-bold'
-              : 'text-gray-500 hover:text-gray-850'
+            activeTab === 'chart' ? 'bg-white text-indigo-700 shadow-md font-bold' : 'text-gray-500 hover:text-gray-850'
           }`}
         >
           <TrendingUp size={13} />
@@ -319,10 +300,9 @@ export function ClassAttendanceSummaryChart({
                   {lang === 'zh' ? '检测到低出勤率周期预警' : 'Problematic Low Attendance Period Detected'}
                 </span>
                 <p className="mt-0.5 text-[11px] text-rose-700/90 leading-relaxed">
-                  {lang === 'zh' 
+                  {lang === 'zh'
                     ? `班级在 ${lowestAttendanceDay.date}（课程: 《${lowestAttendanceDay.lessonTitle}》）到课率处于低谷（仅为 ${lowestAttendanceDay.attendanceRate}%）。请留意可能存在影响出勤的外部因素或教学周期瓶颈。`
-                    : `Check-in density dropped to a critical low of ${lowestAttendanceDay.attendanceRate}% on ${lowestAttendanceDay.date} for lesson: "${lowestAttendanceDay.lessonTitle}". Keep track of potential class milestones or periodic patterns.`
-                  }
+                    : `Check-in density dropped to a critical low of ${lowestAttendanceDay.attendanceRate}% on ${lowestAttendanceDay.date} for lesson: "${lowestAttendanceDay.lessonTitle}". Keep track of potential class milestones or periodic patterns.`}
                 </p>
               </div>
             </div>
@@ -360,40 +340,47 @@ export function ClassAttendanceSummaryChart({
                 </span>
                 <span className="text-[9.5px] text-gray-400 font-mono">Mon-Sun Matrix</span>
               </div>
-              
+
               <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
-                {(lang === 'zh' 
+                {(lang === 'zh'
                   ? ['一', '二', '三', '四', '五', '六', '日']
                   : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                ).map(label => (
-                  <div key={label} className="text-center text-[10px] font-black text-slate-400 py-1 uppercase tracking-wider font-sans">
+                ).map((label) => (
+                  <div
+                    key={label}
+                    className="text-center text-[10px] font-black text-slate-400 py-1 uppercase tracking-wider font-sans"
+                  >
                     {label}
                   </div>
                 ))}
-                
+
                 {heatmapGrid.map((day) => {
-                  let cellBg = "bg-slate-50 border border-slate-150 text-gray-400 cursor-default hover:bg-slate-100/50";
+                  let cellBg = 'bg-slate-50 border border-slate-150 text-gray-400 cursor-default hover:bg-slate-100/50';
                   let ratePercent = null;
-                  
+
                   if (day.isFuture) {
-                    cellBg = "bg-slate-50/20 text-slate-300 opacity-40 border border-dashed border-slate-100 cursor-not-allowed";
+                    cellBg =
+                      'bg-slate-50/20 text-slate-300 opacity-40 border border-dashed border-slate-100 cursor-not-allowed';
                   } else if (day.match) {
                     ratePercent = day.match.attendanceRate;
                     if (ratePercent >= 90) {
-                      cellBg = "bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold cursor-pointer border border-transparent";
+                      cellBg =
+                        'bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold cursor-pointer border border-transparent';
                     } else if (ratePercent >= 75) {
-                      cellBg = "bg-amber-500 hover:bg-amber-600 text-white font-extrabold cursor-pointer border border-transparent";
+                      cellBg =
+                        'bg-amber-500 hover:bg-amber-600 text-white font-extrabold cursor-pointer border border-transparent';
                     } else {
-                      cellBg = "bg-rose-500 hover:bg-rose-600 text-white font-extrabold cursor-pointer border border-transparent";
+                      cellBg =
+                        'bg-rose-500 hover:bg-rose-600 text-white font-extrabold cursor-pointer border border-transparent';
                     }
                   }
 
                   const isSelected = selectedDay && selectedDay.dateStr === day.dateStr;
-                  const borderHighlight = isSelected 
-                    ? "ring-2 ring-indigo-600 ring-offset-2 scale-105 z-10 shadow-md" 
-                    : day.isToday 
-                      ? "ring-2 ring-slate-800 ring-offset-1 z-10" 
-                      : "";
+                  const borderHighlight = isSelected
+                    ? 'ring-2 ring-indigo-600 ring-offset-2 scale-105 z-10 shadow-md'
+                    : day.isToday
+                      ? 'ring-2 ring-slate-800 ring-offset-1 z-10'
+                      : '';
 
                   return (
                     <button
@@ -406,7 +393,9 @@ export function ClassAttendanceSummaryChart({
                       }}
                       disabled={day.isFuture}
                       className={`relative aspect-square rounded-lg flex flex-col items-center justify-center p-1 transition-all group shrink-0 ${cellBg} ${borderHighlight}`}
-                      title={day.match ? `${day.dateStr}: ${day.match.lessonTitle} (${ratePercent}%)` : `${day.dateStr}`}
+                      title={
+                        day.match ? `${day.dateStr}: ${day.match.lessonTitle} (${ratePercent}%)` : `${day.dateStr}`
+                      }
                     >
                       {/* Day count */}
                       <span className="text-[11px] font-bold select-none">{day.dayOfMonth}</span>
@@ -470,8 +459,13 @@ export function ClassAttendanceSummaryChart({
                     <div className="space-y-3 flex-1 flex flex-col justify-between">
                       {/* Lesson title */}
                       <div className="bg-white border border-gray-150 p-2.5 rounded-lg text-left">
-                        <span className="text-[8.5px] font-bold text-gray-400 block uppercase">{lang === 'zh' ? '讲授课目' : 'Subject of Instruction'}</span>
-                        <p className="text-xs font-extrabold text-indigo-900 line-clamp-2 mt-0.5" title={selectedDay.match.lessonTitle}>
+                        <span className="text-[8.5px] font-bold text-gray-400 block uppercase">
+                          {lang === 'zh' ? '讲授课目' : 'Subject of Instruction'}
+                        </span>
+                        <p
+                          className="text-xs font-extrabold text-indigo-900 line-clamp-2 mt-0.5"
+                          title={selectedDay.match.lessonTitle}
+                        >
                           {selectedDay.match.lessonTitle}
                         </p>
                       </div>
@@ -481,18 +475,18 @@ export function ClassAttendanceSummaryChart({
                         <div className="relative flex items-center justify-center shrink-0">
                           <svg className="w-14 h-14 transform -rotate-90">
                             <circle cx="28" cy="28" r="23" className="stroke-gray-200 fill-none" strokeWidth="3.5" />
-                            <circle 
-                              cx="28" 
-                              cy="28" 
-                              r="23" 
+                            <circle
+                              cx="28"
+                              cy="28"
+                              r="23"
                               className={`fill-none transition-all duration-300 ${
                                 selectedDay.match.attendanceRate >= 90
                                   ? 'stroke-emerald-500'
                                   : selectedDay.match.attendanceRate >= 75
                                     ? 'stroke-amber-500'
                                     : 'stroke-rose-500'
-                              }`} 
-                              strokeWidth="4" 
+                              }`}
+                              strokeWidth="4"
                               strokeDasharray={`${2 * Math.PI * 23}`}
                               strokeDashoffset={`${2 * Math.PI * 23 * (1 - selectedDay.match.attendanceRate / 100)}`}
                               strokeLinecap="round"
@@ -507,19 +501,26 @@ export function ClassAttendanceSummaryChart({
                           <span className="text-[10px] font-bold text-gray-400 block uppercase">
                             {lang === 'zh' ? '考勤宏观评估' : 'Check-in Diagnostics'}
                           </span>
-                          <span className={`text-xs font-extrabold block ${
-                            selectedDay.match.attendanceRate >= 90 
-                              ? 'text-emerald-600' 
-                              : selectedDay.match.attendanceRate >= 75 
-                                ? 'text-amber-500' 
-                                : 'text-rose-600'
-                          }`}>
-                            {selectedDay.match.attendanceRate >= 90 
-                              ? (lang === 'zh' ? '出勤情况极好' : 'Excellent Check-in') 
-                              : selectedDay.match.attendanceRate >= 75 
-                                ? (lang === 'zh' ? '出勤尚可但有波动' : 'Moderate Attendance') 
-                                : (lang === 'zh' ? '出勤率严重偏低' : 'Low Attendance Alert')
-                            }
+                          <span
+                            className={`text-xs font-extrabold block ${
+                              selectedDay.match.attendanceRate >= 90
+                                ? 'text-emerald-600'
+                                : selectedDay.match.attendanceRate >= 75
+                                  ? 'text-amber-500'
+                                  : 'text-rose-600'
+                            }`}
+                          >
+                            {selectedDay.match.attendanceRate >= 90
+                              ? lang === 'zh'
+                                ? '出勤情况极好'
+                                : 'Excellent Check-in'
+                              : selectedDay.match.attendanceRate >= 75
+                                ? lang === 'zh'
+                                  ? '出勤尚可但有波动'
+                                  : 'Moderate Attendance'
+                                : lang === 'zh'
+                                  ? '出勤率严重偏低'
+                                  : 'Low Attendance Alert'}
                           </span>
                         </div>
                       </div>
@@ -527,25 +528,41 @@ export function ClassAttendanceSummaryChart({
                       {/* Breakdown Status Badges Grid */}
                       <div className="grid grid-cols-3 gap-1.5 text-center">
                         <div className="bg-white border border-gray-150 p-1.5 rounded-lg">
-                          <span className="text-[8px] font-bold text-emerald-600 block uppercase">{lang === 'zh' ? '到席' : 'In Class'}</span>
-                          <span className="text-xs font-mono font-extrabold text-slate-800">{selectedDay.match.present}</span>
+                          <span className="text-[8px] font-bold text-emerald-600 block uppercase">
+                            {lang === 'zh' ? '到席' : 'In Class'}
+                          </span>
+                          <span className="text-xs font-mono font-extrabold text-slate-800">
+                            {selectedDay.match.present}
+                          </span>
                         </div>
                         <div className="bg-white border border-gray-150 p-1.5 rounded-lg">
-                          <span className="text-[8px] font-bold text-amber-500 block uppercase">{lang === 'zh' ? '迟到' : 'Late'}</span>
-                          <span className="text-xs font-mono font-extrabold text-slate-800">{selectedDay.match.late}</span>
+                          <span className="text-[8px] font-bold text-amber-500 block uppercase">
+                            {lang === 'zh' ? '迟到' : 'Late'}
+                          </span>
+                          <span className="text-xs font-mono font-extrabold text-slate-800">
+                            {selectedDay.match.late}
+                          </span>
                         </div>
                         <div className="bg-white border border-gray-150 p-1.5 rounded-lg">
-                          <span className="text-[8px] font-bold text-rose-500 block uppercase">{lang === 'zh' ? '缺席' : 'Absent'}</span>
-                          <span className="text-xs font-mono font-extrabold text-slate-800">{selectedDay.match.absent}</span>
+                          <span className="text-[8px] font-bold text-rose-500 block uppercase">
+                            {lang === 'zh' ? '缺席' : 'Absent'}
+                          </span>
+                          <span className="text-xs font-mono font-extrabold text-slate-800">
+                            {selectedDay.match.absent}
+                          </span>
                         </div>
                       </div>
                     </div>
                   ) : (
                     <div className="flex-1 flex flex-col items-center justify-center py-6 text-slate-400 text-center gap-1 select-none font-sans">
                       <AlertCircle size={24} className="text-slate-300" />
-                      <span className="font-bold text-slate-500 text-[11px]">{lang === 'zh' ? '当天没有排课计划' : 'No Lesson Scheduled'}</span>
+                      <span className="font-bold text-slate-500 text-[11px]">
+                        {lang === 'zh' ? '当天没有排课计划' : 'No Lesson Scheduled'}
+                      </span>
                       <span className="text-[9px] max-w-[180px] text-gray-400">
-                        {lang === 'zh' ? '本日期无分配的课程安排及签到表。' : 'No instruction maps were recorded on this period.'}
+                        {lang === 'zh'
+                          ? '本日期无分配的课程安排及签到表。'
+                          : 'No instruction maps were recorded on this period.'}
                       </span>
                     </div>
                   )}
@@ -557,7 +574,9 @@ export function ClassAttendanceSummaryChart({
                     {lang === 'zh' ? '请点击考勤方块' : 'Select a Cell to Inspect'}
                   </span>
                   <span className="text-[9.5px] text-gray-400 max-w-[180px] leading-relaxed">
-                    {lang === 'zh' ? '在左侧历史视窗中轻点日期，可瞬间深度解读班级应出席名册及课题明细。' : 'Click any of the heat blocks to audit lesson stats and classroom ratios.'}
+                    {lang === 'zh'
+                      ? '在左侧历史视窗中轻点日期，可瞬间深度解读班级应出席名册及课题明细。'
+                      : 'Click any of the heat blocks to audit lesson stats and classroom ratios.'}
                   </span>
                 </div>
               )}
@@ -570,14 +589,14 @@ export function ClassAttendanceSummaryChart({
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={formattedData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-              <XAxis 
-                dataKey="displayDate" 
+              <XAxis
+                dataKey="displayDate"
                 tick={{ fontSize: 9, fill: '#9ca3af' }}
                 axisLine={{ stroke: '#e5e7eb' }}
                 tickLine={false}
               />
-              <YAxis 
-                domain={[0, 100]} 
+              <YAxis
+                domain={[0, 100]}
                 tickFormatter={(v) => `${v}%`}
                 tick={{ fontSize: 9, fill: '#9ca3af' }}
                 axisLine={false}
@@ -591,23 +610,36 @@ export function ClassAttendanceSummaryChart({
                     return (
                       <div className="bg-white border border-gray-150 p-2.5 rounded-xl shadow-xl font-sans text-xs flex flex-col gap-1.5">
                         <div className="font-bold text-gray-800 border-b border-gray-150 pb-1 mb-1 flex items-center justify-between gap-4">
-                          <span className="max-w-[130px] truncate" title={item.lessonTitle}>{item.lessonTitle}</span>
+                          <span className="max-w-[130px] truncate" title={item.lessonTitle}>
+                            {item.lessonTitle}
+                          </span>
                           <span className="text-[10px] text-gray-400 font-mono normal-case">{item.date}</span>
                         </div>
                         <div className="flex justify-between gap-4 text-gray-600">
-                          <span className="flex items-center gap-1 text-gray-400"><Users size={11} /> {lang === 'zh' ? '总注册学生' : 'Total Students'}:</span>
+                          <span className="flex items-center gap-1 text-gray-400">
+                            <Users size={11} /> {lang === 'zh' ? '总注册学生' : 'Total Students'}:
+                          </span>
                           <span className="font-bold text-slate-700">{item.total}</span>
                         </div>
                         <div className="flex justify-between gap-4 text-emerald-600">
-                          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500" /> {lang === 'zh' ? '实到人数' : 'Present'}:</span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />{' '}
+                            {lang === 'zh' ? '实到人数' : 'Present'}:
+                          </span>
                           <span className="font-semibold">{item.present}</span>
                         </div>
                         <div className="flex justify-between gap-4 text-amber-500">
-                          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> {lang === 'zh' ? '迟到人数' : 'Late'}:</span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />{' '}
+                            {lang === 'zh' ? '迟到人数' : 'Late'}:
+                          </span>
                           <span className="font-semibold">{item.late}</span>
                         </div>
                         <div className="flex justify-between gap-4 text-red-500">
-                          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-400" /> {lang === 'zh' ? '未到人数' : 'Absent'}:</span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />{' '}
+                            {lang === 'zh' ? '未到人数' : 'Absent'}:
+                          </span>
                           <span className="font-semibold">{item.absent}</span>
                         </div>
                         <div className="flex justify-between gap-4 text-indigo-600 border-t border-gray-100 pt-1.5 mt-1 font-bold">
@@ -620,12 +652,7 @@ export function ClassAttendanceSummaryChart({
                   return null;
                 }}
               />
-              <Bar 
-                dataKey="attendanceRate" 
-                fill="#6366f1" 
-                radius={[4, 4, 0, 0]}
-                maxBarSize={28}
-              />
+              <Bar dataKey="attendanceRate" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={28} />
             </BarChart>
           </ResponsiveContainer>
         </div>

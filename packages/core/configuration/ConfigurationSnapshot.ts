@@ -16,10 +16,7 @@ export class ConfigurationSnapshot {
   public readonly version?: string;
   private readonly data: Record<string, unknown>;
 
-  public constructor(
-    data: Record<string, unknown>,
-    options?: { timestamp?: number; version?: string },
-  ) {
+  public constructor(data: Record<string, unknown>, options?: { timestamp?: number; version?: string }) {
     this.data = deepFreeze(deepClone(data));
     this.timestamp = options?.timestamp ?? Date.now();
     this.version = options?.version;

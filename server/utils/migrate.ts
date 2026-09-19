@@ -20,8 +20,8 @@ export interface Migration {
 export function splitSqlStatements(sql: string): string[] {
   return sql
     .split(';')
-    .map(s => s.trim())
-    .filter(s => {
+    .map((s) => s.trim())
+    .filter((s) => {
       // 过滤空串或仅含注释的片段
       const content = s.replace(/--.*$/gm, '').trim();
       return content.length > 0;
@@ -50,10 +50,10 @@ export function loadMigrationsFromDirectory(dirPath: string): Migration[] {
   }
   const files = fs
     .readdirSync(dirPath)
-    .filter(f => f.endsWith('.sql'))
+    .filter((f) => f.endsWith('.sql'))
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
-  return files.map(file => {
+  return files.map((file) => {
     const fullPath = path.join(dirPath, file);
     const content = fs.readFileSync(fullPath, 'utf8');
     const name = path.basename(file, '.sql');
@@ -89,9 +89,7 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): v
     );
   `);
 
-  const applied = new Set(
-    (db.prepare('SELECT name FROM _migrations').all() as { name: string }[]).map(r => r.name),
-  );
+  const applied = new Set((db.prepare('SELECT name FROM _migrations').all() as { name: string }[]).map((r) => r.name));
 
   for (const migration of migrations) {
     if (applied.has(migration.name)) continue;
@@ -101,8 +99,11 @@ export function runMigrations(db: Database.Database, migrations: Migration[]): v
     try {
       executeSqlStatements(db, migration.up);
       const checksum = simpleChecksum(migration.up);
-      db.prepare('INSERT INTO _migrations (name, applied_at, checksum) VALUES (?, ?, ?)')
-        .run(migration.name, Date.now(), checksum);
+      db.prepare('INSERT INTO _migrations (name, applied_at, checksum) VALUES (?, ?, ?)').run(
+        migration.name,
+        Date.now(),
+        checksum,
+      );
       console.log(`[Migration] Applied: ${migration.name}`);
     } catch (err) {
       console.error(`[Migration] FAILED: ${migration.name}`, err);
@@ -129,7 +130,7 @@ export function simpleChecksum(text: string): string {
   let hash = 0;
   for (let i = 0; i < text.length; i++) {
     const char = text.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash |= 0;
   }
   return hash.toString(16);

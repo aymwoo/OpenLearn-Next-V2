@@ -39,7 +39,7 @@ export function setupRealtimeBridge({ eventBus, io, db }: RealtimeBridgeDeps): v
         assignmentTitle,
         studentId: payload.studentId,
         score: payload.score,
-        feedback: payload.feedback || ''
+        feedback: payload.feedback || '',
       });
     } catch (e) {
       console.error('[EventBus -> Socket.IO] Error dispatching assignment graded notification:', e);
@@ -70,7 +70,7 @@ export function setupRealtimeBridge({ eventBus, io, db }: RealtimeBridgeDeps): v
           const exists = db.prepare('SELECT id FROM student_rollcalls WHERE id = ?').get(rollcallId);
           if (!exists) {
             db.prepare(
-              'INSERT INTO student_rollcalls (id, student_id, class_id, lesson_id, picked_time) VALUES (?, ?, ?, ?, ?)'
+              'INSERT INTO student_rollcalls (id, student_id, class_id, lesson_id, picked_time) VALUES (?, ?, ?, ?, ?)',
             ).run(rollcallId, studentId, classId, lessonId, pickedTime);
 
             console.log(`[Rollcall] Saved rollcall for student ${studentId} (${studentName})`);
@@ -81,7 +81,7 @@ export function setupRealtimeBridge({ eventBus, io, db }: RealtimeBridgeDeps): v
               studentName,
               classId,
               lessonId,
-              pickedTime
+              pickedTime,
             });
           }
         }
@@ -103,7 +103,9 @@ export function setupRealtimeBridge({ eventBus, io, db }: RealtimeBridgeDeps): v
         io.to(payload.lessonId).emit('whiteboard-sync', syncMsg);
         // Also broadcast globally so clients not yet in the lesson room can react
         io.to('whiteboard-broadcast').emit('whiteboard-sync', syncMsg);
-        console.log(`[EventBus -> Socket.IO] Broadcast whiteboard refresh for lesson "${payload.lessonId}" (element: "${payload.elementId}", type: "${payload.type}")`);
+        console.log(
+          `[EventBus -> Socket.IO] Broadcast whiteboard refresh for lesson "${payload.lessonId}" (element: "${payload.elementId}", type: "${payload.type}")`,
+        );
       }
     } catch (e) {
       console.error('[EventBus -> Socket.IO] Error processing whiteboard.element_drawn:', e);
@@ -127,9 +129,11 @@ export function setupRealtimeBridge({ eventBus, io, db }: RealtimeBridgeDeps): v
       if (payload.lessonId) {
         io.to(payload.lessonId).emit('whiteboard-sync', {
           roomId: payload.lessonId,
-          type: 'refresh'
+          type: 'refresh',
         });
-        console.log(`[EventBus -> Socket.IO] Broadcast refresh after batch_draw (${payload.count} elements) for lesson "${payload.lessonId}"`);
+        console.log(
+          `[EventBus -> Socket.IO] Broadcast refresh after batch_draw (${payload.count} elements) for lesson "${payload.lessonId}"`,
+        );
       }
     } catch (e) {
       console.error('[EventBus -> Socket.IO] Error processing whiteboard.batch_drawn:', e);
@@ -142,7 +146,7 @@ export function setupRealtimeBridge({ eventBus, io, db }: RealtimeBridgeDeps): v
       if (payload.lessonId) {
         io.to(payload.lessonId).emit('whiteboard-sync', {
           roomId: payload.lessonId,
-          type: 'refresh'
+          type: 'refresh',
         });
       }
     } catch (e) {
@@ -156,7 +160,7 @@ export function setupRealtimeBridge({ eventBus, io, db }: RealtimeBridgeDeps): v
       if (payload.lessonId) {
         io.to(payload.lessonId).emit('whiteboard-sync', {
           roomId: payload.lessonId,
-          type: 'refresh'
+          type: 'refresh',
         });
       }
     } catch (e) {

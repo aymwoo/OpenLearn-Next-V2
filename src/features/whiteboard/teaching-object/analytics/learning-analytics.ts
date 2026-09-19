@@ -23,7 +23,7 @@ export class LearningAnalyticsEngine {
     record.submissionCount++;
     record.participantCount = Math.max(record.participantCount, record.submissionCount);
     record.completionRate = Math.min(1, record.submissionCount / Math.max(1, record.participantCount));
-    
+
     if (!isCorrect) {
       record.errorRate = (record.errorRate * (record.submissionCount - 1) + 1) / record.submissionCount;
     } else {

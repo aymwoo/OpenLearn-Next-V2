@@ -12,12 +12,7 @@ import type { PlatformEvent } from '../../packages/core/event-bus';
 
 type EventHandler = (event: PlatformEvent) => void;
 
-const SOCKET_FORWARD_PREFIXES = [
-  'whiteboard.',
-  'courseware.',
-  'quiz.',
-  'rollcall.',
-];
+const SOCKET_FORWARD_PREFIXES = ['whiteboard.', 'courseware.', 'quiz.', 'rollcall.'];
 
 class FrontendEventBus {
   private handlers = new Map<string, Set<EventHandler>>();

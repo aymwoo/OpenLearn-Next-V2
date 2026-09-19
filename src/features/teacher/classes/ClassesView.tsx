@@ -33,7 +33,7 @@ import { ManualImportButton } from './ManualImportButton.js';
 import { CreateClassButton } from './CreateClassButton.js';
 import { SemesterGradeManager } from '../../../components/SemesterGradeManager';
 
-type Translation = typeof translations['zh'];
+type Translation = (typeof translations)['zh'];
 
 export interface ClassesViewProps {
   t: Translation;
@@ -86,7 +86,9 @@ export interface ClassesViewProps {
   classSubmissionFilters: Record<string, 'all' | 'submitted' | 'graded' | 'pending'>;
   setClassSubmissionFilters: Dispatch<SetStateAction<Record<string, 'all' | 'submitted' | 'graded' | 'pending'>>>;
   classActiveTabs: Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>;
-  setClassActiveTabs: Dispatch<SetStateAction<Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>>>;
+  setClassActiveTabs: Dispatch<
+    SetStateAction<Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>>
+  >;
   classProgressMap: Record<string, { lesson_id: string; lesson_title: string; average_progress: number }[]>;
   classSchedulesMap: Record<string, ScheduleType[]>;
   classDashboardMap: Record<string, any>;
@@ -139,7 +141,6 @@ export interface ClassesViewProps {
 export function ClassesView(props: ClassesViewProps) {
   return (
     <div className="flex-1 flex flex-col gap-6 h-full overflow-y-auto relative p-1 pr-3">
-
       {/* School Management Module */}
       <div className="flex-1 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col min-h-0">
         <div className="p-4 border-b border-gray-100 flex items-center justify-between shrink-0">
@@ -151,7 +152,7 @@ export function ClassesView(props: ClassesViewProps) {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => {
-                props.setBatchMode(b => !b);
+                props.setBatchMode((b) => !b);
                 props.setSelectedClassIds(new Set());
                 props.setSelectedStudentIds(new Set());
               }}
@@ -162,7 +163,11 @@ export function ClassesView(props: ClassesViewProps) {
             {props.batchMode && (
               <>
                 <label className="flex items-center gap-1 text-xs text-gray-500 cursor-pointer select-none">
-                  <input type="checkbox" checked={props.classes.length > 0 && props.selectedClassIds.size === props.classes.length} onChange={props.toggleSelectAllClasses} />
+                  <input
+                    type="checkbox"
+                    checked={props.classes.length > 0 && props.selectedClassIds.size === props.classes.length}
+                    onChange={props.toggleSelectAllClasses}
+                  />
                   {props.lang === 'zh' ? '全选' : 'Select All'}
                 </label>
                 <span className="text-xs text-gray-400">({props.selectedClassIds.size})</span>
@@ -210,10 +215,12 @@ export function ClassesView(props: ClassesViewProps) {
                       initial={{ opacity: 0, y: 8, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 4, scale: 0.95 }}
-                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      transition={{ duration: 0.15, ease: 'easeOut' }}
                       className="absolute right-0 bottom-full mb-2.5 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-semibold rounded-lg shadow-xl z-55 pointer-events-none border border-slate-800 flex items-center gap-1.5 whitespace-nowrap"
                     >
-                      <span>{props.lang === 'zh' ? '导出所有班级的成绩数据' : 'Export grade data for all classes'}</span>
+                      <span>
+                        {props.lang === 'zh' ? '导出所有班级的成绩数据' : 'Export grade data for all classes'}
+                      </span>
                       <div className="absolute right-8 -translate-x-1/2 top-full w-2 h-2 bg-slate-900 rotate-45 -mt-1 border-r border-b border-slate-800"></div>
                     </motion.div>
                   )}
@@ -226,14 +233,17 @@ export function ClassesView(props: ClassesViewProps) {
                   whileHover={{
                     scale: 1.05,
                     y: -1,
-                    boxShadow: "0 10px 15px -3px rgba(16, 185, 129, 0.3), 0 4px 6px -4px rgba(16, 185, 129, 0.3)"
+                    boxShadow: '0 10px 15px -3px rgba(16, 185, 129, 0.3), 0 4px 6px -4px rgba(16, 185, 129, 0.3)',
                   }}
                   whileTap={{ scale: 0.95, y: 0 }}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-medium rounded-lg shadow-sm transition-all cursor-pointer select-none"
                 >
                   <Download size={14} className="animate-pulse" />
                   <span>{props.lang === 'zh' ? '一键导出所有成绩' : 'Export All Grades'}</span>
-                  <ChevronDown size={12} className={`transition-transform duration-200 ${props.exportDropdownOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown
+                    size={12}
+                    className={`transition-transform duration-200 ${props.exportDropdownOpen ? 'rotate-180' : ''}`}
+                  />
                 </motion.button>
 
                 {props.exportDropdownOpen && (
@@ -262,8 +272,14 @@ export function ClassesView(props: ClassesViewProps) {
                         <div className="flex items-center gap-2 text-left">
                           <Sparkles size={14} className="text-emerald-600 animate-pulse" />
                           <div>
-                            <div className="font-extrabold">{props.lang === 'zh' ? '全班级汇总表' : 'All Classes Multi-Sheet'}</div>
-                            <div className="text-[9px] text-emerald-600 font-medium">{props.lang === 'zh' ? '将所有学科班级合并至单张CSV表' : 'Consolidate everyone to a single CSV'}</div>
+                            <div className="font-extrabold">
+                              {props.lang === 'zh' ? '全班级汇总表' : 'All Classes Multi-Sheet'}
+                            </div>
+                            <div className="text-[9px] text-emerald-600 font-medium">
+                              {props.lang === 'zh'
+                                ? '将所有学科班级合并至单张CSV表'
+                                : 'Consolidate everyone to a single CSV'}
+                            </div>
                           </div>
                         </div>
                         {props.isExportingAllCombined ? (
@@ -296,7 +312,8 @@ export function ClassesView(props: ClassesViewProps) {
                             <div className="min-w-0 pr-2">
                               <div className="font-bold text-slate-800 truncate">{cls.name}</div>
                               <div className="text-[9px] text-gray-400 mt-0.5">
-                                {(props.classStudentsMap[cls.id] || []).length} {props.lang === 'zh' ? '名学生已注册' : 'registered pupils'}
+                                {(props.classStudentsMap[cls.id] || []).length}{' '}
+                                {props.lang === 'zh' ? '名学生已注册' : 'registered pupils'}
                               </div>
                             </div>
                             {props.loadingExportClassId === cls.id ? (
@@ -324,12 +341,12 @@ export function ClassesView(props: ClassesViewProps) {
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {props.classes.length === 0 && props.students.length === 0 ? (
-             <div className="text-center p-8 text-sm text-gray-500">
-               {props.t.noClasses} & {props.t.noStudents}
-             </div>
+            <div className="text-center p-8 text-sm text-gray-500">
+              {props.t.noClasses} & {props.t.noStudents}
+            </div>
           ) : (
             <>
-              {props.classes.map(cls => {
+              {props.classes.map((cls) => {
                 const isExpanded = props.expandedClassId === cls.id;
                 const cStudents = props.classStudentsMap[cls.id] || [];
                 const activeSubmissionFilter = props.classSubmissionFilters[cls.id] || 'all';
@@ -382,13 +399,13 @@ export function ClassesView(props: ClassesViewProps) {
                         transition={{ duration: 0.3, ease: 'easeOut' }}
                         className="pl-6 bg-gray-50 pb-2 pt-2 border-t border-gray-100 pr-2"
                       >
-                         <ClassPasscodeController cls={cls} lang={props.lang} fetchClasses={props.fetchClasses} />
-                         <ClassTabs
-                           cls={cls}
-                           lang={props.lang}
-                           classActiveTabs={props.classActiveTabs}
-                           setClassActiveTabs={props.setClassActiveTabs}
-                         />
+                        <ClassPasscodeController cls={cls} lang={props.lang} fetchClasses={props.fetchClasses} />
+                        <ClassTabs
+                          cls={cls}
+                          lang={props.lang}
+                          classActiveTabs={props.classActiveTabs}
+                          setClassActiveTabs={props.setClassActiveTabs}
+                        />
                         {(props.classActiveTabs[cls.id] || 'students') === 'schedules' && (
                           <ClassSchedulesCharts
                             cls={cls}
@@ -400,116 +417,115 @@ export function ClassesView(props: ClassesViewProps) {
                           />
                         )}
 
-                         {(props.classActiveTabs[cls.id] || 'students') === 'assignments' && (
-                           <ClassAssignmentsPanel
-                             cls={cls}
-                             lang={props.lang}
-                             cStudents={cStudents}
-                             activeSubmissionFilter={activeSubmissionFilter}
-                             classDashboardMap={props.classDashboardMap}
-                             assignmentSortOrder={props.assignmentSortOrder}
-                             setAssignmentSortOrder={props.setAssignmentSortOrder}
-                             lessons={props.lessons}
-                             isGeneratingPDFReport={props.isGeneratingPDFReport}
-                             handleGeneratePDFReport={props.handleGeneratePDFReport}
-                             setExportClassId={props.setExportClassId}
-                             setExportClassName={props.setExportClassName}
-                             setQuizzesWeight={props.setQuizzesWeight}
-                             setAssignmentsWeight={props.setAssignmentsWeight}
-                             setCustomCategoryOverrides={props.setCustomCategoryOverrides}
-                             setIsExportWeightModalOpen={props.setIsExportWeightModalOpen}
-                             isGeneratingAssignment={props.isGeneratingAssignment}
-                             setQuizGeneratorClassId={props.setQuizGeneratorClassId}
-                             setQuizGenMode={props.setQuizGenMode}
-                             setQuizGenSelectedLessonId={props.setQuizGenSelectedLessonId}
-                             setQuizGenTopic={props.setQuizGenTopic}
-                             setSuggestedObjectives={props.setSuggestedObjectives}
-                             setSuggestedQuestions={props.setSuggestedQuestions}
-                             setIsQuizGeneratorOpen={props.setIsQuizGeneratorOpen}
-                             setClassSubmissionFilters={props.setClassSubmissionFilters}
-                             setActiveStudentId={props.setActiveStudentId}
-                             setSelectedAssignment={props.setSelectedAssignment}
-                             setStudentViewStatus={props.setStudentViewStatus}
-                             setActiveRole={props.setActiveRole}
-                             isGrading={props.isGrading}
-                             setIsGrading={props.setIsGrading}
-                             fetchClassDashboard={props.fetchClassDashboard}
-                             get30DayAverageWarning={props.get30DayAverageWarning}
-                           />
-                         )}
+                        {(props.classActiveTabs[cls.id] || 'students') === 'assignments' && (
+                          <ClassAssignmentsPanel
+                            cls={cls}
+                            lang={props.lang}
+                            cStudents={cStudents}
+                            activeSubmissionFilter={activeSubmissionFilter}
+                            classDashboardMap={props.classDashboardMap}
+                            assignmentSortOrder={props.assignmentSortOrder}
+                            setAssignmentSortOrder={props.setAssignmentSortOrder}
+                            lessons={props.lessons}
+                            isGeneratingPDFReport={props.isGeneratingPDFReport}
+                            handleGeneratePDFReport={props.handleGeneratePDFReport}
+                            setExportClassId={props.setExportClassId}
+                            setExportClassName={props.setExportClassName}
+                            setQuizzesWeight={props.setQuizzesWeight}
+                            setAssignmentsWeight={props.setAssignmentsWeight}
+                            setCustomCategoryOverrides={props.setCustomCategoryOverrides}
+                            setIsExportWeightModalOpen={props.setIsExportWeightModalOpen}
+                            isGeneratingAssignment={props.isGeneratingAssignment}
+                            setQuizGeneratorClassId={props.setQuizGeneratorClassId}
+                            setQuizGenMode={props.setQuizGenMode}
+                            setQuizGenSelectedLessonId={props.setQuizGenSelectedLessonId}
+                            setQuizGenTopic={props.setQuizGenTopic}
+                            setSuggestedObjectives={props.setSuggestedObjectives}
+                            setSuggestedQuestions={props.setSuggestedQuestions}
+                            setIsQuizGeneratorOpen={props.setIsQuizGeneratorOpen}
+                            setClassSubmissionFilters={props.setClassSubmissionFilters}
+                            setActiveStudentId={props.setActiveStudentId}
+                            setSelectedAssignment={props.setSelectedAssignment}
+                            setStudentViewStatus={props.setStudentViewStatus}
+                            setActiveRole={props.setActiveRole}
+                            isGrading={props.isGrading}
+                            setIsGrading={props.setIsGrading}
+                            fetchClassDashboard={props.fetchClassDashboard}
+                            get30DayAverageWarning={props.get30DayAverageWarning}
+                          />
+                        )}
 
-                         {(props.classActiveTabs[cls.id] || 'students') === 'schedules' && (
-                           <ClassScheduleAttendance
-                             cls={cls}
-                             lang={props.lang}
-                             cStudents={cStudents}
-                             newScheduleDate={props.newScheduleDate}
-                             setNewScheduleDate={props.setNewScheduleDate}
-                             newScheduleLessonId={props.newScheduleLessonId}
-                             setNewScheduleLessonId={props.setNewScheduleLessonId}
-                             lessons={props.lessons}
-                             fetchClassSchedules={props.fetchClassSchedules}
-                             classSchedulesMap={props.classSchedulesMap}
-                             expandedScheduleId={props.expandedScheduleId}
-                             setExpandedScheduleId={props.setExpandedScheduleId}
-                             fetchScheduleAttendance={props.fetchScheduleAttendance}
-                             scheduleAttendanceMap={props.scheduleAttendanceMap}
-                             get30DayAverageWarning={props.get30DayAverageWarning}
-                           />
-                         )}
+                        {(props.classActiveTabs[cls.id] || 'students') === 'schedules' && (
+                          <ClassScheduleAttendance
+                            cls={cls}
+                            lang={props.lang}
+                            cStudents={cStudents}
+                            newScheduleDate={props.newScheduleDate}
+                            setNewScheduleDate={props.setNewScheduleDate}
+                            newScheduleLessonId={props.newScheduleLessonId}
+                            setNewScheduleLessonId={props.setNewScheduleLessonId}
+                            lessons={props.lessons}
+                            fetchClassSchedules={props.fetchClassSchedules}
+                            classSchedulesMap={props.classSchedulesMap}
+                            expandedScheduleId={props.expandedScheduleId}
+                            setExpandedScheduleId={props.setExpandedScheduleId}
+                            fetchScheduleAttendance={props.fetchScheduleAttendance}
+                            scheduleAttendanceMap={props.scheduleAttendanceMap}
+                            get30DayAverageWarning={props.get30DayAverageWarning}
+                          />
+                        )}
 
-                         <ClassStudentsPanel
-                           cls={cls}
-                           classStudentsMap={props.classStudentsMap}
-                           students={props.students}
-                           lang={props.lang}
-                           selectedStudentIds={props.selectedStudentIds}
-                           rosterViewMode={props.rosterViewMode}
-                           setRosterViewMode={props.setRosterViewMode}
-                           rosterSearchQuery={props.rosterSearchQuery}
-                           setRosterSearchQuery={props.setRosterSearchQuery}
-                           rosterTagFilter={props.rosterTagFilter}
-                           setRosterTagFilter={props.setRosterTagFilter}
-                           batchMode={props.batchMode}
-                           toggleSelectAllStudents={props.toggleSelectAllStudents}
-                           handleBatchDeleteStudents={props.handleBatchDeleteStudents}
-                           handleBatchResetPassword={props.handleBatchResetPassword}
-                           handleBatchTransferStudents={props.handleBatchTransferStudents}
-                           handleBatchSetLockedLesson={props.handleBatchSetLockedLesson}
-                           expandedStudentId={props.expandedStudentId}
-                           setExpandedStudentId={props.setExpandedStudentId}
-                           fetchStudentProgress={props.fetchStudentProgress}
-                           studentProgressMap={props.studentProgressMap}
-                           studentActiveTabs={props.studentActiveTabs}
-                           setStudentActiveTabs={props.setStudentActiveTabs}
-                           toggleStudentSelection={props.toggleStudentSelection}
-                           get30DayAverageWarning={props.get30DayAverageWarning}
-                           lessons={props.lessons}
-                           setStudents={props.setStudents}
-                           setClassStudentsMap={props.setClassStudentsMap}
-                           fetchClassStudents={props.fetchClassStudents}
-                           fetchStudents={props.fetchStudents}
-                           parseCSV={props.parseCSV}
-                         />
+                        <ClassStudentsPanel
+                          cls={cls}
+                          classStudentsMap={props.classStudentsMap}
+                          students={props.students}
+                          lang={props.lang}
+                          selectedStudentIds={props.selectedStudentIds}
+                          rosterViewMode={props.rosterViewMode}
+                          setRosterViewMode={props.setRosterViewMode}
+                          rosterSearchQuery={props.rosterSearchQuery}
+                          setRosterSearchQuery={props.setRosterSearchQuery}
+                          rosterTagFilter={props.rosterTagFilter}
+                          setRosterTagFilter={props.setRosterTagFilter}
+                          batchMode={props.batchMode}
+                          toggleSelectAllStudents={props.toggleSelectAllStudents}
+                          handleBatchDeleteStudents={props.handleBatchDeleteStudents}
+                          handleBatchResetPassword={props.handleBatchResetPassword}
+                          handleBatchTransferStudents={props.handleBatchTransferStudents}
+                          handleBatchSetLockedLesson={props.handleBatchSetLockedLesson}
+                          expandedStudentId={props.expandedStudentId}
+                          setExpandedStudentId={props.setExpandedStudentId}
+                          fetchStudentProgress={props.fetchStudentProgress}
+                          studentProgressMap={props.studentProgressMap}
+                          studentActiveTabs={props.studentActiveTabs}
+                          setStudentActiveTabs={props.setStudentActiveTabs}
+                          toggleStudentSelection={props.toggleStudentSelection}
+                          get30DayAverageWarning={props.get30DayAverageWarning}
+                          lessons={props.lessons}
+                          setStudents={props.setStudents}
+                          setClassStudentsMap={props.setClassStudentsMap}
+                          fetchClassStudents={props.fetchClassStudents}
+                          fetchStudents={props.fetchStudents}
+                          parseCSV={props.parseCSV}
+                        />
 
-                         {(props.classActiveTabs[cls.id] || 'students') === 'grades' && (
-                           <SemesterGradeManager
-                             classId={cls.id}
-                             className={cls.name}
-                             students={cStudents}
-                             lang={props.lang}
-                           />
-                         )}
-                       </motion.div>
-                     )}
-                   </div>
-                 );
-               })}
-             </>
+                        {(props.classActiveTabs[cls.id] || 'students') === 'grades' && (
+                          <SemesterGradeManager
+                            classId={cls.id}
+                            className={cls.name}
+                            students={cStudents}
+                            lang={props.lang}
+                          />
+                        )}
+                      </motion.div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
           )}
         </div>
       </div>
-
-      </div>
+    </div>
   );
 }

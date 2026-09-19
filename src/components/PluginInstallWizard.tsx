@@ -24,11 +24,7 @@ interface PluginInstallWizardProps {
   /** When set, wizard is locked to updating this DB plugin id (card "Update"). */
   lockedTargetPluginId?: string | null;
   installedPlugins?: InstalledPluginSummary[];
-  onConfirmInstall: (
-    file: File,
-    executionMode: 'worker' | 'inline',
-    opts?: ZipInstallOptions,
-  ) => Promise<void>;
+  onConfirmInstall: (file: File, executionMode: 'worker' | 'inline', opts?: ZipInstallOptions) => Promise<void>;
 }
 
 interface DetectedExtensionPoint {
@@ -109,8 +105,7 @@ function extractFromFrontendJs(jsContent: string): DetectedExtensionPoint[] {
   if (!jsContent) return [];
   const panels: DetectedExtensionPoint[] = [];
   // Allow nested braces up to one level so multi-field configs still match
-  const epRegex =
-    /registerExtensionPoint\s*\(\s*['"]([^'"]+)['"]\s*,\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g;
+  const epRegex = /registerExtensionPoint\s*\(\s*['"]([^'"]+)['"]\s*,\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g;
   let match: RegExpExecArray | null;
   while ((match = epRegex.exec(jsContent)) !== null) {
     const slot = decodeJsStringLiteral(match[1]);
@@ -149,9 +144,7 @@ function mergeExtensionPoints(
     }
     // Prefer a human label from either side; keep manifest source if present
     const betterLabel =
-      existing.label && existing.label !== existing.id && existing.label !== existing.slot
-        ? existing.label
-        : p.label;
+      existing.label && existing.label !== existing.id && existing.label !== existing.slot ? existing.label : p.label;
     merged.set(key, { ...existing, label: betterLabel || existing.label });
   }
   return Array.from(merged.values());
@@ -174,8 +167,12 @@ function coerceSemver(v: string | undefined | null): string {
 }
 
 function compareSemver(a: string, b: string): number {
-  const pa = coerceSemver(a).split('.').map((x) => parseInt(x, 10));
-  const pb = coerceSemver(b).split('.').map((x) => parseInt(x, 10));
+  const pa = coerceSemver(a)
+    .split('.')
+    .map((x) => parseInt(x, 10));
+  const pb = coerceSemver(b)
+    .split('.')
+    .map((x) => parseInt(x, 10));
   for (let i = 0; i < 3; i++) {
     if (pa[i] < pb[i]) return -1;
     if (pa[i] > pb[i]) return 1;
@@ -262,7 +259,9 @@ export function PluginInstallWizard({
       const parsed = JSON.parse(content);
 
       if (!parsed.id || !parsed.name) {
-        throw new Error(lang === 'zh' ? 'manifest.json 缺少必填字段 id 或 name' : 'manifest.json missing required id or name field');
+        throw new Error(
+          lang === 'zh' ? 'manifest.json 缺少必填字段 id 或 name' : 'manifest.json missing required id or name field',
+        );
       }
 
       setManifest(parsed);
@@ -424,8 +423,7 @@ export function PluginInstallWizard({
   }, [registeredPanels, previewRole]);
 
   const isUpgrade = !!existingInstall;
-  const isDowngrade =
-    isUpgrade && compareSemver(manifest?.version || '0.0.0', existingInstall!.version) < 0;
+  const isDowngrade = isUpgrade && compareSemver(manifest?.version || '0.0.0', existingInstall!.version) < 0;
   const isInUse =
     isUpgrade &&
     existingInstall!.status === 'active' &&
@@ -468,7 +466,10 @@ export function PluginInstallWizard({
       onClose();
     } catch (e: any) {
       console.error(e);
-      setError(e?.message || (lang === 'zh' ? (isUpgrade ? '更新失败' : '安装失败') : isUpgrade ? 'Update failed' : 'Installation failed'));
+      setError(
+        e?.message ||
+          (lang === 'zh' ? (isUpgrade ? '更新失败' : '安装失败') : isUpgrade ? 'Update failed' : 'Installation failed'),
+      );
       setProgressPct(0);
       setProgressMsg('');
     } finally {
@@ -505,7 +506,10 @@ export function PluginInstallWizard({
       onClose();
     } catch (e: any) {
       console.error(e);
-      setError(e?.message || (lang === 'zh' ? (isUpgrade ? '更新失败' : '安装失败') : isUpgrade ? 'Update failed' : 'Installation failed'));
+      setError(
+        e?.message ||
+          (lang === 'zh' ? (isUpgrade ? '更新失败' : '安装失败') : isUpgrade ? 'Update failed' : 'Installation failed'),
+      );
       setProgressPct(0);
       setProgressMsg('');
     } finally {
@@ -615,7 +619,9 @@ export function PluginInstallWizard({
                     </div>
                   </div>
                   <div>
-                    <h4 className="font-bold text-slate-700 text-xs mb-1.5">{lang === 'zh' ? '功能描述' : 'Description'}</h4>
+                    <h4 className="font-bold text-slate-700 text-xs mb-1.5">
+                      {lang === 'zh' ? '功能描述' : 'Description'}
+                    </h4>
                     <p className="text-xs text-gray-600 leading-relaxed bg-slate-50 border border-slate-100 p-3 rounded-lg font-medium">
                       {manifest.description ||
                         (lang === 'zh' ? '该插件暂无详细描述信息。' : 'No description provided for this plugin.')}
@@ -655,7 +661,9 @@ export function PluginInstallWizard({
                       }`}
                     >
                       <h4 className="text-xs font-extrabold text-slate-800 mb-2">
-                        {lang === 'zh' ? '检测到已安装同一插件 — 将执行原地更新' : 'Same plugin already installed — in-place update'}
+                        {lang === 'zh'
+                          ? '检测到已安装同一插件 — 将执行原地更新'
+                          : 'Same plugin already installed — in-place update'}
                       </h4>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div className="bg-white/70 border border-slate-100 rounded-lg p-2">
@@ -745,14 +753,18 @@ export function PluginInstallWizard({
                             className={`border rounded-xl p-3.5 flex flex-col gap-1 transition-all ${risk.rowClass}`}
                           >
                             <div className="flex items-center justify-between">
-                              <span className={`font-mono text-xs font-bold rounded px-2 py-0.5 shadow-2xs ${risk.codeClass}`}>
+                              <span
+                                className={`font-mono text-xs font-bold rounded px-2 py-0.5 shadow-2xs ${risk.codeClass}`}
+                              >
                                 {cap}
                               </span>
                               <span className={`text-[10px] px-2 py-0.5 rounded-md border ${risk.badgeClass}`}>
                                 {risk.label}
                               </span>
                             </div>
-                            <p className={`text-[11px] leading-relaxed font-medium mt-1 ${risk.descClass}`}>{risk.desc}</p>
+                            <p className={`text-[11px] leading-relaxed font-medium mt-1 ${risk.descClass}`}>
+                              {risk.desc}
+                            </p>
                           </div>
                         );
                       })}
@@ -838,7 +850,9 @@ export function PluginInstallWizard({
                 <div className="flex flex-col gap-3 h-full">
                   <div className="flex items-center justify-between shrink-0 gap-3">
                     <p className="text-xs text-slate-500 font-semibold">
-                      {lang === 'zh' ? '检测到的扩展点（静态分析预览）：' : 'Detected extension points (static analysis):'}
+                      {lang === 'zh'
+                        ? '检测到的扩展点（静态分析预览）：'
+                        : 'Detected extension points (static analysis):'}
                     </p>
                     <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0">
                       <button
@@ -908,11 +922,7 @@ export function PluginInstallWizard({
                                       : 'bg-indigo-50 text-indigo-700 border-indigo-100'
                                   }`}
                                 >
-                                  {p.source === 'manifest'
-                                    ? lang === 'zh'
-                                      ? 'manifest'
-                                      : 'manifest'
-                                    : 'frontend.js'}
+                                  {p.source === 'manifest' ? (lang === 'zh' ? 'manifest' : 'manifest') : 'frontend.js'}
                                 </span>
                               </li>
                             ))}
@@ -989,11 +999,7 @@ export function PluginInstallWizard({
                             checked={confirmInUse}
                             onChange={(e) => setConfirmInUse(e.target.checked)}
                           />
-                          <span>
-                            {lang === 'zh'
-                              ? '已知晓课中热更新风险'
-                              : 'I accept live-class hot-update risk'}
-                          </span>
+                          <span>{lang === 'zh' ? '已知晓课中热更新风险' : 'I accept live-class hot-update risk'}</span>
                         </label>
                       )}
                       {!canProceedInstall && (
@@ -1151,7 +1157,13 @@ export function PluginInstallWizard({
                     <div className="flex items-center gap-1.5">
                       <Loader2 size={13} className="animate-spin" />
                       <span>
-                        {lang === 'zh' ? (isUpgrade ? '更新中...' : '安装中...') : isUpgrade ? 'Updating...' : 'Installing...'}
+                        {lang === 'zh'
+                          ? isUpgrade
+                            ? '更新中...'
+                            : '安装中...'
+                          : isUpgrade
+                            ? 'Updating...'
+                            : 'Installing...'}
                       </span>
                     </div>
                     <div className="w-full h-1 bg-indigo-400/30 rounded-full overflow-hidden">

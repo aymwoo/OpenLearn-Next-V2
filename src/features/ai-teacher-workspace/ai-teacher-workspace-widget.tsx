@@ -78,9 +78,7 @@ export const AITeacherWorkspaceWidget: React.FC<AITeacherWorkspaceWidgetProps> =
           marginBottom: '8px',
         }}
       >
-        <span style={{ fontWeight: 600, fontSize: '14px', color: '#1e293b' }}>
-          🤖 AI Teacher Assistant
-        </span>
+        <span style={{ fontWeight: 600, fontSize: '14px', color: '#1e293b' }}>🤖 AI Teacher Assistant</span>
         <div className="ai-widget-controls" style={{ display: 'flex', gap: '4px' }}>
           <button
             data-testid="btn-pin"

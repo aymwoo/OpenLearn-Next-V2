@@ -43,11 +43,7 @@ export class DependencyResolver {
     return desc.dependencies.map((depId) => this.resolveArgument(desc, depId, scope));
   }
 
-  private resolveArgument(
-    dependent: DependencyDescriptor,
-    depId: string,
-    scope: InjectionScope,
-  ): unknown {
+  private resolveArgument(dependent: DependencyDescriptor, depId: string, scope: InjectionScope): unknown {
     const isOptional = dependent.optional.includes(depId);
     const isLazy = dependent.lazy;
 

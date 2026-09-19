@@ -3,7 +3,7 @@ import {
   ICommandBusServiceToken,
   IActionRegistryServiceToken,
   IDatabaseToken,
-  ISemesterGradeServiceToken
+  ISemesterGradeServiceToken,
 } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
 
@@ -17,7 +17,7 @@ export const AssignmentEvalPlugin = {
       '@openlearn/core:ICommandBusService@^1.0.0',
       '@openlearn/core:IActionRegistryService@^1.0.0',
       '@openlearn/core:IDatabase@^1.0.0',
-      '@openlearn/core:ISemesterGradeService@^1.0.0'
+      '@openlearn/core:ISemesterGradeService@^1.0.0',
     ],
     capabilitiesProposed: ['lesson:read', 'lesson:write'],
     engines: { openlearn: '>=0.2.5' },
@@ -49,10 +49,10 @@ export const AssignmentEvalPlugin = {
         properties: {
           lessonId: { type: 'STRING', description: '关联的课时 ID' },
           studentId: { type: 'STRING', description: '提交作品的学生 ID' },
-          filePath: { type: 'STRING', description: '文件相对虚拟文件系统的存储路径' }
+          filePath: { type: 'STRING', description: '文件相对虚拟文件系统的存储路径' },
         },
-        required: ['lessonId', 'studentId', 'filePath']
-      }
+        required: ['lessonId', 'studentId', 'filePath'],
+      },
     });
 
     await commandBus.registerHandler(submitCmd, {
@@ -63,7 +63,8 @@ export const AssignmentEvalPlugin = {
         }
 
         // Check if submission already exists
-        const existing = db.prepare('SELECT id, version FROM plugin_submissions WHERE lesson_id = ? AND student_id = ?')
+        const existing = db
+          .prepare('SELECT id, version FROM plugin_submissions WHERE lesson_id = ? AND student_id = ?')
           .get(lessonId, studentId) as { id: string; version: number } | undefined;
 
         let submissionId: string;
@@ -72,16 +73,21 @@ export const AssignmentEvalPlugin = {
         if (existing) {
           submissionId = existing.id;
           version = existing.version + 1;
-          db.prepare('UPDATE plugin_submissions SET file_path = ?, version = ?, updated_at = ? WHERE id = ?')
-            .run(filePath, version, Date.now(), submissionId);
+          db.prepare('UPDATE plugin_submissions SET file_path = ?, version = ?, updated_at = ? WHERE id = ?').run(
+            filePath,
+            version,
+            Date.now(),
+            submissionId,
+          );
         } else {
           submissionId = 'sub-' + uuidv7();
-          db.prepare('INSERT INTO plugin_submissions (id, lesson_id, student_id, file_path, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-            .run(submissionId, lessonId, studentId, filePath, version, Date.now(), Date.now());
+          db.prepare(
+            'INSERT INTO plugin_submissions (id, lesson_id, student_id, file_path, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          ).run(submissionId, lessonId, studentId, filePath, version, Date.now(), Date.now());
         }
 
         return { success: true, submissionId, version };
-      }
+      },
     });
 
     // ── 2. PEER REVIEW COMMAND ─────────────────────────────────────────────
@@ -97,10 +103,10 @@ export const AssignmentEvalPlugin = {
           submissionId: { type: 'STRING', description: '被评价的作业提交物 ID' },
           reviewerId: { type: 'STRING', description: '执行评价的学生 ID' },
           score: { type: 'INTEGER', description: '互评分数 (0-100)' },
-          comment: { type: 'STRING', description: '互评意见' }
+          comment: { type: 'STRING', description: '互评意见' },
         },
-        required: ['submissionId', 'reviewerId', 'score']
-      }
+        required: ['submissionId', 'reviewerId', 'score'],
+      },
     });
 
     await commandBus.registerHandler(peerReviewCmd, {
@@ -117,8 +123,8 @@ export const AssignmentEvalPlugin = {
         }
 
         // Fetch submission owner
-        const submission = db.prepare('SELECT student_id FROM plugin_submissions WHERE id = ?')
-          .get(submissionId) as { student_id: string } | undefined;
+        const submission = db.prepare('SELECT student_id FROM plugin_submissions WHERE id = ?').get(submissionId) as
+          { student_id: string } | undefined;
         if (!submission) {
           throw new Error(`Submission not found: ${submissionId}`);
         }
@@ -129,17 +135,19 @@ export const AssignmentEvalPlugin = {
         }
 
         const reviewId = 'rev-' + uuidv7();
-        db.prepare(`
+        db.prepare(
+          `
           INSERT INTO plugin_peer_reviews (id, submission_id, reviewer_id, score, comment, created_at)
           VALUES (?, ?, ?, ?, ?, ?)
           ON CONFLICT(submission_id, reviewer_id) DO UPDATE SET
             score = excluded.score,
             comment = excluded.comment,
             created_at = excluded.created_at
-        `).run(reviewId, submissionId, reviewerId, parsedScore, comment || '', Date.now());
+        `,
+        ).run(reviewId, submissionId, reviewerId, parsedScore, comment || '', Date.now());
 
         return { success: true, reviewId };
-      }
+      },
     });
 
     // ── 3. TEACHER GRADE COMMAND ───────────────────────────────────────────
@@ -157,15 +165,22 @@ export const AssignmentEvalPlugin = {
           teacherComment: { type: 'STRING', description: '教师评语反馈' },
           teacherWeight: { type: 'NUMBER', description: '教师打分权重 (默认 0.6)' },
           peerWeight: { type: 'NUMBER', description: '学生互评平均分权重 (默认 0.4)' },
-          status: { type: 'STRING', description: '状态，confirmed 为确认并同步，draft 为草稿' }
+          status: { type: 'STRING', description: '状态，confirmed 为确认并同步，draft 为草稿' },
         },
-        required: ['submissionId', 'teacherScore']
-      }
+        required: ['submissionId', 'teacherScore'],
+      },
     });
 
     await commandBus.registerHandler(gradeCmd, {
       async execute(command) {
-        const { submissionId, teacherScore, teacherComment, teacherWeight = 0.6, peerWeight = 0.4, status = 'draft' } = command.payload as any;
+        const {
+          submissionId,
+          teacherScore,
+          teacherComment,
+          teacherWeight = 0.6,
+          peerWeight = 0.4,
+          status = 'draft',
+        } = command.payload as any;
         if (!submissionId || teacherScore === undefined) {
           throw new Error('Missing required params: submissionId, teacherScore');
         }
@@ -182,14 +197,16 @@ export const AssignmentEvalPlugin = {
         }
 
         // Fetch submission metadata (lesson_id, student_id)
-        const submission = db.prepare('SELECT lesson_id, student_id FROM plugin_submissions WHERE id = ?')
+        const submission = db
+          .prepare('SELECT lesson_id, student_id FROM plugin_submissions WHERE id = ?')
           .get(submissionId) as { lesson_id: string; student_id: string } | undefined;
         if (!submission) {
           throw new Error(`Submission not found: ${submissionId}`);
         }
 
         // Retrieve peer review average score
-        const reviews = db.prepare('SELECT score FROM plugin_peer_reviews WHERE submission_id = ?')
+        const reviews = db
+          .prepare('SELECT score FROM plugin_peer_reviews WHERE submission_id = ?')
           .all(submissionId) as { score: number }[];
 
         let peerAverageScore = 0;
@@ -202,7 +219,8 @@ export const AssignmentEvalPlugin = {
         }
 
         const gradeId = 'grd-' + uuidv7();
-        db.prepare(`
+        db.prepare(
+          `
           INSERT INTO plugin_grades (
             id, submission_id, teacher_score, teacher_comment, teacher_weight, peer_weight, calculated_final_score, status, graded_at
           )
@@ -215,7 +233,18 @@ export const AssignmentEvalPlugin = {
             calculated_final_score = excluded.calculated_final_score,
             status = excluded.status,
             graded_at = excluded.graded_at
-        `).run(gradeId, submissionId, parsedTeacherScore, teacherComment || '', teacherWeight, peerWeight, calculatedFinalScore, status, Date.now());
+        `,
+        ).run(
+          gradeId,
+          submissionId,
+          parsedTeacherScore,
+          teacherComment || '',
+          teacherWeight,
+          peerWeight,
+          calculatedFinalScore,
+          status,
+          Date.now(),
+        );
 
         // T-14-02 Target synchronization on confirmed status
         if (status === 'confirmed') {
@@ -223,11 +252,11 @@ export const AssignmentEvalPlugin = {
         }
 
         return { success: true, calculatedFinalScore };
-      }
+      },
     });
   },
 
   deactivate: async () => {
     // Teardown handled by registry unregister automatically
-  }
+  },
 };

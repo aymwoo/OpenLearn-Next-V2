@@ -25,6 +25,7 @@ OpenLearn V2 采用 SQLite 作为嵌入式持久化存储，结合 WAL 模式提
 ### 迁移约定与文件规范
 
 迁移脚本位于根目录 `migrations/`，遵循统一规范：
+
 1. **命名格式**: `NNN_description.sql`（`NNN` 为三位序号升序执行）；
 2. **段落切分**: 使用 `-- UP` 声明正向迁移操作，使用 `-- DOWN` 声明回滚逆操作；
 3. **元表追踪**: 引擎自动维护 `_migrations` 状态表：
@@ -46,12 +47,12 @@ OpenLearn V2 采用 SQLite 作为嵌入式持久化存储，结合 WAL 模式提
 
 ## 3. 当前标准迁移序列
 
-| 序号 | 迁移文件 | 职责说明 |
-|---|---|---|
-| `000` | `000_initial_schema.sql` | 核心基础数据表（30+ 表）与性能索引全量建表 |
-| `001` | `001_add_execution_mode.sql` | `plugins` 表新增 `execution_mode`（支持 worker/inline） |
-| `002` | `002_add_client_session_expiry.sql` | `client_sessions` 表新增 `expires_at` 会话超时字段 |
-| `003` | `003_classroom_runtime.sql` | 课堂工具与 AI 对话记忆表（`student_rollcalls`, `site_settings`, `agent_conversations`） |
+| 序号  | 迁移文件                            | 职责说明                                                                                |
+| ----- | ----------------------------------- | --------------------------------------------------------------------------------------- |
+| `000` | `000_initial_schema.sql`            | 核心基础数据表（30+ 表）与性能索引全量建表                                              |
+| `001` | `001_add_execution_mode.sql`        | `plugins` 表新增 `execution_mode`（支持 worker/inline）                                 |
+| `002` | `002_add_client_session_expiry.sql` | `client_sessions` 表新增 `expires_at` 会话超时字段                                      |
+| `003` | `003_classroom_runtime.sql`         | 课堂工具与 AI 对话记忆表（`student_rollcalls`, `site_settings`, `agent_conversations`） |
 
 ---
 

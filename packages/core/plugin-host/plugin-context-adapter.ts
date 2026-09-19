@@ -4,12 +4,7 @@
  * Preserves 100% backward compatibility for all existing Context APIs.
  */
 
-import type {
-  PluginContext,
-  IPluginLogger,
-  PluginDatabaseAPI,
-  ContributionAccessor,
-} from './types.js';
+import type { PluginContext, IPluginLogger, PluginDatabaseAPI, ContributionAccessor } from './types.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import type { Token } from '../di/token.js';
 import type { IConfigService } from './config-service.js';

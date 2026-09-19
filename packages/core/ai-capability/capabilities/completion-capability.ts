@@ -26,7 +26,7 @@ export class CompletionCapability implements ICompletionCapability {
 
   public async complete(
     prompt: string,
-    options?: { systemInstruction?: string; temperature?: number }
+    options?: { systemInstruction?: string; temperature?: number },
   ): Promise<string> {
     const startTime = Date.now();
     try {

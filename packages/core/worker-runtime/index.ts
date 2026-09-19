@@ -21,13 +21,7 @@
 // Core types
 export type { IWorkerTransport } from './types.js';
 export type { WorkerMessage, MainThreadMessage, PendingCall } from './types.js';
-export {
-  isInvokeMessage,
-  isSubscribeMessage,
-  isResultMessage,
-  isErrorMessage,
-  isEventMessage,
-} from './types.js';
+export { isInvokeMessage, isSubscribeMessage, isResultMessage, isErrorMessage, isEventMessage } from './types.js';
 
 // Transport implementations
 export { NodeWorkerTransport } from './transport.js';

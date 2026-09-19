@@ -39,7 +39,12 @@ export class PluginCompositionModule implements CompositionModule {
 
     // 幂等注册：共享单例注册表在多次 compose（如多 Kernel 实例/测试）时会触发
     // 重复注册冲突，故已存在时替换为最新实例（与单例 Kernel 生产环境一致）。
-    const registerOrReplace = <T>(config: { id: string; lifetime?: string; description?: string; instance: T }): void => {
+    const registerOrReplace = <T>(config: {
+      id: string;
+      lifetime?: string;
+      description?: string;
+      instance: T;
+    }): void => {
       const { id, instance } = config;
       if (serviceRegistry.has(id)) {
         serviceRegistry.replace(id, instance);
@@ -53,13 +58,35 @@ export class PluginCompositionModule implements CompositionModule {
 
     // 1. Register Plugin Services into PlatformServiceRegistry
     // Note: Fallback mock objects are provided for isolated unit-testing of PlatformCompositionRoot
-    const realPluginHost = options?.infrastructureRefs?.get('pluginHost') ?? { name: 'PluginHostService', isReady: true, pluginsCount: 0 };
-    const realContributionRegistry = options?.infrastructureRefs?.get('contributionRegistry') ?? { name: 'ContributionRegistry', slotsCount: 0 };
-    const realRuntimeComposition = options?.infrastructureRefs?.get('runtimeComposition') ?? { name: 'PluginRuntimeComposition', isStarted: true };
-    const realLifecycleManager = options?.infrastructureRefs?.get('lifecycleManager') ?? { name: 'PluginLifecycleManager', version: PLATFORM_VERSION };
-    const realCapabilityGateway = options?.infrastructureRefs?.get('capabilityGateway') ?? { name: 'PluginCapabilityGateway', version: PLATFORM_VERSION };
-    const realExtensionRegistry = options?.infrastructureRefs?.get('extensionRegistry') ?? { name: 'UnifiedExtensionRegistry', version: PLATFORM_VERSION };
-    const realDistributionManager = options?.infrastructureRefs?.get('distributionManager') ?? { name: 'PluginDistributionManager', version: PLATFORM_VERSION };
+    const realPluginHost = options?.infrastructureRefs?.get('pluginHost') ?? {
+      name: 'PluginHostService',
+      isReady: true,
+      pluginsCount: 0,
+    };
+    const realContributionRegistry = options?.infrastructureRefs?.get('contributionRegistry') ?? {
+      name: 'ContributionRegistry',
+      slotsCount: 0,
+    };
+    const realRuntimeComposition = options?.infrastructureRefs?.get('runtimeComposition') ?? {
+      name: 'PluginRuntimeComposition',
+      isStarted: true,
+    };
+    const realLifecycleManager = options?.infrastructureRefs?.get('lifecycleManager') ?? {
+      name: 'PluginLifecycleManager',
+      version: PLATFORM_VERSION,
+    };
+    const realCapabilityGateway = options?.infrastructureRefs?.get('capabilityGateway') ?? {
+      name: 'PluginCapabilityGateway',
+      version: PLATFORM_VERSION,
+    };
+    const realExtensionRegistry = options?.infrastructureRefs?.get('extensionRegistry') ?? {
+      name: 'UnifiedExtensionRegistry',
+      version: PLATFORM_VERSION,
+    };
+    const realDistributionManager = options?.infrastructureRefs?.get('distributionManager') ?? {
+      name: 'PluginDistributionManager',
+      version: PLATFORM_VERSION,
+    };
 
     registerOrReplace({
       id: 'srv_plugin_host',

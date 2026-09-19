@@ -9,7 +9,7 @@ import { ServiceLifecycleManager } from '../lifecycle/service-lifecycle-manager.
 export class ServiceInspector {
   public static inspect(
     descriptors: ReadonlyArray<ServiceDescriptor>,
-    lifecycleManager: ServiceLifecycleManager
+    lifecycleManager: ServiceLifecycleManager,
   ): ReadonlyArray<ServiceInspectionInfo> {
     const list: ServiceInspectionInfo[] = descriptors.map((desc) => ({
       id: desc.id,

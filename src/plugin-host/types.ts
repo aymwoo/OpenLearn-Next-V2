@@ -13,6 +13,7 @@ import type React from 'react';
 import type { FullscreenRenderer } from '../features/whiteboard/fullscreen/FullscreenRendererRegistry';
 import type { PropertyEditorComponent } from '../features/whiteboard/properties/PropertyEditorRegistry';
 import type { CoursewareSourceLoader } from '../features/whiteboard/courseware/courseware-source-registry';
+import type { PaletteItemConfig } from '../features/teacher/lesson-editor/paletteConfig';
 
 // ── Token name constants (frontend namespace) ────────────────────────────
 
@@ -72,10 +73,10 @@ export type ExtensionSlot =
   | 'classroom.tool'
   | 'teacher.dashboard.widget'
   | 'student.lesson.tool'
-  | 'teacher.panel'         // v5.1: 教师独立全宽管理面板
-  | 'student.fullscreen'    // v5.1: 学生全屏视图（考试模式）
-  | 'global.setting'        // v5.1: 全局设置页扩展
-  | 'nav.user_menu';        // v5.2: 顶部 Header 用户菜单扩展
+  | 'teacher.panel' // v5.1: 教师独立全宽管理面板
+  | 'student.fullscreen' // v5.1: 学生全屏视图（考试模式）
+  | 'global.setting' // v5.1: 全局设置页扩展
+  | 'nav.user_menu'; // v5.2: 顶部 Header 用户菜单扩展
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。
@@ -179,6 +180,9 @@ export interface FrontendPluginContext {
     /** 为 html-applet 注册自定义内容源 loader（在 activate() 内调用） */
     registerCoursewareSource(loader: CoursewareSourceLoader): void;
     unregisterCoursewareSource(id: string): void;
+    /** 为课程设计备课画板注册自定义组件（在 activate() 内调用） */
+    registerPaletteItem(item: PaletteItemConfig): void;
+    unregisterPaletteItem(type: string): void;
   };
   /** 调用后端已注册的 Command Handler，自动添加插件命名空间前缀 */
   invokeCommand<T = any>(type: string, payload?: any): Promise<T>;
@@ -194,7 +198,7 @@ export interface FrontendPluginContext {
     get(): FrontendPluginContextSnapshot;
     subscribe(callback: (ctx: FrontendPluginContextSnapshot) => void): () => void;
   };
-  
+
   // Backward compatibility shims
   registerPanel?(config: any): void;
   registerMenu?(config: any): void;

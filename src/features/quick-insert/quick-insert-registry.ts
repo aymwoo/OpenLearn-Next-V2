@@ -58,7 +58,7 @@ export class QuickInsertRegistry implements QuickInsertRegistryFacade {
         const matchKeywords = item.keywords?.some((k) => k.toLowerCase().includes(q)) ?? false;
 
         return matchTitle || matchDesc || matchKeywords;
-      })
+      }),
     );
   }
 

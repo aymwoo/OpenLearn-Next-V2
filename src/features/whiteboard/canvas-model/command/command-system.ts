@@ -161,7 +161,7 @@ export class MoveObjectCommand implements ICanvasCommand {
   constructor(
     public readonly objectId: string,
     public readonly oldPosition: Point2D,
-    public readonly newPosition: Point2D
+    public readonly newPosition: Point2D,
   ) {
     this.id = `cmd_move_${objectId}_${Date.now()}`;
   }
@@ -209,7 +209,7 @@ export class ResizeObjectCommand implements ICanvasCommand {
     public readonly oldSize: Size2D,
     public readonly newSize: Size2D,
     public readonly oldPosition?: Point2D,
-    public readonly newPosition?: Point2D
+    public readonly newPosition?: Point2D,
   ) {
     this.id = `cmd_resize_${objectId}_${Date.now()}`;
   }
@@ -249,7 +249,9 @@ export class ResizeObjectCommand implements ICanvasCommand {
   }
 }
 
-export class UpdateObjectCommand<T extends Record<string, unknown> = Record<string, unknown>> implements ICanvasCommand {
+export class UpdateObjectCommand<
+  T extends Record<string, unknown> = Record<string, unknown>,
+> implements ICanvasCommand {
   readonly id: string;
   readonly name = 'Update Object';
   readonly timestamp = Date.now();
@@ -257,7 +259,7 @@ export class UpdateObjectCommand<T extends Record<string, unknown> = Record<stri
   constructor(
     public readonly objectId: string,
     public readonly oldPatch: Partial<CanvasObject<T>>,
-    public readonly newPatch: Partial<CanvasObject<T>>
+    public readonly newPatch: Partial<CanvasObject<T>>,
   ) {
     this.id = `cmd_update_${objectId}_${Date.now()}`;
   }
@@ -300,7 +302,10 @@ export class LockObjectCommand implements ICanvasCommand {
   readonly name: string;
   readonly timestamp = Date.now();
 
-  constructor(public readonly objectId: string, public readonly lockState: boolean) {
+  constructor(
+    public readonly objectId: string,
+    public readonly lockState: boolean,
+  ) {
     this.id = `cmd_lock_${objectId}`;
     this.name = lockState ? 'Lock Object' : 'Unlock Object';
   }

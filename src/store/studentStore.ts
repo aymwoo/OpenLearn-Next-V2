@@ -17,5 +17,4 @@ export const studentStore = createStore<StudentState>((set) => ({
   setNotifications: (notifications) => set({ notifications }),
 }));
 
-export const useStudentStore = <T>(selector: (state: StudentState) => T) =>
-  useStore(studentStore, selector);
+export const useStudentStore = <T>(selector: (state: StudentState) => T) => useStore(studentStore, selector);

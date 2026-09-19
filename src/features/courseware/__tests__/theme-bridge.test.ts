@@ -52,7 +52,7 @@ describe('LMS Theme Bridge & Sandboxed Synchronization', () => {
           tokens: mockTokens,
         },
       },
-      '*'
+      '*',
     );
     expect(postMessageSpy1).toHaveBeenCalledWith(
       {
@@ -60,7 +60,7 @@ describe('LMS Theme Bridge & Sandboxed Synchronization', () => {
         theme: 'sapphire-classic',
         tokens: mockTokens,
       },
-      '*'
+      '*',
     );
 
     expect(postMessageSpy2).toHaveBeenCalledTimes(2);

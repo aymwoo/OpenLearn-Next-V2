@@ -10,9 +10,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { NodeEsmLoader } from '../node-loader.js';
-import {
-  EsmSyntaxError,
-} from '../errors.js';
+import { EsmSyntaxError } from '../errors.js';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -63,9 +61,7 @@ describe('NodeEsmLoader', () => {
 
     const result = await Promise.race([
       loader.load(code),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)
-      ),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)),
     ]);
     expect(result.default!.manifest!.id).toBe('test-plugin');
   });

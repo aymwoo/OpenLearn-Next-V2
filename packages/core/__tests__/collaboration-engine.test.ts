@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  CollaborationEngineKernel,
-  Participant,
-  CollaborationPermission,
-} from '../collaboration-engine/index.js';
+import { CollaborationEngineKernel, Participant, CollaborationPermission } from '../collaboration-engine/index.js';
 
 describe('OpenLearn Teaching Collaboration Engine Core Test Suite', () => {
   let kernel: CollaborationEngineKernel;
@@ -109,7 +105,11 @@ describe('OpenLearn Teaching Collaboration Engine Core Test Suite', () => {
       expect(patrol.activeGroupId).toBe(g1.id);
       expect(patrol.isTakingOver).toBe(false);
 
-      const annotated = kernel.teacherPatrol.annotateGroup(g1.id, { id: 'ann_1', type: 'text', content: '教师批注：干得好！' });
+      const annotated = kernel.teacherPatrol.annotateGroup(g1.id, {
+        id: 'ann_1',
+        type: 'text',
+        content: '教师批注：干得好！',
+      });
       expect(annotated).toBe(true);
       expect(kernel.workspaceStore.getWorkspace(g1.id)?.teachingObjects.length).toBe(1);
 
@@ -125,12 +125,7 @@ describe('OpenLearn Teaching Collaboration Engine Core Test Suite', () => {
         canvasState: { elementsCount: 3 },
       });
 
-      const broadcast = kernel.broadcastCollect.startBroadcast(
-        'teacher',
-        'usr_t1',
-        [g1.id],
-        { title: '教师广播示例' }
-      );
+      const broadcast = kernel.broadcastCollect.startBroadcast('teacher', 'usr_t1', [g1.id], { title: '教师广播示例' });
 
       expect(broadcast.broadcastType).toBe('teacher');
       expect(kernel.broadcastCollect.getActiveBroadcast()).toBe(broadcast);
@@ -149,7 +144,7 @@ describe('OpenLearn Teaching Collaboration Engine Core Test Suite', () => {
       const shared = kernel.sharedObjectManager.createSharedObject(
         { title: '全班共享Quiz试题卡' },
         ['grp_1', 'grp_2'],
-        'sync'
+        'sync',
       );
 
       expect(shared.mode).toBe('sync');
@@ -175,7 +170,7 @@ describe('OpenLearn Teaching Collaboration Engine Core Test Suite', () => {
 
       const resolved = kernel.conflictResolver.resolveOptimistic(
         { version: 1, content: 'A' },
-        { version: 2, content: 'B' }
+        { version: 2, content: 'B' },
       );
       expect(resolved.state.version).toBe(2);
       expect(resolved.rolledBack).toBe(false);

@@ -29,7 +29,10 @@ export class TeachingLifecycleManager {
     return () => {
       const arr = this.listeners.get(objectId);
       if (arr) {
-        this.listeners.set(objectId, arr.filter((fn) => fn !== listener));
+        this.listeners.set(
+          objectId,
+          arr.filter((fn) => fn !== listener),
+        );
       }
     };
   }

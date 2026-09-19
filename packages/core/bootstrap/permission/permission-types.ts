@@ -5,19 +5,9 @@
  */
 
 export type PermissionCategory =
-  | 'Platform'
-  | 'Infrastructure'
-  | 'Capability'
-  | 'Configuration'
-  | 'Lifecycle'
-  | 'Reserved';
+  'Platform' | 'Infrastructure' | 'Capability' | 'Configuration' | 'Lifecycle' | 'Reserved';
 
-export type PermissionPolicy =
-  | 'Allow'
-  | 'Deny'
-  | 'Default'
-  | 'Inherited'
-  | 'Reserved';
+export type PermissionPolicy = 'Allow' | 'Deny' | 'Default' | 'Inherited' | 'Reserved';
 
 export interface PermissionDescriptor {
   readonly id: string;

@@ -36,9 +36,7 @@ describe('Token<T>', () => {
 
     // This line MUST compile without errors — it proves that the
     // phantom type parameter is wired correctly.
-    const token = new Token<ICommandBusService>(
-      '@openlearn/core:ICommandBusService'
-    );
+    const token = new Token<ICommandBusService>('@openlearn/core:ICommandBusService');
 
     // At runtime the phantom type is invisible, so we just verify
     // the Token was created successfully.
@@ -50,9 +48,7 @@ describe('Token<T>', () => {
 
   it('should throw TokenError for an empty string name', () => {
     expect(() => new Token('')).toThrow(TokenError);
-    expect(() => new Token('')).toThrow(
-      'Token name must be a non-empty string'
-    );
+    expect(() => new Token('')).toThrow('Token name must be a non-empty string');
   });
 
   it('should throw TokenError for a non-string name (undefined passed as any)', () => {
@@ -62,13 +58,13 @@ describe('Token<T>', () => {
   // --- Invalid format ---------------------------------------------------
 
   it.each([
-    'no-scope',                                    // missing @
-    'no-colon',                                    // missing colon
-    '@scope/domain:Name With Space',               // space in Name
-    '@scope/domain:中文名',                         // Chinese characters
-    '@scope/domain:name!',                         // special character !
-    '@scope/domain:name#',                         // special character #
-    '@scope:Name',                                 // missing domain part
+    'no-scope', // missing @
+    'no-colon', // missing colon
+    '@scope/domain:Name With Space', // space in Name
+    '@scope/domain:中文名', // Chinese characters
+    '@scope/domain:name!', // special character !
+    '@scope/domain:name#', // special character #
+    '@scope:Name', // missing domain part
   ])('should throw TokenError for invalid format: %s', (badName) => {
     expect(() => new Token(badName)).toThrow(TokenError);
     expect(() => new Token(badName)).toThrow(/Invalid Token name format/);

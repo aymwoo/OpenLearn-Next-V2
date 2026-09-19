@@ -42,9 +42,7 @@ describe('CommandBus D-11 priority routing (modern > legacy)', () => {
 
   it('throws error when no handler is registered for the command type', async () => {
     const command = commandBus.createCommand('nonexistent.command', {}, 'test-actor');
-    await expect(commandBus.execute(command)).rejects.toThrow(
-      'No handler registered for command: nonexistent.command',
-    );
+    await expect(commandBus.execute(command)).rejects.toThrow('No handler registered for command: nonexistent.command');
   });
 
   it('unregisters from both modern and legacy maps', async () => {
@@ -56,9 +54,7 @@ describe('CommandBus D-11 priority routing (modern > legacy)', () => {
     commandBus.unregisterHandler('test.command');
 
     const command = commandBus.createCommand('test.command', {}, 'test-actor');
-    await expect(commandBus.execute(command)).rejects.toThrow(
-      'No handler registered for command: test.command',
-    );
+    await expect(commandBus.execute(command)).rejects.toThrow('No handler registered for command: test.command');
   });
 
   it('legacy handler registration does not conflict with existing modern handler', async () => {

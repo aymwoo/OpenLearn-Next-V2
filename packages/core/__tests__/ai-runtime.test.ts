@@ -1,8 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  AIRuntimeKernel,
-  AIToolSchema,
-} from '../ai/index.js';
+import { AIRuntimeKernel, AIToolSchema } from '../ai/index.js';
 import { AIService } from '../di/ai-service.js';
 
 describe('OpenLearn AI Infrastructure Core Test Suite', () => {
@@ -118,7 +115,7 @@ describe('OpenLearn AI Infrastructure Core Test Suite', () => {
       const aiService = new AIService(mockDb);
 
       await expect(aiService.generateText('hello')).rejects.toThrow(
-        'GEMINI_API_KEY is not configured in the environment.'
+        'GEMINI_API_KEY is not configured in the environment.',
       );
     });
   });

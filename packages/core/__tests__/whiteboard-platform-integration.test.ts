@@ -1,8 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  PlatformCompositionRoot,
-  WhiteboardCompositionModule,
-} from '../bootstrap/composition/index.js';
+import { PlatformCompositionRoot, WhiteboardCompositionModule } from '../bootstrap/composition/index.js';
 import { CapabilityRegistry } from '../ai-capability/registry/capability-registry.js';
 import { WhiteboardCapability } from '../ai-capability/capabilities/whiteboard-capability.js';
 import { AIRuntimeKernel } from '../ai/index.js';
@@ -29,7 +26,6 @@ describe('Sprint A3 Step 2 Whiteboard Platform Integration Test Suite', () => {
     expect(registry.hasCapability('capability_whiteboard')).toBe(true);
     expect(registry.resolveCapability('capability_whiteboard')?.meta.name).toBe('Whiteboard AI Capability');
   });
-
 
   it('should publish Whiteboard infrastructure events through EventBus', () => {
     const bus = new EventBus();

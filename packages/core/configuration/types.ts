@@ -63,13 +63,7 @@ export interface ConfigurationProviderInit {
   readonly description?: string;
 }
 
-export type ConfigurationValidationCode =
-  | 'REQUIRED'
-  | 'TYPE'
-  | 'RANGE_MIN'
-  | 'RANGE_MAX'
-  | 'ENUM'
-  | 'UNKNOWN';
+export type ConfigurationValidationCode = 'REQUIRED' | 'TYPE' | 'RANGE_MIN' | 'RANGE_MAX' | 'ENUM' | 'UNKNOWN';
 
 export interface ConfigurationValidationError {
   readonly code: ConfigurationValidationCode;
@@ -93,12 +87,7 @@ export interface ConfigurationLoadResult {
 // ── Integration seams (structural — no business modules modified) ──────────
 
 export interface ServiceRegistryIntegrationSource {
-  register(descriptor: {
-    id: string;
-    instance?: unknown;
-    lifetime?: string;
-    scope?: string;
-  }): void;
+  register(descriptor: { id: string; instance?: unknown; lifetime?: string; scope?: string }): void;
   exists(id: string): boolean;
   unregister(id: string): boolean;
 }

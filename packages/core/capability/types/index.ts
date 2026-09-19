@@ -5,14 +5,7 @@
 
 export type CapabilityRole = 'Teacher' | 'Student' | 'Plugin' | 'AI' | 'Observer' | 'System';
 
-export type CapabilityCategory =
-  | 'lesson'
-  | 'whiteboard'
-  | 'notebook'
-  | 'plugin'
-  | 'analytics'
-  | 'ai'
-  | string;
+export type CapabilityCategory = 'lesson' | 'whiteboard' | 'notebook' | 'plugin' | 'analytics' | 'ai' | string;
 
 export type ResultType =
   | 'teaching_object'
@@ -95,5 +88,5 @@ export interface CapabilityEventEnvelope<K extends CapabilityEventType = Capabil
 }
 
 export type CapabilityEventSubscriber<K extends CapabilityEventType> = (
-  event: CapabilityEventEnvelope<K>
+  event: CapabilityEventEnvelope<K>,
 ) => void | Promise<void>;

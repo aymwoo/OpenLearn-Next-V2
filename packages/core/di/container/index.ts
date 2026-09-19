@@ -12,10 +12,7 @@ export {
 export { InjectionContext } from './InjectionContext.js';
 export { InjectionScope, type Disposable } from './InjectionScope.js';
 export { InjectionPolicy, type InjectionPolicyOptions } from './InjectionPolicy.js';
-export {
-  InjectionException,
-  type InjectionErrorCode,
-} from './InjectionException.js';
+export { InjectionException, type InjectionErrorCode } from './InjectionException.js';
 export {
   Lazy,
   mapScopeKind,

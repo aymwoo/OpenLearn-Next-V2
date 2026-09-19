@@ -38,12 +38,7 @@ export class PresenceEngineKernel {
     this.groupManager = new GroupPresenceManager(this.store);
     this.synchronizer = new PresenceSynchronizer(this.store);
 
-    this.presenceManager = new PresenceManager(
-      this.store,
-      this.eventBus,
-      this.timelineLogger,
-      this.privacyManager
-    );
+    this.presenceManager = new PresenceManager(this.store, this.eventBus, this.timelineLogger, this.privacyManager);
   }
 
   public start(): void {

@@ -11,7 +11,7 @@ export const createDefaultPrompt = (
   description: string,
   category: PromptCategory,
   template: string,
-  version: string = '1.0.0'
+  version: string = '1.0.0',
 ): PromptDescriptor => ({
   metadata: {
     id,
@@ -32,8 +32,8 @@ export const registerDefaultPrompts = (registry: PromptRegistry): void => {
       'Lesson Summary Prompt',
       'Template for generating key-point summaries of current lesson flow',
       'Lesson',
-      'Summarize the following lesson context cleanly: {{lessonContext}}'
-    )
+      'Summarize the following lesson context cleanly: {{lessonContext}}',
+    ),
   );
 
   registry.registerPrompt(
@@ -42,8 +42,8 @@ export const registerDefaultPrompts = (registry: PromptRegistry): void => {
       'Whiteboard Content Explainer',
       'Template for analyzing multi-modal 2D whiteboard drawings and formulas',
       'Whiteboard',
-      'Analyze and explain the whiteboard shapes and formulas: {{whiteboardContext}}'
-    )
+      'Analyze and explain the whiteboard shapes and formulas: {{whiteboardContext}}',
+    ),
   );
 
   registry.registerPrompt(
@@ -52,8 +52,8 @@ export const registerDefaultPrompts = (registry: PromptRegistry): void => {
       'Interactive Quiz Generator',
       'Template for generating 3 multiple-choice pop quiz questions',
       'Activity',
-      'Generate 3 pop quiz questions based on the topic: {{topic}}'
-    )
+      'Generate 3 pop quiz questions based on the topic: {{topic}}',
+    ),
   );
 
   registry.registerPrompt(
@@ -62,7 +62,7 @@ export const registerDefaultPrompts = (registry: PromptRegistry): void => {
       'Student Engagement Insight',
       'Template for synthesizing student participation telemetry',
       'Student',
-      'Synthesize engagement insight for student: {{studentMetrics}}'
-    )
+      'Synthesize engagement insight for student: {{studentMetrics}}',
+    ),
   );
 };

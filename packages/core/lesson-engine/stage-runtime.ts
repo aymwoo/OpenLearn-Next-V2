@@ -178,9 +178,7 @@ export class StageRuntime {
       maxScore: (q.payload.maxScore as number) || 100,
     }));
 
-    const completedActivities = this.currentStage?.activities.filter(
-      (a) => a.status === 'completed'
-    ).length || 0;
+    const completedActivities = this.currentStage?.activities.filter((a) => a.status === 'completed').length || 0;
     const totalActivities = this.currentStage?.activities.length || 1;
     const completionRate = Math.round((completedActivities / totalActivities) * 100);
 

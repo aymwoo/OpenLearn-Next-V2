@@ -2,14 +2,7 @@
  * OpenLearn Command Palette - Data Types & Contracts (Sprint P2-05)
  */
 
-export type CommandCategory =
-  | 'Lesson'
-  | 'Whiteboard'
-  | 'Plugin'
-  | 'AI'
-  | 'Workspace'
-  | 'Analytics'
-  | 'Resource';
+export type CommandCategory = 'Lesson' | 'Whiteboard' | 'Plugin' | 'AI' | 'Workspace' | 'Analytics' | 'Resource';
 
 export interface CommandDescriptor {
   readonly id: string;

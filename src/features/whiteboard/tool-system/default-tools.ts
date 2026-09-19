@@ -11,7 +11,7 @@ export const createDefaultTool = (
   category: 'Selection' | 'Drawing' | 'Shape' | 'Annotation' | 'Media',
   icon: string,
   shortcut?: string,
-  cursor: string = 'default'
+  cursor: string = 'default',
 ): IWhiteboardTool => ({
   meta: {
     id,

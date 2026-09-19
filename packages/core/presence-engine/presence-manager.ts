@@ -28,7 +28,7 @@ export class PresenceManager {
     store: PresenceStore,
     eventBus: PresenceEventBus,
     timelineLogger: PresenceTimelineLogger,
-    privacyManager: PresencePrivacyManager
+    privacyManager: PresencePrivacyManager,
   ) {
     this.store = store;
     this.eventBus = eventBus;
@@ -117,7 +117,7 @@ export class PresenceManager {
 
   public subscribePresence(
     filter: (entity: PresenceEntity) => boolean,
-    callback: (entities: ReadonlyArray<PresenceEntity>) => void
+    callback: (entities: ReadonlyArray<PresenceEntity>) => void,
   ): () => void {
     const handler = () => {
       const matching = this.queryPresence(filter);

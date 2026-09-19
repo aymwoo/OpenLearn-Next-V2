@@ -120,14 +120,20 @@ describe('validateAndBundleZip', () => {
   // Test 7: 路径穿越防护
   it('should reject ZIP with path traversal entries', async () => {
     const zip = new JSZip();
-    zip.file('manifest.json', JSON.stringify({
-      id: 'ext-traversal',
-      name: 'Traversal',
-      version: '1.0.0',
-      main: 'index.js',
-    }));
+    zip.file(
+      'manifest.json',
+      JSON.stringify({
+        id: 'ext-traversal',
+        name: 'Traversal',
+        version: '1.0.0',
+        main: 'index.js',
+      }),
+    );
     zip.file('../etc/passwd', 'malicious content');
-    zip.file('index.js', 'export default { manifest: { id: "ext-traversal", name: "T", version: "1.0.0" }, activate: async () => {} };');
+    zip.file(
+      'index.js',
+      'export default { manifest: { id: "ext-traversal", name: "T", version: "1.0.0" }, activate: async () => {} };',
+    );
 
     const badZipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 

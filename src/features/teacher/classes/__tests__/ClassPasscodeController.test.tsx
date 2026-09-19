@@ -64,7 +64,9 @@ describe('ClassPasscodeController', () => {
   });
 
   it('shows the clear button only when a passcode exists', () => {
-    const { rerender } = render(<ClassPasscodeController {...makeProps({ cls: makeClass({ class_passcode: '1234' }) })} />);
+    const { rerender } = render(
+      <ClassPasscodeController {...makeProps({ cls: makeClass({ class_passcode: '1234' }) })} />,
+    );
     expect(screen.getByTitle('清除临时密码')).toBeTruthy();
     rerender(<ClassPasscodeController {...makeProps({ cls: makeClass() })} />);
     expect(screen.queryByTitle('清除临时密码')).toBeNull();

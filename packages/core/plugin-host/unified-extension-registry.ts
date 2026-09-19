@@ -4,10 +4,7 @@
  * Coordinates existing extension implementations without replacing or executing them.
  */
 
-import type {
-  IntegrationHealthStatus,
-  IntegrationDescriptor,
-} from '../bootstrap/integration/integration-types.js';
+import type { IntegrationHealthStatus, IntegrationDescriptor } from '../bootstrap/integration/integration-types.js';
 
 import { PLATFORM_VERSION } from '../version.js';
 
@@ -22,12 +19,7 @@ export interface ExtensionItemMetadata {
 }
 
 export interface IUnifiedExtensionRegistry {
-  registerExtension(
-    category: string,
-    id: string,
-    impl: unknown,
-    meta?: Partial<ExtensionItemMetadata>,
-  ): void;
+  registerExtension(category: string, id: string, impl: unknown, meta?: Partial<ExtensionItemMetadata>): void;
   hasExtension(category: string, id: string): boolean;
   getExtension<T = unknown>(category: string, id: string): T | undefined;
   listExtensions(category?: string): ReadonlyArray<ExtensionItemMetadata>;
@@ -43,12 +35,7 @@ export class UnifiedExtensionRegistry implements IUnifiedExtensionRegistry {
 
   private readonly _extensions = new Map<string, Map<string, ExtensionItemMetadata>>();
 
-  public registerExtension(
-    category: string,
-    id: string,
-    impl: unknown,
-    meta?: Partial<ExtensionItemMetadata>,
-  ): void {
+  public registerExtension(category: string, id: string, impl: unknown, meta?: Partial<ExtensionItemMetadata>): void {
     if (!category || !id) {
       throw new Error('Extension category and ID must be non-empty strings');
     }
@@ -60,9 +47,7 @@ export class UnifiedExtensionRegistry implements IUnifiedExtensionRegistry {
     }
 
     if (categoryMap.has(id)) {
-      throw new Error(
-        `Duplicate extension registration for category "${category}" and ID "${id}"`,
-      );
+      throw new Error(`Duplicate extension registration for category "${category}" and ID "${id}"`);
     }
 
     const metadata: ExtensionItemMetadata = {
@@ -107,7 +92,11 @@ export class UnifiedExtensionRegistry implements IUnifiedExtensionRegistry {
   }
 
   public syncContributionRegistry(contributionRegistry: {
-    listAll(): Array<{ slot: string; pluginId: string; configs: Array<{ id: string; name?: string; label?: string; description?: string }> }>;
+    listAll(): Array<{
+      slot: string;
+      pluginId: string;
+      configs: Array<{ id: string; name?: string; label?: string; description?: string }>;
+    }>;
   }): void {
     const entries = contributionRegistry.listAll();
     for (const entry of entries) {
@@ -124,7 +113,9 @@ export class UnifiedExtensionRegistry implements IUnifiedExtensionRegistry {
   }
 
   public syncActivityRegistry(activityRegistry: {
-    listProviders(): ReadonlyArray<{ descriptor: { id: string; name: string; provider: string; description?: string } }>;
+    listProviders(): ReadonlyArray<{
+      descriptor: { id: string; name: string; provider: string; description?: string };
+    }>;
   }): void {
     const providers = activityRegistry.listProviders();
     for (const p of providers) {

@@ -7,6 +7,7 @@
 ## 1. 插件上下文
 
 ### `PluginContext`（后端）
+
 插件 `activate(ctx)` 收到的上下文，完整定义见 [DI Token 字典](di-tokens) 第 1 节。核心成员：
 
 ```typescript
@@ -27,6 +28,7 @@ interface PluginContext {
 ```
 
 ### `FrontendPluginContext`（前端）
+
 前端插件 `activate(ctx)` 收到的上下文，见 [UI 扩展槽位](../reference/plugin-ui-extension-slots) 第 3 节：
 
 ```typescript
@@ -47,29 +49,31 @@ interface FrontendPluginContext {
 
 完整方法签名见 [DI Token 字典](di-tokens) 第 3 节：
 
-| 接口 | 用途 |
-|---|---|
-| `ICommandBusService` | 命令总线（execute / registerHandler / createCommand / setInterceptor） |
-| `IEventBusService` | 事件总线（publish / subscribe / unsubscribe） |
-| `IActionRegistryService` | AI Action 注册表 |
-| `ICapabilityService` | 权限校验（grant / revokeAll / check） |
-| `IProcessService` | 受控后台进程（spawn / kill / registerHandler / registerInterval） |
-| `IStorageService` | 键值存储（get / set / delete） |
-| `IAIService` | AI 文本生成（generateText） |
-| `ISemesterGradeService` | 学期成绩（saveSemesterGrade） |
-| `IAuthSessionBridgeService` | 统一安全会话桥接（createSession，用于 LTI 1.3 / SSO） |
-| `IPointsDimensionRegistry` | 积分维度（registerDimension / getDimension / listDimensions） |
-| `IPointsLedgerService` | 积分流水（addPoints / getLogs / …） |
-| 引擎门面 | `ILessonEngineService` / `IClassroomRuntimeService` / `IPresenceEngineService` / `ITeachingCollaborationService` / `ILearningAnalyticsService` / `IAICapabilityService` / `ICapabilityRuntimeService` / `ICapabilityGovernanceService` / `IPlatformServiceRegistryService`（均为 `getX(): Promise<unknown>` 薄门面） |
+| 接口                        | 用途                                                                                                                                                                                                                                                                                                                 |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ICommandBusService`        | 命令总线（execute / registerHandler / createCommand / setInterceptor）                                                                                                                                                                                                                                               |
+| `IEventBusService`          | 事件总线（publish / subscribe / unsubscribe）                                                                                                                                                                                                                                                                        |
+| `IActionRegistryService`    | AI Action 注册表                                                                                                                                                                                                                                                                                                     |
+| `ICapabilityService`        | 权限校验（grant / revokeAll / check）                                                                                                                                                                                                                                                                                |
+| `IProcessService`           | 受控后台进程（spawn / kill / registerHandler / registerInterval）                                                                                                                                                                                                                                                    |
+| `IStorageService`           | 键值存储（get / set / delete）                                                                                                                                                                                                                                                                                       |
+| `IAIService`                | AI 文本生成（generateText）                                                                                                                                                                                                                                                                                          |
+| `ISemesterGradeService`     | 学期成绩（saveSemesterGrade）                                                                                                                                                                                                                                                                                        |
+| `IAuthSessionBridgeService` | 统一安全会话桥接（createSession，用于 LTI 1.3 / SSO）                                                                                                                                                                                                                                                                |
+| `IPointsDimensionRegistry`  | 积分维度（registerDimension / getDimension / listDimensions）                                                                                                                                                                                                                                                        |
+| `IPointsLedgerService`      | 积分流水（addPoints / getLogs / …）                                                                                                                                                                                                                                                                                  |
+| 引擎门面                    | `ILessonEngineService` / `IClassroomRuntimeService` / `IPresenceEngineService` / `ITeachingCollaborationService` / `ILearningAnalyticsService` / `IAICapabilityService` / `ICapabilityRuntimeService` / `ICapabilityGovernanceService` / `IPlatformServiceRegistryService`（均为 `getX(): Promise<unknown>` 薄门面） |
 
 ---
 
 ## 3. 数据库接口
 
 ### `PluginDatabaseAPI`（`ctx.db`）
+
 见 [插件数据库 API](../reference/plugin-database-api)。
 
 ### `SqliteDatabase` / `SqliteStatement`（`IDatabaseToken` 解析类型）
+
 `better-sqlite3.Database` 的 SDK 内联声明：`prepare()` / `transaction()` / `exec()` / `pragma()` / `close()`。
 
 ---

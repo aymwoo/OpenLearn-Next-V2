@@ -29,24 +29,33 @@ export const ProcessPlugin = {
     const db = await ctx.resolve(IDatabaseToken);
 
     // REGISTER TASK HANDLERS
-    await processManager.registerHandler('simulated_task', async (processId: string, payload: any, state: any, log: (msg: string) => void, updateState: (s: any) => void) => {
-      log(`Process resumed/started: ${payload.name}`);
-      const totalSteps = payload.duration;
-      const startStep = state?.step || 0;
+    await processManager.registerHandler(
+      'simulated_task',
+      async (
+        processId: string,
+        payload: any,
+        state: any,
+        log: (msg: string) => void,
+        updateState: (s: any) => void,
+      ) => {
+        log(`Process resumed/started: ${payload.name}`);
+        const totalSteps = payload.duration;
+        const startStep = state?.step || 0;
 
-      for (let i = startStep; i < totalSteps; i++) {
-        // Check if killed
-        const p = db.prepare('SELECT status FROM processes WHERE id = ?').get(processId) as any;
-        if (p && p.status === 'killed') {
-          log(`Process was killed.`);
-          return;
+        for (let i = startStep; i < totalSteps; i++) {
+          // Check if killed
+          const p = db.prepare('SELECT status FROM processes WHERE id = ?').get(processId) as any;
+          if (p && p.status === 'killed') {
+            log(`Process was killed.`);
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 1000));
+          updateState({ step: i + 1 });
+          log(`Progress: step ${i + 1}/${totalSteps} completed.`);
         }
-        await new Promise(r => setTimeout(r, 1000));
-        updateState({ step: i + 1 });
-        log(`Progress: step ${i+1}/${totalSteps} completed.`);
-      }
-      log(`Process ${payload.name} completed successfully.`);
-    });
+        log(`Process ${payload.name} completed successfully.`);
+      },
+    );
 
     // RESTORE EXISTING TASKS
     await processManager.restore();
@@ -62,22 +71,21 @@ export const ProcessPlugin = {
         type: 'OBJECT',
         properties: {
           name: { type: 'STRING', description: '进程名称/标题' },
-          duration: { type: 'NUMBER', description: '模拟运行时长（秒）' }
+          duration: { type: 'NUMBER', description: '模拟运行时长（秒）' },
         },
-        required: ['name', 'duration']
-      }
+        required: ['name', 'duration'],
+      },
     });
 
     await commandBus.registerHandler(spawnCmdType, {
       async execute(command) {
         const payload = command.payload as any;
-        const processId = await processManager.spawn(
-          payload.name,
-          'simulated_task',
-          { name: payload.name, duration: payload.duration }
-        );
+        const processId = await processManager.spawn(payload.name, 'simulated_task', {
+          name: payload.name,
+          duration: payload.duration,
+        });
         return { processId };
-      }
+      },
     });
 
     // 2. PROCESS KILL
@@ -90,10 +98,10 @@ export const ProcessPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          processId: { type: 'STRING', description: '要终止的进程 ID' }
+          processId: { type: 'STRING', description: '要终止的进程 ID' },
         },
-        required: ['processId']
-      }
+        required: ['processId'],
+      },
     });
 
     await commandBus.registerHandler(killCmdType, {
@@ -101,7 +109,7 @@ export const ProcessPlugin = {
         const payload = command.payload as any;
         await processManager.kill(payload.processId);
         return { success: true };
-      }
+      },
     });
 
     // 3. PROCESS LIST
@@ -113,15 +121,17 @@ export const ProcessPlugin = {
       capabilityRequired: 'process:read',
       inputSchema: {
         type: 'OBJECT',
-        properties: {}
-      }
+        properties: {},
+      },
     });
 
     await commandBus.registerHandler(listCmdType, {
       async execute() {
-        const nodes = db.prepare('SELECT id, name, status, created_at, updated_at FROM processes ORDER BY created_at DESC').all();
+        const nodes = db
+          .prepare('SELECT id, name, status, created_at, updated_at FROM processes ORDER BY created_at DESC')
+          .all();
         return { processes: nodes };
-      }
+      },
     });
 
     // 4. PROCESS LOGS
@@ -134,10 +144,10 @@ export const ProcessPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          processId: { type: 'STRING', description: '进程 ID' }
+          processId: { type: 'STRING', description: '进程 ID' },
         },
-        required: ['processId']
-      }
+        required: ['processId'],
+      },
     });
 
     await commandBus.registerHandler(logCmdType, {
@@ -146,12 +156,12 @@ export const ProcessPlugin = {
         const process = db.prepare('SELECT logs FROM processes WHERE id = ?').get(payload.processId) as any;
         if (!process) throw new Error('Process not found');
         return { logs: process.logs };
-      }
+      },
     });
   },
   deactivate: async () => {
     // Handlers automatically disposed by ResourceTracker
-  }
+  },
 };
 
 /** @deprecated Deprecated in Phase 8. Built-in plugins are auto-loaded by the Kernel using PluginHost. */

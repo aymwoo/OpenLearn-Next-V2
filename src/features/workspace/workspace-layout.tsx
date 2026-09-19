@@ -7,10 +7,7 @@ import React from 'react';
 import { WorkspaceSlotType, WorkspaceLayoutProps } from './workspace-types.js';
 import { useWorkspaceSlot } from './workspace-context.js';
 
-const SlotRenderer: React.FC<{ slot: WorkspaceSlotType; className?: string }> = ({
-  slot,
-  className,
-}) => {
+const SlotRenderer: React.FC<{ slot: WorkspaceSlotType; className?: string }> = ({ slot, className }) => {
   const providers = useWorkspaceSlot(slot);
 
   if (providers.length === 0) {
@@ -20,9 +17,7 @@ const SlotRenderer: React.FC<{ slot: WorkspaceSlotType; className?: string }> = 
   return (
     <div className={`workspace-slot workspace-slot-${slot.toLowerCase()} ${className ?? ''}`}>
       {providers.map((provider) => (
-        <React.Fragment key={provider.id}>
-          {provider.render()}
-        </React.Fragment>
+        <React.Fragment key={provider.id}>{provider.render()}</React.Fragment>
       ))}
     </div>
   );
@@ -30,7 +25,9 @@ const SlotRenderer: React.FC<{ slot: WorkspaceSlotType; className?: string }> = 
 
 export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({ className, children }) => {
   return (
-    <div className={`workspace-shell flex flex-col h-screen w-screen overflow-hidden bg-slate-900 text-slate-100 ${className ?? ''}`}>
+    <div
+      className={`workspace-shell flex flex-col h-screen w-screen overflow-hidden bg-slate-900 text-slate-100 ${className ?? ''}`}
+    >
       {/* 1. TopBar Slot */}
       <SlotRenderer slot="TopBar" className="w-full flex-none z-30" />
 

@@ -33,9 +33,7 @@ function baseProps(overrides: Record<string, any> = {}) {
     activeSubmissionFilter: 'all',
     classDashboardMap: {
       'class-1': {
-        assignments: [
-          { id: 'a-1', title: 'Homework 1', description: 'Do it', created_at: 1700000000000 },
-        ],
+        assignments: [{ id: 'a-1', title: 'Homework 1', description: 'Do it', created_at: 1700000000000 }],
         performance: [],
         recentSubmissions: [],
       },

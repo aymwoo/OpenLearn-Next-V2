@@ -9,7 +9,12 @@ interface NotificationDetailModalProps {
   onOpenWorkspace: (assignment: any) => void;
 }
 
-export function NotificationDetailModal({ notification, onClose, lang, onOpenWorkspace }: NotificationDetailModalProps) {
+export function NotificationDetailModal({
+  notification,
+  onClose,
+  lang,
+  onOpenWorkspace,
+}: NotificationDetailModalProps) {
   if (!notification) return null;
 
   return (
@@ -26,7 +31,12 @@ export function NotificationDetailModal({ notification, onClose, lang, onOpenWor
             <Bell className="text-indigo-600 font-sans shrink-0" size={20} />
             <h2 className="font-bold text-gray-800 text-base font-sans truncate">{notification.title}</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 font-bold p-1 hover:bg-gray-200 rounded transition-colors text-lg">&times;</button>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 font-bold p-1 hover:bg-gray-200 rounded transition-colors text-lg"
+          >
+            &times;
+          </button>
         </div>
 
         {/* Modal Content */}
@@ -44,7 +54,9 @@ export function NotificationDetailModal({ notification, onClose, lang, onOpenWor
                   </span>
                   {notification.assignment.submission_status === 'graded' && (
                     <span className="bg-green-100 border border-green-200 text-green-800 text-xs font-bold px-2.5 py-1 rounded-full shadow-sm font-mono">
-                      {lang === 'zh' ? `得分：${notification.assignment.score}%` : `Score: ${notification.assignment.score}%`}
+                      {lang === 'zh'
+                        ? `得分：${notification.assignment.score}%`
+                        : `Score: ${notification.assignment.score}%`}
                     </span>
                   )}
                 </div>
@@ -64,9 +76,15 @@ export function NotificationDetailModal({ notification, onClose, lang, onOpenWor
                         <div className="text-[10px] text-gray-400 font-mono flex items-center gap-1 font-normal select-none">
                           <Clock size={11} className="text-neutral-400" />
                           <span>
-                            {new Date(notification.assignment.graded_at).toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US', {
-                              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                            })}
+                            {new Date(notification.assignment.graded_at).toLocaleString(
+                              lang === 'zh' ? 'zh-CN' : 'en-US',
+                              {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              },
+                            )}
                           </span>
                         </div>
                       )}
@@ -94,11 +112,19 @@ export function NotificationDetailModal({ notification, onClose, lang, onOpenWor
 
         {/* Modal Footer */}
         <div className="p-4 border-t border-gray-100 bg-gray-50/85 flex justify-end gap-2.5 shrink-0 font-sans">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold border border-gray-200 text-gray-700 bg-white rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-semibold border border-gray-200 text-gray-700 bg-white rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+          >
             {lang === 'zh' ? '关闭' : 'Close'}
           </button>
           {notification.assignment && (
-            <button type="button" onClick={() => onOpenWorkspace(notification.assignment)} className="px-4 py-2 text-xs font-bold bg-indigo-600 text-white border border-indigo-700 rounded-lg hover:bg-indigo-700 hover:shadow shadow-sm transition-all cursor-pointer flex items-center gap-1.5 font-sans">
+            <button
+              type="button"
+              onClick={() => onOpenWorkspace(notification.assignment)}
+              className="px-4 py-2 text-xs font-bold bg-indigo-600 text-white border border-indigo-700 rounded-lg hover:bg-indigo-700 hover:shadow shadow-sm transition-all cursor-pointer flex items-center gap-1.5 font-sans"
+            >
               <PenTool size={14} className="font-sans" />
               {lang === 'zh' ? '打开画布 / 查看详情' : 'Open Workspace Canvas'}
             </button>

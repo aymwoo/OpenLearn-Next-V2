@@ -14,7 +14,10 @@ export class DefaultPredictionProvider implements IPredictionProvider {
 
   public async predictLearningOutcome(studentId: string): Promise<PredictionResult> {
     const metrics = this.metricsGetter();
-    const predictedCompletionRate = Math.min(100, Math.max(20, metrics.participationRate * 0.7 + metrics.quizAccuracyRate * 0.3));
+    const predictedCompletionRate = Math.min(
+      100,
+      Math.max(20, metrics.participationRate * 0.7 + metrics.quizAccuracyRate * 0.3),
+    );
     let riskLevel: 'low' | 'medium' | 'high' = 'low';
 
     if (predictedCompletionRate < 45) {

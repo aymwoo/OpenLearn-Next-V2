@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  AIContextProviderRegistry,
-  registerDefaultAIContextProviders,
-  IAIContextProvider,
-} from '../index.js';
+import { AIContextProviderRegistry, registerDefaultAIContextProviders, IAIContextProvider } from '../index.js';
 
 describe('Sprint P5-01 AI Classroom Context Test Suite', () => {
   let registry: AIContextProviderRegistry;

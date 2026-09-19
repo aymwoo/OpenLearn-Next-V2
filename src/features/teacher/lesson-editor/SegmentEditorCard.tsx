@@ -93,9 +93,7 @@ export function SegmentEditorCard({ lang, segment, onPatch, onDelete }: SegmentE
           value={segment.notes || ''}
           onChange={(e) => onPatch({ notes: e.target.value })}
           placeholder={
-            lang === 'zh'
-              ? '教学要点、学生互动提示、教学设计分配…'
-              : 'Teaching points, student interaction hints…'
+            lang === 'zh' ? '教学要点、学生互动提示、教学设计分配…' : 'Teaching points, student interaction hints…'
           }
           className="w-full border border-gray-200 px-2 py-1 rounded-lg bg-white text-[13px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 placeholder:text-gray-400 placeholder:italic resize-y"
         />

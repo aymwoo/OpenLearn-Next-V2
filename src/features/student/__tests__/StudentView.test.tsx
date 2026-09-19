@@ -34,9 +34,7 @@ const baseProps = {
   studentViewStatus: 'dashboard' as const,
   studentDashboardData: {
     progress: [],
-    assignments: [
-      { id: 'a1', title: 'HW', class_name: 'C', content: 'x', submission_status: null },
-    ],
+    assignments: [{ id: 'a1', title: 'HW', class_name: 'C', content: 'x', submission_status: null }],
     schedules: [],
     rollcalls: [],
     classes: [],

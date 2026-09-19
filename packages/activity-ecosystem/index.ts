@@ -25,6 +25,4 @@ export * from './ai.js';
  * This is the SAME mechanism core plugins use for ctx.services.* — no special
  * path for activities.
  */
-export const IActivityRegistryToken = new Token<ActivityRegistry>(
-  '@openlearn/activity-ecosystem:IActivityRegistry',
-);
+export const IActivityRegistryToken = new Token<ActivityRegistry>('@openlearn/activity-ecosystem:IActivityRegistry');

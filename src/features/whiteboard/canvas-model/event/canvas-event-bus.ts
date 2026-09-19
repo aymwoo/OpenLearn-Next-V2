@@ -24,7 +24,7 @@ export type CanvasEventListener<T extends CanvasEventType> = (event: CanvasEvent
 
 /**
  * Canvas Event Bus
- * 
+ *
  * Provides decoupled, strongly-typed event communication between
  * Whiteboard core, tools, selection manager, and external plugins.
  */

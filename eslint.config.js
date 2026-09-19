@@ -30,10 +30,7 @@ export default [
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': [
-        'warn',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
-      ],
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/no-unsafe-function-type': 'warn',
       '@typescript-eslint/no-unused-expressions': 'warn',
       '@typescript-eslint/no-empty-object-type': 'warn',
@@ -56,10 +53,7 @@ export default [
       },
     },
     rules: {
-      'no-unused-vars': [
-        'warn',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
-      ],
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'no-empty': ['warn', { allowEmptyCatch: true }],
       'no-undef': 'off',
     },

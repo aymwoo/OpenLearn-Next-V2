@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Blocks, Search, X, Star, Clock, ChevronDown, ChevronRight, Sparkles } from 'lucide-react';
 import { PaletteCard } from './PaletteCard';
 import { PALETTE_GROUPS, PALETTE_ITEMS, COLOR_THEME } from './paletteConfig';
+import { usePluginPaletteItems } from './palette-item-registry';
 
 interface LessonPaletteProps {
   lang: 'zh' | 'en';
@@ -57,8 +58,11 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
     setCollapsedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
   };
 
+  const pluginItems = usePluginPaletteItems();
+  const allItems = [...PALETTE_ITEMS, ...pluginItems];
+
   // Filtering items
-  const filteredItems = PALETTE_ITEMS.filter((item) => {
+  const filteredItems = allItems.filter((item) => {
     // Search query filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -123,7 +127,9 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
         <button
           onClick={() => setActiveTab('favorites')}
           className={`flex-1 py-1 text-[11px] font-medium rounded-md transition-all flex items-center justify-center gap-1 ${
-            activeTab === 'favorites' ? 'bg-surface text-amber-500 shadow-2xs font-bold' : 'text-muted hover:text-amber-500'
+            activeTab === 'favorites'
+              ? 'bg-surface text-amber-500 shadow-2xs font-bold'
+              : 'text-muted hover:text-amber-500'
           }`}
         >
           <Star size={11} className={activeTab === 'favorites' ? 'fill-amber-500' : ''} />
@@ -132,7 +138,9 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
         <button
           onClick={() => setActiveTab('recent')}
           className={`flex-1 py-1 text-[11px] font-medium rounded-md transition-all flex items-center justify-center gap-1 ${
-            activeTab === 'recent' ? 'bg-surface text-primary-theme shadow-2xs font-bold' : 'text-muted hover:text-primary-theme'
+            activeTab === 'recent'
+              ? 'bg-surface text-primary-theme shadow-2xs font-bold'
+              : 'text-muted hover:text-primary-theme'
           }`}
         >
           <Clock size={11} />
@@ -147,7 +155,13 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
             <Sparkles size={24} className="mx-auto mb-2 opacity-30 text-indigo-500" />
             <p className="font-medium text-slate-500">{lang === 'zh' ? '未找到相关组件' : 'No components found'}</p>
             <p className="text-[10px] mt-1 text-slate-400">
-              {activeTab !== 'all' ? (lang === 'zh' ? '尝试切换到全部组件' : 'Try switching to All tab') : (lang === 'zh' ? '更换搜索关键词' : 'Try a different search term')}
+              {activeTab !== 'all'
+                ? lang === 'zh'
+                  ? '尝试切换到全部组件'
+                  : 'Try switching to All tab'
+                : lang === 'zh'
+                  ? '更换搜索关键词'
+                  : 'Try a different search term'}
             </p>
           </div>
         ) : activeTab !== 'all' || searchQuery.trim() ? (
@@ -166,51 +180,63 @@ export function LessonPalette({ lang, onActivate }: LessonPaletteProps) {
           </div>
         ) : (
           // Grouped list view
-          PALETTE_GROUPS.map((group) => {
-            const items = filteredItems.filter((i) => i.group === group.id);
-            if (items.length === 0) return null;
-            const accent = COLOR_THEME[items[0].color] || COLOR_THEME.indigo;
-            const isCollapsed = collapsedGroups[group.id];
+          (() => {
+            const allGroups = [...PALETTE_GROUPS];
+            filteredItems.forEach((item) => {
+              if (!allGroups.some((g) => g.id === item.group)) {
+                allGroups.push({
+                  id: item.group,
+                  labelZh: item.group,
+                  labelEn: item.group,
+                });
+              }
+            });
 
-            return (
-              <div key={group.id} className="flex flex-col gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => toggleGroupCollapse(group.id)}
-                  className="flex items-center justify-between px-1 py-0.5 text-left group/grp cursor-pointer hover:bg-slate-200/40 rounded transition-colors"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${accent.groupAccent}`} />
-                    <span className={`text-[10px] font-bold uppercase tracking-wider ${accent.groupText}`}>
-                      {lang === 'zh' ? group.labelZh : group.labelEn}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 text-slate-400 group-hover/grp:text-slate-600">
-                    <span className="text-[9px] font-mono font-medium opacity-70">({items.length})</span>
-                    {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                  </div>
-                </button>
+            return allGroups.map((group) => {
+              const items = filteredItems.filter((i) => i.group === group.id);
+              if (items.length === 0) return null;
+              const accent = COLOR_THEME[items[0].color] || COLOR_THEME.indigo;
+              const isCollapsed = collapsedGroups[group.id];
 
-                {!isCollapsed && (
-                  <div className="grid grid-cols-2 gap-2">
-                    {items.map((item) => (
-                      <PaletteCard
-                        key={item.type}
-                        config={item}
-                        lang={lang}
-                        onActivate={handleActivate}
-                        isFavorite={favorites.includes(item.type)}
-                        onToggleFavorite={handleToggleFavorite}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })
+              return (
+                <div key={group.id} className="flex flex-col gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroupCollapse(group.id)}
+                    className="flex items-center justify-between px-1 py-0.5 text-left group/grp cursor-pointer hover:bg-slate-200/40 rounded transition-colors"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${accent.groupAccent}`} />
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${accent.groupText}`}>
+                        {lang === 'zh' ? group.labelZh : group.labelEn}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-slate-400 group-hover/grp:text-slate-600">
+                      <span className="text-[9px] font-mono font-medium opacity-70">({items.length})</span>
+                      {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                    </div>
+                  </button>
+
+                  {!isCollapsed && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {items.map((item) => (
+                        <PaletteCard
+                          key={item.type}
+                          config={item}
+                          lang={lang}
+                          onActivate={handleActivate}
+                          isFavorite={favorites.includes(item.type)}
+                          onToggleFavorite={handleToggleFavorite}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          })()
         )}
       </div>
     </div>
   );
 }
-

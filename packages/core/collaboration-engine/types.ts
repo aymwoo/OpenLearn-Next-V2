@@ -4,13 +4,7 @@
  */
 
 export type ParticipantRole =
-  | 'Teacher'
-  | 'Teaching Assistant'
-  | 'Student'
-  | 'Observer'
-  | 'AI Tutor'
-  | 'AI Assistant'
-  | 'Plugin';
+  'Teacher' | 'Teaching Assistant' | 'Student' | 'Observer' | 'AI Tutor' | 'AI Assistant' | 'Plugin';
 
 export type CollaborationPermission =
   | 'Whiteboard Edit'
@@ -82,12 +76,7 @@ export interface ObjectLock {
 }
 
 export type SyncType =
-  | 'object_sync'
-  | 'selection_sync'
-  | 'viewport_sync'
-  | 'pointer_sync'
-  | 'stage_sync'
-  | 'lesson_sync';
+  'object_sync' | 'selection_sync' | 'viewport_sync' | 'pointer_sync' | 'stage_sync' | 'lesson_sync';
 
 export interface SyncMessage<T = unknown> {
   readonly id: string;
@@ -111,13 +100,31 @@ export interface CollaborationAnalyticsData {
 export interface CollaborationEventMap {
   ParticipantJoined: { readonly participant: Participant; readonly timestamp: number };
   ParticipantLeft: { readonly participantId: string; readonly timestamp: number };
-  PermissionChanged: { readonly role: ParticipantRole; readonly permissions: ReadonlyArray<CollaborationPermission>; readonly timestamp: number };
+  PermissionChanged: {
+    readonly role: ParticipantRole;
+    readonly permissions: ReadonlyArray<CollaborationPermission>;
+    readonly timestamp: number;
+  };
   GroupCreated: { readonly group: GroupData; readonly timestamp: number };
   GroupChanged: { readonly groupId: string; readonly action: string; readonly timestamp: number };
-  TeacherPatrol: { readonly teacherId: string; readonly targetGroupId: string; readonly action: 'enter' | 'leave' | 'annotate' | 'takeover'; readonly timestamp: number };
-  BroadcastStarted: { readonly broadcastType: string; readonly sourceId: string; readonly targetGroupIds: ReadonlyArray<string>; readonly timestamp: number };
+  TeacherPatrol: {
+    readonly teacherId: string;
+    readonly targetGroupId: string;
+    readonly action: 'enter' | 'leave' | 'annotate' | 'takeover';
+    readonly timestamp: number;
+  };
+  BroadcastStarted: {
+    readonly broadcastType: string;
+    readonly sourceId: string;
+    readonly targetGroupIds: ReadonlyArray<string>;
+    readonly timestamp: number;
+  };
   BroadcastFinished: { readonly broadcastId: string; readonly timestamp: number };
-  WorkspaceMerged: { readonly sourceWorkspaceId: string; readonly targetWorkspaceId: string; readonly timestamp: number };
+  WorkspaceMerged: {
+    readonly sourceWorkspaceId: string;
+    readonly targetWorkspaceId: string;
+    readonly timestamp: number;
+  };
   ResultCollected: { readonly groupResults: ReadonlyArray<Record<string, unknown>>; readonly timestamp: number };
 }
 
@@ -132,5 +139,5 @@ export interface CollaborationEventEnvelope<K extends CollaborationEventType = C
 }
 
 export type CollaborationEventSubscriber<K extends CollaborationEventType> = (
-  event: CollaborationEventEnvelope<K>
+  event: CollaborationEventEnvelope<K>,
 ) => void | Promise<void>;

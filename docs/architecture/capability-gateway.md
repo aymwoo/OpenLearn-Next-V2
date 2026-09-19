@@ -16,12 +16,15 @@ graph TD
 ```
 
 ### 1. CapabilityGuard (权限防护)
+
 `CapabilityGuard` 属于 Layer 0 核心安全设施，拦截所有能力调用。在执行前检验调用方的 Token、角色权限（Role）与上下文环境（CapabilityContext）。
 
 ### 2. CapabilityRuntimeKernel
+
 能力运行时内核维护全量能力描述符（CapabilityDescriptor），管理提供者句柄（ICapabilityProviderHandler）注册与分发。
 
 ### 3. CapabilityGovernanceKernel
+
 治理内核控制能力的生命周期阶段（Status）、审批等级（ApprovalTier）与可见性（VisibilityTier）：
 
 - **ApprovalTier**: `Automatic` | `ManualApproval` | `AdminOnly`

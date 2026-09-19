@@ -19,17 +19,15 @@ import path from 'node:path';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getActorId, getCookieToken, getValidSession } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
-import type { PluginApiRequest, PluginApiResponse, PluginStreamResponse } from '../../packages/core/plugin-host/types.js';
+import type {
+  PluginApiRequest,
+  PluginApiResponse,
+  PluginStreamResponse,
+} from '../../packages/core/plugin-host/types.js';
 import { compileRoutePattern } from '../../packages/core/plugin-host/http-router.js';
 
 /** 平台已有的保留管理动作路径（当只有单段子路径且完全匹配时放行给后续 Express 路由） */
-const RESERVED_ACTIONS = new Set([
-  'config',
-  'toggle',
-  'contributions',
-  'check-update',
-  'one-click-update',
-]);
+const RESERVED_ACTIONS = new Set(['config', 'toggle', 'contributions', 'check-update', 'one-click-update']);
 
 /** 响应头危险黑名单：绝对禁止插件向外部注入或篡改 */
 const FORBIDDEN_RESPONSE_HEADERS = new Set([
@@ -198,11 +196,7 @@ function resolveAuthContext(req: Request): {
 /**
  * 插件 RESTful API 统一网关处理器
  */
-export async function pluginApiGatewayMiddleware(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
+export async function pluginApiGatewayMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   const pluginId = req.params.pluginId;
   const rawSubPath = (req.params as any)[0] || '';
 
@@ -298,13 +292,7 @@ export async function pluginApiGatewayMiddleware(
 
   // 8. 组装安全的只读 PluginApiRequest DTO
   const safeHeaders: Record<string, string> = {};
-  const ALLOWED_REQUEST_HEADERS = [
-    'content-type',
-    'accept',
-    'user-agent',
-    'x-request-id',
-    'accept-language',
-  ];
+  const ALLOWED_REQUEST_HEADERS = ['content-type', 'accept', 'user-agent', 'x-request-id', 'accept-language'];
   for (const h of ALLOWED_REQUEST_HEADERS) {
     const val = req.headers[h];
     if (typeof val === 'string') {
@@ -352,7 +340,7 @@ export async function pluginApiGatewayMiddleware(
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     });
     res.flushHeaders?.();
@@ -432,30 +420,38 @@ export async function pluginApiGatewayMiddleware(
 
   // 10. 普通 RESTful 派发请求并等待响应（带 5000ms 超时熔断守卫）
   try {
-    const response: PluginApiResponse = await pluginHost.dispatchHttpRequest(
-      pluginId,
-      reqDto,
-      5000,
-    );
+    const response: PluginApiResponse = await pluginHost.dispatchHttpRequest(pluginId, reqDto, 5000);
 
     // 10. 响应安全清洗与返回
-    const status = (typeof response.status === 'number' && response.status >= 100 && response.status <= 599)
-      ? response.status
-      : 200;
+    const status =
+      typeof response.status === 'number' && response.status >= 100 && response.status <= 599 ? response.status : 200;
 
     // SEC-LTI-AUTH: 仅当插件在 Manifest 中明确声明依赖 IAuthSessionBridgeService 特权服务时，才允许网关注入会话 Cookie
-    const allowsSessionBridge = Array.isArray(manifest?.requires) &&
+    const allowsSessionBridge =
+      Array.isArray(manifest?.requires) &&
       manifest.requires.some((r: string) => typeof r === 'string' && r.includes('IAuthSessionBridgeService'));
 
-    if (allowsSessionBridge && response.sessionToken && typeof response.sessionToken === 'string' && response.sessionToken.startsWith('token_')) {
-      const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https' || (process.env.NODE_ENV === 'production' && process.env.ENABLE_HTTPS === 'true');
+    if (
+      allowsSessionBridge &&
+      response.sessionToken &&
+      typeof response.sessionToken === 'string' &&
+      response.sessionToken.startsWith('token_')
+    ) {
+      const isSecure =
+        req.secure ||
+        req.headers['x-forwarded-proto'] === 'https' ||
+        (process.env.NODE_ENV === 'production' && process.env.ENABLE_HTTPS === 'true');
       const secureFlag = isSecure ? '; Secure' : '';
       const sameSite = isSecure ? 'SameSite=None' : 'SameSite=Lax';
-      res.setHeader('Set-Cookie', `edu_os_token=${response.sessionToken}; Path=/; HttpOnly; ${sameSite}; Max-Age=604800${secureFlag}`);
+      res.setHeader(
+        'Set-Cookie',
+        `edu_os_token=${response.sessionToken}; Path=/; HttpOnly; ${sameSite}; Max-Age=604800${secureFlag}`,
+      );
     } else if (response.sessionToken && !allowsSessionBridge) {
-      console.warn(`[PluginApiGateway:SECURITY] Plugin '${pluginId}' attempted to return sessionToken without declaring IAuthSessionBridgeService in manifest.requires. Cookie rejected.`);
+      console.warn(
+        `[PluginApiGateway:SECURITY] Plugin '${pluginId}' attempted to return sessionToken without declaring IAuthSessionBridgeService in manifest.requires. Cookie rejected.`,
+      );
     }
-
 
     // 清洗响应 Header（剔除高危头）
     if (response.headers && typeof response.headers === 'object') {

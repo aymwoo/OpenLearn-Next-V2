@@ -32,9 +32,7 @@ export interface RunningActivity {
 }
 
 /** Fetch the registered activity providers, optionally filtered by role. */
-export async function fetchActivities(
-  role: ActivityRole = 'all',
-): Promise<ActivityProviderDescriptor[]> {
+export async function fetchActivities(role: ActivityRole = 'all'): Promise<ActivityProviderDescriptor[]> {
   const res = await fetch(`/api/activities?role=${encodeURIComponent(role)}`, {
     headers: { Accept: 'application/json' },
   });

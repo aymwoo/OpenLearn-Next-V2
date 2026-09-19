@@ -38,13 +38,7 @@ interface PluginSettingsModalProps {
 
 // ── Component ────────────────────────────────────────────────────────────
 
-export function PluginSettingsModal({
-  pluginId,
-  pluginName,
-  manifestStr,
-  lang,
-  onClose,
-}: PluginSettingsModalProps) {
+export function PluginSettingsModal({ pluginId, pluginName, manifestStr, lang, onClose }: PluginSettingsModalProps) {
   const [schema, setSchema] = useState<ConfigSchema | null>(null);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
@@ -135,9 +129,7 @@ export function PluginSettingsModal({
             <button
               type="button"
               onClick={() => handleChange(key, !val)}
-              className={`relative w-10 h-5 rounded-full transition-colors ${
-                val ? 'bg-indigo-600' : 'bg-gray-300'
-              }`}
+              className={`relative w-10 h-5 rounded-full transition-colors ${val ? 'bg-indigo-600' : 'bg-gray-300'}`}
             >
               <span
                 className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
@@ -220,9 +212,7 @@ export function PluginSettingsModal({
           <div className="flex items-center gap-2">
             <Settings size={18} className="text-gray-500" />
             <div>
-              <h3 className="font-semibold text-gray-800 text-sm">
-                {t('插件设置', 'Plugin Settings')}
-              </h3>
+              <h3 className="font-semibold text-gray-800 text-sm">{t('插件设置', 'Plugin Settings')}</h3>
               <p className="text-xs text-gray-400">{pluginName}</p>
             </div>
           </div>
@@ -244,7 +234,10 @@ export function PluginSettingsModal({
                 {t('此插件没有可配置项。', 'This plugin has no configurable settings.')}
               </p>
               <p className="text-xs text-gray-300 mt-1">
-                {t('在 manifest.configuration 中声明配置项即可在此处显示。', 'Declare settings in manifest.configuration to see them here.')}
+                {t(
+                  '在 manifest.configuration 中声明配置项即可在此处显示。',
+                  'Declare settings in manifest.configuration to see them here.',
+                )}
               </p>
             </div>
           ) : (
@@ -274,11 +267,7 @@ export function PluginSettingsModal({
                 disabled={saving}
                 className="px-4 py-2 text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
               >
-                {saving ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Save size={14} />
-                )}
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                 {t('保存', 'Save')}
               </button>
             </div>

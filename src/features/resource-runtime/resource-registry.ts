@@ -3,12 +3,7 @@
  * Central registry for resource providers, preview, open, toolbar, and context menu.
  */
 
-import {
-  ResourceType,
-  ResourceAction,
-  ResourceDescriptor,
-  ResourceProvider,
-} from './resource-types.js';
+import { ResourceType, ResourceAction, ResourceDescriptor, ResourceProvider } from './resource-types.js';
 
 export class ResourceRegistry {
   private resources = new Map<string, ResourceDescriptor>();

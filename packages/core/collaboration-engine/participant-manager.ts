@@ -27,7 +27,7 @@ export class ParticipantManager {
         Object.freeze({
           ...existing,
           isOnline: false,
-        })
+        }),
       );
       return true;
     }
@@ -58,7 +58,7 @@ export class ParticipantManager {
           lastHeartbeat: Date.now(),
           lastActive: Date.now(),
           isOnline: true,
-        })
+        }),
       );
       return true;
     }

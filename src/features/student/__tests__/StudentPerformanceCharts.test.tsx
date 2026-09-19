@@ -8,9 +8,7 @@ afterEach(() => {
 
 describe('StudentPerformanceCharts', () => {
   it('renders without throwing', () => {
-    const { container } = render(
-      <StudentPerformanceCharts assignments={[{ id: 'a1' }]} lang="zh" />
-    );
+    const { container } = render(<StudentPerformanceCharts assignments={[{ id: 'a1' }]} lang="zh" />);
     expect(container.querySelector('div')).toBeTruthy();
   });
 });

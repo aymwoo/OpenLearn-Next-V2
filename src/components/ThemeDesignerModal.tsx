@@ -152,7 +152,10 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
   };
 
   const handleSaveAndApply = () => {
-    const cleanId = themeId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+    const cleanId = themeId
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '-');
     if (!cleanId) {
       alert('请输入有效的主题标识 (ID)');
       return;
@@ -213,11 +216,21 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
   };
 
   const tokenFields: { key: string; labelZh: string; labelEn: string; desc: string }[] = [
-    { key: '--color-primary', labelZh: '核心主色', labelEn: 'Primary Brand Color', desc: '按钮高亮、焦点描边与重点图标' },
+    {
+      key: '--color-primary',
+      labelZh: '核心主色',
+      labelEn: 'Primary Brand Color',
+      desc: '按钮高亮、焦点描边与重点图标',
+    },
     { key: '--color-primary-hover', labelZh: '主色悬浮', labelEn: 'Primary Hover', desc: '按钮悬停交互色' },
     { key: '--bg-app', labelZh: '全局底色', labelEn: 'App Background', desc: '页面整体底衬颜色' },
     { key: '--bg-surface', labelZh: '卡片底色', labelEn: 'Surface Background', desc: '白板卡片、浮层与侧边栏底色' },
-    { key: '--bg-surface-secondary', labelZh: '次级底色', labelEn: 'Secondary Surface', desc: '表格斑马纹、标签与次级面板' },
+    {
+      key: '--bg-surface-secondary',
+      labelZh: '次级底色',
+      labelEn: 'Secondary Surface',
+      desc: '表格斑马纹、标签与次级面板',
+    },
     { key: '--bg-surface-elevated', labelZh: '浮层底色', labelEn: 'Elevated Surface', desc: '弹窗与下拉菜单浮动卡片' },
     { key: '--border-theme', labelZh: '主边框色', labelEn: 'Border Color', desc: '卡片外边框、网格分割线' },
     { key: '--border-theme-subtle', labelZh: '弱化边框', labelEn: 'Subtle Border', desc: '细微内部分割线' },
@@ -569,45 +582,27 @@ export function ThemeDesignerModal({ isOpen, onClose, lang = 'zh' }: ThemeDesign
 
                   {/* 模拟数据指标格 */}
                   <div className="grid grid-cols-3 gap-2 pt-1">
-                    <div
-                      className="p-2 rounded-lg"
-                      style={{ backgroundColor: tokens['--bg-surface-secondary'] }}
-                    >
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: tokens['--bg-surface-secondary'] }}>
                       <div className="text-3xs" style={{ color: tokens['--text-muted'] }}>
                         光电门测速 (v)
                       </div>
-                      <div
-                        className="text-sm font-bold font-mono mt-0.5"
-                        style={{ color: tokens['--text-main'] }}
-                      >
+                      <div className="text-sm font-bold font-mono mt-0.5" style={{ color: tokens['--text-main'] }}>
                         2.43 m/s
                       </div>
                     </div>
-                    <div
-                      className="p-2 rounded-lg"
-                      style={{ backgroundColor: tokens['--bg-surface-secondary'] }}
-                    >
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: tokens['--bg-surface-secondary'] }}>
                       <div className="text-3xs" style={{ color: tokens['--text-muted'] }}>
                         动能增量 (ΔEk)
                       </div>
-                      <div
-                        className="text-sm font-bold font-mono mt-0.5"
-                        style={{ color: tokens['--color-primary'] }}
-                      >
+                      <div className="text-sm font-bold font-mono mt-0.5" style={{ color: tokens['--color-primary'] }}>
                         0.589 J
                       </div>
                     </div>
-                    <div
-                      className="p-2 rounded-lg"
-                      style={{ backgroundColor: tokens['--bg-surface-secondary'] }}
-                    >
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: tokens['--bg-surface-secondary'] }}>
                       <div className="text-3xs" style={{ color: tokens['--text-muted'] }}>
                         误差率 (Err)
                       </div>
-                      <div
-                        className="text-sm font-bold font-mono mt-0.5"
-                        style={{ color: tokens['--text-main'] }}
-                      >
+                      <div className="text-sm font-bold font-mono mt-0.5" style={{ color: tokens['--text-main'] }}>
                         0.84 %
                       </div>
                     </div>

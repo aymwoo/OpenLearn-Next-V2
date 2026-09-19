@@ -51,14 +51,7 @@ export type StudentStatus =
   | 'Need Help'
   | 'Away';
 
-export type AIStatus =
-  | 'Idle'
-  | 'Thinking'
-  | 'Generating'
-  | 'Explaining'
-  | 'Evaluating'
-  | 'Waiting'
-  | 'Unavailable';
+export type AIStatus = 'Idle' | 'Thinking' | 'Generating' | 'Explaining' | 'Evaluating' | 'Waiting' | 'Unavailable';
 
 export type PluginStatus = 'Loading' | 'Running' | 'Paused' | 'Error' | 'Finished';
 
@@ -69,14 +62,7 @@ export type StageStatus = 'Waiting' | 'Running' | 'Completed' | 'Paused' | 'Skip
 export type GroupStatus = 'Active' | 'Idle' | 'Discussing' | 'Finished';
 
 export type EntityStatus =
-  | TeacherStatus
-  | StudentStatus
-  | AIStatus
-  | PluginStatus
-  | WhiteboardStatus
-  | StageStatus
-  | GroupStatus
-  | string;
+  TeacherStatus | StudentStatus | AIStatus | PluginStatus | WhiteboardStatus | StageStatus | GroupStatus | string;
 
 export interface PresenceEntity<TStatus extends string = EntityStatus> {
   readonly id: string;
@@ -175,7 +161,7 @@ export interface PresenceEventEnvelope<K extends PresenceEventType = PresenceEve
 }
 
 export type PresenceEventSubscriber<K extends PresenceEventType> = (
-  event: PresenceEventEnvelope<K>
+  event: PresenceEventEnvelope<K>,
 ) => void | Promise<void>;
 
 // ── Plugin SDK Presence Definition ────────────────────────────────────────

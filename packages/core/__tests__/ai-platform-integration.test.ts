@@ -1,8 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  PlatformCompositionRoot,
-  AICompositionModule,
-} from '../bootstrap/composition/index.js';
+import { PlatformCompositionRoot, AICompositionModule } from '../bootstrap/composition/index.js';
 import { AIRuntimeKernel } from '../ai/index.js';
 import { AICapabilityKernel } from '../ai-capability/index.js';
 import { EventBus } from '../event-bus/index.js';
@@ -24,7 +21,9 @@ describe('Sprint A1 Step 2 AI Platform Integration Test Suite', () => {
     const capabilityKernel = new AICapabilityKernel(runtimeKernel);
 
     expect(capabilityKernel.registry.hasCapability('capability_chat')).toBe(true);
-    expect(capabilityKernel.registry.resolveCapability('capability_chat')?.meta.name).toBe('Multi-turn Chat Capability');
+    expect(capabilityKernel.registry.resolveCapability('capability_chat')?.meta.name).toBe(
+      'Multi-turn Chat Capability',
+    );
     expect(capabilityKernel.registry.listCapabilities().length).toBeGreaterThanOrEqual(7);
   });
 

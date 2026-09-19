@@ -57,7 +57,10 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
   }
 
   return (
-    <div ref={containerRef} className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
+    <div
+      ref={containerRef}
+      className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative"
+    >
       <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b border-gray-200 shrink-0">
         <div className="flex items-center gap-2 select-none">
           <Globe size={16} className="text-indigo-500" />
@@ -67,12 +70,15 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
           <button
             onClick={toggleFullscreen}
             className="p-1 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors cursor-pointer"
-            title={isFullscreen ? "退出全屏" : "全屏播放"}
+            title={isFullscreen ? '退出全屏' : '全屏播放'}
           >
             {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
           </button>
           {onClose && (
-            <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors cursor-pointer">
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors cursor-pointer"
+            >
               <X size={16} />
             </button>
           )}
@@ -91,3 +97,5 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
     </div>
   );
 }
+
+export default InteractiveCoursewareViewer;

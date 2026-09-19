@@ -27,19 +27,19 @@ export class AuthSessionBridgeService implements IAuthSessionBridgeService {
       if (!existingStudent) {
         const studentNumber = user.username || `sso_${user.userId}`;
         // 防 student_number 唯一键冲突
-        const studentNumberCheck = this.db.prepare('SELECT id FROM students WHERE student_number = ?').get(studentNumber) as any;
+        const studentNumberCheck = this.db
+          .prepare('SELECT id FROM students WHERE student_number = ?')
+          .get(studentNumber) as any;
         const finalStudentNumber = studentNumberCheck ? `sso_${user.userId}_${Date.now()}` : studentNumber;
 
-        this.db.prepare(`
+        this.db
+          .prepare(
+            `
           INSERT INTO students (id, student_number, name, email, created_at)
           VALUES (?, ?, ?, ?, ?)
-        `).run(
-          user.userId,
-          finalStudentNumber,
-          user.name || user.username || user.userId,
-          user.email || null,
-          now,
-        );
+        `,
+          )
+          .run(user.userId, finalStudentNumber, user.name || user.username || user.userId, user.email || null, now);
       }
     } else if (user.role === 'teacher' || user.role === 'administrator') {
       // 2. 如果是教师或管理员，确保 users 表记录存在
@@ -49,17 +49,21 @@ export class AuthSessionBridgeService implements IAuthSessionBridgeService {
         const usernameCheck = this.db.prepare('SELECT id FROM users WHERE username = ?').get(username) as any;
         const finalUsername = usernameCheck ? `sso_${user.userId}_${Date.now()}` : username;
 
-        this.db.prepare(`
+        this.db
+          .prepare(
+            `
           INSERT INTO users (id, username, password_hash, role, name, created_at, status)
           VALUES (?, ?, ?, ?, ?, ?, 'active')
-        `).run(
-          user.userId,
-          finalUsername,
-          '', // SSO 用户无本地明文/哈希密码
-          user.role,
-          user.name || user.username || user.userId,
-          now,
-        );
+        `,
+          )
+          .run(
+            user.userId,
+            finalUsername,
+            '', // SSO 用户无本地明文/哈希密码
+            user.role,
+            user.name || user.username || user.userId,
+            now,
+          );
       }
     }
 
@@ -75,10 +79,14 @@ export class AuthSessionBridgeService implements IAuthSessionBridgeService {
       classId: user.classId ?? null,
     };
 
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO client_sessions (id, session_data, updated_at, expires_at)
       VALUES (?, ?, ?, ?)
-    `).run(sessionToken, JSON.stringify(sessionData), now, expiresAt);
+    `,
+      )
+      .run(sessionToken, JSON.stringify(sessionData), now, expiresAt);
 
     return {
       token: sessionToken,

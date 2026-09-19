@@ -44,22 +44,43 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
       {/* Dashboard Header */}
       <StudentDashboardHeader students={students} activeStudentId={activeStudentId} />
 
-      <StudentRollCallAlarms studentDashboardData={studentDashboardData} readNotifications={readNotifications} setReadNotifications={setReadNotifications} activeStudentId={activeStudentId} addToast={addToast} lang={lang} />
+      <StudentRollCallAlarms
+        studentDashboardData={studentDashboardData}
+        readNotifications={readNotifications}
+        setReadNotifications={setReadNotifications}
+        activeStudentId={activeStudentId}
+        addToast={addToast}
+        lang={lang}
+      />
 
-      <StudentCourseProgressList progress={studentDashboardData.progress} setSelectedLesson={setSelectedLesson} setStudentViewStatus={setStudentViewStatus} />
+      <StudentCourseProgressList
+        progress={studentDashboardData.progress}
+        setSelectedLesson={setSelectedLesson}
+        setStudentViewStatus={setStudentViewStatus}
+      />
 
       <StudentQuickStats studentDashboardData={studentDashboardData} />
 
       <StudentPerformanceCharts assignments={studentDashboardData.assignments} lang={lang} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
         {/* Schedules / Timetable */}
-        <StudentSchedulePanel schedules={studentDashboardData.schedules} setSelectedLesson={setSelectedLesson} setStudentViewStatus={setStudentViewStatus} />
+        <StudentSchedulePanel
+          schedules={studentDashboardData.schedules}
+          setSelectedLesson={setSelectedLesson}
+          setStudentViewStatus={setStudentViewStatus}
+        />
 
         {/* Assignments */}
-      <StudentAssignmentsPanel assignments={studentDashboardData.assignments} setSelectedAssignment={setSelectedAssignment} setStudentViewStatus={setStudentViewStatus} setQuizStudentAnswers={setQuizStudentAnswers} setSubAssignmentTab={setSubAssignmentTab} lang={lang} />
-        
+        <StudentAssignmentsPanel
+          assignments={studentDashboardData.assignments}
+          setSelectedAssignment={setSelectedAssignment}
+          setStudentViewStatus={setStudentViewStatus}
+          setQuizStudentAnswers={setQuizStudentAnswers}
+          setSubAssignmentTab={setSubAssignmentTab}
+          lang={lang}
+        />
+
         {/* Dynamic plugin-registered student dashboard views */}
         <ExtensionPointRenderer slot="student.view" slotProps={{ studentId: activeStudentId }} />
       </div>

@@ -29,6 +29,19 @@ describe('parseCSV', () => {
     expect(result).toEqual([{ name: '小明', email: 'xiaoming@example.com' }]);
   });
 
+  it('parses student_number and Chinese 学号 header', () => {
+    const text = 'name,student_number,email\nAlice,STU2026001,alice@example.com\nBob,STU2026002,bob@example.com';
+    const result = parseCSV(text);
+    expect(result).toEqual([
+      { name: 'Alice', student_number: 'STU2026001', email: 'alice@example.com' },
+      { name: 'Bob', student_number: 'STU2026002', email: 'bob@example.com' },
+    ]);
+
+    const cnText = '姓名,学号,邮箱\n张三,20260101,zhangsan@example.com';
+    const cnResult = parseCSV(cnText);
+    expect(cnResult).toEqual([{ name: '张三', student_number: '20260101', email: 'zhangsan@example.com' }]);
+  });
+
   it('returns empty array when fewer than 2 lines', () => {
     expect(parseCSV('name,email')).toEqual([]);
     expect(parseCSV('')).toEqual([]);
@@ -101,4 +114,3 @@ describe('parsePluginSource', () => {
     expect(result.manifest?.id).toBe('evil-plugin');
   });
 });
-

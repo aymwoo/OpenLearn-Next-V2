@@ -27,8 +27,8 @@ graph LR
 
 ```typescript
 export interface HighLevelIndicators {
-  engagementRate: number;   // 课堂参与率 (0~100%)
+  engagementRate: number; // 课堂参与率 (0~100%)
   collaborationIndex: number; // 协作指数
-  masteryScore: number;       // 知识点掌握度得分
+  masteryScore: number; // 知识点掌握度得分
 }
 ```

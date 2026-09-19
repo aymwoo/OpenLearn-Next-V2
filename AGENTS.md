@@ -31,15 +31,15 @@
 
 ## Build, Test, and Development Commands
 
-| Command | Purpose |
-|---|---|
-| `pnpm dev` | Start dev server (Express + Vite HMR) on port 9000 |
-| `pnpm build` | Vite frontend build → plugin build → esbuild server bundle |
-| `pnpm start` | Run production server from `dist/server.cjs` |
-| `pnpm lint` | TypeScript type check (`tsc --noEmit`) |
-| `pnpm lint:eslint` | ESLint across all `.ts`/`.tsx` files |
-| `pnpm format` | Prettier auto-format |
-| `pnpm test` | Run Vitest test suite |
+| Command            | Purpose                                                    |
+| ------------------ | ---------------------------------------------------------- |
+| `pnpm dev`         | Start dev server (Express + Vite HMR) on port 9000         |
+| `pnpm build`       | Vite frontend build → plugin build → esbuild server bundle |
+| `pnpm start`       | Run production server from `dist/server.cjs`               |
+| `pnpm lint`        | TypeScript type check (`tsc --noEmit`)                     |
+| `pnpm lint:eslint` | ESLint across all `.ts`/`.tsx` files                       |
+| `pnpm format`      | Prettier auto-format                                       |
+| `pnpm test`        | Run Vitest test suite                                      |
 
 ## Coding Style & Naming Conventions
 

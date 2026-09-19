@@ -10,7 +10,7 @@ export const createDefaultAIAction = (
   id: string,
   name: string,
   description: string,
-  parametersSchema?: Record<string, unknown>
+  parametersSchema?: Record<string, unknown>,
 ): AIActionDescriptor => ({
   id,
   name,
@@ -40,31 +40,31 @@ export const registerDefaultAIActions = (registry: AIActionRegistry): void => {
     createDefaultAIAction(
       'ai_summarize_lesson',
       'Summarize Lesson Content',
-      'Generates a key-point summary of the current classroom lesson'
-    )
+      'Generates a key-point summary of the current classroom lesson',
+    ),
   );
 
   registry.registerAction(
     createDefaultAIAction(
       'ai_explain_whiteboard',
       'Explain Whiteboard Content',
-      'Analyzes 2D whiteboard drawings and explains mathematical formulas or diagrams'
-    )
+      'Analyzes 2D whiteboard drawings and explains mathematical formulas or diagrams',
+    ),
   );
 
   registry.registerAction(
     createDefaultAIAction(
       'ai_generate_quiz',
       'Generate Classroom Quiz',
-      'Creates a 3-question pop quiz based on current teaching topic'
-    )
+      'Creates a 3-question pop quiz based on current teaching topic',
+    ),
   );
 
   registry.registerAction(
     createDefaultAIAction(
       'ai_track_analytics',
       'Query Student Engagement Metrics',
-      'Retrieves real-time student engagement scores and telemetry insights'
-    )
+      'Retrieves real-time student engagement scores and telemetry insights',
+    ),
   );
 };

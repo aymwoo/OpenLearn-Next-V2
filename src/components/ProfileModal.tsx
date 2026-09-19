@@ -73,11 +73,7 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
   };
 
   const pwdValid =
-    oldPwd.length > 0 &&
-    newPwd.length >= 8 &&
-    /[a-zA-Z]/.test(newPwd) &&
-    /[0-9]/.test(newPwd) &&
-    newPwd === confirmPwd;
+    oldPwd.length > 0 && newPwd.length >= 8 && /[a-zA-Z]/.test(newPwd) && /[0-9]/.test(newPwd) && newPwd === confirmPwd;
 
   const handleChangePwd = async () => {
     if (!pwdValid || pwdSaving) return;
@@ -194,8 +190,8 @@ export function ProfileModal({ open, session, lang, onClose, onSaved, onAvatar }
                   {avatarUploading
                     ? t('上传中…', 'Uploading…')
                     : session.avatar
-                    ? t('更换头像', 'Change avatar')
-                    : t('上传头像', 'Upload avatar')}
+                      ? t('更换头像', 'Change avatar')
+                      : t('上传头像', 'Upload avatar')}
                 </button>
                 {session.avatar && (
                   <button

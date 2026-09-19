@@ -4,3 +4,4 @@ export * from './classStore';
 export * from './lessonStore';
 export * from './liveClassStore';
 export * from './studentStore';
+export * from './whiteboardViewStore';

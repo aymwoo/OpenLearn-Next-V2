@@ -17,14 +17,7 @@ export type ResourceType =
   | 'HTML'
   | 'Plugin';
 
-export type ResourceAction =
-  | 'preview'
-  | 'open'
-  | 'pin'
-  | 'favorite'
-  | 'annotate'
-  | 'share'
-  | 'fullscreen';
+export type ResourceAction = 'preview' | 'open' | 'pin' | 'favorite' | 'annotate' | 'share' | 'fullscreen';
 
 export interface ResourceDescriptor {
   readonly id: string;

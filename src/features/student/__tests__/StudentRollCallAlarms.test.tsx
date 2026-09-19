@@ -17,7 +17,7 @@ describe('StudentRollCallAlarms', () => {
         activeStudentId="s1"
         addToast={vi.fn()}
         lang="zh"
-      />
+      />,
     );
     expect(screen.getByText('⚡️ 闪电提问点名中，请立即回应！')).toBeTruthy();
   });

@@ -14,7 +14,7 @@ export class SearchEngine {
       provider?: string;
       namespace?: string;
       keyword?: string;
-    }
+    },
   ): ReadonlyArray<CapabilitySearchResult> {
     const results: CapabilitySearchResult[] = [];
 

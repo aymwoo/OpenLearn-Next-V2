@@ -21,12 +21,7 @@ export class ConfigurationError extends Error {
   public readonly path?: string;
   public readonly scope?: string;
 
-  public constructor(
-    message: string,
-    code: ConfigurationErrorCode,
-    path?: string,
-    scope?: string,
-  ) {
+  public constructor(message: string, code: ConfigurationErrorCode, path?: string, scope?: string) {
     super(message);
     this.name = 'ConfigurationError';
     this.code = code;

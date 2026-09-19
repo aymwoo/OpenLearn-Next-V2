@@ -47,9 +47,7 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
   // Try to extract attemptId from sending iframe if same-origin is accessible
   if (!attemptId && event.source) {
     try {
-      const iframe = Array.from(document.querySelectorAll('iframe')).find(
-        (f) => f.contentWindow === event.source,
-      );
+      const iframe = Array.from(document.querySelectorAll('iframe')).find((f) => f.contentWindow === event.source);
       if (iframe && iframe.contentWindow) {
         const iframeWindow = iframe.contentWindow as any;
         if (iframeWindow.__LMS_STUDENT__?.attempt_id) {

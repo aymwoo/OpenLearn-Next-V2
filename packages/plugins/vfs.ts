@@ -36,11 +36,14 @@ export const VfsPlugin = {
       for (let i = 0; i < parts.length - 1; i++) {
         const part = parts[i];
         const pName = part;
-        const node = db.prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?').get(currentParentId, pName, 'dir') as any;
+        const node = db
+          .prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?')
+          .get(currentParentId, pName, 'dir') as any;
         if (!node) {
           const newId = uuidv7();
-          db.prepare('INSERT INTO vfs_nodes (id, parent_id, type, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-            .run(newId, currentParentId, 'dir', pName, null, Date.now(), Date.now());
+          db.prepare(
+            'INSERT INTO vfs_nodes (id, parent_id, type, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          ).run(newId, currentParentId, 'dir', pName, null, Date.now(), Date.now());
           currentParentId = newId;
         } else {
           currentParentId = node.id;
@@ -60,10 +63,10 @@ export const VfsPlugin = {
         type: 'OBJECT',
         properties: {
           path: { type: 'STRING', description: '完整绝对路径（如 /Mathematics/formula.txt）' },
-          content: { type: 'STRING', description: '文件内容' }
+          content: { type: 'STRING', description: '文件内容' },
         },
-        required: ['path', 'content']
-      }
+        required: ['path', 'content'],
+      },
     });
 
     await commandBus.registerHandler(vfsWriteCmdType, {
@@ -74,7 +77,9 @@ export const VfsPlugin = {
 
         db.prepare('DELETE FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?').run(parentId, name, 'file');
 
-        const stmt = db.prepare('INSERT INTO vfs_nodes (id, parent_id, type, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        const stmt = db.prepare(
+          'INSERT INTO vfs_nodes (id, parent_id, type, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        );
         stmt.run(fileId, parentId, 'file', name, payload.content, Date.now(), Date.now());
 
         await eventBus.publish({
@@ -83,11 +88,11 @@ export const VfsPlugin = {
           source: 'builtin.vfs',
           payload: { fileId, path: payload.path },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { fileId };
-      }
+      },
     });
 
     // 2. VFS READ BY PATH
@@ -100,20 +105,22 @@ export const VfsPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          path: { type: 'STRING', description: '完整绝对路径（如 /Mathematics/formula.txt）' }
+          path: { type: 'STRING', description: '完整绝对路径（如 /Mathematics/formula.txt）' },
         },
-        required: ['path']
-      }
+        required: ['path'],
+      },
     });
 
     await commandBus.registerHandler(vfsReadPathCmdType, {
       async execute(command) {
         const payload = command.payload as any;
         const { parentId, name } = resolvePath(payload.path);
-        const file = db.prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?').get(parentId, name, 'file') as any;
+        const file = db
+          .prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?')
+          .get(parentId, name, 'file') as any;
         if (!file) throw new Error(`File at path ${payload.path} not found`);
         return { content: file.content };
-      }
+      },
     });
 
     // 3. VFS LIST DIR
@@ -126,10 +133,10 @@ export const VfsPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          path: { type: 'STRING', description: '完整绝对目录路径（如 /Mathematics 或 /）' }
+          path: { type: 'STRING', description: '完整绝对目录路径（如 /Mathematics 或 /）' },
         },
-        required: ['path']
-      }
+        required: ['path'],
+      },
     });
 
     await commandBus.registerHandler(vfsListDirCmdType, {
@@ -139,14 +146,16 @@ export const VfsPlugin = {
 
         if (payload.path !== '/') {
           const res = resolvePath(payload.path);
-          const dir = db.prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?').get(res.parentId, res.name, 'dir') as any;
+          const dir = db
+            .prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?')
+            .get(res.parentId, res.name, 'dir') as any;
           if (!dir) throw new Error(`Directory at path ${payload.path} not found`);
           parentId = dir.id;
         }
 
         const nodes = db.prepare('SELECT id, type, name, created_at FROM vfs_nodes WHERE parent_id IS ?').all(parentId);
         return { nodes };
-      }
+      },
     });
 
     // 4. VFS MAKE DIR
@@ -159,21 +168,25 @@ export const VfsPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          path: { type: 'STRING', description: '完整绝对目录路径（如 /Mathematics/Algebra）' }
+          path: { type: 'STRING', description: '完整绝对目录路径（如 /Mathematics/Algebra）' },
         },
-        required: ['path']
-      }
+        required: ['path'],
+      },
     });
 
     await commandBus.registerHandler(vfsMkdirCmdType, {
       async execute(command) {
         const payload = command.payload as any;
         const { parentId, name } = resolvePath(payload.path);
-        let node = db.prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?').get(parentId, name, 'dir') as any;
+        let node = db
+          .prepare('SELECT * FROM vfs_nodes WHERE parent_id IS ? AND name = ? AND type = ?')
+          .get(parentId, name, 'dir') as any;
 
         if (!node) {
           const dirId = uuidv7();
-          const stmt = db.prepare('INSERT INTO vfs_nodes (id, parent_id, type, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+          const stmt = db.prepare(
+            'INSERT INTO vfs_nodes (id, parent_id, type, name, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          );
           stmt.run(dirId, parentId, 'dir', name, null, Date.now(), Date.now());
 
           await eventBus.publish({
@@ -182,18 +195,18 @@ export const VfsPlugin = {
             source: 'builtin.vfs',
             payload: { dirId, path: payload.path },
             timestamp: Date.now(),
-            correlationId: command.id
+            correlationId: command.id,
           });
           return { dirId };
         }
 
         return { dirId: node.id };
-      }
+      },
     });
   },
   deactivate: async () => {
     // Handlers automatically disposed by ResourceTracker via buildContext
-  }
+  },
 };
 
 /** @deprecated Deprecated in Phase 8. Built-in plugins are auto-loaded by the Kernel using PluginHost. */

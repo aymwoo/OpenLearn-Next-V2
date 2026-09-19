@@ -9,12 +9,7 @@
  */
 
 import { v7 as uuidv7 } from 'uuid';
-import type {
-  ActivityContext,
-  ActivityProvider,
-  ActivityProviderDescriptor,
-  ActivityLifecycleState,
-} from './types.js';
+import type { ActivityContext, ActivityProvider, ActivityProviderDescriptor, ActivityLifecycleState } from './types.js';
 
 /** Canonical activity event names published on the (reused) Event Bus. */
 export const ACTIVITY_EVENTS = {
@@ -39,10 +34,7 @@ export interface BaseActivityProviderOptions {
    * (e.g. call the command bus itself). When omitted, the provider falls back
    * to dispatching `descriptor.commandType` (if set) and publishing the event.
    */
-  onStart?: (
-    context: ActivityContext,
-    payload?: Record<string, unknown>,
-  ) => unknown | Promise<unknown>;
+  onStart?: (context: ActivityContext, payload?: Record<string, unknown>) => unknown | Promise<unknown>;
   onPause?: (context: ActivityContext) => void | Promise<void>;
   onResume?: (context: ActivityContext) => void | Promise<void>;
   onFinish?: (context: ActivityContext) => void | Promise<void>;
@@ -105,10 +97,7 @@ export class BaseActivityProvider implements ActivityProvider {
     }
   }
 
-  public async start(
-    context: ActivityContext,
-    payload?: Record<string, unknown>,
-  ): Promise<unknown> {
+  public async start(context: ActivityContext, payload?: Record<string, unknown>): Promise<unknown> {
     let result: unknown;
 
     if (this.hooks.onStart) {

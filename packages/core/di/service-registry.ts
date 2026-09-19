@@ -52,11 +52,7 @@ export class ServiceRegistry {
    * - Throws `MissingDependencyError` if any required dependency is missing
    * - Updates the dependency graph bidirectionally on success
    */
-  async register<T>(
-    token: Token<T>,
-    instance: T,
-    options?: RegisterOptions
-  ): Promise<void> {
+  async register<T>(token: Token<T>, instance: T, options?: RegisterOptions): Promise<void> {
     const name = token.name;
 
     // D-08: duplicate registration
@@ -179,11 +175,7 @@ export class ServiceRegistry {
    *
    * This is the explicit overwrite path required by D-08.
    */
-  async registerOrReplace<T>(
-    token: Token<T>,
-    instance: T,
-    options?: RegisterOptions
-  ): Promise<void> {
+  async registerOrReplace<T>(token: Token<T>, instance: T, options?: RegisterOptions): Promise<void> {
     const name = token.name;
 
     if (this.registry.has(name)) {
@@ -221,9 +213,7 @@ export class ServiceRegistry {
    *
    * Returns `undefined` if the token is not in the depGraph.
    */
-  dependencies(
-    tokenName: string
-  ): { requires: string[]; dependents: string[] } | undefined {
+  dependencies(tokenName: string): { requires: string[]; dependents: string[] } | undefined {
     const edge = this.depGraph.get(tokenName);
     if (!edge) return undefined;
     return {

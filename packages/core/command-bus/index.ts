@@ -10,10 +10,10 @@ export interface CommandMetadata {
 
 export interface PlatformCommand<T = unknown> {
   readonly id: string;
-  readonly type: string;        // Namespace format, e.g., "lesson.create"
-  readonly actorId: string;     
-  readonly payload: T;          
-  readonly timestamp?: number;   
+  readonly type: string; // Namespace format, e.g., "lesson.create"
+  readonly actorId: string;
+  readonly payload: T;
+  readonly timestamp?: number;
   readonly metadata?: CommandMetadata;
 }
 
@@ -60,21 +60,22 @@ export class CommandBus {
   public async execute<T extends PlatformCommand>(command: T): Promise<any> {
     const normalizedCommand: PlatformCommand = {
       ...command,
-      actorId: command.actorId || 'agent-system-0'
+      actorId: command.actorId || 'agent-system-0',
     };
 
     if (this.interceptor) {
       await this.interceptor(normalizedCommand);
     }
-    
+
     // D-11: Priority routing — modern handler first, legacy fallback
-    const handler = this.handlers.get(normalizedCommand.type)
-      ?? this.legacyHandlers.get(normalizedCommand.type);
+    const handler = this.handlers.get(normalizedCommand.type) ?? this.legacyHandlers.get(normalizedCommand.type);
     if (!handler) {
       throw new Error(`No handler registered for command: ${normalizedCommand.type}`);
     }
 
-    console.log(`[CommandBus] Executing: ${normalizedCommand.type} (ID: ${normalizedCommand.id}) by ${normalizedCommand.actorId}`);
+    console.log(
+      `[CommandBus] Executing: ${normalizedCommand.type} (ID: ${normalizedCommand.id}) by ${normalizedCommand.actorId}`,
+    );
 
     // Simplified Pipeline: Validation -> Execution
     try {
@@ -93,7 +94,7 @@ export class CommandBus {
       actorId,
       payload,
       timestamp: Date.now(),
-      metadata: metadata || {}
+      metadata: metadata || {},
     };
   }
 }

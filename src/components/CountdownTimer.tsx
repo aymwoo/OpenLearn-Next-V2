@@ -68,13 +68,15 @@ export function CountdownTimer({ assignmentId, timeLimitMinutes, onTimeUp, isSub
   const isLow = secondsRemaining < 60; // Less than 1 minute remaining
 
   return (
-    <div className={`flex items-center gap-3 font-sans px-4 py-2.5 rounded-xl border transition-all ${
-      isLow 
-        ? 'bg-red-50 text-red-700 border-red-200 animate-pulse font-bold' 
-        : secondsRemaining < 180 
-          ? 'bg-amber-50 text-amber-700 border-amber-200 font-semibold' 
-          : 'bg-indigo-50 text-indigo-700 border-indigo-100'
-    }`}>
+    <div
+      className={`flex items-center gap-3 font-sans px-4 py-2.5 rounded-xl border transition-all ${
+        isLow
+          ? 'bg-red-50 text-red-700 border-red-200 animate-pulse font-bold'
+          : secondsRemaining < 180
+            ? 'bg-amber-50 text-amber-700 border-amber-200 font-semibold'
+            : 'bg-indigo-50 text-indigo-700 border-indigo-100'
+      }`}
+    >
       <Timer size={16} className={isLow ? 'text-red-600 animate-pulse' : 'text-indigo-600'} />
       <div className="flex-1 flex justify-between items-center text-xs gap-4">
         <div>

@@ -76,15 +76,13 @@ describe('Activity Ecosystem — Registry & Official Activities', () => {
 
   it('throws on duplicate registration', () => {
     registry.registerProvider(new BaseActivityProvider({ descriptor: makeDescriptor('dup') }));
-    expect(() =>
-      registry.registerProvider(new BaseActivityProvider({ descriptor: makeDescriptor('dup') })),
-    ).toThrow(/already registered/);
+    expect(() => registry.registerProvider(new BaseActivityProvider({ descriptor: makeDescriptor('dup') }))).toThrow(
+      /already registered/,
+    );
   });
 
   it('rejects a provider without a descriptor id', () => {
-    expect(
-      () => new BaseActivityProvider({ descriptor: makeDescriptor('') }),
-    ).toThrow();
+    expect(() => new BaseActivityProvider({ descriptor: makeDescriptor('') })).toThrow();
   });
 
   it('filters activities by role', () => {
@@ -92,7 +90,11 @@ describe('Activity Ecosystem — Registry & Official Activities', () => {
     const teacherOnly = registry.listByRole('teacher');
     // grouping + checkin are teacher-only
     expect(teacherOnly.length).toBeGreaterThan(0);
-    expect(teacherOnly.every((p) => p.descriptor.supportedRoles.includes('teacher') || p.descriptor.supportedRoles.includes('all'))).toBe(true);
+    expect(
+      teacherOnly.every(
+        (p) => p.descriptor.supportedRoles.includes('teacher') || p.descriptor.supportedRoles.includes('all'),
+      ),
+    ).toBe(true);
 
     const student = registry.listByRole('student');
     const ids = student.map((p) => p.descriptor.id);
@@ -115,7 +117,9 @@ describe('Activity Ecosystem — Lifecycle', () => {
   it('walks through register → initialize → start → pause → resume → finish → dispose', async () => {
     const registry = new ActivityRegistry();
     const ctx = makeContext();
-    const provider = new BaseActivityProvider({ descriptor: makeDescriptor('lifecycle_demo', { commandType: 'demo.run' }) });
+    const provider = new BaseActivityProvider({
+      descriptor: makeDescriptor('lifecycle_demo', { commandType: 'demo.run' }),
+    });
     registry.registerProvider(provider);
 
     expect(provider.state).toBe('registered');
@@ -154,7 +158,12 @@ describe('Activity Ecosystem — Lifecycle', () => {
     const ctx = makeContext();
     const commandBus = ctx._mocks.commandBus as MockCommandBus;
     let handled = false;
-    commandBus.registerHandler('demo.run', { execute: async (c: any) => { handled = true; return { ok: true, id: c.payload?.id }; } });
+    commandBus.registerHandler('demo.run', {
+      execute: async (c: any) => {
+        handled = true;
+        return { ok: true, id: c.payload?.id };
+      },
+    });
 
     const provider = new BaseActivityProvider({ descriptor: makeDescriptor('cmd_demo', { commandType: 'demo.run' }) });
     registry.registerProvider(provider);
@@ -171,7 +180,9 @@ describe('Activity Ecosystem — Lifecycle', () => {
     const registry = new ActivityRegistry();
     const ctx = makeContext();
     const commandBus = ctx._mocks.commandBus as MockCommandBus;
-    const provider = new BaseActivityProvider({ descriptor: makeDescriptor('opt_demo', { commandType: 'missing.cmd' }) });
+    const provider = new BaseActivityProvider({
+      descriptor: makeDescriptor('opt_demo', { commandType: 'missing.cmd' }),
+    });
     registry.registerProvider(provider);
     // Should NOT throw — only publishes activity.started.
     await expect(provider.start(ctx, {})).resolves.toBeUndefined();
@@ -184,7 +195,10 @@ describe('Activity Ecosystem — Lifecycle', () => {
     let called = false;
     const provider = new BaseActivityProvider({
       descriptor: makeDescriptor('hook_demo'),
-      onStart: async (_c, payload) => { called = true; return { echoed: payload }; },
+      onStart: async (_c, payload) => {
+        called = true;
+        return { echoed: payload };
+      },
     });
     registry.registerProvider(provider);
     const result = await provider.start(ctx, { v: 1 });
@@ -267,7 +281,10 @@ describe('Activity Ecosystem — Regression / Backward Compatibility', () => {
   it('keeps the official activity ids stable (consumer contract)', () => {
     const registry = new ActivityRegistry();
     registerOfficialActivities(registry);
-    const ids = registry.listProviders().map((p) => p.descriptor.id).sort();
+    const ids = registry
+      .listProviders()
+      .map((p) => p.descriptor.id)
+      .sort();
     expect(ids).toEqual([
       'official_assignment',
       'official_checkin',

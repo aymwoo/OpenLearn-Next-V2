@@ -3,10 +3,7 @@
  * Core invocation semantics: invoke, stream, cancel, retry, batch, schedule.
  */
 
-import {
-  InvocationRequest,
-  CapabilityResult,
-} from '../types/index.js';
+import { InvocationRequest, CapabilityResult } from '../types/index.js';
 import { CapabilityFrameworkRegistry } from '../registry/capability-framework-registry.js';
 import { CapabilityPipeline } from '../pipeline/capability-pipeline.js';
 import { CapabilityEventBus } from '../event/capability-event-bus.js';
@@ -17,11 +14,7 @@ export class InvocationEngine {
   private eventBus: CapabilityEventBus;
   private cancelledInvocations = new Set<string>();
 
-  constructor(
-    registry: CapabilityFrameworkRegistry,
-    pipeline: CapabilityPipeline,
-    eventBus: CapabilityEventBus
-  ) {
+  constructor(registry: CapabilityFrameworkRegistry, pipeline: CapabilityPipeline, eventBus: CapabilityEventBus) {
     this.registry = registry;
     this.pipeline = pipeline;
     this.eventBus = eventBus;

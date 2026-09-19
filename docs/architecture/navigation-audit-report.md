@@ -116,9 +116,9 @@ ctx.ui.registerExtensionPoint('teacher.tab', {
 ```tsx
 // src/App.tsx (L15-49) — PluginTabPanel Component
 function PluginTabPanel({ activeNavPlugin }: { activeNavPlugin: string | null }) {
-  const extensionPoints = usePluginHostStore(state => state.extensionPoints);
+  const extensionPoints = usePluginHostStore((state) => state.extensionPoints);
   const tabs = extensionPoints.get('teacher.tab' as any) || [];
-  const activeTab = tabs.find(t => t.pluginId === (activeNavPlugin || tabs[0]?.pluginId));
+  const activeTab = tabs.find((t) => t.pluginId === (activeNavPlugin || tabs[0]?.pluginId));
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -161,14 +161,14 @@ graph LR
     M6 --> Panel["Plugin Panel View"]
 ```
 
-| Missing Extension Feature | Target Navigation Area | Impact / Missing Functionality | Proposed API Signature |
-|---|---|---|---|
-| **Navigation Groups (`nav.group`)** | Left Sidebar Rail | Cannot group tabs into sections (e.g. "Teaching", "Admin", "Plugins"). | `group?: 'teaching' \| 'admin' \| 'extensions'` |
-| **Dynamic Badges (`nav.badge`)** | Left Sidebar Rail Tabs | Cannot show unread notifications or pending grading count on tab icons. | `badge?: () => number \| string` |
-| **Visibility Guard (`nav.visibility_guard`)** | All Navigation Tabs | Cannot restrict tab visibility declaratively by role or permission. | `rolesAllowed?: ('admin' \| 'teacher' \| 'student')[]` |
-| **User Menu Items (`nav.user_menu`)** | Top Header User Dropdown | Plugins cannot contribute items to the top-right user menu. | `slot: 'nav.user_menu', { id, label, onClick }` |
-| **Breadcrumb Provider (`nav.breadcrumb`)** | Top Header / Workspace | No unified breadcrumb bar for deep navigation paths (e.g. Course > Lesson > Activity). | `slot: 'nav.breadcrumb', { getPath() }` |
-| **Sub-route Routing (`nav.sub_routes`)** | Plugin Panel Interior | Plugin internal sub-tabs cannot hook into URL or platform tab router. | `routes?: { path: string, component }[]` |
+| Missing Extension Feature                     | Target Navigation Area   | Impact / Missing Functionality                                                         | Proposed API Signature                                 |
+| --------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **Navigation Groups (`nav.group`)**           | Left Sidebar Rail        | Cannot group tabs into sections (e.g. "Teaching", "Admin", "Plugins").                 | `group?: 'teaching' \| 'admin' \| 'extensions'`        |
+| **Dynamic Badges (`nav.badge`)**              | Left Sidebar Rail Tabs   | Cannot show unread notifications or pending grading count on tab icons.                | `badge?: () => number \| string`                       |
+| **Visibility Guard (`nav.visibility_guard`)** | All Navigation Tabs      | Cannot restrict tab visibility declaratively by role or permission.                    | `rolesAllowed?: ('admin' \| 'teacher' \| 'student')[]` |
+| **User Menu Items (`nav.user_menu`)**         | Top Header User Dropdown | Plugins cannot contribute items to the top-right user menu.                            | `slot: 'nav.user_menu', { id, label, onClick }`        |
+| **Breadcrumb Provider (`nav.breadcrumb`)**    | Top Header / Workspace   | No unified breadcrumb bar for deep navigation paths (e.g. Course > Lesson > Activity). | `slot: 'nav.breadcrumb', { getPath() }`                |
+| **Sub-route Routing (`nav.sub_routes`)**      | Plugin Panel Interior    | Plugin internal sub-tabs cannot hook into URL or platform tab router.                  | `routes?: { path: string, component }[]`               |
 
 ---
 
@@ -187,9 +187,15 @@ Navigation in `src/App.tsx` is tightly coupled to specific built-in business fea
 3. **Hardcoded Render Conditionals**:
    ```tsx
    // Hardcoded branch in App.tsx
-   {activeTab === 'timetable' && <TimetableManager />}
-   {activeTab === 'computer-lab' && <ComputerLabManager />}
-   {activeTab === 'semester-grades' && <SemesterGradeManager />}
+   {
+     activeTab === 'timetable' && <TimetableManager />;
+   }
+   {
+     activeTab === 'computer-lab' && <ComputerLabManager />;
+   }
+   {
+     activeTab === 'semester-grades' && <SemesterGradeManager />;
+   }
    ```
 
 ### Decoupling Strategy
@@ -204,15 +210,15 @@ All current navigation entries have been audited and categorized into a Core vs.
 
 ### Navigation Core vs. Plugin Matrix
 
-| Navigation Item | Current Status | Proposed Classification | Rationale |
-|---|---|---|---|
-| **App Shell Header & User Menu** | Hardcoded | 🏛️ **Core Platform** | System infrastructure and global identity. |
-| **Courseware Tab** | Hardcoded | 🔌 **Official Plugin** (`ext_courseware_hub`) | File asset management; should be registered via Navigation Provider. |
-| **Whiteboard Tab** | Hardcoded | 🏛️ **Core Platform** | Fundamental teaching canvas navigation. |
-| **Live Classroom Monitor Tab** | Hardcoded | 🏛️ **Core Platform** | Core real-time classroom orchestration. |
-| **Timetable Manager Tab** | Hardcoded | 🔌 **Official Plugin** (`prov_timetable`) | School schedule manager; should be a `teacher.tab` plugin. |
-| **Computer Lab Manager Tab** | Hardcoded | 🔌 **Official Plugin** (`prov_lab_manager`) | Lab station manager; should be a `teacher.tab` plugin. |
-| **Semester Grade Manager Tab** | Hardcoded | 🔌 **Official Plugin** (`prov_grade_manager`) | Grading analytics; should be a `teacher.tab` plugin. |
+| Navigation Item                  | Current Status | Proposed Classification                       | Rationale                                                            |
+| -------------------------------- | -------------- | --------------------------------------------- | -------------------------------------------------------------------- |
+| **App Shell Header & User Menu** | Hardcoded      | 🏛️ **Core Platform**                          | System infrastructure and global identity.                           |
+| **Courseware Tab**               | Hardcoded      | 🔌 **Official Plugin** (`ext_courseware_hub`) | File asset management; should be registered via Navigation Provider. |
+| **Whiteboard Tab**               | Hardcoded      | 🏛️ **Core Platform**                          | Fundamental teaching canvas navigation.                              |
+| **Live Classroom Monitor Tab**   | Hardcoded      | 🏛️ **Core Platform**                          | Core real-time classroom orchestration.                              |
+| **Timetable Manager Tab**        | Hardcoded      | 🔌 **Official Plugin** (`prov_timetable`)     | School schedule manager; should be a `teacher.tab` plugin.           |
+| **Computer Lab Manager Tab**     | Hardcoded      | 🔌 **Official Plugin** (`prov_lab_manager`)   | Lab station manager; should be a `teacher.tab` plugin.               |
+| **Semester Grade Manager Tab**   | Hardcoded      | 🔌 **Official Plugin** (`prov_grade_manager`) | Grading analytics; should be a `teacher.tab` plugin.                 |
 
 ### Navigation Decoupling Priority Matrix
 

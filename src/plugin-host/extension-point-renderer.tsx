@@ -64,10 +64,7 @@ interface ErrorBoundaryState {
  * T-09-05: Each extension component is wrapped in its own ErrorBoundary instance,
  *          isolating crashes so one failed extension doesn't take down others.
  */
-class ExtensionErrorBoundary extends React.Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
+class ExtensionErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false };
   props: ErrorBoundaryProps;
 
@@ -113,10 +110,20 @@ export interface ExtensionPointRendererProps {
 /**
  * Wrapper component to support plugins using traditional DOM render function.
  */
-export function DOMExtensionWrapper({ ext, route, slotProps, slot }: { ext: any; route?: string; slotProps?: any; slot: string }) {
+export function DOMExtensionWrapper({
+  ext,
+  route,
+  slotProps,
+  slot,
+}: {
+  ext: any;
+  route?: string;
+  slotProps?: any;
+  slot: string;
+}) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const serializedProps = JSON.stringify(slotProps || {});
-  
+
   React.useEffect(() => {
     if (containerRef.current && typeof ext.render === 'function') {
       containerRef.current.innerHTML = '';
@@ -234,23 +241,18 @@ export function ExtensionPointRenderer({
               key={`${ext.pluginId}/${ext.id}`}
               onClick={() => slotProps?.setTeacherTab?.(tabValue)}
               className={`flex items-center gap-3 p-3 transition-colors text-sm font-medium rounded-xl ${
-                isActive
-                  ? 'bg-indigo-50 text-indigo-700 font-bold'
-                  : 'text-gray-600 hover:bg-gray-50'
+                isActive ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-600 hover:bg-gray-50'
               } ${slotProps?.mainNavCollapsed ? 'justify-center px-2' : ''}`}
               title={label}
             >
               <Puzzle size={20} className="shrink-0" />
-              <span className={slotProps?.mainNavCollapsed ? 'hidden' : 'hidden md:block'}>
-                {label}
-              </span>
+              <span className={slotProps?.mainNavCollapsed ? 'hidden' : 'hidden md:block'}>{label}</span>
             </button>
           );
         })}
       </>
     );
   }
-
 
   return (
     <>
@@ -265,11 +267,7 @@ export function ExtensionPointRenderer({
             key={`${ext.pluginId}/${ext.id}`}
             fallback={
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-                <p>
-                  {lang === 'zh'
-                    ? '扩展组件加载失败'
-                    : 'Extension failed to load'}
-                </p>
+                <p>{lang === 'zh' ? '扩展组件加载失败' : 'Extension failed to load'}</p>
               </div>
             }
           >
@@ -286,7 +284,12 @@ export function ExtensionPointRenderer({
                 <DOMExtensionWrapper
                   ext={ext}
                   route={ext.route || route}
-                  slotProps={{ lessonId: selectedLesson, classId: liveClassSelectedClassId, ...ext.slotProps, ...slotProps }}
+                  slotProps={{
+                    lessonId: selectedLesson,
+                    classId: liveClassSelectedClassId,
+                    ...ext.slotProps,
+                    ...slotProps,
+                  }}
                   slot={slot}
                 />
               )}

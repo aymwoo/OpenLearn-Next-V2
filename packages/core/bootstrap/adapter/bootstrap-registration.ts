@@ -50,5 +50,4 @@ export class BootstrapRegistration {
     // Pipeline in PlatformBuilder is instantiated with default standard stages.
     // Additional custom stages can be registered here if provided in adapter context.
   }
-
 }

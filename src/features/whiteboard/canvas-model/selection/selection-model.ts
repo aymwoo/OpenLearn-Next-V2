@@ -71,10 +71,7 @@ export class SelectionManager {
       const areaBottom = area.y + area.height;
 
       const intersects =
-        obj.position.x < areaRight &&
-        objRight > area.x &&
-        obj.position.y < areaBottom &&
-        objBottom > area.y;
+        obj.position.x < areaRight && objRight > area.x && obj.position.y < areaBottom && objBottom > area.y;
 
       if (intersects) {
         selectedIds.push(obj.id);

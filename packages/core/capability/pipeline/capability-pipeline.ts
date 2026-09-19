@@ -3,12 +3,7 @@
  * Standard 7-step pipeline: Request -> Validation -> Permission -> Context Injection -> Capability -> Result Transform -> Publish
  */
 
-import {
-  InvocationRequest,
-  CapabilityResult,
-  ICapabilityProviderHandler,
-  ResultType,
-} from '../types/index.js';
+import { InvocationRequest, CapabilityResult, ICapabilityProviderHandler, ResultType } from '../types/index.js';
 import { PermissionChecker } from './permission-checker.js';
 import { CapabilityEventBus } from '../event/capability-event-bus.js';
 
@@ -21,7 +16,7 @@ export class CapabilityPipeline {
 
   public async executePipeline(
     request: InvocationRequest,
-    handler: ICapabilityProviderHandler
+    handler: ICapabilityProviderHandler,
   ): Promise<CapabilityResult> {
     const startTime = Date.now();
     const desc = handler.descriptor;

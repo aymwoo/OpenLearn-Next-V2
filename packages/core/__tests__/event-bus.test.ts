@@ -32,9 +32,15 @@ describe('Platform Event Bus — publish & subscribe', () => {
   it('delivers to multiple subscribers', async () => {
     const bus = makeBus();
     const hits: string[] = [];
-    bus.subscribe('Test.Multi', () => { hits.push('a'); });
-    bus.subscribe('Test.Multi', () => { hits.push('b'); });
-    bus.subscribe('Test.Multi', () => { hits.push('c'); });
+    bus.subscribe('Test.Multi', () => {
+      hits.push('a');
+    });
+    bus.subscribe('Test.Multi', () => {
+      hits.push('b');
+    });
+    bus.subscribe('Test.Multi', () => {
+      hits.push('c');
+    });
     await bus.publish(bus.createEvent({ type: 'Test.Multi', source: 'test', payload: {} }));
     expect(hits.sort()).toEqual(['a', 'b', 'c']);
   });
@@ -42,7 +48,9 @@ describe('Platform Event Bus — publish & subscribe', () => {
   it('supports wildcard subscriptions', async () => {
     const bus = makeBus();
     let count = 0;
-    bus.subscribe('*', () => { count++; });
+    bus.subscribe('*', () => {
+      count++;
+    });
     await bus.publish(bus.createEvent({ type: 'Any.Type', source: 'test', payload: {} }));
     expect(count).toBe(1);
   });
@@ -52,9 +60,27 @@ describe('Platform Event Bus — priority & ordering', () => {
   it('dispatches higher-priority handlers first (deterministic via publishSync)', () => {
     const bus = makeBus();
     const order: string[] = [];
-    bus.subscribe('Test.Prio', () => { order.push('low'); }, { priority: 1 });
-    bus.subscribe('Test.Prio', () => { order.push('high'); }, { priority: 10 });
-    bus.subscribe('Test.Prio', () => { order.push('mid'); }, { priority: 5 });
+    bus.subscribe(
+      'Test.Prio',
+      () => {
+        order.push('low');
+      },
+      { priority: 1 },
+    );
+    bus.subscribe(
+      'Test.Prio',
+      () => {
+        order.push('high');
+      },
+      { priority: 10 },
+    );
+    bus.subscribe(
+      'Test.Prio',
+      () => {
+        order.push('mid');
+      },
+      { priority: 5 },
+    );
     bus.publishSync(bus.createEvent({ type: 'Test.Prio', source: 'test', payload: {} }));
     expect(order).toEqual(['high', 'mid', 'low']);
   });
@@ -62,8 +88,20 @@ describe('Platform Event Bus — priority & ordering', () => {
   it('uses `order` as a tie-breaker at equal priority', () => {
     const bus = makeBus();
     const order: string[] = [];
-    bus.subscribe('Test.Tie', () => { order.push('second'); }, { priority: 0, order: 2 });
-    bus.subscribe('Test.Tie', () => { order.push('first'); }, { priority: 0, order: 1 });
+    bus.subscribe(
+      'Test.Tie',
+      () => {
+        order.push('second');
+      },
+      { priority: 0, order: 2 },
+    );
+    bus.subscribe(
+      'Test.Tie',
+      () => {
+        order.push('first');
+      },
+      { priority: 0, order: 1 },
+    );
     bus.publishSync(bus.createEvent({ type: 'Test.Tie', source: 'test', payload: {} }));
     expect(order).toEqual(['first', 'second']);
   });
@@ -86,8 +124,13 @@ describe('Platform Event Bus — cancellation', () => {
   it('stops subsequent handlers once a handler cancels', () => {
     const bus = makeBus();
     const ran: string[] = [];
-    bus.subscribe('Test.Cancel', (ctx) => { ctx.cancel(); ran.push('first'); });
-    bus.subscribe('Test.Cancel', () => { ran.push('second'); });
+    bus.subscribe('Test.Cancel', (ctx) => {
+      ctx.cancel();
+      ran.push('first');
+    });
+    bus.subscribe('Test.Cancel', () => {
+      ran.push('second');
+    });
     const result = bus.publishSync(bus.createEvent({ type: 'Test.Cancel', source: 'test', payload: {} }));
     expect(ran).toEqual(['first']);
     expect(result.results.some((r) => r.status === 'cancelled')).toBe(true);
@@ -99,8 +142,12 @@ describe('Platform Event Bus — error isolation', () => {
   it('a failing handler does not terminate the platform', async () => {
     const bus = makeBus();
     const ran: string[] = [];
-    bus.subscribe('Test.Fail', () => { throw new Error('boom'); });
-    bus.subscribe('Test.Fail', () => { ran.push('survived'); });
+    bus.subscribe('Test.Fail', () => {
+      throw new Error('boom');
+    });
+    bus.subscribe('Test.Fail', () => {
+      ran.push('survived');
+    });
     const result = await bus.publish(bus.createEvent({ type: 'Test.Fail', source: 'test', payload: {} }));
     expect(ran).toEqual(['survived']);
     expect(result.failed).toBe(1);
@@ -109,11 +156,7 @@ describe('Platform Event Bus — error isolation', () => {
 
   it('enforces a per-handler timeout', async () => {
     const bus = makeBus();
-    bus.subscribe(
-      'Test.Timeout',
-      () => new Promise((resolve) => setTimeout(resolve, 60)),
-      { timeoutMs: 5 },
-    );
+    bus.subscribe('Test.Timeout', () => new Promise((resolve) => setTimeout(resolve, 60)), { timeoutMs: 5 });
     const result = await bus.publish(bus.createEvent({ type: 'Test.Timeout', source: 'test', payload: {} }));
     expect(result.results[0].status).toBe('timeout');
   });
@@ -123,9 +166,15 @@ describe('Platform Event Bus — filtered & once handlers', () => {
   it('skips handlers whose filter returns false', async () => {
     const bus = makeBus();
     let ran = false;
-    bus.subscribe('Test.Filter', () => { ran = true; }, {
-      filter: (ctx) => (ctx.payload as { allow?: boolean }).allow === true,
-    });
+    bus.subscribe(
+      'Test.Filter',
+      () => {
+        ran = true;
+      },
+      {
+        filter: (ctx) => (ctx.payload as { allow?: boolean }).allow === true,
+      },
+    );
     await bus.publish(bus.createEvent({ type: 'Test.Filter', source: 'test', payload: { allow: false } }));
     expect(ran).toBe(false);
     await bus.publish(bus.createEvent({ type: 'Test.Filter', source: 'test', payload: { allow: true } }));
@@ -135,7 +184,9 @@ describe('Platform Event Bus — filtered & once handlers', () => {
   it('removes a once handler after first invocation', async () => {
     const bus = makeBus();
     let count = 0;
-    bus.subscribeOnce('Test.Once', () => { count++; });
+    bus.subscribeOnce('Test.Once', () => {
+      count++;
+    });
     await bus.publish(bus.createEvent({ type: 'Test.Once', source: 'test', payload: {} }));
     await bus.publish(bus.createEvent({ type: 'Test.Once', source: 'test', payload: {} }));
     expect(count).toBe(1);
@@ -147,7 +198,9 @@ describe('Platform Event Bus — subscription lifecycle', () => {
   it('unsubscribes via the returned subscriber', async () => {
     const bus = makeBus();
     let count = 0;
-    const sub = bus.subscribe('Test.Unsub', () => { count++; });
+    const sub = bus.subscribe('Test.Unsub', () => {
+      count++;
+    });
     await bus.publish(bus.createEvent({ type: 'Test.Unsub', source: 'test', payload: {} }));
     sub.unsubscribe();
     await bus.publish(bus.createEvent({ type: 'Test.Unsub', source: 'test', payload: {} }));
@@ -189,8 +242,12 @@ describe('Platform Event Bus — regression: BootstrapPipeline integration', () 
     } as unknown as import('../bootstrap/pipeline/bootstrap-pipeline.js').BootstrapPipeline;
 
     const seen: string[] = [];
-    bus.subscribe('BootstrapStageStarted', (ctx) => { seen.push(ctx.type); });
-    bus.subscribe('BootstrapStageCompleted', (ctx) => { seen.push(ctx.type); });
+    bus.subscribe('BootstrapStageStarted', (ctx) => {
+      seen.push(ctx.type);
+    });
+    bus.subscribe('BootstrapStageCompleted', (ctx) => {
+      seen.push(ctx.type);
+    });
     bus.bridgeBootstrapPipeline(fakePipeline);
 
     expect(seen).toEqual(['BootstrapStageStarted', 'BootstrapStageCompleted']);
@@ -201,12 +258,22 @@ describe('Platform Event Bus — regression: capability-runtime seam', () => {
   it('forwards capability events from a CapabilityEventSource', () => {
     const bus = makeBus();
     const seen: string[] = [];
-    bus.subscribe('CapabilityRegistered', (ctx) => { seen.push((ctx.payload as { capabilityId: string }).capabilityId); });
-    bus.subscribe('CapabilityResolved', (ctx) => { seen.push((ctx.payload as { capabilityId: string }).capabilityId); });
+    bus.subscribe('CapabilityRegistered', (ctx) => {
+      seen.push((ctx.payload as { capabilityId: string }).capabilityId);
+    });
+    bus.subscribe('CapabilityResolved', (ctx) => {
+      seen.push((ctx.payload as { capabilityId: string }).capabilityId);
+    });
 
     const fakeCap = {
-      onCapabilityRegistered: (cb: (id: string) => void) => { cb('cap.a'); return () => {}; },
-      onCapabilityResolved: (cb: (id: string) => void) => { cb('cap.b'); return () => {}; },
+      onCapabilityRegistered: (cb: (id: string) => void) => {
+        cb('cap.a');
+        return () => {};
+      },
+      onCapabilityResolved: (cb: (id: string) => void) => {
+        cb('cap.b');
+        return () => {};
+      },
     };
     bus.bridgeCapabilityRuntime(fakeCap);
 

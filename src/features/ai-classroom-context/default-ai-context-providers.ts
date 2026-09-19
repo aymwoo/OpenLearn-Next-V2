@@ -9,7 +9,7 @@ export const createDefaultAIContextProvider = (
   id: string,
   name: string,
   key: string,
-  value: unknown
+  value: unknown,
 ): IAIContextProvider => ({
   id,
   name,
@@ -22,7 +22,7 @@ export const registerDefaultAIContextProviders = (registry: AIContextProviderReg
       lessonId: 'les_math_101',
       title: 'Advanced Calculus',
       stage: 'Teaching',
-    })
+    }),
   );
 
   registry.registerProvider(
@@ -30,27 +30,27 @@ export const registerDefaultAIContextProviders = (registry: AIContextProviderReg
       teacherId: 'tch_001',
       name: 'Prof. Alan Turing',
       status: 'Active',
-    })
+    }),
   );
 
   registry.registerProvider(
     createDefaultAIContextProvider('provider_ai_students', 'AI Students Provider', 'students', [
       { studentId: 'stu_01', name: 'Alice', online: true },
       { studentId: 'stu_02', name: 'Bob', online: true },
-    ])
+    ]),
   );
 
   registry.registerProvider(
     createDefaultAIContextProvider('provider_ai_whiteboard', 'AI Whiteboard Provider', 'whiteboard', {
       elementCount: 12,
       activeTool: 'tool_pen',
-    })
+    }),
   );
 
   registry.registerProvider(
     createDefaultAIContextProvider('provider_ai_analytics', 'AI Analytics Provider', 'analyticsSummary', {
       totalInteractions: 128,
       averageEngagementScore: 94.8,
-    })
+    }),
   );
 };

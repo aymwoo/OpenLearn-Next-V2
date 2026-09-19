@@ -192,9 +192,7 @@ export class Kernel {
       ['distributionManager', this.pluginDistributionManager],
     ]);
     try {
-      PlatformCompositionRoot.create()
-        .registerModule(new PluginCompositionModule())
-        .compose({ infrastructureRefs });
+      PlatformCompositionRoot.create().registerModule(new PluginCompositionModule()).compose({ infrastructureRefs });
     } catch (e) {
       console.warn('[P7-A2] Plugin composition failed (non-fatal):', (e as Error).message);
     }
@@ -223,24 +221,31 @@ export class Kernel {
     this.serviceRegistry.register(IPointsDimensionRegistryToken, new PointsDimensionRegistry());
     this.serviceRegistry.register(IPointsLedgerServiceToken, new PointsLedgerService(this.db as any));
     this.serviceRegistry.register(ILessonEngineServiceToken, { getRuntime: async () => this.lessonRuntime } as any);
-    this.serviceRegistry.register(IClassroomRuntimeServiceToken, { getRuntimeKernel: async () => this.classroomRuntime } as any);
-    this.serviceRegistry.register(IPresenceEngineServiceToken, { getPresenceEngine: async () => this.presenceEngine } as any);
-    this.serviceRegistry.register(ITeachingCollaborationServiceToken, { getCollaborationEngine: async () => this.collaborationEngine } as any);
-    this.serviceRegistry.register(ILearningAnalyticsServiceToken, { getAnalyticsEngine: async () => this.analyticsEngine } as any);
-    this.serviceRegistry.register(IAICapabilityServiceToken, { getCapabilityKernel: async () => this.aiCapability } as any);
-    this.serviceRegistry.register(ICapabilityRuntimeServiceToken, { getRuntimeKernel: async () => this.capabilityFrameworkRuntime } as any);
-    this.serviceRegistry.register(ICapabilityGovernanceServiceToken, { getGovernanceKernel: async () => this.capabilityGovernance } as any);
-    this.serviceRegistry.register(IPlatformServiceRegistryToken, { getServiceRegistryKernel: async () => this.platformServiceRegistryKernel } as any);
+    this.serviceRegistry.register(IClassroomRuntimeServiceToken, {
+      getRuntimeKernel: async () => this.classroomRuntime,
+    } as any);
+    this.serviceRegistry.register(IPresenceEngineServiceToken, {
+      getPresenceEngine: async () => this.presenceEngine,
+    } as any);
+    this.serviceRegistry.register(ITeachingCollaborationServiceToken, {
+      getCollaborationEngine: async () => this.collaborationEngine,
+    } as any);
+    this.serviceRegistry.register(ILearningAnalyticsServiceToken, {
+      getAnalyticsEngine: async () => this.analyticsEngine,
+    } as any);
+    this.serviceRegistry.register(IAICapabilityServiceToken, {
+      getCapabilityKernel: async () => this.aiCapability,
+    } as any);
+    this.serviceRegistry.register(ICapabilityRuntimeServiceToken, {
+      getRuntimeKernel: async () => this.capabilityFrameworkRuntime,
+    } as any);
+    this.serviceRegistry.register(ICapabilityGovernanceServiceToken, {
+      getGovernanceKernel: async () => this.capabilityGovernance,
+    } as any);
+    this.serviceRegistry.register(IPlatformServiceRegistryToken, {
+      getServiceRegistryKernel: async () => this.platformServiceRegistryKernel,
+    } as any);
     this.serviceRegistry.register(IAuthSessionBridgeToken, new AuthSessionBridgeService(this.db as any));
-
-
-
-
-
-
-
-
-
 
     // Capability check interceptor
     this.commandBus.setInterceptor(async (command) => {
@@ -250,28 +255,37 @@ export class Kernel {
         if (action.inputSchema) {
           const errors = validateJsonSchema(command.payload, action.inputSchema);
           if (errors.length > 0) {
-            throw new Error(`[PayloadValidationError] Invalid command payload for ${command.type}: ${errors.join('; ')}`);
+            throw new Error(
+              `[PayloadValidationError] Invalid command payload for ${command.type}: ${errors.join('; ')}`,
+            );
           }
         }
-        const isAdmin = command.actorId === 'role:administrator' || 
-                        command.actorId === 'admin' ||
-                        command.actorId === 'usr_admin' ||
-                        command.actorId === 'admin-demo' ||
-                        command.actorId?.endsWith(':administrator') || 
-                        command.actorId?.endsWith(':admin');
+        const isAdmin =
+          command.actorId === 'role:administrator' ||
+          command.actorId === 'admin' ||
+          command.actorId === 'usr_admin' ||
+          command.actorId === 'admin-demo' ||
+          command.actorId?.endsWith(':administrator') ||
+          command.actorId?.endsWith(':admin');
 
         if (action.capabilityRequired && !isAdmin) {
           const allowed = this.capabilityGuard.check(command.actorId, action.capabilityRequired);
           if (!allowed) {
-            throw new Error(`[CapabilityGuard] Access Denied: Actor ${command.actorId} missing capability ${action.capabilityRequired} for ${command.type}`);
+            throw new Error(
+              `[CapabilityGuard] Access Denied: Actor ${command.actorId} missing capability ${action.capabilityRequired} for ${command.type}`,
+            );
           }
         }
 
         if (action.isHighRisk && command.metadata?.approved !== true) {
           if (isAdmin) {
-            console.log(`[Security] Command ${command.type} initiated by Administrator (${command.actorId}). Bypassing human approval.`);
+            console.log(
+              `[Security] Command ${command.type} initiated by Administrator (${command.actorId}). Bypassing human approval.`,
+            );
           } else {
-            const stmt = this.db.prepare('INSERT INTO pending_commands (id, command_type, payload, actor_id, created_at) VALUES (?, ?, ?, ?, ?)');
+            const stmt = this.db.prepare(
+              'INSERT INTO pending_commands (id, command_type, payload, actor_id, created_at) VALUES (?, ?, ?, ?, ?)',
+            );
             stmt.run(command.id, command.type, JSON.stringify(command.payload), command.actorId, Date.now());
 
             this.eventBus.publish({
@@ -280,22 +294,26 @@ export class Kernel {
               source: 'kernel.security',
               payload: { commandId: command.id, commandType: command.type },
               timestamp: Date.now(),
-              correlationId: command.id
+              correlationId: command.id,
             });
 
-            throw new Error(`[Security] Command ${command.type} requires human approval. It has been queued to pending actions.`);
+            throw new Error(
+              `[Security] Command ${command.type} requires human approval. It has been queued to pending actions.`,
+            );
           }
         }
       }
     });
 
     // v5.1: 注册插件共享模块（ctx.require 白名单）
-    import('../plugin-host/context-builder.js').then(m => m.bootstrapSharedModules()).catch(err => {
-      console.warn('[Kernel] Failed to bootstrap shared modules:', err.message);
-    });
+    import('../plugin-host/context-builder.js')
+      .then((m) => m.bootstrapSharedModules())
+      .catch((err) => {
+        console.warn('[Kernel] Failed to bootstrap shared modules:', err.message);
+      });
 
     // Auto-bootstrap system critical plugins (VFS, Process) - Wave 1 (Phase 8)
-    this.ready = this.bootstrapSystemPlugins().catch(err => {
+    this.ready = this.bootstrapSystemPlugins().catch((err) => {
       console.error('[Kernel] Critical system plugin bootstrap failed:', err);
       process.exit(1); // Hard crash
     });
@@ -306,7 +324,7 @@ export class Kernel {
       try {
         const hotReload = new HotReloadController(this.pluginHost, watchDir);
         this.pluginHost.setHotReloadController(hotReload);
-        hotReload.start().catch(err => {
+        hotReload.start().catch((err) => {
           console.warn('[Kernel] Hot reload initialization failed:', err.message);
         });
       } catch (err) {
@@ -325,29 +343,40 @@ export class Kernel {
       { id: '@openlearn/plugin-management', mod: ManagementPlugin, name: 'LMS Management Plugin', critical: true },
       { id: '@openlearn/plugin-builtin', mod: BuiltinPlugin, name: 'Classroom Builtin Plugin', critical: true },
       { id: '@openlearn/plugin-ai-planner', mod: AiPlannerPlugin, name: 'AI Planner Plugin', critical: false },
-      { id: '@openlearn/plugin-ai-submit-injector', mod: AiSubmitInjectorPlugin, name: 'AI Submit Injector Plugin', critical: false },
-      { id: '@openlearn/plugin-assignment-eval', mod: AssignmentEvalPlugin, name: 'Assignment Evaluation and Peer Review Plugin', critical: false }
+      {
+        id: '@openlearn/plugin-ai-submit-injector',
+        mod: AiSubmitInjectorPlugin,
+        name: 'AI Submit Injector Plugin',
+        critical: false,
+      },
+      {
+        id: '@openlearn/plugin-assignment-eval',
+        mod: AssignmentEvalPlugin,
+        name: 'Assignment Evaluation and Peer Review Plugin',
+        critical: false,
+      },
     ];
 
     for (const plugin of systemPlugins) {
       try {
-        let row = this.db.prepare('SELECT id FROM plugins WHERE id = ?')
-          .get(plugin.id) as { id: string } | undefined;
-        
+        let row = this.db.prepare('SELECT id FROM plugins WHERE id = ?').get(plugin.id) as { id: string } | undefined;
+
         if (!row) {
-          this.db.prepare(
-            'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-          ).run(
-            plugin.id,
-            plugin.name,
-            JSON.stringify(plugin.mod.manifest),
-            '',    // source_code: system plugins are preloaded in-memory
-            null,  // file_path: system plugins have no file
-            'installed',
-            Date.now(),
-            'esm',
-            'inline'
-          );
+          this.db
+            .prepare(
+              'INSERT INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            )
+            .run(
+              plugin.id,
+              plugin.name,
+              JSON.stringify(plugin.mod.manifest),
+              '', // source_code: system plugins are preloaded in-memory
+              null, // file_path: system plugins have no file
+              'installed',
+              Date.now(),
+              'esm',
+              'inline',
+            );
         }
 
         // Register in PluginHost's preloadedPlugins map
@@ -380,9 +409,9 @@ export class Kernel {
    * Phase 7: 将 DB 中存有 source_code 的旧插件迁移到文件系统（幂等）
    */
   private async migratePluginsToFilesystem(): Promise<void> {
-    const plugins = this.db.prepare(
-      "SELECT id, source_code, manifest FROM plugins WHERE source_code != '' AND source_code IS NOT NULL",
-    ).all() as Array<{ id: string; source_code: string; manifest: string }>;
+    const plugins = this.db
+      .prepare("SELECT id, source_code, manifest FROM plugins WHERE source_code != '' AND source_code IS NOT NULL")
+      .all() as Array<{ id: string; source_code: string; manifest: string }>;
 
     if (plugins.length === 0) return;
 
@@ -396,8 +425,7 @@ export class Kernel {
 
       // 跳过已迁移的（文件已存在）
       if (fs.existsSync(indexPath)) {
-        this.db.prepare('UPDATE plugins SET source_code = ?, file_path = ? WHERE id = ?')
-          .run('', indexPath, p.id);
+        this.db.prepare('UPDATE plugins SET source_code = ?, file_path = ? WHERE id = ?').run('', indexPath, p.id);
         continue;
       }
 
@@ -407,8 +435,7 @@ export class Kernel {
         if (!fs.existsSync(manifestPath)) {
           fs.writeFileSync(manifestPath, p.manifest, 'utf-8');
         }
-        this.db.prepare('UPDATE plugins SET source_code = ?, file_path = ? WHERE id = ?')
-          .run('', indexPath, p.id);
+        this.db.prepare('UPDATE plugins SET source_code = ?, file_path = ? WHERE id = ?').run('', indexPath, p.id);
         console.log(`[Migration] Plugin "${p.id}" migrated to ${indexPath}`);
       } catch (err) {
         console.error(`[Migration] Failed to migrate plugin "${p.id}":`, err);
@@ -422,7 +449,7 @@ export class Kernel {
   public initAuditLog() {
     this.eventBus.subscribe('*', (event) => {
       const stmt = this.db.prepare(
-        'INSERT INTO events (id, type, source, payload, timestamp, correlationId) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO events (id, type, source, payload, timestamp, correlationId) VALUES (?, ?, ?, ?, ?, ?)',
       );
       stmt.run(
         event.id,
@@ -430,7 +457,7 @@ export class Kernel {
         event.source,
         JSON.stringify(event.payload),
         event.timestamp,
-        event.correlationId || null
+        event.correlationId || null,
       );
     });
   }
@@ -452,7 +479,7 @@ export const kernelContainer = new Proxy({} as Kernel, {
       _kernelContainer.initAuditLog();
     }
     return Reflect.set(_kernelContainer, prop, value, receiver);
-  }
+  },
 });
 
 // Recursive JSON Schema Validator Helper
@@ -466,7 +493,7 @@ function validateJsonSchema(data: any, schema: any): string[] {
       errors.push(`Expected object, got ${typeof data}`);
       return errors;
     }
-    
+
     // Check required properties
     if (schema.required && Array.isArray(schema.required)) {
       for (const req of schema.required) {
@@ -475,7 +502,7 @@ function validateJsonSchema(data: any, schema: any): string[] {
         }
       }
     }
-    
+
     // Check properties
     if (schema.properties && typeof schema.properties === 'object') {
       for (const key in schema.properties) {
@@ -514,6 +541,6 @@ function validateJsonSchema(data: any, schema: any): string[] {
       errors.push(`Expected boolean, got ${typeof data}`);
     }
   }
-  
+
   return errors;
 }

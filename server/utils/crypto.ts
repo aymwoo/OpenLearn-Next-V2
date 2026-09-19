@@ -54,7 +54,7 @@ function getEncryptionKey(): Buffer {
         // 留空并继续走 in-memory fallback —— 启动会进入降级模式但不会损坏现有密文。
         console.warn(
           '[Crypto] ENCRYPTION_KEY missing/empty in .env; NOT overwriting existing entry. ' +
-          'Generating ephemeral in-memory key — please set ENCRYPTION_KEY manually before relying on encrypted storage.'
+            'Generating ephemeral in-memory key — please set ENCRYPTION_KEY manually before relying on encrypted storage.',
         );
         process.env.ENCRYPTION_KEY = newKey;
         _encryptionKey = Buffer.from(newKey, 'hex');
@@ -123,5 +123,5 @@ const PROMPT_INJECTION_PATTERNS = [
 ];
 
 export function detectPromptInjection(input: string): boolean {
-  return PROMPT_INJECTION_PATTERNS.some(p => p.test(input));
+  return PROMPT_INJECTION_PATTERNS.some((p) => p.test(input));
 }

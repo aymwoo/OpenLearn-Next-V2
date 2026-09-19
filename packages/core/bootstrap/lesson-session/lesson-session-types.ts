@@ -3,14 +3,7 @@
  */
 
 export type LessonSessionState =
-  | 'Created'
-  | 'Preparing'
-  | 'Running'
-  | 'Paused'
-  | 'Resuming'
-  | 'Completed'
-  | 'Archived'
-  | 'Disposed';
+  'Created' | 'Preparing' | 'Running' | 'Paused' | 'Resuming' | 'Completed' | 'Archived' | 'Disposed';
 
 export interface LessonSessionContext {
   readonly sessionId: string;

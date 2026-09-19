@@ -24,11 +24,7 @@ export class PluginCapability implements IPluginCapability {
     this.logger = logger;
   }
 
-  public async invokeAI(
-    pluginId: string,
-    prompt: string,
-    options?: Record<string, unknown>
-  ): Promise<string> {
+  public async invokeAI(pluginId: string, prompt: string, options?: Record<string, unknown>): Promise<string> {
     const startTime = Date.now();
     try {
       const result = await this.runtimeKernel.providerGateway.generateText(prompt, {

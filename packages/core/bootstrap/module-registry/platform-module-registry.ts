@@ -3,11 +3,7 @@
  * Central discovery and registration catalog for platform-level modules.
  */
 
-import {
-  PlatformModuleDescriptor,
-  ModuleStatus,
-  ModuleHealth,
-} from './module-registry-types.js';
+import { PlatformModuleDescriptor, ModuleStatus, ModuleHealth } from './module-registry-types.js';
 
 export class PlatformModuleRegistry {
   private _modules = new Map<string, PlatformModuleDescriptor>();

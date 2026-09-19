@@ -6,10 +6,7 @@
 import { AIToolSchema, ToolExecutionResult } from '../types/index.js';
 import { AIEventBus } from '../event/ai-event-bus.js';
 
-export type ToolExecutor = (
-  toolName: string,
-  args: Record<string, unknown>
-) => Promise<unknown>;
+export type ToolExecutor = (toolName: string, args: Record<string, unknown>) => Promise<unknown>;
 
 export class ToolRegistry {
   private tools = new Map<string, AIToolSchema>();
@@ -38,14 +35,14 @@ export class ToolRegistry {
       Array.from(this.tools.values()).map((schema) => ({
         type: 'function' as const,
         function: schema,
-      }))
+      })),
     );
   }
 
   public async executeTool(
     toolName: string,
     args: Record<string, unknown>,
-    fallbackExecutor?: ToolExecutor
+    fallbackExecutor?: ToolExecutor,
   ): Promise<ToolExecutionResult> {
     const executor = this.executors.get(toolName) || fallbackExecutor;
     if (!executor) {

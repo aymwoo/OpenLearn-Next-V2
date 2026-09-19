@@ -68,10 +68,10 @@ export const BuiltinPlugin = {
         type: 'OBJECT',
         properties: {
           title: { type: 'STRING', description: '课程标题' },
-          content: { type: 'STRING', description: '课程的初始 Markdown 内容，请生成一段简短的介绍或教学大纲' }
+          content: { type: 'STRING', description: '课程的初始 Markdown 内容，请生成一段简短的介绍或教学大纲' },
         },
-        required: ['title', 'content']
-      }
+        required: ['title', 'content'],
+      },
     });
 
     await commandBus.registerHandler(createLessonCmdType, {
@@ -79,11 +79,14 @@ export const BuiltinPlugin = {
         const payload = command.payload as any;
         const lessonId = uuidv7();
         const rawCreatorId = payload.creatorId || command.actorId || 'admin';
-        const creatorId = typeof rawCreatorId === 'string' && rawCreatorId.startsWith('user:')
-          ? rawCreatorId.split(':')[1]
-          : rawCreatorId;
-        
-        const stmt = db.prepare('INSERT INTO lessons (id, title, content, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
+        const creatorId =
+          typeof rawCreatorId === 'string' && rawCreatorId.startsWith('user:')
+            ? rawCreatorId.split(':')[1]
+            : rawCreatorId;
+
+        const stmt = db.prepare(
+          'INSERT INTO lessons (id, title, content, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        );
         stmt.run(lessonId, payload.title, payload.content || '', creatorId, Date.now(), Date.now());
 
         await eventBus.publish({
@@ -92,11 +95,11 @@ export const BuiltinPlugin = {
           source: 'builtin.lesson',
           payload: { id: lessonId, title: payload.title, creatorId },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { lessonId };
-      }
+      },
     });
 
     // 1.5 LESSON UPDATE HANDLER
@@ -110,10 +113,10 @@ export const BuiltinPlugin = {
         type: 'OBJECT',
         properties: {
           lessonId: { type: 'STRING', description: '要更新的课程 ID' },
-          content: { type: 'STRING', description: '课程的新 Markdown 内容' }
+          content: { type: 'STRING', description: '课程的新 Markdown 内容' },
         },
-        required: ['lessonId', 'content']
-      }
+        required: ['lessonId', 'content'],
+      },
     });
 
     await commandBus.registerHandler(updateLessonCmdType, {
@@ -128,11 +131,11 @@ export const BuiltinPlugin = {
           source: 'builtin.lesson',
           payload: { id: payload.lessonId },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { lessonId: payload.lessonId };
-      }
+      },
     });
 
     // 1.6 LESSON UPDATE TIMELINE HANDLER
@@ -146,10 +149,10 @@ export const BuiltinPlugin = {
         type: 'OBJECT',
         properties: {
           lessonId: { type: 'STRING', description: '要更新的课程 ID' },
-          timeline: { type: 'STRING', description: '环节时间线的 JSON 字符串或数组' }
+          timeline: { type: 'STRING', description: '环节时间线的 JSON 字符串或数组' },
         },
-        required: ['lessonId', 'timeline']
-      }
+        required: ['lessonId', 'timeline'],
+      },
     });
 
     await commandBus.registerHandler(updateTimelineCmdType, {
@@ -173,11 +176,11 @@ export const BuiltinPlugin = {
           source: 'builtin.lesson',
           payload: { id: payload.lessonId, timeline: timelineStr },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { lessonId: payload.lessonId, success: true };
-      }
+      },
     });
 
     // 1.7 LESSON ADD TIMELINE SEGMENT HANDLER
@@ -196,10 +199,10 @@ export const BuiltinPlugin = {
           type: { type: 'STRING', description: '活动类型（lecture、practice、quiz、break）' },
           notes: { type: 'STRING', description: '可选的环节教学指导、提示或白板指令' },
           color: { type: 'STRING', description: '可选的 Tailwind 背景边框类名或颜色名' },
-          index: { type: 'INTEGER', description: '插入的位置索引（可选，默认为末尾追加）' }
+          index: { type: 'INTEGER', description: '插入的位置索引（可选，默认为末尾追加）' },
         },
-        required: ['lessonId', 'title', 'duration', 'type']
-      }
+        required: ['lessonId', 'title', 'duration', 'type'],
+      },
     });
 
     await commandBus.registerHandler(addSegmentCmdType, {
@@ -226,14 +229,18 @@ export const BuiltinPlugin = {
           duration: payload.duration,
           type: payload.type,
           notes: payload.notes || '',
-          color: payload.color || 'bg-indigo-50 border-indigo-200 text-indigo-700'
+          color: payload.color || 'bg-indigo-50 border-indigo-200 text-indigo-700',
         };
 
         const insertIndex = typeof payload.index === 'number' ? payload.index : segments.length;
         segments.splice(insertIndex, 0, newSegment);
 
         const timelineStr = JSON.stringify(segments);
-        db.prepare('UPDATE lessons SET timeline = ?, updated_at = ? WHERE id = ?').run(timelineStr, Date.now(), payload.lessonId);
+        db.prepare('UPDATE lessons SET timeline = ?, updated_at = ? WHERE id = ?').run(
+          timelineStr,
+          Date.now(),
+          payload.lessonId,
+        );
 
         await eventBus.publish({
           id: uuidv7(),
@@ -241,11 +248,11 @@ export const BuiltinPlugin = {
           source: 'builtin.lesson',
           payload: { id: payload.lessonId, timeline: timelineStr },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { lessonId: payload.lessonId, segment: newSegment, success: true };
-      }
+      },
     });
 
     // 1.75 LESSON REMOVE TIMELINE SEGMENT HANDLER
@@ -260,10 +267,10 @@ export const BuiltinPlugin = {
         properties: {
           lessonId: { type: 'STRING', description: '要编辑的课程 ID' },
           segmentId: { type: 'STRING', description: '要删除的环节 ID（如未提供索引则必填）' },
-          index: { type: 'INTEGER', description: '要删除的环节位置索引（如未提供 segmentId 则必填）' }
+          index: { type: 'INTEGER', description: '要删除的环节位置索引（如未提供 segmentId 则必填）' },
         },
-        required: ['lessonId']
-      }
+        required: ['lessonId'],
+      },
     });
 
     await commandBus.registerHandler(removeSegmentCmdType, {
@@ -287,8 +294,8 @@ export const BuiltinPlugin = {
         let deletedSegment: any = null;
         if (payload.segmentId) {
           const initialLen = segments.length;
-          deletedSegment = segments.find(s => s.id === payload.segmentId);
-          segments = segments.filter(s => s.id !== payload.segmentId);
+          deletedSegment = segments.find((s) => s.id === payload.segmentId);
+          segments = segments.filter((s) => s.id !== payload.segmentId);
           if (segments.length === initialLen) {
             throw new Error(`Segment with ID ${payload.segmentId} was not found in lesson timeline`);
           }
@@ -303,7 +310,11 @@ export const BuiltinPlugin = {
         }
 
         const timelineStr = JSON.stringify(segments);
-        db.prepare('UPDATE lessons SET timeline = ?, updated_at = ? WHERE id = ?').run(timelineStr, Date.now(), payload.lessonId);
+        db.prepare('UPDATE lessons SET timeline = ?, updated_at = ? WHERE id = ?').run(
+          timelineStr,
+          Date.now(),
+          payload.lessonId,
+        );
 
         await eventBus.publish({
           id: uuidv7(),
@@ -311,11 +322,11 @@ export const BuiltinPlugin = {
           source: 'builtin.lesson',
           payload: { id: payload.lessonId, timeline: timelineStr },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { lessonId: payload.lessonId, deletedSegment, success: true };
-      }
+      },
     });
 
     // 1.8 LESSON DELETE HANDLER
@@ -329,10 +340,10 @@ export const BuiltinPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING', description: '要删除的课程 ID' }
+          lessonId: { type: 'STRING', description: '要删除的课程 ID' },
         },
-        required: ['lessonId']
-      }
+        required: ['lessonId'],
+      },
     });
 
     await commandBus.registerHandler(deleteLessonCmdType, {
@@ -340,7 +351,7 @@ export const BuiltinPlugin = {
         const payload = command.payload as any;
         const stmt = db.prepare('DELETE FROM lessons WHERE id = ?');
         stmt.run(payload.lessonId);
-        
+
         db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(payload.lessonId);
 
         await eventBus.publish({
@@ -349,11 +360,11 @@ export const BuiltinPlugin = {
           source: 'builtin.lesson',
           payload: { id: payload.lessonId },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { success: true };
-      }
+      },
     });
 
     // 2. WHITEBOARD HANDLER
@@ -361,32 +372,47 @@ export const BuiltinPlugin = {
     // 前端 renderElement 支持的元素类型白名单。
     // AI Agent 若使用不在列表中的 type，将被拒绝并引导至专用工具。
     const KNOWN_ELEMENT_TYPES = [
-      'pen', 'highlighter',          // 自由绘制
-      'rectangle', 'circle',         // 几何形状
-      'text',                        // 文本
-      'quiz', 'rollcall', 'timer',   // 课堂互动（timer 为倒计时组件）
-      'assignment',                  // 作业
-      'hello-world', 'html-applet', 'code-sandbox', 'math-graph', 'presentation', 'plugin', // 小组件
+      'pen',
+      'highlighter', // 自由绘制
+      'rectangle',
+      'circle', // 几何形状
+      'text', // 文本
+      'quiz',
+      'rollcall',
+      'timer', // 课堂互动（timer 为倒计时组件）
+      'assignment', // 作业
+      'hello-world',
+      'html-applet',
+      'code-sandbox',
+      'math-graph',
+      'presentation',
+      'plugin', // 小组件
     ];
     await actionRegistry.register({
       id: 'core-whiteboard-draw',
       commandType: drawWhiteboardCmdType,
-      description: '在课程白板上绘制基础图形或文本。'
-        + ' 支持：rectangle, circle, text, pen, highlighter。'
-        + ' ⚠️ 创建测验请用 quiz.create 或 quiz_pro.create（自动处理题型格式）。'
-        + ' 创建点名请用 rollcall 相关工具。',
+      description:
+        '在课程白板上绘制基础图形或文本。' +
+        ' 支持：rectangle, circle, text, pen, highlighter。' +
+        ' ⚠️ 创建测验请用 quiz.create 或 quiz_pro.create（自动处理题型格式）。' +
+        ' 创建点名请用 rollcall 相关工具。',
       capabilityRequired: 'whiteboard:write',
       inputSchema: {
         type: 'OBJECT',
         properties: {
           lessonId: { type: 'STRING', description: '课程 ID' },
-          type: { type: 'STRING', description: '元素类型。基础图形/文本直接使用；quiz/rollcall 请用专用工具。已知：' + KNOWN_ELEMENT_TYPES.filter(t => !['quiz', 'rollcall', 'assignment'].includes(t)).join(', ') },
+          type: {
+            type: 'STRING',
+            description:
+              '元素类型。基础图形/文本直接使用；quiz/rollcall 请用专用工具。已知：' +
+              KNOWN_ELEMENT_TYPES.filter((t) => !['quiz', 'rollcall', 'assignment'].includes(t)).join(', '),
+          },
           data: { type: 'STRING', description: '元素配置的 JSON 字符串' },
           segmentId: { type: 'STRING', description: '关联的课堂环节 ID（可选）' },
-          page: { type: 'NUMBER', description: '元素所属页码（可选，默认 0）' }
+          page: { type: 'NUMBER', description: '元素所属页码（可选，默认 0）' },
         },
-        required: ['lessonId', 'type', 'data']
-      }
+        required: ['lessonId', 'type', 'data'],
+      },
     });
 
     await commandBus.registerHandler(drawWhiteboardCmdType, {
@@ -395,10 +421,12 @@ export const BuiltinPlugin = {
 
         // 类型白名单校验：拒绝未知类型，引导调用方使用正确工具
         if (!KNOWN_ELEMENT_TYPES.includes(payload.type)) {
-          const hint = payload.type === 'quiz' ? ''
-            : (payload.type && (payload.type.includes('quiz') || payload.type.includes('question'))
-              ? ` 提示：创建测验请使用 quiz.create 或 quiz_pro.create 工具。`
-              : ` 已知类型：${KNOWN_ELEMENT_TYPES.join(', ')}。`);
+          const hint =
+            payload.type === 'quiz'
+              ? ''
+              : payload.type && (payload.type.includes('quiz') || payload.type.includes('question'))
+                ? ` 提示：创建测验请使用 quiz.create 或 quiz_pro.create 工具。`
+                : ` 已知类型：${KNOWN_ELEMENT_TYPES.join(', ')}。`;
           throw new Error(`不支持的元素类型 "${payload.type}"。${hint}`);
         }
 
@@ -425,7 +453,9 @@ export const BuiltinPlugin = {
           // 如果 data 不是合法 JSON，保持原样存入
         }
 
-        const stmt = db.prepare('INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)');
+        const stmt = db.prepare(
+          'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
+        );
         stmt.run(elementId, payload.lessonId, payload.type, dataStr, Date.now());
 
         await eventBus.publish({
@@ -434,11 +464,11 @@ export const BuiltinPlugin = {
           source: 'builtin.whiteboard',
           payload: { elementId, lessonId: payload.lessonId, type: payload.type },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { elementId };
-      }
+      },
     });
 
     // 3. WHITEBOARD UPDATE HANDLER
@@ -453,10 +483,10 @@ export const BuiltinPlugin = {
         properties: {
           lessonId: { type: 'STRING', description: '课程 ID' },
           elementId: { type: 'STRING', description: '元素 ID' },
-          data: { type: 'STRING', description: '元素配置的新 JSON 字符串' }
+          data: { type: 'STRING', description: '元素配置的新 JSON 字符串' },
         },
-        required: ['lessonId', 'elementId', 'data']
-      }
+        required: ['lessonId', 'elementId', 'data'],
+      },
     });
 
     await commandBus.registerHandler(updateWhiteboardCmdType, {
@@ -471,11 +501,11 @@ export const BuiltinPlugin = {
           source: 'builtin.whiteboard',
           payload: { elementId: payload.elementId, lessonId: payload.lessonId },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { success: true };
-      }
+      },
     });
 
     // 4. WHITEBOARD DELETE HANDLER
@@ -489,10 +519,10 @@ export const BuiltinPlugin = {
         type: 'OBJECT',
         properties: {
           lessonId: { type: 'STRING', description: 'ID of the lesson' },
-          elementId: { type: 'STRING', description: 'ID of the element' }
+          elementId: { type: 'STRING', description: 'ID of the element' },
         },
-        required: ['lessonId', 'elementId']
-      }
+        required: ['lessonId', 'elementId'],
+      },
     });
 
     await commandBus.registerHandler(deleteWhiteboardCmdType, {
@@ -507,11 +537,11 @@ export const BuiltinPlugin = {
           source: 'builtin.whiteboard',
           payload: { elementId: payload.elementId, lessonId: payload.lessonId },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { success: true };
-      }
+      },
     });
 
     // 5. WHITEBOARD CLEAR HANDLER
@@ -524,10 +554,10 @@ export const BuiltinPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          lessonId: { type: 'STRING', description: 'ID of the lesson' }
+          lessonId: { type: 'STRING', description: 'ID of the lesson' },
         },
-        required: ['lessonId']
-      }
+        required: ['lessonId'],
+      },
     });
 
     await commandBus.registerHandler(clearWhiteboardCmdType, {
@@ -542,11 +572,11 @@ export const BuiltinPlugin = {
           source: 'builtin.whiteboard',
           payload: { lessonId: payload.lessonId },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { success: true };
-      }
+      },
     });
 
     // 4.5 WHITEBOARD QUERY HANDLER（P0-2）
@@ -566,12 +596,12 @@ export const BuiltinPlugin = {
             properties: {
               type: { type: 'STRING', description: '按元素类型过滤（如 quiz, text）' },
               segmentId: { type: 'STRING', description: '按课堂环节过滤' },
-              page: { type: 'NUMBER', description: '按页码过滤' }
-            }
-          }
+              page: { type: 'NUMBER', description: '按页码过滤' },
+            },
+          },
         },
-        required: ['lessonId']
-      }
+        required: ['lessonId'],
+      },
     });
 
     await commandBus.registerHandler(queryWhiteboardCmdType, {
@@ -592,18 +622,20 @@ export const BuiltinPlugin = {
 
         let results = rows;
         if (filter.segmentId || filter.page !== undefined) {
-          results = rows.filter(row => {
+          results = rows.filter((row) => {
             try {
               const data = JSON.parse(row.data);
               if (filter.segmentId && data.segmentId !== filter.segmentId) return false;
               if (filter.page !== undefined && (data.page ?? 0) !== filter.page) return false;
               return true;
-            } catch { return false; }
+            } catch {
+              return false;
+            }
           });
         }
 
         return { elements: results, count: results.length };
-      }
+      },
     });
 
     // 4.6 WHITEBOARD GET ELEMENT HANDLER（P0-2）
@@ -617,23 +649,23 @@ export const BuiltinPlugin = {
         type: 'OBJECT',
         properties: {
           lessonId: { type: 'STRING', description: '课程 ID' },
-          elementId: { type: 'STRING', description: '元素 ID' }
+          elementId: { type: 'STRING', description: '元素 ID' },
         },
-        required: ['lessonId', 'elementId']
-      }
+        required: ['lessonId', 'elementId'],
+      },
     });
 
     await commandBus.registerHandler(getElementCmdType, {
       async execute(command) {
         const payload = command.payload as any;
-        const row = db.prepare(
-          'SELECT * FROM whiteboard_elements WHERE id = ? AND lesson_id = ?'
-        ).get(payload.elementId, payload.lessonId) as any;
+        const row = db
+          .prepare('SELECT * FROM whiteboard_elements WHERE id = ? AND lesson_id = ?')
+          .get(payload.elementId, payload.lessonId) as any;
         if (!row) {
           throw new Error(`Element not found: ${payload.elementId}`);
         }
         return { element: row };
-      }
+      },
     });
 
     // 4.7 WHITEBOARD BATCH DRAW HANDLER（P1-1）
@@ -656,14 +688,14 @@ export const BuiltinPlugin = {
                 type: { type: 'STRING', description: `元素类型。已知类型：${KNOWN_ELEMENT_TYPES.join(', ')}` },
                 data: { type: 'STRING', description: '元素配置的 JSON 字符串' },
                 segmentId: { type: 'STRING', description: '关联的课堂环节 ID（可选）' },
-                page: { type: 'NUMBER', description: '元素所属页码（可选，默认 0）' }
+                page: { type: 'NUMBER', description: '元素所属页码（可选，默认 0）' },
               },
-              required: ['type', 'data']
-            }
-          }
+              required: ['type', 'data'],
+            },
+          },
         },
-        required: ['lessonId', 'elements']
-      }
+        required: ['lessonId', 'elements'],
+      },
     });
 
     await commandBus.registerHandler(batchDrawCmdType, {
@@ -676,7 +708,7 @@ export const BuiltinPlugin = {
 
         const elementIds: string[] = [];
         const insertStmt = db.prepare(
-          'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)'
+          'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
         );
 
         // 单次事务批量插入
@@ -693,7 +725,9 @@ export const BuiltinPlugin = {
               if (el.page !== undefined && dataObj.page === undefined) dataObj.page = el.page;
               else if (dataObj.page === undefined) dataObj.page = 0;
               dataStr = JSON.stringify(dataObj);
-            } catch { /* 保持原样 */ }
+            } catch {
+              /* 保持原样 */
+            }
             insertStmt.run(elementId, payload.lessonId, el.type, dataStr, Date.now());
             elementIds.push(elementId);
           }
@@ -708,11 +742,11 @@ export const BuiltinPlugin = {
           source: 'builtin.whiteboard',
           payload: { elementIds, lessonId: payload.lessonId, count: elementIds.length },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { elementIds, count: elementIds.length };
-      }
+      },
     });
 
     // 4.8 WHITEBOARD DUPLICATE HANDLER（P1-2）
@@ -728,18 +762,18 @@ export const BuiltinPlugin = {
           lessonId: { type: 'STRING', description: '课程 ID' },
           elementId: { type: 'STRING', description: '要复制的元素 ID' },
           offsetX: { type: 'NUMBER', description: 'X 轴偏移（默认 30）' },
-          offsetY: { type: 'NUMBER', description: 'Y 轴偏移（默认 30）' }
+          offsetY: { type: 'NUMBER', description: 'Y 轴偏移（默认 30）' },
         },
-        required: ['lessonId', 'elementId']
-      }
+        required: ['lessonId', 'elementId'],
+      },
     });
 
     await commandBus.registerHandler(duplicateCmdType, {
       async execute(command) {
         const payload = command.payload as any;
-        const row = db.prepare(
-          'SELECT * FROM whiteboard_elements WHERE id = ? AND lesson_id = ?'
-        ).get(payload.elementId, payload.lessonId) as any;
+        const row = db
+          .prepare('SELECT * FROM whiteboard_elements WHERE id = ? AND lesson_id = ?')
+          .get(payload.elementId, payload.lessonId) as any;
         if (!row) {
           throw new Error(`Element not found: ${payload.elementId}`);
         }
@@ -755,10 +789,12 @@ export const BuiltinPlugin = {
           if (dataObj.x !== undefined) dataObj.x = (dataObj.x || 0) + offsetX;
           if (dataObj.y !== undefined) dataObj.y = (dataObj.y || 0) + offsetY;
           dataStr = JSON.stringify(dataObj);
-        } catch { /* 保持原样 */ }
+        } catch {
+          /* 保持原样 */
+        }
 
         db.prepare(
-          'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)'
+          'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
         ).run(newId, payload.lessonId, row.type, dataStr, Date.now());
 
         await eventBus.publish({
@@ -767,11 +803,11 @@ export const BuiltinPlugin = {
           source: 'builtin.whiteboard',
           payload: { elementId: newId, lessonId: payload.lessonId, type: row.type },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { elementId: newId };
-      }
+      },
     });
 
     // 6. PLUGIN INSTALL HANDLER
@@ -785,10 +821,10 @@ export const BuiltinPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          sourceCode: { type: 'STRING', description: '插件的完整 JavaScript 源代码' }
+          sourceCode: { type: 'STRING', description: '插件的完整 JavaScript 源代码' },
         },
-        required: ['sourceCode']
-      }
+        required: ['sourceCode'],
+      },
     });
 
     await commandBus.registerHandler(installPluginCmdType, {
@@ -796,7 +832,7 @@ export const BuiltinPlugin = {
         const payload = command.payload as any;
         const manifest = await pluginHost.installPlugin(payload.sourceCode);
         return { success: true, manifest };
-      }
+      },
     });
 
     // 6.5. PLUGIN INSTALL ZIP HANDLER
@@ -811,10 +847,10 @@ export const BuiltinPlugin = {
         type: 'OBJECT',
         properties: {
           base64Data: { type: 'STRING', description: 'ZIP 文件的 Base64 编码数据' },
-          filename: { type: 'STRING', description: 'ZIP 文件名（可选）' }
+          filename: { type: 'STRING', description: 'ZIP 文件名（可选）' },
         },
-        required: ['base64Data']
-      }
+        required: ['base64Data'],
+      },
     });
 
     await commandBus.registerHandler(installPluginZipCmdType, {
@@ -824,7 +860,7 @@ export const BuiltinPlugin = {
         const fileBuffer = Buffer.from(base64Content, 'base64');
         const manifest = await distributionManager.installFromZip(fileBuffer, payload.executionMode);
         return { success: true, manifest };
-      }
+      },
     });
 
     // 6.6 PLUGIN UPDATE ZIP HANDLER
@@ -839,7 +875,10 @@ export const BuiltinPlugin = {
         type: 'OBJECT',
         properties: {
           base64Data: { type: 'STRING', description: 'ZIP 文件的 Base64 编码数据' },
-          targetPluginId: { type: 'STRING', description: '目标插件 UUID 或 manifest.id（可选，缺省按 ZIP 内 manifest.id 匹配）' },
+          targetPluginId: {
+            type: 'STRING',
+            description: '目标插件 UUID 或 manifest.id（可选，缺省按 ZIP 内 manifest.id 匹配）',
+          },
           executionMode: { type: 'STRING', description: 'worker | inline' },
           allowDowngrade: { type: 'BOOLEAN', description: '是否允许版本降级' },
         },
@@ -872,10 +911,13 @@ export const BuiltinPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          pluginId: { type: 'STRING', description: '插件的数据库 UUID 或 manifest.id 别名（如 ext-my-plugin），两者均可识别' }
+          pluginId: {
+            type: 'STRING',
+            description: '插件的数据库 UUID 或 manifest.id 别名（如 ext-my-plugin），两者均可识别',
+          },
         },
-        required: ['pluginId']
-      }
+        required: ['pluginId'],
+      },
     });
 
     await commandBus.registerHandler(togglePluginCmdType, {
@@ -883,7 +925,7 @@ export const BuiltinPlugin = {
         const payload = command.payload as any;
         const newStatus = await pluginHost.togglePlugin(payload.pluginId);
         return { success: true, status: newStatus };
-      }
+      },
     });
 
     // 7.5. PLUGIN UNINSTALL HANDLER
@@ -897,10 +939,13 @@ export const BuiltinPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          pluginId: { type: 'STRING', description: '插件的数据库 UUID 或 manifest.id 别名（如 ext-my-plugin），两者均可识别' }
+          pluginId: {
+            type: 'STRING',
+            description: '插件的数据库 UUID 或 manifest.id 别名（如 ext-my-plugin），两者均可识别',
+          },
         },
-        required: ['pluginId']
-      }
+        required: ['pluginId'],
+      },
     });
 
     await commandBus.registerHandler(uninstallPluginCmdType, {
@@ -908,7 +953,7 @@ export const BuiltinPlugin = {
         const payload = command.payload as any;
         await lifecycleManager.uninstallPlugin(payload.pluginId);
         return { success: true };
-      }
+      },
     });
 
     // 7.8. PLUGIN INFO HANDLER — 通过 UUID 或 manifest.id 别名查询插件详情
@@ -922,10 +967,10 @@ export const BuiltinPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          pluginId: { type: 'STRING', description: '插件的数据库 UUID 或 manifest.id 别名' }
+          pluginId: { type: 'STRING', description: '插件的数据库 UUID 或 manifest.id 别名' },
         },
-        required: ['pluginId']
-      }
+        required: ['pluginId'],
+      },
     });
 
     await commandBus.registerHandler(pluginInfoCmdType, {
@@ -934,9 +979,11 @@ export const BuiltinPlugin = {
         const rawId: string = payload.pluginId;
         // Resolve manifest ID alias → DB UUID (resolvePluginUuid is now public)
         const resolvedId = pluginHost.resolvePluginUuid(rawId);
-        const row = db.prepare(
-          "SELECT id, name, status, created_at, loader_version, execution_mode, json_extract(manifest, '$.id') as manifest_id, json_extract(manifest, '$.version') as version FROM plugins WHERE id = ?"
-        ).get(resolvedId) as any;
+        const row = db
+          .prepare(
+            "SELECT id, name, status, created_at, loader_version, execution_mode, json_extract(manifest, '$.id') as manifest_id, json_extract(manifest, '$.version') as version FROM plugins WHERE id = ?",
+          )
+          .get(resolvedId) as any;
         if (!row) throw new Error(`Plugin not found: ${rawId}`);
         return {
           id: row.id,
@@ -948,7 +995,7 @@ export const BuiltinPlugin = {
           loaderVersion: row.loader_version,
           createdAt: row.created_at,
         };
-      }
+      },
     });
 
     // 8. USER LIST HANDLER
@@ -961,9 +1008,9 @@ export const BuiltinPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          role: { type: 'STRING', description: '按角色筛选：administrator（管理员）或 teacher（教师）（可选）' }
-        }
-      }
+          role: { type: 'STRING', description: '按角色筛选：administrator（管理员）或 teacher（教师）（可选）' },
+        },
+      },
     });
 
     await commandBus.registerHandler(listUsersCmdType, {
@@ -978,7 +1025,7 @@ export const BuiltinPlugin = {
         query += ' ORDER BY created_at DESC';
         const users = db.prepare(query).all(...params);
         return users;
-      }
+      },
     });
 
     // 9. USER CREATE HANDLER
@@ -995,31 +1042,31 @@ export const BuiltinPlugin = {
           password: { type: 'STRING', description: '明文登录密码' },
           role: { type: 'STRING', description: '用户角色：administrator 或 teacher' },
           name: { type: 'STRING', description: '用户显示名称' },
-          status: { type: 'STRING', description: '初始状态：active（启用）或 disabled（禁用）（可选）' }
+          status: { type: 'STRING', description: '初始状态：active（启用）或 disabled（禁用）（可选）' },
         },
-        required: ['username', 'password', 'role', 'name']
-      }
+        required: ['username', 'password', 'role', 'name'],
+      },
     });
 
     await commandBus.registerHandler(createUserCmdType, {
       async execute(command) {
         const payload = command.payload as any;
         const { username, password, role, name, status = 'active' } = payload;
-        
+
         if (!username || !password || !role || !name) {
           throw new Error('username, password, role, and name are required');
         }
-        
+
         const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
         if (existing) {
           throw new Error('Username is already taken');
         }
-        
+
         const id = 'usr_' + Math.random().toString(36).slice(2, 10);
         const hash = crypto.createHash('sha256').update(password).digest('hex');
-        
+
         db.prepare(
-          'INSERT INTO users (id, username, password_hash, role, name, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+          'INSERT INTO users (id, username, password_hash, role, name, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
         ).run(id, username, hash, role, name, status, Date.now());
 
         await eventBus.publish({
@@ -1028,11 +1075,11 @@ export const BuiltinPlugin = {
           source: 'builtin.user',
           payload: { id, username, role, name, status },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { success: true, id, username, role, name, status };
-      }
+      },
     });
 
     // 10. USER UPDATE HANDLER
@@ -1050,22 +1097,22 @@ export const BuiltinPlugin = {
           password: { type: 'STRING', description: '新明文密码（可选）' },
           role: { type: 'STRING', description: '新角色：administrator 或 teacher（可选）' },
           name: { type: 'STRING', description: '新显示名称（可选）' },
-          status: { type: 'STRING', description: '新状态：active 或 disabled（可选）' }
+          status: { type: 'STRING', description: '新状态：active 或 disabled（可选）' },
         },
-        required: ['userId']
-      }
+        required: ['userId'],
+      },
     });
 
     await commandBus.registerHandler(updateUserCmdType, {
       async execute(command) {
         const payload = command.payload as any;
         const { userId, username, password, role, name, status } = payload;
-        
+
         const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
         if (!user) {
           throw new Error(`User with ID ${userId} not found`);
         }
-        
+
         if (username && username !== user.username) {
           const existing = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, userId);
           if (existing) {
@@ -1112,11 +1159,11 @@ export const BuiltinPlugin = {
           source: 'builtin.user',
           payload: { id: userId, username, role, name, status },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { success: true };
-      }
+      },
     });
 
     // 11. USER DELETE HANDLER
@@ -1130,10 +1177,10 @@ export const BuiltinPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          userId: { type: 'STRING', description: '要删除的用户唯一 ID' }
+          userId: { type: 'STRING', description: '要删除的用户唯一 ID' },
         },
-        required: ['userId']
-      }
+        required: ['userId'],
+      },
     });
 
     await commandBus.registerHandler(deleteUserCmdType, {
@@ -1147,7 +1194,9 @@ export const BuiltinPlugin = {
         }
 
         if (userToDelete.role === 'administrator') {
-          const adminCountObj = db.prepare('SELECT COUNT(*) as cnt FROM users WHERE role = ?').get('administrator') as any;
+          const adminCountObj = db
+            .prepare('SELECT COUNT(*) as cnt FROM users WHERE role = ?')
+            .get('administrator') as any;
           if (adminCountObj.cnt <= 1) {
             throw new Error('Cannot delete the only remaining administrator account');
           }
@@ -1161,11 +1210,11 @@ export const BuiltinPlugin = {
           source: 'builtin.user',
           payload: { id: userId },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { success: true };
-      }
+      },
     });
 
     // --- COURSEWARE UPLOAD HANDLER ---
@@ -1180,17 +1229,17 @@ export const BuiltinPlugin = {
         properties: {
           name: { type: 'STRING', description: '课件名称' },
           filename: { type: 'STRING', description: '上传文件的文件名' },
-          base64Data: { type: 'STRING', description: '文件的 Base64 数据（可带 data:URI 前缀）' }
+          base64Data: { type: 'STRING', description: '文件的 Base64 数据（可带 data:URI 前缀）' },
         },
-        required: ['name', 'filename', 'base64Data']
-      }
+        required: ['name', 'filename', 'base64Data'],
+      },
     });
 
     await commandBus.registerHandler(uploadCoursewareCmdType, {
       async execute(command) {
         const payload = command.payload as any;
         const { name, filename, base64Data } = payload;
-        
+
         const ext = path.extname(filename).toLowerCase();
         if (ext !== '.html' && ext !== '.htm' && ext !== '.zip') {
           throw new Error('Only .html, .htm and .zip files are supported for courseware');
@@ -1218,16 +1267,25 @@ export const BuiltinPlugin = {
           fs.writeFileSync(destPath, fileBuffer);
 
           const coursewareId = 'cw_' + crypto.randomBytes(8).toString('hex');
-          db.prepare(
-            'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-          ).run(coursewareId, uuid, name, 'html', entryName, Date.now());
+          db.prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+            coursewareId,
+            uuid,
+            name,
+            'html',
+            entryName,
+            Date.now(),
+          );
 
           // 同步登记到系统资源库（原生表，随平台持久化，不受插件卸载影响）
           try {
             const resId = 'res_' + crypto.randomBytes(8).toString('hex');
-            db.prepare(
-              'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)'
-            ).run(resId, name, 'html', fileBuffer.toString('utf-8'), Date.now());
+            db.prepare('INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)').run(
+              resId,
+              name,
+              'html',
+              fileBuffer.toString('utf-8'),
+              Date.now(),
+            );
           } catch (resErr) {
             console.error('[builtin.courseware] 登记 system_resources 失败:', resErr);
           }
@@ -1238,7 +1296,7 @@ export const BuiltinPlugin = {
             source: 'builtin.courseware',
             payload: { id: coursewareId, uuid, name, entry: entryName },
             timestamp: Date.now(),
-            correlationId: command.id
+            correlationId: command.id,
           });
 
           // Let's check for AI version injection
@@ -1254,7 +1312,7 @@ export const BuiltinPlugin = {
                 fs.writeFileSync(path.join(newStorageDir, entryName), modified);
 
                 db.prepare(
-                  'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+                  'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',
                 ).run(newCwId, newUuid, `[自动提交版] ${name}`, 'html', entryName, Date.now() + 10);
 
                 await eventBus.publish({
@@ -1263,7 +1321,7 @@ export const BuiltinPlugin = {
                   source: 'builtin.courseware',
                   payload: { id: newCwId, uuid: newUuid, name: `[自动提交版] ${name}`, entry: entryName },
                   timestamp: Date.now() + 10,
-                  correlationId: command.id
+                  correlationId: command.id,
                 });
               }
             }
@@ -1303,7 +1361,7 @@ export const BuiltinPlugin = {
           }
 
           // Candidates scan
-          const primaryCandidates = files.filter(f => {
+          const primaryCandidates = files.filter((f) => {
             const base = path.basename(f).toLowerCase();
             return base === 'index.html' || base === 'index.htm' || base === 'main.html' || base === 'lesson.html';
           });
@@ -1312,13 +1370,13 @@ export const BuiltinPlugin = {
           if (primaryCandidates.length === 1) {
             entry = primaryCandidates[0];
           } else if (primaryCandidates.length > 1) {
-            const rootIndex = primaryCandidates.find(f => f.toLowerCase() === 'index.html');
+            const rootIndex = primaryCandidates.find((f) => f.toLowerCase() === 'index.html');
             if (rootIndex) {
               entry = rootIndex;
             }
           }
 
-          const allHtmlCandidates = files.filter(f => {
+          const allHtmlCandidates = files.filter((f) => {
             const extName = path.extname(f).toLowerCase();
             return extName === '.html' || extName === '.htm';
           });
@@ -1332,7 +1390,7 @@ export const BuiltinPlugin = {
           if (entry) {
             const coursewareId = 'cw_' + crypto.randomBytes(8).toString('hex');
             db.prepare(
-              'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+              'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',
             ).run(coursewareId, uuid, name, 'folder', entry, Date.now());
 
             // 同步登记到系统资源库（folder 型：文件数组 JSON，二进制走 base64）
@@ -1343,12 +1401,15 @@ export const BuiltinPlugin = {
                 if (!fileObj.dir) {
                   const buf: Buffer = await fileObj.async('nodebuffer');
                   const isBinary = /\.(png|jpe?g|gif|webp|ico|mp3|wav|mp4|woff2?|ttf|otf|eot)$/i.test(relativePath);
-                  resFiles.push({ path: relativePath, content: isBinary ? buf.toString('base64') : buf.toString('utf-8') });
+                  resFiles.push({
+                    path: relativePath,
+                    content: isBinary ? buf.toString('base64') : buf.toString('utf-8'),
+                  });
                 }
               }
               const resId = 'res_' + crypto.randomBytes(8).toString('hex');
               db.prepare(
-                'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)'
+                'INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)',
               ).run(resId, name, 'folder', JSON.stringify(resFiles), Date.now());
             } catch (resErr) {
               console.error('[builtin.courseware] 登记 system_resources 失败:', resErr);
@@ -1360,7 +1421,7 @@ export const BuiltinPlugin = {
               source: 'builtin.courseware',
               payload: { id: coursewareId, uuid, name, entry },
               timestamp: Date.now(),
-              correlationId: command.id
+              correlationId: command.id,
             });
 
             // Check for AI version injection
@@ -1378,7 +1439,7 @@ export const BuiltinPlugin = {
                     fs.writeFileSync(path.join(newStorageDir, entry), modified);
 
                     db.prepare(
-                      'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+                      'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',
                     ).run(newCwId, newUuid, `[自动提交版] ${name}`, 'folder', entry, Date.now() + 10);
 
                     await eventBus.publish({
@@ -1387,7 +1448,7 @@ export const BuiltinPlugin = {
                       source: 'builtin.courseware',
                       payload: { id: newCwId, uuid: newUuid, name: `[自动提交版] ${name}`, entry },
                       timestamp: Date.now() + 10,
-                      correlationId: command.id
+                      correlationId: command.id,
                     });
                   }
                 }
@@ -1406,11 +1467,11 @@ export const BuiltinPlugin = {
               need_select_entry: true,
               candidates: allHtmlCandidates,
               uuid,
-              name
+              name,
             };
           }
         }
-      }
+      },
     });
 
     // --- COURSEWARE CONFIRM ENTRY HANDLER ---
@@ -1425,10 +1486,10 @@ export const BuiltinPlugin = {
         properties: {
           uuid: { type: 'STRING', description: '上传课件的已生成 UUID' },
           name: { type: 'STRING', description: '课件名称' },
-          entry: { type: 'STRING', description: '选定的入口 HTML 文件路径' }
+          entry: { type: 'STRING', description: '选定的入口 HTML 文件路径' },
         },
-        required: ['uuid', 'name', 'entry']
-      }
+        required: ['uuid', 'name', 'entry'],
+      },
     });
 
     await commandBus.registerHandler(confirmCoursewareCmdType, {
@@ -1437,9 +1498,14 @@ export const BuiltinPlugin = {
         const { uuid, name, entry } = payload;
 
         const coursewareId = 'cw_' + crypto.randomBytes(8).toString('hex');
-        db.prepare(
-          'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-        ).run(coursewareId, uuid, name, 'folder', entry, Date.now());
+        db.prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+          coursewareId,
+          uuid,
+          name,
+          'folder',
+          entry,
+          Date.now(),
+        );
 
         await eventBus.publish({
           id: uuidv7(),
@@ -1447,7 +1513,7 @@ export const BuiltinPlugin = {
           source: 'builtin.courseware',
           payload: { id: coursewareId, uuid, name, entry },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         // Check for AI version injection
@@ -1466,7 +1532,7 @@ export const BuiltinPlugin = {
                 fs.writeFileSync(path.join(newStorageDir, entry), modified);
 
                 db.prepare(
-                  'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+                  'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',
                 ).run(newCwId, newUuid, `[自动提交版] ${name}`, 'folder', entry, Date.now() + 10);
 
                 await eventBus.publish({
@@ -1475,7 +1541,7 @@ export const BuiltinPlugin = {
                   source: 'builtin.courseware',
                   payload: { id: newCwId, uuid: newUuid, name: `[自动提交版] ${name}`, entry },
                   timestamp: Date.now() + 10,
-                  correlationId: command.id
+                  correlationId: command.id,
                 });
               }
             }
@@ -1485,7 +1551,7 @@ export const BuiltinPlugin = {
         }
 
         return { success: true, id: coursewareId, uuid, name, entry };
-      }
+      },
     });
 
     // --- COURSEWARE SUBMIT ATTEMPT HANDLER ---
@@ -1503,10 +1569,10 @@ export const BuiltinPlugin = {
           comment: { type: 'STRING', description: 'LMS 或教师评语' },
           completion: { type: 'NUMBER', description: '完成状态（0 到 1）' },
           status: { type: 'STRING', description: '尝试状态：active（进行中）或 completed（已完成）' },
-          extra: { type: 'OBJECT', description: '额外参数' }
+          extra: { type: 'OBJECT', description: '额外参数' },
         },
-        required: ['attemptId']
-      }
+        required: ['attemptId'],
+      },
     });
 
     await commandBus.registerHandler(submitAttemptCmdType, {
@@ -1517,33 +1583,42 @@ export const BuiltinPlugin = {
         // 1. Log to raw submission
         const rawId = 'raw_' + crypto.randomBytes(8).toString('hex');
         db.prepare(
-          'INSERT INTO submission_raw (id, attempt_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)'
-        ).run(rawId, attemptId, 'submit_lms', JSON.stringify({ score, comment, completion, status, ...extra }), Date.now());
+          'INSERT INTO submission_raw (id, attempt_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)',
+        ).run(
+          rawId,
+          attemptId,
+          'submit_lms',
+          JSON.stringify({ score, comment, completion, status, ...extra }),
+          Date.now(),
+        );
 
         // 2. Update status of the attempt
         if (status === 'completed') {
-          db.prepare('UPDATE courseware_attempt SET finished_at = ?, status = ? WHERE id = ?')
-            .run(Date.now(), 'completed', attemptId);
+          db.prepare('UPDATE courseware_attempt SET finished_at = ?, status = ? WHERE id = ?').run(
+            Date.now(),
+            'completed',
+            attemptId,
+          );
         }
 
         // 3. Update standardized results
         const existing = db.prepare('SELECT * FROM submission_result WHERE attempt_id = ?').get(attemptId) as any;
         if (!existing) {
           db.prepare(
-            'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)'
+            'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)',
           ).run(
             'res_' + crypto.randomBytes(8).toString('hex'),
             attemptId,
             score !== undefined ? score : null,
             comment || null,
             completion !== undefined ? completion : null,
-            JSON.stringify(extra)
+            JSON.stringify(extra),
           );
         } else {
           const finalScore = score !== undefined ? score : existing.score;
           const finalComment = comment || existing.comment;
           const finalCompletion = completion !== undefined ? completion : existing.completion;
-          
+
           let mergedExtra = {};
           try {
             mergedExtra = JSON.parse(existing.extra_json || '{}');
@@ -1551,7 +1626,7 @@ export const BuiltinPlugin = {
           mergedExtra = { ...mergedExtra, ...extra };
 
           db.prepare(
-            'UPDATE submission_result SET score = ?, comment = ?, completion = ?, extra_json = ? WHERE attempt_id = ?'
+            'UPDATE submission_result SET score = ?, comment = ?, completion = ?, extra_json = ? WHERE attempt_id = ?',
           ).run(finalScore, finalComment, finalCompletion, JSON.stringify(mergedExtra), attemptId);
         }
 
@@ -1561,11 +1636,11 @@ export const BuiltinPlugin = {
           source: 'builtin.courseware',
           payload: { attemptId, score, comment, completion, status },
           timestamp: Date.now(),
-          correlationId: command.id
+          correlationId: command.id,
         });
 
         return { success: true };
-      }
+      },
     });
 
     // --- COURSEWARE GET RAW DATA HANDLER ---
@@ -1578,19 +1653,21 @@ export const BuiltinPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          attemptId: { type: 'STRING', description: 'ID of the attempt to query' }
+          attemptId: { type: 'STRING', description: 'ID of the attempt to query' },
         },
-        required: ['attemptId']
-      }
+        required: ['attemptId'],
+      },
     });
 
     await commandBus.registerHandler(getAttemptRawDataCmdType, {
       async execute(command) {
         const payload = command.payload as any;
         const { attemptId } = payload;
-        const rows = db.prepare('SELECT * FROM submission_raw WHERE attempt_id = ? ORDER BY created_at ASC').all(attemptId);
+        const rows = db
+          .prepare('SELECT * FROM submission_raw WHERE attempt_id = ? ORDER BY created_at ASC')
+          .all(attemptId);
         return rows;
-      }
+      },
     });
 
     // --- COURSEWARE LIST HANDLER ---
@@ -1602,15 +1679,15 @@ export const BuiltinPlugin = {
       capabilityRequired: 'lesson:read',
       inputSchema: {
         type: 'OBJECT',
-        properties: {}
-      }
+        properties: {},
+      },
     });
 
     await commandBus.registerHandler(listCoursewareCmdType, {
       async execute() {
         const rows = db.prepare('SELECT * FROM courseware ORDER BY created_at DESC').all();
         return rows;
-      }
+      },
     });
 
     // --- COURSEWARE DELETE HANDLER ---
@@ -1623,10 +1700,10 @@ export const BuiltinPlugin = {
       inputSchema: {
         type: 'OBJECT',
         properties: {
-          id: { type: 'STRING', description: 'ID of the courseware to delete' }
+          id: { type: 'STRING', description: 'ID of the courseware to delete' },
         },
-        required: ['id']
-      }
+        required: ['id'],
+      },
     });
 
     await commandBus.registerHandler(deleteCoursewareCmdType, {
@@ -1646,15 +1723,14 @@ export const BuiltinPlugin = {
             source: 'builtin.courseware',
             payload: { id },
             timestamp: Date.now(),
-            correlationId: command.id
+            correlationId: command.id,
           });
         }
         return { success: true };
-      }
+      },
     });
   },
   deactivate: async () => {
     // Cleanups automatically handled by ResourceTracker
-  }
+  },
 };
-

@@ -66,9 +66,7 @@ export class ActivityRegistry {
   /** Activities visible to a given role (`all` matches everything). */
   public listByRole(role: ActivityRole): ActivityProvider[] {
     return this.listProviders().filter(
-      (p) =>
-        p.descriptor.supportedRoles.includes('all') ||
-        p.descriptor.supportedRoles.includes(role),
+      (p) => p.descriptor.supportedRoles.includes('all') || p.descriptor.supportedRoles.includes(role),
     );
   }
 
@@ -100,9 +98,7 @@ export class ActivityRegistry {
     const required = provider.descriptor.permissions ?? [];
     if (required.length > 0 && actorId) {
       // `capability.check` is async (returns Promise<boolean>) — await all.
-      const results = await Promise.all(
-        required.map((cap) => context.capability.check(actorId, cap)),
-      );
+      const results = await Promise.all(required.map((cap) => context.capability.check(actorId, cap)));
       const granted = results.some(Boolean);
       if (!granted) {
         const err = new Error(

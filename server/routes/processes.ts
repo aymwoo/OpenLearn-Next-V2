@@ -24,12 +24,9 @@ export function registerProcessesRoutes(ctx: ServerContext) {
       const payload = JSON.parse(pending.payload);
       const approverId = getActorId(req) || 'admin';
 
-      const cmd = kernelContainer.commandBus.createCommand(
-        pending.command_type,
-        payload,
-        approverId,
-        { approved: true }
-      );
+      const cmd = kernelContainer.commandBus.createCommand(pending.command_type, payload, approverId, {
+        approved: true,
+      });
 
       const result = await kernelContainer.commandBus.execute(cmd);
       kernelContainer.db.prepare('DELETE FROM pending_commands WHERE id = ?').run(pending.id);
@@ -53,7 +50,11 @@ export function registerProcessesRoutes(ctx: ServerContext) {
   app.get('/api/processes', requireAuth('administrator'), (req, res) => {
     try {
       // Only return currently active running processes to ensure real-time accuracy
-      const list = kernelContainer.db.prepare("SELECT id, name, status, created_at, updated_at FROM processes WHERE status = 'running' ORDER BY created_at DESC").all();
+      const list = kernelContainer.db
+        .prepare(
+          "SELECT id, name, status, created_at, updated_at FROM processes WHERE status = 'running' ORDER BY created_at DESC",
+        )
+        .all();
       res.json(list);
     } catch (e: any) {
       sendSafeError(res, e);

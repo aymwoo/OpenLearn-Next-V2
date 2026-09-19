@@ -7,7 +7,7 @@ export class VirtualRenderer {
   public cullObjects(
     objects: CanvasObject[],
     viewport: Viewport,
-    containerSize: { width: number; height: number }
+    containerSize: { width: number; height: number },
   ): { visible: CanvasObject[]; culledCount: number } {
     if (containerSize.width <= 0 || containerSize.height <= 0) {
       return { visible: objects, culledCount: 0 };
@@ -34,10 +34,7 @@ export class VirtualRenderer {
 
       // Axis-Aligned Bounding Box Intersects check
       const intersects =
-        obj.position.x < viewRight &&
-        objRight > viewLeft &&
-        obj.position.y < viewBottom &&
-        objBottom > viewTop;
+        obj.position.x < viewRight && objRight > viewLeft && obj.position.y < viewBottom && objBottom > viewTop;
 
       if (intersects) {
         visible.push(obj);

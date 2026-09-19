@@ -1,11 +1,15 @@
 import React from 'react';
-import { Plus, Settings2, ChevronRight, FileText, CalendarClock, Clock, CheckCircle2, GripVertical } from 'lucide-react';
 import {
-  SEGMENT_COLORS,
-  DEFAULT_SEGMENT_COLOR,
-  getSegmentType,
-  getSegmentColor,
-} from './timelineConfig';
+  Plus,
+  Settings2,
+  ChevronRight,
+  FileText,
+  CalendarClock,
+  Clock,
+  CheckCircle2,
+  GripVertical,
+} from 'lucide-react';
+import { SEGMENT_COLORS, DEFAULT_SEGMENT_COLOR, getSegmentType, getSegmentColor } from './timelineConfig';
 
 interface TimelineRailProps {
   lang: 'zh' | 'en';
@@ -33,8 +37,7 @@ export function TimelineRail({
   setEditorPanelsExpanded,
 }: TimelineRailProps) {
   const activeIdx = segments.findIndex((s) => s.id === activeSegmentId);
-  const progressPct =
-    segments.length > 1 ? (activeIdx >= 0 ? activeIdx / (segments.length - 1) : 0) : 0;
+  const progressPct = segments.length > 1 ? (activeIdx >= 0 ? activeIdx / (segments.length - 1) : 0) : 0;
   const activeColorMeta = activeIdx >= 0 ? getSegmentColor(segments[activeIdx].color) : null;
 
   const handleReorder = (toIdx: number) => {
@@ -96,8 +99,8 @@ export function TimelineRail({
           const nodeCls = isActive
             ? colorMeta.solid + ' shadow-md shadow-indigo-500/20 ring-2 ring-indigo-400/30'
             : isCompleted
-            ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200/80'
-            : `${seg.color} hover:shadow-sm hover:brightness-105`;
+              ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200/80'
+              : `${seg.color} hover:shadow-sm hover:brightness-105`;
 
           return (
             <React.Fragment key={seg.id}>
@@ -120,7 +123,10 @@ export function TimelineRail({
                 }
                 className={`relative z-10 group flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full border text-xs font-semibold cursor-grab active:cursor-grabbing transition-all duration-200 ${isDragging ? 'opacity-40 border-dashed scale-95' : ''} ${nodeCls}`}
               >
-                <GripVertical size={11} className={`opacity-0 group-hover:opacity-60 transition-opacity -mr-1 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                <GripVertical
+                  size={11}
+                  className={`opacity-0 group-hover:opacity-60 transition-opacity -mr-1 ${isActive ? 'text-white' : 'text-slate-400'}`}
+                />
 
                 {/* sequence number or check */}
                 <span
@@ -128,8 +134,8 @@ export function TimelineRail({
                     isActive
                       ? 'bg-white/25 text-white'
                       : isCompleted
-                      ? 'bg-emerald-500 text-white'
-                      : 'bg-white text-slate-600 border border-slate-200'
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-white text-slate-600 border border-slate-200'
                   }`}
                 >
                   {isCompleted ? <CheckCircle2 size={11} /> : idx + 1}
@@ -142,17 +148,16 @@ export function TimelineRail({
 
                 {/* Duration Badge */}
                 {seg.duration && (
-                  <span className={`text-[10px] px-1 py-0.2 rounded font-mono font-normal flex items-center gap-0.5 ${isActive ? 'bg-black/20 text-white' : 'bg-black/5 text-slate-500'}`}>
+                  <span
+                    className={`text-[10px] px-1 py-0.2 rounded font-mono font-normal flex items-center gap-0.5 ${isActive ? 'bg-black/20 text-white' : 'bg-black/5 text-slate-500'}`}
+                  >
                     <Clock size={9} />
                     {seg.duration}
                   </span>
                 )}
 
                 {seg.notes && (
-                  <FileText
-                    size={10}
-                    className={`shrink-0 ${isActive ? 'text-white/90' : 'text-amber-500'}`}
-                  />
+                  <FileText size={10} className={`shrink-0 ${isActive ? 'text-white/90' : 'text-amber-500'}`} />
                 )}
 
                 {/* Status indicator */}
@@ -163,9 +168,7 @@ export function TimelineRail({
                   </span>
                 )}
               </button>
-              {idx < segments.length - 1 && (
-                <ChevronRight size={12} className="text-slate-300 shrink-0 z-10" />
-              )}
+              {idx < segments.length - 1 && <ChevronRight size={12} className="text-slate-300 shrink-0 z-10" />}
             </React.Fragment>
           );
         })}
@@ -201,4 +204,3 @@ export function TimelineRail({
     </div>
   );
 }
-

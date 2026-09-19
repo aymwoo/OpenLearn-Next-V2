@@ -14,7 +14,11 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     try {
       const { name, filename, base64Data } = req.body;
       const actorId = getActorId(req) || 'teacher';
-      const cmd = kernelContainer.commandBus.createCommand('courseware.upload', { name, filename, base64Data }, actorId);
+      const cmd = kernelContainer.commandBus.createCommand(
+        'courseware.upload',
+        { name, filename, base64Data },
+        actorId,
+      );
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -64,15 +68,15 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     const keysToSearch = {
       score: ['score', 'grade', 'result', 'point', 'points', 'mark', 'marks', 'score_val', 'scoreval'],
       comment: ['comment', 'feedback', 'msg', 'message', 'text', 'note', 'memo'],
-      completion: ['completion', 'progress', 'done', 'finished', 'completed', 'percentage']
+      completion: ['completion', 'progress', 'done', 'finished', 'completed', 'percentage'],
     };
 
     const searchObj = (obj: any) => {
       if (!obj || typeof obj !== 'object') return;
-      
+
       for (const key in obj) {
         const lowerKey = key.toLowerCase();
-        
+
         if (keysToSearch.score.includes(lowerKey) && score === undefined) {
           score = obj[key];
         }
@@ -162,18 +166,20 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         return res.status(401).json({ error: 'Authentication required' });
       }
       if (session.role !== 'teacher' && session.role !== 'administrator') {
-        const attemptRow = kernelContainer.db.prepare(
-          'SELECT student_id FROM courseware_attempt WHERE id = ?'
-        ).get(attemptId) as { student_id: string } | undefined;
+        const attemptRow = kernelContainer.db
+          .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
+          .get(attemptId) as { student_id: string } | undefined;
         if (attemptRow && attemptRow.student_id !== session.userId) {
           return res.status(403).json({ error: 'Forbidden: Cannot modify logs for another student' });
         }
       }
-      
+
       const rawId = 'raw_' + crypto.randomBytes(8).toString('hex');
-      kernelContainer.db.prepare(
-        'INSERT INTO submission_raw (id, attempt_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)'
-      ).run(rawId, attemptId, eventType, JSON.stringify(payload), Date.now());
+      kernelContainer.db
+        .prepare(
+          'INSERT INTO submission_raw (id, attempt_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)',
+        )
+        .run(rawId, attemptId, eventType, JSON.stringify(payload), Date.now());
 
       const extracted = extractScoreCommentCompletion(payload);
       const score = extracted.score;
@@ -195,24 +201,28 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
             parsedCompletion = num;
           }
         }
-        
-        const existing = kernelContainer.db.prepare('SELECT * FROM submission_result WHERE attempt_id = ?').get(attemptId) as any;
+
+        const existing = kernelContainer.db
+          .prepare('SELECT * FROM submission_result WHERE attempt_id = ?')
+          .get(attemptId) as any;
         if (!existing) {
-          kernelContainer.db.prepare(
-            'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)'
-          ).run(
-            'res_' + crypto.randomBytes(8).toString('hex'),
-            attemptId,
-            parsedScore,
-            comment || null,
-            parsedCompletion,
-            JSON.stringify(payload)
-          );
+          kernelContainer.db
+            .prepare(
+              'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)',
+            )
+            .run(
+              'res_' + crypto.randomBytes(8).toString('hex'),
+              attemptId,
+              parsedScore,
+              comment || null,
+              parsedCompletion,
+              JSON.stringify(payload),
+            );
         } else {
           const finalScore = parsedScore !== null ? parsedScore : existing.score;
           const finalComment = comment || existing.comment;
           const finalCompletion = parsedCompletion !== null ? parsedCompletion : existing.completion;
-          
+
           let mergedExtra = {};
           try {
             mergedExtra = JSON.parse(existing.extra_json || '{}');
@@ -221,9 +231,11 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
             mergedExtra = { ...mergedExtra, ...payload };
           }
 
-          kernelContainer.db.prepare(
-            'UPDATE submission_result SET score = ?, comment = ?, completion = ?, extra_json = ? WHERE attempt_id = ?'
-          ).run(finalScore, finalComment, finalCompletion, JSON.stringify(mergedExtra), attemptId);
+          kernelContainer.db
+            .prepare(
+              'UPDATE submission_result SET score = ?, comment = ?, completion = ?, extra_json = ? WHERE attempt_id = ?',
+            )
+            .run(finalScore, finalComment, finalCompletion, JSON.stringify(mergedExtra), attemptId);
         }
       }
 
@@ -254,9 +266,9 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         return res.status(401).json({ error: 'Authentication required to submit attempt scores' });
       }
       if (session.role !== 'teacher' && session.role !== 'administrator') {
-        const attemptRow = kernelContainer.db.prepare(
-          'SELECT student_id FROM courseware_attempt WHERE id = ?'
-        ).get(attemptId) as { student_id: string } | undefined;
+        const attemptRow = kernelContainer.db
+          .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
+          .get(attemptId) as { student_id: string } | undefined;
         if (attemptRow && attemptRow.student_id !== session.userId) {
           return res.status(403).json({ error: 'Forbidden: Cannot submit scores for another student' });
         }
@@ -283,14 +295,18 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       }
 
       const actorId = session.userId || getActorId(req) || 'student';
-      const cmd = kernelContainer.commandBus.createCommand('courseware.submit_attempt', {
-        attemptId,
-        score: parsedScore,
-        comment,
-        completion: parsedCompletion,
-        status,
-        extra
-      }, actorId);
+      const cmd = kernelContainer.commandBus.createCommand(
+        'courseware.submit_attempt',
+        {
+          attemptId,
+          score: parsedScore,
+          comment,
+          completion: parsedCompletion,
+          status,
+          extra,
+        },
+        actorId,
+      );
       const result = await kernelContainer.commandBus.execute(cmd);
       io.emit('courseware-attempt-updated', { attemptId, type: 'submit' });
       res.json(result);
@@ -301,7 +317,9 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
 
   app.get('/api/courseware/attempts', (req, res) => {
     try {
-      const rows = kernelContainer.db.prepare(`
+      const rows = kernelContainer.db
+        .prepare(
+          `
         SELECT a.id as attemptId, a.started_at, a.finished_at, a.status, 
                cw.name as coursewareName, cw.uuid as coursewareUuid,
                COALESCE(s.name, CASE WHEN a.student_id = 'teacher' THEN 'Teacher (Test)' WHEN a.student_id = 'guest' THEN 'Guest Student' ELSE a.student_id END) as studentName,
@@ -318,7 +336,9 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         LEFT JOIN students s ON a.student_id = s.id
         LEFT JOIN submission_result r ON a.id = r.attempt_id
         ORDER BY a.started_at DESC
-      `).all();
+      `,
+        )
+        .all();
       res.json(rows);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -330,10 +350,10 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       const { msg, url, student, courseware } = req.body;
       const logMsg = `[CLIENT DEBUG] ${msg} | URL: ${url} | Student: ${JSON.stringify(student)} | Courseware: ${JSON.stringify(courseware)}`;
       console.log(`\x1b[35m[CLIENT DEBUG]\x1b[0m ${msg}`);
-      
+
       const logFile = path.join(process.cwd(), 'client_debug.log');
       fs.appendFileSync(logFile, `${new Date().toISOString()} - ${logMsg}\n`);
-      
+
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
@@ -343,7 +363,11 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
   app.get('/api/courseware/attempts/:attemptId/raw', async (req, res) => {
     try {
       const { attemptId } = req.params;
-      const cmd = kernelContainer.commandBus.createCommand('courseware.get_attempt_raw_data', { attemptId }, 'teacher-demo');
+      const cmd = kernelContainer.commandBus.createCommand(
+        'courseware.get_attempt_raw_data',
+        { attemptId },
+        'teacher-demo',
+      );
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -354,14 +378,18 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
   app.get('/api/courseware/attempts/:attemptId/progress', (req, res) => {
     try {
       const { attemptId } = req.params;
-      const result = kernelContainer.db.prepare(
-        'SELECT score, comment, completion, extra_json FROM submission_result WHERE attempt_id = ?'
-      ).get(attemptId) as any;
+      const result = kernelContainer.db
+        .prepare('SELECT score, comment, completion, extra_json FROM submission_result WHERE attempt_id = ?')
+        .get(attemptId) as any;
       if (!result) {
         return res.json({ progress: null });
       }
       let extra = {};
-      try { extra = JSON.parse(result.extra_json || '{}'); } catch { /* ignore malformed extra */ }
+      try {
+        extra = JSON.parse(result.extra_json || '{}');
+      } catch {
+        /* ignore malformed extra */
+      }
       res.json({
         progress: { score: result.score, comment: result.comment, completion: result.completion, extra },
       });
@@ -379,14 +407,18 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'Missing lessonId or classId' });
       }
 
-      const attempt = kernelContainer.db.prepare(`
+      const attempt = kernelContainer.db
+        .prepare(
+          `
         SELECT a.*, cw.name as courseware_name, cw.uuid as courseware_uuid,
                r.score, r.comment, r.completion, r.extra_json
         FROM courseware_attempt a
         JOIN courseware cw ON a.courseware_id = cw.id
         LEFT JOIN submission_result r ON a.id = r.attempt_id
         WHERE a.id = ?
-      `).get(attemptId) as any;
+      `,
+        )
+        .get(attemptId) as any;
 
       if (!attempt) {
         return res.status(404).json({ error: 'Attempt not found' });
@@ -407,27 +439,31 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       }
 
       const assignmentTitle = `互动课件: ${coursewareName}`;
-      let assignment = kernelContainer.db.prepare(
-        'SELECT id FROM assignments WHERE class_id = ? AND lesson_id = ? AND title = ?'
-      ).get(classId, lessonId, assignmentTitle) as any;
+      let assignment = kernelContainer.db
+        .prepare('SELECT id FROM assignments WHERE class_id = ? AND lesson_id = ? AND title = ?')
+        .get(classId, lessonId, assignmentTitle) as any;
 
       let assignmentId = assignment?.id;
       if (!assignmentId) {
         assignmentId = 'ast-cw-' + crypto.randomBytes(8).toString('hex');
-        kernelContainer.db.prepare(
-          'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-        ).run(
-          assignmentId,
-          classId,
-          lessonId,
-          assignmentTitle,
-          `来自互动课件 [${coursewareName}] 的随堂学习提交数据记录`,
-          JSON.stringify({ type: 'interactive_courseware', attemptId, coursewareUuid: attempt.courseware_uuid }),
-          Date.now()
-        );
+        kernelContainer.db
+          .prepare(
+            'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            assignmentId,
+            classId,
+            lessonId,
+            assignmentTitle,
+            `来自互动课件 [${coursewareName}] 的随堂学习提交数据记录`,
+            JSON.stringify({ type: 'interactive_courseware', attemptId, coursewareUuid: attempt.courseware_uuid }),
+            Date.now(),
+          );
       }
 
-      kernelContainer.db.prepare(`
+      kernelContainer.db
+        .prepare(
+          `
         INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'graded')
         ON CONFLICT(assignment_id, student_id) DO UPDATE SET
@@ -437,34 +473,36 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
           submitted_at = excluded.submitted_at,
           graded_at = excluded.graded_at,
           status = 'graded'
-      `).run(
-        assignmentId,
-        studentId,
-        attempt.extra_json || '{}',
-        finalScore,
-        `由教师在课堂中保存录入。课件完成度: ${Math.round(completion * 100)}%。课件原始反�?: ${attempt.comment || '�?'}`,
-        Date.now(),
-        Date.now()
-      );
+      `,
+        )
+        .run(
+          assignmentId,
+          studentId,
+          attempt.extra_json || '{}',
+          finalScore,
+          `由教师在课堂中保存录入。课件完成度: ${Math.round(completion * 100)}%。课件原始反�?: ${attempt.comment || '�?'}`,
+          Date.now(),
+          Date.now(),
+        );
 
-      kernelContainer.db.prepare(`
+      kernelContainer.db
+        .prepare(
+          `
         INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at)
         VALUES (?, ?, 1, 100, '[]', ?)
         ON CONFLICT(student_id, lesson_id) DO UPDATE SET
           completed = 1,
           progress_percent = 100
-      `).run(
-        studentId,
-        lessonId,
-        Date.now()
-      );
+      `,
+        )
+        .run(studentId, lessonId, Date.now());
 
       io.emit('student-progress-updated', {
         studentId,
         lessonId,
         progressPercent: 100,
         completed: true,
-        completedSegments: []
+        completedSegments: [],
       });
 
       res.json({ success: true, assignmentId, score: finalScore });
@@ -477,12 +515,12 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     try {
       const node = kernelContainer.db.prepare('SELECT * FROM vfs_nodes WHERE id = ?').get(req.params.id) as any;
       if (!node || node.type !== 'file') return res.status(404).send('Courseware not found');
-      
+
       const existingCw = kernelContainer.db.prepare('SELECT id FROM courseware WHERE id = ?').get(node.id);
       if (!existingCw) {
-        kernelContainer.db.prepare(
-          'INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-        ).run(node.id, node.id, node.name, 'html', node.name, Date.now());
+        kernelContainer.db
+          .prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(node.id, node.id, node.name, 'html', node.name, Date.now());
       }
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');

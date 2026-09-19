@@ -1,21 +1,21 @@
 export const generateTemplateContent = (title: string, category: string): string => {
-  const normalizedTitle = title ? title.trim() : "New Course";
+  const normalizedTitle = title ? title.trim() : 'New Course';
   switch (category) {
     case 'Mathematics':
       return `# ${normalizedTitle}\n\n## 101 Course Core Foundations\nWelcome to our mathematics laboratory. This course is designed to break down abstract calculations into visual whiteboard proofs and real-world application models.\n\n### 📐 Key Theorems & Proof Matrix\n- **Formula A**: $E = mc^2$ or equivalent derivative parameters\n- **Core Axiom**: For every linear projection, a finite dimension defines its trace.\n\n### 实践演练随堂真题 Practice Problems\n1. Calculate the local optima for the function on the interactive workspace.\n2. Prove the uniqueness of the residual limit under Gaussian conditions.\n\n### 📥 Homework Assignment Task\nIdentify three real-world physical structures implementing these spatial principles and coordinate maps.`;
-    
+
     case 'ComputerScience':
       return `# ${normalizedTitle}\n\n## 💻 Technical Exploration & Engineering Lab\nThis session acts as an immersive sandbox exploring core algorithmic structures, optimization mechanics, and data abstractions.\n\n### ⚙️ Core Lecture Blueprint & Pseudocode\n\`\`\`python\ndef optimize_weights(data, factor=0.01):\n    # Initialize local metrics\n    scores = [x * factor for x in data]\n    return sum(scores) / len(scores)\n\`\`\`\n\n### ⚡ Laboratory Workspace Drill\n- **Objective**: Develop a linear hash-map with zero-collision distribution.\n- **Action**: Use the interactive canvas to sketch data pipelines.\n\n### 📝 Post-Class Evaluation\nWrite a 200-word critique analyzing memory-locality vs execution-speed trade-offs in low-level registers.`;
-    
+
     case 'Literature':
       return `# ${normalizedTitle}\n\n## ✍️ Literary Critical Analysis Seminar\nThis curriculum evaluates textual aesthetics, semantic patterns, subtextual symbols, and historical contexts across classic paradigms.\n\n### 🏛️ Classic Textual Excerpts\n> "Reality represents a state of constant translation between what is experienced and what is chronicled."\n\n### 💭 Critique Evaluation Metrics\n- **Theme Assessment**: Analyze structural ironies within contemporary essays.\n- **Author Intention**: Focus on pacing triggers and character foils.\n\n### 💬 Classroom Collaborative Debate Topics\nDoes digital notation diminish the biological connection to textual journaling? Discuss under 15 minutes framework.`;
-    
+
     case 'Physics':
       return `# ${normalizedTitle}\n\n## ⚡ Experimental Physics & Natural Science Sandbox\nIn this session, theoretical models undergo practical validation through interactive virtual whiteboard modeling and numerical measurements.\n\n### 🔬 Key Mechanical Principles & Constraints\n- **Axiom 1**: Momentum is conserved in closed coordinate vectors.\n- **Axiom 2**: Resistance is directly proportional to temperature factors.\n\n### 🛠️ Lab Step-by-Step Procedure\n1. Plot the force vectors acting on the balance coordinate vertices.\n2. Measure the velocity coefficients across three alternate trial loops.\n\n### 📝 Homework Assignment Evaluation\nCalculate energy loss ratios using standard mathematical integrals in your journal.`;
-    
+
     case 'History':
       return `# ${normalizedTitle}\n\n## 🏛️ Geopolitical Context Mapping & Historical Context\nThis course explores historical trends, decision frameworks, resource patterns, and socio-economic influences that shaped modern civilization.\n\n### 🗺️ Context Timeline Focus\n- **Phase A**: Resource migration patterns along major trade waterways.\n- **Phase B**: Strategic institutional reforms and cultural integration cycles.\n\n### 🔍 Primary Source Critique Work\nAnalyze the 18th-century legislative documents for bias, context gaps, and underlying socio-economic drivers.\n\n### 💬 Group Discussion Prompts\nHow did geography influence the longevity of ancient administrative models?`;
-    
+
     case 'Art':
       return `# ${normalizedTitle}\n\n## 🎨 Visual Composition & Creative Sketching Studio\nA workshop focusing on aesthetic principles, negative space ratios, visual balance, and dynamic typography models.\n\n### 🖌️ Design Principles\n- **Golden Spiral**: Align critical focal points with recursive visual arcs.\n- **Chiaroscuro**: Leverage deep high-contrast shading to establish three-dimensional form.\n\n### 🛠️ Whiteboard Practical Sandbox Project\nCollaborate on the dynamic canvas to draft a raw responsive layout using minimal monochromatic blocks.\n\n### 🎨 Portfolio Task\nSubmit three divergent conceptual drafts representing active space constraints.`;
 

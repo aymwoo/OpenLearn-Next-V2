@@ -3,13 +3,7 @@
  * No `any` types permitted. Uses Interfaces, Generics, and Readonly types throughout.
  */
 
-export type CapabilityLifecycleStatus =
-  | 'Draft'
-  | 'Experimental'
-  | 'Preview'
-  | 'Stable'
-  | 'Deprecated'
-  | 'Archived';
+export type CapabilityLifecycleStatus = 'Draft' | 'Experimental' | 'Preview' | 'Stable' | 'Deprecated' | 'Archived';
 
 export type GovernanceCategory =
   | 'Teaching'

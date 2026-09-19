@@ -1,6 +1,6 @@
 /**
  * Teaching Object Framework — Barrel Export
- * 
+ *
  * Semantic Teaching Object Architecture for OpenLearn Whiteboard Engine.
  */
 

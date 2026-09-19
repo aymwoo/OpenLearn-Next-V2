@@ -64,9 +64,7 @@ describe('AIService', () => {
 
   it('generateText 应在无 provider 且无 Gemini key 时抛异常', async () => {
     vi.stubEnv('GEMINI_API_KEY', '');
-    await expect(aiService.generateText('hello')).rejects.toThrow(
-      /GEMINI_API_KEY is not configured|No AI providers/,
-    );
+    await expect(aiService.generateText('hello')).rejects.toThrow(/GEMINI_API_KEY is not configured|No AI providers/);
   });
 
   it('generateText 应在无 provider 但 Gemini key 存在时调用 Gemini', async () => {
@@ -85,15 +83,7 @@ describe('AIService', () => {
     // Insert a test provider into the in-memory DB
     db.prepare(
       'INSERT INTO ai_providers (id, name, api_url, api_key, model_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    ).run(
-      'p1',
-      'test-provider',
-      'https://api.test.com',
-      'key123',
-      'gpt-4',
-      Date.now(),
-      Date.now(),
-    );
+    ).run('p1', 'test-provider', 'https://api.test.com', 'key123', 'gpt-4', Date.now(), Date.now());
 
     // Mock global fetch to return a fake provider response
     const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({

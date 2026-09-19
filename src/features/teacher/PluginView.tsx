@@ -32,7 +32,9 @@ export function PluginView(props: PluginViewProps) {
       pluginCode={props.pluginCode}
       setPluginCode={props.setPluginCode}
       installingPlugin={props.installingPlugin}
-      onInstall={() => { void props.onInstall(props.pluginCode); }}
+      onInstall={() => {
+        void props.onInstall(props.pluginCode);
+      }}
       onZipUpload={props.onZipUpload}
       onToggle={props.onToggle}
       onDelete={props.onDelete}

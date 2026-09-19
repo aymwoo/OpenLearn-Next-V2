@@ -6,10 +6,7 @@
 
 import type { PluginHost } from './index.js';
 import type { PluginState, PluginInfo } from './types.js';
-import type {
-  IntegrationHealthStatus,
-  IntegrationDescriptor,
-} from '../bootstrap/integration/integration-types.js';
+import type { IntegrationHealthStatus, IntegrationDescriptor } from '../bootstrap/integration/integration-types.js';
 import { PLATFORM_VERSION } from '../version.js';
 
 export interface IPluginLifecycleManager {

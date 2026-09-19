@@ -1,15 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  BootstrapPipeline,
-  PipelineExecutor,
-  PipelineDiagnosticEvent,
-} from '../bootstrap/pipeline/index.js';
+import { BootstrapPipeline, PipelineExecutor, PipelineDiagnosticEvent } from '../bootstrap/pipeline/index.js';
 import type { IBootstrapStage } from '../bootstrap/types/index.js';
-import {
-  IBootstrapContext,
-  PlatformStage,
-  DEFAULT_BOOTSTRAP_CONFIG,
-} from '../bootstrap/types/index.js';
+import { IBootstrapContext, PlatformStage, DEFAULT_BOOTSTRAP_CONFIG } from '../bootstrap/types/index.js';
 
 class MockBootstrapContext implements IBootstrapContext {
   public startupTimestamp = Date.now();

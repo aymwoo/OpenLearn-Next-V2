@@ -10,13 +10,7 @@ interface PaletteCardEditModalProps {
   onCancel: () => void;
 }
 
-export function PaletteCardEditModal({
-  config,
-  lang,
-  initialData,
-  onConfirm,
-  onCancel,
-}: PaletteCardEditModalProps) {
+export function PaletteCardEditModal({ config, lang, initialData, onConfirm, onCancel }: PaletteCardEditModalProps) {
   const [data, setData] = useState<Record<string, any>>(() => ({ ...initialData }));
   const [selectOptions, setSelectOptions] = useState<Record<string, SelectOption[]>>({});
   const Icon = config.icon;
@@ -86,9 +80,7 @@ export function PaletteCardEditModal({
           ) : (
             config.editFields.map((f) => (
               <div key={f.key} className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-600">
-                  {lang === 'zh' ? f.labelZh : f.labelEn}
-                </label>
+                <label className="text-xs font-semibold text-gray-600">{lang === 'zh' ? f.labelZh : f.labelEn}</label>
                 {f.kind === 'options' ? (
                   <div className="grid grid-cols-2 gap-2">
                     {options.map((opt, i) => (

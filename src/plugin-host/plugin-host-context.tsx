@@ -25,11 +25,7 @@ export interface PluginHostProviderProps {
 }
 
 export function PluginHostProvider({ children, host }: PluginHostProviderProps) {
-  return (
-    <PluginHostContext.Provider value={host}>
-      {children}
-    </PluginHostContext.Provider>
-  );
+  return <PluginHostContext.Provider value={host}>{children}</PluginHostContext.Provider>;
 }
 
 /**

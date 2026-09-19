@@ -50,7 +50,11 @@ export class ClipboardService {
   /**
    * Duplicate objects directly on page
    */
-  public duplicate(page: CanvasPage, objectIds: string[], offset: Point2D = { x: 20, y: 20 }): { page: CanvasPage; newObjectIds: string[] } {
+  public duplicate(
+    page: CanvasPage,
+    objectIds: string[],
+    offset: Point2D = { x: 20, y: 20 },
+  ): { page: CanvasPage; newObjectIds: string[] } {
     const targets = objectIds.map((id) => page.objects[id]).filter(Boolean);
     this.copy(targets);
     return this.paste(page, offset);

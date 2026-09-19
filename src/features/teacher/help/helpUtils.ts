@@ -7,7 +7,8 @@ export const getCommandCategory = (commandType: string): string => {
     commandType.startsWith('assignment.') ||
     commandType.startsWith('attendance.') ||
     commandType.startsWith('schedule.')
-  ) return 'mgmt';
+  )
+    return 'mgmt';
   if (commandType.startsWith('process.')) return 'proc';
   if (commandType.startsWith('ai.')) return 'ai';
   return 'plugin';
@@ -17,10 +18,10 @@ export const generateInitialPayload = (schema: any): string => {
   if (!schema || schema.type !== 'OBJECT') return '{}';
   const payload: Record<string, any> = {};
   if (schema.properties) {
-    Object.keys(schema.properties).forEach(key => {
+    Object.keys(schema.properties).forEach((key) => {
       const prop = schema.properties[key];
       if (prop.type === 'ARRAY') {
-        payload[key] = prop.items?.type === 'STRING' ? ["选项 A", "选项 B", "选项 C"] : [];
+        payload[key] = prop.items?.type === 'STRING' ? ['选项 A', '选项 B', '选项 C'] : [];
       } else if (prop.type === 'INTEGER' || prop.type === 'NUMBER') {
         payload[key] = 100;
       } else if (prop.type === 'BOOLEAN') {

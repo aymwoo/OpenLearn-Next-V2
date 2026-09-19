@@ -21,7 +21,7 @@ describe('StudentCourseProgressList', () => {
         ]}
         setSelectedLesson={vi.fn()}
         setStudentViewStatus={vi.fn()}
-      />
+      />,
     );
     expect(screen.getByText('My Independent Courses')).toBeTruthy();
     expect(screen.getByText('Start Learning')).toBeTruthy();

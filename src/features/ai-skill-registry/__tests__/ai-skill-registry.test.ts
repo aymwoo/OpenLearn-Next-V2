@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  AISkillRegistry,
-  registerDefaultAISkills,
-  IAISkillProvider,
-} from '../index.js';
+import { AISkillRegistry, registerDefaultAISkills, IAISkillProvider } from '../index.js';
 
 describe('Sprint P5-03 AI Skill Registry Test Suite', () => {
   let registry: AISkillRegistry;

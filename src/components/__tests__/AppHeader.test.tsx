@@ -70,7 +70,7 @@ describe('AppHeader', () => {
           lang: 'zh',
           setActiveRole,
         })}
-      />
+      />,
     );
     const exitBtn = screen.getByText('返回教师端');
     expect(exitBtn).toBeTruthy();
@@ -85,9 +85,86 @@ describe('AppHeader', () => {
           activeRole: 'student',
           session: { name: 'Student', role: 'student', avatar: null },
         })}
-      />
+      />,
     );
     expect(screen.queryByText('返回教师端')).toBeNull();
     expect(screen.queryByText('Exit Student View')).toBeNull();
+  });
+
+  describe('全班专注锁定 (class focus lock)', () => {
+    it('blocks Dashboard navigation and notifies when a locked student clicks it', () => {
+      const setStudentViewStatus = vi.fn();
+      const onBlockedNavigate = vi.fn();
+      render(
+        <AppHeader
+          {...makeProps({
+            activeRole: 'student',
+            session: { name: 'Student', role: 'student', avatar: null },
+            studentViewStatus: 'lesson',
+            isStudentLocked: true,
+            setStudentViewStatus,
+            onBlockedNavigate,
+          })}
+        />,
+      );
+
+      screen.getByText('Dashboard').click();
+
+      expect(setStudentViewStatus).not.toHaveBeenCalled();
+      expect(onBlockedNavigate).toHaveBeenCalledTimes(1);
+    });
+
+    it('blocks the brand/logo shortcut as well', () => {
+      const setStudentViewStatus = vi.fn();
+      const onBlockedNavigate = vi.fn();
+      render(
+        <AppHeader
+          {...makeProps({
+            activeRole: 'student',
+            session: { name: 'Student', role: 'student', avatar: null },
+            studentViewStatus: 'lesson',
+            isStudentLocked: true,
+            setStudentViewStatus,
+            onBlockedNavigate,
+          })}
+        />,
+      );
+
+      screen.getByTitle('Class focus locked — cannot return to dashboard').click();
+
+      expect(setStudentViewStatus).not.toHaveBeenCalled();
+      expect(onBlockedNavigate).toHaveBeenCalledTimes(1);
+    });
+
+    it('still allows navigation for an unlocked student', () => {
+      const setStudentViewStatus = vi.fn();
+      const onBlockedNavigate = vi.fn();
+      render(
+        <AppHeader
+          {...makeProps({
+            activeRole: 'student',
+            session: { name: 'Student', role: 'student', avatar: null },
+            studentViewStatus: 'lesson',
+            isStudentLocked: false,
+            setStudentViewStatus,
+            onBlockedNavigate,
+          })}
+        />,
+      );
+
+      screen.getByText('Dashboard').click();
+
+      expect(setStudentViewStatus).toHaveBeenCalledWith('dashboard');
+      expect(onBlockedNavigate).not.toHaveBeenCalled();
+    });
+
+    it('does not restrict teachers on the dashboard', () => {
+      const setTeacherTab = vi.fn();
+      render(<AppHeader {...makeProps({ activeRole: 'teacher', isStudentLocked: true, setTeacherTab })} />);
+
+      screen.getByText('Dashboard').click();
+
+      expect(setTeacherTab).toHaveBeenCalledWith('dashboard');
+    });
   });
 });

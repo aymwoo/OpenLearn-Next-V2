@@ -7,9 +7,7 @@ import { PluginCompositionModule } from '../../bootstrap/composition/plugin-comp
 describe('PluginRuntimeComposition (EU-01)', () => {
   const createMocks = () => {
     const mockHost = {
-      listPlugins: vi.fn().mockReturnValue([
-        { id: 'p1', state: 'active', manifest: { name: 'P1', version: '1.0' } },
-      ]),
+      listPlugins: vi.fn().mockReturnValue([{ id: 'p1', state: 'active', manifest: { name: 'P1', version: '1.0' } }]),
       setWorkerManager: vi.fn(),
     } as unknown as PluginHost;
 

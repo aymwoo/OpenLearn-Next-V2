@@ -19,84 +19,106 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const db = kernelContainer.db;
 
       // Get students in this class
-      const classStudents = db.prepare(`
+      const classStudents = db
+        .prepare(
+          `
         SELECT student_id FROM class_students WHERE class_id = ?
-      `).all(classId) as any[];
+      `,
+        )
+        .all(classId) as any[];
 
       // Get lessons in the database to link to auto-generated schedules if needed
       const lessons = db.prepare('SELECT id FROM lessons LIMIT 5').all() as any[];
 
       // Verify if there are any schedules for this class
-      let schedules = db.prepare(`
+      let schedules = db
+        .prepare(
+          `
         SELECT s.*, COALESCE(l.title, '未设定内�? (上课时自由选择)') as lesson_title
         FROM schedules s
         LEFT JOIN lessons l ON s.lesson_id = l.id
         WHERE s.class_id = ?
-      `).all(classId) as any[];
+      `,
+        )
+        .all(classId) as any[];
 
       // If no schedules exist at all, let's create a few realistic past schedules
       // over the last 30 days to populate the chart
       if (schedules.length === 0 && lessons.length > 0 && classStudents.length > 0) {
         const dateOffsets = [4, 8, 12, 16, 20, 24, 28]; // past days
         const nowMs = Date.now();
-        
+
         for (let i = 0; i < dateOffsets.length; i++) {
           const offsetDays = dateOffsets[i];
           const schDate = new Date();
           schDate.setDate(schDate.getDate() - offsetDays);
           const dateStr = schDate.toISOString().split('T')[0];
-          
+
           const schId = 'sch-auto-' + classId + '-' + offsetDays;
           const lessonId = lessons[i % lessons.length].id;
-          
+
           // Insert schedule
-          db.prepare(`
+          db.prepare(
+            `
             INSERT OR IGNORE INTO schedules (id, class_id, lesson_id, scheduled_date, created_at)
             VALUES (?, ?, ?, ?, ?)
-          `).run(schId, classId, lessonId, dateStr, nowMs - offsetDays * 24 * 60 * 60 * 1000);
+          `,
+          ).run(schId, classId, lessonId, dateStr, nowMs - offsetDays * 24 * 60 * 60 * 1000);
 
           // Seed attendance for all students of this class
           for (const s of classStudents) {
             // Roll a status: 80% present, 12% late, 8% absent
             const rand = Math.random();
-            const status = rand < 0.80 ? 'present' : rand < 0.92 ? 'late' : 'absent';
-            
-            db.prepare(`
+            const status = rand < 0.8 ? 'present' : rand < 0.92 ? 'late' : 'absent';
+
+            db.prepare(
+              `
               INSERT OR IGNORE INTO attendance (schedule_id, student_id, status, recorded_at)
               VALUES (?, ?, ?, ?)
-            `).run(schId, s.student_id, status, nowMs - offsetDays * 24 * 60 * 60 * 1000);
+            `,
+            ).run(schId, s.student_id, status, nowMs - offsetDays * 24 * 60 * 60 * 1000);
           }
         }
 
         // Re-fetch since we just created them
-        schedules = db.prepare(`
+        schedules = db
+          .prepare(
+            `
           SELECT s.*, COALESCE(l.title, '未设定内�? (上课时自由选择)') as lesson_title
           FROM schedules s
           LEFT JOIN lessons l ON s.lesson_id = l.id
           WHERE s.class_id = ?
-        `).all(classId) as any[];
+        `,
+          )
+          .all(classId) as any[];
       }
 
       // If schedules exist, make sure each has attendance filled for students who are in the class
       // just in case we scheduled a class but did not record attendance yet
       for (const sch of schedules) {
-        const attendanceCount = db.prepare('SELECT COUNT(*) as count FROM attendance WHERE schedule_id = ?').get(sch.id) as any;
+        const attendanceCount = db
+          .prepare('SELECT COUNT(*) as count FROM attendance WHERE schedule_id = ?')
+          .get(sch.id) as any;
         if (attendanceCount && attendanceCount.count === 0 && classStudents.length > 0) {
           const nowMs = Date.now();
           for (const s of classStudents) {
             const rand = Math.random();
             const status = rand < 0.85 ? 'present' : rand < 0.95 ? 'late' : 'absent';
-            db.prepare(`
+            db.prepare(
+              `
               INSERT OR IGNORE INTO attendance (schedule_id, student_id, status, recorded_at)
               VALUES (?, ?, ?, ?)
-            `).run(sch.id, s.student_id, status, nowMs);
+            `,
+            ).run(sch.id, s.student_id, status, nowMs);
           }
         }
       }
 
       // Now query details for each schedule to calculate actual attendance rates
-      const summary = schedules.map(sch => {
-        const counts = db.prepare(`
+      const summary = schedules.map((sch) => {
+        const counts = db
+          .prepare(
+            `
           SELECT 
             SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present,
             SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late,
@@ -104,7 +126,9 @@ export function registerGradingRoutes(ctx: ServerContext) {
             COUNT(*) as total
           FROM attendance
           WHERE schedule_id = ?
-        `).get(sch.id) as any;
+        `,
+          )
+          .get(sch.id) as any;
 
         const total = counts ? counts.total : 0;
         const present = counts ? counts.present : 0;
@@ -121,7 +145,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
           late,
           absent,
           total,
-          attendanceRate: rate
+          attendanceRate: rate,
         };
       });
 
@@ -132,7 +156,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
       // We sort ascending by scheduled_date for chronological bar chart rendering
       const filtered = summary
-        .filter(item => {
+        .filter((item) => {
           try {
             const itemDate = new Date(item.date);
             return itemDate >= thirtyDaysAgo && itemDate <= now;
@@ -150,12 +174,16 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
   app.get('/api/schedules/:scheduleId/attendance', (req, res) => {
     try {
-      const attendance = kernelContainer.db.prepare(`
+      const attendance = kernelContainer.db
+        .prepare(
+          `
         SELECT a.*, s.name as student_name
         FROM attendance a
         JOIN students s ON a.student_id = s.id
         WHERE a.schedule_id = ?
-      `).all(req.params.scheduleId);
+      `,
+        )
+        .all(req.params.scheduleId);
       res.json(attendance);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -165,11 +193,15 @@ export function registerGradingRoutes(ctx: ServerContext) {
   app.post('/api/schedules/:scheduleId/attendance', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { studentId, status } = req.body;
-      kernelContainer.db.prepare(`
+      kernelContainer.db
+        .prepare(
+          `
         INSERT INTO attendance (schedule_id, student_id, status, recorded_at)
         VALUES (?, ?, ?, ?)
         ON CONFLICT(schedule_id, student_id) DO UPDATE SET status = excluded.status, recorded_at = excluded.recorded_at
-      `).run(req.params.scheduleId, studentId, status, Date.now());
+      `,
+        )
+        .run(req.params.scheduleId, studentId, status, Date.now());
       res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -179,14 +211,16 @@ export function registerGradingRoutes(ctx: ServerContext) {
   // ==================== Grade Weights Endpoints ====================
   app.get('/api/classes/:classId/grade-weights', (req, res) => {
     try {
-      const weights = kernelContainer.db.prepare('SELECT * FROM class_grade_weights WHERE class_id = ?').get(req.params.classId);
+      const weights = kernelContainer.db
+        .prepare('SELECT * FROM class_grade_weights WHERE class_id = ?')
+        .get(req.params.classId);
       if (!weights) {
         return res.json({
           class_id: req.params.classId,
           attendance_weight: 0.15,
           progress_weight: 0.25,
           assignment_weight: 0.35,
-          exam_weight: 0.25
+          exam_weight: 0.25,
         });
       }
       res.json(weights);
@@ -198,7 +232,8 @@ export function registerGradingRoutes(ctx: ServerContext) {
   app.post('/api/classes/:classId/grade-weights', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { attendance_weight, progress_weight, assignment_weight, exam_weight } = req.body;
-      const total = Number(attendance_weight) + Number(progress_weight) + Number(assignment_weight) + Number(exam_weight);
+      const total =
+        Number(attendance_weight) + Number(progress_weight) + Number(assignment_weight) + Number(exam_weight);
       if (Math.abs(total - 1.0) > 0.001 && Math.abs(total - 100) > 0.1) {
         return res.status(400).json({ error: 'Weights sum must equal 1.0 or 100%' });
       }
@@ -208,7 +243,9 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const assign = Number(assignment_weight) > 1 ? Number(assignment_weight) / 100 : Number(assignment_weight);
       const ex = Number(exam_weight) > 1 ? Number(exam_weight) / 100 : Number(exam_weight);
 
-      kernelContainer.db.prepare(`
+      kernelContainer.db
+        .prepare(
+          `
         INSERT INTO class_grade_weights (class_id, attendance_weight, progress_weight, assignment_weight, exam_weight, updated_at)
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(class_id) DO UPDATE SET
@@ -217,7 +254,9 @@ export function registerGradingRoutes(ctx: ServerContext) {
           assignment_weight = excluded.assignment_weight,
           exam_weight = excluded.exam_weight,
           updated_at = excluded.updated_at
-      `).run(req.params.classId, att, prog, assign, ex, Date.now());
+      `,
+        )
+        .run(req.params.classId, att, prog, assign, ex, Date.now());
 
       res.json({ success: true });
     } catch (e: any) {
@@ -228,7 +267,9 @@ export function registerGradingRoutes(ctx: ServerContext) {
   // ==================== Exams & Scores Endpoints ====================
   app.get('/api/classes/:classId/exams', (req, res) => {
     try {
-      const exams = kernelContainer.db.prepare('SELECT * FROM exams WHERE class_id = ? ORDER BY created_at DESC').all(req.params.classId);
+      const exams = kernelContainer.db
+        .prepare('SELECT * FROM exams WHERE class_id = ? ORDER BY created_at DESC')
+        .all(req.params.classId);
       res.json(exams);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -240,10 +281,14 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const { title, description, max_score } = req.body;
       if (!title) return res.status(400).json({ error: 'Title is required' });
       const examId = 'exam-' + Math.random().toString(36).substring(2, 10);
-      kernelContainer.db.prepare(`
+      kernelContainer.db
+        .prepare(
+          `
         INSERT INTO exams (id, class_id, title, description, max_score, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run(examId, req.params.classId, title, description || '', max_score || 100, Date.now());
+      `,
+        )
+        .run(examId, req.params.classId, title, description || '', max_score || 100, Date.now());
       res.json({ success: true, examId });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -275,7 +320,13 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
       const transaction = kernelContainer.db.transaction((scoresList) => {
         for (const item of scoresList) {
-          insertStmt.run(req.params.examId, item.studentId, item.score !== undefined && item.score !== null ? Number(item.score) : null, item.notes || null, Date.now());
+          insertStmt.run(
+            req.params.examId,
+            item.studentId,
+            item.score !== undefined && item.score !== null ? Number(item.score) : null,
+            item.notes || null,
+            Date.now(),
+          );
         }
       });
 
@@ -293,81 +344,107 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const semesterName = (req.query.semesterName as string) || '2026年春季学�?';
 
       // 1. Get weights
-      let weights = kernelContainer.db.prepare('SELECT * FROM class_grade_weights WHERE class_id = ?').get(classId) as any;
+      let weights = kernelContainer.db
+        .prepare('SELECT * FROM class_grade_weights WHERE class_id = ?')
+        .get(classId) as any;
       if (!weights) {
         weights = {
           attendance_weight: 0.15,
           progress_weight: 0.25,
           assignment_weight: 0.35,
-          exam_weight: 0.25
+          exam_weight: 0.25,
         };
       }
 
       // 2. Get students
-      const students = kernelContainer.db.prepare(`
+      const students = kernelContainer.db
+        .prepare(
+          `
         SELECT s.id, s.name, s.student_number
         FROM students s
         JOIN class_students cs ON s.id = cs.student_id
         WHERE cs.class_id = ?
-      `).all(classId) as any[];
+      `,
+        )
+        .all(classId) as any[];
 
       // 3. Get all metrics in bulk
-      const attendanceList = kernelContainer.db.prepare(`
+      const attendanceList = kernelContainer.db
+        .prepare(
+          `
         SELECT student_id, status FROM attendance
         WHERE schedule_id IN (SELECT id FROM schedules WHERE class_id = ?)
-      `).all(classId) as any[];
+      `,
+        )
+        .all(classId) as any[];
 
-      const progressList = kernelContainer.db.prepare(`
+      const progressList = kernelContainer.db
+        .prepare(
+          `
         SELECT student_id, progress_percent FROM student_lesson_progress
         WHERE lesson_id IN (SELECT DISTINCT lesson_id FROM schedules WHERE class_id = ?)
-      `).all(classId) as any[];
+      `,
+        )
+        .all(classId) as any[];
 
-      const assignmentSubmissions = kernelContainer.db.prepare(`
+      const assignmentSubmissions = kernelContainer.db
+        .prepare(
+          `
         SELECT student_id, score FROM assignment_submissions
         WHERE assignment_id IN (SELECT id FROM assignments WHERE class_id = ?) AND status = 'graded' AND score IS NOT NULL
-      `).all(classId) as any[];
+      `,
+        )
+        .all(classId) as any[];
 
-      const examScoresList = kernelContainer.db.prepare(`
+      const examScoresList = kernelContainer.db
+        .prepare(
+          `
         SELECT es.student_id, es.score, e.max_score FROM exam_scores es
         JOIN exams e ON es.exam_id = e.id
         WHERE e.class_id = ? AND es.score IS NOT NULL
-      `).all(classId) as any[];
+      `,
+        )
+        .all(classId) as any[];
 
       // Get archived reports
-      const archivedReports = kernelContainer.db.prepare(`
+      const archivedReports = kernelContainer.db
+        .prepare(
+          `
         SELECT * FROM student_semester_reports
         WHERE class_id = ? AND semester_name = ?
-      `).all(classId, semesterName) as any[];
+      `,
+        )
+        .all(classId, semesterName) as any[];
 
-      const archivedMap = new Map(archivedReports.map(r => [r.student_id, r]));
+      const archivedMap = new Map(archivedReports.map((r) => [r.student_id, r]));
 
       // 4. Map metrics by student
       const attendanceMap = new Map<string, string[]>();
-      attendanceList.forEach(a => {
+      attendanceList.forEach((a) => {
         if (!attendanceMap.has(a.student_id)) attendanceMap.set(a.student_id, []);
         attendanceMap.get(a.student_id)!.push(a.status);
       });
 
       const progressMap = new Map<string, number[]>();
-      progressList.forEach(p => {
+      progressList.forEach((p) => {
         if (!progressMap.has(p.student_id)) progressMap.set(p.student_id, []);
         progressMap.get(p.student_id)!.push(p.progress_percent);
       });
 
       const assignmentMap = new Map<string, number[]>();
-      assignmentSubmissions.forEach(a => {
+      assignmentSubmissions.forEach((a) => {
         if (!assignmentMap.has(a.student_id)) assignmentMap.set(a.student_id, []);
         assignmentMap.get(a.student_id)!.push(a.score);
       });
 
       const examMap = new Map<string, { score: number; max: number }[]>();
-      examScoresList.forEach(e => {
+      examScoresList.forEach((e) => {
         if (!examMap.has(e.student_id)) examMap.set(e.student_id, []);
         examMap.get(e.student_id)!.push({ score: e.score, max: e.max_score });
       });
 
       // 5. Compute grades for each student
-      const result = students.map(student => {
+      const result = students.map((student) => {
         const archived = archivedMap.get(student.id);
         if (archived) {
           return {
@@ -382,7 +459,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
             gradeLevel: archived.grade_level,
             teacherEvaluation: archived.teacher_evaluation || '',
             aiEvaluation: archived.ai_evaluation || '',
-            isArchived: true
+            isArchived: true,
           };
         }
 
@@ -423,9 +500,9 @@ export function registerGradingRoutes(ctx: ServerContext) {
         // Calculate Weighted Total Score
         const totalScore = Math.round(
           attendanceScore * weights.attendance_weight +
-          progressScore * weights.progress_weight +
-          assignmentScore * weights.assignment_weight +
-          examScore * weights.exam_weight
+            progressScore * weights.progress_weight +
+            assignmentScore * weights.assignment_weight +
+            examScore * weights.exam_weight,
         );
 
         // Calculate Grade Level
@@ -447,7 +524,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
           gradeLevel,
           teacherEvaluation: '',
           aiEvaluation: '',
-          isArchived: false
+          isArchived: false,
         };
       });
 
@@ -492,11 +569,20 @@ export function registerGradingRoutes(ctx: ServerContext) {
       const { classId, dimensionId, deltaPoints, reason, pluginId } = req.body;
 
       if (!classId || !dimensionId || deltaPoints === undefined || !reason) {
-        return res.status(400).json({ success: false, error: 'classId, dimensionId, deltaPoints, and reason are required' });
+        return res
+          .status(400)
+          .json({ success: false, error: 'classId, dimensionId, deltaPoints, and reason are required' });
       }
 
       const ledgerService = await kernelContainer.serviceRegistry.resolve(IPointsLedgerServiceToken);
-      const logItem = await ledgerService.addPoints(studentId, classId, dimensionId, Number(deltaPoints), reason, pluginId);
+      const logItem = await ledgerService.addPoints(
+        studentId,
+        classId,
+        dimensionId,
+        Number(deltaPoints),
+        reason,
+        pluginId,
+      );
 
       // Publish to EventBus & Socket.IO
       kernelContainer.eventBus.publish({
@@ -573,7 +659,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
             r.aiEvaluation || null,
             r.dimensionScores ? JSON.stringify(r.dimensionScores) : null,
             Date.now(),
-            Date.now()
+            Date.now(),
           );
         }
       });
@@ -585,46 +671,76 @@ export function registerGradingRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/classes/:classId/students/:studentId/semester-ai-evaluation', requireAuth('teacher', 'administrator'), async (req, res) => {
-    try {
-      const { classId, studentId } = req.params;
-      const { semesterName = '2026年春季学�?', providerId } = req.body;
+  app.post(
+    '/api/classes/:classId/students/:studentId/semester-ai-evaluation',
+    requireAuth('teacher', 'administrator'),
+    async (req, res) => {
+      try {
+        const { classId, studentId } = req.params;
+        const { semesterName = '2026年春季学�?', providerId } = req.body;
 
-      // 1. Get student and class info
-      const student = kernelContainer.db.prepare('SELECT name FROM students WHERE id = ?').get(studentId) as { name: string } | undefined;
-      if (!student) return res.status(404).json({ error: 'Student not found' });
+        // 1. Get student and class info
+        const student = kernelContainer.db.prepare('SELECT name FROM students WHERE id = ?').get(studentId) as
+          { name: string } | undefined;
+        if (!student) return res.status(404).json({ error: 'Student not found' });
 
-      // 2. Fetch student's grades / attendance / assignments details for prompt context
-      const attendanceStats = kernelContainer.db.prepare(`
+        // 2. Fetch student's grades / attendance / assignments details for prompt context
+        const attendanceStats = kernelContainer.db
+          .prepare(
+            `
         SELECT status, COUNT(*) as count FROM attendance
         WHERE student_id = ? AND schedule_id IN (SELECT id FROM schedules WHERE class_id = ?)
         GROUP BY status
-      `).all(studentId, classId) as { status: string; count: number }[];
+      `,
+          )
+          .all(studentId, classId) as { status: string; count: number }[];
 
-      const progressObj = kernelContainer.db.prepare(`
+        const progressObj = kernelContainer.db
+          .prepare(
+            `
         SELECT AVG(progress_percent) as avg_progress FROM student_lesson_progress
         WHERE student_id = ? AND lesson_id IN (SELECT DISTINCT lesson_id FROM schedules WHERE class_id = ?)
-      `).get(studentId, classId) as { avg_progress: number | null };
+      `,
+          )
+          .get(studentId, classId) as { avg_progress: number | null };
 
-      const assignmentGrades = kernelContainer.db.prepare(`
+        const assignmentGrades = kernelContainer.db
+          .prepare(
+            `
         SELECT a.title, s.score, s.feedback FROM assignment_submissions s
         JOIN assignments a ON s.assignment_id = a.id
         WHERE s.student_id = ? AND a.class_id = ? AND s.status = 'graded' AND s.score IS NOT NULL
-      `).all(studentId, classId) as { title: string; score: number; feedback: string }[];
+      `,
+          )
+          .all(studentId, classId) as { title: string; score: number; feedback: string }[];
 
-      const examGrades = kernelContainer.db.prepare(`
+        const examGrades = kernelContainer.db
+          .prepare(
+            `
         SELECT e.title, es.score, e.max_score FROM exam_scores es
         JOIN exams e ON es.exam_id = e.id
         WHERE es.student_id = ? AND e.class_id = ? AND es.score IS NOT NULL
-      `).all(studentId, classId) as { title: string; score: number; max_score: number }[];
+      `,
+          )
+          .all(studentId, classId) as { title: string; score: number; max_score: number }[];
 
-      // Formatting context for AI
-      const attSummary = attendanceStats.map(a => `${a.status === 'present' ? '出勤' : a.status === 'late' ? '迟到' : a.status === 'leave_early' ? '早退' : a.status === 'excused' ? '请假' : '缺勤'}: ${a.count}次`).join(', ') || '暂无出勤记录';
-      const avgProg = progressObj.avg_progress !== null ? Math.round(progressObj.avg_progress) : 100;
-      const assignmentsText = assignmentGrades.map(a => `- �?${a.title}》得�?: ${a.score}�? (教师评语: ${a.feedback || '�?'})`).join('\n') || '- 暂无平时作业记录';
-      const examsText = examGrades.map(e => `- �?${e.title}》得�?: ${e.score}/${e.max_score}`).join('\n') || '- 暂无考试成绩记录';
+        // Formatting context for AI
+        const attSummary =
+          attendanceStats
+            .map(
+              (a) =>
+                `${a.status === 'present' ? '出勤' : a.status === 'late' ? '迟到' : a.status === 'leave_early' ? '早退' : a.status === 'excused' ? '请假' : '缺勤'}: ${a.count}次`,
+            )
+            .join(', ') || '暂无出勤记录';
+        const avgProg = progressObj.avg_progress !== null ? Math.round(progressObj.avg_progress) : 100;
+        const assignmentsText =
+          assignmentGrades
+            .map((a) => `- �?${a.title}》得�?: ${a.score}�? (教师评语: ${a.feedback || '�?'})`)
+            .join('\n') || '- 暂无平时作业记录';
+        const examsText =
+          examGrades.map((e) => `- �?${e.title}》得�?: ${e.score}/${e.max_score}`).join('\n') || '- 暂无考试成绩记录';
 
-      const prompt = `请扮演一位充满爱心、语气温馨的班主任老师。请结合下面这位学生的学期学习数据和作业表现，为该学生撰写一段【富有鼓励性、温馨、语气亲切】的学期期末总评语�?
+        const prompt = `请扮演一位充满爱心、语气温馨的班主任老师。请结合下面这位学生的学期学习数据和作业表现，为该学生撰写一段【富有鼓励性、温馨、语气亲切】的学期期末总评语�?
 
 学生姓名�?${student.name}
 班级学期�?${semesterName}
@@ -645,63 +761,69 @@ ${examsText}
    - 对未来的期许，激励学生在下学期继续努力�?
 3. 长度控制�? 150-250 字之间。不要包含任�? Markdown 格式，只返回纯文本评语。`;
 
-      // 3. Invoke AI Provider
-      let text = '';
-      const provider = providerId
-        ? kernelContainer.db.prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?').get(providerId) as StoredAIProvider | undefined
-        : kernelContainer.db.prepare("SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != '' LIMIT 1").get() as StoredAIProvider | undefined;
+        // 3. Invoke AI Provider
+        let text = '';
+        const provider = providerId
+          ? (kernelContainer.db
+              .prepare('SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE id = ?')
+              .get(providerId) as StoredAIProvider | undefined)
+          : (kernelContainer.db
+              .prepare(
+                "SELECT id, name, api_url, api_key, model_name FROM ai_providers WHERE api_key IS NOT NULL AND api_key != '' LIMIT 1",
+              )
+              .get() as StoredAIProvider | undefined);
 
-      if (provider?.api_key) provider.api_key = decryptApiKey(provider.api_key);
+        if (provider?.api_key) provider.api_key = decryptApiKey(provider.api_key);
 
-      if (provider && provider.api_key && provider.api_key.trim()) {
-        let chatUrl = provider.api_url.trim();
-        if (!chatUrl.endsWith('/chat/completions')) {
-          chatUrl = chatUrl.endsWith('/') ? chatUrl + 'chat/completions' : chatUrl + '/chat/completions';
+        if (provider && provider.api_key && provider.api_key.trim()) {
+          let chatUrl = provider.api_url.trim();
+          if (!chatUrl.endsWith('/chat/completions')) {
+            chatUrl = chatUrl.endsWith('/') ? chatUrl + 'chat/completions' : chatUrl + '/chat/completions';
+          }
+
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${provider.api_key.trim()}`,
+          };
+
+          const response = await fetch(chatUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              model: provider.model_name,
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.7,
+              max_tokens: 1024,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`AI request failed (${response.status}): ${errorText}`);
+          }
+
+          const data = await response.json();
+          text = data.choices?.[0]?.message?.content?.trim() || '';
+        } else {
+          // Gemini fallback
+          const geminiKey = process.env.GEMINI_API_KEY;
+          if (!geminiKey) {
+            return res.status(500).json({ error: 'AI provider is not configured and GEMINI_API_KEY is missing.' });
+          }
+          const ai = new GoogleGenAI({ apiKey: geminiKey });
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            config: { temperature: 0.7 },
+          });
+          text = response.text?.trim() || '';
         }
 
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${provider.api_key.trim()}`
-        };
-
-        const response = await fetch(chatUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            model: provider.model_name,
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.7,
-            max_tokens: 1024
-          })
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`AI request failed (${response.status}): ${errorText}`);
-        }
-
-        const data = await response.json();
-        text = data.choices?.[0]?.message?.content?.trim() || '';
-      } else {
-        // Gemini fallback
-        const geminiKey = process.env.GEMINI_API_KEY;
-        if (!geminiKey) {
-          return res.status(500).json({ error: 'AI provider is not configured and GEMINI_API_KEY is missing.' });
-        }
-        const ai = new GoogleGenAI({ apiKey: geminiKey });
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          config: { temperature: 0.7 }
-        });
-        text = response.text?.trim() || '';
+        res.json({ success: true, aiEvaluation: text });
+      } catch (e: any) {
+        console.error('AI Semester Evaluation error:', e);
+        res.status(500).json({ error: e.message });
       }
-
-      res.json({ success: true, aiEvaluation: text });
-    } catch (e: any) {
-      console.error('AI Semester Evaluation error:', e);
-      res.status(500).json({ error: e.message });
-    }
-  });
-
+    },
+  );
 }

@@ -88,7 +88,12 @@ export default defineConfig({
               return 'vendor-content';
             }
             // Utilities
-            if (id.includes('/es-toolkit/') || id.includes('/zustand/') || id.includes('/clsx/') || id.includes('/tailwind-merge/')) {
+            if (
+              id.includes('/es-toolkit/') ||
+              id.includes('/zustand/') ||
+              id.includes('/clsx/') ||
+              id.includes('/tailwind-merge/')
+            ) {
               return 'vendor-utils';
             }
           }

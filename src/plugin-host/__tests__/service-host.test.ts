@@ -218,10 +218,7 @@ describe('ServiceHost', () => {
         transport,
       );
 
-      expect(socketService.on).toHaveBeenCalledWith(
-        'lesson.created',
-        expect.any(Function),
-      );
+      expect(socketService.on).toHaveBeenCalledWith('lesson.created', expect.any(Function));
     });
 
     it('forwards socket events via transport', async () => {

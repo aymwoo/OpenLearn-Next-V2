@@ -24,7 +24,7 @@ export function registerBridgeRoutes(ctx: ServerContext) {
     try {
       const { uuid } = req.params;
       let subpath = req.params[0] || '';
-      
+
       const courseware = kernelContainer.db.prepare('SELECT * FROM courseware WHERE uuid = ?').get(uuid) as any;
       if (!courseware) {
         return res.status(404).send('Courseware not found');

@@ -43,9 +43,10 @@ function createMockTransport(): MockTransport {
 
 // ── Mock ServiceRegistry ───────────────────────────────────────────────────
 
-function createMockServiceRegistry(
-  services: Record<string, unknown>,
-): { resolveByName: ReturnType<typeof vi.fn>; resolve: ReturnType<typeof vi.fn> } {
+function createMockServiceRegistry(services: Record<string, unknown>): {
+  resolveByName: ReturnType<typeof vi.fn>;
+  resolve: ReturnType<typeof vi.fn>;
+} {
   return {
     resolveByName: vi.fn(async (name: string) => {
       const svc = services[name];
@@ -60,9 +61,7 @@ function createMockServiceRegistry(
 
 // ── Mock CapabilityGuard ───────────────────────────────────────────────────
 
-function createMockCapGuard(
-  checkResult: boolean = true,
-): { check: ReturnType<typeof vi.fn> } {
+function createMockCapGuard(checkResult: boolean = true): { check: ReturnType<typeof vi.fn> } {
   return {
     check: vi.fn(() => checkResult),
   } as any;
@@ -94,12 +93,7 @@ describe('ServiceHost basic invoke handling', () => {
       'test:Service': service,
     });
 
-    const host = new ServiceHost(
-      serviceRegistry as any,
-      capGuard as any,
-      'plugin:test',
-      ['test:cap'],
-    );
+    const host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['test:cap']);
 
     await host.handleInvoke(
       {
@@ -130,12 +124,7 @@ describe('ServiceHost basic invoke handling', () => {
       'test:Service': service,
     });
 
-    const host = new ServiceHost(
-      serviceRegistry as any,
-      capGuard as any,
-      'plugin:test',
-      ['test:cap'],
-    );
+    const host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['test:cap']);
 
     await host.handleInvoke(
       {
@@ -294,12 +283,7 @@ describe('ServiceHost error serialization', () => {
       'test:Service': service,
     });
 
-    const host = new ServiceHost(
-      serviceRegistry as any,
-      capGuard as any,
-      'plugin:test',
-      ['cap'],
-    );
+    const host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['cap']);
 
     await host.handleInvoke(
       {
@@ -333,12 +317,7 @@ describe('ServiceHost error serialization', () => {
       'test:Service': service,
     });
 
-    const host = new ServiceHost(
-      serviceRegistry as any,
-      capGuard as any,
-      'plugin:test',
-      ['cap'],
-    );
+    const host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['cap']);
 
     // Should not crash — should serialize the thrown string as an error
     await host.handleInvoke(
@@ -377,12 +356,7 @@ describe('ServiceHost message dispatch routing', () => {
         get: vi.fn(async () => 'ok'),
       },
     });
-    host = new ServiceHost(
-      serviceRegistry as any,
-      capGuard as any,
-      'plugin:test',
-      ['cap'],
-    );
+    host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['cap']);
   });
 
   afterEach(() => {
@@ -390,24 +364,15 @@ describe('ServiceHost message dispatch routing', () => {
   });
 
   it('should ignore unknown message types', async () => {
-    await host.handleMessage(
-      { type: 'unknown-type' },
-      transport as any,
-    );
+    await host.handleMessage({ type: 'unknown-type' }, transport as any);
 
     // Should not post any messages
     expect(transport.postMessage).not.toHaveBeenCalled();
   });
 
   it('should acknowledge activated and deactivated silently', async () => {
-    await host.handleMessage(
-      { type: 'activated' },
-      transport as any,
-    );
-    await host.handleMessage(
-      { type: 'deactivated' },
-      transport as any,
-    );
+    await host.handleMessage({ type: 'activated' }, transport as any);
+    await host.handleMessage({ type: 'deactivated' }, transport as any);
 
     // Should not post any messages for these types
     expect(transport.postMessage).not.toHaveBeenCalled();
@@ -416,10 +381,7 @@ describe('ServiceHost message dispatch routing', () => {
   it('should warn on subscribe without EventBus', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    await host.handleMessage(
-      { type: 'subscribe', subId: 's1', eventType: 'test.event' },
-      transport as any,
-    );
+    await host.handleMessage({ type: 'subscribe', subId: 's1', eventType: 'test.event' }, transport as any);
 
     expect(warnSpy).toHaveBeenCalled();
     expect(transport.postMessage).not.toHaveBeenCalled();
@@ -429,10 +391,7 @@ describe('ServiceHost message dispatch routing', () => {
 
   it('should silently ignore unsubscribe without EventForwarder', async () => {
     // Without an EventBus/EventForwarder, unsubscribe is a no-op
-    await host.handleMessage(
-      { type: 'unsubscribe', subId: 's1' },
-      transport as any,
-    );
+    await host.handleMessage({ type: 'unsubscribe', subId: 's1' }, transport as any);
 
     // Should not post any messages and should not throw
     expect(transport.postMessage).not.toHaveBeenCalled();
@@ -462,22 +421,12 @@ describe('ServiceHost message dispatch routing', () => {
 
 describe('ServiceHost accessors', () => {
   it('should return actorId from getter', () => {
-    const host = new ServiceHost(
-      {} as any,
-      {} as any,
-      'plugin:my-plugin',
-      [],
-    );
+    const host = new ServiceHost({} as any, {} as any, 'plugin:my-plugin', []);
     expect(host.actorId).toBe('plugin:my-plugin');
   });
 
   it('should update manifestCapabilities via setManifestCapabilities', () => {
-    const host = new ServiceHost(
-      {} as any,
-      {} as any,
-      'plugin:test',
-      [],
-    );
+    const host = new ServiceHost({} as any, {} as any, 'plugin:test', []);
 
     // Initially denied (empty caps)
     expect(() => {
@@ -515,12 +464,7 @@ describe('ServiceHost ActionRegistry tracking', () => {
   });
 
   it('should track registered action descriptors and unregister them on dispose', async () => {
-    const host = new ServiceHost(
-      serviceRegistry as any,
-      capGuard as any,
-      'plugin:test',
-      ['test:cap'],
-    );
+    const host = new ServiceHost(serviceRegistry as any, capGuard as any, 'plugin:test', ['test:cap']);
 
     // Call register
     await host.handleInvoke(
@@ -557,12 +501,7 @@ describe('ServiceHost ActionRegistry tracking', () => {
         '@openlearn/core:IDatabase': mockDb,
       });
 
-      const host = new ServiceHost(
-        dbRegistry as any,
-        capGuard as any,
-        'plugin:ext-test-db',
-        ['management:write'],
-      );
+      const host = new ServiceHost(dbRegistry as any, capGuard as any, 'plugin:ext-test-db', ['management:write']);
 
       await host.handleInvoke(
         {
@@ -578,7 +517,7 @@ describe('ServiceHost ActionRegistry tracking', () => {
       expect(transport.messages[0].type).toBe('error');
       expect(transport.messages[0].code).toBe('WorkerCapabilityError');
       expect(transport.messages[0].message).toContain(
-        'Worker plugin "ext-test-db" is forbidden from accessing core security table "users"'
+        'Worker plugin "ext-test-db" is forbidden from accessing core security table "users"',
       );
       expect(mockDb.prepare).not.toHaveBeenCalled();
     });
@@ -593,12 +532,7 @@ describe('ServiceHost ActionRegistry tracking', () => {
         '@openlearn/core:IDatabase': mockDb,
       });
 
-      const host = new ServiceHost(
-        dbRegistry as any,
-        capGuard as any,
-        'plugin:ext-test-db',
-        ['management:write'],
-      );
+      const host = new ServiceHost(dbRegistry as any, capGuard as any, 'plugin:ext-test-db', ['management:write']);
 
       await host.handleInvoke(
         {
@@ -627,12 +561,7 @@ describe('ServiceHost ActionRegistry tracking', () => {
         '@openlearn/core:IDatabase': mockDb,
       });
 
-      const host = new ServiceHost(
-        dbRegistry as any,
-        capGuard as any,
-        'plugin:ext-test-db',
-        ['management:write'],
-      );
+      const host = new ServiceHost(dbRegistry as any, capGuard as any, 'plugin:ext-test-db', ['management:write']);
 
       await host.handleInvoke(
         {
@@ -680,7 +609,10 @@ describe('ServiceHost ActionRegistry tracking', () => {
           invokeId: 'inv-sec-uuid',
           token: '@openlearn/core:IDatabase',
           method: 'prepareAndRun',
-          args: ['CREATE TABLE IF NOT EXISTS plugin_01a043a0_0786_71ca_a22b_4a6dd3110e3b_classes (id TEXT PRIMARY KEY)', []],
+          args: [
+            'CREATE TABLE IF NOT EXISTS plugin_01a043a0_0786_71ca_a22b_4a6dd3110e3b_classes (id TEXT PRIMARY KEY)',
+            [],
+          ],
         },
         transport as any,
       );
@@ -690,7 +622,9 @@ describe('ServiceHost ActionRegistry tracking', () => {
         invokeId: 'inv-sec-uuid',
         value: { changes: 1 },
       });
-      expect(mockDb.prepare).toHaveBeenCalledWith('CREATE TABLE IF NOT EXISTS plugin_01a043a0_0786_71ca_a22b_4a6dd3110e3b_classes (id TEXT PRIMARY KEY)');
+      expect(mockDb.prepare).toHaveBeenCalledWith(
+        'CREATE TABLE IF NOT EXISTS plugin_01a043a0_0786_71ca_a22b_4a6dd3110e3b_classes (id TEXT PRIMARY KEY)',
+      );
     });
 
     it('should allow worker plugin to execute DDL on plugin_migrations for ctx.db.migrate', async () => {
@@ -720,7 +654,10 @@ describe('ServiceHost ActionRegistry tracking', () => {
           invokeId: 'inv-sec-migrations',
           token: '@openlearn/core:IDatabase',
           method: 'prepareAndRun',
-          args: ['CREATE TABLE IF NOT EXISTS plugin_migrations (plugin_id TEXT PRIMARY KEY, version INTEGER NOT NULL)', []],
+          args: [
+            'CREATE TABLE IF NOT EXISTS plugin_migrations (plugin_id TEXT PRIMARY KEY, version INTEGER NOT NULL)',
+            [],
+          ],
         },
         transport as any,
       );
@@ -731,7 +668,7 @@ describe('ServiceHost ActionRegistry tracking', () => {
         value: { changes: 1 },
       });
       expect(mockDb.prepare).toHaveBeenCalledWith(
-        'CREATE TABLE IF NOT EXISTS plugin_migrations (plugin_id TEXT PRIMARY KEY, version INTEGER NOT NULL)'
+        'CREATE TABLE IF NOT EXISTS plugin_migrations (plugin_id TEXT PRIMARY KEY, version INTEGER NOT NULL)',
       );
     });
   });

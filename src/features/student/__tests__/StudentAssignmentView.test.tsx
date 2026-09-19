@@ -27,7 +27,7 @@ describe('StudentAssignmentView', () => {
     render(
       <Suspense fallback={null}>
         <StudentAssignmentView {...allProps} />
-      </Suspense>
+      </Suspense>,
     );
     expect(screen.getByText('Assignment: HW')).toBeTruthy();
   });
@@ -36,7 +36,7 @@ describe('StudentAssignmentView', () => {
     render(
       <Suspense fallback={null}>
         <StudentAssignmentView {...allProps} />
-      </Suspense>
+      </Suspense>,
     );
     expect(screen.getByText('Ready to submit?')).toBeTruthy();
   });

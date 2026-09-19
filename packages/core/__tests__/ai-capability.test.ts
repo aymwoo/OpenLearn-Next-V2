@@ -80,7 +80,7 @@ describe('OpenLearn AI Capability Layer Test Suite', () => {
     it('should execute tool calls and log telemetry', async () => {
       runtimeKernel.toolRegistry.registerTool(
         { name: 'vfs_read_file', description: 'Read file', parameters: {} },
-        async () => 'file content'
+        async () => 'file content',
       );
 
       const toolCap = capabilityKernel.registry.resolveCapability<IToolCapability>('capability_tool');
@@ -94,9 +94,7 @@ describe('OpenLearn AI Capability Layer Test Suite', () => {
   describe('5. Lesson Capability', () => {
     it('should generate lesson plans, quizzes, and activity summaries', async () => {
       vi.spyOn(runtimeKernel.providerGateway, 'generateText').mockResolvedValue(
-        JSON.stringify([
-          { question: 'What is 1+1?', options: ['1', '2', '3', '4'], answerIndex: 1 },
-        ])
+        JSON.stringify([{ question: 'What is 1+1?', options: ['1', '2', '3', '4'], answerIndex: 1 }]),
       );
 
       const lessonCap = capabilityKernel.registry.resolveCapability<ILessonCapability>('capability_lesson');

@@ -15,16 +15,18 @@ import type {
 import { NavigationSidebar } from '../shared/NavigationSidebar';
 import { PluginTabPanel } from '../../components/PluginTabPanel';
 
-const Dashboard = lazy(() => import('./Dashboard').then(m => ({ default: m.Dashboard })));
-const LessonEditorView = lazy(() => import('./LessonEditorView').then(m => ({ default: m.LessonEditorView })));
-const LiveClassroomView = lazy(() => import('../../components/LiveClassroomView').then(m => ({ default: m.LiveClassroomView })));
-const PluginView = lazy(() => import('./PluginView').then(m => ({ default: m.PluginView })));
-const CourseManagement = lazy(() => import('./CourseManagement').then(m => ({ default: m.CourseManagement })));
-const ClassesView = lazy(() => import('./classes/ClassesView').then(m => ({ default: m.ClassesView })));
-const TimetableView = lazy(() => import('./TimetableView').then(m => ({ default: m.TimetableView })));
-const AdminDirectoryView = lazy(() => import('./AdminDirectoryView').then(m => ({ default: m.AdminDirectoryView })));
-const ComputerLabView = lazy(() => import('./ComputerLabView').then(m => ({ default: m.ComputerLabView })));
-const HelpView = lazy(() => import('./HelpView').then(m => ({ default: m.HelpView })));
+const Dashboard = lazy(() => import('./Dashboard').then((m) => ({ default: m.Dashboard })));
+const LessonEditorView = lazy(() => import('./LessonEditorView').then((m) => ({ default: m.LessonEditorView })));
+const LiveClassroomView = lazy(() =>
+  import('../../components/LiveClassroomView').then((m) => ({ default: m.LiveClassroomView })),
+);
+const PluginView = lazy(() => import('./PluginView').then((m) => ({ default: m.PluginView })));
+const CourseManagement = lazy(() => import('./CourseManagement').then((m) => ({ default: m.CourseManagement })));
+const ClassesView = lazy(() => import('./classes/ClassesView').then((m) => ({ default: m.ClassesView })));
+const TimetableView = lazy(() => import('./TimetableView').then((m) => ({ default: m.TimetableView })));
+const AdminDirectoryView = lazy(() => import('./AdminDirectoryView').then((m) => ({ default: m.AdminDirectoryView })));
+const ComputerLabView = lazy(() => import('./ComputerLabView').then((m) => ({ default: m.ComputerLabView })));
+const HelpView = lazy(() => import('./HelpView').then((m) => ({ default: m.HelpView })));
 
 /**
  * TeacherView is the single wrapper for the entire `teacher` branch of App.tsx.
@@ -216,7 +218,9 @@ export interface TeacherViewProps {
   classSubmissionFilters: Record<string, 'all' | 'submitted' | 'graded' | 'pending'>;
   setClassSubmissionFilters: Dispatch<SetStateAction<Record<string, 'all' | 'submitted' | 'graded' | 'pending'>>>;
   classActiveTabs: Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>;
-  setClassActiveTabs: Dispatch<SetStateAction<Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>>>;
+  setClassActiveTabs: Dispatch<
+    SetStateAction<Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>>
+  >;
   classProgressMap: Record<string, { lesson_id: string; lesson_title: string; average_progress: number }[]>;
   classSchedulesMap: Record<string, ScheduleType[]>;
   classDashboardMap: Record<string, any>;
@@ -331,8 +335,18 @@ export function TeacherView(props: TeacherViewProps) {
 
       <div className="flex-1 p-6 overflow-hidden flex gap-6 relative">
         {/* Phase 9: Dynamic plugin tab content — catch-all for non-hardcoded tabs */}
-        {['dashboard', 'lesson_editor', 'live_class', 'plugins', 'courses', 'classes',
-          'timetable', 'admin_directory', 'help', 'computer_labs'].includes(teacherTab) ? null : (
+        {[
+          'dashboard',
+          'lesson_editor',
+          'live_class',
+          'plugins',
+          'courses',
+          'classes',
+          'timetable',
+          'admin_directory',
+          'help',
+          'computer_labs',
+        ].includes(teacherTab) ? null : (
           <PluginTabPanel activeNavPlugin={teacherTab.includes('/') ? teacherTab.split('/')[0] : null} />
         )}
 
@@ -355,7 +369,7 @@ export function TeacherView(props: TeacherViewProps) {
                 setSelectedLesson={setSelectedLesson}
                 lessons={lessons}
                 classes={classes}
-                students={liveClassSelectedClassId ? (classStudentsMap[liveClassSelectedClassId] || []) : []}
+                students={liveClassSelectedClassId ? classStudentsMap[liveClassSelectedClassId] || [] : []}
                 plugins={plugins}
                 lang={lang}
                 timelineSegments={timelineSegments}

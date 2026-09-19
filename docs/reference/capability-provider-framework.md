@@ -7,11 +7,11 @@
 
 ## 1. 三套 "capability" 机制辨析
 
-| 机制 | 鉴权方式 | 插件如何用 |
-|---|---|---|
-| **权限 / RBAC**（`CapabilityGuard`） | `resource:action` 字符串（`lesson:read` 等） | manifest `capabilitiesProposed` 声明 |
-| **AI 能力层**（`ai-capability/`） | `capability_*` 功能 ID | `IPluginCapabilityGatewayToken` |
-| **通用能力 Provider 框架**（本页，`capability/`） | `CapabilityRole[]` 角色数组 | `ICapabilityRuntimeServiceToken` → 运行时内核 |
+| 机制                                              | 鉴权方式                                     | 插件如何用                                    |
+| ------------------------------------------------- | -------------------------------------------- | --------------------------------------------- |
+| **权限 / RBAC**（`CapabilityGuard`）              | `resource:action` 字符串（`lesson:read` 等） | manifest `capabilitiesProposed` 声明          |
+| **AI 能力层**（`ai-capability/`）                 | `capability_*` 功能 ID                       | `IPluginCapabilityGatewayToken`               |
+| **通用能力 Provider 框架**（本页，`capability/`） | `CapabilityRole[]` 角色数组                  | `ICapabilityRuntimeServiceToken` → 运行时内核 |
 
 ---
 
@@ -42,7 +42,7 @@ const handler = {
     name: '学生进度报告',
     category: 'analytics',
     provider: 'ext-report',
-    permission: ['Teacher'],           // 按角色鉴权（CapabilityRole[]）
+    permission: ['Teacher'], // 按角色鉴权（CapabilityRole[]）
     inputSchema: { type: 'object', properties: { studentId: { type: 'string' } } },
     outputSchema: { type: 'object' },
     metadata: {},
@@ -51,7 +51,7 @@ const handler = {
   },
   async execute(request) {
     // request.payload / request.context
-    return { /* 结果 */ };
+    return {/* 结果 */};
   },
 };
 
@@ -64,17 +64,17 @@ kernel.registry.register(handler);
 
 ### `CapabilityDescriptor`（描述符）
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `id` | `string` | 全局唯一 ID |
-| `name` | `string` | 展示名 |
-| `category` | `CapabilityCategory` | `lesson` / `whiteboard` / `notebook` / `plugin` / `analytics` / `ai` / 自定义 |
-| `provider` | `string` | 提供方（插件 ID） |
-| `permission` | `CapabilityRole[]` | 允许的角色：`Teacher` / `Student` / `Plugin` / `AI` / `Observer` / `System` |
-| `inputSchema` / `outputSchema` | `Record<string, unknown>` | 输入/输出 schema |
-| `metadata` | `Record<string, unknown>` | 元数据 |
-| `tags` | `string[]` | 检索标签 |
-| `version` | `string` | 语义版本 |
+| 字段                           | 类型                      | 说明                                                                          |
+| ------------------------------ | ------------------------- | ----------------------------------------------------------------------------- |
+| `id`                           | `string`                  | 全局唯一 ID                                                                   |
+| `name`                         | `string`                  | 展示名                                                                        |
+| `category`                     | `CapabilityCategory`      | `lesson` / `whiteboard` / `notebook` / `plugin` / `analytics` / `ai` / 自定义 |
+| `provider`                     | `string`                  | 提供方（插件 ID）                                                             |
+| `permission`                   | `CapabilityRole[]`        | 允许的角色：`Teacher` / `Student` / `Plugin` / `AI` / `Observer` / `System`   |
+| `inputSchema` / `outputSchema` | `Record<string, unknown>` | 输入/输出 schema                                                              |
+| `metadata`                     | `Record<string, unknown>` | 元数据                                                                        |
+| `tags`                         | `string[]`                | 检索标签                                                                      |
+| `version`                      | `string`                  | 语义版本                                                                      |
 
 ### `ICapabilityProviderHandler`（处理器）
 
@@ -92,14 +92,14 @@ interface InvocationRequest {
   readonly id: string;
   readonly capabilityId: string;
   readonly payload: Record<string, unknown>;
-  readonly context: CapabilityContext;   // { lessonId?, whiteboardId?, studentId?, teacherId?, ..., actorRole }
+  readonly context: CapabilityContext; // { lessonId?, whiteboardId?, studentId?, teacherId?, ..., actorRole }
   readonly timeoutMs?: number;
 }
 
 interface CapabilityResult<T = unknown> {
   readonly invocationId: string;
   readonly capabilityId: string;
-  readonly resultType: ResultType;   // teaching_object / markdown / quiz / code / image / analytics_insight / plugin_data / generic ...
+  readonly resultType: ResultType; // teaching_object / markdown / quiz / code / image / analytics_insight / plugin_data / generic ...
   readonly data: T;
   readonly executionTimeMs: number;
   readonly success: boolean;

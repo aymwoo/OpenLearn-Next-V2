@@ -17,12 +17,22 @@ import { PluginHost } from '../index.js';
 import { PluginState } from '../types.js';
 import type { Middleware, MiddlewareContext } from '../types.js';
 import {
-  ICommandBusServiceToken, IEventBusServiceToken, IActionRegistryServiceToken,
-  ICapabilityServiceToken, IProcessServiceToken, IStorageServiceToken, IAIServiceToken,
+  ICommandBusServiceToken,
+  IEventBusServiceToken,
+  IActionRegistryServiceToken,
+  ICapabilityServiceToken,
+  IProcessServiceToken,
+  IStorageServiceToken,
+  IAIServiceToken,
 } from '../../di/interfaces.js';
 import type {
-  ICommandBusService, IEventBusService, IActionRegistryService,
-  ICapabilityService, IProcessService, IStorageService, IAIService,
+  ICommandBusService,
+  IEventBusService,
+  IActionRegistryService,
+  ICapabilityService,
+  IProcessService,
+  IStorageService,
+  IAIService,
 } from '../../di/interfaces.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -46,11 +56,31 @@ function createTestDb(): Database.Database {
 
 function createMockServices(): Record<string, unknown> {
   return {
-    commandBus: { execute: vi.fn().mockResolvedValue(undefined), registerHandler: vi.fn(), unregisterHandler: vi.fn(), setInterceptor: vi.fn(), createCommand: vi.fn() } as ICommandBusService,
+    commandBus: {
+      execute: vi.fn().mockResolvedValue(undefined),
+      registerHandler: vi.fn(),
+      unregisterHandler: vi.fn(),
+      setInterceptor: vi.fn(),
+      createCommand: vi.fn(),
+    } as ICommandBusService,
     eventBus: { publish: vi.fn(), subscribe: vi.fn(), unsubscribe: vi.fn() } as IEventBusService,
-    actionRegistry: { register: vi.fn(), unregister: vi.fn(), getAllActions: vi.fn().mockResolvedValue([]), getAgentTools: vi.fn().mockResolvedValue([]), getActionByToolName: vi.fn(), getActionByCommandType: vi.fn() } as IActionRegistryService,
+    actionRegistry: {
+      register: vi.fn(),
+      unregister: vi.fn(),
+      getAllActions: vi.fn().mockResolvedValue([]),
+      getAgentTools: vi.fn().mockResolvedValue([]),
+      getActionByToolName: vi.fn(),
+      getActionByCommandType: vi.fn(),
+    } as IActionRegistryService,
     capability: { grant: vi.fn(), revokeAll: vi.fn(), check: vi.fn().mockResolvedValue(true) } as ICapabilityService,
-    processManager: { spawn: vi.fn(), kill: vi.fn(), registerHandler: vi.fn(), unregisterHandler: vi.fn(), registerInterval: vi.fn(), restore: vi.fn() } as IProcessService,
+    processManager: {
+      spawn: vi.fn(),
+      kill: vi.fn(),
+      registerHandler: vi.fn(),
+      unregisterHandler: vi.fn(),
+      registerInterval: vi.fn(),
+      restore: vi.fn(),
+    } as IProcessService,
     storage: { get: vi.fn().mockResolvedValue(null), set: vi.fn(), delete: vi.fn() } as IStorageService,
     ai: { generateText: vi.fn().mockResolvedValue('AI response') } as IAIService,
   };
@@ -67,26 +97,58 @@ async function registerMockServices(sr: ServiceRegistry, svc: Record<string, unk
 }
 
 class TestEsmLoader extends EsmLoader {
-  constructor(private loadMap: Map<string, PluginModule>) { super(); }
+  constructor(private loadMap: Map<string, PluginModule>) {
+    super();
+  }
   async load(code: string): Promise<PluginModule> {
     const result = this.loadMap.get(code);
     if (result) return result;
-    return { default: { manifest: { id: 'default', name: 'Default', version: '1.0.0', main: 'index.ts' }, activate: async () => {} } };
+    return {
+      default: {
+        manifest: { id: 'default', name: 'Default', version: '1.0.0', main: 'index.ts' },
+        activate: async () => {},
+      },
+    };
   }
 }
 
-function makeModule(manifestId: string, version: string, activate?: (ctx: any) => Promise<void>, deactivate?: () => Promise<void>): PluginModule {
+function makeModule(
+  manifestId: string,
+  version: string,
+  activate?: (ctx: any) => Promise<void>,
+  deactivate?: () => Promise<void>,
+): PluginModule {
   const m = { id: manifestId, name: manifestId, version, main: 'index.ts' };
   return {
-    default: { manifest: m, activate: activate ?? (async (ctx: any) => { ctx._activated = true; }), ...(deactivate ? { deactivate } : {}) },
+    default: {
+      manifest: m,
+      activate:
+        activate ??
+        (async (ctx: any) => {
+          ctx._activated = true;
+        }),
+      ...(deactivate ? { deactivate } : {}),
+    },
     manifest: m,
-    activate: activate ?? (async (ctx: any) => { ctx._activated = true; }),
+    activate:
+      activate ??
+      (async (ctx: any) => {
+        ctx._activated = true;
+      }),
     ...(deactivate ? { deactivate } : {}),
   };
 }
 
 /** Install + activate helper */
-async function installAndActivate(host: PluginHost, loader: TestEsmLoader, loadMap: Map<string, PluginModule>, manifestId: string, version: string, activateFn?: (ctx: any) => Promise<void>, deactivateFn?: () => Promise<void>): Promise<string> {
+async function installAndActivate(
+  host: PluginHost,
+  loader: TestEsmLoader,
+  loadMap: Map<string, PluginModule>,
+  manifestId: string,
+  version: string,
+  activateFn?: (ctx: any) => Promise<void>,
+  deactivateFn?: () => Promise<void>,
+): Promise<string> {
   const sourceCode = `/* ${manifestId} v${version} */`;
   const mod = makeModule(manifestId, version, activateFn, deactivateFn);
   loadMap.set(sourceCode, mod);
@@ -117,23 +179,42 @@ describe('Hot Reload — E2E', () => {
     host = new PluginHost(sr, loader, db);
   });
 
-  afterEach(() => { db.close(); });
+  afterEach(() => {
+    db.close();
+  });
 
   // ── Test 1: Reload success — basic flow ──────────────────────────────
   it('reload success — basic flow', async () => {
     let activateCalls = 0;
     let deactivateCalls = 0;
 
-    const pluginId = await installAndActivate(host, loader, loadMap, 'test-plugin', '1.0.0',
-      async (ctx) => { activateCalls++; ctx._version = 'v1'; },
-      async () => { deactivateCalls++; },
+    const pluginId = await installAndActivate(
+      host,
+      loader,
+      loadMap,
+      'test-plugin',
+      '1.0.0',
+      async (ctx) => {
+        activateCalls++;
+        ctx._version = 'v1';
+      },
+      async () => {
+        deactivateCalls++;
+      },
     );
 
     // Now reload with v2
     const v2Source = '/* test-plugin v2.0.0 */';
-    const v2Mod = makeModule('test-plugin', '2.0.0',
-      async (ctx: any) => { activateCalls++; ctx._version = 'v2'; },
-      async () => { deactivateCalls++; },
+    const v2Mod = makeModule(
+      'test-plugin',
+      '2.0.0',
+      async (ctx: any) => {
+        activateCalls++;
+        ctx._version = 'v2';
+      },
+      async () => {
+        deactivateCalls++;
+      },
     );
     loadMap.set(v2Source, v2Mod);
 
@@ -145,7 +226,7 @@ describe('Hot Reload — E2E', () => {
 
     // DB updated with new source
     const plugins = host.listPlugins();
-    const reloaded = plugins.find(p => p.id === pluginId);
+    const reloaded = plugins.find((p) => p.id === pluginId);
     expect(reloaded).toBeDefined();
     expect(reloaded!.version).toBe('2.0.0');
   });
@@ -161,20 +242,23 @@ describe('Hot Reload — E2E', () => {
     // pluginId unchanged, still ACTIVE
     expect(host.getPluginState(pluginId)).toBe(PluginState.ACTIVE);
     const plugins = host.listPlugins();
-    expect(plugins.find(p => p.id === pluginId)).toBeDefined();
+    expect(plugins.find((p) => p.id === pluginId)).toBeDefined();
   });
 
   // ── Test 3: Reload failure — old version continues ──────────────────
   it('reload failure — old version continues running', async () => {
-    const pluginId = await installAndActivate(host, loader, loadMap, 'keep-old', '1.0.0',
-      async (ctx) => { ctx._version = 'v1'; },
-    );
+    const pluginId = await installAndActivate(host, loader, loadMap, 'keep-old', '1.0.0', async (ctx) => {
+      ctx._version = 'v1';
+    });
 
     // Try to reload with failing activate
     const badSource = '/* keep-old v2.0.0 FAIL */';
-    loadMap.set(badSource, makeModule('keep-old', '2.0.0',
-      async () => { throw new Error('activate failed intentionally'); },
-    ));
+    loadMap.set(
+      badSource,
+      makeModule('keep-old', '2.0.0', async () => {
+        throw new Error('activate failed intentionally');
+      }),
+    );
 
     await expect(host.reloadPlugin(pluginId, badSource)).rejects.toThrow();
     expect(host.getPluginState(pluginId)).toBe(PluginState.ACTIVE); // Still active
@@ -195,7 +279,12 @@ describe('Hot Reload — E2E', () => {
   it('old deactivate called and resources cleaned on reload', async () => {
     const deactSpy = vi.fn();
 
-    const pluginId = await installAndActivate(host, loader, loadMap, 'res-plugin', '1.0.0',
+    const pluginId = await installAndActivate(
+      host,
+      loader,
+      loadMap,
+      'res-plugin',
+      '1.0.0',
       async () => {}, // activate is no-op
       deactSpy,
     );
@@ -234,7 +323,9 @@ describe('Hot Reload — Middleware Interaction', () => {
     host = new PluginHost(sr, loader, db);
   });
 
-  afterEach(() => { db.close(); });
+  afterEach(() => {
+    db.close();
+  });
 
   // ── Test 6: Middleware continues after reload ────────────────────────
   it('middleware continues after reload', async () => {
@@ -272,9 +363,12 @@ describe('Hot Reload — Middleware Interaction', () => {
     // In reload, the activate handler itself fails, so afterActivate in the
     // middleware pipeline (which runs on success) will NOT be triggered.
     const badSource = '/* fail-mw v2 FAIL */';
-    loadMap.set(badSource, makeModule('fail-mw', '2.0.0',
-      async () => { throw new Error('activate failed'); },
-    ));
+    loadMap.set(
+      badSource,
+      makeModule('fail-mw', '2.0.0', async () => {
+        throw new Error('activate failed');
+      }),
+    );
 
     await expect(host.reloadPlugin(pluginId, badSource)).rejects.toThrow();
     // afterActivate should NOT have been called again (only from initial activation)
@@ -324,7 +418,9 @@ describe('Hot Reload — Stress', () => {
     host = new PluginHost(sr, loader, db);
   });
 
-  afterEach(() => { db.close(); });
+  afterEach(() => {
+    db.close();
+  });
 
   // ── Test 9: 10-cycle no memory leak ─────────────────────────────────
   it('10-cycle reload — no state leak', async () => {
@@ -340,7 +436,7 @@ describe('Hot Reload — Stress', () => {
     // After 10 reloads: plugin still ACTIVE, no duplicate entries
     expect(host.getPluginState(pluginId)).toBe(PluginState.ACTIVE);
     const plugins = host.listPlugins();
-    const matches = plugins.filter(p => p.id === pluginId);
+    const matches = plugins.filter((p) => p.id === pluginId);
     expect(matches).toHaveLength(1);
   });
 

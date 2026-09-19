@@ -35,7 +35,7 @@ export class TransformManager {
     handle: string,
     delta: Point2D,
     isShiftPressed: boolean = false,
-    isAltPressed: boolean = false
+    isAltPressed: boolean = false,
   ): { position: Point2D; size: Size2D } {
     let newWidth = initialSize.width;
     let newHeight = initialSize.height;

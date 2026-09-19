@@ -62,9 +62,7 @@ export class DependencyDescriptor implements IDependencyDescriptor {
       throw new Error('DependencyDescriptor requires a non-empty string `id`.');
     }
     if (!init.implementation && !init.factory && init.instance === undefined) {
-      throw new Error(
-        `DependencyDescriptor '${init.id}' requires an implementation, factory, or instance.`,
-      );
+      throw new Error(`DependencyDescriptor '${init.id}' requires an implementation, factory, or instance.`);
     }
     this.id = init.id;
     this.lifetime = init.lifetime ?? 'Singleton';

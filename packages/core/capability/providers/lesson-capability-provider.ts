@@ -3,11 +3,7 @@
  * Adapts LessonRuntime into standard Capability Framework Handlers.
  */
 
-import {
-  CapabilityDescriptor,
-  ICapabilityProviderHandler,
-  InvocationRequest,
-} from '../types/index.js';
+import { CapabilityDescriptor, ICapabilityProviderHandler, InvocationRequest } from '../types/index.js';
 
 export class LessonCapabilityProviderHandler implements ICapabilityProviderHandler {
   public readonly descriptor: CapabilityDescriptor;

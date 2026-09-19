@@ -1,23 +1,6 @@
 import React, { useMemo } from 'react';
-import { 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  ReferenceLine
-} from 'recharts';
-import { 
-  BookOpen, 
-  Calendar, 
-  CheckCircle2, 
-  Award, 
-  Activity, 
-  TrendingUp, 
-  Clock 
-} from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { BookOpen, Calendar, CheckCircle2, Award, Activity, TrendingUp, Clock } from 'lucide-react';
 
 interface Schedule {
   id: string;
@@ -40,22 +23,21 @@ interface ScheduledLessonsProgressChartProps {
   lang?: 'en' | 'zh';
 }
 
-export function ScheduledLessonsProgressChart({ 
-  schedules = [], 
-  progress = [], 
-  lang = 'en' 
+export function ScheduledLessonsProgressChart({
+  schedules = [],
+  progress = [],
+  lang = 'en',
 }: ScheduledLessonsProgressChartProps) {
-
   // Chronologically sort schedules and match progress
   const chartData = useMemo(() => {
     if (!schedules || schedules.length === 0) return [];
-    
+
     return [...schedules]
       .sort((a, b) => new Date(a.scheduled_date).getTime() - new Date(b.scheduled_date).getTime())
       .map((sch, idx) => {
-        const matchingProg = progress.find(p => p.lesson_id === sch.lesson_id);
+        const matchingProg = progress.find((p) => p.lesson_id === sch.lesson_id);
         const avgProg = matchingProg ? Math.round(matchingProg.average_progress) : 0;
-        
+
         const dateObj = new Date(sch.scheduled_date);
         const formattedDate = !isNaN(dateObj.getTime())
           ? dateObj.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric' })
@@ -68,7 +50,7 @@ export function ScheduledLessonsProgressChart({
           lessonTitle: sch.lesson_title || sch.title || `Lesson ${idx + 1}`,
           scheduledDate: sch.scheduled_date,
           dateLabel: formattedDate,
-          progress: avgProg
+          progress: avgProg,
         };
       });
   }, [schedules, progress, lang]);
@@ -78,19 +60,22 @@ export function ScheduledLessonsProgressChart({
     if (chartData.length === 0) {
       return { avgProg: 0, completedCount: 0, pendingCount: 0, activeCount: 0 };
     }
-    
+
     const sum = chartData.reduce((acc, d) => acc + d.progress, 0);
     const avgProg = Math.round(sum / chartData.length);
-    const completedCount = chartData.filter(d => d.progress >= 90).length;
-    const activeCount = chartData.filter(d => d.progress > 0 && d.progress < 90).length;
-    const pendingCount = chartData.filter(d => d.progress === 0).length;
+    const completedCount = chartData.filter((d) => d.progress >= 90).length;
+    const activeCount = chartData.filter((d) => d.progress > 0 && d.progress < 90).length;
+    const pendingCount = chartData.filter((d) => d.progress === 0).length;
 
     return { avgProg, completedCount, pendingCount, activeCount };
   }, [chartData]);
 
   const t = {
     title: lang === 'zh' ? '学期排课进度看板' : 'Scheduled Lessons Progress',
-    subtitle: lang === 'zh' ? '班级在全学期已规划课程中的平均学习进度曲线' : "Class average completion progress across the semester's scheduled lessons",
+    subtitle:
+      lang === 'zh'
+        ? '班级在全学期已规划课程中的平均学习进度曲线'
+        : "Class average completion progress across the semester's scheduled lessons",
     averageProgress: lang === 'zh' ? '平均课程总进度' : 'Average Class Progress',
     completedLessons: lang === 'zh' ? '已通关课程' : 'Completed Lessons',
     activeLessons: lang === 'zh' ? '进行中课程' : 'Lessons In-Progress',
@@ -100,8 +85,11 @@ export function ScheduledLessonsProgressChart({
     averageLine: lang === 'zh' ? '平均进度线' : 'Class Average Line',
     progressTooltip: lang === 'zh' ? '平均学习进度' : 'Class Avg Progress',
     emptyTitle: lang === 'zh' ? '暂无排课进度' : 'No Scheduled Progress Data',
-    emptyDesc: lang === 'zh' ? '该班级尚未规划任何课程。请在下方【日程安排与考勤】中指派具体的微课及日期，随后此处的实时进度图表便会随学生学习进程同步渲染。' : 'No schedules have been defined for this class yet. Assign lessons under the "Schedule & Attendance" panel below to begin visualizing your student group progress trajectory.',
-    detailsLabel: lang === 'zh' ? '第 {idx} 节课: {title}' : 'Session #{idx}: {title}'
+    emptyDesc:
+      lang === 'zh'
+        ? '该班级尚未规划任何课程。请在下方【日程安排与考勤】中指派具体的微课及日期，随后此处的实时进度图表便会随学生学习进程同步渲染。'
+        : 'No schedules have been defined for this class yet. Assign lessons under the "Schedule & Attendance" panel below to begin visualizing your student group progress trajectory.',
+    detailsLabel: lang === 'zh' ? '第 {idx} 节课: {title}' : 'Session #{idx}: {title}',
   };
 
   if (schedules.length === 0) {
@@ -112,16 +100,17 @@ export function ScheduledLessonsProgressChart({
             <Activity className="w-6 h-6 animate-pulse" />
           </div>
           <h4 className="font-bold text-gray-800 text-sm">{t.emptyTitle}</h4>
-          <p className="text-gray-500 text-[11px] mt-2 leading-relaxed">
-            {t.emptyDesc}
-          </p>
+          <p className="text-gray-500 text-[11px] mt-2 leading-relaxed">{t.emptyDesc}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white border border-gray-150 rounded-xl shadow-xs overflow-hidden flex flex-col font-sans" id="scheduled-lessons-progress-container">
+    <div
+      className="bg-white border border-gray-150 rounded-xl shadow-xs overflow-hidden flex flex-col font-sans"
+      id="scheduled-lessons-progress-container"
+    >
       {/* Visual Header */}
       <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-start gap-2.5">
@@ -148,7 +137,9 @@ export function ScheduledLessonsProgressChart({
             <Activity size={14} />
           </div>
           <div className="min-w-0">
-            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">{t.averageProgress}</div>
+            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">
+              {t.averageProgress}
+            </div>
             <div className="text-xs font-bold text-gray-800 font-mono mt-0.5">{statistics.avgProg}%</div>
           </div>
         </div>
@@ -158,8 +149,12 @@ export function ScheduledLessonsProgressChart({
             <CheckCircle2 size={14} />
           </div>
           <div className="min-w-0">
-            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">{t.completedLessons}</div>
-            <div className="text-xs font-bold text-gray-800 font-mono mt-0.5">{statistics.completedCount} / {chartData.length}</div>
+            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">
+              {t.completedLessons}
+            </div>
+            <div className="text-xs font-bold text-gray-800 font-mono mt-0.5">
+              {statistics.completedCount} / {chartData.length}
+            </div>
           </div>
         </div>
 
@@ -168,7 +163,9 @@ export function ScheduledLessonsProgressChart({
             <Clock size={14} />
           </div>
           <div className="min-w-0">
-            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">{t.activeLessons}</div>
+            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">
+              {t.activeLessons}
+            </div>
             <div className="text-xs font-bold text-gray-800 font-mono mt-0.5">{statistics.activeCount}</div>
           </div>
         </div>
@@ -178,7 +175,9 @@ export function ScheduledLessonsProgressChart({
             <BookOpen size={14} />
           </div>
           <div className="min-w-0">
-            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">{t.pendingLessons}</div>
+            <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">
+              {t.pendingLessons}
+            </div>
             <div className="text-xs font-bold text-gray-800 font-mono mt-0.5">{statistics.pendingCount}</div>
           </div>
         </div>
@@ -193,10 +192,7 @@ export function ScheduledLessonsProgressChart({
 
         <div className="h-44 w-full bg-slate-50/30 border border-slate-100 p-2 rounded-lg relative">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
-              data={chartData}
-              margin={{ top: 10, right: 10, left: -24, bottom: 0 }}
-            >
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -24, bottom: 0 }}>
               <defs>
                 <linearGradient id="progressGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#ec4899" stopOpacity={0.25} />
@@ -204,28 +200,26 @@ export function ScheduledLessonsProgressChart({
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-              <XAxis 
-                dataKey="dateLabel" 
-                tick={{ fontSize: 8, fill: '#64748b', fontWeight: 'bold' }} 
-                axisLine={{ stroke: '#e2e8f0' }} 
+              <XAxis
+                dataKey="dateLabel"
+                tick={{ fontSize: 8, fill: '#64748b', fontWeight: 'bold' }}
+                axisLine={{ stroke: '#e2e8f0' }}
                 tickLine={false}
               />
-              <YAxis 
-                domain={[0, 100]} 
-                tick={{ fontSize: 8, fill: '#64748b', fontWeight: 'bold' }} 
-                axisLine={{ stroke: '#e2e8f0' }} 
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fontSize: 8, fill: '#64748b', fontWeight: 'bold' }}
+                axisLine={{ stroke: '#e2e8f0' }}
                 tickLine={false}
               />
-              <Tooltip 
+              <Tooltip
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
                     const d = payload[0].payload;
                     return (
                       <div className="p-2.5 bg-white border border-pink-100 rounded-lg shadow-md max-w-[220px]">
                         <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-1.5 mb-1.5">
-                          <span className="text-[8px] text-gray-400 font-bold font-mono">
-                            {d.scheduledDate}
-                          </span>
+                          <span className="text-[8px] text-gray-400 font-bold font-mono">{d.scheduledDate}</span>
                           <span className="inline-flex items-center bg-pink-50 text-pink-700 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold font-mono border border-pink-100">
                             {d.progress}%
                           </span>
@@ -239,38 +233,38 @@ export function ScheduledLessonsProgressChart({
                   return null;
                 }}
               />
-              <ReferenceLine 
-                y={90} 
-                stroke="#10b981" 
+              <ReferenceLine
+                y={90}
+                stroke="#10b981"
                 strokeWidth={1}
-                strokeDasharray="3 3" 
-                label={{ 
-                  value: t.over90, 
-                  fill: '#10b981', 
-                  fontSize: 7, 
+                strokeDasharray="3 3"
+                label={{
+                  value: t.over90,
+                  fill: '#10b981',
+                  fontSize: 7,
                   fontWeight: 'bold',
                   position: 'top',
-                  offset: 2
-                }} 
+                  offset: 2,
+                }}
               />
-              <ReferenceLine 
-                y={statistics.avgProg} 
-                stroke="#ec4899" 
+              <ReferenceLine
+                y={statistics.avgProg}
+                stroke="#ec4899"
                 strokeWidth={1}
-                strokeDasharray="2 2" 
-                label={{ 
-                  value: `${t.averageLine} (${statistics.avgProg}%)`, 
-                  fill: '#ec4899', 
-                  fontSize: 7, 
+                strokeDasharray="2 2"
+                label={{
+                  value: `${t.averageLine} (${statistics.avgProg}%)`,
+                  fill: '#ec4899',
+                  fontSize: 7,
                   fontWeight: 'semibold',
                   position: 'bottom',
-                  offset: 2
-                }} 
+                  offset: 2,
+                }}
               />
-              <Area 
-                type="monotone" 
-                dataKey="progress" 
-                stroke="#ec4899" 
+              <Area
+                type="monotone"
+                dataKey="progress"
+                stroke="#ec4899"
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#progressGrad)"

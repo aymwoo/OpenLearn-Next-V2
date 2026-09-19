@@ -2,21 +2,10 @@
  * OpenLearn Platform Kernel - Builder Types & Result Interfaces (PI-004)
  */
 
-import {
-  IPlatformContext,
-  EnvironmentType,
-  IPlatformLogger,
-  PlatformBootstrapConfig,
-} from '../types/index.js';
+import { IPlatformContext, EnvironmentType, IPlatformLogger, PlatformBootstrapConfig } from '../types/index.js';
 import { BootstrapPipeline } from '../pipeline/bootstrap-pipeline.js';
 
-export type BuilderState =
-  | 'Created'
-  | 'Configuring'
-  | 'Validating'
-  | 'Building'
-  | 'Built'
-  | 'Disposed';
+export type BuilderState = 'Created' | 'Configuring' | 'Validating' | 'Building' | 'Built' | 'Disposed';
 
 export interface ValidationError {
   readonly code: string;

@@ -87,6 +87,4 @@ export interface AIEventEnvelope<K extends AIEventType = AIEventType> {
   readonly timestamp: number;
 }
 
-export type AIEventSubscriber<K extends AIEventType> = (
-  event: AIEventEnvelope<K>
-) => void | Promise<void>;
+export type AIEventSubscriber<K extends AIEventType> = (event: AIEventEnvelope<K>) => void | Promise<void>;

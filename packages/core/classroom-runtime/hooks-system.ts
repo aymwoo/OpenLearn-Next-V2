@@ -13,7 +13,7 @@ export class RuntimeHooksManager {
    */
   public registerHook<T = Record<string, unknown>>(
     hookName: RuntimeHookName,
-    callback: RuntimeHookCallback<T>
+    callback: RuntimeHookCallback<T>,
   ): () => void {
     if (!this.hooks.has(hookName)) {
       this.hooks.set(hookName, new Set());
@@ -32,7 +32,7 @@ export class RuntimeHooksManager {
   public async executeHook<T = Record<string, unknown>>(
     hookName: RuntimeHookName,
     payload: T,
-    context: RuntimeContextData
+    context: RuntimeContextData,
   ): Promise<void> {
     const callbacks = this.hooks.get(hookName);
     if (!callbacks || callbacks.size === 0) return;

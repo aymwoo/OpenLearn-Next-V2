@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  PresenceEngineKernel,
-  PresenceEntity,
-  CustomPresenceDefinition,
-} from '../presence-engine/index.js';
+import { PresenceEngineKernel, PresenceEntity, CustomPresenceDefinition } from '../presence-engine/index.js';
 
 describe('OpenLearn Presence Engine Core Test Suite', () => {
   let kernel: PresenceEngineKernel;

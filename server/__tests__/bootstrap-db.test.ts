@@ -44,8 +44,7 @@ describe('runStartupMigrations', () => {
       },
     } as any;
 
-    const runCallsFor = (sql: string) =>
-      prepared.filter((p) => p.sql === sql).flatMap((p) => p.run.mock.calls);
+    const runCallsFor = (sql: string) => prepared.filter((p) => p.sql === sql).flatMap((p) => p.run.mock.calls);
 
     return { db, executed, prepared, seededGet, seededChanges, throwOnExec, runCallsFor };
   }
@@ -92,13 +91,12 @@ describe('runStartupMigrations', () => {
   it('counts cleaned-up sessions and logs the total', async () => {
     const m = buildMocks();
     m.seededChanges.set('DELETE FROM client_sessions WHERE expires_at IS NOT NULL AND expires_at < ?', 2);
-    m.seededChanges.set(
-      'DELETE FROM client_sessions WHERE updated_at IS NOT NULL AND (? - updated_at) > ?',
-      1,
-    );
+    m.seededChanges.set('DELETE FROM client_sessions WHERE updated_at IS NOT NULL AND (? - updated_at) > ?', 1);
     await runStartupMigrations(m.db);
 
-    expect(m.runCallsFor('DELETE FROM client_sessions WHERE expires_at IS NOT NULL AND expires_at < ?')).toHaveLength(1);
+    expect(m.runCallsFor('DELETE FROM client_sessions WHERE expires_at IS NOT NULL AND expires_at < ?')).toHaveLength(
+      1,
+    );
     expect(
       m.runCallsFor('DELETE FROM client_sessions WHERE updated_at IS NOT NULL AND (? - updated_at) > ?'),
     ).toHaveLength(1);

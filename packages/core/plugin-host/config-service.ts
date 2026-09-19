@@ -190,11 +190,13 @@ export class ConfigService implements IConfigService {
     // Persist to DB
     const storageKey = ConfigService.KEY_PREFIX + key;
     try {
-      this.db.prepare(
-        `INSERT INTO plugin_storage (plugin_id, key, value, updated_at)
+      this.db
+        .prepare(
+          `INSERT INTO plugin_storage (plugin_id, key, value, updated_at)
          VALUES (?, ?, ?, ?)
          ON CONFLICT(plugin_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-      ).run(this.manifestId, storageKey, JSON.stringify(value), Date.now());
+        )
+        .run(this.manifestId, storageKey, JSON.stringify(value), Date.now());
     } catch (e) {
       // Rollback cache on persistence failure
       if (oldValue === undefined) {
@@ -231,9 +233,7 @@ export class ConfigService implements IConfigService {
     try {
       const prefix = ConfigService.KEY_PREFIX;
       const rows = this.db
-        .prepare(
-          `SELECT key, value FROM plugin_storage WHERE plugin_id = ? AND key LIKE ?`,
-        )
+        .prepare(`SELECT key, value FROM plugin_storage WHERE plugin_id = ? AND key LIKE ?`)
         .all(this.manifestId, prefix + '%') as Array<{ key: string; value: string }>;
 
       for (const row of rows) {

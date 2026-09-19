@@ -98,8 +98,8 @@ describe('Kernel PI-012 Platform Permission Framework Test Suite', () => {
     const manager = new PermissionManager();
     manager.register(configWritePerm);
 
-    await expect(
-      manager.require('untrusted_component', 'config_system', 'perm_config_write')
-    ).rejects.toThrow('Infrastructure Permission Exception');
+    await expect(manager.require('untrusted_component', 'config_system', 'perm_config_write')).rejects.toThrow(
+      'Infrastructure Permission Exception',
+    );
   });
 });

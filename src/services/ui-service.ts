@@ -22,9 +22,7 @@ export class UIService implements IUIService {
   private addToastFn: ((title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void) | null;
   private modalState: ModalState | null = null;
 
-  constructor(
-    addToast?: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void,
-  ) {
+  constructor(addToast?: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void) {
     this.addToastFn = addToast ?? null;
   }
 

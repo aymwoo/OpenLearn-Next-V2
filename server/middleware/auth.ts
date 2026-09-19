@@ -24,13 +24,17 @@ export function getValidSession(token: string): any | null {
   }
   // 空闲超时检查（24h）
   const idleTimeout = 24 * 60 * 60 * 1000;
-  if (sessionRow.updated_at && (now - sessionRow.updated_at) > idleTimeout) {
+  if (sessionRow.updated_at && now - sessionRow.updated_at > idleTimeout) {
     kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(token);
     return null;
   }
   // 刷新 updated_at
   kernelContainer.db.prepare('UPDATE client_sessions SET updated_at = ? WHERE id = ?').run(now, token);
-  return JSON.parse(sessionRow.session_data);
+  const session = JSON.parse(sessionRow.session_data);
+  if (session && !session.userId && session.studentId) {
+    session.userId = session.studentId;
+  }
+  return session;
 }
 
 export function getCookieToken(req: Request): string | null {
@@ -53,11 +57,16 @@ export function getActorId(req: Request): string {
     const session = getValidSession(token);
     if (!session) return 'anonymous';
     let role = session.subRole || session.role;
-    if (session.username === 'admin' || session.userId === 'usr_admin' || role === 'admin' || role === 'administrator') {
+    if (
+      session.username === 'admin' ||
+      session.userId === 'usr_admin' ||
+      role === 'admin' ||
+      role === 'administrator'
+    ) {
       role = 'administrator';
     }
     if (role) {
-      return `user:${session.userId || 'demo'}:${role}`;
+      return `user:${session.userId || session.studentId || 'demo'}:${role}`;
     }
     return 'anonymous';
   } catch {
@@ -81,7 +90,9 @@ export function requireAuth(...roles: string[]) {
       }
       const effectiveRoles = roles.map((r) => (r === 'admin' ? 'administrator' : r));
       if (!effectiveRoles.includes(userRole)) {
-        return res.status(403).json({ success: false, error: `Role ${session.role} not allowed. Required: ${roles.join(', ')}` });
+        return res
+          .status(403)
+          .json({ success: false, error: `Role ${session.role} not allowed. Required: ${roles.join(', ')}` });
       }
     }
     (req as any).session = session;

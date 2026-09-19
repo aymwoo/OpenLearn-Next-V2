@@ -22,10 +22,7 @@ export const lessonStore = createStore<LessonState>((set) => ({
 
   setLessons: (lessons) =>
     set((state) => ({
-      lessons:
-        typeof lessons === 'function'
-          ? (lessons as (prev: Lesson[]) => Lesson[])(state.lessons)
-          : lessons,
+      lessons: typeof lessons === 'function' ? (lessons as (prev: Lesson[]) => Lesson[])(state.lessons) : lessons,
     })),
   setSelectedLesson: (selectedLesson) => set({ selectedLesson }),
   setElements: (elements) => set({ elements }),

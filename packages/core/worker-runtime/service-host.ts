@@ -156,10 +156,7 @@ export class ServiceHost {
    * @param msg - The raw message from the Worker
    * @param transport - The transport to send responses back through
    */
-  async handleMessage(
-    msg: unknown,
-    transport: IWorkerTransport,
-  ): Promise<void> {
+  async handleMessage(msg: unknown, transport: IWorkerTransport): Promise<void> {
     try {
       const typed = msg as { type?: string };
       switch (typed.type) {
@@ -232,9 +229,8 @@ export class ServiceHost {
             }
             // Check chunk size limit (T-STR-03: 64KB)
             const rawData = cMsg.data;
-            const payloadLength = typeof rawData === 'string'
-              ? Buffer.byteLength(rawData)
-              : Buffer.byteLength(JSON.stringify(rawData));
+            const payloadLength =
+              typeof rawData === 'string' ? Buffer.byteLength(rawData) : Buffer.byteLength(JSON.stringify(rawData));
             if (payloadLength > 65536) {
               this.abortStream(cMsg.streamId, 'Chunk size exceeded 64KB limit');
               active.stream.error(new Error('Chunk size exceeded 64KB limit'));
@@ -286,10 +282,7 @@ export class ServiceHost {
       }
     } catch (err: unknown) {
       // Never let handler exception crash the message loop
-      console.error(
-        `[ServiceHost] Unhandled error in handleMessage for ${this.pluginActorId}:`,
-        err,
-      );
+      console.error(`[ServiceHost] Unhandled error in handleMessage for ${this.pluginActorId}:`, err);
     }
   }
 
@@ -309,9 +302,7 @@ export class ServiceHost {
    */
   private handleSubscribe(msg: SubscribeMessage, transport: IWorkerTransport): void {
     if (!this.eventBus) {
-      console.warn(
-        `[ServiceHost] No EventBus available -- cannot subscribe for actor ${this.pluginActorId}`,
-      );
+      console.warn(`[ServiceHost] No EventBus available -- cannot subscribe for actor ${this.pluginActorId}`);
       return;
     }
 
@@ -362,26 +353,18 @@ export class ServiceHost {
     // Clean up registered command handlers
     if (this.registeredCommandTypes.size > 0) {
       try {
-        const commandBus = (await this.resolveService(
-          '@openlearn/core:ICommandBusService',
-        )) as any;
+        const commandBus = (await this.resolveService('@openlearn/core:ICommandBusService')) as any;
         if (commandBus) {
           for (const commandType of this.registeredCommandTypes) {
             try {
               commandBus.unregisterHandler(commandType);
             } catch (err) {
-              console.error(
-                `[ServiceHost] Failed to unregister command handler "${commandType}" on dispose:`,
-                err,
-              );
+              console.error(`[ServiceHost] Failed to unregister command handler "${commandType}" on dispose:`, err);
             }
           }
         }
       } catch (err) {
-        console.error(
-          `[ServiceHost] Failed to resolve commandBus on dispose:`,
-          err,
-        );
+        console.error(`[ServiceHost] Failed to resolve commandBus on dispose:`, err);
       }
       this.registeredCommandTypes.clear();
     }
@@ -389,26 +372,18 @@ export class ServiceHost {
     // Clean up registered actions
     if (this.registeredActionIds.size > 0) {
       try {
-        const actionRegistry = (await this.resolveService(
-          '@openlearn/core:IActionRegistryService',
-        )) as any;
+        const actionRegistry = (await this.resolveService('@openlearn/core:IActionRegistryService')) as any;
         if (actionRegistry) {
           for (const actionId of this.registeredActionIds) {
             try {
               await actionRegistry.unregister(actionId);
             } catch (err) {
-              console.error(
-                `[ServiceHost] Failed to unregister action "${actionId}" on dispose:`,
-                err,
-              );
+              console.error(`[ServiceHost] Failed to unregister action "${actionId}" on dispose:`, err);
             }
           }
         }
       } catch (err) {
-        console.error(
-          `[ServiceHost] Failed to resolve actionRegistry on dispose:`,
-          err,
-        );
+        console.error(`[ServiceHost] Failed to resolve actionRegistry on dispose:`, err);
       }
       this.registeredActionIds.clear();
     }
@@ -607,20 +582,14 @@ export class ServiceHost {
    * @param msg - The parsed invoke message with token, method, args
    * @param transport - The transport to send the result/error back through
    */
-  async handleInvoke(
-    msg: InvokeMessage,
-    transport: IWorkerTransport,
-  ): Promise<void> {
+  async handleInvoke(msg: InvokeMessage, transport: IWorkerTransport): Promise<void> {
     try {
       // ── Phase 5 pragmatic capability guard ─────────────────────────
       // If manifestCapabilities is empty, the Worker plugin has no
       // declared capabilities. Block all mutation methods and only allow
       // read-only 'get' methods.
       // Full per-method capability mapping is deferred (Plan 6+).
-      if (
-        this.manifestCapabilities.length === 0 &&
-        msg.method !== 'get'
-      ) {
+      if (this.manifestCapabilities.length === 0 && msg.method !== 'get') {
         throw new WorkerCapabilityError(
           this.pluginActorId,
           '__rpc__',
@@ -634,19 +603,15 @@ export class ServiceHost {
 
       // ── Intercept IStorageService RPC helper methods ─────────────────
       if (msg.token === '@openlearn/core:IStorageService') {
-        const manifestId = this.pluginActorId.startsWith('plugin:')
-          ? this.pluginActorId.slice(7)
-          : this.pluginActorId;
+        const manifestId = this.pluginActorId.startsWith('plugin:') ? this.pluginActorId.slice(7) : this.pluginActorId;
 
-        const db = await this.resolveService('@openlearn/core:IDatabase') as import('better-sqlite3').Database;
+        const db = (await this.resolveService('@openlearn/core:IDatabase')) as import('better-sqlite3').Database;
 
         let result: unknown;
         if (msg.method === 'get') {
           const [key] = msg.args as [string];
           const row = db
-            .prepare(
-              'SELECT value FROM plugin_storage WHERE plugin_id = ? AND key = ?',
-            )
+            .prepare('SELECT value FROM plugin_storage WHERE plugin_id = ? AND key = ?')
             .get(manifestId, key) as { value: string } | undefined;
           result = row ? JSON.parse(row.value) : null;
         } else if (msg.method === 'set') {
@@ -660,9 +625,7 @@ export class ServiceHost {
           result = undefined;
         } else if (msg.method === 'delete') {
           const [key] = msg.args as [string];
-          db.prepare(
-            'DELETE FROM plugin_storage WHERE plugin_id = ? AND key = ?',
-          ).run(manifestId, key);
+          db.prepare('DELETE FROM plugin_storage WHERE plugin_id = ? AND key = ?').run(manifestId, key);
           result = undefined;
         } else {
           throw new Error(`Method "${msg.method}" not supported on IStorageService RPC`);
@@ -715,9 +678,7 @@ export class ServiceHost {
             id: event.id || `evt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
             timestamp: event.timestamp || Date.now(),
             ...event,
-            source: event.source 
-              ? `plugin:${pluginId}.${event.source}` 
-              : `plugin:${pluginId}`,
+            source: event.source ? `plugin:${pluginId}.${event.source}` : `plugin:${pluginId}`,
           };
           const result = await eventBus.publish(enrichedEvent);
           transport.postMessage({
@@ -803,9 +764,7 @@ export class ServiceHost {
       // ── Get the method from the service instance ───────────────────
       const method = (service as Record<string, unknown>)[msg.method];
       if (typeof method !== 'function') {
-        throw new Error(
-          `Method "${msg.method}" not found on service "${msg.token}"`,
-        );
+        throw new Error(`Method "${msg.method}" not found on service "${msg.token}"`);
       }
 
       // ── Execute the method ─────────────────────────────────────────
@@ -825,10 +784,7 @@ export class ServiceHost {
     } catch (err: unknown) {
       // ── Serialize error with stack capped at STACK_CAP ─────────────
       const error = err instanceof Error ? err : new Error(String(err));
-      const stack =
-        error.stack && error.stack.length > STACK_CAP
-          ? error.stack.slice(0, STACK_CAP)
-          : error.stack;
+      const stack = error.stack && error.stack.length > STACK_CAP ? error.stack.slice(0, STACK_CAP) : error.stack;
 
       transport.postMessage({
         type: 'error',
@@ -854,10 +810,7 @@ export class ServiceHost {
    */
   private async resolveService(tokenName: string): Promise<unknown> {
     // Prefer resolveByName if available (Plan 03+)
-    if (
-      typeof (this.serviceRegistry as unknown as Record<string, unknown>)
-        .resolveByName === 'function'
-    ) {
+    if (typeof (this.serviceRegistry as unknown as Record<string, unknown>).resolveByName === 'function') {
       return (
         this.serviceRegistry as unknown as {
           resolveByName: (name: string) => Promise<unknown>;
@@ -934,7 +887,8 @@ export class ServiceHost {
       '_migrations',
     ];
     // 先检查 DDL，优先抛出 DDL 具体的报错以与单元测试契约精确吻合
-    const ddlMatch = /^\s*(CREATE|DROP|ALTER)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-zA-Z_][\w]*)["'`]?/i.exec(sql);
+    const ddlMatch =
+      /^\s*(CREATE|DROP|ALTER)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?["'`]?([a-zA-Z_][\w]*)["'`]?/i.exec(sql);
     if (ddlMatch) {
       const table = ddlMatch[2];
       const validNamespaces: string[] = [];
@@ -944,7 +898,8 @@ export class ServiceHost {
       if (pluginId) {
         validNamespaces.push(`plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`);
       }
-      const isAllowed = validNamespaces.some((ns) => table.startsWith(ns)) || table.toLowerCase() === 'plugin_migrations';
+      const isAllowed =
+        validNamespaces.some((ns) => table.startsWith(ns)) || table.toLowerCase() === 'plugin_migrations';
       if (!isAllowed) {
         throw new WorkerCapabilityError(
           this.pluginActorId,

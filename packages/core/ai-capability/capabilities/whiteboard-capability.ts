@@ -26,8 +26,11 @@ export class WhiteboardCapability implements IWhiteboardCapability {
 
   public async generateDiagram(prompt: string): Promise<Record<string, unknown>> {
     const startTime = Date.now();
-    const systemPrompt = 'You are a Whiteboard Diagram Generator. Generate a structured JSON representing canvas elements (nodes, edges, shapes).';
-    const resultText = await this.runtimeKernel.providerGateway.generateText(prompt, { systemInstruction: systemPrompt });
+    const systemPrompt =
+      'You are a Whiteboard Diagram Generator. Generate a structured JSON representing canvas elements (nodes, edges, shapes).';
+    const resultText = await this.runtimeKernel.providerGateway.generateText(prompt, {
+      systemInstruction: systemPrompt,
+    });
 
     let parsed: Record<string, unknown> = {};
     try {
@@ -83,7 +86,7 @@ export class WhiteboardCapability implements IWhiteboardCapability {
   }
 
   public async beautifyLayout(
-    elements: ReadonlyArray<Record<string, unknown>>
+    elements: ReadonlyArray<Record<string, unknown>>,
   ): Promise<ReadonlyArray<Record<string, unknown>>> {
     const startTime = Date.now();
     // Re-align elements algorithmically or via AI

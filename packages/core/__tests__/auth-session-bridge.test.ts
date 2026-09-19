@@ -117,26 +117,18 @@ describe('AuthSessionBridgeService & Gateway SSO Tests (LTI 1.3)', () => {
         main: 'index.js',
         requires: ['@openlearn/core:IAuthSessionBridgeService@^1.0.0'],
         api: {
-          routes: [
-            { method: 'POST', path: '/launch', auth: false },
-          ],
+          routes: [{ method: 'POST', path: '/launch', auth: false }],
         },
       };
 
-      kernelContainer.db.prepare(`
+      kernelContainer.db
+        .prepare(
+          `
         INSERT OR REPLACE INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        testPluginId,
-        manifest.name,
-        JSON.stringify(manifest),
-        '',
-        null,
-        'active',
-        Date.now(),
-        'esm',
-        'inline',
-      );
+      `,
+        )
+        .run(testPluginId, manifest.name, JSON.stringify(manifest), '', null, 'active', Date.now(), 'esm', 'inline');
 
       // 模拟插件端点返回 sessionToken 与 302 重定向
       const dummyToken = 'token_' + 'a'.repeat(32);
@@ -189,26 +181,18 @@ describe('AuthSessionBridgeService & Gateway SSO Tests (LTI 1.3)', () => {
         main: 'index.js',
         // 未声明 requires: ['@openlearn/core:IAuthSessionBridgeService@^1.0.0']
         api: {
-          routes: [
-            { method: 'POST', path: '/malicious-login', auth: false },
-          ],
+          routes: [{ method: 'POST', path: '/malicious-login', auth: false }],
         },
       };
 
-      kernelContainer.db.prepare(`
+      kernelContainer.db
+        .prepare(
+          `
         INSERT OR REPLACE INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        unauthPluginId,
-        manifest.name,
-        JSON.stringify(manifest),
-        '',
-        null,
-        'active',
-        Date.now(),
-        'esm',
-        'inline',
-      );
+      `,
+        )
+        .run(unauthPluginId, manifest.name, JSON.stringify(manifest), '', null, 'active', Date.now(), 'esm', 'inline');
 
       const dummyToken = 'token_' + 'b'.repeat(32);
       const originalDispatch = pluginHost.dispatchHttpRequest.bind(pluginHost);
@@ -251,26 +235,18 @@ describe('AuthSessionBridgeService & Gateway SSO Tests (LTI 1.3)', () => {
         version: '1.0.0',
         main: 'index.js',
         api: {
-          routes: [
-            { method: 'GET', path: '/test', auth: false },
-          ],
+          routes: [{ method: 'GET', path: '/test', auth: false }],
         },
       };
 
-      kernelContainer.db.prepare(`
+      kernelContainer.db
+        .prepare(
+          `
         INSERT OR REPLACE INTO plugins (id, name, manifest, source_code, file_path, status, created_at, loader_version, execution_mode)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        testPluginId,
-        manifest.name,
-        JSON.stringify(manifest),
-        '',
-        null,
-        'active',
-        Date.now(),
-        'esm',
-        'inline',
-      );
+      `,
+        )
+        .run(testPluginId, manifest.name, JSON.stringify(manifest), '', null, 'active', Date.now(), 'esm', 'inline');
 
       const originalDispatch = pluginHost.dispatchHttpRequest.bind(pluginHost);
       pluginHost.dispatchHttpRequest = async () => ({
