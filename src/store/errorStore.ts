@@ -19,6 +19,18 @@ export interface ErrorStoreState {
 
 const MAX_STORED_ERRORS = 30;
 
+/**
+ * 未读计数不变量：0 <= unreadCount <= errors.length。
+ *
+ * 本 store 不记录每条错误的已读状态，只维护一个「自上次打开面板以来新增了几条」的高水位
+ * （addError 时 +1，打开面板 / 标记全部已读时归零）。因此**任何会缩小 errors 集合的动作**
+ * 都必须重新收敛该计数，否则角标会显示一个比实际错误数还大的数字：
+ *   - removeError：删掉一条错误；
+ *   - addError：达到 MAX_STORED_ERRORS 上限后 slice 截断掉最旧的一条。
+ */
+const reconcileUnreadCount = (unreadCount: number, errors: SystemErrorItem[]): number =>
+  Math.min(unreadCount, errors.length);
+
 export function formatSingleErrorReport(err: SystemErrorItem): string {
   const dateStr = new Date(err.timestamp).toLocaleString();
   const lines: string[] = [
@@ -100,18 +112,19 @@ export const errorStore = createStore<ErrorStoreState>((set, get) => ({
       status: rawErr.status,
     };
 
-    set((state) => ({
-      errors: [newItem, ...state.errors].slice(0, MAX_STORED_ERRORS),
-      unreadCount: state.unreadCount + 1,
-    }));
+    set((state) => {
+      const errors = [newItem, ...state.errors].slice(0, MAX_STORED_ERRORS);
+      return { errors, unreadCount: reconcileUnreadCount(state.unreadCount + 1, errors) };
+    });
 
     return newItem;
   },
 
   removeError: (id) =>
-    set((state) => ({
-      errors: state.errors.filter((e) => e.id !== id),
-    })),
+    set((state) => {
+      const errors = state.errors.filter((e) => e.id !== id);
+      return { errors, unreadCount: reconcileUnreadCount(state.unreadCount, errors) };
+    }),
 
   clearErrors: () =>
     set({

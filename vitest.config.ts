@@ -1,4 +1,12 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+
+/**
+ * Resolve an in-repo path relative to this config file (the repo root), so the
+ * aliases work on any machine and on CI. Previously these were hard-coded to
+ * `/home/wuxf/Develop/openlearnv2/...`, which broke `pnpm test` everywhere else.
+ */
+const fromRepoRoot = (relativePath: string): string => fileURLToPath(new URL(relativePath, import.meta.url));
 
 export default defineConfig({
   test: {
@@ -26,9 +34,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
     alias: {
-      '@openlearn/plugin-sdk': '/home/wuxf/Develop/openlearnv2/packages/plugin-sdk/index.ts',
-      '@openlearn/plugin-test-kit': '/home/wuxf/Develop/openlearnv2/packages/plugin-test-kit/index.ts',
-      xlsx: '/home/wuxf/Develop/openlearnv2/packages/core/__mocks__/xlsx.ts',
+      '@openlearn/plugin-sdk': fromRepoRoot('./packages/plugin-sdk/index.ts'),
+      '@openlearn/plugin-test-kit': fromRepoRoot('./packages/plugin-test-kit/index.ts'),
+      xlsx: fromRepoRoot('./packages/core/__mocks__/xlsx.ts'),
     },
     // Kernel integration tests include ZIP plugin seeding which can take >5s
     testTimeout: 60000,

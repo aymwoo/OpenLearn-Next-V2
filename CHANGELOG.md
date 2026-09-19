@@ -10,6 +10,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **CI 与发布流水线假绿修复 (CI & Publish Pipeline Integrity)**:
+  - **`ci.yml` 从未真正运行过检查**：`cache: 'npm'` + `npm ci` 用在 pnpm workspace 上（仓库只有 `pnpm-lock.yaml`，无 `package-lock.json`），每次都在第一步以 `ENOLOCK` 失败，`tsc` / `vitest` 根本没跑。现改为 `pnpm/action-setup@v4` + `cache: 'pnpm'` + `pnpm install --frozen-lockfile`，并改用 `pnpm lint` / `pnpm test`；
+  - **PR 评论步骤必然 403**：`issues.createComment` 需要 `issues: write`，而默认 token 只读。现为该 job 显式声明 `permissions: { contents: read, issues: write }`；
+  - **移除重复跑整套测试的步骤**：原实现用 `execSync` 再跑一次 `vitest run --reporter=json`，其输出超过 `execSync` 默认 1MB buffer，现直接报告上方步骤的结果；
+  - **`security-audit` job 无法运行**：`npm audit` 同样因缺 lockfile 报 `ENOLOCK`，改为 `pnpm audit --audit-level high`；因仓库现有 7 项传递性 devDependency high 告警，暂设 `continue-on-error: true` 并注明待归档后收紧；
+  - **`publish.yml` 幂等化**：三个 `npm publish` 步骤均无“版本已存在则跳过”守卫，任何重跑（`workflow_dispatch`）或未逐包抬版本的重复 push 都会以 `EPUBLISHCONFLICT` 中断整个 job。现每步先探测 `npm view <pkg>@<ver>`，已发布则 `::notice` 跳过；两处 `workspace:*` 改写后的 `git checkout` 回滚改用 `trap ... EXIT`，即使 publish 失败也会还原工作树。
+
+- **Vitest 配置写死本机绝对路径 (vitest.config.ts Portability)**:
+  - 三个 alias 硬编码为 `/home/wuxf/Develop/openlearnv2/...`，导致 `pnpm test` 在 CI 与其他机器上无法解析。现改为基于 `import.meta.url` 的 `fileURLToPath(new URL(rel, import.meta.url))`，解析结果与原先在本机完全一致（已验证字符串一致，不改变模块标识）。
+
+- **系统错误中心未读角标虚高 (Error Center `unreadCount` Invariant)**:
+  - **缺陷**：`unreadCount` 应恒满足 `0 <= unreadCount <= errors.length`，但有两处会破坏它 —— `removeError` 删除错误后不递减计数；`addError` 达到 30 条存储上限后 `slice` 截断最旧一条却仍无条件 `+1`（后者可让角标显示 40 而面板里只有 30 条错误）；
+  - **修复**：抽出 `reconcileUnreadCount()` 统一收敛该不变量，在上述两处应用；
+  - **回归测试**：补齐 `removeError` 原先只断言 `errors` 长度、从不断言 `unreadCount` 的覆盖漏洞，并新增两条用例分别锁定“删除后计数同步”与“截断后不越界”（均已在修复前验证为红）。
+
+- **白板最大化：父组件重渲染导致学生端视图被反复取消 (`InteractiveWhiteboard onFullscreenSync`)**：
+  - **缺陷**：`onFullscreenSync` 常以内联箭头函数传入，每次渲染都是新引用；它原先位于 cleanup effect 的依赖数组中，导致父组件每次重渲染都拆解重跑 effect，向学生反复广播 `elementId: null`，把刚建立的最大化视图取消掉（实测：一次无关重渲染即产生 1 次 `null` 广播）；
+  - **修复**：将回调存入 ref 供 cleanup 读取，effect 依赖数组仅保留稳定基础值；新增回归测试锁定“父组件重渲染不得触发 `null` 广播”。
+
 ## [0.3.17] - 2026-09-19
 
 ### Features & Plugin Ecosystem
