@@ -282,12 +282,9 @@ export function registerOsRoutes(ctx: ServerContext) {
         content: r.content,
       }));
 
-      // Resolve which AI backend handles this request. Precedence:
+      // Resolve which AI backend handles this request:
       //   1. An explicit provider chosen in the UI (providerId)
-      //   2. A provider configured in the admin panel — this means the
-      //      legacy GEMINI_API_KEY env var is NOT required
-      //   3. The GEMINI_API_KEY environment variable (kept as a fallback for
-      //      backward compatibility)
+      //   2. A provider configured in the admin panel
       let provider: StoredAIProvider | undefined;
       if (providerId) {
         provider = kernelContainer.db
@@ -304,9 +301,25 @@ export function registerOsRoutes(ctx: ServerContext) {
       // SEC-DATA-01: 解密 API Key
       if (provider?.api_key) provider.api_key = decryptApiKey(provider.api_key);
 
-      const result = provider
-        ? await runOpenAIAgentChat(provider, { message, lang, currentLessonId, attachments, callerRole, history })
-        : await runGeminiAgentChat({ message, lang, currentLessonId, attachments, callerRole, history });
+      if (!provider || !provider.api_key || !provider.api_key.trim()) {
+        return res.status(400).json({
+          success: false,
+          error: 'NO_AI_PROVIDER',
+          message:
+            lang === 'zh'
+              ? '未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。'
+              : 'No active AI Provider configured. Please add and configure an AI Provider in "System Management -> AI Provider Management".',
+        });
+      }
+
+      const result = await runOpenAIAgentChat(provider, {
+        message,
+        lang,
+        currentLessonId,
+        attachments,
+        callerRole,
+        history,
+      });
 
       // Persist this exchange so the kernel assistant remembers it next time
       if (result && typeof result.agentText === 'string') {
@@ -322,9 +335,7 @@ export function registerOsRoutes(ctx: ServerContext) {
       res.json({
         success: true,
         ...result,
-        providerUsed: provider
-          ? { id: provider.id, name: provider.name, model_name: provider.model_name }
-          : { id: 'system', name: 'Gemini', model_name: 'gemini-3.5-flash' },
+        providerUsed: { id: provider.id, name: provider.name, model_name: provider.model_name },
       });
     } catch (err: any) {
       console.error(err);

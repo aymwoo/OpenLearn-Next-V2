@@ -35,7 +35,7 @@ import {
 - **`capability`**: `ICapabilityService` —— 运行时权限与 Capability 检查。
 - **`processManager`**: `IProcessService` —— 管理受控后台进程。
 - **`storage`**: `IStorageService` —— 插件专属键值存储。
-- **`ai`**: `IAIService` —— 调用大语言模型（Gemini / OpenAI）。
+- **`ai`**: `IAIService` —— 调用大语言模型（基于系统配置的 OpenAI 兼容 Provider）。
 
 #### `ctx.pluginId`
 

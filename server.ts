@@ -273,7 +273,7 @@ async function startServer() {
     runGeminiAgentChat,
     runOpenAIAgentChat,
     activityRegistry,
-  } as ServerContext;
+  } as unknown as ServerContext;
 
   // SEC-NET-01: CORS 白名单化 — HTTP server + Socket.IO setup (moved up so ctx.io is ready)
   const httpServer = createHttpServer(app);

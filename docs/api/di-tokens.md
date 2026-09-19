@@ -194,7 +194,7 @@ delete(key: string): Promise<void>;
 generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string>;
 ```
 
-> 两级回退：数据库配置的 OpenAI 兼容 Provider → Gemini。
+> 统一由数据库 `ai_providers` 中配置的 OpenAI 兼容 Provider 提供。若未配置任何有效提供商，抛出友好错误提示。
 
 ### `IDatabaseToken` → 原始 `better-sqlite3.Database`
 

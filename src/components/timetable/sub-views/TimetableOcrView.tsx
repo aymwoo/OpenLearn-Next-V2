@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, Sparkles, ImagePlus, X, Eye, Loader2, ScanLine, XCircle, CheckCircle2, Check } from 'lucide-react';
+import { Camera, Sparkles, ImagePlus, X, Eye, Loader2, ScanLine, XCircle, CheckCircle2, Check, AlertTriangle } from 'lucide-react';
 import type { ClassType } from '../types';
 
 export interface TimetableOcrViewProps {
@@ -81,22 +81,38 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
             <Sparkles size={12} className="text-violet-500" />
             {lang === 'zh' ? 'AI 识别引擎' : 'AI Recognition Engine'}
           </label>
+          {aiProviders.length === 0 && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2 mb-2">
+              <AlertTriangle size={15} className="shrink-0 text-amber-600 mt-0.5" />
+              <div className="flex-1 leading-relaxed">
+                {lang === 'zh'
+                  ? '未检测到可用的 AI 提供商。课表识别需借助支持视觉（Vision）的大模型（如 GPT-4o 等），请先前往「系统管理 -> AI 提供商管理」添加模型服务。'
+                  : 'No AI providers configured. Timetable recognition requires a vision-capable AI model. Please configure one in System Management.'}
+              </div>
+            </div>
+          )}
           <select
             title="OCR AI Provider"
-            className="w-full bg-slate-50 border border-gray-200 rounded-lg text-xs p-2.5 text-gray-750 cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-violet-500"
+            disabled={aiProviders.length === 0}
+            className="w-full bg-slate-50 border border-gray-200 rounded-lg text-xs p-2.5 text-gray-750 cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-violet-500 disabled:opacity-60 disabled:cursor-not-allowed"
             value={ocrProviderId}
             onChange={(e) => setOcrProviderId(e.target.value)}
           >
-            <option value="">{lang === 'zh' ? '默认 (Gemini)' : 'Default (Gemini)'}</option>
-            {aiProviders.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.model_name})
+            {aiProviders.length === 0 ? (
+              <option value="" disabled>
+                {lang === 'zh' ? '未配置 AI 提供商' : 'No AI Provider'}
               </option>
-            ))}
+            ) : (
+              aiProviders.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.model_name})
+                </option>
+              ))
+            )}
           </select>
           <span className="text-xs text-gray-400 mt-1 block">
             {lang === 'zh'
-              ? '选择用于识别课表图片的 AI 模型。需要支持图片输入的模型（如 GPT-4o、Gemini 等）。'
+              ? '选择用于识别课表图片的 AI 模型。需要支持图片输入的模型（如 GPT-4o 等）。'
               : 'Choose the AI model for timetable recognition. Must support vision/image input.'}
           </span>
         </div>
@@ -164,7 +180,7 @@ export const TimetableOcrView: React.FC<TimetableOcrViewProps> = ({
         {/* Recognize Button */}
         <button
           onClick={handleOcrRecognize}
-          disabled={!ocrImageBase64 || ocrLoading}
+          disabled={!ocrImageBase64 || ocrLoading || aiProviders.length === 0}
           className="mt-4 w-full bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2 shadow-sm disabled:cursor-not-allowed"
         >
           {ocrLoading ? (

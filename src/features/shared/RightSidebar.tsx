@@ -1,5 +1,15 @@
 import React, { useRef, useEffect } from 'react';
-import { Wand2, Terminal, PanelRightClose, ChevronDown, MessageSquare, FileText, X, Paperclip } from 'lucide-react';
+import {
+  Wand2,
+  Terminal,
+  PanelRightClose,
+  ChevronDown,
+  MessageSquare,
+  FileText,
+  X,
+  Paperclip,
+  AlertTriangle,
+} from 'lucide-react';
 
 interface RightSidebarProps {
   showRightSidebar: boolean;
@@ -110,20 +120,29 @@ export function RightSidebar({
                       {lang === 'zh' ? 'AI 提供商' : 'AI Provider'}
                     </span>
                     <div className="relative w-full">
-                      <select
-                        value={effectiveAgentProviderId}
-                        onChange={(e) => setAgentProviderId(e.target.value)}
-                        className="w-full appearance-none rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50 px-3 py-2 pr-9 text-xs font-medium text-gray-700 shadow-sm outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
-                      >
-                        <option value="system">
-                          {lang === 'zh' ? '系统默认（Gemini）' : 'System Default (Gemini)'}
-                        </option>
-                        {aiProviders.map((provider) => (
-                          <option key={provider.id} value={provider.id}>
-                            {provider.name}
+                      {aiProviders.length === 0 ? (
+                        <select
+                          disabled
+                          value=""
+                          className="w-full appearance-none rounded-xl border border-amber-200 bg-amber-50/50 px-3 py-2 pr-9 text-xs font-medium text-amber-700 shadow-xs outline-none cursor-not-allowed"
+                        >
+                          <option value="">
+                            {lang === 'zh' ? '未配置 AI 提供商' : 'No AI Provider'}
                           </option>
-                        ))}
-                      </select>
+                        </select>
+                      ) : (
+                        <select
+                          value={effectiveAgentProviderId}
+                          onChange={(e) => setAgentProviderId(e.target.value)}
+                          className="w-full appearance-none rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50 px-3 py-2 pr-9 text-xs font-medium text-gray-700 shadow-xs outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                        >
+                          {aiProviders.map((provider) => (
+                            <option key={provider.id} value={provider.id}>
+                              {provider.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       <ChevronDown
                         size={12}
                         className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -131,23 +150,31 @@ export function RightSidebar({
                     </div>
                     <div
                       className="text-xs text-gray-400 truncate w-full text-right"
-                      title={
-                        effectiveAgentProviderId === 'system'
-                          ? lang === 'zh'
-                            ? '使用内置 Gemini 系统模型'
-                            : 'Using the built-in Gemini system model'
-                          : selectedAgentProvider?.model_name || ''
-                      }
+                      title={selectedAgentProvider?.model_name || ''}
                     >
-                      {effectiveAgentProviderId === 'system'
-                        ? lang === 'zh'
-                          ? '内置系统模型'
-                          : 'Built-in system model'
-                        : `${selectedAgentProvider?.name || (lang === 'zh' ? '已选提供商' : 'Selected provider')}`}
+                      {selectedAgentProvider
+                        ? `${selectedAgentProvider.model_name}`
+                        : lang === 'zh'
+                          ? '未配置提供商'
+                          : 'No Provider'}
                     </div>
                   </div>
                 </div>
               </div>
+
+              {aiProviders.length === 0 && (
+                <div className="mx-4 mt-3 p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2 shadow-xs shrink-0">
+                  <AlertTriangle size={15} className="shrink-0 text-amber-600 mt-0.5" />
+                  <div className="flex-1 leading-relaxed">
+                    <span className="font-semibold">{lang === 'zh' ? '未配置 AI 提供商' : 'No AI Provider Configured'}</span>
+                    <p className="mt-0.5 text-amber-700">
+                      {lang === 'zh'
+                        ? '请前往「系统管理 -> AI 提供商管理」添加大模型服务（如 DeepSeek、Qwen、OpenAI 等）。'
+                        : 'Please configure an AI provider in "System Management -> AI Provider Management" to use the AI assistant.'}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {chatLog.map((msg, i) => (
@@ -220,14 +247,21 @@ export function RightSidebar({
                     <input
                       type="text"
                       value={input}
+                      disabled={aiProviders.length === 0}
                       onChange={(e) => setInput(e.target.value)}
-                      placeholder={t.placeholder}
-                      className="w-full bg-gray-50 border border-gray-200 rounded-full pl-4 pr-10 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                      placeholder={
+                        aiProviders.length === 0
+                          ? lang === 'zh'
+                            ? '请先配置 AI 提供商'
+                            : 'Please configure AI provider first'
+                          : t.placeholder
+                      }
+                      className="w-full bg-gray-50 border border-gray-200 rounded-full pl-4 pr-10 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                     />
                     <button
                       type="submit"
-                      disabled={loading || !input.trim()}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                      disabled={loading || !input.trim() || aiProviders.length === 0}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
                     >
                       <MessageSquare size={10} />
                     </button>

@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.3.18] - 2026-09-19
+
 ### Tests & Reliability
 
 - **测试套件时间预算加固 (Test-suite Timing Robustness)**：
@@ -20,6 +22,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **验证**：修复后 6 次全量运行全绿——空闲 ×3、合成 CPU 压力（`PSI cpu` 32.7%）×1、dev server 运行中 ×2（其中一次 `PSI cpu` 44%）。
 
 ### Features
+
+- **默认 Gemini 配置彻底移除与动态 AI Provider 架构强制 (Complete Gemini Fallback Removal & Dynamic AI Provider Enforcement)**:
+  - **解耦硬编码回退**：服务端与内核全面清理 `process.env.GEMINI_API_KEY` 兜底以及 `@google/genai` 依赖，系统 AI 能力统一由数据库 `ai_providers` 中动态配置的 OpenAI 兼容提供商（如 DeepSeek、Qwen、Ollama、OpenAI 等）驱动；
+  - **内核 DI 服务强化与凭据解密**：`packages/core/di/ai-service.ts` 与 `AIProviderGateway` 严格要求已配置的提供商，无有效 Provider 时统一抛出友好中文提示；集成 AES-256-GCM 密钥透明解密支持；
+  - **业务路由全量收归内核服务**：`assignments.ts`（生成题目、建议测验与智能评测）、`lessons.ts`（白板 AI 助教）、`grading.ts`（学期综合评估）、`schedules.ts`（课表 OCR）与 `ai-submit-injector.ts` 全面移除 Gemini 回退分支，统一收归内核 `kernelContainer.aiService`；
+  - **前端未配置状态与友好引导**：
+    - `RightSidebar.tsx`: 移除写死的“系统默认（Gemini）”选项；无提供商时展示“未配置 AI 提供商”禁用选项，并在抽屉顶部展示醒目琥珀色警示卡片引导前往「系统管理 -> AI 提供商管理」，同时禁用输入框与发送按钮；
+    - `TimetableOcrView.tsx`: 移除默认选项，无提供商时显示多模态模型要求引导横幅并禁用 OCR 识别按钮；
+    - `App.tsx`: 修正 `agentProviderId` 初始状态机与同步逻辑，消除对 `'system'` 伪提供商的隐式依赖；
+  - **环境与部署配置清理**：清理 `.env.example`, `docker-compose.yml`, `ecosystem.config.cjs`, `deploy.sh`, `cli.mjs`, `metadata.json` 中的 `GEMINI_API_KEY` 与遗留声明。
+
+- **现代化紧凑导航边栏与分类折叠交互 (Modern Compact Navigation Sidebar & Collapsible Categories)**:
+  - **紧凑排版与现代无边框视觉**：导航边栏宽度缩小为贴合项目文字宽度的紧凑尺寸，移除突兀深黑边框，升级为柔和阴影与半透明底色现代设计；
+  - **分类折叠与视觉层级区隔**：导航条目分类（如教学工具、系统管理等）支持点击折叠/展开，带平滑动画与状态记忆；条目文字“帮助与支持”统一精简为“帮助支持”。
+
+- **全平台品牌统一为 OpenLearn Next (Brand Standardization to OpenLearn Next)**:
+  - 将系统内所有历史遗留的 "Edu OS"、"EduLearn OS"、"EduLearn LMS" 标识全面对齐为统一产品命名 "OpenLearn Next"。
 
 - **全站中文字体规范化与 9pt (12px) 物理保底 (Chinese Web Typography & 9pt Minimum Floor Guarantee)**:
   - **中文排版底线标准设定**：根据现代中文网页排版规范与印刷字号换算标准（$9\text{pt} = 12\text{px}$，中文小五号字），杜绝页面中因字号过小（如 6px~11px）导致的中文字符发虚、笔画粘连与难以辨认问题；
@@ -32,6 +51,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **顶栏统一控制交互 (`FontSizeSelector`)**：在系统全局顶栏集成快捷调节器，并移除非顶部的冗余按钮（如白板与课程编辑器工具栏），保障操作界面纯净统一。
 
 ### Fixes
+
+- **仪表盘加载 500 异常与 Worker 插件命令注册修复 (Dashboard Command & Worker Capability Fixes)**:
+  - **缺陷**：进入 `/#/dashboard` 仪表盘页面时，触发两项 HTTP 500 服务端接口错误（`records is not iterable` 与 `No handler registered for command: lianyun-course.research.get_activities`）；
+  - **修复**：
+    - `@aymwoo/plugin-lab-seat`: 修复 `records is not iterable` 异常，为数据库 `db.prepare(...).all()` 查询结果增加空值数组兜底（`records || []`）；
+    - `service-host.ts`: 修复 worker capability 检查逻辑，支持缺少 `worker:all_commands` 时安全回退，并在无 handler 注册时不发生未捕获奔溃；新增测试 `packages/core/worker-runtime/__tests__/dashboard-plugins.test.ts` 锁定回归。
+
+- **管理后台页面风格规范化对齐 (Admin Panel Visual Harmonization)**:
+  - 重构 `AdminPanel.tsx`，将旧式高对比黑边框与深色底框统一调整为与教师端其他页面一致的现代白底、轻质灰边（`border-gray-200/80`）与柔和阴影风格。
 
 - **全班专注锁定白板内嵌组件只读与交互阻断 (Class Focus Lock Whiteboard Component Read-Only Guard)**:
   - **缺陷**：当教师开启“全班专注模式/禁言锁定”时，学生端白板画布虽有锁定提示遮罩，但白板内部渲染的各类教学组件（Reveal 演示文稿、代码沙箱、数理画板、点名器、互动课件等）仍可被学生独立点击和操作；
@@ -73,6 +101,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **白板最大化：父组件重渲染导致学生端视图被反复取消 (`InteractiveWhiteboard onFullscreenSync`)**：
   - **缺陷**：`onFullscreenSync` 常以内联箭头函数传入，每次渲染都是新引用；它原先位于 cleanup effect 的依赖数组中，导致父组件每次重渲染都拆解重跑 effect，向学生反复广播 `elementId: null`，把刚建立的最大化视图取消掉（实测：一次无关重渲染即产生 1 次 `null` 广播）；
   - **修复**：将回调存入 ref 供 cleanup 读取，effect 依赖数组仅保留稳定基础值；新增回归测试锁定“父组件重渲染不得触发 `null` 广播”。
+
+### Docs
+
+- **技术文档全景更新与 OpenAI 兼容架构对齐 (Documentation Decoupling & Alignment)**:
+  - 全面更新 `docs/getting-started/installation-guide.md`、`docs/getting-started/quickstart.md`、`docs/ai/ai-runtime.md`、`docs/api/di-tokens.md`、`docs/architecture/configuration.md`、`docs/architecture/composition-root.md`、`docs/index.md`、`docs/sdk/plugin-sdk.md` 以及 `AGENTS.md`、`README.md`、`CLAUDE.md`；
+  - 阐明 AI 运行时已完全解耦为数据库驱动的 OpenAI 兼容多 Provider 网关机制，全面移除环境变量 `GEMINI_API_KEY` 兜底说明。
 
 ## [0.3.17] - 2026-09-19
 

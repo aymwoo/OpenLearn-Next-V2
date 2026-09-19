@@ -1,4 +1,3 @@
-import { GoogleGenAI, Type } from '@google/genai';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getCookieToken, getValidSession, requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
@@ -21,10 +20,9 @@ export function registerAssignmentsRoutes(ctx: ServerContext) {
   app.post('/api/classes/:classId/assignments/generate', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { topic, lessonId } = req.body;
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = kernelContainer.aiService;
       const prompt = `You are an expert teacher. Generate a short 1-question quiz or assignment about "${topic}". Output in this JSON format: {"title": "...", "description": "...", "content": "..."} without markdown blocks.`;
-      const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt });
-      const text = response.text || '{}';
+      const text = await ai.generateText(prompt);
       const cleanText = text
         .replace(/```json/g, '')
         .replace(/```/g, '')
@@ -72,14 +70,7 @@ export function registerAssignmentsRoutes(ctx: ServerContext) {
         return res.status(404).json({ error: 'Lesson not found' });
       }
 
-      const ai = new GoogleGenAI({
-        apiKey: process.env.GEMINI_API_KEY,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          },
-        },
-      });
+      const ai = kernelContainer.aiService;
 
       const prompt = `You are an expert curriculum developer and instructional designer. 
 Analyze the following lesson content and:
@@ -91,53 +82,26 @@ Lesson Title: ${lesson.title}
 Lesson Content:
 ${lesson.content}
 
-Generate the response in the specified JSON schema.`;
+Output pure JSON only without markdown code blocks, matching this structure:
+{
+  "learningObjectives": ["objective 1", "objective 2"],
+  "questions": [
+    {
+      "objective": "objective 1",
+      "question": "question text",
+      "options": ["A) opt1", "B) opt2", "C) opt3", "D) opt4"],
+      "correctAnswer": "A) opt1"
+    }
+  ]
+}`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              learningObjectives: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
-                description: 'List of identified key learning objectives for the lesson',
-              },
-              questions: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    objective: {
-                      type: Type.STRING,
-                      description: 'The specific learning objective tested by this question',
-                    },
-                    question: { type: Type.STRING, description: 'The multiple-choice question text' },
-                    options: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING },
-                      description: "Exactly 4 options, including letter prefix like 'A) ...', 'B) ...'",
-                    },
-                    correctAnswer: {
-                      type: Type.STRING,
-                      description:
-                        'The correct option (must exactly match one of the string options in the options array)',
-                    },
-                  },
-                  required: ['objective', 'question', 'options', 'correctAnswer'],
-                },
-              },
-            },
-            required: ['learningObjectives', 'questions'],
-          },
-        },
-      });
-
-      const text = response.text || '{}';
-      res.json(JSON.parse(text));
+      const text = await ai.generateText(prompt);
+      const cleanText = text
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
+      res.json(JSON.parse(cleanText));
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -246,7 +210,7 @@ Generate the response in the specified JSON schema.`;
         const ast = kernelContainer.db.prepare('SELECT * FROM assignments WHERE id = ?').get(req.params.id) as any;
         if (!asb || !ast) throw new Error('Submission or assignment not found');
 
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const ai = kernelContainer.aiService;
         let grade = { score: 0, feedback: '' };
 
         let isMcqQuiz = false;
@@ -293,8 +257,7 @@ Calculated Score: ${autoScore}%
 Write an encouraging message explaining why their correct answers are correct, and gently explaining why the correct concept is correct for any questions they got incorrect. Connect it directly back to the key learning objectives.
 Provide a grade score (${autoScore}) and tutoring feedback. You MUST output in this exact JSON format: {"score": ${autoScore}, "feedback": "tutoring feedback..."} without markdown formatting or backticks.`;
 
-          const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt });
-          const text = response.text || '{}';
+          const text = await ai.generateText(prompt);
           const cleanText = text
             .replace(/```json/g, '')
             .replace(/```/g, '')
@@ -311,8 +274,7 @@ Assignment Question: ${ast.content}
 Student's Answer: ${asb.content}
 Provide a grade score (0-100) and brief feedback. Ensure you output in this exact JSON format: {"score": 85, "feedback": "Good job..."} without markdown formatting or backticks.`;
 
-          const response = await ai.models.generateContent({ model: 'gemini-3.5-flash', contents: prompt });
-          const text = response.text || '{}';
+          const text = await ai.generateText(prompt);
           const cleanText = text
             .replace(/```json/g, '')
             .replace(/```/g, '')

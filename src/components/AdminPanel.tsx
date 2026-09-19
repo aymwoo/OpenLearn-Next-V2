@@ -462,34 +462,37 @@ export function AdminPanel({
   });
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden" id="admin_panel_root">
+    <div className="flex-1 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col min-h-0 overflow-hidden h-full" id="admin_panel_root">
       {/* Admin Panel Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-gray-200 gap-4 shrink-0">
+      <div className="px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white shrink-0">
         <div>
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <Shield className="text-indigo-600 animate-pulse" size={24} />
-            {lang === 'zh' ? '教职与系统管理后台' : 'Staff Directory & System Admin Control'}
+          <h2 className="text-base sm:text-lg font-bold text-gray-800 flex items-center gap-2">
+            <Shield className="text-indigo-600 shrink-0" size={20} />
+            <span>{lang === 'zh' ? '系统管理与教职后台' : 'Staff Directory & System Admin'}</span>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100/80">
+              {currentUserRole === 'administrator' ? (lang === 'zh' ? '超级管理员' : 'Admin') : (lang === 'zh' ? '教师' : 'Teacher')}
+            </span>
           </h2>
           <p className="text-xs text-gray-500 mt-1">
             {lang === 'zh'
-              ? `管理学校教师、教工账户、划分角色权限。当前登录角色权限: ${currentUserRole === 'administrator' ? '👑 超级管理员 (系统设置已解锁)' : '📁 普通教师 (系统设置锁定)'}`
-              : `Create and assign teacher credentials. Active role context: ${currentUserRole === 'administrator' ? '👑 Administrator (System parameters editable)' : '📁 Standard Teacher (Settings view-only)'}`}
+              ? `管理学校教师、教工账户、划分角色权限。当前登录角色权限: ${currentUserRole === 'administrator' ? '超级管理员 (系统设置已解锁)' : '普通教师 (系统设置锁定)'}`
+              : `Create and assign teacher credentials. Active role context: ${currentUserRole === 'administrator' ? 'Administrator (System parameters editable)' : 'Standard Teacher (Settings view-only)'}`}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {onTriggerTour && (
             <button
               onClick={onTriggerTour}
-              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-all cursor-pointer shadow-3xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg border border-indigo-200 transition-all cursor-pointer shadow-3xs"
             >
               <HelpCircle size={14} className="animate-bounce" />
-              {lang === 'zh' ? '开启新手引导' : 'Start Help Tour'}
+              <span>{lang === 'zh' ? '开启新手引导' : 'Start Help Tour'}</span>
             </button>
           )}
           <button
             onClick={() => setRefreshStatsCount((prev) => prev + 1)}
-            className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-gray-150 rounded-xl transition-all cursor-pointer border border-gray-200"
+            className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-gray-100 rounded-lg transition-all cursor-pointer border border-gray-200 shadow-3xs"
             title={lang === 'zh' ? '刷新数据' : 'Refresh stats'}
           >
             <RefreshCw size={14} />
@@ -497,76 +500,78 @@ export function AdminPanel({
         </div>
       </div>
 
+      {/* Sub tabs list segment: Modern Segmented Tab Bar */}
+      <div className="px-6 py-2.5 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-4 shrink-0 overflow-x-auto">
+        <div className="bg-gray-200/60 p-1 rounded-xl flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => setActiveAdminTab('directory')}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeAdminTab === 'directory'
+                ? 'bg-white text-indigo-700 shadow-xs'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <Users size={14} />
+            <span>{lang === 'zh' ? '学校教职及系统配置' : 'Staff Accounts & Config'}</span>
+          </button>
+          <button
+            onClick={() => setActiveAdminTab('ai_providers')}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeAdminTab === 'ai_providers'
+                ? 'bg-white text-indigo-700 shadow-xs'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <Server size={14} />
+            <span>{lang === 'zh' ? 'AI 模型提供商' : 'AI Providers'}</span>
+          </button>
+          <button
+            onClick={() => setActiveAdminTab('sqlite')}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeAdminTab === 'sqlite'
+                ? 'bg-white text-indigo-700 shadow-xs'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <Database size={14} />
+            <span>{lang === 'zh' ? '系统监控' : 'System Monitor'}</span>
+          </button>
+          <button
+            onClick={() => setActiveAdminTab('site_settings')}
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeAdminTab === 'site_settings'
+                ? 'bg-white text-indigo-700 shadow-xs'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            <Settings size={14} />
+            <span>{lang === 'zh' ? '站点信息设置' : 'Site Settings'}</span>
+          </button>
+        </div>
+      </div>
+
       {success && (
-        <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2 shrink-0 animate-fade-in shadow-xs font-medium">
+        <div className="mx-6 mt-3 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2 shrink-0 animate-fade-in shadow-xs font-medium">
           <CheckCircle size={15} />
           <span>{success}</span>
         </div>
       )}
 
       {error && (
-        <div className="mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2 shrink-0 animate-fade-in shadow-xs">
+        <div className="mx-6 mt-3 p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2 shrink-0 animate-fade-in shadow-xs">
           <AlertTriangle size={15} />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Sub tabs list segment */}
-      <div className="flex border-b border-gray-150 mt-4 shrink-0 overflow-x-auto gap-2">
-        <button
-          onClick={() => setActiveAdminTab('directory')}
-          className={`px-4 py-2 border-b-2 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
-            activeAdminTab === 'directory'
-              ? 'border-indigo-600 text-indigo-700 font-bold'
-              : 'border-transparent text-gray-500 hover:text-gray-800'
-          }`}
-        >
-          <Users size={14} />
-          {lang === 'zh' ? '学校教职及系统配置' : 'Staff Accounts & Config'}
-        </button>
-        <button
-          onClick={() => setActiveAdminTab('ai_providers')}
-          className={`px-4 py-2 border-b-2 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
-            activeAdminTab === 'ai_providers'
-              ? 'border-indigo-600 text-indigo-700 font-bold'
-              : 'border-transparent text-gray-500 hover:text-gray-800'
-          }`}
-        >
-          <Server size={14} />
-          {lang === 'zh' ? 'AI 模型提供商' : 'AI Providers'}
-        </button>
-        <button
-          onClick={() => setActiveAdminTab('sqlite')}
-          className={`px-4 py-2 border-b-2 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
-            activeAdminTab === 'sqlite'
-              ? 'border-indigo-600 text-indigo-700 font-bold'
-              : 'border-transparent text-gray-500 hover:text-gray-800'
-          }`}
-        >
-          <Database size={14} />
-          {lang === 'zh' ? '系统监控' : 'System Monitor'}
-        </button>
-        <button
-          onClick={() => setActiveAdminTab('site_settings')}
-          className={`px-4 py-2 border-b-2 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
-            activeAdminTab === 'site_settings'
-              ? 'border-indigo-600 text-indigo-700 font-bold'
-              : 'border-transparent text-gray-500 hover:text-gray-800'
-          }`}
-        >
-          <Settings size={14} />
-          {lang === 'zh' ? '站点信息设置' : 'Site Settings'}
-        </button>
-      </div>
-
       {activeAdminTab === 'ai_providers' ? (
-        <div className="flex-1 overflow-y-auto mt-4 space-y-6 animate-fade-in text-gray-800 pb-12">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 animate-fade-in text-gray-800">
           {/* AI Provider List Card */}
-          <div className="bg-white border border-gray-200/85 rounded-2xl shadow-xs overflow-hidden">
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-slate-50/60">
+          <div className="bg-white border border-gray-200 rounded-xl shadow-3xs overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
               <div>
                 <h3 className="font-bold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
-                  <Blocks className="text-indigo-500" size={18} />
+                  <Blocks className="text-indigo-600" size={18} />
                   {lang === 'zh' ? 'OpenAI 兼容 / 自定义模型 AI 提供商列表' : 'AI Providers List (OpenAI-Compatible)'}
                 </h3>
                 <p className="text-xs text-gray-400 mt-0.5">
@@ -577,7 +582,7 @@ export function AdminPanel({
               </div>
               <button
                 onClick={handleAddProvider}
-                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-all text-xs cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-sm transition-all text-xs cursor-pointer"
               >
                 <Plus size={14} />
                 {lang === 'zh' ? '添加 AI 提供商' : 'Add AI Provider'}
@@ -637,7 +642,7 @@ export function AdminPanel({
                             <div className="flex items-center justify-center gap-2">
                               <button
                                 onClick={() => handleTestProvider(provider)}
-                                className="px-2.5 py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 shadow-xs bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                                className="px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer flex items-center gap-1.5 shadow-3xs bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
                                 title={lang === 'zh' ? '测试连通性' : 'Test Connection'}
                               >
                                 <Globe size={11} />
@@ -645,14 +650,14 @@ export function AdminPanel({
                               </button>
                               <button
                                 onClick={() => handleEditProvider(provider)}
-                                className="px-2.5 py-1.5 text-indigo-600 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-200 rounded-lg bg-white cursor-pointer hover:font-bold font-semibold transition-all shadow-xs"
+                                className="px-2.5 py-1 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-lg bg-indigo-50 cursor-pointer font-semibold transition-all shadow-3xs"
                                 title={lang === 'zh' ? '编辑配置' : 'Edit'}
                               >
                                 {lang === 'zh' ? '编辑' : 'Edit'}
                               </button>
                               <button
                                 onClick={() => handleDeleteProvider(provider.id, provider.name)}
-                                className="px-2.5 py-1.5 text-rose-600 hover:bg-rose-50 border border-gray-200 hover:border-rose-200 rounded-lg bg-white cursor-pointer hover:font-bold font-semibold transition-all shadow-xs"
+                                className="px-2.5 py-1 text-rose-600 hover:bg-rose-100 border border-rose-200 rounded-lg bg-rose-50 cursor-pointer font-semibold transition-all shadow-3xs"
                                 title={lang === 'zh' ? '删除' : 'Delete'}
                               >
                                 {lang === 'zh' ? '删除' : 'Delete'}
@@ -669,11 +674,11 @@ export function AdminPanel({
           </div>
         </div>
       ) : activeAdminTab === 'sqlite' ? (
-        <div className="flex-1 overflow-y-auto mt-4 space-y-6 animate-fade-in text-gray-800 pb-12">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 animate-fade-in text-gray-800">
           {/* Quick Header Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Health status check card */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-2xs flex items-center justify-between">
+            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-3xs flex items-center justify-between">
               <div className="space-y-1 text-left">
                 <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
                   {lang === 'zh' ? 'SQLite引擎状况' : 'SQLite Health Status'}
@@ -698,7 +703,7 @@ export function AdminPanel({
             </div>
 
             {/* Total Tables card */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-2xs flex items-center justify-between">
+            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-3xs flex items-center justify-between">
               <div className="space-y-1 text-left">
                 <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
                   {lang === 'zh' ? '核心实体数据表' : 'Database Table Count'}
@@ -718,7 +723,7 @@ export function AdminPanel({
             </div>
 
             {/* Total Row counts */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-2xs flex items-center justify-between">
+            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-3xs flex items-center justify-between">
               <div className="space-y-1 text-left">
                 <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
                   {lang === 'zh' ? '系统数据承载行' : 'Total Records Managed'}
@@ -736,7 +741,7 @@ export function AdminPanel({
             </div>
 
             {/* Disk space usage */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-2xs flex items-center justify-between">
+            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-3xs flex items-center justify-between">
               <div className="space-y-1 text-left">
                 <span className="text-xs font-black text-slate-400 uppercase tracking-widest block">
                   {lang === 'zh' ? '物理文件占用空间' : 'Physical Disk Usage'}
@@ -756,8 +761,8 @@ export function AdminPanel({
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Table layout detail catalog (lg:col-span-8) */}
-            <div className="lg:col-span-8 bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden flex flex-col">
-              <div className="p-5 border-b border-gray-100 bg-slate-50/60 flex items-center justify-between">
+            <div className="lg:col-span-8 bg-white border border-gray-200 rounded-xl shadow-3xs overflow-hidden flex flex-col">
+              <div className="p-4 sm:p-5 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between">
                 <div className="text-left">
                   <h3 className="font-extrabold text-gray-800 text-sm sm:text-base flex items-center gap-1.5 justify-start">
                     <Database className="text-indigo-600" size={18} />
@@ -1127,7 +1132,7 @@ export function AdminPanel({
           </div>
 
           {/* Section 2: Real-time System Telemetry Grid */}
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-xs p-5 flex flex-col flex-1 overflow-y-auto">
+          <div className="bg-white border border-gray-200 rounded-xl shadow-3xs p-5 flex flex-col flex-1 overflow-y-auto">
             <h3 className="text-xs font-black text-gray-700 uppercase tracking-widest flex items-center gap-2 border-b border-gray-100 pb-3 mb-4 select-none">
               <Activity size={14} className="text-indigo-600 animate-pulse" />
               {lang === 'zh' ? '分布式操作系统硬件状况' : 'Distributed Node Telemetry'}
@@ -1187,12 +1192,12 @@ export function AdminPanel({
           </div>
         </div>
       ) : activeAdminTab === 'site_settings' ? (
-        <div className="flex-1 overflow-y-auto mt-4 animate-fade-in text-gray-800 pb-12">
-          <div className="bg-white border border-gray-200/85 rounded-2xl shadow-xs overflow-hidden max-w-3xl">
-            <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-slate-50/60">
+        <div className="flex-1 overflow-y-auto p-6 animate-fade-in text-gray-800">
+          <div className="bg-white border border-gray-200 rounded-xl shadow-3xs overflow-hidden max-w-3xl">
+            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
               <div>
                 <h3 className="font-bold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
-                  <Settings size={18} className="text-indigo-500" />
+                  <Settings size={18} className="text-indigo-600" />
                   {lang === 'zh' ? '平台站点信息（名称 / 口号 / Logo）' : 'Platform Site Info (Name / Slogan / Logo)'}
                 </h3>
                 <p className="text-xs text-gray-400 mt-0.5">
@@ -1304,33 +1309,12 @@ export function AdminPanel({
           </div>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-12 gap-6 pt-5 overflow-hidden">
-          {/* Left pane: Accounts directory list (xl:col-span-12) */}
-          <div className="xl:col-span-12 flex flex-col min-h-0 bg-white border border-gray-200 rounded-2xl shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-gray-150 bg-gray-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-2">
-                <Users size={16} className="text-gray-500" />
-                <span className="text-xs font-bold text-gray-700 uppercase tracking-wider block">
-                  {lang === 'zh' ? '在册教师/管理员列表' : 'Registered Staff Accounts'}
-                </span>
-                <span className="bg-gray-200 text-gray-700 font-bold px-2 py-0.5 rounded-full text-xs">
-                  {filteredUsers.length}
-                </span>
-              </div>
-
-              <button
-                onClick={handleOpenCreate}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-              >
-                <Plus size={12} />
-                {lang === 'zh' ? '添加教职账户' : 'Add Teacher Account'}
-              </button>
-            </div>
-
-            {/* Search bar & filter controls */}
-            <div className="p-3 border-b border-gray-100 bg-white grid grid-cols-1 sm:grid-cols-12 gap-2 shrink-0">
-              <div className="sm:col-span-8 relative flex items-center">
-                <span className="absolute left-3 text-gray-400">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          {/* Search bar & action controls bar */}
+          <div className="px-6 py-3 border-b border-gray-100 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto flex-1">
+              <div className="relative w-full sm:w-72">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
                   <Search size={14} />
                 </span>
                 <input
@@ -1338,110 +1322,146 @@ export function AdminPanel({
                   placeholder={lang === 'zh' ? '检索姓名、教工用户名...' : 'Search teachers by name or username...'}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full text-xs pl-9 pr-3 py-2 border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 rounded-xl"
+                  className="w-full pl-9 pr-8 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-800 shadow-3xs"
                 />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={12} className="bg-gray-100 hover:bg-gray-200 rounded-full p-0.5" />
+                  </button>
+                )}
               </div>
 
-              <div className="sm:col-span-4 select-none">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                  {lang === 'zh' ? '角色筛选：' : 'Role:'}
+                </span>
                 <select
                   value={roleFilter}
                   onChange={(e) => setRoleFilter(e.target.value as any)}
-                  className="w-full text-xs p-2 border border-gray-200 focus:outline-none focus:border-indigo-400 rounded-xl bg-slate-50 cursor-pointer"
+                  className="bg-white border border-gray-200 text-xs text-gray-700 font-semibold px-2.5 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-3xs cursor-pointer"
                 >
                   <option value="all">{lang === 'zh' ? '全部角色' : 'All Roles'}</option>
                   <option value="administrator">{lang === 'zh' ? '管理员 (admin)' : 'Administrators'}</option>
-                  <option value="teacher">{lang === 'zh' ? '非管理员 (teacher)' : 'Standard Teachers'}</option>
+                  <option value="teacher">{lang === 'zh' ? '教师 (teacher)' : 'Standard Teachers'}</option>
                 </select>
               </div>
+
+              <span className="text-xs text-gray-400">
+                {lang === 'zh' ? `共 ${filteredUsers.length} 位教工` : `${filteredUsers.length} total staff`}
+              </span>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/55">
-              {loading ? (
-                <div className="flex justify-center items-center h-48 text-gray-400 text-xs">
-                  <RefreshCw size={20} className="animate-spin mr-1.5" />
-                  {lang === 'zh' ? '加载教职工账户中...' : 'Reading accounts...'}
-                </div>
-              ) : filteredUsers.length === 0 ? (
-                <div className="text-center p-8 text-gray-400 flex flex-col items-center justify-center h-full">
-                  <Users size={36} className="opacity-20 mb-2" />
-                  <p className="text-xs font-semibold">
-                    {lang === 'zh' ? '未检索到任何符合条件的教师账户' : 'No staff matched your filters.'}
-                  </p>
-                </div>
-              ) : (
-                filteredUsers.map((user) => {
-                  const isSelectedSelf = user.id === currentUserId;
-                  const isUserAdmin = user.role === 'administrator';
-                  const isDisabled = user.status === 'disabled';
-                  return (
-                    <div
-                      key={user.id}
-                      className={`p-3 bg-white border border-gray-150 hover:border-gray-350 rounded-xl shadow-2xs flex items-center justify-between group transition-all ${isDisabled ? 'opacity-75 bg-slate-50/50' : ''}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`p-2 rounded-xl flex items-center justify-center ${isDisabled ? 'bg-slate-200 text-slate-400' : isUserAdmin ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}
-                        >
-                          {isUserAdmin ? <Shield size={18} /> : <Users size={18} />}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`text-xs font-black ${isDisabled ? 'text-gray-500 line-through' : 'text-gray-800'}`}
-                            >
-                              {user.name}
-                            </span>
-                            {isSelectedSelf && (
-                              <span className="bg-indigo-100/80 text-indigo-700 text-xs font-bold px-1.5 py-0.5 rounded-full border border-indigo-200">
-                                {lang === 'zh' ? '你自己' : 'You'}
-                              </span>
-                            )}
-                            <span
-                              className={`text-xs font-black tracking-wider uppercase px-1.5 py-0.5 rounded-full ${
-                                isUserAdmin ? 'bg-indigo-950/90 text-indigo-400' : 'bg-slate-100 text-slate-500'
-                              }`}
-                            >
-                              {user.role}
-                            </span>
-                            {isDisabled && (
-                              <span className="bg-rose-100 text-rose-700 text-xs font-black px-1.5 py-0.5 rounded-full border border-rose-200">
-                                {lang === 'zh' ? '已禁用' : 'Disabled'}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-gray-450 font-mono mt-1 flex items-center gap-1.5">
-                            <span>@{user.username}</span>
-                            <span>•</span>
-                            <span>
-                              {lang === 'zh' ? '注册日期：' : 'ID: '}
-                              {new Date(user.created_at).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+            <button
+              onClick={handleOpenCreate}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm hover:shadow transition-all cursor-pointer shrink-0 self-end sm:self-auto"
+            >
+              <Plus size={14} />
+              <span>{lang === 'zh' ? '添加教职账户' : 'Add Teacher Account'}</span>
+            </button>
+          </div>
 
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleOpenEdit(user)}
-                          className="p-1 px-1.5 text-xs text-gray-650 hover:text-indigo-600 hover:bg-indigo-50/50 border border-transparent rounded-lg transition-colors flex items-center gap-1"
-                          title={lang === 'zh' ? '修改设置' : 'Update settings'}
-                        >
-                          <Edit2 size={12} />
-                          <span className="hidden md:inline text-xs">{lang === 'zh' ? '设置' : 'Edit'}</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUser(user.id, user.name)}
-                          className="p-1 px-1.5 text-xs text-gray-650 hover:text-rose-600 hover:bg-rose-50 border border-transparent rounded-lg transition-colors flex items-center gap-1"
-                          title={lang === 'zh' ? '注销删除' : 'Delete user'}
-                        >
-                          <Trash2 size={12} />
-                        </button>
+          {/* Accounts list */}
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2.5 bg-gray-50/40">
+            {loading ? (
+              <div className="flex justify-center items-center h-48 text-gray-400 text-xs">
+                <RefreshCw size={20} className="animate-spin mr-1.5" />
+                {lang === 'zh' ? '加载教职工账户中...' : 'Reading accounts...'}
+              </div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="text-center p-8 text-gray-400 flex flex-col items-center justify-center h-full">
+                <Users size={36} className="opacity-20 mb-2" />
+                <p className="text-xs font-semibold">
+                  {lang === 'zh' ? '未检索到任何符合条件的教师账户' : 'No staff matched your filters.'}
+                </p>
+              </div>
+            ) : (
+              filteredUsers.map((user) => {
+                const isSelectedSelf = user.id === currentUserId;
+                const isUserAdmin = user.role === 'administrator';
+                const isDisabled = user.status === 'disabled';
+                return (
+                  <div
+                    key={user.id}
+                    className={`p-3.5 bg-white border border-gray-200/90 hover:border-indigo-200 rounded-xl shadow-3xs flex items-center justify-between group transition-all ${
+                      isDisabled ? 'opacity-75 bg-slate-50/50' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`p-2 rounded-lg flex items-center justify-center ${
+                          isDisabled
+                            ? 'bg-slate-100 text-slate-400'
+                            : isUserAdmin
+                              ? 'bg-indigo-50 text-indigo-600'
+                              : 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        {isUserAdmin ? <Shield size={18} /> : <Users size={18} />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-xs font-bold ${
+                              isDisabled ? 'text-gray-500 line-through' : 'text-gray-800'
+                            }`}
+                          >
+                            {user.name}
+                          </span>
+                          {isSelectedSelf && (
+                            <span className="bg-indigo-50 text-indigo-700 text-xs font-semibold px-2 py-0.5 rounded-full border border-indigo-100">
+                              {lang === 'zh' ? '你自己' : 'You'}
+                            </span>
+                          )}
+                          <span
+                            className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                              isUserAdmin
+                                ? 'bg-indigo-900 text-indigo-200'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {user.role}
+                          </span>
+                          {isDisabled && (
+                            <span className="bg-rose-50 text-rose-700 text-xs font-semibold px-2 py-0.5 rounded-full border border-rose-100">
+                              {lang === 'zh' ? '已禁用' : 'Disabled'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-400 font-mono mt-0.5 flex items-center gap-1.5">
+                          <span>@{user.username}</span>
+                          <span>•</span>
+                          <span>
+                            {lang === 'zh' ? '注册日期：' : 'ID: '}
+                            {new Date(user.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  );
-                })
-              )}
-            </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleOpenEdit(user)}
+                        className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors flex items-center gap-1 cursor-pointer border border-indigo-100"
+                        title={lang === 'zh' ? '修改设置' : 'Update settings'}
+                      >
+                        <Edit2 size={12} />
+                        <span>{lang === 'zh' ? '设置' : 'Edit'}</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(user.id, user.name)}
+                        className="px-2 py-1 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors flex items-center gap-1 cursor-pointer border border-rose-100"
+                        title={lang === 'zh' ? '注销删除' : 'Delete user'}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}

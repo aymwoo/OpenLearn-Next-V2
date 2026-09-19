@@ -1,4 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import {
   ISemesterGradeServiceToken,
@@ -805,18 +804,7 @@ ${examsText}
           const data = await response.json();
           text = data.choices?.[0]?.message?.content?.trim() || '';
         } else {
-          // Gemini fallback
-          const geminiKey = process.env.GEMINI_API_KEY;
-          if (!geminiKey) {
-            return res.status(500).json({ error: 'AI provider is not configured and GEMINI_API_KEY is missing.' });
-          }
-          const ai = new GoogleGenAI({ apiKey: geminiKey });
-          const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: { temperature: 0.7 },
-          });
-          text = response.text?.trim() || '';
+          return res.status(400).json({ error: '未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。' });
         }
 
         res.json({ success: true, aiEvaluation: text });

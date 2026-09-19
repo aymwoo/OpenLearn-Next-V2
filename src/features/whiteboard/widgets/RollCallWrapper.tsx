@@ -22,12 +22,12 @@ export function RollCallWrapper({
   readOnly?: boolean;
 }) {
   const allStudents = data.allStudents || [
-    { id: 'mock-s-1', name: '张明', email: 'zhangming@edu-os.org' },
-    { id: 'mock-s-2', name: '李华', email: 'lihua@edu-os.org' },
-    { id: 'mock-s-3', name: '王超', email: 'wangchao@edu-os.org' },
-    { id: 'mock-s-4', name: '赵丽', email: 'zhaoli@edu-os.org' },
-    { id: 'mock-s-5', name: '钱科', email: 'qianke@edu-os.org' },
-    { id: 'mock-s-6', name: '孙雪', email: 'sunxue@edu-os.org' },
+    { id: 'mock-s-1', name: '张明', email: 'zhangming@openlearn-next.org' },
+    { id: 'mock-s-2', name: '李华', email: 'lihua@openlearn-next.org' },
+    { id: 'mock-s-3', name: '王超', email: 'wangchao@openlearn-next.org' },
+    { id: 'mock-s-4', name: '赵丽', email: 'zhaoli@openlearn-next.org' },
+    { id: 'mock-s-5', name: '钱科', email: 'qianke@openlearn-next.org' },
+    { id: 'mock-s-6', name: '孙雪', email: 'sunxue@openlearn-next.org' },
   ];
 
   const [selectedStudent, setSelectedStudent] = useState<any>(data.selectedStudent || null);

@@ -80,13 +80,13 @@ describe('MigrationPrompt banner visibility', () => {
     ];
     const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} />);
     // Should render without throwing — basic smoke test
-    expect(html).toContain('Edu OS App Store');
+    expect(html).toContain('Openlearn Next App Store');
   });
 
   it('renders PluginCenter with legacy plugins in store tab', () => {
     const plugins: PluginType[] = [createPlugin({ id: 'legacy-1', execution_mode: 'legacy' })];
     const html = renderToString(<PluginCenter {...defaultProps} plugins={plugins} storeTab="store" />);
-    expect(html).toContain('Edu OS App Store');
+    expect(html).toContain('Openlearn Next App Store');
     // Legacy badge should be rendered in store tab
     expect(html).toContain('Migratable');
   });
@@ -99,7 +99,7 @@ describe('MigrationPrompt banner visibility', () => {
 
   it('renders PluginCenter with empty plugin list', () => {
     const html = renderToString(<PluginCenter {...defaultProps} plugins={[]} />);
-    expect(html).toContain('Edu OS App Store');
+    expect(html).toContain('Openlearn Next App Store');
   });
 
   it('renders in en language', () => {
@@ -111,7 +111,7 @@ describe('MigrationPrompt banner visibility', () => {
   it('renders in zh language', () => {
     const plugins: PluginType[] = [];
     const html = renderToString(<PluginCenter {...defaultProps} lang="zh" plugins={[]} />);
-    expect(html).toContain('Edu OS 插件中心');
+    expect(html).toContain('Openlearn Next 插件中心');
   });
 });
 

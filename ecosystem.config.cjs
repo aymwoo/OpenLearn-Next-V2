@@ -11,7 +11,6 @@ module.exports = {
         PORT: 9000,
         LOG_LEVEL: 'info',
         // 以下由 deploy.sh 从 .env 自动注入，请勿手动修改
-        GEMINI_API_KEY: '',
         ENCRYPTION_KEY: '',
         ALLOWED_ORIGINS: '',
       },

@@ -42,9 +42,9 @@ export const SdkGuideViewer: React.FC<SdkGuideViewerProps> = ({
             <Puzzle size={28} />
           </div>
           <div className="space-y-2">
-            <h3 className="text-base font-bold text-gray-900">Edu-OS 插件开发指南 & API 参考</h3>
+            <h3 className="text-base font-bold text-gray-900">Openlearn Next 插件开发指南 & API 参考</h3>
             <p className="text-xs text-gray-600 leading-relaxed">
-              Edu-OS 基于 <span className="font-semibold text-indigo-600">CommandBus（命令总线）</span> +{' '}
+              Openlearn Next 基于 <span className="font-semibold text-indigo-600">CommandBus（命令总线）</span> +{' '}
               <span className="font-semibold text-indigo-600">EventBus（事件总线）</span> 微内核架构。 插件通过标准 ESM
               模块导出 <code className="bg-gray-100 text-rose-600 px-1 rounded text-xs">activate(ctx)</code>{' '}
               函数接收 <span className="font-semibold">PluginContext</span>， 进而访问 7 大内核服务。本页提供完整的 API

@@ -63,7 +63,7 @@ export function PluginStorePanel({
               homepage: string;
               updateSource?: { type: string; repo: string };
             } = {
-              description: '扩展 Edu OS 功能的自定义插件。',
+              description: '扩展 Openlearn Next 功能的自定义插件。',
               author: 'Community',
               version: '',
               manifestId: '',

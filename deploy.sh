@@ -145,7 +145,7 @@ fi
 
 # 从 .env 读取值写入 ecosystem.config.cjs（PM2 env 块优先级 > dotenv）
 set -a; source "$APP_ROOT/.env" 2>/dev/null; set +a
-for key in ENCRYPTION_KEY GEMINI_API_KEY ALLOWED_ORIGINS; do
+for key in ENCRYPTION_KEY ALLOWED_ORIGINS; do
     val="${!key}"
     if [ -n "$val" ]; then
         sed -i "s|${key}: ''|${key}: '${val}'|" "$APP_ROOT/ecosystem.config.cjs"

@@ -1,4 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
 import { v7 as uuidv7 } from 'uuid';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
@@ -629,7 +628,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   app.post('/api/lessons/:id/ai-tutor', requireAuth('student', 'teacher', 'administrator'), async (req, res) => {
     try {
       const { elements } = req.body;
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const ai = kernelContainer.aiService;
       const elementsSummary = elements
         .map((e: any, i: number) => `Element ${i + 1}: type=${e.type}, content=${JSON.stringify(e.data)}`)
         .join('\n');
@@ -641,8 +640,8 @@ ${elementsSummary || 'The whiteboard is empty.'}
 
 Provide a short, friendly, and helpful hint (1-2 sentences) directly related to the student's current progress or to encourage them to start. Do not use markdown. Return ONLY the hint text.`;
 
-      const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
-      const hint = response.text || "I'm here to help! Let me know what you're working on.";
+      const text = await ai.generateText(prompt);
+      const hint = text.trim() || "I'm here to help! Let me know what you're working on.";
 
       const cmd = kernelContainer.commandBus.createCommand(
         'whiteboard.draw',

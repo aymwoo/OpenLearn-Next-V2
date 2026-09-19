@@ -17,13 +17,13 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
           </div>
           <div className="space-y-2">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              Edu-OS 核心系统主要特性使用教程
+              Openlearn Next 核心系统主要特性使用教程
               <span className="text-xs bg-indigo-500/30 text-indigo-200 border border-indigo-500/50 px-2 py-0.5 rounded-full font-normal">
                 v2.1.0 LTS
               </span>
             </h3>
             <p className="text-xs text-indigo-200 leading-relaxed">
-              本指南为教育实验操作系统 (Edu-OS)
+              本指南为教育实验操作系统 (Openlearn Next)
               的深度使用手册。详细阐述如何使用内核指令管理班级与学生、基于大纲结构化推进课件时间轴、在互动白板中动态注入脑图和测验元素、启动全屏锁定与签到的教学控制流，以及编写并集成支持
               AI 成绩回传的 HTML Applet 实验组件。
             </p>
@@ -59,7 +59,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                 </div>
               </div>
               <p className="text-xs text-gray-600 leading-relaxed mt-3">
-                Edu-OS 采用权限隔离的<strong>能力安全模型 (Capability Model)</strong>
+                Openlearn Next 采用权限隔离的<strong>能力安全模型 (Capability Model)</strong>
                 。任何行政、学籍以及课表排期修改，底层最终都会被封装为非对称的内核指令，经由分布式指令总线进行安全校验与事务落库。
               </p>
 
@@ -300,7 +300,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
                 </div>
               </div>
               <p className="text-xs text-gray-600 leading-relaxed mt-3">
-                现场教学是 Edu-OS
+                现场教学是 Openlearn Next
                 实现教师端对全班学生端实时掌控、授课与互动的核心驱动模块。以下是系统推荐的标准课堂控制流：
               </p>
 
@@ -386,7 +386,7 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
 
           <div className="text-xs text-slate-300 leading-relaxed space-y-3">
             <p>
-              HTML Applet 是 Edu-OS
+              HTML Applet 是 Openlearn Next
               系统架构中用以承载高级虚拟物理实验、交互式小游戏、或第三方考试系统的微网页插件。Applet
               被封装运行在宿主页面的 <code className="bg-slate-800 text-indigo-300 px-1 rounded font-mono">iframe</code>{' '}
               沙箱容器中。

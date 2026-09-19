@@ -49,7 +49,7 @@ describe('HelpView Sub-components', () => {
         />,
       );
 
-      expect(screen.getByText('Edu-OS 插件开发指南 & API 参考')).toBeDefined();
+      expect(screen.getByText('Openlearn Next 插件开发指南 & API 参考')).toBeDefined();
       expect(screen.getByText('示例 1：思维导图插件 — 注册 Action + 处理器 + 发布事件')).toBeDefined();
     });
   });
@@ -58,7 +58,7 @@ describe('HelpView Sub-components', () => {
     it('should render system user guide sections', () => {
       render(<UserGuideViewer copiedId={null} handleCopy={vi.fn()} />);
 
-      expect(screen.getByText('Edu-OS 核心系统主要特性使用教程')).toBeDefined();
+      expect(screen.getByText('Openlearn Next 核心系统主要特性使用教程')).toBeDefined();
       expect(screen.getByText('1. 使用核心指令管理班级与学生')).toBeDefined();
     });
   });

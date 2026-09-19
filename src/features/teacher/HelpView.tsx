@@ -229,7 +229,7 @@ db.prepare(\`INSERT INTO \${tableName} ...\`).run(...);
         <div>
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <HelpCircle className="text-indigo-600" size={24} />
-            教育实验操作系统：内核帮助与开发中心 (Edu-OS Reference Hub)
+            教育实验操作系统：内核帮助与开发中心 (Openlearn Next Reference Hub)
           </h2>
           <p className="text-xs text-gray-500 mt-1">
             本页提供 OpenLearn 插件开发的快速入口：脚手架工具、交互式代码范例、完整的 API 参考文档。

@@ -10,7 +10,6 @@ services:
       - backup_data:/app/backups
     environment:
       - NODE_ENV=production
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - LOG_LEVEL=info
       - BACKUP_DIR=/app/backups

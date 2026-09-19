@@ -1,4 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { decryptApiKey } from '../utils/crypto.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -350,33 +349,12 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
           throw fetchErr;
         }
       } else {
-        console.log(`[OCR Routing] Using system default Gemini`);
-        const geminiKey = process.env.GEMINI_API_KEY;
-        if (!geminiKey) {
-          console.warn(`[OCR Error] GEMINI_API_KEY is not configured`);
-          return res
-            .status(500)
-            .json({
-              error:
-                lang === 'zh'
-                  ? '未配�? AI 服务。请在系统设置中添加 AI Provider 或配�? GEMINI_API_KEY�?'
-                  : 'No AI provider configured. Please add an AI Provider in settings or set GEMINI_API_KEY.',
-            });
-        }
-
-        const ai = new GoogleGenAI({ apiKey: geminiKey });
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            {
-              role: 'user',
-              parts: [{ inlineData: { mimeType, data: base64Content } }, { text: prompt }],
-            },
-          ],
+        return res.status(400).json({
+          error:
+            lang === 'zh'
+              ? '未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。'
+              : 'No AI provider configured. Please add and configure an AI Provider in "System Management -> AI Provider Management".',
         });
-
-        text = response.text?.trim() || '';
-        console.log(`[OCR Gemini Response] Length: ${text?.length || 0} bytes. Preview: ${text?.substring(0, 500)}`);
       }
 
       // Strip <think> tags if present
@@ -406,9 +384,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
       res.json({
         success: true,
         entries,
-        providerUsed: provider
-          ? { id: provider.id, name: provider.name, model_name: provider.model_name }
-          : { id: 'system', name: 'Gemini', model_name: 'gemini-2.5-flash' },
+        providerUsed: { id: provider.id, name: provider.name, model_name: provider.model_name },
       });
     } catch (e: any) {
       const elapsed = Date.now() - startTime;

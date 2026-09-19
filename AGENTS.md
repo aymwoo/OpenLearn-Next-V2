@@ -79,7 +79,7 @@
 
 ## Environment
 
-Copy `.env.example` to `.env`. AI features are configured via **AI Providers** in the admin dashboard ("AI Provider Management") — `GEMINI_API_KEY` is optional and only used as a fallback. Default login: `admin/admin` (administrator) or `teacher/teacher` (teacher). The SQLite database is at `packages/core/db/educational_os.db`.
+Copy `.env.example` to `.env`. AI features are configured via **AI Providers** in the admin dashboard ("AI Provider Management") with any OpenAI-compatible model provider (such as DeepSeek, Qwen, Ollama, OpenAI, etc.). Default login: `admin/admin` (administrator) or `teacher/teacher` (teacher). The SQLite database is at `packages/core/db/educational_os.db`.
 
 ## Plugin Development
 

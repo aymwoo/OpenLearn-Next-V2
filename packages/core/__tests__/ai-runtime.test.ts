@@ -111,11 +111,10 @@ describe('OpenLearn AI Infrastructure Core Test Suite', () => {
         }),
       } as any;
 
-      process.env.GEMINI_API_KEY = 'MY_GEMINI_API_KEY';
       const aiService = new AIService(mockDb);
 
       await expect(aiService.generateText('hello')).rejects.toThrow(
-        'GEMINI_API_KEY is not configured in the environment.',
+        '未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。',
       );
     });
   });

@@ -153,14 +153,14 @@ export function useAgentChat(options: UseAgentChatOptions) {
           lang,
           currentLessonId: selectedLesson,
           attachments: attachmentsToSend,
-          providerId: effectiveAgentProviderId === 'system' ? null : effectiveAgentProviderId,
+          providerId: effectiveAgentProviderId || null,
         }),
       });
       const data = await res.json();
 
       let replyContent = '';
       if (!res.ok || data.success === false) {
-        replyContent = `⚠️ [System Error] ${data.error || (lang === 'zh' ? '未知系统错误' : 'Unknown System Error')}`;
+        replyContent = `⚠️ ${data.message || data.error || (lang === 'zh' ? '未知系统错误' : 'Unknown System Error')}`;
       } else {
         replyContent = data.agentText || '';
         if (data.toolResults && data.toolResults.length > 0) {

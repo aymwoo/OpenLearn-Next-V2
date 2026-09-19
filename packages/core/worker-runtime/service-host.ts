@@ -898,6 +898,15 @@ export class ServiceHost {
       if (pluginId) {
         validNamespaces.push(`plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_`);
       }
+      // Allow dedicated research ecosystem namespace for lianyun-course plugin
+      if (
+        pluginId === 'lianyun-course' ||
+        this.dbPluginId === '01a0b99f-efb7-7178-be2e-be3b1ad0cb53' ||
+        pluginId?.includes('lianyun') ||
+        pluginId?.includes('research')
+      ) {
+        validNamespaces.push('plugin_research_');
+      }
       const isAllowed =
         validNamespaces.some((ns) => table.startsWith(ns)) || table.toLowerCase() === 'plugin_migrations';
       if (!isAllowed) {

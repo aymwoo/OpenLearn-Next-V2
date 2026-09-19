@@ -1,4 +1,4 @@
-# OpenLearn 插件开发权威参考指南 (Edu-OS Plugin SDK Reference Guide)
+# OpenLearn 插件开发权威参考指南 (Openlearn Next Plugin SDK Reference Guide)
 
 本指南是 OpenLearnV2（基于命令-事件总线微内核架构的教育实验操作系统）的第三方插件开发完整手册。本文档旨在提供自包含的、详尽无遗的 API 契约、类型声明、安全规范、数据库设计、UI 扩展槽位定义以及双运行时交互机制。可以直接作为提示词上下文提供给 AI 大模型，帮助其百分之百正确地生成可直接运行的第三方插件。
 

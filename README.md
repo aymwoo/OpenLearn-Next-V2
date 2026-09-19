@@ -37,7 +37,7 @@ npm update -g openlearn-next    # 更新
 
 ```bash
 npm install
-# AI 功能可在管理后台「AI Provider 管理」配置；或设置 GEMINI_API_KEY 作为回退
+# 启动服务后，在管理后台「AI Provider 管理」中配置大模型提供商
 ./dev.sh
 open http://localhost:9000
 ```
@@ -70,7 +70,6 @@ chmod +x deploy.sh
 | `ENCRYPTION_KEY`    |  ✅  | 64 位 hex，AI Provider API Key 加密密钥（`deploy.sh` 自动生成）                |
 | `PORT`              |  —   | 服务端口，默认 9000                                                            |
 | `OPENLEARN_DB_PATH` |  —   | SQLite 数据库路径（npx 默认 `~/openlearn-next/data.db`，本地开发默认项目目录） |
-| `GEMINI_API_KEY`    |  —   | 可选。AI 服务回退密钥；推荐在管理面板「AI Provider 管理」配置                  |
 | `ALLOWED_ORIGINS`   |  —   | CORS 白名单，逗号分隔                                                          |
 | `LOG_LEVEL`         |  —   | 日志级别（debug / info / warn / error），默认 info                             |
 

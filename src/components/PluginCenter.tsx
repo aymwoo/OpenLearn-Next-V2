@@ -212,7 +212,7 @@ export function PluginCenter({
             <div className="flex items-center gap-6">
               <h2 className="font-bold text-gray-900 flex items-center gap-2 text-lg">
                 <Puzzle size={20} className="text-indigo-600" />
-                {lang === 'zh' ? 'Edu OS 插件中心' : 'Edu OS App Store'}
+                {lang === 'zh' ? 'Openlearn Next 插件中心' : 'Openlearn Next App Store'}
               </h2>
               <div className="flex bg-gray-200/50 p-1 rounded-lg">
                 <button

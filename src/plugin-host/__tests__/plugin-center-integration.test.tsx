@@ -89,7 +89,7 @@ describe('PluginCenter grid rendering', () => {
 describe('PluginCenter tab switching', () => {
   it('renders Discover tab by default', () => {
     const html = renderToString(<PluginCenter {...defaultProps} plugins={[]} storeTab="store" />);
-    expect(html).toContain('Edu OS App Store');
+    expect(html).toContain('Openlearn Next App Store');
     // store tab active
     expect(html).toContain('Discover');
   });

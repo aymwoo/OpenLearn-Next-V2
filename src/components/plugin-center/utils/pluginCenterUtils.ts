@@ -35,7 +35,7 @@ export const DEFAULT_PLUGIN = `exports.default = {
     name: "AI Course Quiz Generator (智能测验生成器)",
     version: "1.0.0",
     description: "自动根据教案主题或特定文本，一键生成结构化的单选/多选随堂测验，并直接分发至指定班级的学生学习终端。",
-    author: "EduOS AI Team",
+    author: "Openlearn Next AI Team",
     capabilitiesProposed: ["lesson:read", "whiteboard:write"]
   },
   activate: async (ctx) => {

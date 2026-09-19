@@ -190,7 +190,6 @@ Environment Variables:
   HOST                     监听主机地址 (默认: 0.0.0.0)
   OPENLEARN_DB_PATH        SQLite 数据库绝对路径 (默认: ~/openlearn-next/data.db)
   ALLOWED_ORIGINS          CORS 白名单来源 (默认放行同源与开发环境)
-  GEMINI_API_KEY           AI 助手兜底密钥 (推荐在管理员后台界面配置)
 `);
     process.exit(0);
   }

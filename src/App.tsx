@@ -576,13 +576,13 @@ export default function App() {
   });
 
   const [agentProviderId, setAgentProviderId] = useState<string>(() => {
-    if (typeof window === 'undefined') return 'system';
-    return window.localStorage.getItem(AGENT_PROVIDER_STORAGE_KEY) || 'system';
+    if (typeof window === 'undefined') return '';
+    return window.localStorage.getItem(AGENT_PROVIDER_STORAGE_KEY) || '';
   });
   const effectiveAgentProviderId =
-    agentProviderId === 'system' || aiProviders.some((provider) => provider.id === agentProviderId)
+    aiProviders.some((provider) => provider.id === agentProviderId)
       ? agentProviderId
-      : 'system';
+      : (aiProviders[0]?.id || '');
   const selectedAgentProvider = aiProviders.find((provider) => provider.id === effectiveAgentProviderId) || null;
   const [studentViewStatus, setStudentViewStatusState] = useState<'dashboard' | 'lesson' | 'assignment'>('dashboard');
 
@@ -748,11 +748,10 @@ export default function App() {
 
   useEffect(() => {
     if (
-      agentProviderId !== 'system' &&
       aiProviders.length > 0 &&
       !aiProviders.some((provider) => provider.id === agentProviderId)
     ) {
-      setAgentProviderId('system');
+      setAgentProviderId(aiProviders[0].id);
     }
   }, [aiProviders, agentProviderId]);
 

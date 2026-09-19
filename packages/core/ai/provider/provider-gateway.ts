@@ -1,6 +1,6 @@
 /**
  * OpenLearn AI Infrastructure - Unified AI Provider Gateway
- * Single source of truth for OpenAI-compatible HTTP endpoints & Google Gemini SDK calls.
+ * Single source of truth for OpenAI-compatible HTTP endpoints.
  */
 
 import { AIProviderConfig, AIGenerateOptions } from '../types/index.js';
@@ -14,9 +14,13 @@ export class AIProviderGateway {
   }
 
   public async generateText(prompt: string, options?: AIGenerateOptions, config?: AIProviderConfig): Promise<string> {
+    if (!config || !config.apiKey || !config.apiKey.trim()) {
+      throw new Error('未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。');
+    }
+
     const startTime = Date.now();
-    const providerId = config?.id || 'system-gemini';
-    const modelName = config?.modelName || 'gemini-3.5-flash';
+    const providerId = config.id;
+    const modelName = config.modelName;
 
     this.eventBus.publish('ModelStarted', {
       providerId,
@@ -25,15 +29,7 @@ export class AIProviderGateway {
     });
 
     try {
-      let resultText = '';
-
-      if (config && config.apiKey && config.apiKey.trim()) {
-        // OpenAI-compatible HTTP Request Branch
-        resultText = await this.callOpenAICompatible(prompt, options, config);
-      } else {
-        // Google Gemini SDK Fallback Branch
-        resultText = await this.callGeminiFallback(prompt, options);
-      }
+      const resultText = await this.callOpenAICompatible(prompt, options, config);
 
       this.eventBus.publish('ModelFinished', {
         providerId,
@@ -95,30 +91,5 @@ export class AIProviderGateway {
     }
 
     return content.trim();
-  }
-
-  private async callGeminiFallback(prompt: string, options?: AIGenerateOptions): Promise<string> {
-    const geminiKey = process.env.GEMINI_API_KEY;
-    if (!geminiKey || geminiKey.trim() === '' || geminiKey.trim() === 'MY_GEMINI_API_KEY') {
-      throw new Error('GEMINI_API_KEY is not configured in the environment.');
-    }
-
-    const { GoogleGenAI } = await import('@google/genai');
-    const ai = new GoogleGenAI({ apiKey: geminiKey.trim() });
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
-        systemInstruction: options?.systemInstruction,
-        temperature: options?.temperature ?? 0.2,
-      },
-    });
-
-    if (!response.text) {
-      throw new Error('Gemini API returned empty text');
-    }
-
-    return response.text.trim();
   }
 }

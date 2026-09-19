@@ -25,14 +25,14 @@ npm start
 npm run clean
 ```
 
-环境要求：`GEMINI_API_KEY` 已不再是必填项。AI 功能可在管理后台的「AI 提供商管理」中配置第三方 AI（OpenAI 兼容接口），或可选地设置 `GEMINI_API_KEY` 作为回退。
+环境要求：AI 功能完全由管理后台的「AI 提供商管理」动态配置第三方 AI（OpenAI 兼容接口，支持 DeepSeek、Qwen、Ollama、OpenAI 等），系统不再依赖任何静态 API Key 环境变量。
 
 ## 技术栈
 
 - **前端**：React 19, Vite 6, TailwindCSS 4, TypeScript 5.8
 - **后端**：Express 4, better-sqlite3, tsx（开发运行时）, esbuild（生产打包）
 - **实时通信**：Socket.IO（WebSocket）
-- **AI 集成**：`@google/genai` SDK + OpenAI 兼容 API
+- **AI 集成**：OpenAI 兼容 API（多 Provider 动态网关与 AES-256 加密凭据存储）
 - **关键库**：konva/react-konva（交互白板）, recharts（图表）, jspdf（PDF导出）, zustand（状态管理）, react-markdown, jszip, reveal.js, lucide-react, motion
 
 ## 项目结构
@@ -155,7 +155,7 @@ expect((ctx.services.commandBus as MockCommandBus).handlers.has('my.command')).t
 ### AI Agent 流程
 
 1. 前端发送聊天消息 → `POST /api/agent/chat`
-2. 服务端根据选择的 AI 提供商，调用 Gemini 或 OpenAI 兼容 API
+2. 服务端根据选择或激活的 AI 提供商，调用 OpenAI 兼容 API
 3. AI 返回 functionCall → 通过 CommandBus 执行对应 action
 4. 工具执行结果返回给 AI → AI 继续思考或产出最终回复
 5. 最多循环 5 轮
@@ -244,7 +244,6 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - autoprefixer 10.4 - PostCSS plugin for CSS vendor prefixes (bundled with TailwindCSS)
 - `@vitejs/plugin-react` 5.0 - Vite plugin for React Fast Refresh and JSX transforms
 ## Key Dependencies
-- `@google/genai` 2.8 - Google Generative AI SDK, used for Gemini model calls (`gemini-3.5-flash`, `gemini-2.5-flash`)
 - `better-sqlite3` 12.10 - Synchronous SQLite3 driver for Node.js; stores all persistent data in `packages/core/db/educational_os.db`
 - `socket.io` 4.8 + `socket.io-client` 4.8 - WebSocket real-time communication (server + client)
 - `zustand` 5.0 - Lightweight React state management library
@@ -272,16 +271,14 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - Path alias: `@` maps to project root
 - HMR disabled via `DISABLE_HMR` env var (for AI Studio compatibility)
 - Config: `pnpm-workspace.yaml`
-- Key setting: Allows native builds for `@google/genai`, `better-sqlite3`, `core-js`, `esbuild`, `protobufjs`
-- `.env.example` 文件存在 — 定义两个必需变量:
+- Key setting: Allows native builds for `better-sqlite3`, `core-js`, `esbuild`, `protobufjs`
+- `.env.example` 文件存在 — 定义环境变量模版
 - 开发模式：根目录放置 `.env` 文件（`dotenv` 自动加载）
-- 生产模式：AI Studio 运行时环境自动注入
+- 生产模式：部署脚本或容器运行时自动注入
 ## Platform Requirements
 - Node.js (支持 ES2022 modules)
 - pnpm 或 npm
-- AI 服务配置（可选）：在管理后台「AI 提供商管理」中添加 AI 提供商，或可选地设置 `GEMINI_API_KEY` 作为回退；两者均非必需
-- AI Studio 平台（Google Cloud Run 部署）
-- Metadata config `metadata.json` 声明 `MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API` 能力
+- AI 服务配置：系统启动后，在管理后台「AI 提供商管理」中添加并激活 OpenAI 兼容的大模型服务
 - 构建流程：`vite build`（前端）+ `esbuild server.ts --bundle --platform=node --format=cjs --packages=external`（后端）
 - `packages/external` 标志确保 `better-sqlite3` 等原生模块不被打包，由生产环境的 `node_modules` 提供
 <!-- GSD:stack-end -->
@@ -425,7 +422,7 @@ OpenLearnV2 是一个教育操作系统（Educational OS / LMS）平台，采用
 - Commands are namespaced strings (e.g., `lesson.create`, `vfs.write_file`) routed through CommandBus
 - All commands pass through a single kernel-level interceptor for capability check + high-risk approval gating
 - Plugins are stored as source files on disk (`plugins/{uuid}/index.js`) with metadata in SQLite, executed via Worker Thread or inline ESM import
-- AI Agent (Gemini/OpenAI) acts as autonomous Shell, calling tools via CommandBus
+- AI Agent acts as autonomous Shell, calling tools via CommandBus (powered by OpenAI-compatible models)
 - Frontend is a monolith `App.tsx` with conditional rendering of 11 teacher tabs and 3 student views
 
 ## Layers

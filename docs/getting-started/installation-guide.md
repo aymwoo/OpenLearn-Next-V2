@@ -117,14 +117,11 @@ cd openlearnv2
 # 安装依赖
 npm install
 
-# 配置 AI 服务（可选：推荐在启动后于管理后台「AI 提供商管理」配置，或设置 GEMINI_API_KEY 作为回退）
-# echo "GEMINI_API_KEY=你的密钥" > .env
-
 # 启动开发服务（Express + Vite HMR）
 ./dev.sh
 # 或：npm run dev
 
-# 访问
+# 访问（首次登录后请前往「系统管理 -> AI 提供商管理」添加大模型提供商）
 open http://localhost:9000
 ```
 
@@ -136,7 +133,6 @@ open http://localhost:9000
 
 ```bash
 # .env
-# GEMINI_API_KEY=your-gemini-api-key   # 可选；推荐改用管理后台「AI 提供商管理」
 PORT=9000
 ENCRYPTION_KEY=your-64-char-hex-key
 LOG_LEVEL=info
@@ -145,14 +141,13 @@ ALLOWED_ORIGINS=http://localhost:5173
 
 | 变量                | 必需 | 说明                                                                                   |
 | ------------------- | :--: | -------------------------------------------------------------------------------------- |
-| `GEMINI_API_KEY`    |  —   | 可选。AI 服务回退密钥；推荐在管理后台「AI 提供商管理」配置第三方 AI（OpenAI 兼容接口） |
 | `PORT`              |  —   | 服务端口，默认 `9000`                                                                  |
 | `ENCRYPTION_KEY`    |  ✅  | 64 位 hex，用于加密 AI Provider API Key。`deploy.sh` 可自动生成                        |
 | `OPENLEARN_DB_PATH` |  —   | SQLite 数据库路径。npx 默认 `~/openlearn-next/data.db`，本地开发默认项目目录           |
 | `LOG_LEVEL`         |  —   | 日志级别：`debug` / `info` / `warn` / `error`，默认 `info`                             |
 | `ALLOWED_ORIGINS`   |  —   | CORS 白名单，逗号分隔                                                                  |
 
-> **提示**：可在管理面板中配置第三方 AI 服务（OpenAI 兼容 API），无需修改 `.env` 即可切换模型。
+> **提示**：系统完全采用后台动态 AI 提供商管理（OpenAI 兼容 API），系统启动后在「系统管理 -> AI 提供商管理」中配置即可，无需在环境变量中写入 AI 密钥。
 
 ---
 
@@ -310,7 +305,7 @@ ALLOWED_ORIGINS=http://localhost:5173
 
 ### 什么是 AI Agent
 
-AI Agent 是 OpenLearnV2 的智能助手，通过自然语言即可控制教学操作。它基于 Gemini / OpenAI 模型，将自然语言指令转换为系统命令。
+AI Agent 是 OpenLearnV2 的智能助手，通过自然语言即可控制教学操作。它基于接入的 OpenAI 兼容大模型（如 DeepSeek、Qwen、OpenAI 等），将自然语言指令转换为系统命令。
 
 ### 使用方式
 
@@ -359,7 +354,7 @@ npm run build
 
 # 2. 配置环境变量
 cp .env.example .env
-# 编辑 .env，填写 ENCRYPTION_KEY（GEMINI_API_KEY 可选，推荐在管理后台「AI 提供商管理」配置）
+# 编辑 .env，确认 ENCRYPTION_KEY 已配置（AI 提供商在后台配置）
 
 # 3. 启动服务
 npm start
@@ -423,13 +418,12 @@ docker-compose up -d
 
 - 检查端口是否被占用：`lsof -i :9000`
 - 检查防火墙是否放行端口
-- 确认 AI 服务已配置：管理后台「AI 提供商管理」中已添加 AI 提供商，或 `.env` 中设置了 `GEMINI_API_KEY` 作为回退
 
 ### Q: AI Agent 功能不可用？
 
-- 确认已配置 AI 服务：管理后台「AI 提供商管理」中已添加 AI 提供商（推荐），或 `.env` 中设置了 `GEMINI_API_KEY` 作为回退
-- 可在管理面板中切换 AI 提供商（Gemini / OpenAI 兼容接口）
-- 检查网络是否能访问 AI API 地址
+- 确认已配置 AI 服务：在管理后台「AI 提供商管理」中已添加并激活至少一个 AI 提供商
+- 检查网络是否能正常访问该提供商的 API 地址与模型名称
+- 确认填写的 API Key 是否正确有效
 
 ### Q: 插件安装后不显示？
 

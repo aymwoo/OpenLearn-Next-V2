@@ -5,7 +5,6 @@
 // path is preserved so behavior is unchanged. See
 // server/__tests__/ai-agent.test.ts for the characterization tests.
 
-import { GoogleGenAI } from '@google/genai';
 import crypto from 'crypto';
 import { kernelContainer } from '../packages/core/kernel/index.js';
 import { lessonActiveSegments } from './shared-state.js';
@@ -171,105 +170,12 @@ export const buildOpenAIChatUrl = (apiUrl: string) => {
 };
 
 export const runGeminiAgentChat = async (request: AgentChatRequest) => {
-  const { message, lang = 'zh', currentLessonId, attachments, callerRole, history } = request;
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey.trim() === '' || apiKey.trim() === 'MY_GEMINI_API_KEY') {
-    throw new Error(
-      lang === 'zh'
-        ? '未配置可用的 AI 服务。请在管理后台的「AI 提供商管理」中添加一个 AI 提供商（或设置 GEMINI_API_KEY 作为兼容回退）。'
-        : 'No AI service is configured. Please add an AI Provider in the admin dashboard\'s "AI Provider Management" (or set `GEMINI_API_KEY` as a compatible fallback).',
-    );
-  }
-  const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
-  const tools = kernelContainer.actionRegistry.getAgentTools();
-  const systemInstruction = buildAgentSystemInstruction(lang, currentLessonId);
-  const finalMessage = buildAgentFinalMessage(message, attachments);
-
-  const historyContents: any[] = (history || []).map((h) => ({
-    role: h.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: h.content }],
-  }));
-  const contents: any[] = [...historyContents, { role: 'user', parts: [{ text: finalMessage }] }];
-  let loopCount = 0;
-  const MAX_LOOPS = 5;
-  let finalResponseText = '';
-  const allExecutedTools: AgentToolExecution[] = [];
-
-  while (loopCount < MAX_LOOPS) {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: contents,
-      config: {
-        systemInstruction,
-        tools: tools,
-        temperature: 0.1,
-      },
-    });
-
-    const candidate = response.candidates?.[0];
-    const contentParts = candidate?.content?.parts || [];
-    const functionCalls = contentParts.filter((p) => 'functionCall' in p);
-
-    if (functionCalls.length === 0) {
-      finalResponseText = response.text || '';
-      break;
-    }
-
-    contents.push({
-      role: 'model',
-      parts: contentParts,
-    });
-
-    const toolParts: any[] = [];
-    for (const part of contentParts) {
-      if ('functionCall' in part && part.functionCall) {
-        const call = part.functionCall;
-        if (call.args && typeof call.args === 'object' && attachments) {
-          for (const key of Object.keys(call.args)) {
-            const val = call.args[key];
-            if (typeof val === 'string' && val.startsWith('ATTACHMENT_BASE64:')) {
-              const idx = parseInt(val.split(':')[1]);
-              if (attachments[idx]) {
-                call.args[key] = attachments[idx].content;
-              }
-            }
-          }
-        }
-        const actionResult = await executeAgentToolCall(
-          call.name,
-          call.args,
-          allExecutedTools,
-          callerRole,
-          currentLessonId,
-        );
-
-        toolParts.push({
-          functionResponse: {
-            name: call.name,
-            response:
-              typeof actionResult === 'object' && actionResult !== null ? actionResult : { value: actionResult },
-          },
-        });
-      }
-    }
-
-    contents.push({
-      role: 'tool',
-      parts: toolParts,
-    });
-
-    loopCount++;
-  }
-
-  if (loopCount >= MAX_LOOPS && !finalResponseText) {
-    finalResponseText =
-      'I have executed several internal commands to create or link resources, but reached the iteration limit. Please double-check the interface to confirm.';
-  }
-
-  return {
-    agentText: finalResponseText,
-    toolResults: allExecutedTools,
-  };
+  const { lang = 'zh' } = request;
+  throw new Error(
+    lang === 'zh'
+      ? '未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。'
+      : 'No active AI Provider configured. Please add and configure an AI Provider in "System Management -> AI Provider Management".',
+  );
 };
 
 export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: AgentChatRequest) => {

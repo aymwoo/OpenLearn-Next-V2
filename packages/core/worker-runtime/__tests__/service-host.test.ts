@@ -671,5 +671,60 @@ describe('ServiceHost ActionRegistry tracking', () => {
         'CREATE TABLE IF NOT EXISTS plugin_migrations (plugin_id TEXT PRIMARY KEY, version INTEGER NOT NULL)',
       );
     });
+
+    it('should allow lianyun-course plugin to execute DDL on plugin_research_* tables', async () => {
+      const mockDb = {
+        exec: vi.fn(),
+        prepare: vi.fn().mockReturnValue({
+          run: vi.fn().mockReturnValue({ changes: 1 }),
+        }),
+      };
+      const dbRegistry = {
+        resolve: vi.fn().mockResolvedValue(mockDb),
+      };
+      const capGuard = {
+        check: vi.fn().mockReturnValue({ allowed: true }),
+      };
+      const transport = {
+        messages: [] as any[],
+        postMessage(msg: any) {
+          this.messages.push(msg);
+        },
+      };
+
+      const host = new ServiceHost(
+        dbRegistry as any,
+        capGuard as any,
+        'plugin:lianyun-course',
+        ['research:write'],
+        undefined,
+        undefined,
+        'lianyun-course',
+        '01a0b99f-efb7-7178-be2e-be3b1ad0cb53',
+      );
+
+      await host.handleInvoke(
+        {
+          type: 'invoke',
+          invokeId: 'inv-sec-research',
+          token: '@openlearn/core:IDatabase',
+          method: 'prepareAndRun',
+          args: [
+            'CREATE TABLE IF NOT EXISTS plugin_research_activities (id TEXT PRIMARY KEY, title TEXT NOT NULL)',
+            [],
+          ],
+        },
+        transport as any,
+      );
+
+      expect(transport.messages[0]).toEqual({
+        type: 'result',
+        invokeId: 'inv-sec-research',
+        value: { changes: 1 },
+      });
+      expect(mockDb.prepare).toHaveBeenCalledWith(
+        'CREATE TABLE IF NOT EXISTS plugin_research_activities (id TEXT PRIMARY KEY, title TEXT NOT NULL)',
+      );
+    });
   });
 });

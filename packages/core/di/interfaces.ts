@@ -232,11 +232,11 @@ export interface IStorageService {
  * Kernel-level AI text generation.
  *
  * Based on the wrappedAI.generateText API from PluginRuntime (D-12).
- * Implements a two-tier fallback: third-party AI provider (DB) → Gemini SDK.
+ * Delegates to the active third-party AI provider configured in the database.
  */
 export interface IAIService {
   /**
-   * Generate text via the configured AI provider or Gemini fallback.
+   * Generate text via the configured OpenAI-compatible AI provider.
    *
    * @param prompt - The user message / prompt text.
    * @param options - Optional system instruction and temperature.
