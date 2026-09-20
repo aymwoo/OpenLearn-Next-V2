@@ -148,6 +148,7 @@ configuration/system-configuration
 api/typescript-interfaces
 api/di-tokens
 api/api-coverage-report
+api/courseware-attempts-contract
 ```
 
 ```{toctree}
