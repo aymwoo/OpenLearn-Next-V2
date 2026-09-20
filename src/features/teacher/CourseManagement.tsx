@@ -8,6 +8,8 @@ import {
   Users,
   Edit3,
   Copy,
+  Clipboard,
+  ClipboardCheck,
   Trash2,
   Loader2,
   AlertTriangle,
@@ -83,6 +85,14 @@ export function CourseManagement({
   const [deleteStats, setDeleteStats] = useState<CourseStats | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteStatsLoading, setDeleteStatsLoading] = useState(false);
+  const [copiedLessonId, setCopiedLessonId] = useState<string | null>(null);
+
+  const handleCopyId = (lessonId: string) => {
+    navigator.clipboard.writeText(lessonId).then(() => {
+      setCopiedLessonId(lessonId);
+      setTimeout(() => setCopiedLessonId(null), 1500);
+    });
+  };
 
   const handleOpenDeleteConfirm = async (lesson: Lesson) => {
     setDeleteTarget(lesson);
@@ -329,7 +339,30 @@ export function CourseManagement({
                         <Markdown>{lesson.content}</Markdown>
                       </div>
                       <div className="flex justify-between items-center mt-auto">
-                        <div className="text-xs text-gray-400">ID: {lesson.id.substring(0, 8)}...</div>
+                        <button
+                          onClick={() => handleCopyId(lesson.id)}
+                          className={`flex items-center gap-1 text-xs rounded px-1.5 py-0.5 transition-all cursor-pointer ${
+                            copiedLessonId === lesson.id
+                              ? 'text-emerald-600 bg-emerald-50 border border-emerald-200'
+                              : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent'
+                          }`}
+                          title={
+                            copiedLessonId === lesson.id
+                              ? lang === 'zh' ? '已复制!' : 'Copied!'
+                              : lang === 'zh' ? '复制课程 ID' : 'Copy Course ID'
+                          }
+                        >
+                          {copiedLessonId === lesson.id ? (
+                            <ClipboardCheck size={12} />
+                          ) : (
+                            <Clipboard size={12} />
+                          )}
+                          <span className="font-mono">
+                            {copiedLessonId === lesson.id
+                              ? (lang === 'zh' ? '已复制!' : 'Copied!')
+                              : `${lesson.id.substring(0, 8)}…`}
+                          </span>
+                        </button>
                         <div className="flex items-center gap-0.5">
                           <button
                             onClick={() => onViewCourse(lesson.id)}
