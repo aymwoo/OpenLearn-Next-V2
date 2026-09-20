@@ -5,6 +5,7 @@ import { SocketService, setSocketInstance } from '../services/socket-service';
 import { UIService } from '../services/ui-service';
 import { StorageService } from '../services/storage-service';
 import { whiteboardViewStore } from '../store/whiteboardViewStore';
+import { whiteboardEventSlot } from '../features/whiteboard/events';
 import type { Lesson, StudentType } from '../types/app';
 
 export interface UseClassroomSocketOptions {
@@ -386,6 +387,32 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     // 不可自行退出的全屏里。
     socket.on('connect', () => {
       restoreInterruptedView();
+    });
+
+    // Quiz 提交 → ingest 到 WhiteboardEventSlot（供 TeacherPanel / AI / 调试面板订阅）
+    socket.on('whiteboard-quiz-answered', (data: any) => {
+      try {
+        if (!data) return;
+        whiteboardEventSlot.ingest({
+          source: 'widget.quiz',
+          type: 'quiz.answered',
+          lessonId: data.lessonId,
+          elementId: data.elementId,
+          studentId: data.studentId,
+          studentName: data.studentName,
+          payload: {
+            answer: data.answer,
+            score: typeof data.score === 'number' ? data.score : undefined,
+            isCorrect: !!data.isCorrect,
+            correctAnswer: data.correctAnswer,
+            question: data.question,
+            time: data.time,
+          },
+          raw: data,
+        });
+      } catch (e) {
+        console.error('[useClassroomSocket] quiz.answered ingest failed', e);
+      }
     });
 
     return () => {

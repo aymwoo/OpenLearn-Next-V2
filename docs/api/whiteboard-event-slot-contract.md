@@ -95,12 +95,13 @@ interface WhiteboardEvent {
 | `courseware.event_logged`    | lms-bridge 处理未知协议或杂项时写入                         | （取决于 iframe 消息内容）                                 |
 | `courseware.unknown`         | 未识别的 `LMS_*` 协议事件                                   | `originalType`                                             |
 
-### 3.2 `quiz.*` （原生 quiz widget，待接入）
+### 3.2 `quiz.*` （原生 quiz widget）
 
-| `type`           | 触发时机                       |
-| ---------------- | ------------------------------ |
-| `quiz.answered`  | 学生提交 quiz 答案             |
-| `quiz.graded`    | 系统完成批改                   |
+| `type`           | 触发时机                                                          | `payload` 字段                                         |
+| ---------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
+| `quiz.answered`  | 学生提交 quiz 答案后，服务端 `/api/lessons/:id/quiz-submit` 成功   | `answer`, `score`, `isCorrect`, `correctAnswer`, `question`, `time` |
+
+**数据流**：学生点击 quiz 答案 → POST `/api/lessons/:id/quiz-submit`（`server/routes/lessons.ts:549`）→ 写入 `whiteboard_elements.data.submissions[studentId]` → `io.emit('whiteboard-quiz-answered', {...})` → 前端 `useClassroomSocket` 监听 → `whiteboardEventSlot.ingest({ source:'widget.quiz', type:'quiz.answered', ...})`。
 
 ### 3.3 `whiteboard.*` （白板自身 UI 事件，已有）
 
@@ -280,6 +281,12 @@ import { WhiteboardEventPanel } from '@/features/whiteboard/events';
 
 ## 10. 已知 gap（待后续接入）
 
-- `widget.quiz` / `widget.canvas` / `widget.custom` 三个 source 尚未接入（quizAnswers state 已存在但未触发 emit）
+- ✅ **`widget.quiz` 已接入**（v0.3.21）：`useClassroomSocket` 监听 `whiteboard-quiz-answered` socket 事件后 ingest；`server/routes/lessons.ts:590` 在 quiz-submit 成功后全局广播。详见 §3.2。
+- `widget.canvas` / `widget.custom` 仍待接入（白板目前未发现原生 canvas widget，custom widget 需插件端主动调用 `whiteboardEventSlot.ingest`）
 - `whiteboard.*` 事件仍在原 frontendEventBus 直发，未迁移
 - IndexedDB 持久化默认关闭（`persist: false`），生产可按需开启
+
+## 11. 配套 UI 组件
+
+- `WhiteboardEventPanel` (`src/features/whiteboard/events/WhiteboardEventPanel.tsx`) — 右下角调试浮窗
+- `RecentSubmissionsCard` (`src/features/whiteboard/events/RecentSubmissionsCard.tsx`) — 顶部"最近提交"小卡，按 `lessonId` 过滤；按事件类型分色（`quiz.answered` 答对/答错；`courseware.submitted` 课件提交），教师面板内嵌用

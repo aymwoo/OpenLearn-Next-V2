@@ -589,6 +589,22 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       // Broadcast refresh to whiteboard room
       io.to(`lesson-${lessonId}`).emit('whiteboard-sync', { type: 'element-updated', elementId });
 
+      // Emit quiz.answered to WhiteboardEventSlot (via socket bridge → frontend ingest).
+      // Use global io.emit so any teacher/student dashboard browser tab can ingest it,
+      // matching the pattern of other progress events (student-progress-updated etc.).
+      io.emit('whiteboard-quiz-answered', {
+        lessonId,
+        elementId,
+        studentId,
+        studentName: session.studentName || session.name || null,
+        answer,
+        score,
+        isCorrect,
+        time: Date.now(),
+        correctAnswer: dataObj.correctAnswer || null,
+        question: dataObj.question || null,
+      });
+
       res.json({ success: true, isCorrect, score, studentId });
     } catch (e: any) {
       sendSafeError(res, e);

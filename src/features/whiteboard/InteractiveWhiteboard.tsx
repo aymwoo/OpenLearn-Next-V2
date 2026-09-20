@@ -127,6 +127,7 @@ import { CoursewareEntrySelectorModal } from './components/CoursewareEntrySelect
 import { fullscreenRendererRegistry, FullscreenOverlay } from './fullscreen/FullscreenRendererRegistry';
 import type { FullscreenRendererProps } from './fullscreen/FullscreenRendererRegistry';
 import { QuizFullscreenView } from './fullscreen/QuizFullscreenView';
+import { WhiteboardEventPanel } from './events';
 import { propertyEditorRegistry } from './properties/PropertyEditorRegistry';
 import { paletteItemRegistry } from '../teacher/lesson-editor/palette-item-registry';
 
@@ -3359,6 +3360,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             fetchCoursewares={fetchCoursewares}
           />
         </div>
+
+        {/* Whiteboard event stream debug panel — only visible to teachers (and dev). */}
+        {userRole === 'teacher' && lessonId && (
+          <WhiteboardEventPanel lessonId={lessonId} defaultCollapsed />
+        )}
 
         {/* 注入右侧属性编辑器侧边栏 */}
         {isEditMode &&
