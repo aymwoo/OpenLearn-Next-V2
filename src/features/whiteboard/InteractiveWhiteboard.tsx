@@ -692,7 +692,25 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const [zipUploadInfo, setZipUploadInfo] = useState<{ uuid: string; name: string } | null>(null);
     const [showEntrySelector, setShowEntrySelector] = useState<boolean>(false);
 
-    const fetchCoursewares = async () => {
+    // 防止选中 html-applet 时 elements 引用变化导致 fetchCoursewares 被反复调用
+    // 仅在 type 真正切换、或距上次成功 fetch 已过 stale 阈值时才重拉
+    const coursewareFetchGateRef = useRef<{ type: string | null; ts: number; inflight: boolean }>({
+      type: null,
+      ts: 0,
+      inflight: false,
+    });
+
+    const fetchCoursewares = async (opts?: { force?: boolean }) => {
+      const gate = coursewareFetchGateRef.current;
+      const now = Date.now();
+      const STALE_MS = 5000;
+      if (
+        !opts?.force &&
+        (gate.inflight || (gate.type === 'html-applet' && now - gate.ts < STALE_MS))
+      ) {
+        return;
+      }
+      gate.inflight = true;
       try {
         const res = await fetch('/api/courseware');
         if (res.ok) {
@@ -701,6 +719,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         }
       } catch (e) {
         console.error('Error fetching coursewares:', e);
+      } finally {
+        coursewareFetchGateRef.current = {
+          type: 'html-applet',
+          ts: Date.now(),
+          inflight: false,
+        };
       }
     };
 
@@ -709,6 +733,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         const selectedEl = safeElements.find((e) => e.id === selectedShapeId);
         if (selectedEl) {
           if (selectedEl.type === 'html-applet') {
+            // 传 force=false（默认）：仅当 type 从其他切换过来、或已 stale 才 fetch
             fetchCoursewares();
           }
           try {
@@ -3784,7 +3809,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                                           setShowEntrySelector(true);
                                         } else {
                                           handlePropsUpdate({ coursewareUuid: data.uuid, resourceId: '' });
-                                          fetchCoursewares();
+                                          // 上传成功后强制重拉，跳过 gate
+                                          fetchCoursewares({ force: true });
                                         }
                                       } else {
                                         const errData = await res.json();

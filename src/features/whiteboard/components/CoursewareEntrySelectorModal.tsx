@@ -11,7 +11,7 @@ export interface CoursewareEntrySelectorModalProps {
   zipUploadInfo: CoursewareZipUploadInfo | null;
   zipCandidates: string[];
   handlePropsUpdate: (update: { coursewareUuid?: string; resourceId?: string }) => void;
-  fetchCoursewares: () => void;
+  fetchCoursewares: (opts?: { force?: boolean }) => void | Promise<void>;
 }
 
 export const CoursewareEntrySelectorModal: React.FC<CoursewareEntrySelectorModalProps> = ({
@@ -59,7 +59,8 @@ export const CoursewareEntrySelectorModal: React.FC<CoursewareEntrySelectorModal
                       const data = await res.json();
                       handlePropsUpdate({ coursewareUuid: data.uuid, resourceId: '' });
                       setShowEntrySelector(false);
-                      fetchCoursewares();
+                      // 选择入口点后强制重拉，跳过 gate
+                      fetchCoursewares({ force: true });
                     }
                   } catch (err) {
                     console.error('Failed to confirm entry point:', err);
