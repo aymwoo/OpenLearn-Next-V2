@@ -415,6 +415,37 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       }
     });
 
+    // 课件提交（plugin submitScore / LMS Bridge 双路径汇合点）→ ingest 到 WhiteboardEventSlot
+    // 服务端在 server/routes/courseware.ts:242 (log) / 311 (submit) / 504 (promote) 都会
+    // 广播 courseware-attempt-updated，并附带 attemptId。汶取详情需二次拉取 attempts 表，
+    // 这里以最小 payload（仅 attemptId）先入槽，让 TeacherPanel / 调试面板看到“这条 attempt
+    // 被处理了”，详细成绩与学生名在面板层再调 attempts API 补全。
+    socket.on('courseware-attempt-updated', (data: any) => {
+      try {
+        if (!data || typeof data.attemptId !== 'string') return;
+        const submitType =
+          data.type === 'log'
+            ? 'courseware.event_logged'
+            : data.type === 'submit'
+              ? 'courseware.submitted'
+              : data.type === 'promote'
+                ? 'courseware.finished'
+                : 'courseware.event_logged';
+        whiteboardEventSlot.ingest({
+          source: 'iframe.bridge',
+          type: submitType,
+          attemptId: data.attemptId,
+          payload: {
+            attemptId: data.attemptId,
+            attemptType: data.type,
+          },
+          raw: data,
+        });
+      } catch (e) {
+        console.error('[useClassroomSocket] courseware-attempt-updated ingest failed', e);
+      }
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;

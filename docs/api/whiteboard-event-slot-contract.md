@@ -88,12 +88,14 @@ interface WhiteboardEvent {
 
 | `type`                       | 触发时机                                                   | `payload` 字段                                             |
 | ---------------------------- | ---------------------------------------------------------- | --------------------------------------------------------- |
-| `courseware.submitted`       | iframe 内 `LMS.submit` / `OpenLearn.submit` 被调用         | `score`, `total`, `completion`, `comment`, `source`       |
+| `courseware.submitted`       | iframe 内 `LMS.submit` / `OpenLearn.submit` 被调用；或 server `courseware-attempt-updated` type=`submit` 广播 | `score`, `total`, `completion`, `comment`, `source`       |
 | `courseware.progress_saved`  | iframe 内 `LMS.saveProgress` 被调用                        | `score`, `completion`                                     |
-| `courseware.finished`        | iframe 内 `LMS.finish` 被调用                              | —                                                         |
+| `courseware.finished`        | iframe 内 `LMS.finish` 被调用；或 server promote 动作      | —                                                         |
 | `courseware.config_reported` | iframe 内 `LMS_CONFIG` 上报                                | （取决于课件；通常包含互动能力清单）                       |
-| `courseware.event_logged`    | lms-bridge 处理未知协议或杂项时写入                         | （取决于 iframe 消息内容）                                 |
+| `courseware.event_logged`    | lms-bridge 处理未知协议或杂项时写入；或 server log 动作     | （取决于 iframe 消息内容）                                 |
 | `courseware.unknown`         | 未识别的 `LMS_*` 协议事件                                   | `originalType`                                             |
+
+**双路径汇合**：plugin `submitScore` (courseware-hub) 和 LMS Bridge 都会触发 server 的 `courseware-attempt-updated` 广播。`useClassroomSocket` 统一将该事件映射到 WhiteboardEventSlot (`source='iframe.bridge'`, `type` 按 server 的 `data.type` 取 `submit`/`log`/`promote`)，保证两种提交路径都在 TeacherPanel "最近提交" 小卡可见。
 
 ### 3.2 `quiz.*` （原生 quiz widget）
 

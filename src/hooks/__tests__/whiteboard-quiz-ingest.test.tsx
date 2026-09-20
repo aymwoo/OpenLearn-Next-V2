@@ -200,3 +200,57 @@ describe('useClassroomSocket — whiteboard-quiz-answered → WhiteboardEventSlo
     expect(nonMatching).toHaveLength(0);
   });
 });
+
+describe('useClassroomSocket — courseware-attempt-updated → WhiteboardEventSlot', () => {
+  beforeEach(() => {
+    mockSocket = new MockSocket();
+    whiteboardEventSlot.clear();
+  });
+  afterEach(() => {
+    whiteboardEventSlot.clear();
+  });
+
+  it('maps submit → courseware.submitted, log → courseware.event_logged, promote → courseware.finished', () => {
+    renderHook(() => useClassroomSocket(baseOptions));
+
+    act(() => {
+      mockSocket.fire('courseware-attempt-updated', { attemptId: 'a1', type: 'submit' });
+      mockSocket.fire('courseware-attempt-updated', { attemptId: 'a2', type: 'log' });
+      mockSocket.fire('courseware-attempt-updated', { attemptId: 'a3', type: 'promote' });
+    });
+
+    const submitted = whiteboardEventSlot.query({ types: ['courseware.submitted'] });
+    const logged = whiteboardEventSlot.query({ types: ['courseware.event_logged'] });
+    const finished = whiteboardEventSlot.query({ types: ['courseware.finished'] });
+    expect(submitted.map((e) => e.attemptId)).toEqual(['a1']);
+    expect(logged.map((e) => e.attemptId)).toEqual(['a2']);
+    expect(finished.map((e) => e.attemptId)).toEqual(['a3']);
+    expect(submitted[0].source).toBe('iframe.bridge');
+  });
+
+  it('drops payloads without a string attemptId', () => {
+    renderHook(() => useClassroomSocket(baseOptions));
+
+    expect(() =>
+      act(() => {
+        mockSocket.fire('courseware-attempt-updated', null);
+        mockSocket.fire('courseware-attempt-updated', { type: 'submit' }); // missing attemptId
+        mockSocket.fire('courseware-attempt-updated', { attemptId: 42, type: 'submit' }); // wrong type
+      }),
+    ).not.toThrow();
+
+    const all = whiteboardEventSlot.query({ sources: ['iframe.bridge'] });
+    expect(all).toHaveLength(0);
+  });
+
+  it('falls back to courseware.event_logged when type is unknown', () => {
+    renderHook(() => useClassroomSocket(baseOptions));
+
+    act(() => {
+      mockSocket.fire('courseware-attempt-updated', { attemptId: 'a-unknown', type: 'mystery' });
+    });
+
+    const fallback = whiteboardEventSlot.query({ types: ['courseware.event_logged'] });
+    expect(fallback.map((e) => e.attemptId)).toEqual(['a-unknown']);
+  });
+});
