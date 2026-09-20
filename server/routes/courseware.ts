@@ -41,7 +41,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
   app.get('/api/courseware', requireAuth(), async (req, res) => {
     try {
       const actorId = getActorId(req) || 'system';
-      const cmd = kernelContainer.commandBus.createCommand('courseware.list', {}, actorId);
+      const cmd = kernelContainer.commandBus.createCommand('courseware.list', {}, actorId, { silent: true });
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {

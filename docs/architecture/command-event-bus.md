@@ -33,6 +33,22 @@ kernel.commandBus.register('lesson.create', async (cmd) => {
 const result = await kernel.commandBus.dispatch(createLessonCmd);
 ```
 
+### 指令元数据与高频静默 (Command Metadata & Quiet Filtering)
+
+每个指令均支持挂载可选的 `CommandMetadata`：
+```typescript
+export interface CommandMetadata {
+  readonly correlationId?: string;
+  readonly agentDelegated?: boolean;
+  readonly undoable?: boolean;
+  readonly silent?: boolean; // 声明该指令执行是否在控制台静默
+  readonly [key: string]: unknown;
+}
+```
+
+* **静默机制 (Quiet Commands)**：为防止高频轮询查询（如 `courseware.list`, `whiteboard.query`, `vfs.read_path` 等）污染控制台输出，CommandBus 内置了高频只读指令静默名单（`DEFAULT_QUIET_COMMANDS`），且支持通过 `metadata: { silent: true }` 标记显式静默。
+* **调试模式**：当需要排查问题时，可通过环境变量 `DEBUG_COMMAND_BUS=true` 或 `DEBUG=*commandbus*` 强制打印所有指令的执行日志。错误信息（`console.error`）始终正常记录。
+
 ---
 
 ## 2. EventBus (事件总线)

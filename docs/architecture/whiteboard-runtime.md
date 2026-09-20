@@ -56,6 +56,7 @@ rendererRegistry.registerRenderer('geogebra-widget', GeoGebraRenderer);
 - **统一组件**: 画布内嵌、全屏渲染器、默认兜底渲染器三处统一复用 `<HtmlAppletFrame>`（`src/features/whiteboard/components/HtmlAppletFrame.tsx`），按优先级解析四种内容源：`coursewareUuid` → `resourceId` → 插件自定义内容源（`coursewareSourceRegistry`）→ `code`（`srcDoc`）。
 - **懒挂载与并发上限**: iframe 进入可视区（含 200px 预加载边距）才创建，同时挂载的 iframe 数不超过 4 个（`courseware-frame-limiter.ts`）。
 - **双向通信**: `window.LMS` 支持 `submit`/`saveProgress`/`finish`/`log`/`setConfig`/`getProgress`/`on`/`off`；课件事件经前端 EventBus 转发到后端供 AI Agent 与插件订阅。
+- **课件列表缓存与防抖**: 维护模块级 `globalCoursewareCache`（30 秒 TTL 与并发请求 Promise 复用），并通过 `lastSelectedCoursewareElementRef` 精确追踪图元选中态，避免白板图元心跳轮询触发高频重复请求。
 
 ### SrcDoc 模式与 wrapSrcDocWithBridge
 

@@ -5,6 +5,7 @@ export interface CommandMetadata {
   readonly correlationId?: string;
   readonly agentDelegated?: boolean;
   readonly undoable?: boolean;
+  readonly silent?: boolean;
   readonly [key: string]: unknown;
 }
 
@@ -20,6 +21,19 @@ export interface PlatformCommand<T = unknown> {
 export interface CommandHandler<C extends PlatformCommand = PlatformCommand> {
   execute(command: C): Promise<void | any>;
 }
+
+/**
+ * High-frequency read-only commands that should not pollute stdout logs
+ * unless process.env.DEBUG contains 'commandbus' or DEBUG_COMMAND_BUS is enabled.
+ */
+const DEFAULT_QUIET_COMMANDS = new Set<string>([
+  'courseware.list',
+  'courseware.get_attempt_raw_data',
+  'whiteboard.query',
+  'whiteboard.get_element',
+  'vfs.read_path',
+  'vfs.list_dir',
+]);
 
 export class CommandBus {
   /** Modern (new-format) handlers — take priority in execution */
@@ -73,9 +87,14 @@ export class CommandBus {
       throw new Error(`No handler registered for command: ${normalizedCommand.type}`);
     }
 
-    console.log(
-      `[CommandBus] Executing: ${normalizedCommand.type} (ID: ${normalizedCommand.id}) by ${normalizedCommand.actorId}`,
-    );
+    const isQuiet =
+      normalizedCommand.metadata?.silent === true || DEFAULT_QUIET_COMMANDS.has(normalizedCommand.type);
+
+    if (!isQuiet || process.env.DEBUG?.includes('commandbus') || process.env.DEBUG_COMMAND_BUS === 'true') {
+      console.log(
+        `[CommandBus] Executing: ${normalizedCommand.type} (ID: ${normalizedCommand.id}) by ${normalizedCommand.actorId}`,
+      );
+    }
 
     // Simplified Pipeline: Validation -> Execution
     try {

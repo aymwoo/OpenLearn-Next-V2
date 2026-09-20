@@ -1308,10 +1308,20 @@ export default function App() {
     } catch (e) {}
   };
 
+  const lastElementsJsonRef = useRef<string>('');
   const fetchElements = async (lessonId: string) => {
-    const res = await fetch(`/api/lessons/${lessonId}/whiteboard`);
-    const data = await res.json();
-    setElements(data);
+    try {
+      const res = await fetch(`/api/lessons/${lessonId}/whiteboard`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const jsonStr = JSON.stringify(data);
+      if (jsonStr !== lastElementsJsonRef.current) {
+        lastElementsJsonRef.current = jsonStr;
+        setElements(data);
+      }
+    } catch {
+      // ignore
+    }
   };
 
   const selectedLessonRef = useRef<string | null>(null);

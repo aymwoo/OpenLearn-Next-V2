@@ -19,8 +19,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 展开后短轮询（`0/120/250/400/700/1100ms`）取最后一次有效分数，**每次作答只上报一次**（`__lmsResultSubmitted` 幂等门）。
   - 验证：用 jsdom 还原该课件的结算页，答题中命中 `第 3 / 15 关` **不**触发；调用 `showResult()`（`#correctCount=12/15`）后仅上报一次 `{score:80,completion:1}`。
 
-### Fixed
-
+- **高频轮询引发的终端指令日志刷屏治理 (CommandBus Logging Noise & Polling Debounce Fix)**:
+  - **问题背景**：用户处于互动课堂或白板模式时，终端持续高频输出 `[CommandBus] Executing: courseware.list (ID: 01a0becb-...) by user:usr_admin:administrator`，且因 UUIDv7 携带毫秒时间戳而导致命令 ID 不停递增变化，造成严重的终端日志刷屏。
+  - **后端 CommandBus 读写分离静默与元数据扩展**：
+    - `packages/core/command-bus/index.ts`: 在 `CommandMetadata` 接口中扩展 `silent?: boolean` 选项；新增默认只读静默指令集合 `DEFAULT_QUIET_COMMANDS`（包含 `courseware.list`, `courseware.get_attempt_raw_data`, `whiteboard.query`, `whiteboard.get_element`, `vfs.read_path`, `vfs.list_dir` 等高频查询）；
+    - 仅在非静默指令或设置了 `DEBUG_COMMAND_BUS=true`/`DEBUG=*commandbus*` 时才输出 `[CommandBus] Executing...` 控制台日志，错误日志（`console.error`）与业务数据变更类（Mutation）指令不受影响；
+    - `server/routes/courseware.ts`: 在 `GET /api/courseware` 路由中，创建 `courseware.list` 指令时标记 `{ silent: true }`。
+  - **前端白板课件拉取防抖与模块级客户端缓存**：
+    - `src/features/whiteboard/InteractiveWhiteboard.tsx`: 建立模块级单例缓存 `globalCoursewareCache`（30 秒 TTL + in-flight 请求 Promise 复用去重），避免组件重渲染或重新挂载时频繁发送 `/api/courseware` 请求；在上传新课件时仍可通过 `{ force: true }` 即刻穿透刷新缓存；
+    - 精确选中追踪：引入 `lastSelectedCoursewareElementRef`，避免白板 `elements` 数组因心跳轮询更新而持续触发 `fetchCoursewares()`，仅在用户切换选中目标为 `html-applet` 图元时才触发选项拉取。
+  - **根组件轮询状态防抖优化**：
+    - `src/App.tsx`: 在 `fetchElements` 中引入 `lastElementsJsonRef` 内容浅对比，当课节白板图元数据未发生实质变更时不再调用 `setElements`，消除 2 秒一次轮询引起的全树无谓重渲染。
+  - **验证**：核心单元测试与 E2E 流程（`command-routing.test.ts`、`courseware-e2e-flow.test.ts` 以及白板 75 项交互测试）全部通过；终端日志刷屏彻底消除。
 - **桥接抓分正则过度转义（数字/分数从未能解析）**：`bridge-sdk.ts` 内嵌于模板字符串中的正则误写成 `\\d` / `\\s`，生成到课件的实际 JS 里是 `\\d`（匹配字面反斜杠 + `d`），导致 `findScoreInDOM` 的分数/分数值解析（`12/15` 等）全部失效。已修正为 `\\d`/`\\s`（即输出 JS 的 `\d`/`\s`），并新增正则自检。
 - **AI Provider 密钥解密分叉（插件 AI 调用 401）**：`packages/core/di/ai-service.ts` 曾自带一份 `decryptKeyIfNeeded`，只读 `process.env.ENCRYPTION_KEY`，且在密钥缺失/为空时**静默返回密文**；而「AI Provider 测试」与各业务路由走 `server/utils/crypto.ts`（含 `.env` 回退）。二者实现分叉导致典型故障：**测试按钮通过，但插件 `ctx.services.ai.generateText()` 把密文当作 Bearer 发出，上游返回 `401 login fail: Please carry the API secret key`**。生产 `ecosystem.config.cjs` 将 `ENCRYPTION_KEY` 显式置为 `''`，而 `dotenv` 不会覆盖已存在的空值变量，因此该问题在 PM2 部署下必现。
   - 新增 `packages/core/di/api-key-crypto.ts` 作为唯一事实来源（`getEncryptionKey` / `encryptApiKey` / `decryptApiKey` / `looksLikeCiphertext`），密钥解析顺序：`process.env` → `.env` 文件 → 自动生成并持久化（仍不覆盖已有行）；

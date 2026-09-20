@@ -197,6 +197,18 @@ const ReadOnlyLockCover: React.FC<{ title?: string }> = ({
   />
 );
 
+interface GlobalCoursewareCache {
+  data: any[];
+  ts: number;
+  inflight: Promise<any[]> | null;
+}
+
+let globalCoursewareCache: GlobalCoursewareCache = {
+  data: [],
+  ts: 0,
+  inflight: null,
+};
+
 interface WhiteboardElement {
   id: string;
   type: string;
@@ -693,40 +705,43 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const [zipUploadInfo, setZipUploadInfo] = useState<{ uuid: string; name: string } | null>(null);
     const [showEntrySelector, setShowEntrySelector] = useState<boolean>(false);
 
-    // 防止选中 html-applet 时 elements 引用变化导致 fetchCoursewares 被反复调用
-    // 仅在 type 真正切换、或距上次成功 fetch 已过 stale 阈值时才重拉
-    const coursewareFetchGateRef = useRef<{ type: string | null; ts: number; inflight: boolean }>({
-      type: null,
-      ts: 0,
-      inflight: false,
-    });
+    // 跟踪上一次选中的 html-applet id，避免 elements 数组引用更新导致反复拉取
+    const lastSelectedCoursewareElementRef = useRef<string | null>(null);
 
     const fetchCoursewares = async (opts?: { force?: boolean }) => {
-      const gate = coursewareFetchGateRef.current;
       const now = Date.now();
-      const STALE_MS = 5000;
-      if (
-        !opts?.force &&
-        (gate.inflight || (gate.type === 'html-applet' && now - gate.ts < STALE_MS))
-      ) {
+      const STALE_MS = 30_000; // 30s 客户端缓存，避免高频请求
+      if (!opts?.force && globalCoursewareCache.data.length > 0 && now - globalCoursewareCache.ts < STALE_MS) {
+        setCoursewares(globalCoursewareCache.data);
         return;
       }
-      gate.inflight = true;
-      try {
-        const res = await fetch('/api/courseware');
-        if (res.ok) {
-          const data = await res.json();
-          setCoursewares(data);
-        }
-      } catch (e) {
-        console.error('Error fetching coursewares:', e);
-      } finally {
-        coursewareFetchGateRef.current = {
-          type: 'html-applet',
-          ts: Date.now(),
-          inflight: false,
-        };
+      if (globalCoursewareCache.inflight && !opts?.force) {
+        const data = await globalCoursewareCache.inflight;
+        setCoursewares(data);
+        return;
       }
+      const fetchPromise = (async () => {
+        try {
+          const res = await fetch('/api/courseware');
+          if (res.ok) {
+            const data = await res.json();
+            globalCoursewareCache = {
+              data: Array.isArray(data) ? data : [],
+              ts: Date.now(),
+              inflight: null,
+            };
+            setCoursewares(globalCoursewareCache.data);
+            return globalCoursewareCache.data;
+          }
+        } catch (e) {
+          console.error('Error fetching coursewares:', e);
+        } finally {
+          globalCoursewareCache.inflight = null;
+        }
+        return globalCoursewareCache.data;
+      })();
+      globalCoursewareCache.inflight = fetchPromise;
+      await fetchPromise;
     };
 
     useEffect(() => {
@@ -734,8 +749,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         const selectedEl = safeElements.find((e) => e.id === selectedShapeId);
         if (selectedEl) {
           if (selectedEl.type === 'html-applet') {
-            // 传 force=false（默认）：仅当 type 从其他切换过来、或已 stale 才 fetch
-            fetchCoursewares();
+            // 仅当选中的图元发生切换时才触发拉取，避免 elements 轮询持续重触发
+            if (lastSelectedCoursewareElementRef.current !== selectedShapeId) {
+              lastSelectedCoursewareElementRef.current = selectedShapeId;
+              fetchCoursewares();
+            }
+          } else {
+            lastSelectedCoursewareElementRef.current = null;
           }
           try {
             setEditingProperties(JSON.parse(selectedEl.data));
@@ -743,9 +763,11 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             setEditingProperties({});
           }
         } else {
+          lastSelectedCoursewareElementRef.current = null;
           setEditingProperties(null);
         }
       } else {
+        lastSelectedCoursewareElementRef.current = null;
         setEditingProperties(null);
       }
     }, [selectedShapeId, elements]);
