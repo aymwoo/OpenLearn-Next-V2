@@ -28,6 +28,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `AIService.generateText` 改用共享 `decryptApiKey`，并在解密结果仍是密文时抛出可操作的错误（提示 ENCRYPTION_KEY 不一致 / 需重新保存 API Key），不再向上游发送密文换取难以定位的 401。
   - 验证：`packages/core/di/__tests__/ai-service.test.ts` 通过；`tsc --noEmit` 0 错误；在“正常 / `ENCRYPTION_KEY=''`（PM2 场景）/ 密钥被轮换”三种场景下探测 AIService，分别为成功、成功（回退 `.env`）、抛出明确解密错误。
 
+## [0.3.21] - 2026-09-20
+
+### Fixes
+
+- **启动横幅品牌重命名与版本号单一来源 (Startup Banner Rebrand & Version SSOT)**:
+  - **横幅品牌化**：`server.ts` 的 HTTP listen 回调内将启动横幅文本从历史遗留的 "Educational OS Kernel" 重命名为平台统一品牌 "OpenLearn Next"；横幅格式为 `OpenLearn Next vX.Y.Z ready:`；
+  - **网址可点击**：本地与局域网 URL 输出套用 OSC 8 (`\x1B]8;;URL\x1B\\URL\x1B]8;;\x1B\\`) 超链接，使 iTerm2 / Windows Terminal / GNOME Terminal / VS Code 集成终端等现代终端可直接 ⌘/Ctrl+点击打开浏览器；同步套用到 `OPEN_BROWSER=true` 时的 "Auto-opening browser" 提示；
+  - **TTY 守卫防日志污染**：`process.stdout.isTTY && process.env.TERM !== 'dumb'` 才启用 OSC 8 转义，管道 / PM2 / 文件重定向等非交互环境自动退化为纯文本，避免日志里残留 ANSI 转义序列；
+  - **版本号单一来源 (SSOT)**：`packages/core/version.ts` 不再硬编码 `PLATFORM_VERSION = '0.3.18'`，改为运行期从最近的上级 `package.json`（匹配 `name === 'openlearn-next'`）读取 `version` 字段；找不到时回退 `'0.3.20'`。从此发布新版本时只改根 `package.json`，启动横幅与所有 `PLATFORM_VERSION` 引用自动同步；
+  - **验证**：`packages/core/__tests__/version-consistency.test.ts` 6/6 通过；`npx tsx` 与模拟 `dist/server.cjs` 两条运行路径均返回 `0.3.21`；`pnpm lint` 在改动文件中未引入新 TS 错误。
+
 ## [0.3.18] - 2026-09-19
 
 ### Tests & Reliability
