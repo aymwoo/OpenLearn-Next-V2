@@ -481,24 +481,24 @@ async function startServer() {
     const cyan = '\x1b[36m';
     const dim = '\x1b[2m';
 
-    console.log(`\n  ${bold}${green}Educational OS Kernel${reset} v${PLATFORM_VERSION} ready:\n`);
-    console.log(
-      `  ${dim}➜${reset}  ${bold}Local:${reset}   ${bold}${cyan}${OSC}${localUrl}${ST}${localUrl}${OSC}${ST}${reset}`,
-    );
+    // OSC 8 超链接：仅在真实终端下启用，输出到日志/管道时退化为纯文本，避免留下转义序列
+    const hyperlink = Boolean(process.stdout.isTTY) && process.env.TERM !== 'dumb';
+    const link = (url: string) => (hyperlink ? `${OSC}${url}${ST}${url}${OSC}${ST}` : url);
+
+    console.log(`\n  ${bold}${green}OpenLearn Next${reset} v${PLATFORM_VERSION} ready:\n`);
+    console.log(`  ${dim}➜${reset}  ${bold}Local:${reset}   ${bold}${cyan}${link(localUrl)}${reset}`);
 
     if (isAnyHost) {
       const netIps = getNetworkIps();
       for (const ip of netIps) {
         const netUrl = `http://${ip}:${PORT}`;
-        console.log(
-          `  ${dim}➜${reset}  ${bold}Network:${reset} ${bold}${cyan}${OSC}${netUrl}${ST}${netUrl}${OSC}${ST}${reset}`,
-        );
+        console.log(`  ${dim}➜${reset}  ${bold}Network:${reset} ${bold}${cyan}${link(netUrl)}${reset}`);
       }
     }
     console.log('');
 
     if (process.env.OPEN_BROWSER === 'true') {
-      console.log(`  ${dim}➜  Auto-opening browser: ${primaryUrl}${reset}\n`);
+      console.log(`  ${dim}➜  Auto-opening browser: ${cyan}${link(primaryUrl)}${reset}\n`);
       openBrowser(primaryUrl);
     }
   });
