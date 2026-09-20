@@ -317,10 +317,12 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
 
   app.get('/api/courseware/attempts', (req, res) => {
     try {
-      const rows = kernelContainer.db
-        .prepare(
-          `
-        SELECT a.id as attemptId, a.started_at, a.finished_at, a.status, 
+      // ?coursewareUuid=<uuid> 用于白板 HtmlAppletFrame 在嵌入某个具体课件时只拉取该课件的成绩，
+      // 避免一次性回传整个 attempts 表（学生量大时会显著降低首屏 + 实时 socket 重拉的负载）。
+      const coursewareUuid =
+        typeof req.query.coursewareUuid === 'string' ? req.query.coursewareUuid.trim() : '';
+      const baseSql = `
+        SELECT a.id as attemptId, a.started_at, a.finished_at, a.status,
                cw.name as coursewareName, cw.uuid as coursewareUuid,
                COALESCE(s.name, CASE WHEN a.student_id = 'teacher' THEN 'Teacher (Test)' WHEN a.student_id = 'guest' THEN 'Guest Student' ELSE a.student_id END) as studentName,
                a.student_id as studentId,
@@ -328,17 +330,19 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
                (
                  SELECT COUNT(*) FROM assignment_submissions sub
                  JOIN assignments ast ON sub.assignment_id = ast.id
-                 WHERE sub.student_id = a.student_id 
+                 WHERE sub.student_id = a.student_id
                    AND ast.title = '互动课件: ' || cw.name
                ) as isPromoted
         FROM courseware_attempt a
         JOIN courseware cw ON a.courseware_id = cw.id
         LEFT JOIN students s ON a.student_id = s.id
         LEFT JOIN submission_result r ON a.id = r.attempt_id
-        ORDER BY a.started_at DESC
-      `,
-        )
-        .all();
+      `;
+      const sql = coursewareUuid
+        ? `${baseSql} WHERE cw.uuid = ? ORDER BY a.started_at DESC`
+        : `${baseSql} ORDER BY a.started_at DESC`;
+      const stmt = kernelContainer.db.prepare(sql);
+      const rows = coursewareUuid ? stmt.all(coursewareUuid) : stmt.all();
       res.json(rows);
     } catch (e: any) {
       sendSafeError(res, e);

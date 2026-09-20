@@ -126,32 +126,13 @@ import { WhiteboardDialog } from './components/WhiteboardDialog';
 import { CoursewareEntrySelectorModal } from './components/CoursewareEntrySelectorModal';
 import { fullscreenRendererRegistry, FullscreenOverlay } from './fullscreen/FullscreenRendererRegistry';
 import type { FullscreenRendererProps } from './fullscreen/FullscreenRendererRegistry';
+import { QuizFullscreenView } from './fullscreen/QuizFullscreenView';
 import { propertyEditorRegistry } from './properties/PropertyEditorRegistry';
 import { paletteItemRegistry } from '../teacher/lesson-editor/palette-item-registry';
 
 // ── 自定义全屏渲染器注册 ─────────────────────────────────────────────────
 
-fullscreenRendererRegistry.register('quiz', ({ data }: FullscreenRendererProps) => (
-  <div className="max-w-2xl mx-auto space-y-6">
-    <h3 className="text-xl font-bold text-gray-800">{data.question}</h3>
-    <div className="flex flex-col gap-3">
-      {(data.options || []).map((opt: string, i: number) => (
-        <button
-          key={i}
-          className="px-5 py-4 text-left bg-gray-50 border-2 border-gray-200 rounded-xl text-base hover:bg-gray-100 transition-colors"
-        >
-          <span className="font-bold text-indigo-600 mr-3">{'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i]}.</span>
-          {opt}
-        </button>
-      ))}
-    </div>
-    {data.submissions && Object.keys(data.submissions).length > 0 && (
-      <div className="mt-4 p-4 bg-gray-50 rounded-xl">
-        <p className="text-sm font-semibold text-gray-600">提交统计: {Object.keys(data.submissions).length} 人已作答</p>
-      </div>
-    )}
-  </div>
-));
+fullscreenRendererRegistry.register('quiz', QuizFullscreenView);
 
 fullscreenRendererRegistry.register('timer', ({ data }: FullscreenRendererProps) => (
   <div className="flex items-center justify-center h-full">
