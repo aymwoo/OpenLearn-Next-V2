@@ -19,7 +19,8 @@ import fs from 'fs';
 import JSZip from 'jszip';
 import path from 'path';
 import express from 'express';
-import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { ServiceRegistry } from '../di/service-registry.js';
 import { EsmLoader } from '../esm-loader/esm-loader.js';
 import type { PluginModule } from '../esm-loader/esm-loader.js';
@@ -131,6 +132,33 @@ function createPluginStaticMiddleware(absDir: string) {
     },
     express.static(absDir),
   ];
+}
+
+/**
+ * 定位宿主自身安装的 @openlearn/plugin-sdk 目录。
+ *
+ * 插件打包时 SDK 被标记为 external，运行时由宿主提供；但宿主可能以 npx 缓存、
+ * 全局安装等方式运行，其 node_modules 并不在插件目录的祖先链上。
+ */
+function resolveHostSdkDir(): string | null {
+  const bases: string[] = [];
+  // CJS 产物（dist/server.cjs）
+  if (typeof __dirname !== 'undefined') bases.push(__dirname);
+  try {
+    // ESM / tsx 直接运行 TS 源码
+    bases.push(path.dirname(fileURLToPath(import.meta.url)));
+  } catch {
+    /* CJS 产物中 import.meta 不可用 */
+  }
+  for (const base of bases) {
+    try {
+      const req = createRequire(path.join(base, '__openlearn_resolve__.js'));
+      return path.dirname(req.resolve('@openlearn/plugin-sdk/package.json'));
+    } catch {
+      /* 换下一个基准目录 */
+    }
+  }
+  return null;
 }
 
 // ── PluginHost ─────────────────────────────────────────────────────────────
@@ -268,6 +296,35 @@ export class PluginHost {
   /** 获取插件 manifest.json 文件路径 */
   getPluginManifestPath(pluginId: string): string {
     return path.join(this.getPluginDir(pluginId), 'manifest.json');
+  }
+
+  /**
+   * 确保宿主的 @openlearn/plugin-sdk 能被插件解析到。
+   *
+   * 插件 index.js 位于 `<pluginsDir>/<id>/`，Node 只从该文件所在目录向上查找
+   * node_modules。宿主的 node_modules（npx 缓存、仓库目录等）通常不在其祖先链上，
+   * 于是 external 的 `@openlearn/plugin-sdk` 会抛 ERR_MODULE_NOT_FOUND。
+   * 这里在 `<pluginsDir>/node_modules/@openlearn/plugin-sdk` 建立指向宿主 SDK 的
+   * 链接，使该目录下所有插件共享宿主的同一份 SDK。
+   */
+  private ensureHostSdkResolution(): void {
+    const linkPath = path.join(this.pluginsDir, 'node_modules', '@openlearn', 'plugin-sdk');
+    if (fs.existsSync(linkPath)) return;
+    const sdkDir = resolveHostSdkDir();
+    if (!sdkDir) {
+      console.warn(
+        '[PluginHost] 未能定位宿主的 @openlearn/plugin-sdk，插件加载可能因缺少运行时依赖而失败',
+      );
+      return;
+    }
+    try {
+      fs.mkdirSync(path.dirname(linkPath), { recursive: true });
+      // junction：Windows 下无需提权即可创建目录链接，POSIX 下等价为普通软链
+      fs.symlinkSync(sdkDir, linkPath, 'junction');
+      console.log(`[PluginHost] Linked host @openlearn/plugin-sdk: ${linkPath} -> ${sdkDir}`);
+    } catch (err) {
+      console.warn('[PluginHost] 建立 @openlearn/plugin-sdk 链接失败:', err);
+    }
   }
 
   // ── V5.2: RESTful API Gateway Dispatcher ───────────────────────────────
@@ -1177,6 +1234,8 @@ export class PluginHost {
       if (process.env.NODE_ENV !== 'test' && row.file_path && fs.existsSync(row.file_path)) {
         // 使用 file:// URL 直接导入，Node.js 会基于文件所在目录解析裸模块 specifier
         // 附加 ?t= 查询参数绕过 ESM 缓存，确保重新激活时加载最新代码
+        // 宿主以 external 方式提供 SDK，先确保插件目录能解析到它
+        this.ensureHostSdkResolution();
         const fileUrl = pathToFileURL(row.file_path);
         mod = await import(`${fileUrl.href}?t=${Date.now()}`);
       } else {
@@ -1701,12 +1760,20 @@ export class PluginHost {
     // 2. 获取当前状态（可能已被 deactivatePlugin 修改）
     const state = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
 
-    // 验证状态转换
-    this.validateTransition(pluginId, state, PluginState.UNINSTALLED);
-
     // 3. 查询 file_path 和 manifest（DELETE 之前必须获取）
     const row = this.db.prepare('SELECT manifest, file_path FROM plugins WHERE id = ?').get(pluginId) as
       { manifest: string; file_path?: string } | undefined;
+
+    // 幂等：已卸载且 DB 无残留记录时直接返回，避免 uninstalled → uninstalled 非法转换
+    if (state === PluginState.UNINSTALLED && !row) {
+      this.pluginStates.delete(pluginId);
+      return;
+    }
+
+    // 验证状态转换（已处于 UNINSTALLED 但仍有残留记录时跳过校验，继续清理）
+    if (state !== PluginState.UNINSTALLED) {
+      this.validateTransition(pluginId, state, PluginState.UNINSTALLED);
+    }
     const manifestId = (() => {
       if (!row) return pluginId;
       try {

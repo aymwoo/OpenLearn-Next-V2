@@ -30,7 +30,6 @@ export interface PluginDevPanelProps {
   setUpdateTargetPluginId: (id: string | null) => void;
   updateFileInputRef: React.RefObject<HTMLInputElement | null>;
   setStoreTab: (tab: 'store' | 'widgets' | 'dev' | 'logs') => void;
-  handleZipDrop: (e: React.DragEvent<HTMLDivElement>) => void;
   zipError: string | null;
   setZipError: (err: string | null) => void;
   zipPreview: { name: string; id: string; version: string } | null;
@@ -53,7 +52,6 @@ export function PluginDevPanel({
   setUpdateTargetPluginId,
   updateFileInputRef,
   setStoreTab,
-  handleZipDrop,
   zipError,
   setZipError,
   zipPreview,
@@ -82,7 +80,8 @@ export function PluginDevPanel({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div
+          <button
+            type="button"
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs uppercase font-bold rounded-lg cursor-pointer transition-all ${
               zipError
                 ? 'border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20'
@@ -90,16 +89,8 @@ export function PluginDevPanel({
                   ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
                   : zipProcessing
                     ? 'border border-indigo-500/30 bg-indigo-500/10 text-indigo-400'
-                    : 'border border-dashed border-gray-600 text-gray-400 hover:text-white hover:border-indigo-400 hover:bg-indigo-500/10'
+                    : 'border border-gray-600 text-gray-400 hover:text-white hover:border-indigo-400 hover:bg-indigo-500/10'
             }`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.currentTarget.classList.add('border-indigo-400', 'bg-indigo-50/50');
-            }}
-            onDragLeave={(e) => {
-              e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50/50');
-            }}
-            onDrop={handleZipDrop}
             onClick={() => {
               setZipError(null);
               setZipPreview(null);
@@ -124,10 +115,10 @@ export function PluginDevPanel({
             ) : (
               <>
                 <Upload size={11} />
-                <span>{lang === 'zh' ? '拖拽安装' : 'Drop ZIP'}</span>
+                <span>{lang === 'zh' ? '从 ZIP 安装' : 'Install from ZIP'}</span>
               </>
             )}
-          </div>
+          </button>
           <button
             onClick={() => setPluginCode(DEFAULT_PLUGIN)}
             className="px-2.5 py-1 text-xs uppercase font-bold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-lg transition-all flex items-center gap-1 cursor-pointer"

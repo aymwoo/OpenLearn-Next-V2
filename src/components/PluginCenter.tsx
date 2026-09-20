@@ -151,16 +151,6 @@ export function PluginCenter({
     }
   };
 
-  const handleZipDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50/50');
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      setUpdateTargetPluginId(null);
-      setSelectedZipFile(files[0]);
-    }
-  };
-
   const handleZipInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -260,20 +250,13 @@ export function PluginCenter({
                   <span>{lang === 'zh' ? '显示系统核心插件' : 'Show System Core Plugins'}</span>
                 </label>
 
-                <div
+                <button
+                  type="button"
                   className={`flex items-center gap-1.5 cursor-pointer text-xs font-semibold select-none transition-colors border rounded-lg px-3 py-1.5 shadow-sm ${
                     selectedZipFile
                       ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
                       : 'border-teal-200 bg-teal-50/50 text-teal-600 hover:border-teal-400 hover:bg-teal-50'
                   }`}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.currentTarget.classList.add('border-teal-400', 'bg-teal-50');
-                  }}
-                  onDragLeave={(e) => {
-                    e.currentTarget.classList.remove('border-teal-400', 'bg-teal-50');
-                  }}
-                  onDrop={handleZipDrop}
                   onClick={() => {
                     document.getElementById('zip-plugin-uploader')?.click();
                   }}
@@ -286,10 +269,10 @@ export function PluginCenter({
                   ) : (
                     <>
                       <Upload size={14} />
-                      <span>{lang === 'zh' ? '拖拽安装 ZIP' : 'Drop ZIP'}</span>
+                      <span>{lang === 'zh' ? '从 ZIP 安装' : 'Install from ZIP'}</span>
                     </>
                   )}
-                </div>
+                </button>
               </div>
             )}
           </div>
@@ -348,7 +331,6 @@ export function PluginCenter({
               setUpdateTargetPluginId={setUpdateTargetPluginId}
               updateFileInputRef={updateFileInputRef}
               setStoreTab={setStoreTab}
-              handleZipDrop={handleZipDrop}
               zipError={zipError}
               setZipError={setZipError}
               zipPreview={zipPreview}
