@@ -10,6 +10,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **通用「结算页自动上报」（不主动提交的课件也能拿分）**：部分互动课件答完题后直接切到结算/结果页（如「闯关结束·…」），既不调用 `LMS.submit`，也没有匹配「提交/完成」关键词的按钮，导致旧的“按钮点击 → 抓分”逻辑无法触发。现于 `server/utils/bridge-sdk.ts` 的 `initAutoSubmit` 中新增独立的 `ResultWatcher`：
+  - 用 `MutationObserver`（debounce 600ms）监听可见文案，命中强结束信号（`闯关/挑战/答题/测试/游戏/本轮/本关` + `结束/完成/成功`、`通关`、`结算`、`查看解析`、`正确率`、`最终得分`、`总得分` 等）才启动；
+  - 抓分口径优先「正确题数 `X/Y` → 百分制」（如 `#correctCount = 12/15 → 80`），否则回落**可见**的分数元素；
+  - 仅从可见元素取值（`getBoundingClientRect` + 祖先 `computedStyle` 判定），避开结算页未展开时隐藏的初始值 `0`；
+  - 展开后短轮询（`0/120/250/400/700/1100ms`）取最后一次有效分数，**每次作答只上报一次**（`__lmsResultSubmitted` 幂等门）。
+  - 验证：用 jsdom 还原该课件的结算页，答题中命中 `第 3 / 15 关` **不**触发；调用 `showResult()`（`#correctCount=12/15`）后仅上报一次 `{score:80,completion:1}`。
+
+### Fixed
+
+- **桥接抓分正则过度转义（数字/分数从未能解析）**：`bridge-sdk.ts` 内嵌于模板字符串中的正则误写成 `\\d` / `\\s`，生成到课件的实际 JS 里是 `\\d`（匹配字面反斜杠 + `d`），导致 `findScoreInDOM` 的分数/分数值解析（`12/15` 等）全部失效。已修正为 `\\d`/`\\s`（即输出 JS 的 `\d`/`\s`），并新增正则自检。
+- **AI Provider 密钥解密分叉（插件 AI 调用 401）**：`packages/core/di/ai-service.ts` 曾自带一份 `decryptKeyIfNeeded`，只读 `process.env.ENCRYPTION_KEY`，且在密钥缺失/为空时**静默返回密文**；而「AI Provider 测试」与各业务路由走 `server/utils/crypto.ts`（含 `.env` 回退）。二者实现分叉导致典型故障：**测试按钮通过，但插件 `ctx.services.ai.generateText()` 把密文当作 Bearer 发出，上游返回 `401 login fail: Please carry the API secret key`**。生产 `ecosystem.config.cjs` 将 `ENCRYPTION_KEY` 显式置为 `''`，而 `dotenv` 不会覆盖已存在的空值变量，因此该问题在 PM2 部署下必现。
+  - 新增 `packages/core/di/api-key-crypto.ts` 作为唯一事实来源（`getEncryptionKey` / `encryptApiKey` / `decryptApiKey` / `looksLikeCiphertext`），密钥解析顺序：`process.env` → `.env` 文件 → 自动生成并持久化（仍不覆盖已有行）；
+  - `server/utils/crypto.ts` 改为从该模块转发导出（保持既有导入路径与可用 API 不变），杜绝再次分叉；
+  - `AIService.generateText` 改用共享 `decryptApiKey`，并在解密结果仍是密文时抛出可操作的错误（提示 ENCRYPTION_KEY 不一致 / 需重新保存 API Key），不再向上游发送密文换取难以定位的 401。
+  - 验证：`packages/core/di/__tests__/ai-service.test.ts` 通过；`tsc --noEmit` 0 错误；在“正常 / `ENCRYPTION_KEY=''`（PM2 场景）/ 密钥被轮换”三种场景下探测 AIService，分别为成功、成功（回退 `.env`）、抛出明确解密错误。
+
 ## [0.3.18] - 2026-09-19
 
 ### Tests & Reliability

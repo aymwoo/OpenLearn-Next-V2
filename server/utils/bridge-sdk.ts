@@ -468,7 +468,7 @@ export const BRIDGE_SDK_CODE = `(function() {
               const text = (el.textContent || el.innerText || '').trim();
               if (text) {
                 logData.push("Selector '" + selector + "' matched text: '" + text + "'");
-                const fractionMatch = text.match(/(\\\\d+(\\\\.\\\\d+)?)\\\\s*[\\\\/|之]\\\\s*(\\\\d+)/);
+                const fractionMatch = text.match(/(\\d+(\\.\\d+)?)\\s*[\\/|之]\\s*(\\d+)/);
                 if (fractionMatch) {
                   const num = parseFloat(fractionMatch[1]);
                   const den = parseFloat(fractionMatch[3]);
@@ -478,7 +478,7 @@ export const BRIDGE_SDK_CODE = `(function() {
                     return { score: pct, log: logData };
                   }
                 }
-                const match = text.match(/\\\\d+(\\\\.\\\\d+)?/);
+                const match = text.match(/\\d+(\\.\\d+)?/);
                 if (match) {
                   const num = parseFloat(match[0]);
                   if (!isNaN(num)) {
@@ -519,7 +519,7 @@ export const BRIDGE_SDK_CODE = `(function() {
               if (txt) {
                 const hasKey = txt.includes('得分') || txt.includes('分数') || txt.includes('成绩') || txt.toLowerCase().includes('score') || txt.toLowerCase().includes('points');
                 if (hasKey) {
-                  const m = txt.match(/\\\\d+(\\\\.\\\\d+)?/);
+                  const m = txt.match(/\\d+(\\.\\d+)?/);
                   if (m) {
                     const val = parseFloat(m[0]);
                     logData.push("Fallback leaf <" + el.tagName + "> '" + txt + "' parsed: " + val);
@@ -535,6 +535,139 @@ export const BRIDGE_SDK_CODE = `(function() {
         logData.push("Scraper error: " + err.message);
       }
       return { score: null, log: logData };
+    }
+
+    // --- RESULT-SCREEN AUTO SUBMIT ---------------------------------------
+    // 部分课件答完题后直接切到「结算 / 结果页」，并不点击任何提交按钮。
+    // 这里监听结算页出现，自动抓取分数并上报一次。
+    // 口径优先「正确题数 X/Y」→ 百分制，否则回落可见的分数元素。
+    var __lmsResultSubmitted = false;
+    var __lmsResultScheduled = false;
+    var __lmsResultPolling = false;
+
+    // 强结束信号：只认结算/结果页文案，避免答题过程中误触发
+    var __LMS_DONE_RE = /(闯关|挑战|答题|测试|游戏|本轮|本关)(结束|完成|成功)|通关|结算|查看解析|正确率|最终得分|总得分|全部答完|答题完毕/;
+    // 用 [0-9] / [^0-9] 代替 \\d / \\s，规避模板字符串的转义陷阱
+    var __LMS_RATIO_RE = /([0-9]+(?:[.][0-9]+)?)[^0-9]*[/／|之][^0-9]*([0-9]+)/;
+    var __LMS_NUM_RE = /[0-9]+(?:[.][0-9]+)?/;
+
+    function __lmsVisibleText() {
+      try {
+        if (!document.body) return '';
+        if (typeof document.body.innerText === 'string') return document.body.innerText;
+        return document.body.textContent || '';
+      } catch (e) { return ''; }
+    }
+
+    function __lmsIsShown(el) {
+      try {
+        if (!el || !el.getBoundingClientRect) return false;
+        var rect = el.getBoundingClientRect();
+        if (rect.width <= 0 && rect.height <= 0) return false;
+        var node = el;
+        while (node && node.nodeType === 1) {
+          var st = window.getComputedStyle ? window.getComputedStyle(node) : null;
+          if (st && (st.display === 'none' || st.visibility === 'hidden')) return false;
+          node = node.parentElement;
+        }
+        return true;
+      } catch (e) { return false; }
+    }
+
+    // 仅从「可见」的分数元素取值，避免结算页尚未展开时读到隐藏的初始值 0
+    function __lmsFindVisibleScore() {
+      var selectors = [
+        '#finalScore', '#score', '#scoreDisplay', '.score', '.final-score',
+        '[id*="score" i]', '[id*="point" i]', '[id*="grade" i]'
+      ];
+      for (var i = 0; i < selectors.length; i++) {
+        var nodes = [];
+        try { nodes = document.querySelectorAll(selectors[i]); } catch (e) { nodes = []; }
+        for (var j = 0; j < nodes.length; j++) {
+          if (!__lmsIsShown(nodes[j])) continue;
+          var txt = (nodes[j].textContent || '').trim();
+          if (!txt) continue;
+          var frac = txt.match(__LMS_RATIO_RE);
+          if (frac) {
+            var fn = parseFloat(frac[1]);
+            var fd = parseFloat(frac[2]);
+            if (fd > 0 && fn >= 0 && fn <= fd) return Math.round((fn / fd) * 10000) / 100;
+          }
+          var num = txt.match(__LMS_NUM_RE);
+          if (num) return parseFloat(num[0]);
+        }
+      }
+      return null;
+    }
+
+    function __lmsExtractResultScore() {
+      // 1) 正确题数 X/Y → 百分制（口径最稳定）
+      var ratioSelectors = [
+        '#correctCount', '[id*="correct" i]', '[id*="accuracy" i]',
+        '[class*="correct" i]', '[class*="accuracy" i]', '[id*="ratio" i]'
+      ];
+      for (var i = 0; i < ratioSelectors.length; i++) {
+        var nodes = [];
+        try { nodes = document.querySelectorAll(ratioSelectors[i]); } catch (e) { nodes = []; }
+        for (var j = 0; j < nodes.length; j++) {
+          if (!__lmsIsShown(nodes[j])) continue;
+          var m = (nodes[j].textContent || '').trim().match(__LMS_RATIO_RE);
+          if (m) {
+            var num = parseFloat(m[1]);
+            var den = parseFloat(m[2]);
+            if (den > 0 && num >= 0 && num <= den) return Math.round((num / den) * 10000) / 100;
+          }
+        }
+      }
+      // 2) 回落：可见分数元素
+      return __lmsFindVisibleScore();
+    }
+
+    function __lmsMaybeSubmitResult() {
+      if (__lmsResultSubmitted || __lmsResultPolling) return;
+      if (!__LMS_DONE_RE.test(__lmsVisibleText())) return;
+
+      __lmsResultPolling = true;
+      // 结算页 DOM 可能分步渲染，短轮询取最后一次有效分数
+      var tries = 0;
+      var delays = [0, 120, 250, 400, 700, 1100];
+      var latest = null;
+
+      function poll() {
+        var s = __lmsExtractResultScore();
+        if (s !== null && !isNaN(s)) latest = s;
+        tries++;
+        if (tries < delays.length) {
+          setTimeout(poll, delays[tries]);
+          return;
+        }
+        __lmsResultPolling = false;
+        if (latest !== null && !__lmsResultSubmitted) {
+          __lmsResultSubmitted = true;
+          logToServer('Result screen detected, auto-submitting score: ' + latest);
+          window.LMS.submit({ score: latest, completion: 1.0, comment: '结算页自动提取得分' });
+        }
+      }
+      poll();
+    }
+
+    function initResultWatcher() {
+      try {
+        if (!document.body) return;
+        var observer = new MutationObserver(function() {
+          if (__lmsResultSubmitted || __lmsResultScheduled) return;
+          __lmsResultScheduled = true;
+          setTimeout(function() {
+            __lmsResultScheduled = false;
+            __lmsMaybeSubmitResult();
+          }, 600);
+        });
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        // 少数课件首屏即结算
+        setTimeout(__lmsMaybeSubmitResult, 800);
+      } catch (e) {
+        logToServer('Error in initResultWatcher: ' + e.message);
+      }
     }
 
     function attachListeners() {
@@ -630,6 +763,7 @@ export const BRIDGE_SDK_CODE = `(function() {
         });
         observer.observe(document.body, { childList: true, subtree: true });
         attachListeners();
+        initResultWatcher();
       } catch (e) {
         logToServer("Error in initAutoSubmit: " + e.message);
       }
