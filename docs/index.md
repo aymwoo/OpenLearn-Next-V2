@@ -149,6 +149,7 @@ api/typescript-interfaces
 api/di-tokens
 api/api-coverage-report
 api/courseware-attempts-contract
+api/whiteboard-event-slot-contract
 ```
 
 ```{toctree}

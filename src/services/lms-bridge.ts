@@ -167,6 +167,8 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
 /**
  * 发布课件事件到前端 EventBus（`courseware.` 前缀会经 Socket 转发到后端 EventBus，
  * 供 AI Agent 与插件订阅分析）。
+ *
+ * 同时写入 WhiteboardEventSlot，使白板内的 TeacherPanel / 调试面板能实时订阅。
  */
 function emitCoursewareEvent(type: string, attemptId: string, payload: unknown): void {
   void frontendEventBus.publish({
@@ -177,6 +179,25 @@ function emitCoursewareEvent(type: string, attemptId: string, payload: unknown):
     timestamp: Date.now(),
     correlationId: attemptId,
   });
+  // 同步进入白板事件槽（纯前端，不依赖 socket）
+  try {
+    const payloadObj = (payload ?? {}) as Record<string, unknown>;
+    void import('../features/whiteboard/events/WhiteboardEventSlot').then(({ whiteboardEventSlot }) => {
+      whiteboardEventSlot.ingest({
+        source: 'iframe.bridge',
+        type,
+        attemptId,
+        coursewareUuid: typeof payloadObj.courseware_uuid === 'string' ? payloadObj.courseware_uuid : undefined,
+        payload: {
+          ...payloadObj,
+          attemptId,
+        },
+        raw: payload,
+      });
+    });
+  } catch {
+    // WhiteboardEventSlot 故障不应影响 EventBus 主路径
+  }
 }
 
 /**

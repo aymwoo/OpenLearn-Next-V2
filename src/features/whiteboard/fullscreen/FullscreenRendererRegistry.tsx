@@ -10,6 +10,8 @@ export type FullscreenRendererProps = {
   onClose: () => void;
   containerSize: { width: number; height: number };
   lessonId: string;
+  /** 白板元素 id（可选，供事件关联使用） */
+  elementId?: string;
 };
 
 export type FullscreenRenderer = React.FC<FullscreenRendererProps>;
@@ -60,6 +62,8 @@ export const FullscreenOverlay: React.FC<{
   containerSize: { width: number; height: number };
   onClose: () => void;
   lessonId: string;
+  /** 白板元素 id（透传到渲染器） */
+  elementId?: string;
   /**
    * 是否允许本地关闭。教师端同步过来的最大化视图为 false：
    * 不渲染关闭按钮、ESC 不生效、下发给渲染器的 onClose 也为空操作，
@@ -70,7 +74,7 @@ export const FullscreenOverlay: React.FC<{
    * 只读跟随模式（全班专注锁定）：阻断全屏内容交互，展示只读演示视图徽标
    */
   readOnly?: boolean;
-}> = ({ type, title, data, containerSize, onClose, lessonId, dismissible = true, readOnly = false }) => {
+}> = ({ type, title, data, containerSize, onClose, lessonId, elementId, dismissible = true, readOnly = false }) => {
   React.useEffect(() => {
     if (!dismissible) return;
     const handleEsc = (e: KeyboardEvent) => {
@@ -145,6 +149,7 @@ export const FullscreenOverlay: React.FC<{
               onClose={handleClose}
               containerSize={viewport}
               lessonId={lessonId}
+              elementId={elementId}
             />
           ) : (
             <DefaultFullscreenRenderer

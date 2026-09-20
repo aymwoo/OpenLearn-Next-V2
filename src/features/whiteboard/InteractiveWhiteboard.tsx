@@ -165,8 +165,8 @@ fullscreenRendererRegistry.register('rollcall', ({ data }: FullscreenRendererPro
   </div>
 ));
 
-fullscreenRendererRegistry.register('html-applet', ({ data, lessonId }: FullscreenRendererProps) => (
-  <HtmlAppletFrame data={data} lessonId={lessonId} className="w-full h-full rounded-xl border" />
+fullscreenRendererRegistry.register('html-applet', ({ data, lessonId, elementId }: FullscreenRendererProps) => (
+  <HtmlAppletFrame data={data} lessonId={lessonId} elementId={elementId} className="w-full h-full rounded-xl border" />
 ));
 
 const ReadOnlyLockCover: React.FC<{ title?: string }> = ({
@@ -2171,7 +2171,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   </div>
                   {!data.isMinimized && (
                     <div className="flex-1 bg-white overflow-hidden relative min-h-0">
-                      <HtmlAppletFrame data={data} lessonId={lessonId} className="w-full h-full border-none" />
+                      <HtmlAppletFrame data={data} lessonId={lessonId} elementId={el.id} className="w-full h-full border-none" />
                     </div>
                   )}
                   {readOnly && <ReadOnlyLockCover />}
@@ -3118,6 +3118,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         dismissible={isFullscreenDismissible}
                         onClose={() => applyFullscreen(null)}
                         lessonId={lessonId}
+                        elementId={fsEl.id}
                         readOnly={readOnly}
                       />
                     );

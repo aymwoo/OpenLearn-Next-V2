@@ -7,10 +7,22 @@ import { useFontSizeStore } from '../../../store/fontSizeStore';
 import { broadcastThemeToIframes, broadcastFontScaleToIframes } from '../../../services/lms-bridge';
 import { getSocketInstance } from '../../../services/socket-service';
 import type { HtmlAppletPayload } from '../canvas-model/types';
+import { whiteboardEventSlot } from '../events/WhiteboardEventSlot';
+
+function pickNumber(v: unknown): number | undefined {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
 
 export interface HtmlAppletFrameProps {
   data: HtmlAppletPayload;
   lessonId: string;
+  /** 白板元素 id（用于事件槽关联到具体画布组件），可选 */
+  elementId?: string;
   className?: string;
   title?: string;
   /** 懒挂载（进入可视区才创建 iframe），默认 true */
@@ -42,7 +54,7 @@ interface CoursewareAttempt {
  *   - 订阅 Socket.IO 的 `courseware-attempt-updated` 事件，自动重拉
  *   - 浮层按钮默认收起，避免遮挡课件；点击展开后只显示已提交的学生成绩
  */
-export function HtmlAppletFrame({ data, lessonId, className, title, lazy = true }: HtmlAppletFrameProps) {
+export function HtmlAppletFrame({ data, lessonId, elementId, className, title, lazy = true }: HtmlAppletFrameProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const mounted = useCoursewareFrameMount(lazy, containerRef);
   const { theme } = useThemeStore();
@@ -90,6 +102,109 @@ export function HtmlAppletFrame({ data, lessonId, className, title, lazy = true 
     broadcastThemeToIframes(theme, getThemeTokens(theme));
     broadcastFontScaleToIframes(scale);
   };
+
+  /**
+   * 监听 iframe 内的 postMessage，把 LMS Bridge SDK 协议事件归一化进 WhiteboardEventSlot。
+   *
+   * 注意：
+   * - 仅监听本组件的 iframe（通过 contentWindow 引用比对），与全局 lms-bridge 监听器共存不冲突
+   * - 适配 LMS_SUBMIT / LMS_SAVE_PROGRESS / LMS_FINISH / courseware:score / openlearn-cw-sdk:score
+   * - 未知 LMS_* 协议事件统一记入 'courseware.unknown'，便于调试面板观察
+   */
+  useEffect(() => {
+    const shapeId = elementId ?? data.title ?? undefined;
+    const uuid = data.coursewareUuid;
+    if (!shapeId && !uuid) return;
+    if (!mounted) return;
+
+    const iframe = containerRef.current?.querySelector('iframe');
+    if (!iframe || !(iframe instanceof HTMLIFrameElement) || !iframe.contentWindow) return;
+
+    const messageHandler = (event: MessageEvent) => {
+      // 仅信任本组件的 iframe
+      if (event.source !== iframe.contentWindow) return;
+
+      const msg = event.data;
+      if (!msg || typeof msg !== 'object') return;
+
+      // LMS Bridge SDK 协议
+      if (msg.type === 'LMS_SUBMIT') {
+        const payload = (msg.payload ?? {}) as Record<string, unknown>;
+        whiteboardEventSlot.ingest({
+          source: 'iframe.postMessage',
+          type: 'courseware.submitted',
+          lessonId,
+          elementId: shapeId,
+          coursewareUuid: uuid,
+          attemptId: typeof msg.attempt_id === 'string' ? msg.attempt_id : undefined,
+          payload: {
+            score: pickNumber(payload.score ?? payload.grade),
+            total: pickNumber(payload.total ?? payload.fullScore),
+            completion: pickNumber(payload.completion ?? payload.progress),
+            comment: typeof payload.comment === 'string' ? payload.comment : undefined,
+          },
+          raw: msg,
+        });
+      } else if (msg.type === 'LMS_SAVE_PROGRESS') {
+        const payload = (msg.payload ?? {}) as Record<string, unknown>;
+        whiteboardEventSlot.ingest({
+          source: 'iframe.postMessage',
+          type: 'courseware.progress_saved',
+          lessonId,
+          elementId: shapeId,
+          coursewareUuid: uuid,
+          attemptId: typeof msg.attempt_id === 'string' ? msg.attempt_id : undefined,
+          payload: {
+            score: pickNumber(payload.score),
+            completion: pickNumber(payload.completion ?? payload.progress),
+          },
+          raw: msg,
+        });
+      } else if (msg.type === 'LMS_FINISH') {
+        whiteboardEventSlot.ingest({
+          source: 'iframe.postMessage',
+          type: 'courseware.finished',
+          lessonId,
+          elementId: shapeId,
+          coursewareUuid: uuid,
+          attemptId: typeof msg.attempt_id === 'string' ? msg.attempt_id : undefined,
+          payload: {},
+          raw: msg,
+        });
+      } else if (msg.type === 'courseware:score' || msg.type === 'openlearn-cw-sdk:score') {
+        // v2_plugins/courseware-hub SDK 协议
+        const payload = (msg.payload ?? msg) as Record<string, unknown>;
+        whiteboardEventSlot.ingest({
+          source: 'applet.score',
+          type: 'courseware.submitted',
+          lessonId,
+          elementId: shapeId,
+          coursewareUuid: uuid,
+          payload: {
+            score: pickNumber(payload.score),
+            total: pickNumber(payload.total),
+            detail: payload.detail,
+            source: typeof msg.source === 'string' ? msg.source : 'openlearn-cw-sdk',
+          },
+          raw: msg,
+        });
+      } else if (typeof msg.type === 'string' && msg.type.startsWith('LMS_')) {
+        // 其他 LMS_* 协议事件统一记入 unknown 分桶
+        whiteboardEventSlot.ingest({
+          source: 'iframe.postMessage',
+          type: 'courseware.unknown',
+          lessonId,
+          elementId: shapeId,
+          coursewareUuid: uuid,
+          payload: { originalType: msg.type },
+          raw: msg,
+        });
+      }
+    };
+
+    window.addEventListener('message', messageHandler);
+    return () => window.removeEventListener('message', messageHandler);
+  }, [mounted, elementId, data.title, data.coursewareUuid, lessonId]);
 
   const customSrc = coursewareSourceRegistry.resolve(data, { lessonId });
   const src = data.coursewareUuid
