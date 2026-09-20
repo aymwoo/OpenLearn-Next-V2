@@ -1,6 +1,6 @@
 {
   "name": "openlearn-next",
-  "version": "0.3.18",
+  "version": "0.3.19",
   "private": false,
   "description": "A plugin-driven Educational OS / LMS platform with AI agent teaching assistant",
   "keywords": [
@@ -58,7 +58,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
-    "@openlearn/plugin-sdk": "workspace:*",
+    "@openlearn/plugin-sdk": "^3.6.1",
     "@types/reveal.js": "^5.2.2",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",

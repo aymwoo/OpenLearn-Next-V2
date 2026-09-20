@@ -82,6 +82,6 @@ jobs:
       # Sync to npmmirror (Chinese mirror)
       - name: Sync to npmmirror
         run: |
-          curl -fsSL -X GET "https://registry.npmmirror.com/@openlearn/plugin-sdk/sync?sync_upstream=true" || true
-          curl -fsSL -X GET "https://registry.npmmirror.com/@openlearn/plugin-test-kit/sync?sync_upstream=true" || true
-          curl -fsSL -X GET "https://registry.npmmirror.com/openlearn-next/sync?sync_upstream=true" || true
+          curl -fsSL -X PUT "https://registry.npmmirror.com/-/package/@openlearn/plugin-sdk/sync" || true
+          curl -fsSL -X PUT "https://registry.npmmirror.com/-/package/@openlearn/plugin-test-kit/sync" || true
+          curl -fsSL -X PUT "https://registry.npmmirror.com/-/package/openlearn-next/sync" || true
