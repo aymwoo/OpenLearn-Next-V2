@@ -16,7 +16,9 @@ import {
   IPluginHostToken,
   IPluginLifecycleManagerToken,
   IPluginDistributionManagerToken,
+  ICoursewareRuntimeScriptRegistryToken,
 } from '../../core/di/interfaces.js';
+import { CoursewareRuntimeScriptRegistry } from '../../core/di/courseware-runtime-script-registry.js';
 import { PluginLifecycleManager } from '../../core/plugin-host/plugin-lifecycle-manager.js';
 import { PluginDistributionManager } from '../../core/plugin-host/plugin-distribution-manager.js';
 import { CommandBus } from '../../core/command-bus/index.js';
@@ -135,6 +137,8 @@ describe('BuiltinPlugin', () => {
     serviceRegistry.register(IPluginHostToken, pluginHost);
     serviceRegistry.register(IPluginLifecycleManagerToken, new PluginLifecycleManager(pluginHost));
     serviceRegistry.register(IPluginDistributionManagerToken, new PluginDistributionManager(pluginHost));
+    // 阶段 B：平台原生课件运行时脚本注册表（builtin 在 activate 时向其注册原生分数监视器）
+    serviceRegistry.register(ICoursewareRuntimeScriptRegistryToken, new CoursewareRuntimeScriptRegistry());
   });
 
   afterEach(() => {
@@ -205,5 +209,27 @@ describe('BuiltinPlugin', () => {
     const element = db.prepare('SELECT * FROM whiteboard_elements WHERE id = ?').get(elementId) as any;
     expect(element).toBeDefined();
     expect(element.lesson_id).toBe(lessonId);
+  });
+
+  it('activate 时向课件运行时脚本注册点注册平台原生分数监视器', async () => {
+    const pluginId = '@openlearn/plugin-builtin';
+    pluginHost.registerPreloadedPlugin(pluginId, BuiltinPlugin);
+    db.prepare(
+      'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(pluginId, 'Builtin', JSON.stringify(BuiltinPlugin.manifest), '', 'installed', Date.now(), 'esm');
+
+    await pluginHost.activatePlugin(pluginId);
+
+    const registry = (await serviceRegistry.resolve(ICoursewareRuntimeScriptRegistryToken)) as CoursewareRuntimeScriptRegistry;
+    const scripts = registry.list({ id: 'cw-1', uuid: 'cw-1' });
+    const monitor = scripts.find((script) => script.id === 'score-variable-monitor') as any;
+    expect(monitor).toBeDefined();
+    expect(monitor.owner).toBe('@openlearn/plugin-builtin');
+    expect(monitor.position).toBe('body-end');
+    expect(monitor.priority).toBe(200);
+    // 脚本要真的是一段可执行代码，且不得含会提前闭合 script 标签的文本
+    expect(monitor.source.length).toBeGreaterThan(500);
+    expect(monitor.source.toLowerCase().includes('</script')).toBe(false);
+    expect(() => new Function(monitor.source)).not.toThrow();
   });
 });

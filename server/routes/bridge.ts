@@ -2,17 +2,29 @@ import path from 'path';
 import fs from 'fs';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
-import { injectLmsSdk } from './shared.js';
+import { injectLmsSdk, collectCoursewareRuntimeScripts } from './shared.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 
 export function registerBridgeRoutes(ctx: ServerContext) {
   const { app } = ctx;
 
-  app.get('/bridge.js', (_req, res) => {
+  // 白板 srcDoc 路径（`src/features/whiteboard/utils/bridgeUtils.ts` 注入 `<script src="/bridge.js">`）
+  // 无法走服务端 HTML 拼接，因此这里把同一套「课件运行时脚本」一并下发，
+  // 让手工 HTML 白板/内联课件也能被平台原生监视器覆盖。
+  app.get('/bridge.js', (req, res) => {
     res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.send(BRIDGE_SDK_CODE);
+    const cw = typeof req.query.cw === 'string' ? req.query.cw : '';
+    const cwName = typeof req.query.name === 'string' ? req.query.name : '';
+    let runtimeScripts = '';
+    try {
+      const scripts = collectCoursewareRuntimeScripts({ id: cw, name: cwName, uuid: cw });
+      runtimeScripts = scripts.head + scripts.bodyEnd;
+    } catch (e) {
+      runtimeScripts = '';
+    }
+    res.send(runtimeScripts ? `${BRIDGE_SDK_CODE}\n${runtimeScripts}` : BRIDGE_SDK_CODE);
   });
 
   app.get('/runtime/:uuid', (req, res, next) => {

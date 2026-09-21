@@ -54,7 +54,7 @@ export function wrapSrcDocWithBridge(rawCode: string, lessonId: string): string 
     } catch(e) {}
   })();
 <\/script>
-<script src="/bridge.js"><\/script>
+<script src="/bridge.js?cw=${encodeURIComponent(lessonId || '')}"><\/script>
 </head><body>
 ${rawCode || ''}
 </body></html>`;

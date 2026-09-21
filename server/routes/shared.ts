@@ -31,7 +31,7 @@ export const BLOCKED_EXTENSIONS = ['.exe', '.sh', '.bat', '.cmd', '.dll', '.so',
  * 父窗口读不到其内部状态，服务端拼接 HTML 是平台唯一能向课件内投递代码的位置。
  * 注册点缺失或未注册任何脚本时必须完全静默，保证既有渲染路径零影响。
  */
-function collectCoursewareRuntimeScripts(cwInfo: { id: string; name: string; uuid: string }): {
+export function collectCoursewareRuntimeScripts(cwInfo: { id: string; name: string; uuid: string }): {
   head: string;
   bodyEnd: string;
 } {

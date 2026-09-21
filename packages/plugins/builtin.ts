@@ -10,9 +10,11 @@ import {
   IPluginHostToken,
   IPluginLifecycleManagerToken,
   IPluginDistributionManagerToken,
+  ICoursewareRuntimeScriptRegistryToken,
 } from '../core/di/interfaces.js';
 import type { PluginContext } from '@openlearn/plugin-sdk';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './ai-submit-injector.js';
+import { SCORE_MONITOR_SCRIPT, SCORE_MONITOR_SCRIPT_ID, SCORE_MONITOR_SCRIPT_OWNER } from './score-monitor-script.js';
 import {
   aggregateAttemptScore,
   describeAggregation,
@@ -21,6 +23,9 @@ import {
   saveScoreConfig,
   type ScoreAggregation,
 } from './courseware-score.js';
+
+/** 平台原生课件运行时脚本注册表的引用（供 deactivate 声明式回收） */
+let nativeRuntimeScriptRegistry: any = null;
 
 function copyFolderSync(src: string, dest: string) {
   if ((fs as any).cpSync) {
@@ -64,6 +69,27 @@ export const BuiltinPlugin = {
     // P7-A2 Stage 3: 通过统一 facade 处理 install/uninstall（1:1 委托同一 PluginHost）
     const lifecycleManager = await ctx.resolve(IPluginLifecycleManagerToken);
     const distributionManager = await ctx.resolve(IPluginDistributionManagerToken);
+
+    // 0. 平台原生「课件运行时脚本」：分数变量监视器（阶段 B）
+    // 注册点归平台所有（内置插件 critical，永不因第三方插件停用而失效）。
+    // 课件 iframe 是 opaque origin，父窗口无法观测其内部变量，注入脚本是唯一通道；
+    // 脚本采集到分数变化后以 `LMS.saveProgress({ score, watch })` 上报，
+    // 由 packages/plugins/courseware-score.ts 按 score_policy 聚合为官方成绩。
+    try {
+      const runtimeScriptRegistry: any = await ctx.resolve(ICoursewareRuntimeScriptRegistryToken);
+      if (runtimeScriptRegistry && typeof runtimeScriptRegistry.register === 'function') {
+        runtimeScriptRegistry.register(SCORE_MONITOR_SCRIPT_OWNER, {
+          id: SCORE_MONITOR_SCRIPT_ID,
+          description: '平台原生分数变量监视器：采集课件内代表分数的变量并持续上报为成绩样本',
+          source: SCORE_MONITOR_SCRIPT,
+          position: 'body-end',
+          priority: 200,
+        });
+        nativeRuntimeScriptRegistry = runtimeScriptRegistry;
+      }
+    } catch (err) {
+      console.warn('[builtin] 注册原生分数变量监视器失败（已忽略）:', (err as Error).message);
+    }
 
     // 1. LESSON HANDLER
     const createLessonCmdType = 'lesson.create';
@@ -1903,6 +1929,15 @@ export const BuiltinPlugin = {
     });
   },
   deactivate: async () => {
+    // 回收平台原生运行时脚本（内置插件为 critical，实际不会被停用；此处仅作声明式清理）
+    try {
+      if (nativeRuntimeScriptRegistry && typeof nativeRuntimeScriptRegistry.clear === 'function') {
+        nativeRuntimeScriptRegistry.clear(SCORE_MONITOR_SCRIPT_OWNER);
+        nativeRuntimeScriptRegistry = null;
+      }
+    } catch (err) {
+      console.warn('[builtin] 回收原生分数变量监视器失败（已忽略）:', (err as Error).message);
+    }
     // Cleanups automatically handled by ResourceTracker
   },
 };
