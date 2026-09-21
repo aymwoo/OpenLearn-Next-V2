@@ -4,6 +4,12 @@ import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, requireAuth } f
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 
+// ── SEC: 诊断上报轻量节流 ───────────────────────────────────────────────
+// 该端点每次调用都会写一行 events 审计记录并向全体在线用户广播，
+// 即便通过鉴权也需要限制频率，避免被单个账号放大为写库/广播风暴。
+const DIAGNOSTIC_MIN_INTERVAL_MS = 1000;
+const diagnosticLastReportAt = new Map<string, number>();
+
 export function registerWorkspaceRoutes(ctx: ServerContext) {
   const { app, MF_REMOTE_CACHE } = ctx;
 
@@ -17,39 +23,85 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
   });
 
   // ── Client Diagnostics Fallback HTTP Report ─────────────────────────────
-  app.post('/api/diagnostics/report', (req, res) => {
+  // SEC-AUTH: 本端点是 WebSocket 路径（server/presence.ts 'student-client-error'）的
+  // HTTP 回退。此前它既无鉴权、也丢掉了 WS 路径已有的防冒充校验（SEC-AUTH），
+  // 使得回退路径成为绕过身份校验的后门。两者现在必须保持同等校验强度。
+  app.post('/api/diagnostics/report', requireAuth(), (req, res) => {
     try {
-      const data = req.body;
-      if (data && data.studentId && data.error) {
-        console.warn(
-          `[Client Diagnostics HTTP] Student ${data.studentId} (${data.studentName || data.studentId}) reported error [${data.error.type || 'runtime'}]: ${data.error.message || data.error.title}`,
-        );
+      const data = req.body || {};
+      const session = (req as any).session || {};
+      const actorId: string = session.userId || session.studentId || 'unknown';
 
-        kernelContainer.eventBus.publish({
-          id: `evt_err_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-          type: 'student.client_error',
-          source: 'student_client',
-          payload: {
-            studentId: data.studentId,
-            studentName: data.studentName || data.studentId,
-            lessonId: data.lessonId || null,
-            classId: data.classId || null,
-            error: data.error,
-          },
-          timestamp: data.error?.timestamp || Date.now(),
-          correlationId: data.lessonId || undefined,
-        });
+      // 无有效载荷时保持静默成功（与历史行为一致，避免触发前端重试）
+      if (!data.studentId || !data.error) {
+        return res.json({ success: true });
+      }
 
-        if (ctx.io) {
-          ctx.io.emit('student-error-alert', {
-            studentId: data.studentId,
-            studentName: data.studentName || data.studentId,
-            lessonId: data.lessonId || null,
-            classId: data.classId || null,
-            error: data.error,
-          });
+      const isTeacherOrAdmin = session.role === 'teacher' || session.role === 'administrator';
+
+      // SEC-AUTH: 阻止学生伪造他人 studentId 上报（与 presence.ts:164-168 一致）
+      if (!isTeacherOrAdmin && actorId !== data.studentId) {
+        console.warn(`[Diagnostics Security] ${actorId} attempted to report error as ${data.studentId}`);
+        return res.status(403).json({ success: false, error: 'Forbidden: studentId mismatch' });
+      }
+
+      // 节流：同一账号 1 秒内只接受一次上报
+      const now = Date.now();
+      const last = diagnosticLastReportAt.get(actorId) || 0;
+      if (now - last < DIAGNOSTIC_MIN_INTERVAL_MS) {
+        return res.status(429).json({ success: false, error: 'Too many diagnostic reports' });
+      }
+      diagnosticLastReportAt.set(actorId, now);
+      if (diagnosticLastReportAt.size > 5000) {
+        for (const [k, v] of diagnosticLastReportAt) {
+          if (now - v > 60_000) diagnosticLastReportAt.delete(k);
         }
       }
+
+      const studentId = String(data.studentId).slice(0, 64);
+      // SEC-AUTH: 学生上报时，显示名一律取服务端会话中的权威值，忽略客户端传入值，
+      // 避免学生借 studentName 向全体教师广播任意文本（冒充 / 钓鱼）。
+      const studentName = isTeacherOrAdmin
+        ? String(data.studentName || studentId).slice(0, 100)
+        : String(session.username || session.studentId || studentId).slice(0, 100);
+
+      // 收敛 payload：仅保留已知字段并截断长度，防止超大包写入 events 表
+      const errorPayload = {
+        type: typeof data.error?.type === 'string' ? data.error.type.slice(0, 64) : 'runtime',
+        message: typeof data.error?.message === 'string' ? data.error.message.slice(0, 2000) : undefined,
+        title: typeof data.error?.title === 'string' ? data.error.title.slice(0, 200) : undefined,
+        timestamp: Number(data.error?.timestamp) || now,
+      };
+
+      console.warn(
+        `[Client Diagnostics HTTP] Student ${studentId} (${studentName}) reported error [${errorPayload.type}]: ${errorPayload.message || errorPayload.title || ''}`,
+      );
+
+      kernelContainer.eventBus.publish({
+        id: `evt_err_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        type: 'student.client_error',
+        source: 'student_client',
+        payload: {
+          studentId,
+          studentName,
+          lessonId: data.lessonId || null,
+          classId: data.classId || null,
+          error: errorPayload,
+        },
+        timestamp: errorPayload.timestamp,
+        correlationId: data.lessonId || undefined,
+      });
+
+      if (ctx.io) {
+        ctx.io.emit('student-error-alert', {
+          studentId,
+          studentName,
+          lessonId: data.lessonId || null,
+          classId: data.classId || null,
+          error: errorPayload,
+        });
+      }
+
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
