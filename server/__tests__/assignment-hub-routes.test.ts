@@ -28,6 +28,8 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
   const studentToken = 'tok-hub-student-0001';
   const otherToken = 'tok-hub-other-0001';
   const teacherToken = 'tok-hub-teacher-0001';
+  const thirdStudentId = 'stu-hub-0003';
+  const thirdToken = 'tok-hub-third-0001';
   const assignmentId = 'asg-hub-0001';
   const otherAssignmentId = 'asg-hub-0002';
 
@@ -87,6 +89,9 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     db.prepare(
       'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     ).run(otherStudentId, 'hub_other', 'placeholder', 'student', 'Hub 另一学生', now);
+    db.prepare(
+      'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(thirdStudentId, 'hub_third', 'placeholder', 'student', 'Hub 第三学生', now);
 
     const insertSession = db.prepare(
       'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
@@ -95,6 +100,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     insertSession.run(studentToken, JSON.stringify({ userId: studentId, role: 'student', username: 'hub_student' }), now, expiresAt);
     insertSession.run(otherToken, JSON.stringify({ userId: otherStudentId, role: 'student', username: 'hub_other' }), now, expiresAt);
     insertSession.run(teacherToken, JSON.stringify({ userId: teacherId, role: 'teacher', username: 'hub_teacher' }), now, expiresAt);
+    insertSession.run(thirdToken, JSON.stringify({ userId: thirdStudentId, role: 'student', username: 'hub_third' }), now, expiresAt);
 
     const insertAssignment = db.prepare(
       `INSERT OR REPLACE INTO plugin_assignments
@@ -123,7 +129,7 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     db.prepare('DELETE FROM plugin_submission_versions WHERE assignment_id IN (?, ?)').run(assignmentId, otherAssignmentId);
     db.prepare('DELETE FROM plugin_submissions WHERE assignment_id IN (?, ?)').run(assignmentId, otherAssignmentId);
     db.prepare('DELETE FROM plugin_assignments WHERE id IN (?, ?)').run(assignmentId, otherAssignmentId);
-    db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?, ?)').run(studentToken, otherToken, teacherToken);
+    db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?, ?, ?)').run(studentToken, otherToken, teacherToken, thirdToken);
     for (const file of createdFiles) {
       try {
         if (fs.existsSync(file)) fs.unlinkSync(file);
@@ -388,5 +394,176 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     expect(guard.check(`user:${studentId}:student`, 'lesson:write')).toBe(false);
     expect(guard.check(`user:${teacherId}:teacher`, 'assignment:manage')).toBe(true);
     expect(guard.check(`user:${teacherId}:teacher`, 'assignment:submit')).toBe(true);
+  });
+
+  it('P2 学生互评端点：只有被分配到的互评人能评价，评语不能冒充他人', async () => {
+    const db = kernelContainer.db;
+    resetAssignmentState();
+    db.prepare('DELETE FROM plugin_peer_review_tasks WHERE assignment_id = ?').run(assignmentId);
+    db.prepare('DELETE FROM plugin_peer_reviews WHERE assignment_id = ?').run(assignmentId);
+
+    await submitWork(studentToken, { textContent: '学生一的作业' });
+    await submitWork(otherToken, { textContent: '学生二的作业' });
+    await submitWork(thirdToken, { textContent: '学生三的作业' });
+    const subs = db
+      .prepare('SELECT id, student_id FROM plugin_submissions WHERE assignment_id = ?')
+      .all(assignmentId) as { id: string; student_id: string }[];
+    expect(subs).toHaveLength(3);
+
+    const assignRes = await fetch(`${baseUrl}/api/assignments/${assignmentId}/assign-peer-reviews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ reviewerCount: 1 }),
+    });
+    const assigned: any = await assignRes.json();
+    expect(assignRes.status, JSON.stringify(assigned)).toBe(200);
+    expect(assigned.created).toBe(3);
+
+    const mine = subs.find((item) => item.student_id === studentId)!;
+    const task = db
+      .prepare('SELECT reviewer_id FROM plugin_peer_review_tasks WHERE submission_id = ?')
+      .get(mine.id) as { reviewer_id: string };
+    expect(task.reviewer_id).not.toBe(studentId);
+    const tokenOf = (id: string) =>
+      id === studentId ? studentToken : id === otherStudentId ? otherToken : thirdToken;
+    const reviewerToken = tokenOf(task.reviewer_id);
+    const outsiderId = [studentId, otherStudentId, thirdStudentId].find(
+      (id) => id !== studentId && id !== task.reviewer_id,
+    )!;
+
+    const reviewWith = (token: string, body: Record<string, unknown>) =>
+      fetch(`${baseUrl}/api/assignments/${assignmentId}/peer-review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...cookie(token) },
+        body: JSON.stringify(body),
+      });
+
+    // 1) 未被分配到的学生不能评（已建立互评任务后只认任务持有人）
+    const notAssigned = await reviewWith(tokenOf(outsiderId), {
+      submissionId: mine.id,
+      reviewerId: task.reviewer_id,
+      score: 100,
+    });
+    const notAssignedBody: any = await notAssigned.json();
+    expect(notAssignedBody.success).toBe(false);
+    expect(String(notAssignedBody.error)).toContain('not assigned to you for peer review');
+
+    // 2) 作者本人不能通过请求体冒充互评人给自己打分（reviewerId 由会话决定）
+    const spoofed = await reviewWith(studentToken, {
+      submissionId: mine.id,
+      reviewerId: task.reviewer_id,
+      score: 100,
+    });
+    const spoofedBody: any = await spoofed.json();
+    expect(spoofedBody.success).toBe(false);
+    expect(String(spoofedBody.error)).toContain('not allowed to evaluate their own assignments');
+
+    // 3) 被分配到的互评人可以提交，且再次提交只更新同一条记录
+    const ok = await reviewWith(reviewerToken, {
+      submissionId: mine.id,
+      reviewerId: task.reviewer_id,
+      score: 88,
+      comment: '第一次意见',
+    });
+    expect(ok.status, await ok.text()).toBe(200);
+
+    const again = await reviewWith(reviewerToken, {
+      submissionId: mine.id,
+      score: 75,
+      comment: '改后的意见',
+    });
+    expect(again.status, await again.text()).toBe(200);
+
+    const reviews = db
+      .prepare('SELECT reviewer_id, score, comment FROM plugin_peer_reviews WHERE submission_id = ?')
+      .all(mine.id) as any[];
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0].reviewer_id).toBe(task.reviewer_id);
+    expect(reviews[0].score).toBe(75);
+    expect(reviews[0].comment).toBe('改后的意见');
+
+    const taskRow = db
+      .prepare('SELECT status FROM plugin_peer_review_tasks WHERE submission_id = ? AND reviewer_id = ?')
+      .get(mine.id, task.reviewer_id) as any;
+    expect(taskRow.status).toBe('submitted');
+  });
+
+  it('P2 附件下载：互评人可读被分配到的提交附件，未分配者仍然 403', async () => {
+    const db = kernelContainer.db;
+    resetAssignmentState();
+    db.prepare('DELETE FROM plugin_peer_review_tasks WHERE assignment_id = ?').run(assignmentId);
+    db.prepare('DELETE FROM plugin_peer_reviews WHERE assignment_id = ?').run(assignmentId);
+
+    const file = await uploadTracked('review-me.pdf', studentToken);
+    const submitted = await submitWork(studentToken, { fileIds: [file.id] });
+    expect(submitted.status, await submitted.text()).toBe(200);
+    await submitWork(otherToken, { textContent: '作品二' });
+    await submitWork(thirdToken, { textContent: '作品三' });
+
+    const assignRes = await fetch(`${baseUrl}/api/assignments/${assignmentId}/assign-peer-reviews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ reviewerCount: 1 }),
+    });
+    expect(assignRes.status).toBe(200);
+
+    const fileUrl = `${baseUrl}/api/assignments/${assignmentId}/files/${file.id}`;
+    const task = db
+      .prepare(
+        `SELECT t.reviewer_id FROM plugin_peer_review_tasks t
+         JOIN plugin_submission_versions v ON v.submission_id = t.submission_id
+         JOIN plugin_assignment_files f ON f.version_id = v.id
+         WHERE f.id = ?`,
+      )
+      .get(file.id) as { reviewer_id: string };
+    const tokenOf = (id: string) =>
+      id === studentId ? studentToken : id === otherStudentId ? otherToken : thirdToken;
+    const reviewerToken = tokenOf(task.reviewer_id);
+    const outsiderId = [studentId, otherStudentId, thirdStudentId].find(
+      (id) => id !== studentId && id !== task.reviewer_id,
+    )!;
+
+    // 互评人可下载（用于评价别人的作品）
+    const asReviewer = await fetch(fileUrl, { headers: cookie(reviewerToken) });
+    expect(asReviewer.status, await asReviewer.text()).toBe(200);
+    // 作者本人与教师照旧可下载
+    expect((await fetch(fileUrl, { headers: cookie(studentToken) })).status).toBe(200);
+    expect((await fetch(fileUrl, { headers: cookie(teacherToken) })).status).toBe(200);
+    // 未分配到的学生依然被拒绝
+    const asOutsider = await fetch(fileUrl, { headers: cookie(tokenOf(outsiderId)) });
+    expect(asOutsider.status).toBe(403);
+  });
+
+  it('P2 教师详情带互评进度，学生拿不到（含姓名）', async () => {
+    const db = kernelContainer.db;
+    resetAssignmentState();
+    db.prepare('DELETE FROM plugin_peer_review_tasks WHERE assignment_id = ?').run(assignmentId);
+    db.prepare('DELETE FROM plugin_peer_reviews WHERE assignment_id = ?').run(assignmentId);
+
+    await submitWork(studentToken, { textContent: '待互评的作品' });
+    await submitWork(otherToken, { textContent: '另一份作品' });
+    await fetch(`${baseUrl}/api/assignments/${assignmentId}/assign-peer-reviews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({ reviewerCount: 1, dueAt: Date.now() + 86_400_000 }),
+    });
+
+    const teacherView: any = await (await fetch(`${baseUrl}/api/assignments/${assignmentId}`, {
+      headers: cookie(teacherToken),
+    })).json();
+    expect(teacherView.success).toBe(true);
+    expect(teacherView.peerProgress.tasks).toBe(2);
+    expect(teacherView.peerProgress.completed).toBe(0);
+    expect(teacherView.peerProgress.pending).toBe(2);
+    expect(teacherView.peerProgress.reviewers.map((item: any) => item.studentId).sort()).toEqual(
+      [studentId, otherStudentId].sort(),
+    );
+
+    const studentView: any = await (await fetch(`${baseUrl}/api/assignments/${assignmentId}`, {
+      headers: cookie(studentToken),
+    })).json();
+    expect(studentView.peerProgress).toBeUndefined();
+    // 互评人的身份不出现在学生可见的互评任务里
+    expect(JSON.stringify(studentView.peerReviewTasks || [])).not.toContain(otherStudentId);
   });
 });

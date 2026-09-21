@@ -13,6 +13,7 @@ import {
   Upload,
   X,
 } from 'lucide-react';
+import { AssignmentPeerReviewPanel, type PeerReviewTaskItem } from './AssignmentPeerReviewPanel';
 
 /**
  * 学生端「提交作业」弹窗 —— 课程编辑器里「课堂作业任务」对象的真实落地入口。
@@ -97,6 +98,8 @@ export function AssignmentSubmitDialog({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [justSubmitted, setJustSubmitted] = useState<number | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  /** 弹窗内的两个页签：我的提交 / 互评任务 */
+  const [tab, setTab] = useState<'submit' | 'peer'>('submit');
   /** onToast 缺省时（例如白板里没有 toast 宿主）在自己内部显示一条提示 */
   const [notice, setNotice] = useState<{ text: string; type: 'info' | 'success' | 'warning' } | null>(null);
   /** queue key → 待上传的 File（XHR 需要原始 File，不能只靠 state） */
@@ -345,6 +348,8 @@ export function AssignmentSubmitDialog({
   const versions: any[] = Array.isArray(detail?.versions) ? detail.versions : [];
   const grade = detail?.grade;
   const stats = detail?.stats;
+  const peerTasks: PeerReviewTaskItem[] = Array.isArray(detail?.peerReviewTasks) ? detail.peerReviewTasks : [];
+  const pendingPeerReviews = peerTasks.filter((task) => !task.review || task.stale).length;
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -393,6 +398,39 @@ export function AssignmentSubmitDialog({
           </div>
         </div>
 
+        <div className="flex items-center gap-1 px-4 pt-2 border-b border-theme">
+          <button
+            type="button"
+            onClick={() => setTab('submit')}
+            className={`px-2.5 py-1.5 text-xs rounded-t-lg border-b-2 transition-colors ${
+              tab === 'submit'
+                ? 'border-orange-500 text-main font-medium'
+                : 'border-transparent text-muted hover:text-main'
+            }`}
+          >
+            {zh ? '我的提交' : 'My submission'}
+          </button>
+          {peerTasks.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setTab('peer')}
+              className={`px-2.5 py-1.5 text-xs rounded-t-lg border-b-2 transition-colors inline-flex items-center gap-1.5 ${
+                tab === 'peer' ? 'border-orange-500 text-main font-medium' : 'border-transparent text-muted hover:text-main'
+              }`}
+            >
+              {zh ? '互评任务' : 'Peer review'}
+              <span className="text-[11px]">
+                {pendingPeerReviews > 0 ? `${peerTasks.length - pendingPeerReviews}/${peerTasks.length}` : peerTasks.length}
+              </span>
+              {pendingPeerReviews > 0 && (
+                <span className="px-1 rounded-full bg-amber-100 text-amber-700 text-[10px]">
+                  {zh ? `待评 ${pendingPeerReviews}` : `${pendingPeerReviews} todo`}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-10 text-muted text-xs">
@@ -406,6 +444,14 @@ export function AssignmentSubmitDialog({
                 <div className="mt-0.5 break-all">{loadError}</div>
               </div>
             </div>
+          ) : tab === 'peer' ? (
+            <AssignmentPeerReviewPanel
+              assignmentId={assignmentId}
+              tasks={peerTasks}
+              onSubmitted={() => load(true)}
+              onToast={onToast}
+              lang={lang}
+            />
           ) : (
             <>
               {assignment?.description ? (

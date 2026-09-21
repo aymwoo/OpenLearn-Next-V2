@@ -125,6 +125,7 @@ import { WhiteboardPageBar } from './components/WhiteboardPageBar';
 import { WhiteboardDialog } from './components/WhiteboardDialog';
 import { AssignmentSubmitDialog } from './components/AssignmentSubmitDialog';
 import { AssignmentBindingField } from './components/AssignmentBindingField';
+import { AssignmentPeerProgressPanel } from './components/AssignmentPeerProgressPanel';
 import { CoursewareEntrySelectorModal } from './components/CoursewareEntrySelectorModal';
 import { fullscreenRendererRegistry, FullscreenOverlay } from './fullscreen/FullscreenRendererRegistry';
 import type { FullscreenRendererProps } from './fullscreen/FullscreenRendererRegistry';
@@ -3812,6 +3813,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                           void handlePropBlur('assignmentId', assignmentId);
                         }}
                       />
+                      {editingProperties.assignmentId ? (
+                        <AssignmentPeerProgressPanel
+                          key={String(editingProperties.assignmentId)}
+                          assignmentId={String(editingProperties.assignmentId)}
+                        />
+                      ) : null}
                     </div>
                   )}
 

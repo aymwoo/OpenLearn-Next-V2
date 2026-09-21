@@ -154,6 +154,10 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       } else if (!isPrivileged && studentId) {
         payload.studentId = studentId;
       }
+      // 互评进度与异常标记含学生姓名，只给教师侧携带
+      if (isPrivileged) {
+        payload.includePeerProgress = true;
+      }
       const cmd = kernelContainer.commandBus.createCommand('assignment.get', payload, getActorId(req), { silent: true });
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
@@ -292,9 +296,20 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       if (!file || file.deleted_at) {
         return res.status(404).json({ success: false, error: 'File not found' });
       }
-      // 不存在与非本人同样返回 403，避免用状态码枚举文件是否存在
+      // 不存在与非本人同样返回 403，避免用状态码枚举文件是否存在；
+      // 例外：被分配了互评任务的学生可以下载被评提交物里的附件（双盲，仅限该提交）。
       if (!isPrivileged && file.student_id !== studentId) {
-        return res.status(403).json({ success: false, error: 'Forbidden: Cannot read another student file' });
+        const assigned = kernelContainer.db
+          .prepare(
+            `SELECT 1 AS ok FROM plugin_assignment_files f
+               JOIN plugin_submission_versions v ON v.id = f.version_id
+               JOIN plugin_peer_review_tasks t ON t.submission_id = v.submission_id
+              WHERE f.id = ? AND t.reviewer_id = ? LIMIT 1`,
+          )
+          .get(req.params.fileId, studentId) as { ok: number } | undefined;
+        if (!assigned) {
+          return res.status(403).json({ success: false, error: 'Forbidden: Cannot read another student file' });
+        }
       }
 
       const absPath = path.resolve(process.cwd(), file.stored_path);
@@ -356,6 +371,37 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
           fileIds: Array.isArray(body.fileIds) ? body.fileIds : [],
           textContent: body.textContent,
           linkUrl: body.linkUrl,
+        },
+        getActorId(req),
+      );
+      const result = await kernelContainer.commandBus.execute(cmd);
+      res.json(result);
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // 学生提交互评：reviewerId 一律由会话决定，请求体不能冒充他人
+  app.post('/api/assignments/:assignmentId/peer-review', requireAuth(), async (req, res) => {
+    try {
+      const { isPrivileged, studentId } = describeRequester(req);
+      const body = req.body || {};
+      const reviewerId = isPrivileged ? String(body.reviewerId || body.studentId || '') : String(studentId || '');
+      if (!reviewerId) {
+        return res.status(400).json({ success: false, error: 'Missing reviewerId' });
+      }
+      const submissionId = String(body.submissionId || '');
+      if (!submissionId) {
+        return res.status(400).json({ success: false, error: 'Missing submissionId' });
+      }
+      const cmd = kernelContainer.commandBus.createCommand(
+        'assignment.peer_review',
+        {
+          submissionId,
+          reviewerId,
+          score: body.score,
+          comment: body.comment,
+          taskId: body.taskId,
         },
         getActorId(req),
       );

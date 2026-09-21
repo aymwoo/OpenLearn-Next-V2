@@ -86,6 +86,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `server/__tests__/assignment-hub-routes.test.ts`：新增 3 个读路径用例（弹窗数据源与重交版本递增、按课时列表的学生/教师差异、教师新建后可直接绑定），并抽出 `resetAssignmentState`/`uploadTracked`/`submitWork` 让用例彼此独立。
   - `src/features/whiteboard/__tests__/assignment-hub-ui.test.tsx`（新增）：4 个组件用例覆盖绑定 / 解除绑定 / 新建就地面板提示、上传队列与版本历史渲染、提交体去重、失败时保留作答。
   - 修掉自测发现的三处问题：`AssignmentBindingField` 在白板没有 toast 宿主时提示会静默丢失（改为面板内就地提示）；上传完成的附件同时出现在「待提交附件」与「上传队列」导致同一 `fileId` 被写进版本两次（按 id 去重）；`通知/删除/重试` 的边界文案与校验补齐。
+- **课程编辑器「作业上传」P2 互评闭环（分配 / 双盲 / 量规 / 截止 / 异常标记）**
+  - 服务端（`packages/plugins/assignment-eval.ts`）：`assignment.get` 新增 `peerReviewTasks`（双盲，只给被评作品内容与版本，不含作者身份）与教师专属 `peerProgress`（提交 / 任务 / 待完成统计、互评人清单、异常标记 `peer_review_pending` / `all_full_marks` / `score_gap`）；`assignment.assign_peer_reviews` 支持 `dueAt` 并回写 `plugin_assignments.peer_review_due_at`；`assignment.peer_review` 收紧为「只认互评任务持有人」并在截止后拒绝（此前仅在已提交过互评时拦截）。
+  - 路由（`server/routes/assignment-hub.ts`）：新增 `POST /api/assignments/:assignmentId/peer-review`，`reviewerId` 一律由会话决定，请求体无法冒充他人；附件下载对互评人放行（仅限被分配到的提交）。
+  - 前端：新增 `AssignmentPeerReviewPanel`（学生端：匿名同学 A/B、作品预览与附件下载、四维四档量规、手输总分、截止后锁定、作者更新后的复核提示），并在提交弹窗里与「我的提交」并列成标签页；新增 `AssignmentPeerProgressPanel`（教师端：分配按钮 + 每份份数 / 截止时间 + 进度 + 异常标记 + 互评人清单），挂在白板教师编辑面板。
+  - 测试：插件层 3 例（分配式互评 / 双盲与教师进度 / 截止与反复改分）、路由层 3 例（互评端点防冒充、互评人附件下载、教师进度可见性）、组件层 5 例（量规提交、截止锁定、越界拒绝、分配与提示）。
 
 ### Fixes
 

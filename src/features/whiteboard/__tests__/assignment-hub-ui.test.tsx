@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { AssignmentBindingField } from '../components/AssignmentBindingField';
 import { AssignmentSubmitDialog } from '../components/AssignmentSubmitDialog';
+import { AssignmentPeerReviewPanel } from '../components/AssignmentPeerReviewPanel';
+import { AssignmentPeerProgressPanel } from '../components/AssignmentPeerProgressPanel';
 
 /**
  * 作业中心 P1 的两个白板组件：
@@ -268,5 +270,183 @@ describe('AssignmentSubmitDialog（学生端提交弹窗）', () => {
     fireEvent.click(screen.getByRole('button', { name: /提交作业/ }));
     expect(await screen.findByText(/Assignment is closed/)).toBeTruthy();
     expect((container.querySelector('textarea') as HTMLTextAreaElement).value).toBe('这是我的作业');
+  });
+});
+
+describe('AssignmentPeerReviewPanel（学生端互评面板）', () => {
+  const makeTask = (overrides: Record<string, unknown> = {}) => ({
+    taskId: 'prt-1',
+    submissionId: 'sub-1',
+    status: 'pending',
+    anonymous: true,
+    dueAt: null,
+    createdAt: Date.now(),
+    stale: false,
+    review: null,
+    submission: {
+      version: 1,
+      textContent: '这是我的方案',
+      linkUrl: '',
+      submittedAt: Date.now(),
+      isLate: false,
+      files: [{ id: 'f-1', original_name: 'plan.pdf', size: 2048, mime: 'application/pdf' }],
+    },
+    ...overrides,
+  });
+
+  it('双盲展示 + 量规打分：提交互评时带 taskId / submissionId / score / comment', async () => {
+    const bodies: any[] = [];
+    const fetchMock = vi.fn(async (url: any, init?: any) => {
+      if (String(url) === '/api/assignments/asg-1/peer-review') {
+        bodies.push(JSON.parse(String(init?.body)));
+        return jsonResponse({ success: true, reviewId: 'rev-1' });
+      }
+      return jsonResponse({ success: false, error: `unexpected ${url}` }, { ok: false, status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const onSubmitted = vi.fn();
+    render(
+      <AssignmentPeerReviewPanel
+        assignmentId="asg-1"
+        tasks={[makeTask() as any]}
+        onSubmitted={onSubmitted}
+        lang="zh"
+      />,
+    );
+
+    expect(screen.getByTestId('peer-review-panel')).toBeTruthy();
+    // 看不到作者身份，只看到「匿名同学 A」
+    expect(screen.getByText('匿名同学 A')).toBeTruthy();
+    expect(screen.getByText('这是我的方案')).toBeTruthy();
+    expect(screen.getByText('plan.pdf')).toBeTruthy();
+    expect(screen.getByText(/已完成 0 \/ 1/)).toBeTruthy();
+
+    // 量规四维 × 四档；未选择维度时不给建议分（ rubricTotal 为 null）
+    expect(screen.getAllByText('未达标')).toHaveLength(4);
+    expect(screen.queryByText(/量规建议/)).toBeNull();
+    fireEvent.click(screen.getAllByText('未达标')[0]);
+    // 内容完整计 30 分档 0.4（其余三维按「基本达标」0.7）→ 12 + 21 + 14 + 14 = 61
+    expect(await screen.findByText(/量规建议 61 分/)).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText(/写点具体建议/), {
+      target: { value: '结构可以再清楚一点' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /提交互评/ }));
+
+    await waitFor(() => expect(bodies.length).toBe(1));
+    expect(bodies[0]).toEqual({
+      submissionId: 'sub-1',
+      score: 61,
+      comment: '结构可以再清楚一点',
+      taskId: 'prt-1',
+    });
+    expect(onSubmitted).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/已给 匿名同学 A 打 61 分/)).toBeTruthy();
+  });
+
+  it('互评截止后锁定输入，已评但作者更新过提交时提示复核', async () => {
+    render(
+      <AssignmentPeerReviewPanel
+        assignmentId="asg-1"
+        tasks={[
+          makeTask({
+            dueAt: Date.now() - 1000,
+            stale: true,
+            review: { score: 60, comment: '旧意见', submittedAt: Date.now() - 5000 },
+          }) as any,
+        ]}
+        lang="zh"
+      />,
+    );
+
+    expect(screen.getByText(/该作者在你评价后又更新了提交/)).toBeTruthy();
+    const submit = screen.getByRole('button', { name: /互评已截止/ }) as HTMLButtonElement;
+    expect(submit.disabled).toBe(true);
+    expect((screen.getByPlaceholderText(/写点具体建议/) as HTMLTextAreaElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: /重填/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('手输分数会覆盖量规估算，越界分数直接拒绝提交', async () => {
+    render(
+      <AssignmentPeerReviewPanel
+        assignmentId="asg-1"
+        tasks={[makeTask() as any]}
+        lang="zh"
+      />,
+    );
+    const scoreInput = document.querySelector('input[type="number"]') as HTMLInputElement;
+    fireEvent.change(scoreInput, { target: { value: '120' } });
+    fireEvent.click(screen.getByRole('button', { name: /提交互评/ }));
+    expect(await screen.findByText(/请给出 0-100 的互评分数/)).toBeTruthy();
+  });
+});
+
+describe('AssignmentPeerProgressPanel（教师端互评进度）', () => {
+  const PROGRESS = {
+    submissions: 3,
+    tasks: 3,
+    completed: 1,
+    pending: 2,
+    reviewers: [
+      { studentId: 'stu-1', name: '张三', pending: 2, submitted: 0 },
+      { studentId: 'stu-2', name: '李四', pending: 0, submitted: 1 },
+    ],
+    flags: [{ type: 'peer_review_pending', reviewerId: 'stu-1', detail: '张三 还有 2 份待评' }],
+  };
+
+  it('展示进度与异常标记，随机分配时带上分配份数', async () => {
+    const bodies: any[] = [];
+    const fetchMock = vi.fn(async (url: any, init?: any) => {
+      if (String(url) === '/api/assignments/asg-1/assign-peer-reviews') {
+        bodies.push(JSON.parse(String(init?.body)));
+        return jsonResponse({ success: true, created: 3, submissions: 3 });
+      }
+      return jsonResponse({ success: false, error: `unexpected ${url}` }, { ok: false, status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const onAssigned = vi.fn();
+    render(
+      <AssignmentPeerProgressPanel
+        assignmentId="asg-1"
+        progress={PROGRESS as any}
+        onAssigned={onAssigned}
+        lang="zh"
+      />,
+    );
+
+    expect(screen.getByText('互评进度')).toBeTruthy();
+    expect(screen.getByText(/1 \/ 3 已完成/)).toBeTruthy();
+    expect(screen.getByText('提交 3')).toBeTruthy();
+    expect(screen.getByText('待完成 2')).toBeTruthy();
+    expect(screen.getByText(/1 项待复核/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /展开/ }));
+    expect(screen.getByText(/未完成互评/)).toBeTruthy();
+    expect(screen.getByText('张三')).toBeTruthy();
+    expect(screen.getByText(/已评 0 · 待评 2/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /随机分配互评/ }));
+    await waitFor(() => expect(bodies.length).toBe(1));
+    expect(bodies[0].reviewerCount).toBe(2);
+    expect(bodies[0].dueAt).toBeUndefined();
+    expect(onAssigned).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/互评已分配：新增 3 个互评任务/)).toBeTruthy();
+  });
+
+  it('还没有互评任务时给出分配提示', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ success: true, peerProgress: null })),
+    );
+    render(
+      <AssignmentPeerProgressPanel
+        assignmentId="asg-1"
+        progress={{ submissions: 2, tasks: 0, completed: 0, pending: 0, reviewers: [], flags: [] } as any}
+        lang="zh"
+      />,
+    );
+    expect(await screen.findByText(/还没有分配互评/)).toBeTruthy();
   });
 });

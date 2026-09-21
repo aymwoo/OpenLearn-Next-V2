@@ -177,6 +177,176 @@ export const AssignmentEvalPlugin = {
       throw new Error('Missing required params: assignmentId or lessonId');
     };
 
+    /** 提交物的最新版本（互评人只应该看到作者当前版本的作业） */
+    const latestVersionOfSubmission = (submissionId: string) =>
+      db
+        .prepare(
+          'SELECT id, version, text_content, link_url, submitted_at, is_late FROM plugin_submission_versions WHERE submission_id = ? ORDER BY version DESC LIMIT 1',
+        )
+        .get(submissionId) as
+        | { id: string; version: number; text_content: string | null; link_url: string | null; submitted_at: number; is_late: number }
+        | undefined;
+
+    const filesOfVersion = (versionId: string) =>
+      db
+        .prepare(
+          'SELECT id, original_name, size, mime FROM plugin_assignment_files WHERE version_id = ? AND deleted_at IS NULL ORDER BY uploaded_at ASC',
+        )
+        .all(versionId) as { id: string; original_name: string; size: number; mime: string | null }[];
+
+    /**
+     * 学生视角的互评任务视图。
+     *
+     * 双盲：这里只返回被评作业的内容与自己的评分，**绝不返回作者身份**（student_id /
+     * 姓名），匿名标签由前端按任务序号生成。
+     */
+    const buildPeerReviewTasks = (assignmentId: string, reviewerId: string) => {
+      const tasks = db
+        .prepare(
+          'SELECT id, submission_id, anonymous, status, due_at, created_at FROM plugin_peer_review_tasks WHERE assignment_id = ? AND reviewer_id = ? ORDER BY created_at ASC',
+        )
+        .all(assignmentId, reviewerId) as {
+        id: string;
+        submission_id: string;
+        anonymous: number;
+        status: string;
+        due_at: number | null;
+        created_at: number;
+      }[];
+
+      return tasks.map((task) => {
+        const version = latestVersionOfSubmission(task.submission_id);
+        const review = db
+          .prepare(
+            'SELECT score, comment, status, updated_at FROM plugin_peer_reviews WHERE submission_id = ? AND reviewer_id = ?',
+          )
+          .get(task.submission_id, reviewerId) as
+          | { score: number; comment: string | null; status: string; updated_at: number | null }
+          | undefined;
+        const submissionUpdatedAt =
+          (db.prepare('SELECT updated_at FROM plugin_submissions WHERE id = ?').get(task.submission_id) as
+            | { updated_at: number }
+            | undefined)?.updated_at ?? null;
+        return {
+          taskId: task.id,
+          submissionId: task.submission_id,
+          status: task.status,
+          anonymous: Number(task.anonymous) === 1,
+          dueAt: task.due_at ?? null,
+          createdAt: task.created_at,
+          // 我评完之后作者又改过提交 → 提醒复核
+          stale: Boolean(
+            review?.status === 'submitted' &&
+              submissionUpdatedAt &&
+              Number(review.updated_at || 0) < Number(submissionUpdatedAt),
+          ),
+          review: review
+            ? { score: review.score, comment: review.comment || '', submittedAt: review.updated_at ?? null }
+            : null,
+          submission: version
+            ? {
+                version: version.version,
+                textContent: version.text_content || '',
+                linkUrl: version.link_url || '',
+                submittedAt: version.submitted_at,
+                isLate: Number(version.is_late) === 1,
+                files: filesOfVersion(version.id),
+              }
+            : null,
+        };
+      });
+    };
+
+    /**
+     * 教师视角的互评进度与异常标记（双盲只约束学生之间，教师可看到姓名）。
+     */
+    const buildPeerProgress = (assignmentId: string) => {
+      const nameOf = (studentId: string) => {
+        try {
+          const row = db.prepare('SELECT name FROM students WHERE id = ?').get(studentId) as { name: string } | undefined;
+          return row?.name || studentId;
+        } catch {
+          // students 表可能不存在（精简部署 / 单元测试），退化为用户 ID
+          return studentId;
+        }
+      };
+
+      const tasks = db
+        .prepare('SELECT reviewer_id, status FROM plugin_peer_review_tasks WHERE assignment_id = ?')
+        .all(assignmentId) as { reviewer_id: string; status: string }[];
+
+      const byReviewer = new Map<string, { studentId: string; name: string; pending: number; submitted: number }>();
+      for (const task of tasks) {
+        const entry =
+          byReviewer.get(task.reviewer_id) ||
+          { studentId: task.reviewer_id, name: nameOf(task.reviewer_id), pending: 0, submitted: 0 };
+        if (task.status === 'submitted') entry.submitted += 1;
+        else entry.pending += 1;
+        byReviewer.set(task.reviewer_id, entry);
+      }
+
+      const flags: { type: string; reviewerId?: string; detail: string }[] = [];
+      for (const entry of byReviewer.values()) {
+        if (entry.pending > 0) {
+          flags.push({
+            type: 'peer_review_pending',
+            reviewerId: entry.studentId,
+            detail: `${entry.name} 还有 ${entry.pending} 份互评未完成`,
+          });
+        }
+        if (entry.submitted >= 2) {
+          const full = (
+            db
+              .prepare(
+                'SELECT COUNT(*) AS c FROM plugin_peer_reviews WHERE assignment_id = ? AND reviewer_id = ? AND score >= 100',
+              )
+              .get(assignmentId, entry.studentId) as { c: number }
+          ).c;
+          if (full >= entry.submitted) {
+            flags.push({
+              type: 'all_full_marks',
+              reviewerId: entry.studentId,
+              detail: `${entry.name} 的 ${entry.submitted} 份互评全部给了满分，建议复核`,
+            });
+          }
+        }
+      }
+
+      const gaps = db
+        .prepare(
+          `SELECT r.reviewer_id AS reviewerId, r.score AS peerScore, g.teacher_score AS teacherScore, s.student_id AS authorId
+             FROM plugin_peer_reviews r
+             JOIN plugin_grades g ON g.submission_id = r.submission_id
+             JOIN plugin_submissions s ON s.id = r.submission_id
+            WHERE r.assignment_id = ? AND g.teacher_score IS NOT NULL`,
+        )
+        .all(assignmentId) as { reviewerId: string; peerScore: number; teacherScore: number; authorId: string }[];
+      for (const gap of gaps) {
+        if (Math.abs(Number(gap.peerScore) - Number(gap.teacherScore)) <= 25) continue;
+        flags.push({
+          type: 'score_gap',
+          reviewerId: gap.reviewerId,
+          detail: `${nameOf(gap.reviewerId)} 给 ${nameOf(gap.authorId)} 的互评分 ${gap.peerScore}，与教师评分 ${gap.teacherScore} 相差较大`,
+        });
+      }
+
+      const submissionCount = (
+        db.prepare('SELECT COUNT(*) AS c FROM plugin_submissions WHERE assignment_id = ?').get(assignmentId) as {
+          c: number;
+        }
+      ).c;
+      const completed = tasks.filter((t) => t.status === 'submitted').length;
+
+      return {
+        submissions: submissionCount,
+        tasks: tasks.length,
+        completed,
+        pending: tasks.length - completed,
+        reviewers: Array.from(byReviewer.values()).sort((a, b) => b.pending - a.pending),
+        flags,
+      };
+    };
+
     const publishEvent = async (type: string, payload: Record<string, unknown>, correlationId?: string) => {
       if (!eventBus || typeof eventBus.publish !== 'function') return;
       try {
@@ -411,15 +581,21 @@ export const AssignmentEvalPlugin = {
               .prepare('SELECT * FROM plugin_submission_versions WHERE submission_id = ? ORDER BY version DESC')
               .all(submission.id);
             result.grade = db.prepare('SELECT * FROM plugin_grades WHERE submission_id = ?').get(submission.id) || null;
-            result.myPeerReviewTasks = db
-              .prepare('SELECT * FROM plugin_peer_review_tasks WHERE assignment_id = ? AND reviewer_id = ?')
-              .all(assignmentId, studentId);
           } else {
             result.submission = null;
             result.versions = [];
             result.grade = null;
-            result.myPeerReviewTasks = [];
           }
+          // 互评任务与「我是否提交」无关：没交作业的学生也可能被分配去评别人
+          result.myPeerReviewTasks = db
+            .prepare('SELECT * FROM plugin_peer_review_tasks WHERE assignment_id = ? AND reviewer_id = ?')
+            .all(assignmentId, studentId);
+          result.peerReviewTasks = buildPeerReviewTasks(assignmentId, studentId);
+        }
+
+        // 教师视图：互评进度与异常标记（含学生姓名，仅教师请求时携带）
+        if ((command.payload as any).includePeerProgress) {
+          result.peerProgress = buildPeerProgress(assignmentId);
         }
 
         return result;
@@ -583,13 +759,25 @@ export const AssignmentEvalPlugin = {
           throw new Error('Access Denied: Students are not allowed to evaluate their own assignments');
         }
 
-        // 截止时间：分配式互评任务带 due_at，截止后不可再改
+        // 分配式互评：作业一旦建立了互评任务，就只允许任务持有人提交（未分配到的学生会被拒绝）；
+        // 没有任何互评任务时保持旧的开放互评行为（课时级历史入口仍可用）。
         const task = db
           .prepare('SELECT id, due_at, status FROM plugin_peer_review_tasks WHERE submission_id = ? AND reviewer_id = ?')
           .get(submissionId, reviewerId) as { id: string; due_at: number | null; status: string } | undefined;
+        if (!task && submission.assignment_id) {
+          const taskCount = (
+            db
+              .prepare('SELECT COUNT(*) AS c FROM plugin_peer_review_tasks WHERE assignment_id = ?')
+              .get(submission.assignment_id) as { c: number }
+          ).c;
+          if (taskCount > 0) {
+            throw new Error('Access Denied: This submission is not assigned to you for peer review');
+          }
+        }
+        const assignmentRow = submission.assignment_id ? loadAssignment(submission.assignment_id) : undefined;
         const resolvedTaskId = taskId || task?.id || null;
-        const dueAt = task?.due_at ?? null;
-        if (task && task.status === 'submitted' && dueAt !== null && Date.now() > Number(dueAt)) {
+        const dueAt = task?.due_at ?? assignmentRow?.peer_review_due_at ?? null;
+        if (dueAt !== null && dueAt !== undefined && Date.now() > Number(dueAt)) {
           throw new Error('Access Denied: The peer review deadline has passed');
         }
 
@@ -685,6 +873,15 @@ export const AssignmentEvalPlugin = {
               pools.set(candidate.student_id, (pools.get(candidate.student_id) || 0) + 1);
             }
           }
+        }
+
+        // 教师显式设定互评截止时间时，同步写回作业主记录，便于详情页/进度面板展示
+        if (dueAt !== undefined && dueAt !== null) {
+          db.prepare('UPDATE plugin_assignments SET peer_review_due_at = ?, updated_at = ? WHERE id = ?').run(
+            Number(dueAt),
+            now,
+            assignmentId,
+          );
         }
 
         return { success: true, created, submissions: submissions.length };

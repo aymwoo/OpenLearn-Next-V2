@@ -485,4 +485,202 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
     expect(row.created_by).toBe('teacher-1'); // 归一化：不是 user:teacher-1:teacher
     expect(row.status).toBe('published');
   });
+
+  it('P2 分配式互评：只有被分配到的互评人能评价，评完任务转为 submitted', async () => {
+    const created: any = await execute('assignment.create', 'user:t1:teacher', {
+      title: '互评作业 A',
+      lessonId: 'lesson-p2-a',
+      peerReviewCount: 1,
+    });
+    const assignmentId = created.assignmentId as string;
+
+    const submitted: { submissionId: string; studentId: string }[] = [];
+    for (const studentId of ['stu-1', 'stu-2', 'stu-3']) {
+      const res: any = await execute('assignment.submit', `user:${studentId}:student`, {
+        assignmentId,
+        studentId,
+        filePath: `/${studentId}.pdf`,
+      });
+      submitted.push({ submissionId: res.submissionId, studentId });
+    }
+
+    const assigned: any = await execute('assignment.assign_peer_reviews', 'user:t1:teacher', {
+      assignmentId,
+      reviewerCount: 1,
+    });
+    expect(assigned.created).toBe(3);
+    expect(assigned.submissions).toBe(3);
+
+    const tasks = db
+      .prepare('SELECT id, submission_id, reviewer_id, status FROM plugin_peer_review_tasks WHERE assignment_id = ?')
+      .all(assignmentId) as any[];
+    expect(tasks).toHaveLength(3);
+    // 每份提交恰好一个互评人，且不是作者本人
+    for (const task of tasks) {
+      const author = submitted.find((item) => item.submissionId === task.submission_id)!;
+      expect(task.reviewer_id).not.toBe(author.studentId);
+      expect(task.status).toBe('pending');
+    }
+
+    const target = tasks[0];
+    const author = submitted.find((item) => item.submissionId === target.submission_id)!;
+    const outsider = ['stu-1', 'stu-2', 'stu-3'].find(
+      (studentId) => studentId !== author.studentId && studentId !== target.reviewer_id,
+    )!;
+
+    await expect(
+      execute('assignment.peer_review', `user:${outsider}:student`, {
+        submissionId: target.submission_id,
+        reviewerId: outsider,
+        score: 70,
+      }),
+    ).rejects.toThrow(/not assigned to you for peer review/);
+
+    const reviewed: any = await execute('assignment.peer_review', `user:${target.reviewer_id}:student`, {
+      submissionId: target.submission_id,
+      reviewerId: target.reviewer_id,
+      score: 88,
+      comment: '结构清晰',
+      taskId: target.id,
+    });
+    expect(reviewed.success).toBe(true);
+
+    const taskRow = db.prepare('SELECT status FROM plugin_peer_review_tasks WHERE id = ?').get(target.id) as any;
+    expect(taskRow.status).toBe('submitted');
+  });
+
+  it('P2 双盲：学生视图带互评内容但不泄露作者身份，教师视图才给姓名与进度', async () => {
+    const created: any = await execute('assignment.create', 'user:t1:teacher', {
+      title: '互评作业 B',
+      lessonId: 'lesson-p2-b',
+      peerReviewCount: 1,
+    });
+    const assignmentId = created.assignmentId as string;
+
+    const mine: any = await execute('assignment.submit', 'user:stu-1:student', {
+      assignmentId,
+      studentId: 'stu-1',
+      textContent: '第一位同学的说明',
+      filePath: '/1.pdf',
+    });
+    await execute('assignment.submit', 'user:stu-2:student', {
+      assignmentId,
+      studentId: 'stu-2',
+      textContent: '第二位同学的说明',
+      filePath: '/2.pdf',
+    });
+    await execute('assignment.assign_peer_reviews', 'user:t1:teacher', { assignmentId, reviewerCount: 1 });
+
+    const task = db
+      .prepare('SELECT submission_id, reviewer_id FROM plugin_peer_review_tasks WHERE assignment_id = ? AND submission_id = ?')
+      .get(assignmentId, mine.submissionId) as any;
+    expect(task.reviewer_id).toBe('stu-2');
+
+    // 互评人视角：能看到内容与版本，但看不到作者是谁
+    const studentView: any = await execute('assignment.get', 'user:stu-2:student', {
+      assignmentId,
+      studentId: 'stu-2',
+    });
+    expect(studentView.peerReviewTasks).toHaveLength(1);
+    const taskView = studentView.peerReviewTasks[0];
+    expect(taskView.submissionId).toBe(mine.submissionId);
+    expect(taskView.submission.textContent).toBe('第一位同学的说明');
+    expect(taskView.submission.version).toBe(1);
+    expect(taskView.review).toBeNull();
+    expect(taskView.anonymous).toBe(true);
+    // 双盲：作者与互评人的身份都不出现在学生可见的数据里
+    const serialized = JSON.stringify(studentView.peerReviewTasks);
+    expect(serialized).not.toContain('stu-1');
+    expect(serialized).not.toContain('stu-2');
+    expect(serialized).not.toContain('student_id');
+    expect(serialized).not.toContain('reviewer_id');
+    expect(Object.keys(taskView)).not.toContain('studentId');
+    // 学生拿不到教师视角的进度（含姓名）
+    expect(studentView.peerProgress).toBeUndefined();
+
+    // 教师视角：带进度与互评人姓名（无 students 表时退化为学生 ID）
+    const teacherView: any = await execute('assignment.get', 'user:t1:teacher', {
+      assignmentId,
+      includePeerProgress: true,
+    });
+    expect(teacherView.peerProgress.tasks).toBe(2);
+    expect(teacherView.peerProgress.pending).toBe(2);
+    expect(teacherView.peerProgress.completed).toBe(0);
+    expect(
+      teacherView.peerProgress.reviewers.map((item: any) => item.name).sort(),
+    ).toEqual(['stu-1', 'stu-2']);
+    expect(teacherView.peerProgress.flags.some((flag: any) => flag.type === 'peer_review_pending')).toBe(true);
+  });
+
+  it('P2 互评截止：截止后拒绝提交，截止前可反复改分（同一条记录被更新）', async () => {
+    const created: any = await execute('assignment.create', 'user:t1:teacher', {
+      title: '互评作业 C',
+      lessonId: 'lesson-p2-c',
+      peerReviewCount: 1,
+    });
+    const assignmentId = created.assignmentId as string;
+    const first: any = await execute('assignment.submit', 'user:stu-1:student', {
+      assignmentId,
+      studentId: 'stu-1',
+      filePath: '/1.pdf',
+    });
+    await execute('assignment.submit', 'user:stu-2:student', {
+      assignmentId,
+      studentId: 'stu-2',
+      filePath: '/2.pdf',
+    });
+
+    // 先用已过期的截止时间分配：任务 due_at 与作业 peer_review_due_at 都应落库
+    await execute('assignment.assign_peer_reviews', 'user:t1:teacher', {
+      assignmentId,
+      reviewerCount: 1,
+      dueAt: Date.now() - 1000,
+    });
+    const assignmentRow = db
+      .prepare('SELECT peer_review_due_at FROM plugin_assignments WHERE id = ?')
+      .get(assignmentId) as any;
+    expect(Number(assignmentRow.peer_review_due_at)).toBeLessThan(Date.now());
+
+    const task = db
+      .prepare('SELECT submission_id, reviewer_id, due_at FROM plugin_peer_review_tasks WHERE assignment_id = ? AND submission_id = ?')
+      .get(assignmentId, first.submissionId) as any;
+    expect(Number(task.due_at)).toBeLessThan(Date.now());
+
+    await expect(
+      execute('assignment.peer_review', `user:${task.reviewer_id}:student`, {
+        submissionId: task.submission_id,
+        reviewerId: task.reviewer_id,
+        score: 90,
+      }),
+    ).rejects.toThrow(/peer review deadline has passed/);
+
+    // 未过期时可以互评，并且重复提交只更新同一条记录
+    db.prepare('UPDATE plugin_peer_review_tasks SET due_at = ? WHERE submission_id = ? AND reviewer_id = ?').run(
+      Date.now() + 60_000,
+      task.submission_id,
+      task.reviewer_id,
+    );
+    const ok: any = await execute('assignment.peer_review', `user:${task.reviewer_id}:student`, {
+      submissionId: task.submission_id,
+      reviewerId: task.reviewer_id,
+      score: 60,
+      comment: '第一版意见',
+    });
+    expect(ok.success).toBe(true);
+
+    const updated: any = await execute('assignment.peer_review', `user:${task.reviewer_id}:student`, {
+      submissionId: task.submission_id,
+      reviewerId: task.reviewer_id,
+      score: 75,
+      comment: '改后的意见',
+    });
+    expect(updated.success).toBe(true);
+
+    const rows = db
+      .prepare('SELECT score, comment FROM plugin_peer_reviews WHERE submission_id = ? AND reviewer_id = ?')
+      .all(task.submission_id, task.reviewer_id) as any[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].score).toBe(75);
+    expect(rows[0].comment).toBe('改后的意见');
+  });
 });
