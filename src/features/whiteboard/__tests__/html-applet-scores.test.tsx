@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
-import { HtmlAppletFrame } from '../components/HtmlAppletFrame';
+import { HtmlAppletFrame, computeAttemptRanks } from '../components/HtmlAppletFrame';
 import { setSocketInstance } from '../../../services/socket-service';
+import { appStore } from '../../../store/appStore';
 
 const socketHandlers: Record<string, Set<(...args: any[]) => void>> = {};
 const mockSocket = {
@@ -172,5 +173,113 @@ describe('HtmlAppletFrame score overlay', () => {
     });
     unmount();
     expect(mockSocket.off).toHaveBeenCalledWith('courseware-attempt-updated', expect.any(Function));
+  });
+});
+
+describe('HtmlAppletFrame 全班成绩榜（学生可见）', () => {
+  const attempt = (
+    overrides: Partial<{
+      attemptId: string;
+      studentId: string;
+      studentName: string;
+      score: number | null;
+      completion: number | null;
+      started_at: number;
+      finished_at: number | null;
+      status: string;
+    }>,
+  ) => ({
+    attemptId: 'a-x',
+    studentId: 's-x',
+    studentName: '某同学',
+    score: 60 as number | null,
+    completion: 1 as number | null,
+    started_at: 1,
+    finished_at: 2 as number | null,
+    status: 'finished',
+    ...overrides,
+  });
+
+  const twoRows = () => [
+    attempt({ attemptId: 'a-1', studentId: 's-1', studentName: '小明', score: 88, completion: 1 }),
+    attempt({ attemptId: 'a-2', studentId: 's-2', studentName: '小红', score: 45, completion: 0.6 }),
+  ];
+
+  afterEach(() => {
+    appStore.setState({ session: null });
+  });
+
+  it('学生视角：给出名次、我的成绩与「（我）」标记，并按名次排序', async () => {
+    appStore.setState({
+      session: { role: 'student', userId: 'u-2', studentId: 's-2', name: '小红' } as any,
+    });
+    fetchMock.mockResolvedValue({ ok: true, json: async () => twoRows() });
+    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
+
+    fireEvent.click(await screen.findByTestId('courseware-scores-toggle'));
+    const panel = await screen.findByTestId('courseware-scores-panel');
+
+    expect(screen.getByTestId('courseware-my-score').textContent).toBe('我的成绩 45 · 全班第 2/2 名');
+    const selfRow = screen.getByTestId('courseware-attempt-row-a-2').textContent ?? '';
+    expect(selfRow).toContain('（我）');
+    expect(selfRow[0]).toBe('2');
+    const otherRow = screen.getByTestId('courseware-attempt-row-a-1').textContent ?? '';
+    expect(otherRow).not.toContain('（我）');
+    expect(otherRow[0]).toBe('1');
+    const text = panel.textContent ?? '';
+    expect(text.indexOf('小明')).toBeLessThan(text.indexOf('小红'));
+  });
+
+  it('学生尚未提交时给出提示', async () => {
+    appStore.setState({
+      session: { role: 'student', userId: 'u-9', studentId: 's-9', name: '小刚' } as any,
+    });
+    fetchMock.mockResolvedValue({ ok: true, json: async () => twoRows() });
+    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
+
+    fireEvent.click(await screen.findByTestId('courseware-scores-toggle'));
+    expect((await screen.findByTestId('courseware-my-score')).textContent).toBe('我还没有提交');
+  });
+
+  it('教师视角不显示「我的成绩」，也不高亮任何行', async () => {
+    appStore.setState({ session: { role: 'teacher', userId: 'u-t', name: '王老师' } as any });
+    fetchMock.mockResolvedValue({ ok: true, json: async () => twoRows() });
+    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
+
+    fireEvent.click(await screen.findByTestId('courseware-scores-toggle'));
+    await screen.findByTestId('courseware-scores-panel');
+    expect(screen.queryByTestId('courseware-my-score')).toBeNull();
+    expect(screen.getByTestId('courseware-attempt-row-a-1').textContent).not.toContain('（我）');
+  });
+
+  it('访客 / 教师预览的占位 attempt 不计入榜单', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [
+        ...twoRows(),
+        attempt({ attemptId: 'a-guest', studentId: 'guest', studentName: 'Guest Student', score: 99 }),
+        attempt({ attemptId: 'a-preview', studentId: 'teacher_preview', studentName: 'Teacher', score: 99 }),
+      ],
+    });
+    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
+
+    const toggle = await screen.findByTestId('courseware-scores-toggle');
+    expect(toggle.textContent).toBe('查看成绩 (2)');
+    fireEvent.click(toggle);
+    expect(screen.queryByTestId('courseware-attempt-row-a-guest')).toBeNull();
+    expect(screen.queryByTestId('courseware-attempt-row-a-preview')).toBeNull();
+  });
+
+  it('computeAttemptRanks：同分并列、未评分不参与排名', () => {
+    const ranks = computeAttemptRanks([
+      attempt({ attemptId: 'x', score: 70 }),
+      attempt({ attemptId: 'y', score: 90 }),
+      attempt({ attemptId: 'z', score: 90 }),
+      attempt({ attemptId: 'w', score: null }),
+    ]);
+    expect(ranks.get('y')).toBe(1);
+    expect(ranks.get('z')).toBe(1);
+    expect(ranks.get('x')).toBe(3);
+    expect(ranks.has('w')).toBe(false);
   });
 });

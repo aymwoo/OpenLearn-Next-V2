@@ -91,6 +91,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 路由（`server/routes/assignment-hub.ts`）：新增 `POST /api/assignments/:assignmentId/peer-review`，`reviewerId` 一律由会话决定，请求体无法冒充他人；附件下载对互评人放行（仅限被分配到的提交）。
   - 前端：新增 `AssignmentPeerReviewPanel`（学生端：匿名同学 A/B、作品预览与附件下载、四维四档量规、手输总分、截止后锁定、作者更新后的复核提示），并在提交弹窗里与「我的提交」并列成标签页；新增 `AssignmentPeerProgressPanel`（教师端：分配按钮 + 每份份数 / 截止时间 + 进度 + 异常标记 + 互评人清单），挂在白板教师编辑面板。
   - 测试：插件层 3 例（分配式互评 / 双盲与教师进度 / 截止与反复改分）、路由层 3 例（互评端点防冒充、互评人附件下载、教师进度可见性）、组件层 5 例（量规提交、截止锁定、越界拒绝、分配与提示）。
+- **互动课件成绩榜对学生可见（白板课件元素）**：学生点开白板课件元素右上角「查看成绩」即可看到全班分数榜（名次 / 姓名 / 分数 / 完成度 / 均分），自己那一行高亮并显示「我的成绩 N · 全班第 X/Y 名」；访客（guest）与教师预览的占位 attempt 不计入榜单，名次同分并列（88/88/70 → 1/1/3），榜单顺序学生与教师一致。
+  - `src/features/whiteboard/components/HtmlAppletFrame.tsx`：新增 `computeAttemptRanks` / `sortAttemptsByRank` 与 `PLACEHOLDER_STUDENT_IDS`，浮层按钮与面板统一改用 `orderedAttempts`（同源计数，避免「徽标 N 条 / 列表 M 条」口径不一致），并从 `useAppStore` 读取当前会话以识别「我」。
+  - 回归：`src/features/whiteboard/__tests__/html-applet-scores.test.tsx` 由 5 例扩到 10 例（学生名次与「（我）」标记、未提交提示、教师视角无「我的成绩」、占位行过滤、名次算法单测）。
 
 ### Fixes
 
@@ -112,6 +115,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **白板 `wrapSrcDocWithBridge` 单测断言过期（全量测试长期为红）**：`src/features/whiteboard/__tests__/whiteboard-components.test.tsx` 仍断言 `<script src="/bridge.js"></script>`，而实现早已输出带追踪参数的 `<script src="/bridge.js?cw=<lessonId>"></script>`（该参数由 `server/routes/bridge.ts` 的 `req.query.cw` 消费），断言已同步修正。另：全量测试中的 `packages/core/__tests__/lti-provider-plugin.test.ts` 因引用仓库内并不存在的 `v2_plugins/plugin-lti-provider/src/index.js` 而整文件失败（新克隆必红），属既有问题，本次未处理。
 - 修复作业中心 `assignment.create` 被 `management.ts` 的旧描述符拦截：`ActionRegistry.getActionByCommandType()` 返回**最先注册**的描述符并由它决定内核 payload 校验，旧描述符 `core-assignment-create` 的 `required: ['classId','title']` 会让「只挂课时、不挂班级」的作业创建失败（`Missing required property "classId"`）。插件现在一并接管该描述符；`server/routes/assignments.ts` 的旧班级作业页直接写库、不经命令总线，不受影响。
 - `plugin_assignments.created_by` / `plugin_grades.graded_by` 改为保存用户 ID，原先写入 `user:<id>:<role>` 形式的完整 actorId，与其他表的 `*_id` 列口径不一致。
+- 修复白板课件元素的成绩浮层在「全班专注锁定」下不可点击的问题：`HtmlAppletFrame` 的浮层与按钮 z-index 由 `z-10` 提升到 `z-[60]`，不再被 `ReadOnlyLockCover`（`z-50`）遮挡，学生在只读锁定态仍能查看成绩榜。
+- 修复 `GET /api/courseware/attempts` 无鉴权且下发原始作答的问题：改为 `requireAuth()` + 按角色裁剪字段——学生只拿榜单字段（姓名 / 分数 / 完成度 / 状态），`extra_json`（原始作答明细）与 `comment`（教师评语）仅教师 / 管理员可见，避免同班互相抄答案。
+  - 回归：`server/__tests__/courseware-attempts-filter.test.ts` 新增「未登录 401」「学生被裁剪 / 教师保留 `extra_json` + `comment`」2 例（补齐真实 `client_sessions` 会话与 Cookie），`server/__tests__/courseware-e2e-flow.test.ts` 两处成绩榜请求改带教师会话 Cookie（该文件由 4 例扩到 6 例）。
 
 ### Docs
 

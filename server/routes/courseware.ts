@@ -431,8 +431,17 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/courseware/attempts', (req, res) => {
+  // 成绩榜对全班可见（白板课件元素的「查看成绩」浮层），但必须鉴权 + 按角色裁剪字段：
+  // 学生只需要榜单信息（姓名/分数/完成度/名次），绝不能拿到 extra_json（原始作答明细，
+  // 会被同学直接抄答案）与 comment（教师评语）。教师/管理员保持完整行。
+  app.get('/api/courseware/attempts', requireAuth(), (req, res) => {
     try {
+      const session = (req as any).session as { role?: string; subRole?: string } | undefined;
+      const isStaff =
+        session?.role === 'teacher' ||
+        session?.role === 'administrator' ||
+        session?.subRole === 'administrator';
+
       // ?coursewareUuid=<uuid> 用于白板 HtmlAppletFrame 在嵌入某个具体课件时只拉取该课件的成绩，
       // 避免一次性回传整个 attempts 表（学生量大时会显著降低首屏 + 实时 socket 重拉的负载）。
       const coursewareUuid =
@@ -458,8 +467,19 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         ? `${baseSql} WHERE cw.uuid = ? ORDER BY a.started_at DESC`
         : `${baseSql} ORDER BY a.started_at DESC`;
       const stmt = kernelContainer.db.prepare(sql);
-      const rows = coursewareUuid ? stmt.all(coursewareUuid) : stmt.all();
-      res.json(rows);
+      const rows = (coursewareUuid ? stmt.all(coursewareUuid) : stmt.all()) as Array<Record<string, any>>;
+      if (isStaff) {
+        res.json(rows);
+        return;
+      }
+      res.json(
+        rows.map((row) => {
+          const sanitized = { ...row };
+          delete sanitized.extra_json;
+          delete sanitized.comment;
+          return sanitized;
+        }),
+      );
     } catch (e: any) {
       sendSafeError(res, e);
     }

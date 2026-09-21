@@ -31,6 +31,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
 
   // Fixtures — 用唯一 id 避免污染真实数据
   const teacherId = 'usr-teacher-e2e';
+  const teacherToken = 'tok-e2e-teacher-001';
   const studentId = 'stu-e2e-001';
   const studentName = '测试小明';
   const classId = 'cls-e2e-001';
@@ -50,6 +51,18 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
         'INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
       )
       .run(teacherId, 'e2e_teacher', 'placeholder', 'teacher', 'E2E 教师', now);
+
+    // 真实会话行：/api/courseware/attempts 现在需要登录（成绩榜对学生开放，但必须先鉴权）
+    kernelContainer.db
+      .prepare(
+        'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
+      )
+      .run(
+        teacherToken,
+        JSON.stringify({ userId: teacherId, role: 'teacher', username: 'e2e_teacher' }),
+        now,
+        now + 60 * 60 * 1000,
+      );
 
     // Class
     kernelContainer.db
@@ -154,6 +167,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
     kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(studentId);
     kernelContainer.db.prepare('DELETE FROM courseware WHERE id = ?').run(coursewareId);
     kernelContainer.db.prepare('DELETE FROM users WHERE id = ?').run(teacherId);
+    kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(teacherToken);
     const cwDir = path.resolve(process.cwd(), 'storage', 'courseware', coursewareUuid);
     if (fs.existsSync(cwDir)) fs.rmSync(cwDir, { recursive: true, force: true });
     if (server) {
@@ -231,6 +245,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
     // （这正是我刚加的 filter —— HtmlAppletFrame 实时面板用这个端点）
     const filterRes = await fetch(
       `${baseUrl}/api/courseware/attempts?coursewareUuid=${encodeURIComponent(coursewareUuid)}`,
+      { headers: { Cookie: `edu_os_token=${teacherToken}` } },
     );
     expect(filterRes.status).toBe(200);
     const filterRows = (await filterRes.json()) as Array<{
@@ -297,7 +312,9 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
 
     // F.5 — isPromoted 计数现在 >= 1
     const filterRowsAfter = (await (
-      await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${encodeURIComponent(coursewareUuid)}`)
+      await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${encodeURIComponent(coursewareUuid)}`, {
+        headers: { Cookie: `edu_os_token=${teacherToken}` },
+      })
     ).json()) as Array<{ isPromoted: number }>;
     expect(filterRowsAfter[0].isPromoted).toBeGreaterThanOrEqual(1);
 
