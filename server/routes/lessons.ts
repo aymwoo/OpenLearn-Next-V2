@@ -129,6 +129,36 @@ export function requireWhiteboardWriteAccess() {
   };
 }
 
+/**
+ * 旧版作业面板（/eval-submissions、/eval-status）只读 `plugin_submissions`，
+ * 而后来的作业中心（P0/P1）支持「纯文字 / 链接 / 多附件」提交：这些内容落在
+ * `plugin_submission_versions`（每次提交留档），`plugin_submissions.file_path`
+ * 对他们恒为 NULL。
+ *
+ * 若沿用旧写法，前端拿到 `file_path = null` 后 `file_path.split('/')` 会直接崩
+ * （学生端白屏 + 遥测上报 `Cannot read properties of null (reading 'split')`），
+ * 且即使不崩也无内容可展示。这里把最新版本的文件/文字/链接一并带出来。
+ */
+const LATEST_VERSION_COLUMNS = `
+  (SELECT v.files_json FROM plugin_submission_versions v WHERE v.submission_id = ps.id ORDER BY v.version DESC LIMIT 1) as latest_files_json,
+  (SELECT v.text_content FROM plugin_submission_versions v WHERE v.submission_id = ps.id ORDER BY v.version DESC LIMIT 1) as latest_text_content,
+  (SELECT v.link_url FROM plugin_submission_versions v WHERE v.submission_id = ps.id ORDER BY v.version DESC LIMIT 1) as latest_link_url
+`;
+
+/** 把最新版本信息展开为 `files` / `textContent` / `linkUrl` 三个前端友好字段 */
+function withLatestVersion(row: any): any {
+  if (!row) return row;
+  let files: any[] = [];
+  try {
+    const parsed = JSON.parse(row.latest_files_json || '[]');
+    if (Array.isArray(parsed)) files = parsed;
+  } catch {
+    files = [];
+  }
+  const { latest_files_json, latest_text_content, latest_link_url, ...rest } = row;
+  return { ...rest, files, textContent: latest_text_content ?? null, linkUrl: latest_link_url ?? null };
+}
+
 export function registerLessonsRoutes(ctx: ServerContext) {
   const { app, io } = ctx;
 
@@ -154,14 +184,15 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const rows = kernelContainer.db
         .prepare(
           `
-        SELECT ps.*, s.name as student_name
+        SELECT ps.*, s.name as student_name,
+               ${LATEST_VERSION_COLUMNS}
         FROM plugin_submissions ps
         LEFT JOIN students s ON ps.student_id = s.id
         WHERE ps.lesson_id = ?
       `,
         )
-        .all(lessonId);
-      res.json(rows);
+        .all(lessonId) as any[];
+      res.json(rows.map(withLatestVersion));
     } catch (err: any) {
       sendSafeError(res, err);
     }
@@ -256,7 +287,8 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       const submission = kernelContainer.db
         .prepare(
           `
-        SELECT * FROM plugin_submissions WHERE lesson_id = ? AND student_id = ?
+        SELECT ps.*, ${LATEST_VERSION_COLUMNS}
+        FROM plugin_submissions ps WHERE ps.lesson_id = ? AND ps.student_id = ?
       `,
         )
         .get(lessonId, studentId) as any;
@@ -299,7 +331,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       }
 
       res.json({
-        submission,
+        submission: submission ? withLatestVersion(submission) : null,
         reviewsWritten,
         grade,
       });

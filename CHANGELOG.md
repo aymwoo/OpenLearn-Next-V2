@@ -118,6 +118,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - 修复白板课件元素的成绩浮层在「全班专注锁定」下不可点击的问题：`HtmlAppletFrame` 的浮层与按钮 z-index 由 `z-10` 提升到 `z-[60]`，不再被 `ReadOnlyLockCover`（`z-50`）遮挡，学生在只读锁定态仍能查看成绩榜。
 - 修复 `GET /api/courseware/attempts` 无鉴权且下发原始作答的问题：改为 `requireAuth()` + 按角色裁剪字段——学生只拿榜单字段（姓名 / 分数 / 完成度 / 状态），`extra_json`（原始作答明细）与 `comment`（教师评语）仅教师 / 管理员可见，避免同班互相抄答案。
   - 回归：`server/__tests__/courseware-attempts-filter.test.ts` 新增「未登录 401」「学生被裁剪 / 教师保留 `extra_json` + `comment`」2 例（补齐真实 `client_sessions` 会话与 Cookie），`server/__tests__/courseware-e2e-flow.test.ts` 两处成绩榜请求改带教师会话 Cookie（该文件由 4 例扩到 6 例）。
+- 修复学生端「作业提交与互评」面板在提交内容为纯文字 / 链接 / 多附件时整页白屏的问题：`src/components/StudentAssignmentEvalPanel.tsx` 直接 `mySubmission.file_path.split('/')`，而作业中心（P0/P1）引入的这类提交 `plugin_submissions.file_path` 恒为 NULL → `TypeError: Cannot read properties of null (reading 'split')`（线上遥测：2026-09-21 学生端 `#/courses`）。
+  - 新增 `baseName()` / `describeSubmission()` / `fileHref()`：自己与同学的提交都改为按内容物描述（文件名 / N 个附件 / 文字作答 / 链接作答 / 已提交（无附件）），附件改为走带权限的 `/api/assignments/:assignmentId/files/:fileId`，并在卡片内展示文字作答与作品链接；无附件时不再渲染指向 `null` 的下载链接。
+  - `server/routes/lessons.ts`：`GET /api/lessons/:lessonId/eval-submissions` 与 `GET /api/lessons/:lessonId/students/:studentId/eval-status` 新增 `LATEST_VERSION_COLUMNS`（子查询取最新 `plugin_submission_versions` 的 `files_json` / `text_content` / `link_url`）与 `withLatestVersion()`（展开为 `files` / `textContent` / `linkUrl`），旧面板因此能看到真实提交内容而不只是一个文件路径。
+  - 回归：新增 `src/components/__tests__/student-assignment-eval-panel.test.tsx` 4 例（纯附件 / 纯文字互评 / 历史纯路径兼容 / 未提交）。把该组件改动 stash 掉后，其中 2 例会以**与线上完全相同的** `TypeError: Cannot read properties of null (reading 'split')` 失败，证明该回归已被锁死。
 
 ### Docs
 

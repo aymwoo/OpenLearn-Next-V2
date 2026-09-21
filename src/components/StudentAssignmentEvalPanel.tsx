@@ -20,6 +20,37 @@ interface StudentAssignmentEvalPanelProps {
   addToast: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
+/** 取路径里的文件名；`file_path` 为空（纯文字 / 链接 / 附件提交）时返回空串 */
+function baseName(path?: string | null): string {
+  if (!path) return '';
+  const parts = path.split('/');
+  return parts[parts.length - 1] || path;
+}
+
+/**
+ * 描述一次提交的内容物。
+ *
+ * 历史缺陷：这里原本直接 `mySubmission.file_path.split('/')`，而作业中心（P0/P1）
+ * 支持纯文字 / 链接 / 多附件提交（`file_path` 恒为 NULL）→ 学生打开「作业提交与互评」
+ * 标签页直接抛 `Cannot read properties of null (reading 'split')` 整页白屏。
+ */
+function describeSubmission(sub: any): string {
+  const name = baseName(sub?.file_path);
+  if (name) return name;
+  const files = Array.isArray(sub?.files) ? sub.files : [];
+  if (files.length === 1) return files[0]?.name || '附件';
+  if (files.length > 1) return `${files.length} 个附件`;
+  if (sub?.textContent) return '文字作答';
+  if (sub?.linkUrl) return '链接作答';
+  return '已提交（无附件）';
+}
+
+/** 附件下载地址：作业中心的文件存在 `plugin_assignment_files`，必须走带权限的下载端点 */
+function fileHref(sub: any, file: any): string | null {
+  if (!file?.fileId || !sub?.assignment_id) return null;
+  return `/api/assignments/${sub.assignment_id}/files/${file.fileId}`;
+}
+
 export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast }: StudentAssignmentEvalPanelProps) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -207,7 +238,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                     {zh ? '当前已提交版本' : 'Currently Submitted Version'}
                   </p>
                   <p className="text-sm font-semibold text-slate-700 truncate">
-                    {mySubmission.file_path.split('/').pop()}
+                    {describeSubmission(mySubmission)}
                   </p>
                 </div>
                 <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full border border-indigo-200">
@@ -222,11 +253,52 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                 </span>
                 <span
                   className="font-mono text-slate-350 select-all truncate max-w-[120px]"
-                  title={mySubmission.file_path}
+                  title={mySubmission.file_path || undefined}
                 >
-                  {mySubmission.file_path}
+                  {mySubmission.file_path || '—'}
                 </span>
               </div>
+
+              {(mySubmission.textContent ||
+                mySubmission.linkUrl ||
+                (Array.isArray(mySubmission.files) && mySubmission.files.length > 0)) && (
+                <div className="border-t border-slate-100 pt-2.5 space-y-1 text-xs text-slate-600">
+                  {mySubmission.textContent && (
+                    <p className="whitespace-pre-wrap break-all max-h-20 overflow-hidden">
+                      {mySubmission.textContent}
+                    </p>
+                  )}
+                  {mySubmission.linkUrl && (
+                    <a
+                      href={mySubmission.linkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block truncate text-indigo-650 hover:underline"
+                    >
+                      {mySubmission.linkUrl}
+                    </a>
+                  )}
+                  {Array.isArray(mySubmission.files) &&
+                    mySubmission.files.map((f: any, idx: number) => {
+                      const href = fileHref(mySubmission, f);
+                      return href ? (
+                        <a
+                          key={f.fileId ?? idx}
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block truncate text-indigo-650 hover:underline"
+                        >
+                          {f.name}
+                        </a>
+                      ) : (
+                        <span key={f.name ?? idx} className="block truncate">
+                          {f.name}
+                        </span>
+                      );
+                    })}
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-xl flex items-start gap-3 mb-4 text-left">
@@ -363,6 +435,10 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                     ? existingReview.comment
                     : '';
               const submittingReview = reviewLoading[peerSub.id] || false;
+              // 同班同学可能只提交了文字 / 链接 / 附件（file_path 为 NULL）
+              const peerFiles = Array.isArray(peerSub.files) ? peerSub.files : [];
+              const peerDownloadHref = peerSub.file_path || fileHref(peerSub, peerFiles[0]) || null;
+              const peerLinkHref = peerDownloadHref || peerSub.linkUrl || null;
 
               return (
                 <div
@@ -381,23 +457,35 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                         </h4>
                         <p
                           className="text-xs text-slate-400 font-mono flex items-center gap-1 mt-0.5 truncate max-w-[200px]"
-                          title={peerSub.file_path}
+                          title={peerSub.file_path || undefined}
                         >
                           <FileText size={11} className="text-slate-350" />
-                          {peerSub.file_path.split('/').pop()} (V{peerSub.version})
+                          {describeSubmission(peerSub)} (V{peerSub.version})
                         </p>
                       </div>
                     </div>
 
-                    <a
-                      href={peerSub.file_path}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-bold text-indigo-650 hover:text-indigo-800 transition-colors border border-indigo-100 px-2 py-1 rounded bg-indigo-50/50 hover:bg-indigo-50"
-                    >
-                      {zh ? '下载查阅' : 'Download File'}
-                    </a>
+                    {peerLinkHref ? (
+                      <a
+                        href={peerLinkHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-bold text-indigo-650 hover:text-indigo-800 transition-colors border border-indigo-100 px-2 py-1 rounded bg-indigo-50/50 hover:bg-indigo-50 shrink-0"
+                      >
+                        {peerDownloadHref ? (zh ? '下载查阅' : 'Download File') : zh ? '打开链接' : 'Open Link'}
+                      </a>
+                    ) : (
+                      <span className="text-xs text-slate-400 px-2 py-1 border border-slate-200 rounded bg-white shrink-0">
+                        {zh ? '无附件' : 'No File'}
+                      </span>
+                    )}
                   </div>
+
+                  {peerSub.textContent && (
+                    <p className="text-xs text-slate-600 whitespace-pre-wrap break-all max-h-24 overflow-auto bg-slate-50 border border-slate-100 rounded-lg p-2">
+                      {peerSub.textContent}
+                    </p>
+                  )}
 
                   {/* Submission review status */}
                   {existingReview && (
