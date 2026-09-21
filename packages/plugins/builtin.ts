@@ -13,6 +13,14 @@ import {
 } from '../core/di/interfaces.js';
 import type { PluginContext } from '@openlearn/plugin-sdk';
 import { hasDataSubmission, hasScoreDisplay, injectScoreSubmissionUsingAI } from './ai-submit-injector.js';
+import {
+  aggregateAttemptScore,
+  describeAggregation,
+  listScoreConfigs,
+  resolveScoreConfig,
+  saveScoreConfig,
+  type ScoreAggregation,
+} from './courseware-score.js';
 
 function copyFolderSync(src: string, dest: string) {
   if ((fs as any).cpSync) {
@@ -1608,7 +1616,21 @@ export const BuiltinPlugin = {
           );
         }
 
-        // 3. Update standardized results
+        // 3. 原生成绩归集：不再简单取「最后一次」，而是按课件配置的策略
+        //    （LATEST / MAX / AVERAGE / FIRST）从 submission_raw 的分数样本历史中算出官方成绩。
+        let aggregation: ScoreAggregation | null = null;
+        try {
+          const attemptRow = db.prepare('SELECT courseware_id FROM courseware_attempt WHERE id = ?').get(attemptId) as any;
+          aggregation = aggregateAttemptScore(db as any, attemptId, {
+            coursewareId: attemptRow?.courseware_id ?? null,
+          });
+        } catch (aggErr) {
+          console.warn('[courseware.submit_attempt] score aggregation failed, fallback to latest score:', aggErr);
+        }
+        const aggregatedScore = aggregation && aggregation.finalScore !== null ? aggregation.finalScore : null;
+        const aggregationExtra = aggregation ? { score_aggregation: describeAggregation(aggregation) } : {};
+
+        // 4. 写入官方成绩
         const existing = db.prepare('SELECT * FROM submission_result WHERE attempt_id = ?').get(attemptId) as any;
         if (!existing) {
           db.prepare(
@@ -1616,13 +1638,14 @@ export const BuiltinPlugin = {
           ).run(
             'res_' + crypto.randomBytes(8).toString('hex'),
             attemptId,
-            score !== undefined ? score : null,
+            aggregatedScore !== null ? aggregatedScore : score !== undefined ? score : null,
             comment || null,
             completion !== undefined ? completion : null,
-            JSON.stringify(extra),
+            JSON.stringify({ ...extra, ...aggregationExtra }),
           );
         } else {
-          const finalScore = score !== undefined ? score : existing.score;
+          const finalScore =
+            aggregatedScore !== null ? aggregatedScore : score !== undefined ? score : existing.score;
           const finalComment = comment || existing.comment;
           const finalCompletion = completion !== undefined ? completion : existing.completion;
 
@@ -1630,7 +1653,7 @@ export const BuiltinPlugin = {
           try {
             mergedExtra = JSON.parse(existing.extra_json || '{}');
           } catch (e) {}
-          mergedExtra = { ...mergedExtra, ...extra };
+          mergedExtra = { ...mergedExtra, ...extra, ...aggregationExtra };
 
           db.prepare(
             'UPDATE submission_result SET score = ?, comment = ?, completion = ?, extra_json = ? WHERE attempt_id = ?',
@@ -1647,6 +1670,148 @@ export const BuiltinPlugin = {
         });
 
         return { success: true };
+      },
+    });
+
+    // --- COURSEWARE SCORE CONFIG HANDLERS（原生成绩归集策略） ---
+    const getScoreConfigCmdType = 'courseware.get_score_config';
+    await actionRegistry.register({
+      id: 'core-courseware-get-score-config',
+      commandType: getScoreConfigCmdType,
+      description: '读取互动课件的成绩归集配置（策略 / 字段 / 满分 / 权重）',
+      capabilityRequired: 'lesson:read',
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          coursewareId: { type: 'STRING', description: "课件 ID（省略或传 '*' 时读取全局默认配置）" },
+        },
+      },
+    });
+
+    await commandBus.registerHandler(getScoreConfigCmdType, {
+      async execute(command) {
+        const payload = (command.payload || {}) as any;
+        const resolved = resolveScoreConfig(db as any, payload.coursewareId ?? payload.courseware_id ?? null);
+        return { success: true, source: resolved.source, ...resolved.config };
+      },
+    });
+
+    const saveScoreConfigCmdType = 'courseware.save_score_config';
+    await actionRegistry.register({
+      id: 'core-courseware-save-score-config',
+      commandType: saveScoreConfigCmdType,
+      description: '保存互动课件的成绩归集配置',
+      capabilityRequired: 'lesson:write',
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          coursewareId: { type: 'STRING', description: "课件 ID（传 '*' 表示全局默认策略）" },
+          coursewareName: { type: 'STRING', description: '课件名称（便于识别）' },
+          scorePolicy: { type: 'STRING', description: 'LATEST | MAX | AVERAGE | FIRST' },
+          scoreFields: { type: 'STRING', description: '分数所在字段路径，逗号分隔，如 score,data.points' },
+          rawFullScore: { type: 'NUMBER', description: '课件原始满分' },
+          targetFullScore: { type: 'NUMBER', description: '归集后的目标满分' },
+          weightPercentage: { type: 'NUMBER', description: '该课件在总评中的权重（百分比）' },
+          lessonId: { type: 'STRING', description: '关联课时 ID（可选）' },
+        },
+        required: ['coursewareId'],
+      },
+    });
+
+    await commandBus.registerHandler(saveScoreConfigCmdType, {
+      async execute(command) {
+        const saved = saveScoreConfig(db as any, (command.payload || {}) as any);
+        await eventBus.publish({
+          id: uuidv7(),
+          type: 'courseware.score_config_saved',
+          source: 'builtin.courseware',
+          payload: { ...saved },
+          timestamp: Date.now(),
+          correlationId: command.id,
+        });
+        return { success: true, ...saved };
+      },
+    });
+
+    const listScoreConfigsCmdType = 'courseware.list_score_configs';
+    await actionRegistry.register({
+      id: 'core-courseware-list-score-configs',
+      commandType: listScoreConfigsCmdType,
+      description: '列出所有已配置的课件成绩归集策略',
+      capabilityRequired: 'lesson:read',
+      inputSchema: { type: 'OBJECT', properties: {} },
+    });
+
+    await commandBus.registerHandler(listScoreConfigsCmdType, {
+      async execute() {
+        return { success: true, configs: listScoreConfigs(db as any) };
+      },
+    });
+
+    // --- COURSEWARE REGRADE HANDLER（按当前策略重算既有成绩） ---
+    const regradeCmdType = 'courseware.regrade_attempts';
+    await actionRegistry.register({
+      id: 'core-courseware-regrade-attempts',
+      commandType: regradeCmdType,
+      description: '按当前成绩归集策略重算既有 attempt 的官方成绩（改配置后回填）',
+      capabilityRequired: 'lesson:write',
+      inputSchema: {
+        type: 'OBJECT',
+        properties: {
+          attemptId: { type: 'STRING', description: '单个 attempt ID（与 coursewareId 二选一）' },
+          coursewareId: { type: 'STRING', description: '按课件批量重算（最多 2000 个 attempt）' },
+          limit: { type: 'NUMBER', description: '批量重算上限，默认 500' },
+        },
+      },
+    });
+
+    await commandBus.registerHandler(regradeCmdType, {
+      async execute(command) {
+        const payload = (command.payload || {}) as any;
+        const attemptId = typeof payload.attemptId === 'string' ? payload.attemptId.trim() : '';
+        const coursewareId = typeof payload.coursewareId === 'string' ? payload.coursewareId.trim() : '';
+        if (!attemptId && !coursewareId) {
+          throw new Error('courseware.regrade_attempts: attemptId or coursewareId is required');
+        }
+
+        const requestedLimit = Number(payload.limit);
+        const limit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 2000) : 500;
+
+        let attemptIds: string[] = [];
+        if (attemptId) {
+          attemptIds = [attemptId];
+        } else {
+          const rows = db
+            .prepare('SELECT id FROM courseware_attempt WHERE courseware_id = ? ORDER BY started_at DESC LIMIT ?')
+            .all(coursewareId, limit) as any[];
+          attemptIds = (rows || []).map((r) => String(r.id));
+        }
+
+        const regraded: any[] = [];
+        let failed = 0;
+        for (const id of attemptIds) {
+          try {
+            const agg = aggregateAttemptScore(db as any, id, { coursewareId: coursewareId || null });
+            if (agg.finalScore === null) continue;
+            const current = db.prepare('SELECT * FROM submission_result WHERE attempt_id = ?').get(id) as any;
+            if (!current) continue;
+            let mergedExtra: any = {};
+            try {
+              mergedExtra = JSON.parse(current.extra_json || '{}');
+            } catch (e) {}
+            mergedExtra = { ...mergedExtra, score_aggregation: describeAggregation(agg) };
+            db.prepare('UPDATE submission_result SET score = ?, extra_json = ? WHERE attempt_id = ?').run(
+              agg.finalScore,
+              JSON.stringify(mergedExtra),
+              id,
+            );
+            regraded.push({ attemptId: id, score: agg.finalScore, samples: agg.samples.length, policy: agg.policy });
+          } catch (e) {
+            failed += 1;
+          }
+        }
+
+        return { success: true, scanned: attemptIds.length, regraded: regraded.length, failed, results: regraded };
       },
     });
 

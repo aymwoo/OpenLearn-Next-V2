@@ -17,3 +17,4 @@
 | 001  | 001_add_execution_mode.sql        | plugins 表添加 execution_mode                                                     |
 | 002  | 002_add_client_session_expiry.sql | client_sessions 添加 expires_at                                                   |
 | 003  | 003_classroom_runtime.sql         | 课堂工具与 AI 对话记忆表（student_rollcalls, site_settings, agent_conversations） |
+| 004  | 004_courseware_score_config.sql   | 互动课件成绩归集策略表（courseware_score_config，宿主侧按策略从样本历史算最终分）  |

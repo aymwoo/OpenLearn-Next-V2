@@ -51,6 +51,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **课件成绩「按策略留分」归集原生化 (Native Courseware Score Policy Aggregation)**：此前「按 `LATEST` / `MAX` / `AVERAGE` / `FIRST` 策略从多次提交里算最终分」只存在于第三方插件 `interactive-courseware` 的私有表里，宿主记录的 `submission_result.score` 恒等于**最后一次**上报值 —— 学生反复作答时「最高分」策略形同虚设，且停用该插件后这层能力一并消失。现在配置与聚合都由平台自己完成：
+  - **迁移 `migrations/004_courseware_score_config.sql`** 新增 `courseware_score_config` 表：`courseware_id`（主键）、`courseware_name`、`raw_full_score`（课件自身满分，默认 100）、`target_full_score`（课程目标满分，默认 100）、`weight_percentage`（权重%，默认 100）、`score_policy`（默认 `LATEST`）、`score_fields`（从提交载荷取分的字段路径，逗号/分号分隔，留空自动探测）、`lesson_id`、`updated_at`；并对 `lesson_id` 建索引；`migrations/README.md` 的迁移清单同步登记；
+  - **新增纯函数模块 `packages/plugins/courseware-score.ts`**：`getNested`（点号路径）/ `toNumber`（兼容尾随 `%`）/ `parseScoreFields` / `extractScoreFromFields` / `collectScoreSamples` / `aggregateScores` / `clamp` / `round2` —— 无副作用、无 IO，供命令处理器与 HTTP 路由共用，杜绝两处口径漂移；
+  - **`courseware.submit_attempt` 按策略聚合**：原始载荷先追加进 `submission_raw`（保持 append-only 流水），随后按该课件配置从**全部样本历史**取分、按策略聚合、按 `raw_full_score → target_full_score` 归一化后写入 `submission_result`；未配置的课件走内置默认（`LATEST`、不折算），行为与改动前完全一致。`POST /api/courseware/attempts/:attemptId/log` 同源同口径接入（该路径的分数抽取口径与 `/submit` 不同，必须复用同一聚合函数才不会算出两个分数）；
+  - **新增四个原生命令**：`courseware.get_score_config`（`lesson:read`，回传 `source: 'courseware' | 'global' | 'builtin'` 标示配置来源）、`courseware.save_score_config`（`lesson:write`，保存后广播 `courseware.score_config_saved`）、`courseware.list_score_configs`（`lesson:read`）、`courseware.regrade_attempts`（`lesson:write`，按 attemptId 或 coursewareId 重算历史成绩，改策略后无需学生重做）；
+  - **权限口径**：这四个命令刻意声明 `lesson:read` / `lesson:write` 而非 `courseware:read` / `courseware:write` —— 后者不在任何角色兜底能力集内（教师兜底为 `lesson:*` / `whiteboard:*` / `management:*` / `quiz:*` / `vfs:*` / `process:*` / `plugin:*`），用 `courseware:*` 会把教师挡在门外；跨插件调用时需透传调用者原始 `actorId`（`commandBus.createCommand(type, payload, command.actorId)`）以延续其角色身份。
+  - 验证：新增 `packages/plugins/__tests__/courseware-score.test.ts`（16 例：字段抽取、样本收集、四种策略、归一化与权重、边界钳制）全部通过；`server/__tests__/courseware-e2e-flow.test.ts` 与 `courseware-attempts-filter.test.ts` 回归 8 例全绿；宿主 `tsc --noEmit` 在本轮改动文件上 0 错误。
 - **课件运行时脚本扩展点（Courseware Runtime Script Extension Point）**：互动课件跑在 `<iframe credentialless sandbox="allow-scripts allow-forms allow-downloads">`（**无** `allow-same-origin`）里，是不透明源（opaque origin）——父窗口读不到它内部的任何状态，服务端拼接 HTML 是平台唯一能向课件投递代码的位置。此前该位置只硬编码了 Bridge SDK，现把这条通道抽象为**可被插件注册的公开扩展点**，宿主不再替业务决定「课件里该跑什么」：
   - **新增内核服务**：`packages/core/di/courseware-runtime-script-registry.ts` 的 `CoursewareRuntimeScriptRegistry`，接口与 Token（`CoursewareRuntimeScript` / `IRegisteredCoursewareRuntimeScript` / `ICoursewareRuntimeScriptRegistry` / `ICoursewareRuntimeScriptRegistryToken`，Token 名 `@openlearn/core:ICoursewareRuntimeScriptRegistry`）定义在 `packages/core/di/interfaces.ts`，并在内核 `constructor()` 中随其他 `IService` 一起注册；`packages/core/di/index.ts` 与 `@openlearn/plugin-sdk` 均已导出；
   - **注册语义**：`register(owner, { id, source, position?, priority?, coursewareId?, coursewareUuid? })` —— `id` 在 owner 内唯一，同一 `owner::id` 重复注册即覆盖（便于热更新）；不指定 `coursewareId`/`coursewareUuid` 则对所有课件生效，指定则精确匹配；`position` 取 `'head'`（紧跟 Bridge SDK）或 `'body-end'`（默认，`</body>` 前）；同位置按 `priority` 升序、插入序次之拼接，顺序确定。配套 `unregister(owner, id)` / `clear(owner?)` / `list(courseware?)` / `listOwners()`；
@@ -1065,3 +1072,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 Baseline release. System-wide version numbers harmonized to 0.1.10 and
 `@openlearn/plugin-sdk` to 3.3.1. (#4d1069a)
+

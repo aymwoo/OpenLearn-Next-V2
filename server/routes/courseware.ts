@@ -5,6 +5,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
 import { injectLmsSdk } from './shared.js';
+import { aggregateAttemptScore, describeAggregation } from '../../packages/plugins/courseware-score.js';
 import { sendSafeError } from '../utils/error-handler.js';
 
 export function registerCoursewareRoutes(ctx: ServerContext) {
@@ -182,14 +183,25 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         .run(rawId, attemptId, eventType, JSON.stringify(payload), Date.now());
 
       const extracted = extractScoreCommentCompletion(payload);
-      const score = extracted.score;
       const comment = extracted.comment;
       const completion = extracted.completion;
 
-      if (score !== undefined || comment !== undefined || completion !== undefined) {
+      // 原生成绩归集：按课件成绩配置的策略（默认取最后一次）从样本历史算出官方成绩，
+      // 这样 «最高分» / «平均分» 之类的策略才能真正生效（此前只保留最后一次）。
+      let aggregatedScore: number | null = null;
+      let aggregationExtra: Record<string, unknown> = {};
+      try {
+        const aggregation = aggregateAttemptScore(kernelContainer.db as any, attemptId);
+        if (aggregation.finalScore !== null) aggregatedScore = aggregation.finalScore;
+        aggregationExtra = { score_aggregation: describeAggregation(aggregation) };
+      } catch (aggErr) {
+        console.warn('[courseware.log] score aggregation failed, fallback to latest score:', aggErr);
+      }
+
+      if (aggregatedScore !== null || comment !== undefined || completion !== undefined) {
         let parsedScore: number | null = null;
-        if (score !== undefined && score !== null) {
-          const num = parseFloat(score);
+        if (extracted.score !== undefined && extracted.score !== null) {
+          const num = parseFloat(extracted.score);
           if (!isNaN(num)) {
             parsedScore = num;
           }
@@ -213,13 +225,17 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
             .run(
               'res_' + crypto.randomBytes(8).toString('hex'),
               attemptId,
-              parsedScore,
+              aggregatedScore !== null ? aggregatedScore : parsedScore,
               comment || null,
               parsedCompletion,
-              JSON.stringify(payload),
+              JSON.stringify({
+                ...(payload && typeof payload === 'object' ? payload : {}),
+                ...aggregationExtra,
+              }),
             );
         } else {
-          const finalScore = parsedScore !== null ? parsedScore : existing.score;
+          const finalScore =
+            aggregatedScore !== null ? aggregatedScore : parsedScore !== null ? parsedScore : existing.score;
           const finalComment = comment || existing.comment;
           const finalCompletion = parsedCompletion !== null ? parsedCompletion : existing.completion;
 
@@ -230,6 +246,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
           if (payload && typeof payload === 'object') {
             mergedExtra = { ...mergedExtra, ...payload };
           }
+          mergedExtra = { ...mergedExtra, ...aggregationExtra };
 
           kernelContainer.db
             .prepare(
