@@ -160,7 +160,24 @@ export async function validateAndBundleZip(zipBuffer: Buffer): Promise<{
   const manifest = manifestSchema.parse(rawManifest);
 
   // Step 6: 读取入口文件
-  const entryFile = zip.file(manifest.main);
+  let entryFile = zip.file(manifest.main);
+  let resolvedMain = manifest.main;
+
+  if (!entryFile && manifest.main.startsWith('dist/')) {
+    // 兼容老旧 build 脚本：manifest 写了 "dist/index.js" 但 ZIP 把文件平铺在根目录
+    // （参见 openlearn-plugin-learnstar / openlearn-plugin-lti13 v1.0.0 旧 build）
+    const fallback = manifest.main.slice('dist/'.length);
+    const fallbackEntry = zip.file(fallback);
+    if (fallbackEntry) {
+      console.warn(
+        `[install-utils] manifest.main "${manifest.main}" not found in ZIP; ` +
+          `falling back to "${fallback}". Plugin author should update build script to drop the dist/ prefix.`,
+      );
+      entryFile = fallbackEntry;
+      resolvedMain = fallback;
+    }
+  }
+
   if (!entryFile) {
     throw new Error(`Entry file "${manifest.main}" specified in manifest not found in ZIP package`);
   }
@@ -185,7 +202,7 @@ export async function validateAndBundleZip(zipBuffer: Buffer): Promise<{
     // Step 8: esbuild 打包
     const bundledCode = await bundlePlugin(entryCode, tmpDir);
 
-    return { manifest, bundledCode, entryFileName: manifest.main };
+    return { manifest, bundledCode, entryFileName: resolvedMain };
   } finally {
     // Step 9: 清理临时目录
     try {
