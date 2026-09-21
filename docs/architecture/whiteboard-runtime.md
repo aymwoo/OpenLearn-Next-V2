@@ -69,3 +69,13 @@ rendererRegistry.registerRenderer('geogebra-widget', GeoGebraRenderer);
 ### 工具栏入口
 
 用户可以在主 **WhiteboardToolbar** 工具栏点击新增的 **Globe（地球仪）** 按钮。该操作将弹出资源选择器，允许讲师选择/上传 HTML 课件包或直接粘贴网页 URL，从而创建并同步挂载一个 `html-applet` 实例。
+
+### 课件运行时脚本扩展点与成绩采集
+
+互动课件运行在 `credentialless` + 无 `allow-same-origin` 的 iframe 中，是一条「看不到平台界面」的孤岛链路：分数必须在课件内部被抓到，再经 Bridge 送回平台。平台为此提供三件套，且**不再依赖任何第三方插件**：
+
+1. **运行时脚本扩展点**：`packages/core/di/courseware-runtime-script-registry.ts` 实现 `ICoursewareRuntimeScriptRegistry`（Token `@openlearn/core:ICoursewareRuntimeScriptRegistry`），按 `${owner}::${id}` 登记待注入脚本，支持 `head` / `body-end` 两个插入位与优先级排序。`server/routes/shared.ts` 的 `collectCoursewareRuntimeScripts()` 在 `injectLmsSdk()` 注入 Bridge SDK 之后把这些脚本一并写进 HTML；任一环节异常都静默降级，不影响课件加载。
+2. **分数变量监视器**：`packages/plugins/score-monitor-script.ts` 由内置插件注册到上述扩展点，运行在课件 iframe 内，用三层采集持续观察「疑似分数」变量 —— 显式声明（`window.__LMS_WATCH__`）→ 遍历 `window` 上的数值属性做启发式发现（键名命中 `score` / `point` / `grade` / `mark` / `correct` 等）→ DOM 可见文本兜底；静默窗口内不再变化即通过 `LMS.saveProgress({ score, watch })` 上报一次样本，并支持 `window.__LMS_WATCH__ === false` 退出。
+3. **成绩策略归集**：`packages/plugins/courseware-score.ts` 是无 IO 的纯函数模块（`getNested` / `toNumber` / `parseScoreFields` / `extractScoreFromFields` / `collectScoreSamples` / `aggregateScores` / `clamp` / `round2`），被 `courseware.submit_attempt` 与 `POST /api/courseware/attempts/:attemptId/log` 共用同一口径：原始载荷先追加进 append-only 的 `submission_raw`，再按 `courseware_score_config` 表（迁移 `migrations/004_courseware_score_config.sql`）配置的 `LATEST` / `MAX` / `AVERAGE` / `FIRST` 策略与满分折算算出 `submission_result.score`。配置由 `courseware.get_score_config` / `courseware.save_score_config` / `courseware.list_score_configs` / `courseware.regrade_attempts` 四个原生命令管理，改策略后可重算历史成绩而无需学生重做。
+
+> **为什么不把监视器直接写进服务端注入的 Bridge SDK 模板字符串**：模板字符串里的正则/转义极易出错（历史上 `\\d` 双重转义曾导致抓分正则全部失效），且无法按课件粒度裁剪、停用或单独测试。扩展点让「谁来监视什么」变成可注册、可撤销的插件能力。

@@ -199,6 +199,9 @@ def extract_doc_facts(docs_root: Path) -> list[DocFact]:
         (re.compile(r"\bClassroomRuntime\b"),            "classroom-runtime"),
     ]
 
+    # A built-in plugin module named by its real path inside any doc.
+    PLUGIN_PATH_PATTERN = re.compile(r"packages/plugins/([A-Za-z0-9_\-./]+)\.ts")
+
     for md in sorted(docs_root.rglob("*.md")):
         rel = md.relative_to(docs_root)
         if any(p.startswith(("_build", "node_modules")) for p in rel.parts):
@@ -222,6 +225,29 @@ def extract_doc_facts(docs_root: Path) -> list[DocFact]:
                         excerpt=line.strip()[:160],
                     ))
                     break  # one fact per line
+
+        # (3) Plugin module mentions: docs that name a built-in plugin by its real
+        # path (e.g. inline code `packages/plugins/courseware-score.ts`) document
+        # that module, so the aligner can match it against the code-side fact of
+        # the same name. Without this rule the only doc facts a plugin could ever
+        # obtain were the file-name/sub-system mappings above, which silently
+        # turned every newly documented built-in plugin into a drift item.
+        for line_no, line in enumerate(text.splitlines(), 1):
+            for m in PLUGIN_PATH_PATTERN.finditer(line):
+                stem = m.group(1).rsplit("/", 1)[-1]
+                if stem.startswith(("__", ".")):
+                    continue
+                key = (stem, "plugin", str(md))
+                if key in seen:
+                    continue
+                seen.add(key)
+                facts.append(DocFact(
+                    name=stem,
+                    kind="plugin",
+                    source_path=str(md),
+                    line=line_no,
+                    excerpt=line.strip()[:160],
+                ))
 
     return facts
 
