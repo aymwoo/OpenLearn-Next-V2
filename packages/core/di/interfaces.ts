@@ -609,3 +609,62 @@ export interface IPlatformServiceRegistryService {
 export const IPlatformServiceRegistryToken = new Token<IPlatformServiceRegistryService>(
   '@openlearn/core:IPlatformServiceRegistryService',
 );
+
+/**
+ * 课件运行时脚本描述 —— 由插件注册、在互动课件 iframe 内部执行的脚本。
+ *
+ * 互动课件运行在 `credentialless` + `sandbox="allow-scripts allow-forms allow-downloads"`
+ * 的 iframe 中（无 `allow-same-origin`，即 opaque origin）：父窗口读不到课件内部状态，
+ * 也无法在运行期向其中注入代码。服务端渲染课件时拼接 HTML
+ * （`server/routes/shared.ts` 的 `injectLmsSdk()`）是平台唯一能向课件内投递代码的位置，
+ * 本接口即该位置的扩展点。
+ */
+export interface CoursewareRuntimeScript {
+  /** 脚本标识，同一 owner 内唯一；重复注册同一 id 视为覆盖 */
+  id: string;
+  /** 在课件 iframe 内执行的脚本源码（宿主会包进 `<script>` 标签） */
+  source: string;
+  /** 仅对指定课件生效（对应 `courseware.id`）；与 coursewareUuid 均缺省时为全局脚本 */
+  coursewareId?: string;
+  /** 仅对指定课件生效（对应 `courseware.uuid`） */
+  coursewareUuid?: string;
+  /** 注入位置，默认 'body-end'（Bridge SDK 之后，DOM 已可访问） */
+  position?: 'head' | 'body-end';
+  /** 执行顺序，升序；默认 100 */
+  priority?: number;
+}
+
+/** 已注册的课件运行时脚本（补全了 owner / position / priority 的默认值） */
+export interface IRegisteredCoursewareRuntimeScript extends CoursewareRuntimeScript {
+  /** 注册方，通常为 pluginId */
+  owner: string;
+  position: 'head' | 'body-end';
+  priority: number;
+}
+
+/**
+ * 课件运行时脚本扩展点 —— 让插件拥有「跑在课件 iframe 内部」的代码。
+ *
+ * 宿主在 `injectLmsSdk()` 渲染课件时调用 `list()` 取出生效脚本并拼接注入；
+ * 注册点本身是纯内存服务，无 I/O，故 `list()` 保持同步（渲染路径是同步函数）。
+ */
+export interface ICoursewareRuntimeScriptRegistry {
+  /** 注册（或覆盖）脚本；owner 通常传 `ctx.pluginId` */
+  register(owner: string, script: CoursewareRuntimeScript): void;
+  /** 注销指定 owner 下的单个脚本 */
+  unregister(owner: string, id: string): void;
+  /** 清理某个 owner 的全部脚本（插件停用时调用）；省略 owner 则清空全部 */
+  clear(owner?: string): void;
+  /** 列出对目标课件生效的脚本，已按 priority 升序排序 */
+  list(courseware?: { id?: string; uuid?: string }): IRegisteredCoursewareRuntimeScript[];
+  /** 列出当前所有注册方 */
+  listOwners(): string[];
+}
+
+/**
+ * Token for ICoursewareRuntimeScriptRegistry.
+ * Identifier: @openlearn/core:ICoursewareRuntimeScriptRegistry
+ */
+export const ICoursewareRuntimeScriptRegistryToken = new Token<ICoursewareRuntimeScriptRegistry>(
+  '@openlearn/core:ICoursewareRuntimeScriptRegistry',
+);

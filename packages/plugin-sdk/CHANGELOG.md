@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features & Types
+
+- **新增「课件运行时脚本扩展点」DI 契约**：新增 Token `ICoursewareRuntimeScriptRegistryToken`（Token 名 `@openlearn/core:ICoursewareRuntimeScriptRegistry`）与类型 `CoursewareRuntimeScript`、`IRegisteredCoursewareRuntimeScript`、`ICoursewareRuntimeScriptRegistry`（实现类 `CoursewareRuntimeScriptRegistry` 位于 `@openlearn/core/di`，由内核启动时注册）。
+  - 契约：`register(owner, { id, source, position?, priority?, coursewareId?, coursewareUuid? })`、`unregister(owner, id)`、`clear(owner?)`、`list(courseware?)`、`listOwners()`；`id` 在 `owner` 内唯一，重复注册即覆盖；`position` 取 `'head' | 'body-end'`，同位置按 `priority` 升序拼接。
+  - 用途：互动课件运行在不透明源（opaque origin）iframe（`credentialless`、无 `allow-same-origin`）中，父窗口读不到其内部状态、也无法注入代码；插件可用本扩展点注册「随课件 HTML 一起下发、在课件 iframe 内部执行」的脚本，由宿主 `injectLmsSdk()` 在渲染时拼接（head 脚本紧随 Bridge SDK，body-end 脚本插在 `</body>` 前）。
+  - 插件既可从 `@openlearn/plugin-sdk` 导入该 Token，也可用 `ctx.resolve(new Token('@openlearn/core:ICoursewareRuntimeScriptRegistry'))` 按名字解析 —— 后者不依赖 SDK 构建产物是否已包含该 Token，部署/升级顺序更安全。
+
 ## [3.7.0] - 2026-09-19
 
 ### Features & Types

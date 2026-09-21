@@ -31,6 +31,9 @@ export type {
   IProcessService,
   IStorageService,
   IAIService,
+  CoursewareRuntimeScript,
+  IRegisteredCoursewareRuntimeScript,
+  ICoursewareRuntimeScriptRegistry,
 } from './interfaces.js';
 
 // ── Token instance exports ──────────────────────────────────────────────
@@ -44,12 +47,14 @@ export {
   IStorageServiceToken,
   IAIServiceToken,
   IPluginHostToken,
+  ICoursewareRuntimeScriptRegistryToken,
 } from './interfaces.js';
 
 // ── Service implementation class exports ────────────────────────────────
 
 export { StorageService } from './storage-service.js';
 export { AIService } from './ai-service.js';
+export { CoursewareRuntimeScriptRegistry } from './courseware-runtime-script-registry.js';
 
 // ── Platform DI Container (PI-008) ──────────────────────────────────────
 

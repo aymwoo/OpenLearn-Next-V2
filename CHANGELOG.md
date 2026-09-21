@@ -51,13 +51,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
-- **课件分数变量监视器（Score Variable Monitor，配套 `interactive-courseware` 插件 v1.0.28）**：`server/utils/bridge-sdk.ts` 新增独立的 `initScoreWatcher()`，随 Bridge SDK 注入每一个互动课件 iframe —— 在课件处于 `credentialless` + 沙箱 opaque origin、父窗口无法读取其内部变量的前提下，**这是唯一能在课件里运行的平台代码**：
-  - **三层采集分数变量**：① `window.__LMS_WATCH__` 显式声明的变量名 / 点路径（课件作者或后续 AI 补刀可写入，设为 `false` 可整体退出监视）；② 自动发现 `window` 上名字匹配 `score|point|grade|mark|correct|right` 的有限数值属性；③ **DOM 兜底**——分数类元素（`#score`、`.score`、`[id*="score" i]` 等）的**可见**文本，键名形如 `dom__score`。因此连完全不调用 `LMS.*`、只把分数写进 `#score` 的静态课件（如 `it-quiz.html`）也能被采到分；
-  - **变化即采样、静默后上报**：`setInterval(800ms)` + `MutationObserver`（300ms 节流，两次 tick 间比对快照）检测变化，在静默 `1200ms` 后以 `LMS.saveProgress({ score, watch })` 上报一次，避免连续抖动产生上报风暴；单次会话最多 60 次，值未变化不上报，初始基线不计为变化；
-  - **不改变现有提交语义**：采样走 `saveProgress`（`status='inprogress'`），只写 `submission_result` / `submission_raw` 并发出 `courseware.attempt_submitted`，**不会**把 attempt 提前置为已完成；`watch` 快照随既有 `extra: payload` 落到 `submission_result.extra_json.watch` 与 `submission_raw.payload_json.watch`，天然构成可供插件聚合的样本历史；
-  - **同一元素去重**：同一节点常被多个选择器命中（`#score` 与 `[id*="score" i]`），快照按元素去重，避免 `watch` 里出现重复变量名；
-  - **平台只负责如实采样**，「取最高分 / 最近一次 / 平均分」等口径由成绩配置所在侧（插件）按 `score_policy` 决定。
-  - 验证：在 jsdom 中真实执行 `BRIDGE_SDK_CODE` 的冒烟测试——初始基线静默不上报、`window.userScore=55` 触发 1 次采样、`#score` 文本改为 `82` 再触发 1 次且 `watch.dom__score=82`、`saveProgress` 载荷同时含 `score` 与完整 `watch` 快照；另确认产物内嵌 JS 无双重转义（`doubleBackslashSeqs=0`）。
+- **课件运行时脚本扩展点（Courseware Runtime Script Extension Point）**：互动课件跑在 `<iframe credentialless sandbox="allow-scripts allow-forms allow-downloads">`（**无** `allow-same-origin`）里，是不透明源（opaque origin）——父窗口读不到它内部的任何状态，服务端拼接 HTML 是平台唯一能向课件投递代码的位置。此前该位置只硬编码了 Bridge SDK，现把这条通道抽象为**可被插件注册的公开扩展点**，宿主不再替业务决定「课件里该跑什么」：
+  - **新增内核服务**：`packages/core/di/courseware-runtime-script-registry.ts` 的 `CoursewareRuntimeScriptRegistry`，接口与 Token（`CoursewareRuntimeScript` / `IRegisteredCoursewareRuntimeScript` / `ICoursewareRuntimeScriptRegistry` / `ICoursewareRuntimeScriptRegistryToken`，Token 名 `@openlearn/core:ICoursewareRuntimeScriptRegistry`）定义在 `packages/core/di/interfaces.ts`，并在内核 `constructor()` 中随其他 `IService` 一起注册；`packages/core/di/index.ts` 与 `@openlearn/plugin-sdk` 均已导出；
+  - **注册语义**：`register(owner, { id, source, position?, priority?, coursewareId?, coursewareUuid? })` —— `id` 在 owner 内唯一，同一 `owner::id` 重复注册即覆盖（便于热更新）；不指定 `coursewareId`/`coursewareUuid` 则对所有课件生效，指定则精确匹配；`position` 取 `'head'`（紧跟 Bridge SDK）或 `'body-end'`（默认，`</body>` 前）；同位置按 `priority` 升序、插入序次之拼接，顺序确定。配套 `unregister(owner, id)` / `clear(owner?)` / `list(courseware?)` / `listOwners()`；
+  - **注入实现**：`server/routes/shared.ts` 的 `injectLmsSdk()` 新增 `collectCoursewareRuntimeScripts(cwInfo)`，把 head 脚本拼在 Bridge SDK 之后、body-end 脚本插在 `</body>` 之前（无 `</body>` 则追加到末尾），每段脚本前带 `<!-- Courseware Runtime Script (owner/id) -->` 注释便于排查；**服务未注册、`list()` 抛错或没有任何脚本时全部静默降级**，既有课件渲染路径零影响；
+  - **插件接入方式**：可直接从 `@openlearn/plugin-sdk` 导入该 Token，也可用 `ctx.resolve(new Token('@openlearn/core:ICoursewareRuntimeScriptRegistry'))` 按名字解析 —— 后者不依赖 SDK 构建产物是否已包含新 Token，部署顺序更安全；
+  - **首个使用方**：「分数变量监视器」已从 `server/utils/bridge-sdk.ts` 的模板字符串中**整体迁出**，改由 `interactive-courseware` 插件 v1.0.29 通过本扩展点注册（`src/score-monitor-script.ts`，`position: 'body-end'`、`priority: 200`，`activate()` 注册、`deactivate()` 撤销）。监视器行为不变：三层采集（`window.__LMS_WATCH__` 显式声明 / window 上名字匹配 `score|point|grade|mark|correct|right` 的有限数值属性自动发现 / 分数类元素**可见**文本兜底，键名形如 `dom__score`，故完全不调用 `LMS.*`、只把分数写进 `#score` 的静态课件也能采到分）、变化后静默 `1200ms` 以 `LMS.saveProgress({ score, watch })` 上报一次样本、单会话上限 60 次、同一元素按选择器去重（避免 `#score` 与 `[id*="score" i]` 重复登记）；采样仍走 `status='inprogress'`，**不会**提前把 attempt 置为已完成，快照落到 `submission_result.extra_json.watch` 与 `submission_raw.payload_json.watch`，成为插件按 `score_policy`（MAX / AVERAGE / LATEST）聚合的样本历史。
+  - 验证：宿主 `tsc --noEmit` 对相关文件 0 错误；插件 `tsc --noEmit` 0 错误；jsdom 冒烟测试（先真实执行 `BRIDGE_SDK_CODE`，再执行扩展点注入的监视器脚本）——两段脚本 `doubleBackslashSeqs=0`，空闲 1.5s 零上报，`window.userScore=55` 触发 1 次采样（`score=55`），`#score` 文本改为 `82` 再触发 1 次（`score=82`、`watch.dom__score=82`，且无重复 DOM 键）。
 
 ### Fixes
 

@@ -46,6 +46,7 @@ import {
   IPluginCapabilityGatewayToken,
   ICapabilityRegistryToken,
   IAuthSessionBridgeToken,
+  ICoursewareRuntimeScriptRegistryToken,
 } from '../di/interfaces.js';
 import { StorageService } from '../di/storage-service.js';
 import { AIService } from '../di/ai-service.js';
@@ -53,6 +54,7 @@ import { SemesterGradeService } from '../di/semester-grade-service.js';
 import { PointsDimensionRegistry } from '../di/points-dimension-registry.js';
 import { PointsLedgerService } from '../di/points-ledger-service.js';
 import { AuthSessionBridgeService } from '../di/auth-session-bridge-service.js';
+import { CoursewareRuntimeScriptRegistry } from '../di/courseware-runtime-script-registry.js';
 import { PluginHost } from '../plugin-host/index.js';
 import { WorkerManager } from '../worker-runtime/worker-manager.js';
 import { HotReloadController } from '../plugin-host/hot-reload.js';
@@ -246,6 +248,9 @@ export class Kernel {
       getServiceRegistryKernel: async () => this.platformServiceRegistryKernel,
     } as any);
     this.serviceRegistry.register(IAuthSessionBridgeToken, new AuthSessionBridgeService(this.db as any));
+    // 课件运行时脚本扩展点：让插件拥有「跑在互动课件 iframe 内部」的代码
+    // （iframe 为 credentialless + 无 allow-same-origin，父窗口无法注入，只能由服务端渲染时拼接）
+    this.serviceRegistry.register(ICoursewareRuntimeScriptRegistryToken, new CoursewareRuntimeScriptRegistry());
 
     // Capability check interceptor
     this.commandBus.setInterceptor(async (command) => {

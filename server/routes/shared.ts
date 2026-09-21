@@ -1,6 +1,7 @@
 import path from 'path';
 import crypto from 'crypto';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { ICoursewareRuntimeScriptRegistryToken } from '../../packages/core/di/interfaces.js';
 import { getCookieToken } from '../middleware/auth.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 
@@ -22,6 +23,39 @@ export function validateMagicBytes(buffer: Buffer, fileName: string): boolean {
   return signatures.some((sig) => sig.every((byte, i) => buffer[i] === byte));
 }
 export const BLOCKED_EXTENSIONS = ['.exe', '.sh', '.bat', '.cmd', '.dll', '.so', '.dylib', '.scr', '.msi', '.ps1'];
+
+/**
+ * 收集插件通过「课件运行时脚本扩展点」注册的脚本。
+ *
+ * 课件 iframe 处于 `credentialless` + sandbox（无 allow-same-origin）的 opaque origin 中，
+ * 父窗口读不到其内部状态，服务端拼接 HTML 是平台唯一能向课件内投递代码的位置。
+ * 注册点缺失或未注册任何脚本时必须完全静默，保证既有渲染路径零影响。
+ */
+function collectCoursewareRuntimeScripts(cwInfo: { id: string; name: string; uuid: string }): {
+  head: string;
+  bodyEnd: string;
+} {
+  const empty = { head: '', bodyEnd: '' };
+  try {
+    const registry: any = (kernelContainer as any)?.serviceRegistry?.resolve?.(ICoursewareRuntimeScriptRegistryToken);
+    if (!registry || typeof registry.list !== 'function') return empty;
+    const scripts: any[] = registry.list({ id: cwInfo.id, uuid: cwInfo.uuid }) || [];
+    if (!scripts.length) return empty;
+    let head = '';
+    let bodyEnd = '';
+    for (const script of scripts) {
+      if (!script || typeof script.source !== 'string' || !script.source.trim()) continue;
+      const tag = `\n<!-- Courseware Runtime Script (${script.owner}/${script.id}) -->\n<script>${script.source}</script>`;
+      if (script.position === 'head') head += tag;
+      else bodyEnd += tag;
+    }
+    return { head, bodyEnd };
+  } catch (err) {
+    console.warn('[injectLmsSdk] 读取课件运行时脚本扩展点失败（已忽略）:', (err as Error).message);
+    return empty;
+  }
+}
+
 export function injectLmsSdk(htmlContent: string, req: any, cwInfo: { id: string; name: string; uuid: string }) {
   const token = getCookieToken(req);
   let studentInfo = {
@@ -102,6 +136,8 @@ export function injectLmsSdk(htmlContent: string, req: any, cwInfo: { id: string
     studentInfo.attempt_id = attempt.id;
   }
 
+  const runtimeScripts = collectCoursewareRuntimeScripts(cwInfo);
+
   const injection = `
 <!-- LMS Courseware SDK Inject -->
 <script>
@@ -111,7 +147,7 @@ window.__LMS_COURSEWARE__ = {
   name: ${JSON.stringify(cwInfo.name)}
 };
 </script>
-<script>${BRIDGE_SDK_CODE}</script>
+<script>${BRIDGE_SDK_CODE}</script>${runtimeScripts.head}
 `;
 
   let html = htmlContent;
@@ -143,6 +179,15 @@ window.__LMS_COURSEWARE__ = {
     html = html.replace(/<html>/i, `<html><head>${injection}</head>`);
   } else {
     html = injection + html;
+  }
+
+  // 插件注册的 body-end 脚本：放在 Bridge SDK 之后、且尽量靠后，确保能观察到课件自己的 DOM
+  if (runtimeScripts.bodyEnd) {
+    if (/<\/body>/i.test(html)) {
+      html = html.replace(/<\/body>/i, `${runtimeScripts.bodyEnd}</body>`);
+    } else {
+      html += runtimeScripts.bodyEnd;
+    }
   }
   return html;
 }

@@ -97,6 +97,9 @@ export type {
   ITeachingCollaborationService,
   ILearningAnalyticsService,
   IAICapabilityService,
+  CoursewareRuntimeScript,
+  IRegisteredCoursewareRuntimeScript,
+  ICoursewareRuntimeScriptRegistry,
   CommandHandler,
   CommandMetadata,
   EventSubscriber,
@@ -131,6 +134,7 @@ export {
   IPluginCapabilityGatewayToken,
   ICapabilityRegistryToken,
   IAuthSessionBridgeToken,
+  ICoursewareRuntimeScriptRegistryToken,
 } from '../core/di/interfaces.js';
 
 export type {
