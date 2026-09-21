@@ -49,6 +49,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `AIService.generateText` 改用共享 `decryptApiKey`，并在解密结果仍是密文时抛出可操作的错误（提示 ENCRYPTION_KEY 不一致 / 需重新保存 API Key），不再向上游发送密文换取难以定位的 401。
   - 验证：`packages/core/di/__tests__/ai-service.test.ts` 通过；`tsc --noEmit` 0 错误；在“正常 / `ENCRYPTION_KEY=''`（PM2 场景）/ 密钥被轮换”三种场景下探测 AIService，分别为成功、成功（回退 `.env`）、抛出明确解密错误。
 
+### Features
+
+- **课件分数变量监视器（Score Variable Monitor，配套 `interactive-courseware` 插件 v1.0.28）**：`server/utils/bridge-sdk.ts` 新增独立的 `initScoreWatcher()`，随 Bridge SDK 注入每一个互动课件 iframe —— 在课件处于 `credentialless` + 沙箱 opaque origin、父窗口无法读取其内部变量的前提下，**这是唯一能在课件里运行的平台代码**：
+  - **三层采集分数变量**：① `window.__LMS_WATCH__` 显式声明的变量名 / 点路径（课件作者或后续 AI 补刀可写入，设为 `false` 可整体退出监视）；② 自动发现 `window` 上名字匹配 `score|point|grade|mark|correct|right` 的有限数值属性；③ **DOM 兜底**——分数类元素（`#score`、`.score`、`[id*="score" i]` 等）的**可见**文本，键名形如 `dom__score`。因此连完全不调用 `LMS.*`、只把分数写进 `#score` 的静态课件（如 `it-quiz.html`）也能被采到分；
+  - **变化即采样、静默后上报**：`setInterval(800ms)` + `MutationObserver`（300ms 节流，两次 tick 间比对快照）检测变化，在静默 `1200ms` 后以 `LMS.saveProgress({ score, watch })` 上报一次，避免连续抖动产生上报风暴；单次会话最多 60 次，值未变化不上报，初始基线不计为变化；
+  - **不改变现有提交语义**：采样走 `saveProgress`（`status='inprogress'`），只写 `submission_result` / `submission_raw` 并发出 `courseware.attempt_submitted`，**不会**把 attempt 提前置为已完成；`watch` 快照随既有 `extra: payload` 落到 `submission_result.extra_json.watch` 与 `submission_raw.payload_json.watch`，天然构成可供插件聚合的样本历史；
+  - **同一元素去重**：同一节点常被多个选择器命中（`#score` 与 `[id*="score" i]`），快照按元素去重，避免 `watch` 里出现重复变量名；
+  - **平台只负责如实采样**，「取最高分 / 最近一次 / 平均分」等口径由成绩配置所在侧（插件）按 `score_policy` 决定。
+  - 验证：在 jsdom 中真实执行 `BRIDGE_SDK_CODE` 的冒烟测试——初始基线静默不上报、`window.userScore=55` 触发 1 次采样、`#score` 文本改为 `82` 再触发 1 次且 `watch.dom__score=82`、`saveProgress` 载荷同时含 `score` 与完整 `watch` 快照；另确认产物内嵌 JS 无双重转义（`doubleBackslashSeqs=0`）。
+
 ### Fixes
 
 - **互动课件学生提交归属丢失（学生提交后教师端「学生互动提交数据」为空）**：学生在互动课堂提交网页课件后，真实学生成绩完全不入库，`submission_result` 长期为空，而 `courseware_attempt` 里堆积的全是 `student_id='guest'` / `'teacher'` 的预览记录。根因是三处独立缺陷叠加：
