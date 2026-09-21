@@ -122,6 +122,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 新增 `baseName()` / `describeSubmission()` / `fileHref()`：自己与同学的提交都改为按内容物描述（文件名 / N 个附件 / 文字作答 / 链接作答 / 已提交（无附件）），附件改为走带权限的 `/api/assignments/:assignmentId/files/:fileId`，并在卡片内展示文字作答与作品链接；无附件时不再渲染指向 `null` 的下载链接。
   - `server/routes/lessons.ts`：`GET /api/lessons/:lessonId/eval-submissions` 与 `GET /api/lessons/:lessonId/students/:studentId/eval-status` 新增 `LATEST_VERSION_COLUMNS`（子查询取最新 `plugin_submission_versions` 的 `files_json` / `text_content` / `link_url`）与 `withLatestVersion()`（展开为 `files` / `textContent` / `linkUrl`），旧面板因此能看到真实提交内容而不只是一个文件路径。
   - 回归：新增 `src/components/__tests__/student-assignment-eval-panel.test.tsx` 4 例（纯附件 / 纯文字互评 / 历史纯路径兼容 / 未提交）。把该组件改动 stash 掉后，其中 2 例会以**与线上完全相同的** `TypeError: Cannot read properties of null (reading 'split')` 失败，证明该回归已被锁死。
+- 补齐作业互评只读接口的鉴权：`GET /api/lessons/:lessonId/eval-submissions` 与 `GET /api/lessons/:lessonId/students/:studentId/eval-status` 此前**没有任何鉴权**，任何人仅凭 `lessonId` 即可读到全班提交（含文字作答、附件名、互评记录与成绩），现分别加 `requireAuth()`。
+  - 回归：新增 `server/__tests__/eval-submissions-auth.test.ts` 3 例（未登录 401；登录后 `file_path` 为 null 的提交回填 `files` 且不泄露内部字段 `latest_files_json`；`eval-status` 同样正常）。
 
 ### Docs
 

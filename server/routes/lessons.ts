@@ -178,7 +178,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   });
 
   // ── 作业上传与互评插�? API ──────────────────────────────────────────────
-  app.get('/api/lessons/:lessonId/eval-submissions', (req, res) => {
+  app.get('/api/lessons/:lessonId/eval-submissions', requireAuth(), (req, res) => {
     try {
       const { lessonId } = req.params;
       const rows = kernelContainer.db
@@ -281,7 +281,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/lessons/:lessonId/students/:studentId/eval-status', (req, res) => {
+  app.get('/api/lessons/:lessonId/students/:studentId/eval-status', requireAuth(), (req, res) => {
     try {
       const { lessonId, studentId } = req.params;
       const submission = kernelContainer.db
