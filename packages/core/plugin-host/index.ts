@@ -1652,6 +1652,10 @@ export class PluginHost {
     } catch (termErr) {
       console.error(`[PluginHost] Worker termination error for "${pluginId}":`, termErr);
     } finally {
+      // D-09: 与 inline 路径（deactivatePluginExclusive）保持一致 —— 无论成功/失败/超时，
+      // 都在 finally 中强制回收资源。此前只有 inline 路径调用 disposeAll，
+      // 导致 worker 模式插件停用后命令、事件订阅、定时器、路由永久残留。
+      this.resourceTracker.disposeAll(pluginId);
       this.pluginStates.set(pluginId, PluginState.INACTIVE);
       this.pluginInstances.delete(pluginId);
       this.db.prepare('UPDATE plugins SET status = ? WHERE id = ?').run('inactive', pluginId);
@@ -1757,6 +1761,12 @@ export class PluginHost {
       }
     }
 
+    // 1b. 兜底资源回收：插件若非 ACTIVE 态（如 ERROR / INACTIVE / INSTALLED），
+    // 上面的停用分支不会执行，其命令、事件订阅、定时器与路由可能仍然残留
+    // （典型场景：activate 中途失败、reload 失败后直接卸载）。
+    // disposeAll 幂等，对已回收过的插件为无操作，故无条件执行。
+    this.resourceTracker.disposeAll(pluginId);
+
     // 2. 获取当前状态（可能已被 deactivatePlugin 修改）
     const state = this.pluginStates.get(pluginId) ?? PluginState.INSTALLED;
 
@@ -1803,6 +1813,16 @@ export class PluginHost {
       }
     } catch (e) {
       console.warn(`[PluginHost] Failed to drop plugin tables for "${pluginId}":`, e);
+    }
+
+    // 4b. 撤销插件能力（与 T-04-20 等价的兜底）
+    // 非 ACTIVE 态卸载不会走 deactivate 路径，也就不会执行 revokeAll，
+    // 会造成已授予能力在内存中残留（权限泄漏）。此处无条件撤销一次。
+    try {
+      const capService = await this.serviceRegistry.resolve<ICapabilityService>(ICapabilityServiceToken);
+      await capService.revokeAll(`plugin:${manifestId}`);
+    } catch (capErr) {
+      console.warn(`[PluginHost] Failed to revoke capabilities for "${pluginId}":`, capErr);
     }
 
     // 4c. Deregister static routes registered by deploy (best-effort cleanup)
