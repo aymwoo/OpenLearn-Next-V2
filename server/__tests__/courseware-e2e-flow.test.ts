@@ -120,9 +120,9 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
       };
       next();
     });
-    // 学生身份在 CapabilityGuard 中走角色后缀 fallback，需 userId 以 ':student' 结尾
-    kernelContainer.capabilityGuard.grant(studentId, 'student:write');
-    kernelContainer.capabilityGuard.grant(studentId, 'lesson:read');
+    // 不再手工 grant 能力：CapabilityGuard 会按 actorId 的 `:student` 后缀兜底授予
+    // student:write / lesson:read（见 packages/core/capability-system/index.ts）。
+    // 历史上这里靠 grant 绕过，掩盖了 /submit 路由 actorId 未归一化的缺陷。
     const ctx: any = {
       app,
       io: { emit: (event: string, payload: any) => emittedEvents.push({ event, payload }) },
