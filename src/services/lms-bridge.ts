@@ -20,6 +20,53 @@ export interface LmsMessagePayload {
 }
 
 /**
+ * attempt 认领缓存：原始 attemptId → 认领后的 attemptId。
+ * 同一页面会话内只需认领一次，避免每条消息都多打一次请求。
+ */
+const adoptedAttemptIds = new Map<string, string>();
+
+/**
+ * 归属认领。
+ *
+ * 背景：课件 iframe 以 `credentialless` + `sandbox`（无 allow-same-origin）加载，
+ * 访问 `/runtime/:uuid/` 时**不携带会话 cookie**，服务端 `injectLmsSdk` 只能识别为匿名，
+ * 从而建出一条 `student_id='guest'` 的共享 attempt（同一课件的所有匿名访问者复用同一条）。
+ * 后果：所有学生共用一个 attempt，真实学生提交时因归属不符被 403 丢弃。
+ *
+ * 修复：由持有会话 cookie 的父窗口（本模块）在转发上报前先请求服务端把该 attempt
+ * 认领到当前登录学生名下；若该 attempt 已归属其他学生，服务端会为当前学生新建/复用
+ * 他自己的 attempt 并返回其 id。
+ *
+ * 失败（未登录 / 网络异常）时退回原始 attemptId，不阻断上报。
+ */
+async function adoptAttempt(attemptId: string): Promise<string> {
+  const cached = adoptedAttemptIds.get(attemptId);
+  if (cached) return cached;
+  try {
+    const res = await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/adopt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    if (!res.ok) {
+      if (res.status !== 401) {
+        console.warn(`[LMS Bridge] Attempt adopt failed: HTTP ${res.status}`);
+      }
+      return attemptId;
+    }
+    const json = (await res.json()) as { attemptId?: string };
+    if (typeof json?.attemptId === 'string' && json.attemptId) {
+      adoptedAttemptIds.set(attemptId, json.attemptId);
+      return json.attemptId;
+    }
+    return attemptId;
+  } catch (e) {
+    console.warn('[LMS Bridge] Attempt adopt request failed:', e);
+    return attemptId;
+  }
+}
+
+/**
  * Validates and processes incoming LMS messages from sandboxed courseware iframes.
  */
 export async function processLmsMessage(event: MessageEvent): Promise<void> {
@@ -60,6 +107,10 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
   }
 
   if (!attemptId || typeof attemptId !== 'string') return;
+
+  // 归属认领：把 iframe 上报的（可能是 guest 共享的）attempt 认领到当前登录用户名下。
+  // 见 adoptAttempt() 注释。失败时退回原始 attemptId，不阻断上报。
+  attemptId = await adoptAttempt(attemptId);
 
   // ── 双向通信：课件上报配置/元数据 ──
   if (type === 'LMS_CONFIG') {
@@ -116,24 +167,32 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
   if (isSubmit) {
     emitCoursewareEvent('courseware.submitted', attemptId, payload);
     try {
-      await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/submit`, {
+      const res = await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           score: payload?.score ?? payload?.grade ?? payload?.result ?? payload?.points ?? undefined,
           comment: payload?.comment ?? payload?.feedback ?? payload?.note ?? undefined,
           completion: payload?.completion ?? 1.0,
-          status: 'submitted',
+          // 终态必须用 'completed'：后端 courseware.submit_attempt 处理器只在该取值下
+          // 更新 courseware_attempt.finished_at / status；传 'submitted' 会永远停在“进行中”，
+          // 导致「已提交/完成」筛选、HtmlAppletFrame 的 submittedAttempts 全部失效。
+          status: 'completed',
           extra: payload,
         }),
       });
+      if (!res.ok) {
+        // 旧实现不看响应，403（归属不符）会被静默吞掉，学生端看起来“提交成功”实际已丢失。
+        const detail = await res.text().catch(() => '');
+        console.error(`[LMS Bridge] Backend rejected attempt submission: HTTP ${res.status}`, detail);
+      }
     } catch (e) {
       console.error('[LMS Bridge] Failed to submit attempt data to backend:', e);
     }
   } else if (isSaveProgress) {
     emitCoursewareEvent('courseware.progress_saved', attemptId, payload);
     try {
-      await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/submit`, {
+      const res = await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -144,13 +203,17 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
           extra: payload,
         }),
       });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        console.error(`[LMS Bridge] Backend rejected progress save: HTTP ${res.status}`, detail);
+      }
     } catch (e) {
       console.error('[LMS Bridge] Failed to save progress to backend:', e);
     }
   } else {
     emitCoursewareEvent('courseware.event_logged', attemptId, payload);
     try {
-      await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/log`, {
+      const res = await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -158,6 +221,10 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
           payload: payload,
         }),
       });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        console.error(`[LMS Bridge] Backend rejected event log: HTTP ${res.status}`, detail);
+      }
     } catch (e) {
       console.error('[LMS Bridge] Failed to log event to backend:', e);
     }

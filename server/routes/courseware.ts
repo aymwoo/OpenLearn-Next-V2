@@ -315,6 +315,96 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
+  /**
+   * POST /api/courseware/attempts/:attemptId/adopt
+   *
+   * 归属认领。
+   *
+   * 背景：课件 iframe 以 `credentialless` + `sandbox`（无 allow-same-origin）加载，
+   * 访问 `/runtime/:uuid/` 时**不携带会话 cookie**，`injectLmsSdk` 只能把访问者识别为匿名，
+   * 建出一条 `student_id='guest'` 的共享 attempt（同一课件的所有匿名访问者复用同一条）。
+   * 于是所有学生共用一个 attempt，真实学生 `POST /submit` 时因
+   * `attempt.student_id('guest') !== session.userId` 被 403 丢弃。
+   *
+   * 持有会话 cookie 的父窗口在转发上报前先调用本接口，把 attempt 认领到当前学生名下：
+   *   - 已是本人 attempt  → 原样返回（幂等）
+   *   - 无主 attempt（guest/teacher 哨兵）→ 直接改归属，保留已产生的原始流水
+   *   - 已被其他真实学生占用 → 为当前学生复用/新建自己的 active attempt，返回新 id
+   *
+   * 教师/管理员预览不受归属约束，原样返回。
+   */
+  app.post('/api/courseware/attempts/:attemptId/adopt', (req, res) => {
+    try {
+      const { attemptId } = req.params;
+
+      const token = getCookieToken(req);
+      const session = (req as any).session || (token ? getValidSession(token) : null);
+      if (!session) {
+        return res.status(401).json({ error: 'Authentication required to adopt an attempt' });
+      }
+
+      const db = kernelContainer.db;
+      const attemptRow = db
+        .prepare('SELECT id, courseware_id, student_id, status FROM courseware_attempt WHERE id = ?')
+        .get(attemptId) as
+        | { id: string; courseware_id: string; student_id: string; status: string }
+        | undefined;
+      if (!attemptRow) {
+        return res.status(404).json({ error: 'Attempt not found' });
+      }
+
+      // 教师/管理员：预览用，不参与归属约束
+      if (session.role === 'teacher' || session.role === 'administrator') {
+        return res.json({ attemptId, adopted: false, reused: true, role: session.role });
+      }
+
+      const studentId = session.userId || session.studentId;
+      if (!studentId) {
+        return res.status(400).json({ error: 'Session has no student identity' });
+      }
+
+      // 已归属当前学生 → 幂等返回
+      if (attemptRow.student_id === studentId) {
+        return res.json({ attemptId, adopted: false, reused: true });
+      }
+
+      // 无主 attempt（injectLmsSdk 写入的匿名/预览哨兵）→ 直接认领，保留已产生的原始流水
+      const UNOWNED_OWNERS = ['guest', 'teacher', 'teacher_preview', ''];
+      if (UNOWNED_OWNERS.includes(attemptRow.student_id)) {
+        const info = db
+          .prepare(
+            "UPDATE courseware_attempt SET student_id = ? WHERE id = ? AND student_id IN ('guest','teacher','teacher_preview','')",
+          )
+          .run(studentId, attemptId);
+        if (info.changes > 0) {
+          io.emit('courseware-attempt-updated', { attemptId, type: 'adopt' });
+          return res.json({ attemptId, adopted: true, reused: true });
+        }
+      }
+
+      // attempt 已被其他真实学生占用 → 为当前学生复用/新建他自己的 active attempt
+      let own = db
+        .prepare('SELECT id FROM courseware_attempt WHERE courseware_id = ? AND student_id = ? AND status = ?')
+        .get(attemptRow.courseware_id, studentId, 'active') as { id: string } | undefined;
+      if (!own) {
+        const newId = 'att_' + crypto.randomBytes(8).toString('hex');
+        db.prepare(
+          'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, status) VALUES (?, ?, ?, ?, ?)',
+        ).run(newId, attemptRow.courseware_id, studentId, Date.now(), 'active');
+        own = { id: newId };
+      }
+      io.emit('courseware-attempt-updated', { attemptId: own.id, type: 'adopt' });
+      return res.json({
+        attemptId: own.id,
+        adopted: false,
+        reused: true,
+        reason: 'attempt-owned-by-another-student',
+      });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
   app.get('/api/courseware/attempts', (req, res) => {
     try {
       // ?coursewareUuid=<uuid> 用于白板 HtmlAppletFrame 在嵌入某个具体课件时只拉取该课件的成绩，

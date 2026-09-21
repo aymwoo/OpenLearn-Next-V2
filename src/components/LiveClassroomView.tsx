@@ -743,6 +743,30 @@ export function LiveClassroomView({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  // ── 提交数据列表的展示口径（徽标与表格必须共用同一份数据） ──
+  // 先按顶部所选班级过滤（未选班级时不筛），再按搜索词与状态筛选。
+  // 之前的 bug：徽标直接用未过滤的 attempts.length，表格却用班级过滤后的结果，
+  // 导致“徽标显示 8 条记录、列表却空空如也”的矛盾。
+  const classStudentIds = liveClassSelectedClassId ? students.map((s) => s.id) : [];
+  const classFilteredAttempts = liveClassSelectedClassId
+    ? attempts.filter((a) => classStudentIds.includes(a.studentId))
+    : attempts;
+  const displayAttempts = classFilteredAttempts.filter((a) => {
+    const matchesSearch =
+      a.studentName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.coursewareName?.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // 终态状态值归一到一处：后端落库可能是 completed，客户端历史上传过 submitted/finished。
+    const FINISHED_STATUSES = ['completed', 'submitted', 'finished'];
+    const IN_PROGRESS_STATUSES = ['active', 'inprogress', 'started'];
+    const matchesStatus =
+      submissionFilter === 'all' ||
+      (submissionFilter === 'submitted' && FINISHED_STATUSES.includes(a.status)) ||
+      (submissionFilter === 'started' && IN_PROGRESS_STATUSES.includes(a.status));
+
+    return matchesSearch && matchesStatus;
+  });
+
   return (
     <div className="flex-grow flex-1 flex flex-col min-h-0 bg-surface border border-theme rounded-2xl shadow-xl text-main overflow-hidden font-sans">
       {/* 1. Header Control Bar */}
@@ -1133,8 +1157,20 @@ export function LiveClassroomView({
                         {lang === 'zh' ? '学生互动提交数据列表' : 'Student Submissions'}
                       </span>
                       {attempts.length > 0 && (
-                        <span className="text-xs bg-primary-theme/10 text-primary-theme px-2 py-0.5 rounded-full border border-primary-theme/20 font-bold">
-                          {attempts.length} {lang === 'zh' ? '条记录' : 'records'}
+                        <span
+                          className="text-xs bg-primary-theme/10 text-primary-theme px-2 py-0.5 rounded-full border border-primary-theme/20 font-bold"
+                          title={
+                            displayAttempts.length === attempts.length
+                              ? undefined
+                              : lang === 'zh'
+                                ? `已按所选班级/筛选条件过滤，全部记录共 ${attempts.length} 条`
+                                : `Filtered by the selected class/filters. ${attempts.length} records in total.`
+                          }
+                        >
+                          {displayAttempts.length} {lang === 'zh' ? '条记录' : 'records'}
+                          {displayAttempts.length !== attempts.length && (
+                            <span className="ml-1 font-normal opacity-70">/ {attempts.length}</span>
+                          )}
                         </span>
                       )}
                     </div>
@@ -1186,25 +1222,6 @@ export function LiveClassroomView({
                       </div>
                     ) : (
                       (() => {
-                        const classStudentIds = liveClassSelectedClassId ? students.map((s) => s.id) : [];
-                        const classFiltered = liveClassSelectedClassId
-                          ? attempts.filter((a) => classStudentIds.includes(a.studentId))
-                          : attempts;
-
-                        const displayAttempts = classFiltered.filter((a) => {
-                          const matchesSearch =
-                            a.studentName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            a.coursewareName?.toLowerCase().includes(searchQuery.toLowerCase());
-
-                          const matchesStatus =
-                            submissionFilter === 'all' ||
-                            (submissionFilter === 'submitted' &&
-                              (a.status === 'submitted' || a.status === 'finished')) ||
-                            (submissionFilter === 'started' && a.status === 'started');
-
-                          return matchesSearch && matchesStatus;
-                        });
-
                         if (displayAttempts.length === 0) {
                           return (
                             <div className="h-full flex flex-col items-center justify-center py-12 text-muted gap-2">

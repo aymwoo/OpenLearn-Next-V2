@@ -49,6 +49,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - `AIService.generateText` 改用共享 `decryptApiKey`，并在解密结果仍是密文时抛出可操作的错误（提示 ENCRYPTION_KEY 不一致 / 需重新保存 API Key），不再向上游发送密文换取难以定位的 401。
   - 验证：`packages/core/di/__tests__/ai-service.test.ts` 通过；`tsc --noEmit` 0 错误；在“正常 / `ENCRYPTION_KEY=''`（PM2 场景）/ 密钥被轮换”三种场景下探测 AIService，分别为成功、成功（回退 `.env`）、抛出明确解密错误。
 
+### Fixes
+
+- **互动课件学生提交归属丢失（学生提交后教师端「学生互动提交数据」为空）**：学生在互动课堂提交网页课件后，真实学生成绩完全不入库，`submission_result` 长期为空，而 `courseware_attempt` 里堆积的全是 `student_id='guest'` / `'teacher'` 的预览记录。根因是三处独立缺陷叠加：
+  - **iframe 不携带会话导致归属丢失**：`src/features/whiteboard/components/HtmlAppletFrame.tsx` 的课件 iframe 使用 `credentialless` + `sandbox`（无 `allow-same-origin`），访问 `/runtime/:uuid/` 时不带 cookie，服务端 `injectLmsSdk` 只能建出一条 `student_id='guest'` 的 attempt，且**同一课件的所有匿名访问者复用同一条**；真实学生提交时又因 `attempt.student_id('guest') !== session.userId` 被 `403 Forbidden` 拒绝。现由持有会话的父窗口在转发上报前调用新增接口 `POST /api/courseware/attempts/:attemptId/adopt` 认领归属：无主 attempt 直接改归属（保留已产生的原始流水），已被其他学生占用则为本学生复用/新建自己的 attempt 并返回新 id；接口幂等，教师/管理员预览不受约束。
+  - **提交失败被静默吞掉**：`src/services/lms-bridge.ts` 的三处上报（submit / saveProgress / log）均不检查 `res.ok`，401/403 只在控制台留下无痕错误，学生端看起来「提交成功」。现已对非 2xx 响应输出带响应正文的 `console.error`。
+  - **终态状态值不一致导致「已完成」永不生效**：`lms-bridge.ts` 提交时传 `status: 'submitted'`，而 `packages/plugins/builtin.ts` 的 `courseware.submit_attempt` 处理器只在 `status === 'completed'` 时更新 `courseware_attempt.finished_at/status`，导致 attempt 永远停在「进行中」，`HtmlAppletFrame` 的 `submittedAttempts` 覆盖层与提交列表的「已提交/完成」筛选全部失效。现统一提交终态为 `'completed'`。
+- **互动课堂提交列表徽标与列表口径不一致（徽标显示 8 条记录、列表却为空）**：`src/components/LiveClassroomView.tsx` 的徽标使用未过滤的 `attempts.length`，而列表使用按所选班级过滤后的结果，二者数据源不同造成自相矛盾的界面。现两者共用同一份派生数据（班级 + 搜索 + 状态筛选），徽标在发生过滤时额外以 `/ 总数` 形式提示总量；状态筛选口径统一为 `completed|submitted|finished`（终态）与 `active|inprogress|started`（进行中），修正原先只认 `'started'` 导致「进行中」筛选失效的问题。
+
 ## [0.3.21] - 2026-09-20
 
 ### Fixes
