@@ -178,7 +178,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // 插件市场列表与版本更新检测 API
-  app.get('/api/plugins/market', async (req, res) => {
+  // SEC-AUTH: 与 check-update 同源 —— 该端点会对每个声明 updateSource 的插件调用
+  // checkVersion（触发服务端 git / HTTP 出站请求），必须要求有效会话。
+  app.get('/api/plugins/market', requireAuth(), async (req, res) => {
     // Return update info for all installed plugins that declare updateSource
     try {
       const plugins = kernelContainer.db
@@ -222,7 +224,9 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // 手动检查单个插件更新
-  app.post('/api/plugins/:id(*)/check-update', async (req, res) => {
+  // SEC-AUTH: 该端点以插件 manifest 声明的 repo 为参数触发服务端 git / HTTP 出站请求，
+  // 必须要求有效会话（不限制角色：插件中心教师亦可查看），避免成为未认证的出站请求放大面。
+  app.post('/api/plugins/:id(*)/check-update', requireAuth(), async (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
       const pluginId = kernelContainer.pluginHost.resolvePluginUuid(rawId);
@@ -552,7 +556,11 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   );
 
   // Plugin command execution endpoint (V3.0: frontend invokeCommand bridge)
-  app.post('/api/plugins/execute-command', async (req, res) => {
+  // SEC-AUTH: 该端点被前端插件宿主全局调用，教师端与学生端共用同一宿主
+  // （src/main.tsx 单例，学生端学习面板/考试全屏视图亦会派发命令）。
+  // 因此此处只要求"有效会话"，不得限制角色 —— 改成 requireAuth('teacher','administrator')
+  // 会直接打断学生端功能。
+  app.post('/api/plugins/execute-command', requireAuth(), async (req, res) => {
     try {
       const { type, payload } = req.body;
       if (!type) {
