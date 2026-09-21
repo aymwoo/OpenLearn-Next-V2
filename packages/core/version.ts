@@ -11,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** 兜底版本：仅在无法定位平台 package.json 时使用 */
-const FALLBACK_VERSION = '0.3.20';
+const FALLBACK_VERSION = '0.3.21';
 
 function readPlatformVersion(): string {
   const bases: string[] = [];
