@@ -896,15 +896,29 @@ parentPort.on('message', async function(msg) {
       var dbService = rawServices['@openlearn/core:IDatabase'];
       var dbApi = dbService ? {
         ensureTable: function(tableName, schema) {
+          // SEC: tableName / schema 由插件提供，属不可信输入。直接拼接会导致 SQL 注入
+          // （例如 tableName = "t (x); DROP TABLE events; --"）。此处强制标识符白名单
+          // 并禁止 schema 中的分号，避免多语句注入。与 inline 模式保持一致。
+          if (!/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(String(tableName))) {
+            throw new Error("[SEC] Invalid SQL identifier for ensureTable: " + String(tableName));
+          }
+          if (typeof schema !== "string" || schema.length === 0 || schema.length > 4000 || schema.indexOf(";") !== -1) {
+            throw new Error("[SEC] Invalid CREATE TABLE schema fragment: must be non-empty and contain no semicolon");
+          }
           var fullName = tablePrefix + tableName;
           return dbService.prepareAndRun('CREATE TABLE IF NOT EXISTS ' + fullName + ' (' + schema + ')', []);
         },
         table: function(tableName) {
+          if (!/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(String(tableName))) {
+            throw new Error("[SEC] Invalid SQL identifier for table(): " + String(tableName));
+          }
           return tablePrefix + tableName;
         },
         dropAllTables: async function() {
           var tables = await dbService.prepareAndAll("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?", [tablePrefix + '%']);
           for (var i = 0; i < tables.length; i++) {
+            // SEC: 表名来自 sqlite_master，仍二次校验后再拼进 DDL
+            if (!/^plugin_[A-Za-z0-9_]+$/.test(String(tables[i].name))) continue;
             await dbService.prepareAndRun('DROP TABLE IF EXISTS ' + tables[i].name, []);
           }
         },

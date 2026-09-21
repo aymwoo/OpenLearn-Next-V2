@@ -66,6 +66,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **提交失败被静默吞掉**：`src/services/lms-bridge.ts` 的三处上报（submit / saveProgress / log）均不检查 `res.ok`，401/403 只在控制台留下无痕错误，学生端看起来「提交成功」。现已对非 2xx 响应输出带响应正文的 `console.error`。
   - **终态状态值不一致导致「已完成」永不生效**：`lms-bridge.ts` 提交时传 `status: 'submitted'`，而 `packages/plugins/builtin.ts` 的 `courseware.submit_attempt` 处理器只在 `status === 'completed'` 时更新 `courseware_attempt.finished_at/status`，导致 attempt 永远停在「进行中」，`HtmlAppletFrame` 的 `submittedAttempts` 覆盖层与提交列表的「已提交/完成」筛选全部失效。现统一提交终态为 `'completed'`。
 - **互动课堂提交列表徽标与列表口径不一致（徽标显示 8 条记录、列表却为空）**：`src/components/LiveClassroomView.tsx` 的徽标使用未过滤的 `attempts.length`，而列表使用按所选班级过滤后的结果，二者数据源不同造成自相矛盾的界面。现两者共用同一份派生数据（班级 + 搜索 + 状态筛选），徽标在发生过滤时额外以 `/ 总数` 形式提示总量；状态筛选口径统一为 `completed|submitted|finished`（终态）与 `active|inprogress|started`（进行中），修正原先只认 `'started'` 导致「进行中」筛选失效的问题。
+- **修复插件自建表 SQL 注入（`ensureTable` / `table` / `dropAllTables`）**：`ctx.db.ensureTable(tableName, schema)`、`ctx.db.table(tableName)` 的表名与 `CREATE TABLE` 的列定义片段都直接来自插件（ZIP 上传，属不可信输入），此前被原样拼进 DDL —— 形如 `t (x); DROP TABLE events; --` 的表名即可改写内核数据。现在 inline（`packages/core/plugin-host/context-builder.ts`）与 Worker（`packages/core/worker-runtime/worker-manager.ts`）双模式强制同等校验：表名必须匹配 `^[A-Za-z_][A-Za-z0-9_]{0,63}$`，列定义必须为非空字符串且不含 `;`（阻断多语句注入），`dropAllTables()` 从 `sqlite_master` 读到的表名二次校验 `^plugin_[A-Za-z0-9_]+$` 后才拼进 `DROP TABLE`。校验失败直接抛错，不再静默放行。
 
 ## [0.3.21] - 2026-09-20
 

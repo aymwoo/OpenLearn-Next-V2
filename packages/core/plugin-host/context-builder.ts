@@ -43,6 +43,37 @@ import type {
 } from '../di/interfaces.js';
 import { resolvePluginCommandType, stripPluginCommandPrefix } from './plugin-namespace.js';
 
+// ── SEC: 插件自建表 SQL 注入防护 ─────────────────────────────────────────
+
+/** 允许的 SQL 标识符：字母/下划线开头，后接字母/数字/下划线，最长 64 字符 */
+const SQL_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+
+/**
+ * 校验插件提供的 SQL 标识符（表名）。
+ * 插件通过 ZIP 上传，属不可信输入；若直接拼进 DDL，形如
+ * `t (x); DROP TABLE events; --` 的表名即可改写内核数据。
+ */
+function assertSafeSqlIdentifier(value: unknown, label: string): string {
+  if (typeof value !== 'string' || !SQL_IDENTIFIER_PATTERN.test(value)) {
+    throw new Error(`[SEC] Invalid SQL identifier for ${label}: ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+/**
+ * 校验 CREATE TABLE 的列定义片段。
+ * 列定义中不需要分号，禁止后可阻断多语句注入（`…); DROP TABLE x; --`）。
+ */
+function assertSafeCreateTableSchema(schema: unknown): string {
+  if (typeof schema !== 'string' || schema.length === 0 || schema.length > 4000) {
+    throw new Error('[SEC] createTable schema must be a non-empty string (max 4000 chars)');
+  }
+  if (schema.includes(';')) {
+    throw new Error('[SEC] createTable schema must not contain ";" (multiple statements are not allowed)');
+  }
+  return schema;
+}
+
 // ── 共享模块注册表 ──────────────────────────────────────────────────────
 
 const sharedModules: Record<string, any> = {};
@@ -515,10 +546,14 @@ export async function buildContext(
 
   const dbApi: PluginDatabaseAPI = {
     async ensureTable(tableName: string, schema: string) {
+      // SEC: tableName / schema 由插件提供，属不可信输入，必须先校验再拼接
+      assertSafeSqlIdentifier(tableName, 'ensureTable(tableName)');
+      assertSafeCreateTableSchema(schema);
       const fullName = tablePrefix + tableName;
       db.exec(`CREATE TABLE IF NOT EXISTS ${fullName} (${schema})`);
     },
     table(tableName: string) {
+      assertSafeSqlIdentifier(tableName, 'table(tableName)');
       return tablePrefix + tableName;
     },
     async dropAllTables() {
@@ -526,6 +561,8 @@ export async function buildContext(
         .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE ?`)
         .all(tablePrefix + '%') as { name: string }[];
       for (const t of tables) {
+        // SEC: 表名来自 sqlite_master，仍二次校验后再拼进 DDL
+        if (!/^plugin_[A-Za-z0-9_]+$/.test(t.name)) continue;
         db.exec(`DROP TABLE IF EXISTS ${t.name}`);
       }
     },
