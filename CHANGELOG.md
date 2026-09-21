@@ -12,6 +12,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **学生端异常教师端实时感知、系统日志审计与端侧极简角标 (Student Exception Telemetry & Low-Visibility Diagnostics)**:
+  - **端侧异常上报与系统审计日志持久化**：
+    - `src/hooks/useGlobalErrorCapture.ts` 与 `src/store/errorStore.ts`：新增错误订阅机制 `registerErrorListener`。当学生端（处于 `role === 'student'` 或 `student_live` 模式）捕获到 React 崩溃、Promise 异常、JS 运行时错误或 5xx 接口故障时，自动提取学生学号/ID、学生姓名、课节及班级上下文，通过 Socket.IO 发送 `student-client-error`（并提供 `/api/diagnostics/report` 作为断网或重连期间的 HTTP Fallback）；
+    - `server/presence.ts` 与 `packages/core/kernel/index.ts`：服务端接收后向控制台输出警告日志，并通过内核 `eventBus.publish({ type: 'student.client_error' })` 自动将完整错误载荷持久化记录至 SQLite `events` 审计日志表（可供 `/api/events` 追溯查询）；
+  - **教师端实时多维感知**：
+    - `src/hooks/useClassroomSocket.ts`：监听 `student-error-alert` 事件，在教师/管理员端触发黄色 Toast 警示气泡并记录入 `errorStore.studentErrors`；
+    - `src/components/LiveClassroomView.tsx`：在在线互动课堂顶部状态栏展示「学生端异常 (N)」快速入口，并在学生头像圆环卡片与学生详情列表中对发生异常的学生渲染红色脉冲感叹号角标，支持一键点击直达该学生的排查日志；
+    - `src/features/modals/SystemErrorCenterModal.tsx`：为教师端引入「本机异常」与「学生端异常」双标签页切换，支持查看学生详细报错堆栈并一键导出 Markdown 诊断报告；
+  - **学生端低可见度与低干扰改造**：
+    - 降低学生端异常浮窗的视觉侵入性，将以往大尺寸的文本气泡替换为**屏幕左下角极简感叹号圆形图标加红色数字角标**，保留点击查看排查报告能力的同时最大限度降低课堂上对学生专注度的干扰。
+
 - **通用「结算页自动上报」（不主动提交的课件也能拿分）**：部分互动课件答完题后直接切到结算/结果页（如「闯关结束·…」），既不调用 `LMS.submit`，也没有匹配「提交/完成」关键词的按钮，导致旧的“按钮点击 → 抓分”逻辑无法触发。现于 `server/utils/bridge-sdk.ts` 的 `initAutoSubmit` 中新增独立的 `ResultWatcher`：
   - 用 `MutationObserver`（debounce 600ms）监听可见文案，命中强结束信号（`闯关/挑战/答题/测试/游戏/本轮/本关` + `结束/完成/成功`、`通关`、`结算`、`查看解析`、`正确率`、`最终得分`、`总得分` 等）才启动；
   - 抓分口径优先「正确题数 `X/Y` → 百分制」（如 `#correctCount = 12/15 → 80`），否则回落**可见**的分数元素；

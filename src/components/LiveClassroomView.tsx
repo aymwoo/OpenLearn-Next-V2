@@ -25,6 +25,7 @@ import {
   Search,
   ExternalLink,
   Sparkles,
+  AlertTriangle,
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { LazyWhiteboard } from '../components/LazyWhiteboard';
@@ -33,6 +34,8 @@ import { io } from 'socket.io-client';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 import { ClassroomSyncChannel } from '../services/classroom-sync-channel';
+import { useErrorStore, errorStore } from '../store/errorStore';
+
 
 // Dynamic Icon component to render Lucide icons by name string
 function DynamicIcon({ name, ...props }: { name: string; [key: string]: any }) {
@@ -111,6 +114,7 @@ export function LiveClassroomView({
   const [lockingClass, setLockingClass] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [hoveredStudentId, setHoveredStudentId] = useState<string | null>(null);
+  const studentErrors = useErrorStore((s) => s.studentErrors);
 
   // Random drawing states
   const [isDrawing, setIsDrawing] = useState(false);
@@ -1018,10 +1022,27 @@ export function LiveClassroomView({
                     </button>
                   </div>
                 </div>
-                <span className="text-primary-theme font-mono tracking-widest animate-pulse flex items-center gap-1">
-                  <Activity size={10} /> Live Broadcaster Connected
-                </span>
+                <div className="flex items-center gap-2">
+                  {studentErrors.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        errorStore.getState().setActiveTab('student');
+                        errorStore.getState().setIsErrorCenterOpen(true);
+                      }}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 transition-colors cursor-pointer mr-1"
+                      title={lang === 'zh' ? '点击查看学生端异常诊断日志' : 'View Student Client Errors'}
+                    >
+                      <AlertTriangle size={12} className="text-rose-500 animate-pulse" />
+                      <span>{lang === 'zh' ? `学生端异常 (${studentErrors.length})` : `Student Errors (${studentErrors.length})`}</span>
+                    </button>
+                  )}
+                  <span className="text-primary-theme font-mono tracking-widest animate-pulse flex items-center gap-1">
+                    <Activity size={10} /> Live Broadcaster Connected
+                  </span>
+                </div>
               </div>
+
 
               {middleTab === 'whiteboard' ? (
                 <>
@@ -1407,6 +1428,8 @@ export function LiveClassroomView({
                     ringColor = 'stroke-emerald-500'; // completed
                   }
 
+                  const stErrors = studentErrors.filter((e) => e.studentId === st.id);
+
                   return (
                     <div
                       key={st.id}
@@ -1426,6 +1449,22 @@ export function LiveClassroomView({
                               : ''
                         }`}
                       >
+                        {/* Student Exception Alert Badge */}
+                        {stErrors.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              errorStore.getState().setActiveTab('student');
+                              errorStore.getState().setIsErrorCenterOpen(true);
+                            }}
+                            className="absolute -top-1 -right-1 z-30 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-md cursor-pointer hover:scale-125 transition-transform"
+                            title={`该学生端捕获到 ${stErrors.length} 处异常: ${stErrors[0].title || stErrors[0].message}`}
+                          >
+                            <AlertTriangle size={10} className="animate-pulse" />
+                          </button>
+                        )}
+
                         {/* Golden glow aura for selected draw */}
                         {isSelectedDraw && (
                           <div
@@ -1433,6 +1472,7 @@ export function LiveClassroomView({
                             style={{ animationDuration: '2s' }}
                           />
                         )}
+
 
                         {/* Circular Progress Ring */}
                         <svg className="absolute w-full h-full transform -rotate-90" viewBox="0 0 50 50">
@@ -1587,6 +1627,8 @@ export function LiveClassroomView({
                   }
                 })();
 
+                const stErrors = studentErrors.filter((e) => e.studentId === st.id);
+
                 return (
                   <div className="flex flex-col gap-1.5 text-xs text-main">
                     <div className="font-extrabold text-main border-b border-theme pb-1 flex justify-between items-center shrink-0">
@@ -1597,11 +1639,27 @@ export function LiveClassroomView({
                         <span className="truncate max-w-[130px]">
                           {st.name} ({st.student_number || 'N/A'})
                         </span>
+                        {stErrors.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              errorStore.getState().setActiveTab('student');
+                              errorStore.getState().setIsErrorCenterOpen(true);
+                            }}
+                            className="flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 px-1 py-0.2 rounded hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
+                            title={`学生端存在 ${stErrors.length} 处异常: ${stErrors[0].title || stErrors[0].message}`}
+                          >
+                            <AlertTriangle size={10} className="text-rose-500 animate-pulse" />
+                            <span>{stErrors.length} 异常</span>
+                          </button>
+                        )}
                       </span>
                       <span className="text-xs text-primary-theme font-mono font-black shrink-0">
                         {progPercent}%
                       </span>
                     </div>
+
 
                     <div className="grid grid-cols-2 gap-1.5 text-xs leading-tight shrink-0">
                       <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">

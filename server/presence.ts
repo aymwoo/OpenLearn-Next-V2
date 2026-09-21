@@ -149,6 +149,60 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceD
       },
     );
 
+    // 学生端异常上报：记录到系统审计日志并广播给教师端
+    socket.on(
+      'student-client-error',
+      (data: {
+        studentId: string;
+        studentName?: string;
+        lessonId?: string | null;
+        classId?: string | null;
+        error: any;
+      }) => {
+        if (!data || !data.studentId || !data.error) return;
+
+        // SEC-AUTH: 阻止学生客户端伪造他人 studentId 上报错误
+        if (session && !isTeacherOrAdmin && session.userId !== data.studentId) {
+          console.warn(`[Presence Security] Student ${session.userId} attempted to report error as ${data.studentId}`);
+          return;
+        }
+
+        const studentName = data.studentName || onlineStudents.get(data.studentId)?.name || data.studentId;
+        const lessonId = data.lessonId || activeStudentLessons.get(data.studentId) || null;
+        const classId = data.classId || null;
+
+        // 1. 输出到服务端控制台/系统日志
+        console.warn(
+          `[Client Diagnostics] Student ${data.studentId} (${studentName}) reported error [${data.error.type || 'runtime'}]: ${data.error.message || data.error.title} (Lesson: ${lessonId || 'N/A'})`,
+        );
+
+        // 2. 发布到 EventBus 自动记录在 events 审计日志表中
+        eventBus.publish({
+          id: `evt_err_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          type: 'student.client_error',
+          source: 'student_client',
+          payload: {
+            studentId: data.studentId,
+            studentName,
+            lessonId,
+            classId,
+            error: data.error,
+          },
+          timestamp: data.error.timestamp || Date.now(),
+          correlationId: lessonId || undefined,
+        });
+
+        // 3. 广播给教师端实时感知
+        io.emit('student-error-alert', {
+          studentId: data.studentId,
+          studentName,
+          lessonId,
+          classId,
+          error: data.error,
+        });
+      },
+    );
+
     socket.on(
       'teacher-broadcast-fullscreen',
       (data: { classId?: string | null; lessonId: string; elementId: string | null }) => {

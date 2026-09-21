@@ -38,3 +38,39 @@ export interface ObjectLock {
   expiresAt: number;
 }
 ```
+
+---
+
+## 3. Student Exception Telemetry (学生端异常遥测与健康诊断)
+
+在智慧在线课堂中，学生端的运行时异常（脚本错误、网络故障、资源加载失败、课件崩溃等）需要被教师端和运维审计日志感知，同时不能过度干扰学生正常的课堂专注度。
+
+### 遥测架构流水线
+
+```text
+[学生端浏览器]
+  │ (React ErrorBoundary / window.onerror / unhandledrejection / 5xx)
+  ▼
+[useGlobalErrorCapture] ──注册订阅──> [errorStore.registerErrorListener]
+  │
+  ├─ 1. WebSocket 链路 (优先): socket.emit('student-client-error', payload)
+  └─ 2. HTTP Fallback (离线/重连兜底): POST /api/diagnostics/report
+        │
+        ▼
+   [Server presence.ts / routes/workspace.ts]
+        │
+        ├─ 审计日志落盘: kernel.eventBus.publish({ type: 'student.client_error', payload }) -> SQLite events 表
+        └─ 教师端实时广播: io.to(`lesson:${lessonId}`).emit('student-error-alert', payload)
+              │
+              ▼
+         [教师端 LiveClassroomView & SystemErrorCenterModal]
+              ├─ 顶部栏: 「学生端异常 (N)」一键查看
+              ├─ 学生列表 / 头像圈: 红色脉冲异常角标
+              └─ 诊断中心: 双标签页切换，支持堆栈排查与一键导出 Markdown 诊断报告
+```
+
+### 极简低干扰 UI 设计
+
+- **学生端**：默认隐藏冗长错误气泡与堆栈，仅在屏幕左下角（`fixed bottom-5 left-5`）展示极简感叹号圆形图标加红色数字角标，点击后可调起轻量诊断弹窗，保障课堂沉浸感。
+- **教师/管理端**：享有完整的错误感知与跨端排查能力，实时掌握全班学生的设备与网络健康度。
+

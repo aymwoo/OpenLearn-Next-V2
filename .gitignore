@@ -47,4 +47,5 @@ test-results/
 temp_*.mjs
 temp_*.js
 backups/
+.workbuddy/
 

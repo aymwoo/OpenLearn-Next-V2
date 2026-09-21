@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
-import { errorStore } from '../store/errorStore';
+import { errorStore, registerErrorListener } from '../store/errorStore';
+import { getOptionalSocket } from '../services/socket-service';
+import { appStore } from '../store/appStore';
 
 /**
  * Global telemetry hook to capture unhandled promise rejections, window runtime errors,
  * and 5xx API network failures into the centralized error store.
+ * Also relays student-side errors to server for system audit logging and teacher alerts.
  */
 export function useGlobalErrorCapture() {
   useEffect(() => {
@@ -100,6 +103,68 @@ export function useGlobalErrorCapture() {
       }
     };
 
+    // 4. Report Student-side Errors to Server / Teacher
+    const unregisterListener = registerErrorListener((errorItem) => {
+      try {
+        const state = appStore.getState();
+        const isStudentLiveMode =
+          typeof window !== 'undefined' &&
+          (new URLSearchParams(window.location.search).get('mode') === 'student_live' ||
+            window.location.hash.includes('student_live'));
+        const isStudent = state.session?.role === 'student' || isStudentLiveMode;
+
+        // Only student-side errors need to be relayed to teacher & recorded to audit log
+        if (!isStudent) return;
+
+        const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const studentId =
+          state.session?.userId ||
+          urlParams?.get('studentId') ||
+          'anonymous_student';
+        const studentName =
+          state.session?.name ||
+          state.session?.username ||
+          urlParams?.get('studentName') ||
+          studentId;
+        const lessonId =
+          state.selectedLesson ||
+          urlParams?.get('lessonId') ||
+          null;
+        const classId =
+          state.liveClassSelectedClassId ||
+          urlParams?.get('classId') ||
+          null;
+
+        const payload = {
+          studentId,
+          studentName,
+          lessonId,
+          classId,
+          error: errorItem,
+        };
+
+        const socket = getOptionalSocket();
+        if (socket && socket.connected) {
+          socket.emit('student-client-error', payload);
+        } else {
+          // Fallback via HTTP sendBeacon or fetch
+          const reportUrl = '/api/diagnostics/report';
+          const body = JSON.stringify(payload);
+          if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+            navigator.sendBeacon(reportUrl, new Blob([body], { type: 'application/json' }));
+          } else {
+            fetch(reportUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body,
+            }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.warn('[GlobalErrorCapture] Failed to report student error:', err);
+      }
+    });
+
     window.fetch = monitoredFetch;
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
     window.addEventListener('error', handleWindowError);
@@ -108,6 +173,8 @@ export function useGlobalErrorCapture() {
       window.fetch = originalFetch;
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       window.removeEventListener('error', handleWindowError);
+      unregisterListener();
     };
   }, []);
 }
+

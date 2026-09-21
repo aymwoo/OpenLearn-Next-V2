@@ -6,6 +6,7 @@ import { UIService } from '../services/ui-service';
 import { StorageService } from '../services/storage-service';
 import { whiteboardViewStore } from '../store/whiteboardViewStore';
 import { whiteboardEventSlot } from '../features/whiteboard/events';
+import { errorStore } from '../store/errorStore';
 import type { Lesson, StudentType } from '../types/app';
 
 export interface UseClassroomSocketOptions {
@@ -209,6 +210,38 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
         }
       });
     });
+
+    socket.on(
+      'student-error-alert',
+      (data: {
+        studentId: string;
+        studentName?: string;
+        lessonId?: string | null;
+        classId?: string | null;
+        error: any;
+      }) => {
+        if (!data || !data.error) return;
+
+        // 仅教师或管理员端接收并感知学生异常
+        if (activeRoleRef.current === 'teacher' || session?.role === 'administrator') {
+          errorStore.getState().addStudentError({
+            ...data.error,
+            studentId: data.studentId,
+            studentName: data.studentName || data.studentId,
+            lessonId: data.lessonId,
+            classId: data.classId,
+          });
+
+          const studentLabel = data.studentName ? `${data.studentName} (${data.studentId})` : data.studentId;
+          addToast(
+            langRef.current === 'zh' ? '学生端异常提醒' : 'Student Exception Alert',
+            `${studentLabel}: ${data.error.title || data.error.message}`,
+            'warning',
+          );
+        }
+      },
+    );
+
 
     socket.on('assignment-graded-toast', (data: any) => {
       if (

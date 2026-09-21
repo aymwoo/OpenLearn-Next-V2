@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { errorStore, formatSingleErrorReport, formatBatchErrorReport } from '../errorStore';
+import {
+  errorStore,
+  formatSingleErrorReport,
+  formatBatchErrorReport,
+  registerErrorListener,
+} from '../errorStore';
 import type { SystemErrorItem } from '../../types/error';
 
 describe('errorStore', () => {
@@ -158,4 +163,76 @@ describe('errorStore', () => {
     expect(batchMd).toContain('#### 错误 #1 (PROMISE)');
     expect(batchMd).toContain('Network disconnected');
   });
+
+  it('manages student errors and formats student error reports', () => {
+    errorStore.getState().clearStudentErrors();
+    expect(errorStore.getState().studentErrors).toEqual([]);
+
+    errorStore.getState().addStudentError({
+      id: 'st-err-1',
+      studentId: 'stu-101',
+      studentName: '张小明',
+      lessonId: 'lesson-88',
+      classId: 'class-1',
+      type: 'runtime',
+      title: '课件交互脚本异常',
+      message: 'Cannot read properties of undefined',
+      timestamp: 1774000001000,
+      url: 'http://localhost:9000/student_live',
+    });
+
+    const state = errorStore.getState();
+    expect(state.studentErrors).toHaveLength(1);
+    expect(state.studentErrors[0].studentName).toBe('张小明');
+
+    // Deduplication check
+    errorStore.getState().addStudentError({
+      id: 'st-err-2',
+      studentId: 'stu-101',
+      type: 'runtime',
+      title: '课件交互脚本异常',
+      message: 'Cannot read properties of undefined',
+      timestamp: 1774000001500,
+      url: 'http://localhost:9000/student_live',
+    });
+    expect(errorStore.getState().studentErrors).toHaveLength(1);
+
+    // Batch report includes student errors
+    const report = formatBatchErrorReport(state.errors, state.studentErrors);
+    expect(report).toContain('学生端异常数**: 1 项');
+    expect(report).toContain('张小明');
+    expect(report).toContain('Cannot read properties of undefined');
+
+    // Remove student error
+    errorStore.getState().removeStudentError('st-err-1');
+    expect(errorStore.getState().studentErrors).toHaveLength(0);
+  });
+
+  it('invokes registered error listeners on addError', () => {
+    let captured: any = null;
+    const unregister = registerErrorListener((err: any) => {
+      captured = err;
+    });
+
+    const item = errorStore.getState().addError({
+      type: 'api',
+      title: 'API Fail',
+      message: 'Server down',
+    });
+
+    expect(captured).not.toBeNull();
+    expect(captured.id).toBe(item.id);
+    expect(captured.message).toBe('Server down');
+
+    unregister();
+    captured = null;
+
+    errorStore.getState().addError({
+      type: 'api',
+      title: 'Another Fail',
+      message: 'Server timeout',
+    });
+    expect(captured).toBeNull();
+  });
 });
+

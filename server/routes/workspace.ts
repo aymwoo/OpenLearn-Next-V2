@@ -7,7 +7,7 @@ import { sendSafeError } from '../utils/error-handler.js';
 export function registerWorkspaceRoutes(ctx: ServerContext) {
   const { app, MF_REMOTE_CACHE } = ctx;
 
-  app.get('/api/events', requireAuth('administrator'), (req, res) => {
+  app.get('/api/events', requireAuth('administrator', 'teacher'), (req, res) => {
     try {
       const events = kernelContainer.db.prepare('SELECT * FROM events ORDER BY timestamp DESC LIMIT 50').all();
       res.json(events);
@@ -15,6 +15,47 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
       sendSafeError(res, e);
     }
   });
+
+  // ── Client Diagnostics Fallback HTTP Report ─────────────────────────────
+  app.post('/api/diagnostics/report', (req, res) => {
+    try {
+      const data = req.body;
+      if (data && data.studentId && data.error) {
+        console.warn(
+          `[Client Diagnostics HTTP] Student ${data.studentId} (${data.studentName || data.studentId}) reported error [${data.error.type || 'runtime'}]: ${data.error.message || data.error.title}`,
+        );
+
+        kernelContainer.eventBus.publish({
+          id: `evt_err_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          type: 'student.client_error',
+          source: 'student_client',
+          payload: {
+            studentId: data.studentId,
+            studentName: data.studentName || data.studentId,
+            lessonId: data.lessonId || null,
+            classId: data.classId || null,
+            error: data.error,
+          },
+          timestamp: data.error?.timestamp || Date.now(),
+          correlationId: data.lessonId || undefined,
+        });
+
+        if (ctx.io) {
+          ctx.io.emit('student-error-alert', {
+            studentId: data.studentId,
+            studentName: data.studentName || data.studentId,
+            lessonId: data.lessonId || null,
+            classId: data.classId || null,
+            error: data.error,
+          });
+        }
+      }
+      res.json({ success: true });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
 
   // ── MFE Remote Entries ─────────────────────────────────────────────────
   app.get('/api/mfe/remotes', (req, res) => {

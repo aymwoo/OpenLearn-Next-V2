@@ -26,6 +26,11 @@ export function getSocketInstance(): Socket {
   return _socket;
 }
 
+export function getOptionalSocket(): Socket | null {
+  return _socket;
+}
+
+
 export class SocketService implements ISocketService {
   private socket: Socket;
 

@@ -17,3 +17,11 @@ export interface SystemErrorItem {
   url: string;
   userAgent?: string;
 }
+
+export interface StudentErrorItem extends SystemErrorItem {
+  studentId: string;
+  studentName?: string;
+  lessonId?: string | null;
+  classId?: string | null;
+}
+

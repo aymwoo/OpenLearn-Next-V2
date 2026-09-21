@@ -256,4 +256,58 @@ describe('setupPresence', () => {
       ]);
     });
   });
+
+  describe('student-client-error telemetry', () => {
+    it('publishes error to eventBus and broadcasts student-error-alert to clients', async () => {
+      const m = buildMocks();
+      const socket = m.connect();
+      m.globalEmitted.length = 0;
+
+      const errorPayload = {
+        id: 'err-123',
+        type: 'runtime',
+        title: 'Component Error',
+        message: 'TypeError in Whiteboard',
+        timestamp: 1774000000000,
+      };
+
+      socket.trigger('student-client-error', {
+        studentId: 's1',
+        studentName: 'Alice',
+        lessonId: 'L1',
+        classId: 'c1',
+        error: errorPayload,
+      });
+
+      // 1. Verify EventBus publish was called with audit record
+      expect(m.eventBus.publish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'student.client_error',
+          source: 'student_client',
+          correlationId: 'L1',
+          payload: {
+            studentId: 's1',
+            studentName: 'Alice',
+            lessonId: 'L1',
+            classId: 'c1',
+            error: errorPayload,
+          },
+        }),
+      );
+
+      // 2. Verify global broadcast of student-error-alert
+      expect(m.globalEmitted).toContainEqual({
+        scope: 'global',
+        event: 'student-error-alert',
+        payload: {
+          studentId: 's1',
+          studentName: 'Alice',
+          lessonId: 'L1',
+          classId: 'c1',
+          error: errorPayload,
+        },
+      });
+    });
+  });
 });
+
