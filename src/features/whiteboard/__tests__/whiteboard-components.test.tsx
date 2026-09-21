@@ -18,7 +18,8 @@ describe('Whiteboard Extracted Components & Utilities', () => {
       const result = wrapSrcDocWithBridge('<h1>Hello World</h1>', 'lesson-123');
       expect(result).toContain('window.__LMS_STUDENT__ =');
       expect(result).toContain('lesson-123');
-      expect(result).toContain('<script src="/bridge.js"></script>');
+      // bridge.js 带 cw 追踪参数（server/routes/bridge.ts 读取 req.query.cw）
+      expect(result).toContain('<script src="/bridge.js?cw=lesson-123"></script>');
       expect(result).toContain('<h1>Hello World</h1>');
     });
 

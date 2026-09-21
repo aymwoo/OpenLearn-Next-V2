@@ -90,17 +90,19 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
   const testTeacherId = 'teacher-carol';
   let kernel: Kernel;
 
+  // 平台规范 actorId：`user:<students.id>:<role>`（也是线上 getActorId() 的产出格式）
+  const student1Actor = `user:${testStudentId1}:student`;
+  const student2Actor = `user:${testStudentId2}:student`;
+  const teacherActor = `user:${testTeacherId}:teacher`;
+
   beforeAll(async () => {
     kernel = new Kernel();
     await kernel.ready;
 
-    // Grant capabilities
-    kernel.capabilityGuard.grant(testStudentId1, 'lesson:write');
-    kernel.capabilityGuard.grant(testStudentId1, 'lesson:read');
-    kernel.capabilityGuard.grant(testStudentId2, 'lesson:write');
-    kernel.capabilityGuard.grant(testStudentId2, 'lesson:read');
-    kernel.capabilityGuard.grant(testTeacherId, 'lesson:write');
-    kernel.capabilityGuard.grant(testTeacherId, 'lesson:read');
+    // 刻意不做手工能力授权：actorId 采用平台规范的 `user:<id>:<role>` 形式，
+    // 能力由 CapabilityGuard 的角色后缀兜底提供（学生 assignment:submit/review，
+    // 教师 assignment:*）。历史上这里用 grant() 直接授权，掩盖了学生缺少
+    // assignment:* 能力导致的真实线上故障。
 
     // Setup schedule and lesson data
     db.prepare(
@@ -135,7 +137,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         studentId: testStudentId1,
         filePath: '/submissions/alice_v1.pdf',
       },
-      testStudentId1,
+      student1Actor,
     );
 
     const res1 = (await kernel.commandBus.execute(cmd1)) as any;
@@ -157,7 +159,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         studentId: testStudentId1,
         filePath: '/submissions/alice_v2.pdf',
       },
-      testStudentId1,
+      student1Actor,
     );
 
     const res2 = (await kernel.commandBus.execute(cmd2)) as any;
@@ -180,7 +182,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         studentId: testStudentId1,
         filePath: '/submissions/alice_v2.pdf',
       },
-      testStudentId1,
+      student1Actor,
     );
     const resSubmitAlice = (await kernel.commandBus.execute(cmdSubmitAlice)) as any;
     const aliceSubId = resSubmitAlice.submissionId;
@@ -193,7 +195,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         studentId: testStudentId2,
         filePath: '/submissions/bob_v1.pdf',
       },
-      testStudentId2,
+      student2Actor,
     );
     const resSubmitBob = (await kernel.commandBus.execute(cmdSubmitBob)) as any;
     const bobSubId = resSubmitBob.submissionId;
@@ -207,7 +209,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         score: 85,
         comment: 'I am so good',
       },
-      testStudentId1,
+      student1Actor,
     );
 
     await expect(kernel.commandBus.execute(cmdSelfReview)).rejects.toThrow(/Access Denied/);
@@ -221,7 +223,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         score: 105,
         comment: 'Too high',
       },
-      testStudentId2,
+      student2Actor,
     );
     await expect(kernel.commandBus.execute(cmdInvalidReview1)).rejects.toThrow(/Access Denied/);
 
@@ -233,7 +235,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         score: -5,
         comment: 'Too low',
       },
-      testStudentId2,
+      student2Actor,
     );
     await expect(kernel.commandBus.execute(cmdInvalidReview2)).rejects.toThrow(/Access Denied/);
 
@@ -246,7 +248,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         score: 90,
         comment: 'Well done Bob',
       },
-      testStudentId2,
+      student2Actor,
     );
 
     const resReview = (await kernel.commandBus.execute(cmdValidReview)) as any;
@@ -269,7 +271,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         studentId: testStudentId2,
         filePath: '/submissions/bob_v1.pdf',
       },
-      testStudentId2,
+      student2Actor,
     );
     const resSubmitBob = (await kernel.commandBus.execute(cmdSubmitBob)) as any;
     const bobSubId = resSubmitBob.submissionId;
@@ -283,7 +285,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         score: 80,
         comment: 'Decent work',
       },
-      testStudentId1,
+      student1Actor,
     );
     await kernel.commandBus.execute(cmdReview1);
 
@@ -298,7 +300,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         peerWeight: 0.4,
         status: 'draft',
       },
-      testTeacherId,
+      teacherActor,
     );
 
     const resGradeDraft = (await kernel.commandBus.execute(cmdGradeDraft)) as any;
@@ -329,7 +331,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         peerWeight: 0.4,
         status: 'confirmed',
       },
-      testTeacherId,
+      teacherActor,
     );
 
     const resGradeConfirm = (await kernel.commandBus.execute(cmdGradeConfirm)) as any;
@@ -359,7 +361,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         teacherScore: -10,
         status: 'confirmed',
       },
-      testTeacherId,
+      teacherActor,
     );
     await expect(kernel.commandBus.execute(cmdInvalidGrade)).rejects.toThrow(/Access Denied/);
 
@@ -373,7 +375,7 @@ describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () 
         peerWeight: 0.5, // Total 1.3
         status: 'confirmed',
       },
-      testTeacherId,
+      teacherActor,
     );
     await expect(kernel.commandBus.execute(cmdInvalidWeights)).rejects.toThrow(/Access Denied/);
   });
