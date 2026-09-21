@@ -56,6 +56,7 @@ export class CapabilityGuard {
     if (actorId?.endsWith(':teacher')) {
       // student:write 供教师预览互动课件（attempt.student_id = 'teacher_preview'）
       // 或代录学生成绩时使用；路由层仍按 attempt.student_id 校验所属权。
+      // assignment:submit / assignment:review 让教师能代交、试评与终评。
       const teacherCaps = [
         'lesson:*',
         'whiteboard:*',
@@ -65,6 +66,10 @@ export class CapabilityGuard {
         'process:*',
         'plugin:*',
         'student:write',
+        'assignment:read',
+        'assignment:submit',
+        'assignment:review',
+        'assignment:manage',
       ];
       const [reqRes, reqAct] = requiredCap.split(':');
       if (
@@ -78,7 +83,17 @@ export class CapabilityGuard {
     }
 
     if (actorId?.endsWith(':student')) {
-      const studentCaps = ['student:write', 'lesson:read', 'whiteboard:read'];
+      // assignment:submit / assignment:review 是学生唯一能发起作业写入的入口，
+      // 因此**不含** lesson:write（避免学生改课时内容）；命令处理器内部再按
+      // actorId 与 payload.studentId 校验所属权，防止代交/代评。
+      const studentCaps = [
+        'student:write',
+        'lesson:read',
+        'whiteboard:read',
+        'assignment:read',
+        'assignment:submit',
+        'assignment:review',
+      ];
       const [reqRes, reqAct] = requiredCap.split(':');
       if (
         studentCaps.some((c) => {

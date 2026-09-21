@@ -1117,7 +1117,11 @@ whiteboard:write — 编辑白板
 vfs:read — 读取虚拟文件系统
 vfs:write — 写入虚拟文件系统
 process:write — 创建后台进程
-assignment:write — 编辑作业
+assignment:write — 编辑作业（AI 规划器）
+assignment:read — 读取作业列表/详情
+assignment:submit — 提交作业（学生）
+assignment:review — 互评（学生）
+assignment:manage — 建/改作业、分配互评、终评（教师）
 management:read — 读取管理数据
 management:write — 写入管理数据
 

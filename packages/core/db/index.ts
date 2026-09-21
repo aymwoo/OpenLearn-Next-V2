@@ -379,15 +379,89 @@ db.exec(`
     updated_at TEXT DEFAULT (datetime('now'))
   );
 
+  -- ── 作业中心（Assignment Hub）──────────────────────────────────────────
+  -- plugin_assignments 是作业实体：白板上的「课堂作业任务」教学对象只是它的
+  -- 一个投影片段（element_id），class_id 让它同时出现在班级作业成绩页。
+  CREATE TABLE IF NOT EXISTS plugin_assignments (
+    id TEXT PRIMARY KEY,
+    class_id TEXT,
+    lesson_id TEXT,
+    element_id TEXT,
+    title TEXT NOT NULL,
+    description TEXT,
+    instructions TEXT,
+    due_at INTEGER,
+    allow_late INTEGER NOT NULL DEFAULT 1,
+    allow_text INTEGER NOT NULL DEFAULT 1,
+    allow_link INTEGER NOT NULL DEFAULT 0,
+    max_files INTEGER NOT NULL DEFAULT 10,
+    max_file_size INTEGER NOT NULL DEFAULT 20971520,
+    allowed_ext TEXT NOT NULL DEFAULT '',
+    peer_review_mode TEXT NOT NULL DEFAULT 'assigned',
+    peer_review_count INTEGER NOT NULL DEFAULT 2,
+    peer_review_due_at INTEGER,
+    teacher_weight REAL NOT NULL DEFAULT 0.6,
+    peer_weight REAL NOT NULL DEFAULT 0.4,
+    status TEXT NOT NULL DEFAULT 'published',
+    created_by TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  -- 一个作业一个学生一行（assignment_id 非空时）；保留 lesson_id 列以兼容旧数据
   CREATE TABLE IF NOT EXISTS plugin_submissions (
     id TEXT PRIMARY KEY,
-    lesson_id TEXT NOT NULL,
+    assignment_id TEXT,
+    lesson_id TEXT,
     student_id TEXT NOT NULL,
-    file_path TEXT NOT NULL,
+    file_path TEXT,
     version INTEGER NOT NULL DEFAULT 1,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    UNIQUE(lesson_id, student_id)
+    updated_at INTEGER NOT NULL
+  );
+
+  -- 每次提交都留档（重交不覆盖历史）
+  CREATE TABLE IF NOT EXISTS plugin_submission_versions (
+    id TEXT PRIMARY KEY,
+    submission_id TEXT NOT NULL,
+    assignment_id TEXT,
+    student_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    files_json TEXT NOT NULL DEFAULT '[]',
+    text_content TEXT,
+    link_url TEXT,
+    is_late INTEGER NOT NULL DEFAULT 0,
+    submitted_at INTEGER NOT NULL,
+    UNIQUE(submission_id, version)
+  );
+
+  -- 上传的实体文件（磁盘存储 + 元数据），下载端点按此表鉴权
+  CREATE TABLE IF NOT EXISTS plugin_assignment_files (
+    id TEXT PRIMARY KEY,
+    assignment_id TEXT NOT NULL,
+    submission_id TEXT,
+    version_id TEXT,
+    student_id TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    stored_path TEXT NOT NULL,
+    size INTEGER NOT NULL DEFAULT 0,
+    mime TEXT,
+    sha256 TEXT,
+    uploaded_at INTEGER NOT NULL,
+    deleted_at INTEGER
+  );
+
+  -- 互评任务（谁评谁 / 匿名 / 截止），由分配策略生成
+  CREATE TABLE IF NOT EXISTS plugin_peer_review_tasks (
+    id TEXT PRIMARY KEY,
+    assignment_id TEXT NOT NULL,
+    submission_id TEXT NOT NULL,
+    reviewer_id TEXT NOT NULL,
+    anonymous INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'pending',
+    due_at INTEGER,
+    created_at INTEGER NOT NULL,
+    UNIQUE(submission_id, reviewer_id)
   );
 
   CREATE TABLE IF NOT EXISTS plugin_peer_reviews (
@@ -397,6 +471,11 @@ db.exec(`
     score INTEGER NOT NULL,
     comment TEXT,
     created_at INTEGER NOT NULL,
+    assignment_id TEXT,
+    task_id TEXT,
+    anonymous INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'submitted',
+    updated_at INTEGER,
     UNIQUE(submission_id, reviewer_id)
   );
 
@@ -409,7 +488,12 @@ db.exec(`
     peer_weight REAL NOT NULL DEFAULT 0.4,
     calculated_final_score INTEGER,
     status TEXT NOT NULL DEFAULT 'draft',
-    graded_at INTEGER
+    graded_at INTEGER,
+    assignment_id TEXT,
+    peer_average_score REAL,
+    source TEXT NOT NULL DEFAULT 'teacher',
+    published_at INTEGER,
+    graded_by TEXT
   );
 
   -- Performance Indexes
@@ -422,7 +506,28 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_events_type_time ON events(type, timestamp);
   CREATE INDEX IF NOT EXISTS idx_assignments_class ON assignments(class_id);
   CREATE INDEX IF NOT EXISTS idx_attendance_schedule ON attendance(schedule_id);
+
+  -- 作业中心索引
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_plugin_assignments_element ON plugin_assignments(element_id);
+  CREATE INDEX IF NOT EXISTS idx_plugin_assignments_lesson ON plugin_assignments(lesson_id);
+  CREATE INDEX IF NOT EXISTS idx_plugin_assignments_class ON plugin_assignments(class_id);
+  CREATE INDEX IF NOT EXISTS idx_plugin_submission_versions_submission ON plugin_submission_versions(submission_id);
+  CREATE INDEX IF NOT EXISTS idx_plugin_assignment_files_owner ON plugin_assignment_files(assignment_id, student_id);
+  CREATE INDEX IF NOT EXISTS idx_plugin_peer_review_tasks_reviewer ON plugin_peer_review_tasks(reviewer_id, status);
 `);
+
+// plugin_submissions 的作业中心索引：
+// 老库里这张表还是「UNIQUE(lesson_id, student_id) + 无 assignment_id」的旧形态，
+// 重建发生在 migrations/005_assignment_hub.sql（服务器启动时执行，晚于本文件的 schema 块）。
+// 所以这里的索引创建必须容错：老库会失败并静默跳过，随后由 005 迁移建好。
+try {
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_plugin_submissions_assignment_student ON plugin_submissions(assignment_id, student_id)');
+  db.exec(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_plugin_submissions_legacy ON plugin_submissions(lesson_id, student_id) WHERE assignment_id IS NULL',
+  );
+} catch {
+  // 旧形态表缺少 assignment_id，等 005 迁移重建后再建索引
+}
 
 try {
   db.exec('ALTER TABLE lessons ADD COLUMN creator_id TEXT');

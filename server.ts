@@ -86,6 +86,7 @@ import { registerProcessesRoutes } from './server/routes/processes.js';
 import { registerAdminRoutes } from './server/routes/admin.js';
 import { registerRosterRoutes } from './server/routes/roster.js';
 import { registerAssignmentsRoutes } from './server/routes/assignments.js';
+import { registerAssignmentHubRoutes } from './server/routes/assignment-hub.js';
 import { registerSchedulesRoutes } from './server/routes/schedules.js';
 import { registerGradingRoutes } from './server/routes/grading.js';
 import { registerPluginsRoutes } from './server/routes/plugins.js';
@@ -348,6 +349,7 @@ async function startServer() {
   registerAdminRoutes(ctx);
   registerRosterRoutes(ctx);
   registerAssignmentsRoutes(ctx);
+  registerAssignmentHubRoutes(ctx);
   registerSchedulesRoutes(ctx);
   registerGradingRoutes(ctx);
   registerPluginsRoutes(ctx);
