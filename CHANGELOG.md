@@ -72,6 +72,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **修复学生端诊断上报回退端点的鉴权后门与身份冒充**：`POST /api/diagnostics/report` 是 WebSocket 路径（`server/presence.ts` 的 `student-client-error`）的 HTTP 回退，却既无鉴权、也丢掉了 WS 路径已有的防冒充校验，使回退路径成为绕过身份校验的后门。现在：① 挂 `requireAuth()`；② 非教师/管理员时必须 `session.userId === data.studentId`，不符返回 403 并记 `[Diagnostics Security]` 警告（与 `presence.ts` 校验强度对齐）；③ 学生上报的 `studentName` 一律取服务端会话权威值（`session.username || session.studentId`），忽略客户端传值，阻断借 `studentName` 向全体教师广播任意文本的冒充/钓鱼；④ 同一账号 1 秒内只接受一次上报（超出返回 429），计数表超过 5000 条时清理 60 秒前的记录，避免被放大为写库 + 全量广播风暴；⑤ 收敛 payload：仅保留已知字段并截断长度（`type` ≤ 64、`message` ≤ 2000、`title` ≤ 200、`studentId` ≤ 64、`studentName` ≤ 100），防止超大包写进 `events` 审计表；⑥ 无有效载荷时保持静默成功（与历史行为一致，避免触发前端重试）。
 - **修复插件停用 / 卸载后的资源与能力残留**：`packages/core/plugin-host/index.ts` 中，Worker 模式插件的 `terminateWorker` 只在 `finally` 里改状态、**未调用** `this.resourceTracker.disposeAll(pluginId)`（只有 inline 路径 `deactivatePluginExclusive` 调用了），导致 worker 模式插件停用后命令、事件订阅、定时器与路由永久残留；非 ACTIVE 态（`ERROR` / `INACTIVE` / `INSTALLED`）的卸载分支既不执行停用逻辑、也不执行 `revokeAll`，使已授予能力残留在内存中（权限泄漏，典型场景：`activate` 中途失败或 reload 失败后直接卸载）。现在 Worker 终止的 `finally` 中无条件 `disposeAll`；卸载流程在「1b. 兜底资源回收」与「4b. 撤销插件能力」两处无条件执行 `resourceTracker.disposeAll(pluginId)`（幂等，对已回收过的插件为空操作）与 `capService.revokeAll('plugin:' + manifestId)`（失败仅 warn），与 inline 路径及 T-04-20 保持一致。
 
+### Docs
+
+- **新增「架构文档 ↔ 代码」漂移审计流水线与本地钩子**：`audit-tools/` 新增三个互不依赖的 Python 脚本与两个入口脚本 —— `normalize.py`（把文档标题与代码目录名归一化为同一套 canonical key）、`extractors.py`（分别从 `docs/` 与 `packages/core/`、`packages/plugins/`、`src/`、`server.ts` 提取结构化事实并落成 JSON）、`aligner.py`（对齐两侧并输出 `MISSING_IN_CODE` / `MISSING_IN_DOCS` 漂移清单）、`run.sh`（一键跑完整链路：无漂移时退出码 0 并打印 `✅ No architecture drift detected.`，有漂移时以 `::error::` 注解打印并退出 1，便于 CI 与钩子消费）、`install-hook.sh`（把审计装成本地 pre-commit 钩子，仅当暂存区命中 `docs/`、`packages/core/`、`src/features/`、`packages/plugins/` 时才运行；若已存在钩子会先备份为 `*.bak` 再链式追加，不覆盖用户脚本）。
+- **CI 新增 `docs-drift-audit` job**：`.github/workflows/ci.yml` 中依次 checkout ➔ setup-python 3.11 ➔ `bash audit-tools/run.sh`；失败时上传 `audit-tools/reports/drift_report.md` 作为工件，并在 PR 场景下用 `actions/github-script` 把完整报告贴回 PR 评论，让文档漂移在合并前可见。当前基线：`docs facts: 103` / `code facts: 55` / `drift items: 0`（MISSING_IN_CODE 0、MISSING_IN_DOCS 0）。
+- **新增 `docs/developer-guide/docs-drift-audit.md`**：记录该审计要解决的问题（文档描述了而代码已删改，或代码新增了子系统而文档未登记）、两侧事实的提取口径、本地运行方式与装钩子方式，并登记进 `docs/index.md` 的开发者指南 toctree。
+- `.gitignore` 补充忽略审计生成物：`audit-tools/reports/`（`extracts.json` / `drift_report.md` / `drift_report.json`）与 `audit-tools/__pycache__/`，仓库只提交脚本与说明，避免每次运行都产生噪声 diff。
+
 ## [0.3.21] - 2026-09-20
 
 ### Fixes

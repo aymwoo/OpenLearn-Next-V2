@@ -160,6 +160,7 @@ api/whiteboard-event-slot-contract
 developer-guide/developer-guide
 developer-guide/testing-strategy
 developer-guide/sync-report
+developer-guide/docs-drift-audit
 ```
 
 ```{toctree}

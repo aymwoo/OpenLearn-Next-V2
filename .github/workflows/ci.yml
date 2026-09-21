@@ -59,6 +59,56 @@ jobs:
               ].join('\n'),
             });
 
+  docs-drift-audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run docs-vs-code architecture drift audit
+        id: audit
+        run: bash audit-tools/run.sh
+
+      - name: Upload drift report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: audit-tools/reports/drift_report.md
+
+      - name: Comment drift report on PR
+        if: github.event_name == 'pull_request' && always() && steps.audit.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.existsSync('audit-tools/reports/drift_report.md')
+              ? fs.readFileSync('audit-tools/reports/drift_report.md', 'utf8')
+              : 'No report file produced.';
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: [
+                '## 📝 Architecture Docs Drift Audit — FAILED',
+                '',
+                'The architecture docs-vs-code audit detected drift. Please update the affected docs (or run `bash audit-tools/run.sh` locally to inspect).',
+                '',
+                '<details><summary>Full drift report</summary>',
+                '',
+                '```',
+                report,
+                '```',
+                '',
+                '</details>',
+              ].join('\n'),
+            });
+
   security-audit:
     runs-on: ubuntu-latest
     permissions:

@@ -49,3 +49,7 @@ temp_*.js
 backups/
 .workbuddy/
 
+# 架构文档漂移审计（audit-tools）：只提交脚本，忽略运行生成物与 Python 缓存
+audit-tools/reports/
+audit-tools/__pycache__/
+
