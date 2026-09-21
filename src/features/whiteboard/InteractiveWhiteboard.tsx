@@ -123,6 +123,8 @@ import { HtmlAppletFrame } from './components/HtmlAppletFrame';
 import { WhiteboardToolbar } from './components/WhiteboardToolbar';
 import { WhiteboardPageBar } from './components/WhiteboardPageBar';
 import { WhiteboardDialog } from './components/WhiteboardDialog';
+import { AssignmentSubmitDialog } from './components/AssignmentSubmitDialog';
+import { AssignmentBindingField } from './components/AssignmentBindingField';
 import { CoursewareEntrySelectorModal } from './components/CoursewareEntrySelectorModal';
 import { fullscreenRendererRegistry, FullscreenOverlay } from './fullscreen/FullscreenRendererRegistry';
 import type { FullscreenRendererProps } from './fullscreen/FullscreenRendererRegistry';
@@ -696,6 +698,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       onConfirm: (inputValue?: string) => void | Promise<void>;
     } | null>(null);
     const [dialogInput, setDialogInput] = useState('');
+    /** 学生端「提交作业」弹窗当前打开的作业实体 id */
+    const [assignmentDialogId, setAssignmentDialogId] = useState<string | null>(null);
     const [editingProperties, setEditingProperties] = useState<any>(null);
     const [propertyUndoStack, setPropertyUndoStack] = useState<{ [elementId: string]: string[] }>({});
     const [propertyRedoStack, setPropertyRedoStack] = useState<{ [elementId: string]: string[] }>({});
@@ -2080,15 +2084,42 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         disabled={readOnly}
                         onClick={() => {
                           if (readOnly) return;
-                          setDialog({
-                            type: 'alert',
-                            title: '作业文件上传',
-                            message: `系统已经成功模拟拉起本地文件选择和上传流程！\n已准备上传作业: ${data.title ?? '白板作业'}`,
-                            onConfirm: () => setDialog(null),
-                          });
+                          // 白板对象已绑定作业中心时直接打开真实提交弹窗；否则按课时兜底查找已发布作业
+                          const boundId = typeof data.assignmentId === 'string' ? data.assignmentId : '';
+                          if (boundId) {
+                            setAssignmentDialogId(boundId);
+                            return;
+                          }
+                          void (async () => {
+                            try {
+                              const res = await fetch(
+                                `/api/assignments?lessonId=${encodeURIComponent(lessonId || '')}`,
+                              );
+                              const payload = await res.json().catch(() => null);
+                              const list: any[] = Array.isArray(payload?.assignments) ? payload.assignments : [];
+                              const candidate = list.find((item) => item?.status === 'published') || list[0];
+                              if (candidate?.id) {
+                                setAssignmentDialogId(String(candidate.id));
+                                return;
+                              }
+                              setDialog({
+                                type: 'alert',
+                                title: '尚未发布作业',
+                                message: '教师还没有发布本课节的作业，请稍后再试。',
+                                onConfirm: () => setDialog(null),
+                              });
+                            } catch (e: any) {
+                              setDialog({
+                                type: 'alert',
+                                title: '无法加载作业',
+                                message: e?.message ? String(e.message) : '请检查网络后重试。',
+                                onConfirm: () => setDialog(null),
+                              });
+                            }
+                          })();
                         }}
                       >
-                        Upload File
+                        {data.assignmentId ? '提交作业' : 'Upload File'}
                       </button>
                     </div>
                   )}
@@ -3373,6 +3404,14 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             setDialog={setDialog}
           />
 
+          {assignmentDialogId && (
+            <AssignmentSubmitDialog
+              assignmentId={assignmentDialogId}
+              onClose={() => setAssignmentDialogId(null)}
+              lang="zh"
+            />
+          )}
+
           <CoursewareEntrySelectorModal
             showEntrySelector={showEntrySelector}
             setShowEntrySelector={setShowEntrySelector}
@@ -3762,6 +3801,17 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                           placeholder="请输入详细的作业指南..."
                         />
                       </div>
+                      <AssignmentBindingField
+                        lessonId={lessonId}
+                        elementId={selectedEl.id}
+                        value={editingProperties.assignmentId || ''}
+                        draftTitle={editingProperties.title || ''}
+                        draftDescription={editingProperties.description || ''}
+                        onChange={(assignmentId) => {
+                          handleLocalPropChange('assignmentId', assignmentId);
+                          void handlePropBlur('assignmentId', assignmentId);
+                        }}
+                      />
                     </div>
                   )}
 

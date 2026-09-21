@@ -40,6 +40,11 @@ function isPrivilegedActor(actorId?: string): boolean {
   return PRIVILEGED_ROLES.includes(actor.role);
 }
 
+/** 写库时统一保存「用户 ID」，而不是 `user:<id>:<role>` 形式的完整 actorId。 */
+function actorUserId(actorId?: string): string | null {
+  return parseActorId(actorId)?.userId ?? actorId ?? null;
+}
+
 /**
  * 所属权校验：学生只能对自己名下的数据执行写操作。
  * 特权角色（教师/管理员/系统）放行，便于教师代交、试评与终评。
@@ -109,6 +114,14 @@ export const AssignmentEvalPlugin = {
     commandBus.unregisterHandler('assignment.grade');
 
     // Unregister existing action descriptors to avoid ID conflicts
+    //
+    // 注意：`ActionRegistry.getActionByCommandType()` 返回**最先注册**的那条描述符，
+    // 由它决定内核的 payloadSchema 校验。management.ts 早在内核 bootstrap 阶段就注册了
+    // `core-assignment-create`（`required: ['classId','title']`），若不撤销，作业中心
+    // 的 `POST /api/assignments` 会在创建「不挂班级、只挂课时」的作业时被误判为
+    // `Missing required property "classId"`。`server/routes/assignments.ts` 的旧班级作业页
+    // 直接写 `assignments` 表、不经命令总线，因此这里接管 `assignment.create` 不影响旧链路。
+    actionRegistry.unregister('core-assignment-create');
     actionRegistry.unregister('core-assignment-submit');
     actionRegistry.unregister('core-assignment-grade');
 
@@ -276,7 +289,7 @@ export const AssignmentEvalPlugin = {
             teacherWeight,
             peerWeight,
             payload.status ?? 'published',
-            command.actorId,
+            actorUserId(command.actorId),
             now,
             now,
           );
@@ -777,7 +790,7 @@ export const AssignmentEvalPlugin = {
           submission.assignment_id,
           peerAverageScore,
           status === 'confirmed' ? now : null,
-          command.actorId,
+          actorUserId(command.actorId),
         );
 
         // T-14-02 目标同步：确认后写学期成绩 + 投影到班级作业成绩页

@@ -447,4 +447,42 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
     expect(graded.teacherWeight).toBe(0.6);
     expect(graded.peerWeight).toBe(0.4);
   });
+
+  it('接管 management.ts 的 core-assignment-create 描述符：不挂班级的作业也能创建，写入的是用户 ID', async () => {
+    // 模拟 management.ts 在内核 bootstrap 阶段先注册的同名描述符（`required` 含 classId）。
+    // `ActionRegistry.getActionByCommandType()` 返回**最先注册**的那条，由它决定
+    // 内核的 payload 校验；若插件不接管，不挂班级的作业会被误判为缺少 classId。
+    actionRegistry.register({
+      id: 'core-assignment-create',
+      commandType: 'assignment.create',
+      description: '为指定班级创建课后作业（旧）',
+      capabilityRequired: 'management:write',
+      inputSchema: {
+        type: 'OBJECT',
+        properties: { classId: { type: 'STRING' }, title: { type: 'STRING' } },
+        required: ['classId', 'title'],
+      },
+    } as any);
+
+    // 停用再激活：PluginHost 的 DB 恢复与内核 bootstrap 会各自触发一次激活，
+    // 因此「第二次激活」必须自己清掉旧描述符（PluginHost 不允许 active → active）
+    await pluginHost.deactivatePlugin(AssignmentEvalPlugin.manifest.id);
+    await pluginHost.activatePlugin(AssignmentEvalPlugin.manifest.id);
+
+    expect(actionRegistry.getActionByCommandType('assignment.create')?.id).toBe('eval-assignment-create');
+
+    const created: any = await execute('assignment.create', 'user:teacher-1:teacher', {
+      title: '只挂课时的作业',
+      lessonId: 'lesson-x',
+    });
+    expect(created.success).toBe(true);
+
+    const row = db
+      .prepare('SELECT lesson_id, class_id, created_by, status FROM plugin_assignments WHERE id = ?')
+      .get(created.assignmentId) as any;
+    expect(row.lesson_id).toBe('lesson-x');
+    expect(row.class_id).toBeNull();
+    expect(row.created_by).toBe('teacher-1'); // 归一化：不是 user:teacher-1:teacher
+    expect(row.status).toBe('published');
+  });
 });

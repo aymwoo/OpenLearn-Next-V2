@@ -33,6 +33,32 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
 
   const cookie = (token: string) => ({ Cookie: `edu_os_token=${token}` });
   const createdFiles: string[] = [];
+  const createdAssignmentIds: string[] = [];
+
+  /** 清掉某作业下的提交 / 版本 / 附件，让用例彼此独立（DB 在同文件内共享） */
+  const resetAssignmentState = (target = assignmentId) => {
+    const db = kernelContainer.db;
+    db.prepare('DELETE FROM plugin_assignment_files WHERE assignment_id = ?').run(target);
+    db.prepare('DELETE FROM plugin_submission_versions WHERE assignment_id = ?').run(target);
+    db.prepare('DELETE FROM plugin_submissions WHERE assignment_id = ?').run(target);
+  };
+
+  /** 上传一个附件并登记落盘路径（便于 afterAll 清理） */
+  const uploadTracked = async (fileName: string, token = studentToken, target = assignmentId) => {
+    const uploaded: any = await (await upload(pdfBytes, fileName, token, target)).json();
+    const stored = kernelContainer.db
+      .prepare('SELECT stored_path FROM plugin_assignment_files WHERE id = ?')
+      .get(uploaded.file.id) as { stored_path: string } | undefined;
+    if (stored) createdFiles.push(path.resolve(process.cwd(), stored.stored_path));
+    return uploaded.file as { id: string; name: string };
+  };
+
+  const submitWork = (token: string, body: Record<string, unknown>, target = assignmentId) =>
+    fetch(`${baseUrl}/api/assignments/${target}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(token) },
+      body: JSON.stringify(body),
+    });
 
   const pdfBytes = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.from('assignment hub test\n')]);
 
@@ -108,6 +134,13 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     const dir = path.join(process.cwd(), 'storage', 'assignments', assignmentId);
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(path.join(process.cwd(), 'storage', 'assignments', otherAssignmentId), { recursive: true, force: true });
+    for (const id of createdAssignmentIds) {
+      db.prepare('DELETE FROM plugin_assignment_files WHERE assignment_id = ?').run(id);
+      db.prepare('DELETE FROM plugin_submission_versions WHERE assignment_id = ?').run(id);
+      db.prepare('DELETE FROM plugin_submissions WHERE assignment_id = ?').run(id);
+      db.prepare('DELETE FROM plugin_assignments WHERE id = ?').run(id);
+      fs.rmSync(path.join(process.cwd(), 'storage', 'assignments', id), { recursive: true, force: true });
+    }
   });
 
   it('未登录上传 → 401', async () => {
@@ -225,6 +258,125 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
       .get(assignmentId) as { text_content: string; version: number };
     expect(version.text_content).toBe('这是我的作业');
     expect(version.version).toBe(1);
+  });
+
+  it('学生端读路径：弹窗能拿到作业 / 待提交附件 / 版本历史，重交后版本递增且附件归档', async () => {
+    resetAssignmentState();
+    const file = await uploadTracked('读路径附件.pdf');
+
+    // ① 上传后尚未提交：附件处于「待提交」状态（无 version_id）
+    const pending = await fetch(`${baseUrl}/api/assignments/${assignmentId}/files`, { headers: cookie(studentToken) });
+    const pendingBody: any = await pending.json();
+    expect(pending.status, JSON.stringify(pendingBody)).toBe(200);
+    const pendingRow = pendingBody.files.find((f: any) => f.id === file.id);
+    expect(pendingRow).toBeTruthy();
+    expect(pendingRow.version_id ?? null).toBeNull();
+
+    // ② 链接作答被作业配置禁止（种子作业 allow_link = 0）：必须报错且不消耗版本号
+    const rejected: any = await (await submitWork(studentToken, { linkUrl: 'https://example.com/nope' })).json();
+    expect(rejected.success).toBe(false);
+    expect(String(rejected.error)).toContain('Link answers are not allowed');
+
+    // ③ 提交（附件 + 文本）
+    const submitted = await submitWork(studentToken, { fileIds: [file.id], textContent: '第一版文本作答' });
+    const submitBody: any = await submitted.json();
+    expect(submitted.status, JSON.stringify(submitBody)).toBe(200);
+    expect(submitBody.version).toBe(1);
+    expect(submitBody.versionId).toBeTruthy();
+
+    // ④ 归档后该附件不再出现在待提交列表
+    const after: any = await (await fetch(`${baseUrl}/api/assignments/${assignmentId}/files`, {
+      headers: cookie(studentToken),
+    })).json();
+    const archivedRow = after.files.find((f: any) => f.id === file.id);
+    expect(archivedRow.version_id).toBe(submitBody.versionId);
+
+    // ⑤ 弹窗详情：assignment + submission + versions + grade
+    const detail: any = await (await fetch(`${baseUrl}/api/assignments/${assignmentId}`, {
+      headers: cookie(studentToken),
+    })).json();
+    expect(detail.success).toBe(true);
+    expect(detail.assignment.id).toBe(assignmentId);
+    expect(detail.submission.student_id).toBe(studentId);
+    expect(detail.submission.version).toBe(1);
+    expect(detail.versions[0].version).toBe(1);
+    expect(detail.versions[0].text_content).toBe('第一版文本作答');
+    expect(detail.grade).toBeNull();
+    expect(detail.stats.submissionCount).toBeGreaterThanOrEqual(1);
+
+    // ⑥ 重交：版本递增，历史版本保留
+    const resubmit: any = await (await submitWork(studentToken, { textContent: '第二版' })).json();
+    expect(resubmit.version).toBe(2);
+    const versions = kernelContainer.db
+      .prepare('SELECT version FROM plugin_submission_versions WHERE assignment_id = ? ORDER BY version')
+      .all(assignmentId) as { version: number }[];
+    expect(versions.map((v) => v.version)).toEqual([1, 2]);
+  });
+
+  it('列表读路径：学生只看得到自己的提交概要，教师可按 studentId 查询', async () => {
+    resetAssignmentState();
+    await submitWork(studentToken, { textContent: '列表用例' });
+
+    // 学生：列表行附带自己的 submission / grade
+    const asStudent: any = await (await fetch(`${baseUrl}/api/assignments?lessonId=lesson-hub-0001`, {
+      headers: cookie(studentToken),
+    })).json();
+    const studentRow = (asStudent.assignments || []).find((a: any) => a.id === assignmentId);
+    expect(studentRow).toBeTruthy();
+    expect(studentRow.submission.version).toBe(1);
+    expect(studentRow.grade).toBeNull();
+
+    // 教师：不指定学生时不附带个人提交；指定后可以看到该学生的提交
+    const asTeacher: any = await (await fetch(`${baseUrl}/api/assignments?lessonId=lesson-hub-0001`, {
+      headers: cookie(teacherToken),
+    })).json();
+    const teacherRow = (asTeacher.assignments || []).find((a: any) => a.id === assignmentId);
+    expect(teacherRow).toBeTruthy();
+    expect(teacherRow.submission).toBeUndefined();
+
+    const withStudent: any = await (await fetch(
+      `${baseUrl}/api/assignments?lessonId=lesson-hub-0001&studentId=${studentId}`,
+      { headers: cookie(teacherToken) },
+    )).json();
+    const scopedRow = (withStudent.assignments || []).find((a: any) => a.id === assignmentId);
+    expect(scopedRow.submission.version).toBe(1);
+  });
+
+  it('教师新建作业：不挂班级也能创建（POST /api/assignments 返回 assignmentId 供白板绑定）', async () => {
+    // 回归：`ActionRegistry.getActionByCommandType()` 取的是最先注册的描述符，
+    // management.ts 的 `core-assignment-create` 要求 classId。若插件未接管该描述符，
+    // 这里会得到 `[PayloadValidationError] ... Missing required property "classId"`。
+    const created = await fetch(`${baseUrl}/api/assignments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+      body: JSON.stringify({
+        title: '绑定控件新建的作业',
+        description: '来自白板编辑面板',
+        lessonId: 'lesson-hub-0003',
+        elementId: 'el-hub-0001',
+        status: 'published',
+      }),
+    });
+    const createdBody: any = await created.json();
+    expect(created.status, JSON.stringify(createdBody)).toBe(200);
+    expect(createdBody.success).toBe(true);
+    const newId = String(createdBody.assignmentId || createdBody.assignment?.id || '');
+    expect(newId).toBeTruthy();
+    createdAssignmentIds.push(newId);
+
+    const row = kernelContainer.db
+      .prepare('SELECT lesson_id, element_id, title, status, created_by FROM plugin_assignments WHERE id = ?')
+      .get(newId) as any;
+    expect(row.lesson_id).toBe('lesson-hub-0003');
+    expect(row.element_id).toBe('el-hub-0001');
+    expect(row.status).toBe('published');
+    expect(row.created_by).toBe(teacherId);
+
+    // 学生能在同一课时的列表里看到这条刚发布的作业
+    const asStudent: any = await (await fetch(`${baseUrl}/api/assignments?lessonId=lesson-hub-0003`, {
+      headers: cookie(studentToken),
+    })).json();
+    expect((asStudent.assignments || []).map((a: any) => a.id)).toContain(newId);
   });
 
   it('CapabilityGuard：学生与教师均被授予 assignment:* 能力（P0 权限修正）', () => {
