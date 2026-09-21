@@ -78,6 +78,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **CI 新增 `docs-drift-audit` job**：`.github/workflows/ci.yml` 中依次 checkout ➔ setup-python 3.11 ➔ `bash audit-tools/run.sh`；失败时上传 `audit-tools/reports/drift_report.md` 作为工件，并在 PR 场景下用 `actions/github-script` 把完整报告贴回 PR 评论，让文档漂移在合并前可见。当前基线：`docs facts: 103` / `code facts: 55` / `drift items: 0`（MISSING_IN_CODE 0、MISSING_IN_DOCS 0）。
 - **新增 `docs/developer-guide/docs-drift-audit.md`**：记录该审计要解决的问题（文档描述了而代码已删改，或代码新增了子系统而文档未登记）、两侧事实的提取口径、本地运行方式与装钩子方式，并登记进 `docs/index.md` 的开发者指南 toctree。
 - `.gitignore` 补充忽略审计生成物：`audit-tools/reports/`（`extracts.json` / `drift_report.md` / `drift_report.json`）与 `audit-tools/__pycache__/`，仓库只提交脚本与说明，避免每次运行都产生噪声 diff。
+- **README 重写为面向外部读者的平台能力总览**：补充徽章（测试 / Node / pnpm / 许可证）、「核心特性」五大项（微内核 + 事件驱动架构、双运行模式插件沙箱、零信任课件隔离与 Bridge SDK、课堂实时协同与学生端遥测、AI 伴随教学引擎）、ASCII 架构拓扑图、pnpm 命令表（补齐 `lint:eslint` / `format` / `db:backup` / `db:reset`）、环境变量表（补默认值列）、分阶段演进路线图（阶段一 v0.3.21 稳固与安全收敛，阶段二 v0.4.0 K12 课堂交互与智能伴随深化）与相关文档索引，替代原先偏「快速上手」的首页。
+- **补充三个运行时架构文档**，把此前只存在于代码里的三条运行链路正式文档化：`docs/architecture/classroom-runtime.md`（Classroom Runtime，跨前端 `src/features/classroom-runtime/` 与内核 `packages/core/classroom-runtime/` 两侧）、`docs/architecture/interaction-runtime.md`（Interaction Runtime，覆盖 Keyboard / Mouse / Touch / Gesture / Drag / Clipboard / Focus / ContextMenu / Selection 九个交互域）、`docs/architecture/resource-runtime.md`（Teaching Resource Runtime，把 PDF / PPT / 视频 / Notebook / Mermaid / GeoGebra 等异构资源统一适配为 Workspace 控件）；三篇文档均登记进 `docs/index.md` 的架构 toctree，随 ReadTheDocs 发布，同时被上一提交引入的漂移审计纳入比对范围（本仓库 `docs facts: 103` / `code facts: 55` / `drift items: 0` 基线保持）。
+- **修正 README 中 5 处失效链接**：3 处指向并不存在的 `docs/architecture/plugin-architecture-audit-report.md`（该文件全仓不存在、git 历史也从未提交过；改为指向既有的架构文档漂移审计），2 处指向同样不存在的仓库根 `LICENSE`（改为指向声明 `"license": "MIT"` 的 `package.json`）。**注意：仓库目前确实没有 LICENSE 文件**，若要以文件形式发布许可证，需由版权持有者补齐版权行后另行提交。
 
 ## [0.3.21] - 2026-09-20
 
