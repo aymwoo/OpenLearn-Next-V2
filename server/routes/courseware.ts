@@ -311,17 +311,26 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         }
       }
 
-      const actorId = session.userId || getActorId(req) || 'student';
+      // CapabilityGuard 的角色兜底依赖 actorId 的 `:role` 后缀（见 packages/core/capability-system）。
+      // 直接传裸 session.userId 会让 `courseware.submit_attempt` 的 student:write 校验失败，
+      // 学生真实提交与教师课件预览提交都会 500（历史缺陷，见 courseware-submit-actor.test.ts）。
+      const normalizedActorId = getActorId(req);
+      const actorId =
+        normalizedActorId && normalizedActorId !== 'anonymous'
+          ? normalizedActorId
+          : `user:${session.userId || session.studentId || 'student'}:${session.role || 'student'}`;
+      // 命令 payload 需剔空：validateJsonSchema 把显式 null 当作已提供值校验
+      // （`key in data && data[key] !== undefined`），completion/score 传 null 会 500 PayloadValidationError。
+      const payload: Record<string, any> = { attemptId };
+      if (parsedScore !== null) payload.score = parsedScore;
+      if (parsedCompletion !== null) payload.completion = parsedCompletion;
+      if (comment !== undefined && comment !== null) payload.comment = comment;
+      if (status !== undefined && status !== null) payload.status = status;
+      if (extra && typeof extra === 'object' && !Array.isArray(extra)) payload.extra = extra;
+
       const cmd = kernelContainer.commandBus.createCommand(
         'courseware.submit_attempt',
-        {
-          attemptId,
-          score: parsedScore,
-          comment,
-          completion: parsedCompletion,
-          status,
-          extra,
-        },
+        payload,
         actorId,
       );
       const result = await kernelContainer.commandBus.execute(cmd);
@@ -471,13 +480,27 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/courseware/attempts/:attemptId/raw', async (req, res) => {
+  // 原始作答数据含学生答案明细：修复前无 requireAuth 且 actorId 硬编码 'teacher-demo'
+  // （种子能力含 lesson:*，恰满足该命令要求的 lesson:read），任何人凭 attemptId 即可越权读取。
+  // 现行口径：需登录；教师/管理员可读任意 attempt，其他角色（含学生）仅能读自己的，
+  // 与 /submit 的所属权口径一致 —— 这样既不放开跨学生读取，也不打断“看自己作答详情”的调用方。
+  app.get('/api/courseware/attempts/:attemptId/raw', requireAuth(), async (req, res) => {
     try {
       const { attemptId } = req.params;
+      const session = (req as any).session;
+      if (session.role !== 'teacher' && session.role !== 'administrator') {
+        const owner = kernelContainer.db
+          .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
+          .get(attemptId) as { student_id: string } | undefined;
+        // 不存在与非本人同样返回 403，避免用状态码枚举 attempt 是否存在
+        if (!owner || owner.student_id !== (session.userId || session.studentId)) {
+          return res.status(403).json({ error: 'Forbidden: Cannot read another student attempt' });
+        }
+      }
       const cmd = kernelContainer.commandBus.createCommand(
         'courseware.get_attempt_raw_data',
         { attemptId },
-        'teacher-demo',
+        getActorId(req),
       );
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);

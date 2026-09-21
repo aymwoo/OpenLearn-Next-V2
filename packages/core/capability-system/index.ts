@@ -54,7 +54,18 @@ export class CapabilityGuard {
 
     // Role-based capability fallback
     if (actorId?.endsWith(':teacher')) {
-      const teacherCaps = ['lesson:*', 'whiteboard:*', 'management:*', 'quiz:*', 'vfs:*', 'process:*', 'plugin:*'];
+      // student:write 供教师预览互动课件（attempt.student_id = 'teacher_preview'）
+      // 或代录学生成绩时使用；路由层仍按 attempt.student_id 校验所属权。
+      const teacherCaps = [
+        'lesson:*',
+        'whiteboard:*',
+        'management:*',
+        'quiz:*',
+        'vfs:*',
+        'process:*',
+        'plugin:*',
+        'student:write',
+      ];
       const [reqRes, reqAct] = requiredCap.split(':');
       if (
         teacherCaps.some((c) => {
