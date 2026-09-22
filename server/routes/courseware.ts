@@ -485,11 +485,14 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/courseware/debug', (req, res) => {
+  app.post('/api/courseware/debug', requireAuth(), (req, res) => {
     try {
       const { msg, url, student, courseware } = req.body;
-      const logMsg = `[CLIENT DEBUG] ${msg} | URL: ${url} | Student: ${JSON.stringify(student)} | Courseware: ${JSON.stringify(courseware)}`;
-      console.log(`\x1b[35m[CLIENT DEBUG]\x1b[0m ${msg}`);
+      // SEC-FIX: limit log entry size to prevent disk fill / injection
+      const safeMsg = typeof msg === 'string' ? msg.slice(0, 2000) : String(msg).slice(0, 2000);
+      const safeUrl = typeof url === 'string' ? url.slice(0, 1000) : String(url).slice(0, 1000);
+      const logMsg = `[CLIENT DEBUG] ${safeMsg} | URL: ${safeUrl} | Student: ${JSON.stringify(student)?.slice(0, 1000)} | Courseware: ${JSON.stringify(courseware)?.slice(0, 1000)}`;
+      console.log(`\x1b[35m[CLIENT DEBUG]\x1b[0m ${safeMsg}`);
 
       const logFile = path.join(process.cwd(), 'client_debug.log');
       fs.appendFileSync(logFile, `${new Date().toISOString()} - ${logMsg}\n`);
@@ -529,9 +532,18 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/courseware/attempts/:attemptId/progress', (req, res) => {
+  app.get('/api/courseware/attempts/:attemptId/progress', requireAuth(), (req, res) => {
     try {
       const { attemptId } = req.params;
+      const session = (req as any).session as { role?: string; subRole?: string; userId?: string; studentId?: string } | undefined;
+      if (session && session.role !== 'teacher' && session.role !== 'administrator' && session.subRole !== 'administrator') {
+        const owner = kernelContainer.db
+          .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
+          .get(attemptId) as { student_id: string } | undefined;
+        if (!owner || owner.student_id !== (session.userId || session.studentId)) {
+          return res.status(403).json({ success: false, error: 'Forbidden: Cannot read another student attempt' });
+        }
+      }
       const result = kernelContainer.db
         .prepare('SELECT score, comment, completion, extra_json FROM submission_result WHERE attempt_id = ?')
         .get(attemptId) as any;
@@ -552,7 +564,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/courseware/attempts/:attemptId/promote', async (req, res) => {
+  app.post('/api/courseware/attempts/:attemptId/promote', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { attemptId } = req.params;
       const { lessonId, classId } = req.body;
@@ -593,31 +605,32 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       }
 
       const assignmentTitle = `互动课件: ${coursewareName}`;
-      let assignment = kernelContainer.db
-        .prepare('SELECT id FROM assignments WHERE class_id = ? AND lesson_id = ? AND title = ?')
-        .get(classId, lessonId, assignmentTitle) as any;
+      const promoteTx = kernelContainer.db.transaction(() => {
+        let assignment = kernelContainer.db
+          .prepare('SELECT id FROM assignments WHERE class_id = ? AND lesson_id = ? AND title = ?')
+          .get(classId, lessonId, assignmentTitle) as any;
 
-      let assignmentId = assignment?.id;
-      if (!assignmentId) {
-        assignmentId = 'ast-cw-' + crypto.randomBytes(8).toString('hex');
+        let assignmentId = assignment?.id;
+        if (!assignmentId) {
+          assignmentId = 'ast-cw-' + crypto.randomBytes(8).toString('hex');
+          kernelContainer.db
+            .prepare(
+              'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            )
+            .run(
+              assignmentId,
+              classId,
+              lessonId,
+              assignmentTitle,
+              `来自互动课件 [${coursewareName}] 的随堂学习提交数据记录`,
+              JSON.stringify({ type: 'interactive_courseware', attemptId, coursewareUuid: attempt.courseware_uuid }),
+              Date.now(),
+            );
+        }
+
         kernelContainer.db
           .prepare(
-            'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          )
-          .run(
-            assignmentId,
-            classId,
-            lessonId,
-            assignmentTitle,
-            `来自互动课件 [${coursewareName}] 的随堂学习提交数据记录`,
-            JSON.stringify({ type: 'interactive_courseware', attemptId, coursewareUuid: attempt.courseware_uuid }),
-            Date.now(),
-          );
-      }
-
-      kernelContainer.db
-        .prepare(
-          `
+            `
         INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'graded')
         ON CONFLICT(assignment_id, student_id) DO UPDATE SET
@@ -628,28 +641,33 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
           graded_at = excluded.graded_at,
           status = 'graded'
       `,
-        )
-        .run(
-          assignmentId,
-          studentId,
-          attempt.extra_json || '{}',
-          finalScore,
-          `由教师在课堂中保存录入。课件完成度: ${Math.round(completion * 100)}%。课件原始反�?: ${attempt.comment || '�?'}`,
-          Date.now(),
-          Date.now(),
-        );
+          )
+          .run(
+            assignmentId,
+            studentId,
+            attempt.extra_json || '{}',
+            finalScore,
+            `由教师在课堂中保存录入。课件完成度: ${Math.round(completion * 100)}%。课件原始反�?: ${attempt.comment || '�?'}`,
+            Date.now(),
+            Date.now(),
+          );
 
-      kernelContainer.db
-        .prepare(
-          `
+        kernelContainer.db
+          .prepare(
+            `
         INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at)
         VALUES (?, ?, 1, 100, '[]', ?)
         ON CONFLICT(student_id, lesson_id) DO UPDATE SET
           completed = 1,
           progress_percent = 100
       `,
-        )
-        .run(studentId, lessonId, Date.now());
+          )
+          .run(studentId, lessonId, Date.now());
+
+        return assignmentId;
+      });
+
+      const assignmentId = promoteTx();
 
       io.emit('student-progress-updated', {
         studentId,

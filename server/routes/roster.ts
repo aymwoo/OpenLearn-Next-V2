@@ -12,7 +12,7 @@ import type { ServerContext } from '../context.js';
 export function registerRosterRoutes(ctx: ServerContext) {
   const { app, io, loginLimiter } = ctx;
 
-  app.get('/api/classes', (req, res) => {
+  app.get('/api/classes', requireAuth(), (req, res) => {
     try {
       const classes = kernelContainer.db
         .prepare(
@@ -28,25 +28,32 @@ export function registerRosterRoutes(ctx: ServerContext) {
         .all();
       res.json(classes);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
-  app.get('/api/students', (req, res) => {
+  app.get('/api/students', requireAuth(), (req, res) => {
     try {
-      const students = kernelContainer.db.prepare('SELECT * FROM students ORDER BY created_at DESC').all();
+      // SEC-FIX: Never expose password hashes via API; explicit column list
+      const students = kernelContainer.db
+        .prepare(
+          'SELECT id, student_number, name, email, avatar, locked_lesson_id, private_notes, created_at FROM students ORDER BY created_at DESC',
+        )
+        .all();
       res.json(students);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
-  app.get('/api/classes/:id/students', (req, res) => {
+  app.get('/api/classes/:id/students', requireAuth(), (req, res) => {
     try {
+      // SEC-FIX: explicit columns, hide password hashes
       const students = kernelContainer.db
         .prepare(
           `
-        SELECT s.* FROM students s
+        SELECT s.id, s.student_number, s.name, s.email, s.avatar, s.locked_lesson_id, s.private_notes, s.created_at, cs.joined_at
+        FROM students s
         INNER JOIN class_students cs ON s.id = cs.student_id
         WHERE cs.class_id = ?
         ORDER BY cs.joined_at DESC
@@ -667,7 +674,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
 
   // --- STUDENT READ NOTIFICATIONS APIS ---
-  app.get('/api/students/:id/read_notifications', (req, res) => {
+  app.get('/api/students/:id/read_notifications', requireAuth(), (req, res) => {
     try {
       const rows = kernelContainer.db
         .prepare('SELECT notification_id FROM student_read_notifications WHERE student_id = ?')
@@ -809,7 +816,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
 
   // --- COMPUTER LABS AND SEATING APIS ---
-  app.get('/api/labs', (req, res) => {
+  app.get('/api/labs', requireAuth(), (req, res) => {
     try {
       const labs = kernelContainer.db.prepare('SELECT * FROM computer_labs ORDER BY created_at DESC').all();
       res.json(labs);
@@ -853,7 +860,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/classes/:classId/seats', (req, res) => {
+  app.get('/api/classes/:classId/seats', requireAuth(), (req, res) => {
     try {
       const classInfo = kernelContainer.db
         .prepare('SELECT lab_id FROM classes WHERE id = ?')
@@ -969,11 +976,8 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
 
   // SEC-DATA-02: GDPR 学生数据导出
-  app.get('/api/students/:id/export', (req, res) => {
+  app.get('/api/students/:id/export', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      if (!checkIsTeacherOrAdmin(req)) {
-        return res.status(403).json({ error: 'Only teachers and administrators can export student data' });
-      }
       const studentId = req.params.id;
       const student = kernelContainer.db.prepare('SELECT * FROM students WHERE id = ?').get(studentId) as any;
       if (!student) return res.status(404).json({ error: 'Student not found' });
@@ -1055,13 +1059,19 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/students/:id/progress', (req, res) => {
+  app.get('/api/students/:id/progress', requireAuth(), (req, res) => {
     try {
+      const session = (req as any).session as any;
+      const isPrivileged = session && (session.role === 'teacher' || session.role === 'administrator');
+      const currentUserId = session?.userId || session?.studentId;
       const studentRow = kernelContainer.db
         .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
         .get(req.params.id, req.params.id) as any;
       const studentId = studentRow ? studentRow.id : req.params.id;
-
+      // Students may only read their own progress
+      if (!isPrivileged && currentUserId !== studentId && currentUserId !== (studentRow?.student_number ?? null)) {
+        return res.status(403).json({ error: 'Forbidden: Cannot read another student progress' });
+      }
       const progress = kernelContainer.db
         .prepare(
           `
@@ -1201,7 +1211,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/classes/:id/progress', (req, res) => {
+  app.get('/api/classes/:id/progress', requireAuth(), (req, res) => {
     try {
       const progress = kernelContainer.db
         .prepare(
@@ -1221,7 +1231,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/classes/:classId/lessons/:lessonId/progress', (req, res) => {
+  app.get('/api/classes/:classId/lessons/:lessonId/progress', requireAuth(), (req, res) => {
     try {
       const progress = kernelContainer.db
         .prepare(
@@ -1257,7 +1267,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/classes/:classId/dashboard', (req, res) => {
+  app.get('/api/classes/:classId/dashboard', requireAuth(), (req, res) => {
     try {
       const assignments = kernelContainer.db
         .prepare('SELECT * FROM assignments WHERE class_id = ? ORDER BY created_at DESC')

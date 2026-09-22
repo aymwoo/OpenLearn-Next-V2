@@ -264,7 +264,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
     // ── E. 教师点「保存为作业成绩」→ /promote ───────────────────
     const promoteRes = await fetch(`${baseUrl}/api/courseware/attempts/${attemptId}/promote`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', Cookie: `edu_os_token=${teacherToken}` },
       body: JSON.stringify({ lessonId, classId }),
     });
     expect(promoteRes.status).toBe(200);
@@ -321,7 +321,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
     // F.6 — 幂等：第二次 promote 不会重复建作业，submission 行只增不改
     const promoteAgain = await fetch(`${baseUrl}/api/courseware/attempts/${attemptId}/promote`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', Cookie: `edu_os_token=${teacherToken}` },
       body: JSON.stringify({ lessonId, classId }),
     });
     expect(promoteAgain.status).toBe(200);
@@ -361,7 +361,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
 
     const promoteRes = await fetch(`${baseUrl}/api/courseware/attempts/${attemptId}/promote`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', Cookie: `edu_os_token=${teacherToken}` },
       body: JSON.stringify({ lessonId, classId }),
     });
     expect(promoteRes.status).toBe(200);
@@ -386,7 +386,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
   it('returns 404 when promoting a non-existent attempt', async () => {
     const res = await fetch(`${baseUrl}/api/courseware/attempts/does-not-exist/promote`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', Cookie: `edu_os_token=${teacherToken}` },
       body: JSON.stringify({ lessonId, classId }),
     });
     expect(res.status).toBe(404);
@@ -403,7 +403,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
 
     const res = await fetch(`${baseUrl}/api/courseware/attempts/${attemptId}/promote`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', Cookie: `edu_os_token=${teacherToken}` },
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(400);

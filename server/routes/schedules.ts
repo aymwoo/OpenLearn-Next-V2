@@ -7,7 +7,7 @@ import { sendSafeError } from '../utils/error-handler.js';
 export function registerSchedulesRoutes(ctx: ServerContext) {
   const { app } = ctx;
 
-  app.get('/api/schedules/today', (req, res) => {
+  app.get('/api/schedules/today', requireAuth(), (req, res) => {
     try {
       const clientDate = (req.query.date as string) || new Date().toISOString().split('T')[0];
 
@@ -38,11 +38,11 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
 
       res.json({ success: true, schedules });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
-  app.get('/api/schedules', (req, res) => {
+  app.get('/api/schedules', requireAuth(), (req, res) => {
     try {
       const schedules = kernelContainer.db
         .prepare(
@@ -57,11 +57,11 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
         .all();
       res.json(schedules);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
-  app.get('/api/classes/:classId/schedules', (req, res) => {
+  app.get('/api/classes/:classId/schedules', requireAuth(), (req, res) => {
     try {
       const schedules = kernelContainer.db
         .prepare(
@@ -76,7 +76,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
         .all(req.params.classId);
       res.json(schedules);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -114,7 +114,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
         },
       });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -140,7 +140,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
         );
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -152,7 +152,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
       kernelContainer.db.prepare('DELETE FROM attendance WHERE schedule_id = ?').run(req.params.scheduleId);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -185,7 +185,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
       transaction(schedules);
       res.json({ success: true, count: schedules.length });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -394,7 +394,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
         stack: e.stack,
         cause: e.cause,
       });
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 }
