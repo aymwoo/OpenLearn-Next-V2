@@ -43,17 +43,29 @@ export class CapabilityGuard {
     this.actorCapabilities.delete(actorId);
   }
 
+  private static extractRole(actorId: string): string | null {
+    if (!actorId || typeof actorId !== 'string') return null;
+    // actorId 格式为 user:<userId>:<role>，role 必须为白名单之一，避免 userId 含 ':' 注入
+    const lastColon = actorId.lastIndexOf(':');
+    if (lastColon === -1) return null;
+    const role = actorId.slice(lastColon + 1);
+    if (['administrator', 'admin', 'teacher', 'student', 'anonymous'].includes(role)) return role;
+    return null;
+  }
+
   public check(actorId: string, requiredCap: string): boolean {
+    const role = CapabilityGuard.extractRole(actorId);
     const isAdmin =
       actorId === 'role:administrator' ||
-      actorId?.endsWith(':administrator') ||
       actorId === 'admin' ||
       actorId === 'usr_admin' ||
-      actorId === 'admin-demo';
+      actorId === 'admin-demo' ||
+      role === 'administrator' ||
+      role === 'admin';
     if (isAdmin) return true;
 
-    // Role-based capability fallback
-    if (actorId?.endsWith(':teacher')) {
+    // Role-based capability fallback — 使用严格解析的 role，避免 actorId 字符串后缀被注入
+    if (role === 'teacher') {
       // student:write 供教师预览互动课件（attempt.student_id = 'teacher_preview'）
       // 或代录学生成绩时使用；路由层仍按 attempt.student_id 校验所属权。
       // assignment:submit / assignment:review 让教师能代交、试评与终评。
@@ -82,7 +94,7 @@ export class CapabilityGuard {
       }
     }
 
-    if (actorId?.endsWith(':student')) {
+    if (role === 'student') {
       // assignment:submit / assignment:review 是学生唯一能发起作业写入的入口，
       // 因此**不含** lesson:write（避免学生改课时内容）；命令处理器内部再按
       // actorId 与 payload.studentId 校验所属权，防止代交/代评。

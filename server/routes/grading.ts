@@ -12,7 +12,7 @@ import { sendSafeError } from '../utils/error-handler.js';
 export function registerGradingRoutes(ctx: ServerContext) {
   const { app } = ctx;
 
-  app.get('/api/classes/:classId/attendance-summary', (req, res) => {
+  app.get('/api/classes/:classId/attendance-summary', requireAuth(), (req, res) => {
     try {
       const classId = req.params.classId;
       const db = kernelContainer.db;
@@ -167,11 +167,11 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
       res.json(filtered);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
-  app.get('/api/schedules/:scheduleId/attendance', (req, res) => {
+  app.get('/api/schedules/:scheduleId/attendance', requireAuth(), (req, res) => {
     try {
       const attendance = kernelContainer.db
         .prepare(
@@ -185,7 +185,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
         .all(req.params.scheduleId);
       res.json(attendance);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -203,12 +203,12 @@ export function registerGradingRoutes(ctx: ServerContext) {
         .run(req.params.scheduleId, studentId, status, Date.now());
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
   // ==================== Grade Weights Endpoints ====================
-  app.get('/api/classes/:classId/grade-weights', (req, res) => {
+  app.get('/api/classes/:classId/grade-weights', requireAuth(), (req, res) => {
     try {
       const weights = kernelContainer.db
         .prepare('SELECT * FROM class_grade_weights WHERE class_id = ?')
@@ -224,7 +224,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
       }
       res.json(weights);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -259,19 +259,19 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
   // ==================== Exams & Scores Endpoints ====================
-  app.get('/api/classes/:classId/exams', (req, res) => {
+  app.get('/api/classes/:classId/exams', requireAuth(), (req, res) => {
     try {
       const exams = kernelContainer.db
         .prepare('SELECT * FROM exams WHERE class_id = ? ORDER BY created_at DESC')
         .all(req.params.classId);
       res.json(exams);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -290,16 +290,16 @@ export function registerGradingRoutes(ctx: ServerContext) {
         .run(examId, req.params.classId, title, description || '', max_score || 100, Date.now());
       res.json({ success: true, examId });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
-  app.get('/api/exams/:examId/scores', (req, res) => {
+  app.get('/api/exams/:examId/scores', requireAuth(), (req, res) => {
     try {
       const scores = kernelContainer.db.prepare('SELECT * FROM exam_scores WHERE exam_id = ?').all(req.params.examId);
       res.json(scores);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -332,12 +332,12 @@ export function registerGradingRoutes(ctx: ServerContext) {
       transaction(scores);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
   // ==================== Semester Grades & Reports Endpoints ====================
-  app.get('/api/classes/:classId/semester-grades', (req, res) => {
+  app.get('/api/classes/:classId/semester-grades', requireAuth(), (req, res) => {
     try {
       const classId = req.params.classId;
       const semesterName = (req.query.semesterName as string) || '2026年春季学�?';
@@ -529,7 +529,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
       res.json({ success: true, weights, students: result });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -545,20 +545,20 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
+      sendSafeError(res, e);
     }
   });
 
   // ─────────────────────────────────────────────────────────────────
   // Points Ledger & Dimension Extensions API
   // ─────────────────────────────────────────────────────────────────
-  app.get('/api/classes/:classId/points-dimensions', async (req, res) => {
+  app.get('/api/classes/:classId/points-dimensions', requireAuth(), async (req, res) => {
     try {
       const dimensionRegistry = await kernelContainer.serviceRegistry.resolve(IPointsDimensionRegistryToken);
       const dimensions = dimensionRegistry.listDimensions();
       res.json({ success: true, dimensions });
     } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -594,11 +594,11 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
       res.json({ success: true, logItem });
     } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
+      sendSafeError(res, e);
     }
   });
 
-  app.get('/api/students/:studentId/points-logs', async (req, res) => {
+  app.get('/api/students/:studentId/points-logs', requireAuth(), async (req, res) => {
     try {
       const { studentId } = req.params;
       const { classId } = req.query;
@@ -609,7 +609,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
       res.json({ success: true, logs, summary });
     } catch (e: any) {
-      res.status(500).json({ success: false, error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -666,7 +666,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
       transaction(reports);
       res.json({ success: true });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e);
     }
   });
 
@@ -810,7 +810,7 @@ ${examsText}
         res.json({ success: true, aiEvaluation: text });
       } catch (e: any) {
         console.error('AI Semester Evaluation error:', e);
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e);
       }
     },
   );

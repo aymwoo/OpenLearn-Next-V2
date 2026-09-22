@@ -15,7 +15,7 @@ import { sendSafeError } from '../utils/error-handler.js';
 export function registerResourcesRoutes(ctx: ServerContext) {
   const { app } = ctx;
 
-  app.get('/api/resources', (req, res) => {
+  app.get('/api/resources', requireAuth(), (req, res) => {
     try {
       const resources = kernelContainer.db
         .prepare('SELECT id, name, type, created_at FROM system_resources ORDER BY created_at DESC')
@@ -26,7 +26,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/resources/:id', (req, res) => {
+  app.get('/api/resources/:id', requireAuth(), (req, res) => {
     try {
       const resource = kernelContainer.db
         .prepare('SELECT * FROM system_resources WHERE id = ?')
@@ -158,7 +158,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/resources/:id/*', (req, res) => {
+  app.get('/api/resources/:id/*', requireAuth(), (req, res) => {
     try {
       const resource = kernelContainer.db
         .prepare('SELECT * FROM system_resources WHERE id = ?')

@@ -6,8 +6,23 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 
 // ── Session 工具函数 ──────────────────────────────────────────────
 
-/** 获取有效 session（自动检查过期 + 刷新空闲超时） */
-export function getValidSession(token: string): any | null {
+export interface Session {
+  userId?: string;
+  studentId?: string;
+  username?: string;
+  name?: string;
+  email?: string;
+  role: string;
+  subRole?: string;
+  avatar?: string | null;
+  permissions?: string[];
+  [key: string]: unknown;
+}
+
+const SESSION_REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 分钟内不重复刷新 updated_at，降低写放大
+
+/** 获取有效 session（自动检查过期 + 节流刷新空闲超时） */
+export function getValidSession(token: string): Session | null {
   let sessionRow: any;
   try {
     sessionRow = kernelContainer.db.prepare('SELECT * FROM client_sessions WHERE id = ?').get(token);
@@ -28,11 +43,23 @@ export function getValidSession(token: string): any | null {
     kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(token);
     return null;
   }
-  // 刷新 updated_at
-  kernelContainer.db.prepare('UPDATE client_sessions SET updated_at = ? WHERE id = ?').run(now, token);
-  const session = JSON.parse(sessionRow.session_data);
+  // 节流刷新 updated_at（仅当距离上次更新超过 5 分钟）
+  if (!sessionRow.updated_at || now - sessionRow.updated_at > SESSION_REFRESH_INTERVAL_MS) {
+    kernelContainer.db.prepare('UPDATE client_sessions SET updated_at = ? WHERE id = ?').run(now, token);
+  }
+  let session: Session;
+  try {
+    session = JSON.parse(sessionRow.session_data) as Session;
+  } catch {
+    return null;
+  }
   if (session && !session.userId && session.studentId) {
     session.userId = session.studentId;
+  }
+  // 入库加固：role 必须是白名单，禁止通过 session_data 注入任意角色字符串
+  if (session.role && !['teacher', 'student', 'administrator', 'admin'].includes(session.role)) {
+    // 非法 role 视为 anonymous，避免 capability 误判
+    session.role = 'anonymous';
   }
   return session;
 }
@@ -65,8 +92,11 @@ export function getActorId(req: Request): string {
     ) {
       role = 'administrator';
     }
+    // 加固：userId 去除 ':' 与非法字符，防止 actorId 注入导致 capability 越权
+    const rawUserId = session.userId || session.studentId || 'demo';
+    const safeUserId = String(rawUserId).replace(/[:\s]/g, '_').slice(0, 64);
     if (role) {
-      return `user:${session.userId || session.studentId || 'demo'}:${role}`;
+      return `user:${safeUserId}:${role}`;
     }
     return 'anonymous';
   } catch {

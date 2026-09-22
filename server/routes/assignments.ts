@@ -6,7 +6,7 @@ import { sendSafeError } from '../utils/error-handler.js';
 export function registerAssignmentsRoutes(ctx: ServerContext) {
   const { app } = ctx;
 
-  app.get('/api/classes/:classId/assignments', (req, res) => {
+  app.get('/api/classes/:classId/assignments', requireAuth(), (req, res) => {
     try {
       const assignments = kernelContainer.db
         .prepare('SELECT * FROM assignments WHERE class_id = ? ORDER BY created_at DESC')
@@ -180,7 +180,7 @@ Output pure JSON only without markdown code blocks, matching this structure:
     }
   });
 
-  app.get('/api/assignments/:id/submissions', (req, res) => {
+  app.get('/api/assignments/:id/submissions', requireAuth(), (req, res) => {
     try {
       const submissions = kernelContainer.db
         .prepare(

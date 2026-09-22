@@ -162,7 +162,7 @@ function withLatestVersion(row: any): any {
 export function registerLessonsRoutes(ctx: ServerContext) {
   const { app, io } = ctx;
 
-  app.get('/api/lessons', (req, res) => {
+  app.get('/api/lessons', requireAuth(), (req, res) => {
     const lessons = kernelContainer.db
       .prepare(
         `
@@ -198,7 +198,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/lessons/:lessonId/eval-grades', (req, res) => {
+  app.get('/api/lessons/:lessonId/eval-grades', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { lessonId } = req.params;
       const submissions = kernelContainer.db
@@ -262,7 +262,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/eval-submissions/:submissionId/reviews', (req, res) => {
+  app.get('/api/eval-submissions/:submissionId/reviews', requireAuth(), (req, res) => {
     try {
       const { submissionId } = req.params;
       const rows = kernelContainer.db
@@ -410,7 +410,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
   // Auth helper functions imported from server/middleware/auth.js
   // (getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId are now module-level imports)
 
-  app.get('/api/lessons/:id/whiteboard', (req, res) => {
+  app.get('/api/lessons/:id/whiteboard', requireAuth(), (req, res) => {
     const id = req.params.id;
     const elements = kernelContainer.db.prepare('SELECT * FROM whiteboard_elements WHERE lesson_id = ?').all(id);
 
@@ -729,12 +729,14 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         return res.status(ownership.status).json({ success: false, error: ownership.error });
       }
 
-      kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
-      kernelContainer.db.prepare('DELETE FROM student_lesson_progress WHERE lesson_id = ?').run(id);
-      kernelContainer.db.prepare('DELETE FROM schedules WHERE lesson_id = ?').run(id);
-      kernelContainer.db.prepare('DELETE FROM assignments WHERE lesson_id = ?').run(id);
-
-      const result = kernelContainer.db.prepare('DELETE FROM lessons WHERE id = ?').run(id);
+      const delTx = kernelContainer.db.transaction(() => {
+        kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(id);
+        kernelContainer.db.prepare('DELETE FROM student_lesson_progress WHERE lesson_id = ?').run(id);
+        kernelContainer.db.prepare('DELETE FROM schedules WHERE lesson_id = ?').run(id);
+        kernelContainer.db.prepare('DELETE FROM assignments WHERE lesson_id = ?').run(id);
+        return kernelContainer.db.prepare('DELETE FROM lessons WHERE id = ?').run(id);
+      });
+      const result = delTx() as any;
 
       if (result.changes === 0) {
         return res.status(404).json({ error: 'Lesson not found' });
@@ -747,7 +749,7 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
   });
 
   // ── 课程统计 API（删除确认弹窗用）───────────────────────────────────
-  app.get('/api/lessons/:id/stats', (req, res) => {
+  app.get('/api/lessons/:id/stats', requireAuth(), (req, res) => {
     try {
       const { id } = req.params;
 
@@ -793,33 +795,36 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       const now = Date.now();
       const newTitle = `副本-${original.title}`;
 
-      kernelContainer.db
-        .prepare(
-          'INSERT INTO lessons (id, title, content, timeline, progress_mode, progress_conditions, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        )
-        .run(
-          newId,
-          newTitle,
-          original.content,
-          original.timeline,
-          original.progress_mode,
-          original.progress_conditions,
-          creatorId,
-          now,
-          now,
+      const cloneTx = kernelContainer.db.transaction(() => {
+        kernelContainer.db
+          .prepare(
+            'INSERT INTO lessons (id, title, content, timeline, progress_mode, progress_conditions, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            newId,
+            newTitle,
+            original.content,
+            original.timeline,
+            original.progress_mode,
+            original.progress_conditions,
+            creatorId,
+            now,
+            now,
+          );
+
+        const whiteboardElements = kernelContainer.db
+          .prepare('SELECT * FROM whiteboard_elements WHERE lesson_id = ?')
+          .all(id) as any[];
+
+        const insertElement = kernelContainer.db.prepare(
+          'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
         );
 
-      const whiteboardElements = kernelContainer.db
-        .prepare('SELECT * FROM whiteboard_elements WHERE lesson_id = ?')
-        .all(id) as any[];
-
-      const insertElement = kernelContainer.db.prepare(
-        'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-      );
-
-      for (const el of whiteboardElements) {
-        insertElement.run(uuidv7(), newId, el.type, el.data, now);
-      }
+        for (const el of whiteboardElements) {
+          insertElement.run(uuidv7(), newId, el.type, el.data, now);
+        }
+      });
+      cloneTx();
 
       const cloned = kernelContainer.db
         .prepare(
