@@ -75,7 +75,10 @@ db.exec(`
     source TEXT NOT NULL,
     payload TEXT NOT NULL,
     timestamp INTEGER NOT NULL,
-    correlationId TEXT
+    correlationId TEXT,
+    -- 课堂维度：由 Kernel#initAuditLog 从 payload 的 lessonId 提取，
+    -- 用于「按课节重放整堂课」。老库由 migrations/006 补列。
+    lesson_id TEXT
   );
 
   CREATE TABLE IF NOT EXISTS lessons (
@@ -504,6 +507,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_courseware_attempt_cw_st ON courseware_attempt(courseware_id, student_id);
   CREATE INDEX IF NOT EXISTS idx_submission_result_attempt ON submission_result(attempt_id);
   CREATE INDEX IF NOT EXISTS idx_events_type_time ON events(type, timestamp);
+  -- 课堂事件统一经总线发布后 events 成为课堂事实日志，按时间窗口 / correlationId /
+  -- 课节三种维度查询都需要索引支撑（老库由 migrations/006 补齐）。
+  CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
+  CREATE INDEX IF NOT EXISTS idx_events_correlation ON events(correlationId);
   CREATE INDEX IF NOT EXISTS idx_assignments_class ON assignments(class_id);
   CREATE INDEX IF NOT EXISTS idx_attendance_schedule ON attendance(schedule_id);
 
@@ -669,6 +676,18 @@ try {
   db.prepare('ALTER TABLE students ADD COLUMN avatar TEXT').run();
 } catch (e) {
   // column already exists
+}
+
+try {
+  db.prepare('ALTER TABLE events ADD COLUMN lesson_id TEXT').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_events_lesson_time ON events(lesson_id, timestamp)').run();
+} catch (e) {
+  // index already exists
 }
 
 try {

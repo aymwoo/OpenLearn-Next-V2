@@ -452,20 +452,53 @@ export class Kernel {
 
   // Subscribe to all events and log them to DB
   public initAuditLog() {
+    // 惰性 prepare + 缓存：课堂事件统一走总线后写入频次显著上升，逐次 prepare
+    // 会成为热点。列是否存在只在首次写入时探测一次（PRAGMA 很便宜）。
+    let stmt: { run: (...params: unknown[]) => unknown } | null = null;
+    let hasLessonIdColumn: boolean | null = null;
+
     this.eventBus.subscribe('*', (event) => {
-      const stmt = this.db.prepare(
-        'INSERT INTO events (id, type, source, payload, timestamp, correlationId) VALUES (?, ?, ?, ?, ?, ?)',
-      );
-      stmt.run(
+      const values: unknown[] = [
         event.id,
         event.type,
         event.source,
         JSON.stringify(event.payload),
         event.timestamp,
         event.correlationId || null,
-      );
+      ];
+
+      if (hasLessonIdColumn === null) {
+        const columns = this.db.prepare('PRAGMA table_info(events)').all() as { name: string }[];
+        hasLessonIdColumn = columns.some((c) => c.name === 'lesson_id');
+        stmt = this.db.prepare(hasLessonIdColumn ? INSERT_EVENT_WITH_LESSON : INSERT_EVENT_LEGACY);
+      }
+
+      if (hasLessonIdColumn) {
+        stmt!.run(...values, extractEventLessonId(event.payload));
+      } else {
+        stmt!.run(...values);
+      }
     });
   }
+}
+
+const INSERT_EVENT_WITH_LESSON =
+  'INSERT INTO events (id, type, source, payload, timestamp, correlationId, lesson_id) VALUES (?, ?, ?, ?, ?, ?, ?)';
+const INSERT_EVENT_LEGACY =
+  'INSERT INTO events (id, type, source, payload, timestamp, correlationId) VALUES (?, ?, ?, ?, ?, ?)';
+
+/**
+ * 从事件 payload 中提取课节 ID，写入 `events.lesson_id` 以支持「按课堂重放」。
+ * 只认两种常见拼写；取不到就留 NULL（事件仍会完整入库）。
+ */
+function extractEventLessonId(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as Record<string, unknown>;
+  for (const key of ['lessonId', 'lesson_id']) {
+    const value = record[key];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return null;
 }
 
 // Singleton export - Lazy evaluated via Proxy to prevent instant creation during test imports
