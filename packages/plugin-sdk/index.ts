@@ -323,3 +323,19 @@ export {
   BaseActivityProvider,
   defineActivityProvider,
 } from '../activity-ecosystem/index.js';
+
+// ── Classroom Lifecycle & Interaction Engine Extensibility ─────────────────
+export type {
+  ClassroomLifecycleStage,
+  StageGuardResult,
+  ClassroomStageGuard,
+  IClassroomLifecycleService,
+  QuickActivityDescriptor,
+  IInteractionRuntimeService,
+} from '../core/di/interfaces.js';
+
+export {
+  IClassroomLifecycleServiceToken,
+  IInteractionRuntimeServiceToken,
+} from '../core/di/interfaces.js';
+

@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
@@ -206,6 +208,33 @@ export function registerAdminRoutes(ctx: ServerContext) {
       res.json({ success: true, imported });
     } catch (e: any) {
       sendSafeError(res, e);
+    }
+  });
+
+  app.get('/api/audit-report/download', (_req, res) => {
+    const reportPath = path.join(process.cwd(), 'docs/architecture/code-quality-audit-report.md');
+    if (fs.existsSync(reportPath)) {
+      res.download(reportPath, 'OpenLearn-V2-Audit-Report.md');
+    } else {
+      res.status(404).json({ success: false, error: 'Report not found' });
+    }
+  });
+
+  app.get('/api/remediation-roadmap/download', (_req, res) => {
+    const roadmapPath = path.join(process.cwd(), 'docs/architecture/remediation-and-optimization-roadmap.md');
+    if (fs.existsSync(roadmapPath)) {
+      res.download(roadmapPath, 'OpenLearn-V2-Remediation-Roadmap.md');
+    } else {
+      res.status(404).json({ success: false, error: 'Roadmap not found' });
+    }
+  });
+
+  app.get('/api/classroom-optimization-plan/download', (_req, res) => {
+    const planPath = path.join(process.cwd(), 'docs/architecture/interactive-classroom-and-editor-optimization-plan.md');
+    if (fs.existsSync(planPath)) {
+      res.download(planPath, 'OpenLearn-V2-Classroom-Optimization-Plan.md');
+    } else {
+      res.status(404).json({ success: false, error: 'Optimization plan not found' });
     }
   });
 }

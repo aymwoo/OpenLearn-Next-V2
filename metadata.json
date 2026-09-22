@@ -1,6 +1,6 @@
 {
   "name": "OpenLearn Next",
-  "description": "An AI-powered Learning Management System featuring assignments, quizzes, auto-grading, class scheduling, and attendance.",
+  "description": "An AI-powered Learning Management System featuring interactive classrooms, stage management, real-time student response systems, lesson editor, auto-grading, and an extensible third-party plugin ecosystem.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

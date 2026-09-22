@@ -77,6 +77,55 @@ export interface HelpDocConfig {
   markdownUrl?: string;
 }
 
+/** A contribution to the classroom.quick_activity slot (interactive quick tools). */
+export interface QuickActivityConfig {
+  id: string;
+  name: string;
+  icon?: string;
+  description?: string;
+  category?: string;
+  commandType?: string;
+  payload?: Record<string, unknown>;
+}
+
+/** A contribution to the timeline.segments slot (custom lesson segment types). */
+export interface TimelineSegmentConfig {
+  id: string;
+  labelZh: string;
+  labelEn: string;
+  icon?: string;
+  color?: string;
+  defaultDurationMin?: number;
+}
+
+/** A contribution to the palette.items slot (custom whiteboard tools & widgets). */
+export interface PaletteItemContributionConfig {
+  id: string;
+  type: string;
+  labelZh: string;
+  labelEn: string;
+  icon?: string;
+  category?: 'media' | 'interactive' | 'container' | 'custom';
+  defaultData?: Record<string, unknown>;
+}
+
+/** A contribution to the teacher.cockpit.widget slot (learning radar cards). */
+export interface CockpitWidgetConfig {
+  id: string;
+  title: string;
+  icon?: string;
+  position?: number;
+  width?: 'full' | 'half' | 'third';
+}
+
+/** A contribution to the stage.display.card slot (large projector display cards). */
+export interface StageCardConfig {
+  id: string;
+  title: string;
+  icon?: string;
+  theme?: 'dark' | 'light' | 'accent';
+}
+
 /** Union of all contribution config shapes, keyed by slot name. */
 export type ContributionConfig =
   | ClassroomToolConfig
@@ -85,7 +134,13 @@ export type ContributionConfig =
   | StudentViewConfig
   | StudentLessonToolConfig
   | AnchorToolConfig
-  | HelpDocConfig;
+  | HelpDocConfig
+  | QuickActivityConfig
+  | TimelineSegmentConfig
+  | PaletteItemContributionConfig
+  | CockpitWidgetConfig
+  | StageCardConfig;
+
 
 /** A human-readable summary of what a plugin contributes. */
 export interface ContributionSummary {

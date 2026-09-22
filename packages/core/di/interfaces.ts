@@ -668,3 +668,64 @@ export interface ICoursewareRuntimeScriptRegistry {
 export const ICoursewareRuntimeScriptRegistryToken = new Token<ICoursewareRuntimeScriptRegistry>(
   '@openlearn/core:ICoursewareRuntimeScriptRegistry',
 );
+
+// ── Classroom Lifecycle & Interaction Engine Extensibility ─────────────────
+
+/**
+ * 课堂生命周期阶段
+ */
+export type ClassroomLifecycleStage =
+  | 'PRE_CLASS_READY'
+  | 'IN_CLASS_TEACHING'
+  | 'WRAP_UP_EXIT_TICKET'
+  | 'ARCHIVED_REPORT';
+
+export interface StageGuardResult {
+  allowed: boolean;
+  reason?: string;
+}
+
+export type ClassroomStageGuard = (
+  fromStage: ClassroomLifecycleStage,
+  toStage: ClassroomLifecycleStage,
+  context: { lessonId: string; classId?: string; actorId: string },
+) => boolean | StageGuardResult | Promise<boolean | StageGuardResult>;
+
+export interface IClassroomLifecycleService {
+  getStage(lessonId: string): Promise<ClassroomLifecycleStage>;
+  transitionStage(
+    lessonId: string,
+    toStage: ClassroomLifecycleStage,
+    actorId: string,
+    classId?: string,
+  ): Promise<{ success: boolean; stage: ClassroomLifecycleStage; reason?: string }>;
+  registerStageGuard(owner: string, guard: ClassroomStageGuard): void;
+  unregisterStageGuard(owner: string): void;
+}
+
+export const IClassroomLifecycleServiceToken = new Token<IClassroomLifecycleService>(
+  '@openlearn/core:IClassroomLifecycleService',
+);
+
+/**
+ * 互动运行时服务接口 —— 支持极速投票、抢答、结课通票，并支持第三方插件注册自定义互动
+ */
+export interface QuickActivityDescriptor {
+  id: string;
+  name: string;
+  category: string;
+  icon?: string;
+  description?: string;
+  supportedRoles?: ('teacher' | 'student')[];
+}
+
+export interface IInteractionRuntimeService {
+  registerActivityProvider(owner: string, descriptor: QuickActivityDescriptor): void;
+  unregisterActivityProvider(owner: string, id: string): void;
+  listActivityProviders(): QuickActivityDescriptor[];
+}
+
+export const IInteractionRuntimeServiceToken = new Token<IInteractionRuntimeService>(
+  '@openlearn/core:IInteractionRuntimeService',
+);
+

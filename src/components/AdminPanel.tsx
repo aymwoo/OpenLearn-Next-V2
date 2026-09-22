@@ -24,6 +24,10 @@ import {
   Terminal,
   Layers,
   HelpCircle,
+  FileText,
+  Download,
+  Milestone,
+  Compass,
 } from 'lucide-react';
 
 interface TeacherUser {
@@ -547,6 +551,44 @@ export function AdminPanel({
             <Settings size={14} />
             <span>{lang === 'zh' ? '站点信息设置' : 'Site Settings'}</span>
           </button>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <a
+            id="btn-download-audit-report"
+            href="/api/audit-report/download"
+            download="OpenLearn-V2-代码质量与架构审计报告.md"
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-all shrink-0 cursor-pointer shadow-xs"
+            title={lang === 'zh' ? '下载全栈代码质量与架构审计报告' : 'Download Code Quality & Architecture Audit Report'}
+          >
+            <FileText size={14} className="text-indigo-600" />
+            <span>{lang === 'zh' ? '下载审计报告' : 'Download Audit Report'}</span>
+            <Download size={13} className="text-indigo-500 ml-0.5" />
+          </a>
+
+          <a
+            id="btn-download-remediation-roadmap"
+            href="/api/remediation-roadmap/download"
+            download="OpenLearn-V2-修补与优化路线图.md"
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-all shrink-0 cursor-pointer shadow-xs"
+            title={lang === 'zh' ? '下载分阶段修补与优化路线图' : 'Download Phased Remediation & Optimization Roadmap'}
+          >
+            <Milestone size={14} className="text-emerald-600" />
+            <span>{lang === 'zh' ? '下载修补路线图' : 'Download Roadmap'}</span>
+            <Download size={13} className="text-emerald-500 ml-0.5" />
+          </a>
+
+          <a
+            id="btn-download-optimization-plan"
+            href="/api/classroom-optimization-plan/download"
+            download="OpenLearn-V2-互动课堂与编辑器优化方案.md"
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition-all shrink-0 cursor-pointer shadow-xs"
+            title={lang === 'zh' ? '下载互动课堂及课程编辑器深度优化方案' : 'Download Interactive Classroom & Lesson Editor Optimization Plan'}
+          >
+            <Compass size={14} className="text-amber-600" />
+            <span>{lang === 'zh' ? '下载课堂优化方案' : 'Download Plan'}</span>
+            <Download size={13} className="text-amber-500 ml-0.5" />
+          </a>
         </div>
       </div>
 

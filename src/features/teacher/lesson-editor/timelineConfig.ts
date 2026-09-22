@@ -26,7 +26,23 @@ export const SEGMENT_TYPES: SegmentTypeMeta[] = [
   { id: 'summary', labelZh: '要点总结', labelEn: 'Summary', icon: CheckCircle2 },
 ];
 
+/** Dynamic registry for plugin-contributed segment types */
+const customSegmentTypes = new Map<string, SegmentTypeMeta>();
+
+export function registerCustomSegmentType(type: SegmentTypeMeta): void {
+  customSegmentTypes.set(type.id, type);
+}
+
+export function unregisterCustomSegmentType(id: string): void {
+  customSegmentTypes.delete(id);
+}
+
+export function getAllSegmentTypes(): SegmentTypeMeta[] {
+  return [...SEGMENT_TYPES, ...Array.from(customSegmentTypes.values())];
+}
+
 export const SEGMENT_COLORS: SegmentColorMeta[] = [
+
   {
     name: 'Blue',
     color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
@@ -62,7 +78,7 @@ export const SEGMENT_COLORS: SegmentColorMeta[] = [
 export const DEFAULT_SEGMENT_COLOR = SEGMENT_COLORS[1].color; // Indigo
 
 export function getSegmentType(type?: string): SegmentTypeMeta {
-  return SEGMENT_TYPES.find((t) => t.id === type) || SEGMENT_TYPES[1];
+  return getAllSegmentTypes().find((t) => t.id === type) || SEGMENT_TYPES[1];
 }
 
 export function getSegmentColor(color?: string): SegmentColorMeta {
