@@ -11,11 +11,13 @@ import {
   ExternalLink,
   Github,
   RefreshCw,
+  Store,
 } from 'lucide-react';
 import type { PluginCenterProps } from './plugin-center/types';
 import { PluginSettingsModal } from './PluginSettingsModal';
 import { PluginInstallWizard } from './PluginInstallWizard';
 import { PluginStorePanel } from './plugin-center/sub-views/PluginStorePanel';
+import { PluginCommunityPanel } from './plugin-center/sub-views/PluginCommunityPanel';
 import { PluginDevPanel } from './plugin-center/sub-views/PluginDevPanel';
 import { PluginLogsPanel } from './plugin-center/sub-views/PluginLogsPanel';
 
@@ -70,6 +72,17 @@ export function PluginCenter({
       isMounted = false;
     };
   }, []);
+
+  // 社区插件安装完成后需要重新加载：插件的前端贡献点（导航/组件）是在
+  // 启动时注册的，仅刷新列表不足以让新插件真正生效。与一键热更新保持一致。
+  const handleCommunityInstalled = () => {
+    setUpdateToast(
+      lang === 'zh'
+        ? '🎉 社区插件已安装，正在刷新插件列表…'
+        : '🎉 Community plugin installed, reloading the plugin list…',
+    );
+    setTimeout(() => window.location.reload(), 1200);
+  };
 
   const handleCheckUpdate = async (pluginId: string, manifestId: string) => {
     setCheckingUpdateId(pluginId);
@@ -216,6 +229,16 @@ export function PluginCenter({
                   {lang === 'zh' ? '发现' : 'Discover'}
                 </button>
                 <button
+                  onClick={() => setStoreTab('community')}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1 cursor-pointer ${
+                    storeTab === 'community'
+                      ? 'bg-white shadow text-indigo-600 font-bold'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Store size={14} /> {lang === 'zh' ? '社区' : 'Community'}
+                </button>
+                <button
                   onClick={() => setStoreTab('dev')}
                   className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1 cursor-pointer ${
                     storeTab === 'dev'
@@ -316,6 +339,8 @@ export function PluginCenter({
               onToggle={onToggle}
               onDelete={onDelete}
             />
+          ) : storeTab === 'community' ? (
+            <PluginCommunityPanel installedPlugins={plugins} lang={lang} onInstalled={handleCommunityInstalled} />
           ) : storeTab === 'logs' ? (
             <PluginLogsPanel lang={lang} />
           ) : (

@@ -12,6 +12,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **插件中心社区市场 (Community Plugin Registry & One-Click Install)**:
+  - **远端注册表与后端代取**：新增 `server/services/community-registry.ts`，由服务端通过环境变量 `PLUGIN_COMMUNITY_REGISTRY_URL` 代取社区注册表 JSON。经 `GET /api/plugins/community`（要求有效会话）归一化后返回，前端无需处理 CORS 与远端格式差异；未配置地址时返回 `configured: false` 并展示配置指引，而非报错。
+  - **注册表格式容错**：同时兼容 v1 信封（`{ version, plugins: [...] }`）、`items` 别名与裸数组；缺少 `id`、id 非法、缺少 `downloadUrl` 或下载地址未通过出站安全校验的记录被整条丢弃并以 `skipped` 计数回传；重复 id 保留首次出现；`homepage` / `repository` 不安全时置空但保留条目；失败结果不写入缓存。
+  - **安装与更新**：新增 `server/routes/plugins.ts` 的 `POST /api/plugins/install-from-url`（管理员专属），服务端下载 ZIP 后交由 `PluginDistributionManager` 安装；`expectedId` 已在本机安装时自动改走 `updateFromZip`（`allowDowngrade` 默认关闭）。服务端下载失败返回 `fallbackToClient: true`，前端改为浏览器下载并以 `application/octet-stream` 直传既有的 `/api/plugins/upload-zip-raw`，与「一键热更新」同一兜底策略。
+  - **出站安全校验复用**：将原本内联在 `server/routes/plugins.ts` 的 `isSafeExternalUrl` 提取为共享工具 `server/utils/url-safety.ts`（逻辑逐字节保持等价，消息文案不变），插件更新、AI 供应商连通性测试与社区市场现共用同一份 SSRF 防护实现；插件包下载额外限制 60 秒超时与 200MB 体积上限。
+  - **社区页 UI**：新增 `src/components/plugin-center/sub-views/PluginCommunityPanel.tsx`，作为插件中心顶部 **社区 (Community)** 标签页挂载。提供预览卡片（图标/作者/版本/认证与精选角标/描述/标签/权限数量/下载量与收藏数/源码与主页外链）、关键词搜索、高频标签筛选、三种排序与「隐藏已安装」开关，以及骨架屏、可重试错误态、空注册表、筛选无结果、未配置指引等完整状态覆盖；安装成功后卡片立即进入已安装态并触发插件列表刷新（插件前端贡献点在启动时注册，需重新加载页面方生效）。
+  - **安装状态标注**：服务端对照本地 `plugins` 表的 `manifest.id` 与版本，为每条注册表记录填充 `installedVersion` / `hasUpdate`，注册表本身无需提供；版本比较对注册表与本机两侧的版本号均做 semver 校验，避免被改坏的 manifest 版本（如 `nightly`）导致整个市场请求失败。
+  - **测试**：新增 `server/__tests__/community-registry.test.ts`（归一化、排序、重复与非法条目、安装状态标注、缓存命中/过期/强制刷新/失败不缓存、超时与 5xx、SSRF 拦截、下载体积与空包限制，71 例）、`server/__tests__/community-routes.test.ts`（匿名 401、教师可读但不可装 403、参数校验、`file:` 协议/回环/云元数据端点/私网地址拦截，10 例）与 `src/components/__tests__/PluginCommunityPanel.test.tsx`（卡片渲染、筛选与排序、安装成功、浏览器直传回退、403 提示、已安装与可更新态，18 例）。
+  - **文档**：新增 `docs/plugin/community-plugin-registry.md`，记录环境变量配置、注册表 JSON Schema 与字段说明、两条接口契约、归一化容错策略与前后端实现索引；`.env.example` 补充 `PLUGIN_COMMUNITY_REGISTRY_URL` 说明。
+
 - **互动课堂与课程编辑器全局架构优化及第三方插件生态体系 (Interactive Classroom & Lesson Editor Optimization with Plugin Ecosystem)**:
   - **四阶课堂生命周期状态机与中控台 (Classroom Stage State Machine & Cockpit)**:
     - `server/services/classroom-runtime-service.ts`：实现高可用课堂生命周期状态机，定义 `PRE_CLASS_READY`（课前就绪）、`IN_CLASS_TEACHING`（课中授课）、`WRAP_UP_EXIT_TICKET`（结课通票）、`ARCHIVED_REPORT`（学情归档简报）四阶流转；

@@ -8,6 +8,14 @@ import { encryptApiKey, decryptApiKey, maskApiKey } from '../utils/crypto.js';
 import { getActorId, requireAuth } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { pluginApiGatewayMiddleware } from './plugin-api-gateway.js';
+import { isSafeExternalUrl } from '../utils/url-safety.js';
+import {
+  COMMUNITY_REGISTRY_ENV,
+  fetchCommunityRegistry,
+  downloadPluginPackage,
+  isValidPluginId,
+  type DownloadedPackage,
+} from '../services/community-registry.js';
 import type { ServerContext } from '../context.js';
 
 /**
@@ -38,42 +46,28 @@ function findLocalPluginSource(manifestId: string): { dir: string; version: stri
   return best;
 }
 
-function isSafeExternalUrl(urlStr: string): { safe: boolean; reason?: string } {
+/**
+ * 汇总本地已安装插件的 manifest.id -> 版本，用于社区市场标注「已安装 / 可更新」。
+ * manifest 解析失败的行直接跳过，不影响其余插件的展示。
+ */
+function listInstalledManifestVersions(): Map<string, string> {
+  const installed = new Map<string, string>();
   try {
-    const parsed = new URL(urlStr);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return { safe: false, reason: 'Only HTTP and HTTPS protocols are allowed' };
-    }
-    const hostname = parsed.hostname.toLowerCase();
-    if (
-      hostname === 'localhost' ||
-      hostname.endsWith('.localhost') ||
-      hostname.endsWith('.local') ||
-      hostname === '0.0.0.0' ||
-      hostname === '::1' ||
-      hostname === '[::1]'
-    ) {
-      return { safe: false, reason: 'Access to loopback/local addresses is forbidden' };
-    }
-    const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-    if (ipv4Match) {
-      const octets = ipv4Match.slice(1).map(Number);
-      if (
-        octets[0] === 127 ||
-        octets[0] === 10 ||
-        (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
-        (octets[0] === 192 && octets[1] === 168) ||
-        (octets[0] === 169 && octets[1] === 254) ||
-        octets[0] === 0 ||
-        octets[0] >= 224
-      ) {
-        return { safe: false, reason: 'Access to private or link-local IP addresses is forbidden' };
+    const rows = kernelContainer.db.prepare('SELECT manifest FROM plugins').all() as Array<{ manifest: string }>;
+    for (const row of rows) {
+      try {
+        const manifest = JSON.parse(row.manifest);
+        if (typeof manifest?.id === 'string' && manifest.id) {
+          installed.set(manifest.id, typeof manifest.version === 'string' ? manifest.version : '0.0.0');
+        }
+      } catch {
+        // 单行 manifest 损坏不应拖垮整个市场列表
       }
     }
-    return { safe: true };
-  } catch (e: any) {
-    return { safe: false, reason: `Invalid URL format: ${e.message}` };
+  } catch {
+    // 数据库不可用时按「未安装任何插件」处理
   }
+  return installed;
 }
 
 export function registerPluginsRoutes(ctx: ServerContext) {
@@ -220,6 +214,93 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       res.json({ success: true, market: results });
     } catch (e: any) {
       sendSafeError(res, e);
+    }
+  });
+
+  // 社区插件市场（Community Registry）
+  // SEC-AUTH: 该端点会代表服务端向运维配置的社区注册表发起出站请求，
+  // 必须要求有效会话；仅管理员可安装，因此列表对教师开放、安装动作受限于 install-from-url。
+  app.get('/api/plugins/community', requireAuth(), async (req, res) => {
+    try {
+      const result = await fetchCommunityRegistry({
+        installed: listInstalledManifestVersions(),
+        forceRefresh: String(req.query.refresh || '') === '1',
+      });
+      res.json({ success: true, envVar: COMMUNITY_REGISTRY_ENV, ...result });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // 从社区注册表条目安装/更新插件
+  // SEC-AUTH: 管理员专属 —— 服务端会下载并执行第三方代码，风险等级等同于 ZIP 安装。
+  app.post('/api/plugins/install-from-url', requireAuth('administrator'), async (req, res) => {
+    try {
+      const { downloadUrl, expectedId, allowDowngrade, executionMode: rawExecutionMode } = req.body || {};
+
+      if (typeof downloadUrl !== 'string' || !downloadUrl.trim()) {
+        return res.status(400).json({ success: false, error: '缺少 downloadUrl' });
+      }
+      if (expectedId !== undefined && !isValidPluginId(expectedId)) {
+        return res.status(400).json({ success: false, error: 'expectedId 格式非法' });
+      }
+
+      const urlCheck = isSafeExternalUrl(downloadUrl.trim());
+      if (!urlCheck.safe) {
+        return res.status(400).json({ success: false, error: `安全拦截: 非法下载地址 (${urlCheck.reason})` });
+      }
+
+      const executionMode =
+        rawExecutionMode === 'worker' || rawExecutionMode === 'inline'
+          ? (rawExecutionMode as 'worker' | 'inline')
+          : undefined;
+
+      let pkg: DownloadedPackage;
+      try {
+        pkg = await downloadPluginPackage(downloadUrl.trim());
+      } catch (e: any) {
+        // 与 one-click-update 一致：服务端下载失败时让前端改为浏览器直传
+        // 至 /api/plugins/upload-zip-raw，避免大包/网络环境导致整体失败。
+        return res.status(400).json({
+          success: false,
+          error: e?.message || '服务端下载插件包失败',
+          fallbackToClient: true,
+        });
+      }
+
+      const existing = expectedId ? kernelContainer.pluginHost.findByManifestId(expectedId) : null;
+
+      if (existing) {
+        const result = await kernelContainer.pluginDistributionManager.updateFromZip(pkg.buffer, {
+          targetPluginId: existing.pluginId,
+          executionMode,
+          allowDowngrade: Boolean(allowDowngrade),
+        });
+        return res.json({
+          success: true,
+          updated: true,
+          pluginId: result.pluginId,
+          manifest: result.manifest,
+          oldVersion: result.oldVersion,
+          newVersion: result.newVersion,
+          wasActive: result.wasActive,
+          filename: pkg.filename,
+          bytes: pkg.bytes,
+        });
+      }
+
+      const result = await kernelContainer.pluginDistributionManager.installFromZip(pkg.buffer, executionMode);
+      res.json({
+        success: true,
+        updated: false,
+        pluginId: result.pluginId,
+        manifest: result.manifest,
+        filename: pkg.filename,
+        bytes: pkg.bytes,
+      });
+    } catch (err: any) {
+      console.error(err);
+      sendSafeError(res, err);
     }
   });
 
