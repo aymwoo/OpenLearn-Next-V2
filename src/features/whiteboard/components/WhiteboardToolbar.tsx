@@ -39,9 +39,9 @@ export interface WhiteboardToolbarProps {
   userRole?: 'teacher' | 'student';
   isSyncing: boolean;
   setIsSyncing: (syncing: boolean) => void;
-  handleClearBoard: () => Promise<void>;
-  handleResetBoard: () => Promise<void>;
-  handleElementDelete: (id: string) => Promise<void>;
+  handleClearBoard: () => void | Promise<void>;
+  handleResetBoard: () => void | Promise<void>;
+  handleElementDelete: (id: string) => void | Promise<void>;
   setDialog: (dialog: any) => void;
   setDialogInput: (input: string) => void;
   onRefresh?: () => void;

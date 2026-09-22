@@ -9,6 +9,7 @@ import {
   Star,
   X,
 } from 'lucide-react';
+import { StudentCountdownBanner } from './StudentCountdownBanner';
 
 export interface StudentInteractiveOverlayProps {
   lessonId: string | null;
@@ -188,6 +189,9 @@ export function StudentInteractiveOverlay({
 
   return (
     <>
+      {/* 课堂倒计时横幅（与教师端实时同步） */}
+      <StudentCountdownBanner lessonId={lessonId} lang={lang} />
+
       {/* 悬浮学习节奏信号条 (底部浮动) */}
       <aside
         aria-label={lang === 'zh' ? '课堂互动工具栏' : 'Classroom interaction toolbar'}

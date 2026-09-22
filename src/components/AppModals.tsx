@@ -165,8 +165,8 @@ export interface AppModalsProps {
   fetchLibraryResources?: () => void;
 
   // Batch Picker Modal
-  batchPicker?: 'schedule' | 'lock' | 'transfer' | null;
-  setBatchPicker?: (v: 'schedule' | 'lock' | 'transfer' | null) => void;
+  batchPicker?: 'schedule' | 'lockedLesson' | 'transfer' | null;
+  setBatchPicker?: Dispatch<SetStateAction<'schedule' | 'lockedLesson' | 'transfer' | null>> | ((v: any) => void);
   batchPickerLesson?: string;
   setBatchPickerLesson?: (v: string) => void;
   batchPickerDate?: string;
@@ -175,7 +175,7 @@ export interface AppModalsProps {
   setBatchPickerTargetClass?: (v: string) => void;
   classes?: ClassType[];
   expandedClassId?: string | null;
-  confirmBatchPicker?: () => void;
+  confirmBatchPicker?: () => void | Promise<void>;
 
   // Export Weight Modal
   isExportWeightModalOpen?: boolean;

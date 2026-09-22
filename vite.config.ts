@@ -5,6 +5,7 @@ import path from 'path';
 import { defineConfig } from 'vite';
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
+const targetPort = 3000;
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -17,13 +18,15 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
   server: {
+    host: '0.0.0.0',
+    port: 3000,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:9000', changeOrigin: true },
-      '/plugins': { target: 'http://127.0.0.1:9000', changeOrigin: true },
-      '/uploads': { target: 'http://127.0.0.1:9000', changeOrigin: true },
-      '/scratch': { target: 'http://127.0.0.1:9000', changeOrigin: true },
+      '/api': { target: `http://127.0.0.1:${targetPort}`, changeOrigin: true },
+      '/plugins': { target: `http://127.0.0.1:${targetPort}`, changeOrigin: true },
+      '/uploads': { target: `http://127.0.0.1:${targetPort}`, changeOrigin: true },
+      '/scratch': { target: `http://127.0.0.1:${targetPort}`, changeOrigin: true },
       '/_tools': {
-        target: 'http://127.0.0.1:9000',
+        target: `http://127.0.0.1:${targetPort}`,
         changeOrigin: true,
         rewrite: (path: string) => path.replace(/^\/_tools/, ''),
       },

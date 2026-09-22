@@ -729,3 +729,30 @@ export const IInteractionRuntimeServiceToken = new Token<IInteractionRuntimeServ
   '@openlearn/core:IInteractionRuntimeService',
 );
 
+/**
+ * 课堂倒计时管理服务接口 —— 支持教师端与第三方插件控制全班倒计时并广播
+ */
+export interface ClassroomCountdownDescriptor {
+  lessonId: string;
+  totalDuration: number;
+  timeRemaining: number;
+  isRunning: boolean;
+  isPaused: boolean;
+  label: string;
+  endsAt: number | null;
+}
+
+export interface IClassroomCountdownService {
+  getCountdown(lessonId: string): Promise<ClassroomCountdownDescriptor>;
+  start(lessonId: string, duration: number, label?: string): Promise<ClassroomCountdownDescriptor>;
+  pause(lessonId: string): Promise<ClassroomCountdownDescriptor>;
+  resume(lessonId: string): Promise<ClassroomCountdownDescriptor>;
+  reset(lessonId: string): Promise<ClassroomCountdownDescriptor>;
+  addTime(lessonId: string, seconds: number): Promise<ClassroomCountdownDescriptor>;
+}
+
+export const IClassroomCountdownServiceToken = new Token<IClassroomCountdownService>(
+  '@openlearn/core:IClassroomCountdownService',
+);
+
+

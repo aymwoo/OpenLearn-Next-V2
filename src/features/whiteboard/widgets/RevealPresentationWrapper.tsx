@@ -104,7 +104,7 @@ export function RevealPresentationWrapper({
         if (pptxContainerRef.current) {
           pptxContainerRef.current.innerHTML = '';
           try {
-            const previewer = initPptxPreview(pptxContainerRef.current, { mode: 'slide' } as any);
+            const previewer: any = initPptxPreview(pptxContainerRef.current, { mode: 'slide' } as any);
             previewerInstanceRef.current = previewer;
             await previewer.load(ab);
 

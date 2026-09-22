@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { QuickActionsMenu } from '../../components/QuickActionsMenu';
 import Markdown from 'react-markdown';
 import {
@@ -16,9 +16,15 @@ import {
   ChevronDown,
   ChevronUp,
   Folder,
+  LayoutDashboard,
+  Presentation,
+  Trophy,
 } from 'lucide-react';
 import type { Lesson, ClassType, StudentType, ScheduleType, ProcessType } from '../../store/appStore';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { ClassroomMoodTracker } from './ClassroomMoodTracker';
+import { TopPerformersWidget } from './TopPerformersWidget';
+import { ClassroomCountdownWidget } from '../classroom/ClassroomCountdownWidget';
 
 interface DashboardProps {
   lang: 'zh' | 'en';
@@ -80,10 +86,125 @@ export function Dashboard(props: DashboardProps) {
     handleQuickGenerateAssignment,
     handleQuickCreateLesson,
   } = props;
+
+  const [dashboardTab, setDashboardTab] = useState<'overview' | 'classroom'>('overview');
+  const [activeClassroomLessonId, setActiveClassroomLessonId] = useState<string | null>(null);
+
   return (
     <>
       <div className="flex-1 flex flex-col gap-6 h-full overflow-y-auto pr-2">
-        {/* Today's Timetable Flow Dashboard Banner */}
+        {/* Dashboard Navigation Tabs */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-theme/50">
+          <div className="flex items-center gap-1.5 bg-surface-secondary p-1 rounded-xl border border-theme w-fit">
+            <button
+              id="teacher-dashboard-overview-tab"
+              data-testid="teacher-dashboard-overview-tab"
+              onClick={() => setDashboardTab('overview')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                dashboardTab === 'overview'
+                  ? 'bg-surface text-primary-theme shadow-xs'
+                  : 'text-muted hover:text-main'
+              }`}
+            >
+              <LayoutDashboard size={14} />
+              <span>{lang === 'zh' ? '综合总览' : 'Overview'}</span>
+            </button>
+            <button
+              id="teacher-dashboard-classroom-tab"
+              data-testid="teacher-dashboard-classroom-tab"
+              onClick={() => setDashboardTab('classroom')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                dashboardTab === 'classroom'
+                  ? 'bg-surface text-primary-theme shadow-xs'
+                  : 'text-muted hover:text-main'
+              }`}
+            >
+              <Presentation size={14} />
+              <span>{lang === 'zh' ? '课堂互动 (Classroom)' : 'Classroom'}</span>
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <span className="font-medium">
+              {lang === 'zh' ? '当前视图:' : 'View:'}{' '}
+              <span className="text-main font-bold">
+                {dashboardTab === 'overview'
+                  ? lang === 'zh'
+                    ? '日常综合总览'
+                    : 'Overview'
+                  : lang === 'zh'
+                    ? '课堂随堂优秀榜与态势追踪'
+                    : 'Classroom Top Performers & Flow'}
+              </span>
+            </span>
+          </div>
+        </div>
+
+        {dashboardTab === 'classroom' ? (
+          <div className="flex flex-col gap-6">
+            {/* Classroom Countdown Widget Banner */}
+            <div className="bg-surface border border-theme rounded-2xl p-5 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                <div>
+                  <h3 className="text-sm font-black text-main flex items-center gap-2">
+                    <Clock size={16} className="text-primary-theme" />
+                    <span>{lang === 'zh' ? '课堂全班倒计时调度与广播' : 'Classroom Countdown Dispatcher'}</span>
+                  </h3>
+                  <p className="text-xs text-muted">
+                    {lang === 'zh'
+                      ? '实时向所有学生端同步广播任务倒计时，支持随堂测验、分组探究与限时答题'
+                      : 'Broadcast real-time countdown to connected students with presets and third-party plugin extensions'}
+                  </p>
+                </div>
+                {lessons.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={activeClassroomLessonId || lessons[0]?.id || ''}
+                      onChange={(e) => setActiveClassroomLessonId(e.target.value)}
+                      className="px-3 py-1.5 bg-surface-secondary border border-theme rounded-xl text-xs font-semibold text-main outline-none focus:ring-2 focus:ring-primary-theme cursor-pointer"
+                    >
+                      {lessons.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <ClassroomCountdownWidget
+                lessonId={activeClassroomLessonId || lessons[0]?.id || null}
+                lang={lang}
+                compact={false}
+                onlineStudentCount={students.length}
+              />
+            </div>
+
+            {/* Top Performers Widget (Recharts) */}
+            <TopPerformersWidget
+              lang={lang}
+              lessons={lessons}
+              classes={classes}
+              schedules={todaySchedules}
+              students={students}
+              addToast={addToast}
+            />
+
+            {/* Real-time Classroom Mood & Engagement Tracker (Recharts) */}
+            <ClassroomMoodTracker
+              lang={lang}
+              lessons={lessons}
+              classes={classes}
+              schedules={todaySchedules}
+              students={students}
+              addToast={addToast}
+            />
+          </div>
+        ) : (
+          <>
+            {/* Today's Timetable Flow Dashboard Banner */}
         {(() => {
           const isScheduleUpcoming = (sch: any) => {
             if (sch.status === 'cancelled' || sch.status === 'holiday') return false;
@@ -236,6 +357,26 @@ export function Dashboard(props: DashboardProps) {
 
         {/* Dynamic plugin-registered teacher dashboard widgets */}
         <ExtensionPointRenderer slot="teacher.dashboard.widget" />
+
+        {/* Top 5 Performers Widget (Recharts) */}
+        <TopPerformersWidget
+          lang={lang}
+          lessons={lessons}
+          classes={classes}
+          schedules={todaySchedules}
+          students={students}
+          addToast={addToast}
+        />
+
+        {/* Real-time Classroom Mood & Engagement Tracker (Recharts) */}
+        <ClassroomMoodTracker
+          lang={lang}
+          lessons={lessons}
+          classes={classes}
+          schedules={todaySchedules}
+          students={students}
+          addToast={addToast}
+        />
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -436,6 +577,8 @@ export function Dashboard(props: DashboardProps) {
             )}
           </div>
         </div>
+          </>
+        )}
       </div>
       <QuickActionsMenu
         classes={classes}

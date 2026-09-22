@@ -23,6 +23,8 @@ export interface ClassroomInteractiveCockpitProps {
   classId?: string | null;
   lang?: 'zh' | 'en';
   addToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
+  currentStage?: string;
+  onStageChange?: (stage: string) => void;
 }
 
 export function ClassroomInteractiveCockpit({
@@ -31,8 +33,17 @@ export function ClassroomInteractiveCockpit({
   classId,
   lang = 'zh',
   addToast,
+  currentStage: propStage,
+  onStageChange,
 }: ClassroomInteractiveCockpitProps) {
-  const [currentStage, setCurrentStage] = useState<string>('IN_CLASS_TEACHING');
+  const [internalStage, setInternalStage] = useState<string>('IN_CLASS_TEACHING');
+  const currentStage = propStage !== undefined ? propStage : internalStage;
+
+  const setStage = (st: string) => {
+    setInternalStage(st);
+    onStageChange?.(st);
+  };
+
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
   const [isPollDialogOpen, setIsPollDialogOpen] = useState(false);
   const [pollTitle, setPollTitle] = useState('课堂极速单选投票');
@@ -54,7 +65,7 @@ export function ClassroomInteractiveCockpit({
         if (res.ok && mounted) {
           const json = await res.json();
           if (json.hasActiveSession && json.stage) {
-            setCurrentStage(json.stage);
+            setStage(json.stage);
           }
           setActivePoll(json.activePoll || null);
           setActiveBuzzer(json.activeBuzzer || null);
@@ -90,7 +101,7 @@ export function ClassroomInteractiveCockpit({
       });
 
       if (res.ok) {
-        setCurrentStage(stage);
+        setStage(stage);
         addToast(
           lang === 'zh' ? '课堂阶段已切换' : 'Classroom Stage Updated',
           lang === 'zh' ? `当前进入阶段：${stage}` : `Current stage: ${stage}`,

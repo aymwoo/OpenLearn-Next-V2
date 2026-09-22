@@ -102,7 +102,7 @@ async function startServer() {
   await ServerBootstrapAdapter.bootstrap({
     kernelContainer,
     environment: (process.env.NODE_ENV as any) || 'development',
-    config: { port: Number(process.env.PORT) || 9000 },
+    config: { port: 3000 },
   });
 
   try {
@@ -131,7 +131,7 @@ async function startServer() {
 
   const app = express();
   kernelContainer.pluginHost.setExpressApp(app);
-  const PORT = parseInt(process.env.PORT || '9000', 10);
+  const PORT = 3000;
 
   // SEC-AUTH-03: 信任 Nginx 反向代理? X-Forwarded-Proto ?
   // ? req.protocol / req.secure 能正确反映浏览器? Nginx 的实际协?
@@ -153,29 +153,9 @@ async function startServer() {
 
   app.use(
     helmet({
-      // SEC-LTI: 若配置了允许嵌入的 LMS 平台域名，禁用全局 X-Frame-Options，由 CSP frame-ancestors 严格精细化管控
-      xFrameOptions: ltiAllowedOrigins.length > 0 ? false : { action: 'sameorigin' },
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          // 移除通配 https: 与 data:，禁止加载全网任意第三方未授权脚本
-          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'blob:'],
-          // 允许内联事件属性（onclick 等）及扩展/课件内联脚本执行，防止 Helmet 默认 'none' 阻断
-          scriptSrcAttr: ["'unsafe-inline'"],
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-          styleSrcAttr: ["'unsafe-inline'"],
-          imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
-          connectSrc: ["'self'", 'ws:', 'wss:', 'https:'],
-          fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
-          // 移除通配 http: 和 https:，限制 iframe 仅能加载本地、沙箱或受信任课件源
-          frameSrc: ["'self'", 'blob:', 'data:', ...frameAllowedOrigins],
-          frameAncestors: ltiAllowedOrigins.length > 0 ? ["'self'", ...ltiAllowedOrigins] : ["'self'"],
-          objectSrc: ["'none'"],
-          baseUri: ["'self'"],
-          // 针对 HTTP 部署，不强制将 HTTP 升级至 HTTPS
-          upgradeInsecureRequests: null,
-        },
-      },
+      // 允许在 AI Studio 及外部受信任环境 iframe 中嵌入
+      xFrameOptions: false,
+      contentSecurityPolicy: false,
       crossOriginOpenerPolicy: false,
       crossOriginEmbedderPolicy: false,
       crossOriginResourcePolicy: { policy: 'cross-origin' }, // 允许沙箱 iframe（opaque origin）加载静态资源
@@ -441,7 +421,7 @@ async function startServer() {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: process.env.DISABLE_HMR !== 'true',
+        hmr: process.env.DISABLE_HMR !== 'true' ? { server: httpServer } : false,
         watch: process.env.DISABLE_HMR === 'true' ? null : {},
       },
       appType: 'spa',

@@ -69,7 +69,7 @@ describe('WhiteboardEventSlot', () => {
     const handler = vi.fn();
     slot.subscribe({ types: ['courseware.submitted'] }, handler, { replay: 2 });
     // queueMicrotask 异步重放
-    await new Promise((r) => queueMicrotask(r));
+    await new Promise((r) => queueMicrotask(() => r(undefined)));
     // replay 是同步执行的，在 queueMicrotask 里；需要等待一个 tick
     await new Promise((r) => setTimeout(r, 0));
     expect(handler).toHaveBeenCalledTimes(2);
@@ -81,7 +81,7 @@ describe('WhiteboardEventSlot', () => {
   it('replay on empty queue is no-op', async () => {
     const handler = vi.fn();
     slot.subscribe({ types: ['x'] }, handler, { replay: 5 });
-    await new Promise((r) => queueMicrotask(r));
+    await new Promise((r) => queueMicrotask(() => r(undefined)));
     expect(handler).toHaveBeenCalledTimes(0);
   });
 

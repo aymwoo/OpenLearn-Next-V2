@@ -24,7 +24,7 @@ export interface StudentViewProps {
   setStudentViewStatus: (status: 'dashboard' | 'lesson' | 'assignment') => void;
   setSelectedAssignment: (ast: any | null) => void;
   setQuizStudentAnswers: (updater: (prev: any) => any) => void;
-  setSubAssignmentTab: (tab: string) => void;
+  setSubAssignmentTab: (tab: any) => void;
 
   lessons: Lesson[];
   selectedLesson: string | null;

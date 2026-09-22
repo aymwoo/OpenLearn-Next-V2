@@ -16,7 +16,7 @@ export interface BatchPickerModalProps {
   lessons: any[];
   classes: any[];
   expandedClassId: string | null;
-  confirmBatchPicker: () => Promise<void>;
+  confirmBatchPicker: () => void | Promise<void>;
   lang: Lang;
 }
 

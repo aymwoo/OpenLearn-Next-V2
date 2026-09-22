@@ -5,7 +5,7 @@ interface ImportModalProps {
   show: boolean;
   onClose: () => void;
   lang: string;
-  handleImportFile: (file: File) => Promise<void>;
+  handleImportFile: (file: File) => Promise<void> | void;
   importError: string | null;
   importSuccess: string | null;
   isImporting: boolean;

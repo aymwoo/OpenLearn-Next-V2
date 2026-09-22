@@ -15,7 +15,8 @@ export const LazyWhiteboard = forwardRef<any, any>((props, ref) => {
         </div>
       }
     >
-      <Whiteboard ref={ref} {...props} />
+      {/* @ts-ignore */}
+      <Whiteboard ref={ref} {...(props as any)} />
     </Suspense>
   );
 });

@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import {
   Users,
   Check,
@@ -22,6 +22,10 @@ import type {
   AttendanceType,
 } from '../../../types/app';
 import { parseCSV } from '../../../utils/pluginParsers.js';
+import {
+  exportClassAllSchedulesAttendanceCSV,
+  exportAllClassesAttendanceCSV,
+} from '../../../services/attendanceExportService';
 import { ClassRowHeader } from './ClassRowHeader.js';
 import { ClassPasscodeController } from './ClassPasscodeController.js';
 import { ClassTabs } from './ClassTabs.js';
@@ -139,6 +143,45 @@ export interface ClassesViewProps {
 }
 
 export function ClassesView(props: ClassesViewProps) {
+  const [isExportingAttendance, setIsExportingAttendance] = useState(false);
+
+  const handleExportCurrentClassAttendance = async () => {
+    if (!props.expandedClassId) return;
+    const currentClass = props.classes.find((c) => c.id === props.expandedClassId);
+    if (!currentClass) return;
+    const schedules = props.classSchedulesMap[currentClass.id] || [];
+    const students = props.classStudentsMap[currentClass.id] || [];
+    setIsExportingAttendance(true);
+    try {
+      await exportClassAllSchedulesAttendanceCSV({
+        classInfo: currentClass,
+        schedules,
+        students,
+        scheduleAttendanceMap: props.scheduleAttendanceMap,
+        lang: props.lang,
+        fetchScheduleAttendance: props.fetchScheduleAttendance,
+      });
+    } finally {
+      setIsExportingAttendance(false);
+    }
+  };
+
+  const handleExportAllAttendanceCombined = async () => {
+    setIsExportingAttendance(true);
+    try {
+      await exportAllClassesAttendanceCSV({
+        classes: props.classes,
+        classSchedulesMap: props.classSchedulesMap,
+        classStudentsMap: props.classStudentsMap,
+        scheduleAttendanceMap: props.scheduleAttendanceMap,
+        lang: props.lang,
+        fetchScheduleAttendance: props.fetchScheduleAttendance,
+      });
+    } finally {
+      setIsExportingAttendance(false);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col gap-6 h-full overflow-y-auto relative p-1 pr-3">
       {/* School Management Module */}
@@ -203,6 +246,27 @@ export function ClassesView(props: ClassesViewProps) {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {props.classes.length > 0 && (
+              <button
+                type="button"
+                id="classroom-export-attendance-btn"
+                onClick={
+                  props.expandedClassId
+                    ? handleExportCurrentClassAttendance
+                    : handleExportAllAttendanceCombined
+                }
+                disabled={isExportingAttendance}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-linear-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white font-medium rounded-lg shadow-sm transition-all cursor-pointer select-none disabled:opacity-50"
+                title={
+                  props.lang === 'zh'
+                    ? '导出学生排课考勤记录报表 (CSV)'
+                    : 'Export student attendance records per scheduled class (CSV)'
+                }
+              >
+                {isExportingAttendance ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                <span>{props.lang === 'zh' ? '导出考勤报表' : 'Export Attendance'}</span>
+              </button>
+            )}
             {props.expandedClassId && (
               <div
                 className="relative font-sans animate-in fade-in duration-200"
@@ -262,7 +326,7 @@ export function ClassesView(props: ClassesViewProps) {
                     </div>
 
                     {/* Combined Export option */}
-                    <div className="mb-4">
+                    <div className="mb-2">
                       <button
                         type="button"
                         onClick={props.handleExportAllClassesCombined}
@@ -273,12 +337,12 @@ export function ClassesView(props: ClassesViewProps) {
                           <Sparkles size={14} className="text-emerald-600 animate-pulse" />
                           <div>
                             <div className="font-extrabold">
-                              {props.lang === 'zh' ? '全班级汇总表' : 'All Classes Multi-Sheet'}
+                              {props.lang === 'zh' ? '全班级成绩汇总表' : 'All Classes Grade Sheet'}
                             </div>
                             <div className="text-xs text-emerald-600 font-medium">
                               {props.lang === 'zh'
-                                ? '将所有学科班级合并至单张CSV表'
-                                : 'Consolidate everyone to a single CSV'}
+                                ? '将所有学科班级合并至单张成绩CSV表'
+                                : 'Consolidate all grades to a single CSV'}
                             </div>
                           </div>
                         </div>
@@ -286,6 +350,36 @@ export function ClassesView(props: ClassesViewProps) {
                           <Loader2 size={14} className="animate-spin text-emerald-600" />
                         ) : (
                           <ChevronRight size={14} className="text-emerald-500" />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Attendance Export option */}
+                    <div className="mb-4">
+                      <button
+                        type="button"
+                        id="dropdown-export-attendance-csv-btn"
+                        onClick={handleExportAllAttendanceCombined}
+                        disabled={isExportingAttendance}
+                        className="w-full flex items-center justify-between gap-2 p-3 bg-teal-50 hover:bg-teal-100/80 border border-teal-100 text-teal-950 rounded-xl font-bold text-xs cursor-pointer transition-all disabled:opacity-55"
+                      >
+                        <div className="flex items-center gap-2 text-left">
+                          <CalendarIcon size={14} className="text-teal-600 animate-pulse" />
+                          <div>
+                            <div className="font-extrabold">
+                              {props.lang === 'zh' ? '排课考勤汇总表 (CSV)' : 'Attendance Report (CSV)'}
+                            </div>
+                            <div className="text-xs text-teal-600 font-medium">
+                              {props.lang === 'zh'
+                                ? '按排课导出各学生考勤记录'
+                                : 'Individual student attendance records per scheduled class'}
+                            </div>
+                          </div>
+                        </div>
+                        {isExportingAttendance ? (
+                          <Loader2 size={14} className="animate-spin text-teal-600" />
+                        ) : (
+                          <ChevronRight size={14} className="text-teal-500" />
                         )}
                       </button>
                     </div>

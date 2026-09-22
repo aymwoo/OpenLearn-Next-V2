@@ -332,10 +332,13 @@ export type {
   IClassroomLifecycleService,
   QuickActivityDescriptor,
   IInteractionRuntimeService,
+  ClassroomCountdownDescriptor,
+  IClassroomCountdownService,
 } from '../core/di/interfaces.js';
 
 export {
   IClassroomLifecycleServiceToken,
   IInteractionRuntimeServiceToken,
+  IClassroomCountdownServiceToken,
 } from '../core/di/interfaces.js';
 

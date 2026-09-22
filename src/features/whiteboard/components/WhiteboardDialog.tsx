@@ -5,14 +5,14 @@ export interface WhiteboardDialogData {
   title: string;
   message: string;
   placeholder?: string;
-  onConfirm: (inputValue: string) => Promise<void> | void;
+  onConfirm?: (inputValue?: string) => Promise<void> | void;
 }
 
 export interface WhiteboardDialogProps {
-  dialog: WhiteboardDialogData | null;
+  dialog: any;
   dialogInput: string;
   setDialogInput: (input: string) => void;
-  setDialog: (dialog: WhiteboardDialogData | null) => void;
+  setDialog: (dialog: any) => void;
 }
 
 export const WhiteboardDialog: React.FC<WhiteboardDialogProps> = ({

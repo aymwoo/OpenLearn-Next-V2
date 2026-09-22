@@ -1,5 +1,10 @@
-import { CalendarIcon, ChevronDown, ChevronRight, ShieldAlert } from 'lucide-react';
+import { useState } from 'react';
+import { CalendarIcon, ChevronDown, ChevronRight, ShieldAlert, Download, Loader2 } from 'lucide-react';
 import type { ClassType, StudentType, Lesson } from '../../../types/app';
+import {
+  exportSingleScheduleAttendanceCSV,
+  exportClassAllSchedulesAttendanceCSV,
+} from '../../../services/attendanceExportService';
 
 export interface ClassScheduleAttendanceProps {
   cls: ClassType;
@@ -38,12 +43,71 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
     get30DayAverageWarning,
   } = props;
 
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportClassAttendance = async () => {
+    const schedules = classSchedulesMap[cls.id] || [];
+    if (schedules.length === 0) return;
+    setIsExporting(true);
+    try {
+      await exportClassAllSchedulesAttendanceCSV({
+        classInfo: cls,
+        schedules,
+        students: cStudents,
+        scheduleAttendanceMap,
+        lang,
+        fetchScheduleAttendance,
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportSingleSchedule = async (sch: any) => {
+    let att = scheduleAttendanceMap[sch.id];
+    if (!att) {
+      try {
+        const res = await fetch(`/api/schedules/${sch.id}/attendance`);
+        if (res.ok) {
+          att = await res.json();
+          fetchScheduleAttendance(sch.id);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch schedule attendance:', err);
+      }
+    }
+    exportSingleScheduleAttendanceCSV({
+      className: cls.name,
+      schedule: sch,
+      students: cStudents,
+      attendanceRecords: att || [],
+      lang,
+    });
+  };
+
   return (
     <div className="mb-4 bg-white p-3 rounded-xl border border-slate-100 shadow-xs">
       <div className="flex items-center justify-between mb-3 border-b border-gray-200 pb-2">
         <div className="text-xs font-semibold text-gray-700 flex items-center gap-1">
           <CalendarIcon size={14} className="text-pink-500" /> Schedule & Attendance
         </div>
+        {(classSchedulesMap[cls.id] || []).length > 0 && (
+          <button
+            type="button"
+            id={`export-attendance-btn-${cls.id}`}
+            onClick={handleExportClassAttendance}
+            disabled={isExporting}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg font-medium transition-colors cursor-pointer disabled:opacity-50"
+            title={
+              lang === 'zh'
+                ? '导出此班级所有排课的学生考勤报表 (CSV)'
+                : 'Export all student attendance records for this class (CSV)'
+            }
+          >
+            {isExporting ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+            <span>{lang === 'zh' ? '导出考勤报表 (CSV)' : 'Export Attendance (CSV)'}</span>
+          </button>
+        )}
       </div>
 
       <div className="mb-3 flex gap-2 items-center">
@@ -125,11 +189,47 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
                       </span>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    id={`export-schedule-btn-${sch.id}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleExportSingleSchedule(sch);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-200 rounded-md transition-colors cursor-pointer shrink-0"
+                    title={
+                      lang === 'zh'
+                        ? `导出 "${sch.lesson_title}" 考勤表 (CSV)`
+                        : `Export attendance for "${sch.lesson_title}" (CSV)`
+                    }
+                  >
+                    <Download size={11} />
+                    <span className="hidden sm:inline">{lang === 'zh' ? '导出CSV' : 'Export CSV'}</span>
+                  </button>
                 </div>
                 {isExp && (
                   <div className="border-t border-gray-100 p-2 bg-gray-50/50">
-                    <div className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wider">
-                      Attendance Check-in
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Attendance Check-in
+                      </div>
+                      <button
+                        type="button"
+                        id={`export-expanded-schedule-btn-${sch.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleExportSingleSchedule(sch);
+                        }}
+                        className="flex items-center gap-1 px-2 py-0.5 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition-colors cursor-pointer"
+                        title={
+                          lang === 'zh'
+                            ? '导出此排课考勤表 (CSV)'
+                            : `Export this schedule's attendance records (CSV)`
+                        }
+                      >
+                        <Download size={11} />
+                        <span>{lang === 'zh' ? '导出考勤 (CSV)' : 'Export CSV'}</span>
+                      </button>
                     </div>
                     <div className="grid gap-1">
                       {cStudents.map((st) => {

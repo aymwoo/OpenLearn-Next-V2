@@ -5,7 +5,7 @@ import type { Lesson, ClassType } from '../../store/appStore';
 interface TimetableViewProps {
   classes: ClassType[];
   lessons: Lesson[];
-  lang: string;
+  lang: 'zh' | 'en';
   onSchedulesUpdated: () => Promise<void>;
 }
 

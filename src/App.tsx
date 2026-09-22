@@ -1561,6 +1561,10 @@ export default function App() {
           setLiveClassTimeRemaining(msg.payload.timeRemaining);
           break;
         }
+        case 'TEACHER_BROADCAST_COUNTDOWN': {
+          setLiveClassTimeRemaining(msg.payload.timeRemaining);
+          break;
+        }
         case 'TEACHER_PING_STUDENT': {
           if (!activeStudentId || activeStudentId === msg.payload.studentId) {
             addToast(

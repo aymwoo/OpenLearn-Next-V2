@@ -24,12 +24,9 @@ export class GlobalErrorBoundary extends React.Component<Props, State> {
     copied: false,
     showDetails: false,
   };
-  public props: Props;
-  declare setState: (state: Partial<State> | ((prev: State) => Partial<State>), callback?: () => void) => void;
 
   constructor(props: Props) {
     super(props);
-    this.props = props;
   }
 
   public static getDerivedStateFromError(error: Error): Partial<State> {

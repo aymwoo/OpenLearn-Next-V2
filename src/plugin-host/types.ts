@@ -80,7 +80,14 @@ export type ExtensionSlot =
   | 'classroom.quick_activity' // 极速课堂互动扩展
   | 'stage.display.card' // 大屏展台卡片扩展
   | 'editor.timeline_segment' // 课程编辑器步骤类型扩展
-  | 'editor.palette_item'; // 课程编辑器白板图元扩展
+  | 'editor.palette_item' // 课程编辑器白板图元扩展
+  | 'classroom.countdown.widget' // 课堂倒计时挂件扩展
+  | 'classroom.countdown.action' // 课堂倒计时快捷操作扩展
+  | 'student.classroom.countdown' // 学生端倒计时通知扩展
+  | 'student.quick_actions.item' // 学生端快捷指令菜单项扩展
+  | 'student.quick_actions.action' // 学生端快捷指令操作扩展
+  | 'student.quick_actions.fab' // 学生端快捷指令悬浮球扩展
+  | 'student.quick_actions.compact_addon'; // 学生端移动端紧凑模式挂件扩展
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。

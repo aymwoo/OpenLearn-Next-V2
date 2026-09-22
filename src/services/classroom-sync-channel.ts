@@ -7,6 +7,17 @@
  * 3. 双向互动闭环：支持教师端教学指令广播与学生端动作（举手/签到/作答）即时回传。
  */
 
+export interface ClassroomCountdownState {
+  lessonId: string | null;
+  totalDuration: number;
+  timeRemaining: number;
+  isRunning: boolean;
+  isPaused: boolean;
+  label: string;
+  endsAt: number | null;
+  updatedAt: number;
+}
+
 export interface LiveClassSyncState {
   selectedLesson: string | null;
   activeSegmentId: string | null;
@@ -16,6 +27,7 @@ export interface LiveClassSyncState {
   liveClassSelectedClassId: string | null;
   liveClassIsActive: boolean;
   fullscreenElementId?: string | null;
+  countdown?: ClassroomCountdownState | null;
 }
 
 export type ClassroomSyncMessage =
@@ -26,6 +38,7 @@ export type ClassroomSyncMessage =
   | { type: 'TEACHER_LOCK_CLASS'; payload: { locked: boolean } }
   | { type: 'TEACHER_PICK_STUDENT'; payload: { studentId: string; studentName: string } }
   | { type: 'TEACHER_SYNC_TIMER'; payload: { timeRemaining: number; isRunning: boolean } }
+  | { type: 'TEACHER_BROADCAST_COUNTDOWN'; payload: ClassroomCountdownState }
   | { type: 'TEACHER_PING_STUDENT'; payload: { studentId: string; message?: string } }
   | { type: 'TEACHER_BROADCAST_FULLSCREEN'; payload: { elementId: string | null; lessonId?: string } }
   | { type: 'STUDENT_HANDSHAKE_REQUEST' }
@@ -105,6 +118,12 @@ export class ClassroomSyncChannel {
 
   public broadcastSyncTimer(timeRemaining: number, isRunning: boolean): void {
     this.postMessage({ type: 'TEACHER_SYNC_TIMER', payload: { timeRemaining, isRunning } });
+  }
+
+  public broadcastCountdown(countdown: ClassroomCountdownState): void {
+    this.postMessage({ type: 'TEACHER_BROADCAST_COUNTDOWN', payload: countdown });
+    // Also post legacy sync timer for backward compatibility
+    this.broadcastSyncTimer(countdown.timeRemaining, countdown.isRunning);
   }
 
   public broadcastPingStudent(studentId: string, message?: string): void {

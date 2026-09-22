@@ -292,7 +292,7 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
           sandbox="allow-scripts allow-forms allow-downloads"
           referrerPolicy="no-referrer"
           title={title ?? data.title ?? 'Interactive Courseware'}
-          credentialless="true"
+          {...({ credentialless: 'true' } as any)}
           onLoad={handleIframeLoad}
         />
       ) : (

@@ -462,7 +462,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
     const handleDeletePage = (idx: number) => {
       if (pages.length <= 1) {
-        setDialog({ title: '无法删除', message: '至少需要保留一个白板页面！', type: 'alert' });
+        setDialog({ title: '无法删除', message: '至少需要保留一个白板页面！', type: 'alert', onConfirm: () => {} });
         return;
       }
 
@@ -696,7 +696,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       title: string;
       message: string;
       placeholder?: string;
-      onConfirm: (inputValue?: string) => void | Promise<void>;
+      onConfirm?: (inputValue?: string) => void | Promise<void>;
     } | null>(null);
     const [dialogInput, setDialogInput] = useState('');
     /** 学生端「提交作业」弹窗当前打开的作业实体 id */

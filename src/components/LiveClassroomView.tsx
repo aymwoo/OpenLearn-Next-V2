@@ -26,16 +26,22 @@ import {
   ExternalLink,
   Sparkles,
   AlertTriangle,
+  Trophy,
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { LazyWhiteboard } from '../components/LazyWhiteboard';
 import { TeacherAssignmentGradePanel } from './TeacherAssignmentGradePanel';
+import { TopPerformersWidget } from '../features/teacher/TopPerformersWidget';
 import { io } from 'socket.io-client';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 import { ClassroomSyncChannel } from '../services/classroom-sync-channel';
 import { useErrorStore, errorStore } from '../store/errorStore';
 import { ClassroomInteractiveCockpit } from '../features/classroom/ClassroomInteractiveCockpit';
+import { PreClassReadyView } from '../features/classroom/PreClassReadyView';
+import { PostClassWrapupView } from '../features/classroom/PostClassWrapupView';
+import { ClassroomBriefingView } from '../features/classroom/ClassroomBriefingView';
+import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdownWidget';
 
 
 // Dynamic Icon component to render Lucide icons by name string
@@ -134,8 +140,38 @@ export function LiveClassroomView({
   const syncChannelRef = useRef<ClassroomSyncChannel | null>(null);
   const [liveClassFullscreenElementId, setLiveClassFullscreenElementId] = useState<string | null>(null);
 
+  // Classroom workflow stages: PRE_CLASS_READY, IN_CLASS_TEACHING, WRAP_UP_EXIT_TICKET, ARCHIVED_REPORT
+  const [classroomStage, setClassroomStage] = useState<string>('IN_CLASS_TEACHING');
+
+  useEffect(() => {
+    if (!selectedLesson) return;
+    fetch(`/api/classroom/sessions/${selectedLesson}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.hasActiveSession && data?.stage) {
+          setClassroomStage(data.stage);
+        }
+      })
+      .catch(() => {});
+  }, [selectedLesson]);
+
+  const handleStageChange = async (newStage: string) => {
+    setClassroomStage(newStage);
+    if (selectedLesson) {
+      try {
+        await fetch(`/api/classroom/sessions/${selectedLesson}/stage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stage: newStage, classId: liveClassSelectedClassId }),
+        });
+      } catch (err) {
+        console.error('Failed to update stage:', err);
+      }
+    }
+  };
+
   // Interactive courseware submission states
-  const [middleTab, setMiddleTab] = useState<'whiteboard' | 'submissions' | 'assignment'>('whiteboard');
+  const [middleTab, setMiddleTab] = useState<'whiteboard' | 'submissions' | 'assignment' | 'top_performers'>('whiteboard');
   const [attempts, setAttempts] = useState<any[]>([]);
   const [loadingAttempts, setLoadingAttempts] = useState(false);
   const [selectedAttempt, setSelectedAttempt] = useState<any | null>(null);
@@ -308,7 +344,7 @@ export function LiveClassroomView({
         channel.broadcastInitState({
           selectedLesson,
           activeSegmentId,
-          activeTab: middleTab === 'submissions' ? 'courseware' : middleTab,
+          activeTab: middleTab === 'submissions' || middleTab === 'top_performers' ? 'courseware' : middleTab,
           isClassLocked,
           liveClassTimeRemaining,
           liveClassSelectedClassId,
@@ -372,7 +408,9 @@ export function LiveClassroomView({
   }, [activeSegmentId]);
 
   useEffect(() => {
-    syncChannelRef.current?.broadcastChangeTab(middleTab === 'submissions' ? 'courseware' : middleTab);
+    syncChannelRef.current?.broadcastChangeTab(
+      middleTab === 'submissions' || middleTab === 'top_performers' ? 'courseware' : middleTab,
+    );
   }, [middleTab]);
 
   useEffect(() => {
@@ -882,10 +920,93 @@ export function LiveClassroomView({
         classId={liveClassSelectedClassId}
         lang={lang as any}
         addToast={addToast}
+        currentStage={classroomStage}
+        onStageChange={(newStage) => setClassroomStage(newStage)}
       />
 
-      {/* 2. Main Three-column Panel Grid */}
-      <div className="flex-1 flex overflow-hidden min-h-0 bg-surface-secondary/30">
+      {/* 2. Main Stage Router: Switches based on classroomStage */}
+      {!selectedLesson ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-slate-455 gap-2.5 select-none bg-surface">
+          <Presentation size={38} className="text-slate-300 animate-bounce" style={{ animationDuration: '2.5s' }} />
+          <div className="text-sm font-bold text-slate-655">
+            {lang === 'zh' ? '请在顶部栏选择一个授课课节' : 'Please select a lesson to start teaching'}
+          </div>
+          <p className="text-xs text-slate-400">
+            {lang === 'zh' ? '课前准备、课中白板、课后小结与简报将在选择课节后就绪' : 'Classroom workflows activate once a lesson is selected.'}
+          </p>
+        </div>
+      ) : classroomStage === 'PRE_CLASS_READY' ? (
+        <PreClassReadyView
+          selectedLesson={selectedLesson}
+          lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title || ''}
+          selectedClassId={liveClassSelectedClassId}
+          className={classes.find((c) => c.id === liveClassSelectedClassId)?.name || ''}
+          students={students}
+          onlineStudentIds={Array.from(liveClassAcknowledgedMap.keys())}
+          timelineSegments={timelineSegments}
+          lang={lang as any}
+          isClassLocked={isClassLocked}
+          onToggleClassLock={() => handleToggleClassLock(!isClassLocked)}
+          onStartClass={() => handleStageChange('IN_CLASS_TEACHING')}
+          onPingStudent={() => handleRandomPick()}
+          onOpenStudentWindow={handleOpenStudentWindow}
+          isStudentWindowOpen={isStudentWindowOpen}
+          addToast={addToast}
+          onBroadcastNotice={(msg) => {
+            setLiveClassFeed((prev) => [
+              {
+                id: `feed-notice-${Date.now()}`,
+                time: new Date().toLocaleTimeString(),
+                type: 'checkin',
+                message: msg,
+              },
+              ...prev,
+            ]);
+          }}
+        />
+      ) : classroomStage === 'WRAP_UP_EXIT_TICKET' ? (
+        <PostClassWrapupView
+          selectedLesson={selectedLesson}
+          lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title || ''}
+          selectedClassId={liveClassSelectedClassId}
+          className={classes.find((c) => c.id === liveClassSelectedClassId)?.name || ''}
+          students={students}
+          lang={lang as any}
+          attempts={attempts}
+          loadingAttempts={loadingAttempts}
+          onFetchAttempts={() => fetchAttempts()}
+          onPromoteAttempt={handlePromoteAttempt}
+          onViewRaw={(a) => handleViewRaw(a)}
+          onAdvanceToReport={() => handleStageChange('ARCHIVED_REPORT')}
+          onReturnToTeaching={() => handleStageChange('IN_CLASS_TEACHING')}
+          addToast={addToast}
+          onBroadcastNotice={(msg) => {
+            setLiveClassFeed((prev) => [
+              {
+                id: `feed-hw-${Date.now()}`,
+                time: new Date().toLocaleTimeString(),
+                type: 'checkin',
+                message: msg,
+              },
+              ...prev,
+            ]);
+          }}
+        />
+      ) : classroomStage === 'ARCHIVED_REPORT' ? (
+        <ClassroomBriefingView
+          selectedLesson={selectedLesson}
+          lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title || ''}
+          selectedClassId={liveClassSelectedClassId}
+          className={classes.find((c) => c.id === liveClassSelectedClassId)?.name || ''}
+          students={students}
+          lang={lang as any}
+          onReturnToTeaching={() => handleStageChange('IN_CLASS_TEACHING')}
+          onReturnToPreClass={() => handleStageChange('PRE_CLASS_READY')}
+          addToast={addToast}
+        />
+      ) : (
+        /* classroomStage === 'IN_CLASS_TEACHING' - Whiteboard ONLY rendered here! */
+        <div className="flex-1 flex overflow-hidden min-h-0 bg-surface-secondary/30">
         {/* Left Column: Timeline Control */}
         {!isLeftSidebarCollapsed && (
           <div className="w-[220px] shrink-0 bg-surface p-3.5 border-r border-theme flex flex-col gap-4 overflow-y-auto">
@@ -903,44 +1024,17 @@ export function LiveClassroomView({
                 </button>
               </div>
 
-              {/* Live Timer status */}
-              <div className="bg-surface-secondary border border-theme rounded-xl p-3 flex flex-col items-center justify-center gap-1 shadow-sm">
-                <span className="text-xs uppercase tracking-widest text-muted font-semibold flex items-center gap-1">
-                  <Clock
-                    size={11}
-                    className={liveClassIsActive ? 'animate-spin' : ''}
-                    style={{ animationDuration: '4s' }}
-                  />
-                  {lang === 'zh' ? '当前步骤剩余时间' : 'Phase Remaining'}
-                </span>
-                <div
-                  className={`text-2xl font-black font-mono tracking-widest ${liveClassIsActive ? 'text-primary-theme' : 'text-muted'}`}
-                >
-                  {formatTime(liveClassTimeRemaining)}
-                </div>
-                <div className="flex gap-1.5 w-full mt-2 shrink-0">
-                  <button
-                    onClick={() => setLiveClassIsActive(!liveClassIsActive)}
-                    disabled={liveClassTimeRemaining <= 0}
-                    className="flex-1 py-1 rounded bg-surface hover:bg-surface-secondary text-xs font-bold text-main transition-all disabled:opacity-40 flex items-center justify-center gap-1 border border-theme"
-                  >
-                    {liveClassIsActive ? <Pause size={10} /> : <Play size={10} />}
-                    <span>
-                      {liveClassIsActive ? (lang === 'zh' ? '暂停' : 'Pause') : lang === 'zh' ? '开始' : 'Start'}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setLiveClassIsActive(false);
-                      setLiveClassTimeRemaining(0);
-                    }}
-                    className="py-1 px-2.5 rounded bg-surface hover:bg-rose-500/10 text-xs font-bold text-rose-500 hover:text-rose-600 transition-all flex items-center justify-center border border-theme"
-                    title="重置"
-                  >
-                    <Square size={10} />
-                  </button>
-                </div>
-              </div>
+              {/* Persistent Classroom Countdown Timer Widget */}
+              <ClassroomCountdownWidget
+                lessonId={selectedLesson}
+                lang={lang as any}
+                syncChannel={syncChannelRef.current}
+                onlineStudentCount={onlineStudentIds?.length || liveClassAcknowledgedMap.size || 0}
+                onTimeRemainingChange={(timeRemaining, isRunning) => {
+                  setLiveClassTimeRemaining(timeRemaining);
+                  setLiveClassIsActive(isRunning);
+                }}
+              />
             </div>
 
             <div className="flex-1 flex flex-col gap-2 min-h-0">
@@ -1054,6 +1148,19 @@ export function LiveClassroomView({
                     >
                       {lang === 'zh' ? '🎓 作业成绩评定' : '🎓 Assignment Grades'}
                     </button>
+                    <button
+                      id="teacher_top_performers_tab_btn"
+                      data-testid="teacher-top-performers-tab-btn"
+                      onClick={() => setMiddleTab('top_performers')}
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        middleTab === 'top_performers'
+                          ? 'bg-surface text-amber-500 shadow-sm'
+                          : 'text-muted hover:text-main'
+                      }`}
+                    >
+                      <Trophy size={12} className="text-amber-500" />
+                      <span>{lang === 'zh' ? '🏆 随堂测验榜' : '🏆 Top Performers'}</span>
+                    </button>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1074,6 +1181,14 @@ export function LiveClassroomView({
                   <span className="text-primary-theme font-mono tracking-widest animate-pulse flex items-center gap-1">
                     <Activity size={10} /> Live Broadcaster Connected
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => handleStageChange('WRAP_UP_EXIT_TICKET')}
+                    className="ml-2 px-3 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer hover:shadow-md transition-all active:scale-95"
+                  >
+                    <span>{lang === 'zh' ? '完成授课，进入课后' : 'Finish Teaching → Post-Class'}</span>
+                    <ChevronRight size={12} />
+                  </button>
                 </div>
               </div>
 
@@ -1217,6 +1332,16 @@ export function LiveClassroomView({
                         title={lang === 'zh' ? '刷新数据' : 'Refresh'}
                       >
                         <RefreshCw size={12} className={loadingAttempts ? 'animate-spin' : ''} />
+                      </button>
+
+                      {/* Jump to Top Performers */}
+                      <button
+                        onClick={() => setMiddleTab('top_performers')}
+                        className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                        title={lang === 'zh' ? '查看随堂测验 Top 5 榜单' : 'View Top 5 Performers'}
+                      >
+                        <Trophy size={12} className="text-amber-500" />
+                        <span>{lang === 'zh' ? '优秀榜' : 'Top 5'}</span>
                       </button>
                     </div>
                   </div>
@@ -1364,6 +1489,18 @@ export function LiveClassroomView({
                       })()
                     )}
                   </div>
+                </div>
+              ) : middleTab === 'top_performers' ? (
+                <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-y-auto border border-theme shadow-md bg-surface flex flex-col p-4">
+                  <TopPerformersWidget
+                    lang={lang as any}
+                    lessonId={selectedLesson}
+                    classId={liveClassSelectedClassId}
+                    lessons={lessons}
+                    classes={classes}
+                    students={students}
+                    addToast={addToast}
+                  />
                 </div>
               ) : (
                 <TeacherAssignmentGradePanel
@@ -1828,6 +1965,7 @@ export function LiveClassroomView({
           </div>
         </div>
       </div>
+      )}
 
       {/* Raw Data Detail Modal */}
       {selectedAttempt && (

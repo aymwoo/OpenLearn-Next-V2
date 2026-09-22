@@ -119,8 +119,8 @@ export interface TeacherViewProps {
   onOpenCoursewareHub?: () => void;
 
   // ── PluginView ──────────────────────────────────────────────────────
-  storeTab: string;
-  setStoreTab: (tab: string) => void;
+  storeTab: 'logs' | 'store' | 'dev' | 'widgets';
+  setStoreTab: (tab: any) => void;
   pluginCode: string;
   setPluginCode: (code: string) => void;
   installingPlugin: boolean;

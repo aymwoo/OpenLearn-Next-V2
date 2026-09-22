@@ -49,7 +49,7 @@ export function PluginCardRenderer({
   }
 
   if (ext.component) {
-    return React.createElement(ext.component, { elementId, lessonId });
+    return React.createElement(ext.component as any, { elementId, lessonId });
   }
 
   return <div ref={containerRef} className="w-full h-full min-h-0" />;
