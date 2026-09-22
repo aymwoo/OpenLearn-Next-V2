@@ -7,6 +7,7 @@ import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packag
 import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS, generateStudentNumber } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import type { ServerContext } from '../context.js';
 
 export function registerRosterRoutes(ctx: ServerContext) {
@@ -685,7 +686,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/students/:id/read_notifications', requireAuth(), (req, res) => {
+  app.post('/api/students/:id/read_notifications', requireAuth(), async (req, res) => {
     try {
       const { notificationId } = req.body;
       if (!notificationId) {
@@ -695,17 +696,21 @@ export function registerRosterRoutes(ctx: ServerContext) {
         .prepare('INSERT OR IGNORE INTO student_read_notifications (student_id, notification_id) VALUES (?, ?)')
         .run(req.params.id, notificationId);
 
-      io.emit('student-acknowledged', {
-        studentId: req.params.id,
-        notificationId,
-      });
+      await publishClassroomEvent(
+        CLASSROOM_EVENTS.STUDENT_NOTIFICATION_ACKNOWLEDGED,
+        {
+          studentId: req.params.id,
+          notificationId,
+        },
+        { correlationId: req.params.id },
+      );
       res.json({ success: true });
     } catch (e: any) {
       sendSafeError(res, e);
     }
   });
 
-  app.post('/api/classes/:classId/lock_lesson', requireAuth('teacher', 'administrator'), (req, res) => {
+  app.post('/api/classes/:classId/lock_lesson', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { lessonId } = req.body;
       if (!lessonId) {
@@ -717,18 +722,22 @@ export function registerRosterRoutes(ctx: ServerContext) {
         )
         .run(lessonId, req.params.classId);
 
-      io.emit('class-lock-status-changed', {
-        classId: req.params.classId,
-        lessonId,
-        locked: true,
-      });
+      await publishClassroomEvent(
+        CLASSROOM_EVENTS.CLASSROOM_LOCK_CHANGED,
+        {
+          classId: req.params.classId,
+          lessonId,
+          locked: true,
+        },
+        { correlationId: req.params.classId },
+      );
       res.json({ success: true });
     } catch (e: any) {
       res.status(550).json({ error: e.message });
     }
   });
 
-  app.post('/api/classes/:classId/unlock_lesson', requireAuth('teacher', 'administrator'), (req, res) => {
+  app.post('/api/classes/:classId/unlock_lesson', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       kernelContainer.db
         .prepare(
@@ -736,10 +745,14 @@ export function registerRosterRoutes(ctx: ServerContext) {
         )
         .run(req.params.classId);
 
-      io.emit('class-lock-status-changed', {
-        classId: req.params.classId,
-        locked: false,
-      });
+      await publishClassroomEvent(
+        CLASSROOM_EVENTS.CLASSROOM_LOCK_CHANGED,
+        {
+          classId: req.params.classId,
+          locked: false,
+        },
+        { correlationId: req.params.classId },
+      );
       res.json({ success: true });
     } catch (e: any) {
       res.status(550).json({ error: e.message });
@@ -1088,7 +1101,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/students/:id/progress', requireAuth(), (req, res) => {
+  app.post('/api/students/:id/progress', requireAuth(), async (req, res) => {
     try {
       const session = (req as any).session;
       const isPrivileged = session && (session.role === 'teacher' || session.role === 'administrator');
@@ -1125,13 +1138,17 @@ export function registerRosterRoutes(ctx: ServerContext) {
         )
         .run(studentId, lessonId, completed ? 1 : 0, progressPercent || 0, completedSegmentsStr, Date.now());
 
-      io.emit('student-progress-updated', {
-        studentId,
-        lessonId,
-        progressPercent: progressPercent || 0,
-        completed: !!completed,
-        completedSegments: completedSegments || [],
-      });
+      await publishClassroomEvent(
+        CLASSROOM_EVENTS.STUDENT_PROGRESS_UPDATED,
+        {
+          studentId,
+          lessonId,
+          progressPercent: progressPercent || 0,
+          completed: !!completed,
+          completedSegments: completedSegments || [],
+        },
+        { correlationId: lessonId || undefined },
+      );
 
       res.json({ success: true });
     } catch (e: any) {

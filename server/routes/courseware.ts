@@ -7,9 +7,18 @@ import type { ServerContext } from '../context.js';
 import { injectLmsSdk } from './shared.js';
 import { aggregateAttemptScore, describeAggregation } from '../../packages/plugins/courseware-score.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 
 export function registerCoursewareRoutes(ctx: ServerContext) {
   const { app, io } = ctx;
+
+  /** 课件 attempt 变更的统一发布入口（log / submit / adopt 三类）。 */
+  const publishAttemptUpdated = (attemptId: string, type: 'log' | 'submit' | 'adopt') =>
+    publishClassroomEvent(
+      CLASSROOM_EVENTS.COURSEWARE_ATTEMPT_UPDATED,
+      { attemptId, type },
+      { correlationId: attemptId },
+    );
 
   app.post('/api/courseware/upload', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
@@ -155,7 +164,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     return { score, comment, completion };
   }
 
-  app.post('/api/courseware/attempts/:attemptId/log', (req, res) => {
+  app.post('/api/courseware/attempts/:attemptId/log', async (req, res) => {
     try {
       const { attemptId } = req.params;
       const { eventType, payload } = req.body;
@@ -256,7 +265,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         }
       }
 
-      io.emit('courseware-attempt-updated', { attemptId, type: 'log' });
+      await publishAttemptUpdated(attemptId, 'log');
       void kernelContainer.eventBus.publish({
         id: 'evt_' + crypto.randomBytes(8).toString('hex'),
         type: 'courseware.event_logged',
@@ -334,7 +343,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         actorId,
       );
       const result = await kernelContainer.commandBus.execute(cmd);
-      io.emit('courseware-attempt-updated', { attemptId, type: 'submit' });
+      await publishAttemptUpdated(attemptId, 'submit');
       res.json(result);
     } catch (e: any) {
       sendSafeError(res, e);
@@ -359,7 +368,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
    *
    * 教师/管理员预览不受归属约束，原样返回。
    */
-  app.post('/api/courseware/attempts/:attemptId/adopt', (req, res) => {
+  app.post('/api/courseware/attempts/:attemptId/adopt', async (req, res) => {
     try {
       const { attemptId } = req.params;
 
@@ -403,7 +412,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
           )
           .run(studentId, attemptId);
         if (info.changes > 0) {
-          io.emit('courseware-attempt-updated', { attemptId, type: 'adopt' });
+          await publishAttemptUpdated(attemptId, 'adopt');
           return res.json({ attemptId, adopted: true, reused: true });
         }
       }
@@ -419,7 +428,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         ).run(newId, attemptRow.courseware_id, studentId, Date.now(), 'active');
         own = { id: newId };
       }
-      io.emit('courseware-attempt-updated', { attemptId: own.id, type: 'adopt' });
+      await publishAttemptUpdated(own.id, 'adopt');
       return res.json({
         attemptId: own.id,
         adopted: false,
@@ -669,13 +678,17 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
 
       const assignmentId = promoteTx();
 
-      io.emit('student-progress-updated', {
-        studentId,
-        lessonId,
-        progressPercent: 100,
-        completed: true,
-        completedSegments: [],
-      });
+      await publishClassroomEvent(
+        CLASSROOM_EVENTS.STUDENT_PROGRESS_UPDATED,
+        {
+          studentId,
+          lessonId,
+          progressPercent: 100,
+          completed: true,
+          completedSegments: [],
+        },
+        { correlationId: lessonId },
+      );
 
       res.json({ success: true, assignmentId, score: finalScore });
     } catch (e: any) {

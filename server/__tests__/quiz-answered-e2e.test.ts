@@ -26,6 +26,7 @@ import type { AddressInfo } from 'net';
 import { Server as SocketServer } from 'socket.io';
 import { io as ioClient, type Socket as ClientSocket } from 'socket.io-client';
 import { registerLessonsRoutes } from '../routes/lessons.js';
+import { setupRealtimeBridge } from '../realtime-bridge.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 
 interface WhiteboardQuizAnswered {
@@ -78,6 +79,13 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
       runOpenAIAgentChat: async () => null,
     } as any;
     registerLessonsRoutes(ctx);
+    // 随堂作答事件现在经内核总线发布，再由声明式路由投递到 Socket，
+    // 因此需要把真实总线接到这个 io 实例上（与 server.ts 启动时的接线一致）。
+    setupRealtimeBridge({
+      eventBus: kernelContainer.eventBus,
+      io,
+      db: kernelContainer.db as any,
+    });
 
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     const port = (server.address() as AddressInfo).port;

@@ -2,6 +2,7 @@ import { v7 as uuidv7 } from 'uuid';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import type { ServerContext } from '../context.js';
 
 /**
@@ -395,11 +396,15 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         .prepare('UPDATE lessons SET progress_mode = ?, progress_conditions = ?, updated_at = ? WHERE id = ?')
         .run(progressMode || 'manual', conditionsStr, Date.now(), id);
 
-      io.emit('lesson-progress-mode-changed', {
-        lessonId: id,
-        progressMode: progressMode || 'manual',
-        progressConditions: progressConditions || null,
-      });
+      await publishClassroomEvent(
+        CLASSROOM_EVENTS.LESSON_PROGRESS_MODE_CHANGED,
+        {
+          lessonId: id,
+          progressMode: progressMode || 'manual',
+          progressConditions: progressConditions || null,
+        },
+        { correlationId: id },
+      );
 
       res.json({ success: true });
     } catch (e: any) {
@@ -618,24 +623,29 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         .prepare('UPDATE whiteboard_elements SET data = ? WHERE id = ?')
         .run(JSON.stringify(dataObj), elementId);
 
-      // Broadcast refresh to whiteboard room
-      io.to(`lesson-${lessonId}`).emit('whiteboard-sync', { type: 'element-updated', elementId });
+      // Broadcast refresh to whiteboard room.
+      // FIX: 原先这里 join 的房间名是 `lesson-${lessonId}`，而学生端在
+      // `server/presence.ts:83` 加入的房间就是 `lessonId` 本身 —— 前缀导致
+      // 这次刷新从来没被任何人收到。改为与学生端一致的房间名。
+      io.to(lessonId).emit('whiteboard-sync', { type: 'element-updated', elementId });
 
-      // Emit quiz.answered to WhiteboardEventSlot (via socket bridge → frontend ingest).
-      // Use global io.emit so any teacher/student dashboard browser tab can ingest it,
-      // matching the pattern of other progress events (student-progress-updated etc.).
-      io.emit('whiteboard-quiz-answered', {
-        lessonId,
-        elementId,
-        studentId,
-        studentName: session.studentName || session.name || null,
-        answer,
-        score,
-        isCorrect,
-        time: Date.now(),
-        correctAnswer: dataObj.correctAnswer || null,
-        question: dataObj.question || null,
-      });
+      // 随堂练习作答 → 经内核事件总线广播给教师/学生面板摄取。
+      await publishClassroomEvent(
+        CLASSROOM_EVENTS.WHITEBOARD_QUIZ_ANSWERED,
+        {
+          lessonId,
+          elementId,
+          studentId,
+          studentName: session.studentName || session.name || null,
+          answer,
+          score,
+          isCorrect,
+          time: Date.now(),
+          correctAnswer: dataObj.correctAnswer || null,
+          question: dataObj.question || null,
+        },
+        { correlationId: lessonId },
+      );
 
       res.json({ success: true, isCorrect, score, studentId });
     } catch (e: any) {

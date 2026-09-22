@@ -72,7 +72,7 @@ function buildMocks() {
     publish: (eventType: string, payload: unknown) => {
       const handler = subscribers.get(eventType);
       if (!handler) throw new Error(`no subscriber for ${eventType}`);
-      handler({ type: eventType, payload });
+      handler({ id: `evt_${eventType}`, type: eventType, source: 'test', timestamp: 1000, payload });
     },
     runCallsFor: (prefix: string) => runCalls.filter((c) => c.sql.startsWith(prefix)),
   };
@@ -93,13 +93,19 @@ describe('setupRealtimeBridge', () => {
 
     m.publish('assignment.graded', { assignmentId: 'a1', studentId: 's1', score: 95, feedback: 'good' });
 
-    expect(m.emitted).toEqual([
-      {
-        scope: 'global',
-        event: 'assignment-graded-toast',
-        payload: { assignmentId: 'a1', assignmentTitle: 'Midterm', studentId: 's1', score: 95, feedback: 'good' },
-      },
-    ]);
+    expect(m.emitted).toHaveLength(1);
+    expect(m.emitted[0]).toMatchObject({
+      scope: 'global',
+      event: 'assignment-graded-toast',
+      payload: { assignmentId: 'a1', assignmentTitle: 'Midterm', studentId: 's1', score: 95, feedback: 'good' },
+    });
+    // 事件元信息随 payload 一起下发（前端可据此去重/串联）
+    expect((m.emitted[0].payload as any)._meta).toEqual({
+      eventId: 'evt_assignment.graded',
+      type: 'assignment.graded',
+      source: 'test',
+      timestamp: 1000,
+    });
   });
 
   it('falls back to "Assignment" when the title query returns nothing', () => {
@@ -118,15 +124,19 @@ describe('setupRealtimeBridge', () => {
 
     m.publish('whiteboard.element_drawn', { type: 'line', elementId: 'e1', lessonId: 'L1' });
 
-    expect(m.emitted).toEqual([
-      { scope: 'room', room: 'L1', event: 'whiteboard-sync', payload: { roomId: 'L1', type: 'refresh' } },
-      {
-        scope: 'room',
-        room: 'whiteboard-broadcast',
-        event: 'whiteboard-sync',
-        payload: { roomId: 'L1', type: 'refresh' },
-      },
-    ]);
+    expect(m.emitted).toHaveLength(2);
+    expect(m.emitted[0]).toMatchObject({
+      scope: 'room',
+      room: 'L1',
+      event: 'whiteboard-sync',
+      payload: { roomId: 'L1', type: 'refresh' },
+    });
+    expect(m.emitted[1]).toMatchObject({
+      scope: 'room',
+      room: 'whiteboard-broadcast',
+      event: 'whiteboard-sync',
+      payload: { roomId: 'L1', type: 'refresh' },
+    });
   });
 
   it('handles a rollcall element: saves rollcall + emits student-picked + sync', () => {
@@ -191,11 +201,15 @@ describe('setupRealtimeBridge', () => {
     m.publish('whiteboard.element_deleted', { lessonId: 'L2' });
     m.publish('whiteboard.cleared', { lessonId: 'L2' });
 
-    expect(m.emitted).toEqual([
-      { scope: 'room', room: 'L2', event: 'whiteboard-sync', payload: { roomId: 'L2', type: 'refresh' } },
-      { scope: 'room', room: 'L2', event: 'whiteboard-sync', payload: { roomId: 'L2', type: 'refresh' } },
-      { scope: 'room', room: 'L2', event: 'whiteboard-sync', payload: { roomId: 'L2', type: 'refresh' } },
-    ]);
+    expect(m.emitted).toHaveLength(3);
+    for (const e of m.emitted) {
+      expect(e).toMatchObject({
+        scope: 'room',
+        room: 'L2',
+        event: 'whiteboard-sync',
+        payload: { roomId: 'L2', type: 'refresh' },
+      });
+    }
   });
 
   it('forwards both spotlight event spellings verbatim', () => {
@@ -206,9 +220,9 @@ describe('setupRealtimeBridge', () => {
     m.publish('spotlight:state_updated', payload);
     m.publish('spotlight.state_updated', payload);
 
-    expect(m.emitted).toEqual([
-      { scope: 'global', event: 'spotlight:state_updated', payload },
-      { scope: 'global', event: 'spotlight:state_updated', payload },
-    ]);
+    expect(m.emitted).toHaveLength(2);
+    for (const e of m.emitted) {
+      expect(e).toMatchObject({ scope: 'global', event: 'spotlight:state_updated', payload });
+    }
   });
 });

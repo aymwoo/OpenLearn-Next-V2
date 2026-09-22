@@ -8,6 +8,7 @@ import { registerCoursewareRoutes } from '../routes/courseware.js';
 import { registerLessonsRoutes } from '../routes/lessons.js';
 import { registerAssignmentsRoutes } from '../routes/assignments.js';
 import { registerGradingRoutes } from '../routes/grading.js';
+import { setupRealtimeBridge } from '../realtime-bridge.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 
 /**
@@ -138,12 +139,23 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
     // 历史上这里靠 grant 绕过，掩盖了 /submit 路由 actorId 未归一化的缺陷。
     const ctx: any = {
       app,
-      io: { emit: (event: string, payload: any) => emittedEvents.push({ event, payload }) },
+      io: {
+        emit: (event: string, payload: any) => emittedEvents.push({ event, payload }),
+        to: () => ({ emit: () => {} }),
+      },
     };
     registerCoursewareRoutes(ctx);
     registerLessonsRoutes(ctx);
     registerAssignmentsRoutes(ctx);
     registerGradingRoutes(ctx);
+
+    // 课堂事件已改为「REST → 内核总线 → 声明式路由 → Socket」，
+    // 因此必须把真实内核总线接到这个 io 上，断言才有意义。
+    setupRealtimeBridge({
+      eventBus: kernelContainer.eventBus,
+      io: ctx.io,
+      db: kernelContainer.db as any,
+    });
 
     server = createServer(app);
     await new Promise<void>((resolve) => server.listen(0, resolve));
