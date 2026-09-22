@@ -12,6 +12,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **互动课堂与课程编辑器全局架构优化及第三方插件生态体系 (Interactive Classroom & Lesson Editor Optimization with Plugin Ecosystem)**:
+  - **四阶课堂生命周期状态机与中控台 (Classroom Stage State Machine & Cockpit)**:
+    - `server/services/classroom-runtime-service.ts`：实现高可用课堂生命周期状态机，定义 `PRE_CLASS_READY`（课前就绪）、`IN_CLASS_TEACHING`（课中授课）、`WRAP_UP_EXIT_TICKET`（结课通票）、`ARCHIVED_REPORT`（学情归档简报）四阶流转；
+    - 支持前置守卫钩子（`StageGuardHook`）与流转监听拦截，允许第三方插件在切阶前进行条件阻断或后续联动（如课件同步、随堂测触发）；
+    - `src/features/classroom/ClassroomInteractiveCockpit.tsx`：为教师端中控台提供一键阶梯式教学流转控制栏、节奏晴雨表、极速点名/投票/抢答快捷交互与大屏展台唤起。
+  - **大屏教学展台 (Projector Stage Display View)**:
+    - `src/features/classroom/StageDisplayModal.tsx`：为多媒体教室与大屏投影场景打造暗色高对比度专属展台，集成当前教学环节、大屏高精度时钟、动态投屏签到码、极速抢答夺魁光效看板、极速投票柱状图与实时节奏晴雨表。
+  - **学生端极简实时响应与极速互动 (Student Interactive Overlay & Real-time SRS)**:
+    - `src/features/student/StudentInteractiveOverlay.tsx`：为学生端（含独立 Tab/弹窗联动模式）打造非侵入式悬浮互动条，支持「听懂了 💡 / 有疑问 ❓ / 讲太快 🐇」瞬时步调反馈、毫秒级一键抢答按钮、极速单选答题卡及 60 秒下课通票打卡。
+  - **全链路第三方插件可扩展能力架构 (Third-Party Plugin Extensibility Ecosystem)**:
+    - 扩展槽位 `classroom.quick_activity`：允许第三方插件以极简声明式组件向教师端中控台注册自定义即时互动卡片/操作；
+    - 扩展槽位 `stage.display.card`：允许第三方插件向多媒体大屏展台投送专属展示看板与数据可视化图元；
+    - 课程编辑器步骤扩展：`src/features/teacher/lesson-editor/timelineConfig.ts` 引入 `registerCustomSegmentType` 与 `customSegmentTypes` 动态注册表，支持第三方插件扩展自定义教学环节（如分组研讨、科学探究实验、随堂辩论）；
+    - 插件 SDK 与依赖注入：`packages/core/di/interfaces.ts` 与 `@openlearn/plugin-sdk` 暴露 `IInteractionRuntimeServiceToken`，允许插件调用服务端统一状态广播、抢答判定与活动生命周期。
+  - **原子并发安全抢答与随堂测原子 Upsert (Atomic Concurrency Protection)**:
+    - 抢答状态机采用 `UPDATE classroom_buzzers SET ... WHERE status = 'READY'` 原子 CAS 语句，杜绝并发网络包下的并列第一争议；
+    - 修复随堂测关系型提交漏洞，`server/routes/lessons.ts` 的 `/api/lessons/:id/quiz-submit` 在原有 JSON 写入之外新增 `lesson_quiz_submissions` 关系行级 upsert（`ON CONFLICT(lesson_id, element_id, student_id) DO UPDATE`），避免多学生同时交卷时 read-modify-write 覆盖同伴作答；唯一键含 `lesson_id`，同一元素在多个课节复用时也不会跨课节互相覆盖。
+
 - **学生端异常教师端实时感知、系统日志审计与端侧极简角标 (Student Exception Telemetry & Low-Visibility Diagnostics)**:
   - **端侧异常上报与系统审计日志持久化**：
     - `src/hooks/useGlobalErrorCapture.ts` 与 `src/store/errorStore.ts`：新增错误订阅机制 `registerErrorListener`。当学生端（处于 `role === 'student'` 或 `student_live` 模式）捕获到 React 崩溃、Promise 异常、JS 运行时错误或 5xx 接口故障时，自动提取学生学号/ID、学生姓名、课节及班级上下文，通过 Socket.IO 发送 `student-client-error`（并提供 `/api/diagnostics/report` 作为断网或重连期间的 HTTP Fallback）；
@@ -124,6 +142,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 回归：新增 `src/components/__tests__/student-assignment-eval-panel.test.tsx` 4 例（纯附件 / 纯文字互评 / 历史纯路径兼容 / 未提交）。把该组件改动 stash 掉后，其中 2 例会以**与线上完全相同的** `TypeError: Cannot read properties of null (reading 'split')` 失败，证明该回归已被锁死。
 - 补齐作业互评只读接口的鉴权：`GET /api/lessons/:lessonId/eval-submissions` 与 `GET /api/lessons/:lessonId/students/:studentId/eval-status` 此前**没有任何鉴权**，任何人仅凭 `lessonId` 即可读到全班提交（含文字作答、附件名、互评记录与成绩），现分别加 `requireAuth()`。
   - 回归：新增 `server/__tests__/eval-submissions-auth.test.ts` 3 例（未登录 401；登录后 `file_path` 为 null 的提交回填 `files` 且不泄露内部字段 `latest_files_json`；`eval-status` 同样正常）。
+- **互动课堂前后端字段名失配修复（学生端投票 / 节奏信号 / 结课通票）**：
+  - **投票**：`StudentInteractiveOverlay` 发送 `selectedOption` 而服务端读 `option`，导致所有投票落库为字符串 `"undefined"`（投票分布与课堂简报警戒失真）。服务端改为兼容 `option` / `selectedOption`，并新增「选项必须属于本次投票的可选项」「缺失选项返回 400」校验；前端统一发送 `option`。
+  - **节奏信号**：前端发送 `signalType` 而服务端读 `signal`，请求恒 400 且被前端静默吞掉（"听懂反馈晴雨表"从未生效）。服务端兼容两种字段名，前端统一发送 `signal`。
+  - **结课通票**：前端发送 `feedbackNotes` 而服务端读 `feedback`，学生文字反馈被静默丢弃。服务端兼容两种字段名，前端统一发送 `feedback`。
+  - 新增 `server/__tests__/classroom-routes-contract.test.ts`（11 例）锁定请求契约：两种字段名均可用、非法选项 400、缺字段 400、投票关闭后拒绝、大屏数据接口未登录 401。
 
 ### Docs
 

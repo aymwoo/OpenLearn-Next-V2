@@ -35,6 +35,7 @@ import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 import { ClassroomSyncChannel } from '../services/classroom-sync-channel';
 import { useErrorStore, errorStore } from '../store/errorStore';
+import { ClassroomInteractiveCockpit } from '../features/classroom/ClassroomInteractiveCockpit';
 
 
 // Dynamic Icon component to render Lucide icons by name string
@@ -873,6 +874,15 @@ export function LiveClassroomView({
           </div>
         </div>
       </div>
+
+      {/* Interactive Classroom Cockpit (Stages, Polls, Buzzers, Exit Tickets, Stage Display) */}
+      <ClassroomInteractiveCockpit
+        lessonId={selectedLesson}
+        lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title}
+        classId={liveClassSelectedClassId}
+        lang={lang as any}
+        addToast={addToast}
+      />
 
       {/* 2. Main Three-column Panel Grid */}
       <div className="flex-1 flex overflow-hidden min-h-0 bg-surface-secondary/30">

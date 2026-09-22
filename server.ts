@@ -24,7 +24,12 @@ import { createServer as createHttpServer } from 'http';
 import { Server } from 'socket.io';
 import { kernelContainer } from './packages/core/kernel/index.js';
 import { PLATFORM_VERSION } from './packages/core/version.js';
-import { ISemesterGradeServiceToken } from './packages/core/di/interfaces.js';
+import {
+  ISemesterGradeServiceToken,
+  IClassroomLifecycleServiceToken,
+  IInteractionRuntimeServiceToken,
+} from './packages/core/di/interfaces.js';
+import { ClassroomRuntimeService } from './server/services/classroom-runtime-service.js';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import helmet from 'helmet';
@@ -90,6 +95,7 @@ import { registerAssignmentHubRoutes } from './server/routes/assignment-hub.js';
 import { registerSchedulesRoutes } from './server/routes/schedules.js';
 import { registerGradingRoutes } from './server/routes/grading.js';
 import { registerPluginsRoutes } from './server/routes/plugins.js';
+import { registerClassroomRoutes } from './server/routes/classroom.js';
 
 async function startServer() {
   // Bridge server startup through Platform Kernel Bootstrap Adapter (PI-005)
@@ -373,6 +379,12 @@ async function startServer() {
   registerSchedulesRoutes(ctx);
   registerGradingRoutes(ctx);
   registerPluginsRoutes(ctx);
+
+  // Classroom Lifecycle and Realtime Interaction Engine
+  const classroomRuntimeService = new ClassroomRuntimeService(kernelContainer.db, io);
+  await kernelContainer.serviceRegistry.register(IClassroomLifecycleServiceToken, classroomRuntimeService);
+  await kernelContainer.serviceRegistry.register(IInteractionRuntimeServiceToken, classroomRuntimeService);
+  registerClassroomRoutes(ctx, classroomRuntimeService);
 
   // Realtime bridge: forward kernel domain events to Socket.IO clients.
   // Extracted to server/realtime-bridge.ts so the monolith can be decomposed

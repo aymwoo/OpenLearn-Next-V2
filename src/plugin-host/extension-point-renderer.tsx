@@ -17,7 +17,7 @@
 
 import React, { Suspense } from 'react';
 import { Loader2, Puzzle } from 'lucide-react';
-import { usePluginHost } from './plugin-host-context';
+import { usePluginHost, useOptionalPluginHost } from './plugin-host-context';
 import { usePluginHostStore } from './plugin-host-store';
 import { useAppStore } from '../store/appStore';
 import type { ExtensionSlot } from './types';
@@ -208,7 +208,8 @@ export function ExtensionPointRenderer({
   slotProps,
   placement,
 }: ExtensionPointRendererProps) {
-  const host = usePluginHost();
+  const host = useOptionalPluginHost();
+  if (!host) return fallback ?? null;
   let extensions = host.getExtensions(slot as ExtensionSlot);
 
   const visibility = usePluginHostStore((s) => s.dashboardVisibility);

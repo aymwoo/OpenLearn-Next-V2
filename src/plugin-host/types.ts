@@ -76,7 +76,11 @@ export type ExtensionSlot =
   | 'teacher.panel' // v5.1: 教师独立全宽管理面板
   | 'student.fullscreen' // v5.1: 学生全屏视图（考试模式）
   | 'global.setting' // v5.1: 全局设置页扩展
-  | 'nav.user_menu'; // v5.2: 顶部 Header 用户菜单扩展
+  | 'nav.user_menu' // v5.2: 顶部 Header 用户菜单扩展
+  | 'classroom.quick_activity' // 极速课堂互动扩展
+  | 'stage.display.card' // 大屏展台卡片扩展
+  | 'editor.timeline_segment' // 课程编辑器步骤类型扩展
+  | 'editor.palette_item'; // 课程编辑器白板图元扩展
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。

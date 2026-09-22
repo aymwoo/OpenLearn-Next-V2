@@ -41,3 +41,11 @@ export function usePluginHost(): FrontendPluginHost {
   }
   return ctx;
 }
+
+/**
+ * Optional hook to access FrontendPluginHost without throwing.
+ */
+export function useOptionalPluginHost(): FrontendPluginHost | null {
+  return useContext(PluginHostContext);
+}
+

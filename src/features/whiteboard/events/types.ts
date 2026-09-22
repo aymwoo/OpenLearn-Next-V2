@@ -79,6 +79,10 @@ export interface SubscribeOptions {
   replay?: number;
 }
 
+export type Subscription = () => void;
+export type EventFilterMatch = EventFilter;
+export type QueryOptions = EventFilter;
+
 /** EventSlot 配置 */
 export interface EventSlotOptions {
   /** Ring buffer 容量 */

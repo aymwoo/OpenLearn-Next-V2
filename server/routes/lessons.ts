@@ -623,6 +623,40 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         .prepare('UPDATE whiteboard_elements SET data = ? WHERE id = ?')
         .run(JSON.stringify(dataObj), elementId);
 
+      // CONCUR-01：关系型原子 upsert。
+      // 上方 JSON 写入是 read-modify-write（并发时同题多名学生互相覆盖），
+      // 这里以 (lesson_id, element_id, student_id) 为唯一键做行级原子写入，
+      // 作为学情统计（全景简报 / 随堂练习正确率）的权威数据源。
+      try {
+        kernelContainer.db
+          .prepare(
+            `INSERT INTO lesson_quiz_submissions
+               (id, lesson_id, element_id, student_id, student_name, answer, score, is_correct, time_spent_ms, submitted_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(lesson_id, element_id, student_id) DO UPDATE SET
+               answer = excluded.answer,
+               score = excluded.score,
+               is_correct = excluded.is_correct,
+               time_spent_ms = excluded.time_spent_ms,
+               submitted_at = excluded.submitted_at`,
+          )
+          .run(
+            `lqs-${lessonId}-${elementId}-${studentId}`,
+            lessonId,
+            elementId,
+            studentId,
+            session.studentName || session.name || null,
+            typeof answer === 'string' ? answer : JSON.stringify(answer),
+            score,
+            isCorrect ? 1 : 0,
+            Number(req.body?.timeSpentMs) || 0,
+            Date.now(),
+          );
+      } catch (relErr: any) {
+        // 迁移 007 尚未落库时退化为旧的 JSON 覆盖式写入，不阻断学生作答。
+        console.warn('[classroom] relational quiz upsert skipped:', relErr?.message || relErr);
+      }
+
       // Broadcast refresh to whiteboard room.
       // FIX: 原先这里 join 的房间名是 `lesson-${lessonId}`，而学生端在
       // `server/presence.ts:83` 加入的房间就是 `lessonId` 本身 —— 前缀导致
@@ -744,6 +778,26 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         kernelContainer.db.prepare('DELETE FROM student_lesson_progress WHERE lesson_id = ?').run(id);
         kernelContainer.db.prepare('DELETE FROM schedules WHERE lesson_id = ?').run(id);
         kernelContainer.db.prepare('DELETE FROM assignments WHERE lesson_id = ?').run(id);
+
+        // Cascade delete interactive classroom session data
+        const sessionRows = kernelContainer.db
+          .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ?')
+          .all(id) as { id: string }[];
+
+        for (const s of sessionRows) {
+          kernelContainer.db
+            .prepare(
+              'DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id = ?)',
+            )
+            .run(s.id);
+          kernelContainer.db.prepare('DELETE FROM classroom_quick_polls WHERE session_id = ?').run(s.id);
+          kernelContainer.db.prepare('DELETE FROM classroom_buzzers WHERE session_id = ?').run(s.id);
+          kernelContainer.db.prepare('DELETE FROM classroom_exit_tickets WHERE session_id = ?').run(s.id);
+          kernelContainer.db.prepare('DELETE FROM classroom_pacing_signals WHERE session_id = ?').run(s.id);
+        }
+
+        kernelContainer.db.prepare('DELETE FROM classroom_sessions WHERE lesson_id = ?').run(id);
+        kernelContainer.db.prepare('DELETE FROM lesson_quiz_submissions WHERE lesson_id = ?').run(id);
         return kernelContainer.db.prepare('DELETE FROM lessons WHERE id = ?').run(id);
       });
       const result = delTx() as any;

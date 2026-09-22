@@ -10,6 +10,7 @@ import { ProfileModal } from './components/ProfileModal';
 import { FontSizeSelector } from './components/FontSizeSelector';
 import { PALETTE_ITEM_MAP, getPaletteItemConfig } from './features/teacher/lesson-editor/paletteConfig';
 import { generateTemplateContent } from './features/teacher/HelpView';
+import { StudentInteractiveOverlay } from './features/student/StudentInteractiveOverlay';
 
 // ── Hash-based routing helpers ────────────────────────────────────────────
 function tabToHash(tab: string): string {
@@ -2198,6 +2199,16 @@ export default function App() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* 学生端实时互动浮层 (Pacing Signals, Quick Polls, Buzzer, 60s Exit Ticket) */}
+        {(activeRole === 'student' || isStudentLiveMode) && (
+          <StudentInteractiveOverlay
+            lessonId={selectedLesson}
+            studentId={activeStudentId || liveStudentParam || undefined}
+            studentName={students.find((s) => s.id === (activeStudentId || liveStudentParam))?.name || undefined}
+            lang={lang as any}
+          />
         )}
 
         {/* Real-time Toast Notifications */}
