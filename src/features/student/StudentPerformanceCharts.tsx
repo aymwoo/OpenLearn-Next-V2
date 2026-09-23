@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { WeeklyProgressTrendChart } from '../../components/WeeklyProgressTrendChart';
 import { SemesterGradeTrendChart } from '../../components/SemesterGradeTrendChart';
 import { RecentThreeMonthsPerformanceChart } from '../../components/RecentThreeMonthsPerformanceChart';

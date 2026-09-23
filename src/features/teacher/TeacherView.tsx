@@ -119,7 +119,7 @@ export interface TeacherViewProps {
   onOpenCoursewareHub?: () => void;
 
   // ── PluginView ──────────────────────────────────────────────────────
-  storeTab: 'logs' | 'store' | 'dev' | 'widgets';
+  storeTab: 'logs' | 'store' | 'dev' | 'widgets' | 'community';
   setStoreTab: (tab: any) => void;
   pluginCode: string;
   setPluginCode: (code: string) => void;

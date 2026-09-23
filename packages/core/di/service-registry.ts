@@ -108,6 +108,20 @@ export class ServiceRegistry {
   }
 
   /**
+   * Optional resolve: returns null if the token is not registered (no throw).
+   *
+   * For optional plugin-host services that may not be wired in every test
+   * or partial deployment (e.g. points subsystem not enabled).
+   * Mirrors D-12 sentinel design: plugin can `ctx.services.x === null` check.
+   */
+  async tryResolve<T>(token: Token<T>): Promise<T | null> {
+    const name = token.name;
+    const entry = this.registry.get(name);
+    if (!entry) return null;
+    return entry.instance as T;
+  }
+
+  /**
    * Resolve a registered service instance by token name string.
    *
    * Phase 5: Added for Worker RPC — Worker sends token as string, not Token<T> object.

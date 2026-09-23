@@ -14,6 +14,12 @@ import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatReq
 export function registerOsRoutes(ctx: ServerContext) {
   const { app, runGeminiAgentChat, runOpenAIAgentChat, activityRegistry } = ctx;
 
+  // 轻量连通性探测端点：课堂启动门户的顶部遥测岛用它测 HTTP 往返时延。
+  // 刻意不鉴权、不访问数据库、无副作用，以便在登录页等未认证场景也能复用。
+  app.get('/api/ping', (_req, res) => {
+    res.json({ ok: true, ts: Date.now() });
+  });
+
   app.post('/api/upload', async (req, res) => {
     try {
       const { filename, base64Data } = req.body;

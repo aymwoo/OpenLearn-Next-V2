@@ -38,23 +38,13 @@ import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer'
 import { ClassroomSyncChannel } from '../services/classroom-sync-channel';
 import { useErrorStore, errorStore } from '../store/errorStore';
 import { ClassroomInteractiveCockpit } from '../features/classroom/ClassroomInteractiveCockpit';
-import { ClassroomStandardTopbar } from '../features/classroom/ClassroomStandardTopbar';
-import { ClassroomAttributionModal } from '../features/classroom/ClassroomAttributionModal';
-import { StudentGrowthProfileModal } from '../features/student/StudentGrowthProfileModal';
-import {
-  ClassroomCockpitHeader,
-  ClassroomWorkflowSubHeader,
-  ClassroomAgendaPanel,
-  ClassroomCanvasArea,
-  ClassroomEngagementConsole,
-  StudentGaugeItem,
-  AuditEventItem,
-  AuditEventLevel,
-} from '../features/classroom/cockpit';
 import { PreClassReadyView } from '../features/classroom/PreClassReadyView';
+import { ClassroomEntryPortal } from '../features/classroom/ClassroomEntryPortal';
 import { PostClassWrapupView } from '../features/classroom/PostClassWrapupView';
 import { ClassroomBriefingView } from '../features/classroom/ClassroomBriefingView';
 import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdownWidget';
+import { StudentGrowthProfileModal } from '../features/student/StudentGrowthProfileModal';
+import { PeerReviewShowcaseModal } from '../features/classroom/peer-review/PeerReviewShowcaseModal';
 
 
 // Dynamic Icon component to render Lucide icons by name string
@@ -96,6 +86,11 @@ interface LiveClassroomViewProps {
   onOpenCoursewareHub?: () => void;
   activeRole?: string;
   setActiveRole?: (role: 'teacher' | 'student') => void;
+  /**
+   * 是否先展示「课堂启动门户」。默认 true —— 教师进入互动课堂先确认
+   * 课程 / 班级 / 教学模式。既有单测需直接断言授课视图时传 false。
+   */
+  initialPortalOpen?: boolean;
 }
 
 export function LiveClassroomView({
@@ -130,6 +125,7 @@ export function LiveClassroomView({
   onOpenCoursewareHub,
   activeRole,
   setActiveRole,
+  initialPortalOpen = true,
 }: LiveClassroomViewProps) {
   const [lockingClass, setLockingClass] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
@@ -155,6 +151,13 @@ export function LiveClassroomView({
 
   // Classroom workflow stages: PRE_CLASS_READY, IN_CLASS_TEACHING, WRAP_UP_EXIT_TICKET, ARCHIVED_REPORT
   const [classroomStage, setClassroomStage] = useState<string>('IN_CLASS_TEACHING');
+  // 互动课堂起始门户：默认先展示「课程入口与班级选择门户」，
+  // 教师确认课程 / 班级 / 教学模式后才进入授课视图（对应 Stitch 门户设计）。
+  // 可通过 initialPortalOpen 关闭（既有单测直接断言授课视图时使用）。
+  const [showEntryPortal, setShowEntryPortal] = useState(initialPortalOpen);
+  const [isGrowthProfileOpen, setIsGrowthProfileOpen] = useState(false);
+  const [growthProfileStudentId, setGrowthProfileStudentId] = useState<string | null>(null);
+  const [isPeerReviewShowcaseOpen, setIsPeerReviewShowcaseOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedLesson) return;
@@ -183,6 +186,39 @@ export function LiveClassroomView({
     }
   };
 
+  /**
+   * 门户「进入数字赋能课堂」：先初始化课堂会话（携带教学模式），
+   * 再切换到授课视图。初始化失败时不切视图，由门户把错误提示给教师，
+   * 避免出现「界面已进课堂但服务端没有会话」的割裂状态。
+   */
+  const handlePortalEnter = async ({
+    lessonId,
+    classId,
+    teachingModeId,
+  }: {
+    lessonId: string;
+    classId: string;
+    teachingModeId: string | null;
+  }) => {
+    const res = await fetch(`/api/classroom/sessions/${lessonId}/init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ classId, teachingModeId: teachingModeId ?? undefined }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new Error(
+        data?.error || (lang === 'zh' ? '初始化课堂会话失败' : 'Failed to initialise the classroom session'),
+      );
+    }
+
+    setSelectedLesson(lessonId);
+    setLiveClassSelectedClassId(classId);
+    void fetchElements(lessonId);
+    setShowEntryPortal(false);
+  };
+
   // Interactive courseware submission states
   const [middleTab, setMiddleTab] = useState<'whiteboard' | 'submissions' | 'assignment' | 'top_performers'>('whiteboard');
   const [attempts, setAttempts] = useState<any[]>([]);
@@ -192,8 +228,6 @@ export function LiveClassroomView({
   const [loadingRaw, setLoadingRaw] = useState(false);
   const [submissionFilter, setSubmissionFilter] = useState<'all' | 'submitted' | 'started'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProfileStudentId, setSelectedProfileStudentId] = useState<string | null>(null);
-  const [isCanvasAttributionOpen, setIsCanvasAttributionOpen] = useState(false);
 
   const fetchAttempts = async () => {
     setLoadingAttempts(true);
@@ -821,96 +855,143 @@ export function LiveClassroomView({
     return matchesSearch && matchesStatus;
   });
 
-  const studentGaugeItems = React.useMemo<StudentGaugeItem[]>(() => {
-    return students.map((st) => {
-      const isStudentLocked = st.locked_lesson_id === selectedLesson;
-      const isOnline = onlineStudentIds.includes(st.id);
-      const studentProg = liveClassStudentProgress.find((p) => p.student_id === st.id);
-      const progPercent = studentProg?.progress_percent ?? (isOnline ? 59 : 0);
-      const hasError = studentErrors.some((e) => e.studentId === st.id);
-
-      return {
-        id: st.id,
-        name: st.name,
-        studentNo: st.student_number,
-        focusPercent: progPercent,
-        isOnline,
-        isLocked: isStudentLocked,
-        hasError,
-      };
-    });
-  }, [students, selectedLesson, onlineStudentIds, liveClassStudentProgress, studentErrors]);
-
-  const auditEvents = React.useMemo<AuditEventItem[]>(() => {
-    return liveClassFeed.map((f) => {
-      let level: AuditEventLevel = 'INFO';
-      if (f.type === 'warning' || f.type === 'error') level = 'WARNING';
-      else if (f.type === 'checkin' || f.type === 'answer') level = 'ANSWER';
-      else if (f.type === 'system') level = 'SYSTEM';
-      else if (f.type === 'plugin') level = 'PLUGIN';
-      else if (f.type === 'success') level = 'INFO';
-
-      return {
-        id: f.id || String(Math.random()),
-        time: f.time || new Date().toLocaleTimeString(),
-        level,
-        message: f.message || '',
-      };
-    });
-  }, [liveClassFeed]);
-
-  const onlineStudentsCount = students.filter((s) => onlineStudentIds.includes(s.id)).length;
-  const lockedCount = students.filter((s) => s.locked_lesson_id === selectedLesson).length;
-  const averageProgress = React.useMemo(() => {
-    const inClassStudents = students.filter((s) => onlineStudentIds.includes(s.id));
-    if (inClassStudents.length === 0) return 0;
-    const total = inClassStudents.reduce((sum, s) => {
-      const p = liveClassStudentProgress.find((prog) => prog.student_id === s.id);
-      return sum + (p?.progress_percent ?? 0);
-    }, 0);
-    return Math.round(total / inClassStudents.length);
-  }, [students, onlineStudentIds, liveClassStudentProgress]);
+  // 起始门户：未确认配置前不渲染授课视图，避免教师直接进入无准备的课堂。
+  // 注意此处已越过全部 hook 调用，条件返回不影响 Hook 顺序。
+  if (showEntryPortal) {
+    return (
+      <ClassroomEntryPortal
+        lessons={lessons}
+        classes={classes}
+        students={students}
+        selectedLesson={selectedLesson}
+        setSelectedLesson={setSelectedLesson}
+        liveClassSelectedClassId={liveClassSelectedClassId}
+        setLiveClassSelectedClassId={setLiveClassSelectedClassId}
+        timelineSegments={timelineSegments}
+        onlineStudentIds={onlineStudentIds}
+        lang={lang}
+        addToast={addToast}
+        onEnterClassroom={handlePortalEnter}
+      />
+    );
+  }
 
   return (
     <div className="flex-grow flex-1 flex flex-col min-h-0 bg-surface border border-theme rounded-2xl shadow-xl text-main overflow-hidden font-sans">
-      {/* 1. Global Navigation Topbar (Stitch Screen 1219a481) */}
-      <ClassroomCockpitHeader
-        lessonId={selectedLesson}
-        lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title}
-        classId={liveClassSelectedClassId}
-        className={classes.find((c) => c.id === liveClassSelectedClassId)?.name}
-        lessons={lessons}
-        classes={classes}
-        onSelectLesson={(val) => {
-          setSelectedLesson(val);
-          if (val) fetchElements(val);
-        }}
-        onSelectClass={(val) => setLiveClassSelectedClassId(val)}
-        isClassLocked={isClassLocked}
-        lockingClass={lockingClass}
-        onToggleClassLock={(locked) => handleToggleClassLock(locked)}
-        isStudentWindowOpen={isStudentWindowOpen}
-        onOpenStudentWindow={handleOpenStudentWindow}
-        studentCount={students.length || 32}
-        onlineCount={onlineStudentIds?.length || 1}
-        lang={lang as any}
-        addToast={addToast}
-      />
+      {/* 1. Header Control Bar */}
+      <div className="bg-surface-secondary p-4 border-b border-theme flex flex-wrap items-center justify-between gap-4 shrink-0">
+        <div className="flex items-center gap-3 select-none">
+          <div className="relative flex items-center justify-center">
+            <span
+              className={`w-3 h-3 rounded-full ${liveClassIsActive ? 'bg-emerald-500 animate-ping' : 'bg-rose-500'} absolute`}
+            />
+            <span className={`w-2 h-2 rounded-full ${liveClassIsActive ? 'bg-emerald-500' : 'bg-rose-500'} relative`} />
+          </div>
+          <h2 className="text-sm font-extrabold tracking-tight text-main flex items-center gap-2">
+            {lang === 'zh' ? '🔴 智能授课工作流控制中心' : '🔴 Active Lesson control center'}
+          </h2>
+        </div>
 
-      {/* 2. Sub-Header: Lesson Phase Stepper & Quick Actions (Stitch Screen 1219a481) */}
-      <ClassroomWorkflowSubHeader
-        currentStage={classroomStage}
-        onStageChange={handleStageChange}
-        lang={lang as any}
+        {/* Dropdown selectors */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <div>
+            <select
+              value={selectedLesson || ''}
+              onChange={(e) => {
+                const val = e.target.value === '' ? null : e.target.value;
+                setSelectedLesson(val);
+                if (val) fetchElements(val);
+              }}
+              className="bg-surface border border-theme rounded-lg text-xs font-semibold px-3 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none cursor-pointer hover:bg-surface-secondary transition-colors"
+            >
+              <option value="">{lang === 'zh' ? '-- 选择授课课节 --' : '-- Select Lesson --'}</option>
+              {lessons.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <select
+              value={liveClassSelectedClassId || ''}
+              onChange={(e) => setLiveClassSelectedClassId(e.target.value === '' ? null : e.target.value)}
+              className="bg-surface border border-theme rounded-lg text-xs font-semibold px-3 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none cursor-pointer hover:bg-surface-secondary transition-colors"
+            >
+              <option value="">{lang === 'zh' ? '-- 选择授课班级 --' : '-- Select Class --'}</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Lock & Student Tab Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleOpenStudentWindow}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 ${
+                isStudentWindowOpen
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400/50 shadow-emerald-500/20'
+                  : 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white'
+              }`}
+              title={
+                lang === 'zh'
+                  ? '在独立浏览器新Tab中打开学生端预览，可与当前教师端分屏实时操作联动'
+                  : 'Open student preview in a new browser tab to sync with teacher operations side-by-side'
+              }
+            >
+              {isStudentWindowOpen ? (
+                <>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-200"></span>
+                  </span>
+                  <span>🎓 {lang === 'zh' ? '学生端已联动 (激活Tab)' : 'Student Linked (Focus Tab)'}</span>
+                  <ExternalLink size={12} className="opacity-90" />
+                </>
+              ) : (
+                <>
+                  <span>🎓 {lang === 'zh' ? '学生视角预览 (独立Tab)' : 'Student Preview (New Tab)'}</span>
+                  <ExternalLink size={12} className="opacity-90" />
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => handleToggleClassLock(!isClassLocked)}
+              disabled={lockingClass || !selectedLesson || !liveClassSelectedClassId}
+              className={`px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer ${
+                isClassLocked
+                  ? 'bg-rose-500 hover:bg-rose-600 text-white'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+              }`}
+            >
+              {isClassLocked ? <ShieldAlert size={12} /> : <Shield size={12} />}
+              <span>
+                {isClassLocked
+                  ? lang === 'zh'
+                    ? '一键解锁全班'
+                    : 'Unlock Entire Class'
+                  : lang === 'zh'
+                    ? '全班专注锁定'
+                    : 'Lock Class Screen'}
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Interactive Classroom Cockpit (Stages, Polls, Buzzers, Exit Tickets, Stage Display) */}
+      <ClassroomInteractiveCockpit
         lessonId={selectedLesson}
         lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title}
         classId={liveClassSelectedClassId}
-        className={classes.find((c) => c.id === liveClassSelectedClassId)?.name}
-        students={students}
+        lang={lang as any}
         addToast={addToast}
-        pollSubmissionsCount={24}
-        buzzerReadyCount={2}
-        countdownSeconds={60}
+        currentStage={classroomStage}
+        onStageChange={(newStage) => setClassroomStage(newStage)}
       />
 
       {/* 2. Main Stage Router: Switches based on classroomStage */}
@@ -994,317 +1075,966 @@ export function LiveClassroomView({
           addToast={addToast}
         />
       ) : (
-        /* classroomStage === 'IN_CLASS_TEACHING' - Stitch Screen 1219a481 Modular Cockpit Architecture */
-        <div className="flex-1 flex overflow-hidden min-h-0 bg-surface-secondary/30 relative">
-          {/* 3. Left Column: Agenda & Lesson Steps Panel */}
-          <ClassroomAgendaPanel
-            timelineSegments={timelineSegments}
-            activeSegmentId={activeSegmentId}
-            onSelectSegment={(seg) => handleStartSegment(seg)}
-            isCollapsed={isLeftSidebarCollapsed}
-            onToggleCollapse={() => setIsLeftSidebarCollapsed(!isLeftSidebarCollapsed)}
-            lang={lang as any}
-            timeRemaining={liveClassTimeRemaining}
-            setTimeRemaining={setLiveClassTimeRemaining}
-            isActive={liveClassIsActive}
-            setIsActive={setLiveClassIsActive}
-            syncChannel={syncChannelRef.current}
-            addToast={addToast}
-          />
-
-          {/* 4. Center Main Column: Interactive Canvas, Whiteboard, and Submissions */}
-          <ClassroomCanvasArea
-            currentTab={middleTab}
-            onTabChange={setMiddleTab}
-            lang={lang as any}
-            isLiveBroadcasterConnected={true}
-            studentErrorCount={studentErrors.length}
-            onOpenErrorCenter={() => {
-              errorStore.getState().setActiveTab('student');
-              errorStore.getState().setIsErrorCenterOpen(true);
-            }}
-            onOpenAttributionTool={() => setIsCanvasAttributionOpen(true)}
-            submissionsCount={attempts.length}
-            showDemoTaskCard={true}
-          >
-            {middleTab === 'whiteboard' ? (
-              <div className="w-full h-full relative flex flex-col">
-                <LazyWhiteboard
-                  lessonId={selectedLesson}
-                  userRole={'teacher'}
-                  isEditMode={false}
-                  broadcastFullscreen
-                  fullscreenBroadcastClassId={liveClassSelectedClassId}
-                  onFullscreenSync={(elId: string | null) => {
-                    setLiveClassFullscreenElementId(elId);
-                    syncChannelRef.current?.broadcastFullscreen(elId, selectedLesson || undefined);
-                  }}
-                  elements={elements}
-                  activeSegmentId={activeSegmentId}
-                  onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
-                  onElementAdd={async (type: string, data: any) => {
-                    await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ type, data }),
-                    });
-                    fetchElements(selectedLesson);
-                  }}
-                  onElementUpdate={async (elementId: string, data: any) => {
-                    await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ data }),
-                    });
-                    fetchElements(selectedLesson);
-                  }}
-                  onElementDelete={async (elementId: string) => {
-                    await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                      method: 'DELETE',
-                    });
-                    fetchElements(selectedLesson);
-                  }}
-                  onRefresh={() => fetchElements(selectedLesson)}
-                />
+        /* classroomStage === 'IN_CLASS_TEACHING' - Whiteboard ONLY rendered here! */
+        <div className="flex-1 flex overflow-hidden min-h-0 bg-surface-secondary/30">
+        {/* Left Column: Timeline Control */}
+        {!isLeftSidebarCollapsed && (
+          <div className="w-[220px] shrink-0 bg-surface p-3.5 border-r border-theme flex flex-col gap-4 overflow-y-auto">
+            <div>
+              <div className="flex items-center justify-between mb-2 select-none">
+                <h3 className="text-xs font-black uppercase text-muted tracking-wider">
+                  {lang === 'zh' ? '教学步骤与时间管理' : 'Lesson Segments & Phases'}
+                </h3>
+                <button
+                  onClick={() => setIsLeftSidebarCollapsed(true)}
+                  className="p-1 rounded bg-surface-secondary hover:bg-surface border border-theme text-muted hover:text-main transition-colors cursor-pointer"
+                  title={lang === 'zh' ? '折叠导航栏' : 'Collapse Sidebar'}
+                >
+                  <ChevronLeft size={10} />
+                </button>
               </div>
-            ) : middleTab === 'submissions' ? (
-              <div className="flex-grow flex-1 min-h-0 w-full h-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col p-4">
-                {/* Submissions list view */}
-                <div className="flex justify-between items-center mb-4 gap-3 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-main">
-                      {lang === 'zh' ? '学生互动提交数据列表' : 'Student Submissions'}
-                    </span>
-                    {attempts.length > 0 && (
-                      <span className="text-xs bg-primary-theme/10 text-primary-theme px-2 py-0.5 rounded-full border border-primary-theme/20 font-bold">
-                        {displayAttempts.length} {lang === 'zh' ? '条记录' : 'records'}
-                        {displayAttempts.length !== attempts.length && (
-                          <span className="ml-1 font-normal opacity-70">/ {attempts.length}</span>
-                        )}
-                      </span>
-                    )}
-                  </div>
 
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {/* Search */}
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder={lang === 'zh' ? '搜索学生或课件...' : 'Search student or courseware...'}
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="bg-surface border border-theme rounded-lg text-xs pl-8 pr-3 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none w-44 transition-all"
-                      />
-                      <Search size={12} className="absolute left-2.5 top-2.5 text-muted" />
-                    </div>
+              {/* Persistent Classroom Countdown Timer Widget */}
+              <ClassroomCountdownWidget
+                lessonId={selectedLesson}
+                lang={lang as any}
+                syncChannel={syncChannelRef.current}
+                onlineStudentCount={onlineStudentIds?.length || liveClassAcknowledgedMap.size || 0}
+                onTimeRemainingChange={(timeRemaining, isRunning) => {
+                  setLiveClassTimeRemaining(timeRemaining);
+                  setLiveClassIsActive(isRunning);
+                }}
+              />
+            </div>
 
-                    {/* Filter */}
-                    <select
-                      value={submissionFilter}
-                      onChange={(e) => setSubmissionFilter(e.target.value as any)}
-                      className="bg-surface border border-theme rounded-lg text-xs px-2.5 py-1.5 text-main outline-none focus:ring-1 focus:ring-primary-theme cursor-pointer"
-                    >
-                      <option value="all">{lang === 'zh' ? '全部状态' : 'All Status'}</option>
-                      <option value="submitted">{lang === 'zh' ? '已提交' : 'Submitted'}</option>
-                      <option value="started">{lang === 'zh' ? '进行中' : 'In Progress'}</option>
-                    </select>
+            <div className="flex-1 flex flex-col gap-2 min-h-0">
+              <h4 className="text-xs font-black uppercase text-muted tracking-wider select-none">
+                {lang === 'zh' ? '教学环节进度表' : 'Timeline Segments'}
+              </h4>
 
-                    {/* Refresh */}
+              {selectedLesson ? (
+                <div className="space-y-2 overflow-y-auto flex-1 pr-1.5 scrollbar-thin">
+                  {timelineSegments.map((seg, idx) => {
+                    const isActive = activeSegmentId === seg.id;
+                    return (
+                      <div
+                        key={seg.id}
+                        className={`p-2.5 rounded-xl border transition-all flex flex-col gap-1.5 ${
+                          isActive
+                            ? 'bg-primary-theme/10 border-primary-theme/40 shadow-sm'
+                            : 'bg-surface border-theme hover:bg-surface-secondary'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <span className={`text-xs font-bold ${isActive ? 'text-primary-theme' : 'text-main'}`}>
+                            {idx + 1}. {seg.title}
+                          </span>
+                          <span className="text-xs font-mono px-1 py-0.5 rounded bg-surface-secondary text-muted border border-theme">
+                            {seg.duration}
+                          </span>
+                        </div>
+                        <div
+                          className={`text-xs line-clamp-2 leading-relaxed ${isActive ? 'text-primary-theme' : 'text-muted'}`}
+                        >
+                          {seg.notes || '无步骤描述备注信息。'}
+                        </div>
+                        <button
+                          onClick={() => handleStartSegment(seg)}
+                          className={`w-full py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                            isActive
+                              ? 'bg-primary-theme text-white hover:bg-primary-theme-hover shadow-sm'
+                              : 'bg-surface-secondary text-muted hover:text-main hover:bg-surface border border-theme'
+                          }`}
+                        >
+                          <Presentation size={10} />
+                          <span>
+                            {isActive
+                              ? lang === 'zh'
+                                ? '同步演示中'
+                                : 'Broadcasting'
+                              : lang === 'zh'
+                                ? '广播此环节'
+                                : 'Broadcast Step'}
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-xs text-muted italic py-4 text-center">
+                  {lang === 'zh' ? '请选择一个课节加载流程表' : 'Select a lesson to view schedule.'}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Middle Column: Live Interactive Whiteboard & Plugins Tool Shelf */}
+        <div className="flex-1 flex flex-col min-w-0 bg-surface-secondary/40 p-3 gap-3 relative">
+          {selectedLesson ? (
+            <div className="w-full h-full relative flex flex-col min-h-0">
+              <div className="flex justify-between items-center px-1.5 py-1 select-none text-muted text-xs uppercase font-extrabold tracking-wide shrink-0 mb-1">
+                <div className="flex items-center gap-3">
+                  {isLeftSidebarCollapsed && (
                     <button
-                      onClick={() => fetchAttempts()}
-                      className="p-1.5 text-muted hover:text-main hover:bg-surface-secondary rounded-lg border border-theme transition-colors cursor-pointer"
-                      title={lang === 'zh' ? '刷新列表' : 'Refresh'}
+                      onClick={() => setIsLeftSidebarCollapsed(false)}
+                      className="p-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-primary-theme hover:text-primary-theme-hover transition-colors cursor-pointer mr-1.5 flex items-center gap-1 shadow-sm"
+                      title={lang === 'zh' ? '展开环节大纲' : 'Expand Sidebar'}
                     >
-                      <RefreshCw size={13} className={loadingAttempts ? 'animate-spin text-primary-theme' : ''} />
+                      <ChevronRight size={10} />
+                      <span className="text-xs font-bold tracking-wider">{lang === 'zh' ? '展开' : 'Expand'}</span>
+                    </button>
+                  )}
+                  <div className="bg-surface-secondary p-0.5 rounded-lg flex items-center gap-1 border border-theme">
+                    <button
+                      onClick={() => setMiddleTab('whiteboard')}
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                        middleTab === 'whiteboard'
+                          ? 'bg-surface text-primary-theme shadow-sm'
+                          : 'text-muted hover:text-main'
+                      }`}
+                    >
+                      {lang === 'zh' ? '💻 演示白板' : '💻 Whiteboard'}
+                    </button>
+                    <button
+                      onClick={() => setMiddleTab('submissions')}
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                        middleTab === 'submissions'
+                          ? 'bg-surface text-primary-theme shadow-sm'
+                          : 'text-muted hover:text-main'
+                      }`}
+                    >
+                      {lang === 'zh' ? '📊 学生提交数据' : '📊 Student Submissions'}
+                    </button>
+                    <button
+                      id="teacher_assignment_eval_tab_btn"
+                      onClick={() => setMiddleTab('assignment')}
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                        middleTab === 'assignment'
+                          ? 'bg-surface text-primary-theme shadow-sm'
+                          : 'text-muted hover:text-main'
+                      }`}
+                    >
+                      {lang === 'zh' ? '🎓 作业成绩评定' : '🎓 Assignment Grades'}
+                    </button>
+                    <button
+                      id="teacher_top_performers_tab_btn"
+                      data-testid="teacher-top-performers-tab-btn"
+                      onClick={() => setMiddleTab('top_performers')}
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        middleTab === 'top_performers'
+                          ? 'bg-surface text-amber-500 shadow-sm'
+                          : 'text-muted hover:text-main'
+                      }`}
+                    >
+                      <Trophy size={12} className="text-amber-500" />
+                      <span>{lang === 'zh' ? '🏆 随堂测验榜' : '🏆 Top Performers'}</span>
                     </button>
                   </div>
                 </div>
-
-                <div className="overflow-y-auto flex-1 border border-theme rounded-xl bg-surface-secondary/20">
-                  {loadingAttempts ? (
-                    <div className="py-12 flex flex-col items-center justify-center text-muted gap-2">
-                      <RefreshCw size={24} className="animate-spin text-primary-theme" />
-                      <span className="text-xs">{lang === 'zh' ? '正在加载学生提交数据...' : 'Loading submissions...'}</span>
-                    </div>
-                  ) : displayAttempts.length === 0 ? (
-                    <div className="py-12 text-center text-xs text-muted italic">
-                      {lang === 'zh' ? '暂无匹配的提交记录。' : 'No matching submissions found.'}
-                    </div>
-                  ) : (
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead className="bg-surface-secondary/60 text-muted uppercase font-bold sticky top-0 border-b border-theme z-10">
-                        <tr>
-                          <th className="p-3">{lang === 'zh' ? '学生姓名' : 'Student'}</th>
-                          <th className="p-3">{lang === 'zh' ? '课件交互卡片' : 'Courseware'}</th>
-                          <th className="p-3 text-center">{lang === 'zh' ? '状态' : 'Status'}</th>
-                          <th className="p-3 text-center">{lang === 'zh' ? '得分' : 'Score'}</th>
-                          <th className="p-3 text-center">{lang === 'zh' ? '完成进度' : 'Progress'}</th>
-                          <th className="p-3 text-right">{lang === 'zh' ? '操作' : 'Actions'}</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-theme">
-                        {displayAttempts.map((a) => {
-                          const FINISHED_STATUSES = ['completed', 'submitted', 'finished'];
-                          const isFinished = FINISHED_STATUSES.includes(a.status);
-                          return (
-                            <tr key={a.attemptId} className="hover:bg-surface-secondary/50 transition-colors">
-                              <td className="p-3 font-semibold text-main">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-6 h-6 rounded-full bg-primary-theme/10 text-primary-theme flex items-center justify-center text-xs font-bold shrink-0">
-                                    {a.studentName?.slice(0, 1) || 'S'}
-                                  </div>
-                                  <span>{a.studentName}</span>
-                                </div>
-                              </td>
-                              <td className="p-3 text-muted max-w-[180px] truncate" title={a.coursewareName}>
-                                {a.coursewareName}
-                              </td>
-                              <td className="p-3 text-center">
-                                <span
-                                  className={`px-2 py-0.5 rounded-full border text-xs font-bold ${
-                                    isFinished
-                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300'
-                                      : 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-950/40 dark:text-blue-300 animate-pulse'
-                                  }`}
-                                >
-                                  {isFinished
-                                    ? lang === 'zh'
-                                      ? '已提交'
-                                      : 'Finished'
-                                    : lang === 'zh'
-                                      ? '进行中'
-                                      : 'Running'}
-                                </span>
-                              </td>
-                              <td className="p-3 text-center font-bold font-mono">
-                                {a.score !== null ? (
-                                  <span className="text-primary-theme bg-primary-theme/10 border border-primary-theme/20 px-1.5 py-0.5 rounded-md">
-                                    {a.score}分
-                                  </span>
-                                ) : (
-                                  <span className="text-muted font-medium">-</span>
-                                )}
-                              </td>
-                              <td className="p-3 text-center font-semibold font-mono">
-                                {a.completion !== null ? `${Math.round(a.completion * 100)}%` : '0%'}
-                              </td>
-                              <td className="p-3 text-right">
-                                <div className="flex justify-end gap-2">
-                                  <button
-                                    onClick={() => handleViewRaw(a)}
-                                    className="p-1 text-muted hover:text-primary-theme hover:bg-surface-secondary border border-transparent hover:border-theme rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs"
-                                    title={lang === 'zh' ? '查看提交轨迹事件数据' : 'View Raw Data'}
-                                  >
-                                    <Eye size={12} />
-                                    <span>{lang === 'zh' ? '轨迹' : 'Events'}</span>
-                                  </button>
-
-                                  {a.isPromoted > 0 ? (
-                                    <span className="px-2 py-1 text-emerald-650 font-bold text-xs flex items-center gap-0.5 bg-emerald-50/50 rounded-lg border border-emerald-100">
-                                      <Check size={11} />
-                                      {lang === 'zh' ? '已归档' : 'Saved'}
-                                    </span>
-                                  ) : (
-                                    <button
-                                      onClick={() => handlePromoteAttempt(a.attemptId)}
-                                      disabled={!isFinished}
-                                      className={`px-2 py-1 text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border ${
-                                        isFinished
-                                          ? 'bg-primary-theme hover:bg-primary-theme-hover text-white border-primary-theme'
-                                          : 'bg-surface-secondary text-muted border-theme cursor-not-allowed opacity-60'
-                                      }`}
-                                      title={
-                                        lang === 'zh'
-                                          ? '将分数和进度作为随堂学习数据存入数据库，记入学期成绩'
-                                          : 'Save to DB & Semester grade'
-                                      }
-                                    >
-                                      <Database size={11} />
-                                      <span>{lang === 'zh' ? '录入成绩' : 'Record'}</span>
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                <div className="flex items-center gap-2">
+                  {studentErrors.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        errorStore.getState().setActiveTab('student');
+                        errorStore.getState().setIsErrorCenterOpen(true);
+                      }}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 transition-colors cursor-pointer mr-1"
+                      title={lang === 'zh' ? '点击查看学生端异常诊断日志' : 'View Student Client Errors'}
+                    >
+                      <AlertTriangle size={12} className="text-rose-500 animate-pulse" />
+                      <span>{lang === 'zh' ? `学生端异常 (${studentErrors.length})` : `Student Errors (${studentErrors.length})`}</span>
+                    </button>
                   )}
+                  <span className="text-primary-theme font-mono tracking-widest animate-pulse flex items-center gap-1">
+                    <Activity size={10} /> Live Broadcaster Connected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleStageChange('WRAP_UP_EXIT_TICKET')}
+                    className="ml-2 px-3 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer hover:shadow-md transition-all active:scale-95"
+                  >
+                    <span>{lang === 'zh' ? '完成授课，进入课后' : 'Finish Teaching → Post-Class'}</span>
+                    <ChevronRight size={12} />
+                  </button>
                 </div>
               </div>
-            ) : middleTab === 'top_performers' ? (
-              <div className="flex-grow flex-1 min-h-0 w-full h-full relative rounded-xl overflow-y-auto border border-theme shadow-md bg-surface flex flex-col p-4">
-                <TopPerformersWidget
-                  lang={lang as any}
-                  lessonId={selectedLesson}
-                  classId={liveClassSelectedClassId}
-                  lessons={lessons}
-                  classes={classes}
-                  students={students}
+
+
+              {middleTab === 'whiteboard' ? (
+                <>
+                  {/* Whiteboard canvas wrapper */}
+                  <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col">
+                    <LazyWhiteboard
+                      lessonId={selectedLesson}
+                      userRole={'teacher'}
+                      isEditMode={false}
+                      broadcastFullscreen
+                      fullscreenBroadcastClassId={liveClassSelectedClassId}
+                      onFullscreenSync={(elId: string | null) => {
+                        setLiveClassFullscreenElementId(elId);
+                        syncChannelRef.current?.broadcastFullscreen(elId, selectedLesson || undefined);
+                      }}
+                      elements={elements}
+                      activeSegmentId={activeSegmentId}
+                      onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
+                      onElementAdd={async (type: string, data: any) => {
+                        await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ type, data }),
+                        });
+                        fetchElements(selectedLesson);
+                      }}
+                      onElementUpdate={async (elementId: string, data: any) => {
+                        await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ data }),
+                        });
+                        fetchElements(selectedLesson);
+                      }}
+                      onElementDelete={async (elementId: string) => {
+                        await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
+                          method: 'DELETE',
+                        });
+                        fetchElements(selectedLesson);
+                      }}
+                      onRefresh={() => fetchElements(selectedLesson)}
+                    />
+                  </div>
+
+                  {/* Classroom Interactive Tool Shelf (Extensible Tools Panel) */}
+                  <div className="mt-3 bg-surface border border-theme rounded-xl p-3 shadow-sm shrink-0 flex flex-col gap-2 relative z-30">
+                    <div className="flex items-center justify-between text-xs uppercase font-black text-muted tracking-wider select-none">
+                      <span className="flex items-center gap-1.5 text-primary-theme">
+                        <Shuffle size={12} className="text-primary-theme animate-pulse" />
+                        <span>{lang === 'zh' ? '互动工具 (插件扩展)' : 'Classroom Interactive Tools'}</span>
+                      </span>
+                      <span className="text-xs text-muted font-mono">Plugins: {classroomTools.length} Active</span>
+                    </div>
+
+                    {classroomTools.length > 0 ? (
+                      <div className="flex gap-2.5 overflow-x-auto py-0.5 pr-2 scrollbar-thin">
+                        {classroomTools.map((tool) => (
+                          <button
+                            key={tool.id}
+                            onClick={() => handleExecuteTool(tool)}
+                            disabled={!selectedLesson}
+                            className="p-2 bg-surface-secondary hover:bg-surface border border-theme hover:border-primary-theme/50 rounded-xl text-left transition-all active:scale-[0.98] disabled:opacity-40 flex items-center gap-2.5 w-44 shrink-0 group cursor-pointer"
+                            title={tool.description}
+                          >
+                            <div className="p-1.5 bg-primary-theme/10 text-primary-theme group-hover:bg-primary-theme/20 rounded-lg border border-primary-theme/20 shrink-0 transition-colors">
+                              <DynamicIcon name={tool.icon} size={14} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-bold text-main truncate">{tool.name}</div>
+                              <div className="text-xs text-muted truncate mt-0.5">{tool.description}</div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-2 text-xs text-muted italic">
+                        {lang === 'zh' ? '暂无可用的互动工具。请在应用商店启用插件。' : 'No plugin tools loaded.'}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : middleTab === 'submissions' ? (
+                <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col p-4">
+                  {/* Submissions list view */}
+                  <div className="flex justify-between items-center mb-4 gap-3 shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-main">
+                        {lang === 'zh' ? '学生互动提交数据列表' : 'Student Submissions'}
+                      </span>
+                      {attempts.length > 0 && (
+                        <span
+                          className="text-xs bg-primary-theme/10 text-primary-theme px-2 py-0.5 rounded-full border border-primary-theme/20 font-bold"
+                          title={
+                            displayAttempts.length === attempts.length
+                              ? undefined
+                              : lang === 'zh'
+                                ? `已按所选班级/筛选条件过滤，全部记录共 ${attempts.length} 条`
+                                : `Filtered by the selected class/filters. ${attempts.length} records in total.`
+                          }
+                        >
+                          {displayAttempts.length} {lang === 'zh' ? '条记录' : 'records'}
+                          {displayAttempts.length !== attempts.length && (
+                            <span className="ml-1 font-normal opacity-70">/ {attempts.length}</span>
+                          )}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Search */}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder={lang === 'zh' ? '搜索学生或课件...' : 'Search student or courseware...'}
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="bg-surface border border-theme rounded-lg text-xs pl-8 pr-3 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none w-44 transition-all"
+                        />
+                        <Search size={12} className="absolute left-2.5 top-2.5 text-muted" />
+                      </div>
+
+                      {/* Filter */}
+                      <select
+                        value={submissionFilter}
+                        onChange={(e: any) => setSubmissionFilter(e.target.value)}
+                        className="bg-surface border border-theme rounded-lg text-xs px-3 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none cursor-pointer hover:bg-surface-secondary transition-colors"
+                      >
+                        <option value="all">{lang === 'zh' ? '全部状态' : 'All Status'}</option>
+                        <option value="submitted">{lang === 'zh' ? '已提交/完成' : 'Submitted/Finished'}</option>
+                        <option value="started">{lang === 'zh' ? '进行中' : 'In Progress'}</option>
+                      </select>
+
+                      {/* Refresh */}
+                      <button
+                        onClick={fetchAttempts}
+                        disabled={loadingAttempts}
+                        className="p-1.5 bg-surface hover:bg-surface-secondary border border-theme rounded-lg text-muted hover:text-main transition-colors cursor-pointer flex items-center justify-center shadow-sm disabled:opacity-50"
+                        title={lang === 'zh' ? '刷新数据' : 'Refresh'}
+                      >
+                        <RefreshCw size={12} className={loadingAttempts ? 'animate-spin' : ''} />
+                      </button>
+
+                      {/* Jump to Top Performers */}
+                      <button
+                        onClick={() => setMiddleTab('top_performers')}
+                        className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                        title={lang === 'zh' ? '查看随堂测验 Top 5 榜单' : 'View Top 5 Performers'}
+                      >
+                        <Trophy size={12} className="text-amber-500" />
+                        <span>{lang === 'zh' ? '优秀榜' : 'Top 5'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Table area */}
+                  <div className="flex-1 overflow-y-auto border border-theme rounded-xl scrollbar-thin">
+                    {loadingAttempts ? (
+                      <div className="h-full flex flex-col items-center justify-center text-muted gap-2">
+                        <RefreshCw size={24} className="animate-spin text-primary-theme mb-2" />
+                        <span className="text-xs">
+                          {lang === 'zh' ? '正在加载学生提交数据...' : 'Loading submissions...'}
+                        </span>
+                      </div>
+                    ) : (
+                      (() => {
+                        if (displayAttempts.length === 0) {
+                          return (
+                            <div className="h-full flex flex-col items-center justify-center py-12 text-muted gap-2">
+                              <FileText size={32} className="text-muted/60" />
+                              <span className="text-xs">
+                                {lang === 'zh' ? '暂无匹配的提交数据。' : 'No matching submissions found.'}
+                              </span>
+                              {!liveClassSelectedClassId && (
+                                <span className="text-xs text-muted italic">
+                                  {lang === 'zh'
+                                    ? '提示：请在顶部选择一个班级进行筛选。'
+                                    : 'Tip: Select a class at the top to filter.'}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <table className="w-full border-collapse text-left text-xs text-main">
+                            <thead>
+                              <tr className="bg-surface-secondary border-b border-theme font-bold text-muted select-none">
+                                <th className="p-3">{lang === 'zh' ? '学生姓名' : 'Student Name'}</th>
+                                <th className="p-3">{lang === 'zh' ? '交互课件' : 'Courseware'}</th>
+                                <th className="p-3">{lang === 'zh' ? '状态' : 'Status'}</th>
+                                <th className="p-3 text-center">{lang === 'zh' ? '成绩' : 'Score'}</th>
+                                <th className="p-3 text-center">{lang === 'zh' ? '完成度' : 'Completion'}</th>
+                                <th className="p-3 text-right">{lang === 'zh' ? '操作' : 'Actions'}</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border-theme">
+                              {displayAttempts.map((a) => {
+                                const isFinished = a.status === 'finished' || a.status === 'submitted';
+                                const formattedTime = a.started_at
+                                  ? new Date(a.started_at).toLocaleTimeString([], {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })
+                                  : 'N/A';
+
+                                return (
+                                  <tr
+                                    key={a.attemptId}
+                                    className="hover:bg-surface-secondary/50 transition-colors group"
+                                  >
+                                    <td className="p-3">
+                                      <div className="font-semibold text-main">{a.studentName}</div>
+                                      <div className="text-xs text-muted mt-0.5">
+                                        {lang === 'zh' ? '时间' : 'Time'}: {formattedTime}
+                                      </div>
+                                    </td>
+                                    <td
+                                      className="p-3 font-medium text-main max-w-[150px] truncate"
+                                      title={a.coursewareName}
+                                    >
+                                      {a.coursewareName}
+                                    </td>
+                                    <td className="p-3">
+                                      <span
+                                        className={`px-2 py-0.5 rounded-full border text-xs font-bold ${
+                                          isFinished
+                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                            : 'bg-blue-50 text-blue-700 border-blue-100 animate-pulse'
+                                        }`}
+                                      >
+                                        {isFinished
+                                          ? lang === 'zh'
+                                            ? '已提交'
+                                            : 'Finished'
+                                          : lang === 'zh'
+                                            ? '进行中'
+                                            : 'Running'}
+                                      </span>
+                                    </td>
+                                    <td className="p-3 text-center font-bold font-mono">
+                                      {a.score !== null ? (
+                                        <span className="text-primary-theme bg-primary-theme/10 border border-primary-theme/20 px-1.5 py-0.5 rounded-md">
+                                          {a.score}分
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted font-medium">-</span>
+                                      )}
+                                    </td>
+                                    <td className="p-3 text-center font-semibold font-mono">
+                                      {a.completion !== null ? `${Math.round(a.completion * 100)}%` : '0%'}
+                                    </td>
+                                    <td className="p-3 text-right">
+                                      <div className="flex justify-end gap-2">
+                                        <button
+                                          onClick={() => handleViewRaw(a)}
+                                          className="p-1 text-muted hover:text-primary-theme hover:bg-surface-secondary border border-transparent hover:border-theme rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                                          title={lang === 'zh' ? '查看提交轨迹事件数据' : 'View Raw Data'}
+                                        >
+                                          <Eye size={12} />
+                                          <span>{lang === 'zh' ? '轨迹' : 'Events'}</span>
+                                        </button>
+
+                                        {a.isPromoted > 0 ? (
+                                          <span className="px-2 py-1 text-emerald-650 font-bold text-xs flex items-center gap-0.5 bg-emerald-50/50 rounded-lg border border-emerald-100">
+                                            <Check size={11} />
+                                            {lang === 'zh' ? '已归档' : 'Saved'}
+                                          </span>
+                                        ) : (
+                                          <button
+                                            onClick={() => handlePromoteAttempt(a.attemptId)}
+                                            disabled={!isFinished}
+                                            className={`px-2 py-1 text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border ${
+                                              isFinished
+                                                ? 'bg-primary-theme hover:bg-primary-theme-hover text-white border-primary-theme'
+                                                : 'bg-surface-secondary text-muted border-theme cursor-not-allowed opacity-60'
+                                            }`}
+                                            title={
+                                              lang === 'zh'
+                                                ? '将分数和进度作为随堂学习数据存入数据库，记入学期成绩'
+                                                : 'Save to DB & Semester grade'
+                                            }
+                                          >
+                                            <Database size={11} />
+                                            <span>{lang === 'zh' ? '录入成绩' : 'Record'}</span>
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        );
+                      })()
+                    )}
+                  </div>
+                </div>
+              ) : middleTab === 'top_performers' ? (
+                <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-y-auto border border-theme shadow-md bg-surface flex flex-col p-4">
+                  <TopPerformersWidget
+                    lang={lang as any}
+                    lessonId={selectedLesson}
+                    classId={liveClassSelectedClassId}
+                    lessons={lessons}
+                    classes={classes}
+                    students={students}
+                    addToast={addToast}
+                  />
+                </div>
+              ) : (
+                <TeacherAssignmentGradePanel
+                  lessonId={selectedLesson || ''}
+                  lang={lang === 'zh' ? 'zh' : 'en'}
                   addToast={addToast}
                 />
+              )}
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-455 gap-2.5 select-none">
+              <Presentation size={38} className="text-slate-300 animate-bounce" style={{ animationDuration: '2.5s' }} />
+              <div className="text-sm font-bold text-slate-655">
+                {lang === 'zh' ? '请在顶部栏选择一个授课课节' : 'Please select a lesson to start teaching'}
+              </div>
+              <p className="text-xs text-slate-400">白板及环节控制面板将在课节载入后自动生成</p>
+            </div>
+          )}
+        </div>
+
+        {/* Right Column: Students Status & Feedback Log */}
+        <div className="w-[260px] shrink-0 bg-surface p-3.5 border-l border-theme flex flex-col gap-3.5 overflow-hidden">
+          {/* Student attendance grid */}
+          <div className="flex-1 flex flex-col min-h-0 gap-2">
+            <h3 className="text-xs font-black uppercase text-muted tracking-wider select-none flex justify-between items-center shrink-0">
+              <span className="flex items-center gap-1">
+                <span>{lang === 'zh' ? '学生专注力监控' : 'Student Status Console'}</span>
+                {liveClassSelectedClassId && (
+                  <button
+                    onClick={handleRandomPick}
+                    disabled={students.length === 0 || isDrawing}
+                    className="ml-2 text-xs font-bold bg-primary-theme/10 text-primary-theme border border-primary-theme/20 px-1.5 py-0.5 rounded hover:bg-primary-theme/20 transition-colors flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+                    title={lang === 'zh' ? '随机抽取一名学生提问' : 'Pick a student randomly'}
+                  >
+                    <Shuffle size={8.5} className={isDrawing ? 'animate-spin' : ''} />
+                    <span>{lang === 'zh' ? '随机抽问' : 'Pick Student'}</span>
+                  </button>
+                )}
+              </span>
+              <span className="text-xs bg-surface-secondary border border-theme text-muted font-mono px-1.5 py-0.5 rounded-md">
+                {students.filter((s) => s.locked_lesson_id === selectedLesson).length} / {students.length} Locked
+              </span>
+            </h3>
+
+            {liveClassSelectedClassId ? (
+              <div className="overflow-y-auto flex-1 pr-1 grid grid-cols-3 gap-2 justify-items-center auto-rows-max scrollbar-thin py-2">
+                {students.map((st) => {
+                  const isStudentLocked = st.locked_lesson_id === selectedLesson;
+                  const isCheckedIn = liveClassAcknowledgedMap.get(st.id);
+                  const isOnline = onlineStudentIds.includes(st.id);
+                  const activeLessonId = activeStudentLessons[st.id];
+                  const isInLesson = activeLessonId === selectedLesson;
+
+                  const studentProg = liveClassStudentProgress.find((p) => p.student_id === st.id);
+                  const progPercent = studentProg?.progress_percent ?? 0;
+                  const teacherActiveIdx = activeSegmentId
+                    ? timelineSegments.findIndex((s) => s.id === activeSegmentId)
+                    : -1;
+                  const expectedProgress =
+                    timelineSegments.length > 0
+                      ? Math.round(((teacherActiveIdx + 1) / timelineSegments.length) * 100)
+                      : 0;
+                  const isBehind = teacherActiveIdx >= 0 && progPercent < expectedProgress;
+
+                  const isSelectedDraw = selectedDrawStudentIds.includes(st.id);
+                  const isActiveDraw = activeDrawStudentId === st.id;
+
+                  // SVG ring calculation
+                  const radius = 22;
+                  const strokeWidth = 3;
+                  const circumference = 2 * Math.PI * radius; // 138.23
+                  const strokeDashoffset = circumference - (progPercent / 100) * circumference;
+
+                  // Circular color system
+                  let ringColor = 'stroke-indigo-650'; // normal progress / in class
+                  if (isSelectedDraw) {
+                    ringColor = 'stroke-amber-500 stroke-[3.5px]'; // jackpot winner!
+                  } else if (isActiveDraw) {
+                    ringColor = 'stroke-indigo-500 stroke-[3.5px] animate-pulse'; // flickering drawer
+                  } else if (!isOnline) {
+                    ringColor = 'stroke-slate-200'; // offline
+                  } else if (isStudentLocked) {
+                    ringColor = 'stroke-rose-500 animate-pulse'; // focus locked
+                  } else if (isBehind) {
+                    ringColor = 'stroke-amber-500 animate-pulse'; // behind progress
+                  } else if (!isInLesson) {
+                    ringColor = 'stroke-blue-400'; // not entered lesson but online
+                  } else if (progPercent === 100) {
+                    ringColor = 'stroke-emerald-500'; // completed
+                  }
+
+                  const stErrors = studentErrors.filter((e) => e.studentId === st.id);
+
+                  return (
+                    <div
+                      key={st.id}
+                      onMouseEnter={() => setHoveredStudentId(st.id)}
+                      onMouseLeave={() => setHoveredStudentId(null)}
+                      className={`group relative flex flex-col items-center justify-center p-1 rounded-xl transition-all cursor-default ${
+                        isSelectedDraw ? 'z-20 duration-300' : isActiveDraw ? 'z-20' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      {/* Main Circular Widget */}
+                      <div
+                        className={`relative w-14 h-14 flex items-center justify-center rounded-full transition-all duration-300 ${
+                          isSelectedDraw
+                            ? 'shadow-[0_0_15px_#f59e0b] scale-110 z-10 bg-amber-50 ring-2 ring-amber-400 ring-offset-1'
+                            : isActiveDraw
+                              ? 'shadow-[0_0_10px_#6366f1] scale-105 z-10 bg-indigo-50 ring-1 ring-indigo-400'
+                              : ''
+                        }`}
+                      >
+                        {/* Student Exception Alert Badge */}
+                        {stErrors.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              errorStore.getState().setActiveTab('student');
+                              errorStore.getState().setIsErrorCenterOpen(true);
+                            }}
+                            className="absolute -top-1 -right-1 z-30 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-md cursor-pointer hover:scale-125 transition-transform"
+                            title={`该学生端捕获到 ${stErrors.length} 处异常: ${stErrors[0].title || stErrors[0].message}`}
+                          >
+                            <AlertTriangle size={10} className="animate-pulse" />
+                          </button>
+                        )}
+
+                        {/* Golden glow aura for selected draw */}
+                        {isSelectedDraw && (
+                          <div
+                            className="absolute inset-0 rounded-full bg-amber-400/30 animate-ping"
+                            style={{ animationDuration: '2s' }}
+                          />
+                        )}
+
+
+                        {/* Circular Progress Ring */}
+                        <svg className="absolute w-full h-full transform -rotate-90" viewBox="0 0 50 50">
+                          {/* Inner circle background */}
+                          <circle
+                            cx="25"
+                            cy="25"
+                            r={radius}
+                            className="stroke-slate-100 fill-white"
+                            strokeWidth={strokeWidth}
+                          />
+                          {/* Outer circle progress indicator */}
+                          <circle
+                            cx="25"
+                            cy="25"
+                            r={radius}
+                            className={`fill-transparent transition-all duration-300 ${ringColor}`}
+                            strokeWidth={strokeWidth}
+                            strokeDasharray={circumference}
+                            strokeDashoffset={strokeDashoffset}
+                            strokeLinecap="round"
+                          />
+                        </svg>
+
+                        {/* Name (Static) or Controls (Hover) */}
+                        <div
+                          className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center overflow-hidden transition-colors ${
+                            isSelectedDraw ? 'bg-amber-100/90' : ''
+                          }`}
+                        >
+                          {/* Name view: Visible by default, hidden on hover */}
+                          <span
+                            className={`text-xs font-bold tracking-tight truncate max-w-[34px] group-hover:scale-0 group-hover:opacity-0 transition-all duration-200 select-none ${
+                              isSelectedDraw
+                                ? 'text-amber-900 font-extrabold'
+                                : !isOnline
+                                  ? 'text-slate-400'
+                                  : 'text-slate-700'
+                            }`}
+                          >
+                            {st.name}
+                          </span>
+
+                          {/* Hover action overlay */}
+                          <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 bg-white/95 rounded-full shadow-inner">
+                            {/* Alert / Warning button */}
+                            {selectedLesson && onPingStudent && (
+                              <button
+                                onClick={() => {
+                                  const msg =
+                                    lang === 'zh'
+                                      ? `⚠️ 学习进度预警：您当前的进度 (${progPercent}%) 落后于老师的讲解进度。请专注课堂，跟上讲解！`
+                                      : `⚠️ Progress Alert: Your progress (${progPercent}%) is behind.`;
+                                  onPingStudent(st.id, msg);
+                                  addToast(
+                                    lang === 'zh' ? '🔔 已发送提醒' : '🔔 Alert Sent',
+                                    `已向学生 ${st.name} 发送进度提醒。`,
+                                    'success',
+                                  );
+                                }}
+                                className={`p-0.5 rounded-md hover:bg-slate-105 transition-colors shrink-0 cursor-pointer ${
+                                  isBehind
+                                    ? 'text-amber-500 hover:text-amber-600 animate-pulse'
+                                    : 'text-slate-400 hover:text-slate-650'
+                                }`}
+                                title="提醒"
+                              >
+                                <Send size={10} />
+                              </button>
+                            )}
+
+                            {/* Focus Lock controller */}
+                            <button
+                              onClick={() => handleToggleStudentLock(st.id, st.locked_lesson_id)}
+                              disabled={!selectedLesson}
+                              className={`p-0.5 rounded-md hover:bg-slate-105 transition-colors shrink-0 cursor-pointer ${
+                                isStudentLocked
+                                  ? 'text-rose-500 hover:text-rose-600'
+                                  : 'text-slate-400 hover:text-slate-655'
+                              }`}
+                              title={isStudentLocked ? '解锁' : '锁定'}
+                            >
+                              {isStudentLocked ? <ShieldAlert size={10} /> : <Shield size={10} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Top-Right Online/Lesson Badge Indicator or Jackpot winner target badge */}
+                        {isSelectedDraw ? (
+                          <span className="absolute -top-1.5 -right-1.5 z-20 text-xs bg-amber-500 text-white rounded-full w-4 h-4 flex items-center justify-center font-bold shadow-md animate-bounce">
+                            🎯
+                          </span>
+                        ) : (
+                          isOnline && (
+                            <span
+                              className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white shrink-0 ${
+                                isInLesson ? 'bg-emerald-500' : 'bg-blue-400'
+                              }`}
+                              title={isInLesson ? '正在上课' : '在线(但未进课堂)'}
+                            />
+                          )
+                        )}
+
+                        {/* Bottom-Right Acknowledged/Ready Indicator */}
+                        {isCheckedIn === true && !isSelectedDraw && (
+                          <span
+                            className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white bg-amber-500 shrink-0 animate-bounce"
+                            title="已确认/就位"
+                          />
+                        )}
+                      </div>
+
+                      {/* Small Progress Label or Draw Winner Label */}
+                      <span
+                        className={`text-xs mt-1 truncate max-w-[48px] select-none font-medium ${
+                          isSelectedDraw
+                            ? 'text-amber-600 font-extrabold animate-bounce'
+                            : !isOnline
+                              ? 'text-slate-350'
+                              : 'text-slate-505'
+                        }`}
+                      >
+                        {isSelectedDraw ? '🎯 抽中' : `${progPercent}%`}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <TeacherAssignmentGradePanel
-                lessonId={selectedLesson || ''}
-                lang={lang === 'zh' ? 'zh' : 'en'}
-                addToast={addToast}
-              />
+              <div className="text-xs text-slate-400 italic py-4 text-center flex-1 flex items-center justify-center">
+                {lang === 'zh' ? '请选择班级以显示学生' : 'Select class to show student monitors.'}
+              </div>
             )}
-          </ClassroomCanvasArea>
+          </div>
 
-          {/* 5. Right Column: Student Attention & Engagement Console */}
-          <ClassroomEngagementConsole
-            students={studentGaugeItems}
-            events={auditEvents}
-            onClearEvents={() => {
-              setLiveClassFeed([
-                {
-                  id: 'clear',
-                  time: new Date().toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                  }),
-                  type: 'info',
-                  message: lang === 'zh' ? '反馈流已清空。' : 'Feedback log cleared.',
-                },
-              ]);
-            }}
-            onRandomPick={handleRandomPick}
-            onPingStudent={(stId, msg) => {
-              if (onPingStudent) {
-                const st = students.find((s) => s.id === stId);
-                const prog = liveClassStudentProgress.find((p) => p.student_id === stId);
-                const pct = prog?.progress_percent ?? 0;
-                const fullMsg =
-                  msg ||
-                  (lang === 'zh'
-                    ? `⚠️ 学习进度预警：您当前的进度 (${pct}%) 落后于老师的讲解进度。请专注课堂，跟上讲解！`
-                    : `⚠️ Progress Alert: Your progress (${pct}%) is behind.`);
-                onPingStudent(stId, fullMsg);
-                addToast(
-                  lang === 'zh' ? '🔔 已发送提醒' : '🔔 Alert Sent',
-                  `已向学生 ${st?.name || stId} 发送进度提醒。`,
-                  'success',
+          {/* Hover Details / Class Summary Panel */}
+          <div className="bg-surface-secondary border border-theme rounded-xl p-3 flex flex-col gap-1.5 h-[135px] shrink-0 shadow-sm select-none justify-center">
+            {hoveredStudentId ? (
+              (() => {
+                const st = students.find((s) => s.id === hoveredStudentId);
+                if (!st) return null;
+                const studentProg = liveClassStudentProgress.find((p) => p.student_id === st.id);
+                const progPercent = studentProg?.progress_percent ?? 0;
+                const completedSegIds = (() => {
+                  if (!studentProg || !studentProg.completed_segments) return [];
+                  try {
+                    return typeof studentProg.completed_segments === 'string'
+                      ? JSON.parse(studentProg.completed_segments)
+                      : studentProg.completed_segments;
+                  } catch (e) {
+                    return [];
+                  }
+                })();
+
+                const stErrors = studentErrors.filter((e) => e.studentId === st.id);
+
+                return (
+                  <div className="flex flex-col gap-1.5 text-xs text-main">
+                    <div className="font-extrabold text-main border-b border-theme pb-1 flex justify-between items-center shrink-0">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <span
+                          className={`w-2 h-2 rounded-full shrink-0 ${onlineStudentIds.includes(st.id) ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}
+                        />
+                        <span className="truncate max-w-[130px]">
+                          {st.name} ({st.student_number || 'N/A'})
+                        </span>
+                        {stErrors.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              errorStore.getState().setActiveTab('student');
+                              errorStore.getState().setIsErrorCenterOpen(true);
+                            }}
+                            className="flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 px-1 py-0.2 rounded hover:bg-rose-100 transition-colors cursor-pointer shrink-0"
+                            title={`学生端存在 ${stErrors.length} 处异常: ${stErrors[0].title || stErrors[0].message}`}
+                          >
+                            <AlertTriangle size={10} className="text-rose-500 animate-pulse" />
+                            <span>{stErrors.length} 异常</span>
+                          </button>
+                        )}
+                      </span>
+                      <span className="text-xs text-primary-theme font-mono font-black shrink-0">
+                        {progPercent}%
+                      </span>
+                    </div>
+
+
+                    <div className="grid grid-cols-2 gap-1.5 text-xs leading-tight shrink-0">
+                      <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
+                        <span className="text-muted font-bold">随堂测验</span>
+                        <span
+                          className={`font-bold font-mono text-xs ${studentProg != null && studentProg.quiz_score !== null ? 'text-primary-theme' : 'text-muted'}`}
+                        >
+                          {studentProg != null && studentProg.quiz_score !== null
+                            ? `${studentProg.quiz_score} / 100`
+                            : '未提交'}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
+                        <span className="text-muted font-bold">教学环节进度</span>
+                        <span className="font-bold text-main text-xs">
+                          {Array.isArray(completedSegIds) ? completedSegIds.length : 0} / {timelineSegments.length}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-muted leading-relaxed truncate mt-0.5 shrink-0">
+                      环节:{' '}
+                      {timelineSegments.length > 0 ? (
+                        timelineSegments.map((seg, sIdx) => {
+                          const isSegCompleted = Array.isArray(completedSegIds) && completedSegIds.includes(seg.id);
+                          return (
+                            <span
+                              key={seg.id}
+                              className={`mr-1 px-1 py-0.2 rounded ${isSegCompleted ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-surface text-muted border border-theme'}`}
+                              title={seg.title}
+                            >
+                              {sIdx + 1}:{isSegCompleted ? '✓' : '✗'}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <span className="italic text-muted">暂无步骤</span>
+                      )}
+                    </div>
+                  </div>
                 );
-              }
-            }}
-            onToggleLockStudent={(stId, currentLocked) => {
-              handleToggleStudentLock(stId, currentLocked ? selectedLesson : null);
-            }}
-            onSelectStudentProfile={(stId) => {
-              setSelectedProfileStudentId(stId);
-            }}
-            totalStudentsCount={students.length}
-            onlineStudentsCount={onlineStudentsCount}
-            lockedCount={lockedCount}
-            averageProgress={averageProgress}
-            isDrawing={isDrawing}
-            lang={lang as any}
-          />
+              })()
+            ) : (
+              // Class summary state when no hover
+              <div className="flex flex-col gap-1 text-xs text-main h-full justify-center">
+                <div className="font-extrabold text-main border-b border-theme pb-1.5 flex items-center gap-1.5 shrink-0">
+                  <Activity size={12} className="text-primary-theme animate-pulse" />
+                  <span>{lang === 'zh' ? '班级学情概况' : 'Class Overview'}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 text-xs leading-tight mt-1.5 shrink-0">
+                  <div className="flex flex-col items-center bg-surface py-1 rounded-lg border border-theme">
+                    <span className="text-muted font-medium">在线/总数</span>
+                    <span className="font-bold font-mono text-emerald-600 text-xs mt-0.5">
+                      {students.filter((s) => onlineStudentIds.includes(s.id)).length}/{students.length}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-center bg-surface py-1 rounded-lg border border-theme">
+                    <span className="text-muted font-medium">屏幕锁定</span>
+                    <span className="font-bold font-mono text-rose-500 text-xs mt-0.5">
+                      {students.filter((s) => s.locked_lesson_id === selectedLesson).length}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-center bg-surface py-1 rounded-lg border border-theme">
+                    <span className="text-muted font-medium">平均进度</span>
+                    <span className="font-bold font-mono text-primary-theme text-xs mt-0.5">
+                      {(() => {
+                        const inClassStudents = students.filter((s) => onlineStudentIds.includes(s.id));
+                        if (inClassStudents.length === 0) return '0%';
+                        const total = inClassStudents.reduce((sum, s) => {
+                          const p = liveClassStudentProgress.find((prog) => prog.student_id === s.id);
+                          return sum + (p?.progress_percent ?? 0);
+                        }, 0);
+                        return `${Math.round(total / inClassStudents.length)}%`;
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Feedback log feed */}
+          <div className="h-[160px] flex flex-col border-t border-theme pt-3 min-h-0 gap-2 shrink-0">
+            <h3 className="text-xs font-black uppercase text-muted tracking-wider select-none flex justify-between items-center">
+              <span>{lang === 'zh' ? '课堂互动反馈流' : 'Live Classroom Feed'}</span>
+              <button
+                onClick={() =>
+                  setLiveClassFeed([
+                    {
+                      id: 'clear',
+                      time: new Date().toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                      }),
+                      type: 'info',
+                      message: '反馈流已清空。',
+                    },
+                  ])
+                }
+                className="text-xs hover:text-main text-muted underline transition-all"
+              >
+                Clear
+              </button>
+            </h3>
+
+            <div className="flex-1 bg-surface-secondary border border-theme rounded-xl p-2.5 font-mono text-xs leading-relaxed overflow-y-auto space-y-2 select-text text-left text-main shadow-inner scrollbar-thin">
+              {liveClassFeed.map((f) => (
+                <div key={f.id} className="border-b border-theme pb-1.5 last:border-b-0">
+                  <div className="flex justify-between items-center text-muted font-bold mb-0.5">
+                    <span>{f.time}</span>
+                    <span
+                      className={`px-1 rounded uppercase tracking-wide text-xs ${
+                        f.type === 'success'
+                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                          : f.type === 'warning'
+                            ? 'bg-amber-50 text-amber-600 border border-amber-100'
+                            : 'bg-surface text-muted border border-theme'
+                      }`}
+                    >
+                      {f.type}
+                    </span>
+                  </div>
+                  <p
+                    className={
+                      f.type === 'success'
+                        ? 'text-emerald-700 font-medium'
+                        : f.type === 'warning'
+                          ? 'text-amber-700 font-medium'
+                          : 'text-main'
+                    }
+                  >
+                    {f.message}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
+      </div>
       )}
 
       {/* Raw Data Detail Modal */}
@@ -1423,64 +2153,36 @@ export function LiveClassroomView({
         </div>
       )}
 
-      {/* 学生个人成长雷达与全景档案弹窗 (Stitch Screen 07fd3861 / 1219a481) */}
-      {selectedProfileStudentId && (() => {
-        const st = students.find((s) => s.id === selectedProfileStudentId);
-        if (!st) return null;
-        const studentProg = liveClassStudentProgress.find((p) => p.student_id === st.id);
-        const progPercent = studentProg?.progress_percent ?? (onlineStudentIds.includes(st.id) ? 59 : 0);
-        return (
-          <StudentGrowthProfileModal
-            isOpen={!!selectedProfileStudentId}
-            onClose={() => setSelectedProfileStudentId(null)}
-            student={{
-              id: st.id,
-              name: st.name,
-              student_number: st.student_number,
-              role: lang === 'zh' ? '组员' : 'Student',
-              focusPercentage: progPercent,
-            }}
-            lessonId={selectedLesson}
-            classId={liveClassSelectedClassId}
-            lang={lang as any}
-            addToast={addToast}
-            onInspectSandbox={() => {
-              addToast(
-                lang === 'zh' ? '打开学生沙箱' : 'Inspect Sandbox',
-                `正在调取学生 ${st.name} 的沙箱实例...`,
-                'info',
-              );
-            }}
-            onCastStudentScreen={() => {
-              addToast(
-                lang === 'zh' ? '学生投屏' : 'Screen Cast',
-                `已将学生 ${st.name} 的屏幕投射至主演示台`,
-                'success',
-              );
-            }}
-            onAwardPoints={(_sId, delta, reason) => {
-              addToast(
-                lang === 'zh' ? '积分激励' : 'Points Awarded',
-                `已向学生 ${st.name} 奖励 +${delta} 积分 (${reason || '课堂积极表现'})`,
-                'success',
-              );
-            }}
-          />
-        );
-      })()}
+      {/* ── 远端精华：学生成长能力五维雷达档案（Stitch 07fd3861） ──
+          点“查看学情档案”从 AttributionModal/LeaderboardModal 传入的 studentId，
+          本组件拉取后端 /api/students/:id/growth-profile 并渲染五维雷达 + 全景轨迹。 */}
+      <StudentGrowthProfileModal
+        isOpen={isGrowthProfileOpen}
+        onClose={() => {
+          setIsGrowthProfileOpen(false);
+          setGrowthProfileStudentId(null);
+        }}
+        student={
+          growthProfileStudentId
+            ? students.find((s) => s.id === growthProfileStudentId) || null
+            : null
+        }
+        lessonId={selectedLesson}
+        classId={liveClassSelectedClassId}
+        lang={lang as 'zh' | 'en'}
+        addToast={addToast}
+      />
 
-      {/* 课堂评价归因弹窗 (Triggered from Canvas Active Plugins Dock) */}
-      {isCanvasAttributionOpen && (
-        <ClassroomAttributionModal
-          isOpen={isCanvasAttributionOpen}
-          onClose={() => setIsCanvasAttributionOpen(false)}
-          lessonId={selectedLesson}
-          classId={liveClassSelectedClassId}
-          students={students}
-          addToast={addToast}
-          lang={lang as any}
-        />
-      )}
+      {/* ── 远端精华：全班大屏作业互评秀场（Stitch 21e2dac1） ──
+          从 ClassroomInteractiveCockpit 内部以事件/回调形式开启。
+          主仪表 / “推进” 接口：启用后与课堂阶段推进联动。 */}
+      <PeerReviewShowcaseModal
+        isOpen={isPeerReviewShowcaseOpen}
+        onClose={() => setIsPeerReviewShowcaseOpen(false)}
+        lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title}
+        addToast={addToast}
+        onAdvanceToStage3={() => handleStageChange('WRAP_UP_EXIT_TICKET')}
+      />
     </div>
   );
 }

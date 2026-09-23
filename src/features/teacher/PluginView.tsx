@@ -7,8 +7,8 @@ import type { Language } from '../../i18n';
 interface PluginViewProps {
   plugins: PluginType[];
   lang: Language;
-  storeTab: 'store' | 'widgets' | 'dev' | 'logs';
-  setStoreTab: (tab: 'store' | 'widgets' | 'dev' | 'logs') => void;
+  storeTab: 'store' | 'widgets' | 'dev' | 'logs' | 'community';
+  setStoreTab: (tab: 'store' | 'widgets' | 'dev' | 'logs' | 'community') => void;
   pluginCode: string;
   setPluginCode: (code: string) => void;
   installingPlugin: boolean;

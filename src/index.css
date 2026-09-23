@@ -3,7 +3,130 @@
 
 @source "../packages/mfe-*/**/*.{ts,tsx}";
 
+/* ── Tailwind v4 设计令牌补齐 ─────────────────────────────────
+   历史代码中使用了 shadow-3xs / border-border / text-foreground，但这三个
+   token 从未定义：95 处阴影、22 处边框、16 处文字色因此静默失效（元素完全
+   没有阴影，边框与文字色回落）。在此按设计规范补齐。
+   shadow-3xs 的值由 Tailwind 内联进工具类；border/foreground 引用主题变量，
+   因此四套主题自动跟随，无需为各主题重复声明。 */
+@theme {
+  --shadow-3xs: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  --color-border: var(--border-theme);
+  --color-foreground: var(--text-main);
+
+  /* ── 语义色令牌 ─────────────────────────────────────────────
+     必须以 @theme（而非 @utility）定义：@utility 是静态工具类，Tailwind
+     不会为其生成任何斜杠变体，因此 bg-surface/95、border-primary-theme/20
+     这类写法完全不生效（全项目原有 78 处，表现为背景/边框整体丢失）。
+     @theme 颜色会自动派生出 bg-x/50、text-x/60、border-x/20 等；
+     值引用主题变量，四套主题自动跟随。类名与改造前完全一致。 */
+  --color-app: var(--bg-app);
+  --color-surface: var(--bg-surface);
+  --color-surface-secondary: var(--bg-surface-secondary);
+  --color-surface-elevated: var(--bg-surface-elevated);
+  /* border-theme / border-theme-subtle —— 类名里没有 border 前缀，故 token 名就取 theme */
+  --color-theme: var(--border-theme);
+  --color-theme-subtle: var(--border-theme-subtle);
+  /* bg-border-theme / bg-border-theme-subtle —— 把边框色当背景用 */
+  --color-border-theme: var(--border-theme);
+  --color-border-theme-subtle: var(--border-theme-subtle);
+  --color-main: var(--text-main);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-primary-theme: var(--color-primary);
+  --color-primary-theme-light: var(--color-primary-light);
+  --color-primary-theme-hover: var(--color-primary-hover);
+}
+
+/* ── 把 dark: 变体绑定到应用主题，而非操作系统的 prefers-color-scheme ──
+   Tailwind v4 的 dark: 默认走 @media (prefers-color-scheme: dark)，而本项目的
+   主题是运行时写在 <html data-theme> 上的（themeStore）。两者互不相关，导致：
+   用户切到深色主题时全项目 156 处 dark:* 不生效；系统为深色时浅色主题反被
+   深色样式污染。此处改为跟随 data-theme（含 chalkboard 这套深色主题）。 */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *, [data-theme='chalkboard'], [data-theme='chalkboard'] *));
+
+/* ── 远端兼容兜底：14 个语义色 @utility 显式声明 ─────────────
+   @theme 派生会生成 bg-color、text-color、border-color 等工具类，但 portal
+   与 cockpit 子组件中存在 `bg-primary-theme` / `text-main` / `border-primary-theme`
+   等不带透明度斜杠的写法（cockpit/portal 大量使用）。@theme 派生虽然也会
+   生成同名类，但显式 @utility 优先并保留语义化语义，便于后人理解"此处的
+   颜色来自哪里"。同时为 chalkboard、eyecare 等多主题保留透明度差异
+   （如 rgba(... 0.18)），@theme 派生不能直接表达 rgba 透明度。 */
+@utility bg-app {
+  background-color: var(--bg-app);
+}
+
+@utility bg-surface {
+  background-color: var(--bg-surface);
+}
+
+@utility bg-surface-secondary {
+  background-color: var(--bg-surface-secondary);
+}
+
+@utility bg-surface-elevated {
+  background-color: var(--bg-surface-elevated);
+}
+
+@utility border-theme {
+  border-color: var(--border-theme);
+}
+
+@utility border-theme-subtle {
+  border-color: var(--border-theme-subtle);
+}
+
+@utility bg-border-theme {
+  background-color: var(--border-theme);
+}
+
+@utility bg-border-theme-subtle {
+  background-color: var(--border-theme-subtle);
+}
+
+@utility text-main {
+  color: var(--text-main);
+}
+
+@utility text-muted {
+  color: var(--text-muted);
+}
+
+@utility text-subtle {
+  color: var(--text-subtle);
+}
+
+@utility bg-primary-theme {
+  background-color: var(--color-primary);
+}
+
+@utility bg-primary-theme-light {
+  background-color: var(--color-primary-light);
+}
+
+@utility bg-primary-theme-hover {
+  background-color: var(--color-primary-hover);
+}
+
+@utility text-primary-theme {
+  color: var(--color-primary);
+}
+
+@utility border-primary-theme {
+  border-color: var(--color-primary);
+}
+
 @layer base {
+  /* Tailwind v4 的 border 默认色是 currentColor（v3 是 gray-200），因此只写
+     `border` / `border-b` 而未指定颜色时会渲染成文字色 —— 浅色主题下表现为
+     一条深色（近黑）细线，全项目原有 63 处。这里把默认值恢复为「主题边框色」，
+     显式颜色工具类（border-slate-200 等）优先级更高，不受影响。 */
+  *,
+  ::before,
+  ::after,
+  ::backdrop {
+    border-color: var(--border-theme);
+  }
   :root,
   [data-theme='light'] {
     --bg-app: #f8fafc;
@@ -70,69 +193,11 @@
   }
 }
 
-@utility bg-app {
-  background-color: var(--bg-app);
-}
-
-@utility bg-surface {
-  background-color: var(--bg-surface);
-}
-
-@utility bg-surface-secondary {
-  background-color: var(--bg-surface-secondary);
-}
-
-@utility bg-surface-elevated {
-  background-color: var(--bg-surface-elevated);
-}
-
-@utility border-theme {
-  border-color: var(--border-theme);
-}
-
-@utility border-theme-subtle {
-  border-color: var(--border-theme-subtle);
-}
-
-@utility bg-border-theme {
-  background-color: var(--border-theme);
-}
-
-@utility bg-border-theme-subtle {
-  background-color: var(--border-theme-subtle);
-}
-
-@utility text-main {
-  color: var(--text-main);
-}
-
-@utility text-muted {
-  color: var(--text-muted);
-}
-
-@utility text-subtle {
-  color: var(--text-subtle);
-}
-
-@utility bg-primary-theme {
-  background-color: var(--color-primary);
-}
-
-@utility bg-primary-theme-light {
-  background-color: var(--color-primary-light);
-}
-
-@utility bg-primary-theme-hover {
-  background-color: var(--color-primary-hover);
-}
-
-@utility text-primary-theme {
-  color: var(--color-primary);
-}
-
-@utility border-primary-theme {
-  border-color: var(--color-primary);
-}
+/* 语义色工具类已迁至文件顶部的 @theme 块（见那里的说明）：
+   原先用 @utility 定义，导致 bg-surface/95、border-primary-theme/20 等
+   斜杠透明度写法无法生成、静默失效；@theme 会派生全部变体。
+   类名与行为向下兼容：bg-surface、border-theme、text-muted… 用法完全不变。
+   ↑↑↑ 上方已补充 14 个 @utility 作为 cockpit/portal 等子组件的兼容兜底。 */
 
 /* ── 中文排版规范保障：全站所有字体最小不得低于 9pt (12px) ── */
 :root {
@@ -208,5 +273,3 @@
 .animate-danmaku-slide {
   animation: danmaku-slide 14s linear infinite;
 }
-
-
