@@ -13,11 +13,13 @@ import {
   Trophy,
   Shuffle,
   Award,
+  GitCompare,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import { StageDisplayModal } from '../StageDisplayModal';
 import { ClassroomAttributionModal } from '../ClassroomAttributionModal';
 import { ClassroomLeaderboardModal } from '../ClassroomLeaderboardModal';
+import { PeerReviewShowcaseModal } from '../peer-review/PeerReviewShowcaseModal';
 
 export interface ClassroomWorkflowSubHeaderProps {
   currentStage: string;
@@ -63,6 +65,7 @@ export function ClassroomWorkflowSubHeader({
   const [isStageDisplayOpen, setIsStageDisplayOpen] = useState(false);
   const [isAttributionOpen, setIsAttributionOpen] = useState(false);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [isPeerReviewOpen, setIsPeerReviewOpen] = useState(false);
 
   // Workflow Stages configuration (Stitch Screen 1219a481)
   const stages = [
@@ -248,6 +251,23 @@ export function ClassroomWorkflowSubHeader({
               </div>
             </div>
 
+            {/* Peer Review & Dual-View Showcase (Stitch Screen 21e2dac1) */}
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={() => setIsPeerReviewOpen(true)}
+                className="w-7 h-7 rounded-md bg-surface border border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/40 flex items-center justify-center shadow-3xs transition cursor-pointer"
+                title={lang === 'zh' ? '全班大屏作业互评与协同赏析 (Stitch 21e2dac1)' : 'Peer Review Showcase'}
+              >
+                <GitCompare size={13} />
+              </button>
+              <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-40 hidden group-hover:flex flex-col items-center pointer-events-none">
+                <div className="bg-slate-900 text-white text-[11px] font-medium py-1 px-2.5 rounded-md shadow-lg whitespace-nowrap">
+                  {lang === 'zh' ? '全班大屏作业互评与协同赏析模式' : 'Peer Review Showcase'}
+                </div>
+              </div>
+            </div>
+
             {/* Third-Party Plugin Quick Activity Slot */}
             <ExtensionPointRenderer slot="classroom.quick_activity" />
           </div>
@@ -340,6 +360,16 @@ export function ClassroomWorkflowSubHeader({
           classId={classId}
           students={students}
           lang={lang}
+          addToast={addToast}
+        />
+      )}
+
+      {isPeerReviewOpen && (
+        <PeerReviewShowcaseModal
+          isOpen={isPeerReviewOpen}
+          onClose={() => setIsPeerReviewOpen(false)}
+          onAdvanceToStage3={() => onStageChange('WRAP_UP_EXIT_TICKET')}
+          lessonTitle={lessonTitle}
           addToast={addToast}
         />
       )}

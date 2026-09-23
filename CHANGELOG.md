@@ -12,6 +12,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **全班大屏作业互评与协同赏析模式及第三方插件扩展能力 (Peer Review Showcase & Spotlight Dual-View Arena with Plugin Extensibility)**:
+  - **基于 Stitch 全班大屏作业互评与协同赏析（Screen `21e2dac185074bb6ad4e7ce9671327ee`）完整实现**:
+    - 构建独立专态互评子系统 (`src/features/classroom/peer-review/`)，无缝打通课中收卷与结课巡查通票阶段；
+    - **HUD Level 3 顶部遥测控制栏 (`PeerReviewTelemetryHeader`)**: 具备 `STAGE 02.4 全班大屏协同互评` 专态徽标、精确数码倒计时（02:18 / 03:00，支持 `+1m` 快速补时与暂停/恢复）、环形 SVG 评阅完成率（88% · 28/32 已评）、实时互动点赞计数（142 次点赞 · 6 份提名）以及双盲匿名切换、量规弹窗调取、语音弹幕开关与一键揭晓勋章榜；
+    - **左侧智能交叉互评矩阵 (`PeerReviewMatrixPanel`)**: 落地「1 生评 2 份」分层对调机制（标杆范本与攻坚作业交叉），呈现 4 类实时互评匹配卡片流（已提交评语+5星打分、正在推导进度条、已完成、提出改进建议）及实时徽章流（🎉 思路精妙、💡 纠错自愈、⚡ 最佳开源解法）；
+    - **中央大屏焦点作品对比赏析舞台 (`SpotlightDualWorkArena` & `PeerReviewRubricStats`)**:
+      - 标杆创新解法 (陈子墨, 满分标杆, 4.9分) ⟷ 经典逆风翻盘解法 (张子豪, 最佳进步, 4.8分) 并排对比；
+      - 动态图形内置 60FPS 仿真模拟器（彩色正五边形螺旋与旋转方阵）及核心代码语法片段（自适应模运算取色与 4 空格缩进对齐绿标高亮）；
+      - **协同板书批注图层**: 支持主讲教师与互评员多角色实时批注挂载与追加；
+      - **三维量规综合达标率看板**: 实时统计算法逻辑正确性 (98%)、代码规范与缩进 (96%)、创意美感与拓展 (92%)，平均达标率 95.3%；
+      - **实时点赞动态 Ticker**: ❤️ 超赞 (+68)、💡 灵感启迪 (+24)、📐 极度严谨 (+15) 互动点赞，与全班终端点赞动效联动；
+    - **悬浮动态气泡弹幕墙 (`PeerReviewDanmakuOverlay`)**: 支持全屏飘动文字与语音弹幕气泡（如 `🎙️ 03s`），附带快捷发弹幕与语音弹幕输入条；
+    - **右侧互评先锋榜与推进控制台 (`PeerReviewLeaderboardPanel`)**: 展示 Top 1/2/3 先锋榜领奖台、随堂微勋章即时分发箱（一键发放认真互评积分、入库班级数字展览馆）、教师连麦连线/邀请投屏及推进按键（回车直通 Stage 3）；
+    - **主容器与全景联动 (`PeerReviewShowcaseModal`)**: 集成全景键盘快捷键（`Enter` 推进、`Esc` 退出、`Space` 暂停），并与 `ClassroomWorkflowSubHeader` 快速活动区及 `StageDisplayModal` 展台深度打通。
+  - **全方位第三方插件扩展生态 (Third-Party Plugin Extensibility)**:
+    - 开放 4 大互评专属扩展插槽：
+      - `peer_review.rubric.dimension`: 允许第三方学科插件注入专属评阅量规维度；
+      - `peer_review.badge`: 允许第三方插件定义特色微勋章；
+      - `peer_review.action`: 允许第三方插件在顶栏或即时分发箱注入自定义教学操作；
+      - `peer_review.showcase.widget`: 允许第三方插件在双焦点作品下方挂载深度分析卡片（如 AST 语法结构差异对比、单元测试用例通过矩阵）；
+    - 在 `@openlearn/plugin-sdk` 与 `packages/core/plugin-host/contribution-registry.ts` 声明并导出 `PeerReviewRubricConfig` 与 `PeerReviewBadgeConfig` 清单契约；
+    - 新增 11 项单元测试，课堂模块 62/62 项单元测试 100% 通过。
+
 - **课中授课工作流控制中心重构与第三方插件扩展能力 (In-Class Teaching Workflow Cockpit Refactor with Plugin Extensibility)**:
   - **基于 Stitch 智能授课工作流控制中心（Screen `1219a4816fa34e8fa312998ff62db726`）深度重构**:
     - 将原有 2010 行单文件单体组件彻底解构为高内聚、模块化授课驾驶舱子系统 (`src/features/classroom/cockpit/`)；

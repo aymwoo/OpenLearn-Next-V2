@@ -12,8 +12,10 @@ import {
   Sparkles,
   Award,
   Zap,
+  GitCompare,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { PeerReviewShowcaseModal } from './peer-review/PeerReviewShowcaseModal';
 
 export interface StageDisplayModalProps {
   isOpen: boolean;
@@ -46,6 +48,7 @@ export function StageDisplayModal({
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTime, setCurrentTime] = useState('');
+  const [isPeerReviewOpen, setIsPeerReviewOpen] = useState(false);
 
   // Clock updater
   useEffect(() => {
@@ -134,6 +137,16 @@ export function StageDisplayModal({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              id="stage-peer-review-toggle"
+              type="button"
+              onClick={() => setIsPeerReviewOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 rounded-xl transition-colors border border-teal-500/40 text-xs font-semibold cursor-pointer"
+              title="进入全班大屏作业互评与协同赏析模式 (Stitch 21e2dac1)"
+            >
+              <GitCompare size={15} />
+              <span>作业互评赏析</span>
+            </button>
             <button
               id="stage-fullscreen-toggle"
               onClick={toggleFullscreen}
@@ -379,6 +392,14 @@ export function StageDisplayModal({
           </div>
         </aside>
       </main>
+
+      {isPeerReviewOpen && (
+        <PeerReviewShowcaseModal
+          isOpen={isPeerReviewOpen}
+          onClose={() => setIsPeerReviewOpen(false)}
+          lessonTitle={lessonTitle}
+        />
+      )}
     </div>
   );
 }

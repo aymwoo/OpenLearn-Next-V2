@@ -190,6 +190,27 @@ export interface BarometerMetricConfig {
   tooltip?: string;
 }
 
+/** A contribution to the peer_review.rubric.dimension slot (custom rubric assessment dimensions). */
+export interface PeerReviewRubricConfig {
+  id: string;
+  name: string;
+  description?: string;
+  maxScore?: number;
+  weight?: number;
+  icon?: string;
+  targetMetric?: string;
+}
+
+/** A contribution to the peer_review.badge slot (custom peer nomination micro-badges). */
+export interface PeerReviewBadgeConfig {
+  id: string;
+  title: string;
+  emoji?: string;
+  description?: string;
+  color?: string;
+  points?: number;
+}
+
 /** Union of all contribution config shapes, keyed by slot name. */
 export type ContributionConfig =
   | ClassroomToolConfig
@@ -209,7 +230,9 @@ export type ContributionConfig =
   | StudentCompetencyDimensionConfig
   | StudentProfileWidgetConfig
   | CanvasWidgetConfig
-  | BarometerMetricConfig;
+  | BarometerMetricConfig
+  | PeerReviewRubricConfig
+  | PeerReviewBadgeConfig;
 
 
 /** A human-readable summary of what a plugin contributes. */

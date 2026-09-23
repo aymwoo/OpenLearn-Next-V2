@@ -195,3 +195,18 @@
   background-size: 24px 24px;
 }
 
+/* ── Stitch Peer Review Danmaku Animation ── */
+@keyframes danmaku-slide {
+  0% {
+    transform: translateX(100vw);
+  }
+  100% {
+    transform: translateX(-120vw);
+  }
+}
+
+.animate-danmaku-slide {
+  animation: danmaku-slide 14s linear infinite;
+}
+
+

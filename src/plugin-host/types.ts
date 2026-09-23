@@ -95,7 +95,11 @@ export type ExtensionSlot =
   | 'classroom.agenda.action' // 教学环节步骤卡片动作扩展
   | 'whiteboard.dock.plugin' // 白板主画板左下角活跃插件悬浮坞扩展
   | 'whiteboard.canvas.widget' // 白板画布动态可拖拽任务卡片扩展
-  | 'classroom.audit.event'; // 课堂互动分级审计流扩展
+  | 'classroom.audit.event' // 课堂互动分级审计流扩展
+  | 'peer_review.rubric.dimension' // 全班大屏互评量规维度扩展 (Stitch 21e2dac1)
+  | 'peer_review.badge' // 全班大屏互评微勋章扩展
+  | 'peer_review.action' // 全班大屏互评操作扩展
+  | 'peer_review.showcase.widget'; // 大屏焦点作品对比分析组件扩展
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。

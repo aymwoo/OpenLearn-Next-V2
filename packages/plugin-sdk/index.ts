@@ -82,6 +82,8 @@ export type {
   StudentProfileWidgetConfig,
   CanvasWidgetConfig,
   BarometerMetricConfig,
+  PeerReviewRubricConfig,
+  PeerReviewBadgeConfig,
   ContributionConfig,
 } from '../core/plugin-host/contribution-registry.js';
 

@@ -11,6 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features & Types
 
+- **全班大屏作业互评与协同赏析模式静态清单声明契约 (`PeerReviewRubricConfig`, `PeerReviewBadgeConfig`)**:
+  - 在 `@openlearn/plugin-sdk` 导出 `PeerReviewRubricConfig` 与 `PeerReviewBadgeConfig` 类型定义，供第三方互动教学与学科评价插件在 `package.json` 的 `openlearn.contributes` 中静态声明；
+  - `PeerReviewRubricConfig`: 支持声明自定义互评量规维度（如算法复杂度、代码注释覆盖率、视觉构图美感），属性包含 `id`, `name`, `description`, `maxScore`, `weight`, `icon`, `targetMetric`；
+  - `PeerReviewBadgeConfig`: 支持声明特色随堂互评微勋章（如“算法攻坚勋章”、“最佳开源作者”、“极客重构奖”），属性包含 `id`, `title`, `emoji`, `description`, `color`, `points`；
+  - 对应运行时 Extension Slots：`peer_review.rubric.dimension`、`peer_review.badge`、`peer_review.action`、`peer_review.showcase.widget`。
+
 - **课中授课工作流控制中心与画布小组件静态清单声明契约 (`CanvasWidgetConfig`, `BarometerMetricConfig`)**:
   - 在 `@openlearn/plugin-sdk` 导出 `CanvasWidgetConfig` 与 `BarometerMetricConfig` 类型定义，供第三方互动教学插件在 `package.json` 的 `openlearn.contributes` 中静态声明；
   - `CanvasWidgetConfig`: 支持声明自定义教学画布悬浮组件（如随堂代码检核任务卡、AI 互助小助手、仿真图表看板），属性包含 `id`, `name`, `component`, `position`, `width`, `height`, `draggable`；
