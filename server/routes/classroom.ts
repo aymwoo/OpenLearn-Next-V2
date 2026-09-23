@@ -5,6 +5,87 @@ import { requireAuth, getActorId } from '../middleware/auth.js';
 import type { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
 import type { ServerContext } from '../context.js';
 
+/**
+ * 内置教学模式 —— 课堂启动门户「教学模式选择器」的兜底数据源。
+ *
+ * 不写进迁移 seed 的原因：模式文案需跟随 i18n 与产品迭代变化，写进迁移会造成
+ * 「迁移与业务常量两处维护」。API 读取时以「数据库记录优先 + 本常量兜底」合并返回，
+ * 因此管理员可在不发版的情况下改写文案或追加自定义模式。
+ * color 存语义色名（非具体色值），由前端映射到主题 token，避免深色主题下失色。
+ */
+export interface TeachingMode {
+  id: string;
+  name: string;
+  nameEn: string | null;
+  description: string;
+  descriptionEn: string | null;
+  icon: string;
+  color: string;
+  isBuiltin: boolean;
+  sortOrder: number;
+}
+
+export const BUILTIN_TEACHING_MODES: TeachingMode[] = [
+  {
+    id: 'lecture',
+    name: '讲授式',
+    nameEn: 'Lecture',
+    description: '教师主导讲解，学生跟随听讲与记录',
+    descriptionEn: 'Teacher-led explanation with students following along',
+    icon: 'Presentation',
+    color: 'indigo',
+    isBuiltin: true,
+    sortOrder: 10,
+  },
+  {
+    id: 'inquiry',
+    name: '探究式',
+    nameEn: 'Inquiry',
+    description: '以问题驱动，学生自主提出假设并验证',
+    descriptionEn: 'Question-driven: students form and test their own hypotheses',
+    icon: 'FlaskConical',
+    color: 'emerald',
+    isBuiltin: true,
+    sortOrder: 20,
+  },
+  {
+    id: 'collaborative',
+    name: '协作式',
+    nameEn: 'Collaborative',
+    description: '小组分工协作，共同产出并互评',
+    descriptionEn: 'Group work with division of labour and peer review',
+    icon: 'Users',
+    color: 'amber',
+    isBuiltin: true,
+    sortOrder: 30,
+  },
+  {
+    id: 'experiential',
+    name: '体验式',
+    nameEn: 'Experiential',
+    description: '濉浸式交互体验，在做中学',
+    descriptionEn: 'Immersive hands-on experience: learning by doing',
+    icon: 'Sparkles',
+    color: 'violet',
+    isBuiltin: true,
+    sortOrder: 40,
+  },
+  {
+    id: 'drill',
+    name: '练习式',
+    nameEn: 'Drill',
+    description: '针对性变式练习与即时反馈攻克',
+    descriptionEn: 'Targeted varied practice with immediate feedback',
+    icon: 'Target',
+    color: 'rose',
+    isBuiltin: true,
+    sortOrder: 50,
+  },
+];
+
+/** 教学模式 id 规范：与插件 id 同构，避免路径穿越与非法字符。 */
+const TEACHING_MODE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
 export function registerClassroomRoutes(
   ctx: ServerContext,
   classroomService: ClassroomRuntimeService,
@@ -325,10 +406,19 @@ export function registerClassroomRoutes(
   app.post('/api/classroom/sessions/:lessonId/init', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
     try {
       const { lessonId } = req.params;
-      const { classId } = req.body;
+      const { classId, teachingModeId } = req.body;
       const teacherId = getActorId(req) || 'teacher';
 
       const session = await classroomService.getOrCreateSession(lessonId, teacherId, classId);
+
+      // 课堂启动门户会在启动课堂时一并提交所选教学模式
+      if (typeof teachingModeId === 'string' && teachingModeId.trim()) {
+        db.prepare('UPDATE classroom_sessions SET teaching_mode_id = ? WHERE id = ?').run(
+          teachingModeId.trim(),
+          session.id,
+        );
+      }
+
       res.json({ success: true, session });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -902,6 +992,179 @@ export function registerClassroomRoutes(
       res.status(500).json({ error: e.message });
     }
   });
+
+  // ── 教学模式 (Teaching Modes — 课堂启动门户的模式选择器) ──────────
+  // 内置模式以代码常量兜底，数据库记录优先，便于管理员与插件在不发版的情况下扩展。
+  app.get('/api/classroom/teaching-modes', requireAuth(), (req: Request, res: Response) => {
+    try {
+      const rows = db
+        .prepare('SELECT * FROM teaching_modes ORDER BY sort_order ASC, created_at ASC')
+        .all() as any[];
+
+      const stored: TeachingMode[] = rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        nameEn: r.name_en,
+        description: r.description ?? '',
+        descriptionEn: r.description_en,
+        icon: r.icon ?? 'BookOpen',
+        color: r.color ?? 'indigo',
+        isBuiltin: !!r.is_builtin,
+        sortOrder: r.sort_order ?? 100,
+      }));
+
+      // 内置模式保持顺序与存在性；同 id 的数据库记录覆盖其文案
+      const merged = BUILTIN_TEACHING_MODES.map((b) => stored.find((s) => s.id === b.id) ?? b);
+      const extra = stored.filter((s) => !BUILTIN_TEACHING_MODES.some((b) => b.id === s.id));
+
+      res.json({ success: true, modes: [...merged, ...extra].sort((a, b) => a.sortOrder - b.sortOrder) });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post('/api/classroom/teaching-modes', requireAuth('administrator'), (req: Request, res: Response) => {
+    try {
+      const { id, name, nameEn, description, descriptionEn, icon, color, sortOrder } = req.body || {};
+      if (typeof id !== 'string' || !TEACHING_MODE_ID_PATTERN.test(id)) {
+        return res
+          .status(400)
+          .json({ error: 'Invalid id：仅允许字母数字与 . _ -，以字母数字开头，最长 64 字符' });
+      }
+      if (typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({ error: 'name is required' });
+      }
+      if (BUILTIN_TEACHING_MODES.some((b) => b.id === id)) {
+        return res.status(409).json({ error: `"${id}" 是内置教学模式 id，请改用其他 id` });
+      }
+      if (db.prepare('SELECT id FROM teaching_modes WHERE id = ?').get(id)) {
+        return res.status(409).json({ error: `Teaching mode "${id}" already exists` });
+      }
+
+      const now = Date.now();
+      db.prepare(
+        `INSERT INTO teaching_modes
+           (id, name, name_en, description, description_en, icon, color, is_builtin, sort_order, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      ).run(
+        id,
+        name.trim(),
+        nameEn || null,
+        description || null,
+        descriptionEn || null,
+        icon || null,
+        color || null,
+        Number.isFinite(sortOrder) ? sortOrder : 100,
+        now,
+      );
+      res.json({ success: true, id });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.put('/api/classroom/teaching-modes/:id', requireAuth('administrator'), (req: Request, res: Response) => {
+    try {
+      const id = decodeURIComponent(req.params.id);
+      const { name, nameEn, description, descriptionEn, icon, color, sortOrder } = req.body || {};
+
+      const builtin = BUILTIN_TEACHING_MODES.find((b) => b.id === id);
+      const existing = db.prepare('SELECT id FROM teaching_modes WHERE id = ?').get(id);
+      const now = Date.now();
+
+      if (!existing) {
+        // 首次改写内置模式的文案：以 upsert 落库，保留 is_builtin=1 语义
+        if (!builtin) return res.status(404).json({ error: `Teaching mode "${id}" not found` });
+        db.prepare(
+          `INSERT INTO teaching_modes
+             (id, name, name_en, description, description_en, icon, color, is_builtin, sort_order, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        ).run(
+          id,
+          name || builtin.name,
+          nameEn ?? builtin.nameEn,
+          description ?? builtin.description,
+          descriptionEn ?? builtin.descriptionEn,
+          icon ?? builtin.icon,
+          color ?? builtin.color,
+          Number.isFinite(sortOrder) ? sortOrder : builtin.sortOrder,
+          now,
+        );
+        return res.json({ success: true, id, created: true });
+      }
+
+      // 已有记录：只更新传入字段（内置记录不可被改动 is_builtin）
+      const sets: string[] = [];
+      const args: any[] = [];
+      const assign = (col: string, value: unknown) => {
+        if (value !== undefined) {
+          sets.push(`${col} = ?`);
+          args.push(value);
+        }
+      };
+      assign('name', typeof name === 'string' && name.trim() ? name.trim() : undefined);
+      assign('name_en', nameEn);
+      assign('description', description);
+      assign('description_en', descriptionEn);
+      assign('icon', icon);
+      assign('color', color);
+      assign('sort_order', Number.isFinite(sortOrder) ? sortOrder : undefined);
+
+      if (!sets.length) return res.status(400).json({ error: '没有可更新的字段' });
+      sets.push('updated_at = ?');
+      args.push(now, id);
+      db.prepare(`UPDATE teaching_modes SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+
+      res.json({ success: true, id, created: false });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.delete('/api/classroom/teaching-modes/:id', requireAuth('administrator'), (req: Request, res: Response) => {
+    try {
+      const id = decodeURIComponent(req.params.id);
+      if (BUILTIN_TEACHING_MODES.some((b) => b.id === id)) {
+        return res.status(403).json({ error: `内置教学模式 "${id}" 不可删除（可改写其文案）` });
+      }
+      const info = db.prepare('DELETE FROM teaching_modes WHERE id = ?').run(id);
+      if (!info.changes) return res.status(404).json({ error: `Teaching mode "${id}" not found` });
+      res.json({ success: true, id });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // 设置当次课堂选用的教学模式。id 为空字符串表示清除选择。
+  app.put(
+    '/api/classroom/sessions/:lessonId/teaching-mode',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const { teachingModeId, classId } = req.body || {};
+        const teacherId = getActorId(req) || 'teacher';
+
+        const modeId = typeof teachingModeId === 'string' && teachingModeId.trim() ? teachingModeId.trim() : null;
+        if (modeId && !TEACHING_MODE_ID_PATTERN.test(modeId)) {
+          return res.status(400).json({ error: 'Invalid teachingModeId' });
+        }
+        if (modeId) {
+          const known =
+            BUILTIN_TEACHING_MODES.some((b) => b.id === modeId) ||
+            !!db.prepare('SELECT id FROM teaching_modes WHERE id = ?').get(modeId);
+          if (!known) return res.status(404).json({ error: `Teaching mode "${modeId}" not found` });
+        }
+
+        const session = await classroomService.getOrCreateSession(lessonId, teacherId, classId);
+        db.prepare('UPDATE classroom_sessions SET teaching_mode_id = ? WHERE id = ?').run(modeId, session.id);
+
+        res.json({ success: true, sessionId: session.id, teachingModeId: modeId });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    },
+  );
 
   // 课堂情绪与专注度时间序列与统计聚合
   app.get('/api/classroom/sessions/:lessonId/mood-tracker', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {

@@ -19,3 +19,6 @@
 | 003  | 003_classroom_runtime.sql         | 课堂工具与 AI 对话记忆表（student_rollcalls, site_settings, agent_conversations） |
 | 004  | 004_courseware_score_config.sql   | 互动课件成绩归集策略表（courseware_score_config，宿主侧按策略从样本历史算最终分）  |
 | 005  | 005_assignment_hub.sql            | 作业中心（plugin_assignments / plugin_submission_versions / plugin_assignment_files / plugin_peer_review_tasks，并重建 plugin_submissions 支持按作业唯一） |
+| 006  | 006_classroom_event_bus.sql       | `events` 审计表补课堂维度：`lesson_id` 列与 (type,timestamp) / correlationId / (lesson_id,timestamp) 索引，让课堂事件可按时间窗口、业务流串联与课节重放查询 |
+| 007  | 007_interactive_classroom.sql     | 互动课堂与课节生命周期（lesson_quiz_submissions / classroom_sessions / classroom_quick_polls / classroom_poll_votes / classroom_buzzers / classroom_exit_tickets / classroom_pacing_signals） |
+| 008  | 008_teaching_modes.sql            | 教学模式表 teaching_modes 与 classroom_sessions.teaching_mode_id（课堂启动门户的模式选择器数据源） |
