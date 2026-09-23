@@ -229,6 +229,12 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
     rooms: () => null,
     description: '课节进度模式切换 → 全局广播',
   },
+  {
+    eventType: 'points.awarded',
+    socketEvent: 'classroom:points_awarded',
+    rooms: () => null,
+    description: '课堂归因加分/扣分变更 → 全局广播',
+  },
 
   // ── 聚焦（spotlight）────────────────────────────────────────────────────
   // 历史遗留：内核侧同时存在 `spotlight:state_updated`（冒号）与

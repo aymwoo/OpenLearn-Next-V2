@@ -12,6 +12,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **课中授课工作流控制中心重构与第三方插件扩展能力 (In-Class Teaching Workflow Cockpit Refactor with Plugin Extensibility)**:
+  - **基于 Stitch 智能授课工作流控制中心（Screen `1219a4816fa34e8fa312998ff62db726`）深度重构**:
+    - 将原有 2010 行单文件单体组件彻底解构为高内聚、模块化授课驾驶舱子系统 (`src/features/classroom/cockpit/`)；
+    - **56px 全局导航顶栏 (`ClassroomCockpitHeader`)**: 高保真还原平台品牌、v0.3.21/v5.0-OS 标识、课节/班级切换下拉抽屉、独立 Tab 联动预览按钮（`学生视角预览 (独立Tab)` / `学生端已联动 (激活Tab)`）、一键全班专注锁屏切换器、教学资源库与推流健康度指示器；
+    - **40px 授课阶段步进与互动中控栏 (`ClassroomWorkflowSubHeader`)**: 串联「1. 课前就绪 → 2. 课中授课 → 3. 结课巡查 → 4. 学情简报」四阶工作流，集成极速单选投票 (24人)、毫秒级抢答器 (2人)、60s 限时冲刺、大屏展台投屏与课堂节奏气压计（💡 专注度 94%、❓ 疑问 2、💬 互动 28 次）；
+    - **72-wide 左侧环节大纲与时间管理面板 (`ClassroomAgendaPanel`)**: 提供精确到秒的环节数字倒计时、+2m 快速补时补偿调节机制、完成/同步演示中/待进行三态卡片流，支持查看「课件附注」教学指导与提前广播特定环节；
+    - **中区多模态教学画布与工具坞 (`ClassroomCanvasArea`)**: 支持演示白板、学生提交数据、作业成绩评定、随堂测验榜四大模式自由切换；白板模式集成悬浮画笔工具坞 (V/P/H/E/S/T/L/素材/网格)、底部翻页导航、左下角已激活插件挂载坞 (`ActivePluginsDock`) 及可拖拽交互式代码检核卡片 (`AssignmentTaskCard`，29/32 完成，90.6% 完成率)；
+    - **80-wide 右侧学生专注力监控台 (`ClassroomEngagementConsole`)**: 包含 4 列自适应圆形 SVG 专注力环形进度仪表盘（绿色/灰色环、百分比、悬停提醒与专注锁定）、班级整体学情概览卡片（在线/总数、屏幕锁定、平均进度）及结构化类型事件审计流 (`TypedAuditStream`，涵盖 WARNING/INFO/ANSWER/SYSTEM/PLUGIN 级别彩色徽标与一键清空）。
+  - **全方位第三方插件扩展生态与槽位体系 (Plugin Extensibility Slots)**:
+    - 开放 7 大课中中控扩展槽位：
+      - `classroom.header.action`: 顶栏右侧工具坞外部动作注入；
+      - `classroom.quick_activity`: 40px 子顶栏第三方互动工具插槽；
+      - `classroom.barometer.metric`: 节奏气压计动态指标注入（如 AI 疑惑度分析、肢体体态分析）；
+      - `classroom.agenda.action`: 环节大纲底部操作扩展；
+      - `whiteboard.canvas.widget`: 画布中央浮动工具卡片插槽；
+      - `whiteboard.dock.plugin`: 画布左下角插件快捷坞插槽；
+      - `classroom.audit.event`: 课堂审计流外部事件注入点；
+    - 在 `@openlearn/plugin-sdk` 与 `packages/core/plugin-host/contribution-registry.ts` 声明并导出 `CanvasWidgetConfig` 与 `BarometerMetricConfig`，支持第三方插件在 `package.json` 的 `openlearn.contributes` 中静态声明；
+    - 完美保持全部 50+ 现有课堂单元测试 100% 通过与零代码断裂。
+
+- **学生成长能力五维雷达与全景档案及第三方插件扩展能力 (Student Growth Profile & Pentagon Competency Radar with Plugin Extensibility)**:
+  - **高保真学生全景学情与五维雷达画像 (`StudentGrowthProfileModal`)**:
+    - 基于 Stitch 设计方案（Screen `07fd386148e7478c8253bc0d82fcc52a`），实现兼具教学严谨性与现代极客质感的个人全景学情档案模态框；
+    - **原生 SVG 五维计算思维雷达图**: 基于精确三角几何算法（$-90^\circ$ 起始角、$72^\circ$ 步进），渲染「算法逻辑、代码工程、创新思维、团队协作、课堂专注」五维能力模型，具备三层同心五边形网格背景与综合能力评级（如 A+）；
+    - **4 大关键学情指标卡片**: 呈现「本节总积分」（含本堂增量）、全班排位「本堂专注度」（如 98% 专注在线，击败 92% 全班同伴）、「答题正确率」（100%）与「互助答疑频次」（3 次）；
+    - **AI 导师学情评语与成长潜质**: 融合阶段性作答与沙箱提交数据，生成针对性计算思维进阶评语与推荐进阶路径（如推荐进入算法创新挑战营）；
+    - **本堂答题与互动全景时间线 (Live Timeline)**: 倒序沉淀极速投票、随堂抽选归因表彰、编程沙箱实操提交（支持一键调取沙箱回放查验）及抢答夺魁事件；
+    - **底部快捷归因与协作赋能**: 提供「💡 +2 逻辑」、「🚀 +3 创意」、「👏 +1 表达」一键授分栏、学生工作台大屏一键投屏演练与 Markdown 个人成长全景报告一键导出。
+  - **抽问归因与积分榜深度联动 (Seamless Integration)**:
+    - 在 `ClassroomAttributionModal`（抽问归因）与 `ClassroomLeaderboardModal`（班级英雄榜）中分别植入「学情档案」快捷入口，点击即可瞬时切入该学生的五维雷达与全景互动轨迹。
+  - **全链路第三方插件扩展生态 (Third-Party Plugin Extensibility Architecture)**:
+    - **扩展槽位 `student.profile.dimension`**: 允许学科插件（如机器人、数据科学、英语教学）动态注入学科专属能力维度与评价指标；
+    - **扩展槽位 `student.profile.card`**: 支持第三方插件插入专属诊断看板（如代码风格评分、单元测试覆盖率、眼动/注意力外设数据卡片）；
+    - **扩展槽位 `student.profile.action`**: 顶部中控与底部工具条支持注册外部动作按钮（如发送家长信、发起一对一辅导、颁发区块链数字微证书）；
+    - **扩展槽位 `student.profile.timeline_item`**: 开放学情轨迹流，支持第三方互动插件（如在线 IDE、仿真实验套件、外置答题器）将外部学生事件汇聚至全景轨迹；
+    - **声明式配置清单契约**: 在 `packages/core/plugin-host/contribution-registry.ts` 与 `@openlearn/plugin-sdk` 中定义并导出 `StudentCompetencyDimensionConfig` 与 `StudentProfileWidgetConfig`，插件可在 `package.json` 的 `openlearn.contributes.studentCompetencyDimensions` 与 `studentProfileWidgets` 中静态声明自定义能力维度与全景小组件。
+
+- **统一 48px Iconified 顶栏与多维归因加分闭环及第三方插件扩展能力 (Unified 48px Topbar & Attribution Gamification Loop with Plugin Extensibility)**:
+  - **高保真统一 48px 顶栏 (`ClassroomStandardTopbar`)**:
+    - 基于 Stitch 设计方案（Screen `390059b5`），实现紧凑型 48px 顶部中控栏，整合品牌标识、四阶胶囊导航（预习、核心讲解 + 环节倒计时与 `+2m` 补时、实操通票、总结简报）、课节/班级上下文切换器及右侧图标快捷动作 Dock；
+    - 右侧 Dock 深度整合极速投票 (Vote)、随堂抢答 (Buzzer)、随机抽选与归因表现激励 (Roll Call & Attribution)、班级积分榜与小组联赛 (Leaderboard)、学生端独立 Tab 联动预览、一键全班专注锁定、大屏展台与 HD 广播状态指示；
+    - 全面集成至 `src/components/LiveClassroomView.tsx`，无缝替代旧版冗余工具栏，保持 100% 现有测试兼容性。
+  - **课堂随机抽选与多维归因激励闭环 (`ClassroomAttributionModal` & `ClassroomLeaderboardModal`)**:
+    - 基于 Stitch 设计方案（Screen `88b094e6` 与 `00e4f919`），构建课堂提问与正向即时反馈闭环；
+    - 提供 4 大教育学多维归因卡片（`💡 逻辑清晰` +2、`🚀 创意满分` +3、`👏 勇于发言` +1、`🌟 互助示范` +2），支持 `+1 / +2 / -1` 微调及加分评语；
+    - 集成学生个人积分画像与小组归属分析，在班级积分榜中支持「小组联赛」与「个人英雄榜」双视角切换，并支持整组表彰加分（`⭐ 团队协作之星`、`🏅 全员全勤奖`）；
+    - 服务端 `server/event-routing.ts` 接入内核 `points.awarded` 领域事件，通过 Socket.IO `classroom:points_awarded` 实现多端毫秒级实时积分动画与排行榜刷新。
+  - **全链路第三方插件扩展能力 (Third-Party Plugin Extensibility Architecture)**:
+    - **顶栏操作与徽标插槽**: 提供 `classroom.topbar.action` 与 `classroom.topbar.pill` 扩展点，第三方插件可向 48px 顶栏注册自定义动作按钮与状态徽标；
+    - **归因维度与激励动作插槽**: 提供 `classroom.attribution.award` 与 `classroom.attribution.action` 扩展点，允许特定学科或教育机构插件注册专属表现维度（如“实验规范”、“双语表达”）与自定义操作；
+    - **排行榜扩展插槽**: 提供 `classroom.leaderboard.action` 扩展点，支持成绩导出、荣誉勋章授予等插件功能；
+    - **声明式配置清单契约**: 在 `packages/core/plugin-host/contribution-registry.ts` 与 `@openlearn/plugin-sdk` 中定义并导出 `ClassroomTopbarActionConfig` 与 `ClassroomAttributionAwardConfig`，第三方插件可在 `package.json` 的 `openlearn.contributes` 中静态声明顶栏动作与归因维度。
+
 - **互动课堂与课程编辑器全局架构优化及第三方插件生态体系 (Interactive Classroom & Lesson Editor Optimization with Plugin Ecosystem)**:
   - **四阶课堂生命周期状态机与中控台 (Classroom Stage State Machine & Cockpit)**:
     - `server/services/classroom-runtime-service.ts`：实现高可用课堂生命周期状态机，定义 `PRE_CLASS_READY`（课前就绪）、`IN_CLASS_TEACHING`（课中授课）、`WRAP_UP_EXIT_TICKET`（结课通票）、`ARCHIVED_REPORT`（学情归档简报）四阶流转；
@@ -115,6 +168,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **开发端口默认值回归 9000 并恢复环境变量覆盖 (Default Port Restored to Env-Overridable 9000)**：`d8f9e0dc`（互动课堂倒计时服务）把 `server.ts` 监听端口硬编码为 `3000`（`const PORT = 3000` 与引导配置 `config: { port: 3000 }`），并同步把 `vite.config.ts` 的 dev server 端口与代理目标改为 3000，移除了 `PORT` 环境变量覆盖能力，与 `dev.sh`（固定 `http://localhost:9000` 探活）、`DEFAULT_BOOTSTRAP_CONFIG.port = 9000` 及安装文档不一致。现恢复为 `const PORT = parseInt(process.env.PORT || '9000', 10)`，引导配置同步为 `Number(process.env.PORT) || 9000`，`vite.config.ts` 的 `targetPort` 改为同一表达式：默认监听 9000，可用 `PORT=<端口>` 覆盖（实测默认尝试绑定 9000、`PORT=9137` 启动横幅输出 `http://localhost:9137`）。
 - **互动课件学生提交归属丢失（学生提交后教师端「学生互动提交数据」为空）**：学生在互动课堂提交网页课件后，真实学生成绩完全不入库，`submission_result` 长期为空，而 `courseware_attempt` 里堆积的全是 `student_id='guest'` / `'teacher'` 的预览记录。根因是三处独立缺陷叠加：
   - **iframe 不携带会话导致归属丢失**：`src/features/whiteboard/components/HtmlAppletFrame.tsx` 的课件 iframe 使用 `credentialless` + `sandbox`（无 `allow-same-origin`），访问 `/runtime/:uuid/` 时不带 cookie，服务端 `injectLmsSdk` 只能建出一条 `student_id='guest'` 的 attempt，且**同一课件的所有匿名访问者复用同一条**；真实学生提交时又因 `attempt.student_id('guest') !== session.userId` 被 `403 Forbidden` 拒绝。现由持有会话的父窗口在转发上报前调用新增接口 `POST /api/courseware/attempts/:attemptId/adopt` 认领归属：无主 attempt 直接改归属（保留已产生的原始流水），已被其他学生占用则为本学生复用/新建自己的 attempt 并返回新 id；接口幂等，教师/管理员预览不受约束。
   - **提交失败被静默吞掉**：`src/services/lms-bridge.ts` 的三处上报（submit / saveProgress / log）均不检查 `res.ok`，401/403 只在控制台留下无痕错误，学生端看起来「提交成功」。现已对非 2xx 响应输出带响应正文的 `console.error`。

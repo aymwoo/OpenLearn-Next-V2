@@ -81,13 +81,21 @@ export type ExtensionSlot =
   | 'stage.display.card' // 大屏展台卡片扩展
   | 'editor.timeline_segment' // 课程编辑器步骤类型扩展
   | 'editor.palette_item' // 课程编辑器白板图元扩展
-  | 'classroom.countdown.widget' // 课堂倒计时挂件扩展
-  | 'classroom.countdown.action' // 课堂倒计时快捷操作扩展
-  | 'student.classroom.countdown' // 学生端倒计时通知扩展
-  | 'student.quick_actions.item' // 学生端快捷指令菜单项扩展
-  | 'student.quick_actions.action' // 学生端快捷指令操作扩展
-  | 'student.quick_actions.fab' // 学生端快捷指令悬浮球扩展
-  | 'student.quick_actions.compact_addon'; // 学生端移动端紧凑模式挂件扩展
+  | 'classroom.topbar.action' // 统一顶栏快捷操作扩展 (Stitch 规范)
+  | 'classroom.topbar.pill' // 统一顶栏状态胶囊扩展
+  | 'classroom.attribution.award' // 课堂归因加分维度扩展 (Stitch 规范)
+  | 'classroom.attribution.action' // 课堂表现归因动作扩展
+  | 'classroom.leaderboard.action' // 班级积分榜操作扩展
+  | 'student.profile.dimension' // 学生多维素养雷达维度扩展 (Stitch 规范)
+  | 'student.profile.card' // 学生成长档案扩展卡片 (Stitch 规范)
+  | 'student.profile.action' // 学生成长档案操作动作扩展
+  | 'student.profile.timeline_item' // 学生答题与互动轨迹项扩展
+  | 'classroom.header.action' // 全局顶栏右侧快捷动作扩展 (Stitch 规范)
+  | 'classroom.barometer.metric' // 课堂节奏晴雨表指标扩展
+  | 'classroom.agenda.action' // 教学环节步骤卡片动作扩展
+  | 'whiteboard.dock.plugin' // 白板主画板左下角活跃插件悬浮坞扩展
+  | 'whiteboard.canvas.widget' // 白板画布动态可拖拽任务卡片扩展
+  | 'classroom.audit.event'; // 课堂互动分级审计流扩展
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。

@@ -71,6 +71,17 @@ export type {
   StudentLessonToolConfig,
   AnchorToolConfig,
   HelpDocConfig,
+  QuickActivityConfig,
+  TimelineSegmentConfig,
+  PaletteItemContributionConfig,
+  CockpitWidgetConfig,
+  StageCardConfig,
+  ClassroomTopbarActionConfig,
+  ClassroomAttributionAwardConfig,
+  StudentCompetencyDimensionConfig,
+  StudentProfileWidgetConfig,
+  CanvasWidgetConfig,
+  BarometerMetricConfig,
   ContributionConfig,
 } from '../core/plugin-host/contribution-registry.js';
 

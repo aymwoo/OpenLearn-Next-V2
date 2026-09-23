@@ -11,6 +11,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features & Types
 
+- **课中授课工作流控制中心与画布小组件静态清单声明契约 (`CanvasWidgetConfig`, `BarometerMetricConfig`)**:
+  - 在 `@openlearn/plugin-sdk` 导出 `CanvasWidgetConfig` 与 `BarometerMetricConfig` 类型定义，供第三方互动教学插件在 `package.json` 的 `openlearn.contributes` 中静态声明；
+  - `CanvasWidgetConfig`: 支持声明自定义教学画布悬浮组件（如随堂代码检核任务卡、AI 互助小助手、仿真图表看板），属性包含 `id`, `name`, `component`, `position`, `width`, `height`, `draggable`；
+  - `BarometerMetricConfig`: 支持声明课堂节奏气压计动态指标项（如 AI 疑惑度分析、课堂提问率、肢体专注度指标），属性包含 `id`, `label`, `icon`, `commandType`, `defaultValue`；
+  - 对应运行时 Extension Slots：`classroom.header.action`、`classroom.quick_activity`、`classroom.barometer.metric`、`classroom.agenda.action`、`whiteboard.dock.plugin`、`whiteboard.canvas.widget`、`classroom.audit.event`。
+
+- **学生成长能力五维雷达与全景档案静态清单声明契约 (`StudentCompetencyDimensionConfig`, `StudentProfileWidgetConfig`)**:
+  - 在 `@openlearn/plugin-sdk` 导出 `StudentCompetencyDimensionConfig` 与 `StudentProfileWidgetConfig` 类型定义，供第三方学科与学情诊断插件在 `package.json` 的 `openlearn.contributes` 中静态声明；
+  - `StudentCompetencyDimensionConfig`: 支持声明自定义素养维度（如计算思维、批判思维、艺术创造、实践动手），属性包含 `key`, `label`, `weight`, `description`, `color`；
+  - `StudentProfileWidgetConfig`: 支持声明个人全景学情小组件卡片（如代码查重率、测试覆盖率、注意力眼动诊断看板），属性包含 `id`, `title`, `component`, `position`, `height`；
+  - 对应运行时 Extension Slots：`student.profile.dimension`、`student.profile.card`、`student.profile.action`、`student.profile.timeline_item`。
+
+- **课堂顶栏与归因加分静态清单声明契约 (`ClassroomTopbarActionConfig`, `ClassroomAttributionAwardConfig`)**:
+  - 在 `@openlearn/plugin-sdk` 导出 `ClassroomTopbarActionConfig` 与 `ClassroomAttributionAwardConfig` 类型定义，供第三方插件在 `package.json` 的 `openlearn.contributes` 中静态声明；
+  - `ClassroomTopbarActionConfig`: 支持配置 `id`, `title`, `icon`, `command`, `tooltip`, `order`, `stages` 等属性，实现无需编写复杂前端代码即可向 48px 课堂中控顶栏注入动作；
+  - `ClassroomAttributionAwardConfig`: 支持配置自定义表彰维度 `id`, `title`, `icon`, `defaultPoints`, `category`, `description`，赋能学科特色化课堂过程性评价；
+  - 对应运行时 Extension Slots：`classroom.topbar.action`、`classroom.topbar.pill`、`classroom.attribution.award`、`classroom.attribution.action`、`classroom.leaderboard.action`。
+
 - **新增「课件运行时脚本扩展点」DI 契约**：新增 Token `ICoursewareRuntimeScriptRegistryToken`（Token 名 `@openlearn/core:ICoursewareRuntimeScriptRegistry`）与类型 `CoursewareRuntimeScript`、`IRegisteredCoursewareRuntimeScript`、`ICoursewareRuntimeScriptRegistry`（实现类 `CoursewareRuntimeScriptRegistry` 位于 `@openlearn/core/di`，由内核启动时注册）。
   - 契约：`register(owner, { id, source, position?, priority?, coursewareId?, coursewareUuid? })`、`unregister(owner, id)`、`clear(owner?)`、`list(courseware?)`、`listOwners()`；`id` 在 `owner` 内唯一，重复注册即覆盖；`position` 取 `'head' | 'body-end'`，同位置按 `priority` 升序拼接。
   - 用途：互动课件运行在不透明源（opaque origin）iframe（`credentialless`、无 `allow-same-origin`）中，父窗口读不到其内部状态、也无法注入代码；插件可用本扩展点注册「随课件 HTML 一起下发、在课件 iframe 内部执行」的脚本，由宿主 `injectLmsSdk()` 在渲染时拼接（head 脚本紧随 Bridge SDK，body-end 脚本插在 `</body>` 前）。

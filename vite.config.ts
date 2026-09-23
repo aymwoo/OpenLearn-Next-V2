@@ -5,7 +5,7 @@ import path from 'path';
 import { defineConfig } from 'vite';
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
-const targetPort = 3000;
+const targetPort = parseInt(process.env.PORT || '9000', 10);
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -19,7 +19,7 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 3000,
+    port: targetPort,
     proxy: {
       '/api': { target: `http://127.0.0.1:${targetPort}`, changeOrigin: true },
       '/plugins': { target: `http://127.0.0.1:${targetPort}`, changeOrigin: true },
