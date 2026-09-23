@@ -78,6 +78,10 @@ CANONICAL_OVERRIDES = {
     "lesson-engine": "lesson-engine",
     "lesson-workflow": "lesson-engine",
     "classroom-runtime": "classroom-runtime",
+    # src/features/classroom/（UI 层：portal + cockpit + peer-review + student growth profile 等）
+    # 在架构概念上属于 Classroom Runtime 的前端实现，归一到 classroom-runtime canonical
+    # （docs/architecture/classroom-runtime.md 同时覆盖前后端）。
+    "classroom": "classroom-runtime",
     "courseware": "_small-ui_",  # InteractiveCoursewareViewer, 小型 UI 组件
 
     # Presence / Collaboration
