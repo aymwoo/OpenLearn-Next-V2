@@ -45,6 +45,9 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     setLiveClassSelectedClassId: vi.fn(),
     liveClassIsActive: true,
     setLiveClassIsActive: vi.fn(),
+    // 本组用例断言的是授课视图内部交互（学生视窗预览开新 Tab），
+    // 因此显式跳过互动课堂起始门户。
+    initialPortalOpen: false,
     liveClassTimeRemaining: 300,
     setLiveClassTimeRemaining: vi.fn(),
     liveClassFeed: [],

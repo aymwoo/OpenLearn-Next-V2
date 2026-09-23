@@ -87,7 +87,16 @@ export type ExtensionSlot =
   | 'student.quick_actions.item' // 学生端快捷指令菜单项扩展
   | 'student.quick_actions.action' // 学生端快捷指令操作扩展
   | 'student.quick_actions.fab' // 学生端快捷指令悬浮球扩展
-  | 'student.quick_actions.compact_addon'; // 学生端移动端紧凑模式挂件扩展
+  | 'student.quick_actions.compact_addon' // 学生端移动端紧凑模式挂件扩展
+  // ── 课堂启动门户（Classroom Entry Portal）扩展槽位 ──────────────
+  // 门户是教师进入互动课堂的起始页（选课程 / 班级 / 教学模式）。以下槽位
+  // 让第三方插件接入门户各区域，无需改动宿主组件。
+  | 'classroom.portal.telemetry' // 顶部遥测岛指标（网络、设备、考勤等）
+  | 'classroom.portal.course_badge' // 课程卡片徽章与补充信息
+  | 'classroom.portal.teaching_mode' // 自定义教学模式（与 teaching_modes 表合并展示）
+  | 'classroom.portal.insight' // 课前学情洞察卡（AI 洞察为内置默认实现）
+  | 'classroom.portal.preflight' // 课前检查项
+  | 'classroom.portal.launch_action'; // 启动区附加操作
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。

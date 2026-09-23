@@ -39,6 +39,7 @@ import { ClassroomSyncChannel } from '../services/classroom-sync-channel';
 import { useErrorStore, errorStore } from '../store/errorStore';
 import { ClassroomInteractiveCockpit } from '../features/classroom/ClassroomInteractiveCockpit';
 import { PreClassReadyView } from '../features/classroom/PreClassReadyView';
+import { ClassroomEntryPortal } from '../features/classroom/ClassroomEntryPortal';
 import { PostClassWrapupView } from '../features/classroom/PostClassWrapupView';
 import { ClassroomBriefingView } from '../features/classroom/ClassroomBriefingView';
 import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdownWidget';
@@ -83,6 +84,11 @@ interface LiveClassroomViewProps {
   onOpenCoursewareHub?: () => void;
   activeRole?: string;
   setActiveRole?: (role: 'teacher' | 'student') => void;
+  /**
+   * 是否先展示「课堂启动门户」。默认 true —— 教师进入互动课堂先确认
+   * 课程 / 班级 / 教学模式。既有单测需直接断言授课视图时传 false。
+   */
+  initialPortalOpen?: boolean;
 }
 
 export function LiveClassroomView({
@@ -117,6 +123,7 @@ export function LiveClassroomView({
   onOpenCoursewareHub,
   activeRole,
   setActiveRole,
+  initialPortalOpen = true,
 }: LiveClassroomViewProps) {
   const [lockingClass, setLockingClass] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
@@ -142,6 +149,10 @@ export function LiveClassroomView({
 
   // Classroom workflow stages: PRE_CLASS_READY, IN_CLASS_TEACHING, WRAP_UP_EXIT_TICKET, ARCHIVED_REPORT
   const [classroomStage, setClassroomStage] = useState<string>('IN_CLASS_TEACHING');
+  // 互动课堂起始门户：默认先展示「课程入口与班级选择门户」，
+  // 教师确认课程 / 班级 / 教学模式后才进入授课视图（对应 Stitch 门户设计）。
+  // 可通过 initialPortalOpen 关闭（既有单测直接断言授课视图时使用）。
+  const [showEntryPortal, setShowEntryPortal] = useState(initialPortalOpen);
 
   useEffect(() => {
     if (!selectedLesson) return;
@@ -168,6 +179,39 @@ export function LiveClassroomView({
         console.error('Failed to update stage:', err);
       }
     }
+  };
+
+  /**
+   * 门户「进入数字赋能课堂」：先初始化课堂会话（携带教学模式），
+   * 再切换到授课视图。初始化失败时不切视图，由门户把错误提示给教师，
+   * 避免出现「界面已进课堂但服务端没有会话」的割裂状态。
+   */
+  const handlePortalEnter = async ({
+    lessonId,
+    classId,
+    teachingModeId,
+  }: {
+    lessonId: string;
+    classId: string;
+    teachingModeId: string | null;
+  }) => {
+    const res = await fetch(`/api/classroom/sessions/${lessonId}/init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ classId, teachingModeId: teachingModeId ?? undefined }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new Error(
+        data?.error || (lang === 'zh' ? '初始化课堂会话失败' : 'Failed to initialise the classroom session'),
+      );
+    }
+
+    setSelectedLesson(lessonId);
+    setLiveClassSelectedClassId(classId);
+    void fetchElements(lessonId);
+    setShowEntryPortal(false);
   };
 
   // Interactive courseware submission states
@@ -805,6 +849,27 @@ export function LiveClassroomView({
 
     return matchesSearch && matchesStatus;
   });
+
+  // 起始门户：未确认配置前不渲染授课视图，避免教师直接进入无准备的课堂。
+  // 注意此处已越过全部 hook 调用，条件返回不影响 Hook 顺序。
+  if (showEntryPortal) {
+    return (
+      <ClassroomEntryPortal
+        lessons={lessons}
+        classes={classes}
+        students={students}
+        selectedLesson={selectedLesson}
+        setSelectedLesson={setSelectedLesson}
+        liveClassSelectedClassId={liveClassSelectedClassId}
+        setLiveClassSelectedClassId={setLiveClassSelectedClassId}
+        timelineSegments={timelineSegments}
+        onlineStudentIds={onlineStudentIds}
+        lang={lang}
+        addToast={addToast}
+        onEnterClassroom={handlePortalEnter}
+      />
+    );
+  }
 
   return (
     <div className="flex-grow flex-1 flex flex-col min-h-0 bg-surface border border-theme rounded-2xl shadow-xl text-main overflow-hidden font-sans">

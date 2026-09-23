@@ -12,6 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **互动课堂起始门户与教学模式体系 (Classroom Entry Portal & Teaching Modes)**：对应 Stitch「课程入口与班级选择门户」设计，教师进入「互动课堂」先看到门户页而不是直接进入无准备的课堂：
+  - **起始门户页**：新增 `src/features/classroom/ClassroomEntryPortal.tsx`。顶部遥测岛（系统时钟 / 网络时延 / 席位就绪率 / 主控大屏）、STEP1 课程卡片马赛克、STEP2 班级标签 + **32 席位矩阵**（按 4 组分组、在线态着色）+ 教学模式选择器、底部粘性启动区；右辅栏为教案蓝图与 45 分钟节奏管道（按环节 `duration` 计算占比）、课前学情透镜与三项自检体检卡。全部使用项目语义 token（`bg-surface` / `text-main` / `border-theme` / `bg-primary-theme`…），四套主题自动一致；图标沿用 lucide-react，不引入第二套图标库。
+  - **六个插件扩展槽位**：新增 `classroom.portal.telemetry`（遥测岛指标）/ `course_badge`（课程卡徽章）/ `teaching_mode`（自定义教学模式）/ `insight`（课前洞察卡）/ `preflight`（课前检查项）/ `launch_action`（启动区附加操作），门户六个区域均可用插件接入而不改动宿主。AI 课前洞察的**内置实现同样走 `classroom.portal.insight` 槽位**，插件可直接替换。
+  - **教学模式后端表与 API**：`migrations/008_teaching_modes.sql` 新增 `teaching_modes` 表与 `classroom_sessions.teaching_mode_id`；`server/routes/classroom.ts` 提供 `GET/POST/PUT/DELETE /api/classroom/teaching-modes` 与 `PUT /api/classroom/sessions/:lessonId/teaching-mode`，`init` 端点亦可携带模式。读开放、写限管理员；内置 5 种模式（讲授 / 探究 / 协作 / 体验 / 练习）以**代码常量兜底、不写进迁移 seed**（避免迁移与业务文案两处维护），内置模式不可删除但可改写文案；前端封装见 `src/features/classroom/teaching-modes-client.ts`。
+  - **网络时延探测**：新增 `GET /api/ping`（不鉴权、不访库、无副作用，供登录页等未认证场景复用）与 `src/hooks/useNetworkLatency.ts`（模块级单例探测，多组件订阅共用同一轮询；探测失败时保留上次时延但降级质量，避免误导教师）。
+  - **接入方式**：`LiveClassroomView` 新增 `initialPortalOpen`（默认 `true`）。门户确认后先调用 `init`（携带所选教学模式）再切换到授课视图；**初始化失败不切视图**，避免出现「界面已进课堂但服务端无会话」的割裂状态。
+  - **测试**：`server/__tests__/teaching-modes.test.ts`（19 例：鉴权、内置模式兜底与顺序、CRUD、内置不可删可改写、非法 id/重复 id/缺 name 拒绝、课堂模式落库与清除）与 `src/features/classroom/__tests__/ClassroomEntryPortal.test.tsx`（20 例：三栏渲染、空态引导、课程/班级选择、席位矩阵在线态、教学模式加载与切换、启动回调 payload、初始化失败提示、节奏管道与课前关注）。
+
 - **插件中心社区市场 (Community Plugin Registry & One-Click Install)**:
   - **远端注册表与后端代取**：新增 `server/services/community-registry.ts`，由服务端通过环境变量 `PLUGIN_COMMUNITY_REGISTRY_URL` 代取社区注册表 JSON。经 `GET /api/plugins/community`（要求有效会话）归一化后返回，前端无需处理 CORS 与远端格式差异；未配置地址时返回 `configured: false` 并展示配置指引，而非报错。
   - **注册表格式容错**：同时兼容 v1 信封（`{ version, plugins: [...] }`）、`items` 别名与裸数组；缺少 `id`、id 非法、缺少 `downloadUrl` 或下载地址未通过出站安全校验的记录被整条丢弃并以 `skipped` 计数回传；重复 id 保留首次出现；`homepage` / `repository` 不安全时置空但保留条目；失败结果不写入缓存。
@@ -124,6 +132,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 回归：`src/features/whiteboard/__tests__/html-applet-scores.test.tsx` 由 5 例扩到 10 例（学生名次与「（我）」标记、未提交提示、教师视角无「我的成绩」、占位行过滤、名次算法单测）。
 
 ### Fixes
+
+- **样式基设三处静默失效修复（Tailwind v4 迁移遗留，表现为“黑线”与“样式丢失”）**：这三个问题都不报错、不影响构建，只在视觉上静默失真，因此长期未被发现：
+  - **语义色透明度写法全部失效（78 处）**：16 个语义色此前以 `@utility` 定义，而 `@utility` 是**静态工具类**，Tailwind 不会为其生成任何斜杠变体 —— `bg-surface/95`、`bg-primary-theme/10`、`border-primary-theme/20` 这类写法因此**根本不生成、静默失效**（表现为元素背景/边框整体丢失，即用户反馈的“样式似乎没有”）。现将这 16 个语义色全部迁至 `@theme` 颜色令牌，自动派生 `bg-x/50`、`text-x/60`、`border-x/20` 等（走 `color-mix(in oklab, var(--color-x) N%, transparent)`），**类名与调用方零变更**（`bg-surface` / `border-theme` / `text-muted`… 用法不变），四套主题仍自动跟随。
+  - **默认边框色回落为 `currentColor`（63 处 / 23 文件）**：Tailwind v4 把 `border` 的默认色从 v3 的 `gray-200` 改为 **`currentColor`**，因此只写 `border` / `border-b` 而未指定颜色的元素会渲染成**文字色** —— 浅色主题下就是一条深色（近黑）细线。已在 `@layer base` 用 `*, ::before, ::after, ::backdrop` 把默认值恢复为「主题边框色」；显式颜色工具类（`border-slate-200` 等）优先级更高，完全不受影响。
+  - **`dark:` 变体未绑定应用主题（156 处）**：Tailwind v4 的 `dark:` 默认走 `@media (prefers-color-scheme: dark)`（**操作系统**偏好），而本项目主题是运行时写入 `<html data-theme>`（`themeStore`），两者互不相关 —— 切到深色主题时 `dark:*` 不生效，系统为深色时浅色主题反被深色样式污染。现已用 `@custom-variant dark` 绑定到 `data-theme`（`dark` 与 `chalkboard` 两套深色主题）。
+  - **三个从未定义的设计令牌**：`shadow-3xs`（95 处）、`border-border`（22 处）、`text-foreground`（16 处）此前均无定义（Tailwind v4 阴影阶梯只有 `2xs`/`xs`/`sm`…，**没有 `3xs`**），导致对应阴影与颜色静默失效；已在 `@theme` 补齐，值引用主题变量（深色主题下阴影不重复声明）。
+  - **验证**：用 `@tailwindcss/cli` 直接编译 `src/index.css` 透项核对，原有 16 个语义类名**零变更**、透明度假体（20 个真实用法抽样）全部生成；`tsc --noEmit` 0 错误；全量 242 个测试文件 / 1597 例通过。
+  - **一处诊断陷阱（供后续参考）**：`@tailwindcss/vite` 按 **Vite 模块图**扫描（按需生成 CSS），因此直接 curl 首页 CSS 会看不到尚未加载页面所用的类 —— 这是正常行为，核对类是否生成请用 `@tailwindcss/cli` 全量编译。
 
 - **互动课件学生提交归属丢失（学生提交后教师端「学生互动提交数据」为空）**：学生在互动课堂提交网页课件后，真实学生成绩完全不入库，`submission_result` 长期为空，而 `courseware_attempt` 里堆积的全是 `student_id='guest'` / `'teacher'` 的预览记录。根因是三处独立缺陷叠加：
   - **iframe 不携带会话导致归属丢失**：`src/features/whiteboard/components/HtmlAppletFrame.tsx` 的课件 iframe 使用 `credentialless` + `sandbox`（无 `allow-same-origin`），访问 `/runtime/:uuid/` 时不带 cookie，服务端 `injectLmsSdk` 只能建出一条 `student_id='guest'` 的 attempt，且**同一课件的所有匿名访问者复用同一条**；真实学生提交时又因 `attempt.student_id('guest') !== session.userId` 被 `403 Forbidden` 拒绝。现由持有会话的父窗口在转发上报前调用新增接口 `POST /api/courseware/attempts/:attemptId/adopt` 认领归属：无主 attempt 直接改归属（保留已产生的原始流水），已被其他学生占用则为本学生复用/新建自己的 attempt 并返回新 id；接口幂等，教师/管理员预览不受约束。
