@@ -23,6 +23,20 @@ export interface StudentProfile {
   focusScore?: number;
   pickedCountToday?: number;
   avatarUrl?: string;
+  /**
+   * 真实维度分数（0-100），由宿主从可追溯数据源计算后传入：
+   *   logic         ← 随堂测真实正确率
+   *   engineering   ← 课件真实完成度
+   *   focus         ← 真实学习进度
+   *   creativity / collaboration ← 平台当前无数据源，留空即显示「暂无数据」
+   */
+  competencyScores?: {
+    logic?: number;
+    engineering?: number;
+    creativity?: number;
+    collaboration?: number;
+    focus?: number;
+  };
 }
 
 export interface BuiltinAward {
@@ -187,7 +201,7 @@ export function ClassroomAttributionModal({
 
       setStudentPointsMap((prev) => ({
         ...prev,
-        [selectedStudent.id]: (prev[selectedStudent.id] ?? (selectedStudent.currentPoints || 28)) + deltaPoints,
+        [selectedStudent.id]: (prev[selectedStudent.id] ?? (selectedStudent.currentPoints ?? 0)) + deltaPoints,
       }));
 
       setRecentBonusAnimation(`${deltaPoints >= 0 ? '+' : ''}${deltaPoints} ${reason}`);
@@ -207,7 +221,7 @@ export function ClassroomAttributionModal({
 
   const currentPoints = useMemo(() => {
     if (!selectedStudent) return 0;
-    return studentPointsMap[selectedStudent.id] ?? (selectedStudent.currentPoints || 28);
+    return studentPointsMap[selectedStudent.id] ?? (selectedStudent.currentPoints ?? 0);
   }, [selectedStudent, studentPointsMap]);
 
   if (!isOpen) return null;
@@ -268,7 +282,7 @@ export function ClassroomAttributionModal({
                       <span className="text-[11px] text-muted font-mono">({selectedStudent.studentNo})</span>
                     )}
                     <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold">
-                      {selectedStudent.groupName || '飞鹰极客队'}
+                      {selectedStudent.groupName || (lang === 'zh' ? '未分组' : 'Ungrouped')}
                     </span>
                   </div>
                   <div className="flex items-center gap-2.5 text-xs">
@@ -278,7 +292,14 @@ export function ClassroomAttributionModal({
                     </span>
                     <span className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-300/40 px-2 py-0.5 rounded-md">
                       <Flame size={12} className="text-emerald-500" />
-                      <span>{lang === 'zh' ? '专注度' : 'Focus'}: <strong>{selectedStudent.focusScore ?? 98}%</strong></span>
+                      <span>
+                        {lang === 'zh' ? '专注度' : 'Focus'}:{' '}
+                        <strong>
+                          {typeof selectedStudent.focusScore === 'number'
+                            ? `${selectedStudent.focusScore}%`
+                            : '—'}
+                        </strong>
+                      </span>
                     </span>
                     <span className="text-muted text-[11px]">
                       {lang === 'zh'
@@ -449,7 +470,9 @@ export function ClassroomAttributionModal({
               </span>
               <div>
                 <div className="font-bold text-foreground">
-                  {lang === 'zh' ? '榜首小队：飞鹰极客队' : 'Top Group: Eagle Geeks'}
+                  {lang === 'zh'
+                    ? `榜首小队：${students.length > 0 ? (students[0]?.groupName || '未分组') : '数据不足'}`
+                    : `Top Group: ${students.length > 0 ? (students[0]?.groupName || 'Ungrouped') : 'No data'}`}
                 </div>
                 <div className="text-[10px] text-muted">
                   {lang === 'zh' ? '累计 104 积分 · 领跑全班' : '104 cumulative points · Leading'}
@@ -517,10 +540,12 @@ export function ClassroomAttributionModal({
             id: selectedStudent.id,
             name: selectedStudent.name,
             student_number: selectedStudent.studentNo,
-            role: lang === 'zh' ? '组长' : 'Leader',
+            role: undefined,
             group_name: selectedStudent.groupName,
             points: currentPoints,
             focusPercentage: selectedStudent.focusScore,
+            // 真实维度分数（缺失维度由弹窗显示「暂无数据」，不再硬编码 95/90/88/96/98）
+            competencyScores: selectedStudent.competencyScores,
           }}
           lessonId={lessonId}
           classId={classId}

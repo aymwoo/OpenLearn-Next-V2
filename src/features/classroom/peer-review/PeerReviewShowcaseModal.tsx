@@ -23,28 +23,63 @@ export interface PeerReviewShowcaseModalProps {
   onAdvanceToStage3?: () => void;
   lessonTitle?: string;
   addToast?: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
+
+  // ── 真实数据入参（全部可选）─────────────────────────────────────────
+  // 未提供时列表为空并渲染空态；**不再内置任何假学生/假作品/假分数**。
+  // 数据来源：
+  //   matchingItems  ← 互评任务分配（assignment-hub 的 plugin_peer_review_tasks）
+  //   badges         ← 学生互评时投出的微勋章（plugin_peer_reviews）
+  //   dimensions     ← 量规维度真实达标率（plugin_peer_reviews 按维度聚合）
+  //   podiumStudents ← 提名票数排名（真实投票）
+  //   danmaku        ← 课堂弹幕（Socket.IO 广播，见 classroom.* 事件）
+  //   workA / workB  ← 大屏焦点对比的两份真实作品（courseware_attempt）
+  matchingItems?: PeerMatchingItem[];
+  badges?: LivePeerBadge[];
+  annotations?: TeacherPeerAnnotation[];
+  rubricDimensions?: RubricDimensionItem[];
+  reactions?: ReactionCountItem[];
+  podiumStudents?: NominatedStudent[];
+  danmaku?: DanmakuItem[];
+  workA?: SpotlightWorkItem | null;
+  workB?: SpotlightWorkItem | null;
+  /** 真实评阅进度（已评/总数），未提供时按 0 显示 */
+  reviewProgress?: { completed: number; total: number };
+  /** 真实倒计时秒数，未提供时为 0（不显示假倒计时） */
+  countdownSeconds?: number;
 }
 
 export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = ({
   isOpen,
   onClose,
   onAdvanceToStage3,
-  lessonTitle = 'Python 进阶与图形化编程',
+  lessonTitle = '',
   addToast,
+  workA: workAProp,
+  workB: workBProp,
+  reviewProgress,
+  countdownSeconds,
+  matchingItems: matchingItemsProp,
+  badges: badgesProp,
+  annotations: annotationsProp,
+  rubricDimensions: rubricDimensionsProp,
+  reactions: reactionsProp,
+  podiumStudents: podiumStudentsProp,
+  danmaku: danmakuProp,
 }) => {
   // ── State ─────────────────────────────────────────────────────────────
+  // 评阅状态：进度与倒计时来自真实入参；缺失时为 0（不再写死 28/32、142、138s）
   const [reviewState, setReviewState] = useState<PeerReviewState>({
     stage: 'STAGE 02.4',
     isLocked: true,
     isDualScreen: true,
     isAnonymous: true,
-    timeRemainingSeconds: 138, // 02:18
-    totalTimeSeconds: 180, // 03:00
+    timeRemainingSeconds: countdownSeconds ?? 0,
+    totalTimeSeconds: countdownSeconds ?? 0,
     isPaused: false,
-    completedReviews: 28,
-    totalStudents: 32,
-    totalLikes: 142,
-    totalNominations: 6,
+    completedReviews: reviewProgress?.completed ?? 0,
+    totalStudents: reviewProgress?.total ?? 0,
+    totalLikes: 0,
+    totalNominations: 0,
     showVoiceDanmaku: true,
     showDanmaku: true,
   });
@@ -53,225 +88,23 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
   const [isRubricOpen, setIsRubricOpen] = useState(false);
 
   // ── Initial Mock Data based on Stitch 21e2dac1 ─────────────────────────
-  const [matchingItems, setMatchingItems] = useState<PeerMatchingItem[]>([
-    {
-      id: 'm1',
-      code: '#P01',
-      reviewerName: '张子豪',
-      reviewerGroup: '攻坚组',
-      targetStudentName: '陈子墨',
-      targetWorkTitle: '标杆五边形螺旋',
-      status: 'submitted',
-      statusLabel: '已提交评语',
-      score: 5.0,
-      maxScore: 5.0,
-      stars: 5,
-      comment: '画笔粗细自适应很巧妙，颜色过渡的取模算法好严谨！',
-    },
-    {
-      id: 'm2',
-      code: '#P02',
-      reviewerName: '李晓彤',
-      reviewerGroup: '95分',
-      targetStudentName: '王语嫣',
-      targetWorkTitle: '螺旋多边形变式',
-      status: 'in_progress',
-      statusLabel: '正在推导 (2/3)',
-      progressPercent: 66,
-    },
-    {
-      id: 'm3',
-      code: '#P03',
-      reviewerName: '周雨彤',
-      reviewerGroup: '90分',
-      targetStudentName: '孙小博',
-      targetWorkTitle: '几何迭代实验',
-      status: 'completed',
-      statusLabel: '已完成',
-      score: 4.8,
-      maxScore: 5.0,
-      stars: 5,
-    },
-    {
-      id: 'm4',
-      code: '#P04',
-      reviewerName: '钱浩宇',
-      reviewerGroup: '100分',
-      targetStudentName: '何雨辰',
-      targetWorkTitle: '画笔循环优化题',
-      status: 'improvement',
-      statusLabel: '提出改进建议 💡',
-      score: 4.5,
-      maxScore: 5.0,
-      stars: 4,
-    },
-  ]);
+  const [matchingItems, setMatchingItems] = useState<PeerMatchingItem[]>(matchingItemsProp ?? []);
 
-  const [badges, setBadges] = useState<LivePeerBadge[]>([
-    {
-      id: 'b1',
-      senderName: '赵若冰',
-      receiverName: '林浩',
-      badgeTitle: '【思路精妙】徽章',
-      emoji: '🎉',
-      tagColor: 'text-[#ffb95f]',
-    },
-    {
-      id: 'b2',
-      senderName: '郑凯文',
-      receiverName: '张子豪',
-      badgeTitle: '【纠错自愈标杆】',
-      emoji: '💡',
-      tagColor: 'text-[#4edea3]',
-    },
-    {
-      id: 'b3',
-      senderName: '吴敏',
-      receiverName: '陈子墨',
-      badgeTitle: '最佳开源解法',
-      emoji: '⚡',
-      tagColor: 'text-[#c0c1ff]',
-    },
-  ]);
+  const [badges, setBadges] = useState<LivePeerBadge[]>(badgesProp ?? []);
 
-  const [workA, setWorkA] = useState<SpotlightWorkItem>({
-    id: 'work-a',
-    slot: 'A',
-    studentName: '陈子墨',
-    studentInitial: '墨',
-    workTitle: '陈子墨 (作品 A)',
-    workSubtitle: '六色动态多边形螺旋',
-    rating: 4.9,
-    reviewCount: 12,
-    badges: [
-      { label: '🔥 最具创意视觉', colorClass: 'bg-[#ca8100]/30 text-[#ffb95f]' },
-      { label: '代码规范标兵', colorClass: 'bg-[#00a572]/20 text-[#4edea3]' },
-    ],
-    visualType: 'polygon_spiral',
-    visualBadgeText: '60 FPS SANDBOX',
-    codeTitle: '六色动态螺旋与自适应笔触',
-    codeLines: [
-      { text: "colors = ['#c0c1ff', '#4edea3', '#ffb95f']" },
-      { text: 'for i in range(120):', isHighlight: true },
-      { text: 't.pencolor(colors[i % 3])', isHighlight: true, indent: 1 },
-      { text: 't.width(i / 30 + 1)', indent: 1 },
-      { text: 't.forward(i * 1.5)', indent: 1 },
-      { text: 't.left(72)', indent: 1, comment: '# 动态正五边形外角' },
-    ],
-  });
+  const [workA, setWorkA] = useState<SpotlightWorkItem>(workAProp ?? (null as unknown as SpotlightWorkItem));
 
-  const [workB, setWorkB] = useState<SpotlightWorkItem>({
-    id: 'work-b',
-    slot: 'B',
-    studentName: '张子豪',
-    studentInitial: '豪',
-    workTitle: '张子豪 (作品 B)',
-    workSubtitle: '逆风翻盘 · 变式缩进修正版',
-    rating: 4.8,
-    reviewCount: 10,
-    badges: [
-      { label: '💪 最佳进步奖', colorClass: 'bg-[#00a572]/20 text-[#4edea3]' },
-      { label: '韧性极客标杆', colorClass: 'bg-[#8083ff]/20 text-[#c0c1ff]' },
-    ],
-    visualType: 'rect_matrix',
-    visualBadgeText: '缩进修复运行成功',
-    codeTitle: '修复了缩进错位后的四边形矩阵',
-    codeLines: [
-      { text: 'sides = 4; angle = 360 / sides + 18' },
-      { text: 'for step in range(80):' },
-      { text: 't.forward(step * 2)', isSuccess: true, indent: 1, comment: '# ✓ 修正：已对齐4空格' },
-      { text: 't.right(angle)', isSuccess: true, indent: 1, comment: '# ✓ 循环体内执行正常' },
-      { text: 't.speed(0)', indent: 1 },
-    ],
-  });
+  const [workB, setWorkB] = useState<SpotlightWorkItem>(workBProp ?? (null as unknown as SpotlightWorkItem));
 
-  const [annotations, setAnnotations] = useState<TeacherPeerAnnotation[]>([
-    {
-      id: 'a1',
-      authorType: 'teacher',
-      authorRole: '主讲教师',
-      authorName: '陈老师',
-      timeAgo: '1分钟前',
-      content: '大家重点看作品B第4-5行，缩进对齐后循环变量每轮自增生效，图形才呈现出规整的发散美！',
-      borderColor: '#8083ff',
-    },
-    {
-      id: 'a2',
-      authorType: 'peer',
-      authorRole: '互评员',
-      authorName: '李晓彤',
-      timeAgo: '刚刚',
-      content: '作品A用 `colors[i % 3]` 进行模运算循环取色，不仅避免了列表越界，还让画面色彩具有规律律动。',
-      borderColor: '#00a572',
-    },
-  ]);
+  const [annotations, setAnnotations] = useState<TeacherPeerAnnotation[]>(annotationsProp ?? []);
 
-  const [dimensions] = useState<RubricDimensionItem[]>([
-    {
-      id: 'd1',
-      label: '算法逻辑正确性',
-      percentage: 98,
-      colorClass: 'text-[#c0c1ff]',
-      barColorClass: 'bg-[#8083ff]',
-    },
-    {
-      id: 'd2',
-      label: '代码规范与缩进',
-      percentage: 96,
-      colorClass: 'text-[#4edea3]',
-      barColorClass: 'bg-[#00a572]',
-    },
-    {
-      id: 'd3',
-      label: '创意美感与拓展',
-      percentage: 92,
-      colorClass: 'text-[#ffb95f]',
-      barColorClass: 'bg-[#ca8100]',
-    },
-  ]);
+  const [dimensions] = useState<RubricDimensionItem[]>(rubricDimensionsProp ?? []);
 
-  const [reactions, setReactions] = useState<ReactionCountItem[]>([
-    { id: 'like', emoji: '❤️', label: '超赞', count: 68, colorClass: 'text-[#c0c1ff]' },
-    { id: 'inspire', emoji: '💡', label: '灵感启迪', count: 24, colorClass: 'text-[#ffb95f]' },
-    { id: 'rigor', emoji: '📐', label: '极度严谨', count: 15, colorClass: 'text-[#4edea3]' },
-  ]);
+  const [reactions, setReactions] = useState<ReactionCountItem[]>(reactionsProp ?? []);
 
-  const [podiumStudents] = useState<NominatedStudent[]>([
-    {
-      rank: 1,
-      name: '陈子墨',
-      votes: 18,
-      workTitle: '五色动态螺线',
-      honorTitle: '最佳开源作者',
-      rankBadgeClass: 'bg-[#ffb95f] text-[#2a1700]',
-      tagBadgeClass: 'bg-[#ca8100]/20 text-[#ffb95f]',
-    },
-    {
-      rank: 2,
-      name: '张子豪',
-      votes: 14,
-      workTitle: '经典缩进纠错范本',
-      honorTitle: '最佳自愈实践',
-      rankBadgeClass: 'bg-[#2d3449] text-white',
-      tagBadgeClass: 'bg-[#00a572]/20 text-[#4edea3]',
-    },
-    {
-      rank: 3,
-      name: '李晓彤',
-      votes: 11,
-      workTitle: '极简行数高分解',
-      honorTitle: '精简代码标兵',
-      rankBadgeClass: 'bg-[#2d3449] text-white',
-      tagBadgeClass: 'bg-[#171f33] text-[#908fa0]',
-    },
-  ]);
+  const [podiumStudents] = useState<NominatedStudent[]>(podiumStudentsProp ?? []);
 
-  const [danmakuList, setDanmakuList] = useState<DanmakuItem[]>([
-    { id: 'd1', sender: '林浩', text: '这个模运算真的绝了！', topPercent: 15 },
-    { id: 'd2', sender: '王语嫣', text: '作品B的修复思路太清晰啦 🚀', topPercent: 32 },
-    { id: 'd3', sender: '何雨辰', text: '给子墨投了一票！', topPercent: 50 },
-    { id: 'd4', sender: '周雨彤', text: '原来缩进对齐后效果这么惊艳', topPercent: 68, type: 'voice', voiceDuration: 3 },
-  ]);
+  const [danmakuList, setDanmakuList] = useState<DanmakuItem[]>(danmakuProp ?? []);
 
   // ── Countdown Timer effect ───────────────────────────────────────────
   useEffect(() => {
@@ -393,9 +226,13 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
   };
 
   const handleArchiveTopWorks = () => {
+    // 入库对象来自真实焦点作品（无则说明无人可入库），不再硬编码学生姓名
+    const names = [workA?.studentName, workB?.studentName].filter(Boolean) as string[];
     addToast?.(
       '作品已入库',
-      '陈子墨与张子豪的优秀作品已收录进班级数字展览馆。',
+      names.length > 0
+        ? `${names.join(' 与 ')}的优秀作品已收录进班级数字展览馆。`
+        : '暂无焦点作品可入库（学生尚未提交）。',
       'success',
     );
   };
@@ -451,6 +288,20 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
 
       {/* 2. Main 3-Column Arena */}
       <main className="relative flex-1 overflow-y-auto w-full px-6 py-5">
+        {/*
+          数据来源提示：全部数据（互评任务、微勋章、量规、提名榜、弹幕、焦点作品）
+          均由调用方通过 props 传入真实数据。无数据时明确告知教师原因，
+          而不是用假学生/假分数让界面「看起来有内容」。
+        */}
+        {!workA && !workB && matchingItems.length === 0 && podiumStudents.length === 0 && (
+          <div className="mb-4 rounded-xl border border-[#2d3449] bg-[#0b1326] px-4 py-2.5 flex items-center gap-2 text-[11px] text-[#908fa0]">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+            <span>
+              本节暂无可展示的互评数据（学生尚未提交作业或未开始互评）。数据将在学生提交后自动出现。
+            </span>
+          </div>
+        )}
+
         {/* Floating Danmaku Wall */}
         <PeerReviewDanmakuOverlay
           isVisible={reviewState.showDanmaku}
@@ -478,8 +329,17 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
 
           {/* MIDDLE COLUMN: Spotlight Dual-View Peer Showcase & Rubric Stats (col-span-12 lg:col-span-6) */}
           <div className="col-span-12 lg:col-span-6 flex flex-col gap-4">
+            {!workA && !workB && (
+              <div className="rounded-xl border border-dashed border-[#2d3449] bg-[#0b1326] p-6 text-center">
+                <p className="text-xs font-bold text-[#dae2fd]">暂无提交作品可供对比</p>
+                <p className="text-[10px] text-[#908fa0] mt-1">
+                  学生提交课件作业后，此处将自动展示两份真实作品的并排对比。
+                </p>
+              </div>
+            )}
+            {workA || workB ? (
             <SpotlightDualWorkArena
-              workA={workA}
+              workA={workA as SpotlightWorkItem}
               workB={workB}
               annotations={annotations}
               isAnonymous={reviewState.isAnonymous}
@@ -487,12 +347,13 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
               onSyncSandboxToClass={() => {
                 addToast?.(
                   '沙箱广播已生效',
-                  '对比范本已同步至全班 32 台学生机控制台',
+                  `对比范本已同步至全班 ${reviewState.totalStudents || 0} 台学生机控制台`,
                   'success',
                 );
               }}
               onAddAnnotation={handleAddAnnotation}
             />
+            ) : null}
 
             <PeerReviewRubricStats
               dimensions={dimensions}

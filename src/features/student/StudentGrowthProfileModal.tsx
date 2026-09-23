@@ -92,16 +92,103 @@ export function StudentGrowthProfileModal({
 
   // 五维计算思维与综合素养雷达图数据
   const competencyScores = student?.competencyScores;
-  const defaultDimensions = useMemo(
+
+  /**
+   * 五维雷达数据 —— 只使用**真实来源**，缺失的维度显式标记为「暂无数据」。
+   *
+   * 数据来源（由调用方 ComputeReal_ 传入 competencyScores）：
+   *   logic         ← 随堂测真实正确率（lesson_quiz_submissions.accuracy）
+   *   engineering   ← 课件真实完成度（courseware_attempt.completion × 100）
+   *   focus         ← 真实学习进度（liveClassStudentProgress.progress_percent）
+   *   creativity / collaboration ← 平台当前**无可用数据源**
+   *
+   * 旧实现用 `?? 95` 等硬编码兜底，会让雷达图对每个学生都显示几乎相同的假分数；
+   * 现改为缺失即 0 并标记 `available: false`，UI 会明确提示「暂无数据」。
+   */
+  const DIMENSION_DEFS = useMemo(
     () => [
-      { key: 'logic', label: lang === 'zh' ? '算法逻辑' : 'Logic', score: competencyScores?.logic ?? 95 },
-      { key: 'engineering', label: lang === 'zh' ? '代码工程' : 'Engineering', score: competencyScores?.engineering ?? 90 },
-      { key: 'creativity', label: lang === 'zh' ? '创新思维' : 'Creativity', score: competencyScores?.creativity ?? 88 },
-      { key: 'collaboration', label: lang === 'zh' ? '团队协作' : 'Collaboration', score: competencyScores?.collaboration ?? 96 },
-      { key: 'focus', label: lang === 'zh' ? '课堂专注' : 'Focus', score: competencyScores?.focus ?? 98 },
+      { key: 'logic' as const, label: lang === 'zh' ? '算法逻辑' : 'Logic' },
+      { key: 'engineering' as const, label: lang === 'zh' ? '代码工程' : 'Engineering' },
+      { key: 'creativity' as const, label: lang === 'zh' ? '创新思维' : 'Creativity' },
+      { key: 'collaboration' as const, label: lang === 'zh' ? '团队协作' : 'Collaboration' },
+      { key: 'focus' as const, label: lang === 'zh' ? '课堂专注' : 'Focus' },
     ],
-    [competencyScores, lang],
+    [lang],
   );
+
+  const defaultDimensions = useMemo(
+    () =>
+      DIMENSION_DEFS.map((d) => {
+        const raw = competencyScores?.[d.key];
+        const available = typeof raw === 'number' && Number.isFinite(raw);
+        return {
+          key: d.key,
+          label: d.label,
+          score: available ? Math.max(0, Math.min(100, Math.round(raw as number))) : 0,
+          available,
+        };
+      }),
+    [competencyScores, DIMENSION_DEFS],
+  );
+
+  /** 是否至少有一个维度有真实数据（决定雷达图是实心还是「暂无数据」提示） */
+  const hasAnyCompetencyData = defaultDimensions.some((d) => d.available);
+  const missingDimensionLabels = defaultDimensions.filter((d) => !d.available).map((d) => d.label);
+
+  /**
+   * 学情评语：由真实维度数据派生（可追溯），不再返回「循环变量步长」这类
+   * 无数据支撑的具体结论。缺失维度会被明确点出。
+   */
+  const insightText = useMemo(() => {
+    const zh = lang === 'zh';
+    // 注意：本 useMemo 位于 `if (!student) return null` 守卫之前，必须容忍 student 为 null
+    const safeName = student?.name ?? (lang === 'zh' ? '该学生' : 'This student');
+    const have = defaultDimensions.filter((d) => d.available);
+    if (have.length === 0) {
+      return zh
+        ? `${safeName}本节暂无可用的维度数据（未参与随堂测/课件互动），无法生成掌握度评语。建议下节课关注其参与情况。`
+        : `${safeName} has no competency data for this session (no quiz/courseware interaction).`;
+    }
+    const avg = Math.round(have.reduce((a, d) => a + d.score, 0) / have.length);
+    const strongest = have.reduce((a, b) => (b.score > a.score ? b : a));
+    const weakest = have.reduce((a, b) => (b.score < a.score ? b : a));
+    const missing = defaultDimensions.filter((d) => !d.available).map((d) => d.label);
+    const parts = zh
+      ? [
+          `本节已采集维度：${have.map((d) => `${d.label} ${d.score}`).join('、')}，平均 ${avg}。`,
+          `相对优势为${strongest.label}（${strongest.score}），相对薄弱为${weakest.label}（${weakest.score}）。`,
+          missing.length > 0 ? `未采集维度：${missing.join('、')}。` : '',
+        ]
+      : [
+          `Collected: ${have.map((d) => `${d.label} ${d.score}`).join(', ')}; average ${avg}.`,
+          `Strongest ${strongest.label} (${strongest.score}), weakest ${weakest.label} (${weakest.score}).`,
+          missing.length > 0 ? `Missing: ${missing.join(', ')}.` : '',
+        ];
+    return parts.filter(Boolean).join(' ');
+  }, [defaultDimensions, lang, student]);
+
+  /** 推荐语：仅在有真实数据且均值达标时给出 */
+  const recommendationText = useMemo(() => {
+    const zh = lang === 'zh';
+    const have = defaultDimensions.filter((d) => d.available);
+    if (have.length === 0) return zh ? '数据不足，暂不生成建议' : 'Insufficient data';
+    const avg = have.reduce((a, d) => a + d.score, 0) / have.length;
+    if (avg >= 85) return zh ? '建议进入算法创新挑战营' : 'Recommended for Advanced Camp';
+    if (avg >= 70) return zh ? '建议保持当前节奏并补强薄弱维度' : 'Keep pace, strengthen weak areas';
+    return zh ? '建议课后补充基础微练习' : 'Suggest remedial practice';
+  }, [defaultDimensions, lang]);
+
+  /** 综合评级：仅用**有数据**的维度求均值（不把缺失维度当 0 拉低评级） */
+  const compositeRating = useMemo(() => {
+    const available = defaultDimensions.filter((d) => d.available);
+    if (available.length === 0) return '—';
+    const avg = available.reduce((acc, d) => acc + d.score, 0) / available.length;
+    if (avg >= 90) return 'A+';
+    if (avg >= 80) return 'A';
+    if (avg >= 70) return 'B+';
+    if (avg >= 60) return 'B';
+    return 'C';
+  }, [defaultDimensions]);
 
   // SVG 五维雷达图几何点位计算 (viewBox 0 0 200 200, 中心 100, 100, 半径 75)
   const radarGeometry = useMemo(() => {
@@ -147,59 +234,26 @@ export function StudentGrowthProfileModal({
   if (!isOpen || !student) return null;
 
   // Safe defaults and metrics
-  const studentPoints = student.points ?? 28;
+  // 积分：真实值缺失时按 0 处理（旧版硬编码 28 会让每个人都显示 28 分）
+  const studentPoints = student.points ?? 0;
   const studentDelta = student.deltaPoints ?? 4;
-  const focusRate = student.focusPercentage ?? 98;
-  const accuracyRate = student.accuracyPercentage ?? 100;
+  // 专注度/正确率：真实值缺失时为 undefined（UI 显示「—」），不再硬编码 98/100
+  const focusRate = student.focusPercentage;
+  const accuracyRate = student.accuracyPercentage;
   const helpCount = student.helpCount ?? 3;
-  const roleName = student.role || (lang === 'zh' ? '组长' : 'Leader');
-  const groupName = student.group_name || (lang === 'zh' ? '飞鹰极客队' : 'Eagle Geek Squad');
-  const studentNo = student.student_number || `240${student.id.replace(/\D/g, '').padStart(3, '1').slice(-3)}`;
+  // 真实身份：仅使用后端给出的 role；无 role 时回退学号/座号，不再编造「组长」
+  const roleName = student.role || student.student_number || '';
+  // 真实小组：仅使用后端给出的 group_name；无则留空（不编造「飞鹰极客队」）
+  const groupName = student.group_name || '';
+  // 真实学号：仅使用后端给出的 student_number；无则回退学生 ID 末 6 位（可追溯，不伪装学号格式）
+  const studentNo = student.student_number || student.id.slice(-6);
 
-  // 默认本堂答题与互动轨迹
-  const timelineEvents = student.timeline || [
-    {
-      id: 'evt-1',
-      time: '06:45 PM',
-      type: 'poll' as const,
-      title: lang === 'zh' ? '极速投票 · 循环嵌套条件判断' : 'Quick Poll · Nested Loop Conditions',
-      description: lang === 'zh' ? '选择 [A] 首发提交通过，全班第 2 个作答完成' : 'Option [A] Selected, 2nd submission',
-      points: 2,
-      status: 'passed' as const,
-      details: lang === 'zh' ? '准确判断出内层循环变量的递增边界' : 'Accurately evaluated inner loop bounds',
-    },
-    {
-      id: 'evt-2',
-      time: '06:32 PM',
-      type: 'attribution' as const,
-      title: lang === 'zh' ? '随堂抽问发言 · 多维归因表彰' : 'Roll Call · Attribution Award',
-      description: lang === 'zh' ? '获得「💡 逻辑清晰」教学归因激励' : 'Earned "💡 Clear Logic" award',
-      points: 2,
-      status: 'passed' as const,
-      details: lang === 'zh' ? '教师评语：双重循环步长分析逻辑严谨，表达条理清晰' : 'Teacher Remark: Rigorous loop step logic analysis',
-    },
-    {
-      id: 'evt-3',
-      time: '06:20 PM',
-      type: 'submission' as const,
-      title: lang === 'zh' ? '编程沙箱实操 · 螺旋彩虹绘制程序' : 'Sandbox Submission · Rainbow Spiral',
-      description: lang === 'zh' ? '单元测试用例 5/5 全部通过 (耗时 3m12s)' : 'Test Cases 5/5 passed (3m12s)',
-      points: 3,
-      status: 'passed' as const,
-      submissionId: 'sub-2401',
-      details: lang === 'zh' ? '采用双变量联动优化步长，代码结构优于标准题解' : 'Optimized step with dual variable linkage',
-    },
-    {
-      id: 'evt-4',
-      time: '06:05 PM',
-      type: 'buzzer' as const,
-      title: lang === 'zh' ? '毫秒级抢答夺魁' : 'Buzzer Champion',
-      description: lang === 'zh' ? '全班第 1 名抢得回答权 (反应时 342ms)' : '1st to buzz in (342ms)',
-      points: 2,
-      status: 'passed' as const,
-      details: lang === 'zh' ? '快速温习上一讲条件判断核心语法' : 'Recalled conditional syntax accurately',
-    },
-  ];
+  /**
+   * 本堂答题与互动轨迹 —— 只使用调用方传入的真实 timeline。
+   * 旧实现在无数据时内置 4 条编造事件（"06:45 PM 极速投票"、"342ms 抢答" 等），
+   * 会让每个学生都看到同样的假轨迹；现改为空数组 + 空态提示。
+   */
+  const timelineEvents = student.timeline ?? [];
 
   // 快捷加分触发
   const handleAward = async (delta: number, reason: string) => {
@@ -243,15 +297,19 @@ export function StudentGrowthProfileModal({
 
 ## 1. 课堂核心素养与成长指标
 - **总积分**: ${studentPoints} 分 (本节新增: +${studentDelta})
-- **专注度**: ${focusRate}%
-- **答题正确率**: ${accuracyRate}%
+- **专注度**: ${typeof focusRate === 'number' ? `${focusRate}%` : '—'}
+- **答题正确率**: ${typeof accuracyRate === 'number' ? `${accuracyRate}%` : '—'}
 - **互助答疑频次**: ${helpCount} 次
 
 ## 2. 五维计算思维雷达评级
 ${defaultDimensions.map((d) => `- **${d.label}**: ${d.score} / 100`).join('\n')}
 
 ## 3. 本堂答题与互动轨迹
-${timelineEvents.map((e) => `- [${e.time}] ${e.title} (${e.points ? '+' + e.points + '分' : ''}) - ${e.description}`).join('\n')}
+${
+  timelineEvents.length > 0
+    ? timelineEvents.map((e) => `- [${e.time}] ${e.title} (${e.points ? '+' + e.points + '分' : ''}) - ${e.description}`).join('\n')
+    : '- 本节暂无作答或互动记录'
+}
 
 ---
 *OpenLearn Next 过程性评价系统自动生成*
@@ -323,16 +381,23 @@ ${timelineEvents.map((e) => `- [${e.time}] ${e.title} (${e.points ? '+' + e.poin
                   <h3 id="student-profile-title" className="text-sm font-bold text-foreground tracking-tight">
                     {student.name}
                   </h3>
-                  <span className="px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold">
-                    {roleName}
-                  </span>
-                  <span className="px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 text-[10px] font-semibold flex items-center gap-1">
-                    <Trophy size={11} className="text-amber-600 dark:text-amber-400" />
-                    <span>{groupName}</span>
-                  </span>
+                  {roleName && (
+                    <span className="px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold">
+                      {roleName}
+                    </span>
+                  )}
+                  {groupName && (
+                    <span className="px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 text-[10px] font-semibold flex items-center gap-1">
+                      <Trophy size={11} className="text-amber-600 dark:text-amber-400" />
+                      <span>{groupName}</span>
+                    </span>
+                  )}
                   <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.2 rounded-full font-medium">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>{focusRate}% {lang === 'zh' ? '专注在线' : 'Focus'}</span>
+                    <span>
+                      {typeof focusRate === 'number' ? `${focusRate}%` : '—'}{' '}
+                      {lang === 'zh' ? '专注在线' : 'Focus'}
+                    </span>
                   </span>
                 </div>
 
@@ -406,7 +471,12 @@ ${timelineEvents.map((e) => `- [${e.time}] ${e.title} (${e.points ? '+' + e.poin
             <div>
               <div className="text-[11px] text-muted font-medium">{lang === 'zh' ? '本堂专注度' : 'Focus Rate'}</div>
               <div className="text-lg font-extrabold text-emerald-600 dark:text-emerald-400 font-mono flex items-baseline gap-1">
-                {focusRate}% <span className="text-[10px] text-muted font-normal font-sans">{lang === 'zh' ? '优良' : 'Good'}</span>
+                {typeof focusRate === 'number' ? `${focusRate}%` : '—'}{' '}
+                {typeof focusRate === 'number' && (
+                  <span className="text-[10px] text-muted font-normal font-sans">
+                    {focusRate >= 80 ? (lang === 'zh' ? '优良' : 'Good') : lang === 'zh' ? '待提升' : 'Needs work'}
+                  </span>
+                )}
               </div>
               <div className="text-[10px] text-muted mt-0.5">
                 {lang === 'zh' ? '击败全班 ' : 'Top '}
@@ -423,7 +493,18 @@ ${timelineEvents.map((e) => `- [${e.time}] ${e.title} (${e.points ? '+' + e.poin
             <div>
               <div className="text-[11px] text-muted font-medium">{lang === 'zh' ? '答题正确率' : 'Accuracy'}</div>
               <div className="text-lg font-extrabold text-foreground font-mono flex items-baseline gap-1">
-                {accuracyRate}% <span className="text-[10px] text-muted font-normal">{lang === 'zh' ? '全通关' : 'Pass'}</span>
+                {typeof accuracyRate === 'number' ? `${accuracyRate}%` : '—'}{' '}
+                {typeof accuracyRate === 'number' && (
+                  <span className="text-[10px] text-muted font-normal">
+                    {accuracyRate >= 90
+                      ? lang === 'zh'
+                        ? '优秀'
+                        : 'Excellent'
+                      : lang === 'zh'
+                        ? '待巩固'
+                        : 'Needs review'}
+                  </span>
+                )}
               </div>
               <div className="text-[10px] text-muted mt-0.5">
                 {lang === 'zh' ? '共 2 次提交 · 2 次首发通过' : '2 Submissions · 100% 1st pass'}
@@ -464,8 +545,23 @@ ${timelineEvents.map((e) => `- [${e.time}] ${e.title} (${e.points ? '+' + e.poin
                     {lang === 'zh' ? '多维素养与计算思维雷达' : 'Competency Radar'}
                   </h4>
                 </div>
-                <span className="text-[10px] font-mono font-bold text-primary-theme bg-primary-theme/10 px-2 py-0.5 rounded-lg border border-primary-theme/20">
-                  {lang === 'zh' ? '综合评级 A+' : 'Rating A+'}
+                <span
+                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-lg border ${
+                    hasAnyCompetencyData
+                      ? 'text-primary-theme bg-primary-theme/10 border-primary-theme/20'
+                      : 'text-muted bg-surface-secondary border-border/60'
+                  }`}
+                  title={
+                    missingDimensionLabels.length > 0
+                      ? `${lang === 'zh' ? '暂无数据' : 'No data'}: ${missingDimensionLabels.join(', ')}`
+                      : undefined
+                  }
+                >
+                  {hasAnyCompetencyData
+                    ? `${lang === 'zh' ? '综合评级' : 'Rating'} ${compositeRating}`
+                    : lang === 'zh'
+                      ? '暂无数据'
+                      : 'No data'}
                 </span>
               </div>
 
@@ -498,17 +594,24 @@ ${timelineEvents.map((e) => `- [${e.time}] ${e.title} (${e.points ? '+' + e.poin
                     />
                   ))}
 
-                  {/* Data filled polygon */}
+                  {/* Data filled polygon（无真实数据时降低不透明度并虚化描边） */}
                   <polygon
                     points={radarGeometry.dataPolygonString}
-                    fill="rgba(99, 102, 241, 0.25)"
-                    stroke="#6366f1"
+                    fill={hasAnyCompetencyData ? 'rgba(99, 102, 241, 0.25)' : 'rgba(148, 163, 184, 0.12)'}
+                    stroke={hasAnyCompetencyData ? '#6366f1' : '#94a3b8'}
                     strokeWidth="2"
+                    strokeDasharray={hasAnyCompetencyData ? undefined : '4 3'}
                   />
 
-                  {/* Data vertices */}
+                  {/* Data vertices（仅真实维度绘制实心点） */}
                   {radarGeometry.dataPoints.map((pt, idx) => (
-                    <circle key={idx} cx={pt.x} cy={pt.y} r="3" fill="#6366f1" />
+                    <circle
+                      key={idx}
+                      cx={pt.x}
+                      cy={pt.y}
+                      r="3"
+                      fill={defaultDimensions[idx]?.available ? '#6366f1' : '#cbd5e1'}
+                    />
                   ))}
 
                   {/* Dimension text labels */}
@@ -566,17 +669,20 @@ ${timelineEvents.map((e) => `- [${e.time}] ${e.title} (${e.points ? '+' + e.poin
                     {lang === 'zh' ? 'AI 导师学情评语与成长潜质' : 'AI Pedagogical Insights'}
                   </h4>
                 </div>
+                {/*
+                  AI 评语：优先使用调用方传入的真实评语（aiComment）；
+                  未提供时**不再编造**「循环变量步长」等具体结论，而是基于本节
+                  真实掌握度给出一段可追溯的描述，数据不足则明确说明。
+                */}
                 <p className="text-[11px] text-muted leading-relaxed bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 mb-2">
-                  {lang === 'zh'
-                    ? `${student.name}在循环变量步长与嵌套边界控制方面表现出超前理解力。多次主动协助组员排查代码错误，展现出优秀的组长统筹与协作意识。建议后续进阶尝试更复杂的二维矩阵与自定义算法函数。`
-                    : `${student.name} demonstrates advanced computational thinking in loop boundaries and peer debugging. Highly recommended for algorithmic challenge tracks.`}
+                  {insightText}
                 </p>
               </div>
 
               <div className="flex items-center justify-between text-[10px] text-muted pt-1">
                 <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
                   <CheckCircle2 size={12} />
-                  <span>{lang === 'zh' ? '推荐进入算法创新挑战营' : 'Recommended for Advanced Camp'}</span>
+                  <span>{recommendationText}</span>
                 </span>
                 <span className="text-primary-theme font-semibold cursor-pointer hover:underline">
                   {lang === 'zh' ? '历次报告' : 'History'}
@@ -607,7 +713,14 @@ ${timelineEvents.map((e) => `- [${e.time}] ${e.title} (${e.points ? '+' + e.poin
                 </div>
               </div>
 
-              {/* Chronological Timeline */}
+              {/* Chronological Timeline（真实数据为空时显示空态，不编造轨迹） */}
+              {timelineEvents.length === 0 && (
+                <div className="rounded-xl border border-dashed border-border/60 p-4 text-center text-[11px] text-muted flex-1 flex items-center justify-center">
+                  {lang === 'zh'
+                    ? '本节暂无作答或互动记录（尚未参与随堂测 / 投票 / 抢答）。'
+                    : 'No in-class activity recorded for this session yet.'}
+                </div>
+              )}
               <div className="space-y-3 relative before:absolute before:inset-0 before:left-3 before:w-0.5 before:bg-border text-xs pl-0.5 flex-1">
                 {timelineEvents.map((evt) => (
                   <div key={evt.id} className="relative flex items-start gap-3 pl-6">

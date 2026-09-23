@@ -388,13 +388,70 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
 
       expect(screen.getByText('STAGE 02.4')).toBeDefined();
       expect(screen.getByText('智能交叉互评')).toBeDefined();
-      expect(screen.getByText('大屏焦点作品对比赏析')).toBeDefined();
       expect(screen.getByText('互评推荐先锋榜')).toBeDefined();
+      // 未传真实数据 → 显式空态，而非伪造的「陈子墨 / 张子豪」对比作品
+      expect(screen.getAllByText(/暂无提交作品可供对比|本节暂无可展示的互评数据/).length).toBeGreaterThan(0);
 
       // Press Enter to advance
       fireEvent.keyDown(window, { key: 'Enter' });
       expect(onAdvance).toHaveBeenCalledTimes(1);
       expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('传入真实作品与提名榜时渲染真实姓名（不再出现硬编码假学生）', () => {
+      render(
+        <PeerReviewShowcaseModal
+          isOpen={true}
+          onClose={vi.fn()}
+          workA={
+            {
+              id: 'w-a',
+              slot: 'A',
+              studentName: '真实学生甲',
+              studentInitial: '真',
+              workTitle: '真实作品 A',
+              workSubtitle: '得分 92',
+              badges: [],
+            } as any
+          }
+          workB={
+            {
+              id: 'w-b',
+              slot: 'B',
+              studentName: '真实学生乙',
+              studentInitial: '实',
+              workTitle: '真实作品 B',
+              workSubtitle: '得分 88',
+              badges: [],
+            } as any
+          }
+          podiumStudents={[
+            {
+              rank: 1,
+              name: '真实学生甲',
+              votes: 92,
+              workTitle: '92% 正确率',
+              honorTitle: '本节最高分',
+              rankBadgeClass: 'bg-[#ffb95f] text-[#2a1700]',
+              tagBadgeClass: 'bg-[#ca8100]/20 text-[#ffb95f]',
+            },
+          ] as any}
+        />,
+      );
+
+      // 双盲匿名默认开启 → 姓名按设计被遮罩，但真实作品标题与得分必须出现
+      // arena 渲染的是 workSubtitle（真实得分/完成度）；workTitle 不在 arena 渲染范围内
+      expect(screen.getAllByText(/得分 92/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/得分 88/).length).toBeGreaterThan(0);
+      // 双盲匿名下姓名被遮罩，但「（作品 A）/（作品 B）」槽位标签必须存在
+      expect(screen.getAllByText(/\(作品 A\)/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/\(作品 B\)/).length).toBeGreaterThan(0);
+      // 真实提名榜姓名出现在右侧先锋榜（双盲匿名 → 按设计遮罩为「真**」）
+      expect(screen.getAllByText(/真\*\*/).length).toBeGreaterThan(0);
+      // 旧版硬编码假学生不得再出现
+      expect(screen.queryByText(/陈子墨/)).toBeNull();
+      expect(screen.queryByText(/张子豪/)).toBeNull();
+      expect(screen.queryByText(/李晓彤/)).toBeNull();
     });
 
     it('handles Escape hotkey to close modal directly', () => {

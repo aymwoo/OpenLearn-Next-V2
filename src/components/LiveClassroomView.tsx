@@ -46,6 +46,7 @@ import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdo
 import { StudentGrowthProfileModal } from '../features/student/StudentGrowthProfileModal';
 import { PeerReviewShowcaseModal } from '../features/classroom/peer-review/PeerReviewShowcaseModal';
 import { ParentNotificationModal } from '../features/classroom/notifications/ParentNotificationModal';
+import { useClassroomLiveData } from '../features/classroom/hooks/useClassroomLiveData';
 import { MasteryPredictionModal } from '../features/classroom/pacing/MasteryPredictionModal';
 import { DiagnosticCenterModal } from '../features/classroom/diagnostics/DiagnosticCenterModal';
 import { GroupCollabWhiteboardModal } from '../features/classroom/collab-whiteboard/GroupCollabWhiteboardModal';
@@ -167,18 +168,172 @@ export function LiveClassroomView({
   const [isMasteryPredictionOpen, setIsMasteryPredictionOpen] = useState(false);
   const [isDiagnosticCenterOpen, setIsDiagnosticCenterOpen] = useState(false);
   const [isGroupCollabOpen, setIsGroupCollabOpen] = useState(false);
+  /** 真实开课时间（来自 classroom_sessions.started_at），用于计算已用时长 */
+  const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
+  /** 真实课件作答记录（用于成绩/完成度/行为标签派生） */
+  const [attempts, setAttempts] = useState<any[]>([]);
+
+  // 轮询课堂会话：真实 stage + 真实开课时间（驱动 elapsedMin / AI 预测 / 家校通知）
+  useEffect(() => {
+    if (!selectedLesson) {
+      setSessionStartedAt(null);
+      return;
+    }
+    let mounted = true;
+    const fetchSession = () => {
+      fetch(`/api/classroom/sessions/${selectedLesson}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!mounted || !data) return;
+          if (data.hasActiveSession && data.stage) {
+            setClassroomStage(data.stage);
+          }
+          // started_at 来自真实会话行；无会话时为 null（elapsedMin 随之归 0，不编造）
+          const startedAt = data.session?.started_at ?? data.startedAt ?? null;
+          setSessionStartedAt(typeof startedAt === 'number' ? startedAt : null);
+        })
+        .catch(() => {});
+    };
+    fetchSession();
+    const timer = setInterval(fetchSession, 15000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, [selectedLesson]);
+
+  /** 真实课堂积分榜（来自 lesson_quiz_submissions 聚合），用于归因/积分榜弹窗 */
+  const [topPerformers, setTopPerformers] = useState<
+    Array<{ studentId: string; studentName: string; cumulativeScore: number; accuracy: number }>
+  >([]);
 
   useEffect(() => {
-    if (!selectedLesson) return;
-    fetch(`/api/classroom/sessions/${selectedLesson}`)
+    if (!selectedLesson) {
+      setTopPerformers([]);
+      return;
+    }
+    let mounted = true;
+    fetch(`/api/classroom/sessions/${selectedLesson}/top-performers?limit=50`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data?.hasActiveSession && data?.stage) {
-          setClassroomStage(data.stage);
-        }
+        if (!mounted) return;
+        const rows = Array.isArray(data?.topPerformers) ? data.topPerformers : [];
+        setTopPerformers(
+          rows.map((r: any) => ({
+            studentId: String(r.studentId ?? ''),
+            studentName: String(r.studentName ?? ''),
+            cumulativeScore: Number(r.cumulativeScore) || 0,
+            accuracy: Number(r.accuracy) || 0,
+          })),
+        );
       })
       .catch(() => {});
+    return () => {
+      mounted = false;
+    };
   }, [selectedLesson]);
+
+  // 课堂真实数据派生层：把已有 props/state 统一派生为 AI/报表可用的真实指标
+  const liveData = useClassroomLiveData({
+    students,
+    liveClassStudentProgress,
+    onlineStudentIds,
+    liveClassFeed,
+    timelineSegments,
+    attempts,
+    sessionStartedAt,
+    classroomStage,
+    studentErrors,
+  });
+
+  /**
+   * 互评秀场真实数据源（不编造学生/作品/分数）：
+   *   workA / workB   ← 本节真实课件作答（courseware_attempt + submission_result）按分数取前 2
+   *   podiumStudents  ← 本节真实积分榜（lesson_quiz_submissions 聚合）按积分取前 3
+   *   reviewProgress  ← 真实「已完成 / 总人数」
+   * 平台当前**没有**课中互评任务表（plugin_peer_review_* 是作业级互评），
+   * 因此 matchingItems / badges / danmaku 留空，由弹窗渲染空态说明，
+   * 不再用「张子豪评陈子墨」这类假数据填充界面。
+   */
+  const peerReviewData = React.useMemo(() => {
+    const validAttempts = (attempts ?? []).filter(
+      (a: any) => a?.studentId && a.studentId !== 'teacher' && a.studentId !== 'guest',
+    );
+    // 按分数降序，取前 2 作为焦点对比作品
+    const ranked = [...validAttempts].sort(
+      (a: any, b: any) => (Number(b.score) || 0) - (Number(a.score) || 0),
+    );
+    const toWork = (a: any, slot: 'A' | 'B') => {
+      if (!a) return null;
+      const name = String(a.studentName || a.studentId);
+      const score = typeof a.score === 'number' ? a.score : null;
+      return {
+        id: String(a.attemptId ?? `work-${slot}`),
+        slot,
+        studentName: name,
+        studentInitial: name.slice(0, 1),
+        workTitle: `${name} · ${a.coursewareName ?? '课件作品'}`,
+        workSubtitle:
+          score === null
+            ? a.status === 'completed'
+              ? '已完成提交'
+              : '作答中'
+            : `得分 ${score}${typeof a.completion === 'number' ? ` · 完成度 ${Math.round(a.completion * 100)}%` : ''}`,
+        rating: null,
+        reviewCount: 0,
+        badges: [],
+      };
+    };
+
+    const podium = topPerformers.slice(0, 3).map((t, idx) => ({
+      rank: idx + 1,
+      name: t.studentName,
+      votes: t.cumulativeScore,
+      workTitle: `${t.accuracy}% 正确率`,
+      honorTitle: idx === 0 ? '本节最高分' : '优秀表现',
+      rankBadgeClass: idx === 0 ? 'bg-[#ffb95f] text-[#2a1700]' : 'bg-[#171f33] text-[#908fa0]',
+      tagBadgeClass: 'bg-[#ca8100]/20 text-[#ffb95f]',
+    }));
+
+    return {
+      workA: toWork(ranked[0], 'A'),
+      workB: toWork(ranked[1], 'B'),
+      podiumStudents: podium,
+      reviewProgress: {
+        completed: validAttempts.filter((a: any) => a.status === 'completed').length,
+        total: students.length,
+      },
+    };
+  }, [attempts, topPerformers, students.length]);
+
+  /**
+   * 真实学生档案：积分来自 top-performers（lesson_quiz_submissions 聚合），
+   * 专注度来自 liveClassStudentProgress.progress_percent，座位/小组来自学生记录。
+   * 无真实数据时保持 0 / undefined —— 不再回退到「学员 A1」这类假身份。
+   */
+  const classProfiles = React.useMemo(() => {
+    const pointsById = new Map(topPerformers.map((t) => [t.studentId, t.cumulativeScore]));
+    const accuracyById = new Map(topPerformers.map((t) => [t.studentId, t.accuracy]));
+    return liveData.studentMetrics.map((m, idx) => {
+      // 真实维度分数：只填有真实来源的维度，其余留 undefined（弹窗显示「暂无数据」）
+      const accuracy = accuracyById.get(m.studentId);
+      const competencyScores: Record<string, number> = {};
+      if (typeof accuracy === 'number' && accuracy > 0) competencyScores.logic = Math.round(accuracy);
+      if (typeof m.completion === 'number') competencyScores.engineering = Math.round(m.completion * 100);
+      if (m.progressPercent > 0) competencyScores.focus = m.progressPercent;
+      return {
+        id: m.studentId,
+        name: m.studentName,
+        studentNo: m.studentNumber,
+        groupName: (students[idx] as any)?.group_name ?? undefined,
+        seatNumber: (students[idx] as any)?.seat_number ?? undefined,
+        currentPoints: pointsById.get(m.studentId) ?? 0,
+        focusScore: m.progressPercent,
+        pickedCountToday: 0,
+        competencyScores: Object.keys(competencyScores).length > 0 ? competencyScores : undefined,
+      };
+    });
+  }, [liveData.studentMetrics, topPerformers, students]);
 
   const handleStageChange = async (newStage: string) => {
     setClassroomStage(newStage);
@@ -230,7 +385,6 @@ export function LiveClassroomView({
 
   // Interactive courseware submission states
   const [middleTab, setMiddleTab] = useState<'whiteboard' | 'submissions' | 'assignment' | 'top_performers'>('whiteboard');
-  const [attempts, setAttempts] = useState<any[]>([]);
   const [loadingAttempts, setLoadingAttempts] = useState(false);
   const [selectedAttempt, setSelectedAttempt] = useState<any | null>(null);
   const [rawPayload, setRawPayload] = useState<any | null>(null);
@@ -1033,6 +1187,7 @@ export function LiveClassroomView({
         addToast={addToast}
         currentStage={classroomStage}
         onStageChange={(newStage) => setClassroomStage(newStage)}
+        students={classProfiles}
       />
 
       {/* 2. Main Stage Router: Switches based on classroomStage */}
@@ -2223,6 +2378,10 @@ export function LiveClassroomView({
         lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title}
         addToast={addToast}
         onAdvanceToStage3={() => handleStageChange('WRAP_UP_EXIT_TICKET')}
+        workA={peerReviewData.workA as any}
+        workB={peerReviewData.workB as any}
+        podiumStudents={peerReviewData.podiumStudents as any}
+        reviewProgress={peerReviewData.reviewProgress}
       />
 
       {/* ── 流程扩展 #1：家校通知生成器（post-class） ──
@@ -2233,21 +2392,23 @@ export function LiveClassroomView({
         snapshot={{
           lessonTitle: lessons.find((l) => l.id === selectedLesson)?.title ?? '',
           lessonId: selectedLesson,
-          className:
-            classes.find((c) => c.id === liveClassSelectedClassId)?.name ?? '',
+          className: classes.find((c) => c.id === liveClassSelectedClassId)?.name ?? '',
           classId: liveClassSelectedClassId,
-          startTimeMs: Date.now() - (liveClassTimeRemaining || 0) * 1000,
+          // 真实时间窗：优先用会话 started_at，缺失时回退到「现在」（不编造时长）
+          startTimeMs: sessionStartedAt ?? Date.now(),
           endTimeMs: Date.now(),
           totalStudents: students.length,
-          onlineStudentIds: (onlineStudentIds as string[]) ?? [],
-          highlights: [],
-          stages: [],
-          students: students.map((s: any) => ({
-            id: s.id,
-            name: s.name ?? s.student_number ?? s.id,
-            student_number: s.student_number,
-            participationScore: 60,
-            behaviorTags: [],
+          onlineStudentIds: liveData.studentMetrics.filter((m) => m.online).map((m) => m.studentId),
+          highlights: liveData.highlights,
+          stages: liveData.stages,
+          students: liveData.studentMetrics.map((m) => ({
+            id: m.studentId,
+            name: m.studentName,
+            student_number: m.studentNumber,
+            // 参与度来自真实 progress_percent
+            participationScore: m.participationScore,
+            quizScore: m.quizScore,
+            behaviorTags: m.behaviorTags,
           })),
         }}
         addToast={addToast}
@@ -2261,14 +2422,25 @@ export function LiveClassroomView({
         lessonId={selectedLesson}
         lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title ?? ''}
         currentStageName={classroomStage ?? 'IN_CLASS_TEACHING'}
-        elapsedMin={0}
-        plannedTotalMin={45}
-        studentSnapshots={(students ?? []).map((s: any) => ({
-          studentId: s.id,
-          studentName: s.name ?? s.student_number ?? s.id,
-          participationScore: 60,
-          paceIndicator: 'on-track' as const,
-          behaviorSignals: [],
+        elapsedMin={liveData.elapsedMin}
+        plannedTotalMin={liveData.plannedTotalMin}
+        studentSnapshots={liveData.studentMetrics.map((m) => ({
+          studentId: m.studentId,
+          studentName: m.studentName,
+          // 真实参与度（progress_percent）
+          participationScore: m.participationScore,
+          quizScore: m.quizScore,
+          // 节奏由真实进度派生：≥80 领先、≥50 正常、>0 偏慢、=0 停滞
+          paceIndicator:
+            m.progressPercent >= 80
+              ? ('fast' as const)
+              : m.progressPercent >= 50
+                ? ('on-track' as const)
+                : m.progressPercent > 0
+                  ? ('slow' as const)
+                  : ('stalled' as const),
+          // 行为信号直接复用真实派生的行为标签（可追溯）
+          behaviorSignals: m.behaviorTags,
         }))}
         addToast={addToast}
         lang={lang as 'zh' | 'en'}

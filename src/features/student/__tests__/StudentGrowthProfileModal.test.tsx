@@ -91,36 +91,68 @@ describe('StudentGrowthProfileModal (Stitch Screen 07fd3861)', () => {
     render(<StudentGrowthProfileModal {...defaultProps} />);
 
     expect(screen.getByText('多维素养与计算思维雷达')).toBeDefined();
-    expect(screen.getByText('综合评级 A+')).toBeDefined();
+    // 综合评级由真实维度均值派生（95/90/88/96/98 → 均 93.4 → A+）
+    expect(screen.getByText(/综合评级 A\+/)).toBeDefined();
 
-    // Radar chart dimensions
-    expect(screen.getByText(/算法逻辑 95/)).toBeDefined();
-    expect(screen.getByText(/代码工程 90/)).toBeDefined();
-    expect(screen.getByText(/创新思维 88/)).toBeDefined();
-    expect(screen.getByText(/团队协作 96/)).toBeDefined();
-    expect(screen.getByText(/课堂专注 98/)).toBeDefined();
+    // Radar chart dimensions（评分同时出现在 SVG 轴标签与派生评语中，故用 getAllByText）
+    expect(screen.getAllByText(/算法逻辑 95/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/代码工程 90/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/创新思维 88/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/团队协作 96/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/课堂专注 98/).length).toBeGreaterThan(0);
   });
 
-  it('renders AI pedagogical review insights and growth recommendations', () => {
+  it('无 competencyScores 时雷达图标记「暂无数据」而不是硬编码 95/90/88/96/98', () => {
+    render(
+      <StudentGrowthProfileModal
+        {...defaultProps}
+        student={{ id: 's-nodata', name: '无数据学生' } as any}
+      />,
+    );
+    expect(screen.getByText('暂无数据')).toBeDefined();
+    expect(screen.getByText(/无法生成掌握度评语/)).toBeDefined();
+  });
+
+  it('AI 评语由真实维度派生（可追溯），不再编造具体结论', () => {
     render(<StudentGrowthProfileModal {...defaultProps} />);
 
     expect(screen.getByText('AI 导师学情评语与成长潜质')).toBeDefined();
-    expect(screen.getByText(/在循环变量步长与嵌套边界控制方面表现出超前理解力/)).toBeDefined();
-    expect(screen.getByText('推荐进入算法创新挑战营')).toBeDefined();
+    // 评语只引用真实采集到的维度与均值
+    expect(screen.getByText(/本节已采集维度/)).toBeDefined();
+    expect(screen.getByText(/平均 93/)).toBeDefined();
+    // 均值 ≥85 → 给出进阶建议
+    expect(screen.getByText('建议进入算法创新挑战营')).toBeDefined();
   });
 
-  it('renders timeline events and handles inspect sandbox action', () => {
-    render(<StudentGrowthProfileModal {...defaultProps} />);
+  it('渲染传入的真实时间线并提供沙箱查验入口', () => {
+    const withTimeline = {
+      ...mockStudent,
+      timeline: [
+        {
+          id: 'evt-real-1',
+          time: '18:45',
+          type: 'poll' as const,
+          title: '真实随堂测',
+          description: '提交作答',
+          points: 2,
+          status: 'passed' as const,
+          submissionId: 'sub-2401',
+        },
+      ],
+    };
+    render(<StudentGrowthProfileModal {...defaultProps} student={withTimeline as any} />);
 
-    expect(screen.getByText(/极速投票 · 循环嵌套条件判断/)).toBeDefined();
-    expect(screen.getByText(/随堂抽问发言 · 多维归因表彰/)).toBeDefined();
-    expect(screen.getByText(/编程沙箱实操 · 螺旋彩虹绘制程序/)).toBeDefined();
-    expect(screen.getByText(/毫秒级抢答夺魁/)).toBeDefined();
+    expect(screen.getByText(/真实随堂测/)).toBeDefined();
 
-    // Click inspect sandbox button on submission event
     const inspectBtn = screen.getByRole('button', { name: /查验代码沙箱/ });
     fireEvent.click(inspectBtn);
     expect(defaultProps.onInspectSandbox).toHaveBeenCalledWith('s-101', 'sub-2401');
+  });
+
+  it('无 timeline 时显示空态而不是编造的互动轨迹', () => {
+    render(<StudentGrowthProfileModal {...defaultProps} />);
+    expect(screen.getByText(/本节暂无作答或互动记录/)).toBeDefined();
+    expect(screen.queryByText(/毫秒级抢答夺魁/)).toBeNull();
   });
 
   it('handles quick attribution point award from modal footer', () => {

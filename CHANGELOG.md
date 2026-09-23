@@ -12,6 +12,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **课堂数据真实化治理（消除 12 处伪数据来源）**：上课流程中原有 12 处「非真实来源」的数据（硬编码学生、伪计算分数、空数组占位），导致 AI 生成、学情简报、雷达图等输出失真。本次全部改为**可追溯的真实来源**，无数据时显式降级为空态而非编造：
+  - **新增共享派生层 `src/features/classroom/hooks/useClassroomLiveData.ts`**：把 `LiveClassroomView` 已有的 props/state（`liveClassStudentProgress` / `onlineStudentIds` / `liveClassFeed` / `timelineSegments` / `attempts` / `session.started_at`）统一派生为逐生指标、课堂亮点、环节节奏、已用时长，**不新增任何网络请求**。核心原则：无数据 → `0 / undefined / []`，绝不给「看起来合理」的假值。附带 17 例单测锁定该不变量。
+  - **`LiveClassroomView` 4 个流程页面的数据泵**：`participationScore: 60` → 真实 `progress_percent`；空 `highlights` → 真实 `liveClassFeed` 事件；空 `stages` → 真实 `timelineSegments`；`elapsedMin=0` / `plannedTotalMin=45` → 真实 `session.started_at` 与教案时长；`paceIndicator` 由真实进度分级派生；`quizScore` 由真实 `courseware_attempt` 取最高分（排除 teacher/guest 占位）。
+  - **`server/routes/classroom.ts` panoramic-report 增加逐生真实明细**：新增 `students[]` 字段，聚合 `lesson_quiz_submissions`（平均分 / 正确率）、`classroom_poll_votes`（投票次数）、`classroom_exit_tickets`（通票评分），并按班级花名册补齐未互动学生（`attendance=false`）。
+  - **`ClassroomBriefingView` 伪计算移除**：`quizScore = 80 + ((i * 7) % 21)`、`pollsAnswered = 2 + (i % 3)`、`rating`、`status`、`note` 全部改为消费上述真实明细；无数据字段渲染「—」而非假数字（表格与 CSV 导出同步）。
+  - **学生五维雷达图诚实化**：`StudentGrowthProfileModal` 移除 `?? 95/90/88/96/98` 硬编码兜底（旧实现让每个学生雷达图几乎相同）。现在仅使用调用方传入的 `competencyScores`，缺失维度标记 `available: false` → 雷达多边形虚线灰化并提示「暂无数据」；综合评级与 AI 评语改为**由真实维度均值派生**（不再输出「循环变量步长表现出超前理解力」这类无据结论）；时间线移除 4 条内置编造事件，改为空态提示。`ClassroomAttributionModal` 补充 `competencyScores` 透传，`StudentGrowthProfileModal` 的 `role`/`group_name`/`student_number` 缺失时不再编造「组长 / 飞鹰极客队 / 240101」。
+  - **`ClassroomLeaderboardModal` 分组与积分真实化**：移除假小组名（飞鹰极客队等）与写死的 `baseScore: 104` / `growth: '+14'`；改为按真实 `groupName` 分组、组内真实积分求和排序，无数据渲染空态；移除 `currentPoints ?? 28`、`focusScore ?? 98` 兜底。
+  - **互评秀场真实数据接入**：`PeerReviewShowcaseModal` 移除 `// Initial Mock Data` 中的假学生（张子豪 / 陈子墨 / 李晓彤…）、假作品、假评分、假倒计时，改为 props 驱动（`workA` / `workB` / `matchingItems` / `badges` / `rubricDimensions` / `reactions` / `podiumStudents` / `danmaku` / `reviewProgress` / `countdownSeconds`）；`LiveClassroomView` 用真实课件作答前 2 名作为焦点对比作品、真实积分榜作为提名榜。平台当前无课中互评任务表，相应区域渲染空态并说明原因。`PeerReviewLeaderboardPanel` / `SpotlightDualWorkArena` 的硬编码姓名改为 props 驱动（无数据时按钮禁用）。
+  - **未改动的合理默认值**：`ClassroomCountdownWidget` 的 `|| 300` 是倒计时预设时长、`timelineSegments` 的 `|| 300` 是环节默认时长，属合法默认而非伪数据，保持原状。
+
 - **上课流程四页面扩展（家校通知 / AI 学情预测 / 异常告警中心 / 小组协作白板）**：从「上课流程完整性」出发补齐四个课上/课后环节，全部挂在 `LiveClassroomView` 顶栏入口，均支持 `lang: 'zh' | 'en'` 与四套主题语义 token：
   - **#1 家校通知生成器（post-class）**：新增 `src/features/classroom/notifications/ParentNotificationModal.tsx` + 服务端 `POST /api/classroom/:lessonId/parent-notification`（限教师/管理员）。产物 = 全班 Markdown 学情简报（出勤率 / 课堂总评 / 亮点 / 各阶段节奏偏差）+ 逐生家长通知（AI 按参与度、测验、行为标签生成 ≤ 80 字中文简报）；支持「全班简报 / 逐生通知」双 Tab、学生侧栏切换、一键复制到剪贴板、导出 `.md`。**AI 失败降级**：单生 AI 抛错时该生回落模板（`致 xxx 家长` + 参与度/行为标签拼接），互不影响；全班 AI 失败同样回落模板，整体仍 200。
   - **#2 AI 实时学情预测（in-class）**：新增 `src/features/classroom/pacing/MasteryPredictionModal.tsx` + 服务端 `POST /api/classroom/:lessonId/predict-mastery`。**一次 AI 调用批量预测全班**（避免 N 次调用），输出每生 5 维掌握度（算法逻辑 / 代码工程 / 创新思维 / 团队协作 / 课堂专注）+ `risk: low|medium|high` + 一句话说明；顶部课堂进度条（elapsed/planned）与风险聚合徽标，支持「风险优先 / 综合掌握 / 姓名」三种排序。**AI 不可用时自动降级**为启发式（参与度基线 ± 测验校正，`stalled`/低参与度判高风险），并在 UI 标注「降级模式」，`aiSucceeded` 字段回传前端以供区分。

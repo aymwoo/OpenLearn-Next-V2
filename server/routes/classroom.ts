@@ -946,6 +946,96 @@ export function registerClassroomRoutes(
         .map((t) => t.puzzled_concept?.trim())
         .filter((c) => Boolean(c));
 
+      // ── 逐生真实明细（供学情简报 / CSV 导出） ──────────────────────
+      // 口径：
+      //   quizScore   = 该生本节所有随堂测得分的平均值（无作答 → null）
+      //   accuracy    = 该生本节随堂测正确率（无作答 → null）
+      //   pollsAnswered = 该生在本次会话中的投票次数（真实计数）
+      //   exitRating  = 该生结课通票评分（未提交 → null）
+      //   attendance  = 是否出现在投票/测验/通票任一真实互动记录中
+      // 绝不使用前端伪计算（旧版曾用 score = 80 + ((i * 7) % 21)）。
+      const quizByStudent = db
+        .prepare(
+          `SELECT student_id,
+                  MAX(student_name) as student_name,
+                  ROUND(AVG(score), 1) as avg_score,
+                  ROUND(AVG(is_correct) * 100, 1) as accuracy,
+                  COUNT(*) as quiz_count
+           FROM lesson_quiz_submissions
+           WHERE lesson_id = ?
+           GROUP BY student_id`,
+        )
+        .all(lessonId) as Array<{
+        student_id: string;
+        student_name: string | null;
+        avg_score: number | null;
+        accuracy: number | null;
+        quiz_count: number;
+      }>;
+
+      const votesByStudent = db
+        .prepare(
+          `SELECT v.student_id, COUNT(*) as votes
+           FROM classroom_poll_votes v
+           JOIN classroom_quick_polls p ON v.poll_id = p.id
+           WHERE p.session_id = ?
+           GROUP BY v.student_id`,
+        )
+        .all(session.id) as Array<{ student_id: string; votes: number }>;
+
+      const exitByStudent = new Map<string, { rating: number | null; puzzledConcept: string | null }>();
+      for (const t of exitTickets as Array<any>) {
+        exitByStudent.set(t.student_id, {
+          rating: typeof t.rating === 'number' ? t.rating : null,
+          puzzledConcept: t.puzzled_concept ?? null,
+        });
+      }
+
+      // 以「本节有真实互动记录的学生」为主键集合，并集上班级花名册
+      const roster = db
+        .prepare('SELECT id, name, student_number FROM students WHERE class_id = ? ORDER BY student_number, name')
+        .all(session.class_id) as Array<{ id: string; name: string; student_number: string | null }>;
+
+      const votesMap = new Map(votesByStudent.map((v) => [v.student_id, v.votes]));
+      const quizMap = new Map(quizByStudent.map((q) => [q.student_id, q]));
+
+      const seen = new Set<string>();
+      const studentBreakdown: any[] = [];
+      const pushStudent = (studentId: string, fallbackName?: string | null) => {
+        if (seen.has(studentId)) return;
+        seen.add(studentId);
+        const q = quizMap.get(studentId);
+        const votes = votesMap.get(studentId) ?? 0;
+        const exit = exitByStudent.get(studentId);
+        studentBreakdown.push({
+          studentId,
+          studentName: q?.student_name || fallbackName || studentId,
+          attendance: Boolean(q) || votes > 0 || Boolean(exit),
+          quizScore: q?.avg_score ?? null,
+          quizCount: q?.quiz_count ?? 0,
+          accuracy: q?.accuracy ?? null,
+          pollsAnswered: votes,
+          exitRating: exit?.rating ?? null,
+          puzzledConcept: exit?.puzzledConcept ?? null,
+        });
+      };
+
+      // 1) 先放有真实互动记录的学生（按成绩降序，便于简报排序）
+      const interacted = new Set<string>([
+        ...quizByStudent.map((q) => q.student_id),
+        ...votesByStudent.map((v) => v.student_id),
+        ...exitByStudent.keys(),
+      ]);
+      for (const id of Array.from(interacted).sort((a, b) => {
+        const sa = quizMap.get(a)?.avg_score ?? -1;
+        const sb = quizMap.get(b)?.avg_score ?? -1;
+        return sb - sa;
+      })) {
+        pushStudent(id, quizMap.get(id)?.student_name);
+      }
+      // 2) 再补花名册中未产生互动的学生（attendance=false，成绩 null）
+      for (const st of roster) pushStudent(st.id, st.name);
+
       res.json({
         success: true,
         session: {
@@ -964,6 +1054,7 @@ export function registerClassroomRoutes(
           exitTicketsAvgRating: parseFloat(avgRating),
           topPuzzledConcepts: puzzledConcepts.slice(0, 10),
         },
+        students: studentBreakdown,
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });

@@ -56,68 +56,42 @@ export function ClassroomLeaderboardModal({
   const [bonusAnimation, setBonusAnimation] = useState<string | null>(null);
   const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<StudentProfile | null>(null);
 
-  // Group default students into structured teams (Stitch 00e4f919 / 783386a9)
+  /**
+   * 小组分组与积分 —— 全部基于真实数据：
+   *   分组名 ← students[].groupName（来自学生记录的真实小组）
+   *   总分   ← 组内成员 currentPoints 之和（来自 lesson_quiz_submissions 聚合）
+   *   成长分 ← 平台当前无历史快照表，故不显示（旧版为 +14/+10 等硬编码假值）
+   * 无学生数据时返回空数组，UI 展示空态，而不是伪造「飞鹰极客队」。
+   */
   const groups: ClassroomGroup[] = useMemo(() => {
-    const defaultTeams = [
-      { id: 'group-1', name: '第 1 组 · 飞鹰极客队', baseScore: 104, growth: '+14' },
-      { id: 'group-2', name: '第 2 组 · 极速风暴队', baseScore: 92, growth: '+10' },
-      { id: 'group-3', name: '第 3 组 · 智汇探索队', baseScore: 86, growth: '+8' },
-      { id: 'group-4', name: '第 4 组 · 创想未来队', baseScore: 78, growth: '+6' },
-    ];
+    if (students.length === 0) return [];
 
-    return defaultTeams.map((team, tIdx) => {
-      // slice students for each group
-      const teamMembers = students.length > 0
-        ? students.filter((_, idx) => idx % defaultTeams.length === tIdx)
-        : [
-            {
-              id: `st-${tIdx}-1`,
-              name: tIdx === 0 ? '李晓彤' : `学员 A${tIdx + 1}`,
-              studentNo: `2024030${tIdx * 4 + 1}`,
-              seatNumber: `${tIdx + 1}组 01`,
-              groupName: team.name,
-              currentPoints: 28,
-              focusScore: 98,
-            },
-            {
-              id: `st-${tIdx}-2`,
-              name: tIdx === 0 ? '张子豪' : `学员 B${tIdx + 1}`,
-              studentNo: `2024030${tIdx * 4 + 2}`,
-              seatNumber: `${tIdx + 1}组 02`,
-              groupName: team.name,
-              currentPoints: 26,
-              focusScore: 92,
-            },
-            {
-              id: `st-${tIdx}-3`,
-              name: tIdx === 0 ? '陈思远' : `学员 C${tIdx + 1}`,
-              studentNo: `2024030${tIdx * 4 + 3}`,
-              seatNumber: `${tIdx + 1}组 03`,
-              groupName: team.name,
-              currentPoints: 25,
-              focusScore: 89,
-            },
-            {
-              id: `st-${tIdx}-4`,
-              name: tIdx === 0 ? '王艺婷' : `学员 D${tIdx + 1}`,
-              studentNo: `2024030${tIdx * 4 + 4}`,
-              seatNumber: `${tIdx + 1}组 04`,
-              groupName: team.name,
-              currentPoints: 25,
-              focusScore: 95,
-            },
-          ];
+    // 按真实 groupName 分组；无 groupName 的学生归入「未分组」
+    const byGroup = new Map<string, StudentProfile[]>();
+    for (const st of students) {
+      const key = (st.groupName || '').trim() || (lang === 'zh' ? '未分组' : 'Ungrouped');
+      const list = byGroup.get(key) ?? [];
+      list.push(st);
+      byGroup.set(key, list);
+    }
 
-      return {
-        id: team.id,
-        name: team.name,
-        totalScore: team.baseScore,
-        rank: tIdx + 1,
-        members: teamMembers,
-        growthScore: parseInt(team.growth.replace('+', ''), 10),
-      };
-    });
-  }, [students]);
+    return Array.from(byGroup.entries())
+      .map(([name, members], idx) => {
+        // 真实总分 = 组内成员真实积分之和（无积分记录 → 0）
+        const totalScore = members.reduce((acc, m) => acc + (m.currentPoints ?? 0), 0);
+        return {
+          id: `group-${idx + 1}`,
+          name,
+          totalScore,
+          rank: 0, // 排名在下方排序后统一赋值
+          members,
+          // growthScore 留空：平台无「本节增量」真实来源，不编造
+          growthScore: undefined,
+        };
+      })
+      .sort((a, b) => b.totalScore - a.totalScore)
+      .map((g, idx) => ({ ...g, rank: idx + 1 }));
+  }, [students, lang]);
 
   // Handle whole-group batch awards (Stitch 00e4f919)
   const handleAwardWholeGroup = (groupId: string, groupName: string, deltaPoints: number, reason: string) => {
@@ -243,7 +217,11 @@ export function ClassroomLeaderboardModal({
                           <div className="flex items-center gap-2">
                             <h4 className="font-extrabold text-sm text-foreground">{group.name}</h4>
                             <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded font-bold">
-                              本节 +{group.growthScore}
+                              {typeof group.growthScore === 'number'
+                                ? lang === 'zh'
+                                  ? `本节 +${group.growthScore}`
+                                  : `+${group.growthScore}`
+                                : ''}
                             </span>
                           </div>
                           <span className="text-[11px] text-muted">
@@ -385,7 +363,7 @@ export function ClassroomLeaderboardModal({
                       <div className="flex items-center gap-2">
                         <span className="font-extrabold text-foreground">{student.name}</span>
                         <span className="px-1.5 py-0.2 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold">
-                          {student.groupName || '飞鹰极客队'}
+                          {student.groupName || (lang === 'zh' ? '未分组' : 'Ungrouped')}
                         </span>
                       </div>
                       <span className="text-[11px] text-muted font-mono">{student.studentNo}</span>
@@ -395,10 +373,13 @@ export function ClassroomLeaderboardModal({
                   <div className="flex items-center gap-3">
                     <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold text-[11px]">
                       <Flame size={12} />
-                      <span>{student.focusScore ?? 98}%</span>
+                      <span>
+                        {typeof student.focusScore === 'number' ? `${student.focusScore}%` : '—'}
+                      </span>
                     </span>
                     <span className="font-mono font-extrabold text-sm text-primary-theme">
-                      {student.currentPoints ?? 28} <span className="text-xs font-normal text-muted">分</span>
+                      {student.currentPoints ?? 0}{' '}
+                      <span className="text-xs font-normal text-muted">分</span>
                     </span>
                     <button
                       onClick={() => {
