@@ -96,6 +96,7 @@ import { registerSchedulesRoutes } from './server/routes/schedules.js';
 import { registerGradingRoutes } from './server/routes/grading.js';
 import { registerPluginsRoutes } from './server/routes/plugins.js';
 import { registerClassroomRoutes } from './server/routes/classroom.js';
+import { registerClassroomExtrasRoutes } from './server/routes/classroom-extras.js';
 
 async function startServer() {
   // Bridge server startup through Platform Kernel Bootstrap Adapter (PI-005)
@@ -365,6 +366,7 @@ async function startServer() {
   await kernelContainer.serviceRegistry.register(IClassroomLifecycleServiceToken, classroomRuntimeService);
   await kernelContainer.serviceRegistry.register(IInteractionRuntimeServiceToken, classroomRuntimeService);
   registerClassroomRoutes(ctx, classroomRuntimeService);
+  registerClassroomExtrasRoutes(ctx.app);
 
   // Realtime bridge: forward kernel domain events to Socket.IO clients.
   // Extracted to server/realtime-bridge.ts so the monolith can be decomposed

@@ -45,6 +45,10 @@ import { ClassroomBriefingView } from '../features/classroom/ClassroomBriefingVi
 import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdownWidget';
 import { StudentGrowthProfileModal } from '../features/student/StudentGrowthProfileModal';
 import { PeerReviewShowcaseModal } from '../features/classroom/peer-review/PeerReviewShowcaseModal';
+import { ParentNotificationModal } from '../features/classroom/notifications/ParentNotificationModal';
+import { MasteryPredictionModal } from '../features/classroom/pacing/MasteryPredictionModal';
+import { DiagnosticCenterModal } from '../features/classroom/diagnostics/DiagnosticCenterModal';
+import { GroupCollabWhiteboardModal } from '../features/classroom/collab-whiteboard/GroupCollabWhiteboardModal';
 
 
 // Dynamic Icon component to render Lucide icons by name string
@@ -158,6 +162,11 @@ export function LiveClassroomView({
   const [isGrowthProfileOpen, setIsGrowthProfileOpen] = useState(false);
   const [growthProfileStudentId, setGrowthProfileStudentId] = useState<string | null>(null);
   const [isPeerReviewShowcaseOpen, setIsPeerReviewShowcaseOpen] = useState(false);
+  // 上课流程扩展：4 个新页面的开启状态
+  const [isParentNotificationOpen, setIsParentNotificationOpen] = useState(false);
+  const [isMasteryPredictionOpen, setIsMasteryPredictionOpen] = useState(false);
+  const [isDiagnosticCenterOpen, setIsDiagnosticCenterOpen] = useState(false);
+  const [isGroupCollabOpen, setIsGroupCollabOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedLesson) return;
@@ -978,6 +987,38 @@ export function LiveClassroomView({
                     ? '全班专注锁定'
                     : 'Lock Class Screen'}
               </span>
+            </button>
+          </div>
+
+          {/* 上课流程扩展：4 个流程页入口按钮 */}
+          <div className="flex items-center gap-1.5 ml-auto border-l border-theme pl-3">
+            <button
+              onClick={() => setIsDiagnosticCenterOpen(true)}
+              className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition-colors flex items-center gap-1.5"
+              title={lang === 'zh' ? '课堂异常告警中心' : 'Diagnostic Center'}
+            >
+              ⚠️ {lang === 'zh' ? '告警' : 'Alerts'}
+            </button>
+            <button
+              onClick={() => setIsMasteryPredictionOpen(true)}
+              className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-colors flex items-center gap-1.5"
+              title={lang === 'zh' ? 'AI 实时学情预测' : 'AI Mastery Prediction'}
+            >
+              🧠 {lang === 'zh' ? 'AI 预测' : 'Predict'}
+            </button>
+            <button
+              onClick={() => setIsGroupCollabOpen(true)}
+              className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5"
+              title={lang === 'zh' ? '小组协作白板' : 'Group Collab Whiteboard'}
+            >
+              👥 {lang === 'zh' ? '小组' : 'Groups'}
+            </button>
+            <button
+              onClick={() => setIsParentNotificationOpen(true)}
+              className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-colors flex items-center gap-1.5"
+              title={lang === 'zh' ? '家校通知生成器（课中预生成可在下课期间直接复制）' : 'Parent Notification'}
+            >
+              ✉️ {lang === 'zh' ? '家校通知' : 'Notify'}
             </button>
           </div>
         </div>
@@ -2182,6 +2223,77 @@ export function LiveClassroomView({
         lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title}
         addToast={addToast}
         onAdvanceToStage3={() => handleStageChange('WRAP_UP_EXIT_TICKET')}
+      />
+
+      {/* ── 流程扩展 #1：家校通知生成器（post-class） ──
+          从 ClassroomBriefingView 的“生成家长通知”按钮调起。 */}
+      <ParentNotificationModal
+        isOpen={isParentNotificationOpen}
+        onClose={() => setIsParentNotificationOpen(false)}
+        snapshot={{
+          lessonTitle: lessons.find((l) => l.id === selectedLesson)?.title ?? '',
+          lessonId: selectedLesson,
+          className:
+            classes.find((c) => c.id === liveClassSelectedClassId)?.name ?? '',
+          classId: liveClassSelectedClassId,
+          startTimeMs: Date.now() - (liveClassTimeRemaining || 0) * 1000,
+          endTimeMs: Date.now(),
+          totalStudents: students.length,
+          onlineStudentIds: (onlineStudentIds as string[]) ?? [],
+          highlights: [],
+          stages: [],
+          students: students.map((s: any) => ({
+            id: s.id,
+            name: s.name ?? s.student_number ?? s.id,
+            student_number: s.student_number,
+            participationScore: 60,
+            behaviorTags: [],
+          })),
+        }}
+        addToast={addToast}
+        lang={lang as 'zh' | 'en'}
+      />
+
+      {/* ── 流程扩展 #2：AI 实时学情预测（in-class） ── */}
+      <MasteryPredictionModal
+        isOpen={isMasteryPredictionOpen}
+        onClose={() => setIsMasteryPredictionOpen(false)}
+        lessonId={selectedLesson}
+        lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title ?? ''}
+        currentStageName={classroomStage ?? 'IN_CLASS_TEACHING'}
+        elapsedMin={0}
+        plannedTotalMin={45}
+        studentSnapshots={(students ?? []).map((s: any) => ({
+          studentId: s.id,
+          studentName: s.name ?? s.student_number ?? s.id,
+          participationScore: 60,
+          paceIndicator: 'on-track' as const,
+          behaviorSignals: [],
+        }))}
+        addToast={addToast}
+        lang={lang as 'zh' | 'en'}
+      />
+
+      {/* ── 流程扩展 #3：课堂异常告警中心（in-class） ── */}
+      <DiagnosticCenterModal
+        isOpen={isDiagnosticCenterOpen}
+        onClose={() => setIsDiagnosticCenterOpen(false)}
+        addToast={addToast}
+        lang={lang as 'zh' | 'en'}
+      />
+
+      {/* ── 流程扩展 #4：小组协作白板（in-class） ── */}
+      <GroupCollabWhiteboardModal
+        isOpen={isGroupCollabOpen}
+        onClose={() => setIsGroupCollabOpen(false)}
+        lessonId={selectedLesson}
+        classId={liveClassSelectedClassId}
+        availableStudents={(students ?? []).map((s: any) => ({
+          id: s.id,
+          name: s.name ?? s.student_number ?? s.id,
+        }))}
+        addToast={addToast}
+        lang={lang as 'zh' | 'en'}
       />
     </div>
   );

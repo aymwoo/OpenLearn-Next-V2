@@ -12,6 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **上课流程四页面扩展（家校通知 / AI 学情预测 / 异常告警中心 / 小组协作白板）**：从「上课流程完整性」出发补齐四个课上/课后环节，全部挂在 `LiveClassroomView` 顶栏入口，均支持 `lang: 'zh' | 'en'` 与四套主题语义 token：
+  - **#1 家校通知生成器（post-class）**：新增 `src/features/classroom/notifications/ParentNotificationModal.tsx` + 服务端 `POST /api/classroom/:lessonId/parent-notification`（限教师/管理员）。产物 = 全班 Markdown 学情简报（出勤率 / 课堂总评 / 亮点 / 各阶段节奏偏差）+ 逐生家长通知（AI 按参与度、测验、行为标签生成 ≤ 80 字中文简报）；支持「全班简报 / 逐生通知」双 Tab、学生侧栏切换、一键复制到剪贴板、导出 `.md`。**AI 失败降级**：单生 AI 抛错时该生回落模板（`致 xxx 家长` + 参与度/行为标签拼接），互不影响；全班 AI 失败同样回落模板，整体仍 200。
+  - **#2 AI 实时学情预测（in-class）**：新增 `src/features/classroom/pacing/MasteryPredictionModal.tsx` + 服务端 `POST /api/classroom/:lessonId/predict-mastery`。**一次 AI 调用批量预测全班**（避免 N 次调用），输出每生 5 维掌握度（算法逻辑 / 代码工程 / 创新思维 / 团队协作 / 课堂专注）+ `risk: low|medium|high` + 一句话说明；顶部课堂进度条（elapsed/planned）与风险聚合徽标，支持「风险优先 / 综合掌握 / 姓名」三种排序。**AI 不可用时自动降级**为启发式（参与度基线 ± 测验校正，`stalled`/低参与度判高风险），并在 UI 标注「降级模式」，`aiSucceeded` 字段回传前端以供区分。
+  - **#3 课堂异常告警中心（in-class）**：新增 `src/features/classroom/diagnostics/DiagnosticCenterModal.tsx`，直接消费既有 `errorStore.studentErrors` / `errors`（不新增后端依赖）。提供「学生端异常 / 本机异常」双 Tab + 严重度徽标计数、按 `SystemErrorType`（react / promise / runtime / api / custom）筛选、单条移除、一键清空、**复制全部学生 ID**（供 IT 批量排查）。复用 `src/types/error.ts` 真实类型，不再重复定义。
+  - **#4 小组协作白板（in-class）**：新增 `src/features/classroom/collab-whiteboard/GroupCollabWhiteboardModal.tsx`。零依赖 SVG 画布实现（不引入第二套绘图库）：四支工具（笔 / 矩形 / 圆形 / 橡皮）+ 8 色调色板 + 笔触粗细；默认 4 个小组、可新建/删除、按学生「+ / −」手动派位、一键随机自动分配；支持「仅当前组 / 查看全部」叠层对比、单组清空、当前组导出 SVG。实时多人同步预留扩展点 `classroom.collab.canvas`（当前为前端 in-memory 状态，注释标明后续接 socket 广播）。
+  - **插件扩展槽位**：新增 4 个槽位 `classroom.notification.tabs` / `classroom.pacing.dashboard` / `classroom.diagnostic.feed` / `classroom.collab.canvas`，四个新页面各自的关键区域均可插件接入而不改宿主。
+  - **测试**：新增 `server/__tests__/classroom-extras.test.ts`（10 例：匿名 401 / 学生 403 / 参数校验 400 / AI 成功 / AI 抛错降级 / AI 垃圾 JSON 降级 / 风险判定）与 4 个组件测试（`ParentNotificationModal` 5 例、`MasteryPredictionModal` 7 例、`DiagnosticCenterModal` 8 例、`GroupCollabWhiteboardModal` 8 例），共 38 例。
+
 - **互动课堂起始门户与教学模式体系 (Classroom Entry Portal & Teaching Modes)**：对应 Stitch「课程入口与班级选择门户」设计，教师进入「互动课堂」先看到门户页而不是直接进入无准备的课堂：
   - **起始门户页**：新增 `src/features/classroom/ClassroomEntryPortal.tsx`。顶部遥测岛（系统时钟 / 网络时延 / 席位就绪率 / 主控大屏）、STEP1 课程卡片马赛克、STEP2 班级标签 + **32 席位矩阵**（按 4 组分组、在线态着色）+ 教学模式选择器、底部粘性启动区；右辅栏为教案蓝图与 45 分钟节奏管道（按环节 `duration` 计算占比）、课前学情透镜与三项自检体检卡。全部使用项目语义 token（`bg-surface` / `text-main` / `border-theme` / `bg-primary-theme`…），四套主题自动一致；图标沿用 lucide-react，不引入第二套图标库。
   - **六个插件扩展槽位**：新增 `classroom.portal.telemetry`（遥测岛指标）/ `course_badge`（课程卡徽章）/ `teaching_mode`（自定义教学模式）/ `insight`（课前洞察卡）/ `preflight`（课前检查项）/ `launch_action`（启动区附加操作），门户六个区域均可用插件接入而不改动宿主。AI 课前洞察的**内置实现同样走 `classroom.portal.insight` 槽位**，插件可直接替换。
