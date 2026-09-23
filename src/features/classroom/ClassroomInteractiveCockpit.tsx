@@ -13,9 +13,13 @@ import {
   Activity,
   ChevronRight,
   TrendingUp,
+  Dices,
+  Trophy,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { StageDisplayModal } from './StageDisplayModal';
+import { ClassroomAttributionModal } from './ClassroomAttributionModal';
+import { ClassroomLeaderboardModal } from './ClassroomLeaderboardModal';
 
 export interface ClassroomInteractiveCockpitProps {
   lessonId: string | null;
@@ -25,6 +29,7 @@ export interface ClassroomInteractiveCockpitProps {
   addToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   currentStage?: string;
   onStageChange?: (stage: string) => void;
+  students?: any[];
 }
 
 export function ClassroomInteractiveCockpit({
@@ -35,6 +40,7 @@ export function ClassroomInteractiveCockpit({
   addToast,
   currentStage: propStage,
   onStageChange,
+  students = [],
 }: ClassroomInteractiveCockpitProps) {
   const [internalStage, setInternalStage] = useState<string>('IN_CLASS_TEACHING');
   const currentStage = propStage !== undefined ? propStage : internalStage;
@@ -45,6 +51,8 @@ export function ClassroomInteractiveCockpit({
   };
 
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
+  const [isAttributionModalOpen, setIsAttributionModalOpen] = useState(false);
+  const [isLeaderboardModalOpen, setIsLeaderboardModalOpen] = useState(false);
   const [isPollDialogOpen, setIsPollDialogOpen] = useState(false);
   const [pollTitle, setPollTitle] = useState('课堂极速单选投票');
   const [pollType, setPollType] = useState<'ABCD' | 'TF'>('ABCD');
@@ -310,9 +318,47 @@ export function ClassroomInteractiveCockpit({
           <span>{lang === 'zh' ? '打开大屏展台' : 'Stage Display'}</span>
         </button>
 
+        {/* 随机抽问与归因加分 (Stitch 88b094e6) */}
+        <button
+          onClick={() => setIsAttributionModalOpen(true)}
+          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
+          title={lang === 'zh' ? '随机抽问与归因表现激励' : 'Random Pick & Attribution Points'}
+        >
+          <Dices size={13} className="text-indigo-500" />
+          <span>{lang === 'zh' ? '随机抽问' : 'Roll Call'}</span>
+        </button>
+
+        {/* 班级积分榜 (Stitch 00e4f919) */}
+        <button
+          onClick={() => setIsLeaderboardModalOpen(true)}
+          className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
+          title={lang === 'zh' ? '全班积分榜与小组联赛' : 'Class Points & Team Leaderboard'}
+        >
+          <Trophy size={13} className="text-amber-500" />
+          <span>{lang === 'zh' ? '积分榜' : 'Leaderboard'}</span>
+        </button>
+
         {/* 扩展卡槽：第三方插件注册自定义快捷互动 */}
         <ExtensionPointRenderer
           slot="classroom.quick_activity"
+          slotProps={{
+            lessonId,
+            classId,
+            stage: currentStage,
+          }}
+        />
+
+        {/* 扩展卡槽：第三方插件注册顶栏操作 */}
+        <ExtensionPointRenderer
+          slot="classroom.topbar.action"
+          slotProps={{
+            lessonId,
+            classId,
+            stage: currentStage,
+          }}
+        />
+        <ExtensionPointRenderer
+          slot="classroom.topbar.pill"
           slotProps={{
             lessonId,
             classId,
@@ -356,6 +402,33 @@ export function ClassroomInteractiveCockpit({
         lessonId={lessonId}
         lessonTitle={lessonTitle}
         lang={lang}
+      />
+
+      {/* 课堂抽问与归因表现激励弹窗 (Stitch 88b094e6) */}
+      <ClassroomAttributionModal
+        isOpen={isAttributionModalOpen}
+        onClose={() => setIsAttributionModalOpen(false)}
+        classId={classId}
+        lessonId={lessonId}
+        students={students}
+        lang={lang}
+        addToast={addToast}
+        onOpenLeaderboard={() => setIsLeaderboardModalOpen(true)}
+      />
+
+      {/* 班级积分榜与小组联赛弹窗 (Stitch 00e4f919) */}
+      <ClassroomLeaderboardModal
+        isOpen={isLeaderboardModalOpen}
+        onClose={() => setIsLeaderboardModalOpen(false)}
+        classId={classId}
+        lessonId={lessonId}
+        students={students}
+        lang={lang}
+        addToast={addToast}
+        onSelectStudentToAward={() => {
+          setIsLeaderboardModalOpen(false);
+          setIsAttributionModalOpen(true);
+        }}
       />
 
       {/* 极速出题配置对话框 */}

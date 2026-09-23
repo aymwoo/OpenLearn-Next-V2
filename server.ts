@@ -102,7 +102,7 @@ async function startServer() {
   await ServerBootstrapAdapter.bootstrap({
     kernelContainer,
     environment: (process.env.NODE_ENV as any) || 'development',
-    config: { port: 3000 },
+    config: { port: Number(process.env.PORT) || 9000 },
   });
 
   try {
@@ -131,7 +131,7 @@ async function startServer() {
 
   const app = express();
   kernelContainer.pluginHost.setExpressApp(app);
-  const PORT = 3000;
+  const PORT = parseInt(process.env.PORT || '9000', 10);
 
   // SEC-AUTH-03: 信任 Nginx 反向代理? X-Forwarded-Proto ?
   // ? req.protocol / req.secure 能正确反映浏览器? Nginx 的实际协?

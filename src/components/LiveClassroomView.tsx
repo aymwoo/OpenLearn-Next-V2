@@ -43,6 +43,8 @@ import { ClassroomEntryPortal } from '../features/classroom/ClassroomEntryPortal
 import { PostClassWrapupView } from '../features/classroom/PostClassWrapupView';
 import { ClassroomBriefingView } from '../features/classroom/ClassroomBriefingView';
 import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdownWidget';
+import { StudentGrowthProfileModal } from '../features/student/StudentGrowthProfileModal';
+import { PeerReviewShowcaseModal } from '../features/classroom/peer-review/PeerReviewShowcaseModal';
 
 
 // Dynamic Icon component to render Lucide icons by name string
@@ -153,6 +155,9 @@ export function LiveClassroomView({
   // 教师确认课程 / 班级 / 教学模式后才进入授课视图（对应 Stitch 门户设计）。
   // 可通过 initialPortalOpen 关闭（既有单测直接断言授课视图时使用）。
   const [showEntryPortal, setShowEntryPortal] = useState(initialPortalOpen);
+  const [isGrowthProfileOpen, setIsGrowthProfileOpen] = useState(false);
+  const [growthProfileStudentId, setGrowthProfileStudentId] = useState<string | null>(null);
+  const [isPeerReviewShowcaseOpen, setIsPeerReviewShowcaseOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedLesson) return;
@@ -2147,6 +2152,37 @@ export function LiveClassroomView({
           </div>
         </div>
       )}
+
+      {/* ── 远端精华：学生成长能力五维雷达档案（Stitch 07fd3861） ──
+          点“查看学情档案”从 AttributionModal/LeaderboardModal 传入的 studentId，
+          本组件拉取后端 /api/students/:id/growth-profile 并渲染五维雷达 + 全景轨迹。 */}
+      <StudentGrowthProfileModal
+        isOpen={isGrowthProfileOpen}
+        onClose={() => {
+          setIsGrowthProfileOpen(false);
+          setGrowthProfileStudentId(null);
+        }}
+        student={
+          growthProfileStudentId
+            ? students.find((s) => s.id === growthProfileStudentId) || null
+            : null
+        }
+        lessonId={selectedLesson}
+        classId={liveClassSelectedClassId}
+        lang={lang as 'zh' | 'en'}
+        addToast={addToast}
+      />
+
+      {/* ── 远端精华：全班大屏作业互评秀场（Stitch 21e2dac1） ──
+          从 ClassroomInteractiveCockpit 内部以事件/回调形式开启。
+          主仪表 / “推进” 接口：启用后与课堂阶段推进联动。 */}
+      <PeerReviewShowcaseModal
+        isOpen={isPeerReviewShowcaseOpen}
+        onClose={() => setIsPeerReviewShowcaseOpen(false)}
+        lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title}
+        addToast={addToast}
+        onAdvanceToStage3={() => handleStageChange('WRAP_UP_EXIT_TICKET')}
+      />
     </div>
   );
 }

@@ -126,6 +126,91 @@ export interface StageCardConfig {
   theme?: 'dark' | 'light' | 'accent';
 }
 
+/** A contribution to the classroom.topbar.action slot (custom action buttons in the unified 48px topbar). */
+export interface ClassroomTopbarActionConfig {
+  id: string;
+  name: string;
+  icon?: string;
+  description?: string;
+  badge?: string | number;
+  commandType?: string;
+  payload?: Record<string, unknown>;
+}
+
+/** A contribution to the classroom.attribution.award slot (custom award criteria in point awarding modal). */
+export interface ClassroomAttributionAwardConfig {
+  id: string;
+  dimensionId: string;
+  name: string;
+  description: string;
+  icon?: string;
+  defaultDeltaPoints: number;
+}
+
+/** A contribution to the student.profile.dimension slot (custom competency radar dimensions). */
+export interface StudentCompetencyDimensionConfig {
+  id: string;
+  label: string;
+  key: string;
+  maxScore?: number;
+  defaultWeight?: number;
+  icon?: string;
+  category?: 'cognitive' | 'practice' | 'collaboration' | 'focus' | 'custom';
+}
+
+/** A contribution to the student.profile.card slot (custom widgets inside student growth profile). */
+export interface StudentProfileWidgetConfig {
+  id: string;
+  title: string;
+  description?: string;
+  icon?: string;
+  placement?: 'sidebar' | 'content' | 'footer';
+  order?: number;
+}
+
+/** A contribution to the whiteboard.canvas.widget slot (draggable interactive canvas widgets). */
+export interface CanvasWidgetConfig {
+  id: string;
+  title: string;
+  component: string;
+  description?: string;
+  icon?: string;
+  defaultWidth?: number;
+  defaultHeight?: number;
+  resizable?: boolean;
+}
+
+/** A contribution to the classroom.barometer.metric slot (rhythm barometer metric gauge). */
+export interface BarometerMetricConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  valueSource?: string;
+  color?: string;
+  tooltip?: string;
+}
+
+/** A contribution to the peer_review.rubric.dimension slot (custom rubric assessment dimensions). */
+export interface PeerReviewRubricConfig {
+  id: string;
+  name: string;
+  description?: string;
+  maxScore?: number;
+  weight?: number;
+  icon?: string;
+  targetMetric?: string;
+}
+
+/** A contribution to the peer_review.badge slot (custom peer nomination micro-badges). */
+export interface PeerReviewBadgeConfig {
+  id: string;
+  title: string;
+  emoji?: string;
+  description?: string;
+  color?: string;
+  points?: number;
+}
+
 /** Union of all contribution config shapes, keyed by slot name. */
 export type ContributionConfig =
   | ClassroomToolConfig
@@ -139,7 +224,15 @@ export type ContributionConfig =
   | TimelineSegmentConfig
   | PaletteItemContributionConfig
   | CockpitWidgetConfig
-  | StageCardConfig;
+  | StageCardConfig
+  | ClassroomTopbarActionConfig
+  | ClassroomAttributionAwardConfig
+  | StudentCompetencyDimensionConfig
+  | StudentProfileWidgetConfig
+  | CanvasWidgetConfig
+  | BarometerMetricConfig
+  | PeerReviewRubricConfig
+  | PeerReviewBadgeConfig;
 
 
 /** A human-readable summary of what a plugin contributes. */

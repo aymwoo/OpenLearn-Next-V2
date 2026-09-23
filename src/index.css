@@ -45,6 +45,77 @@
    深色样式污染。此处改为跟随 data-theme（含 chalkboard 这套深色主题）。 */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *, [data-theme='chalkboard'], [data-theme='chalkboard'] *));
 
+/* ── 远端兼容兜底：14 个语义色 @utility 显式声明 ─────────────
+   @theme 派生会生成 bg-color、text-color、border-color 等工具类，但 portal
+   与 cockpit 子组件中存在 `bg-primary-theme` / `text-main` / `border-primary-theme`
+   等不带透明度斜杠的写法（cockpit/portal 大量使用）。@theme 派生虽然也会
+   生成同名类，但显式 @utility 优先并保留语义化语义，便于后人理解"此处的
+   颜色来自哪里"。同时为 chalkboard、eyecare 等多主题保留透明度差异
+   （如 rgba(... 0.18)），@theme 派生不能直接表达 rgba 透明度。 */
+@utility bg-app {
+  background-color: var(--bg-app);
+}
+
+@utility bg-surface {
+  background-color: var(--bg-surface);
+}
+
+@utility bg-surface-secondary {
+  background-color: var(--bg-surface-secondary);
+}
+
+@utility bg-surface-elevated {
+  background-color: var(--bg-surface-elevated);
+}
+
+@utility border-theme {
+  border-color: var(--border-theme);
+}
+
+@utility border-theme-subtle {
+  border-color: var(--border-theme-subtle);
+}
+
+@utility bg-border-theme {
+  background-color: var(--border-theme);
+}
+
+@utility bg-border-theme-subtle {
+  background-color: var(--border-theme-subtle);
+}
+
+@utility text-main {
+  color: var(--text-main);
+}
+
+@utility text-muted {
+  color: var(--text-muted);
+}
+
+@utility text-subtle {
+  color: var(--text-subtle);
+}
+
+@utility bg-primary-theme {
+  background-color: var(--color-primary);
+}
+
+@utility bg-primary-theme-light {
+  background-color: var(--color-primary-light);
+}
+
+@utility bg-primary-theme-hover {
+  background-color: var(--color-primary-hover);
+}
+
+@utility text-primary-theme {
+  color: var(--color-primary);
+}
+
+@utility border-primary-theme {
+  border-color: var(--color-primary);
+}
+
 @layer base {
   /* Tailwind v4 的 border 默认色是 currentColor（v3 是 gray-200），因此只写
      `border` / `border-b` 而未指定颜色时会渲染成文字色 —— 浅色主题下表现为
@@ -125,7 +196,8 @@
 /* 语义色工具类已迁至文件顶部的 @theme 块（见那里的说明）：
    原先用 @utility 定义，导致 bg-surface/95、border-primary-theme/20 等
    斜杠透明度写法无法生成、静默失效；@theme 会派生全部变体。
-   类名与行为向下兼容：bg-surface、border-theme、text-muted… 用法完全不变。 */
+   类名与行为向下兼容：bg-surface、border-theme、text-muted… 用法完全不变。
+   ↑↑↑ 上方已补充 14 个 @utility 作为 cockpit/portal 等子组件的兼容兜底。 */
 
 /* ── 中文排版规范保障：全站所有字体最小不得低于 9pt (12px) ── */
 :root {
@@ -175,3 +247,29 @@
   font-size: max(12px, calc(0.75rem * var(--app-font-scale, 1)));
 }
 
+/* ── Stitch Canvas Dot Grid Pattern ── */
+.dot-grid-canvas {
+  background-color: #f8fafc;
+  background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
+  background-size: 24px 24px;
+}
+
+.dark .dot-grid-canvas {
+  background-color: #0b1120;
+  background-image: radial-gradient(#334155 1.2px, transparent 1.2px);
+  background-size: 24px 24px;
+}
+
+/* ── Stitch Peer Review Danmaku Animation ── */
+@keyframes danmaku-slide {
+  0% {
+    transform: translateX(100vw);
+  }
+  100% {
+    transform: translateX(-120vw);
+  }
+}
+
+.animate-danmaku-slide {
+  animation: danmaku-slide 14s linear infinite;
+}
