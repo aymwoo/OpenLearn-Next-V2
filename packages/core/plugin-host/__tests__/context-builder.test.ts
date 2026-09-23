@@ -24,6 +24,8 @@ import {
   IProcessServiceToken,
   IStorageServiceToken,
   IAIServiceToken,
+  IPointsDimensionRegistryToken,
+  IPointsLedgerServiceToken,
 } from '../../di/interfaces.js';
 import { Token } from '../../di/token.js';
 import type { Manifest } from '../../esm-loader/manifest-schema.js';
@@ -99,6 +101,24 @@ async function setupRegistry(): Promise<ServiceRegistry> {
   const mockAi = {
     generateText: vi.fn().mockResolvedValue('AI response'),
   };
+  const mockPointsDimension = {
+    registerDimension: vi.fn(),
+    getDimension: vi.fn().mockReturnValue(undefined),
+    listDimensions: vi.fn().mockReturnValue([]),
+  };
+  const mockPointsLedger = {
+    addPoints: vi.fn().mockResolvedValue({
+      studentId: '',
+      classId: '',
+      dimensionId: '',
+      deltaPoints: 0,
+      reason: '',
+      timestamp: 0,
+    }),
+    getLogs: vi.fn().mockResolvedValue([]),
+    getStudentTotalByDimension: vi.fn().mockResolvedValue(0),
+    getStudentDimensionSummary: vi.fn().mockResolvedValue({}),
+  };
 
   await registry.register(ICommandBusServiceToken, mockCmd as any);
   await registry.register(IEventBusServiceToken, mockEvent as any);
@@ -107,6 +127,8 @@ async function setupRegistry(): Promise<ServiceRegistry> {
   await registry.register(IProcessServiceToken, mockProc as any);
   await registry.register(IStorageServiceToken, mockStore as any);
   await registry.register(IAIServiceToken, mockAi as any);
+  await registry.register(IPointsDimensionRegistryToken, mockPointsDimension as any);
+  await registry.register(IPointsLedgerServiceToken, mockPointsLedger as any);
 
   return registry;
 }
@@ -139,9 +161,9 @@ describe('buildContext', () => {
     expect(ctx.pluginId).toBe('plugin-id-123');
     expect(ctx.manifest).toBe(testManifest);
 
-    // 验证 7 个 services 键
+    // 验证 9 个 services 键（7 个核心 + 2 个积分 v0.1.12）
     const keys = Object.keys(ctx.services);
-    expect(keys).toHaveLength(7);
+    expect(keys).toHaveLength(9);
     expect(keys).toContain('commandBus');
     expect(keys).toContain('eventBus');
     expect(keys).toContain('actionRegistry');
@@ -149,6 +171,8 @@ describe('buildContext', () => {
     expect(keys).toContain('processManager');
     expect(keys).toContain('storage');
     expect(keys).toContain('ai');
+    expect(keys).toContain('pointsDimension');
+    expect(keys).toContain('pointsLedger');
   });
 
   // ── Test 2 ──────────────────────────────────────────────────────────
@@ -281,6 +305,24 @@ describe('buildContext', () => {
     } as any);
     await registry.register(IAIServiceToken, {
       generateText: vi.fn().mockResolvedValue('AI response'),
+    } as any);
+    await registry.register(IPointsDimensionRegistryToken, {
+      registerDimension: vi.fn(),
+      getDimension: vi.fn().mockReturnValue(undefined),
+      listDimensions: vi.fn().mockReturnValue([]),
+    } as any);
+    await registry.register(IPointsLedgerServiceToken, {
+      addPoints: vi.fn().mockResolvedValue({
+        studentId: '',
+        classId: '',
+        dimensionId: '',
+        deltaPoints: 0,
+        reason: '',
+        timestamp: 0,
+      }),
+      getLogs: vi.fn().mockResolvedValue([]),
+      getStudentTotalByDimension: vi.fn().mockResolvedValue(0),
+      getStudentDimensionSummary: vi.fn().mockResolvedValue({}),
     } as any);
 
     const ctx = await setupContext({ registry, tracker });

@@ -32,6 +32,12 @@ import type {
   IProcessService,
   IStorageService,
   IAIService,
+  IPointsDimensionRegistry,
+  IPointsLedgerService,
+} from '../../di/interfaces.js';
+import {
+  IPointsDimensionRegistryToken,
+  IPointsLedgerServiceToken,
 } from '../../di/interfaces.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -190,10 +196,28 @@ function createMockServices(): Record<string, unknown> {
     ai: {
       generateText: vi.fn().mockResolvedValue('AI response'),
     } as IAIService,
+    pointsDimension: {
+      registerDimension: vi.fn(),
+      getDimension: vi.fn().mockReturnValue(undefined),
+      listDimensions: vi.fn().mockReturnValue([]),
+    } as IPointsDimensionRegistry,
+    pointsLedger: {
+      addPoints: vi.fn().mockResolvedValue({
+        studentId: '',
+        classId: '',
+        dimensionId: '',
+        deltaPoints: 0,
+        reason: '',
+        timestamp: 0,
+      }),
+      getLogs: vi.fn().mockResolvedValue([]),
+      getStudentTotalByDimension: vi.fn().mockResolvedValue(0),
+      getStudentDimensionSummary: vi.fn().mockResolvedValue({}),
+    } as IPointsLedgerService,
   };
 }
 
-/** 向 ServiceRegistry 注册所有 7 个 mock services */
+/** 向 ServiceRegistry 注册所有 9 个 mock services（7 个核心 + 2 个积分 v0.1.12） */
 async function registerMockServices(sr: ServiceRegistry, services: Record<string, unknown>): Promise<void> {
   await sr.register(ICommandBusServiceToken, services.commandBus as ICommandBusService);
   await sr.register(IEventBusServiceToken, services.eventBus as IEventBusService);
@@ -202,6 +226,8 @@ async function registerMockServices(sr: ServiceRegistry, services: Record<string
   await sr.register(IProcessServiceToken, services.processManager as IProcessService);
   await sr.register(IStorageServiceToken, services.storage as IStorageService);
   await sr.register(IAIServiceToken, services.ai as IAIService);
+  await sr.register(IPointsDimensionRegistryToken, services.pointsDimension as IPointsDimensionRegistry);
+  await sr.register(IPointsLedgerServiceToken, services.pointsLedger as IPointsLedgerService);
 }
 
 /**

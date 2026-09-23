@@ -18,6 +18,8 @@ import {
   IProcessServiceToken,
   IStorageServiceToken,
   IAIServiceToken,
+  IPointsDimensionRegistryToken,
+  IPointsLedgerServiceToken,
   IDatabaseToken,
 } from '../../di/interfaces.js';
 
@@ -113,6 +115,24 @@ describe('Plugin Hardening & Optimizations (Phase 29)', () => {
       delete: vi.fn(),
     } as any);
     await registry.register(IAIServiceToken, {} as any);
+    await registry.register(IPointsDimensionRegistryToken, {
+      registerDimension: vi.fn(),
+      getDimension: vi.fn().mockReturnValue(undefined),
+      listDimensions: vi.fn().mockReturnValue([]),
+    } as any);
+    await registry.register(IPointsLedgerServiceToken, {
+      addPoints: vi.fn().mockResolvedValue({
+        studentId: '',
+        classId: '',
+        dimensionId: '',
+        deltaPoints: 0,
+        reason: '',
+        timestamp: 0,
+      }),
+      getLogs: vi.fn().mockResolvedValue([]),
+      getStudentTotalByDimension: vi.fn().mockResolvedValue(0),
+      getStudentDimensionSummary: vi.fn().mockResolvedValue({}),
+    } as any);
     await registry.register(IDatabaseToken, db);
 
     // Mock ESM Loader

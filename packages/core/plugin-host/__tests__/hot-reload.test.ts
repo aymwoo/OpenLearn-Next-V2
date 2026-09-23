@@ -24,6 +24,8 @@ import {
   IProcessServiceToken,
   IStorageServiceToken,
   IAIServiceToken,
+  IPointsDimensionRegistryToken,
+  IPointsLedgerServiceToken,
 } from '../../di/interfaces.js';
 import type {
   ICommandBusService,
@@ -33,6 +35,8 @@ import type {
   IProcessService,
   IStorageService,
   IAIService,
+  IPointsDimensionRegistry,
+  IPointsLedgerService,
 } from '../../di/interfaces.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -83,6 +87,24 @@ function createMockServices(): Record<string, unknown> {
     } as IProcessService,
     storage: { get: vi.fn().mockResolvedValue(null), set: vi.fn(), delete: vi.fn() } as IStorageService,
     ai: { generateText: vi.fn().mockResolvedValue('AI response') } as IAIService,
+    pointsDimension: {
+      registerDimension: vi.fn(),
+      getDimension: vi.fn().mockReturnValue(undefined),
+      listDimensions: vi.fn().mockReturnValue([]),
+    } as IPointsDimensionRegistry,
+    pointsLedger: {
+      addPoints: vi.fn().mockResolvedValue({
+        studentId: '',
+        classId: '',
+        dimensionId: '',
+        deltaPoints: 0,
+        reason: '',
+        timestamp: 0,
+      }),
+      getLogs: vi.fn().mockResolvedValue([]),
+      getStudentTotalByDimension: vi.fn().mockResolvedValue(0),
+      getStudentDimensionSummary: vi.fn().mockResolvedValue({}),
+    } as IPointsLedgerService,
   };
 }
 
@@ -94,6 +116,8 @@ async function registerMockServices(sr: ServiceRegistry, svc: Record<string, unk
   await sr.register(IProcessServiceToken, svc.processManager as IProcessService);
   await sr.register(IStorageServiceToken, svc.storage as IStorageService);
   await sr.register(IAIServiceToken, svc.ai as IAIService);
+  await sr.register(IPointsDimensionRegistryToken, svc.pointsDimension as IPointsDimensionRegistry);
+  await sr.register(IPointsLedgerServiceToken, svc.pointsLedger as IPointsLedgerService);
 }
 
 class TestEsmLoader extends EsmLoader {

@@ -23,6 +23,8 @@ import {
   IProcessServiceToken,
   IStorageServiceToken,
   IAIServiceToken,
+  IPointsDimensionRegistryToken,
+  IPointsLedgerServiceToken,
   IDatabaseToken,
 } from '../../di/interfaces.js';
 import { CommandBus } from '../../command-bus/index.js';
@@ -143,6 +145,28 @@ async function setupServiceRegistry(db: Database.Database): Promise<ServiceRegis
   // IAIService: 注册最小实现
   await sr.register(IAIServiceToken, {
     generateText: async () => '',
+  } as any);
+
+  // IPointsDimensionRegistry: 注册最小实现（v0.1.12 起的积分系统）
+  await sr.register(IPointsDimensionRegistryToken, {
+    registerDimension: () => undefined,
+    getDimension: () => undefined,
+    listDimensions: () => [],
+  } as any);
+
+  // IPointsLedgerService: 注册最小实现（v0.1.12 起的积分系统）
+  await sr.register(IPointsLedgerServiceToken, {
+    addPoints: async () => ({
+      studentId: '',
+      classId: '',
+      dimensionId: '',
+      deltaPoints: 0,
+      reason: '',
+      timestamp: 0,
+    }),
+    getLogs: async () => [],
+    getStudentTotalByDimension: async () => 0,
+    getStudentDimensionSummary: async () => ({}),
   } as any);
 
   return sr;

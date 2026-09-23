@@ -31,6 +31,8 @@ import {
   IProcessServiceToken,
   IStorageServiceToken,
   IAIServiceToken,
+  IPointsDimensionRegistryToken,
+  IPointsLedgerServiceToken,
 } from '../di/interfaces.js';
 import type {
   ICommandBusService,
@@ -40,6 +42,8 @@ import type {
   IProcessService,
   IStorageService,
   IAIService,
+  IPointsDimensionRegistry,
+  IPointsLedgerService,
 } from '../di/interfaces.js';
 import { resolvePluginCommandType, stripPluginCommandPrefix } from './plugin-namespace.js';
 
@@ -383,6 +387,63 @@ function wrapCapability(capabilityService: ICapabilityService): ICapabilityServi
 }
 
 /**
+ * 包装 IPointsDimensionRegistry：透传注册表查询操作。
+ *
+ * 这是点维度注册表本身的能力；插件调用 registerDimension 会被 CapabilityGuard
+ * 另行校验（不是在这里拦截）。ResourceTracker 不需要介入——注册表是单例、
+ * 无需按插件维度清理。
+ */
+function wrapPointsDimensionRegistry(registry: IPointsDimensionRegistry): IPointsDimensionRegistry {
+  return {
+    registerDimension: createSafeFunction((spec) => {
+      return registry.registerDimension(spec);
+    }),
+    getDimension: createSafeFunction((id) => {
+      return registry.getDimension(id);
+    }),
+    listDimensions: createSafeFunction(() => {
+      return registry.listDimensions();
+    }),
+  } as IPointsDimensionRegistry;
+}
+
+/**
+ * 包装 IPointsLedgerService：透传积分账本读写。
+ *
+ * addPoints 会持久化到 events 表，插件上下文调用的所有写入都需经过此包装。
+ * 与 wrap*EventBus 不同，这里不需要 ResourceTracker——账本项不属于“订阅 / 定时器 / 资源”那一类需清理的资源。
+ */
+function wrapPointsLedgerService(service: IPointsLedgerService): IPointsLedgerService {
+  return {
+    addPoints: createSafeFunction(
+      async (
+        studentId: string,
+        classId: string,
+        dimensionId: string,
+        deltaPoints: number,
+        reason: string,
+        pluginId?: string,
+      ) => {
+        return service.addPoints(studentId, classId, dimensionId, deltaPoints, reason, pluginId);
+      },
+    ),
+    getLogs: createSafeFunction(async (studentId: string, classId?: string) => {
+      return service.getLogs(studentId, classId);
+    }),
+    getStudentTotalByDimension: createSafeFunction(
+      async (studentId: string, classId: string, dimensionId: string) => {
+        return service.getStudentTotalByDimension(studentId, classId, dimensionId);
+      },
+    ),
+    getStudentDimensionSummary: createSafeFunction(
+      async (studentId: string, classId: string) => {
+        return service.getStudentDimensionSummary(studentId, classId);
+      },
+    ),
+  } as IPointsLedgerService;
+}
+
+/**
  * 包装 IStorageService：按 manifestId 隔离键空间。
  *
  * 迁移自 PluginRuntime lines 392-427。
@@ -472,7 +533,7 @@ export async function buildContext(
   skipTokens?: Set<string>, // Phase 6 (D-12): incompatible optional token names
   contributionRegistry?: ContributionRegistry, // V3.0: 贡献点注册表引用
 ): Promise<PluginContext> {
-  // 1. 从 DI 容器解析 7 个 IService
+  // 1. 从 DI 容器解析 9 个 IService（7 个核心 + 2 个积分 v0.1.12 起的 points 系统）
   const commandBusService = await serviceRegistry.resolve(ICommandBusServiceToken);
   const eventBusService = await serviceRegistry.resolve(IEventBusServiceToken);
   const actionRegistryService = await serviceRegistry.resolve(IActionRegistryServiceToken);
@@ -480,6 +541,10 @@ export async function buildContext(
   const processService = await serviceRegistry.resolve(IProcessServiceToken);
   const storageService = await serviceRegistry.resolve(IStorageServiceToken);
   const aiService = await serviceRegistry.resolve(IAIServiceToken);
+  // Points 服务采用 tryResolve：未注册的降级为 null（沿用 D-12 sentinel 设计）。
+  // 测试或部分部署可能不启用积分子系统；生产环境 kernel 会注册。
+  const pointsDimensionRegistry = await serviceRegistry.tryResolve(IPointsDimensionRegistryToken);
+  const pointsLedgerService = await serviceRegistry.tryResolve(IPointsLedgerServiceToken);
 
   // 2. 逐个包装 IService — 应用 createSafeFunction + ResourceTracker 集成
   const wrappedCommandBus = wrapCommandBus(commandBusService, tracker, pluginId, manifest.id);
@@ -489,6 +554,13 @@ export async function buildContext(
   const wrappedCapability = wrapCapability(capabilityService);
   const wrappedStorage = wrapStorage(storageService, db, manifest.id);
   const wrappedAI = wrapAI(aiService);
+  // Points 包装仅在服务已注册时生效；未注册则取 null（plugin 可检查 === null 降级）。
+  const wrappedPointsDimension = pointsDimensionRegistry
+    ? wrapPointsDimensionRegistry(pointsDimensionRegistry)
+    : null;
+  const wrappedPointsLedger = pointsLedgerService
+    ? wrapPointsLedgerService(pointsLedgerService)
+    : null;
 
   // 3. 冻结包装对象的原型链（迁移自 PluginRuntime lines 512-518）
   Object.setPrototypeOf(wrappedCommandBus, null);
@@ -508,6 +580,8 @@ export async function buildContext(
     processManager: wrappedProcessManager,
     storage: wrappedStorage,
     ai: wrappedAI,
+    pointsDimension: wrappedPointsDimension,
+    pointsLedger: wrappedPointsLedger,
   };
 
   // === Phase 6: Null out incompatible optional service keys (D-12) =============
@@ -524,6 +598,8 @@ export async function buildContext(
       '@openlearn/core:IProcessService': 'processManager',
       '@openlearn/core:IStorageService': 'storage',
       '@openlearn/core:IAIService': 'ai',
+      '@openlearn/core:IPointsDimensionRegistry': 'pointsDimension',
+      '@openlearn/core:IPointsLedgerService': 'pointsLedger',
     };
     for (const tokenName of skipTokens) {
       const serviceKey = TOKEN_TO_SERVICE_KEY[tokenName];
