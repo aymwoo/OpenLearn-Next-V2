@@ -43,13 +43,9 @@ import { ClassroomEntryPortal } from '../features/classroom/ClassroomEntryPortal
 import { PostClassWrapupView } from '../features/classroom/PostClassWrapupView';
 import { ClassroomBriefingView } from '../features/classroom/ClassroomBriefingView';
 import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdownWidget';
-import { StudentGrowthProfileModal } from '../features/student/StudentGrowthProfileModal';
-import { PeerReviewShowcaseModal } from '../features/classroom/peer-review/PeerReviewShowcaseModal';
-import { ParentNotificationModal } from '../features/classroom/notifications/ParentNotificationModal';
 import { useClassroomLiveData } from '../features/classroom/hooks/useClassroomLiveData';
-import { MasteryPredictionModal } from '../features/classroom/pacing/MasteryPredictionModal';
-import { DiagnosticCenterModal } from '../features/classroom/diagnostics/DiagnosticCenterModal';
-import { GroupCollabWhiteboardModal } from '../features/classroom/collab-whiteboard/GroupCollabWhiteboardModal';
+import { ClassroomModalsHost } from './classroom/ClassroomModalsHost';
+import { usePeerReviewData } from '../features/classroom/hooks/usePeerReviewData';
 
 
 // Dynamic Icon component to render Lucide icons by name string
@@ -202,37 +198,6 @@ export function LiveClassroomView({
     };
   }, [selectedLesson]);
 
-  /** 真实课堂积分榜（来自 lesson_quiz_submissions 聚合），用于归因/积分榜弹窗 */
-  const [topPerformers, setTopPerformers] = useState<
-    Array<{ studentId: string; studentName: string; cumulativeScore: number; accuracy: number }>
-  >([]);
-
-  useEffect(() => {
-    if (!selectedLesson) {
-      setTopPerformers([]);
-      return;
-    }
-    let mounted = true;
-    fetch(`/api/classroom/sessions/${selectedLesson}/top-performers?limit=50`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!mounted) return;
-        const rows = Array.isArray(data?.topPerformers) ? data.topPerformers : [];
-        setTopPerformers(
-          rows.map((r: any) => ({
-            studentId: String(r.studentId ?? ''),
-            studentName: String(r.studentName ?? ''),
-            cumulativeScore: Number(r.cumulativeScore) || 0,
-            accuracy: Number(r.accuracy) || 0,
-          })),
-        );
-      })
-      .catch(() => {});
-    return () => {
-      mounted = false;
-    };
-  }, [selectedLesson]);
-
   // 课堂真实数据派生层：把已有 props/state 统一派生为 AI/报表可用的真实指标
   const liveData = useClassroomLiveData({
     students,
@@ -255,56 +220,21 @@ export function LiveClassroomView({
    * 因此 matchingItems / badges / danmaku 留空，由弹窗渲染空态说明，
    * 不再用「张子豪评陈子墨」这类假数据填充界面。
    */
-  const peerReviewData = React.useMemo(() => {
-    const validAttempts = (attempts ?? []).filter(
-      (a: any) => a?.studentId && a.studentId !== 'teacher' && a.studentId !== 'guest',
-    );
-    // 按分数降序，取前 2 作为焦点对比作品
-    const ranked = [...validAttempts].sort(
-      (a: any, b: any) => (Number(b.score) || 0) - (Number(a.score) || 0),
-    );
-    const toWork = (a: any, slot: 'A' | 'B') => {
-      if (!a) return null;
-      const name = String(a.studentName || a.studentId);
-      const score = typeof a.score === 'number' ? a.score : null;
-      return {
-        id: String(a.attemptId ?? `work-${slot}`),
-        slot,
-        studentName: name,
-        studentInitial: name.slice(0, 1),
-        workTitle: `${name} · ${a.coursewareName ?? '课件作品'}`,
-        workSubtitle:
-          score === null
-            ? a.status === 'completed'
-              ? '已完成提交'
-              : '作答中'
-            : `得分 ${score}${typeof a.completion === 'number' ? ` · 完成度 ${Math.round(a.completion * 100)}%` : ''}`,
-        rating: null,
-        reviewCount: 0,
-        badges: [],
-      };
-    };
+  // 课中互评数据层（真实积分榜 + 互评表 + 一键分配），见 features/classroom/hooks/usePeerReviewData.ts
+  const {
+    data: peerReviewData,
+    topPerformers,
+    autoAssigning,
+    autoAssign: handleAutoAssignPeerReview,
+  } = usePeerReviewData({
+    lessonId: selectedLesson,
+    enabled: isPeerReviewShowcaseOpen,
+    attempts,
+    studentCount: students.length,
+    addToast,
+    lang: lang as 'zh' | 'en',
+  });
 
-    const podium = topPerformers.slice(0, 3).map((t, idx) => ({
-      rank: idx + 1,
-      name: t.studentName,
-      votes: t.cumulativeScore,
-      workTitle: `${t.accuracy}% 正确率`,
-      honorTitle: idx === 0 ? '本节最高分' : '优秀表现',
-      rankBadgeClass: idx === 0 ? 'bg-[#ffb95f] text-[#2a1700]' : 'bg-[#171f33] text-[#908fa0]',
-      tagBadgeClass: 'bg-[#ca8100]/20 text-[#ffb95f]',
-    }));
-
-    return {
-      workA: toWork(ranked[0], 'A'),
-      workB: toWork(ranked[1], 'B'),
-      podiumStudents: podium,
-      reviewProgress: {
-        completed: validAttempts.filter((a: any) => a.status === 'completed').length,
-        total: students.length,
-      },
-    };
-  }, [attempts, topPerformers, students.length]);
 
   /**
    * 真实学生档案：积分来自 top-performers（lesson_quiz_submissions 聚合），
@@ -2349,123 +2279,38 @@ export function LiveClassroomView({
         </div>
       )}
 
-      {/* ── 远端精华：学生成长能力五维雷达档案（Stitch 07fd3861） ──
-          点“查看学情档案”从 AttributionModal/LeaderboardModal 传入的 studentId，
-          本组件拉取后端 /api/students/:id/growth-profile 并渲染五维雷达 + 全景轨迹。 */}
-      <StudentGrowthProfileModal
-        isOpen={isGrowthProfileOpen}
-        onClose={() => {
+      {/* ── 课堂模态框宿主（6 个弹窗的编排已抽出，见 components/classroom/ClassroomModalsHost.tsx） ── */}
+      <ClassroomModalsHost
+        lang={lang as 'zh' | 'en'}
+        addToast={addToast}
+        selectedLesson={selectedLesson}
+        lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title ?? ''}
+        className={classes.find((c) => c.id === liveClassSelectedClassId)?.name ?? ''}
+        liveClassSelectedClassId={liveClassSelectedClassId}
+        classroomStage={classroomStage}
+        sessionStartedAt={sessionStartedAt}
+        students={students}
+        liveData={liveData}
+        isGrowthProfileOpen={isGrowthProfileOpen}
+        onCloseGrowthProfile={() => {
           setIsGrowthProfileOpen(false);
           setGrowthProfileStudentId(null);
         }}
-        student={
-          growthProfileStudentId
-            ? students.find((s) => s.id === growthProfileStudentId) || null
-            : null
-        }
-        lessonId={selectedLesson}
-        classId={liveClassSelectedClassId}
-        lang={lang as 'zh' | 'en'}
-        addToast={addToast}
-      />
-
-      {/* ── 远端精华：全班大屏作业互评秀场（Stitch 21e2dac1） ──
-          从 ClassroomInteractiveCockpit 内部以事件/回调形式开启。
-          主仪表 / “推进” 接口：启用后与课堂阶段推进联动。 */}
-      <PeerReviewShowcaseModal
-        isOpen={isPeerReviewShowcaseOpen}
-        onClose={() => setIsPeerReviewShowcaseOpen(false)}
-        lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title}
-        addToast={addToast}
+        growthProfileStudentId={growthProfileStudentId}
+        isPeerReviewShowcaseOpen={isPeerReviewShowcaseOpen}
+        onClosePeerReviewShowcase={() => setIsPeerReviewShowcaseOpen(false)}
         onAdvanceToStage3={() => handleStageChange('WRAP_UP_EXIT_TICKET')}
-        workA={peerReviewData.workA as any}
-        workB={peerReviewData.workB as any}
-        podiumStudents={peerReviewData.podiumStudents as any}
-        reviewProgress={peerReviewData.reviewProgress}
-      />
-
-      {/* ── 流程扩展 #1：家校通知生成器（post-class） ──
-          从 ClassroomBriefingView 的“生成家长通知”按钮调起。 */}
-      <ParentNotificationModal
-        isOpen={isParentNotificationOpen}
-        onClose={() => setIsParentNotificationOpen(false)}
-        snapshot={{
-          lessonTitle: lessons.find((l) => l.id === selectedLesson)?.title ?? '',
-          lessonId: selectedLesson,
-          className: classes.find((c) => c.id === liveClassSelectedClassId)?.name ?? '',
-          classId: liveClassSelectedClassId,
-          // 真实时间窗：优先用会话 started_at，缺失时回退到「现在」（不编造时长）
-          startTimeMs: sessionStartedAt ?? Date.now(),
-          endTimeMs: Date.now(),
-          totalStudents: students.length,
-          onlineStudentIds: liveData.studentMetrics.filter((m) => m.online).map((m) => m.studentId),
-          highlights: liveData.highlights,
-          stages: liveData.stages,
-          students: liveData.studentMetrics.map((m) => ({
-            id: m.studentId,
-            name: m.studentName,
-            student_number: m.studentNumber,
-            // 参与度来自真实 progress_percent
-            participationScore: m.participationScore,
-            quizScore: m.quizScore,
-            behaviorTags: m.behaviorTags,
-          })),
-        }}
-        addToast={addToast}
-        lang={lang as 'zh' | 'en'}
-      />
-
-      {/* ── 流程扩展 #2：AI 实时学情预测（in-class） ── */}
-      <MasteryPredictionModal
-        isOpen={isMasteryPredictionOpen}
-        onClose={() => setIsMasteryPredictionOpen(false)}
-        lessonId={selectedLesson}
-        lessonTitle={lessons.find((l) => l.id === selectedLesson)?.title ?? ''}
-        currentStageName={classroomStage ?? 'IN_CLASS_TEACHING'}
-        elapsedMin={liveData.elapsedMin}
-        plannedTotalMin={liveData.plannedTotalMin}
-        studentSnapshots={liveData.studentMetrics.map((m) => ({
-          studentId: m.studentId,
-          studentName: m.studentName,
-          // 真实参与度（progress_percent）
-          participationScore: m.participationScore,
-          quizScore: m.quizScore,
-          // 节奏由真实进度派生：≥80 领先、≥50 正常、>0 偏慢、=0 停滞
-          paceIndicator:
-            m.progressPercent >= 80
-              ? ('fast' as const)
-              : m.progressPercent >= 50
-                ? ('on-track' as const)
-                : m.progressPercent > 0
-                  ? ('slow' as const)
-                  : ('stalled' as const),
-          // 行为信号直接复用真实派生的行为标签（可追溯）
-          behaviorSignals: m.behaviorTags,
-        }))}
-        addToast={addToast}
-        lang={lang as 'zh' | 'en'}
-      />
-
-      {/* ── 流程扩展 #3：课堂异常告警中心（in-class） ── */}
-      <DiagnosticCenterModal
-        isOpen={isDiagnosticCenterOpen}
-        onClose={() => setIsDiagnosticCenterOpen(false)}
-        addToast={addToast}
-        lang={lang as 'zh' | 'en'}
-      />
-
-      {/* ── 流程扩展 #4：小组协作白板（in-class） ── */}
-      <GroupCollabWhiteboardModal
-        isOpen={isGroupCollabOpen}
-        onClose={() => setIsGroupCollabOpen(false)}
-        lessonId={selectedLesson}
-        classId={liveClassSelectedClassId}
-        availableStudents={(students ?? []).map((s: any) => ({
-          id: s.id,
-          name: s.name ?? s.student_number ?? s.id,
-        }))}
-        addToast={addToast}
-        lang={lang as 'zh' | 'en'}
+        peerReviewData={peerReviewData as never}
+        onAutoAssignPeerReview={handleAutoAssignPeerReview}
+        autoAssigning={autoAssigning}
+        isParentNotificationOpen={isParentNotificationOpen}
+        onCloseParentNotification={() => setIsParentNotificationOpen(false)}
+        isMasteryPredictionOpen={isMasteryPredictionOpen}
+        onCloseMasteryPrediction={() => setIsMasteryPredictionOpen(false)}
+        isDiagnosticCenterOpen={isDiagnosticCenterOpen}
+        onCloseDiagnosticCenter={() => setIsDiagnosticCenterOpen(false)}
+        isGroupCollabOpen={isGroupCollabOpen}
+        onCloseGroupCollab={() => setIsGroupCollabOpen(false)}
       />
     </div>
   );

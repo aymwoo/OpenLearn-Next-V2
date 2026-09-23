@@ -264,4 +264,77 @@ describe('上课流程扩展端点（classroom-extras）', () => {
       spy.mockRestore();
     });
   });
+  // ── 模型输出清洗（浏览器实测发现的真实缺陷）─────────────────────────
+  it('AI 返回带 <think> 的内容时，产物 Markdown 中不含思考块', async () => {
+    const spy = vi
+      .spyOn(kernelContainer.aiService, 'generateText')
+      .mockImplementation(async (prompt: string) => {
+        if (prompt.includes('学生家长')) {
+          return '<think>推理：该生参与度高</think>\n\n张子豪本节参与积极，建议保持。';
+        }
+        return '<think>推理：班级节奏正常</think>\n\n本节课堂节奏良好。';
+      });
+
+    const res = await call('POST', `/api/classroom/${lessonId}/parent-notification`, teacherToken, baseSummary);
+    const body = (await res.json()) as any;
+
+    expect(body.classMarkdown).not.toContain('<think>');
+    expect(body.classMarkdown).not.toContain('推理：');
+    expect(body.classMarkdown).toContain('本节课堂节奏良好');
+
+    for (const n of body.studentNotifications) {
+      expect(n.markdown).not.toContain('<think>');
+      expect(n.markdown).not.toContain('推理：');
+    }
+    expect(body.studentNotifications[0].markdown).toContain('张子豪本节参与积极');
+    spy.mockRestore();
+  });
+
+});
+
+/**
+ * AI 输出清洗（浏览器实测发现的真实缺陷）
+ *
+ * 部分推理模型会把思考过程写在 <think>…</think> 中随正文返回；若不清洗，
+ * 这些内容会直接进入家长通知与学情评语（已在 pnpm dev 实测复现）。
+ */
+describe('stripModelArtifacts', () => {
+  it('移除成对 <think> 块（含跨行）', async () => {
+    const { stripModelArtifacts } = await import('../routes/classroom-extras.js');
+    const out = stripModelArtifacts('<think>先分析学生数据\n再组织语言</think>该生本节表现优秀。');
+    expect(out).toBe('该生本节表现优秀。');
+    expect(out).not.toContain('think');
+  });
+
+  it('移除未闭合的 <think> 尾部残留', async () => {
+    const { stripModelArtifacts } = await import('../routes/classroom-extras.js');
+    const out = stripModelArtifacts('正文第一句。<think>后面全是未闭合的推理过程…');
+    expect(out).toBe('正文第一句。');
+  });
+
+  it('移除 ```think 围栏与整体 json 围栏', async () => {
+    const { stripModelArtifacts } = await import('../routes/classroom-extras.js');
+    expect(stripModelArtifacts('```think\n推理\n```\n正文')).toBe('正文');
+    expect(stripModelArtifacts('```json\n[{"a":1}]\n```')).toBe('[{"a":1}]');
+  });
+
+  it('大小写不敏感（<THINK>/<Thinking>）', async () => {
+    const { stripModelArtifacts } = await import('../routes/classroom-extras.js');
+    expect(stripModelArtifacts('<THINK>x</THINK>正文')).toBe('正文');
+    expect(stripModelArtifacts('<Thinking>x</Thinking>正文')).toBe('正文');
+  });
+
+  it('清洗后为空时回退原文（避免误删成空）', async () => {
+    const { stripModelArtifacts } = await import('../routes/classroom-extras.js');
+    expect(stripModelArtifacts('<think>只有推理没有正文</think>')).toBe(
+      '<think>只有推理没有正文</think>',
+    );
+  });
+
+  it('正常正文不被改动', async () => {
+    const { stripModelArtifacts } = await import('../routes/classroom-extras.js');
+    expect(stripModelArtifacts('张子豪今天表现出色，建议保持。')).toBe('张子豪今天表现出色，建议保持。');
+  });
+
+
 });

@@ -18,6 +18,37 @@ import { getActorId, requireAuth } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
 
 /**
+ * 清洗模型输出中的「思考过程」等非正文内容。
+ *
+ * 背景：部分 OpenAI 兼容供应商（推理模型）会把推理过程写在 `<think>…</think>`
+ * 或 `…` 中并随正文一起返回。若不清洗，这些内容会直接进入家长通知、
+ * 学情评语等面向人的文案里（浏览器实测已复现）。
+ *
+ * 处理：移除成对思考块（含跨行、含未闭合的尾部残留）、剥离 markdown 代码围栏，
+ * 并压缩多余空行；仅在清洗后为空时才返回原文，避免误伤正常输出。
+ */
+export function stripModelArtifacts(raw: string): string {
+  if (typeof raw !== 'string') return '';
+  let out = raw;
+
+  // 成对/未闭合的 <think…> 块（大小写不敏感，跨行）
+  out = out.replace(/<(think|thinking|reasoning|analysis)>[\s\S]*?<\/\1>/gi, '');
+  out = out.replace(/<(think|thinking|reasoning|analysis)>[\s\S]*$/gi, '');
+
+  // 成对/未闭合的 markdown 代码围栏包裹的思考块
+  out = out.replace(/```(?:think|thinking|reasoning)[\s\S]*?```/gi, '');
+
+  // 剥掉整体包裹的 json 围栏（predict-mastery 的解析路径已单独处理，这里兜底）
+  out = out.replace(/^```(?:json|markdown|md)?\s*/i, '').replace(/```\s*$/i, '');
+
+  // 压缩 3+ 连续空行为 2
+  out = out.replace(/\n{3,}/g, '\n\n').trim();
+
+  // 清洗后为空 → 返回原文（避免把正常内容误删成空）
+  return out.length > 0 ? out : raw.trim();
+}
+
+/**
  * 班级维度统计输入（家校通知 #1 使用）。
  * 字段尽量保持与前端可序列化格式对齐。
  */
@@ -168,12 +199,8 @@ ${snapshot.studentSnapshots
         let predictions: any[] = [];
         let aiSucceeded = false;
         try {
-          const text = await ai.generateText(prompt);
-          // AI 可能返回 ```json ... ``` 包装，剥掉
-          const cleaned = text
-            .replace(/^```(?:json)?\s*/i, '')
-            .replace(/```\s*$/i, '')
-            .trim();
+          // 先剥离 <think> 等思考块与代码围栏，再解析 JSON
+          const cleaned = stripModelArtifacts(await ai.generateText(prompt));
           const parsed = JSON.parse(cleaned);
           if (Array.isArray(parsed)) {
             predictions = parsed;
@@ -256,7 +283,7 @@ ${JSON.stringify({
 })}`;
     const aiText = await ai.generateText(prompt);
     lines.push('## 课堂总评');
-    lines.push(aiText.trim());
+    lines.push(stripModelArtifacts(aiText));
     lines.push('');
   } catch (e) {
     lines.push('## 课堂总评');
@@ -303,8 +330,8 @@ ${sr.quizScore !== undefined ? `随堂测：${sr.quizScore}/100` : ''}
 ${sr.note ? `教师备注：${sr.note}` : ''}
 
 直接返回 Markdown 文本，不要任何前缀或 JSON。`;
-  const text = await ai.generateText(prompt);
-  return text.trim() || renderStudentMarkdownFallback(sr, summary);
+  const text = stripModelArtifacts(await ai.generateText(prompt));
+  return text || renderStudentMarkdownFallback(sr, summary);
 }
 
 /**

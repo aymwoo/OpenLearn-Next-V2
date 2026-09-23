@@ -12,6 +12,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **课中全班大屏互评后端补齐（Stitch 21e2dac1）**：`src/features/classroom/peer-review/*` 此前只有前端 UI、**零后端表**，界面靠内置 mock 学生/作品/评分渲染。本次补齐完整数据模型与 API：
+  - **迁移 `009_classroom_peer_review.sql`**：新增 5 张表 —— `classroom_peer_review_tasks`（分配任务，唯一键含 `target_attempt_id` 防重复分配）、`classroom_peer_reviews`（评语，唯一键支持同人同作品重复改分走 UPDATE）、`classroom_peer_badges`（互赠微勋章，幂等）、`classroom_peer_nominations`（提名按行存储，票数 COUNT 聚合）、`classroom_danmaku`（文字/语音弹幕）、`classroom_peer_rubric_dimensions`（量规维度，会话首次访问自动落库 3 个默认维度）。
+  - **新增 `server/routes/classroom-peer-review.ts`（6 端点）**：`POST …/peer-review/auto-assign`（教师一键「1 生评 2 份」，分层对调标杆/攻坚，**不产生自己评自己**）、`GET …/peer-review`（大屏展示全部真实数据：匹配矩阵/徽章流/提名榜/弹幕/量规达标率/进度）、`POST …/peer-review/tasks/:taskId/submit`（防代评：学生只能提交自己的任务，教师例外；越界分数 400）、`POST …/peer-review/badges`（未知 badgeKey 400）、`POST …/peer-review/nominations`（不能提名自己）、`POST …/danmaku`（空文本 400，超长截断 120 字）。
+  - **作品池口径（忠于 schema 事实）**：`courseware_attempt` **没有 `lesson_id`**，课节↔课件关联在 `whiteboard_elements(type='html-applet').data.coursewareUuid`。因此分两级：`scope='lesson'` 优先收本教案内嵌课件的作答；不足 2 份时回退 `scope='class'`（本班学生全部作答），响应回传 `scope` 便于教师理解口径；两者都取不到则 400（不伪造作品）。
+  - **前端接线**：`LiveClassroomView` 的互评秀场改为消费真实数据，并在空态提供「一键分配互评」按钮（真实调用 auto-assign）。新增 `usePeerReviewData` hook 承载积分榜 + 互评数据 + 分配动作。
+  - **测试**：新增 `server/__tests__/classroom-peer-review.test.ts`（16 例：鉴权、作品不足拒绝、class 回退口径、防代评、越界分、重复提交走 UPDATE、徽章幂等、不能自提名、票数聚合、弹幕截断、空态真实姓名校验）。
+
+### Fixes
+
+- **AI 产物泄漏模型思考过程**：`pnpm dev` 浏览器实测发现，推理模型会把 `<think>…</think>` 思考块随正文返回，直接印进家长通知与学情评语。新增 `stripModelArtifacts()`（`server/routes/classroom-extras.ts`）：移除成对/未闭合的 `<think|thinking|reasoning|analysis>` 块（大小写不敏感、跨行）、```` ```think ```` 围栏、整体 json 围栏；**清洗后为空时回退原文**避免误删成空。家校通知的班级总评与逐生通知、AI 学情预测的 JSON 解析全部走该清洗。新增 7 例单测（含端到端断言产物中不含思考块）。
+- **Layout 治理：`LiveClassroomView` 拆分（2562 → 2317 行）**：抽出两个内聚单元 —— `src/components/classroom/ClassroomModalsHost.tsx`（6 个弹窗的编排层，只渲染不持状态，新增课堂弹窗不必再改动巨型组件）与 `src/features/classroom/hooks/usePeerReviewData.ts`（积分榜 + 互评数据 + 一键分配的数据层）。行为零变更，全部现有测试保持通过。
+
+### Docs
+
+- **记录 worker 模式积分服务缺口**：`packages/core/worker-runtime/worker-manager.ts` 的 `ALL_SERVICE_TOKENS` 补充说明性注释 —— 该白名单**不含**积分系统两个 token，故 WORKER 模式插件取积分服务时降级为插件内自建（不阻塞激活）。实测把 token 直接加入白名单会让 worker 插件激活阶段抛 `function () { [native code] } could not be cloned`（worker RPC 通用转发路径尝试克隆函数值），需先修 `service-host.ts` 通用转发再放行；inline 模式已在 `plugin-host/context-builder.ts` 完成转发。
+
 - **课堂数据真实化治理（消除 12 处伪数据来源）**：上课流程中原有 12 处「非真实来源」的数据（硬编码学生、伪计算分数、空数组占位），导致 AI 生成、学情简报、雷达图等输出失真。本次全部改为**可追溯的真实来源**，无数据时显式降级为空态而非编造：
   - **新增共享派生层 `src/features/classroom/hooks/useClassroomLiveData.ts`**：把 `LiveClassroomView` 已有的 props/state（`liveClassStudentProgress` / `onlineStudentIds` / `liveClassFeed` / `timelineSegments` / `attempts` / `session.started_at`）统一派生为逐生指标、课堂亮点、环节节奏、已用时长，**不新增任何网络请求**。核心原则：无数据 → `0 / undefined / []`，绝不给「看起来合理」的假值。附带 17 例单测锁定该不变量。
   - **`LiveClassroomView` 4 个流程页面的数据泵**：`participationScore: 60` → 真实 `progress_percent`；空 `highlights` → 真实 `liveClassFeed` 事件；空 `stages` → 真实 `timelineSegments`；`elapsedMin=0` / `plannedTotalMin=45` → 真实 `session.started_at` 与教案时长；`paceIndicator` 由真实进度分级派生；`quizScore` 由真实 `courseware_attempt` 取最高分（排除 teacher/guest 占位）。

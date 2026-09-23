@@ -46,6 +46,10 @@ export interface PeerReviewShowcaseModalProps {
   reviewProgress?: { completed: number; total: number };
   /** 真实倒计时秒数，未提供时为 0（不显示假倒计时） */
   countdownSeconds?: number;
+  /** 教师一键「1 生评 2 份」：真实写入 classroom_peer_review_tasks */
+  onAutoAssign?: () => void | Promise<void>;
+  /** 分配进行中（按钮禁用） */
+  autoAssigning?: boolean;
 }
 
 export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = ({
@@ -58,6 +62,8 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
   workB: workBProp,
   reviewProgress,
   countdownSeconds,
+  onAutoAssign,
+  autoAssigning = false,
   matchingItems: matchingItemsProp,
   badges: badgesProp,
   annotations: annotationsProp,
@@ -294,11 +300,21 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
           而不是用假学生/假分数让界面「看起来有内容」。
         */}
         {!workA && !workB && matchingItems.length === 0 && podiumStudents.length === 0 && (
-          <div className="mb-4 rounded-xl border border-[#2d3449] bg-[#0b1326] px-4 py-2.5 flex items-center gap-2 text-[11px] text-[#908fa0]">
+          <div className="mb-4 rounded-xl border border-[#2d3449] bg-[#0b1326] px-4 py-2.5 flex items-center gap-3 text-[11px] text-[#908fa0]">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-            <span>
-              本节暂无可展示的互评数据（学生尚未提交作业或未开始互评）。数据将在学生提交后自动出现。
+            <span className="flex-1">
+              本节暂无可展示的互评数据（需至少 2 份学生提交作品）。点击右侧按钮按「1 生评 2 份」自动分配。
             </span>
+            {onAutoAssign && (
+              <button
+                type="button"
+                disabled={autoAssigning}
+                onClick={() => void onAutoAssign()}
+                className="px-3 py-1 rounded-lg bg-[#8083ff] text-white text-[11px] font-bold hover:bg-[#9497ff] transition-colors disabled:opacity-50 shrink-0"
+              >
+                {autoAssigning ? '分配中…' : '一键分配互评'}
+              </button>
+            )}
           </div>
         )}
 
