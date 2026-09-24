@@ -9,10 +9,14 @@ on:
 jobs:
   typecheck-and-test:
     runs-on: ubuntu-latest
-    # `issues: write` is required by the PR-comment step below. The default token
-    # is read-only for issues, which is why that step used to fail with 403.
+    # 说明（与实测对齐）：在 PR 上创建评论时，GitHub 返回的
+    # `x-accepted-github-permissions` 是 `issues=write; pull_requests=write`。
+    # 仅声明 `issues: write` 时该步骤会 403（Resource not accessible by
+    # integration），从而把整个 job 判为失败 —— 而 typecheck/test 本身是过的。
+    # 因此这里同时声明两者，并给评论步骤加 continue-on-error 兜底。
     permissions:
       contents: read
+      pull-requests: write
       issues: write
     steps:
       - uses: actions/checkout@v4
@@ -45,6 +49,9 @@ jobs:
       # `vitest run --reporter=json` whose output exceeded execSync's 1 MB buffer.
       - name: Comment CI result on PR
         if: github.event_name == 'pull_request' && success()
+        # 评论只是「锦上添花」的反馈：fork PR（token 只读）或仓库权限收紧时
+        # 必然 403。不应因此把 typecheck/test 通过的 job 判为失败。
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
