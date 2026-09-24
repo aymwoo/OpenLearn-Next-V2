@@ -133,31 +133,49 @@ export const PeerReviewLeaderboardPanel: React.FC<PeerReviewLeaderboardPanelProp
           TEACHER BROADCAST &amp; STAGE TRANSITION
         </span>
 
-        {/* Quick Call-out buttons */}
+        {/*
+          快捷连线/投屏 —— 目标来自**真实提名榜**（podiumStudents，按真实票数排序）。
+          此前硬编码「陈子墨 / 张子豪」，导致任何班级、任何课节都出现同一对姓名。
+          无真实提名数据时按钮禁用并说明原因。
+        */}
         <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => onCallStudentMic('陈子墨')}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#171f33] hover:bg-[#222a3d] border border-[#2d3449]/50 text-[#dae2fd] transition-colors text-xs text-left"
-          >
-            <span className="flex items-center gap-2">
-              <Mic size={14} className="text-[#c0c1ff]" />
-              <span>连麦作者 {maskName('陈子墨', isAnonymous)} (分享思路)</span>
-            </span>
-            <span className="text-[#908fa0] text-[10px] font-mono">连线</span>
-          </button>
+          {(() => {
+            const top = podiumStudents[0]?.name;
+            const second = podiumStudents[1]?.name ?? top;
+            return (
+              <>
+                <button
+                  type="button"
+                  disabled={!top}
+                  onClick={() => top && onCallStudentMic(top)}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#171f33] hover:bg-[#222a3d] border border-[#2d3449]/50 text-[#dae2fd] transition-colors text-xs text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <span className="flex items-center gap-2">
+                    <Mic size={14} className="text-[#c0c1ff]" />
+                    <span>
+                      {top ? `连麦作者 ${maskName(top, isAnonymous)} (分享思路)` : '暂无提名，无法连麦'}
+                    </span>
+                  </span>
+                  <span className="text-[#908fa0] text-[10px] font-mono">连线</span>
+                </button>
 
-          <button
-            type="button"
-            onClick={() => onInviteScreenShare('张子豪')}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#171f33] hover:bg-[#222a3d] border border-[#2d3449]/50 text-[#dae2fd] transition-colors text-xs text-left"
-          >
-            <span className="flex items-center gap-2">
-              <Cast size={14} className="text-[#4edea3]" />
-              <span>邀请 {maskName('张子豪', isAnonymous)} 投屏分享纠错心得</span>
-            </span>
-            <span className="text-[#908fa0] text-[10px] font-mono">邀请</span>
-          </button>
+                <button
+                  type="button"
+                  disabled={!second}
+                  onClick={() => second && onInviteScreenShare(second)}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#171f33] hover:bg-[#222a3d] border border-[#2d3449]/50 text-[#dae2fd] transition-colors text-xs text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <span className="flex items-center gap-2">
+                    <Cast size={14} className="text-[#4edea3]" />
+                    <span>
+                      {second ? `邀请 ${maskName(second, isAnonymous)} 投屏分享` : '暂无提名，无法投屏'}
+                    </span>
+                  </span>
+                  <span className="text-[#908fa0] text-[10px] font-mono">邀请</span>
+                </button>
+              </>
+            );
+          })()}
         </div>
 
         {/* Third-Party Actions Slot */}

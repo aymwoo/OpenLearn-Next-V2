@@ -47,6 +47,22 @@ import { IEventBusServiceToken } from '../di/index.js';
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /** 7 个内核服务 Token 名称字符串 — 用于 Worker 端 RPC 代理。 */
+/**
+ * Worker 可解析的服务 token 白名单。
+ *
+ * ⚠️ 已知缺口：**不包含**积分系统的两个 token
+ * （`@openlearn/core:IPointsDimensionRegistry` / `IPointsLedgerService`）。
+ * 后果：WORKER 模式插件通过 `ctx.resolve()` 取积分服务时会得到
+ * 「No provider registered for token」并降级为插件内自建积分（不阻塞激活）。
+ *
+ * 为什么暂不加入（2026-* 实测）：
+ *   仅把 token 追加到此数组后，worker 插件（@ext/class-manager）在激活阶段
+ *   抛 `function () { [native code] } could not be cloned` —— 说明 worker 侧
+ *   RPC 的通用方法转发路径会尝试 postMessage 一个函数值。需要先修
+ *   `service-host.ts` 的通用转发（只回传可结构化克隆的返回值 / 对函数值显式
+ *   报错），再把 token 加入白名单。inline 模式已在
+ *   `plugin-host/context-builder.ts` 完成转发（配合 `ServiceRegistry.tryResolve`）。
+ */
 export const ALL_SERVICE_TOKENS = [
   '@openlearn/core:ICommandBusService',
   '@openlearn/core:IEventBusService',

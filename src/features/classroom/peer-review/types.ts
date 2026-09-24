@@ -38,13 +38,17 @@ export interface SpotlightWorkItem {
   studentInitial: string;
   workTitle: string;
   workSubtitle: string;
-  rating: number;
-  reviewCount: number;
+  /** 真实评分（0-5）；平台无评分来源时为 undefined，UI 显示「—」 */
+  rating?: number;
+  /** 真实评阅人数；无来源时为 0 */
+  reviewCount?: number;
   badges: Array<{ label: string; colorClass: string }>;
-  visualType: 'polygon_spiral' | 'rect_matrix' | 'custom';
-  visualBadgeText: string;
-  codeTitle: string;
-  codeLines: Array<{
+  /** 展示用图形类型（纯渲染选择，非数据）；缺省时组件回退 polygon_spiral */
+  visualType?: 'polygon_spiral' | 'rect_matrix' | 'custom';
+  visualBadgeText?: string;
+  /** 代码片段标题与内容：真实作品无代码源时为空，UI 显示占位说明 */
+  codeTitle?: string;
+  codeLines?: Array<{
     text: string;
     isHighlight?: boolean;
     isSuccess?: boolean;

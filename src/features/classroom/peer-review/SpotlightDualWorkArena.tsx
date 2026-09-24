@@ -104,7 +104,7 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
 
       {/* 2. Dual Work Sandbox Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* SUB-CARD A: 陈子墨 (满分标杆) */}
+        {/* SUB-CARD A：作品 A（学生名/标题来自真实 workA 入参） */}
         <div className="bg-[#131b2e] rounded-xl p-4 flex flex-col gap-3 border border-[#2d3449]/60 shadow-md relative">
           {/* Card Header */}
           <div className="flex items-center justify-between">
@@ -122,8 +122,10 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
 
             <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#ca8100]/20 text-[#ffb95f] border border-[#ca8100]/30">
               <Star size={13} className="text-[#ffb95f] fill-[#ffb95f]" />
-              <span className="font-mono text-xs font-semibold">{workA.rating.toFixed(1)}</span>
-              <span className="text-[10px] text-[#908fa0]">({workA.reviewCount}评)</span>
+              <span className="font-mono text-xs font-semibold">
+                {typeof workA.rating === 'number' ? workA.rating.toFixed(1) : '—'}
+              </span>
+              <span className="text-[10px] text-[#908fa0]">({workA.reviewCount ?? 0}评)</span>
             </div>
           </div>
 
@@ -193,8 +195,8 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
 
           {/* Code Snippet */}
           <div className="bg-[#060e20] rounded-lg p-3 font-mono text-[11px] leading-5 border border-[#2d3449]/60 overflow-x-auto text-[#dae2fd]">
-            <div className="text-[#908fa0] mb-1"># {workA.codeTitle}</div>
-            {workA.codeLines.map((line, idx) => (
+            <div className="text-[#908fa0] mb-1"># {workA.codeTitle ?? ''}</div>
+            {(workA.codeLines ?? []).map((line, idx) => (
               <div
                 key={idx}
                 className={`${line.isHighlight ? 'bg-[#8083ff]/20 px-1 rounded -mx-1 text-[#dae2fd]' : ''}`}
@@ -207,7 +209,7 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
           </div>
         </div>
 
-        {/* SUB-CARD B: 张子豪 (经典纠错突破) */}
+        {/* SUB-CARD B：作品 B（学生名/标题来自真实 workB 入参） */}
         <div className="bg-[#131b2e] rounded-xl p-4 flex flex-col gap-3 border border-[#2d3449]/60 shadow-md relative">
           {/* Card Header */}
           <div className="flex items-center justify-between">
@@ -225,8 +227,10 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
 
             <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#ca8100]/20 text-[#ffb95f] border border-[#ca8100]/30">
               <Star size={13} className="text-[#ffb95f] fill-[#ffb95f]" />
-              <span className="font-mono text-xs font-semibold">{workB.rating.toFixed(1)}</span>
-              <span className="text-[10px] text-[#908fa0]">({workB.reviewCount}评)</span>
+              <span className="font-mono text-xs font-semibold">
+                {typeof workB.rating === 'number' ? workB.rating.toFixed(1) : '—'}
+              </span>
+              <span className="text-[10px] text-[#908fa0]">({workB.reviewCount ?? 0}评)</span>
             </div>
           </div>
 
@@ -302,8 +306,8 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
 
           {/* Code Snippet with Success Fix Highlight */}
           <div className="bg-[#060e20] rounded-lg p-3 font-mono text-[11px] leading-5 border border-[#2d3449]/60 overflow-x-auto text-[#dae2fd]">
-            <div className="text-[#908fa0] mb-1"># {workB.codeTitle}</div>
-            {workB.codeLines.map((line, idx) => (
+            <div className="text-[#908fa0] mb-1"># {workB.codeTitle ?? ''}</div>
+            {(workB.codeLines ?? []).map((line, idx) => (
               <div
                 key={idx}
                 className={`${line.isSuccess ? 'bg-[#00a572]/20 px-1 rounded -mx-1 text-[#4edea3] font-medium' : ''}`}

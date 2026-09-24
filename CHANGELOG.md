@@ -12,6 +12,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Features
 
+- **课中全班大屏互评后端补齐（Stitch 21e2dac1）**：`src/features/classroom/peer-review/*` 此前只有前端 UI、**零后端表**，界面靠内置 mock 学生/作品/评分渲染。本次补齐完整数据模型与 API：
+  - **迁移 `009_classroom_peer_review.sql`**：新增 5 张表 —— `classroom_peer_review_tasks`（分配任务，唯一键含 `target_attempt_id` 防重复分配）、`classroom_peer_reviews`（评语，唯一键支持同人同作品重复改分走 UPDATE）、`classroom_peer_badges`（互赠微勋章，幂等）、`classroom_peer_nominations`（提名按行存储，票数 COUNT 聚合）、`classroom_danmaku`（文字/语音弹幕）、`classroom_peer_rubric_dimensions`（量规维度，会话首次访问自动落库 3 个默认维度）。
+  - **新增 `server/routes/classroom-peer-review.ts`（6 端点）**：`POST …/peer-review/auto-assign`（教师一键「1 生评 2 份」，分层对调标杆/攻坚，**不产生自己评自己**）、`GET …/peer-review`（大屏展示全部真实数据：匹配矩阵/徽章流/提名榜/弹幕/量规达标率/进度）、`POST …/peer-review/tasks/:taskId/submit`（防代评：学生只能提交自己的任务，教师例外；越界分数 400）、`POST …/peer-review/badges`（未知 badgeKey 400）、`POST …/peer-review/nominations`（不能提名自己）、`POST …/danmaku`（空文本 400，超长截断 120 字）。
+  - **作品池口径（忠于 schema 事实）**：`courseware_attempt` **没有 `lesson_id`**，课节↔课件关联在 `whiteboard_elements(type='html-applet').data.coursewareUuid`。因此分两级：`scope='lesson'` 优先收本教案内嵌课件的作答；不足 2 份时回退 `scope='class'`（本班学生全部作答），响应回传 `scope` 便于教师理解口径；两者都取不到则 400（不伪造作品）。
+  - **前端接线**：`LiveClassroomView` 的互评秀场改为消费真实数据，并在空态提供「一键分配互评」按钮（真实调用 auto-assign）。新增 `usePeerReviewData` hook 承载积分榜 + 互评数据 + 分配动作。
+  - **测试**：新增 `server/__tests__/classroom-peer-review.test.ts`（16 例：鉴权、作品不足拒绝、class 回退口径、防代评、越界分、重复提交走 UPDATE、徽章幂等、不能自提名、票数聚合、弹幕截断、空态真实姓名校验）。
+
+### Fixes
+
+- **AI 产物泄漏模型思考过程**：`pnpm dev` 浏览器实测发现，推理模型会把 `<think>…</think>` 思考块随正文返回，直接印进家长通知与学情评语。新增 `stripModelArtifacts()`（`server/routes/classroom-extras.ts`）：移除成对/未闭合的 `<think|thinking|reasoning|analysis>` 块（大小写不敏感、跨行）、```` ```think ```` 围栏、整体 json 围栏；**清洗后为空时回退原文**避免误删成空。家校通知的班级总评与逐生通知、AI 学情预测的 JSON 解析全部走该清洗。新增 7 例单测（含端到端断言产物中不含思考块）。
+- **Layout 治理：`LiveClassroomView` 拆分（2562 → 2317 行）**：抽出两个内聚单元 —— `src/components/classroom/ClassroomModalsHost.tsx`（6 个弹窗的编排层，只渲染不持状态，新增课堂弹窗不必再改动巨型组件）与 `src/features/classroom/hooks/usePeerReviewData.ts`（积分榜 + 互评数据 + 一键分配的数据层）。行为零变更，全部现有测试保持通过。
+
+### Docs
+
+- **记录 worker 模式积分服务缺口**：`packages/core/worker-runtime/worker-manager.ts` 的 `ALL_SERVICE_TOKENS` 补充说明性注释 —— 该白名单**不含**积分系统两个 token，故 WORKER 模式插件取积分服务时降级为插件内自建（不阻塞激活）。实测把 token 直接加入白名单会让 worker 插件激活阶段抛 `function () { [native code] } could not be cloned`（worker RPC 通用转发路径尝试克隆函数值），需先修 `service-host.ts` 通用转发再放行；inline 模式已在 `plugin-host/context-builder.ts` 完成转发。
+
+- **课堂数据真实化治理（消除 12 处伪数据来源）**：上课流程中原有 12 处「非真实来源」的数据（硬编码学生、伪计算分数、空数组占位），导致 AI 生成、学情简报、雷达图等输出失真。本次全部改为**可追溯的真实来源**，无数据时显式降级为空态而非编造：
+  - **新增共享派生层 `src/features/classroom/hooks/useClassroomLiveData.ts`**：把 `LiveClassroomView` 已有的 props/state（`liveClassStudentProgress` / `onlineStudentIds` / `liveClassFeed` / `timelineSegments` / `attempts` / `session.started_at`）统一派生为逐生指标、课堂亮点、环节节奏、已用时长，**不新增任何网络请求**。核心原则：无数据 → `0 / undefined / []`，绝不给「看起来合理」的假值。附带 17 例单测锁定该不变量。
+  - **`LiveClassroomView` 4 个流程页面的数据泵**：`participationScore: 60` → 真实 `progress_percent`；空 `highlights` → 真实 `liveClassFeed` 事件；空 `stages` → 真实 `timelineSegments`；`elapsedMin=0` / `plannedTotalMin=45` → 真实 `session.started_at` 与教案时长；`paceIndicator` 由真实进度分级派生；`quizScore` 由真实 `courseware_attempt` 取最高分（排除 teacher/guest 占位）。
+  - **`server/routes/classroom.ts` panoramic-report 增加逐生真实明细**：新增 `students[]` 字段，聚合 `lesson_quiz_submissions`（平均分 / 正确率）、`classroom_poll_votes`（投票次数）、`classroom_exit_tickets`（通票评分），并按班级花名册补齐未互动学生（`attendance=false`）。
+  - **`ClassroomBriefingView` 伪计算移除**：`quizScore = 80 + ((i * 7) % 21)`、`pollsAnswered = 2 + (i % 3)`、`rating`、`status`、`note` 全部改为消费上述真实明细；无数据字段渲染「—」而非假数字（表格与 CSV 导出同步）。
+  - **学生五维雷达图诚实化**：`StudentGrowthProfileModal` 移除 `?? 95/90/88/96/98` 硬编码兜底（旧实现让每个学生雷达图几乎相同）。现在仅使用调用方传入的 `competencyScores`，缺失维度标记 `available: false` → 雷达多边形虚线灰化并提示「暂无数据」；综合评级与 AI 评语改为**由真实维度均值派生**（不再输出「循环变量步长表现出超前理解力」这类无据结论）；时间线移除 4 条内置编造事件，改为空态提示。`ClassroomAttributionModal` 补充 `competencyScores` 透传，`StudentGrowthProfileModal` 的 `role`/`group_name`/`student_number` 缺失时不再编造「组长 / 飞鹰极客队 / 240101」。
+  - **`ClassroomLeaderboardModal` 分组与积分真实化**：移除假小组名（飞鹰极客队等）与写死的 `baseScore: 104` / `growth: '+14'`；改为按真实 `groupName` 分组、组内真实积分求和排序，无数据渲染空态；移除 `currentPoints ?? 28`、`focusScore ?? 98` 兜底。
+  - **互评秀场真实数据接入**：`PeerReviewShowcaseModal` 移除 `// Initial Mock Data` 中的假学生（张子豪 / 陈子墨 / 李晓彤…）、假作品、假评分、假倒计时，改为 props 驱动（`workA` / `workB` / `matchingItems` / `badges` / `rubricDimensions` / `reactions` / `podiumStudents` / `danmaku` / `reviewProgress` / `countdownSeconds`）；`LiveClassroomView` 用真实课件作答前 2 名作为焦点对比作品、真实积分榜作为提名榜。平台当前无课中互评任务表，相应区域渲染空态并说明原因。`PeerReviewLeaderboardPanel` / `SpotlightDualWorkArena` 的硬编码姓名改为 props 驱动（无数据时按钮禁用）。
+  - **未改动的合理默认值**：`ClassroomCountdownWidget` 的 `|| 300` 是倒计时预设时长、`timelineSegments` 的 `|| 300` 是环节默认时长，属合法默认而非伪数据，保持原状。
+
+- **上课流程四页面扩展（家校通知 / AI 学情预测 / 异常告警中心 / 小组协作白板）**：从「上课流程完整性」出发补齐四个课上/课后环节，全部挂在 `LiveClassroomView` 顶栏入口，均支持 `lang: 'zh' | 'en'` 与四套主题语义 token：
+  - **#1 家校通知生成器（post-class）**：新增 `src/features/classroom/notifications/ParentNotificationModal.tsx` + 服务端 `POST /api/classroom/:lessonId/parent-notification`（限教师/管理员）。产物 = 全班 Markdown 学情简报（出勤率 / 课堂总评 / 亮点 / 各阶段节奏偏差）+ 逐生家长通知（AI 按参与度、测验、行为标签生成 ≤ 80 字中文简报）；支持「全班简报 / 逐生通知」双 Tab、学生侧栏切换、一键复制到剪贴板、导出 `.md`。**AI 失败降级**：单生 AI 抛错时该生回落模板（`致 xxx 家长` + 参与度/行为标签拼接），互不影响；全班 AI 失败同样回落模板，整体仍 200。
+  - **#2 AI 实时学情预测（in-class）**：新增 `src/features/classroom/pacing/MasteryPredictionModal.tsx` + 服务端 `POST /api/classroom/:lessonId/predict-mastery`。**一次 AI 调用批量预测全班**（避免 N 次调用），输出每生 5 维掌握度（算法逻辑 / 代码工程 / 创新思维 / 团队协作 / 课堂专注）+ `risk: low|medium|high` + 一句话说明；顶部课堂进度条（elapsed/planned）与风险聚合徽标，支持「风险优先 / 综合掌握 / 姓名」三种排序。**AI 不可用时自动降级**为启发式（参与度基线 ± 测验校正，`stalled`/低参与度判高风险），并在 UI 标注「降级模式」，`aiSucceeded` 字段回传前端以供区分。
+  - **#3 课堂异常告警中心（in-class）**：新增 `src/features/classroom/diagnostics/DiagnosticCenterModal.tsx`，直接消费既有 `errorStore.studentErrors` / `errors`（不新增后端依赖）。提供「学生端异常 / 本机异常」双 Tab + 严重度徽标计数、按 `SystemErrorType`（react / promise / runtime / api / custom）筛选、单条移除、一键清空、**复制全部学生 ID**（供 IT 批量排查）。复用 `src/types/error.ts` 真实类型，不再重复定义。
+  - **#4 小组协作白板（in-class）**：新增 `src/features/classroom/collab-whiteboard/GroupCollabWhiteboardModal.tsx`。零依赖 SVG 画布实现（不引入第二套绘图库）：四支工具（笔 / 矩形 / 圆形 / 橡皮）+ 8 色调色板 + 笔触粗细；默认 4 个小组、可新建/删除、按学生「+ / −」手动派位、一键随机自动分配；支持「仅当前组 / 查看全部」叠层对比、单组清空、当前组导出 SVG。实时多人同步预留扩展点 `classroom.collab.canvas`（当前为前端 in-memory 状态，注释标明后续接 socket 广播）。
+  - **插件扩展槽位**：新增 4 个槽位 `classroom.notification.tabs` / `classroom.pacing.dashboard` / `classroom.diagnostic.feed` / `classroom.collab.canvas`，四个新页面各自的关键区域均可插件接入而不改宿主。
+  - **测试**：新增 `server/__tests__/classroom-extras.test.ts`（10 例：匿名 401 / 学生 403 / 参数校验 400 / AI 成功 / AI 抛错降级 / AI 垃圾 JSON 降级 / 风险判定）与 4 个组件测试（`ParentNotificationModal` 5 例、`MasteryPredictionModal` 7 例、`DiagnosticCenterModal` 8 例、`GroupCollabWhiteboardModal` 8 例），共 38 例。
+
 - **互动课堂起始门户与教学模式体系 (Classroom Entry Portal & Teaching Modes)**：对应 Stitch「课程入口与班级选择门户」设计，教师进入「互动课堂」先看到门户页而不是直接进入无准备的课堂：
   - **起始门户页**：新增 `src/features/classroom/ClassroomEntryPortal.tsx`。顶部遥测岛（系统时钟 / 网络时延 / 席位就绪率 / 主控大屏）、STEP1 课程卡片马赛克、STEP2 班级标签 + **32 席位矩阵**（按 4 组分组、在线态着色）+ 教学模式选择器、底部粘性启动区；右辅栏为教案蓝图与 45 分钟节奏管道（按环节 `duration` 计算占比）、课前学情透镜与三项自检体检卡。全部使用项目语义 token（`bg-surface` / `text-main` / `border-theme` / `bg-primary-theme`…），四套主题自动一致；图标沿用 lucide-react，不引入第二套图标库。
   - **六个插件扩展槽位**：新增 `classroom.portal.telemetry`（遥测岛指标）/ `course_badge`（课程卡徽章）/ `teaching_mode`（自定义教学模式）/ `insight`（课前洞察卡）/ `preflight`（课前检查项）/ `launch_action`（启动区附加操作），门户六个区域均可用插件接入而不改动宿主。AI 课前洞察的**内置实现同样走 `classroom.portal.insight` 槽位**，插件可直接替换。

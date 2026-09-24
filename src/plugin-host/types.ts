@@ -98,6 +98,11 @@ export type ExtensionSlot =
   | 'classroom.portal.insight' // 课前学情洞察卡（AI 洞察为内置默认实现）
   | 'classroom.portal.preflight' // 课前检查项
   | 'classroom.portal.launch_action' // 启动区附加操作
+  // ── 上课流程扩展：4 个新页面（家校通知/AI 预测/异常告警/小组协作） ──
+  | 'classroom.notification.tabs' // 家校通知生成器标签页扩展
+  | 'classroom.pacing.dashboard' // AI 学情预测仪表扩展（注入卡片）
+  | 'classroom.diagnostic.feed' // 课堂异常告警实时流扩展
+  | 'classroom.collab.canvas' // 小组协作白板工具扩展
   // ── 远端新增槽位（Stitch 1219a481 / 21e2dac1 规范） ──
   | 'classroom.topbar.action' // 统一顶栏快捷操作扩展
   | 'classroom.topbar.pill' // 统一顶栏状态胶囊扩展

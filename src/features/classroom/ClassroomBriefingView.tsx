@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FileBarChart2,
   Award,
@@ -69,36 +69,69 @@ export function ClassroomBriefingView({
     });
   }, [selectedLesson]);
 
-  // Derived metrics
-  const totalStudents = students.length || 24;
-  const quizAccuracy = reportData?.metrics?.quizAccuracy || 88;
-  const pollVotes = reportData?.metrics?.pollVotesTotal || 42;
-  const exitRating = reportData?.metrics?.exitTicketsAvgRating || 4.8;
-  const durationMin = reportData?.session?.durationMin || 45;
+  // ── 真实指标（全部来自 panoramic-report，缺失时为 0/null，不再回退到假值） ──
+  const totalStudents = students.length || reportData?.students?.length || 0;
+  const quizAccuracy = reportData?.metrics?.quizAccuracy ?? 0;
+  const pollVotes = reportData?.metrics?.pollVotesTotal ?? 0;
+  const exitRating = reportData?.metrics?.exitTicketsAvgRating ?? 0;
+  const durationMin = reportData?.session?.durationMin ?? 0;
 
   const totalPacing = pacingData.CLEAR + pacingData.CONFUSED + pacingData.TOO_FAST || 1;
   const clearPercent = Math.round((pacingData.CLEAR / totalPacing) * 100);
   const confusedPercent = Math.round((pacingData.CONFUSED / totalPacing) * 100);
   const fastPercent = Math.max(0, 100 - clearPercent - confusedPercent);
 
-  // Mock student roster performance records
-  const studentRecords = students.map((st, i) => {
-    const score = 80 + ((i * 7) % 21);
-    const pollsAnswered = 2 + (i % 3);
-    const rating = Math.min(5, Math.max(3, 4 + (i % 2) * 1));
-    const status = score >= 90 ? '优秀' : score >= 75 ? '良好' : '需关注';
-    return {
-      id: st.id,
-      name: st.name,
-      studentNumber: st.student_number || `S${1000 + i}`,
-      attendance: '出勤',
-      quizScore: score,
-      pollsAnswered,
-      rating,
-      status,
-      note: score < 80 ? '建议课后补充探究微练习' : '课堂掌握扎实，互动积极',
-    };
-  });
+  /**
+   * 逐生学情记录 —— 全部来自服务端 panoramic-report.students 真实聚合：
+   *   quizScore    ← lesson_quiz_submissions AVG(score)
+   *   accuracy     ← AVG(is_correct)
+   *   pollsAnswered← classroom_poll_votes COUNT
+   *   exitRating   ← classroom_exit_tickets.rating
+   *   attendance   ← 是否出现在任一真实互动记录中
+   * 无数据的字段保持 null → UI 显示「—」，不再用 score = 80 + ((i * 7) % 21) 编造。
+   */
+  const studentRecords = useMemo(() => {
+    const breakdown: any[] = Array.isArray(reportData?.students) ? reportData.students : [];
+    // 服务端未就绪（如未建会话）时，用花名册占位但所有指标为 null（诚实空态）
+    const rows = breakdown.length > 0
+      ? breakdown
+      : students.map((st) => ({
+          studentId: st.id,
+          studentName: st.name,
+          studentNumber: st.student_number,
+          attendance: false,
+          quizScore: null,
+          accuracy: null,
+          pollsAnswered: 0,
+          exitRating: null,
+          puzzledConcept: null,
+        }));
+
+    return rows.map((r) => {
+      const score = typeof r.quizScore === 'number' ? r.quizScore : null;
+      const status =
+        score === null ? '无数据' : score >= 90 ? '优秀' : score >= 75 ? '良好' : '需关注';
+      const note =
+        score === null
+          ? '本节无可用的随堂测记录'
+          : score < 75
+            ? '建议课后补充探究微练习'
+            : '课堂掌握扎实，互动积极';
+      return {
+        id: r.studentId,
+        name: r.studentName,
+        studentNumber: r.studentNumber || r.studentId,
+        attendance: r.attendance ? '出勤' : '未互动',
+        quizScore: score,
+        accuracy: typeof r.accuracy === 'number' ? r.accuracy : null,
+        pollsAnswered: Number(r.pollsAnswered) || 0,
+        rating: typeof r.exitRating === 'number' ? r.exitRating : null,
+        puzzledConcept: r.puzzledConcept || '',
+        status,
+        note,
+      };
+    });
+  }, [reportData, students]);
 
   const filteredRecords = studentRecords.filter((r) =>
     r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -121,9 +154,9 @@ export function ClassroomBriefingView({
       escapeCSV(r.studentNumber),
       escapeCSV(r.name),
       escapeCSV(r.attendance),
-      escapeCSV(`${r.quizScore}分`),
+      escapeCSV(r.quizScore === null ? '—' : `${r.quizScore}分`),
       escapeCSV(`${r.pollsAnswered}次`),
-      escapeCSV(`${r.rating}星`),
+      escapeCSV(r.rating === null ? '—' : `${r.rating}星`),
       escapeCSV(r.status),
       escapeCSV(r.note),
     ]);
@@ -426,9 +459,13 @@ export function ClassroomBriefingView({
                       {r.attendance}
                     </span>
                   </td>
-                  <td className="p-3 text-center font-mono font-bold text-main">{r.quizScore} 分</td>
+                  <td className="p-3 text-center font-mono font-bold text-main">
+                    {r.quizScore === null ? '—' : `${r.quizScore} 分`}
+                  </td>
                   <td className="p-3 text-center font-mono">{r.pollsAnswered} 次</td>
-                  <td className="p-3 text-center font-bold text-amber-500">{r.rating} ★</td>
+                  <td className="p-3 text-center font-bold text-amber-500">
+                    {r.rating === null ? '—' : `${r.rating} ★`}
+                  </td>
                   <td className="p-3">
                     <span
                       className={`px-2 py-0.5 rounded-lg text-[11px] font-bold ${
