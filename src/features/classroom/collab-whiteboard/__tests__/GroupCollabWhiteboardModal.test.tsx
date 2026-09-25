@@ -88,4 +88,51 @@ describe('GroupCollabWhiteboardModal', () => {
     fireEvent.click(rectBtn);
     expect(rectBtn.className).toContain('bg-primary-theme');
   });
+
+  it('支持切换至同质分层策略并执行自动分配', () => {
+    renderModal();
+    const homoBtn = screen.getByTitle('同质分层探讨');
+    fireEvent.click(homoBtn);
+    fireEvent.click(screen.getByText('一键自动分配'));
+    expect(noopToast).toHaveBeenCalledWith(
+      expect.stringContaining('自动分配完成'),
+      expect.stringContaining('同质分层探讨'),
+      'success',
+    );
+  });
+
+  it('支持一键切入「画廊互评大屏并览 (Gallery Walk)」模式', () => {
+    renderModal();
+    const galleryToggle = screen.getByText('画廊互评大屏并览 (Gallery Walk)');
+    fireEvent.click(galleryToggle);
+
+    // 大屏并览标题出现
+    expect(screen.getByText('全班小组探究画廊展台')).toBeTruthy();
+    expect(screen.getByText('返回单组画布')).toBeTruthy();
+  });
+
+  it('画廊模式下支持为小组送花点赞与思辨标签点选及置顶高光', () => {
+    renderModal();
+    // 切换到画廊模式
+    fireEvent.click(screen.getByText('画廊互评大屏并览 (Gallery Walk)'));
+
+    // 1. 测试送花
+    const likeButtons = screen.getAllByText(/送花赞赏/);
+    fireEvent.click(likeButtons[0]);
+    expect(noopToast).toHaveBeenCalledWith(
+      expect.stringContaining('送花点赞成功'),
+      expect.stringContaining('鲜花'),
+      'success',
+    );
+
+    // 2. 测试思辨标签点选
+    const inquiryTagBtn = screen.getAllByText('+ 思路新颖')[0];
+    fireEvent.click(inquiryTagBtn);
+    expect(screen.getAllByText('✓ 思路新颖').length).toBeGreaterThanOrEqual(1);
+
+    // 3. 测试置顶高光
+    const spotlightBtn = screen.getAllByTitle('设为全班高光')[0];
+    fireEvent.click(spotlightBtn);
+    expect(screen.getByText('🌟 置顶高光')).toBeTruthy();
+  });
 });

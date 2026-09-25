@@ -164,6 +164,7 @@ export function LiveClassroomView({
   const [isMasteryPredictionOpen, setIsMasteryPredictionOpen] = useState(false);
   const [isDiagnosticCenterOpen, setIsDiagnosticCenterOpen] = useState(false);
   const [isGroupCollabOpen, setIsGroupCollabOpen] = useState(false);
+  const [isShowcaseDiffOpen, setIsShowcaseDiffOpen] = useState(false);
   /** 真实开课时间（来自 classroom_sessions.started_at），用于计算已用时长 */
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
   /** 真实课件作答记录（用于成绩/完成度/行为标签派生） */
@@ -1092,10 +1093,17 @@ export function LiveClassroomView({
             </button>
             <button
               onClick={() => setIsGroupCollabOpen(true)}
-              className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5"
-              title={lang === 'zh' ? '小组协作白板' : 'Group Collab Whiteboard'}
+              className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title={lang === 'zh' ? '随堂小组协作与画廊互评展台 (Jigsaw & Gallery Walk)' : 'Group Collab & Gallery Walk'}
             >
-              👥 {lang === 'zh' ? '小组' : 'Groups'}
+              👥 {lang === 'zh' ? '小组拼板' : 'Jigsaw'}
+            </button>
+            <button
+              onClick={() => setIsShowcaseDiffOpen(true)}
+              className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title={lang === 'zh' ? '优秀作业 / 屏幕一键多屏对比投屏批注 (Showcase & Dual-Screen Diff)' : 'Showcase & Multi-Screen Diff'}
+            >
+              🔍 {lang === 'zh' ? '多屏对比' : 'Diff View'}
             </button>
             <button
               onClick={() => setIsParentNotificationOpen(true)}
@@ -2311,6 +2319,8 @@ export function LiveClassroomView({
         onCloseDiagnosticCenter={() => setIsDiagnosticCenterOpen(false)}
         isGroupCollabOpen={isGroupCollabOpen}
         onCloseGroupCollab={() => setIsGroupCollabOpen(false)}
+        isShowcaseDiffOpen={isShowcaseDiffOpen}
+        onCloseShowcaseDiff={() => setIsShowcaseDiffOpen(false)}
       />
     </div>
   );

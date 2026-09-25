@@ -25,6 +25,7 @@ import { ParentNotificationModal } from '../../features/classroom/notifications/
 import { MasteryPredictionModal } from '../../features/classroom/pacing/MasteryPredictionModal';
 import { DiagnosticCenterModal } from '../../features/classroom/diagnostics/DiagnosticCenterModal';
 import { GroupCollabWhiteboardModal } from '../../features/classroom/collab-whiteboard/GroupCollabWhiteboardModal';
+import { ShowcaseDiffModal } from '../../features/classroom/showcase-diff/ShowcaseDiffModal';
 import type { ClassroomLiveData } from '../../features/classroom/hooks/useClassroomLiveData';
 
 type ToastFn = (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
@@ -82,6 +83,10 @@ export interface ClassroomModalsHostProps {
   // ── 小组协作白板 ──
   isGroupCollabOpen: boolean;
   onCloseGroupCollab: () => void;
+
+  // ── 多屏对比投屏批注 ──
+  isShowcaseDiffOpen?: boolean;
+  onCloseShowcaseDiff?: () => void;
 }
 
 export const ClassroomModalsHost: React.FC<ClassroomModalsHostProps> = ({
@@ -112,6 +117,8 @@ export const ClassroomModalsHost: React.FC<ClassroomModalsHostProps> = ({
   onCloseDiagnosticCenter,
   isGroupCollabOpen,
   onCloseGroupCollab,
+  isShowcaseDiffOpen,
+  onCloseShowcaseDiff,
 }) => {
   const now = Date.now();
 
@@ -238,6 +245,20 @@ export const ClassroomModalsHost: React.FC<ClassroomModalsHostProps> = ({
         availableStudents={students.map((s) => ({
           id: s.id,
           name: s.name ?? s.student_number ?? s.id,
+        }))}
+        addToast={addToast}
+        lang={lang}
+      />
+
+      {/* ── 优秀作业 / 屏幕一键多屏对比投屏批注（Showcase & Dual-Screen Diff） ── */}
+      <ShowcaseDiffModal
+        isOpen={Boolean(isShowcaseDiffOpen)}
+        onClose={onCloseShowcaseDiff ?? (() => {})}
+        lessonTitle={lessonTitle}
+        availableStudents={students.map((s) => ({
+          id: s.id,
+          name: s.name ?? s.student_number ?? s.id,
+          seatNumber: s.seat_number ?? (s as any).seatNumber,
         }))}
         addToast={addToast}
         lang={lang}

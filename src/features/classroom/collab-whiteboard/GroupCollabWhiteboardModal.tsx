@@ -1,11 +1,10 @@
 /**
- * GroupCollabWhiteboardModal — 小组协作白板（in-class）
+ * GroupCollabWhiteboardModal — 随堂小组协作白板与拼板互评展台（in-class）
  *
- * 上课流程扩展 #4：从 ClassroomInteractiveCockpit 工具栏打开。
- * 教师端为每个小组提供独立画布（mock 实现），可创建/分配/切换查看。
- * 实时同步（socket.io 多客户端写入）作为未来扩展点：
- * 当前实现仅前端 in-memory state + 注释说明；
- * 持久化与广播由 extension slot `classroom.collab.canvas` 接入。
+ * 核心特性：
+ * 1. 智能动态分组决策：同质分层探讨 (Homogeneous) / 异质互助拼板 (Heterogeneous) / 随机均分 (Random)
+ * 2. 随堂探究驱动任务下发 (Mission Prompt)
+ * 3. 组间成果画廊互评展台 (Gallery Walk): 4~6 组多屏并览投屏、送花点赞 (🌸)、思辨提问与高光置顶
  */
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
@@ -22,8 +21,20 @@ import {
   EyeOff,
   Download,
   Palette,
+  Sparkles,
+  LayoutGrid,
+  Heart,
+  MessageSquare,
+  Award,
+  HelpCircle,
+  Edit3,
 } from 'lucide-react';
-import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
+import {
+  executeGrouping,
+  type GroupingStrategy,
+  type BreakoutGroup,
+  type StudentCandidate,
+} from './breakout-engine';
 
 // ── 类型 ────────────────────────────────────────────────────────────
 
@@ -43,29 +54,18 @@ interface Stroke {
   circle?: { cx: number; cy: number; r: number };
 }
 
-interface Group {
-  id: string;
-  name: string;
-  memberIds: string[];
-  color: string;
-}
-
 export interface GroupCollabWhiteboardModalProps {
   isOpen: boolean;
   onClose: () => void;
   lessonId: string | null;
   classId: string | null;
-  availableStudents: Array<{ id: string; name: string }>;
+  availableStudents: Array<{ id: string; name: string; tier?: 'basic' | 'intermediate' | 'advanced' }>;
   addToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   lang?: 'zh' | 'en';
 }
 
-// ── 工具与颜色 ──────────────────────────────────────────────────────
-
 const COLORS = ['#4f46e5', '#06b6d4', '#a855f7', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#1e293b'];
-const GROUP_COLORS = ['bg-indigo-500', 'bg-cyan-500', 'bg-purple-500', 'bg-pink-500', 'bg-amber-500', 'bg-emerald-500'];
-
-// ── 主组件 ──────────────────────────────────────────────────────────
+const PRESET_INQUIRY_TAGS = ['思路新颖', '极值合理', '受力严谨', '需补充推导'];
 
 export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProps> = ({
   isOpen,
@@ -76,7 +76,7 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
   addToast,
   lang = 'zh',
 }) => {
-  const [groups, setGroups] = useState<Group[]>([]);
+  const [groups, setGroups] = useState<BreakoutGroup[]>([]);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [activeColor, setActiveColor] = useState<string>(COLORS[0]);
@@ -84,50 +84,87 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
   const [activeTool, setActiveTool] = useState<'pen' | 'rect' | 'circle' | 'eraser'>('pen');
   const [showAllGroups, setShowAllGroups] = useState(false);
   const [showAssignmentPanel, setShowAssignmentPanel] = useState(true);
+
+  // 随堂探究与画廊互评扩展状态
+  const [groupingStrategy, setGroupingStrategy] = useState<GroupingStrategy>('heterogeneous');
+  const [isGalleryMode, setIsGalleryMode] = useState<boolean>(false);
+  const [missionPrompt, setMissionPrompt] = useState<string>(
+    lang === 'zh'
+      ? '随堂探究驱动题：请各小组针对本题受力与运动过程进行受力拆解绘图，并标出关键守恒量。'
+      : 'In-class Jigsaw Task: Collaborate to draw the state diagram and identify conserved quantities.',
+  );
+  const [groupLikes, setGroupLikes] = useState<Record<string, number>>({});
+  const [groupInquiries, setGroupInquiries] = useState<Record<string, string[]>>({});
+  const [spotlightGroupId, setSpotlightGroupId] = useState<string | null>(null);
+
   const canvasRef = useRef<SVGSVGElement | null>(null);
 
   // 初始化默认 4 个小组
   useEffect(() => {
     if (isOpen && groups.length === 0) {
-      const initialGroups: Group[] = [1, 2, 3, 4].map((i) => ({
-        id: `group-${i}`,
-        name: lang === 'zh' ? `第 ${i} 小组` : `Group ${i}`,
+      const defaultColors = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500'];
+      const initialGroups: BreakoutGroup[] = Array.from({ length: 4 }).map((_, i) => ({
+        id: `group-${i + 1}`,
+        name: lang === 'zh' ? `第 ${i + 1} 小组` : `Group ${i + 1}`,
         memberIds: [],
-        color: GROUP_COLORS[(i - 1) % GROUP_COLORS.length],
+        color: defaultColors[i % defaultColors.length],
+        focusTier: 'balanced',
+        likesCount: 0,
+        inquiryTags: [],
+        isSpotlight: false,
       }));
       setGroups(initialGroups);
       setActiveGroupId(initialGroups[0].id);
     }
     if (!isOpen) {
-      // 关闭时清空（避免下次打开时残留）
       setGroups([]);
       setStrokes([]);
       setActiveGroupId(null);
+      setIsGalleryMode(false);
     }
-  }, [isOpen, lang, groups.length]);
+  }, [isOpen, lang]);
 
-  // 自动分配学生到各组（按顺序均分）
+  // 智能一键自动分配
   const autoAssign = useCallback(() => {
     if (groups.length === 0) return;
-    const shuffled = [...availableStudents].sort(() => Math.random() - 0.5);
-    const newGroups = groups.map((g, i) => ({
-      ...g,
-      memberIds: shuffled.filter((_, idx) => idx % groups.length === i).map((s) => s.id),
+    const candidates: StudentCandidate[] = availableStudents.map((s, idx) => ({
+      id: s.id,
+      name: s.name,
+      tier: s.tier || (idx % 3 === 0 ? 'advanced' : idx % 3 === 1 ? 'intermediate' : 'basic'),
     }));
+    const newGroups = executeGrouping(candidates, groups.length, groupingStrategy);
     setGroups(newGroups);
+
+    const strategyLabel =
+      groupingStrategy === 'heterogeneous'
+        ? lang === 'zh'
+          ? '异质拼板互助（以优带新）'
+          : 'Heterogeneous Jigsaw'
+        : groupingStrategy === 'homogeneous'
+          ? lang === 'zh'
+            ? '同质分层探讨'
+            : 'Homogeneous Tiered'
+          : lang === 'zh'
+            ? '随机均分'
+            : 'Random';
+
     addToast(
-      lang === 'zh' ? '✅ 已自动分配' : '✅ Auto-assigned',
-      lang === 'zh' ? `${shuffled.length} 位学生` : `${shuffled.length} students`,
+      lang === 'zh' ? '✅ 自动分配完成' : '✅ Auto-assigned',
+      lang === 'zh' ? `已按「${strategyLabel}」将 ${candidates.length} 名学生自动分配完毕。` : `Assigned by ${strategyLabel}.`,
       'success',
     );
-  }, [groups, availableStudents, addToast, lang]);
+  }, [groups.length, availableStudents, groupingStrategy, addToast, lang]);
 
   const addGroup = useCallback(() => {
-    const newGroup: Group = {
+    const newGroup: BreakoutGroup = {
       id: `group-${Date.now()}`,
       name: lang === 'zh' ? `第 ${groups.length + 1} 小组` : `Group ${groups.length + 1}`,
       memberIds: [],
-      color: GROUP_COLORS[groups.length % GROUP_COLORS.length],
+      color: 'bg-indigo-500',
+      focusTier: 'balanced',
+      likesCount: 0,
+      inquiryTags: [],
+      isSpotlight: false,
     };
     setGroups((prev) => [...prev, newGroup]);
     setActiveGroupId(newGroup.id);
@@ -147,24 +184,41 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
     [activeGroupId, groups],
   );
 
-  const assignMember = useCallback(
-    (groupId: string, studentId: string, member: boolean) => {
-      setGroups((prev) =>
-        prev.map((g) => {
-          if (g.id !== groupId) return g;
-          const memberIds = member
-            ? [...g.memberIds, studentId]
-            : g.memberIds.filter((id) => id !== studentId);
-          return { ...g, memberIds };
-        }),
-      );
-    },
-    [],
-  );
+  const assignMember = useCallback((groupId: string, studentId: string, member: boolean) => {
+    setGroups((prev) =>
+      prev.map((g) => {
+        if (g.id !== groupId) return g;
+        const memberIds = member ? [...g.memberIds, studentId] : g.memberIds.filter((id) => id !== studentId);
+        return { ...g, memberIds };
+      }),
+    );
+  }, []);
 
   const clearGroupStrokes = useCallback((groupId: string) => {
     setStrokes((prev) => prev.filter((s) => s.groupId !== groupId));
   }, []);
+
+  // 送花点赞交互
+  const handleLikeGroup = (groupId: string, groupName: string) => {
+    setGroupLikes((prev) => ({
+      ...prev,
+      [groupId]: (prev[groupId] || 0) + 1,
+    }));
+    addToast(
+      lang === 'zh' ? '🌸 送花点赞成功' : '🌸 Flower Awarded',
+      lang === 'zh' ? `已为「${groupName}」送出一朵协作探究鲜花！` : `Awarded flower to ${groupName}!`,
+      'success',
+    );
+  };
+
+  // 增加思辨标签
+  const handleAddInquiryTag = (groupId: string, tag: string) => {
+    setGroupInquiries((prev) => {
+      const current = prev[groupId] || [];
+      if (current.includes(tag)) return prev;
+      return { ...prev, [groupId]: [...current, tag] };
+    });
+  };
 
   // 画布交互：鼠标拖动绘制
   const drawingState = useRef<{
@@ -175,7 +229,7 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
 
   const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
-      if (!activeGroupId || !canvasRef.current) return;
+      if (!activeGroupId || !canvasRef.current || isGalleryMode) return;
       const rect = canvasRef.current.getBoundingClientRect();
       const start: Point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
       drawingState.current = {
@@ -191,7 +245,7 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
         },
       };
     },
-    [activeGroupId, activeTool, activeColor, activeWidth],
+    [activeGroupId, activeTool, activeColor, activeWidth, isGalleryMode],
   );
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
@@ -236,7 +290,6 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
     URL.revokeObjectURL(url);
   }, [activeGroupId]);
 
-  // 渲染当前查看的笔画（active 或全部）
   const visibleStrokes = useMemo(() => {
     if (showAllGroups) return strokes;
     return strokes.filter((s) => s.groupId === activeGroupId);
@@ -245,76 +298,160 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[118] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-surface border border-theme rounded-2xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col overflow-hidden">
-        {/* ── Header ─────────────────────────────────────────── */}
-        <div className="bg-surface-secondary px-6 py-4 border-b border-theme flex items-center justify-between shrink-0">
+    <div className="fixed inset-0 z-[118] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+      <div className="bg-surface border border-theme rounded-2xl shadow-2xl w-full max-w-7xl h-[92vh] flex flex-col overflow-hidden text-main">
+        {/* ── 顶部导航栏 ─────────────────────────────────────────── */}
+        <div className="bg-surface-secondary px-5 py-3 border-b border-theme flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-              <Users size={20} className="text-emerald-600" />
+            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+              <Users size={18} className="text-indigo-600 dark:text-indigo-400" />
             </div>
             <div>
-              <h2 className="text-base font-extrabold text-main">
-                {lang === 'zh' ? '小组协作白板' : 'Group Collaborative Whiteboard'}
-              </h2>
-              <p className="text-xs text-muted mt-0.5">
-                {lessonId ? `${lang === 'zh' ? '课节' : 'Lesson'}: ${lessonId}` : '—'} ·{' '}
-                {groups.length} {lang === 'zh' ? '个小组' : 'groups'}
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-extrabold text-main">
+                  {lang === 'zh' ? '随堂小组协作与画廊互评' : 'Group Collaboration & Gallery Walk'}
+                </h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-mono">
+                  Jigsaw & Battle
+                </span>
+              </div>
+              <p className="text-2xs text-muted mt-0.5">
+                {groups.length} {lang === 'zh' ? '个探究小组' : 'groups'} ·{' '}
+                {isGalleryMode ? (lang === 'zh' ? '当前处于画廊大屏互评并览' : 'Gallery Walk Active') : (lang === 'zh' ? '当前处于组内精修' : 'Single Canvas Active')}
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-surface text-muted hover:text-main transition-colors"
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
+
+          <div className="flex items-center gap-2">
+            {/* Gallery Walk Toggle */}
+            <button
+              onClick={() => setIsGalleryMode(!isGalleryMode)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ${
+                isGalleryMode
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20'
+                  : 'bg-surface hover:bg-surface-secondary border border-theme text-main'
+              }`}
+            >
+              <LayoutGrid size={13} />
+              <span>{isGalleryMode ? (lang === 'zh' ? '返回单组画布' : 'Exit Gallery') : (lang === 'zh' ? '画廊互评大屏并览 (Gallery Walk)' : 'Gallery Walk')}</span>
+            </button>
+
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-surface text-muted hover:text-main transition-colors cursor-pointer"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
-        {/* ── Main Layout ──────────────────────────────────── */}
+        {/* ── 探究任务驱动题横幅 ──────────────────────────────────── */}
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-5 py-2 flex items-center justify-between gap-3 text-xs shrink-0">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <Sparkles size={14} className="text-amber-500 shrink-0" />
+            <span className="font-bold text-amber-700 dark:text-amber-400 shrink-0">
+              {lang === 'zh' ? '探究任务：' : 'Mission: '}
+            </span>
+            <input
+              type="text"
+              value={missionPrompt}
+              onChange={(e) => setMissionPrompt(e.target.value)}
+              className="bg-transparent border-none text-main focus:outline-hidden text-xs flex-1 truncate font-medium"
+              placeholder={lang === 'zh' ? '输入或调整小组驱动探究任务...' : 'Enter collaboration mission...'}
+            />
+          </div>
+          <span className="text-3xs text-muted font-mono shrink-0 flex items-center gap-1">
+            <Edit3 size={10} />
+            {lang === 'zh' ? '各组画布实时同步' : 'Synced to all canvases'}
+          </span>
+        </div>
+
+        {/* ── 主体区域 ────────────────────────────────────────────── */}
         <div className="flex-1 min-h-0 flex">
-          {/* 左侧：小组列表 + 分配面板 */}
-          {showAssignmentPanel && (
-            <div className="w-72 shrink-0 border-r border-theme bg-surface-secondary overflow-y-auto scrollbar-thin">
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-3">
+          {/* 左侧：小组策略与花名册分配面板 */}
+          {showAssignmentPanel && !isGalleryMode && (
+            <div className="w-72 shrink-0 border-r border-theme bg-surface-secondary/50 overflow-y-auto scrollbar-thin flex flex-col p-3.5 gap-3">
+              <div>
+                <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-extrabold text-main uppercase tracking-wider">
-                    {lang === 'zh' ? '小组' : 'Groups'}
+                    {lang === 'zh' ? '分组策略' : 'Strategy'}
                   </h3>
                   <button
                     onClick={addGroup}
-                    className="p-1 rounded hover:bg-surface text-primary-theme"
+                    className="p-1 rounded hover:bg-surface text-primary-theme cursor-pointer"
                     title={lang === 'zh' ? '新建小组' : 'New group'}
                   >
                     <Plus size={14} />
                   </button>
                 </div>
 
+                {/* 策略切换 */}
+                <div className="grid grid-cols-3 gap-1 p-0.5 bg-surface rounded-lg border border-theme mb-2.5">
+                  <button
+                    onClick={() => setGroupingStrategy('heterogeneous')}
+                    className={`py-1 text-2xs font-bold rounded transition-colors ${
+                      groupingStrategy === 'heterogeneous' ? 'bg-primary-theme text-white' : 'text-muted hover:text-main'
+                    }`}
+                    title={lang === 'zh' ? '拼板互助（1优+2中+1潜）' : 'Heterogeneous'}
+                  >
+                    拼板互助
+                  </button>
+                  <button
+                    onClick={() => setGroupingStrategy('homogeneous')}
+                    className={`py-1 text-2xs font-bold rounded transition-colors ${
+                      groupingStrategy === 'homogeneous' ? 'bg-primary-theme text-white' : 'text-muted hover:text-main'
+                    }`}
+                    title={lang === 'zh' ? '同质分层探讨' : 'Homogeneous'}
+                  >
+                    同质分层
+                  </button>
+                  <button
+                    onClick={() => setGroupingStrategy('random')}
+                    className={`py-1 text-2xs font-bold rounded transition-colors ${
+                      groupingStrategy === 'random' ? 'bg-primary-theme text-white' : 'text-muted hover:text-main'
+                    }`}
+                    title={lang === 'zh' ? '随机均分' : 'Random'}
+                  >
+                    随机均分
+                  </button>
+                </div>
+
                 <button
                   onClick={autoAssign}
-                  className="w-full mb-3 px-3 py-1.5 text-xs font-bold rounded-lg bg-primary-theme text-white hover:bg-primary-theme-hover transition-colors flex items-center justify-center gap-1.5"
+                  className="w-full px-3 py-1.5 text-xs font-bold rounded-xl bg-primary-theme hover:bg-primary-theme-hover text-white transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
                 >
                   <Users size={12} />
-                  {lang === 'zh' ? '一键自动分配' : 'Auto-assign'}
+                  <span>{lang === 'zh' ? '一键自动分配' : 'Auto-assign'}</span>
                 </button>
+              </div>
 
-                <div className="space-y-2">
-                  {groups.map((g) => (
-                    <div
-                      key={g.id}
-                      onClick={() => setActiveGroupId(g.id)}
-                      className={`p-2.5 rounded-lg border-2 cursor-pointer transition-all ${
-                        activeGroupId === g.id
-                          ? 'border-primary-theme bg-surface shadow-sm'
-                          : 'border-transparent hover:bg-surface'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <div className={`w-2 h-2 rounded-full ${g.color}`} />
-                          <span className="text-xs font-bold text-main truncate">{g.name}</span>
-                        </div>
+              {/* 小组列表 */}
+              <div className="space-y-1.5 flex-1 min-h-[160px]">
+                <h4 className="text-2xs font-bold text-muted uppercase tracking-wider">
+                  {lang === 'zh' ? '小组列表' : 'Groups'}
+                </h4>
+                {groups.map((g) => (
+                  <div
+                    key={g.id}
+                    onClick={() => setActiveGroupId(g.id)}
+                    className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                      activeGroupId === g.id
+                        ? 'border-primary-theme bg-surface shadow-2xs font-semibold'
+                        : 'border-theme/40 hover:bg-surface'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className={`w-2 h-2 rounded-full ${g.color}`} />
+                        <span className="text-xs font-bold text-main truncate">{g.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {groupLikes[g.id] > 0 && (
+                          <span className="text-2xs text-rose-500 font-mono flex items-center gap-0.5">
+                            🌸{groupLikes[g.id]}
+                          </span>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -326,37 +463,44 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
                           <Trash2 size={11} />
                         </button>
                       </div>
-                      <div className="text-[10px] text-muted">
-                        {g.memberIds.length === 0
-                          ? lang === 'zh'
-                            ? '未分配成员'
-                            : 'No members'
-                          : g.memberIds
-                              .map(
-                                (id) =>
-                                  availableStudents.find((s) => s.id === id)?.name ?? id.slice(0, 6),
-                              )
-                              .join(', ')}
-                      </div>
                     </div>
-                  ))}
-                </div>
+                    <div className="text-[10px] text-muted truncate">
+                      {g.memberIds.length === 0
+                        ? lang === 'zh'
+                          ? '未分配成员'
+                          : 'No members'
+                        : g.memberIds
+                            .map((id) => availableStudents.find((s) => s.id === id)?.name ?? id.slice(0, 6))
+                            .join(', ')}
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-                <h3 className="text-xs font-extrabold text-main uppercase tracking-wider mt-4 mb-2">
-                  {lang === 'zh' ? '可用学生' : 'Available'}
-                </h3>
-                <div className="space-y-1 max-h-64 overflow-y-auto scrollbar-thin">
+              {/* 学生花名册 */}
+              <div className="pt-2 border-t border-theme/60">
+                <h4 className="text-2xs font-bold text-muted uppercase tracking-wider mb-1.5">
+                  {lang === 'zh' ? '班级学生库' : 'Roster'}
+                </h4>
+                <div className="space-y-1 max-h-48 overflow-y-auto scrollbar-thin">
                   {availableStudents.map((s) => {
                     const inSomeGroup = groups.some((g) => g.memberIds.includes(s.id));
                     return (
-                      <div key={s.id} className="flex items-center justify-between px-2 py-1 rounded text-[11px] hover:bg-surface">
-                        <span className={inSomeGroup ? 'text-muted line-through' : 'text-main'}>
+                      <div
+                        key={s.id}
+                        className="flex items-center justify-between p-1 rounded hover:bg-surface text-2xs"
+                      >
+                        <span className={inSomeGroup ? 'text-muted line-through' : 'text-main font-medium'}>
                           {s.name}
                         </span>
                         {activeGroupId && (
                           <button
                             onClick={() => assignMember(activeGroupId, s.id, !inSomeGroup)}
-                            className="text-[10px] px-1.5 py-0.5 rounded bg-surface text-primary-theme hover:bg-primary-theme/10 transition-colors"
+                            className={`px-1.5 py-0.5 rounded text-3xs font-bold ${
+                              inSomeGroup
+                                ? 'bg-surface-secondary text-muted hover:text-rose-600'
+                                : 'bg-primary-theme/10 text-primary-theme hover:bg-primary-theme hover:text-white'
+                            }`}
                           >
                             {inSomeGroup ? '−' : '+'}
                           </button>
@@ -369,168 +513,325 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
             </div>
           )}
 
-          {/* 中央：白板画布 + 工具栏 */}
-          <div className="flex-1 min-w-0 flex flex-col">
-            {/* 工具栏 */}
-            <div className="px-4 py-2 border-b border-theme flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => setShowAssignmentPanel(!showAssignmentPanel)}
-                className="p-1.5 rounded hover:bg-surface-secondary text-muted"
-                title={lang === 'zh' ? '切换侧栏' : 'Toggle sidebar'}
-              >
-                <Users size={14} />
-              </button>
-              <div className="h-4 w-px bg-theme mx-1" />
+          {/* 右侧主绘图区 或 画廊互评展台 */}
+          <div className="flex-1 min-w-0 flex flex-col bg-surface">
+            {isGalleryMode ? (
+              /* ── 组间画廊互评展台 (Gallery Walk) ── */
+              <div className="flex-1 p-5 overflow-y-auto bg-surface-secondary/30">
+                <div className="max-w-6xl mx-auto space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-extrabold text-sm text-main flex items-center gap-1.5">
+                        <LayoutGrid size={16} className="text-amber-500" />
+                        <span>{lang === 'zh' ? '全班小组探究画廊展台' : 'Classroom Gallery Walk Showcase'}</span>
+                      </h3>
+                      <p className="text-2xs text-muted">
+                        {lang === 'zh'
+                          ? '多组画布并排投屏，支持师生端送花点赞、思辨发问与成果置顶评选'
+                          : 'Side-by-side presentation, like and praise student submissions.'}
+                      </p>
+                    </div>
 
-              <ToolButton active={activeTool === 'pen'} onClick={() => setActiveTool('pen')} icon={<Brush size={14} />} label={lang === 'zh' ? '笔' : 'Pen'} />
-              <ToolButton active={activeTool === 'rect'} onClick={() => setActiveTool('rect')} icon={<SquareIcon size={14} />} label={lang === 'zh' ? '矩形' : 'Rect'} />
-              <ToolButton active={activeTool === 'circle'} onClick={() => setActiveTool('circle')} icon={<CircleIcon size={14} />} label={lang === 'zh' ? '圆形' : 'Circle'} />
-              <ToolButton active={activeTool === 'eraser'} onClick={() => setActiveTool('eraser')} icon={<Eraser size={14} />} label={lang === 'zh' ? '橡皮' : 'Eraser'} />
+                    <div className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-3 py-1 rounded-xl border border-amber-500/30">
+                      🌸 协作热度总计: {Object.values(groupLikes).reduce((a, b) => a + b, 0)} 朵鲜花
+                    </div>
+                  </div>
 
-              <div className="h-4 w-px bg-theme mx-1" />
+                  {/* 2x2 / 2x3 网格卡片 */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {groups.map((g) => {
+                      const groupStrokes = strokes.filter((s) => s.groupId === g.id);
+                      const likes = groupLikes[g.id] || 0;
+                      const inquiries = groupInquiries[g.id] || [];
+                      const isSpotlight = spotlightGroupId === g.id;
 
-              <Palette size={14} className="text-muted" />
-              {COLORS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setActiveColor(c)}
-                  className={`w-5 h-5 rounded-full border-2 transition-all ${
-                    activeColor === c ? 'border-main scale-110' : 'border-transparent'
-                  }`}
-                  style={{ backgroundColor: c }}
-                  title={c}
-                />
-              ))}
+                      return (
+                        <div
+                          key={g.id}
+                          className={`bg-surface border rounded-2xl p-3.5 shadow-sm flex flex-col gap-2.5 transition-all ${
+                            isSpotlight
+                              ? 'border-amber-400 ring-2 ring-amber-400/40 shadow-amber-500/10'
+                              : 'border-theme hover:border-primary-theme/60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between border-b border-theme/50 pb-2">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2.5 h-2.5 rounded-full ${g.color}`} />
+                              <span className="font-bold text-xs text-main">{g.name}</span>
+                              {isSpotlight && (
+                                <span className="px-1.5 py-0.2 rounded-md bg-amber-500 text-white text-[9px] font-bold">
+                                  🌟 置顶高光
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-2xs text-muted font-mono">{g.memberIds.length} 成员</span>
+                          </div>
 
-              <div className="h-4 w-px bg-theme mx-1" />
+                          {/* 画布微型预览 */}
+                          <div
+                            onClick={() => {
+                              setActiveGroupId(g.id);
+                              setIsGalleryMode(false);
+                            }}
+                            className="w-full h-44 bg-white rounded-xl border border-theme/60 overflow-hidden relative cursor-pointer group"
+                            title={lang === 'zh' ? '点击切入单组精修' : 'Click to edit canvas'}
+                          >
+                            <svg className="w-full h-full" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid meet">
+                              <rect width="1200" height="800" fill="#ffffff" />
+                              {groupStrokes.map((s) => {
+                                if (s.tool === 'pen' || s.tool === 'eraser') {
+                                  const pathD = s.points.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+                                  return (
+                                    <path
+                                      key={s.id}
+                                      d={pathD}
+                                      stroke={s.color}
+                                      strokeWidth={s.width * 1.5}
+                                      fill="none"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    />
+                                  );
+                                }
+                                return null;
+                              })}
+                            </svg>
 
-              <input
-                type="range"
-                min="1"
-                max="12"
-                value={activeWidth}
-                onChange={(e) => setActiveWidth(parseInt(e.target.value))}
-                className="w-20"
-                title={lang === 'zh' ? '笔触粗细' : 'Brush width'}
-              />
-              <span className="text-xs text-muted w-6">{activeWidth}</span>
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                              <span className="opacity-0 group-hover:opacity-100 bg-surface/90 text-main text-2xs font-bold px-2 py-1 rounded-lg shadow-sm transition-opacity">
+                                🔍 点击切入画布
+                              </span>
+                            </div>
+                          </div>
 
-              <div className="ml-auto flex items-center gap-2">
-                <button
-                  onClick={() => setShowAllGroups(!showAllGroups)}
-                  className={`px-2 py-1 text-xs font-bold rounded flex items-center gap-1 ${
-                    showAllGroups ? 'bg-primary-theme text-white' : 'bg-surface-secondary text-main'
-                  }`}
-                >
-                  {showAllGroups ? <Eye size={12} /> : <EyeOff size={12} />}
-                  {showAllGroups
-                    ? lang === 'zh'
-                      ? '查看全部'
-                      : 'All groups'
-                    : lang === 'zh'
-                    ? '仅当前'
-                    : 'Current only'}
-                </button>
-                <button
-                  onClick={() => activeGroupId && clearGroupStrokes(activeGroupId)}
-                  className="px-2 py-1 text-xs font-bold rounded border border-rose-500 text-rose-600 hover:bg-rose-50 flex items-center gap-1"
-                >
-                  <Trash2 size={12} />
-                  {lang === 'zh' ? '清空本组' : 'Clear'}
-                </button>
-                <button
-                  onClick={downloadCurrentGroupSVG}
-                  className="px-2 py-1 text-xs font-bold rounded bg-surface-secondary text-main hover:bg-surface flex items-center gap-1"
-                >
-                  <Download size={12} />
-                  SVG
-                </button>
-                <ExtensionPointRenderer slot="classroom.collab.canvas" />
+                          {/* 互动控制区：送花与思辨标签 */}
+                          <div className="space-y-2 pt-1">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <button
+                                onClick={() => handleLikeGroup(g.id, g.name)}
+                                className="flex-1 py-1 px-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                              >
+                                <span>🌸 送花赞赏</span>
+                                <span className="font-mono text-2xs">({likes})</span>
+                              </button>
+
+                              <button
+                                onClick={() => setSpotlightGroupId(isSpotlight ? null : g.id)}
+                                className={`py-1 px-2 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer ${
+                                  isSpotlight
+                                    ? 'bg-amber-500 text-white'
+                                    : 'bg-surface-secondary text-muted hover:text-main'
+                                }`}
+                                title={lang === 'zh' ? '设为全班高光' : 'Spotlight'}
+                              >
+                                <Award size={12} />
+                                <span>{isSpotlight ? '取消高光' : '高光'}</span>
+                              </button>
+                            </div>
+
+                            {/* 思辨标签池 */}
+                            <div className="flex flex-wrap gap-1">
+                              {PRESET_INQUIRY_TAGS.map((tag) => {
+                                const hasTag = inquiries.includes(tag);
+                                return (
+                                  <button
+                                    key={tag}
+                                    onClick={() => handleAddInquiryTag(g.id, tag)}
+                                    className={`px-1.5 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
+                                      hasTag
+                                        ? 'bg-indigo-600 text-white font-bold'
+                                        : 'bg-surface-secondary text-muted hover:text-main'
+                                    }`}
+                                  >
+                                    {hasTag ? `✓ ${tag}` : `+ ${tag}`}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* ── 单组精修模式 ── */
+              <>
+                {/* 绘图工具栏 */}
+                <div className="bg-surface-secondary/40 px-4 py-2 border-b border-theme flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <ToolButton
+                      active={activeTool === 'pen'}
+                      onClick={() => setActiveTool('pen')}
+                      icon={<Brush size={14} />}
+                      label={lang === 'zh' ? '笔' : 'Pen'}
+                    />
+                    <ToolButton
+                      active={activeTool === 'rect'}
+                      onClick={() => setActiveTool('rect')}
+                      icon={<SquareIcon size={14} />}
+                      label={lang === 'zh' ? '矩形' : 'Rectangle'}
+                    />
+                    <ToolButton
+                      active={activeTool === 'circle'}
+                      onClick={() => setActiveTool('circle')}
+                      icon={<CircleIcon size={14} />}
+                      label={lang === 'zh' ? '圆形' : 'Circle'}
+                    />
+                    <ToolButton
+                      active={activeTool === 'eraser'}
+                      onClick={() => setActiveTool('eraser')}
+                      icon={<Eraser size={14} />}
+                      label={lang === 'zh' ? '橡皮' : 'Eraser'}
+                    />
 
-            {/* 画布 */}
-            <div className="flex-1 min-h-0 bg-white relative">
-              <svg
-                ref={canvasRef}
-                className="w-full h-full"
-                viewBox="0 0 1200 800"
-                preserveAspectRatio="xMidYMid meet"
-                onMouseDown={handleCanvasMouseDown}
-                onMouseMove={handleCanvasMouseMove}
-                onMouseUp={handleCanvasMouseUp}
-                onMouseLeave={handleCanvasMouseUp}
-                style={{ cursor: 'crosshair' }}
-              >
-                {/* 网格背景 */}
-                <defs>
-                  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f1f5f9" strokeWidth="1" />
-                  </pattern>
-                </defs>
-                <rect width="1200" height="800" fill="url(#grid)" />
+                    <div className="h-4 w-px bg-theme mx-1" />
 
-                {/* 笔画 */}
-                {visibleStrokes.map((s) => {
-                  if (s.tool === 'pen' || s.tool === 'eraser') {
-                    const pathD = s.points
-                      .map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`))
-                      .join(' ');
-                    return (
-                      <path
-                        key={s.id}
-                        d={pathD}
-                        stroke={s.color}
-                        strokeWidth={s.width}
-                        fill="none"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        opacity={s.tool === 'eraser' ? 0.4 : 1}
-                      />
-                    );
-                  } else if (s.tool === 'rect' && s.rect) {
-                    return (
-                      <rect
-                        key={s.id}
-                        x={s.rect.x}
-                        y={s.rect.y}
-                        width={s.rect.w}
-                        height={s.rect.h}
-                        stroke={s.color}
-                        strokeWidth={s.width}
-                        fill="none"
-                      />
-                    );
-                  } else if (s.tool === 'circle' && s.circle) {
-                    return (
-                      <circle
-                        key={s.id}
-                        cx={s.circle.cx}
-                        cy={s.circle.cy}
-                        r={s.circle.r}
-                        stroke={s.color}
-                        strokeWidth={s.width}
-                        fill="none"
-                      />
-                    );
-                  }
-                  return null;
-                })}
-              </svg>
+                    <div className="flex items-center gap-1">
+                      {COLORS.map((c) => (
+                        <button
+                          key={c}
+                          onClick={() => setActiveColor(c)}
+                          style={{ backgroundColor: c }}
+                          className={`w-5 h-5 rounded-full transition-transform ${
+                            activeColor === c ? 'scale-125 ring-2 ring-primary-theme' : 'hover:scale-110'
+                          }`}
+                        />
+                      ))}
+                    </div>
 
-              {/* 当前小组浮标 */}
-              <div className="absolute top-3 left-3 px-2.5 py-1 bg-surface/95 border border-theme rounded-lg text-xs font-bold text-main shadow-sm backdrop-blur-sm">
-                {groups.find((g) => g.id === activeGroupId)?.name ?? lang === 'zh' ? '未选小组' : 'No group'}
-              </div>
-            </div>
+                    <div className="h-4 w-px bg-theme mx-1" />
+
+                    <div className="flex items-center gap-1 text-xs">
+                      {[1, 3, 5, 8].map((w) => (
+                        <button
+                          key={w}
+                          onClick={() => setActiveWidth(w)}
+                          className={`px-2 py-0.5 rounded text-2xs font-mono font-bold ${
+                            activeWidth === w ? 'bg-primary-theme text-white' : 'hover:bg-surface'
+                          }`}
+                        >
+                          {w}px
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setShowAllGroups(!showAllGroups)}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg flex items-center gap-1 transition-colors cursor-pointer ${
+                        showAllGroups ? 'bg-primary-theme text-white' : 'bg-surface-secondary text-main'
+                      }`}
+                    >
+                      {showAllGroups ? <Eye size={12} /> : <EyeOff size={12} />}
+                      <span>{showAllGroups ? (lang === 'zh' ? '查看全部' : 'All groups') : (lang === 'zh' ? '仅当前' : 'Single')}</span>
+                    </button>
+
+                    <button
+                      onClick={() => activeGroupId && clearGroupStrokes(activeGroupId)}
+                      className="px-2.5 py-1 text-xs font-bold rounded-lg bg-surface-secondary hover:bg-rose-50 hover:text-rose-600 transition-colors cursor-pointer"
+                    >
+                      {lang === 'zh' ? '清空本组' : 'Clear'}
+                    </button>
+
+                    <button
+                      onClick={downloadCurrentGroupSVG}
+                      className="px-2.5 py-1 text-xs font-bold rounded-lg bg-surface-secondary hover:bg-surface transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Download size={12} />
+                      <span>SVG</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 独立子画布 */}
+                <div className="flex-1 min-h-0 bg-white relative">
+                  <svg
+                    ref={canvasRef}
+                    className="w-full h-full"
+                    viewBox="0 0 1200 800"
+                    preserveAspectRatio="xMidYMid meet"
+                    onMouseDown={handleCanvasMouseDown}
+                    onMouseMove={handleCanvasMouseMove}
+                    onMouseUp={handleCanvasMouseUp}
+                    onMouseLeave={handleCanvasMouseUp}
+                    style={{ cursor: 'crosshair' }}
+                  >
+                    <defs>
+                      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f1f5f9" strokeWidth="1" />
+                      </pattern>
+                    </defs>
+                    <rect width="1200" height="800" fill="url(#grid)" />
+
+                    {visibleStrokes.map((s) => {
+                      if (s.tool === 'pen' || s.tool === 'eraser') {
+                        const pathD = s.points.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+                        return (
+                          <path
+                            key={s.id}
+                            d={pathD}
+                            stroke={s.color}
+                            strokeWidth={s.width}
+                            fill="none"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            opacity={s.tool === 'eraser' ? 0.4 : 1}
+                          />
+                        );
+                      } else if (s.tool === 'rect' && s.rect) {
+                        return (
+                          <rect
+                            key={s.id}
+                            x={s.rect.x}
+                            y={s.rect.y}
+                            width={s.rect.w}
+                            height={s.rect.h}
+                            stroke={s.color}
+                            strokeWidth={s.width}
+                            fill="none"
+                          />
+                        );
+                      } else if (s.tool === 'circle' && s.circle) {
+                        return (
+                          <circle
+                            key={s.id}
+                            cx={s.circle.cx}
+                            cy={s.circle.cy}
+                            r={s.circle.r}
+                            stroke={s.color}
+                            strokeWidth={s.width}
+                            fill="none"
+                          />
+                        );
+                      }
+                      return null;
+                    })}
+                  </svg>
+
+                  {/* 悬浮组名与送花热度 */}
+                  <div className="absolute top-3 left-3 px-3 py-1.5 bg-surface/95 border border-theme rounded-xl text-xs font-bold text-main shadow-sm backdrop-blur-xs flex items-center gap-2">
+                    <span>
+                      {lang === 'zh' ? '当前画布：' : 'Canvas: '}
+                      {groups.find((g) => g.id === activeGroupId)?.name ?? (lang === 'zh' ? '未选小组' : 'No group')}
+                    </span>
+                    {activeGroupId && groupLikes[activeGroupId] > 0 && (
+                      <span className="text-2xs text-rose-500 font-mono flex items-center gap-0.5">
+                        🌸 {groupLikes[activeGroupId]}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
 };
-
-// ── 子组件 ──────────────────────────────────────────────────────────
 
 const ToolButton: React.FC<{
   active: boolean;
@@ -540,7 +841,7 @@ const ToolButton: React.FC<{
 }> = ({ active, onClick, icon, label }) => (
   <button
     onClick={onClick}
-    className={`p-1.5 rounded flex items-center gap-1 transition-colors ${
+    className={`p-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer ${
       active ? 'bg-primary-theme text-white' : 'bg-surface-secondary text-main hover:bg-surface'
     }`}
     title={label}
