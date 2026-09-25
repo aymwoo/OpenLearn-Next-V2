@@ -25,6 +25,7 @@ import { ExtensionPointRenderer } from '../../plugin-host/extension-point-render
 import { ClassroomMoodTracker } from './ClassroomMoodTracker';
 import { TopPerformersWidget } from './TopPerformersWidget';
 import { ClassroomCountdownWidget } from '../classroom/ClassroomCountdownWidget';
+import { ClassSummaryStats } from './ClassSummaryStats';
 
 interface DashboardProps {
   lang: 'zh' | 'en';
@@ -55,6 +56,7 @@ interface DashboardProps {
   handleQuickScheduleClass: (classId: string, lessonId: string, date: string) => Promise<boolean>;
   handleQuickGenerateAssignment: (classId: string, title: string, desc: string) => Promise<string | null>;
   handleQuickCreateLesson: (title: string, content: string) => Promise<string>;
+  classDashboardMap: Record<string, any>;
 }
 
 export function Dashboard(props: DashboardProps) {
@@ -85,6 +87,7 @@ export function Dashboard(props: DashboardProps) {
     handleQuickScheduleClass,
     handleQuickGenerateAssignment,
     handleQuickCreateLesson,
+    classDashboardMap,
   } = props;
 
   const [dashboardTab, setDashboardTab] = useState<'overview' | 'classroom'>('overview');
@@ -143,6 +146,13 @@ export function Dashboard(props: DashboardProps) {
 
         {dashboardTab === 'classroom' ? (
           <div className="flex flex-col gap-6">
+            {/* Class Summary Stats Widget */}
+            <ClassSummaryStats
+              classDashboardMap={classDashboardMap}
+              classes={classes}
+              lang={lang}
+            />
+
             {/* Classroom Countdown Widget Banner */}
             <div className="bg-surface border border-theme rounded-2xl p-5 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">

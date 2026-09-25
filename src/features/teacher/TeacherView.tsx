@@ -422,7 +422,7 @@ export function TeacherView(props: TeacherViewProps) {
           ) : teacherTab === 'admin_directory' ? (
             <AdminDirectoryView {...props} />
           ) : teacherTab === 'computer_labs' ? (
-            <ComputerLabView computerLabs={computerLabs} onRefresh={onRefresh} lang={lang} />
+            <ComputerLabView computerLabs={computerLabs} onRefresh={onRefresh} lang={lang} classes={classes} />
           ) : teacherTab === 'help' ? (
             <HelpView registeredCommands={registeredCommands} onRefresh={fetchRegisteredCommands} />
           ) : null}

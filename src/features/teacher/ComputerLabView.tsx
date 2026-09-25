@@ -5,8 +5,9 @@ interface ComputerLabViewProps {
   computerLabs: any[];
   onRefresh: () => Promise<void>;
   lang: string;
+  classes?: any[];
 }
 
-export function ComputerLabView({ computerLabs, onRefresh, lang }: ComputerLabViewProps) {
-  return <ComputerLabManager computerLabs={computerLabs} onRefresh={onRefresh} lang={lang as 'zh' | 'en'} />;
+export function ComputerLabView({ computerLabs, onRefresh, lang, classes = [] }: ComputerLabViewProps) {
+  return <ComputerLabManager computerLabs={computerLabs} onRefresh={onRefresh} lang={lang as 'zh' | 'en'} classes={classes} />;
 }
