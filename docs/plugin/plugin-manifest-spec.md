@@ -248,7 +248,7 @@
 
 | 属性名               | 类型       | 必填 | 默认值  | 说明                                                                                                        |
 | :------------------- | :--------- | :--- | :------ | :---------------------------------------------------------------------------------------------------------- |
-| `method`             | `string`   | 是   | -       | HTTP 请求方法：`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `ALL`                                               |
+| `method`             | `string`   | 是   | -       | HTTP 请求方法：`GET`, `POST`, `PUT`, `DELETE`, `PATCH`（不支持 `ALL`，需要多动词匹配时分别声明多条 route，或使用 `ctx.http.stream(method, path, handler)`） |
 | `path`               | `string`   | 是   | -       | 相对子路径（如 `/status` 或 `/items/:id`），支持命名参数与通配符 `*`                                        |
 | `auth`               | `boolean`  | 否   | `true`  | 是否必须登录认证。设为 `false` 允许未认证访问（公开端点）                                                   |
 | `roles`              | `string[]` | 否   | `[]`    | 允许访问的用户角色白名单（如 `["teacher", "administrator"]`）。若为空则仅需认证，管理员总是具备最高访问权限 |

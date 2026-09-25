@@ -26,15 +26,15 @@
 
 ### 软件要求
 
-- **Node.js** ≥ 18.x（推荐 20.x LTS 或更高）
-- **npm** ≥ 9.x（随 Node.js 提供）
+- **Node.js** ≥ 20.x（LTS 推荐，`package.json` 的 `engines` 约束为 `>=20.0.0`）
+- **pnpm**（仓库脚本与 workspace 基于 pnpm；`npm` 亦可安装依赖但脚本入口以 `pnpm` 为准）
 - **操作系统**：Linux（推荐）、macOS、Windows（WSL2 推荐）
 
 验证安装：
 
 ```bash
-node --version   # 应输出 v18.0.0 或更高
-npm --version    # 应输出 9.0.0 或更高
+node --version   # 应输出 v20.0.0 或更高
+pnpm --version   # 应输出 8.0.0 或更高
 ```
 
 ---
@@ -142,7 +142,7 @@ ALLOWED_ORIGINS=http://localhost:5173
 | 变量                | 必需 | 说明                                                                                   |
 | ------------------- | :--: | -------------------------------------------------------------------------------------- |
 | `PORT`              |  —   | 服务端口，默认 `9000`                                                                  |
-| `ENCRYPTION_KEY`    |  ✅  | 64 位 hex，用于加密 AI Provider API Key。`deploy.sh` 可自动生成                        |
+| `ENCRYPTION_KEY`    |  —   | 64 位 hex，用于加密 AI Provider API Key。**非必需**：首次用到时若未配置，系统会自动生成并写回 `.env` 持久化（`packages/core/di/api-key-crypto.ts`）；生产环境也可用 `deploy.sh` 预生成 |
 | `OPENLEARN_DB_PATH` |  —   | SQLite 数据库路径。npx 默认 `~/openlearn-next/data.db`，本地开发默认项目目录           |
 | `LOG_LEVEL`         |  —   | 日志级别：`debug` / `info` / `warn` / `error`，默认 `info`                             |
 | `ALLOWED_ORIGINS`   |  —   | CORS 白名单，逗号分隔                                                                  |
@@ -438,21 +438,22 @@ OpenLearnV2 使用 SQLite 数据库存储所有数据。备份只需复制数据
 
 ```bash
 # 查找数据库路径
-# 本地开发：项目根目录下的 educational_os.db
+# 本地开发：packages/core/db/educational_os.db（相对项目根目录）
 # npx 安装：~/openlearn-next/data.db
+# 也可用环境变量 OPENLEARN_DB_PATH 覆盖
 
 # 备份
-cp educational_os.db educational_os.db.backup.$(date +%Y%m%d)
+cp packages/core/db/educational_os.db educational_os.db.backup.$(date +%Y%m%d)
 ```
 
 ### Q: 如何重置系统？
 
 ```bash
 # 停止服务后删除数据库文件
-rm educational_os.db
+rm packages/core/db/educational_os.db
 
 # 重新启动，系统会自动创建新数据库并预置默认账户
-npm run dev
+pnpm dev
 ```
 
 ---

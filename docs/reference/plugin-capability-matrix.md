@@ -24,6 +24,7 @@
 | `lesson:read`   | builtin.ts:1502,1527；ai-planner.ts；CapabilityGuard 默认授予 `teacher-demo`                          |
 | `lesson:write`  | builtin.ts:66,104,140,185,253,1139,1347,1547；ai-planner.ts:111                                     |
 | `lesson:delete` | builtin.ts:323                                                                                      |
+| `lesson:control` | activity-ecosystem/default-providers.ts:72,86,100,114,142；classroom-runtime/types.ts:12；permission-manager.ts:13 —— **活动生态 `startActivity` 所需**，使用 `IActivityRegistryToken` 的插件必须在 `capabilitiesProposed` 中声明，否则抛 `PERMISSION_DENIED` |
 
 ### `whiteboard:*`
 

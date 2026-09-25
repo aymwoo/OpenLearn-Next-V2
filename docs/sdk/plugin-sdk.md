@@ -76,7 +76,7 @@ import {
 
 #### `ctx.require(moduleName: string)`
 
-引用主应用共享模块白名单。仅允许引用：`recharts`, `react-markdown`, `jspdf`, `jspdf-autotable`, `xlsx`, `lucide-react`, `uuid`。
+引用主应用共享模块白名单。仅允许引用：`recharts`, `react-markdown`, `jspdf`, `jspdf-autotable`, `exceljs`, `lucide-react`, `uuid`（注意：表格处理库是 `exceljs`，白名单中不含 `xlsx`）。
 
 #### `ctx.http`（v0.3.11 / v0.3.12 新增）
 
@@ -87,8 +87,9 @@ import {
 - **`ctx.http.put(path, handler)`**: 注册 HTTP PUT 请求处理函数。
 - **`ctx.http.delete(path, handler)`**: 注册 HTTP DELETE 请求处理函数。
 - **`ctx.http.patch(path, handler)`**: 注册 HTTP PATCH 请求处理函数。
-- **`ctx.http.all(path, handler)`**: 匹配任意 HTTP 动词。
 - **`ctx.http.stream(path, handler)`**: **（v0.3.12 新增）** 注册 Server-Sent Events (SSE) 流式响应端点（支持大模型流式生成，内置反向中断与看门狗超时保护）。
+
+> 注意：路由器没有 `all()` 方法；流式端点另有 `ctx.http.stream(method, path, handler)` 双参数重载可同时匹配 GET/POST。
 
 ##### `PluginApiRequest` 请求对象接口：
 
@@ -105,7 +106,7 @@ import {
 
 - `status?: number`: HTTP 状态码（默认 200）。
 - `headers?: Record<string, string>`: 自定义响应头（高危头如 `Set-Cookie` 会被网关安全剔除）。
-- `body?: any`: 响应内容。若 Handler 直接返回普通对象或基本类型，会自动被包装为 `{ status: 200, body: 返回值 }`。
+- `body: any`: 响应内容（必填）。若 Handler 直接返回普通对象或基本类型，会自动被包装为 `{ status: 200, body: 返回值 }`。
 - `sessionToken?: string`: **（v0.3.15 新增）** 可选的 SSO 会话凭证（配合 `IAuthSessionBridgeToken` 签发，由安全网关自动写入跨域安全 Cookie）。
 
 #### `ctx.reportProgress(stage?, message?)`（v0.3.15+ 新增）
@@ -120,7 +121,7 @@ import {
 
 ### 导出 Token 清单
 
-> 完整 29 个 Token 的方法签名与标识字符串，请以 [DI Token 字典](../api/di-tokens) 为权威。下表列出最常用的 Token 速查。
+> 完整 33 个 Token 的方法签名与标识字符串，请以 [DI Token 字典](../api/di-tokens) 为权威。下表列出最常用的 Token 速查。
 
 | Token 常量名                         | 服务接口类型                      | 说明                                                                                 |
 | :----------------------------------- | :-------------------------------- | :----------------------------------------------------------------------------------- |
@@ -173,6 +174,8 @@ export const MyPlugin = {
 
 #### 2. 自定义服务声明与共享 (`ctx.provide`)
 
+> **命名规则**：Token 名称必须满足 `(@scope/)?domain:Name` 格式（必须含 `:`），如 `@example/analytics:IAnalyticsCustomService`。纯名字（如 `'IAnalyticsCustomService'`）会在构造时直接抛错。`manifest.provides` 中声明的字符串必须是 **Token 的完整 `name`**。
+
 ```typescript
 import { Token } from '@openlearn/plugin-sdk';
 
@@ -180,12 +183,15 @@ export interface IAnalyticsCustomService {
   calculateScore(studentId: string): number;
 }
 
-export const IAnalyticsCustomServiceToken = new Token<IAnalyticsCustomService>('IAnalyticsCustomService');
+export const IAnalyticsCustomServiceToken = new Token<IAnalyticsCustomService>(
+  '@example/analytics:IAnalyticsCustomService',
+);
 
 export const ServiceProviderPlugin = {
   manifest: {
     id: 'provider-plugin',
-    provides: ['IAnalyticsCustomService'],
+    // provides 中的字符串必须与 Token.name 完全一致
+    provides: ['@example/analytics:IAnalyticsCustomService'],
     // ...
   },
   activate: async (ctx: PluginContext) => {

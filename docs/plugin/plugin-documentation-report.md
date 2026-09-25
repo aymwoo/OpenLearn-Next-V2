@@ -25,8 +25,8 @@
 
 ## 2. 插件体系架构关键指标
 
-- **受控核心服务数**: 7 个 (`commandBus`, `eventBus`, `actionRegistry`, `capability`, `processManager`, `storage`, `ai`)
+- **受控核心服务数**: 9 个 (`commandBus`, `eventBus`, `actionRegistry`, `capability`, `processManager`, `storage`, `ai`, `pointsDimension`, `pointsLedger`)
 - **生命周期状态数**: 7 个 (`INSTALLED`, `ACTIVATING`, `ACTIVE`, `DEACTIVATING`, `INACTIVE`, `ERROR`, `UNINSTALLED`)
 - **激活/停用超时阈值**: `5000ms`
-- **共享 Node 模块白名单**: 7 个 (`recharts`, `react-markdown`, `jspdf`, `jspdf-autotable`, `xlsx`, `lucide-react`, `uuid`)
+- **共享 Node 模块白名单**: 7 个 (`recharts`, `react-markdown`, `jspdf`, `jspdf-autotable`, `exceljs`, `lucide-react`, `uuid`)
 - **内置范例插件库**: 7 个 (`@openlearn/plugin-vfs`, `management`, `builtin`, `ai-planner`, `ai-submit-injector`, `assignment-eval`, `process`)

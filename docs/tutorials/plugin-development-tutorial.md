@@ -351,7 +351,7 @@ interface Manifest {
   id: string; // 唯一标识，推荐格式 @scope/name
   name: string; // 显示名称
   version: string; // SemVer 版本号（如 "1.0.0"）
-  main?: string; // 入口文件名，默认 "index.js"
+  main: string; // 入口文件名（必填，如 "index.js"，缺失将无法通过安装校验）
   description?: string; // 描述
   author?: string; // 作者
   engines?: {
@@ -1046,9 +1046,13 @@ interface IConfigService {
 // }
 
 const maxOptions = ctx.config.get<number>('maxOptions'); // 10
-ctx.config.onChange('maxOptions', (newVal, oldVal) => {
-  ctx.log.info('Config changed', { key: 'maxOptions', oldVal, newVal });
+ctx.config.onChange((key, newVal, oldVal) => {
+  if (key === 'maxOptions') {
+    ctx.log.info('Config changed', { key, oldVal, newVal });
+  }
 });
+// 注意：onChange 只接受一个回调参数，回调签名 (key, newValue, oldValue)。
+// 回调对所有已声明配置键都会触发，需在回调内按 key 过滤。
 ```
 
 > **系统内置配置键**：`showInDashboard`（`boolean`）是一个被框架识别的特殊键。当插件在 `configuration.properties` 中声明此键后，插件卡片的「总览」开关可用，关闭后将隐藏 `teacher.dashboard.widget` 注册的小部件。此行为由框架在渲染层实现，无需插件自行处理。
@@ -1079,28 +1083,42 @@ const recharts = ctx.require('recharts');
 **使用示例：**
 
 ```typescript
+const commandBus = ctx.services.commandBus;
+
+// execute() 只接受 PlatformCommand 对象，不接受 (type, payload) 两个参数。
+// 用 createCommand() 构造命令；inline 模式同步返回，Worker 模式返回 Promise，统一 await 即可。
+
 // 查询所有资源
-const { resources } = await ctx.services.commandBus.execute('resource.list', {});
+const { resources } = await commandBus.execute(
+  await commandBus.createCommand('resource.list', {}, 'system'),
+);
 
 // 创建 HTML 课件资源
-const { id } = await ctx.services.commandBus.execute('resource.create', {
-  name: 'my-courseware-v1',
-  type: 'html',
-  content: '<html>...</html>',
-});
+const { id } = await commandBus.execute(
+  await commandBus.createCommand(
+    'resource.create',
+    { name: 'my-courseware-v1', type: 'html', content: '<html>...</html>' },
+    'system',
+  ),
+);
 
 // 读取资源内容
-const { resource } = await ctx.services.commandBus.execute('resource.get', { id });
+const { resource } = await commandBus.execute(
+  await commandBus.createCommand('resource.get', { id }, 'system'),
+);
 console.log(resource.content);
 ```
 
 **注意**：当前 ResourceService 未注册为 ActionRegistry 条目，因此不能通过 AI Agent 的 function call 触发，仅供插件代码内直接调用。
+
+**共享模块白名单速查**：
+
+```typescript
 const pdf = ctx.require('jspdf');
 const markdown = ctx.require('react-markdown');
-const xlsx = ctx.require('xlsx');
+const ExcelJS = ctx.require('exceljs'); // 注意：白名单是 exceljs，不含 xlsx
 const icons = ctx.require('lucide-react');
 const uuid = ctx.require('uuid');
-
 ```
 
 ### 5.13 权限字符串规范
@@ -1945,8 +1963,8 @@ describe('my-plugin', () => {
     const ctx = createMockContext();
     await plugin.activate(ctx);
 
-    const handlers = ctx.services.commandBus._getHandlers();
-    expect(handlers).toContain('myplugin.hello');
+    // MockCommandBus 公开 handlers Map（key 为命令类型，value 为 CommandHandler）
+    expect(ctx.services.commandBus.handlers.has('myplugin.hello')).toBe(true);
   });
 
   // v0.3.11 新增：测试插件 RESTful API 路由
@@ -2153,7 +2171,7 @@ const ext = filename.split('.').pop()?.toLowerCase() ?? '';
 | 包名           | 使用方式                                           |
 | -------------- | -------------------------------------------------- |
 | `uuid`         | `const { v4: uuidv4 } = ctx.require('uuid')`       |
-| `xlsx`         | `const XLSX = ctx.require('xlsx')`                 |
+| `exceljs`      | `const ExcelJS = ctx.require('exceljs')`           |
 | `recharts`     | `const { LineChart } = ctx.require('recharts')`    |
 | `jspdf`        | `const { jsPDF } = ctx.require('jspdf')`           |
 | `lucide-react` | `const { BookOpen } = ctx.require('lucide-react')` |

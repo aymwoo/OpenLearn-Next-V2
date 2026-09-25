@@ -41,9 +41,9 @@ describe('My Plugin Unit Tests', () => {
 
 | 上下文属性     | 类型                  | 测试功能与行为                                                                    |
 | :------------- | :-------------------- | :-------------------------------------------------------------------------------- |
-| `ctx.pluginId` | `string`              | 插件唯一标识（默认 `'test-plugin'`，可通过参数指定）                              |
+| `ctx.pluginId` | `string`              | 插件唯一标识（默认 `'ext-test'`，可通过参数指定）                                |
 | `ctx.manifest` | `Manifest`            | 模拟的 Manifest 元数据                                                            |
-| `ctx.services` | `Record<string, any>` | 内核 7 大服务 Mock 桩（支持 `commandBus`, `eventBus`, `storage`, `ai` 等）        |
+| `ctx.services` | `Record<string, any>` | 内核 9 大服务 Mock 桩（支持 `commandBus`, `eventBus`, `storage`, `ai` 等；`pointsDimension` / `pointsLedger` 恒为 `null`） |
 | `ctx.db`       | `PluginDatabaseAPI`   | 内存 SQLite / 模拟数据库（支持 `ensureTable`, `table`, `migrate`）                |
 | `ctx.log`      | `IPluginLogger`       | 内存日志捕获（`debug`, `info`, `warn`, `error`），可断言日志输出                  |
 | `ctx.http`     | `PluginHttpRouter`    | **内置 RESTful 路由器（v0.3.11 新增）**，无需启动 HTTP 服务即可离线测试 HTTP 接口 |

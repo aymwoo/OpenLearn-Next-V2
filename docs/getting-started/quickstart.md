@@ -34,11 +34,13 @@ PORT=9000
 pnpm dev
 ```
 
-终端输出如下即表示服务启动成功：
+终端输出如下即表示服务启动成功（版本号运行期从 `package.json` 读取）：
 
 ```
-OpenLearn V2 Platform Server listening on port 9000
-[Bootstrap Pipeline] Stage completed: ReadyStage
+  OpenLearn Next vX.Y.Z ready:
+
+  ➜  Local:   http://localhost:9000
+  ➜  Network: http://192.168.x.x:9000
 ```
 
 访问 `http://localhost:9000` 即可进入系统控制台。默认内置初始账户：

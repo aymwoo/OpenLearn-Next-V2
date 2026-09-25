@@ -22,5 +22,5 @@ pnpm vitest watch
 ## 测试规范与原则
 
 1. **测试文件放置**: 所有测试存放在对应模块同级目录下的 `__tests__/` 文件夹中，后缀为 `.test.ts` 或 `.test.tsx`。
-2. **并发策略**: 为避免 SQLite 并发写死锁，`vitest.config.ts` 中禁用了文件并行运行 (`singleThread: true` / `fileParallelism: false`)。
+2. **并发策略**: `vitest.config.ts` 启用了 `fileParallelism: true`（文件级并行），安全性由 **per-worker 临时 SQLite 数据库**保证 —— 每个测试 worker 通过 `VITEST_POOL_ID` 在 `/tmp/openlearn_test_dbs/` 下获得独立数据库，互不干扰。不要在测试中写死或共享数据库路径。
 3. **插件独立测试**: 使用 `@openlearn/plugin-test-kit` 的 `createMockContext()` 隔离插件测试环境。
