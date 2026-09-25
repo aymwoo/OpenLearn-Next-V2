@@ -118,7 +118,7 @@ import { ICommandBusServiceToken, IDatabaseToken } from '@openlearn/plugin-sdk';
 const commandBus = await ctx.resolve(ICommandBusServiceToken);
 const db = await ctx.resolve(IDatabaseToken);
 
-// 也可以通过 ctx.services 直接访问 7 个内核服务
+// 也可以通过 ctx.services 直接访问 9 个内核服务
 const eventBus = ctx.services.eventBus;
 const ai = ctx.services.ai;
 ```
@@ -138,7 +138,7 @@ const qb = await ctx.resolve({ name: '@my-scope/IQuestionBankService' } as any);
 
 ```typescript
 interface PluginContext {
-  // 7 个内核服务接口（直接访问）
+  // 9 个内核服务接口（直接访问）
   services: {
     commandBus: ICommandBusService; // 命令执行、注册
     eventBus: IEventBusService; // 事件发布/订阅
@@ -295,7 +295,7 @@ ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
 
 ### 2.8 使用 AI Skill 快速开发（推荐）
 
-除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（平台 `0.2.9`、SDK `@openlearn/plugin-sdk@3.5.2` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
+除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（平台 `0.2.9`、SDK `@openlearn/plugin-sdk@3.7.0` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
 
 **安装与配置：**
 
@@ -310,7 +310,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 
 | 能力维度                    | 最新架构适配说明                                                                                                                                          |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 📖 **权威文档与 SDK 契约**  | 实时对齐 `@openlearn/plugin-sdk@3.5.2` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。             |
+| 📖 **权威文档与 SDK 契约**  | 实时对齐 `@openlearn/plugin-sdk@3.7.0` API，包含强类型 `Token<T>`、`ctx.provide()` 自定义服务共享以及活动生态 `IActivityRegistryToken` 契约。             |
 | 💬 **结构化交互设计确认**   | 自动引导确认插件模式（`server-only` / `full-stack` / `frontend-only`）、Worker Thread 沙箱权限、UI 扩展槽位（`teacherTab`, `classroomTool` 等）及表结构。 |
 | 🏗️ **标准脚手架与代码生成** | 自动生成包含 `package.json`、`tsconfig.json`、`src/index.ts` (后端 Worker 逻辑) 和 `src/frontend.tsx` (React 19 组件) 的标准项目工程。                    |
 | 🛡️ **安全与规范防错**       | 自动校验 CQRS 三件套模式（`ActionRegistry` → `CommandBus` → `EventBus`）、CapabilityGuard 权限申报、SQLite 增量迁移脚本与 ESM 沙箱导出规范。              |
@@ -321,7 +321,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 
 ```
 用户提出需求：「帮我开发一个随堂互动小测验插件」
-  → Skill 自动载入 @openlearn/plugin-sdk@3.5.2 规格与核心 Token
+  → Skill 自动载入 @openlearn/plugin-sdk@3.7.0 规格与核心 Token
   → 交互式确认：用途、沙箱权限 (vfs/lesson/db)、扩展槽位 (teacherTab/classroomTool)
   → 选择插件模板 (full-stack / server-only / frontend-only)
   → 生成项目结构与代码 (Action/Command/Event + React 19 UI)
@@ -1303,7 +1303,7 @@ interface FrontendPluginContext {
   ui: {
     registerExtensionPoint(slot: ExtensionSlot, config: ExtensionPointConfig): void;
     unregisterExtensionPoint(slot: ExtensionSlot, id: string): void;
-    registerPaletteItem(config: PaletteItemConfig): void; // V5.1: 注册备课画板组件
+    registerPaletteItem(config: PaletteItemConfig): void; // v0.3.17: 注册备课画板组件
     unregisterPaletteItem(type: string): void;
   };
   invokeCommand<T = any>(type: string, payload?: any): Promise<T>; // V2.5: 调用后端 Command Handler
@@ -1378,9 +1378,9 @@ export default function MyStudentPlugin(props: { studentId?: string }) {
 **所有扩展点组件统一收到课堂上下文（v0.2.8+）**：宿主经 `ExtensionPointRenderer` 向每个扩展点组件注入 `{ lessonId, classId }`（当前课程/班级，`string | null`）；非渲染场景用 `ctx.context.get()` / `ctx.context.subscribe()` 读取。详见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
 | `classroom.tool` | 课堂工具 |
 | `global.setting` | 全局设置页扩展（v3.2） |
-| `nav.user_menu` | 顶部 Header 用户菜单扩展（v5.2） |
+| `nav.user_menu` | 顶部 Header 用户菜单扩展（v0.3.x） |
 | `anchor:*` | 宿主原生按钮/元素前后插入按钮（v0.2.6，锚点目录见 `docs/plugin/anchor-slots.md`） |
-| `palette.item` | 备课画板组件面板与白板画布专属教学组件扩展（v5.1） |
+| `palette.item` | 备课画板组件面板与白板画布专属教学组件扩展（v0.3.17） |
 
 ### 6.5 invokeCommand（自 V2.5 起可用）
 
@@ -1527,7 +1527,7 @@ esbuild 在打包箭头函数时可能改变其闭包作用域，导致 `React.c
 
 扩展点组件由宿主渲染，props 由宿主控制。宿主向扩展点组件传递的 props 是宿主定义的（如 `studentId`、`lessonId` 等业务数据），不包含 `invokeCommand`。因此 API 调用能力必须通过模块级闭包变量传递。
 
-### 6.9 备课画板组件扩展 (Palette Item)（v5.1）
+### 6.9 备课画板组件扩展 (Palette Item)（v0.3.17）
 
 如果你想为教师课程设计（备课画板）开发专用的教学内容卡片（例如物理仿真模拟器、3D 分子结构、AI 生成习题卡等），可以通过 `ctx.ui.registerPaletteItem()` 注册画板组件：
 

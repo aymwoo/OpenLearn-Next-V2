@@ -1,5 +1,9 @@
 # 统一扩展点与 UI 贡献点注册表 (Extension & Contribution Registry)
 
+<!-- doc-version: sdk=3.7.0 -->
+
+> **适用范围**：`@openlearn/plugin-sdk@3.7.0`
+
 OpenLearn V2 提供了双层扩展点架构：
 
 1. **`ContributionRegistry` (静态声明式)**：在插件未激活时解析 `manifest.json` 中的 `contributes` 配置，用于管理后台和主界面静态呈现图标与菜单。

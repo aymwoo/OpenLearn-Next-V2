@@ -1,6 +1,8 @@
 # 完整 DI Token 与 Service API 字典
 
-> **适用范围**：`@openlearn/plugin-sdk@3.6.1`（版本号以 `packages/plugin-sdk/package.json` 为准） / 平台 `v0.3.15+`。
+<!-- doc-version: sdk=3.7.0 -->
+
+> **适用范围**：`@openlearn/plugin-sdk@3.7.0`（版本号以 `packages/plugin-sdk/package.json` 为准） / 平台 `v0.3.15+`。
 > 本页是插件获取平台内核服务的**唯一权威字典**。所有 Token 定义位于 `packages/core/di/interfaces.ts`，并由 `packages/plugin-sdk/index.ts` 统一导出。
 > **重要**：插件 SDK 发布的 `dist/index.d.ts`（由 `openlearn.d.ts` 复制而来）由 `node packages/plugin-sdk/build.mjs` 生成，需在 SDK 源码变更后**重新构建**；若你在 `tsc` 下遇到 `TS2305 "has no exported member"`，即为 SDK 声明文件未同步所致，运行 `node packages/plugin-sdk/build.mjs` 重新生成即可。
 
@@ -10,7 +12,7 @@
 
 插件在 `activate(ctx)` 中拿到 `PluginContext`（`ctx`）。平台服务通过两种方式获取：
 
-1. **`ctx.resolve(Token)` —— 通用 DI 路径**。除了下方 7 个核心服务代理之外，任何已注册的 Token 都走这条路：
+1. **`ctx.resolve(Token)` —— 通用 DI 路径**。除了下方 9 个核心服务代理之外，任何已注册的 Token 都走这条路：
 
    ```typescript
    import { IPluginLifecycleManagerToken, IDatabaseToken, IAuthSessionBridgeToken } from '@openlearn/plugin-sdk';
@@ -20,13 +22,13 @@
    const authBridge = await ctx.resolve(IAuthSessionBridgeToken); // 类型: IAuthSessionBridgeService
    ```
 
-2. **`ctx.services.X` —— 仅 7 个核心服务的便捷代理**（与对应 Token 解析出的实例相同）。
+2. **`ctx.services.X` —— 仅 9 个核心服务的便捷代理**（与对应 Token 解析出的实例相同）。
 
 `PluginContext` 完整形态（`packages/core/plugin-host/types.ts`）：
 
 ```typescript
 interface PluginContext {
-  // (a) 预接线的 7 个核心服务代理
+  // (a) 预接线的 9 个核心服务代理
   services: {
     commandBus: ICommandBusService;
     eventBus: IEventBusService;
@@ -35,6 +37,8 @@ interface PluginContext {
     processManager: IProcessService;
     storage: IStorageService;
     ai: IAIService;
+    pointsDimension: IPointsDimensionRegistry | null;
+    pointsLedger: IPointsLedgerService | null;
   };
   pluginId: string;
   manifest: Manifest;
@@ -49,17 +53,17 @@ interface PluginContext {
   contributions: ContributionAccessor;
   http: IPluginHttpRouter; // RESTful & SSE 流式路由
   require(moduleName: string): unknown; // 仅白名单内的共享模块
-  reportProgress?(stage?: string, message?: string): void; // 激活期进度心跳与超时续期
+  reportProgress?(stage?: string, message?: string): void; // ⚠️ 仅 Worker 模式可用，Inline 模式无此方法
 }
 ```
 
 ---
 
-## 2. 完整 Token 列表（29 个）
+## 2. 完整 Token 列表（33 个）
 
 `Token<T>` 本身是一个运行时常量（`packages/core/di/token.ts:32-62`），其 `name` 形如 `@openlearn/core:ICommandBusService`，`T` 仅用于编译期类型携带。
 
-### A. 核心 7 服务 Token（`interfaces.ts:267-318`）
+### A. 核心 9 服务 Token（`interfaces.ts:267-318`）
 
 | 导出 Token                    | 解析类型                 | 标识字符串                               |
 | ----------------------------- | ------------------------ | ---------------------------------------- |
@@ -70,6 +74,10 @@ interface PluginContext {
 | `IProcessServiceToken`        | `IProcessService`        | `@openlearn/core:IProcessService`        |
 | `IStorageServiceToken`        | `IStorageService`        | `@openlearn/core:IStorageService`        |
 | `IAIServiceToken`             | `IAIService`             | `@openlearn/core:IAIService`             |
+| `IPointsDimensionRegistryToken` | `IPointsDimensionRegistry` | `@openlearn/core:IPointsDimensionRegistry` |
+| `IPointsLedgerServiceToken`   | `IPointsLedgerService`   | `@openlearn/core:IPointsLedgerService`   |
+
+> `pointsDimension` 和 `pointsLedger` 通过 `tryResolve` 获取，未注册时值为 `null`（插件可检查 `=== null` 降级）。
 
 ### B. 内核 / 基础设施 Token
 
@@ -89,13 +97,13 @@ interface PluginContext {
 | `IPluginCapabilityGatewayToken`   | `PluginCapabilityGateway`   | `@openlearn/core:IPluginCapabilityGateway`   |
 | `ICapabilityRegistryToken`        | `CapabilityRegistry`        | `@openlearn/core:ICapabilityRegistry`        |
 
-### D. 积分 / 学期 / 领域 Token
+### D. 积分 / 学期 Token
 
-| 导出 Token                      | 解析类型                   | 标识字符串                                 |
-| ------------------------------- | -------------------------- | ------------------------------------------ |
-| `ISemesterGradeServiceToken`    | `ISemesterGradeService`    | `@openlearn/core:ISemesterGradeService`    |
-| `IPointsDimensionRegistryToken` | `IPointsDimensionRegistry` | `@openlearn/core:IPointsDimensionRegistry` |
-| `IPointsLedgerServiceToken`     | `IPointsLedgerService`     | `@openlearn/core:IPointsLedgerService`     |
+| 导出 Token                   | 解析类型                | 标识字符串                                 |
+| ---------------------------- | ----------------------- | ------------------------------------------ |
+| `ISemesterGradeServiceToken` | `ISemesterGradeService` | `@openlearn/core:ISemesterGradeService`    |
+
+> `IPointsDimensionRegistryToken` 和 `IPointsLedgerServiceToken` 已归入 §A 核心 9 服务。
 
 ### E. 引擎访问 Token（薄封装 `getX(): Promise<unknown>` 门面）
 
@@ -122,6 +130,15 @@ interface PluginContext {
 | 导出 Token                | 解析类型                    | 标识字符串                                  |
 | ------------------------- | --------------------------- | ------------------------------------------- |
 | `IAuthSessionBridgeToken` | `IAuthSessionBridgeService` | `@openlearn/core:IAuthSessionBridgeService` |
+
+### H. 课件运行时 / 课堂扩展 Token
+
+| 导出 Token                                | 解析类型                            | 标识字符串                                              |
+| ----------------------------------------- | ----------------------------------- | ------------------------------------------------------- |
+| `ICoursewareRuntimeScriptRegistryToken`   | `ICoursewareRuntimeScriptRegistry`  | `@openlearn/core:ICoursewareRuntimeScriptRegistry`      |
+| `IClassroomLifecycleServiceToken`         | `IClassroomLifecycleService`        | `@openlearn/core:IClassroomLifecycleService`            |
+| `IInteractionRuntimeServiceToken`         | `IInteractionRuntimeService`        | `@openlearn/core:IInteractionRuntimeService`            |
+| `IClassroomCountdownServiceToken`         | `IClassroomCountdownService`        | `@openlearn/core:IClassroomCountdownService`            |
 
 ---
 

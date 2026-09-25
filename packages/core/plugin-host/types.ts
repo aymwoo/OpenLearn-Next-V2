@@ -4,7 +4,7 @@
  * 为 PluginHost 生命周期管理器、ContextBuilder 和资源追踪器提供共享的类型契约。
  *
  * D-03: PluginState 枚举 — 7 个值定义完整的插件生命周期状态机
- * D-04/D-05: PluginContext — 7 个 IService 属性供插件访问内核能力
+ * D-04/D-05: PluginContext — 9 个 IService 属性供插件访问内核能力
  */
 
 import type { IActionRegistryService } from '../di/interfaces.js';
@@ -14,6 +14,8 @@ import type { ICapabilityService } from '../di/interfaces.js';
 import type { IProcessService } from '../di/interfaces.js';
 import type { IStorageService } from '../di/interfaces.js';
 import type { IAIService } from '../di/interfaces.js';
+import type { IPointsDimensionRegistry } from '../di/interfaces.js';
+import type { IPointsLedgerService } from '../di/interfaces.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
 import type { Token } from '../di/token.js';
 import type { ContributionSummary } from './contribution-registry.js';
@@ -216,7 +218,7 @@ export interface IPluginHttpRouter {
 }
 
 export interface PluginContext {
-  /** 7 个内核服务，通过 Token DI 获取的接口代理 */
+  /** 9 个内核服务，通过 Token DI 获取的接口代理 */
   services: {
     commandBus: ICommandBusService;
     eventBus: IEventBusService;
@@ -225,6 +227,8 @@ export interface PluginContext {
     processManager: IProcessService;
     storage: IStorageService;
     ai: IAIService;
+    pointsDimension: IPointsDimensionRegistry | null;
+    pointsLedger: IPointsLedgerService | null;
   };
   /** 插件唯一标识符（manifest.id） */
   pluginId: string;

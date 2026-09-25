@@ -434,7 +434,9 @@ export function createMockContext(opts: CreateMockContextOptions = {}): PluginCo
       processManager: mockProcessManager,
       storage: mockStorage,
       ai: mockAI,
-    },
+      pointsDimension: null,
+      pointsLedger: null,
+    } as any,
     pluginId,
     manifest,
     resolve: async <T>(token: Token<T>): Promise<T> => {

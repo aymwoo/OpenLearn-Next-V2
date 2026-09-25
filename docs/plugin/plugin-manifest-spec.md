@@ -1,5 +1,9 @@
 # 插件 Manifest 规范 (Plugin Manifest Specification)
 
+<!-- doc-version: sdk=3.7.0 -->
+
+> **适用范围**：`@openlearn/plugin-sdk@3.7.0`
+
 每一个 OpenLearn V2 插件在根目录下必须包含一个 `manifest.json` 清单文件。宿主环境（`PluginHost`）在插件安装与激活时通过 **Zod Schema**（定义于 [`packages/core/esm-loader/manifest-schema.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/esm-loader/manifest-schema.ts#L86)）对其进行强制运行时校验。
 
 ---

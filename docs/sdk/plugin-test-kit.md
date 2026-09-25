@@ -1,5 +1,9 @@
 # `@openlearn/plugin-test-kit` 插件测试套件
 
+<!-- doc-version: sdk=3.7.0 -->
+
+> **适用范围**：`@openlearn/plugin-sdk@3.7.0` / `@openlearn/plugin-test-kit@3.3.3`
+
 `@openlearn/plugin-test-kit` 是 OpenLearn V2 官方为插件开发者提供的轻量级、零真实平台依赖的单元测试工具包。通过 `createMockContext()` 测试桩，开发者可以在 Vitest 或 Jest 中离线运行、模拟和断言插件的全部生命周期与业务逻辑。
 
 ---

@@ -5,7 +5,7 @@
  * wrapped* 安全包装器代码，将 `this.kernel.xxx` 调用替换为通过 DI 容器
  * 获取的服务实例方法调用。
  *
- * D-04: buildContext 异步构建 PluginContext（7 个 IService 各 1 个包装函数）
+ * D-04: buildContext 异步构建 PluginContext（9 个 IService 各 1 个包装函数）
  * D-05: 每个 register/subscribe 方法通过 ResourceTracker 注册清理
  * D-06: ctx.services 被 Object.freeze() 冻结
  * D-07: ResourceTracker 按插入顺序管理 cleanup

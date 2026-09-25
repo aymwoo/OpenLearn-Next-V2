@@ -1,6 +1,8 @@
 # 插件数据库 API 与 Migration 规范
 
-> **适用范围**：`@openlearn/plugin-sdk@3.6.1` / 平台 `v0.3.15+`
+<!-- doc-version: sdk=3.7.0 -->
+
+> **适用范围**：`@openlearn/plugin-sdk@3.7.0` / 平台 `v0.3.15+`
 > 本页说明插件可用的两条数据库路径、事务支持、以及插件版本升级时的表结构迁移范式。
 
 ---
@@ -70,7 +72,7 @@ const db = await ctx.resolve(IDatabaseToken); // 类型: better-sqlite3.Database
 
 ## 3. Migration / 版本升级范式
 
-插件自有表拥有**正式的 `migrate()` API**（v5.1，`context-builder.ts:529-557`）：
+插件自有表拥有**正式的 `migrate()` API**（v0.2.5+，`context-builder.ts:529-557`）：
 
 ```typescript
 async migrate(targetVersion: number, upgradeFn: (db: any) => Promise<void> | void) {

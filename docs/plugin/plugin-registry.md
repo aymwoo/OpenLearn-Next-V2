@@ -1,5 +1,9 @@
 # 插件注册表与分发管理 (Plugin Registry & Distribution)
 
+<!-- doc-version: sdk=3.7.0 -->
+
+> **适用范围**：`@openlearn/plugin-sdk@3.7.0`
+
 OpenLearn V2 的插件注册表由 **SQLite 数据库持久化层** 与 **`PluginDistributionManager` 分发管理层** 共同构成，负责插件元数据管理、版本控制、本地与远程仓库包安装及动态热更新。
 
 ---
@@ -19,7 +23,7 @@ CREATE TABLE IF NOT EXISTS plugins (
   file_path TEXT,                  -- 物理入口文件绝对路径
   status TEXT NOT NULL,            -- 'installed' | 'active' | 'inactive' | 'error'
   execution_mode TEXT DEFAULT 'inline', -- 'inline' | 'worker'
-  loader_version TEXT DEFAULT 'esm',    -- 'esm' | 'vm'
+  loader_version TEXT DEFAULT 'vm',    -- 'esm' | 'vm'
   created_at INTEGER NOT NULL      -- 安装时间戳 (Unix ms)
 );
 ```
@@ -56,15 +60,18 @@ export interface IPluginRepositoryAdapter {
 
 主进程 Express 路由位于 [`server/routes/plugins.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/plugins.ts)：
 
-| HTTP 方法 | 路径                      | 描述                                        |
-| :-------- | :------------------------ | :------------------------------------------ |
-| `GET`     | `/api/plugins`            | 获取当前已安装插件列表及其实时状态。        |
-| `POST`    | `/api/plugins/upload`     | 上传 ZIP 插件包并执行安装。                 |
-| `POST`    | `/api/plugins/:id/toggle` | 切换插件的激活/停用状态。                   |
-| `DELETE`  | `/api/plugins/:id`        | 停用并彻底卸载指定插件。                    |
-| `GET`     | `/api/plugins/:id/config` | 读取指定插件的运行时配置声明与当前值。      |
-| `POST`    | `/api/plugins/:id/config` | 更新指定插件的运行时配置项。                |
-| `GET`     | `/api/plugins/store`      | 检索插件市场中的离线 ZIP 资源与可安装列表。 |
+| HTTP 方法 | 路径                            | 描述                                              |
+| :-------- | :------------------------------ | :------------------------------------------------ |
+| `GET`     | `/api/plugins`                  | 获取当前已安装插件列表及其实时状态。              |
+| `POST`    | `/api/plugins/upload-zip`       | 上传 base64 编码的 ZIP 插件包并执行安装。         |
+| `POST`    | `/api/plugins/upload-zip-raw`   | 上传原始二进制 ZIP 插件包并执行安装。             |
+| `POST`    | `/api/plugins/:id/toggle`       | 切换插件的激活/停用状态。                         |
+| `DELETE`  | `/api/plugins/:id`              | 停用并彻底卸载指定插件。                          |
+| `GET`     | `/api/plugins/:id/config`       | 读取指定插件的运行时配置声明与当前值。            |
+| `POST`    | `/api/plugins/:id/config`       | 更新指定插件的运行时配置项。                      |
+| `GET`     | `/api/plugins/market`           | 检测已安装插件的可用更新。                        |
+| `GET`     | `/api/plugins/community`        | 检索社区插件市场注册表（5 分钟缓存）。            |
+| `POST`    | `/api/plugins/install-from-url` | 从远程 URL 下载并安装插件（仅管理员）。           |
 
 ---
 

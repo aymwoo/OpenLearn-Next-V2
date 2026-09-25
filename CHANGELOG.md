@@ -3,12 +3,14 @@
 All notable changes to **OpenLearn V2** (platform package `openlearn-next`) are documented here.
 
 > Versioning note: the platform `openlearn-next` is versioned independently of
-> `@openlearn/plugin-sdk` (currently **3.6.1**) and `@openlearn/plugin-test-kit`.
+> `@openlearn/plugin-sdk` (currently **3.7.0**) and `@openlearn/plugin-test-kit`.
 > Bumping the platform does not change the SDK / test-kit versions.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+
+## [0.3.22] - 2026-09-25
 
 ### Features
 
@@ -26,6 +28,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Docs
 
+- **插件系统文档审计与一致性修复**：全面比对 `docs/` 与代码实现，修复 5 类差异：
+  - **类型定义同步**：`PluginContext.services` 补齐 `pointsDimension`/`pointsLedger`（7→9 服务），同步 `types.ts`、`context-builder.ts`、`plugin-test-kit`。
+  - **API 端点更正**：`plugin-registry.md` 中 `upload`→`upload-zip`/`upload-zip-raw`，`store`→`market`+`community`。
+  - **共享模块白名单**：`xlsx`→`exceljs`。
+  - **ExtensionSlot 补全**：从 9 个补全到 42 个，渲染器表格从 9 行扩到 40 行。
+  - **DI Token 字典**：计数 29→33，新增 4 个课堂/课件 Token。
+  - **版本号清理**：19 篇文档添加 `<!-- doc-version: sdk=3.7.0 -->` 元数据标记；消除所有 `v5.1`/`v5.2` 内部里程碑标记，替换为实际平台版本（`v0.2.8`/`v0.3.17`/`v0.3.x`）；SDK 版本引用统一至 `3.7.0`。
 - **记录 worker 模式积分服务缺口**：`packages/core/worker-runtime/worker-manager.ts` 的 `ALL_SERVICE_TOKENS` 补充说明性注释 —— 该白名单**不含**积分系统两个 token，故 WORKER 模式插件取积分服务时降级为插件内自建（不阻塞激活）。实测把 token 直接加入白名单会让 worker 插件激活阶段抛 `function () { [native code] } could not be cloned`（worker RPC 通用转发路径尝试克隆函数值），需先修 `service-host.ts` 通用转发再放行；inline 模式已在 `plugin-host/context-builder.ts` 完成转发。
 
 - **课堂数据真实化治理（消除 12 处伪数据来源）**：上课流程中原有 12 处「非真实来源」的数据（硬编码学生、伪计算分数、空数组占位），导致 AI 生成、学情简报、雷达图等输出失真。本次全部改为**可追溯的真实来源**，无数据时显式降级为空态而非编造：

@@ -1,6 +1,8 @@
 # 锚点扩展槽目录 (Anchor Extension Slots)
 
-> **版本**：v0.2.6+
+<!-- doc-version: sdk=3.7.0 -->
+
+> **适用范围**：`@openlearn/plugin-sdk@3.7.0` / 平台 `v0.2.6+`
 >
 > 锚点槽位（`anchor:*`）用于在宿主某个**原生按钮/元素的前后**插入插件按钮。与固定槽位（`teacher.tab`、`classroom.tool` 等）不同，锚点槽位由宿主在目标元素两侧各渲染一次，插件通过 `placement` 声明插在哪一侧。
 

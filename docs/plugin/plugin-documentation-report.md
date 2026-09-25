@@ -2,7 +2,7 @@
 
 **Project**: OpenLearn V2  
 **Module**: Plugin Subsystem (`packages/core/plugin-host/`, `packages/plugin-sdk/`, `packages/plugins/`)  
-**SDK Version**: `@openlearn/plugin-sdk@3.5.2`  
+**SDK Version**: `@openlearn/plugin-sdk@3.7.0`  
 **Audited Date**: 2026-07-30  
 **Status**: 100% Fully Verified against Source Code
 

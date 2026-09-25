@@ -1,25 +1,78 @@
 # UI 扩展槽位 Context / Props 上下文定义
 
-> **适用范围**：`@openlearn/plugin-sdk@3.5.2`
+<!-- doc-version: sdk=3.7.0 -->
+
+> **适用范围**：`@openlearn/plugin-sdk@3.7.0`
 > 本页说明宿主在渲染各 UI 扩展槽位时**实际注入**给插件 React 组件的 Props，纠正 "宿主会自动注入 `lessonId` / `userId` / `role` / `socket`" 的常见误解。
 
 ---
 
 ## 1. 完整扩展槽位清单
 
-### 前端 ExtensionSlot 联合类型（`src/plugin-host/types.ts:66-75`）
+### 前端 ExtensionSlot 联合类型（`src/plugin-host/types.ts:70-125`）
 
 ```typescript
 export type ExtensionSlot =
+  // ── 基础槽位 ──
   | 'teacher.tab'
   | 'student.view'
   | 'classroom.tool'
   | 'teacher.dashboard.widget'
   | 'student.lesson.tool'
-  | 'teacher.panel' // v5.1: 教师独立全宽管理面板
-  | 'student.fullscreen' // v5.1: 学生全屏视图（考试模式）
-  | 'global.setting' // v5.1: 全局设置页扩展
-  | 'nav.user_menu'; // v5.2: 顶部 Header 用户菜单扩展
+  | 'teacher.panel'                    // v0.3.x: 教师独立全宽管理面板
+  | 'student.fullscreen'               // v0.3.x: 学生全屏视图（考试模式）
+  | 'global.setting'                   // v0.3.x: 全局设置页扩展
+  | 'nav.user_menu'                    // v0.3.x: 顶部 Header 用户菜单扩展
+  // ── 课堂互动扩展 ──
+  | 'classroom.quick_activity'         // 极速课堂互动扩展
+  | 'stage.display.card'               // 大屏展台卡片扩展
+  | 'editor.timeline_segment'          // 课程编辑器步骤类型扩展
+  | 'editor.palette_item'              // 课程编辑器白板图元扩展
+  // ── 倒计时扩展 ──
+  | 'classroom.countdown.widget'       // 课堂倒计时挂件
+  | 'classroom.countdown.action'       // 课堂倒计时快捷操作
+  | 'student.classroom.countdown'      // 学生端倒计时通知
+  // ── 学生端快捷指令 ──
+  | 'student.quick_actions.item'       // 快捷指令菜单项
+  | 'student.quick_actions.action'     // 快捷指令操作
+  | 'student.quick_actions.fab'        // 快捷指令悬浮球
+  // ── 课堂启动门户（Classroom Entry Portal）──
+  | 'classroom.portal.telemetry'       // 顶部遥测岛指标
+  | 'classroom.portal.course_badge'    // 课程卡片徽章
+  | 'classroom.portal.teaching_mode'   // 自定义教学模式
+  | 'classroom.portal.insight'         // 课前学情洞察卡
+  | 'classroom.portal.preflight'       // 课前检查项
+  | 'classroom.portal.launch_action'   // 启动区附加操作
+  // ── 课堂流程扩展页面 ──
+  | 'classroom.notification.tabs'      // 家校通知生成器标签页
+  | 'classroom.pacing.dashboard'       // AI 学情预测仪表
+  | 'classroom.diagnostic.feed'        // 课堂异常告警实时流
+  | 'classroom.collab.canvas'          // 小组协作白板工具
+  // ── 统一顶栏 / 归因 / 积分榜 ──
+  | 'classroom.topbar.action'          // 顶栏快捷操作
+  | 'classroom.topbar.pill'            // 顶栏状态胶囊
+  | 'classroom.attribution.award'      // 课堂归因加分维度
+  | 'classroom.attribution.action'     // 课堂归因动作
+  | 'classroom.leaderboard.action'     // 班级积分榜操作
+  // ── 学生多维素养 / 成长档案 ──
+  | 'student.profile.dimension'        // 多维素养雷达维度
+  | 'student.profile.card'             // 成长档案扩展卡片
+  | 'student.profile.action'           // 成长档案操作动作
+  | 'student.profile.timeline_item'    // 答题与互动轨迹项
+  // ── 全局顶栏 / 晴雨表 / 环节 ──
+  | 'classroom.header.action'          // 全局顶栏右侧快捷动作
+  | 'classroom.barometer.metric'       // 课堂节奏晴雨表指标
+  | 'classroom.agenda.action'          // 教学环节步骤卡片动作
+  // ── 白板扩展 ──
+  | 'whiteboard.dock.plugin'           // 白板活跃插件悬浮坞
+  | 'whiteboard.canvas.widget'         // 白板画布可拖拽任务卡片
+  // ── 审计 ──
+  | 'classroom.audit.event'            // 课堂互动分级审计流
+  // ── 全班大屏互评 ──
+  | 'peer_review.rubric.dimension'     // 互评量规维度
+  | 'peer_review.badge'                // 互评微勋章
+  | 'peer_review.action'               // 互评操作
+  | 'peer_review.showcase.widget';     // 焦点作品对比分析组件
 
 // v0.2.6: 锚点槽位（开放命名空间）
 export type AnchorSlot = `anchor:${string}`;
@@ -49,8 +102,39 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `whiteboard.fullscreen`       | `InteractiveWhiteboard.tsx`（`FullscreenOverlay` 通过 `fullscreenRendererRegistry` 查找）                       | 见 §5                            |
 | `whiteboard.property-editor`  | `InteractiveWhiteboard.tsx`（属性面板通过 `propertyEditorRegistry` 查找）                                       | 见 §6                            |
 | `palette.item` (备课画板组件) | `LessonPalette.tsx`（左侧面板聚合）/ `InteractiveWhiteboard.tsx`（画布卡片渲染与通用属性表单）                  | 见 §9                            |
+| `classroom.quick_activity`    | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                        | 无（仅 `route?`）                |
+| `stage.display.card`          | `src/features/classroom/StageDisplayModal.tsx`                                                                  | 无（仅 `route?`）                |
+| `classroom.countdown.widget`  | `src/features/classroom/ClassroomCountdownWidget.tsx`                                                           | 无（仅 `route?`）                |
+| `classroom.countdown.action`  | `src/features/classroom/ClassroomCountdownWidget.tsx`                                                           | 无（仅 `route?`）                |
+| `student.classroom.countdown` | `src/features/student/StudentCountdownBanner.tsx`                                                               | 无（仅 `route?`）                |
+| `student.quick_actions.item`   | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                           | 无（仅 `route?`）                |
+| `student.quick_actions.action` | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                           | 无（仅 `route?`）                |
+| `student.quick_actions.fab`    | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                           | 无（仅 `route?`）                |
+| `classroom.portal.telemetry`   | `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                |
+| `classroom.portal.course_badge`| `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                |
+| `classroom.portal.teaching_mode`| `src/features/classroom/ClassroomEntryPortal.tsx`                                                              | 无（仅 `route?`）                |
+| `classroom.portal.insight`     | `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                |
+| `classroom.portal.preflight`   | `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                |
+| `classroom.portal.launch_action`| `src/features/classroom/ClassroomEntryPortal.tsx`                                                              | 无（仅 `route?`）                |
+| `classroom.notification.tabs`  | `src/features/classroom/notifications/ParentNotificationModal.tsx`                                              | 无（仅 `route?`）                |
+| `classroom.pacing.dashboard`   | `src/features/classroom/pacing/MasteryPredictionModal.tsx`                                                     | 无（仅 `route?`）                |
+| `classroom.diagnostic.feed`    | `src/features/classroom/diagnostics/DiagnosticCenterModal.tsx`                                                  | 无（仅 `route?`）                |
+| `classroom.collab.canvas`      | `src/features/classroom/collab-whiteboard/GroupCollabWhiteboardModal.tsx`                                       | 无（仅 `route?`）                |
+| `classroom.topbar.action`      | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                        | 无（仅 `route?`）                |
+| `classroom.topbar.pill`        | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                        | 无（仅 `route?`）                |
+| `classroom.attribution.award`  | `src/features/classroom/ClassroomAttributionModal.tsx`                                                          | 无（仅 `route?`）                |
+| `classroom.attribution.action` | `src/features/classroom/ClassroomAttributionModal.tsx`                                                          | 无（仅 `route?`）                |
+| `classroom.leaderboard.action` | `src/features/classroom/ClassroomLeaderboardModal.tsx`                                                          | 无（仅 `route?`）                |
+| `student.profile.dimension`    | `src/features/student/StudentGrowthProfileModal.tsx`                                                            | 无（仅 `route?`）                |
+| `student.profile.card`         | `src/features/student/StudentGrowthProfileModal.tsx`                                                            | 无（仅 `route?`）                |
+| `student.profile.action`       | `src/features/student/StudentGrowthProfileModal.tsx`                                                            | 无（仅 `route?`）                |
+| `student.profile.timeline_item`| `src/features/student/StudentGrowthProfileModal.tsx`                                                            | 无（仅 `route?`）                |
+| `peer_review.rubric.dimension` | `src/features/classroom/peer-review/PeerReviewRubricStats.tsx`、`PeerReviewRubricModal.tsx`                     | 无（仅 `route?`）                |
+| `peer_review.badge`            | `src/features/classroom/peer-review/PeerReviewMatrixPanel.tsx`                                                  | 无（仅 `route?`）                |
+| `peer_review.action`           | `src/features/classroom/peer-review/PeerReviewLeaderboardPanel.tsx`、`PeerReviewTelemetryHeader.tsx`            | 无（仅 `route?`）                |
+| `peer_review.showcase.widget`  | `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`                                                 | 无（仅 `route?`）                |
 
-> `student.lesson.tool` / `teacher.panel` / `student.fullscreen` / `global.setting` / `nav.user_menu` 仅出现在 `ExtensionSlot` 联合类型中，**尚无渲染器挂载**，当前不会渲染任何内容。
+> `student.lesson.tool` / `teacher.panel` / `student.fullscreen` / `global.setting` / `nav.user_menu` / `editor.timeline_segment` / `editor.palette_item` / `classroom.header.action` / `classroom.barometer.metric` / `classroom.agenda.action` / `whiteboard.dock.plugin` / `whiteboard.canvas.widget` / `classroom.audit.event` 仅出现在 `ExtensionSlot` 联合类型中，**尚无渲染器挂载**，当前不会渲染任何内容。
 > `help.plugin_docs` 有渲染器，但**不在** `ExtensionSlot` 联合类型内（以字符串字面量传入，其 prop 类型为 `ExtensionSlot | string`）。
 > `anchor:*`（v0.2.6+）为开放命名空间槽位，渲染器已挂载（`WhiteboardToolbar.tsx` 七个锚点），通过 `placement` prop 按侧过滤——`placement="before"` 只渲染声明 `'before'` 的扩展，`placement="after"` 只渲染声明 `'after'` 或未声明（默认）的扩展。同侧多插件按钮按 `position` 升序渲染（缺省 `100`）。锚点目录见 [`docs/plugin/anchor-slots.md`](../plugin/anchor-slots.md)。
 
@@ -64,7 +148,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 React.createElement(resolveExtensionComponent(ext), {
   route: ext.route || route,
   lessonId,
-  classId, // 宿主统一注入的课堂上下文（v5.1）
+  classId, // 宿主统一注入的课堂上下文（v0.2.8+）
   ...ext.slotProps,
   ...slotProps,
 });
@@ -81,7 +165,7 @@ React.createElement(resolveExtensionComponent(ext), {
 
 ### 各槽位实际 props
 
-所有经 `ExtensionPointRenderer` 渲染的槽位组件都收到 `{ lessonId, classId, route? }`（v5.1 起由渲染器统一注入），此外：
+所有经 `ExtensionPointRenderer` 渲染的槽位组件都收到 `{ lessonId, classId, route? }`（v0.2.8 起由渲染器统一注入），此外：
 
 - **`student.view`**：`src/features/student/StudentDashboardPanel.tsx` 调用点额外注入 `{ studentId }`（注意 `student-default-widgets.tsx` 的 `StudentPluginWidgets` 调用点不注入 `studentId`）。
 - **`teacher.tab`**：
@@ -165,10 +249,10 @@ interface HelpDocConfig {
 
 ## 3. 宿主注入了哪些上下文？（如何获取 user/role/lessonId/classId/socket）
 
-**没有**包裹插件组件的 per-slot Provider 注入 `userId` / `role` / `socket`。自 v5.1 起，宿主**统一注入**以下课堂上下文：
+**没有**包裹插件组件的 per-slot Provider 注入 `userId` / `role` / `socket`。自 v0.2.8 起，宿主**统一注入**以下课堂上下文：
 
 1. **React Props（渲染时）** —— 见 §2。所有扩展点组件收到 `lessonId`（当前课程，`string | null`，源 `appStore.selectedLesson`）与 `classId`（当前班级，`string | null`，源 `appStore.liveClassSelectedClassId`）；`student.view` 调用点额外注入 `studentId`；`teacher.tab` panel 形态额外收到 `renderType: 'panel'`。
-2. **`ctx.context`（激活时 / 非渲染场景）** —— `FrontendPluginContext` 新增只读快照 + 订阅（v5.1）：
+2. **`ctx.context`（激活时 / 非渲染场景）** —— `FrontendPluginContext` 新增只读快照 + 订阅（v0.2.8）：
    ```typescript
    context?: {
      get(): { lessonId: string | null; classId: string | null };
@@ -191,7 +275,7 @@ interface HelpDocConfig {
      ui: { registerExtensionPoint; unregisterExtensionPoint; registerFullscreenRenderer; registerPropertyEditor; registerCoursewareSource; unregisterCoursewareSource; registerPaletteItem; unregisterPaletteItem; /* ... */ };
      invokeCommand<T>(type: string, payload?: unknown): Promise<T>;
      navigation: { getTeacherTab; setTeacherTab; subscribeTeacherTab };
-     context: { get; subscribe };        // v5.1 课堂上下文
+     context: { get; subscribe };        // v0.2.8 课堂上下文
      registerPanel? / registerMenu? / registerToolbarButton?; // 兼容 shim
    }
    ```
@@ -377,7 +461,7 @@ async function activate(ctx) {
 
 ## 9. 备课画板组件扩展 (`paletteItemRegistry` / 课程设计组件插槽)
 
-自 v5.1 起，课程设计（备课画板）与白板画布开放了**组件扩展插槽 (Palette Item Extension)**。插件不仅能在课堂工具栏添加按钮，还可以向左侧备课画板组件面板（`LessonPalette`）注入专属教学组件（如学科仿真实验、3D 分子结构、乐谱互动、特定编程评测沙箱等）。
+自 v0.3.17 起，课程设计（备课画板）与白板画布开放了**组件扩展插槽 (Palette Item Extension)**。插件不仅能在课堂工具栏添加按钮，还可以向左侧备课画板组件面板（`LessonPalette`）注入专属教学组件（如学科仿真实验、3D 分子结构、乐谱互动、特定编程评测沙箱等）。
 
 ### 核心特性
 

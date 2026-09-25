@@ -26,6 +26,8 @@ describe('PluginContextAdapter (EU-02)', () => {
         processManager: {} as any,
         storage: {} as any,
         ai: {} as any,
+        pointsDimension: null,
+        pointsLedger: null,
       },
       resolve: vi.fn().mockResolvedValue('resolved_service'),
       provide: vi.fn().mockResolvedValue(undefined),

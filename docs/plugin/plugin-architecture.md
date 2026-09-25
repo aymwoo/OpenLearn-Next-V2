@@ -1,5 +1,9 @@
 # 插件宿主架构与沙箱隔离机制 (Plugin Architecture)
 
+<!-- doc-version: sdk=3.7.0 -->
+
+> **适用范围**：`@openlearn/plugin-sdk@3.7.0`
+
 OpenLearn V2 的插件系统为全栈、可伸缩、多租户隔离的微前端与 Worker 进程隔离架构。本文档详细解析插件宿主的物理结构、模块职责、沙箱机制、组件通信与服务代理模型。
 
 ---
@@ -112,7 +116,7 @@ sequenceDiagram
 
 ```typescript
 export interface PluginContext {
-  // 7 大核心服务代理
+  // 9 大核心服务代理
   services: {
     commandBus: ICommandBusService;
     eventBus: IEventBusService;
@@ -121,6 +125,8 @@ export interface PluginContext {
     processManager: IProcessService;
     storage: IStorageService;
     ai: IAIService;
+    pointsDimension: IPointsDimensionRegistry | null;
+    pointsLedger: IPointsLedgerService | null;
   };
   pluginId: string;
   manifest: Manifest;
@@ -205,7 +211,7 @@ resourceTracker.disposeAll(pluginId);
 - `react-markdown`
 - `jspdf`
 - `jspdf-autotable`
-- `xlsx`
+- `exceljs`（需在 `package.json` dependencies 中安装）
 - `lucide-react`
 - `uuid`
 

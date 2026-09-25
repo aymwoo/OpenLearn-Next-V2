@@ -1,6 +1,8 @@
 # 宿主共享依赖白名单 (HostSharedDeps)
 
-> **适用范围**：`@openlearn/plugin-sdk@3.6.1` / 平台 `v0.3.15+`
+<!-- doc-version: sdk=3.7.0 -->
+
+> **适用范围**：`@openlearn/plugin-sdk@3.7.0` / 平台 `v0.3.15+`
 > 本页说明打包前端插件时**推荐 external（由宿主提供）** 的宿主全局库，及其精确版本，防止因重复打包导致包体积过大或 "Invalid hook call" 等重复加载错误。
 
 ---
