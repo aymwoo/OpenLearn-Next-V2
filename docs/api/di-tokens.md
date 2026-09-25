@@ -18,7 +18,7 @@
    import { IPluginLifecycleManagerToken, IDatabaseToken, IAuthSessionBridgeToken } from '@openlearn/plugin-sdk';
 
    const lifecycle = await ctx.resolve(IPluginLifecycleManagerToken); // 类型: PluginLifecycleManager
-   const db = await ctx.resolve(IDatabaseToken); // 类型: better-sqlite3.Database
+   const db = await ctx.resolve(IDatabaseToken); // 类型: SqliteDatabase（SDK 导出的自包含类型，运行时为 better-sqlite3 Database）
    const authBridge = await ctx.resolve(IAuthSessionBridgeToken); // 类型: IAuthSessionBridgeService
    ```
 
@@ -83,7 +83,7 @@ interface PluginContext {
 
 | 导出 Token         | 解析类型                                          | 标识字符串                    |
 | ------------------ | ------------------------------------------------- | ----------------------------- |
-| `IDatabaseToken`   | `better-sqlite3.Database`（**原始句柄，无包装**） | `@openlearn/core:IDatabase`   |
+| `IDatabaseToken`   | `SqliteDatabase`（better-sqlite3 兼容的原始句柄，无包装；SDK 导出自包含类型，避免消费方依赖 better-sqlite3 类型解析） | `@openlearn/core:IDatabase`   |
 | `IPluginHostToken` | `PluginHost`（**类，非纯接口**）                  | `@openlearn/core:IPluginHost` |
 
 ### C. P7-A2 统一插件平台 Token（`interfaces.ts:348-390`）
@@ -213,9 +213,9 @@ generateText(prompt: string, options?: { systemInstruction?: string; temperature
 
 > 统一由数据库 `ai_providers` 中配置的 OpenAI 兼容 Provider 提供。若未配置任何有效提供商，抛出友好错误提示。
 
-### `IDatabaseToken` → 原始 `better-sqlite3.Database`
+### `IDatabaseToken` → 原生 SQLite 句柄（`SqliteDatabase`）
 
-无接口包装，插件直接拿到原始 `Database` 对象。查询/插入/更新/删除/事务请使用 better-sqlite3 原生 API（详见 [插件数据库 API 与 Migration 规范](../reference/plugin-database-api)）。
+无接口包装，插件直接拿到原始 `Database` 对象（SDK 以自包含的 `SqliteDatabase` 类型描述其表面，运行时即 better-sqlite3 `Database`）。查询/插入/更新/删除/事务请使用 better-sqlite3 原生 API（详见 [插件数据库 API 与 Migration 规范](../reference/plugin-database-api)）。
 
 ### `IPluginHostToken` → `PluginHost` 类（`packages/core/plugin-host/index.ts:105`）
 
@@ -433,6 +433,8 @@ interface IPluginLogger {
 
 ## 5. 组合根（Composition Root）
 
-所有 Token 在 `packages/core/kernel/index.ts` 绑定到具体实例（`kernelContainer.serviceRegistry.register(...)`），包含 `IAuthSessionBridgeToken` 等平台级核心单例。`server.ts` 仅补充 `IActivityRegistryToken`（`server.ts:537`）。插件无需关心绑定细节，直接 `ctx.resolve(Token)` 即可。
+所有 Token 在 `packages/core/kernel/index.ts` 绑定到具体实例（`kernelContainer.serviceRegistry.register(...)`），包含 `IAuthSessionBridgeToken` 等平台级核心单例。`server.ts` 另外补充绑定 `IActivityRegistryToken`、`IClassroomLifecycleServiceToken` 与 `IInteractionRuntimeServiceToken`。插件无需关心绑定细节，直接 `ctx.resolve(Token)` 即可。
+
+> ⚠️ **已知缺口**：`IClassroomCountdownServiceToken` 目前**只有 Token 与接口定义，尚无内核实现与注册**（课堂倒计时实际由 `server/routes/classroom.ts` 的 HTTP/Socket 路由实现）。在服务端补齐注册前，`ctx.resolve(IClassroomCountdownServiceToken)` 会失败——请勿在插件中使用该 Token，倒计时请消费 `classroom:countdown_updated` Socket 事件。
 
 > 最后更新：2026-09-18

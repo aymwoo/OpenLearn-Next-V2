@@ -41,7 +41,7 @@ OpenLearn V2 采用分层解耦的模块化设计，平台内核（Kernel）清�
 ### 4. 沙箱隔离的插件生态 (Plugin Ecosystem)
 
 - 插件以 Worker Thread 沙箱隔离模式运行，主进程与插件线程安全隔离。
-- 插件通过 `@openlearn/plugin-sdk@3.7.0` 提供的 `PluginContext` 交互，无法直接触碰全局 DOM 或私有 Core API。
+- 插件通过 `@openlearn/plugin-sdk` 提供的 `PluginContext` 交互，无法直接触碰全局 DOM 或私有 Core API。
 
 > 详细插件沙箱机制请参阅权威页面：[插件宿主架构与 Worker 沙箱](../plugin/plugin-architecture)
 
@@ -54,7 +54,7 @@ OpenLearn V2 采用分层解耦的模块化设计，平台内核（Kernel）清�
 | **后端运行时** | Node.js (ESM), Express, Socket.IO, SQLite (`better-sqlite3`) |
 | **前端框架**   | React 19, TypeScript, Vite                                   |
 | **核心内核**   | Custom Micro-kernel (`packages/core`) with DI Container      |
-| **插件 SDK**   | `@openlearn/plugin-sdk` (v3.7.0)                             |
+| **插件 SDK**   | `@openlearn/plugin-sdk`（版本随平台发布同步，见 `packages/plugin-sdk/package.json`） |
 | **测试框架**   | Vitest with jsdom environment                                |
 | **文档引擎**   | Sphinx with MyST Parser, Mermaid, RTD Theme                  |
 

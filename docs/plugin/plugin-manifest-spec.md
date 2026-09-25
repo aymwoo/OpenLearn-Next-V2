@@ -259,9 +259,11 @@
 
 ---
 
-### 2.8 远端版本更新源声明 (`updateSource`)（v0.3.10+）
+### 2.8 远端版本更新源声明 (`updateSource`)（SDK 3.4.3 / 平台 v0.3.10 新增）
 
-声明插件检查版本升级的外部 Git 仓库或发布源。平台插件中心据此执行远端版本检测；当未配置时平台自动回退扫描本地 `v2_plugins/*/manifest.json` 进行 SemVer 版本比对：
+声明插件检查版本升级的外部 Git 仓库或发布源。平台插件中心据此执行远端版本检测；当未配置时平台自动回退扫描本地 `v2_plugins/*/manifest.json` 进行 SemVer 版本比对。
+
+> ⚠️ **校验口径**：`updateSource` 通过 manifest 的 passthrough 透传（**不在 Zod schema 强校验范围内**），安装期不会校验其取值；`repo` 的白名单校验（仅 `owner/repo` 形式的 GitHub / Gitee）发生在服务端触发更新检测时。
 
 ```json
 "updateSource": {

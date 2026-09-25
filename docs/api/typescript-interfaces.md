@@ -1,5 +1,7 @@
 # TypeScript Interfaces 规范
 
+<!-- doc-version: sdk=3.7.0 -->
+
 汇总 `@openlearn/plugin-sdk@3.7.0` 与 `packages/core/` 定义的所有核心 TS 接口。SDK 仅导出**类型 + Token 值**，不含运行时代码。
 
 ---
@@ -12,7 +14,7 @@
 
 ```typescript
 interface PluginContext {
-  services: { commandBus; eventBus; actionRegistry; capability; processManager; storage; ai };
+  services: { commandBus; eventBus; actionRegistry; capability; processManager; storage; ai; pointsDimension; pointsLedger };
   pluginId: string;
   manifest: Manifest;
   resolve<T>(token: Token<T>): Promise<T>;
@@ -39,6 +41,7 @@ interface FrontendPluginContext {
   ui: { registerExtensionPoint; unregisterExtensionPoint };
   invokeCommand<T>(type: string, payload?: unknown): Promise<T>;
   navigation: { getTeacherTab; setTeacherTab; subscribeTeacherTab };
+  context?: { get(): FrontendPluginContextSnapshot; subscribe(cb: (ctx: FrontendPluginContextSnapshot) => void): () => void };  // v0.2.8+: 当前课堂上下文只读快照 + 订阅
   registerPanel? / registerMenu? / registerToolbarButton?;   // 兼容 shim
 }
 ```

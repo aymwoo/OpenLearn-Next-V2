@@ -1,5 +1,7 @@
 # Whiteboard Event Slot Contract
 
+<!-- doc-version: sdk=3.7.0 -->
+
 > 白板内**前端事件采集 / 队列 / 分发**层的契约文档。
 >
 > 对应实现位于 `src/features/whiteboard/events/`：
@@ -277,7 +279,7 @@ import { WhiteboardEventPanel } from '@/features/whiteboard/events';
 
 - **新增**于 v0.3.21（OpenLearn Next）
 - 单例 API 表面稳定；`WhiteboardEventSource` / `EventFilter` 在新接入场景下会扩展，但破坏性变更需经评审
-- 不向后兼容旧版 `frontendEventBus.publish('courseware.*')` —— 旧调用仍然有效，但新代码应优先使用 `whiteboardEventSlot.ingest(...)`
+- 旧版 `frontendEventBus.publish('courseware.*')` 调用**仍然有效**（已桥接到新总线，保证向后兼容），但新代码应优先使用 `whiteboardEventSlot.ingest(...)`
 
 ---
 

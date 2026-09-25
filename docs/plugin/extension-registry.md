@@ -26,6 +26,8 @@ OpenLearn V2 提供了双层扩展点架构：
 | `student.lesson.tool`      | 学生端课中互动小工具                       | `id`, `label`, `icon`                                  |
 | `anchor:*`                 | 宿主原生按钮/元素前后（锚点槽位，v0.2.6+） | `id`, `label`, `icon`, `placement`（`before`/`after`） |
 
+> **注意**：上表仅列举最早一批核心槽位，**并非全集**。截至 v0.3.22，`ContributionRegistry` 已定义 20 种槽位类型（含 `classroom.quick_activity`、`palette.items`、`timeline.segments`、`stage.display.card` 等），完整清单与配置字段以 [UI 扩展槽位全目录](../reference/plugin-ui-extension-slots) 为权威。
+
 > 锚点槽位是开放命名空间，具体锚点 id 由宿主定义并公布，见 [`anchor-slots.md`](./anchor-slots.md)。
 
 ### API 使用示例
@@ -36,8 +38,8 @@ const contributions = pluginHost.getContributionRegistry();
 // 检索指定插件的所有贡献点
 const pluginContribs = contributions.summary(pluginId);
 
-// 检索指定槽位下的所有已注册贡献点（跨插件）
-const allTeacherTabs = contributions.getTeacherTabs();
+// 检索指定槽位下的所有已注册贡献点（跨插件；ContributionRegistry 没有 getTeacherTabs() 这类按槽位命名的便捷方法）
+const allTeacherTabs = contributions.getBySlot('teacher.tab');
 ```
 
 ---
@@ -55,6 +57,8 @@ export interface IUnifiedExtensionRegistry {
   getExtension<T = unknown>(category: string, id: string): T | undefined;
   listExtensions(category?: string): ReadonlyArray<ExtensionItemMetadata>;
   listCategories(): ReadonlyArray<string>;
+  health(): IntegrationHealthStatus;
+  metadata(): IntegrationDescriptor;
 }
 ```
 
@@ -66,7 +70,7 @@ export interface IUnifiedExtensionRegistry {
 
 ## 3. 前端 UI 扩展槽与渲染流程
 
-前端 React 层（位于 `src/plugin-host/extension-point-renderer.tsx` 的 `ExtensionPointRenderer`，以及 `src/components/PluginTabPanel.tsx`、`src/components/PluginCardRenderer.tsx`）：
+前端 React 层（位于 `src/plugin-host/extension-point-renderer.tsx` 的 `ExtensionPointRenderer`，以及 `src/components/PluginTabPanel.tsx`、`src/features/whiteboard/widgets/PluginCardRenderer.tsx`）：
 
 1. 用户点击插件提供的 `teacher.tab` 菜单。
 2. 前端根据 `manifest.id` 与 `staticRoute` 渲染安全 `<iframe>` 沙箱或动态组件。

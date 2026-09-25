@@ -1,5 +1,7 @@
 # Courseware Attempts API Contract
 
+<!-- doc-version: sdk=3.7.0 -->
+
 > 本文档汇总 **互动课件 (courseware) / 学生作答 (attempt) / 成绩提交流水** 的全部 HTTP 端点契约快照。
 >
 > 目的：把服务端实现 `server/routes/courseware.ts` 与 LMS Bridge SDK（前端 iframe 内）实际期望的请求/响应形态做一次**唯一可信**记录，方便前后端协作、契约测试回归、以及新人 onboarding。
@@ -251,7 +253,7 @@ ORDER BY a.started_at DESC;
 ## 6. `GET /api/courseware/attempts/:attemptId/progress` — 单条成绩快照
 
 ### 用途
-学生端轮询自己的当前成绩（教师端实时面板也可用）。无需鉴权，但通常配合 session 鉴权。
+学生端轮询自己的当前成绩（教师端实时面板也可用）。**需登录**（`requireAuth`）：教师/管理员可读取任意 attempt；学生仅能读取 `student_id` 等于自身的 attempt，越权返回 403。attempt 无成绩时返回 `{ progress: null }`。
 
 ### 响应
 

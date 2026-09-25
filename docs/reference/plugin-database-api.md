@@ -37,13 +37,13 @@ interface PluginDatabaseAPI {
 ### 路径 B — `ctx.resolve(IDatabaseToken)`：平台共享数据库（非命名空间）
 
 ```typescript
-const db = await ctx.resolve(IDatabaseToken); // 类型: better-sqlite3.Database (Inline) / 异步 RPC Proxy (Worker)
+const db = await ctx.resolve(IDatabaseToken); // 类型: SqliteDatabase (Inline) / 异步 RPC Proxy (Worker)
 ```
 
 - 注册于 `packages/core/kernel/index.ts`，是**整个平台共享数据库**，可读写平台基础表（如 `vfs_nodes`、`students`、`users` 等）。
 - **无命名空间隔离**。所有内置核心插件的数据操作实际走此路径。
 - 这是唯一能直接执行平台级 `SELECT` / `INSERT` / `UPDATE` / `DELETE` 的路径。
-- **类型提示**：从 `@openlearn/plugin-sdk` 导入时 `resolve` 结果在 Inline 模式下可断言为 `better-sqlite3.Database` 使用 `prepare()` / `exec()`；在 Worker 模式下其方法返回 Promise。
+- **类型提示**：从 `@openlearn/plugin-sdk` 导入时 `resolve` 结果的类型为自包含的 `SqliteDatabase`（运行时即 better-sqlite3 `Database`），Inline 模式下可直接使用 `prepare()` / `exec()`；在 Worker 模式下其方法返回 Promise。
 
 ---
 

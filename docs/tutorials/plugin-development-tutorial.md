@@ -1,6 +1,6 @@
 # OpenLearnV2 插件开发完全指南
 
-> 📅 **最后更新**：2026-07-27
+> 📅 **最后更新**：2026-09-25
 >
 > 本文档描述 Worker Thread 隔离模式与 Inline 模式的 API 差异。若你的插件运行在 Worker 模式下，请务必阅读 [§8.1.1 Worker 与 Inline 模式 API 差异](#worker-inline-mode-api)。
 
@@ -235,9 +235,9 @@ ERROR ──→ ACTIVATING（重试）          UNINSTALLED ←─────�
 >
 > | 版本          | 说明          | 用途                                                                 |
 > | ------------- | ------------- | -------------------------------------------------------------------- |
-> | 平台发行版本  | 当前 `0.3.11` | 主应用平台发布版本（根目录 `package.json`）                          |
-> | 宿主 API 版本 | 当前 `0.3.11` | `engines.openlearn` 检查所用的版本（与平台版本单一真理源保持强一致） |
-> | SDK 版本      | 当前 `3.6.0`  | `@openlearn/plugin-sdk` npm 包版本，独立语义化版本管理               |
+> | 平台发行版本  | 当前 `0.3.22` | 主应用平台发布版本（根目录 `package.json`）                          |
+> | 宿主 API 版本 | 当前 `0.3.22` | `engines.openlearn` 检查所用的版本（与平台版本单一真理源保持强一致） |
+> | SDK 版本      | 当前 `3.7.0`  | `@openlearn/plugin-sdk` npm 包版本，独立语义化版本管理               |
 >
 > **`engines.openlearn` 应填写宿主版本兼容范围（推荐声明为 `>=0.2.5`）**，而非 SDK 版本。
 
@@ -295,7 +295,7 @@ ctx.ui.registerExtensionPoint('teacher.dashboard.widget', {
 
 ### 2.8 使用 AI Skill 快速开发（推荐）
 
-除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（平台 `0.2.9`、SDK `@openlearn/plugin-sdk@3.7.0` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
+除了手动参考本指南编写代码，推荐使用官方的 **OpenLearn 插件开发 Skill** 来辅助开发。Skill 是运行在 Antigravity / Codex / Claude Code 中的 AI 代理套件，整合了最新 OpenLearn V2（平台 `0.3.22`、SDK `@openlearn/plugin-sdk@3.7.0` 与测试包 `@openlearn/plugin-test-kit`）的架构规范，能自动化插件开发的大部分流程。
 
 **安装与配置：**
 
@@ -314,7 +314,7 @@ npx skills add aymwoo/openlearn-skills/openlearn-next-plugin-dev
 | 💬 **结构化交互设计确认**   | 自动引导确认插件模式（`server-only` / `full-stack` / `frontend-only`）、Worker Thread 沙箱权限、UI 扩展槽位（`teacherTab`, `classroomTool` 等）及表结构。 |
 | 🏗️ **标准脚手架与代码生成** | 自动生成包含 `package.json`、`tsconfig.json`、`src/index.ts` (后端 Worker 逻辑) 和 `src/frontend.tsx` (React 19 组件) 的标准项目工程。                    |
 | 🛡️ **安全与规范防错**       | 自动校验 CQRS 三件套模式（`ActionRegistry` → `CommandBus` → `EventBus`）、CapabilityGuard 权限申报、SQLite 增量迁移脚本与 ESM 沙箱导出规范。              |
-| 🧪 **测试套件集成**         | 自动生成基于 `@openlearn/plugin-test-kit@3.3.1` 的 Vitest 单元测试桩（支持 `createMockContext()` 工厂）。                                                 |
+| 🧪 **测试套件集成**         | 自动生成基于 `@openlearn/plugin-test-kit@3.3.3` 的 Vitest 单元测试桩（支持 `createMockContext()` 工厂）。                                                 |
 | 📦 **一键打包与发布**       | 提供 `npx @openlearn/plugin-sdk build` 命令行指导，生成经过 Manifest Schema 验证的插件 `.zip` 分发包。                                                    |
 
 **AI 辅助开发标准化工作流：**
@@ -368,7 +368,7 @@ interface Manifest {
     properties: Record<string, ConfigProperty>;
   };
   updateSource?: {
-    // V3.4.3: 远端更新源声明
+    // SDK 3.4.3（平台 v0.3.10）新增：远端更新源声明
     type: 'github-release' | 'gitee-release';
     repo: string; // 仓库路径，如 "user/repo-name"
   };
@@ -392,7 +392,7 @@ interface ClassroomTool {
 }
 ```
 
-#### 3.1.1 远端更新检测（V3.4.3 新增）
+#### 3.1.1 远端更新检测（SDK 3.4.3 / 平台 v0.3.10 新增）
 
 在 `manifest.json` 中声明 `updateSource` 字段后，平台插件中心可自动检测远端仓库（GitHub / Gitee）Release 中的新版本，并支持一键热更新。
 
@@ -2290,4 +2290,4 @@ export default {
 ---
 
 > 本文档基于 OpenLearnV2 最新代码库（`main` 分支），通过 Codegraph 知识图谱分析生成。
-> 最后更新：2026-07-14
+> 最后更新：2026-09-25

@@ -3,7 +3,7 @@
 <!-- doc-version: sdk=3.7.0 -->
 
 > **适用范围**：`@openlearn/plugin-sdk@3.7.0`
-> 插件通过 `ctx.resolve(IDatabaseToken)` 拿到**整个平台共享数据库**的裸 `better-sqlite3.Database` 句柄，可读写任意表。本页列出平台实际存在的全部数据表及关键列，作为插件跨表查询/读写时的参考。
+> 插件通过 `ctx.resolve(IDatabaseToken)` 拿到**整个平台共享数据库**的裸 SQLite 句柄（SDK 类型 `SqliteDatabase`，运行时为 better-sqlite3 `Database`），可读写任意表。本页列出平台实际存在的全部数据表及关键列，作为插件跨表查询/读写时的参考。
 >
 > ⚠️ 若只想做插件私有数据，优先用 `ctx.db`（自动加 `plugin_{pluginId}_` 前缀）或 `ctx.services.storage`（`plugin_storage` 键值），见[插件数据库 API](plugin-database-api)。
 
@@ -239,6 +239,6 @@ AI 助手对话记忆。`id` / `conv_key` / `role` / `content` / `created_at`。
 
 微前端远程。`name` / `entry` / `meta` / `created_at` / `updated_at`。
 
-> **提示**：核心 schema 初始化于 `packages/core/db/index.ts`（约 34 张表），另有 `server/bootstrap-db.ts`（3 张：`student_rollcalls` / `site_settings` / `agent_conversations`）与 `server/utils/migrate.ts`（`_migrations`）。
+> **提示**：核心 schema 初始化于 `packages/core/db/index.ts`（40 张表），另有 `server/bootstrap-db.ts`（3 张：`student_rollcalls` / `site_settings` / `agent_conversations`）与 `server/utils/migrate.ts`（`_migrations`）；增量迁移见 `migrations/`（000-009）。
 
 > 最后更新：2026-08-29
