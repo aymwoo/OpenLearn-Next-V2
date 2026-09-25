@@ -393,6 +393,10 @@ interface PluginContext {
     processManager: IProcessService;
     storage: IStorageService;
     ai: IAIService;
+    /** 积分维度注册表（Worker 模式插件恒为 null，见 worker-manager 白名单说明） */
+    pointsDimension: IPointsDimensionRegistry | null;
+    /** 积分流水服务（Worker 模式插件恒为 null） */
+    pointsLedger: IPointsLedgerService | null;
   };
   pluginId: string;
   manifest: Manifest;
@@ -577,6 +581,277 @@ interface PluginHost {
   togglePlugin(pluginId: string): Promise<string>;
 }
 
+// ── Capability & Platform Kernel Services (v0.3.17+) ─────────────────────
+
+interface IntegrationHealthStatus {
+  readonly isHealthy: boolean;
+  readonly details?: Readonly<Record<string, unknown>>;
+}
+
+interface IntegrationDescriptor {
+  readonly id: string;
+  readonly name: string;
+  readonly version: string;
+  readonly description: string;
+  readonly dependencies?: ReadonlyArray<string>;
+}
+
+interface IAICapabilityService {
+  getCapabilityKernel(): Promise<unknown>;
+}
+
+interface ICapabilityRuntimeService {
+  getRuntimeKernel(): Promise<unknown>;
+}
+
+interface ICapabilityGovernanceService {
+  getGovernanceKernel(): Promise<unknown>;
+}
+
+interface IPlatformServiceRegistryService {
+  getServiceRegistryKernel(): Promise<unknown>;
+}
+
+// AI capability registry contracts (referenced by ICapabilityRegistryToken
+// and IPluginCapabilityGatewayToken).
+interface IAICapability {
+  readonly meta: {
+    readonly id: string;
+    readonly name: string;
+    /** 能力类型判别字符串（源类型为含 `| string` 的宽松联合，如 'chat' | 'tool' | …） */
+    readonly type: string;
+    readonly description: string;
+    readonly version: string;
+  };
+}
+
+interface CapabilityRegistry {
+  registerCapability(capability: IAICapability): void;
+  resolveCapability<T extends IAICapability = IAICapability>(capabilityId: string): T;
+  hasCapability(capabilityId: string): boolean;
+  listCapabilities(): ReadonlyArray<IAICapability>;
+  clear(): void;
+}
+
+// ── P7 Unified Plugin Services ───────────────────────────────────────────
+
+interface CapabilityMetadata {
+  readonly id: string;
+  readonly name: string;
+  readonly type: string;
+  readonly version: string;
+  readonly description: string;
+  readonly provider?: string;
+  readonly stability?: 'experimental' | 'stable' | 'deprecated';
+}
+
+interface ExtensionItemMetadata {
+  readonly id: string;
+  readonly category: string;
+  readonly name?: string;
+  readonly version?: string;
+  readonly providerId?: string;
+  readonly description?: string;
+  readonly impl?: unknown;
+}
+
+/** 统一插件生命周期管理器（EU-01）：包装 PluginHost 状态机与钩子的协调层 */
+interface IPluginLifecycleManager {
+  readonly pluginHost: PluginHost;
+  getPluginState(pluginId: string): PluginState | undefined;
+  listPlugins(): ReadonlyArray<PluginInfo>;
+  activatePlugin(pluginId: string): Promise<void>;
+  deactivatePlugin(pluginId: string): Promise<void>;
+  reloadPlugin(pluginId: string, newCode?: string): Promise<void>;
+  uninstallPlugin(pluginId: string): Promise<void>;
+  health(): IntegrationHealthStatus;
+  metadata(): IntegrationDescriptor;
+}
+
+/** 插件能力网关：发现 / 解析 / 路由平台能力调用的单一入口 */
+interface IPluginCapabilityGateway {
+  readonly capabilityRegistry: CapabilityRegistry;
+  listCapabilities(): ReadonlyArray<CapabilityMetadata>;
+  hasCapability(capabilityId: string): boolean;
+  resolveCapability<T extends IAICapability = IAICapability>(capabilityId: string): T;
+  executeCapability<T = unknown>(capabilityId: string, methodName: string, ...args: unknown[]): Promise<T>;
+  health(): IntegrationHealthStatus;
+  metadata(): IntegrationDescriptor;
+}
+
+/** 统一扩展注册表：所有平台扩展点（widget / command / AI action / activity 等）的单一管理层 */
+interface IUnifiedExtensionRegistry {
+  registerExtension(category: string, id: string, impl: unknown, meta?: Partial<ExtensionItemMetadata>): void;
+  hasExtension(category: string, id: string): boolean;
+  getExtension<T = unknown>(category: string, id: string): T | undefined;
+  listExtensions(category?: string): ReadonlyArray<ExtensionItemMetadata>;
+  listCategories(): ReadonlyArray<string>;
+  health(): IntegrationHealthStatus;
+  metadata(): IntegrationDescriptor;
+}
+
+interface PluginPackageMetadata {
+  readonly id: string;
+  readonly name: string;
+  readonly version: string;
+  readonly description: string;
+  readonly repositoryId: string;
+  readonly downloadUrl?: string;
+  readonly manifest?: Manifest;
+}
+
+interface IPluginRepositoryAdapter {
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'official' | 'private' | 'local' | 'offline';
+  listPackages(): Promise<ReadonlyArray<PluginPackageMetadata>>;
+  getPackage(pluginId: string): Promise<PluginPackageMetadata | undefined>;
+  fetchZipBuffer(pluginId: string): Promise<Buffer>;
+}
+
+interface PluginUpdateOptions {
+  targetPluginId?: string;
+  executionMode?: 'worker' | 'inline';
+  allowDowngrade?: boolean;
+}
+
+interface PluginUpdateResult {
+  pluginId: string;
+  manifest: Manifest;
+  oldVersion: string;
+  newVersion: string;
+  previousStatus: string;
+  wasActive: boolean;
+}
+
+/** 插件分发管理器：仓库注册、包元数据、安装 / 更新编排与卸载 */
+interface IPluginDistributionManager {
+  readonly pluginHost: PluginHost;
+  registerRepository(repo: IPluginRepositoryAdapter): void;
+  listRepositories(): ReadonlyArray<IPluginRepositoryAdapter>;
+  listAvailablePackages(): Promise<ReadonlyArray<PluginPackageMetadata>>;
+  installFromZip(
+    zipBuffer: Buffer,
+    executionMode?: 'worker' | 'inline',
+  ): Promise<{ pluginId: string; manifest: Manifest }>;
+  installFromRepository(repoId: string, pluginId: string): Promise<{ pluginId: string; manifest: Manifest }>;
+  updatePlugin(pluginId: string, zipBuffer?: Buffer): Promise<void>;
+  updateFromZip(zipBuffer: Buffer, options?: PluginUpdateOptions): Promise<PluginUpdateResult>;
+  uninstallPlugin(pluginId: string): Promise<void>;
+  health(): IntegrationHealthStatus;
+  metadata(): IntegrationDescriptor;
+}
+
+/** 插件运行时组合：插件宿主与 Worker 管理器的有序启停编排 */
+declare class PluginRuntimeComposition {
+  readonly pluginHost: PluginHost;
+  readonly workerManager?: unknown;
+  get isStarted(): boolean;
+  start(context?: unknown): Promise<void>;
+  stop(): Promise<void>;
+  health(): IntegrationHealthStatus;
+  metadata(): IntegrationDescriptor;
+}
+
+// ── Courseware Runtime Script Extension (v0.3.22) ────────────────────────
+// 插件注册后、在互动课件 iframe（opaque origin）内部执行的脚本扩展点。
+// 服务端渲染课件 HTML 时是唯一投递位置（injectLmsSdk），故 list() 为同步。
+
+interface CoursewareRuntimeScript {
+  /** 脚本标识，同一 owner 内唯一；重复注册同一 id 视为覆盖 */
+  id: string;
+  /** 在课件 iframe 内执行的脚本源码（宿主会包进 `<script>` 标签） */
+  source: string;
+  /** 仅对指定课件生效（对应 `courseware.id`）；与 coursewareUuid 均缺省时为全局脚本 */
+  coursewareId?: string;
+  /** 仅对指定课件生效（对应 `courseware.uuid`） */
+  coursewareUuid?: string;
+  /** 注入位置，默认 'body-end'（Bridge SDK 之后，DOM 已可访问） */
+  position?: 'head' | 'body-end';
+  /** 执行顺序，升序；默认 100 */
+  priority?: number;
+}
+
+interface IRegisteredCoursewareRuntimeScript extends CoursewareRuntimeScript {
+  /** 注册方，通常为 pluginId */
+  owner: string;
+  position: 'head' | 'body-end';
+  priority: number;
+}
+
+interface ICoursewareRuntimeScriptRegistry {
+  register(owner: string, script: CoursewareRuntimeScript): void;
+  unregister(owner: string, id: string): void;
+  clear(owner?: string): void;
+  list(courseware?: { id?: string; uuid?: string }): IRegisteredCoursewareRuntimeScript[];
+  listOwners(): string[];
+}
+
+// ── Classroom Lifecycle & Interaction Extensibility (v0.3.22) ────────────
+
+type ClassroomLifecycleStage =
+  | 'PRE_CLASS_READY'
+  | 'IN_CLASS_TEACHING'
+  | 'WRAP_UP_EXIT_TICKET'
+  | 'ARCHIVED_REPORT';
+
+interface StageGuardResult {
+  allowed: boolean;
+  reason?: string;
+}
+
+type ClassroomStageGuard = (
+  fromStage: ClassroomLifecycleStage,
+  toStage: ClassroomLifecycleStage,
+  context: { lessonId: string; classId?: string; actorId: string },
+) => boolean | StageGuardResult | Promise<boolean | StageGuardResult>;
+
+interface IClassroomLifecycleService {
+  getStage(lessonId: string): Promise<ClassroomLifecycleStage>;
+  transitionStage(
+    lessonId: string,
+    toStage: ClassroomLifecycleStage,
+    actorId: string,
+    classId?: string,
+  ): Promise<{ success: boolean; stage: ClassroomLifecycleStage; reason?: string }>;
+  registerStageGuard(owner: string, guard: ClassroomStageGuard): void;
+  unregisterStageGuard(owner: string): void;
+}
+
+interface QuickActivityDescriptor {
+  id: string;
+  name: string;
+  category: string;
+  icon?: string;
+  description?: string;
+  supportedRoles?: ('teacher' | 'student')[];
+}
+
+interface IInteractionRuntimeService {
+  registerActivityProvider(owner: string, descriptor: QuickActivityDescriptor): void;
+  unregisterActivityProvider(owner: string, id: string): void;
+  listActivityProviders(): QuickActivityDescriptor[];
+}
+
+interface ClassroomCountdownDescriptor {
+  lessonId: string;
+  totalDuration: number;
+  timeRemaining: number;
+  isRunning: boolean;
+  isPaused: boolean;
+  label: string;
+  endsAt: number | null;
+}
+
+interface IClassroomCountdownService {
+  getCountdown(lessonId: string): Promise<ClassroomCountdownDescriptor>;
+  start(lessonId: string, duration: number, label?: string): Promise<ClassroomCountdownDescriptor>;
+  pause(lessonId: string): Promise<ClassroomCountdownDescriptor>;
+  resume(lessonId: string): Promise<ClassroomCountdownDescriptor>;
+  reset(lessonId: string): Promise<ClassroomCountdownDescriptor>;
+  addTime(lessonId: string, seconds: number): Promise<ClassroomCountdownDescriptor>;
+}
+
 // ── Token Constants ──────────────────────────────────────────────────────
 
 declare const ICommandBusServiceToken: Token<ICommandBusService>;
@@ -613,6 +888,20 @@ declare const IClassroomRuntimeServiceToken: Token<IClassroomRuntimeService>;
 declare const IPresenceEngineServiceToken: Token<IPresenceEngineService>;
 declare const ITeachingCollaborationServiceToken: Token<ITeachingCollaborationService>;
 declare const ILearningAnalyticsServiceToken: Token<ILearningAnalyticsService>;
+declare const IAICapabilityServiceToken: Token<IAICapabilityService>;
+declare const ICapabilityRuntimeServiceToken: Token<ICapabilityRuntimeService>;
+declare const ICapabilityGovernanceServiceToken: Token<ICapabilityGovernanceService>;
+declare const IPlatformServiceRegistryToken: Token<IPlatformServiceRegistryService>;
+declare const ICapabilityRegistryToken: Token<CapabilityRegistry>;
+declare const IPluginLifecycleManagerToken: Token<IPluginLifecycleManager>;
+declare const IPluginCapabilityGatewayToken: Token<IPluginCapabilityGateway>;
+declare const IUnifiedExtensionRegistryToken: Token<IUnifiedExtensionRegistry>;
+declare const IPluginDistributionManagerToken: Token<IPluginDistributionManager>;
+declare const IPluginRuntimeCompositionToken: Token<PluginRuntimeComposition>;
+declare const ICoursewareRuntimeScriptRegistryToken: Token<ICoursewareRuntimeScriptRegistry>;
+declare const IClassroomLifecycleServiceToken: Token<IClassroomLifecycleService>;
+declare const IInteractionRuntimeServiceToken: Token<IInteractionRuntimeService>;
+declare const IClassroomCountdownServiceToken: Token<IClassroomCountdownService>;
 
 // ── Frontend Whiteboard Registries (V3.5) ────────────────────────────────
 // Type-only mirrors of the host runtime registries for third-party plugins.
@@ -724,6 +1013,36 @@ export type {
   IPresenceEngineService,
   ITeachingCollaborationService,
   ILearningAnalyticsService,
+  IAICapabilityService,
+  ICapabilityRuntimeService,
+  ICapabilityGovernanceService,
+  IPlatformServiceRegistryService,
+  IAICapability,
+  CapabilityRegistry,
+  CapabilityMetadata,
+  ExtensionItemMetadata,
+  IPluginLifecycleManager,
+  IPluginCapabilityGateway,
+  IUnifiedExtensionRegistry,
+  PluginPackageMetadata,
+  IPluginRepositoryAdapter,
+  PluginUpdateOptions,
+  PluginUpdateResult,
+  IPluginDistributionManager,
+  PluginRuntimeComposition,
+  CoursewareRuntimeScript,
+  IRegisteredCoursewareRuntimeScript,
+  ICoursewareRuntimeScriptRegistry,
+  ClassroomLifecycleStage,
+  StageGuardResult,
+  ClassroomStageGuard,
+  IClassroomLifecycleService,
+  QuickActivityDescriptor,
+  IInteractionRuntimeService,
+  ClassroomCountdownDescriptor,
+  IClassroomCountdownService,
+  IntegrationHealthStatus,
+  IntegrationDescriptor,
   ActivityCategory,
   ActivityRole,
   ActivityDevice,
@@ -774,6 +1093,20 @@ export {
   IPresenceEngineServiceToken,
   ITeachingCollaborationServiceToken,
   ILearningAnalyticsServiceToken,
+  IAICapabilityServiceToken,
+  ICapabilityRuntimeServiceToken,
+  ICapabilityGovernanceServiceToken,
+  IPlatformServiceRegistryToken,
+  ICapabilityRegistryToken,
+  IPluginLifecycleManagerToken,
+  IPluginCapabilityGatewayToken,
+  IUnifiedExtensionRegistryToken,
+  IPluginDistributionManagerToken,
+  IPluginRuntimeCompositionToken,
+  ICoursewareRuntimeScriptRegistryToken,
+  IClassroomLifecycleServiceToken,
+  IInteractionRuntimeServiceToken,
+  IClassroomCountdownServiceToken,
   IActivityRegistryToken,
   IAuthSessionBridgeToken,
 };
