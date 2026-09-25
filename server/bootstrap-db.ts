@@ -49,12 +49,36 @@ export async function runStartupMigrations(db: MigrationDb): Promise<void> {
         student_id TEXT NOT NULL,
         class_id TEXT,
         lesson_id TEXT,
-        picked_time INTEGER NOT NULL
+        picked_time INTEGER NOT NULL,
+        rating TEXT,
+        score INTEGER DEFAULT 0,
+        reward_coins INTEGER DEFAULT 0,
+        difficulty TEXT
       );
     `);
+    const safeAddColumn = (sql: string) => {
+      try {
+        db.exec(sql);
+      } catch (err: any) {
+        // SQLite throws duplicate column error if column already exists
+        if (!err?.message?.includes('duplicate column')) {
+          // ignore expected column-exists error
+        }
+      }
+    };
+    safeAddColumn('ALTER TABLE student_rollcalls ADD COLUMN rating TEXT;');
+    safeAddColumn('ALTER TABLE student_rollcalls ADD COLUMN score INTEGER DEFAULT 0;');
+    safeAddColumn('ALTER TABLE student_rollcalls ADD COLUMN reward_coins INTEGER DEFAULT 0;');
+    safeAddColumn('ALTER TABLE student_rollcalls ADD COLUMN difficulty TEXT;');
     console.log('student_rollcalls table successfully ensured.');
+
+    // 确保 classroom_exit_tickets 表结构具备自适应梯级字段
+    safeAddColumn('ALTER TABLE classroom_exit_tickets ADD COLUMN core_answer TEXT;');
+    safeAddColumn('ALTER TABLE classroom_exit_tickets ADD COLUMN is_correct INTEGER DEFAULT 0;');
+    safeAddColumn('ALTER TABLE classroom_exit_tickets ADD COLUMN tier_level TEXT DEFAULT "passed";');
+    safeAddColumn('ALTER TABLE classroom_exit_tickets ADD COLUMN challenge_answer TEXT;');
   } catch (e) {
-    console.error('Error creating student_rollcalls table:', e);
+    console.error('Error ensuring student_rollcalls or classroom_exit_tickets table:', e);
   }
 
   // 站点信息设置表（站点名称、口号、Logo）

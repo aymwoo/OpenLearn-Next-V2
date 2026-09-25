@@ -874,7 +874,13 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const labId = classInfo ? classInfo.lab_id : null;
 
       const seats = kernelContainer.db
-        .prepare('SELECT * FROM student_seats WHERE class_id = ?')
+        .prepare(
+          `SELECT ss.class_id, ss.student_id, ss.lab_id, ss.row_idx, ss.col_idx,
+                  s.name AS student_name, s.student_number
+           FROM student_seats ss
+           LEFT JOIN students s ON ss.student_id = s.id
+           WHERE ss.class_id = ?`,
+        )
         .all(req.params.classId);
       res.json({ lab_id: labId, seats });
     } catch (e: any) {
@@ -1479,5 +1485,148 @@ export function registerRosterRoutes(ctx: ServerContext) {
     }
   });
 
-  // Docs APIs
+  // --- Smart Fair & Tiered Random Picker APIs ---
+
+  app.get('/api/classes/:classId/picker-candidates', requireAuth(), (req, res) => {
+    try {
+      const classId = req.params.classId;
+      const lessonId = req.query.lessonId as string | undefined;
+
+      const students = kernelContainer.db
+        .prepare(
+          `
+        SELECT 
+          s.id,
+          s.name,
+          s.email,
+          s.student_number,
+          COALESCE(term_rc.count, 0) as term_picked_count,
+          COALESCE(term_rc.coins, 0) as total_reward_coins,
+          term_rc.last_picked_time,
+          COALESCE(lesson_rc.count, 0) as lesson_picked_count,
+          COALESCE(sub.avg_score, 80) as avg_assignment_score
+        FROM class_students cs
+        JOIN students s ON cs.student_id = s.id
+        LEFT JOIN (
+          SELECT 
+            student_id, 
+            COUNT(*) as count, 
+            SUM(COALESCE(reward_coins, 0)) as coins,
+            MAX(picked_time) as last_picked_time
+          FROM student_rollcalls
+          WHERE class_id = ?
+          GROUP BY student_id
+        ) term_rc ON s.id = term_rc.student_id
+        LEFT JOIN (
+          SELECT 
+            student_id, 
+            COUNT(*) as count
+          FROM student_rollcalls
+          WHERE class_id = ? AND lesson_id = ?
+          GROUP BY student_id
+        ) lesson_rc ON s.id = lesson_rc.student_id
+        LEFT JOIN (
+          SELECT 
+            student_id, 
+            AVG(score) as avg_score
+          FROM assignment_submissions
+          WHERE score IS NOT NULL
+          GROUP BY student_id
+        ) sub ON s.id = sub.student_id
+        WHERE cs.class_id = ?
+        ORDER BY s.student_number ASC, s.name ASC
+      `,
+        )
+        .all(classId, classId, lessonId || '', classId) as any[];
+
+      // Compute tiered recommendations
+      const candidates = students.map((s) => {
+        let tier: 'basic' | 'intermediate' | 'advanced' = 'intermediate';
+        if (s.avg_assignment_score < 70 || s.term_picked_count === 0) {
+          tier = 'basic';
+        } else if (s.avg_assignment_score >= 88 && s.term_picked_count >= 1) {
+          tier = 'advanced';
+        }
+        return {
+          id: s.id,
+          name: s.name,
+          email: s.email,
+          student_number: s.student_number,
+          term_picked_count: s.term_picked_count,
+          lesson_picked_count: s.lesson_picked_count,
+          last_picked_time: s.last_picked_time,
+          total_reward_coins: s.total_reward_coins,
+          tier,
+        };
+      });
+
+      res.json(candidates);
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  app.post('/api/rollcalls/evaluate', requireAuth(), (req, res) => {
+    try {
+      const {
+        id,
+        studentId,
+        studentName,
+        classId,
+        lessonId,
+        rating,
+        score = 0,
+        rewardCoins = 0,
+        difficulty = 'intermediate',
+      } = req.body;
+
+      if (!studentId) {
+        return res.status(400).json({ error: 'studentId is required' });
+      }
+
+      const rollcallId = id || `rollcall-${studentId}-${Date.now()}`;
+      const now = Date.now();
+
+      // Upsert into student_rollcalls
+      kernelContainer.db
+        .prepare(
+          `
+        INSERT INTO student_rollcalls (id, student_id, class_id, lesson_id, picked_time, rating, score, reward_coins, difficulty)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          rating = excluded.rating,
+          score = excluded.score,
+          reward_coins = excluded.reward_coins,
+          difficulty = excluded.difficulty
+      `,
+        )
+        .run(rollcallId, studentId, classId || null, lessonId || null, now, rating, score, rewardCoins, difficulty);
+
+      const payload = {
+        rollcallId,
+        studentId,
+        studentName,
+        classId,
+        lessonId,
+        rating,
+        score,
+        rewardCoins,
+        difficulty,
+        timestamp: now,
+      };
+
+      if (io) {
+        io.emit('rollcall:evaluated', payload);
+        io.emit('student:coins_awarded', {
+          studentId,
+          coins: rewardCoins,
+          reason: `课堂抽问答对激励 (${rating})`,
+        });
+      }
+
+      res.json({ success: true, rollcall: payload });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
 }
