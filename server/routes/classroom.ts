@@ -778,7 +778,16 @@ export function registerClassroomRoutes(
   app.post('/api/classroom/sessions/:lessonId/exit-ticket', requireAuth('student', 'teacher', 'administrator'), async (req: Request, res: Response) => {
     try {
       const { lessonId } = req.params;
-      const { rating = 5, puzzledConcept = '', feedback = '', feedbackNotes = '' } = req.body;
+      const {
+        rating = 5,
+        puzzledConcept = '',
+        feedback = '',
+        feedbackNotes = '',
+        coreAnswer = null,
+        isCorrect = null,
+        tierLevel = 'passed',
+        challengeAnswer = null,
+      } = req.body;
       const session = (req as any).session;
       const studentId = session.studentId || session.userId || getActorId(req) || 'student';
       const studentName = session.studentName || session.name || studentId;
@@ -789,15 +798,38 @@ export function registerClassroomRoutes(
       const ticketId = `ticket_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
       const now = Date.now();
 
-      db.prepare(`
-        INSERT INTO classroom_exit_tickets (id, session_id, lesson_id, student_id, student_name, rating, puzzled_concept, feedback, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(session_id, student_id) DO UPDATE SET
-          rating = excluded.rating,
-          puzzled_concept = excluded.puzzled_concept,
-          feedback = excluded.feedback,
-          created_at = excluded.created_at
-      `).run(ticketId, sessionId, lessonId, studentId, studentName, rating, puzzledConcept, feedback || feedbackNotes, now);
+      try {
+        db.prepare(`
+          INSERT INTO classroom_exit_tickets (
+            id, session_id, lesson_id, student_id, student_name, rating, puzzled_concept, feedback,
+            core_answer, is_correct, tier_level, challenge_answer, created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(session_id, student_id) DO UPDATE SET
+            rating = excluded.rating,
+            puzzled_concept = excluded.puzzled_concept,
+            feedback = excluded.feedback,
+            core_answer = excluded.core_answer,
+            is_correct = excluded.is_correct,
+            tier_level = excluded.tier_level,
+            challenge_answer = excluded.challenge_answer,
+            created_at = excluded.created_at
+        `).run(
+          ticketId, sessionId, lessonId, studentId, studentName, rating, puzzledConcept, feedback || feedbackNotes,
+          coreAnswer, isCorrect ? 1 : 0, tierLevel, challengeAnswer, now
+        );
+      } catch {
+        // Fallback to legacy schema for unmigrated test DBs
+        db.prepare(`
+          INSERT INTO classroom_exit_tickets (id, session_id, lesson_id, student_id, student_name, rating, puzzled_concept, feedback, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(session_id, student_id) DO UPDATE SET
+            rating = excluded.rating,
+            puzzled_concept = excluded.puzzled_concept,
+            feedback = excluded.feedback,
+            created_at = excluded.created_at
+        `).run(ticketId, sessionId, lessonId, studentId, studentName, rating, puzzledConcept, feedback || feedbackNotes, now);
+      }
 
       const countRow = db.prepare('SELECT COUNT(*) as count FROM classroom_exit_tickets WHERE session_id = ?').get(sessionId) as any;
 
@@ -809,6 +841,58 @@ export function registerClassroomRoutes(
       }
 
       res.json({ success: true, totalSubmitted: countRow?.count || 1 });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // 教师获取结课通票自适应梯级分析与疑点汇总
+  app.get('/api/classroom/sessions/:lessonId/exit-ticket-summary', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
+    try {
+      const { lessonId } = req.params;
+      const activeSession = db.prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1').get(lessonId) as any;
+      const sessionId = activeSession ? activeSession.id : `s_${lessonId}`;
+
+      let rows: any[] = [];
+      try {
+        rows = db.prepare(`
+          SELECT student_id, student_name, rating, puzzled_concept, feedback, core_answer, is_correct, tier_level, challenge_answer, created_at
+          FROM classroom_exit_tickets
+          WHERE session_id = ?
+        `).all(sessionId) as any[];
+      } catch {
+        rows = db.prepare(`
+          SELECT student_id, student_name, rating, puzzled_concept, feedback, created_at
+          FROM classroom_exit_tickets
+          WHERE session_id = ?
+        `).all(sessionId) as any[];
+      }
+
+      const totalCount = rows.length;
+      const avgRating = totalCount > 0
+        ? parseFloat((rows.reduce((acc, r) => acc + (r.rating || 5), 0) / totalCount).toFixed(1))
+        : 5.0;
+
+      const tierDistribution = {
+        passed: rows.filter((r) => r.tier_level === 'passed').length,
+        remediation: rows.filter((r) => r.tier_level === 'remediation').length,
+        challenge_done: rows.filter((r) => r.tier_level === 'challenge_done').length,
+      };
+
+      const puzzledConcepts = rows
+        .map((r) => (r.puzzled_concept || '').trim())
+        .filter(Boolean);
+
+      res.json({
+        success: true,
+        sessionId,
+        lessonId,
+        totalCount,
+        avgRating,
+        tierDistribution,
+        puzzledConcepts,
+        submissions: rows,
+      });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

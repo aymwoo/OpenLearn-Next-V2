@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { StudentCountdownBanner } from './StudentCountdownBanner';
+import { AdaptiveExitTicketModal } from '../classroom/exit-ticket/AdaptiveExitTicketModal';
 
 export interface StudentInteractiveOverlayProps {
   lessonId: string | null;
@@ -315,82 +316,17 @@ export function StudentInteractiveOverlay({
         </div>
       )}
 
-      {/* 60s 结课通票模态框 */}
-      {isExitTicketOpen && !exitTicketSubmitted && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-surface rounded-3xl border border-indigo-500/40 p-6 w-full max-w-md shadow-2xl flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-border/80 pb-3">
-              <div className="flex items-center gap-2 text-indigo-500 font-extrabold text-base">
-                <CheckCircle2 size={20} />
-                <span>{lang === 'zh' ? '60 秒结课通票 (Exit Ticket)' : '60s Exit Ticket'}</span>
-              </div>
-              <button
-                onClick={() => setIsExitTicketOpen(false)}
-                className="text-muted hover:text-foreground rounded-lg p-1 cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-foreground">
-                {lang === 'zh' ? '1. 对今天课堂知识的掌握程度' : 'Rate Today Lesson'}
-              </label>
-              <div className="flex items-center gap-2 my-1">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    onClick={() => setRating(star)}
-                    className="p-1 text-2xl transition-transform hover:scale-125 cursor-pointer"
-                  >
-                    <Star
-                      size={24}
-                      className={star <= rating ? 'text-amber-400 fill-amber-400' : 'text-border'}
-                    />
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-foreground">
-                {lang === 'zh' ? '2. 今天最困惑或没听懂的概念是什么？' : 'Most Confused Concept'}
-              </label>
-              <input
-                type="text"
-                value={puzzledConcept}
-                onChange={(e) => setPuzzledConcept(e.target.value)}
-                placeholder="例如：向心加速度公式推导..."
-                className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-foreground">
-                {lang === 'zh' ? '3. 给老师的一句小建议 (选填)' : 'Feedback (Optional)'}
-              </label>
-              <textarea
-                rows={2}
-                value={feedbackNotes}
-                onChange={(e) => setFeedbackNotes(e.target.value)}
-                placeholder="例如：希望实验演示时间更充裕..."
-                className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-xl text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 resize-none"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={submitExitTicket}
-                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors cursor-pointer shadow-md"
-              >
-                {lang === 'zh' ? '提交结课通票' : 'Submit Exit Ticket'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 60s 自适应结课通票模态框 */}
+      <AdaptiveExitTicketModal
+        isOpen={isExitTicketOpen && !exitTicketSubmitted}
+        onClose={() => setIsExitTicketOpen(false)}
+        lessonId={lessonId}
+        studentName={studentName}
+        lang={lang}
+        onSubmitSuccess={() => {
+          setExitTicketSubmitted(true);
+        }}
+      />
     </>
   );
 }

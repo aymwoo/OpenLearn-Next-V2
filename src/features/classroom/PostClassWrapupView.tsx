@@ -20,6 +20,9 @@ import {
 } from 'lucide-react';
 import { TeacherAssignmentGradePanel } from '../../components/TeacherAssignmentGradePanel';
 import type { StudentType } from '../../types/app';
+import { ConceptWordcloudPanel } from './exit-ticket/ConceptWordcloudPanel';
+import { KnowledgeTreeLightingModal } from './exit-ticket/KnowledgeTreeLightingModal';
+import { clusterPuzzledConcepts } from './exit-ticket/concept-clustering-engine';
 
 export interface PostClassWrapupViewProps {
   selectedLesson: string | null;
@@ -67,6 +70,13 @@ export function PostClassWrapupView({
     count: 0,
     topConcepts: ['公式推导步骤', '动量与能量转化边界', '单位换算'],
   });
+  const [isKnowledgeTreeOpen, setIsKnowledgeTreeOpen] = useState(false);
+  const [rawPuzzledConcepts, setRawPuzzledConcepts] = useState<string[]>([]);
+  const [tierDistribution, setTierDistribution] = useState({
+    passed: 16,
+    remediation: 5,
+    challenge_done: 9,
+  });
 
   // Homework form state
   const [homeworkTitle, setHomeworkTitle] = useState(
@@ -98,8 +108,31 @@ export function PostClassWrapupView({
           }
         })
         .catch(() => {});
+
+      fetch(`/api/classroom/sessions/${selectedLesson}/exit-ticket-summary`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.success) {
+            if (data.tierDistribution) setTierDistribution(data.tierDistribution);
+            if (data.puzzledConcepts && data.puzzledConcepts.length > 0) {
+              setRawPuzzledConcepts(data.puzzledConcepts);
+            }
+            if (data.totalCount !== undefined) {
+              setExitTicketStats((prev) => ({
+                ...prev,
+                count: data.totalCount,
+                avgRating: data.avgRating || prev.avgRating,
+              }));
+            }
+          }
+        })
+        .catch(() => {});
     }
   }, [selectedLesson]);
+
+  const clusteredConcepts = React.useMemo(() => {
+    return clusterPuzzledConcepts(rawPuzzledConcepts);
+  }, [rawPuzzledConcepts]);
 
   const handleSaveReflection = () => {
     if (selectedLesson) {
@@ -391,54 +424,20 @@ export function PostClassWrapupView({
 
         {activeTab === 'exitTicket' && (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 flex-1">
-            {/* Left Card (5 cols): Rating & stats */}
-            <div className="md:col-span-5 bg-surface rounded-2xl border border-theme p-5 shadow-sm flex flex-col gap-4">
-              <div className="flex items-center justify-between border-b border-theme pb-3">
-                <span className="text-xs font-black uppercase text-main tracking-wider flex items-center gap-1.5">
-                  <Star size={14} className="text-amber-500 fill-amber-500" />
-                  <span>{lang === 'zh' ? '60秒结课通票回收概况' : 'Exit Ticket Overview'}</span>
-                </span>
-                <span className="text-xs text-muted font-bold">{exitTicketStats.count} 份反馈</span>
-              </div>
-
-              <div className="p-4 bg-surface-secondary/70 rounded-2xl border border-theme/60 flex flex-col items-center justify-center text-center">
-                <span className="text-xs text-muted font-bold">{lang === 'zh' ? '全班掌握度综合评分' : 'Avg Comprehension'}</span>
-                <div className="text-4xl font-black text-amber-500 font-mono mt-1 flex items-center gap-1">
-                  <span>{exitTicketStats.avgRating}</span>
-                  <span className="text-xl text-amber-400">/ 5.0</span>
-                </div>
-                <div className="flex gap-1 mt-2">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <Star
-                      key={s}
-                      size={16}
-                      className={s <= Math.round(exitTicketStats.avgRating) ? 'text-amber-500 fill-amber-500' : 'text-slate-300'}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Puzzled Concepts */}
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-bold text-main flex items-center gap-1">
-                  <AlertTriangle size={13} className="text-rose-500" />
-                  <span>{lang === 'zh' ? '学生集中反馈的困惑概念' : 'Top Puzzled Concepts'}</span>
-                </span>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {exitTicketStats.topConcepts.map((c, i) => (
-                    <span
-                      key={i}
-                      className="px-3 py-1 bg-amber-500/10 text-amber-800 dark:text-amber-200 border border-amber-500/30 rounded-xl text-xs font-semibold"
-                    >
-                      📌 {c}
-                    </span>
-                  ))}
-                </div>
-              </div>
+            {/* Left Card (6 cols): Concept Wordcloud & Knowledge Tree Entrance */}
+            <div className="md:col-span-6 flex flex-col gap-4">
+              <ConceptWordcloudPanel
+                concepts={clusteredConcepts}
+                totalFeedbackCount={exitTicketStats.count}
+                avgRating={exitTicketStats.avgRating}
+                tierDistribution={tierDistribution}
+                onOpenKnowledgeTree={() => setIsKnowledgeTreeOpen(true)}
+                lang={lang}
+              />
             </div>
 
-            {/* Right Card (7 cols): Student Feedback Stream */}
-            <div className="md:col-span-7 bg-surface rounded-2xl border border-theme p-5 shadow-sm flex flex-col gap-3">
+            {/* Right Card (6 cols): Student Feedback Stream */}
+            <div className="md:col-span-6 bg-surface rounded-2xl border border-theme p-5 shadow-sm flex flex-col gap-3">
               <div className="flex items-center justify-between border-b border-theme pb-3">
                 <span className="text-xs font-black uppercase text-main tracking-wider flex items-center gap-1.5">
                   <MessageSquare size={14} className="text-primary-theme" />
@@ -555,6 +554,15 @@ export function PostClassWrapupView({
           </div>
         )}
       </div>
+
+      <KnowledgeTreeLightingModal
+        isOpen={isKnowledgeTreeOpen}
+        onClose={() => setIsKnowledgeTreeOpen(false)}
+        lessonTitle={lessonTitle}
+        className={className}
+        masteryPercent={Math.round((exitTicketStats.avgRating / 5) * 100)}
+        lang={lang}
+      />
     </div>
   );
 }
