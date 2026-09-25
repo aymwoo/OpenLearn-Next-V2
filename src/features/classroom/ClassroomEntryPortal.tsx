@@ -28,6 +28,7 @@ import {
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { useNetworkLatency } from '../../hooks/useNetworkLatency';
 import { fetchTeachingModes, teachingModeColor, type TeachingMode } from './teaching-modes-client';
+import { ComputerLabSeatingMap } from './ComputerLabSeatingMap';
 
 /**
  * ClassroomEntryPortal —— 互动课堂的起始门户（对应 Stitch「课程入口与班级选择门户」设计）。
@@ -505,7 +506,7 @@ function ClassroomDeck({
   selectedModeId: string | null;
   onSelectMode: (id: string) => void;
   modesLoading: boolean;
-  lang: string;
+  lang: 'zh' | 'en';
 }) {
   const zh = lang === 'zh';
   const onlineCount = students.filter((s) => onlineStudentIds.includes(s.id)).length;
@@ -515,7 +516,7 @@ function ClassroomDeck({
   return (
     <Deck
       step="02"
-      title={zh ? '挑选班级与分配沙箱算力' : 'Pick Class & Allocate Sandbox'}
+      title={zh ? '挑选授课班级' : 'Pick Class'}
       subtitle={zh ? '选择本节课面向的班级' : 'Choose the class for this session'}
       aside={
         <span className="text-2xs font-semibold text-muted inline-flex items-center gap-1.5">
@@ -562,29 +563,12 @@ function ClassroomDeck({
         )}
 
         {selectedClassId && (
-          <div className="bg-surface-secondary border border-theme rounded-xl p-3.5 flex flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-xs font-bold text-main flex items-center gap-1.5">
-                <LayoutGrid size={13} className="text-primary-theme" />
-                {zh ? '席位与硬件透视' : 'Seats & hardware'}
-              </span>
-              <div className="flex flex-wrap items-center gap-3 text-2xs text-muted">
-                <span className="inline-flex items-center gap-1 font-mono">
-                  <Wifi size={11} />
-                  {latencyMs === null ? '—' : `${latencyMs}ms`}
-                </span>
-                <span className="inline-flex items-center gap-1 font-mono">
-                  <Cpu size={11} />
-                  {readiness}%
-                </span>
-                <span className="inline-flex items-center gap-1 font-mono">
-                  <Users size={11} />
-                  {students.length} {zh ? '席' : 'seats'}
-                </span>
-              </div>
-            </div>
-            <SeatMatrix students={students} onlineStudentIds={onlineStudentIds} lang={lang} />
-          </div>
+          <ComputerLabSeatingMap
+            classId={selectedClassId}
+            students={students}
+            onlineStudentIds={onlineStudentIds}
+            lang={lang}
+          />
         )}
 
         <TeachingModeSelector
@@ -1000,7 +984,7 @@ export function ClassroomEntryPortal({
               selectedModeId={selectedModeId}
               onSelectMode={setSelectedModeId}
               modesLoading={modesLoading}
-              lang={lang}
+              lang={lang as 'zh' | 'en'}
             />
             <LaunchDeck
               lessonTitle={currentLesson?.title ?? ''}

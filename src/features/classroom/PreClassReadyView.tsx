@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Play,
   Users,
@@ -9,6 +9,7 @@ import {
   Bell,
   Shield,
   ShieldAlert,
+  ShieldCheck,
   ExternalLink,
   ListChecks,
   AlertCircle,
@@ -17,8 +18,12 @@ import {
   FileText,
   Volume2,
   HelpCircle,
+  QrCode,
+  KeyRound,
 } from 'lucide-react';
 import type { StudentType } from '../../types/app';
+import { PreClassDiagnosticHub } from './PreClassDiagnosticHub';
+import { PreflightHealthModal } from './PreflightHealthModal';
 
 export interface PreClassReadyViewProps {
   selectedLesson: string | null;
@@ -57,6 +62,24 @@ export function PreClassReadyView({
   addToast,
   onBroadcastNotice,
 }: PreClassReadyViewProps) {
+  const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
+  const [dynamicCode, setDynamicCode] = useState(() => Math.floor(1000 + Math.random() * 9000).toString());
+  const [codeCountdown, setCodeCountdown] = useState(5);
+
+  // 动态签到码每 5 秒平滑轮换更新，防代签
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCodeCountdown((prev) => {
+        if (prev <= 1) {
+          setDynamicCode(Math.floor(1000 + Math.random() * 9000).toString());
+          return 5;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Pre-flight preparation checklists
   const [checklist, setChecklist] = useState<Record<string, boolean>>({
     resources: true,
@@ -157,6 +180,19 @@ export function PreClassReadyView({
 
         {/* Action Controls */}
         <div className="flex items-center gap-2.5 flex-wrap w-full md:w-auto justify-end">
+          {/* Pre-flight Environmental Healthcheck Button */}
+          <button
+            id="pre-class-healthcheck-btn"
+            type="button"
+            onClick={() => setIsHealthModalOpen(true)}
+            className="px-3 py-2 text-xs font-bold rounded-xl border border-teal-500/30 bg-teal-50/60 dark:bg-teal-950/20 text-teal-700 dark:text-teal-300 hover:bg-teal-100/60 dark:hover:bg-teal-900/40 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+            title={lang === 'zh' ? '一键自检局域网延迟、课件与沙箱健康度' : 'Environmental Healthcheck'}
+          >
+            <ShieldCheck size={14} className="text-teal-600 dark:text-teal-400" />
+            <span>{lang === 'zh' ? '环境一键飞检' : 'Healthcheck'}</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          </button>
+
           <button
             id="pre-class-open-student-tab-btn"
             type="button"
@@ -199,8 +235,15 @@ export function PreClassReadyView({
 
       {/* 2. Main Content Grid: 2 Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
-        {/* Left Column (5 cols): Lesson Preparation & Checklist */}
+        {/* Left Column (5 cols): Diagnostic Hub & Checklist */}
         <div className="lg:col-span-5 flex flex-col gap-4">
+          {/* Pre-lesson Diagnostic Hub: Top 3 Mistake Concepts & Video Prep */}
+          <PreClassDiagnosticHub
+            lessonId={selectedLesson}
+            classId={selectedClassId}
+            lang={lang}
+          />
+
           {/* Card: Pre-flight Checklist */}
           <div className="bg-surface border border-theme rounded-2xl p-4 shadow-sm flex flex-col gap-3">
             <div className="flex items-center justify-between border-b border-theme pb-2.5">
@@ -359,6 +402,32 @@ export function PreClassReadyView({
               />
             </div>
 
+            {/* Dynamic Anti-Proxy OTP Checkin Banner */}
+            <div className="p-2.5 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-800/40 flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                  <KeyRound size={16} />
+                </div>
+                <div>
+                  <div className="font-bold text-main flex items-center gap-1.5">
+                    <span>{lang === 'zh' ? '防代签动态签到码' : 'Dynamic Check-in OTP'}</span>
+                    <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono font-bold">
+                      ({codeCountdown}s 后滚动)
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-muted">
+                    {lang === 'zh' ? '学生端在就绪屏输入该验证码或扫码即可秒就绪' : 'Students input code or scan to check in'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="px-3 py-1 bg-white dark:bg-slate-900 border-2 border-indigo-500 rounded-lg text-lg font-black font-mono text-indigo-600 dark:text-indigo-400 tracking-widest shadow-2xs">
+                  {dynamicCode}
+                </div>
+              </div>
+            </div>
+
             {/* Students Table / Grid */}
             <div className="max-h-[260px] overflow-y-auto border border-theme/70 rounded-xl divide-y divide-border/60 bg-surface-secondary/20">
               {students.length > 0 ? (
@@ -471,6 +540,14 @@ export function PreClassReadyView({
           </div>
         </div>
       </div>
+
+      <PreflightHealthModal
+        isOpen={isHealthModalOpen}
+        onClose={() => setIsHealthModalOpen(false)}
+        classId={selectedClassId}
+        className={className}
+        lang={lang}
+      />
     </div>
   );
 }
