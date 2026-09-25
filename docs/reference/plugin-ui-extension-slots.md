@@ -9,7 +9,7 @@
 
 ## 1. 完整扩展槽位清单
 
-### 前端 ExtensionSlot 联合类型（`src/plugin-host/types.ts:70-132`，共 53 个）
+### 前端 ExtensionSlot 联合类型（`src/plugin-host/types.ts:70-135`，共 55 个）
 
 ```typescript
 export type ExtensionSlot =
@@ -78,7 +78,10 @@ export type ExtensionSlot =
   | 'classroom.seating.legend'         // 座位图底部图例区追加
   | 'classroom.seating.seat_badge'     // 每个座位卡片内叠加徽章/图标
   | 'classroom.seating.seat_actions'   // 座位右键/长按菜单项
-  | 'classroom.seating.summary';       // 座位图底部汇总区追加统计卡片
+  | 'classroom.seating.summary'        // 座位图底部汇总区追加统计卡片
+  // ── 白板自动保存（v0.3.22 末 / 阶段1）──
+  | 'whiteboard.autosave.status'       // 白板自动保存状态指示区（同步状态、第三方云备份展示）
+  | 'whiteboard.autosave.action';      // 白板自动保存附加操作区（立即同步外部网盘、版本快照打标）
 
 // v0.2.6: 锚点槽位（开放命名空间）
 export type AnchorSlot = `anchor:${string}`;
@@ -139,9 +142,16 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `peer_review.badge`            | `src/features/classroom/peer-review/PeerReviewMatrixPanel.tsx`                                                  | 无（仅 `route?`）                |
 | `peer_review.action`           | `src/features/classroom/peer-review/PeerReviewLeaderboardPanel.tsx`、`PeerReviewTelemetryHeader.tsx`            | 无（仅 `route?`）                |
 | `peer_review.showcase.widget`  | `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`                                                 | 无（仅 `route?`）                |
+| `classroom.seating.toolbar`    | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                              | `{ classId, lab, stats }`        |
+| `classroom.seating.legend`     | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                              | `{ classId, stats }`             |
+| `classroom.seating.summary`    | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                              | `{ classId, stats }`             |
+| `classroom.seating.seat_badge` | `src/features/classroom/ComputerLabSeatingMap.tsx`（每个座位内渲染）                                             | `{ seat, student, isOnline, classId }` |
+| `whiteboard.autosave.status`   | `src/features/teacher/LessonEditorView.tsx`                                                                     | `{ lessonId, status, pendingCount, lastSavedTime }` |
+| `whiteboard.autosave.action`   | `src/features/teacher/LessonEditorView.tsx`                                                                     | `{ lessonId, flush, pendingCount }` |
 
 > `student.lesson.tool` / `teacher.panel` / `student.fullscreen` / `global.setting` / `nav.user_menu` / `editor.timeline_segment` / `editor.palette_item` / `classroom.header.action` / `classroom.barometer.metric` / `classroom.agenda.action` / `whiteboard.dock.plugin` / `whiteboard.canvas.widget` / `classroom.audit.event` 仅出现在 `ExtensionSlot` 联合类型中，**尚无渲染器挂载**，当前不会渲染任何内容。
-> `classroom.seating.*` 五个座位图槽位（v0.3.22 新增）**同样尚无渲染器挂载**（座位图前端读取 `computer_labs` / `student_seats` 表的能力在建设中）——插件可先行声明预留，但当前不会渲染。
+> `classroom.seating.*` 五个座位图槽位中 **4 个已挂载渲染器**（`ComputerLabSeatingMap.tsx`，见上表），仅 `classroom.seating.seat_actions`（座位右键菜单项）尚未挂载——声明后暂不渲染。
+> `whiteboard.autosave.status` / `whiteboard.autosave.action`（白板自动保存）已挂载渲染器（`LessonEditorView.tsx`），前端事件流经 `frontendEventBus` 的 `whiteboard.autosave.pending / saving / saved` 三态广播。
 > `help.plugin_docs` 有渲染器，但**不在** `ExtensionSlot` 联合类型内（以字符串字面量传入，其 prop 类型为 `ExtensionSlot | string`）。
 > `anchor:*`（v0.2.6+）为开放命名空间槽位，渲染器已挂载（`WhiteboardToolbar.tsx` 七个锚点），通过 `placement` prop 按侧过滤——`placement="before"` 只渲染声明 `'before'` 的扩展，`placement="after"` 只渲染声明 `'after'` 或未声明（默认）的扩展。同侧多插件按钮按 `position` 升序渲染（缺省 `100`）。锚点目录见 [`docs/plugin/anchor-slots.md`](../plugin/anchor-slots.md)。
 
