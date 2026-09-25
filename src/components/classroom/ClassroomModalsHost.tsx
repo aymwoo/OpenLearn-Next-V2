@@ -26,6 +26,7 @@ import { MasteryPredictionModal } from '../../features/classroom/pacing/MasteryP
 import { DiagnosticCenterModal } from '../../features/classroom/diagnostics/DiagnosticCenterModal';
 import { GroupCollabWhiteboardModal } from '../../features/classroom/collab-whiteboard/GroupCollabWhiteboardModal';
 import { ShowcaseDiffModal } from '../../features/classroom/showcase-diff/ShowcaseDiffModal';
+import { ClassroomMacroRunnerModal, HardwareBridgeSettingsModal } from '../../features/classroom/ecosystem';
 import type { ClassroomLiveData } from '../../features/classroom/hooks/useClassroomLiveData';
 
 type ToastFn = (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
@@ -87,6 +88,12 @@ export interface ClassroomModalsHostProps {
   // ── 多屏对比投屏批注 ──
   isShowcaseDiffOpen?: boolean;
   onCloseShowcaseDiff?: () => void;
+
+  // ── 课堂宏动作与硬件教具 ──
+  isMacroRunnerOpen?: boolean;
+  onCloseMacroRunner?: () => void;
+  isHardwareSettingsOpen?: boolean;
+  onCloseHardwareSettings?: () => void;
 }
 
 export const ClassroomModalsHost: React.FC<ClassroomModalsHostProps> = ({
@@ -119,6 +126,10 @@ export const ClassroomModalsHost: React.FC<ClassroomModalsHostProps> = ({
   onCloseGroupCollab,
   isShowcaseDiffOpen,
   onCloseShowcaseDiff,
+  isMacroRunnerOpen,
+  onCloseMacroRunner,
+  isHardwareSettingsOpen,
+  onCloseHardwareSettings,
 }) => {
   const now = Date.now();
 
@@ -262,6 +273,20 @@ export const ClassroomModalsHost: React.FC<ClassroomModalsHostProps> = ({
         }))}
         addToast={addToast}
         lang={lang}
+      />
+
+      {/* ── 课堂宏动作编排中枢 (Classroom Action Macros) ── */}
+      <ClassroomMacroRunnerModal
+        isOpen={Boolean(isMacroRunnerOpen)}
+        onClose={onCloseMacroRunner ?? (() => {})}
+        addToast={addToast}
+      />
+
+      {/* ── 硬件教具生态标准化网关设置 (Hardware Bridge) ── */}
+      <HardwareBridgeSettingsModal
+        isOpen={Boolean(isHardwareSettingsOpen)}
+        onClose={onCloseHardwareSettings ?? (() => {})}
+        addToast={addToast}
       />
     </>
   );

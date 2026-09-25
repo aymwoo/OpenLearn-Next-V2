@@ -46,6 +46,7 @@ import { ClassroomCountdownWidget } from '../features/classroom/ClassroomCountdo
 import { useClassroomLiveData } from '../features/classroom/hooks/useClassroomLiveData';
 import { ClassroomModalsHost } from './classroom/ClassroomModalsHost';
 import { usePeerReviewData } from '../features/classroom/hooks/usePeerReviewData';
+import { EdgeLanStatusIndicator } from '../features/classroom/ecosystem';
 
 
 // Dynamic Icon component to render Lucide icons by name string
@@ -165,6 +166,8 @@ export function LiveClassroomView({
   const [isDiagnosticCenterOpen, setIsDiagnosticCenterOpen] = useState(false);
   const [isGroupCollabOpen, setIsGroupCollabOpen] = useState(false);
   const [isShowcaseDiffOpen, setIsShowcaseDiffOpen] = useState(false);
+  const [isMacroRunnerOpen, setIsMacroRunnerOpen] = useState(false);
+  const [isHardwareSettingsOpen, setIsHardwareSettingsOpen] = useState(false);
   /** 真实开课时间（来自 classroom_sessions.started_at），用于计算已用时长 */
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
   /** 真实课件作答记录（用于成绩/完成度/行为标签派生） */
@@ -1112,6 +1115,23 @@ export function LiveClassroomView({
             >
               ✉️ {lang === 'zh' ? '家校通知' : 'Notify'}
             </button>
+            <button
+              id="btn-open-classroom-macros"
+              onClick={() => setIsMacroRunnerOpen(true)}
+              className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title={lang === 'zh' ? '课堂宏动作编排中枢 (Classroom Action Macros)' : 'Action Macros'}
+            >
+              ⚡ {lang === 'zh' ? '课堂宏' : 'Macros'}
+            </button>
+            <button
+              id="btn-open-hardware-bridge"
+              onClick={() => setIsHardwareSettingsOpen(true)}
+              className="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title={lang === 'zh' ? '硬件教具生态标准化网关设置' : 'Hardware Bridge'}
+            >
+              🎛️ {lang === 'zh' ? '硬件网关' : 'Hardware'}
+            </button>
+            <EdgeLanStatusIndicator className="ml-1" />
           </div>
         </div>
       </div>
@@ -2321,6 +2341,10 @@ export function LiveClassroomView({
         onCloseGroupCollab={() => setIsGroupCollabOpen(false)}
         isShowcaseDiffOpen={isShowcaseDiffOpen}
         onCloseShowcaseDiff={() => setIsShowcaseDiffOpen(false)}
+        isMacroRunnerOpen={isMacroRunnerOpen}
+        onCloseMacroRunner={() => setIsMacroRunnerOpen(false)}
+        isHardwareSettingsOpen={isHardwareSettingsOpen}
+        onCloseHardwareSettings={() => setIsHardwareSettingsOpen(false)}
       />
     </div>
   );

@@ -1,0 +1,111 @@
+import type { MacroPreset } from '../types';
+
+export const CLASSROOM_MACRO_PRESETS: MacroPreset[] = [
+  {
+    id: 'MACRO_BURST_QUIZ',
+    name: '3分钟随堂突击检测',
+    description: '自动触发：全屏锁定学生机 ➔ 推送检测练习 ➔ 启动倒计时 ➔ 切大屏动态榜 ➔ 自动收卷',
+    icon: '⚡',
+    category: 'evaluation',
+    estimatedSeconds: 180,
+    steps: [
+      {
+        id: 'step-1',
+        title: '广播随堂检测就绪指令',
+        description: '向全班学生机发送高优先级通知，预热随堂检测环境。',
+        actionType: 'BROADCAST_NOTIFICATION',
+        payload: { message: '随堂突击检测开始，请迅速就位作答！' },
+      },
+      {
+        id: 'step-2',
+        title: '锁定学生端全屏作答',
+        description: '学生机屏幕自动进入全屏防切屏作答模式。',
+        actionType: 'LOCK_STUDENT_SCREENS',
+        payload: { locked: true, reason: 'burst_quiz' },
+      },
+      {
+        id: 'step-3',
+        title: '启动 180 秒倒计时总线',
+        description: '下发全班倒计时并在大屏与学生端同步显示。',
+        actionType: 'START_COUNTDOWN',
+        payload: { durationSeconds: 180 },
+      },
+      {
+        id: 'step-4',
+        title: '大屏切至 Top Performers 动态榜',
+        description: '主屏展示实时答题进度与排行榜，营造积极竞争氛围。',
+        actionType: 'NAVIGATE_VIEW',
+        payload: { target: 'top_performers_leaderboard' },
+      },
+      {
+        id: 'step-5',
+        title: '倒计时结束自动收卷与正答分析',
+        description: '时间截止后自动提交所有未完成答卷并弹出正答率简报。',
+        actionType: 'AUTO_COLLECT_QUIZ',
+        payload: { autoSubmit: true },
+      },
+    ],
+  },
+  {
+    id: 'MACRO_BREAKOUT_SYNC',
+    name: '小组探究收口与画廊互评',
+    description: '自动触发：广播讨论结束 ➔ 冻结小组画布 ➔ 弹出画廊互评展台 ➔ 开启 2 分钟点赞送花',
+    icon: '🎨',
+    category: 'collaboration',
+    estimatedSeconds: 120,
+    steps: [
+      {
+        id: 'step-1',
+        title: '广播探究收口指令',
+        description: '提示各小组停笔，准备进行班级成果互评。',
+        actionType: 'BROADCAST_NOTIFICATION',
+        payload: { message: '小组探究时间到，准备进入画廊互评！' },
+      },
+      {
+        id: 'step-2',
+        title: '冻结子画布编辑并同步成果',
+        description: '将各小组白板切至只读状态并向服务器提交最新画布快照。',
+        actionType: 'LOCK_STUDENT_SCREENS',
+        payload: { subCanvasReadOnly: true },
+      },
+      {
+        id: 'step-3',
+        title: '弹出全班画廊互评展台 (Gallery Walk)',
+        description: '主屏 4~6 组探究成果并排陈列，学生端进入互评送花界面。',
+        actionType: 'OPEN_GALLERY_WALK',
+        payload: { durationSeconds: 120 },
+      },
+    ],
+  },
+  {
+    id: 'MACRO_FOCUS_SILENCE',
+    name: '全员专注静默与黑板聚焦',
+    description: '自动触发：全屏锁定学生机画面 ➔ 提示视线回黑板 ➔ 教师白板高亮放大解题焦点',
+    icon: '🎯',
+    category: 'focus',
+    estimatedSeconds: 30,
+    steps: [
+      {
+        id: 'step-1',
+        title: '全员视线聚焦回黑板提示',
+        description: '向全班机房学生下发视线回拢广播。',
+        actionType: 'BROADCAST_NOTIFICATION',
+        payload: { message: '请同学们暂停操作，视线聚焦到主屏黑板！' },
+      },
+      {
+        id: 'step-2',
+        title: '全屏遮罩锁定学生终端操作',
+        description: '防止学生分心，强制统一课堂视线焦点。',
+        actionType: 'LOCK_STUDENT_SCREENS',
+        payload: { blackout: true },
+      },
+      {
+        id: 'step-3',
+        title: '教师白板高亮核心推导区域',
+        description: '白板自动居中并放大关键板书。',
+        actionType: 'HIGHLIGHT_WHITEBOARD',
+        payload: { zoomScale: 1.25 },
+      },
+    ],
+  },
+];
