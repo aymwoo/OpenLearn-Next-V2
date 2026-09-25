@@ -17,9 +17,18 @@ import {
   Lightbulb,
   ChevronRight,
   Filter,
+  FileText,
 } from 'lucide-react';
 import type { StudentType } from '../../types/app';
 import { escapeCSV } from '../../services/gradeReportService';
+import {
+  generateCoPilotReflection,
+  buildFollowupTiers,
+  generateStudentPersonalDigest,
+  DifferentiatedFollowupHub,
+  StudentLearningDigestModal,
+} from './post-class';
+import type { StudentPersonalDigest } from './post-class';
 
 export interface ClassroomBriefingViewProps {
   selectedLesson: string | null;
@@ -48,6 +57,7 @@ export function ClassroomBriefingView({
   const [searchQuery, setSearchQuery] = useState('');
   const [reportData, setReportData] = useState<any>(null);
   const [pacingData, setPacingData] = useState({ TOO_FAST: 1, CONFUSED: 3, CLEAR: 18 });
+  const [selectedStudentForDigest, setSelectedStudentForDigest] = useState<StudentPersonalDigest | null>(null);
 
   useEffect(() => {
     if (!selectedLesson) return;
@@ -137,6 +147,24 @@ export function ClassroomBriefingView({
     r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     r.studentNumber.toLowerCase().includes(searchQuery.toLowerCase()),
   );
+
+  // 教学副驾反思与量化归因计算
+  const reflectionReport = useMemo(() => {
+    return generateCoPilotReflection({
+      lessonTitle: lessonTitle || '当堂课节',
+      durationMin,
+      totalStudents,
+      quizAccuracy,
+      interactiveCount: pollVotes,
+      pacingData,
+      primaryPuzzledConcept: reportData?.metrics?.topPuzzledConcept || '核心公式与变式应用',
+    });
+  }, [lessonTitle, durationMin, totalStudents, quizAccuracy, pollVotes, pacingData, reportData]);
+
+  // 差异化课后分流计算
+  const initialTiers = useMemo(() => {
+    return buildFollowupTiers(studentRecords, lessonTitle || '本节课');
+  }, [studentRecords, lessonTitle]);
 
   const handleExportBriefingCSV = () => {
     const headers = [
@@ -361,55 +389,100 @@ export function ClassroomBriefingView({
 
         {/* Right Column (7 cols): AI Insights & Teaching Reflections */}
         <div className="lg:col-span-7 bg-surface rounded-2xl border border-theme p-5 shadow-sm flex flex-col gap-4">
-          <div className="flex items-center justify-between border-b border-theme pb-3">
+          <div className="flex flex-wrap items-center justify-between border-b border-theme pb-3 gap-2">
             <span className="text-xs font-black uppercase text-main tracking-wider flex items-center gap-1.5">
               <Lightbulb size={14} className="text-indigo-500" />
-              <span>{lang === 'zh' ? 'AI 智能学情诊断与教学反思建议' : 'AI Teaching Reflection & Insights'}</span>
+              <span>{lang === 'zh' ? 'AI 教学副驾反思建议 (Teaching Co-Pilot)' : 'AI Teaching Reflection & Insights'}</span>
             </span>
-            <span className="text-xs px-2 py-0.5 bg-indigo-500/10 text-indigo-600 rounded-full font-bold">
-              {lang === 'zh' ? '基于全班课堂实时数据生成' : 'Generated from live telemetry'}
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                reflectionReport.lectureRatio > reflectionReport.recommendedLectureMaxRatio
+                  ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
+                  : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+              }`}>
+                讲授用时 {reflectionReport.lectureRatio}%
+              </span>
+              <span className="text-[11px] px-2 py-0.5 bg-primary-theme/10 text-primary-theme rounded-full font-bold border border-primary-theme/20">
+                互动覆盖率 {reflectionReport.interactionCoverage}%
+              </span>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-3 text-xs leading-relaxed">
-            <div className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col gap-1">
-              <span className="font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                <CheckCircle2 size={13} />
-                <span>{lang === 'zh' ? '课堂亮点 (Strengths)' : 'Key Highlights'}</span>
-              </span>
-              <p className="text-muted">
-                {lang === 'zh'
-                  ? '教学重难点在白板演示与探究环节中分解清晰，全班在随堂单选题投票中展现出高达 92% 的概念迁移率；抢答与随机抽查互动活跃，后排学生专注度显著提升。'
-                  : 'High concept retention demonstrated in poll results. Active engagement from student buzzer participation.'}
-              </p>
-            </div>
+          <div className="flex flex-col gap-3 text-xs leading-relaxed max-h-[460px] overflow-y-auto pr-1">
+            {/* 亮点 Strengths */}
+            {reflectionReport.strengths.map((str, idx) => (
+              <div key={idx} className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                    <CheckCircle2 size={13} />
+                    <span>{str.title}</span>
+                  </span>
+                  {str.metricTag && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 rounded">
+                      {str.metricTag}
+                    </span>
+                  )}
+                </div>
+                <p className="text-muted">{str.description}</p>
+              </div>
+            ))}
 
-            <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 flex flex-col gap-1">
-              <span className="font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1">
-                <AlertTriangle size={13} />
-                <span>{lang === 'zh' ? '疑难诊断与薄弱点 (Bottlenecks)' : 'Areas to Reinforce'}</span>
-              </span>
-              <p className="text-muted">
-                {lang === 'zh'
-                  ? '结课通票显示有 15% 的同学在“公式推导步骤第3步的符号转换”上出现认知停滞；晴雨表反映授课第 25 分钟环节节奏稍快，需在下节课伊始预留 3 分钟做概念温故。'
-                  : 'Formula derivation step 3 flagged by 15% of students in exit tickets as requiring targeted review.'}
-              </p>
-            </div>
+            {/* 瓶颈归因 Bottlenecks */}
+            {reflectionReport.bottlenecks.map((btn, idx) => (
+              <div key={idx} className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                    <AlertTriangle size={13} />
+                    <span>{btn.title}</span>
+                  </span>
+                  {btn.metricTag && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 bg-amber-500/15 text-amber-700 dark:text-amber-300 rounded">
+                      {btn.metricTag}
+                    </span>
+                  )}
+                </div>
+                <p className="text-muted">{btn.description}</p>
+                <div className="text-[11px] text-amber-800 dark:text-amber-300/80 bg-amber-500/10 p-2 rounded-lg font-mono">
+                  💡 量化归因: {btn.attribution}
+                </div>
+              </div>
+            ))}
 
-            <div className="p-3.5 rounded-xl bg-indigo-500/5 border border-indigo-500/20 flex flex-col gap-1">
-              <span className="font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1">
-                <Lightbulb size={13} />
-                <span>{lang === 'zh' ? '分层辅导建议 (Actionable Next Steps)' : 'Action Items'}</span>
-              </span>
-              <p className="text-muted">
-                {lang === 'zh'
-                  ? '建议为测验得分低于 85 分的同学推送 2 道自适应微练习；对表现优秀的同学可开放拓展探究实验卡，进一步发展高阶探究能力。'
-                  : 'Assign 2 adaptive practice problems to students scoring under 85. Provide challenge task for top students.'}
-              </p>
-            </div>
+            {/* 下一课时策略 Action Items */}
+            {reflectionReport.actionableSuggestions.map((act, idx) => (
+              <div key={idx} className="p-3.5 rounded-xl bg-indigo-500/5 border border-indigo-500/20 flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1">
+                    <Lightbulb size={13} />
+                    <span>{act.title}</span>
+                  </span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.2 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 rounded">
+                    {act.timing === 'next_pre_class'
+                      ? '下节课前预热'
+                      : act.timing === 'next_in_class'
+                        ? '课中环节调整'
+                        : '课后分流巩固'}
+                  </span>
+                </div>
+                <p className="text-muted">{act.suggestion}</p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
+
+      {/* 3.5 差异化课后巩固派发中枢 (Differentiated Follow-up Hub) */}
+      <DifferentiatedFollowupHub
+        initialTiers={initialTiers}
+        lessonTitle={lessonTitle}
+        onSelectStudent={(stId) => {
+          const raw = studentRecords.find((s) => s.id === stId);
+          if (raw) {
+            setSelectedStudentForDigest(generateStudentPersonalDigest(raw, lessonTitle, className));
+          }
+        }}
+        addToast={addToast}
+      />
 
       {/* 4. Student Performance Roster Table */}
       <div className="bg-surface rounded-2xl border border-theme p-4 shadow-sm flex flex-col gap-3">
@@ -447,6 +520,7 @@ export function ClassroomBriefingView({
                 <th className="p-3 text-center">{lang === 'zh' ? '掌握度评分' : 'Rating'}</th>
                 <th className="p-3">{lang === 'zh' ? '学情评定' : 'Rating Tier'}</th>
                 <th className="p-3">{lang === 'zh' ? '个性化建议' : 'Recommendation'}</th>
+                <th className="p-3 text-center">{lang === 'zh' ? '个人报告' : 'Digest'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -480,12 +554,33 @@ export function ClassroomBriefingView({
                     </span>
                   </td>
                   <td className="p-3 text-muted text-[11px] truncate max-w-xs">{r.note}</td>
+                  <td className="p-3 text-center">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedStudentForDigest(
+                          generateStudentPersonalDigest(r, lessonTitle, className),
+                        )
+                      }
+                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-theme bg-surface hover:bg-primary-theme hover:text-white transition-colors cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                    >
+                      <FileText size={11} />
+                      <span>{lang === 'zh' ? '查看' : 'View'}</span>
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* 学生个人课节报告与家长同步卡片弹窗 */}
+      <StudentLearningDigestModal
+        digest={selectedStudentForDigest}
+        onClose={() => setSelectedStudentForDigest(null)}
+        addToast={addToast}
+      />
     </div>
   );
 }
