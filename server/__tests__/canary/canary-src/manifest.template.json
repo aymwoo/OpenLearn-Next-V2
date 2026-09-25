@@ -1,0 +1,13 @@
+{
+  "id": "ext-canary",
+  "name": "金丝雀探针插件",
+  "version": "1.0.0",
+  "main": "index.js",
+  "engines": { "openlearn": ">=0.3.0" },
+  "capabilitiesProposed": [],
+  "api": {
+    "routes": [
+      { "method": "GET", "path": "/status", "auth": true }
+    ]
+  }
+}

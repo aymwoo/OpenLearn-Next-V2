@@ -230,7 +230,7 @@ manifest 以独立文件写入 ZIP 根（宿主 `zip.file('manifest.json')` 读�
 
 | 步 | 内容 | 验证点 |
 |---|---|---|
-| 1 | builder 骨架 + 最小合法 ZIP 打通安装闭环（R2） | 上传 → 激活 inline → `/status` 200 |
+| 1 | ✅ builder 骨架 + 最小合法 ZIP 打通安装闭环（R2 已排除） | 上传 → 激活 inline → `/status` 200（`canary.step1.test.ts` 4/4） |
 | 2 | activate 骨架完整化（探针结果落表 + /probes） | GET /probes 返回首批结果 |
 | 3 | 主矩阵（expectations.ts + canary.e2e.test.ts 双模式） | 85 用例全绿 |
 | 4 | 毒丸矩阵（8 变体） | 逐条拒绝文案比对 |
@@ -275,6 +275,10 @@ manifest 以独立文件写入 ZIP 根（宿主 `zip.file('manifest.json')` 读�
 4. **5.3** 命令式注册但 manifest 未声明的端点的网关语义
 5. **5.x** SEC 报错文案 inline/worker 两套不一致（4.3）
 6. **2.5** `IClassroomCountdownServiceToken` 无实现无注册（已在 di-tokens.md 标注勿用）
+7. **步骤 1 实测**：`NODE_ENV=test` 时激活退化为 data: URL 加载，无法解析 external 的 `@openlearn/*` 导入（plugin-host/index.ts:1235 分支）——测试必须显式切 `NODE_ENV='production'` 复现生产行为；测试环境与生产行为存在此分叉
+8. **步骤 1 实测**：ZIP 安装插件的 `ctx.pluginId` 是 **DB UUID**（非 manifest.id），与 `plugin-sdk.md` 的"唯一实例标识"表述存在口径冲突；表前缀相应为 `plugin_<uuid 整理后>_`
+9. **步骤 1 实测**：vitest module runner 对仓库外路径（/tmp）的 `import(file://…)` 抛 ERR_MODULE_NOT_FOUND——测试的 pluginsDir 必须位于仓库内（已固定为 `server/__tests__/canary/.tmp-plugins-*`，gitignore 覆盖）
+10. **步骤 1 实测**：宿主符号链接指向的是 **node_modules 中已发布的 @openlearn/plugin-sdk@3.6.1**（根 package.json 依赖 ^3.6.1），而非 workspace 源码 3.7.0——Token 按 name 解析不受影响，但"插件运行时 SDK 与宿主同源"的表述需留意
 
 ## 附录 B：机房座位图种子数据（启用 7.5 渲染断言）
 

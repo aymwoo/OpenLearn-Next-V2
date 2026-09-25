@@ -54,3 +54,6 @@ audit-tools/reports/
 audit-tools/__pycache__/
 .qoder/
 
+
+# 金丝雀测试临时插件目录（崩溃残留防护）
+server/__tests__/canary/.tmp-plugins-*
