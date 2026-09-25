@@ -79,3 +79,28 @@ rendererRegistry.registerRenderer('geogebra-widget', GeoGebraRenderer);
 3. **成绩策略归集**：`packages/plugins/courseware-score.ts` 是无 IO 的纯函数模块（`getNested` / `toNumber` / `parseScoreFields` / `extractScoreFromFields` / `collectScoreSamples` / `aggregateScores` / `clamp` / `round2`），被 `courseware.submit_attempt` 与 `POST /api/courseware/attempts/:attemptId/log` 共用同一口径：原始载荷先追加进 append-only 的 `submission_raw`，再按 `courseware_score_config` 表（迁移 `migrations/004_courseware_score_config.sql`）配置的 `LATEST` / `MAX` / `AVERAGE` / `FIRST` 策略与满分折算算出 `submission_result.score`。配置由 `courseware.get_score_config` / `courseware.save_score_config` / `courseware.list_score_configs` / `courseware.regrade_attempts` 四个原生命令管理，改策略后可重算历史成绩而无需学生重做。
 
 > **为什么不把监视器直接写进服务端注入的 Bridge SDK 模板字符串**：模板字符串里的正则/转义极易出错（历史上 `\\d` 双重转义曾导致抓分正则全部失效），且无法按课件粒度裁剪、停用或单独测试。扩展点让「谁来监视什么」变成可注册、可撤销的插件能力。
+
+---
+
+## 白板防抖自动保存机制 (Debounced Auto-Save System)
+
+为避免教师编辑教案或书写复杂板书时突发掉电或误关浏览器导致数据丢失，白板引擎提供了 `WhiteboardAutoSaveManager`（`src/features/whiteboard/services/whiteboard-autosave-manager.ts`）：
+
+1. **脏数据深度检测 (Dirty Tracking)**：基于深比较算法对比当前画布元素集合与最后一次持久化快照，仅在画布真正变更时标记脏状态。
+2. **动态防抖窗口 (Debounce Window)**：内置 1500ms（可配置）防抖时钟，在高频笔触书写或连续拖动过程中持续重置计时器，待停笔后平滑下发持久化网络请求，避免高频并发写冲击。
+3. **安全卸载保护 (Unload Safeguard)**：监听浏览器的 `beforeunload` 与组件卸载生命周期，若检测到仍有未持久化的脏数据，毫秒级同步触发紧急保全，保障板书资产零丢失。
+4. **插件拦截与观察者模式**：提供 `saveInterceptor` 扩展点，允许第三方插件在持久化前后执行加密、备份或审计。
+
+---
+
+## 智能随机抽问与分层轮盘 (Fair Tiered Random Picker)
+
+为改变传统课堂提问扎堆或点名不均问题，引擎在 `src/features/whiteboard/services/fair-picker-engine.ts` 引入了公平分层抽取算法：
+
+1. **历史频次降采样惩罚**：记录学生本堂课与本学期历史发言次数，动态计算被抽取权重 $W_i = \max(1, 100 - C_i \times 25)$，大幅降低高频发言者的连中概率，优先眷顾课堂静默学生。
+2. **分层难度梯级匹配 (Tiered Mode)**：
+   - **基础题梯度**：优先匹配学困生与待巩固学生，保护自信心；
+   - **进阶题梯度**：面向班级中坚学生群体；
+   - **拔高题梯度**：重点匹配学优生，激发高阶挑战欲。
+3. **即时积分金币与声光特效**：抽问评价后，教师一键派发成长金币，学生机端实时展示声光徽章特效。
+

@@ -235,3 +235,76 @@ Classroom Runtime 是 Layer 2 中**唯一的"协调型" runtime**——其他 ru
 ### 后端（packages/core/classroom-runtime/）
 
 - 后端 `ClassroomRuntimeKernel` 与 6 个被协调 runtime 由 [`platform-kernel.md`](./platform-kernel.md) Layer 2_6 节点描述；具体内部模块划分待 backend 审计报告补充。
+
+---
+
+## 教学全生命周期四阶段架构实现 (Classroom Lifecycle Models)
+
+在实际教学落地（`src/features/classroom/` 与 `LiveClassroomView.tsx`）中，系统将课堂抽象为**四阶段主生命周期**，贯穿课前、课中、课尾与课后：
+
+### 1. 课前准备阶段（Pre-Class Ready）
+- **预习学情穿透看板 (`PreClassDiagnosticHub.tsx`)**：
+  - 课前穿透展示学生微课视频完播率与前置导学测验错误率最高 Top 3 知识点卡点，实现“以学定教”。
+- **环境一键飞检预检 (`PreflightHealthModal.tsx`)**：
+  - 自动巡检音视频加载速度、插件沙箱安全合规、学生终端 WebSocket 局域网连通率与本地服务响应延迟。
+- **无感动态签到与破冰题**：
+  - 5 秒滚动动态 OTP 二维码防代签，配合全班心态基线破冰题调研。
+
+### 2. 课中授课与深度互动阶段（In-Class Teaching）
+- **智能随机抽问与分层轮盘 (`FairPickerEngine.ts` / `RollCallWrapper.tsx`)**：
+  - 结合历史发言频次进行公平降采样惩罚，支持基础/进阶/拔高难度自适应分层匹配，回答后触发即时成长金币声光特效。
+- **随堂小组协作与画廊互评展台 (`GroupCollabWhiteboardModal.tsx` / `breakout-engine.ts`)**：
+  - 支持同质分层与异质互助动态分组，提供组内协作子白板与组间成果画廊互评（Gallery Walk），支持全班点赞送花与思辨标签。
+- **优秀作业多屏对比投屏批注 (`ShowcaseDiffModal.tsx` / `DiffAnnotationCanvas.tsx`)**：
+  - 支持 2~4 屏多端作答并排比对，搭载激光笔光晕拖尾与荧光笔半透明覆盖批注图层。
+
+### 3. 课尾反馈与结课阶段（Wrap-up Exit Ticket）
+- **自适应梯级 Exit Ticket (`AdaptiveExitTicketModal.tsx`)**：
+  - 核心概念通关必做题 ➔ 答对动态解锁进阶探究挑战题，答错动态解锁支架概念解析卡分支。
+- **疑难词云与卡点聚类 (`ConceptWordcloudPanel.tsx` / `concept-clustering-engine.ts`)**：
+  - 运用自然语言分词将全班反馈的疑惑概念聚类为动态词云，并生成 2 分钟收口总结建议。
+- **课堂知识树即时点亮 (`KnowledgeTreeLightingModal.tsx`)**：
+  - 全班核心知识图谱节点由灰暗转为亮起，直观呈现当堂达成度。
+
+### 4. 课后复盘与学情沉淀阶段（Archived Report & Follow-up）
+- **AI 教学副驾反思建议 (`copilot-reflection-engine.ts`)**：
+  - 结合讲授时长占比（高讲授预警）、提问覆盖率、晴雨表时序波峰定位，输出量化归因反思报告与下一课时针对性温故策略。
+- **差异化课后巩固派发中枢 (`DifferentiatedFollowupHub.tsx`)**：
+  - 依据测评表现自动将全班分流为 A 梯队（通关拔高型）、B 梯队（稳健巩固型）、C 梯队（支架补强型），支持教师微调并一键下发专属任务包。
+- **学生个人课节报告卡与家校互联 (`StudentLearningDigestModal.tsx`)**：
+  - 自动核算单生得分、互动人次、成就勋章，并生成家校同步成长卡片。
+
+---
+
+## 底层架构与插件生态优化 (Architecture & Ecosystem)
+
+系统于 `src/features/classroom/ecosystem/` 建立了三位一体的平台级支撑基座：
+
+```mermaid
+graph LR
+    subgraph Edge LAN Mesh
+        DET[EdgeLanDetector] -->|外网波动自动降级| LAN[局域网直连模式]
+        LAN -->|学情暂存| BUF[Sync Journal Buffer]
+        BUF -->|外网恢复| CLOUD[云端增量对账]
+    end
+
+    subgraph Hardware Bridge
+        HW[物理答题器 / 翻页笔] --> HWS[HardwareBridgeService]
+        HWS -->|标准事件分发| BUS[系统事件总线]
+        BUS --> APP[抢答器 / 白板翻页]
+    end
+
+    subgraph Macro Engine
+        MAC[ClassroomMacroEngine] -->|预设流水线| RUN[一键教学动作流]
+        RUN --> AUTO[突击测验 / 倒计时 / 锁屏]
+    end
+```
+
+1. **本地局域网离线高可用降级 (Edge LAN Mesh Fallback)**：
+   - 三态网络健康机：`CLOUD_ONLINE`（云端在线）、`EDGE_LAN_ONLY`（局域网直连高可用）、`OFFLINE_DISCONNECTED`（离线断开）；
+   - 在校园外网抖动中断时，课堂白板、抢答、投票全量交互基于本地 Express + Socket.IO 零中断运行，待外网恢复后由对账机制自动回传。
+2. **硬件教具生态标准化 (Hardware Bridge)**：
+   - 统一抽象 RF 433MHz 物理答题器、数位板、无线翻页笔按键为系统事件（`CLICKER_SUBMIT_OPTION`、`CLICKER_BUZZER_PRESS`、`PRESENTER_NEXT_PAGE` 等），打通实体教具与虚拟软件的交互隔阂。
+3. **课堂宏动作编排 (Classroom Action Macros)**：
+   - 调度执行器支持一键自动化编排串联多步原子教学动作（倒计时总线、学生端防切屏全屏锁定、实时动态榜切换与自动收卷）。
+
