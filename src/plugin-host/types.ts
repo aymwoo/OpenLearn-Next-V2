@@ -122,7 +122,17 @@ export type ExtensionSlot =
   | 'peer_review.rubric.dimension' // 全班大屏互评量规维度扩展
   | 'peer_review.badge' // 全班大屏互评微勋章扩展
   | 'peer_review.action' // 全班大屏互评操作扩展
-  | 'peer_review.showcase.widget'; // 大屏焦点作品对比分析组件扩展
+  | 'peer_review.showcase.widget' // 大屏焦点作品对比分析组件扩展
+  // ── 机房座位图扩展槽位 ──────────────────────────────────────────────
+  // 座位图读取已有的 computer_labs + student_seats 表，展示班级学生在机房的物理座位分布。
+  | 'classroom.seating.toolbar' // 座位图工具栏右侧按钮（如"远程开机"、"锁屏"）
+  | 'classroom.seating.legend' // 座位图底部图例区追加（插件自定义状态图例）
+  | 'classroom.seating.seat_badge' // 每个座位卡片内叠加徽章/图标
+  | 'classroom.seating.seat_actions' // 座位右键/长按菜单项
+  | 'classroom.seating.summary' // 座位图底部汇总区追加统计卡片
+  // ── 白板自动保存扩展槽位 ──────────────────────────────────────────────
+  | 'whiteboard.autosave.status' // 白板自动保存状态指示区扩展（插件可展示同步状态、第三方云备份等）
+  | 'whiteboard.autosave.action'; // 白板自动保存附加操作区扩展（如立即同步到外部网盘、版本快照打标）
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。

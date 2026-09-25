@@ -160,14 +160,25 @@ fullscreenRendererRegistry.register('assignment', ({ data }: FullscreenRendererP
   </div>
 ));
 
-fullscreenRendererRegistry.register('rollcall', ({ data }: FullscreenRendererProps) => (
-  <div className="flex items-center justify-center h-full">
-    <div className="text-center">
-      <div className="text-6xl font-bold text-indigo-600 mb-4">{data.selectedStudent || '点击点名'}</div>
-      <p className="text-lg text-gray-500">随机点名</p>
+fullscreenRendererRegistry.register('rollcall', ({ data }: FullscreenRendererProps) => {
+  const student = data.selectedStudent;
+  const name = typeof student === 'object' ? student?.name : student;
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center space-y-3">
+        <div className="text-2xl text-indigo-400 font-semibold tracking-wider">🎯 幸运答题者</div>
+        <div className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 mb-2">
+          {name || '等待抽取中...'}
+        </div>
+        {data.evaluation?.submitted && (
+          <div className="text-xl text-emerald-400 font-bold">
+            🌟 评价达成: +{data.evaluation.rewardCoins} 金币激励
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-));
+  );
+});
 
 fullscreenRendererRegistry.register('html-applet', ({ data, lessonId, elementId }: FullscreenRendererProps) => (
   <HtmlAppletFrame data={data} lessonId={lessonId} elementId={elementId} className="w-full h-full rounded-xl border" />
@@ -1965,6 +1976,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   <RollCallWrapper
                     elementId={el.id}
                     data={data}
+                    lessonId={lessonId}
+                    classId={fullscreenBroadcastClassId || (data && data.classId)}
                     readOnly={readOnly}
                     onElementUpdate={onElementUpdate}
                     onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}

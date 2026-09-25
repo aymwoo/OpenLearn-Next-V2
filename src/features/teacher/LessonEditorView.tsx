@@ -21,6 +21,8 @@ import { TimelineRail } from './lesson-editor/TimelineRail';
 import { SegmentEditorCard } from './lesson-editor/SegmentEditorCard';
 import { PaletteCardEditModal } from './lesson-editor/PaletteCardEditModal';
 import { PALETTE_ITEM_MAP, getPaletteItemConfig } from './lesson-editor/paletteConfig';
+import { useWhiteboardAutoSave } from '../whiteboard/services/useWhiteboardAutoSave';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export interface LessonEditorViewProps {
   lang: 'zh' | 'en';
@@ -104,6 +106,34 @@ export function LessonEditorView({
 
   const canEdit = isAdmin || isOwner;
 
+  const handleSaveElementToServer = async (lId: string, elId: string, data: any): Promise<boolean> => {
+    try {
+      const response = await fetch(`/api/lessons/${lId}/whiteboard/${elId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data }),
+      });
+      return response.ok;
+    } catch (err) {
+      console.error('[LessonEditorView] autosave element failed:', err);
+      return false;
+    }
+  };
+
+  const { queueUpdate, flush: flushAutoSave, pendingCount } = useWhiteboardAutoSave({
+    lessonId: selectedLesson,
+    onSaveToServer: handleSaveElementToServer,
+    debounceDelay: 800,
+    onStatusChange: (status, savedTime) => {
+      if (status !== 'pending') {
+        setEditorSaveStatus(status);
+      }
+      if (savedTime) {
+        setEditorLastSavedTime(savedTime);
+      }
+    },
+  });
+
   // 备课与教案设计器：向打开的学生端Tab实时广播课节与环节变化
   useEffect(() => {
     if (!selectedLesson) return;
@@ -178,13 +208,27 @@ export function LessonEditorView({
           </div>
           {selectedLesson && (
             <div className="hidden sm:flex items-center gap-1.5 shrink-0 ml-1">
+              {pendingCount > 0 && editorSaveStatus !== 'saving' && (
+                <button
+                  onClick={() => void flushAutoSave()}
+                  title={lang === 'zh' ? '有未保存改动，点击立即写入服务器' : 'Pending changes, click to sync now'}
+                  className="flex items-center gap-1 text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2 py-0.5 rounded-full transition-colors cursor-pointer shadow-3xs"
+                >
+                  <Loader2 size={10} className="animate-spin text-amber-700" />
+                  <span>
+                    {lang === 'zh'
+                      ? `${pendingCount} 项待同步 (点击保存)`
+                      : `${pendingCount} pending (click to save)`}
+                  </span>
+                </button>
+              )}
               {editorSaveStatus === 'saving' && (
                 <div className="flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full animate-pulse">
                   <Loader2 size={10} className="animate-spin text-amber-600" />
                   <span>{lang === 'zh' ? '同步 SQLite...' : 'Saving...'}</span>
                 </div>
               )}
-              {editorSaveStatus === 'saved' && (
+              {editorSaveStatus === 'saved' && pendingCount === 0 && (
                 <div className="flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-250 px-2 py-0.5 rounded-full">
                   <CheckCircle2 size={10} className="text-emerald-600" />
                   <span>{lang === 'zh' ? '已同步 SQLite' : 'Saved to SQLite'}</span>
@@ -205,12 +249,31 @@ export function LessonEditorView({
                   <span>{lang === 'zh' ? '写入失败' : 'Failed to save'}</span>
                 </div>
               )}
-              {editorSaveStatus === 'none' && (
+              {editorSaveStatus === 'none' && pendingCount === 0 && (
                 <div className="flex items-center gap-1 text-xs font-semibold text-muted bg-surface-secondary border border-theme px-2 py-0.5 rounded-full">
                   <Database size={10} className="text-muted" />
                   <span>{lang === 'zh' ? 'SQLite 就绪' : 'SQLite Ready'}</span>
                 </div>
               )}
+
+              {/* Plugin Extension Slots */}
+              <ExtensionPointRenderer
+                slot="whiteboard.autosave.status"
+                slotProps={{
+                  lessonId: selectedLesson,
+                  status: editorSaveStatus,
+                  pendingCount,
+                  lastSavedTime: editorLastSavedTime,
+                }}
+              />
+              <ExtensionPointRenderer
+                slot="whiteboard.autosave.action"
+                slotProps={{
+                  lessonId: selectedLesson,
+                  flush: flushAutoSave,
+                  pendingCount,
+                }}
+              />
             </div>
           )}
         </div>
@@ -340,6 +403,7 @@ export function LessonEditorView({
                   activeSegmentId={activeSegmentId}
                   onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
                   onElementAdd={async (type: string, data: any) => {
+                    await flushAutoSave();
                     setEditorSaveStatus('saving');
                     try {
                       const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
@@ -358,26 +422,11 @@ export function LessonEditorView({
                       setEditorSaveStatus('error');
                     }
                   }}
-                  onElementUpdate={async (elementId: string, data: any) => {
-                    setEditorSaveStatus('saving');
-                    try {
-                      const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ data }),
-                      });
-                      if (response.ok) {
-                        setEditorSaveStatus('saved');
-                        setEditorLastSavedTime(new Date());
-                        fetchElements(selectedLesson);
-                      } else {
-                        setEditorSaveStatus('error');
-                      }
-                    } catch (err) {
-                      setEditorSaveStatus('error');
-                    }
+                  onElementUpdate={(elementId: string, data: any) => {
+                    queueUpdate(elementId, data);
                   }}
                   onElementDelete={async (elementId: string) => {
+                    await flushAutoSave();
                     setEditorSaveStatus('saving');
                     try {
                       const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard/${elementId}`, {
@@ -395,6 +444,7 @@ export function LessonEditorView({
                     }
                   }}
                   onClearBoard={async () => {
+                    await flushAutoSave();
                     setEditorSaveStatus('saving');
                     try {
                       const response = await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
