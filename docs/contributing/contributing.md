@@ -14,7 +14,7 @@ type(scope): message
 
 | 变更对象 | 记录位置 |
 | --- | --- |
-| 平台宿主（`openlearn-next`） | 根 [CHANGELOG.md](../../CHANGELOG.md)，SemVer 标题 + `Features / Fixes / Refactor / Docs / Breaking Changes` 小节；开发中变更写入 `## [Unreleased]` |
+| 平台宿主（`openlearn-next`） | 根 根目录 `CHANGELOG.md`，SemVer 标题 + `Features / Fixes / Refactor / Docs / Breaking Changes` 小节；开发中变更写入 `## [Unreleased]` |
 | Plugin SDK（`@openlearn/plugin-sdk`） | `packages/plugin-sdk/CHANGELOG.md` |
 | 单个插件（`v2_plugins/<plugin-id>`） | 各插件目录内 `CHANGELOG.md` |
 

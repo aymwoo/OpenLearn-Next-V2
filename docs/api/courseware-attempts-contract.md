@@ -37,7 +37,7 @@
 | POST   | `/api/courseware/:id`                             | 教师   | 删除课件                          |
 | GET    | `/api/courseware/:id`                             | 教师   | 单课件详情（VFS 节点）            |
 
-> 仅本表中的端点在本契约范围；其他 `/api/courseware/*`（上传 / VFS）见 [courseware-upload.md](./courseware-upload.md)（占位，待补）。
+> 仅本表中的端点在本契约范围；其他 `/api/courseware/*`（上传 / VFS）见 （上传 / VFS 契约文档尚未建立，待补）。
 
 ---
 
@@ -48,7 +48,7 @@
 
 ### 请求
 
-```jsonc
+```js
 // Headers
 Content-Type: application/json
 
@@ -73,7 +73,7 @@ Content-Type: application/json
 
 ### 响应
 
-```jsonc
+```json
 // 200 OK
 { "success": true }
 ```
@@ -97,7 +97,7 @@ Content-Type: application/json
 
 ### 请求
 
-```jsonc
+```json
 {
   "score": 88,                       // 可选 — 0-100 整数或 0-1 浮点（推荐 0-100，避免与 promote 归一化歧义）
   "completion": 1,                   // 可选 — 0-1；不传则从 extractScoreCommentCompletion 推断
@@ -117,7 +117,7 @@ Content-Type: application/json
 
 ### 响应
 
-```jsonc
+```json
 // 200 OK
 {
   "success": true
@@ -146,7 +146,7 @@ Content-Type: application/json
 
 ### 响应（200 OK）
 
-```jsonc
+```json
 [
   {
     "attemptId": "att-xyz",
@@ -198,7 +198,7 @@ ORDER BY a.started_at DESC;
 
 ### 请求
 
-```jsonc
+```json
 {
   "lessonId": "lesson-abc",         // 必填 — 关联到 lesson_id（写进 assignments.lesson_id 与 student_lesson_progress）
   "classId": "cls-001"              // 必填 — 关联到班级（写进 assignments.class_id）
@@ -207,7 +207,7 @@ ORDER BY a.started_at DESC;
 
 ### 响应
 
-```jsonc
+```json
 // 200 OK
 {
   "success": true,
@@ -257,7 +257,7 @@ ORDER BY a.started_at DESC;
 
 ### 响应
 
-```jsonc
+```json
 // 200 OK — 有成绩
 {
   "progress": {
