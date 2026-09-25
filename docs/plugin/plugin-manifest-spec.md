@@ -95,7 +95,7 @@
 | `id`      | `string` | **插件唯一标识符**。必须全局唯一，建议采用 snake-case 或带命名空间的格式（如 `@org/plugin-name`）。 |
 | `name`    | `string` | **显示名称**。用于管理后台面板和插件中心界面展示。                                                  |
 | `version` | `string` | **语义化版本号**（SemVer），如 `"1.0.0"`。                                                          |
-| `main`    | `string` | **插件代码入口**相对路径（如 `"index.js"` 或 `"dist/index.js"`）。                                  |
+| `main`    | `string` | **插件代码入口**相对路径（如 `"index.js"` 或 `"dist/index.js"`）。Schema 层**必填**；唯一例外：ZIP 安装路径会在 schema 校验前对缺失值注入默认 `"index.js"`（`install-utils.ts`）。请始终显式声明。 |
 
 ---
 

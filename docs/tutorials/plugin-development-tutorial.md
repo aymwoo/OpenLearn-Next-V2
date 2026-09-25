@@ -351,7 +351,7 @@ interface Manifest {
   id: string; // 唯一标识，推荐格式 @scope/name
   name: string; // 显示名称
   version: string; // SemVer 版本号（如 "1.0.0"）
-  main: string; // 入口文件名（必填，如 "index.js"，缺失将无法通过安装校验）
+  main: string; // 入口文件路径（schema 必填；唯一例外：ZIP 安装路径会在校验前对缺失值注入默认 "index.js"，请始终显式声明）
   description?: string; // 描述
   author?: string; // 作者
   engines?: {
@@ -2032,7 +2032,7 @@ describe('my-plugin', () => {
 ### 构建检查
 
 - [ ] `npx @openlearn/plugin-sdk build` 无报错
-- [ ] ZIP 产物包含 `manifest.json` + `index.js` +（可选）`frontend.js`
+- [ ] ZIP 产物**根目录**包含 `manifest.json` + `index.js` +（可选）`frontend.js`（注意 `zip -r my-plugin.zip my-plugin/` 会产生嵌套目录导致安装失败，见 11.2）
 - [ ] 解压 ZIP 后检查 `index.js` 不包含禁用的裸导入（参考 [11.4 常见打包错误与排查](#114-常见打包错误与排查)）
 - [ ] 解压 ZIP 后检查 `frontend.js` 不包含 `import ... from "react/jsx-runtime"`
 
@@ -2068,9 +2068,21 @@ my-plugin/
   package.json      # 可选
   README.md         # 文档
 
-# 打包
-zip -r my-plugin.zip my-plugin/
+# 打包 —— 关键：manifest.json 必须位于 ZIP 根目录
+# ❌ 错误：以下命令会产生 my-plugin/manifest.json 嵌套结构，
+#    安装时报 "ZIP package is missing manifest.json"
+# zip -r my-plugin.zip my-plugin/
+
+# ✅ 正确：进入插件目录打包，manifest.json / index.js 位于 ZIP 根
+(cd my-plugin && zip -r ../my-plugin.zip .)
 ```
+
+**安装期 ZIP 硬约束**（`packages/core/esm-loader/install-utils.ts`）：
+
+- `manifest.json` 必须在 ZIP **根目录**（`zip.file('manifest.json')` 取不到即失败）；
+- 全部文件解压后总大小 ≤ **300MB**（ZIP bomb 防护）；
+- 禁止路径穿越条目（含 `..` 或以 `/` 开头的路径）；
+- 入口文件按 `manifest.main` 读取；若 `main` 以 `dist/` 开头且 ZIP 中不存在，会回退尝试去掉前缀后的路径。
 
 ### 11.3 安装 ZIP 插件
 

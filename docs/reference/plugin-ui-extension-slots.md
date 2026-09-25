@@ -9,7 +9,7 @@
 
 ## 1. 完整扩展槽位清单
 
-### 前端 ExtensionSlot 联合类型（`src/plugin-host/types.ts:70-125`）
+### 前端 ExtensionSlot 联合类型（`src/plugin-host/types.ts:70-132`，共 53 个）
 
 ```typescript
 export type ExtensionSlot =
@@ -72,7 +72,13 @@ export type ExtensionSlot =
   | 'peer_review.rubric.dimension'     // 互评量规维度
   | 'peer_review.badge'                // 互评微勋章
   | 'peer_review.action'               // 互评操作
-  | 'peer_review.showcase.widget';     // 焦点作品对比分析组件
+  | 'peer_review.showcase.widget'      // 焦点作品对比分析组件
+  // ── 机房座位图（v0.3.22）──
+  | 'classroom.seating.toolbar'        // 座位图工具栏右侧按钮（如"远程开机"、"锁屏"）
+  | 'classroom.seating.legend'         // 座位图底部图例区追加
+  | 'classroom.seating.seat_badge'     // 每个座位卡片内叠加徽章/图标
+  | 'classroom.seating.seat_actions'   // 座位右键/长按菜单项
+  | 'classroom.seating.summary';       // 座位图底部汇总区追加统计卡片
 
 // v0.2.6: 锚点槽位（开放命名空间）
 export type AnchorSlot = `anchor:${string}`;
@@ -135,6 +141,7 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 | `peer_review.showcase.widget`  | `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`                                                 | 无（仅 `route?`）                |
 
 > `student.lesson.tool` / `teacher.panel` / `student.fullscreen` / `global.setting` / `nav.user_menu` / `editor.timeline_segment` / `editor.palette_item` / `classroom.header.action` / `classroom.barometer.metric` / `classroom.agenda.action` / `whiteboard.dock.plugin` / `whiteboard.canvas.widget` / `classroom.audit.event` 仅出现在 `ExtensionSlot` 联合类型中，**尚无渲染器挂载**，当前不会渲染任何内容。
+> `classroom.seating.*` 五个座位图槽位（v0.3.22 新增）**同样尚无渲染器挂载**（座位图前端读取 `computer_labs` / `student_seats` 表的能力在建设中）——插件可先行声明预留，但当前不会渲染。
 > `help.plugin_docs` 有渲染器，但**不在** `ExtensionSlot` 联合类型内（以字符串字面量传入，其 prop 类型为 `ExtensionSlot | string`）。
 > `anchor:*`（v0.2.6+）为开放命名空间槽位，渲染器已挂载（`WhiteboardToolbar.tsx` 七个锚点），通过 `placement` prop 按侧过滤——`placement="before"` 只渲染声明 `'before'` 的扩展，`placement="after"` 只渲染声明 `'after'` 或未声明（默认）的扩展。同侧多插件按钮按 `position` 升序渲染（缺省 `100`）。锚点目录见 [`docs/plugin/anchor-slots.md`](../plugin/anchor-slots.md)。
 

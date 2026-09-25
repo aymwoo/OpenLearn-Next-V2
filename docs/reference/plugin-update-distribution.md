@@ -110,6 +110,24 @@ Header: x-allow-downgrade: true|false
 → { success:true, updated:true, pluginId, manifest, oldVersion, newVersion, wasActive }
 ```
 
+### URL 直装与社区市场链路（v0.3.22）
+
+```
+POST /api/plugins/install-from-url        # 管理员专属（requireAuth('administrator')）
+Body: { downloadUrl: string,
+        expectedId?: string,      # 合法插件 id 格式；已在本机安装时自动改走 updateFromZip
+        allowDowngrade?: boolean, # 默认关闭
+        executionMode?: 'worker'|'inline' }
+→ 安装: { success:true, updated:false, pluginId, manifest, filename, bytes }
+→ 更新: { success:true, updated:true, pluginId, manifest, oldVersion, newVersion, wasActive, filename, bytes }
+→ 下载失败: 400 { success:false, error, fallbackToClient:true }
+```
+
+- **出站 SSRF 校验**：`downloadUrl` 先过 `isSafeExternalUrl()`（`server/utils/url-safety.ts`，拒绝 `file:` 协议、回环地址、云元数据端点、私网地址），再由服务端 `downloadPluginPackage()` 代取（`server/services/community-registry.ts`：60 秒超时、200MB 体积上限）。
+- **`fallbackToClient` 兜底**：服务端下载失败时，前端改为浏览器下载 ZIP 后直传 `upload-zip-raw`（`express.raw` limit 400MB），与一键热更新同一兜底策略。
+- **社区市场只读端点**：`GET /api/plugins/community`（要求有效会话；服务端经 `PLUGIN_COMMUNITY_REGISTRY_URL` 代取注册表并归一化，见 [community-plugin-registry.md](../plugin/community-plugin-registry.md)）与 `GET /api/plugins/market`（本地市场）。
+- **更新检测**：`POST /api/plugins/:id(*)/check-update`（要求有效会话）按插件 `updateSource.repo` 触发服务端 git / HTTP 出站请求，未声明 `updateSource` 时回退扫描本地 `v2_plugins/*/manifest.json` 做 semver 比对；`POST /api/plugins/:id(*)/one-click-update` 服务端优先下载、失败回退客户端 ZIP 直传。
+
 ---
 
 ## 4. 前端安装向导更新模式（`PluginInstallWizard.tsx`）

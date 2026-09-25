@@ -52,6 +52,22 @@ describe('My Plugin Unit Tests', () => {
 
 ---
 
+## ⚠️ Mock 与生产宿主的行为差异（测试通过 ≠ 生产可用）
+
+Mock 上下文为测试便利**刻意放宽**了部分生产校验，以下差异必须知晓，不要把 Mock 行为当作宿主契约：
+
+| 行为            | Mock（`createMockContext`）                          | 生产宿主（`context-builder`）                                            |
+| --------------- | ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| `ctx.provide`   | **不校验** `manifest.provides` 声明，直接注册        | 校验 `token.name` 必须完整出现在 `manifest.provides`，否则抛错           |
+| `ctx.db.ensureTable` / `table()` | **无 SEC 校验**                      | 强制表名正则 `/^[A-Za-z_][A-Za-z0-9_]{0,63}$/`、schema ≤ 4000 字符、禁分号（见 [插件数据库 API](../reference/plugin-database-api)） |
+| `ctx.db`        | 内存 SQLite（per-test 隔离）                         | 平台共享库 + `plugin_<pluginId>_` 前缀命名空间                           |
+| `ctx.require`   | 直接抛错                                             | 白名单共享模块（`recharts` / `exceljs` / `jspdf` / …）                   |
+| `pointsDimension` / `pointsLedger` | 恒为 `null`                        | Inline 模式注入真实服务；**Worker 模式同样为 `null`**（见 worker-manager 白名单说明） |
+
+因此：涉及 `ensureTable` 命名/分号、`provide` 未声明、`require` 白名单的代码路径，请额外用「上传真实 ZIP → 插件中心安装 → 激活」做一次集成验证（或对照 [examples/verifiable-examples](../examples/verifiable-examples) 的契约断言）。
+
+---
+
 ## 3. 单元测试实战演练
 
 ### 3.1 测试命令处理逻辑 (Command Handlers)
