@@ -275,3 +275,63 @@ manifest 以独立文件写入 ZIP 根（宿主 `zip.file('manifest.json')` 读�
 4. **5.3** 命令式注册但 manifest 未声明的端点的网关语义
 5. **5.x** SEC 报错文案 inline/worker 两套不一致（4.3）
 6. **2.5** `IClassroomCountdownServiceToken` 无实现无注册（已在 di-tokens.md 标注勿用）
+
+## 附录 B：机房座位图种子数据（启用 7.5 渲染断言）
+
+> 表 DDL：`computer_labs(id, room_number, rows, cols, created_at)`、`student_seats(class_id, student_id, lab_id, row_idx, col_idx, PK(class_id, student_id))`（packages/core/db/index.ts:235-250）。
+> 关键约束：`classes.lab_id` 与 `student_seats.lab_id` 必须一致——`GET /api/classes/:classId/seats` 分别从两处读取（roster.ts:869-886），前端用返回的 `lab_id` 在 labs 列表中 `find` 命中机房信息。
+
+### B.1 API 驱动种子（L3 E2E / Playwright，全黑盒，teacher 会话）
+
+```text
+1. POST /api/labs           { room_number: "机房A-101", rows: 4, cols: 6 }
+   → { id: "lab_xxxx" }                                   // id 形如 lab_<random8>（roster.ts:834）
+2. POST /api/classes        { name: "金丝雀测试班", description: "canary seating" }
+   → { id: "cls_xxxx" }
+3. POST /api/students × 8   { name: "学生01" .. "学生08" }
+   → 每次返回 { id }（学号自动生成；默认密码 123456）
+4. POST /api/classes/:classId/seats
+   { lab_id: "<labId>", seats: [                          // 8 人中 6 人落座前两排
+     { student_id: s01, row_idx: 0, col_idx: 0 },         // ← 在线
+     { student_id: s02, row_idx: 0, col_idx: 1 },         // ← 在线
+     { student_id: s03, row_idx: 0, col_idx: 2 },         // ← 离线
+     { student_id: s04, row_idx: 1, col_idx: 0 },         // ← 离线
+     { student_id: s05, row_idx: 1, col_idx: 1 },         // ← 在线
+     { student_id: s06, row_idx: 1, col_idx: 2 }          // ← 离线
+   ] }                                                    // s07 / s08 故意不落座 → "未分配"分支
+   → { success: true }                                    // 接口自动双写 classes.lab_id + student_seats（先清后插，roster.ts:891-908）
+5. GET /api/classes/:classId/seats（读回校验）
+   → { lab_id, seats: [6 条，含 LEFT JOIN students 得到的 student_name / student_number] }
+```
+
+在线态来源：`isOnline = onlineStudentIds.includes(student_id)`（presence 在线名单，ComputerLabSeatingMap.tsx:223）。E2E 中让学生 s01/s02/s05 各开一个已登录浏览器会话即可点亮 3 个在线徽章；纯集成测试可跳过（全部离线也是合法断言面）。
+
+### B.2 SQL 直灌种子（L2 集成测试，白盒）
+
+```sql
+INSERT INTO computer_labs (id, room_number, rows, cols, created_at)
+VALUES ('lab_canary', '机房A-101', 4, 6, 1737800000000);
+-- 班级若走 API 创建则跳过 classes 插入（id 由服务端生成）；
+-- 直灌时必须同步 classes.lab_id（GET 端点从 classes 表读 lab_id，roster.ts:871-873）：
+UPDATE classes SET lab_id = 'lab_canary' WHERE id = '<classId>';
+
+INSERT INTO student_seats (class_id, student_id, lab_id, row_idx, col_idx) VALUES
+  ('<classId>', '<s01>', 'lab_canary', 0, 0),
+  ('<classId>', '<s02>', 'lab_canary', 0, 1),
+  ('<classId>', '<s03>', 'lab_canary', 0, 2),
+  ('<classId>', '<s04>', 'lab_canary', 1, 0),
+  ('<classId>', '<s05>', 'lab_canary', 1, 1),
+  ('<classId>', '<s06>', 'lab_canary', 1, 2);
+-- ⚠️ 直灌必须保证 students 表已有 s01-s06 记录（GET 端点 LEFT JOIN students 取姓名/学号）
+```
+
+### B.3 种子数据 ↔ 渲染断言映射
+
+| 种子要素 | 驱动的断言 |
+| --- | --- |
+| 6 人落座 + 2 人未落座 | 座位卡 `hasSeat` 两分支；未落座渲染「未分配」且**不挂 seat_badge 扩展点** |
+| 3 在线 / 3 离线 | `seat_badge` 的 `slotProps.isOnline` 两态；状态点样式两分支 |
+| students 表真实记录 | `student_name` / `student_number` 经 LEFT JOIN 返回非空 |
+| （可选毒样）seat 指向不存在的学生 | LEFT JOIN 产生 null 姓名分支的容错渲染 |
+| `classes.lab_id` 与 `student_seats.lab_id` 一致 | 前端 `labs.find(l => l.id === lab_id)` 命中，机房信息面板渲染 |
+| rows=4 × cols=6 网格 | 座位矩阵按 row_idx / col_idx 排布正确性 |
