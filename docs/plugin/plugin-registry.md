@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS plugins (
 
 ## 2. 插件分发管理器 (`PluginDistributionManager`)
 
-实现在 [`packages/core/plugin-host/plugin-distribution-manager.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/plugin-distribution-manager.ts#L95)。
+实现在 `packages/core/plugin-host/plugin-distribution-manager.ts`。
 
 `PluginDistributionManager` 解耦了前端市场 UI 与底层的安装逻辑，支持多仓库适配器（`IPluginRepositoryAdapter`）：
 
@@ -58,7 +58,7 @@ export interface IPluginRepositoryAdapter {
 
 ## 3. 服务器端 REST API 端点
 
-主进程 Express 路由位于 [`server/routes/plugins.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/plugins.ts)：
+主进程 Express 路由位于 `server/routes/plugins.ts`：
 
 | HTTP 方法 | 路径                            | 描述                                              |
 | :-------- | :------------------------------ | :------------------------------------------------ |
@@ -77,7 +77,7 @@ export interface IPluginRepositoryAdapter {
 
 ## 4. 插件别名与 UUID 解析机制 (`resolvePluginUuid`)
 
-为了方便 API 调用与控制台管理，`PluginHost` 提供了优雅的标识符解析机制（定义于 [`packages/core/plugin-host/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/index.ts#L630)）：
+为了方便 API 调用与控制台管理，`PluginHost` 提供了优雅的标识符解析机制（定义于 `packages/core/plugin-host/index.ts`）：
 
 ```typescript
 const realUuid = pluginHost.resolvePluginUuid('@openlearn/plugin-vfs');

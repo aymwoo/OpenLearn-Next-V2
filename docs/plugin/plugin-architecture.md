@@ -22,14 +22,14 @@ OpenLearn V2 的插件系统为全栈、可伸缩、多租户隔离的微前端�
 
 ### 核心实现位置
 
-- **插件宿主主逻辑**: [`packages/core/plugin-host/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/index.ts#L105)
-- **生命周期管理器**: [`packages/core/plugin-host/plugin-lifecycle-manager.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/plugin-lifecycle-manager.ts#L26)
-- **环境上下文构建器**: [`packages/core/plugin-host/context-builder.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/context-builder.ts#L36)
-- **资源追踪器**: [`packages/core/plugin-host/resource-tracker.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/resource-tracker.ts#L15)
-- **声明式贡献注册表**: [`packages/core/plugin-host/contribution-registry.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/contribution-registry.ts#L54)
-- **能力关卡网关**: [`packages/core/plugin-host/plugin-capability-gateway.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/plugin-capability-gateway.ts#L20)
-- **Worker 线程池管理器**: [`packages/core/worker-runtime/worker-manager.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/worker-runtime/worker-manager.ts#L35)
-- **ESM 模块动态加载器**: [`packages/core/esm-loader/esm-loader.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/esm-loader/esm-loader.ts#L24)
+- **插件宿主主逻辑**: `packages/core/plugin-host/index.ts`
+- **生命周期管理器**: `packages/core/plugin-host/plugin-lifecycle-manager.ts`
+- **环境上下文构建器**: `packages/core/plugin-host/context-builder.ts`
+- **资源追踪器**: `packages/core/plugin-host/resource-tracker.ts`
+- **声明式贡献注册表**: `packages/core/plugin-host/contribution-registry.ts`
+- **能力关卡网关**: `packages/core/plugin-host/plugin-capability-gateway.ts`
+- **Worker 线程池管理器**: `packages/core/worker-runtime/worker-manager.ts`
+- **ESM 模块动态加载器**: `packages/core/esm-loader/esm-loader.ts`
 
 ---
 
@@ -106,7 +106,7 @@ sequenceDiagram
 
 实现文件：
 
-- [`server/utils/bridge-sdk.ts`](file:///home/wuxf/Develop/openlearnv2/server/utils/bridge-sdk.ts#L10)
+- `server/utils/bridge-sdk.ts`
 
 ---
 
@@ -142,7 +142,7 @@ export interface PluginContext {
 
 ### 上下文包装器与代理拦截 (`buildContext`)
 
-位于 [`packages/core/plugin-host/context-builder.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/context-builder.ts#L36)：
+位于 `packages/core/plugin-host/context-builder.ts`：
 
 1. **自动资源接管**：所有注册到 `commandBus` 或 `eventBus` 的处理器与订阅会被自动包装并注册到 `ResourceTracker` 中。
 2. **能力约束检查**：在调用敏感能力时自动透传插件 actor ID (`plugin:${manifest.id}`) 进行权限过滤。
@@ -152,7 +152,7 @@ export interface PluginContext {
 
 ## 5. 自动资源管理与清理机制 (ResourceTracker)
 
-实现位置：[`packages/core/plugin-host/resource-tracker.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/resource-tracker.ts#L15)
+实现位置：`packages/core/plugin-host/resource-tracker.ts`
 
 插件在运行期间创建的所有资源（如注册的命令 Handler、事件 Subscription、定时器与网络连接）必须实现 `Disposable` 接口：
 
@@ -174,7 +174,7 @@ resourceTracker.disposeAll(pluginId);
 
 ## 6. 声明式贡献注册表 (ContributionRegistry)
 
-实现位置：[`packages/core/plugin-host/contribution-registry.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/contribution-registry.ts#L54)
+实现位置：`packages/core/plugin-host/contribution-registry.ts`
 
 插件可在其 `manifest.json` 中声明 UI 贡献点（如教师端 Tab 页面、学生端工具箱组件、课堂微应用）。`ContributionRegistry` 在插件安装时无须激活代码即可解析并建立索引：
 
@@ -205,7 +205,7 @@ resourceTracker.disposeAll(pluginId);
 
 ## 7. 共享模块安全白名单
 
-为平衡安全性与 CJS/ESM Bundle 大小，插件在 Node.js 环境下通过 `ctx.require(moduleName)` 引用共享模块时，`PluginHost` 强行校验白名单（定义于 [`packages/core/plugin-host/types.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/types.ts#L73)）：
+为平衡安全性与 CJS/ESM Bundle 大小，插件在 Node.js 环境下通过 `ctx.require(moduleName)` 引用共享模块时，`PluginHost` 强行校验白名单（定义于 `packages/core/plugin-host/types.ts`）：
 
 - `recharts`
 - `react-markdown`
@@ -223,9 +223,9 @@ resourceTracker.disposeAll(pluginId);
 
 实现位置：
 
-- **安全网关中间件**: [`server/routes/plugin-api-gateway.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/plugin-api-gateway.ts)
-- **路由分发总线**: [`packages/core/plugin-host/http-router.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/http-router.ts)
-- **挂载入口**: [`server/routes/plugins.ts`](file:///home/wuxf/Develop/openlearnv2/server/routes/plugins.ts)
+- **安全网关中间件**: `server/routes/plugin-api-gateway.ts`
+- **路由分发总线**: `packages/core/plugin-host/http-router.ts`
+- **挂载入口**: `server/routes/plugins.ts`
 
 OpenLearn V2 允许插件通过 `ctx.http` 导出轻量 RESTful API。为确保系统安全性，所有外部 HTTP 流量均被收敛至统一入口 `/api/plugins/:pluginId/*`，并在派发前强制穿透六道纵深安全防御：
 

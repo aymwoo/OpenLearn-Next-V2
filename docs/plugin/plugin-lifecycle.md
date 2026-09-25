@@ -10,7 +10,7 @@ OpenLearn V2 插件系统使用严密的 7 状态确定性有限状态机（Dete
 
 ## 1. 状态枚举 (`PluginState`)
 
-插件在生命周期中必定处于 [`packages/core/plugin-host/types.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/types.ts#L52) 定义的以下 7 种状态之一：
+插件在生命周期中必定处于 `packages/core/plugin-host/types.ts` 定义的以下 7 种状态之一：
 
 | 状态名称 (Enum) | 对应字符串       | 类型             | 说明                                                            |
 | :-------------- | :--------------- | :--------------- | :-------------------------------------------------------------- |
@@ -51,7 +51,7 @@ stateDiagram-v2
 
 ### 合法转换矩阵 (`VALID_TRANSITIONS`)
 
-实现在 [`packages/core/plugin-host/index.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/index.ts#L62)。任意未列在表中的状态转换均会被 `validatePluginStateTransition()` 拦截并抛出 `IllegalStateTransitionError`：
+实现在 `packages/core/plugin-host/index.ts`。任意未列在表中的状态转换均会被 `validatePluginStateTransition()` 拦截并抛出 `IllegalStateTransitionError`：
 
 ```typescript
 const VALID_TRANSITIONS: Record<PluginState, PluginState[]> = {
@@ -125,7 +125,7 @@ const VALID_TRANSITIONS: Record<PluginState, PluginState[]> = {
 
 ## 4. 生命周期中间件机制 (Middleware System)
 
-`PluginHost` 提供了洋葱模型（Onion Model）中间件机制（实现在 [`packages/core/plugin-host/middleware.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/middleware.ts#L10)），允许开发者或系统监控扩展插件激活与停用的前后钩子：
+`PluginHost` 提供了洋葱模型（Onion Model）中间件机制（实现在 `packages/core/plugin-host/middleware.ts`），允许开发者或系统监控扩展插件激活与停用的前后钩子：
 
 ### 支持的生命周期阶段 (`LifecyclePhase`)
 

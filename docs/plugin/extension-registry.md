@@ -13,7 +13,7 @@ OpenLearn V2 提供了双层扩展点架构：
 
 ## 1. `ContributionRegistry` 声明式贡献点
 
-实现位置：[`packages/core/plugin-host/contribution-registry.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/contribution-registry.ts#L54)
+实现位置：`packages/core/plugin-host/contribution-registry.ts`
 
 ### 槽位分类 (Slots)
 
@@ -46,7 +46,7 @@ const allTeacherTabs = contributions.getBySlot('teacher.tab');
 
 ## 2. `UnifiedExtensionRegistry` 统一扩展索引
 
-实现位置：[`packages/core/plugin-host/unified-extension-registry.ts`](file:///home/wuxf/Develop/openlearnv2/packages/core/plugin-host/unified-extension-registry.ts#L37)
+实现位置：`packages/core/plugin-host/unified-extension-registry.ts`
 
 ### 核心 API 契约
 

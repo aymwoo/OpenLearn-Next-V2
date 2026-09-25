@@ -17,7 +17,7 @@ react, react-dom, react-dom/client, react/jsx-runtime, recharts, lucide-react
 
 ### 多层保障机制：
 
-- **运行时 `window.HostSharedDeps`**（[`src/main.tsx`](file:///home/wuxf/Develop/openlearnv2/src/main.tsx)）：
+- **运行时 `window.HostSharedDeps`**（`src/main.tsx`）：
   ```ts
   (window as any).HostSharedDeps = {
     React,
@@ -34,7 +34,7 @@ react, react-dom, react-dom/client, react/jsx-runtime, recharts, lucide-react
     'lucide-react': LucideReact,
   };
   ```
-- **前端动态导入转译器 (`transformBareModuleImports`)**（[`src/plugin-host/plugin-host.ts`](file:///home/wuxf/Develop/openlearnv2/src/plugin-host/plugin-host.ts)）：
+- **前端动态导入转译器 (`transformBareModuleImports`)**（`src/plugin-host/plugin-host.ts`）：
   当前端插件 `frontend.js` 包含对上述共享库的裸模块导入时，宿主在执行 Blob URL 动态导入前会自动执行 ESM 语法转译，全面兼容：
   - 复合默认 + 具名导入（如 `import React, { useState, useEffect } from "react"`）
   - 别名转换（如 `import { useState as useState2 } from "react"` 转译为对象解构 `{ useState: useState2 }`，避免语法错误）

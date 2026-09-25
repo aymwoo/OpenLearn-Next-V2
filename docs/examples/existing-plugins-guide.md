@@ -6,7 +6,7 @@ OpenLearn V2 在 `packages/plugins/` 目录中内置了 7 个生产级范例插�
 
 ## 1. 虚拟文件系统插件 (`@openlearn/plugin-vfs`)
 
-- **源码目录**: [`packages/plugins/vfs.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugins/vfs.ts)
+- **源码目录**: `packages/plugins/vfs.ts`
 - **主要用途**: 为系统与 AI 智能体提供树状目录结构的虚拟文件系统（VFS）隔离读写能力。
 
 ### Manifest 解析
@@ -38,7 +38,7 @@ manifest: {
 
 ## 2. 平台管理与运维插件 (`@openlearn/plugin-management`)
 
-- **源码目录**: [`packages/plugins/management.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugins/management.ts)
+- **源码目录**: `packages/plugins/management.ts`
 - **主要用途**: 管理系统内部插件、插件配置、系统状态诊断与数据备份恢复。
 
 ### 核心功能
@@ -50,7 +50,7 @@ manifest: {
 
 ## 3. AI 智能体课程规划器 (`@openlearn/plugin-ai-planner`)
 
-- **源码目录**: [`packages/plugins/ai-planner.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugins/ai-planner.ts)
+- **源码目录**: `packages/plugins/ai-planner.ts`
 - **主要用途**: 利用大模型能力，根据教学大纲与知识点自动规划课程 Stages 与互动环节。
 
 ### 实现亮点
@@ -62,7 +62,7 @@ manifest: {
 
 ## 4. 智能作业自动批改插件 (`@openlearn/plugin-assignment-eval`)
 
-- **源码目录**: [`packages/plugins/assignment-eval.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugins/assignment-eval.ts)
+- **源码目录**: `packages/plugins/assignment-eval.ts`
 - **主要用途**: 收集学生提交的文本/代码作业，调用 AI 模型进行初批并生成量化评分与评语。
 
 ### 实现亮点
@@ -74,7 +74,7 @@ manifest: {
 
 ## 5. 后台受控进程与定时器插件 (`@openlearn/plugin-process`)
 
-- **源码目录**: [`packages/plugins/process.ts`](file:///home/wuxf/Develop/openlearnv2/packages/plugins/process.ts)
+- **源码目录**: `packages/plugins/process.ts`
 - **主要用途**: 展示如何通过 `ctx.services.processManager` 创建受监控的后台常驻任务与定时 Cron Job。
 
 ---
