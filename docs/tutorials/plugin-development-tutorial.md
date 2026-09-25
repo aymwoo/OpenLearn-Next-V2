@@ -1384,7 +1384,7 @@ interface IStorageService {
 | `anchor:*`                 | 宿主原生按钮/元素前后插入按钮（v0.2.6，锚点目录见 `docs/plugin/anchor-slots.md`） |
 | `palette.item`             | 备课画板组件面板与白板画布专属教学组件扩展（v0.3.17） |
 
-> 上表为教程演示用的常用子集（早期版本为完整清单，现已扩展至 53 个槽位）；完整目录与各槽位 Props 见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
+> 上表为教程演示用的常用子集（早期版本为完整清单，现已扩展至 55 个槽位）；完整目录与各槽位 Props 见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
 
 **学生端插件获取当前学生 ID**：宿主在渲染 `student.view` 扩展点时（`src/features/student/StudentDashboardPanel.tsx` 调用点），通过 `slotProps` 注入当前学生 ID。插件组件通过 props 接收：
 

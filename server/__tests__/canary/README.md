@@ -248,6 +248,25 @@ manifest 以独立文件写入 ZIP 根（宿主 `zip.file('manifest.json')` 读�
 | R4 | bomb 变体 301MB 内存峰值 | 单独跑；coverage job 与其并行需注意 |
 | R5 | classic JSX 前端加载接受度 | 阶段 7 验证；失败则前端降级为纯声明式 contributes |
 
+## 附录 A：阶段 7 前端断言明细（2026-09-25 随 2320687 提交复核更新）
+
+新提交为座位图落地了渲染器，并新增 2 个 autosave 槽位（**槽位总数 53 → 55**）：
+
+| # | 断言 | 预期 |
+|---|---|---|
+| 7.1 | manifest 声明 `teacher.tab` + `ctx.ui.registerExtensionPoint` | 教师端主导航出现「金丝雀」Tab，点击渲染插件组件 |
+| 7.2 | `student.view` | 组件收到 `slotProps.studentId` |
+| 7.3 | 任意槽位组件 | 统一收到 `{ lessonId, classId }`（extension-point-renderer 未被新提交改动） |
+| 7.4 | `anchor:toolbar-export:before` | 按钮出现在锚点前侧、`position` 升序 |
+| 7.5 | 声明 `classroom.seating.toolbar` / `legend` / `summary` / `seat_badge` | **在机房座位页真实渲染**（`ComputerLabSeatingMap.tsx:192/267/302/363`）。前置：先经 `GET /api/classes/:classId/seats` 准备 `computer_labs` + `student_seats` 数据。slotProps：toolbar=`{classId,lab,stats}`、legend/summary=`{classId,stats}`、seat_badge=`{seat,student,isOnline,classId}`（座位级，每个有座学生渲染一次） |
+| 7.5b | 声明 `classroom.seating.seat_actions` | 注册成功但**暂不渲染**（右键菜单挂载未实现，记录现状项） |
+| 7.6 | 组件内 `invokeCommand('canary.ping')` | 经后端 handler 返回 |
+| 7.7 | 组件 import `@/` 内部单例 | 构建期被拒 |
+| 7.8 | `showInDashboard: false` | 插件卡片总览开关隐藏 widget |
+| 7.9（新增） | 声明 `whiteboard.autosave.status` / `action` | 在课程编辑器渲染（`LessonEditorView.tsx:261/270`）；slotProps：status=`{lessonId,status,pendingCount,lastSavedTime}`、action=`{lessonId,flush,pendingCount}`；伴随事件 `whiteboard.autosave.pending/saving/saved` |
+
+**文档同步影响**：`docs/reference/plugin-ui-extension-slots.md` 已随本次复核更新（55 槽位、渲染器表 6 行、seat_actions 未挂载标注）；`docs/tutorials/plugin-development-tutorial.md` §6.4 注脚的"53 个槽位"需同步为 55。
+
 ## 9. 「记录现状」清单（后续修复讨论输入）
 
 1. **1.1** 缺 `main` 时 ZIP 路径静默注入 `'index.js'`（install-utils.ts:159）——与 schema 必填语义不一致
