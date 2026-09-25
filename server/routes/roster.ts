@@ -157,7 +157,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   // --- AUTHENTICATION & TEACHER USER ACCOUNTS APIS ---
   // getCookieToken is now defined earlier to be used by whiteboard endpoints
 
-  app.get('/api/db-status', (req, res) => {
+  app.get('/api/db-status', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const startTime = performance.now();
       const result = kernelContainer.db.prepare('SELECT 1 as alive').get() as any;
@@ -595,14 +595,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
         }
         // 旧明文密�?
         else if (storedPwd === providedPassword) {
-          matchesOwnPassword = true;
-          // 自动升级�? bcrypt
-          kernelContainer.db
-            .prepare('UPDATE students SET password = ? WHERE id = ?')
-            .run(bcryptHashPassword(providedPassword), studentObj.id);
-          console.log(
-            `[Auth] Auto-upgraded plaintext password to bcrypt for student ${studentObj.student_number || studentObj.id}`,
-          );
+          matchesOwnPassword = false;
         }
 
         // 2. Check temporary class passcodes for classes the student is enrolled in
@@ -932,7 +925,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
           'INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)',
         )
         .run(studentId, finalNum, name, email || '', hashedPassword, Date.now());
-      res.json({ success: true, id: studentId, student_number: finalNum, tempPassword: password || '123456' });
+      res.json({ success: true, id: studentId, student_number: finalNum });
     } catch (e: any) {
       sendSafeError(res, e);
     }

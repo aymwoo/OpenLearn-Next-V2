@@ -286,8 +286,6 @@ export const appStore = createStore<AppState>((set) => ({
   },
 }));
 
-import { classStore } from './classStore';
-
 // Sync changes from uiStore into appStore
 uiStore.subscribe((uiState) => {
   appStore.setState({
@@ -295,61 +293,6 @@ uiStore.subscribe((uiState) => {
     teacherTab: uiState.teacherTab,
     toasts: uiState.toasts,
     siteInfo: uiState.siteInfo,
-  });
-});
-
-import { lessonStore } from './lessonStore';
-
-// Sync changes from classStore into appStore
-classStore.subscribe((classState) => {
-  appStore.setState({
-    classes: classState.classes,
-    students: classState.students,
-    classStudentsMap: classState.classStudentsMap,
-    classDashboardMap: classState.classDashboardMap,
-    studentProgressMap: classState.studentProgressMap,
-    classSchedulesMap: classState.classSchedulesMap,
-    scheduleAttendanceMap: classState.scheduleAttendanceMap,
-    assignmentSubmissionsMap: classState.assignmentSubmissionsMap,
-    classAssignmentsMap: classState.classAssignmentsMap,
-    classProgressMap: classState.classProgressMap,
-    classSeats: classState.classSeats,
-  });
-});
-
-import { liveClassStore } from './liveClassStore';
-
-// Sync changes from lessonStore into appStore
-lessonStore.subscribe((lessonState) => {
-  appStore.setState({
-    lessons: lessonState.lessons,
-    selectedLesson: lessonState.selectedLesson,
-    elements: lessonState.elements,
-    vfsNodes: lessonState.vfsNodes,
-  });
-});
-
-import { studentStore } from './studentStore';
-
-// Sync changes from liveClassStore into appStore
-liveClassStore.subscribe((liveState) => {
-  appStore.setState({
-    liveClassSelectedClassId: liveState.liveClassSelectedClassId,
-    liveClassIsActive: liveState.liveClassIsActive,
-    liveClassFeed: liveState.liveClassFeed,
-    liveClassTimeRemaining: liveState.liveClassTimeRemaining,
-    liveClassAcknowledgedMap: liveState.liveClassAcknowledgedMap,
-    liveClassStudentProgress: liveState.liveClassStudentProgress,
-    onlineStudentIds: liveState.onlineStudentIds,
-    activeStudentLessons: liveState.activeStudentLessons,
-  });
-});
-
-// Sync changes from studentStore into appStore
-studentStore.subscribe((studentState) => {
-  appStore.setState({
-    studentDashboardData: studentState.studentDashboardData,
-    notifications: studentState.notifications,
   });
 });
 

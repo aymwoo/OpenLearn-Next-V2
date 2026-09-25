@@ -49,6 +49,7 @@ export interface ServerContext {
   app: express.Express;
   io: Server;
   loginLimiter: any;
+  aiLimiter: any;
   activityRegistry: ActivityRegistry;
   MF_REMOTE_CACHE: Map<string, { entry: string; meta: Record<string, any> }>;
   lessonActiveSegments: Map<string, string>;

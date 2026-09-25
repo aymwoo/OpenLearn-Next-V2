@@ -977,7 +977,7 @@ parentPort.on('message', async function(msg) {
         }
       } : undefined;
 
-      var PLUGIN_SHARED_MODULES = ['recharts', 'react-markdown', 'jspdf', 'jspdf-autotable', 'xlsx', 'lucide-react', 'uuid'];
+      var PLUGIN_SHARED_MODULES = ['recharts', 'react-markdown', 'jspdf', 'jspdf-autotable', 'exceljs', 'lucide-react', 'uuid'];
 
       var pluginLog = {
         info: function() { console.log.apply(console, arguments); },

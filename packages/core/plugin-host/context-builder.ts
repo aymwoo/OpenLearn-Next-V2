@@ -96,11 +96,11 @@ export async function bootstrapSharedModules(): Promise<void> {
     import('jspdf-autotable').then((m) => ({ name: 'jspdf-autotable', mod: m })),
     import('lucide-react').then((m) => ({ name: 'lucide-react', mod: m })),
     import('uuid').then((m) => ({ name: 'uuid', mod: m })),
-    // xlsx 按需可选，失败不阻塞
-    import('xlsx')
-      .then((m) => ({ name: 'xlsx', mod: m }))
+    // exceljs 按需可选，失败不阻塞
+    import('exceljs')
+      .then((m) => ({ name: 'exceljs', mod: m }))
       .catch((err) => {
-        console.warn('[PluginHost] xlsx not available (optional):', err.message);
+        console.warn('[PluginHost] exceljs not available (optional):', err.message);
         return null;
       }),
   ]);

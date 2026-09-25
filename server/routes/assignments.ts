@@ -180,7 +180,7 @@ Output pure JSON only without markdown code blocks, matching this structure:
     }
   });
 
-  app.get('/api/assignments/:id/submissions', requireAuth(), (req, res) => {
+  app.get('/api/assignments/:id/submissions', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const submissions = kernelContainer.db
         .prepare(

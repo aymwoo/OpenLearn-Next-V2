@@ -211,7 +211,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/audit-report/download', (_req, res) => {
+  app.get('/api/audit-report/download', requireAuth('administrator'), (_req, res) => {
     const reportPath = path.join(process.cwd(), 'docs/architecture/code-quality-audit-report.md');
     if (fs.existsSync(reportPath)) {
       res.download(reportPath, 'OpenLearn-V2-Audit-Report.md');
@@ -220,7 +220,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/remediation-roadmap/download', (_req, res) => {
+  app.get('/api/remediation-roadmap/download', requireAuth('administrator'), (_req, res) => {
     const roadmapPath = path.join(process.cwd(), 'docs/architecture/remediation-and-optimization-roadmap.md');
     if (fs.existsSync(roadmapPath)) {
       res.download(roadmapPath, 'OpenLearn-V2-Remediation-Roadmap.md');
@@ -229,7 +229,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/classroom-optimization-plan/download', (_req, res) => {
+  app.get('/api/classroom-optimization-plan/download', requireAuth('administrator'), (_req, res) => {
     const planPath = path.join(process.cwd(), 'docs/architecture/interactive-classroom-and-editor-optimization-plan.md');
     if (fs.existsSync(planPath)) {
       res.download(planPath, 'OpenLearn-V2-Classroom-Optimization-Plan.md');

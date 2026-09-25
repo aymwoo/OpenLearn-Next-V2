@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import crypto from 'crypto';
 import { filterXSS } from 'xss';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
@@ -12,7 +12,7 @@ import { sendSafeError } from '../utils/error-handler.js';
 import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
 
 export function registerOsRoutes(ctx: ServerContext) {
-  const { app, runGeminiAgentChat, runOpenAIAgentChat, activityRegistry } = ctx;
+  const { app, runGeminiAgentChat, runOpenAIAgentChat, activityRegistry, aiLimiter } = ctx;
 
   // 轻量连通性探测端点：课堂启动门户的顶部遥测岛用它测 HTTP 往返时延。
   // 刻意不鉴权、不访问数据库、无副作用，以便在登录页等未认证场景也能复用。
@@ -20,7 +20,7 @@ export function registerOsRoutes(ctx: ServerContext) {
     res.json({ ok: true, ts: Date.now() });
   });
 
-  app.post('/api/upload', async (req, res) => {
+  app.post('/api/upload', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { filename, base64Data } = req.body;
       if (!filename || !base64Data) {
@@ -58,7 +58,7 @@ export function registerOsRoutes(ctx: ServerContext) {
       if (ext === '.pdf') {
         try {
           await new Promise<void>((resolve) => {
-            exec(`pdfinfo "${filePath}"`, (error, stdout) => {
+            execFile('pdfinfo', [filePath], (error, stdout) => {
               if (error) {
                 console.error('Error running pdfinfo:', error);
                 return resolve();
@@ -106,7 +106,7 @@ export function registerOsRoutes(ctx: ServerContext) {
     }
   });
 
-  app.get('/api/commands/registered', (req, res) => {
+  app.get('/api/commands/registered', requireAuth(), (req, res) => {
     try {
       const actions = kernelContainer.actionRegistry.getAllActions();
       res.json(actions);
@@ -118,7 +118,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   //  Activity Ecosystem REST (Sprint P7-01)
   // List registered activity providers, filtered by role. Reuses the same
   // registry the Workspace and plugins share. No business logic is duplicated.
-  app.get('/api/activities', async (req, res) => {
+  app.get('/api/activities', requireAuth(), async (req, res) => {
     try {
       const role = (req.query.role as string) || 'all';
       const list =
@@ -134,7 +134,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   // Start an activity: builds an ActivityContext from the existing kernel
   // services and drives the provider lifecycle (reuses Command Bus + Event Bus
   // + Permission runtime). Permission isolation is enforced by startActivity().
-  app.post('/api/activities/:id/start', async (req, res) => {
+  app.post('/api/activities/:id/start', requireAuth(), async (req, res) => {
     try {
       const { payload, actorId } = req.body || {};
       const context = createActivityContext({
@@ -156,7 +156,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   // the dashboard "Activity Center" status monitor  it shows live status and
   // hides itself when nothing is running. State is in-memory on the provider
   // instances, so this reflects the live server process only.
-  app.get('/api/activities/running', (_req, res) => {
+  app.get('/api/activities/running', requireAuth(), (_req, res) => {
     try {
       const activities = activityRegistry
         .listProviders()
@@ -178,7 +178,7 @@ export function registerOsRoutes(ctx: ServerContext) {
 
   // Finish (end) a running activity
   // dashboard. Reuses the same ActivityContext as start().
-  app.post('/api/activities/:id/finish', async (req, res) => {
+  app.post('/api/activities/:id/finish', requireAuth(), async (req, res) => {
     try {
       const provider = activityRegistry.getProvider(req.params.id);
       if (!provider) {
@@ -199,7 +199,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   });
 
   // Pause a running activity (dashboard management action).
-  app.post('/api/activities/:id/pause', async (req, res) => {
+  app.post('/api/activities/:id/pause', requireAuth(), async (req, res) => {
     try {
       const provider = activityRegistry.getProvider(req.params.id);
       if (!provider) {
@@ -220,7 +220,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   });
 
   // Resume a paused activity (dashboard management action).
-  app.post('/api/activities/:id/resume', async (req, res) => {
+  app.post('/api/activities/:id/resume', requireAuth(), async (req, res) => {
     try {
       const provider = activityRegistry.getProvider(req.params.id);
       if (!provider) {
@@ -241,7 +241,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   });
 
   // OS Agent interaction
-  app.post('/api/agent/chat', async (req, res) => {
+  app.post('/api/agent/chat', requireAuth(), aiLimiter, async (req, res) => {
     try {
       let { message, lang = 'zh', currentLessonId, attachments, providerId } = req.body as AgentChatRequest;
 
@@ -350,7 +350,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   });
 
   // Retrieve the kernel assistant's stored memory for the current user + lesson
-  app.get('/api/agent/conversations', (req, res) => {
+  app.get('/api/agent/conversations', requireAuth(), (req, res) => {
     try {
       const token = getCookieToken(req);
       let userId: string | undefined;
@@ -372,7 +372,7 @@ export function registerOsRoutes(ctx: ServerContext) {
   });
 
   // Clear the kernel assistant's memory for the current user + lesson
-  app.delete('/api/agent/conversations', (req, res) => {
+  app.delete('/api/agent/conversations', requireAuth(), (req, res) => {
     try {
       const token = getCookieToken(req);
       let userId: string | undefined;

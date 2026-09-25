@@ -156,7 +156,7 @@ async function startServer() {
   app.use(
     helmet({
       // 允许在 AI Studio 及外部受信任环境 iframe 中嵌入
-      xFrameOptions: false,
+      xFrameOptions: { action: 'sameorigin' },
       contentSecurityPolicy: false,
       crossOriginOpenerPolicy: false,
       crossOriginEmbedderPolicy: false,
@@ -166,7 +166,7 @@ async function startServer() {
     }),
   );
 
-  // SEC-AUTH-04: 登录频率限制?5?/IP/分钟?
+  // SEC-AUTH-04: 登录频率限制器（5次/IP/分钟）
   const loginLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 分钟
     max: 5,
@@ -175,18 +175,41 @@ async function startServer() {
     legacyHeaders: false,
   });
 
+  const writeLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    message: { error: '请求过于频繁，请稍后再试。Too many requests, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  const aiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: { error: 'AI 请求过于频繁，请稍后再试。Too many AI requests, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
+  app.use((req, res, next) => {
+    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') {
+      return writeLimiter(req, res, next);
+    }
+    next();
+  });
   // SEC-FIX: uploads 静态资源需鉴权（防匿名枚举已上传课件/头像），plugins 保持只读但阻断敏感文件
   app.use(
     '/uploads',
     (req: any, res: any, next: any) => {
-      // 公开头像与课件运行时仍需可读，但基础鉴权防止匿名爬取
-      // 若需完全公开，可改为白名单路径；此处保持与路由层一致的会话要求
+      const reqPath = (req.path || '') as string;
+      if (reqPath.startsWith('/avatars/')) {
+        return next();
+      }
       const token = req.headers.cookie?.match?.(/edu_os_token=([^;]+)/)?.[1];
       if (!token) {
-        // 允许已通过 requireAuth 的路由已校验，此处仅作静态层兜底：匿名仍可读头像（产品需求）
-        // 但阻止匿名列目录（express.static 默认不列目录，已安全）
+        return res.status(401).json({ error: 'Authentication required' });
       }
       next();
     },
@@ -249,14 +272,15 @@ async function startServer() {
   // SEC-NET-01: Express CORS 中间件 — 允许沙箱 iframe（origin: null）、同源请求与合法来源
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    if (origin === 'null' || origin === undefined) {
-      res.setHeader('Access-Control-Allow-Origin', origin ?? '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-      res.setHeader('Access-Control-Max-Age', '86400'); // 预检缓存 24h
-    } else if (isOriginAllowed(origin, req.headers.host)) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    if (origin && origin !== 'null' && origin !== undefined) {
+      if (isOriginAllowed(origin, req.headers.host)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.setHeader('Access-Control-Max-Age', '86400');
+      }
+    } else {
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
       res.setHeader('Access-Control-Max-Age', '86400');
@@ -271,6 +295,7 @@ async function startServer() {
   const ctx: ServerContext = {
     app,
     loginLimiter,
+    aiLimiter,
     MF_REMOTE_CACHE,
     lessonActiveSegments,
     buildAgentSystemInstruction,

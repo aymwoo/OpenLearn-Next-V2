@@ -142,7 +142,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // Plugin APIs
-  app.get('/api/plugins', (req, res) => {
+  app.get('/api/plugins', requireAuth(), (req, res) => {
     res.json(kernelContainer.pluginLifecycleManager.listPlugins());
   });
 
@@ -421,7 +421,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // V3.0: 查询插件贡献点摘�?
-  app.get('/api/plugins/:id(*)/contributions', (req, res) => {
+  app.get('/api/plugins/:id(*)/contributions', requireAuth(), (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
       const summary = kernelContainer.pluginHost.listContributions(rawId);
@@ -432,7 +432,7 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // V3.1: 读取插件配置（schema + 当前值）
-  app.get('/api/plugins/:id(*)/config', (req, res) => {
+  app.get('/api/plugins/:id(*)/config', requireAuth(), (req, res) => {
     try {
       const rawId = decodeURIComponent(req.params.id);
       const pluginId = kernelContainer.pluginHost.resolvePluginUuid(rawId);

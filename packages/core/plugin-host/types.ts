@@ -75,7 +75,7 @@ export const PLUGIN_SHARED_MODULES = [
   'react-markdown',
   'jspdf',
   'jspdf-autotable',
-  'xlsx', // 可选：需在 package.json dependencies 中
+  'exceljs', // 可选：需在 package.json dependencies 中
   'lucide-react',
   'uuid',
 ] as const;

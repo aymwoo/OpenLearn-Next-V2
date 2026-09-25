@@ -110,7 +110,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
 
 
   // ── MFE Remote Entries ─────────────────────────────────────────────────
-  app.get('/api/mfe/remotes', (req, res) => {
+  app.get('/api/mfe/remotes', requireAuth(), (req, res) => {
     try {
       const name = req.query.name as string | undefined;
 
@@ -242,7 +242,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
   });
 
   // VFS File Download Router (V5.1+)
-  app.get('/files/*', (req, res) => {
+  app.get('/files/*', requireAuth(), (req, res) => {
     try {
       let filePath = req.params[0] || '';
       if (!filePath.startsWith('/')) {

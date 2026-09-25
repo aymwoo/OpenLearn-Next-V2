@@ -49,8 +49,8 @@ export default defineConfig({
           },
   },
   build: {
-    target: 'esnext',
-    modulePreload: false,
+    target: 'es2022',
+    modulePreload: { polyfill: false },
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -85,10 +85,6 @@ export default defineConfig({
             }
             if (id.includes('/pptx-preview/')) {
               return 'vendor-pptx';
-            }
-            // Markdown & Sanitization
-            if (id.includes('/marked/') || id.includes('/dompurify/') || id.includes('/highlight.js/')) {
-              return 'vendor-content';
             }
             // Utilities
             if (

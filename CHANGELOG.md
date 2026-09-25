@@ -218,6 +218,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **补充三个运行时架构文档**，把此前只存在于代码里的三条运行链路正式文档化：`docs/architecture/classroom-runtime.md`（Classroom Runtime，跨前端 `src/features/classroom-runtime/` 与内核 `packages/core/classroom-runtime/` 两侧）、`docs/architecture/interaction-runtime.md`（Interaction Runtime，覆盖 Keyboard / Mouse / Touch / Gesture / Drag / Clipboard / Focus / ContextMenu / Selection 九个交互域）、`docs/architecture/resource-runtime.md`（Teaching Resource Runtime，把 PDF / PPT / 视频 / Notebook / Mermaid / GeoGebra 等异构资源统一适配为 Workspace 控件）；三篇文档均登记进 `docs/index.md` 的架构 toctree，随 ReadTheDocs 发布，同时被上一提交引入的漂移审计纳入比对范围（本仓库 `docs facts: 103` / `code facts: 55` / `drift items: 0` 基线保持）。
 - **修正 README 中 5 处失效链接**：3 处指向并不存在的 `docs/architecture/plugin-architecture-audit-report.md`（该文件全仓不存在、git 历史也从未提交过；改为指向既有的架构文档漂移审计），2 处指向同样不存在的仓库根 `LICENSE`（改为指向声明 `"license": "MIT"` 的 `package.json`）。**注意：仓库目前确实没有 LICENSE 文件**，若要以文件形式发布许可证，需由版权持有者补齐版权行后另行提交。
 
+### Security
+
+- **全面安全审计与修复（14 项）**：对平台进行系统性安全审计（覆盖 974 个源文件 / ~180K 行代码），发现并修复 4 项 CRITICAL、8 项 HIGH、3 项 MEDIUM 安全问题，全部修复通过 TypeScript 类型检查（0 错误）与完整测试套件（250 文件 / 1691 用例通过）验证：
+  - **[CRITICAL] 命令注入 RCE 修复**：`server/routes/os.ts` 的 `exec(\`pdfinfo "${filePath}"\`)` 替换为 `execFile('pdfinfo', [filePath])`，消除 shell 元字符注入风险；`/api/upload` 端点补加 `requireAuth('teacher', 'administrator')`，阻断未认证 RCE 攻击链。
+  - **[CRITICAL] 16 个未认证端点加固**：`/api/db-status`（数据库 Schema 泄露）、`/files/*`（VFS 文件访问）、`/api/mfe/remotes`（微前端入口）、`/api/plugins` 系列（插件列表/配置/贡献点）、`/api/audit-report/download` 等管理报告下载、`/api/commands/registered`（命令注册表）、`/api/agent/conversations`（AI 对话历史）、`/api/activities` 系列（活动管理）全部补加 `requireAuth()` 中间件。管理报告下载限 `administrator` 角色。
+  - **[HIGH] 明文密码回退移除**：`server/routes/roster.ts` 学生登录流程中，当存储密码既非 bcrypt 也非 SHA-256 时，原逻辑直接明文比较并自动升级。修复后该分支拒绝登录（`matchesOwnPassword = false`），遗留明文账户需管理员重置。
+  - **[HIGH] 临时密码泄露修复**：`POST /api/students` 创建学生接口的响应中移除 `tempPassword` 字段（前端无引用，安全移除）。
+  - **[HIGH] CORS null origin 修复**：`server.ts` CORS 中间件不再反射 `null` origin 为 `Access-Control-Allow-Origin`，不再为 null origin 设置 `Allow-Credentials`，防止沙箱 iframe 伪造 origin 进行跨域攻击。
+  - **[HIGH] 点击劫持防护**：`helmet.xFrameOptions` 从 `false` 改为 `{ action: 'sameorigin' }`。
+  - **[HIGH] 全局 Rate Limiting**：新增 `writeLimiter`（60 次/分钟/IP）作为全局中间件应用于所有 POST/PUT/DELETE 请求；新增 `aiLimiter`（10 次/分钟/IP）专用于 `POST /api/agent/chat`（昂贵 LLM 调用）。`ServerContext` 接口新增 `aiLimiter` 字段。
+  - **[HIGH] 作业提交 IDOR 修复**：`GET /api/assignments/:id/submissions` 角色限制从 `requireAuth()` 改为 `requireAuth('teacher', 'administrator')`，防止学生查看他人提交。
+  - **[MEDIUM] 上传目录认证修复**：`/uploads` 静态资源中间件从空操作改为实际执行认证检查，`/avatars/` 路径例外放行（产品需求）。
+  - **[依赖安全] xlsx → exceljs 替换**：`xlsx@^0.18.5` 有已知 CVE（原型污染），替换为 `exceljs@^4.4.0`。共享模块注册名、Worker 白名单、类型声明、Vitest mock 同步更新。移除 `@types/xlsx`（exceljs 内置类型）。
+  - **[依赖分类] devDependencies 修正**：`esbuild`（仅构建脚本）、`@types/reveal.js`（类型定义）、`pino-pretty`（仅开发环境日志格式化）从 `dependencies` 移至 `devDependencies`，减少生产安装体积。
+  - **[构建配置] vite.config.ts 优化**：`build.target` 从 `'esnext'` 改为 `'es2022'`（匹配 tsconfig，避免旧环境语法错误）；`modulePreload` 从 `false` 改为 `{ polyfill: false }`；移除 `vendor-content` manualChunk 死规则（marked/dompurify/highlight.js 非直接依赖）。
+  - **[类型安全] tsconfig strict 子集启用**：启用 `noImplicitThis`、`alwaysStrict`、`strictBindCallApply`（0 编译错误）。完整 `strict: true` 因需修复 ~150 个 `strictNullChecks` 错误，建议后续按模块渐进推进。
+  - **[状态管理] 死 store 清理**：移除 `classStore`/`lessonStore`/`liveClassStore`/`studentStore` 在 `appStore.ts` 中的无效镜像订阅（4 个域 store 从未被组件直接消费），清理 `store/index.ts` barrel 导出。
+  - **[文档] 迁移 README 补全**：`migrations/README.md` 补充 009 条目（`009_classroom_peer_review.sql`）。
+  - 完整修复报告归档于 `docs/architecture/security-remediation-report.md`。
+
 ## [0.3.21] - 2026-09-20
 
 ### Fixes
