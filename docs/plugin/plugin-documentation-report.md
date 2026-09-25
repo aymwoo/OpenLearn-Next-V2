@@ -1,5 +1,7 @@
 # 插件系统文档审计报告 (Plugin Documentation Report)
 
+> ⚠️ **快照报告（Snapshot）**：本页是 2026-07-30 的审计快照。"100% Fully Verified" 只反映撰写时点；此后平台已演进（服务 7→9、Token 补齐至 33、槽位 20 种、白名单 xlsx→exceljs 等，部分已于 2026-09 审计中修正）。权威数字请以 [DI Token 字典](../api/di-tokens) 与 [UI 扩展槽位全目录](../reference/plugin-ui-extension-slots) 为准。
+
 **Project**: OpenLearn V2  
 **Module**: Plugin Subsystem (`packages/core/plugin-host/`, `packages/plugin-sdk/`, `packages/plugins/`)  
 **SDK Version**: `@openlearn/plugin-sdk@3.7.0`  

@@ -1,5 +1,7 @@
 # Architecture Synchronization Report 架构同步报告
 
+> ⚠️ **快照报告（Snapshot）**：本页是无日期锚定的审计快照，其中"100% Synchronized"等结论只反映撰写时点的状态。此后代码持续演进（服务数 7→9、Token 19→33、槽位扩展至 53、迁移 000-009 等），本页数字**不应被当作当前事实**；当前状态请以源码与带 `doc-version` 标记的权威参考页为准。
+
 **Project**: OpenLearn V2  
 **Module**: Architecture Subsystem (`packages/core/`)  
 **Status**: 100% Synchronized with Codebase

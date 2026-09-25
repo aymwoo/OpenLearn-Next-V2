@@ -42,6 +42,10 @@ architecture/resource-runtime
 architecture/architecture-synchronization-report
 architecture/platform-foundation-audit-report
 architecture/navigation-audit-report
+architecture/security-remediation-report
+architecture/code-quality-audit-report
+architecture/remediation-and-optimization-roadmap
+architecture/interactive-classroom-and-editor-optimization-plan
 ```
 
 ```{toctree}
@@ -197,6 +201,7 @@ examples/existing-plugins-guide
 :caption: 🗺️ 产品路线图 (Roadmap)
 :hidden:
 
+roadmap/v0.4.0-roadmap
 roadmap/v0.3.0-roadmap
 roadmap/documentation-roadmap
 ```

@@ -823,10 +823,10 @@ interface PlatformCommand<T = unknown> {
 | `IStorageServiceToken`        | `@openlearn/core:IStorageService`        | `IStorageService`           | K-V 存储       |
 | `IAIServiceToken`             | `@openlearn/core:IAIService`             | `IAIService`                | AI 文本生成    |
 | `IDatabaseToken`              | `@openlearn/core:IDatabase`              | `Database` (better-sqlite3) | 直接 SQL 访问  |
+| `IPluginHostToken`            | `@openlearn/core:IPluginHost`            | `PluginHost`                | 插件主机管理   |
+| `ISemesterGradeServiceToken`  | `@openlearn/core:ISemesterGradeService`  | `ISemesterGradeService`     | 学期成绩管理   |
 
 > **⚠️ better-sqlite3 版本差异**：`ctx.resolve(IDatabaseToken)` 返回宿主进程的 `better-sqlite3` `Database` 实例。可用 API 取决于宿主安装版本，`exec()` 仅 v9.0+ 可用，建议优先使用 `prepare().run()` / `.get()` / `.all()`。
-> | `IPluginHostToken` | `@openlearn/core:IPluginHost` | `PluginHost` | 插件主机管理 |
-> | `ISemesterGradeServiceToken` | `@openlearn/core:ISemesterGradeService` | `ISemesterGradeService` | 学期成绩管理 |
 
 在 `manifest.requires` 中使用格式：`@openlearn/core:TokenName@^1.0.0`
 
@@ -1121,7 +1121,7 @@ const icons = ctx.require('lucide-react');
 const uuid = ctx.require('uuid');
 ```
 
-### 5.13 权限字符串规范
+### 5.14 权限字符串规范
 
 ```
 
@@ -1144,10 +1144,9 @@ management:read — 读取管理数据
 management:write — 写入管理数据
 
 通配符: lesson:* 匹配 lesson:read, lesson:write, lesson:delete
+```
 
-````
-
-### 5.14 插件 RESTful API 开发实战（v0.3.11 新增）
+### 5.15 插件 RESTful API 开发实战（v0.3.11 新增）
 
 自 OpenLearn V2 `v0.3.11`（SDK `3.6.0`）起，平台正式支持插件对外导出标准 RESTful API，使插件能够与外部系统、前端交互组件或第三方工具直接进行 HTTP 通信。
 
@@ -1155,7 +1154,7 @@ management:write — 写入管理数据
 所有插件的 HTTP 路由均统一由平台主安全网关挂载至：
 ```text
 /api/plugins/:pluginId/*
-````
+```
 
 例如插件 ID 为 `ext-homework-hub`，注册了 `/students/:id/summary` 端点，客户端访问的完整路径为：
 
@@ -1379,6 +1378,13 @@ interface IStorageService {
 | `student.view`             | 学生视图                      |
 | `student.fullscreen`       | 学生全屏视图/考试模式（v3.2） |
 | `student.lesson.tool`      | 学生学习工具                  |
+| `classroom.tool`           | 课堂工具                      |
+| `global.setting`           | 全局设置页扩展（v3.2）        |
+| `nav.user_menu`            | 顶部 Header 用户菜单扩展（v0.3.x） |
+| `anchor:*`                 | 宿主原生按钮/元素前后插入按钮（v0.2.6，锚点目录见 `docs/plugin/anchor-slots.md`） |
+| `palette.item`             | 备课画板组件面板与白板画布专属教学组件扩展（v0.3.17） |
+
+> 上表为教程演示用的常用子集（早期版本为完整清单，现已扩展至 53 个槽位）；完整目录与各槽位 Props 见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
 
 **学生端插件获取当前学生 ID**：宿主在渲染 `student.view` 扩展点时（`src/features/student/StudentDashboardPanel.tsx` 调用点），通过 `slotProps` 注入当前学生 ID。插件组件通过 props 接收：
 
@@ -1394,11 +1400,6 @@ export default function MyStudentPlugin(props: { studentId?: string }) {
 ```
 
 **所有扩展点组件统一收到课堂上下文（v0.2.8+）**：宿主经 `ExtensionPointRenderer` 向每个扩展点组件注入 `{ lessonId, classId }`（当前课程/班级，`string | null`）；非渲染场景用 `ctx.context.get()` / `ctx.context.subscribe()` 读取。详见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
-| `classroom.tool` | 课堂工具 |
-| `global.setting` | 全局设置页扩展（v3.2） |
-| `nav.user_menu` | 顶部 Header 用户菜单扩展（v0.3.x） |
-| `anchor:*` | 宿主原生按钮/元素前后插入按钮（v0.2.6，锚点目录见 `docs/plugin/anchor-slots.md`） |
-| `palette.item` | 备课画板组件面板与白板画布专属教学组件扩展（v0.3.17） |
 
 ### 6.5 invokeCommand（自 V2.5 起可用）
 
@@ -1846,12 +1847,16 @@ await ctx.db.migrate(2, async (sqliteDb) => {
 await ctx.provide('@my-scope/IQuestionBank', questionBankService);
 
 // 插件 B：manifest.optional 中声明依赖
-// optional: ['@my-scope:IQuestionBank@>=1.0.0']
+// optional: ['@my-scope/question-bank:IQuestionBank@>=1.0.0']
 
-// 插件 B：运行时消费
+// 插件 B：运行时消费 —— 通过提供方导出的 Token 解析
+// ⚠️ Token 是 Token<T> 类实例，ctx.resolve 只接受 Token；
+//    形如 ctx.resolve({ name: '@my-scope/IQuestionBank' } as any) 的写法
+//    在运行时会失败（Token 名还必须满足 domain:Name 格式，见 8.8）。
+const questionBank = await ctx.resolve(questionBankToken);
 ```
 
-### 8.5 跨插件服务共享（V3.2）
+### 8.8 跨插件服务共享（V3.2）
 
 多个插件可以通过类型安全的 DI Token 互相分享服务。
 
@@ -1908,10 +1913,6 @@ const score = engine.score(answers);
 - 激活时：检查提供方是否已激活并提供服务 → 阻塞
 - 激活顺序：`ext-quiz-engine:IQuizEngineService` 自动推导为对 `ext-quiz-engine` 的依赖，提供方先激活
 
-const qb = await ctx.resolve({ name: '@my-scope:IQuestionBank' } as any);
-
-````
-
 ---
 
 ## 9. 测试与调试
@@ -1924,7 +1925,7 @@ const qb = await ctx.resolve({ name: '@my-scope:IQuestionBank' } as any);
 ctx.log.info('Handler registered', { commandType: 'poll.create' });
 ctx.log.error('Database connection failed', { error: error.message });
 ctx.log.debug('Request processed', { latency: 23, payload: data });
-````
+```
 
 ### 9.2 查看进程状态
 

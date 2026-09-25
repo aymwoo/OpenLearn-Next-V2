@@ -1,5 +1,7 @@
 # OpenLearn Documentation Synchronization Report
 
+> ⚠️ **快照报告（Snapshot）**：本页是 2026-07-24 的文档结构审计快照，其中的页数、目录结构与版本号（如 SDK 3.5.0）均已随文档站演进过时（当前目录为 plugin/ / ai/ / sdk/ / api/ 等，SDK 3.7.0）。请勿将本页当作当前事实引用。
+
 **Project**: OpenLearn V2  
 **Date**: July 24, 2026  
 **Author**: Chief Technical Writer & Software Architect  
