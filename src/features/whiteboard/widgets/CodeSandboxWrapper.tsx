@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Terminal } from 'lucide-react';
+import { WidgetTitleBar } from './WidgetTitleBar';
 
 export function CodeSandboxWrapper({
   elementId,
@@ -10,15 +11,29 @@ export function CodeSandboxWrapper({
   onPointerUp,
   onDelete,
   readOnly = false,
+  isMinimized = false,
+  isMaximized = false,
+  isPropertiesOpen = false,
+  onOpenProperties,
+  onMinimize,
+  onRestore,
+  onMaximize,
 }: {
   elementId: string;
   data: any;
   readOnly?: boolean;
   onElementUpdate?: (id: string, data: any) => Promise<void>;
   onPointerDown: (e: React.PointerEvent) => void;
-  onPointerMove: (e: React.PointerEvent) => void;
-  onPointerUp: (e: React.PointerEvent) => void;
+  onPointerMove?: (e: React.PointerEvent) => void;
+  onPointerUp?: (e: React.PointerEvent) => void;
   onDelete: () => void;
+  isMinimized?: boolean;
+  isMaximized?: boolean;
+  isPropertiesOpen?: boolean;
+  onOpenProperties?: () => void;
+  onMinimize?: () => void;
+  onRestore?: () => void;
+  onMaximize?: () => void;
 }) {
   const [code, setCode] = useState(data.code || "console.log('Hello from sandbox!');");
   const [output, setOutput] = useState('');
@@ -89,48 +104,55 @@ export function CodeSandboxWrapper({
       className="w-full h-full bg-gray-900 border border-gray-700 rounded-lg shadow-xl overflow-hidden flex flex-col font-mono text-sm"
       style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
     >
-      <div
-        className="bg-gray-800 text-gray-300 px-3 py-1.5 flex justify-between items-center text-xs border-b border-gray-700 cursor-move select-none shrink-0"
+      <WidgetTitleBar
+        title={data.title || 'JS Sandbox'}
+        icon={<Terminal size={13} className="text-emerald-500" />}
+        readOnly={readOnly}
+        isMinimized={isMinimized}
+        isMaximized={isMaximized}
+        isPropertiesOpen={isPropertiesOpen}
+        themeColor="default"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-      >
-        <span className="flex items-center gap-1">JS Sandbox</span>
-        {!readOnly && (
-          <div className="flex items-center gap-1.5" onPointerDown={(e) => e.stopPropagation()}>
+        onOpenProperties={onOpenProperties}
+        onMinimize={onMinimize}
+        onRestore={onRestore}
+        onMaximize={onMaximize}
+        onDelete={onDelete}
+        extraActions={
+          !readOnly ? (
             <button
               onClick={runCode}
-              className="bg-green-600 hover:bg-green-500 text-white px-2 py-0.5 rounded shadow text-xs cursor-pointer"
+              onPointerDown={(e) => e.stopPropagation()}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-0.5 rounded shadow text-xs cursor-pointer font-sans mr-1"
             >
               Run
             </button>
-            <button
-              onClick={onDelete}
-              className="p-0.5 hover:bg-gray-700 rounded text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
-              title="删除组件"
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
-        )}
-      </div>
-      <textarea
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        onBlur={handleBlur}
-        className="w-full flex-1 min-h-0 bg-gray-900 text-green-400 p-3 focus:outline-none resize-none font-mono text-xs"
-        placeholder="// Write JS here"
-        onPointerDown={(e) => {
-          e.stopPropagation();
-        }}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-        }}
+          ) : null
+        }
       />
-      {output && (
-        <div className="bg-black text-gray-400 p-2 border-t border-gray-800 h-24 overflow-y-auto whitespace-pre-wrap text-xs shrink-0">
-          {output}
-        </div>
+      {!isMinimized && (
+        <>
+          <textarea
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            onBlur={handleBlur}
+            className="w-full flex-1 min-h-0 bg-gray-900 text-green-400 p-3 focus:outline-none resize-none font-mono text-xs"
+            placeholder="// Write JS here"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+            }}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+            }}
+          />
+          {output && (
+            <div className="bg-black text-gray-400 p-2 border-t border-gray-800 h-24 overflow-y-auto whitespace-pre-wrap text-xs shrink-0">
+              {output}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

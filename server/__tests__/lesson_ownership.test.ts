@@ -200,6 +200,40 @@ describe('Lesson Ownership & IDOR Protection Suite', () => {
       expect(savedLesson).toBeDefined();
       expect(savedLesson.creator_id).toBe('usr_teacher_chemist');
     });
+
+    it('should update timeline with array or string payloads without PayloadValidationError', async () => {
+      const segments = [
+        { id: 'seg-1', title: '准备环节', duration: '5m' },
+        { id: 'seg-2', title: '讲授新课', duration: '20m' },
+      ];
+
+      const teacherActor = 'user:usr_teacher_alice:teacher';
+
+      // 1. Direct array payload (which previously threw PayloadValidationError)
+      const cmdArray = kernelContainer.commandBus.createCommand(
+        'lesson.update_timeline',
+        { lessonId: aliceLessonId, timeline: segments },
+        teacherActor,
+        { approved: true },
+      );
+      await expect(kernelContainer.commandBus.execute(cmdArray)).resolves.not.toThrow();
+
+      let row = kernelContainer.db.prepare('SELECT timeline FROM lessons WHERE id = ?').get(aliceLessonId) as any;
+      expect(JSON.parse(row.timeline)).toEqual(segments);
+
+      // 2. Serialized string payload (after deletion)
+      const afterDeletion = [{ id: 'seg-1', title: '准备环节', duration: '5m' }];
+      const cmdString = kernelContainer.commandBus.createCommand(
+        'lesson.update_timeline',
+        { lessonId: aliceLessonId, timeline: JSON.stringify(afterDeletion) },
+        teacherActor,
+        { approved: true },
+      );
+      await expect(kernelContainer.commandBus.execute(cmdString)).resolves.not.toThrow();
+
+      row = kernelContainer.db.prepare('SELECT timeline FROM lessons WHERE id = ?').get(aliceLessonId) as any;
+      expect(JSON.parse(row.timeline)).toEqual(afterDeletion);
+    });
   });
 
   describe('requireWhiteboardWriteAccess Middleware Suite', () => {

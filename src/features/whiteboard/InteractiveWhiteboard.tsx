@@ -41,6 +41,9 @@ import {
   Grid,
   LayoutGrid,
   Copy,
+  Blocks,
+  Globe,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Html } from 'react-konva-utils';
 import { init as initPptxPreview } from 'pptx-preview';
@@ -113,6 +116,7 @@ import {
   teachingPluginSDK,
 } from './teaching-object/index.js';
 
+import { WidgetTitleBar } from './widgets/WidgetTitleBar';
 import { PluginCardRenderer } from './widgets/PluginCardRenderer';
 import { RollCallWrapper } from './widgets/RollCallWrapper';
 import { CodeSandboxWrapper } from './widgets/CodeSandboxWrapper';
@@ -248,6 +252,10 @@ export interface InteractiveWhiteboardProps {
    */
   readOnly?: boolean;
   /**
+   * 当前课堂所属班级 ID（用于白板作业卡自动绑定所属班级）
+   */
+  classId?: string | null;
+  /**
    * 教师端（互动课堂实时授课）：最大化 / 退出最大化组件时广播给同课节的学生端，
    * 让学生的屏幕与教师保持一致。
    */
@@ -302,6 +310,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       userRole = 'teacher',
       isEditMode = true,
       readOnly = false,
+      classId,
       broadcastFullscreen = false,
       fullscreenBroadcastClassId = null,
       followRemoteFullscreen = false,
@@ -713,6 +722,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     /** 学生端「提交作业」弹窗当前打开的作业实体 id */
     const [assignmentDialogId, setAssignmentDialogId] = useState<string | null>(null);
     const [editingProperties, setEditingProperties] = useState<any>(null);
+    const [activePropertiesElementId, setActivePropertiesElementId] = useState<string | null>(null);
     const [propertyUndoStack, setPropertyUndoStack] = useState<{ [elementId: string]: string[] }>({});
     const [propertyRedoStack, setPropertyRedoStack] = useState<{ [elementId: string]: string[] }>({});
 
@@ -781,10 +791,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         } else {
           lastSelectedCoursewareElementRef.current = null;
           setEditingProperties(null);
+          setActivePropertiesElementId(null);
         }
       } else {
         lastSelectedCoursewareElementRef.current = null;
         setEditingProperties(null);
+        setActivePropertiesElementId(null);
       }
     }, [selectedShapeId, elements]);
 
@@ -1750,12 +1762,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         const displayHeight = isResizingThis
           ? resizingState.height
           : data.isMinimized
-            ? 32
+            ? 36
             : (data.height ?? getInitialHeight(el.type));
         const isThisSelected = selectedShapeId === el.id;
 
         const renderResizeHandles = () => {
-          if (readOnly || !isThisSelected) return null;
+          if (readOnly || !isThisSelected || data.isMinimized) return null;
           return (
             <>
               {/* Outline highlight */}
@@ -1796,6 +1808,60 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             </>
           );
         };
+
+        const getWidgetTitleBarProps = (
+          defaultTitle: string,
+          icon?: React.ReactNode,
+          themeColor: 'indigo' | 'orange' | 'purple' | 'gray' | 'slate' | 'default' = 'default',
+          extraActions?: React.ReactNode,
+        ) => ({
+          title: data.title || defaultTitle,
+          icon,
+          readOnly,
+          isMinimized: !!data.isMinimized,
+          isMaximized: effectiveFullscreenElementId === el.id,
+          isPropertiesOpen: activePropertiesElementId === el.id,
+          themeColor,
+          extraActions,
+          onPointerDown: (e: React.PointerEvent) => !readOnly && handleElementDragStart(e, el.id, data),
+          onPointerMove: !readOnly ? handleElementDragMove : undefined,
+          onPointerUp: !readOnly ? handleElementDragEnd : undefined,
+          onOpenProperties: () => {
+            setSelectedShapeId(el.id);
+            setActivePropertiesElementId((prev) => (prev === el.id ? null : el.id));
+          },
+          onMinimize: async () => {
+            if (onElementUpdate) {
+              await onElementUpdate(el.id, { ...data, isMinimized: true });
+              frontendEventBus.publish({
+                id: uuidv7(),
+                type: 'whiteboard.element_updated',
+                source: 'whiteboard',
+                payload: { lessonId },
+                timestamp: Date.now(),
+                correlationId: lessonId,
+              });
+            }
+          },
+          onRestore: async () => {
+            if (effectiveFullscreenElementId === el.id) {
+              applyFullscreen(null);
+            }
+            if (data.isMinimized && onElementUpdate) {
+              await onElementUpdate(el.id, { ...data, isMinimized: false });
+              frontendEventBus.publish({
+                id: uuidv7(),
+                type: 'whiteboard.element_updated',
+                source: 'whiteboard',
+                payload: { lessonId },
+                timestamp: Date.now(),
+                correlationId: lessonId,
+              });
+            }
+          },
+          onMaximize: () => applyFullscreen(el.id),
+          onDelete: () => handleElementDelete(el.id),
+        });
 
         if (el.type === 'plugin') {
           const isTeacherView = userRole === 'teacher';
@@ -1839,41 +1905,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative"
                   style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
-                  <div
-                    className={`bg-indigo-50 text-indigo-750 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-indigo-150 select-none shrink-0 ${readOnly ? 'cursor-default' : 'cursor-move'}`}
-                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
-                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
-                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
-                  >
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span>{data.title || 'Plugin Component'}</span>
-                      {readOnly && (
-                        <span className="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800 border border-amber-300 font-semibold select-none flex items-center gap-0.5">
-                          🔒 只读锁定
-                        </span>
-                      )}
-                    </div>
-                    {!readOnly && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => applyFullscreen(el.id)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-650 hover:text-indigo-900 transition-colors cursor-pointer flex items-center justify-center"
-                          title="全屏"
-                        >
-                          <Maximize2 size={11} />
-                        </button>
-                        <button
-                          onClick={() => handleElementDelete(el.id)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-600 hover:text-red-500 transition-colors cursor-pointer flex items-center justify-center"
-                          title="删除组件"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
+                  <WidgetTitleBar
+                    {...getWidgetTitleBarProps(
+                      'Plugin Component',
+                      <Blocks size={13} className="text-indigo-600" />,
+                      'indigo',
                     )}
-                  </div>
+                  />
                   {!data.isMinimized && (
                     <div className="flex-grow bg-white overflow-auto relative min-h-0 p-2">
                       <PluginCardRenderer
@@ -1920,15 +1958,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     elementId={el.id}
                     data={data}
                     readOnly={readOnly}
-                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
-                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
-                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
-                    onDelete={() => handleElementDelete(el.id)}
+                    {...getWidgetTitleBarProps(
+                      'Hello World 插件',
+                      <Sparkles size={11} className="text-amber-500 animate-pulse" />,
+                      'slate',
+                    )}
                     onElementUpdate={onElementUpdate}
                     lessonId={lessonId}
                   />
                   {readOnly && <ReadOnlyLockCover />}
-                  {renderResizeHandles()}
+                  {!data.isMinimized && renderResizeHandles()}
                 </div>
               </Html>
             </Group>
@@ -1979,11 +2018,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     lessonId={lessonId}
                     classId={fullscreenBroadcastClassId || (data && data.classId)}
                     readOnly={readOnly}
+                    {...getWidgetTitleBarProps(
+                      '随机点名助手 (分层抽问 Fair Picker)',
+                      <Sparkles size={13} className="animate-pulse text-amber-400" />,
+                      'indigo',
+                    )}
                     onElementUpdate={onElementUpdate}
-                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
-                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
-                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
-                    onDelete={() => handleElementDelete(el.id)}
                   />
                   {readOnly && <ReadOnlyLockCover />}
                   {renderResizeHandles()}
@@ -2034,61 +2074,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative select-none"
                   style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
-                  <div
-                    className={`bg-orange-50 text-orange-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-orange-100 select-none shrink-0 ${readOnly ? 'cursor-default' : 'cursor-move'}`}
-                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
-                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
-                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
-                  >
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span>Assignment Upload Task</span>
-                      {readOnly && (
-                        <span className="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800 border border-amber-300 font-semibold select-none flex items-center gap-0.5">
-                          🔒 只读锁定
-                        </span>
-                      )}
-                    </div>
-                    {!readOnly && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => applyFullscreen(el.id)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-orange-600 hover:text-orange-900 transition-colors cursor-pointer flex items-center justify-center"
-                          title="全屏"
-                        >
-                          <Maximize2 size={11} />
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (onElementUpdate) {
-                              await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
-                              frontendEventBus.publish({
-                                id: uuidv7(),
-                                type: 'whiteboard.element_updated',
-                                source: 'whiteboard',
-                                payload: { lessonId },
-                                timestamp: Date.now(),
-                                correlationId: lessonId,
-                              });
-                            }
-                          }}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-orange-655 hover:text-orange-900 transition-colors cursor-pointer flex items-center justify-center"
-                          title={data.isMinimized ? '展开组件' : '收起组件'}
-                        >
-                          {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
-                        </button>
-                        <button
-                          onClick={() => handleElementDelete(el.id)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-orange-600 hover:text-red-500 transition-colors cursor-pointer flex items-center justify-center"
-                          title="删除组件"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
+                  <WidgetTitleBar
+                    {...getWidgetTitleBarProps(
+                      'Assignment Upload Task',
+                      <FileText size={13} className="text-orange-500" />,
+                      'orange',
                     )}
-                  </div>
+                  />
                   {!data.isMinimized && (
                     <div className="p-4 text-center flex-1 overflow-y-auto flex flex-col justify-center min-h-0">
                       <p className="font-semibold text-gray-800 mb-1 text-xs">{data.title}</p>
@@ -2182,61 +2174,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative"
                   style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
-                  <div
-                    className={`bg-gray-100 text-gray-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-gray-200 select-none shrink-0 ${readOnly ? 'cursor-default' : 'cursor-move'}`}
-                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
-                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
-                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
-                  >
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span>{data.title || 'Interactive Courseware'}</span>
-                      {readOnly && (
-                        <span className="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800 border border-amber-300 font-semibold select-none flex items-center gap-0.5">
-                          🔒 只读锁定
-                        </span>
-                      )}
-                    </div>
-                    {!readOnly && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => applyFullscreen(el.id)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-gray-600 hover:text-gray-900 transition-colors cursor-pointer flex items-center justify-center"
-                          title="全屏"
-                        >
-                          <Maximize2 size={11} />
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (onElementUpdate) {
-                              await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
-                              frontendEventBus.publish({
-                                id: uuidv7(),
-                                type: 'whiteboard.element_updated',
-                                source: 'whiteboard',
-                                payload: { lessonId },
-                                timestamp: Date.now(),
-                                correlationId: lessonId,
-                              });
-                            }
-                          }}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-gray-650 hover:text-gray-900 transition-colors cursor-pointer flex items-center justify-center"
-                          title={data.isMinimized ? '展开组件' : '收起组件'}
-                        >
-                          {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
-                        </button>
-                        <button
-                          onClick={() => handleElementDelete(el.id)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-gray-650 hover:text-red-500 transition-colors cursor-pointer flex items-center justify-center"
-                          title="删除组件"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
+                  <WidgetTitleBar
+                    {...getWidgetTitleBarProps(
+                      data.title || 'Interactive Courseware',
+                      <Globe size={13} className="text-primary-theme" />,
+                      'default',
                     )}
-                  </div>
+                  />
                   {!data.isMinimized && (
                     <div className="flex-1 bg-white overflow-hidden relative min-h-0">
                       <HtmlAppletFrame data={data} lessonId={lessonId} elementId={el.id} className="w-full h-full border-none" />
@@ -2545,6 +2489,43 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     elementId={el.id}
                     data={data}
                     readOnly={readOnly}
+                    isMinimized={!!data.isMinimized}
+                    isMaximized={effectiveFullscreenElementId === el.id}
+                    isPropertiesOpen={activePropertiesElementId === el.id}
+                    onOpenProperties={() => {
+                      setSelectedShapeId(el.id);
+                      setActivePropertiesElementId((prev) => (prev === el.id ? null : el.id));
+                    }}
+                    onMinimize={async () => {
+                      if (onElementUpdate) {
+                        await onElementUpdate(el.id, { ...data, isMinimized: true });
+                        frontendEventBus.publish({
+                          id: uuidv7(),
+                          type: 'whiteboard.element_updated',
+                          source: 'whiteboard',
+                          payload: { lessonId },
+                          timestamp: Date.now(),
+                          correlationId: lessonId,
+                        });
+                      }
+                    }}
+                    onRestore={async () => {
+                      if (effectiveFullscreenElementId === el.id) {
+                        applyFullscreen(null);
+                      }
+                      if (data.isMinimized && onElementUpdate) {
+                        await onElementUpdate(el.id, { ...data, isMinimized: false });
+                        frontendEventBus.publish({
+                          id: uuidv7(),
+                          type: 'whiteboard.element_updated',
+                          source: 'whiteboard',
+                          payload: { lessonId },
+                          timestamp: Date.now(),
+                          correlationId: lessonId,
+                        });
+                      }
+                    }}
+                    onMaximize={() => applyFullscreen(el.id)}
                     onElementUpdate={
                       onElementUpdate
                         ? async (id, d) => {
@@ -2614,6 +2595,43 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     elementId={el.id}
                     data={data}
                     readOnly={readOnly}
+                    isMinimized={!!data.isMinimized}
+                    isMaximized={effectiveFullscreenElementId === el.id}
+                    isPropertiesOpen={activePropertiesElementId === el.id}
+                    onOpenProperties={() => {
+                      setSelectedShapeId(el.id);
+                      setActivePropertiesElementId((prev) => (prev === el.id ? null : el.id));
+                    }}
+                    onMinimize={async () => {
+                      if (onElementUpdate) {
+                        await onElementUpdate(el.id, { ...data, isMinimized: true });
+                        frontendEventBus.publish({
+                          id: uuidv7(),
+                          type: 'whiteboard.element_updated',
+                          source: 'whiteboard',
+                          payload: { lessonId },
+                          timestamp: Date.now(),
+                          correlationId: lessonId,
+                        });
+                      }
+                    }}
+                    onRestore={async () => {
+                      if (effectiveFullscreenElementId === el.id) {
+                        applyFullscreen(null);
+                      }
+                      if (data.isMinimized && onElementUpdate) {
+                        await onElementUpdate(el.id, { ...data, isMinimized: false });
+                        frontendEventBus.publish({
+                          id: uuidv7(),
+                          type: 'whiteboard.element_updated',
+                          source: 'whiteboard',
+                          payload: { lessonId },
+                          timestamp: Date.now(),
+                          correlationId: lessonId,
+                        });
+                      }
+                    }}
+                    onMaximize={() => applyFullscreen(el.id)}
                     onElementUpdate={
                       onElementUpdate
                         ? async (id, d) => {
@@ -2679,61 +2697,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   className="bg-white border border-gray-305 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative select-none"
                   style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
-                  <div
-                    className={`bg-purple-100 text-purple-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-purple-200 select-none shrink-0 ${readOnly ? 'cursor-default' : 'cursor-move'}`}
-                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
-                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
-                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
-                  >
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span>Interactive Presentation</span>
-                      {readOnly && (
-                        <span className="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800 border border-amber-300 font-semibold select-none flex items-center gap-0.5">
-                          🔒 只读锁定
-                        </span>
-                      )}
-                    </div>
-                    {!readOnly && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => applyFullscreen(el.id)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-purple-600 hover:text-purple-900 transition-colors cursor-pointer flex items-center justify-center"
-                          title="全屏"
-                        >
-                          <Maximize2 size={11} />
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (onElementUpdate) {
-                              await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
-                              frontendEventBus.publish({
-                                id: uuidv7(),
-                                type: 'whiteboard.element_updated',
-                                source: 'whiteboard',
-                                payload: { lessonId },
-                                timestamp: Date.now(),
-                                correlationId: lessonId,
-                              });
-                            }
-                          }}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-purple-650 hover:text-purple-900 transition-colors cursor-pointer flex items-center justify-center"
-                          title={data.isMinimized ? '展开组件' : '收起组件'}
-                        >
-                          {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
-                        </button>
-                        <button
-                          onClick={() => handleElementDelete(el.id)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-purple-600 hover:text-red-500 transition-colors cursor-pointer flex items-center justify-center"
-                          title="删除组件"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
+                  <WidgetTitleBar
+                    {...getWidgetTitleBarProps(
+                      'Interactive Presentation',
+                      <Presentation size={13} className="text-purple-600" />,
+                      'purple',
                     )}
-                  </div>
+                  />
                   {!data.isMinimized && (
                     <div className="flex-1 min-h-0 relative bg-white" style={{ pointerEvents: readOnly ? 'none' : 'auto' }}>
                       <RevealPresentationWrapper
@@ -2807,61 +2777,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative"
                   style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
                 >
-                  <div
-                    className={`bg-indigo-50 text-indigo-700 px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b border-indigo-200 select-none shrink-0 ${readOnly ? 'cursor-default' : 'cursor-move'}`}
-                    onPointerDown={(e) => !readOnly && handleElementDragStart(e, el.id, data)}
-                    onPointerMove={!readOnly ? handleElementDragMove : undefined}
-                    onPointerUp={!readOnly ? handleElementDragEnd : undefined}
-                  >
-                    <div className="flex items-center gap-1.5 truncate pr-2">
-                      <span className="truncate">{data.title || pluginPaletteItem.labelZh || el.type}</span>
-                      {readOnly && (
-                        <span className="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-800 border border-amber-300 font-semibold select-none flex items-center gap-0.5 shrink-0">
-                          🔒 只读锁定
-                        </span>
-                      )}
-                    </div>
-                    {!readOnly && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => applyFullscreen(el.id)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-600 hover:text-indigo-900 transition-colors cursor-pointer flex items-center justify-center"
-                          title="全屏"
-                        >
-                          <Maximize2 size={11} />
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (onElementUpdate) {
-                              await onElementUpdate(el.id, { ...data, isMinimized: !data.isMinimized });
-                              frontendEventBus.publish({
-                                id: uuidv7(),
-                                type: 'whiteboard.element_updated',
-                                source: 'whiteboard',
-                                payload: { lessonId },
-                                timestamp: Date.now(),
-                                correlationId: lessonId,
-                              });
-                            }
-                          }}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-600 hover:text-indigo-900 transition-colors cursor-pointer flex items-center justify-center"
-                          title={data.isMinimized ? '展开组件' : '收起组件'}
-                        >
-                          {data.isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
-                        </button>
-                        <button
-                          onClick={() => handleElementDelete(el.id)}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-slate-200/50 rounded-full text-indigo-600 hover:text-red-500 transition-colors cursor-pointer flex items-center justify-center"
-                          title="删除组件"
-                        >
-                          <Trash2 size={11} />
-                        </button>
-                      </div>
+                  <WidgetTitleBar
+                    {...getWidgetTitleBarProps(
+                      pluginPaletteItem.labelZh || el.type,
+                      <Blocks size={13} className="text-indigo-600" />,
+                      'indigo',
                     )}
-                  </div>
+                  />
                   {!data.isMinimized && (
                     <div className="flex-1 bg-white overflow-hidden relative min-h-0" style={{ pointerEvents: readOnly ? 'none' : 'auto' }}>
                       {PluginComponent ? (
@@ -3092,7 +3014,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
           <div
             ref={containerRef}
-            className="flex-1 rounded-2xl border border-theme relative overflow-hidden w-full mb-14 shadow-inner transition-colors"
+            className="flex-1 rounded-xl border border-theme/80 relative overflow-hidden w-full shadow-inner transition-colors"
             style={{
               backgroundImage: showGrid ? `radial-gradient(${themeTokens.gridDot} 1.2px, transparent 1.2px)` : 'none',
               backgroundSize: '24px 24px',
@@ -3304,6 +3226,20 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         onClick={() => {
                           const elId = contextMenu.elementId;
                           if (elId) {
+                            setSelectedShapeId(elId);
+                            setActivePropertiesElementId(elId);
+                          }
+                          setContextMenu(null);
+                        }}
+                        className="w-full px-3 py-1.5 flex items-center gap-2 text-left text-main hover:bg-surface-secondary transition-colors text-xs font-semibold cursor-pointer"
+                      >
+                        <SlidersHorizontal size={14} />
+                        配置组件属性
+                      </button>
+                      <button
+                        onClick={() => {
+                          const elId = contextMenu.elementId;
+                          if (elId) {
                             handleElementDelete(elId);
                             if (selectedShapeId === elId) {
                               setSelectedShapeId(null);
@@ -3448,6 +3384,22 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           (() => {
             const selectedEl = safeElements.find((e) => e.id === selectedShapeId);
             if (!selectedEl) return null;
+            // 窗体类小组件仅在用户显式点击标题栏“属性图标”或右键菜单“配置组件属性”时展开侧栏
+            const isWidget =
+              [
+                'plugin',
+                'hello-world',
+                'rollcall',
+                'quiz',
+                'assignment',
+                'html-applet',
+                'code-sandbox',
+                'math-graph',
+                'presentation',
+              ].includes(selectedEl.type) || paletteItemRegistry.has(selectedEl.type);
+            if (isWidget && activePropertiesElementId !== selectedShapeId) {
+              return null;
+            }
 
             return (
               <div
@@ -3502,7 +3454,10 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     <div className="h-4 w-px bg-border-theme mx-0.5 shrink-0" />
 
                     <button
-                      onClick={() => setSelectedShapeId(null)}
+                      onClick={() => {
+                        setActivePropertiesElementId(null);
+                        setSelectedShapeId(null);
+                      }}
                       className="text-muted hover:text-main hover:bg-surface-secondary p-1 rounded-full transition-all cursor-pointer"
                       title="关闭属性编辑器"
                     >
@@ -3817,6 +3772,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       </div>
                       <AssignmentBindingField
                         lessonId={lessonId}
+                        classId={classId || fullscreenBroadcastClassId || undefined}
                         elementId={selectedEl.id}
                         value={editingProperties.assignmentId || ''}
                         draftTitle={editingProperties.title || ''}

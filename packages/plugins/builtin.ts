@@ -183,7 +183,7 @@ export const BuiltinPlugin = {
         type: 'OBJECT',
         properties: {
           lessonId: { type: 'STRING', description: '要更新的课程 ID' },
-          timeline: { type: 'STRING', description: '环节时间线的 JSON 字符串或数组' },
+          timeline: { description: '环节时间线的 JSON 字符串或数组' },
         },
         required: ['lessonId', 'timeline'],
       },

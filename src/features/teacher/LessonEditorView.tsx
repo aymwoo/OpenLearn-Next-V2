@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject } from 'react';
+import { useEffect, useState, type MutableRefObject } from 'react';
 import type { Lesson, WhiteboardElement } from '../../store/appStore';
 import type { SessionType } from '../../types/app';
 import { useAppStore } from '../../store/appStore';
@@ -105,6 +105,7 @@ export function LessonEditorView({
     currentLesson.creator_id === effectiveSession?.username;
 
   const canEdit = isAdmin || isOwner;
+  const [paletteCollapsed, setPaletteCollapsed] = useState(false);
 
   const handleSaveElementToServer = async (lId: string, elId: string, data: any): Promise<boolean> => {
     try {
@@ -174,66 +175,92 @@ export function LessonEditorView({
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-surface rounded-2xl border border-theme overflow-hidden shadow-sm text-main">
-      <div className="px-3.5 py-2 border-b border-theme flex items-center justify-between shrink-0 bg-surface-secondary/80 backdrop-blur-xs">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <h3 className="font-bold text-main text-xs sm:text-sm flex items-center gap-2 truncate">
-            <Wand2 size={16} className="text-primary-theme shrink-0" />
-            <span className="truncate">
-              {lang === 'zh' ? '课程编辑器: ' : 'Lesson Editor: '}
-              {currentLesson?.title || (lang === 'zh' ? '未选择课程' : 'No Lesson Selected')}
-            </span>
-          </h3>
-          <div className="bg-slate-200/80 p-0.5 rounded-lg flex items-center gap-0.5 border border-slate-300/60 shadow-3xs">
+    <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-surface rounded-2xl border border-theme overflow-hidden shadow-sm text-main transition-colors">
+      {/* 现代悬浮毛玻璃顶栏 (Glassmorphic Header) */}
+      <div className="px-4 py-2.5 border-b border-theme flex flex-wrap items-center justify-between gap-3 shrink-0 bg-surface/85 backdrop-blur-md">
+        <div className="flex items-center gap-3 min-w-0 flex-wrap">
+          {/* 课程标题 Badge */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-primary-theme/10 text-primary-theme border border-primary-theme/20 flex items-center justify-center shrink-0">
+              <Wand2 size={16} />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-primary-theme">
+                  {lang === 'zh' ? '教案与白板编排' : 'Lesson Orchestrator'}
+                </span>
+                {!canEdit && (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
+                    {lang === 'zh' ? '只读' : 'Read-Only'}
+                  </span>
+                )}
+              </div>
+              <h2 className="text-xs sm:text-sm font-black text-main truncate tracking-tight">
+                {lang === 'zh'
+                  ? `课程编辑器: ${currentLesson?.title || '未选择课程'}`
+                  : `Lesson Editor: ${currentLesson?.title || 'No Lesson Selected'}`}
+              </h2>
+            </div>
+          </div>
+
+          {/* 现代微药丸段控器角色切换 (Segmented Control) */}
+          <div className="bg-surface-secondary border border-theme p-1 rounded-xl flex items-center gap-1 shadow-2xs">
             <button
+              type="button"
               onClick={() => setActiveRole('teacher')}
-              className={`px-2.5 py-1 text-xs font-bold rounded transition-all cursor-pointer ${
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeRole === 'teacher'
-                  ? 'bg-white text-indigo-700 shadow-2xs font-extrabold'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-surface text-primary-theme font-black shadow-xs border border-theme/60 scale-102'
+                  : 'text-muted hover:text-main'
               }`}
             >
-              👨‍🏫 {lang === 'zh' ? '教师模式' : 'Teacher Mode'}
+              <span>👨‍🏫</span>
+              <span>{lang === 'zh' ? '教师视角' : 'Teacher'}</span>
             </button>
             <button
+              type="button"
               onClick={() => setActiveRole('student')}
-              className={`px-2.5 py-1 text-xs font-bold rounded transition-all cursor-pointer ${
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeRole === 'student'
-                  ? 'bg-pink-600 text-white shadow-2xs font-extrabold'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-primary-theme text-white font-black shadow-xs scale-102'
+                  : 'text-muted hover:text-main'
               }`}
             >
-              🎓 {lang === 'zh' ? '学生模式' : 'Student Mode'}
+              <span>🎓</span>
+              <span>{lang === 'zh' ? '学生视角' : 'Student'}</span>
             </button>
           </div>
+
+          {/* 自动保存状态胶囊 */}
           {selectedLesson && (
-            <div className="hidden sm:flex items-center gap-1.5 shrink-0 ml-1">
+            <div className="hidden sm:flex items-center gap-1.5 shrink-0">
               {pendingCount > 0 && editorSaveStatus !== 'saving' && (
                 <button
+                  type="button"
                   onClick={() => void flushAutoSave()}
                   title={lang === 'zh' ? '有未保存改动，点击立即写入服务器' : 'Pending changes, click to sync now'}
-                  className="flex items-center gap-1 text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2 py-0.5 rounded-full transition-colors cursor-pointer shadow-3xs"
+                  className="flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 rounded-full transition-all cursor-pointer shadow-2xs hover:scale-102"
                 >
-                  <Loader2 size={10} className="animate-spin text-amber-700" />
+                  <Loader2 size={11} className="animate-spin text-amber-600" />
                   <span>
                     {lang === 'zh'
-                      ? `${pendingCount} 项待同步 (点击保存)`
-                      : `${pendingCount} pending (click to save)`}
+                      ? `${pendingCount} 项待写入 (点击立即保存)`
+                      : `${pendingCount} pending (sync now)`}
                   </span>
                 </button>
               )}
               {editorSaveStatus === 'saving' && (
-                <div className="flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full animate-pulse">
-                  <Loader2 size={10} className="animate-spin text-amber-600" />
-                  <span>{lang === 'zh' ? '同步 SQLite...' : 'Saving...'}</span>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-full animate-pulse shadow-2xs">
+                  <Loader2 size={11} className="animate-spin text-amber-600" />
+                  <span>{lang === 'zh' ? '同步 SQLite...' : 'Saving SQLite...'}</span>
                 </div>
               )}
               {editorSaveStatus === 'saved' && pendingCount === 0 && (
-                <div className="flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-250 px-2 py-0.5 rounded-full">
-                  <CheckCircle2 size={10} className="text-emerald-600" />
-                  <span>{lang === 'zh' ? '已同步 SQLite' : 'Saved to SQLite'}</span>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-full shadow-2xs">
+                  <CheckCircle2 size={11} className="text-emerald-500" />
+                  <span>{lang === 'zh' ? '已自动保存' : 'Auto-Saved'}</span>
                   {editorLastSavedTime && (
-                    <span className="text-emerald-600/70 text-xs font-mono">
+                    <span className="text-[11px] font-mono opacity-70">
                       {editorLastSavedTime.toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
@@ -244,15 +271,15 @@ export function LessonEditorView({
                 </div>
               )}
               {editorSaveStatus === 'error' && (
-                <div className="flex items-center gap-1 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-250 px-2 py-0.5 rounded-full">
-                  <X size={10} className="text-rose-600" />
+                <div className="flex items-center gap-1.5 text-xs font-bold text-rose-600 bg-rose-500/10 border border-rose-500/30 px-2.5 py-1 rounded-full shadow-2xs">
+                  <X size={11} className="text-rose-600" />
                   <span>{lang === 'zh' ? '写入失败' : 'Failed to save'}</span>
                 </div>
               )}
               {editorSaveStatus === 'none' && pendingCount === 0 && (
-                <div className="flex items-center gap-1 text-xs font-semibold text-muted bg-surface-secondary border border-theme px-2 py-0.5 rounded-full">
-                  <Database size={10} className="text-muted" />
-                  <span>{lang === 'zh' ? 'SQLite 就绪' : 'SQLite Ready'}</span>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-muted bg-surface-secondary border border-theme px-2.5 py-1 rounded-full shadow-2xs">
+                  <Database size={11} className="text-muted" />
+                  <span>{lang === 'zh' ? '同步就绪' : 'Ready'}</span>
                 </div>
               )}
 
@@ -277,40 +304,45 @@ export function LessonEditorView({
             </div>
           )}
         </div>
+
+        {/* 顶部右侧快捷操作 */}
         <div className="flex items-center gap-2 shrink-0">
           {selectedLesson && (
             <div className="flex items-center gap-1.5">
               <button
+                type="button"
                 onClick={() => {
                   const studentUrl = `${window.location.origin}${window.location.pathname}?mode=student_live&lessonId=${encodeURIComponent(selectedLesson)}#/student_live`;
                   window.open(studentUrl, '_blank');
                 }}
-                className="px-2.5 py-1 bg-primary-theme hover:bg-primary-theme-hover text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                className="px-3 py-1.5 bg-primary-theme hover:bg-primary-theme-hover text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-2xs transition-all hover:scale-102 cursor-pointer"
                 title={
                   lang === 'zh'
-                    ? '在独立浏览器Tab中打开学生视角预览，支持双屏一边操作一边预览'
-                    : 'Open student perspective in a new independent browser tab'
+                    ? '在独立浏览器标签页中开启学生视角双屏备课'
+                    : 'Open student perspective in a new independent tab'
                 }
               >
                 <ExternalLink size={13} />
-                <span>{lang === 'zh' ? '学生视角预览 (独立Tab)' : 'Student View (New Tab)'}</span>
+                <span>{lang === 'zh' ? '学生视角预览 (独立Tab)' : 'Student Preview (Tab)'}</span>
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setIsLessonPreviewVisible(true);
                   setPreviewLessonTab('whiteboard');
                   setPreviewSelectedCourseware(null);
                 }}
-                className="p-1 bg-surface-secondary hover:bg-surface border border-theme text-muted hover:text-main text-xs font-medium rounded-lg transition-colors cursor-pointer"
-                title={lang === 'zh' ? '在当前弹窗中快速预览' : 'Preview inside modal'}
+                className="p-2 bg-surface hover:bg-surface-secondary border border-theme text-muted hover:text-main rounded-xl transition-all cursor-pointer shadow-2xs hover:scale-105"
+                title={lang === 'zh' ? '当前窗口快速弹窗预览' : 'Preview inside modal'}
               >
-                <Eye size={13} />
+                <Eye size={14} />
               </button>
             </div>
           )}
           <button
+            type="button"
             onClick={() => setTeacherTab('courses')}
-            className="px-2.5 py-1 bg-surface-secondary hover:bg-surface border border-theme text-muted hover:text-main text-xs font-medium rounded-lg transition-colors cursor-pointer"
+            className="px-3 py-1.5 bg-surface hover:bg-surface-secondary border border-theme text-muted hover:text-main text-xs font-bold rounded-xl transition-all cursor-pointer shadow-2xs hover:scale-102"
           >
             {lang === 'zh' ? '返回课程库' : 'Back to Courses'}
           </button>
@@ -318,9 +350,9 @@ export function LessonEditorView({
       </div>
 
       {!canEdit && currentLesson && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between text-xs text-amber-900 shrink-0">
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2.5 flex items-center justify-between text-xs text-amber-800 dark:text-amber-300 backdrop-blur-xs shrink-0">
           <div className="flex items-center gap-2">
-            <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+            <AlertTriangle size={15} className="text-amber-500 shrink-0" />
             <span>
               {lang === 'zh'
                 ? `【他人课程只读模式】当前课程由教师「${currentLesson.creator_name || currentLesson.creator_id}」创建。您拥有完整查看与备课参考权限。如需编辑调整，请克隆为您的专属教案。`
@@ -330,7 +362,7 @@ export function LessonEditorView({
           {onCopyCourse && (
             <button
               onClick={() => onCopyCourse(currentLesson.id)}
-              className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold px-3 py-1 rounded-lg shadow-xs transition-all hover:shadow cursor-pointer shrink-0"
+              className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold px-3 py-1.5 rounded-xl shadow-xs transition-all hover:scale-102 cursor-pointer shrink-0"
             >
               <Copy size={13} />
               <span>{lang === 'zh' ? '一键克隆为我的备课' : 'Clone as My Lesson'}</span>
@@ -340,7 +372,12 @@ export function LessonEditorView({
       )}
 
       <div className="flex-1 flex overflow-hidden">
-        <LessonPalette lang={lang} onActivate={safeHandlePaletteActivate} />
+        <LessonPalette
+          lang={lang}
+          onActivate={safeHandlePaletteActivate}
+          collapsed={paletteCollapsed}
+          onToggleCollapse={setPaletteCollapsed}
+        />
         <div className="flex-1 relative bg-surface flex flex-col min-w-0 overflow-y-auto">
           <TimelineRail
             lang={lang}
@@ -359,6 +396,7 @@ export function LessonEditorView({
             editorPanelsExpanded &&
             timelineSegments.some((s) => s.id === activeSegmentId) && (
               <SegmentEditorCard
+                key={activeSegmentId}
                 lang={lang}
                 segment={timelineSegments.find((s) => s.id === activeSegmentId)}
                 onPatch={(patch) =>
@@ -384,7 +422,7 @@ export function LessonEditorView({
                 }}
               />
             )}
-          <div className="flex-1 min-h-[500px] relative flex flex-col min-w-0">
+          <div className="flex-1 min-h-[380px] relative flex flex-col min-w-0">
             {!selectedLesson ? (
               <div className="absolute inset-0 flex items-center justify-center text-muted p-8 text-center bg-surface-secondary/50">
                 <div>

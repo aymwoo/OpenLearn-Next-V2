@@ -148,7 +148,7 @@ describe('InteractiveWhiteboard readOnly (全班专注锁定)', () => {
   it('locks html-applet component with pointer-events: none and displays ReadOnlyLockCover when readOnly', () => {
     const { container } = renderBoard(true, sampleElements);
     // 检查只读标签
-    expect(screen.getByText('🔒 只读锁定')).toBeTruthy();
+    expect(screen.getAllByText('🔒 只读锁定').length).toBeGreaterThan(0);
     // 检查遮罩层存在
     const covers = screen.getAllByTestId('whiteboard-readonly-lock-cover');
     expect(covers.length).toBeGreaterThan(0);
@@ -173,7 +173,7 @@ describe('InteractiveWhiteboard readOnly (全班专注锁定)', () => {
     const appletContainer = container.querySelector('.bg-white.border.border-gray-300.rounded-lg.shadow-xl');
     expect(appletContainer).toBeTruthy();
     expect((appletContainer as HTMLElement).style.pointerEvents).toBe('auto');
-    expect(screen.getByTitle('全屏')).toBeTruthy();
+    expect(screen.getAllByTitle('全屏').length).toBeGreaterThan(0);
   });
 
   it('locks FullscreenOverlay when readOnly and renders lock cover badge', () => {

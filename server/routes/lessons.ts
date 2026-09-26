@@ -366,10 +366,11 @@ export function registerLessonsRoutes(ctx: ServerContext) {
       }
 
       const { timeline } = req.body;
+      const timelineStr = typeof timeline === 'string' ? timeline : JSON.stringify(timeline ?? []);
       const actorId = getActorId(req) || 'teacher';
       const cmd = kernelContainer.commandBus.createCommand(
         'lesson.update_timeline',
-        { lessonId: id, timeline },
+        { lessonId: id, timeline: timelineStr },
         actorId,
         { approved: true },
       );

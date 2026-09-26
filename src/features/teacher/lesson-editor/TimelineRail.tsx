@@ -2,14 +2,12 @@ import React from 'react';
 import {
   Plus,
   Settings2,
-  ChevronRight,
-  FileText,
   CalendarClock,
   Clock,
   CheckCircle2,
   GripVertical,
 } from 'lucide-react';
-import { SEGMENT_COLORS, DEFAULT_SEGMENT_COLOR, getSegmentType, getSegmentColor } from './timelineConfig';
+import { DEFAULT_SEGMENT_COLOR, getSegmentType, getSegmentColor } from './timelineConfig';
 
 interface TimelineRailProps {
   lang: 'zh' | 'en';
@@ -40,6 +38,13 @@ export function TimelineRail({
   const progressPct = segments.length > 1 ? (activeIdx >= 0 ? activeIdx / (segments.length - 1) : 0) : 0;
   const activeColorMeta = activeIdx >= 0 ? getSegmentColor(segments[activeIdx].color) : null;
 
+  // 计算总时长
+  const totalMinutes = segments.reduce((sum, seg) => {
+    const raw = String(seg.duration || '10m');
+    const num = parseInt(raw.replace(/[^\d]/g, ''), 10) || 10;
+    return sum + num;
+  }, 0);
+
   const handleReorder = (toIdx: number) => {
     if (draggedSegmentIdx === null || draggedSegmentIdx === toIdx) {
       setDraggedSegmentIdx(null);
@@ -68,23 +73,31 @@ export function TimelineRail({
   };
 
   return (
-    <div className="relative flex items-center gap-3 px-3 py-1.5 border-b border-slate-200/80 bg-slate-50/70 shrink-0 overflow-x-auto select-none">
-      {/* Label */}
-      <div className="flex items-center gap-1.5 shrink-0 pl-1 border-r border-slate-200/80 pr-2.5">
-        <CalendarClock size={15} className="text-indigo-600 shrink-0" />
-        <span className="text-xs font-extrabold uppercase tracking-wider text-slate-600 whitespace-nowrap">
-          {lang === 'zh' ? '教学流程' : 'Lesson Flow'}
-        </span>
+    <div className="relative flex items-center justify-between gap-3 px-3.5 py-2 border-b border-theme bg-surface-secondary/50 backdrop-blur-xs shrink-0 select-none overflow-x-auto text-main">
+      {/* 左侧流程标签与总时长 */}
+      <div className="flex items-center gap-2 shrink-0 border-r border-theme pr-3">
+        <div className="w-6 h-6 rounded-lg bg-primary-theme/10 text-primary-theme flex items-center justify-center">
+          <CalendarClock size={14} />
+        </div>
+        <div className="flex flex-col">
+          <span className="text-xs font-black uppercase tracking-wider text-main whitespace-nowrap">
+            {lang === 'zh' ? '教学流程' : 'Lesson Flow'}
+          </span>
+          <span className="text-[10px] font-mono text-muted flex items-center gap-0.5">
+            <Clock size={9} />
+            <span>{totalMinutes} min</span>
+          </span>
+        </div>
       </div>
 
-      {/* Rail + nodes */}
-      <div className="relative flex items-center gap-1.5 py-0.5 min-w-0 flex-1">
-        {/* background rail */}
-        <div className="absolute left-2 right-2 top-1/2 h-0.5 -translate-y-1/2 bg-slate-200 rounded-full" />
-        {/* progress rail */}
+      {/* 中间流程导轨与节点 */}
+      <div className="relative flex items-center gap-2 py-0.5 min-w-0 flex-1">
+        {/* 背景底轨 */}
+        <div className="absolute left-3 right-3 top-1/2 h-0.5 -translate-y-1/2 bg-border/80 rounded-full" />
+        {/* 活动进度轨 */}
         {activeIdx >= 0 && (
           <div
-            className={`absolute left-2 top-1/2 h-0.5 -translate-y-1/2 rounded-full transition-all duration-300 ${activeColorMeta?.rail || 'bg-indigo-500'}`}
+            className={`absolute left-3 top-1/2 h-0.5 -translate-y-1/2 rounded-full transition-all duration-300 ${activeColorMeta?.rail || 'bg-primary-theme'}`}
             style={{ width: `calc(${progressPct * 100}% - 0.5rem)` }}
           />
         )}
@@ -97,109 +110,69 @@ export function TimelineRail({
           const colorMeta = getSegmentColor(seg.color);
           const Icon = typeMeta.icon;
           const nodeCls = isActive
-            ? colorMeta.solid + ' shadow-md shadow-indigo-500/20 ring-2 ring-indigo-400/30'
+            ? colorMeta.solid + ' shadow-md ring-2 ring-primary-theme/30 scale-105'
             : isCompleted
-              ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200/80'
-              : `${seg.color} hover:shadow-sm hover:brightness-105`;
+              ? 'bg-surface-secondary/90 text-main/80 border-primary-theme/30'
+              : colorMeta.color;
 
           return (
-            <React.Fragment key={seg.id}>
-              <button
-                draggable
-                onDragStart={(e) => {
-                  setDraggedSegmentIdx(idx);
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', idx.toString());
-                }}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  handleReorder(idx);
-                }}
-                onClick={() => setActiveSegmentId(seg.id)}
-                title={
-                  `${seg.title} · ${seg.duration}${seg.notes ? ' · 📝' : ''}` +
-                  (lang === 'zh' ? '（点击编辑 / 拖拽排序）' : ' (click to edit / drag to reorder)')
-                }
-                className={`relative z-10 group flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full border text-xs font-semibold cursor-grab active:cursor-grabbing transition-all duration-200 ${isDragging ? 'opacity-40 border-dashed scale-95' : ''} ${nodeCls}`}
-              >
-                <GripVertical
-                  size={11}
-                  className={`opacity-0 group-hover:opacity-60 transition-opacity -mr-1 ${isActive ? 'text-white' : 'text-slate-400'}`}
-                />
-
-                {/* sequence number or check */}
-                <span
-                  className={`flex items-center justify-center w-4 h-4 rounded-full text-xs font-bold shrink-0 ${
-                    isActive
-                      ? 'bg-white/25 text-white'
-                      : isCompleted
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-white text-slate-600 border border-slate-200'
-                  }`}
-                >
-                  {isCompleted ? <CheckCircle2 size={11} /> : idx + 1}
-                </span>
-
-                <Icon size={13} className="shrink-0" />
-
-                {/* Segment Title */}
-                <span className="max-w-[110px] truncate font-medium">{seg.title}</span>
-
-                {/* Duration Badge */}
-                {seg.duration && (
-                  <span
-                    className={`text-xs px-1 py-0.2 rounded font-mono font-normal flex items-center gap-0.5 ${isActive ? 'bg-black/20 text-white' : 'bg-black/5 text-slate-500'}`}
-                  >
-                    <Clock size={9} />
-                    {seg.duration}
-                  </span>
-                )}
-
-                {seg.notes && (
-                  <FileText size={10} className={`shrink-0 ${isActive ? 'text-white/90' : 'text-amber-500'}`} />
-                )}
-
-                {/* Status indicator */}
-                {isActive && (
-                  <span className="flex items-center gap-1 ml-0.5 pl-1.5 border-l border-white/30 text-xs font-extrabold uppercase tracking-wide shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                    {lang === 'zh' ? '进行中' : 'LIVE'}
-                  </span>
-                )}
-              </button>
-              {idx < segments.length - 1 && <ChevronRight size={12} className="text-slate-300 shrink-0 z-10" />}
-            </React.Fragment>
+            <div
+              key={seg.id}
+              draggable
+              onDragStart={(e) => {
+                setDraggedSegmentIdx(idx);
+                e.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleReorder(idx)}
+              onClick={() => setActiveSegmentId(seg.id)}
+              className={`relative z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold cursor-pointer transition-all duration-200 border border-theme/60 shadow-2xs group ${nodeCls} ${
+                isDragging ? 'opacity-40 scale-95' : 'hover:scale-102'
+              }`}
+            >
+              <GripVertical
+                size={11}
+                className="opacity-0 group-hover:opacity-60 -ml-0.5 text-muted cursor-grab"
+              />
+              <span className="text-[10px] font-mono font-bold opacity-75">{idx + 1}</span>
+              <Icon size={12} className="shrink-0" />
+              <span className="truncate max-w-[90px]">{seg.title}</span>
+              <span className="text-[10px] font-mono opacity-60">({seg.duration || '10m'})</span>
+              {isCompleted && <CheckCircle2 size={11} className="text-emerald-500 shrink-0 ml-0.5" />}
+            </div>
           );
         })}
 
+        {/* 添加新环节按钮 */}
         {selectedLesson && (
           <button
+            type="button"
             onClick={handleAdd}
-            className="relative z-10 shrink-0 ml-1 px-2.5 py-1 rounded-full border border-dashed border-slate-300 text-xs font-semibold text-slate-500 hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
-            title={lang === 'zh' ? '新增教学环节' : 'Add flow segment'}
+            className="relative z-10 flex items-center gap-1 px-2 py-1 rounded-xl text-xs font-medium text-muted hover:text-primary-theme bg-surface hover:bg-surface-secondary border border-dashed border-theme hover:border-primary-theme transition-all cursor-pointer shadow-2xs"
+            title={lang === 'zh' ? '追加新环节' : 'Add new segment'}
           >
-            <Plus size={13} />
-            <span className="text-xs">{lang === 'zh' ? '添加环节' : 'Add Step'}</span>
+            <Plus size={12} />
+            <span className="hidden sm:inline">{lang === 'zh' ? '加环节' : 'Add'}</span>
           </button>
         )}
       </div>
 
-      {/* Settings toggle */}
+      {/* 右侧抽屉展开控制 */}
       <button
-        onClick={() => setEditorPanelsExpanded((p) => !p)}
-        className="ml-auto shrink-0 px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
+        type="button"
+        onClick={() => setEditorPanelsExpanded((prev) => !prev)}
+        className={`px-3 py-1 text-xs font-bold rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+          editorPanelsExpanded
+            ? 'bg-primary-theme text-white border-primary-theme shadow-md shadow-primary-theme/30 ring-2 ring-primary-theme/30 scale-102'
+            : 'bg-surface hover:bg-surface-secondary text-muted hover:text-main border-theme shadow-2xs'
+        }`}
+        title={lang === 'zh' ? '展开/收起环节设置面板' : 'Toggle Segment Settings'}
       >
-        <Settings2 size={13} className={editorPanelsExpanded ? 'text-indigo-600' : 'text-slate-400'} />
-        <span>
-          {editorPanelsExpanded
-            ? lang === 'zh'
-              ? '隐藏环节编辑'
-              : 'Hide Details'
-            : lang === 'zh'
-              ? '展开环节编辑'
-              : 'Edit Step'}
-        </span>
+        <Settings2 size={13} className={editorPanelsExpanded ? 'rotate-90 transition-transform text-white' : ''} />
+        <span>{lang === 'zh' ? '环节参数' : 'Settings'}</span>
+        {editorPanelsExpanded && (
+          <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping ml-0.5" />
+        )}
       </button>
     </div>
   );

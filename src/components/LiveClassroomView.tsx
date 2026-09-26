@@ -1423,6 +1423,7 @@ export function LiveClassroomView({
                   <div className="flex-grow flex-1 min-h-0 w-full relative rounded-xl overflow-hidden border border-theme shadow-md bg-surface flex flex-col">
                     <LazyWhiteboard
                       lessonId={selectedLesson}
+                      classId={liveClassSelectedClassId}
                       userRole={'teacher'}
                       isEditMode={false}
                       broadcastFullscreen

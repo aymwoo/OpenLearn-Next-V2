@@ -178,6 +178,9 @@ export function safeEvaluateMath(rawExpr: string, x: number): number {
   return result;
 }
 
+import { Activity } from 'lucide-react';
+import { WidgetTitleBar } from './WidgetTitleBar';
+
 export function MathGraphWrapper({
   elementId,
   data,
@@ -187,15 +190,29 @@ export function MathGraphWrapper({
   onPointerUp,
   onDelete,
   readOnly = false,
+  isMinimized = false,
+  isMaximized = false,
+  isPropertiesOpen = false,
+  onOpenProperties,
+  onMinimize,
+  onRestore,
+  onMaximize,
 }: {
   elementId: string;
   data: any;
   readOnly?: boolean;
   onElementUpdate?: (id: string, data: any) => Promise<void>;
   onPointerDown: (e: React.PointerEvent) => void;
-  onPointerMove: (e: React.PointerEvent) => void;
-  onPointerUp: (e: React.PointerEvent) => void;
+  onPointerMove?: (e: React.PointerEvent) => void;
+  onPointerUp?: (e: React.PointerEvent) => void;
   onDelete: () => void;
+  isMinimized?: boolean;
+  isMaximized?: boolean;
+  isPropertiesOpen?: boolean;
+  onOpenProperties?: () => void;
+  onMinimize?: () => void;
+  onRestore?: () => void;
+  onMaximize?: () => void;
 }) {
   const [equation, setEquation] = useState<string>(data.equation || 'sin(x)');
   const [points, setPoints] = useState<string>('');
@@ -248,25 +265,26 @@ export function MathGraphWrapper({
       className="w-full h-full bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-mono text-sm"
       style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
     >
-      <div
-        className="bg-gray-100 text-gray-700 px-3 py-1.5 flex justify-between items-center text-xs border-b border-gray-300 cursor-move select-none shrink-0"
+      <WidgetTitleBar
+        title={data.title || 'Math Graph Sandbox'}
+        icon={<Activity size={13} className="text-indigo-500" />}
+        readOnly={readOnly}
+        isMinimized={isMinimized}
+        isMaximized={isMaximized}
+        isPropertiesOpen={isPropertiesOpen}
+        themeColor="default"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-      >
-        <span className="flex items-center gap-1 font-semibold text-gray-600">Math Graph Sandbox</span>
-        {!readOnly && (
-          <button
-            onClick={onDelete}
-            onPointerDown={(e) => e.stopPropagation()}
-            className="p-1 hover:bg-gray-200 rounded-full text-gray-500 hover:text-red-500 transition-colors cursor-pointer flex items-center justify-center"
-            title="删除组件"
-          >
-            <Trash2 size={13} />
-          </button>
-        )}
-      </div>
-      <div className="p-3 border-b border-gray-200 flex-none flex flex-col gap-1">
+        onOpenProperties={onOpenProperties}
+        onMinimize={onMinimize}
+        onRestore={onRestore}
+        onMaximize={onMaximize}
+        onDelete={onDelete}
+      />
+      {!isMinimized && (
+        <>
+          <div className="p-3 border-b border-gray-200 flex-none flex flex-col gap-1">
         <span className="text-gray-500 text-xs">y = f(x)</span>
         <input
           type="text"
@@ -309,6 +327,8 @@ export function MathGraphWrapper({
           {points && <polyline points={points} fill="none" stroke="#6366f1" strokeWidth="2" strokeLinejoin="round" />}
         </svg>
       </div>
-    </div>
-  );
+    </>
+  )}
+</div>
+);
 }

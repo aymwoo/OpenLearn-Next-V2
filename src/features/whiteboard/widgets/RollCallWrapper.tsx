@@ -24,6 +24,7 @@ import {
 import { useAppStore } from '../../../store/appStore';
 import { frontendEventBus } from '../../../services/event-bus';
 import { v7 as uuidv7 } from 'uuid';
+import { WidgetTitleBar } from './WidgetTitleBar';
 
 export interface RollCallWrapperProps {
   elementId: string;
@@ -37,6 +38,13 @@ export interface RollCallWrapperProps {
   onDelete: () => void;
   /** 只读跟随模式：隐藏删除等编辑按钮 */
   readOnly?: boolean;
+  isMinimized?: boolean;
+  isMaximized?: boolean;
+  isPropertiesOpen?: boolean;
+  onOpenProperties?: () => void;
+  onMinimize?: () => void;
+  onRestore?: () => void;
+  onMaximize?: () => void;
 }
 
 export function RollCallWrapper({
@@ -50,6 +58,13 @@ export function RollCallWrapper({
   onPointerUp,
   onDelete,
   readOnly = false,
+  isMinimized = false,
+  isMaximized = false,
+  isPropertiesOpen = false,
+  onOpenProperties,
+  onMinimize,
+  onRestore,
+  onMaximize,
 }: RollCallWrapperProps) {
   const classes = useAppStore((s) => s.classes) || [];
   const [selectedClassId, setSelectedClassId] = useState<string>(
@@ -265,25 +280,30 @@ export function RollCallWrapper({
       className="w-full h-full bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 border border-indigo-500/50 rounded-xl shadow-2xl overflow-hidden flex flex-col font-sans select-none"
       style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
     >
-      {/* 顶部标题栏 & 拖拽把手 */}
-      <div
-        className="bg-indigo-950/90 text-indigo-200 px-3 py-2 flex justify-between items-center text-xs font-semibold border-b border-indigo-900/60 cursor-move select-none shrink-0"
+      {/* 顶部统一标题栏 & 拖拽把手 */}
+      <WidgetTitleBar
+        title="随机点名助手 (分层抽问 Fair Picker)"
+        icon={<Sparkles size={13} className="animate-pulse text-amber-400" />}
+        readOnly={readOnly}
+        isMinimized={isMinimized}
+        isMaximized={isMaximized}
+        isPropertiesOpen={isPropertiesOpen}
+        themeColor="indigo"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-      >
-        <span className="flex items-center gap-1.5 text-indigo-300">
-          <Sparkles size={13} className="animate-pulse text-amber-400" />
-          <span>随机点名助手 (分层抽问 Fair Picker)</span>
-        </span>
-
-        <div className="flex items-center gap-2">
-          {classes.length > 1 && !readOnly && (
-            <div className="relative" onPointerDown={(e) => e.stopPropagation()}>
+        onOpenProperties={onOpenProperties}
+        onMinimize={onMinimize}
+        onRestore={onRestore}
+        onMaximize={onMaximize}
+        onDelete={onDelete}
+        extraActions={
+          classes.length > 1 && !readOnly ? (
+            <div className="relative mr-1" onPointerDown={(e) => e.stopPropagation()}>
               <select
                 value={selectedClassId}
                 onChange={(e) => setSelectedClassId(e.target.value)}
-                className="bg-indigo-900/80 text-indigo-100 text-xs rounded px-1.5 py-0.5 border border-indigo-700/60 outline-hidden cursor-pointer"
+                className="bg-indigo-900/80 text-indigo-100 text-[11px] rounded px-1.5 py-0.5 border border-indigo-700/60 outline-hidden cursor-pointer"
               >
                 {classes.map((c) => (
                   <option key={c.id} value={c.id} className="bg-slate-900 text-white">
@@ -292,22 +312,13 @@ export function RollCallWrapper({
                 ))}
               </select>
             </div>
-          )}
+          ) : null
+        }
+      />
 
-          {!readOnly && (
-            <button
-              onClick={onDelete}
-              onPointerDown={(e) => e.stopPropagation()}
-              className="p-1 hover:bg-indigo-900/60 rounded text-indigo-400 hover:text-red-400 transition-colors cursor-pointer"
-              title="删除组件"
-            >
-              <Trash2 size={13} />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 模式选择栏 */}
+      {!isMinimized && (
+        <>
+          {/* 模式选择栏 */}
       {!readOnly && (
         <div
           className="px-3 py-1.5 bg-indigo-950/40 border-b border-indigo-900/40 flex items-center justify-between gap-2 shrink-0 text-xs"
@@ -489,6 +500,8 @@ export function RollCallWrapper({
           </div>
         </div>
       </div>
-    </div>
-  );
+      </>
+    )}
+  </div>
+);
 }

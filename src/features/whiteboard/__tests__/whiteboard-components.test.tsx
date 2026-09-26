@@ -1,11 +1,16 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, cleanup } from '@testing-library/react';
 import { WhiteboardToolbar } from '../components/WhiteboardToolbar';
 import { WhiteboardDialog } from '../components/WhiteboardDialog';
 import { RollCallWrapper } from '../widgets/RollCallWrapper';
 import { wrapSrcDocWithBridge } from '../utils/bridgeUtils';
 import { HtmlAppletFrame } from '../components/HtmlAppletFrame';
+import { WidgetTitleBar } from '../widgets/WidgetTitleBar';
+
+afterEach(() => {
+  cleanup();
+});
 
 // Mock ExtensionPointRenderer to avoid needing full PluginHostContext in unit test
 vi.mock('../../../plugin-host/extension-point-renderer', () => ({
@@ -160,4 +165,70 @@ describe('Whiteboard Extracted Components & Utilities', () => {
       expect(iframe?.getAttribute('referrerpolicy')).toBe('no-referrer');
     });
   });
+
+  describe('WidgetTitleBar', () => {
+    it('should render window controls: properties, minimize, restore, maximize, and delete', () => {
+      const onOpenProperties = vi.fn();
+      const onMinimize = vi.fn();
+      const onRestore = vi.fn();
+      const onMaximize = vi.fn();
+      const onDelete = vi.fn();
+
+      const { getByText, getByTitle } = render(
+        <WidgetTitleBar
+          title="Custom Widget"
+          onOpenProperties={onOpenProperties}
+          onMinimize={onMinimize}
+          onRestore={onRestore}
+          onMaximize={onMaximize}
+          onDelete={onDelete}
+        />,
+      );
+
+      expect(getByText('Custom Widget')).toBeTruthy();
+
+      const propBtn = getByTitle('属性配置');
+      fireEvent.click(propBtn);
+      expect(onOpenProperties).toHaveBeenCalledTimes(1);
+
+      const minBtn = getByTitle('最小化组件');
+      fireEvent.click(minBtn);
+      expect(onMinimize).toHaveBeenCalledTimes(1);
+
+      const restoreBtn = getByTitle('还原组件');
+      fireEvent.click(restoreBtn);
+      expect(onRestore).toHaveBeenCalledTimes(1);
+
+      const maxBtn = getByTitle('全屏');
+      fireEvent.click(maxBtn);
+      expect(onMaximize).toHaveBeenCalledTimes(1);
+
+      const delBtn = getByTitle('删除组件');
+      fireEvent.click(delBtn);
+      expect(onDelete).toHaveBeenCalledTimes(1);
+    });
+
+    it('should hide all action buttons and show lock badge in readOnly mode', () => {
+      const { getByText, queryByTitle } = render(
+        <WidgetTitleBar
+          title="Locked Widget"
+          readOnly
+          onOpenProperties={vi.fn()}
+          onMinimize={vi.fn()}
+          onRestore={vi.fn()}
+          onMaximize={vi.fn()}
+          onDelete={vi.fn()}
+        />,
+      );
+
+      expect(getByText('Locked Widget')).toBeTruthy();
+      expect(getByText('🔒 只读锁定')).toBeTruthy();
+      expect(queryByTitle('属性配置')).toBeNull();
+      expect(queryByTitle('最小化组件')).toBeNull();
+      expect(queryByTitle('还原组件')).toBeNull();
+      expect(queryByTitle('全屏')).toBeNull();
+      expect(queryByTitle('删除组件')).toBeNull();
+    });
+  });
 });
+
