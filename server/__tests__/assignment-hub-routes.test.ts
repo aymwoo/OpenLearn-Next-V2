@@ -4,7 +4,12 @@ import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import fs from 'fs';
 import path from 'path';
-import { registerAssignmentHubRoutes } from '../routes/assignment-hub.js';
+import { registerAssignmentHubRoutes, gcSoftDeletedAssignmentFiles } from '../routes/assignment-hub.js';
+import {
+  ALLOWED_ASSIGNMENT_EXT,
+  STUDENT_ASSIGNMENT_QUOTA_BYTES,
+  parseAllowedExt,
+} from '../../server/utils/assignment-upload-policy.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 
 /**
@@ -17,25 +22,49 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
  *     验证学生**不再**因缺少 `lesson:write` 而被 CapabilityGuard 拒绝（P0 阻塞缺陷），
  *     且请求体里的 studentId 无法冒充他人。
  */
-describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
-  let app: express.Express;
-  let server: Server;
-  let baseUrl: string;
+/** 模块级共享：供文件末尾「修复回归」describe 使用（同一 server 实例与 helper） */
+let app: express.Express;
+let server: Server;
+let baseUrl: string;
 
   const studentId = 'stu-hub-0001';
-  const otherStudentId = 'stu-hub-0002';
-  const teacherId = 'usr-hub-teacher-0001';
-  const studentToken = 'tok-hub-student-0001';
-  const otherToken = 'tok-hub-other-0001';
-  const teacherToken = 'tok-hub-teacher-0001';
-  const thirdStudentId = 'stu-hub-0003';
-  const thirdToken = 'tok-hub-third-0001';
-  const assignmentId = 'asg-hub-0001';
-  const otherAssignmentId = 'asg-hub-0002';
+const otherStudentId = 'stu-hub-0002';
+const teacherId = 'usr-hub-teacher-0001';
+const studentToken = 'tok-hub-student-0001';
+const otherToken = 'tok-hub-other-0001';
+const teacherToken = 'tok-hub-teacher-0001';
+const thirdStudentId = 'stu-hub-0003';
+const thirdToken = 'tok-hub-third-0001';
+const assignmentId = 'asg-hub-0001';
+const otherAssignmentId = 'asg-hub-0002';
+const cookie = (token: string) => ({ Cookie: `edu_os_token=${token}` });
+const createdFiles: string[] = [];
+const createdAssignmentIds: string[] = [];
+const pdfBytes = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.from('assignment hub test\n')]);
+const submitWork = (token: string, body: Record<string, unknown>, target = assignmentId) =>
+    fetch(`${baseUrl}/api/assignments/${target}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...cookie(token) },
+      body: JSON.stringify(body),
+    });
 
-  const cookie = (token: string) => ({ Cookie: `edu_os_token=${token}` });
-  const createdFiles: string[] = [];
-  const createdAssignmentIds: string[] = [];
+
+const upload = (body: Buffer, fileName: string, token: string, target = assignmentId, studentHeader?: string) =>
+    fetch(`${baseUrl}/api/assignments/${target}/files`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-File-Name': encodeURIComponent(fileName),
+        ...(studentHeader ? { 'X-Student-Id': studentHeader } : {}),
+        ...(token ? cookie(token) : {}),
+      },
+      body: new Uint8Array(body),
+    });
+
+
+describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
+
+
 
   /** 清掉某作业下的提交 / 版本 / 附件，让用例彼此独立（DB 在同文件内共享） */
   const resetAssignmentState = (target = assignmentId) => {
@@ -55,26 +84,6 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     return uploaded.file as { id: string; name: string };
   };
 
-  const submitWork = (token: string, body: Record<string, unknown>, target = assignmentId) =>
-    fetch(`${baseUrl}/api/assignments/${target}/submit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...cookie(token) },
-      body: JSON.stringify(body),
-    });
-
-  const pdfBytes = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.from('assignment hub test\n')]);
-
-  const upload = (body: Buffer, fileName: string, token: string, target = assignmentId, studentHeader?: string) =>
-    fetch(`${baseUrl}/api/assignments/${target}/files`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        'X-File-Name': encodeURIComponent(fileName),
-        ...(studentHeader ? { 'X-Student-Id': studentHeader } : {}),
-        ...(token ? cookie(token) : {}),
-      },
-      body: new Uint8Array(body),
-    });
 
   beforeAll(async () => {
     const now = Date.now();
@@ -123,7 +132,6 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
   });
 
   afterAll(async () => {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
     const db = kernelContainer.db;
     db.prepare('DELETE FROM plugin_assignment_files WHERE assignment_id IN (?, ?)').run(assignmentId, otherAssignmentId);
     db.prepare('DELETE FROM plugin_submission_versions WHERE assignment_id IN (?, ?)').run(assignmentId, otherAssignmentId);
@@ -566,4 +574,251 @@ describe('assignment-hub 路由（上传 / 下载 / 提交）', () => {
     // 互评人的身份不出现在学生可见的互评任务里
     expect(JSON.stringify(studentView.peerReviewTasks || [])).not.toContain(otherStudentId);
   });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// 修复回归：班级归属（H1）/ 状态与截止（H2）/ 软删除文件物理 GC（M4）
+// 共享上方 describe 的 server 实例与 helper（app/server/baseUrl 已提升到模块级）。
+// ══════════════════════════════════════════════════════════════════════════
+describe('修复回归：H1 班级归属 / H2 状态截止 / M4 文件 GC', () => {
+  const guardClassId = 'cls-hub-guard-001';
+  const memberStudentId = 'stu-hub-member-0001';
+  const outsiderStudentId = 'stu-hub-outsider-01';
+  const memberToken = 'tok-hub-member-0001';
+  const outsiderToken = 'tok-hub-outsider-001';
+  const guardTeacherId = 'usr-hub-guard-teacher';
+  const guardTeacherToken = 'tok-hub-guard-teacher';
+  const classBoundAssignmentId = 'asg-hub-guard-001';
+  const draftAssignmentId = 'asg-hub-draft-001';
+  const closedDueAssignmentId = 'asg-hub-due-0001';
+  const lateAllowedAssignmentId = 'asg-hub-late-001';
+  const legacyAssignmentId = 'asg-hub-legacy-001';
+
+  beforeAll(async () => {
+    const db = kernelContainer.db;
+    const now = Date.now();
+    const expiresAt = now + 60 * 60 * 1000;
+    const insertSession = db.prepare(
+      'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
+    );
+    insertSession.run(memberToken, JSON.stringify({ userId: memberStudentId, role: 'student', username: 'hub_member' }), now, expiresAt);
+    insertSession.run(outsiderToken, JSON.stringify({ userId: outsiderStudentId, role: 'student', username: 'hub_outsider' }), now, expiresAt);
+    // 独立教师会话：首个 describe 的 afterAll 会清理共享 teacherToken
+    insertSession.run(guardTeacherToken, JSON.stringify({ userId: guardTeacherId, role: 'teacher', username: 'hub_guard_teacher' }), now, expiresAt);
+    // 班级与选课关系：member 在班内，outsider 不在
+    db.prepare(
+      'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(guardClassId, '归属校验班', 'H1 测试班级', 'pass-guard', now);
+    db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+      guardClassId,
+      memberStudentId,
+      now,
+    );
+    const insertStudent = db.prepare(
+      'INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
+    );
+    insertStudent.run(memberStudentId, 'hub-member-01', '班内学生', 'member@test', now);
+    insertStudent.run(outsiderStudentId, 'hub-out-01', '外班学生', 'out@test', now);
+
+    const insertGuardAssignment = db.prepare(
+      `INSERT OR REPLACE INTO plugin_assignments
+         (id, class_id, lesson_id, element_id, title, description, instructions, due_at, allow_late, allow_text, allow_link,
+          max_files, max_file_size, allowed_ext, peer_review_mode, peer_review_count, peer_review_due_at,
+          teacher_weight, peer_weight, status, created_by, created_at, updated_at)
+       VALUES (?, ?, NULL, NULL, ?, NULL, NULL, ?, ?, 1, 0, 3, 5242880, '', 'assigned', 1, NULL, 0.6, 0.4, ?, ?, ?, ?)`,
+    );
+    // 班级作业：未截止
+    insertGuardAssignment.run(classBoundAssignmentId, guardClassId, 'H1 班级作业', null, 1, 'published', guardTeacherId, now, now);
+    // 草稿作业
+    insertGuardAssignment.run(draftAssignmentId, guardClassId, '草稿作业', null, 1, 'draft', guardTeacherId, now, now);
+    // 已截止且不允许迟交
+    insertGuardAssignment.run(closedDueAssignmentId, guardClassId, '已截止作业', now - 3_600_000, 0, 'published', guardTeacherId, now, now);
+    // 已截止但允许迟交
+    insertGuardAssignment.run(lateAllowedAssignmentId, guardClassId, '允许迟交作业', now - 3_600_000, 1, 'published', guardTeacherId, now, now);
+    // 课时作业（class_id NULL）— 验证无班级归属约束的旧行为不变
+    insertGuardAssignment.run('asg-hub-legacy-001', null, '课时作业-无归属', null, 1, 'published', guardTeacherId, now, now);
+  });
+
+  afterAll(async () => {
+    const db = kernelContainer.db;
+    const ids = [classBoundAssignmentId, draftAssignmentId, closedDueAssignmentId, lateAllowedAssignmentId, legacyAssignmentId];
+    db.prepare(`DELETE FROM plugin_assignment_files WHERE assignment_id IN (${ids.map(() => '?').join(', ')})`).run(...ids);
+    db.prepare(`DELETE FROM plugin_submission_versions WHERE assignment_id IN (${ids.map(() => '?').join(', ')})`).run(...ids);
+    db.prepare(`DELETE FROM plugin_submissions WHERE assignment_id IN (${ids.map(() => '?').join(', ')})`).run(...ids);
+    db.prepare(`DELETE FROM plugin_assignments WHERE id IN (${ids.map(() => '?').join(', ')})`).run(...ids);
+    db.prepare('DELETE FROM class_students WHERE class_id = ?').run(guardClassId);
+    db.prepare('DELETE FROM classes WHERE id = ?').run(guardClassId);
+    db.prepare('DELETE FROM students WHERE id IN (?, ?)').run(memberStudentId, outsiderStudentId);
+    db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?, ?)').run(memberToken, outsiderToken, guardTeacherToken);
+    for (const id of ids) {
+      fs.rmSync(path.join(process.cwd(), 'storage', 'assignments', id), { recursive: true, force: true });
+    }
+  });
+
+  // ── H1 班级归属 ─────────────────────────────────────────────────────────
+  it('H1: 外班学生读班级作业详情 → 403；班内学生 → 200', async () => {
+    const url = `${baseUrl}/api/assignments/${classBoundAssignmentId}`;
+    const asOutsider = await fetch(url, { headers: cookie(outsiderToken) });
+    expect(asOutsider.status).toBe(403);
+    const asMember = await fetch(url, { headers: cookie(memberToken) });
+    expect(asMember.status).toBe(200);
+  });
+
+  it('H1: 外班学生上传/提交班级作业 → 403（成绩册不被外班污染）', async () => {
+    const upRes = await upload(pdfBytes, 'intruder.pdf', outsiderToken, classBoundAssignmentId);
+    expect(upRes.status).toBe(403);
+
+    const subRes = await submitWork(outsiderToken, { textContent: '外班入侵提交' }, classBoundAssignmentId);
+    expect(subRes.status).toBe(403);
+    expect(
+      (kernelContainer.db
+        .prepare('SELECT COUNT(*) AS c FROM plugin_submissions WHERE assignment_id = ? AND student_id = ?')
+        .get(classBoundAssignmentId, outsiderStudentId) as { c: number }).c,
+    ).toBe(0);
+  });
+
+  it('H1: 教师不受班级归属限制；课时作业（class_id NULL）行为不变', async () => {
+    const asTeacher = await fetch(`${baseUrl}/api/assignments/${classBoundAssignmentId}`, {
+      headers: cookie(guardTeacherToken),
+    });
+    expect(asTeacher.status).toBe(200);
+    // 课时作业（class_id = NULL）仍对所有登录学生可读（无归属约束，行为不变）
+    const legacyOk = await fetch(`${baseUrl}/api/assignments/${legacyAssignmentId}`, { headers: cookie(memberToken) });
+    expect(legacyOk.status).toBe(200);
+  });
+
+  // ── H2 状态与截止 ───────────────────────────────────────────────────────
+  it('H2: 草稿作业禁止上传 → 409', async () => {
+    const res = await upload(pdfBytes, 'draft.pdf', memberToken, draftAssignmentId);
+    expect(res.status).toBe(409);
+  });
+
+  it('H2: 已截止且不允许迟交 → 上传 409；允许迟交 → 上传 200', async () => {
+    const blocked = await upload(pdfBytes, 'late-blocked.pdf', memberToken, closedDueAssignmentId);
+    expect(blocked.status).toBe(409);
+
+    const allowed = await upload(pdfBytes, 'late-ok.pdf', memberToken, lateAllowedAssignmentId);
+    expect(allowed.status).toBe(200);
+  });
+
+  // ── M4 软删除文件物理 GC ────────────────────────────────────────────────
+  it('M4: gcSoftDeletedAssignmentFiles 物理删除超期软删文件，保留期内不动', async () => {
+    const uploaded: any = await (await upload(pdfBytes, 'gc-target.pdf', memberToken, classBoundAssignmentId)).json();
+    const row = kernelContainer.db
+      .prepare('SELECT stored_path FROM plugin_assignment_files WHERE id = ?')
+      .get(uploaded.file.id) as { stored_path: string };
+    const absPath = path.resolve(process.cwd(), row.stored_path);
+    expect(fs.existsSync(absPath)).toBe(true);
+
+    // 刚软删除（保留期内）：不物理删除
+    kernelContainer.db.prepare('UPDATE plugin_assignment_files SET deleted_at = ? WHERE id = ?').run(
+      Date.now(),
+      uploaded.file.id,
+    );
+    gcSoftDeletedAssignmentFiles(kernelContainer.db as any, 7 * 86_400_000);
+    expect(fs.existsSync(absPath)).toBe(true);
+
+    // 标记为 8 天前：物理删除
+    kernelContainer.db.prepare('UPDATE plugin_assignment_files SET deleted_at = ? WHERE id = ?').run(
+      Date.now() - 8 * 86_400_000,
+      uploaded.file.id,
+    );
+    gcSoftDeletedAssignmentFiles(kernelContainer.db as any, 7 * 86_400_000);
+    expect(fs.existsSync(absPath)).toBe(false);
+  });
+
+  it('M4: GC 拒绝 stored_path 逃逸 storage/assignments 根目录的行', () => {
+    const canaryPath = path.resolve(process.cwd(), 'package.json');
+    expect(fs.existsSync(canaryPath)).toBe(true);
+    kernelContainer.db
+      .prepare(
+        `INSERT OR REPLACE INTO plugin_assignment_files
+           (id, assignment_id, submission_id, version_id, student_id, original_name, stored_path, size, mime, sha256, uploaded_at, deleted_at)
+         VALUES ('af-gc-escape-probe', 'asg-nonexistent', NULL, NULL, 'ghost', 'evil', '../../package.json', 1, NULL, NULL, ?, ?)`,
+      )
+      .run(Date.now(), Date.now() - 8 * 86_400_000);
+    gcSoftDeletedAssignmentFiles(kernelContainer.db as any, 7 * 86_400_000);
+    expect(fs.existsSync(canaryPath)).toBe(true);
+    kernelContainer.db.prepare("DELETE FROM plugin_assignment_files WHERE id = 'af-gc-escape-probe'").run();
+  });
+  // ── L1 每作业扩展名限制（allowed_ext）───────────────────────────────────
+  it('L1: 作业配置 allowed_ext=".docx" 时，pdf 被拒、docx 通过；未配置作业回落全局白名单', async () => {
+    const db = kernelContainer.db;
+    const extAssignmentId = 'asg-hub-ext-001';
+    db.prepare(
+      `INSERT OR REPLACE INTO plugin_assignments
+         (id, class_id, lesson_id, element_id, title, description, instructions, due_at, allow_late, allow_text, allow_link,
+          max_files, max_file_size, allowed_ext, peer_review_mode, peer_review_count, peer_review_due_at,
+          teacher_weight, peer_weight, status, created_by, created_at, updated_at)
+       VALUES (?, ?, NULL, NULL, '仅 docx 作业', NULL, NULL, NULL, 1, 1, 0, 3, 5242880, '.docx', 'assigned', 1, NULL, 0.6, 0.4, 'published', ?, ?, ?)`,
+    ).run(extAssignmentId, guardClassId, guardTeacherId, Date.now(), Date.now());
+
+    // pdf 不在该作业白名单 → 400
+    const pdfRes = await upload(pdfBytes, 'should-fail.pdf', memberToken, extAssignmentId);
+    expect(pdfRes.status).toBe(400);
+
+    // docx（ZIP 容器族 magic bytes）→ 200
+    const docxBytes = Buffer.concat([Buffer.from('PK\x03\x04'), Buffer.from('fake docx')]);
+    const docxRes = await upload(docxBytes, 'real.docx', memberToken, extAssignmentId);
+    expect(docxRes.status, await docxRes.text()).toBe(200);
+
+    db.prepare('DELETE FROM plugin_assignment_files WHERE assignment_id = ?').run(extAssignmentId);
+    db.prepare('DELETE FROM plugin_assignments WHERE id = ?').run(extAssignmentId);
+  });
+
+  it('L1: parseAllowedExt 只能收紧全局白名单（越界项被过滤，全空回落 null）', () => {
+    expect(parseAllowedExt('.pdf, .docx')!.has('.pdf')).toBe(true);
+    expect(parseAllowedExt('.pdf, .docx')!.has('.exe')).toBe(false);
+    // .exe 不在全局白名单 → 解析结果剔除；剩余为空 → null
+    expect(parseAllowedExt('.exe, .msi')).toBeNull();
+    expect(parseAllowedExt('')).toBeNull();
+    expect(parseAllowedExt(null)).toBeNull();
+  });
+
+  // ── M3 学生存储配额 ─────────────────────────────────────────────────────
+  it('M3: 学生累计用量达到配额 → 上传 413；教师代传不受配额限制', async () => {
+    const db = kernelContainer.db;
+    // 直接注入一条接近配额的历史用量（免传真实大文件）
+    db.prepare(
+      `INSERT OR REPLACE INTO plugin_assignment_files
+         (id, assignment_id, submission_id, version_id, student_id, original_name, stored_path, size, mime, sha256, uploaded_at)
+       VALUES ('af-quota-fill', '${classBoundAssignmentId}', NULL, NULL, ?, 'heavy.bin', 'storage/assignments/fake.bin', ?, NULL, NULL, ?)`,
+    ).run(memberStudentId, STUDENT_ASSIGNMENT_QUOTA_BYTES - 10, Date.now());
+
+    // 班内学生：剩余配额不足 1MB，上传 5KB 文件也能触发（差值 < 文件大小？否——剩余 1000 字节 < 文件大小）
+    const res = await upload(pdfBytes, 'over-quota.pdf', memberToken, classBoundAssignmentId);
+    expect(res.status).toBe(413);
+
+    // 清理注入行，教师代传同文件应成功
+    db.prepare("DELETE FROM plugin_assignment_files WHERE id = 'af-quota-fill'").run();
+    const teacherProxy = await upload(pdfBytes, 'proxy.pdf', guardTeacherToken, classBoundAssignmentId, memberStudentId);
+    expect(teacherProxy.status, await teacherProxy.text()).toBe(200);
+    const stored = db
+      .prepare("SELECT stored_path FROM plugin_assignment_files WHERE original_name = 'proxy.pdf' AND student_id = ?")
+      .get(memberStudentId) as { stored_path: string };
+    createdFiles.push(path.resolve(process.cwd(), stored.stored_path));
+  });
+
+  // ── L2 前后端白名单同步守护 ─────────────────────────────────────────────
+  it('L2: 前端 AssignmentSubmitDialog 的 ACCEPT_EXT 与服务端白名单一致', () => {
+    const dialogSource = fs.readFileSync(
+      path.resolve(process.cwd(), 'src/features/whiteboard/components/AssignmentSubmitDialog.tsx'),
+      'utf8',
+    );
+    const m = dialogSource.match(/const ACCEPT_EXT[\s\S]*?;/);
+    expect(m, 'ACCEPT_EXT not found in dialog source').toBeTruthy();
+    const clientExts = new Set(
+      (m![0].match(/\.[a-z0-9]+/g) ?? []).map((e) => e.toLowerCase()),
+    );
+    expect(clientExts).toEqual(ALLOWED_ASSIGNMENT_EXT);
+  });
+});
+
+
+// 共享 server 生命周期：所有 describe 结束后统一关闭
+// （首个 describe 的 afterAll 只做数据清理；close 放文件级，避免后续 describe 拿到已关闭的 server）
+afterAll(async () => {
+  if (server) {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 });
