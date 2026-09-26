@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { Stage, Layer, Rect, Circle, Line, Text as KonvaText, Group } from 'react-konva';
 import {
@@ -244,6 +244,12 @@ export interface InteractiveWhiteboardProps {
   enableAutoAI?: boolean;
   activeSegmentId?: string | null;
   onSegmentSync?: (segmentId: string) => void;
+  /** 清单声明的课堂插件工具（原底部「互动工具」面板数据源，现移至工具栏插件区） */
+  classroomTools?: any[];
+  /** 执行一个插件工具（下发 commandType） */
+  onExecuteTool?: (tool: any) => void | Promise<void>;
+  /** 会话恢复：教师重进课堂时恢复到的白板页（只应用一次） */
+  initialPage?: number;
   userRole?: 'teacher' | 'student';
   isEditMode?: boolean;
   /**
@@ -307,6 +313,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       enableAutoAI,
       activeSegmentId,
       onSegmentSync,
+      initialPage,
+      classroomTools,
+      onExecuteTool,
       userRole = 'teacher',
       isEditMode = true,
       readOnly = false,
@@ -358,6 +367,36 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       }
     }, [elements]);
 
+    // 会话恢复：教师重进课堂后，跳回离开时的白板页（只应用一次，避免覆盖后续手动切页）
+    const initialPageAppliedRef = useRef(false);
+    useEffect(() => {
+      if (initialPageAppliedRef.current) return;
+      if (!Array.isArray(pages) || pages.length === 0) return;
+      const target = Number(initialPage);
+      if (Number.isFinite(target) && target > 0 && target < pages.length) {
+        setCurrentPage(target);
+      }
+      initialPageAppliedRef.current = true;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pages]);
+
+    // 会话保存：教师切页时防抖回写（课堂会话恢复用）。学生端不发（视图跟随广播）。
+    const viewStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const persistPageChange = useCallback(
+      (page: number) => {
+        if (userRole !== 'teacher' || !lessonId) return;
+        if (viewStateTimerRef.current) clearTimeout(viewStateTimerRef.current);
+        viewStateTimerRef.current = setTimeout(() => {
+          fetch(`/api/classroom/sessions/${encodeURIComponent(lessonId)}/view-state`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ currentPage: page }),
+          }).catch(() => {});
+        }, 500);
+      },
+      [userRole, lessonId],
+    );
+
     // 只读模式（全班专注锁定）：清除选中态与临时绘制，避免出现可编辑的浮动工具栏
     useEffect(() => {
       if (readOnly) {
@@ -396,6 +435,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           payload: { page: idx },
         });
       }
+      // 会话保存：防抖回写当前页（教师离开后重进可恢复）
+      persistPageChange(idx);
     };
 
     const handleAddPage = (customTitle?: string) => {
@@ -3009,6 +3050,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               setDialog={setDialog}
               setDialogInput={setDialogInput}
               onRefresh={onRefresh}
+              classroomTools={classroomTools}
+              onExecuteTool={onExecuteTool}
             />
           )}
 

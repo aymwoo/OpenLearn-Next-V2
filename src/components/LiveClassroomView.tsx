@@ -149,10 +149,14 @@ export function LiveClassroomView({
   const studentWindowRef = useRef<Window | null>(null);
   const [isStudentWindowOpen, setIsStudentWindowOpen] = useState(false);
   const syncChannelRef = useRef<ClassroomSyncChannel | null>(null);
+  /** 环节切换回写 view-state 的防抖定时器 */
+  const segWriteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [liveClassFullscreenElementId, setLiveClassFullscreenElementId] = useState<string | null>(null);
 
   // Classroom workflow stages: PRE_CLASS_READY, IN_CLASS_TEACHING, WRAP_UP_EXIT_TICKET, ARCHIVED_REPORT
   const [classroomStage, setClassroomStage] = useState<string>('PRE_CLASS_READY');
+  /** 会话恢复：教师重进课堂时恢复到的白板页（undefined = 无恢复数据） */
+  const [restoredCurrentPage, setRestoredCurrentPage] = useState<number | undefined>(undefined);
   // 互动课堂起始门户：默认先展示「课程入口与班级选择门户」，
   // 教师确认课程 / 班级 / 教学模式后才进入授课视图（对应 Stitch 门户设计）。
   // 可通过 initialPortalOpen 关闭（既有单测直接断言授课视图时使用）。
@@ -196,6 +200,27 @@ export function LiveClassroomView({
           // started_at 来自真实会话行；无会话时为 null（elapsedMin 随之归 0，不编造）
           const startedAt = data.session?.started_at ?? data.startedAt ?? null;
           setSessionStartedAt(typeof startedAt === 'number' ? startedAt : null);
+
+          // ── 会话恢复（课堂会话保存与恢复）──────────────────────────
+          // 1) 动态流回放：服务端 classroom_feed 落库数据预填（按 id 去重，
+          //    不覆盖本地已积累的实时条目）；仅首次拉到非空回放时写入。
+          if (Array.isArray(data.feedReplay) && data.feedReplay.length > 0) {
+            setLiveClassFeed((prev) => {
+              const seen = new Set(prev.map((f: any) => f?.id).filter(Boolean));
+              const missing = data.feedReplay.filter((f: any) => !seen.has(f.id));
+              return missing.length > 0 ? [...missing, ...prev] : prev;
+            });
+          }
+          // 2) 当前教学环节：激活休眠列 current_segment_id（本地未选环节时才恢复）
+          const persistedSegmentId = data.session?.current_segment_id ?? null;
+          if (persistedSegmentId && !activeSegmentId) {
+            setActiveSegmentId(persistedSegmentId);
+          }
+          // 3) 当前白板页：经 initialPage 传给白板（挂载后一次性跳转）
+          const restoredPage = Number(data.viewState?.currentPage);
+          if (Number.isFinite(restoredPage) && restoredPage > 0) {
+            setRestoredCurrentPage(restoredPage);
+          }
         })
         .catch(() => {});
     };
@@ -557,7 +582,37 @@ export function LiveClassroomView({
 
   useEffect(() => {
     syncChannelRef.current?.broadcastChangeSegment(activeSegmentId);
-  }, [activeSegmentId]);
+    // 会话保存：环节切换防抖回写（恢复协议的 activeSegmentId 来源）
+    if (selectedLesson && segWriteTimerRef.current) clearTimeout(segWriteTimerRef.current);
+    if (selectedLesson) {
+      segWriteTimerRef.current = setTimeout(() => {
+        fetch(`/api/classroom/sessions/${encodeURIComponent(selectedLesson)}/view-state`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activeSegmentId: activeSegmentId }),
+        }).catch(() => {});
+      }, 500);
+    }
+  }, [activeSegmentId, selectedLesson]);
+
+  // 服务端课堂动态流（classroom_feed 落库后广播）：实时追加，与本地事件同池渲染
+  useEffect(() => {
+    if (!selectedLesson) return;
+    const socket = io();
+    const handler = (entry: any) => {
+      if (!entry || typeof entry !== 'object') return;
+      setLiveClassFeed((prev: any[]) => {
+        if (prev.some((f) => f?.id && f.id === entry.id)) return prev;
+        return [entry, ...prev];
+      });
+    };
+    socket.on('classroom:feed_appended', handler);
+    return () => {
+      // 防御性清理：测试环境的 mock socket 可能没有 off
+      if (typeof socket.off === 'function') socket.off('classroom:feed_appended', handler);
+      else if (typeof (socket as any).removeListener === 'function') (socket as any).removeListener('classroom:feed_appended', handler);
+    };
+  }, [selectedLesson]);
 
   useEffect(() => {
     syncChannelRef.current?.broadcastChangeTab(
@@ -1438,6 +1493,7 @@ export function LiveClassroomView({
                       lessonId={selectedLesson}
                       classId={liveClassSelectedClassId}
                       userRole={'teacher'}
+                      initialPage={restoredCurrentPage}
                       isEditMode={false}
                       broadcastFullscreen
                       fullscreenBroadcastClassId={liveClassSelectedClassId}
@@ -1448,6 +1504,8 @@ export function LiveClassroomView({
                       elements={elements}
                       activeSegmentId={activeSegmentId}
                       onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
+                      classroomTools={classroomTools}
+                      onExecuteTool={handleExecuteTool}
                       onElementAdd={async (type: string, data: any) => {
                         await fetch(`/api/lessons/${selectedLesson}/whiteboard`, {
                           method: 'POST',
@@ -1472,43 +1530,6 @@ export function LiveClassroomView({
                       }}
                       onRefresh={() => fetchElements(selectedLesson)}
                     />
-                  </div>
-
-                  {/* Classroom Interactive Tool Shelf (Extensible Tools Panel) */}
-                  <div className="mt-3 bg-surface border border-theme rounded-xl p-3 shadow-sm shrink-0 flex flex-col gap-2 relative z-30">
-                    <div className="flex items-center justify-between text-xs uppercase font-black text-muted tracking-wider select-none">
-                      <span className="flex items-center gap-1.5 text-primary-theme">
-                        <Shuffle size={12} className="text-primary-theme animate-pulse" />
-                        <span>{lang === 'zh' ? '互动工具 (插件扩展)' : 'Classroom Interactive Tools'}</span>
-                      </span>
-                      <span className="text-xs text-muted font-mono">Plugins: {classroomTools.length} Active</span>
-                    </div>
-
-                    {classroomTools.length > 0 ? (
-                      <div className="flex gap-2.5 overflow-x-auto py-0.5 pr-2 scrollbar-thin">
-                        {classroomTools.map((tool) => (
-                          <button
-                            key={tool.id}
-                            onClick={() => handleExecuteTool(tool)}
-                            disabled={!selectedLesson}
-                            className="p-2 bg-surface-secondary hover:bg-surface border border-theme hover:border-primary-theme/50 rounded-xl text-left transition-all active:scale-[0.98] disabled:opacity-40 flex items-center gap-2.5 w-44 shrink-0 group cursor-pointer"
-                            title={tool.description}
-                          >
-                            <div className="p-1.5 bg-primary-theme/10 text-primary-theme group-hover:bg-primary-theme/20 rounded-lg border border-primary-theme/20 shrink-0 transition-colors">
-                              <DynamicIcon name={tool.icon} size={14} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="text-xs font-bold text-main truncate">{tool.name}</div>
-                              <div className="text-xs text-muted truncate mt-0.5">{tool.description}</div>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-2 text-xs text-muted italic">
-                        {lang === 'zh' ? '暂无可用的互动工具。请在应用商店启用插件。' : 'No plugin tools loaded.'}
-                      </div>
-                    )}
                   </div>
                 </>
               ) : middleTab === 'submissions' ? (

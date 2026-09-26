@@ -177,23 +177,23 @@ function TelemetryIsland({
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+    <div className="grid grid-cols-2 gap-2.5">
       {tiles.map((tile) => {
         const Icon = tile.icon;
         return (
           <div
             key={tile.label}
-            className="bg-surface border border-theme rounded-xl px-3 py-2.5 flex items-center gap-2.5 shadow-3xs"
+            className="bg-surface border border-theme rounded-xl px-3 py-2.5 flex items-center gap-2.5 shadow-3xs min-w-0"
           >
             <div className="w-8 h-8 rounded-lg bg-surface-secondary border border-theme-subtle flex items-center justify-center shrink-0">
               <Icon size={15} className="text-primary-theme" />
             </div>
-            <div className="min-w-0">
-              <div className="text-2xs text-muted truncate">{tile.label}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-2xs text-muted truncate" title={tile.label}>{tile.label}</div>
               <div className={`font-mono font-bold text-xs truncate ${tile.tone ? '' : 'text-main'}`}>
                 {tile.tone ? <span className={`px-1.5 py-0.5 rounded border ${tile.tone}`}>{tile.value}</span> : tile.value}
               </div>
-              <div className="text-2xs text-subtle truncate">{tile.hint}</div>
+              <div className="text-2xs text-subtle truncate" title={tile.hint}>{tile.hint}</div>
             </div>
           </div>
         );
@@ -1001,6 +1001,29 @@ export function ClassroomEntryPortal({
     };
   }, [fetcher]);
 
+  // ── 课堂会话恢复：探测所选课程是否有进行中的会话 ──
+  const [activeSession, setActiveSession] = useState<{ stage: string; classId: string | null } | null>(null);
+  const [resuming, setResuming] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setActiveSession(null);
+    if (!selectedLesson) return;
+    const doFetch = fetcher ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
+    doFetch(`/api/classroom/sessions/${encodeURIComponent(selectedLesson)}`)
+      .then((res) => (res && res.ok ? res.json() : null))
+      .then((data: any) => {
+        if (cancelled || !data?.hasActiveSession) return;
+        if (data.stage === 'IN_CLASS_TEACHING' || data.stage === 'WRAP_UP_EXIT_TICKET') {
+          // classId 取自会话行（开课时已确定），回到课堂不依赖本地是否已选班级
+          setActiveSession({ stage: data.stage, classId: data.session?.class_id ?? null });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLesson, fetcher]);
+
   const currentLesson = useMemo(
     () => lessons.find((l) => l.id === selectedLesson) ?? null,
     [lessons, selectedLesson],
@@ -1017,6 +1040,29 @@ export function ClassroomEntryPortal({
   const startClock = new Date();
   const zhGreeting = greetingOf(startClock.getHours(), true);
   const enGreeting = greetingOf(startClock.getHours(), false);
+
+  /** P4: 回到进行中的课堂 —— 走同一 onEnterClassroom，LiveClassroomView 端会按恢复协议还原现场 */
+  const handleResume = useCallback(async () => {
+    if (!currentLesson) return;
+    const resumeClassId = currentClass?.id ?? activeSession?.classId ?? null;
+    if (!resumeClassId) return;
+    setResuming(true);
+    try {
+      await onEnterClassroom({
+        lessonId: currentLesson.id,
+        classId: resumeClassId,
+        teachingModeId: selectedModeId,
+      });
+    } catch (e) {
+      addToast?.(
+        zh ? '回到课堂失败' : 'Failed to resume classroom',
+        e instanceof Error ? e.message : String(e),
+        'error',
+      );
+    } finally {
+      if (mountedRef.current) setResuming(false);
+    }
+  }, [activeSession, addToast, currentClass, currentLesson, onEnterClassroom, selectedModeId, zh]);
 
   const handleLaunch = useCallback(async () => {
     if (!currentLesson || !currentClass) {
@@ -1073,7 +1119,7 @@ export function ClassroomEntryPortal({
             </p>
           </div>
 
-          <div className="xl:w-[560px] shrink-0">
+          <div className="xl:w-[440px] shrink-0">
             <TelemetryIsland
               lang={lang}
               seatCount={students.length}
@@ -1082,6 +1128,38 @@ export function ClassroomEntryPortal({
             />
           </div>
         </section>
+
+        {/* P4: 课堂进行中提示条 —— 一键回到当前状态（含学生/作业/课件/动态流数据） */}
+        {activeSession && currentLesson && (
+          <section
+            data-testid="active-session-banner"
+            className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-emerald-800 truncate">
+                  {zh ? `课堂进行中：${currentLesson.title}` : `Class in progress: ${currentLesson.title}`}
+                </p>
+                <p className="text-xs text-emerald-600 mt-0.5">
+                  {zh
+                    ? '学生数据、作业与课堂动态均已保存，点击右侧回到当前状态。'
+                    : 'Student data, assignments and feed are saved. Resume to continue.'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => void handleResume()}
+              disabled={resuming || !(currentClass || activeSession?.classId)}
+              className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
+            >
+              {resuming ? (zh ? '恢复中…' : 'Resuming…') : zh ? '回到课堂' : 'Resume'}
+            </button>
+          </section>
+        )}
 
         {/* 主工作区：左 8 / 右 4 */}
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">

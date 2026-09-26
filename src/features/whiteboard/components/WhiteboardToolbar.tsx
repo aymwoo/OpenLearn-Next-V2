@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   MousePointer2,
+  Puzzle,
   Square,
   Circle as CircleIcon,
   PenTool,
@@ -45,6 +47,10 @@ export interface WhiteboardToolbarProps {
   setDialog: (dialog: any) => void;
   setDialogInput: (input: string) => void;
   onRefresh?: () => void;
+  /** 清单声明的课堂插件工具（原底部「互动工具」面板数据源，现移至工具栏插件区） */
+  classroomTools?: any[];
+  /** 执行一个插件工具（下发 commandType） */
+  onExecuteTool?: (tool: any) => void | Promise<void>;
 }
 
 export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
@@ -70,7 +76,94 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
   setDialog,
   setDialogInput,
   onRefresh,
+  classroomTools = [],
+  onExecuteTool,
 }) => {
+  // ── 课堂插件工具区（Puzzle 按钮 + portal 弹出面板）────────────────────
+  // 面板 portal 到 body：工具栏是 overflow-x-auto 裁剪上下文，内部绝对定位会被裁剪；
+  // 且规范要求工具栏本体保持纯图标尺寸，展开面板不得挤压布局。
+  const [pluginMenuOpen, setPluginMenuOpen] = useState(false);
+  const pluginBtnRef = useRef<HTMLButtonElement | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  const openPluginMenu = useCallback(() => {
+    const rect = pluginBtnRef.current?.getBoundingClientRect();
+    if (rect) {
+      setMenuPos({
+        top: rect.bottom + 6,
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - 340)),
+      });
+    }
+    setPluginMenuOpen((v) => !v);
+  }, []);
+
+  useEffect(() => {
+    if (!pluginMenuOpen) return;
+    const close = () => setPluginMenuOpen(false);
+    const onScrollOrResize = () => setPluginMenuOpen(false);
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+  }, [pluginMenuOpen]);
+
+  const runTool = useCallback(
+    (tool: any) => {
+      setPluginMenuOpen(false);
+      void onExecuteTool?.(tool);
+    },
+    [onExecuteTool],
+  );
+
+  const pluginMenu =
+    pluginMenuOpen && menuPos
+      ? createPortal(
+          <>
+            {/* 点击遮罩：关闭面板（透明） */}
+            <div className="fixed inset-0 z-[9998]" onPointerDown={() => setPluginMenuOpen(false)} />
+            <div
+              className="fixed z-[9999] w-[320px] max-h-[420px] overflow-y-auto bg-surface border border-theme rounded-xl shadow-xl p-2 font-sans text-main"
+              style={{ top: menuPos.top, left: menuPos.left }}
+            >
+              <div className="px-2 py-1.5 text-2xs font-black uppercase tracking-wider text-muted flex items-center gap-1.5 sticky top-0 bg-surface">
+                <Puzzle size={11} className="text-primary-theme" />
+                {classroomTools.length > 0
+                  ? `互动工具 · ${classroomTools.length} 个插件`
+                  : '互动工具'}
+              </div>
+              {classroomTools.length > 0 ? (
+                classroomTools.map((tool) => (
+                  <button
+                    key={`${tool.pluginId}/${tool.id}`}
+                    onClick={() => runTool(tool)}
+                    disabled={!lessonId}
+                    title={tool.description}
+                    className="w-full flex items-start gap-2.5 px-2 py-2 rounded-lg hover:bg-surface-secondary text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <span className="p-1.5 rounded-lg bg-primary-theme/10 text-primary-theme border border-primary-theme/20 shrink-0">
+                      <Puzzle size={13} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-bold text-main truncate">{tool.name}</span>
+                      <span className="block text-2xs text-muted truncate mt-0.5">
+                        {tool.description || tool.name}
+                      </span>
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <div className="px-2 py-3 text-xs text-muted italic text-center">
+                  暂无可用的互动工具。请在应用商店启用插件。
+                </div>
+              )}
+            </div>
+          </>,
+          document.body,
+        )
+      : null;
+
   return (
     <div className="flex items-center justify-between gap-1.5 px-2 py-1 bg-surface/95 backdrop-blur-md border-b border-theme/80 shrink-0 font-sans select-none text-main min-h-[38px] overflow-x-auto no-scrollbar">
       {/* 左侧及中间主要工具集合 */}
@@ -358,6 +451,28 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
 
         {/* Group 6: 课堂插件与 AI 助教 */}
         <ExtensionPointRenderer slot="classroom.tool" />
+
+        {/* 插件工具区（原授课页底部「互动工具」面板，收敛为工具栏下拉） */}
+        <div className="flex items-center gap-0.5 bg-surface-secondary/70 p-0.5 rounded-xl border border-theme/60 shrink-0">
+          <button
+            ref={pluginBtnRef}
+            onClick={openPluginMenu}
+            className={`relative w-7 h-7 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
+              pluginMenuOpen
+                ? 'bg-primary-theme text-white shadow-2xs'
+                : 'text-primary-theme hover:bg-primary-theme-light'
+            } ${classroomTools.length === 0 ? 'opacity-50' : ''}`}
+            title="互动工具 (插件扩展)"
+          >
+            <Puzzle size={14} />
+            {classroomTools.length > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 rounded-full bg-primary-theme text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                {classroomTools.length}
+              </span>
+            )}
+          </button>
+        </div>
+        {pluginMenu}
 
         <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:ai-tutor" placement="before" />
         <button
