@@ -265,9 +265,15 @@ export function PreClassReadyView({
     });
   };
 
+  // Helper: 判断学生是否在线（双轨兼容学生 id 与学号 student_number）
+  const isStudentOnline = (st: StudentType) =>
+    onlineStudentIds.includes(st.id) ||
+    Boolean(st.student_number && onlineStudentIds.includes(st.student_number));
+
   // Metrics
   const totalCount = students.length;
-  const readyCount = students.filter((s) => onlineStudentIds.includes(s.id) || markedPresentIds.has(s.id)).length;
+  const onlineCount = students.filter(isStudentOnline).length;
+  const readyCount = students.filter((s) => isStudentOnline(s) || markedPresentIds.has(s.id)).length;
   const readyPercent = totalCount > 0 ? Math.round((readyCount / totalCount) * 100) : 0;
   const totalDuration = timelineSegments.reduce((acc, cur) => {
     const raw = cur?.duration;
@@ -485,6 +491,10 @@ export function PreClassReadyView({
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-primary-theme/10 text-primary-theme border border-primary-theme/20">
                   {readyCount} / {totalCount} ({readyPercent}%)
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>{onlineCount} {lang === 'zh' ? '设备连入' : 'Online'}</span>
                 </span>
               </div>
 
@@ -735,7 +745,7 @@ export function PreClassReadyView({
             <div className="max-h-[260px] overflow-y-auto border border-theme/70 rounded-xl divide-y divide-border/60 bg-surface-secondary/20">
               {students.length > 0 ? (
                 students.map((st) => {
-                  const isOnline = onlineStudentIds.includes(st.id);
+                  const isOnline = isStudentOnline(st);
                   const isMarked = markedPresentIds.has(st.id);
                   const isReady = isOnline || isMarked;
 

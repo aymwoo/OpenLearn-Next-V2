@@ -137,16 +137,31 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       );
     }
 
-    // Register student presence
-    if (activeRoleRef.current === 'student' && activeStudentIdRef.current) {
-      socket.emit('register-student', {
-        studentId: activeStudentIdRef.current,
-        name: studentsRef.current.find((s) => s.id === activeStudentIdRef.current)?.name || activeStudentIdRef.current,
-      });
-    }
+    const syncPresenceAndRooms = () => {
+      // Join global whiteboard broadcast room
+      socket.emit('join-room', 'whiteboard-broadcast');
 
-    // Join global whiteboard broadcast room
-    socket.emit('join-room', 'whiteboard-broadcast');
+      // Register student presence if active role is student
+      if (activeRoleRef.current === 'student' && activeStudentIdRef.current) {
+        socket.emit('register-student', {
+          studentId: activeStudentIdRef.current,
+          name: studentsRef.current.find((s) => s.id === activeStudentIdRef.current)?.name || activeStudentIdRef.current,
+        });
+
+        if (studentViewStatusRef.current === 'lesson' && selectedLessonRef.current) {
+          socket.emit('enter-lesson', {
+            studentId: activeStudentIdRef.current,
+            lessonId: selectedLessonRef.current,
+          });
+        }
+      } else {
+        // Teacher / admin: actively request latest presence snapshot
+        socket.emit('request-presence');
+      }
+    };
+
+    // Initial presence sync
+    syncPresenceAndRooms();
 
     socket.on(
       'presence-update',
@@ -434,7 +449,12 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     // 学生重连后清空远程最大化状态并恢复被打断的视图，避免被永久困在
     // 不可自行退出的全屏里。
     socket.on('connect', () => {
+      syncPresenceAndRooms();
       restoreInterruptedView();
+    });
+
+    socket.io?.on('reconnect', () => {
+      syncPresenceAndRooms();
     });
 
     // Quiz 提交 → ingest 到 WhiteboardEventSlot（供 TeacherPanel / AI / 调试面板订阅）

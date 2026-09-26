@@ -1179,7 +1179,7 @@ export function LiveClassroomView({
           selectedClassId={liveClassSelectedClassId}
           className={classes.find((c) => c.id === liveClassSelectedClassId)?.name || ''}
           students={students}
-          onlineStudentIds={Array.from(liveClassAcknowledgedMap.keys())}
+          onlineStudentIds={onlineStudentIds}
           timelineSegments={timelineSegments}
           lang={lang as any}
           isClassLocked={isClassLocked}

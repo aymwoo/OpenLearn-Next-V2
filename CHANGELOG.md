@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **互动课堂学生到课与设备就绪监控在线状态全链路精准化修复**：
+  - **纠正课前就绪界面传参错位（`src/components/LiveClassroomView.tsx`）**：修复原先将点名互动签到确认映射表（`liveClassAcknowledgedMap.keys()`）误当作在线学生名单传递给 `PreClassReadyView` 的致命缺陷，纠正为真实的 WebSocket 在线名单（`onlineStudentIds`），使已登录连入系统的学生能即时点亮绿色在线状态指示灯；
+  - **学生在线双轨容错匹配（`src/features/classroom/PreClassReadyView.tsx`）**：抽离 `isStudentOnline` 判定函数，支持对学生数据库主键 `st.id` 与学号 `st.student_number` 的双轨匹配；在表头状态栏增加「设备连入」动态数与就绪率双重展示；
+  - **服务端断开竞态防护与刷新防误杀（`server/presence.ts`）**：在 `socket.on('disconnect')` 中加入 socketId 校验，避免学生刷新页面（F5）或多标签页切换时旧连接断开抹除新连接已注册的在线状态；新增 `request-presence` 实时事件与 `GET /api/presence` REST 端点；
+  - **客户端断网重连自动补报自愈（`src/hooks/useClassroomSocket.ts`）**：封装 `syncPresenceAndRooms`，在 `connect` 与 `reconnect` 事件中自动重新注册 Presence 与进入课节房间，确保局域网抖动后学生端可无感重连并自动点亮在线状态。
+
 - **互动课堂课前就绪「班级上课临时密码」与学生双轨登录鉴权**：
   - **班级临时密码替换动态签到码（`src/features/classroom/PreClassReadyView.tsx`）**：将原本纯前端 5 秒滚动的“防代签动态签到码”重构为真实的班级上课临时密码面板。支持大号口令展示、一键复制、🎲 随机生成 4 位高可读数字密码、⏱️ 有效期快捷切换（45分钟 / 2小时 / 今日有效 / 长期有效）、✏️ 自定义口令输入以及 🗑️ 一键清除口令；
   - **双轨登录鉴权体系（`server/routes/roster.ts` & `packages/core/db/index.ts`）**：`classes` 表增加 `class_passcode_expires_at` 字段及自动迁移支持；`POST /api/auth/login` 支持学生双轨登录（优先校验个人自设密码，未命中则验证所属班级上课临时密码及有效期）；严格隔离非本班学生访问；

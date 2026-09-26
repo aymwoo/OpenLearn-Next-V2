@@ -4,6 +4,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { requireAuth, getActorId } from '../middleware/auth.js';
 import type { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
 import type { ServerContext } from '../context.js';
+import { getOnlineStudentIds } from '../presence.js';
 
 /**
  * 内置教学模式 —— 课堂启动门户「教学模式选择器」的兜底数据源。
@@ -1817,5 +1818,12 @@ export function registerClassroomRoutes(
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
+  });
+
+  // 主动查询当前在线学生名单（仅教师/管理员）
+  app.get('/api/presence', requireAuth('teacher', 'administrator'), (_req, res) => {
+    res.json({
+      onlineStudentIds: getOnlineStudentIds(),
+    });
   });
 }

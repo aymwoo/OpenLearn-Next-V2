@@ -51,12 +51,12 @@ function buildMocks(opts: { studentClassIds?: Record<string, string[]>; lookupTh
   } as any;
   setupPresence(deps);
 
-  function connect() {
+  function connect(customId = 'sock-1') {
     const socketEmitted: Emitted[] = [];
     const joinedRooms: string[] = [];
     const socketHandlers = new Map<string, (data: any) => void>();
     const socket = {
-      id: 'sock-1',
+      id: customId,
       on: (event: string, cb: (data: any) => void) => socketHandlers.set(event, cb),
       emit: (event: string, payload: unknown) => socketEmitted.push({ scope: 'socket', event, payload }),
       to: (room: string) => ({
@@ -191,6 +191,47 @@ describe('setupPresence', () => {
 
     expect(m.globalEmitted).toEqual([
       { scope: 'global', event: 'presence-update', payload: { onlineStudentIds: [], activeStudentLessons: {} } },
+    ]);
+  });
+
+  it('stale disconnect does not remove student if replaced by newer socket (refresh/multi-tab protection)', () => {
+    const m = buildMocks();
+    const socket1 = m.connect('sock-1');
+    socket1.trigger('register-student', { studentId: 's1', name: 'Stu' });
+
+    // Student refreshes page: socket2 connects and registers before socket1 disconnects
+    const socket2 = m.connect('sock-2');
+    socket2.trigger('register-student', { studentId: 's1', name: 'Stu' });
+
+    m.globalEmitted.length = 0;
+    // Old socket1 finally disconnects
+    socket1.trigger('disconnect', undefined);
+
+    // Stale disconnect should NOT broadcast empty presence or remove student
+    expect(m.globalEmitted).toEqual([]);
+
+    // Now when active socket2 disconnects, presence is removed
+    socket2.trigger('disconnect', undefined);
+    expect(m.globalEmitted).toEqual([
+      { scope: 'global', event: 'presence-update', payload: { onlineStudentIds: [], activeStudentLessons: {} } },
+    ]);
+  });
+
+  it('request-presence sends the current presence-update to the requesting socket', () => {
+    const m = buildMocks();
+    const socket1 = m.connect('sock-1');
+    socket1.trigger('register-student', { studentId: 's1', name: 'Stu' });
+
+    const socket2 = m.connect('sock-2');
+    socket2._emitted.length = 0;
+    socket2.trigger('request-presence', undefined);
+
+    expect(socket2._emitted).toEqual([
+      {
+        scope: 'socket',
+        event: 'presence-update',
+        payload: { onlineStudentIds: ['s1'], activeStudentLessons: {} },
+      },
     ]);
   });
 

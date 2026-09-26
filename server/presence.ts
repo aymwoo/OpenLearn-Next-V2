@@ -36,10 +36,19 @@ export const WHITEBOARD_FULLSCREEN_CHANGED = 'whiteboard-fullscreen-changed';
  *
  * Characterization test: `server/__tests__/presence.test.ts`.
  */
+let globalOnlineStudentsGetter: (() => string[]) | null = null;
+
+/** 读取当前实时在线的学生 ID 列表 */
+export function getOnlineStudentIds(): string[] {
+  return globalOnlineStudentsGetter ? globalOnlineStudentsGetter() : [];
+}
+
 export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceDeps): void {
   // In-memory status maps
   const onlineStudents = new Map<string, { socketId: string; name: string }>();
   const activeStudentLessons = new Map<string, string>(); // studentId -> lessonId
+
+  globalOnlineStudentsGetter = () => Array.from(onlineStudents.keys());
 
   const broadcastPresence = () => {
     io.emit('presence-update', {
@@ -303,11 +312,28 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceD
 
     socket.on('disconnect', () => {
       if (registeredStudentId) {
-        onlineStudents.delete(registeredStudentId);
-        activeStudentLessons.delete(registeredStudentId);
-        console.log(`[Presence] Student offline: ${registeredStudentId}`);
-        broadcastPresence();
+        // 竞态保护：仅当当前记录的活跃 socketId 匹配当前断开的 socket 时才删除，
+        // 避免学生在页面刷新（F5）或多 Tab 切换时，旧连接的断开抹除新连接已注册的在线态
+        const currentRecord = onlineStudents.get(registeredStudentId);
+        if (!currentRecord || currentRecord.socketId === socket.id) {
+          onlineStudents.delete(registeredStudentId);
+          activeStudentLessons.delete(registeredStudentId);
+          console.log(`[Presence] Student offline: ${registeredStudentId}`);
+          broadcastPresence();
+        } else {
+          console.log(
+            `[Presence] Stale socket disconnected for student ${registeredStudentId}, preserved active connection (${currentRecord.socketId})`,
+          );
+        }
       }
+    });
+
+    // 支持客户端随时按需主动请求最新在线列表
+    socket.on('request-presence', () => {
+      socket.emit('presence-update', {
+        onlineStudentIds: Array.from(onlineStudents.keys()),
+        activeStudentLessons: Object.fromEntries(activeStudentLessons.entries()),
+      });
     });
 
     // Send initial status immediately on connection
