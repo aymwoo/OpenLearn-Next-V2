@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **双轨登录鉴权体系（`server/routes/roster.ts` & `packages/core/db/index.ts`）**：`classes` 表增加 `class_passcode_expires_at` 字段及自动迁移支持；`POST /api/auth/login` 支持学生双轨登录（优先校验个人自设密码，未命中则验证所属班级上课临时密码及有效期）；严格隔离非本班学生访问；
   - **预留第三方插件扩展槽与数据获取接口（UI Slots & REST API）**：注册 `classroom.preclass.passcode_action` 与 `classroom.preclass.passcode_addon` 插件扩展槽；新增 `GET /api/classes/:id/passcode` 接口供第三方考勤机、电子班牌及外部系统获取实时口令与剩余时效。
 
+- **互动课堂控制中心顶栏操作按钮纯图标化与单行排布优化（`src/components/LiveClassroomView.tsx`）**：
+  - **纯图标微卡片改造**：将智能授课控制中心顶栏右侧 7 个扩展流程按钮（告警、AI 预测、小组拼板、多屏对比、家校通知、课堂宏、硬件网关）彻底改造为纯图标形式（Icon-only），每个按钮尺寸精简为 `w-8 h-8` 紧凑微卡片，总占用宽度由原本 ~600px 骤降至 ~230px（缩减超过 60%）；
+  - **杜绝折叠换行与断层**：即使在笔记本小屏幕、浏览器分屏或侧边栏展开时，右侧工具按钮亦可与左侧课节/班级选择框和全班锁定控制保持平整单行排布，彻底杜绝换行折叠；完整保留 Hover 气泡提示（`title`）与无障碍属性（`aria-label`）。
+
 - **互动课堂启动门户「挑选授课班级」紧凑化与极简 UI 优化（`src/features/classroom/ClassroomEntryPortal.tsx`）**：
   - **高屏效微卡片胶囊**：重构班级大卡片为紧凑胶囊，去除多行冗余提示，卡片高度缩减近 45%（压缩至 36~38px），单行融合圆点状态、班级名称、人数统计与精致的 `✓ 已选` 标识；
   - **多列自适应网格与一体化工具栏**：采用 `grid-cols-2 sm:grid-cols-3 lg:grid-cols-4` 自适应网格，搭配内嵌式紧凑搜索栏与班级数统计，大幅降低纵向空间浪费，优化同屏座位图与模式选择的排版体验。
