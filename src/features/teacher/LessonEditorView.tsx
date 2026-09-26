@@ -105,6 +105,7 @@ export function LessonEditorView({
     currentLesson.creator_id === effectiveSession?.username;
 
   const canEdit = isAdmin || isOwner;
+  const isReadOnly = !canEdit || activeRole !== 'teacher';
   const [paletteCollapsed, setPaletteCollapsed] = useState(false);
 
   const handleSaveElementToServer = async (lId: string, elId: string, data: any): Promise<boolean> => {
@@ -163,11 +164,15 @@ export function LessonEditorView({
   }, [selectedLesson, activeSegmentId]);
 
   const safeHandlePaletteActivate = (type: string) => {
-    if (!canEdit) {
+    if (isReadOnly) {
       alert(
-        lang === 'zh'
-          ? '【只读模式】您无法直接修改其他教师创建的课程。请点击上方的「一键克隆为我的备课」生成您的专属教案副本。'
-          : '[Read-Only Mode] You cannot modify lessons created by other teachers. Please clone it to your own lessons.',
+        !canEdit
+          ? lang === 'zh'
+            ? '【只读模式】您无法直接修改其他教师创建的课程。请点击上方的「一键克隆为我的备课」生成您的专属教案副本。'
+            : '[Read-Only Mode] You cannot modify lessons created by other teachers. Please clone it to your own lessons.'
+          : lang === 'zh'
+            ? '学生视角预览为只读模式。'
+            : 'Student preview is read-only.',
       );
       return;
     }
@@ -189,9 +194,9 @@ export function LessonEditorView({
                 <span className="text-[10px] font-black uppercase tracking-wider text-primary-theme">
                   {lang === 'zh' ? '教案与白板编排' : 'Lesson Orchestrator'}
                 </span>
-                {!canEdit && (
+                {isReadOnly && (
                   <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
-                    {lang === 'zh' ? '只读' : 'Read-Only'}
+                    {lang === 'zh' ? '只读预览' : 'Read-Only Preview'}
                   </span>
                 )}
               </div>
@@ -375,6 +380,7 @@ export function LessonEditorView({
         <LessonPalette
           lang={lang}
           onActivate={safeHandlePaletteActivate}
+          readOnly={isReadOnly}
           collapsed={paletteCollapsed}
           onToggleCollapse={setPaletteCollapsed}
         />
@@ -388,6 +394,7 @@ export function LessonEditorView({
             setDraggedSegmentIdx={setDraggedSegmentIdx}
             selectedLesson={selectedLesson}
             saveTimeline={saveTimeline}
+            readOnly={isReadOnly}
             editorPanelsExpanded={editorPanelsExpanded}
             setEditorPanelsExpanded={setEditorPanelsExpanded}
           />
@@ -399,6 +406,7 @@ export function LessonEditorView({
                 key={activeSegmentId}
                 lang={lang}
                 segment={timelineSegments.find((s) => s.id === activeSegmentId)}
+                readOnly={isReadOnly}
                 onPatch={(patch) =>
                   saveTimeline(
                     selectedLesson,
@@ -437,10 +445,12 @@ export function LessonEditorView({
                   ref={whiteboardRef}
                   lessonId={selectedLesson}
                   userRole={activeRole}
+                  readOnly={isReadOnly}
                   elements={elements}
                   activeSegmentId={activeSegmentId}
                   onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
                   onElementAdd={async (type: string, data: any) => {
+                    if (isReadOnly) return;
                     await flushAutoSave();
                     setEditorSaveStatus('saving');
                     try {
@@ -461,9 +471,11 @@ export function LessonEditorView({
                     }
                   }}
                   onElementUpdate={(elementId: string, data: any) => {
+                    if (isReadOnly) return;
                     queueUpdate(elementId, data);
                   }}
                   onElementDelete={async (elementId: string) => {
+                    if (isReadOnly) return;
                     await flushAutoSave();
                     setEditorSaveStatus('saving');
                     try {
@@ -482,6 +494,7 @@ export function LessonEditorView({
                     }
                   }}
                   onClearBoard={async () => {
+                    if (isReadOnly) return;
                     await flushAutoSave();
                     setEditorSaveStatus('saving');
                     try {
@@ -501,7 +514,7 @@ export function LessonEditorView({
                   }}
                   onRefresh={() => fetchElements(selectedLesson)}
                 />
-                {paletteEdit && getPaletteItemConfig(paletteEdit.type) && (
+                {paletteEdit && !isReadOnly && getPaletteItemConfig(paletteEdit.type) && (
                   <PaletteCardEditModal
                     config={getPaletteItemConfig(paletteEdit.type)!}
                     lang={lang}

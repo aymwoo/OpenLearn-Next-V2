@@ -58,13 +58,37 @@ const MODES = [
   },
 ];
 
-/** 教学模式接口成功响应 */
-const okFetcher = () =>
-  vi.fn(async () => ({
-    ok: true,
-    status: 200,
-    json: async () => ({ success: true, modes: MODES }),
-  })) as unknown as typeof fetch;
+/** 门户 API 与物理座位图 API 的成功响应。 */
+const okFetcher = (students = STUDENTS) =>
+  vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith('/seats')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          lab_id: 'lab-1',
+          seats: students.map((student, index) => ({
+            student_id: student.id,
+            row_idx: 0,
+            col_idx: index,
+          })),
+        }),
+      };
+    }
+    if (url.endsWith('/api/labs')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => [{ id: 'lab-1', room_number: 'A-101', rows: 1, cols: 4 }],
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, modes: MODES }),
+    };
+  }) as unknown as typeof fetch;
 
 /** 教学模式接口失败响应（用于验证降级不阻塞开课） */
 const failingFetcher = () =>
@@ -105,7 +129,7 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       renderPortal();
 
       expect(await screen.findByText('选择授课课程')).toBeTruthy();
-      expect(screen.getByText('挑选班级与分配沙箱算力')).toBeTruthy();
+      expect(screen.getByText('挑选授课班级')).toBeTruthy();
       expect(screen.getByText('本节课教学蓝图')).toBeTruthy();
       expect(screen.getByText('课前三项自检体检卡')).toBeTruthy();
       expect(screen.getByRole('button', { name: /进入数字赋能课堂/ })).toBeTruthy();
@@ -119,6 +143,21 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       expect(screen.getByText('人工智能与机器学习启蒙')).toBeTruthy();
       expect(screen.getByText('高一 (3) 班')).toBeTruthy();
       expect(screen.getByText('初二 (1) 班')).toBeTruthy();
+    });
+
+    it('can find courses and classes beyond the first six entries', async () => {
+      const lessons = [
+        ...LESSONS,
+        ...Array.from({ length: 6 }, (_, index) => ({ id: `les-extra-${index}`, title: `扩展课程 ${index + 1}` })),
+      ];
+      const classes = [
+        ...CLASSES,
+        ...Array.from({ length: 6 }, (_, index) => ({ id: `cls-extra-${index}`, name: `扩展班级 ${index + 1}` })),
+      ];
+      renderPortal({ lessons, classes });
+
+      expect(await screen.findByText('扩展课程 6')).toBeTruthy();
+      expect(screen.getByText('扩展班级 6')).toBeTruthy();
     });
 
     it('空课节列表时给出引导文案而不是空白', async () => {
@@ -153,7 +192,7 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
 
     it('选择班级后展示席位矩阵', async () => {
       const { setLiveClassSelectedClassId } = renderPortal();
-      await screen.findByText('挑选班级与分配沙箱算力');
+      await screen.findByText('挑选授课班级');
 
       fireEvent.click(screen.getByText('高一 (3) 班'));
 
@@ -162,17 +201,24 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
 
     it('已选班级时渲染席位矩阵与在线状态', async () => {
       renderPortal({ liveClassSelectedClassId: 'cls-1' });
-      await screen.findByText('席位与硬件透视');
+      await screen.findByText('机房座位图');
 
-      expect(screen.getByText('第 1 组')).toBeTruthy();
-      // 座位号来自 student_number 的后两位
-      expect(screen.getByTitle(/张子豪（在线）/)).toBeTruthy();
-      expect(screen.getByTitle(/王一诺（未连接）/)).toBeTruthy();
+      expect(screen.getByTitle(/张子豪.*在线/)).toBeTruthy();
+      expect(screen.getByTitle(/王一诺.*离线/)).toBeTruthy();
     });
 
-    it('班级无学生时给出提示', async () => {
-      renderPortal({ liveClassSelectedClassId: 'cls-1', students: [] });
-      expect(await screen.findByText(/该班级暂无学生/)).toBeTruthy();
+    it('empty roster displays an unassigned physical seating map', async () => {
+      renderPortal({ liveClassSelectedClassId: 'cls-1', students: [], fetcher: okFetcher([]) });
+      await screen.findByText('机房座位图');
+
+      expect(screen.getByText('空位 (4)')).toBeTruthy();
+    });
+
+    it('does not report an empty class roster as preflight-ready', async () => {
+      renderPortal({ students: [] });
+
+      expect(await screen.findByText('暂无学生名单')).toBeTruthy();
+      expect(screen.getByText('需注意')).toBeTruthy();
     });
   });
 
@@ -221,6 +267,13 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       await screen.findByText('选择授课课程');
 
       expect(screen.getByRole('button', { name: /进入数字赋能课堂/ })).toHaveProperty('disabled', false);
+    });
+
+    it('disables launch when stored course or class selections are stale', async () => {
+      renderPortal({ selectedLesson: 'lesson-deleted', liveClassSelectedClassId: 'class-deleted' });
+      await screen.findByText('选择授课课程');
+
+      expect(screen.getByRole('button', { name: /进入数字赋能课堂/ })).toHaveProperty('disabled', true);
     });
 
     it('点击后回调携带课程、班级与所选教学模式', async () => {

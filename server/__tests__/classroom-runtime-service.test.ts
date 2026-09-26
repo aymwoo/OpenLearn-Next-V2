@@ -48,6 +48,14 @@ describe('ClassroomRuntimeService & Interactive Classroom Engine', () => {
     expect(stage).toBe('PRE_CLASS_READY');
   });
 
+  it('updates a reused lesson session when the teacher explicitly chooses another class', async () => {
+    const first = await service.getOrCreateSession('les_101', 't1', 'cls_1');
+    const reused = await service.getOrCreateSession('les_101', 't1', 'cls_2');
+
+    expect(reused.id).toBe(first.id);
+    expect(reused.class_id).toBe('cls_2');
+  });
+
   it('transitions through stages and broadcasts socket events', async () => {
     await service.getOrCreateSession('les_101', 't1', 'cls_1');
 

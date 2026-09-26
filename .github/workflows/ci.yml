@@ -135,6 +135,33 @@ jobs:
           OPENLEARN_PLUGIN_COMPAT_FIXTURES: .plugin-compatibility-fixtures
         run: pnpm exec vitest run server/__tests__/canary/plugin-compatibility.test.ts
 
+  browser-workflow-e2e:
+    name: Browser workflow E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run browser workflow tests
+        run: pnpm exec playwright test e2e/lesson-classroom-flow.spec.ts
+
   docs-drift-audit:
     runs-on: ubuntu-latest
     permissions:

@@ -94,6 +94,21 @@ export function registerClassroomRoutes(
   const io: Server = (ctx as any).io;
   const db = kernelContainer.db;
 
+  const validateTeachingModeId = (
+    value: unknown,
+  ): { ok: true; id: string | null } | { ok: false; status: 400 | 404; error: string } => {
+    const id = typeof value === 'string' && value.trim() ? value.trim() : null;
+    if (!id) return { ok: true, id: null };
+    if (!TEACHING_MODE_ID_PATTERN.test(id)) {
+      return { ok: false, status: 400, error: 'Invalid teachingModeId' };
+    }
+    const exists =
+      BUILTIN_TEACHING_MODES.some((mode) => mode.id === id) ||
+      !!db.prepare('SELECT id FROM teaching_modes WHERE id = ?').get(id);
+    if (!exists) return { ok: false, status: 404, error: `Teaching mode "${id}" not found` };
+    return { ok: true, id };
+  };
+
   // ── 课堂倒计时管理（持久化 & 插件可扩展） ─────────────────────────
   interface ActiveCountdownState {
     lessonId: string;
@@ -406,18 +421,30 @@ export function registerClassroomRoutes(
   app.post('/api/classroom/sessions/:lessonId/init', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
     try {
       const { lessonId } = req.params;
-      const { classId, teachingModeId } = req.body;
+      const { classId, teachingModeId } = req.body || {};
       const teacherId = getActorId(req) || 'teacher';
 
-      const session = await classroomService.getOrCreateSession(lessonId, teacherId, classId);
+      if (!db.prepare('SELECT id FROM lessons WHERE id = ?').get(lessonId)) {
+        return res.status(404).json({ error: `Lesson "${lessonId}" not found` });
+      }
+
+      const normalizedClassId = typeof classId === 'string' && classId.trim() ? classId.trim() : null;
+      if (classId !== undefined && classId !== null && !normalizedClassId) {
+        return res.status(400).json({ error: 'Invalid classId' });
+      }
+      if (normalizedClassId && !db.prepare('SELECT id FROM classes WHERE id = ?').get(normalizedClassId)) {
+        return res.status(404).json({ error: `Class "${normalizedClassId}" not found` });
+      }
+
+      const modeValidation = validateTeachingModeId(teachingModeId);
+      if (modeValidation.ok === false) {
+        return res.status(modeValidation.status).json({ error: modeValidation.error });
+      }
+
+      const session = await classroomService.getOrCreateSession(lessonId, teacherId, normalizedClassId ?? undefined);
 
       // 课堂启动门户会在启动课堂时一并提交所选教学模式
-      if (typeof teachingModeId === 'string' && teachingModeId.trim()) {
-        db.prepare('UPDATE classroom_sessions SET teaching_mode_id = ? WHERE id = ?').run(
-          teachingModeId.trim(),
-          session.id,
-        );
-      }
+      db.prepare('UPDATE classroom_sessions SET teaching_mode_id = ? WHERE id = ?').run(modeValidation.id, session.id);
 
       res.json({ success: true, session });
     } catch (e: any) {
@@ -1320,21 +1347,15 @@ export function registerClassroomRoutes(
         const { teachingModeId, classId } = req.body || {};
         const teacherId = getActorId(req) || 'teacher';
 
-        const modeId = typeof teachingModeId === 'string' && teachingModeId.trim() ? teachingModeId.trim() : null;
-        if (modeId && !TEACHING_MODE_ID_PATTERN.test(modeId)) {
-          return res.status(400).json({ error: 'Invalid teachingModeId' });
-        }
-        if (modeId) {
-          const known =
-            BUILTIN_TEACHING_MODES.some((b) => b.id === modeId) ||
-            !!db.prepare('SELECT id FROM teaching_modes WHERE id = ?').get(modeId);
-          if (!known) return res.status(404).json({ error: `Teaching mode "${modeId}" not found` });
+        const modeValidation = validateTeachingModeId(teachingModeId);
+        if (modeValidation.ok === false) {
+          return res.status(modeValidation.status).json({ error: modeValidation.error });
         }
 
         const session = await classroomService.getOrCreateSession(lessonId, teacherId, classId);
-        db.prepare('UPDATE classroom_sessions SET teaching_mode_id = ? WHERE id = ?').run(modeId, session.id);
+        db.prepare('UPDATE classroom_sessions SET teaching_mode_id = ? WHERE id = ?').run(modeValidation.id, session.id);
 
-        res.json({ success: true, sessionId: session.id, teachingModeId: modeId });
+        res.json({ success: true, sessionId: session.id, teachingModeId: modeValidation.id });
       } catch (e: any) {
         res.status(500).json({ error: e.message });
       }

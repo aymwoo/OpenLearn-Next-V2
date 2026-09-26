@@ -5,11 +5,12 @@ import { SEGMENT_TYPES, SEGMENT_COLORS } from './timelineConfig';
 interface SegmentEditorCardProps {
   lang: 'zh' | 'en';
   segment: any;
+  readOnly?: boolean;
   onPatch: (patch: Record<string, any>) => void;
   onDelete: () => void;
 }
 
-export function SegmentEditorCard({ lang, segment, onPatch, onDelete }: SegmentEditorCardProps) {
+export function SegmentEditorCard({ lang, segment, readOnly = false, onPatch, onDelete }: SegmentEditorCardProps) {
   return (
     <div className="relative mx-3 sm:mx-4 my-3 rounded-2xl bg-surface/98 backdrop-blur-xl border-2 border-primary-theme/50 dark:border-primary-theme/60 shadow-2xl shadow-primary-theme/20 ring-4 ring-primary-theme/15 overflow-hidden shrink-0 text-main animate-in fade-in-0 zoom-in-[0.98] slide-in-from-top-3 duration-300 ease-out transition-all">
       {/* 聚光灯柔光背景与装饰光斑 */}
@@ -48,15 +49,21 @@ export function SegmentEditorCard({ lang, segment, onPatch, onDelete }: SegmentE
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onDelete}
-            className="px-2.5 py-1 text-xs text-rose-600 hover:text-white bg-rose-500/10 hover:bg-rose-600 border border-rose-500/25 rounded-xl flex items-center gap-1.5 transition-all hover:scale-102 cursor-pointer shadow-2xs shrink-0"
-            title={lang === 'zh' ? '删除当前环节' : 'Delete Segment'}
-          >
-            <Trash2 size={12} />
-            <span>{lang === 'zh' ? '删除环节' : 'Delete'}</span>
-          </button>
+          {readOnly ? (
+            <span className="text-2xs font-semibold text-muted px-2 py-1 rounded-lg border border-theme">
+              {lang === 'zh' ? '只读' : 'Read-only'}
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="px-2.5 py-1 text-xs text-rose-600 hover:text-white bg-rose-500/10 hover:bg-rose-600 border border-rose-500/25 rounded-xl flex items-center gap-1.5 transition-all hover:scale-102 cursor-pointer shadow-2xs shrink-0"
+              title={lang === 'zh' ? '删除当前环节' : 'Delete Segment'}
+            >
+              <Trash2 size={12} />
+              <span>{lang === 'zh' ? '删除环节' : 'Delete'}</span>
+            </button>
+          )}
         </div>
 
         {/* 参数表单网格 */}
@@ -70,6 +77,7 @@ export function SegmentEditorCard({ lang, segment, onPatch, onDelete }: SegmentE
               type="text"
               value={segment.title || ''}
               onChange={(e) => onPatch({ title: e.target.value })}
+              disabled={readOnly}
               className="border border-theme/80 px-2.5 py-1.5 rounded-xl bg-surface-secondary/80 focus:bg-surface text-xs text-main font-medium outline-none focus:border-primary-theme focus:ring-2 focus:ring-primary-theme/25 transition-all shadow-2xs"
             />
           </label>
@@ -83,6 +91,7 @@ export function SegmentEditorCard({ lang, segment, onPatch, onDelete }: SegmentE
               type="text"
               value={segment.duration || '10m'}
               onChange={(e) => onPatch({ duration: e.target.value })}
+              disabled={readOnly}
               placeholder="例如: 10m"
               className="border border-theme/80 px-2.5 py-1.5 rounded-xl bg-surface-secondary/80 focus:bg-surface text-xs text-main font-mono outline-none focus:border-primary-theme focus:ring-2 focus:ring-primary-theme/25 transition-all shadow-2xs"
             />
@@ -96,6 +105,7 @@ export function SegmentEditorCard({ lang, segment, onPatch, onDelete }: SegmentE
             <select
               value={segment.type || 'lecture'}
               onChange={(e) => onPatch({ type: e.target.value })}
+              disabled={readOnly}
               className="border border-theme/80 px-2.5 py-1.5 rounded-xl bg-surface-secondary/80 focus:bg-surface text-xs text-main font-medium outline-none focus:border-primary-theme focus:ring-2 focus:ring-primary-theme/25 transition-all shadow-2xs cursor-pointer"
             >
               {SEGMENT_TYPES.map((t) => (
@@ -117,6 +127,8 @@ export function SegmentEditorCard({ lang, segment, onPatch, onDelete }: SegmentE
                   key={c.name}
                   type="button"
                   onClick={() => onPatch({ color: c.color })}
+                  disabled={readOnly}
+                  aria-label={lang === 'zh' ? `选择颜色 ${c.name}` : `Choose color ${c.name}`}
                   className={`w-5 h-5 rounded-full border border-theme/60 transition-all hover:scale-115 cursor-pointer ${
                     c.color.split(' ')[0]
                   } ${segment.color === c.color ? 'ring-2 ring-primary-theme ring-offset-2 scale-110 shadow-xs' : ''}`}
@@ -137,6 +149,7 @@ export function SegmentEditorCard({ lang, segment, onPatch, onDelete }: SegmentE
             rows={2}
             value={segment.notes || ''}
             onChange={(e) => onPatch({ notes: e.target.value })}
+            disabled={readOnly}
             placeholder={
               lang === 'zh'
                 ? '写给自己的教学小抄：本环节核心提问、白板板书重点、容易卡壳的步骤…'

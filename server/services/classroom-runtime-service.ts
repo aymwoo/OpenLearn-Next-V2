@@ -51,6 +51,11 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
         .run(id, lessonId, classId || null, teacherId, checkinCode, now);
 
       session = this.db.prepare('SELECT * FROM classroom_sessions WHERE id = ?').get(id);
+    } else if (classId && session.class_id !== classId) {
+      // The launch portal lets teachers choose a class each time they enter.
+      // Keep the reused lesson session aligned with that explicit selection.
+      this.db.prepare('UPDATE classroom_sessions SET class_id = ? WHERE id = ?').run(classId, session.id);
+      session = this.db.prepare('SELECT * FROM classroom_sessions WHERE id = ?').get(session.id);
     }
     return session;
   }

@@ -18,6 +18,7 @@ import { usePluginPaletteItems } from './palette-item-registry';
 interface LessonPaletteProps {
   lang: 'zh' | 'en';
   onActivate: (type: string) => void;
+  readOnly?: boolean;
   collapsed?: boolean;
   onToggleCollapse?: (collapsed: boolean) => void;
 }
@@ -25,6 +26,7 @@ interface LessonPaletteProps {
 export function LessonPalette({
   lang,
   onActivate,
+  readOnly = false,
   collapsed: controlledCollapsed,
   onToggleCollapse,
 }: LessonPaletteProps) {
@@ -58,6 +60,7 @@ export function LessonPalette({
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const handleActivate = (type: string) => {
+    if (readOnly) return;
     setRecent((prev) => {
       const next = [type, ...prev.filter((t) => t !== type)].slice(0, 6);
       try {
@@ -125,7 +128,9 @@ export function LessonPalette({
                 key={item.type}
                 type="button"
                 onClick={() => handleActivate(item.type)}
-                className="w-10 h-10 rounded-xl bg-surface hover:bg-primary-theme/10 hover:border-primary-theme border border-theme text-main flex items-center justify-center transition-all cursor-pointer shadow-2xs group relative"
+                disabled={readOnly}
+                aria-disabled={readOnly}
+                className={`w-10 h-10 rounded-xl bg-surface border border-theme text-main flex items-center justify-center transition-all shadow-2xs group relative ${readOnly ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary-theme/10 hover:border-primary-theme cursor-pointer'}`}
                 title={`${lang === 'zh' ? item.labelZh : item.labelEn} - ${lang === 'zh' ? '点击配置' : 'Configure'}`}
               >
                 <Icon size={16} className="text-primary-theme transition-transform group-hover:scale-110" />
@@ -249,6 +254,7 @@ export function LessonPalette({
                 config={item}
                 lang={lang}
                 onActivate={handleActivate}
+                disabled={readOnly}
                 isFavorite={favorites.includes(item.type)}
                 onToggleFavorite={handleToggleFavorite}
               />
@@ -300,6 +306,7 @@ export function LessonPalette({
                           config={item}
                           lang={lang}
                           onActivate={handleActivate}
+                          disabled={readOnly}
                           isFavorite={favorites.includes(item.type)}
                           onToggleFavorite={handleToggleFavorite}
                         />

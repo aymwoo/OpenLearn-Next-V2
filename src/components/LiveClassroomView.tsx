@@ -152,7 +152,7 @@ export function LiveClassroomView({
   const [liveClassFullscreenElementId, setLiveClassFullscreenElementId] = useState<string | null>(null);
 
   // Classroom workflow stages: PRE_CLASS_READY, IN_CLASS_TEACHING, WRAP_UP_EXIT_TICKET, ARCHIVED_REPORT
-  const [classroomStage, setClassroomStage] = useState<string>('IN_CLASS_TEACHING');
+  const [classroomStage, setClassroomStage] = useState<string>('PRE_CLASS_READY');
   // 互动课堂起始门户：默认先展示「课程入口与班级选择门户」，
   // 教师确认课程 / 班级 / 教学模式后才进入授课视图（对应 Stitch 门户设计）。
   // 可通过 initialPortalOpen 关闭（既有单测直接断言授课视图时使用）。
@@ -176,10 +176,13 @@ export function LiveClassroomView({
   // 轮询课堂会话：真实 stage + 真实开课时间（驱动 elapsedMin / AI 预测 / 家校通知）
   useEffect(() => {
     if (!selectedLesson) {
+      setClassroomStage('PRE_CLASS_READY');
       setSessionStartedAt(null);
       return;
     }
     let mounted = true;
+    // Do not keep the previous lesson's stage visible while the next session is loading.
+    setClassroomStage('PRE_CLASS_READY');
     const fetchSession = () => {
       fetch(`/api/classroom/sessions/${selectedLesson}`)
         .then((res) => (res.ok ? res.json() : null))
@@ -187,6 +190,8 @@ export function LiveClassroomView({
           if (!mounted || !data) return;
           if (data.hasActiveSession && data.stage) {
             setClassroomStage(data.stage);
+          } else {
+            setClassroomStage('PRE_CLASS_READY');
           }
           // started_at 来自真实会话行；无会话时为 null（elapsedMin 随之归 0，不编造）
           const startedAt = data.session?.started_at ?? data.startedAt ?? null;

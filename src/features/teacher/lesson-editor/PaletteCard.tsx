@@ -7,27 +7,48 @@ interface PaletteCardProps {
   config: PaletteItemConfig;
   lang: 'zh' | 'en';
   onActivate: (type: string) => void;
+  disabled?: boolean;
   isFavorite?: boolean;
   onToggleFavorite?: (type: string, e: React.MouseEvent) => void;
 }
 
-export function PaletteCard({ config, lang, onActivate, isFavorite = false, onToggleFavorite }: PaletteCardProps) {
+export function PaletteCard({
+  config,
+  lang,
+  onActivate,
+  disabled = false,
+  isFavorite = false,
+  onToggleFavorite,
+}: PaletteCardProps) {
   const Icon = config.icon || Puzzle;
   const theme = COLOR_THEME[config.color] || COLOR_THEME.indigo;
 
   return (
     <div
-      draggable
+      draggable={!disabled}
       onDragStart={(e) => {
+        if (disabled) {
+          e.preventDefault();
+          return;
+        }
         const payload = { type: config.type, ...config.defaultData };
         const dataStr = JSON.stringify(payload);
         e.dataTransfer.effectAllowed = 'copy';
         e.dataTransfer.setData('application/json', dataStr);
         e.dataTransfer.setData('text/plain', dataStr);
       }}
-      onClick={() => onActivate(config.type)}
-      title={lang === 'zh' ? '点击编辑并添加到画板，或拖拽到画板' : 'Click to edit & add, or drag onto the board'}
-      className={`group relative bg-surface border border-theme rounded-xl p-2.5 shadow-sm transition-all duration-200 cursor-grab active:cursor-grabbing hover:shadow-md hover:-translate-y-0.5 ${theme.cardHoverBorder} ${theme.cardHoverRing} ${theme.cardHoverShadow} flex flex-col justify-between min-h-[92px]`}
+      onClick={() => !disabled && onActivate(config.type)}
+      title={
+        disabled
+          ? lang === 'zh'
+            ? '当前为只读模式'
+            : 'Read-only mode'
+          : lang === 'zh'
+            ? '点击编辑并添加到画板，或拖拽到画板'
+            : 'Click to edit & add, or drag onto the board'
+      }
+      aria-disabled={disabled}
+      className={`group relative bg-surface border border-theme rounded-xl p-2.5 shadow-sm transition-all duration-200 ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-grab active:cursor-grabbing hover:shadow-md hover:-translate-y-0.5'} ${theme.cardHoverBorder} ${theme.cardHoverRing} ${theme.cardHoverShadow} flex flex-col justify-between min-h-[92px]`}
     >
       <div className="flex items-center justify-between gap-1">
         <div

@@ -249,6 +249,29 @@ describe('教学模式 API（课堂启动门户）', () => {
       expect(readSelected()).toBe('collaborative');
     });
 
+    it('init 拒绝格式非法或已不存在的教学模式', async () => {
+      const invalidFormat = await call('POST', `/api/classroom/sessions/${lessonId}/init`, teacherToken, {
+        teachingModeId: 'bad id!',
+      });
+      expect(invalidFormat.status).toBe(400);
+
+      const missingMode = await call('POST', `/api/classroom/sessions/${lessonId}/init`, teacherToken, {
+        teachingModeId: 'tm-not-exist',
+      });
+      expect(missingMode.status).toBe(404);
+      expect(readSelected()).toBe('collaborative');
+    });
+
+    it('init 拒绝不存在的课程或班级', async () => {
+      const missingLesson = await call('POST', '/api/classroom/sessions/les-missing/init', teacherToken, {});
+      expect(missingLesson.status).toBe(404);
+
+      const missingClass = await call('POST', `/api/classroom/sessions/${lessonId}/init`, teacherToken, {
+        classId: 'cls-missing',
+      });
+      expect(missingClass.status).toBe(404);
+    });
+
     it('传空字符串表示清除选择', async () => {
       const res = await call('PUT', `/api/classroom/sessions/${lessonId}/teaching-mode`, teacherToken, {
         teachingModeId: '',

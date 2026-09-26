@@ -17,6 +17,7 @@ import {
   Presentation,
   Radio,
   Rocket,
+  Search,
   Server,
   ShieldCheck,
   Sparkles,
@@ -108,7 +109,7 @@ function TelemetryIsland({
   readinessRate: string;
 }) {
   const zh = lang === 'zh';
-  const { latencyMs, quality, isOnline } = useNetworkLatency();
+  const { latencyMs, quality, isOnline, measuredAt } = useNetworkLatency();
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -117,24 +118,30 @@ function TelemetryIsland({
   }, []);
 
   const qualityLabel =
-    quality === 'offline'
+    measuredAt === null
       ? zh
-        ? '离线'
-        : 'Offline'
-      : quality === 'smooth'
+        ? '检测中'
+        : 'Checking'
+      : quality === 'offline'
         ? zh
-          ? '流畅'
-          : 'Smooth'
-        : quality === 'fair'
+          ? '离线'
+          : 'Offline'
+        : quality === 'smooth'
           ? zh
-            ? '一般'
-            : 'Fair'
-          : zh
-            ? '较差'
-            : 'Poor';
+            ? '流畅'
+            : 'Smooth'
+          : quality === 'fair'
+            ? zh
+              ? '一般'
+              : 'Fair'
+            : zh
+              ? '较差'
+              : 'Poor';
 
   const qualityTone =
-    quality === 'smooth'
+    measuredAt === null
+      ? 'text-muted bg-surface-secondary border-theme'
+      : quality === 'smooth'
       ? 'text-emerald-700 bg-emerald-50 border-emerald-200/80 dark:bg-emerald-950/40 dark:border-emerald-800/80 dark:text-emerald-300'
       : quality === 'fair'
         ? 'text-amber-700 bg-amber-50 border-amber-200/80 dark:bg-amber-950/40 dark:border-amber-800/80 dark:text-amber-300'
@@ -143,18 +150,18 @@ function TelemetryIsland({
   const tiles = [
     {
       icon: Monitor,
-      label: zh ? '主控大屏' : 'Main Display',
-      value: zh ? '投屏通道通畅' : 'Projector ready',
-      hint: zh ? '4K UHD' : '4K UHD',
+      label: zh ? '授课控制台' : 'Teaching Console',
+      value: zh ? '当前设备' : 'This device',
+      hint: zh ? '本浏览器窗口' : 'Current browser window',
     },
     {
       icon: Server,
-      label: zh ? '沙箱就绪率' : 'Sandbox Ready',
+      label: zh ? '学生端连接' : 'Student Connections',
       value: `${onlineCount} / ${seatCount}`,
       hint: readinessRate,
     },
     {
-      icon: isOnline ? Wifi : WifiOff,
+      icon: measuredAt === null ? Activity : isOnline ? Wifi : WifiOff,
       label: zh ? '网络时延' : 'Network RTT',
       value: latencyMs === null ? '—' : `${latencyMs} ms`,
       hint: qualityLabel,
@@ -248,6 +255,12 @@ function CourseDeck({
   lang: string;
 }) {
   const zh = lang === 'zh';
+  const [query, setQuery] = useState('');
+  const visibleLessons = lessons.filter((lesson) =>
+    String(lesson.title ?? '')
+      .toLocaleLowerCase()
+      .includes(query.trim().toLocaleLowerCase()),
+  );
   return (
     <Deck
       step="01"
@@ -259,58 +272,77 @@ function CourseDeck({
           {zh ? '暂无可用课程，请先在「课程管理」中创建课节' : 'No courses yet — create a lesson first'}
         </p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {lessons.slice(0, 6).map((lesson) => {
-            const active = lesson.id === selectedLesson;
-            return (
-              <button
-                key={lesson.id}
-                type="button"
-                onClick={() => onSelect(lesson.id)}
-                aria-pressed={active}
-                className={`text-left rounded-xl border p-3.5 transition-all cursor-pointer flex flex-col gap-2 h-full ${
-                  active
-                    ? 'border-primary-theme bg-primary-theme-light shadow-3xs'
-                    : 'border-theme bg-surface hover:border-primary-theme hover:bg-surface-secondary'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-2xs font-mono font-bold text-muted">
-                    <Layers size={11} />
-                    {zh ? '课节' : 'Lesson'}
-                  </span>
-                  {active ? (
-                    <span className="inline-flex items-center gap-1 text-2xs font-bold text-primary-theme">
-                      <CheckCircle2 size={12} />
-                      {zh ? '已选' : 'Selected'}
-                    </span>
-                  ) : (
-                    <span className="w-3.5 h-3.5 rounded-full border border-theme" />
-                  )}
-                </div>
-                <div className="font-bold text-xs text-main line-clamp-2 leading-relaxed">{lesson.title}</div>
-                <div className="mt-auto flex items-center gap-2 text-2xs text-muted">
-                  <BookOpen size={11} />
-                  <span className="truncate">
-                    {Array.isArray(lesson.timeline)
-                      ? zh
-                        ? `${lesson.timeline.length} 个环节`
-                        : `${lesson.timeline.length} segments`
-                      : zh
-                        ? '按默认时长授课'
-                        : 'Default pacing'}
-                  </span>
-                </div>
-                {/* 插件可在课程卡片上追加徽章/标签 */}
-                <ExtensionPointRenderer
-                  slot="classroom.portal.course_badge"
-                  lang={lang}
-                  slotProps={{ lessonId: lesson.id, lesson, isSelected: active }}
-                />
-              </button>
-            );
-          })}
-        </div>
+        <>
+          <label className="relative block mb-3">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              type="search"
+              aria-label={zh ? '搜索课程' : 'Search courses'}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={zh ? '搜索全部课程...' : 'Search all courses...'}
+              className="w-full pl-8 pr-3 py-2 bg-surface-secondary border border-theme rounded-xl text-xs text-main placeholder-muted outline-none focus:border-primary-theme focus:ring-1 focus:ring-primary-theme"
+            />
+          </label>
+          {visibleLessons.length === 0 ? (
+            <p className="text-xs text-muted italic py-6 text-center">
+              {zh ? '没有匹配的课程' : 'No matching courses'}
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-h-[28rem] overflow-y-auto">
+              {visibleLessons.map((lesson) => {
+                const active = lesson.id === selectedLesson;
+                return (
+                  <button
+                    key={lesson.id}
+                    type="button"
+                    onClick={() => onSelect(lesson.id)}
+                    aria-pressed={active}
+                    className={`text-left rounded-xl border p-3.5 transition-all cursor-pointer flex flex-col gap-2 h-full ${
+                      active
+                        ? 'border-primary-theme bg-primary-theme-light shadow-3xs'
+                        : 'border-theme bg-surface hover:border-primary-theme hover:bg-surface-secondary'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-1.5 text-2xs font-mono font-bold text-muted">
+                        <Layers size={11} />
+                        {zh ? '课节' : 'Lesson'}
+                      </span>
+                      {active ? (
+                        <span className="inline-flex items-center gap-1 text-2xs font-bold text-primary-theme">
+                          <CheckCircle2 size={12} />
+                          {zh ? '已选' : 'Selected'}
+                        </span>
+                      ) : (
+                        <span className="w-3.5 h-3.5 rounded-full border border-theme" />
+                      )}
+                    </div>
+                    <div className="font-bold text-xs text-main line-clamp-2 leading-relaxed">{lesson.title}</div>
+                    <div className="mt-auto flex items-center gap-2 text-2xs text-muted">
+                      <BookOpen size={11} />
+                      <span className="truncate">
+                        {Array.isArray(lesson.timeline)
+                          ? zh
+                            ? `${lesson.timeline.length} 个环节`
+                            : `${lesson.timeline.length} segments`
+                          : zh
+                            ? '按默认时长授课'
+                            : 'Default pacing'}
+                      </span>
+                    </div>
+                    {/* 插件可在课程卡片上追加徽章/标签 */}
+                    <ExtensionPointRenderer
+                      slot="classroom.portal.course_badge"
+                      lang={lang}
+                      slotProps={{ lessonId: lesson.id, lesson, isSelected: active }}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </Deck>
   );
@@ -495,6 +527,7 @@ function ClassroomDeck({
   selectedModeId,
   onSelectMode,
   modesLoading,
+  fetcher,
   lang,
 }: {
   classes: any[];
@@ -506,9 +539,16 @@ function ClassroomDeck({
   selectedModeId: string | null;
   onSelectMode: (id: string) => void;
   modesLoading: boolean;
+  fetcher?: typeof fetch;
   lang: 'zh' | 'en';
 }) {
   const zh = lang === 'zh';
+  const [query, setQuery] = useState('');
+  const visibleClasses = classes.filter((klass) =>
+    String(klass.name ?? '')
+      .toLocaleLowerCase()
+      .includes(query.trim().toLocaleLowerCase()),
+  );
   const onlineCount = students.filter((s) => onlineStudentIds.includes(s.id)).length;
   const readiness = students.length ? Math.round((onlineCount / students.length) * 100) : 0;
   const { latencyMs } = useNetworkLatency();
@@ -531,35 +571,48 @@ function ClassroomDeck({
             {zh ? '暂无班级，请先在「班级管理」中创建' : 'No classes yet'}
           </p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-            {classes.slice(0, 6).map((klass) => {
-              const active = klass.id === selectedClassId;
-              return (
-                <button
-                  key={klass.id}
-                  type="button"
-                  onClick={() => onSelectClass(klass.id)}
-                  aria-pressed={active}
-                  className={`text-left rounded-xl border p-3 transition-all cursor-pointer flex flex-col gap-1.5 ${
-                    active
-                      ? 'border-primary-theme bg-primary-theme-light shadow-3xs'
-                      : 'border-theme bg-surface hover:border-primary-theme hover:bg-surface-secondary'
-                  }`}
-                >
-                  <span className="font-bold text-xs text-main truncate">{klass.name}</span>
-                  <span className="text-2xs text-muted">
-                    {active
-                      ? zh
-                        ? '当前授课班级'
-                        : 'Current class'
-                      : zh
-                        ? '点击选择'
-                        : 'Click to select'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <>
+            <label className="relative block">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+              <input
+                type="search"
+                aria-label={zh ? '搜索班级' : 'Search classes'}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={zh ? '搜索全部班级...' : 'Search all classes...'}
+                className="w-full pl-8 pr-3 py-2 bg-surface-secondary border border-theme rounded-xl text-xs text-main placeholder-muted outline-none focus:border-primary-theme focus:ring-1 focus:ring-primary-theme"
+              />
+            </label>
+            {visibleClasses.length === 0 ? (
+              <p className="text-xs text-muted italic py-4 text-center">
+                {zh ? '没有匹配的班级' : 'No matching classes'}
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto">
+                {visibleClasses.map((klass) => {
+                  const active = klass.id === selectedClassId;
+                  return (
+                    <button
+                      key={klass.id}
+                      type="button"
+                      onClick={() => onSelectClass(klass.id)}
+                      aria-pressed={active}
+                      className={`text-left rounded-xl border p-3 transition-all cursor-pointer flex flex-col gap-1.5 ${
+                        active
+                          ? 'border-primary-theme bg-primary-theme-light shadow-3xs'
+                          : 'border-theme bg-surface hover:border-primary-theme hover:bg-surface-secondary'
+                      }`}
+                    >
+                      <span className="font-bold text-xs text-main truncate">{klass.name}</span>
+                      <span className="text-2xs text-muted">
+                        {active ? (zh ? '当前授课班级' : 'Current class') : zh ? '点击选择' : 'Click to select'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
 
         {selectedClassId && (
@@ -568,6 +621,7 @@ function ClassroomDeck({
             students={students}
             onlineStudentIds={onlineStudentIds}
             lang={lang}
+            fetcher={fetcher}
           />
         )}
 
@@ -614,8 +668,14 @@ function LaunchDeck({
             <span className="text-xs font-bold text-main truncate">
               {zh ? '已锁定开课流水线' : 'Launch pipeline locked'}
             </span>
-            <span className="text-2xs font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/70">
-              Ready
+            <span
+              className={`text-2xs font-bold px-1.5 py-0.5 rounded border ${
+                canLaunch
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/70'
+                  : 'bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/70'
+              }`}
+            >
+              {canLaunch ? (zh ? '配置完成' : 'Configured') : zh ? '待配置' : 'Needs setup'}
             </span>
           </div>
           <p className="text-2xs text-muted truncate">
@@ -715,12 +775,16 @@ function InsightDeck({ students, onlineStudentIds, lang }: { students: any[]; on
 
   return (
     <Deck
-      title={zh ? 'AI 助教学情透镜' : 'AI Teaching Lens'}
-      subtitle={zh ? '课前重点关注提示' : 'Pre-class attention hints'}
+      title={zh ? '课前学生状态' : 'Pre-class Student Status'}
+      subtitle={zh ? '依据当前在线连接提示' : 'Based on current online connections'}
       aside={<Sparkles size={13} className="text-primary-theme" />}
     >
       <div className="flex flex-col gap-2">
-        {offline.length === 0 ? (
+        {students.length === 0 ? (
+          <p className="text-2xs text-muted py-3 text-center">
+            {zh ? '当前班级没有学生名单，暂时无法判断在线状态' : 'No student roster is available to assess connections'}
+          </p>
+        ) : offline.length === 0 ? (
           <p className="text-2xs text-muted py-3 text-center inline-flex items-center justify-center gap-1.5">
             <ShieldCheck size={12} className="text-emerald-500" />
             {zh ? '全员席位已连接，暂无需要关注的学生' : 'All seats connected — nothing needs attention'}
@@ -763,34 +827,56 @@ function InsightDeck({ students, onlineStudentIds, lang }: { students: any[]; on
 // ── 右栏：课前自检 ─────────────────────────────────────────────────────────
 
 function PreflightDeck({
+  hasSelectedLesson,
+  hasSelectedClass,
   seatCount,
   onlineCount,
   lang,
 }: {
+  hasSelectedLesson: boolean;
+  hasSelectedClass: boolean;
   seatCount: number;
   onlineCount: number;
   lang: string;
 }) {
   const zh = lang === 'zh';
-  const { isOnline, quality } = useNetworkLatency();
+  const { isOnline, quality, measuredAt } = useNetworkLatency();
   const items = [
     {
       icon: CheckCircle2,
-      label: zh ? '随堂课件与代码示例同步' : 'Courseware sync',
-      value: zh ? '已就绪' : 'Ready',
-      ok: true,
+      label: zh ? '课程与班级配置' : 'Course and class selection',
+      value: hasSelectedLesson && hasSelectedClass ? (zh ? '已选择' : 'Selected') : (zh ? '待选择' : 'Select both'),
+      ok: hasSelectedLesson && hasSelectedClass,
     },
     {
       icon: Server,
-      label: zh ? '学生端沙箱节点' : 'Student sandboxes',
-      value: seatCount ? `${onlineCount}/${seatCount} ${zh ? '存活' : 'alive'}` : zh ? '无席位' : 'No seats',
-      ok: seatCount === 0 || onlineCount > 0,
+      label: zh ? '学生端在线连接' : 'Student connections',
+      value: seatCount
+        ? `${onlineCount}/${seatCount} ${zh ? '在线' : 'online'}`
+        : zh
+          ? '暂无学生名单'
+          : 'No roster',
+      ok: seatCount > 0 && onlineCount === seatCount,
     },
     {
       icon: Radio,
-      label: zh ? '互动投票与抢答器信道' : 'Interaction channel',
-      value: isOnline ? (quality === 'poor' ? (zh ? '时延偏高' : 'High latency') : zh ? '双工正常' : 'Duplex OK') : zh ? '离线' : 'Offline',
-      ok: isOnline,
+      label: zh ? '平台网络连接' : 'Platform network',
+      value: measuredAt === null
+        ? zh
+          ? '检测中'
+          : 'Checking'
+        : isOnline
+        ? quality === 'poor'
+          ? zh
+            ? '时延偏高'
+            : 'High latency'
+          : zh
+            ? '网络可达'
+            : 'Network reachable'
+        : zh
+          ? '离线'
+          : 'Offline',
+      ok: measuredAt !== null && isOnline && quality !== 'poor',
     },
   ];
 
@@ -894,14 +980,14 @@ export function ClassroomEntryPortal({
 
   const onlineCount = students.filter((s) => onlineStudentIds.includes(s.id)).length;
   const readinessRate = students.length ? `${Math.round((onlineCount / students.length) * 100)}%` : '—';
-  const canLaunch = Boolean(selectedLesson) && Boolean(liveClassSelectedClassId);
+  const canLaunch = Boolean(currentLesson) && Boolean(currentClass);
 
   const startClock = new Date();
   const zhGreeting = greetingOf(startClock.getHours(), true);
   const enGreeting = greetingOf(startClock.getHours(), false);
 
   const handleLaunch = useCallback(async () => {
-    if (!selectedLesson || !liveClassSelectedClassId) {
+    if (!currentLesson || !currentClass) {
       addToast?.(
         zh ? '无法开课' : 'Cannot start',
         zh ? '请先选择课程与班级' : 'Select a course and a class first',
@@ -912,8 +998,8 @@ export function ClassroomEntryPortal({
     setLaunching(true);
     try {
       await onEnterClassroom({
-        lessonId: selectedLesson,
-        classId: liveClassSelectedClassId,
+        lessonId: currentLesson.id,
+        classId: currentClass.id,
         teachingModeId: selectedModeId,
       });
     } catch (e) {
@@ -925,7 +1011,7 @@ export function ClassroomEntryPortal({
     } finally {
       if (mountedRef.current) setLaunching(false);
     }
-  }, [addToast, liveClassSelectedClassId, onEnterClassroom, selectedLesson, selectedModeId, zh]);
+  }, [addToast, currentClass, currentLesson, onEnterClassroom, selectedModeId, zh]);
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto bg-app text-main">
@@ -984,6 +1070,7 @@ export function ClassroomEntryPortal({
               selectedModeId={selectedModeId}
               onSelectMode={setSelectedModeId}
               modesLoading={modesLoading}
+              fetcher={fetcher}
               lang={lang as 'zh' | 'en'}
             />
             <LaunchDeck
@@ -1004,7 +1091,13 @@ export function ClassroomEntryPortal({
               lang={lang}
             />
             <InsightDeck students={students} onlineStudentIds={onlineStudentIds} lang={lang} />
-            <PreflightDeck seatCount={students.length} onlineCount={onlineCount} lang={lang} />
+            <PreflightDeck
+              hasSelectedLesson={Boolean(currentLesson)}
+              hasSelectedClass={Boolean(currentClass)}
+              seatCount={students.length}
+              onlineCount={onlineCount}
+              lang={lang}
+            />
           </div>
         </div>
       </div>

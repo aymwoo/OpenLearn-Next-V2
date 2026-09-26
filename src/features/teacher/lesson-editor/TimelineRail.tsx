@@ -18,6 +18,7 @@ interface TimelineRailProps {
   setDraggedSegmentIdx: (idx: number | null) => void;
   selectedLesson: string | null;
   saveTimeline: (lessonId: string, segments: any[]) => void;
+  readOnly?: boolean;
   editorPanelsExpanded: boolean;
   setEditorPanelsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
 }
@@ -31,6 +32,7 @@ export function TimelineRail({
   setDraggedSegmentIdx,
   selectedLesson,
   saveTimeline,
+  readOnly = false,
   editorPanelsExpanded,
   setEditorPanelsExpanded,
 }: TimelineRailProps) {
@@ -46,6 +48,7 @@ export function TimelineRail({
   }, 0);
 
   const handleReorder = (toIdx: number) => {
+    if (readOnly) return;
     if (draggedSegmentIdx === null || draggedSegmentIdx === toIdx) {
       setDraggedSegmentIdx(null);
       return;
@@ -58,7 +61,7 @@ export function TimelineRail({
   };
 
   const handleAdd = () => {
-    if (!selectedLesson) return;
+    if (readOnly || !selectedLesson) return;
     const newSegId = 'seg-' + Math.random().toString(36).slice(2, 9);
     const newSeg = {
       id: newSegId,
@@ -118,15 +121,20 @@ export function TimelineRail({
           return (
             <div
               key={seg.id}
-              draggable
+              draggable={!readOnly}
               onDragStart={(e) => {
+                if (readOnly) {
+                  e.preventDefault();
+                  return;
+                }
                 setDraggedSegmentIdx(idx);
                 e.dataTransfer.effectAllowed = 'move';
               }}
-              onDragOver={(e) => e.preventDefault()}
+              onDragOver={(e) => !readOnly && e.preventDefault()}
               onDrop={() => handleReorder(idx)}
               onClick={() => setActiveSegmentId(seg.id)}
-              className={`relative z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold cursor-pointer transition-all duration-200 border border-theme/60 shadow-2xs group ${nodeCls} ${
+              aria-disabled={readOnly}
+              className={`relative z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold ${readOnly ? 'cursor-pointer' : 'cursor-grab'} transition-all duration-200 border border-theme/60 shadow-2xs group ${nodeCls} ${
                 isDragging ? 'opacity-40 scale-95' : 'hover:scale-102'
               }`}
             >
@@ -144,7 +152,7 @@ export function TimelineRail({
         })}
 
         {/* 添加新环节按钮 */}
-        {selectedLesson && (
+        {selectedLesson && !readOnly && (
           <button
             type="button"
             onClick={handleAdd}
@@ -161,6 +169,7 @@ export function TimelineRail({
       <button
         type="button"
         onClick={() => setEditorPanelsExpanded((prev) => !prev)}
+        aria-expanded={editorPanelsExpanded}
         className={`px-3 py-1 text-xs font-bold rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
           editorPanelsExpanded
             ? 'bg-primary-theme text-white border-primary-theme shadow-md shadow-primary-theme/30 ring-2 ring-primary-theme/30 scale-102'

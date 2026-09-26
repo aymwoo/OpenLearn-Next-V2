@@ -12,6 +12,14 @@ vi.mock('../TeacherAssignmentGradePanel', () => ({
   TeacherAssignmentGradePanel: () => <div data-testid="grade-panel">GradePanel</div>,
 }));
 
+vi.mock('../../features/classroom/PreClassReadyView', () => ({
+  PreClassReadyView: () => <div data-testid="pre-class-ready-view" />,
+}));
+
+vi.mock('../../features/classroom/ClassroomInteractiveCockpit', () => ({
+  ClassroomInteractiveCockpit: () => null,
+}));
+
 vi.mock('socket.io-client', () => ({
   io: () => ({
     on: vi.fn(),
@@ -150,5 +158,19 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       expect.any(String),
       'warning',
     );
+  });
+
+  it('shows the pre-class stage when the selected lesson has no active session', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ hasActiveSession: false }),
+      }),
+    );
+
+    render(<LiveClassroomView {...(defaultProps as any)} />);
+
+    expect(await screen.findByTestId('pre-class-ready-view')).toBeDefined();
   });
 });

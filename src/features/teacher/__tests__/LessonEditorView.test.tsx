@@ -3,6 +3,12 @@ import { render, screen, cleanup } from '@testing-library/react';
 import type { MutableRefObject } from 'react';
 import { LessonEditorView, type LessonEditorViewProps } from '../LessonEditorView';
 
+vi.mock('../../../components/LazyWhiteboard', () => ({
+  LazyWhiteboard: ({ readOnly }: { readOnly?: boolean }) => (
+    <div data-testid="editor-whiteboard" data-read-only={String(Boolean(readOnly))} />
+  ),
+}));
+
 afterEach(() => cleanup());
 
 function makeProps(overrides: Partial<LessonEditorViewProps> = {}): LessonEditorViewProps {
@@ -60,6 +66,41 @@ describe('LessonEditorView', () => {
     render(<LessonEditorView {...makeProps({ selectedLesson: 'lesson-1', editorSaveStatus: 'saving' })} />);
 
     expect(screen.getByText('同步 SQLite...')).toBeTruthy();
+  });
+
+  it('disables timeline, palette and whiteboard editing for another teacher’s lesson', () => {
+    render(
+      <LessonEditorView
+        {...makeProps({
+          session: { userId: 'viewer-id', username: 'viewer', role: 'teacher' } as any,
+          lessons: [{ id: 'lesson-1', title: '共享课程', creator_id: 'owner-id' } as any],
+          selectedLesson: 'lesson-1',
+          timelineSegments: [{ id: 'segment-1', title: '导入', duration: '5m', type: 'intro' }],
+          activeSegmentId: 'segment-1',
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId('editor-whiteboard').getAttribute('data-read-only')).toBe('true');
+    expect(screen.queryByRole('button', { name: /加环节/ })).toBeNull();
+    expect(screen.getByLabelText('环节名称')).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('button', { name: /删除环节/ })).toBeNull();
+  });
+
+  it('keeps the lesson editor read-only in student preview mode', () => {
+    render(
+      <LessonEditorView
+        {...makeProps({
+          session: { userId: 'owner-id', username: 'owner', role: 'teacher' } as any,
+          lessons: [{ id: 'lesson-1', title: '我的课程', creator_id: 'owner-id' } as any],
+          selectedLesson: 'lesson-1',
+          activeRole: 'student',
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId('editor-whiteboard').getAttribute('data-read-only')).toBe('true');
+    expect(screen.queryByRole('button', { name: /加环节/ })).toBeNull();
   });
 
   it('opens student preview in independent tab when "学生视角预览 (独立Tab)" is clicked', () => {
