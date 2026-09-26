@@ -20,7 +20,6 @@ export interface BuildOptions {
 let cachedBundle: string | null = null;
 
 async function bundleIndex(): Promise<string> {
-  if (cachedBundle) return cachedBundle;
   const result = await esbuild.build({
     entryPoints: [path.join(SRC_DIR, 'index.ts')],
     bundle: true,

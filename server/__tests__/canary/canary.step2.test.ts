@@ -285,8 +285,10 @@ describe('金丝雀第 2 步：探针报告与 Token/require 扫描', () => {
     probes = new Map(list.map((p) => [p.id, p]));
   }, 120_000);
 
-  afterAll(() => {
-    host?.deactivatePlugin(pluginId).catch(() => {});
+  afterAll(async () => {
+    if (host && pluginId) {
+      await host.deactivatePlugin(pluginId).catch(() => {});
+    }
     db?.close();
     if (pluginsDir) fs.rmSync(pluginsDir, { recursive: true, force: true });
   });

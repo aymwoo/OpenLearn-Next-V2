@@ -100,7 +100,10 @@ export function createMethodProxy(
   timeoutMs: number = 30000,
 ): Record<string, Function> {
   return new Proxy({} as Record<string, Function>, {
-    get(_target: Record<string, Function>, method: string | symbol): Function {
+    get(_target: Record<string, Function>, method: string | symbol): any {
+      if (method === 'then' || method === 'catch' || method === 'finally' || typeof method === 'symbol') {
+        return undefined;
+      }
       // Return an async invoke function for any property access
       return (...args: unknown[]) => {
         const invokeId = crypto.randomUUID();

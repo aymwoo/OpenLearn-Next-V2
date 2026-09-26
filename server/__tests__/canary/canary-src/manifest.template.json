@@ -4,10 +4,52 @@
   "version": "1.0.0",
   "main": "index.js",
   "engines": { "openlearn": ">=0.3.0" },
-  "capabilitiesProposed": [],
+  "requires": [
+    "@openlearn/core:ICommandBusService@^1.0.0",
+    "@openlearn/core:IEventBusService@^1.0.0",
+    "@openlearn/core:IDatabase@^1.0.0",
+    "@openlearn/core:IStorageService@^1.0.0"
+  ],
+  "optional": ["@openlearn/core:IAIService@^1.0.0"],
+  "capabilitiesProposed": [
+    "lesson:read", "lesson:write", "file:write"
+  ],
+  "provides": ["ext-canary:ICanaryProbeService"],
   "api": {
+    "baseRoute": "/canary",
     "routes": [
-      { "method": "GET", "path": "/status", "auth": true }
+      { "method": "GET",  "path": "/status",    "auth": true },
+      { "method": "GET",  "path": "/items/:id", "auth": true, "roles": ["teacher", "administrator"] },
+      { "method": "POST", "path": "/echo",      "auth": true },
+      { "method": "GET",  "path": "/public",    "auth": false }
     ]
-  }
+  },
+  "contributes": {
+    "teacher.tab": [
+      { "id": "canary-tab", "label": "金丝雀", "icon": "Bird", "position": 50 }
+    ],
+    "student.view": [
+      { "id": "canary-student", "label": "探针面板" }
+    ],
+    "classroom.tool": [
+      { "id": "canary-tool", "name": "探针互动", "icon": "Activity", "commandType": "canary.ping" }
+    ],
+    "anchor:*": { "id": "anchor:toolbar-export", "placement": "before", "label": "探针锚点" },
+    "help.plugin_docs": { "id": "canary-docs", "title": "金丝雀说明", "markdownUrl": "/plugins/canary.md" },
+    "student.lesson.tool": [
+      { "id": "canary-lesson-tool", "label": "课中探针" }
+    ]
+  },
+  "classroomTools": [
+    { "id": "canary-classroom", "name": "探针", "icon": "Bird", "commandType": "canary.ping", "payload": { "src": "classroom" } }
+  ],
+  "configuration": {
+    "properties": {
+      "showInDashboard":  { "type": "boolean", "default": true },
+      "maxPollOptions":   { "type": "number",  "default": 10, "minimum": 1, "maximum": 20 },
+      "greeting":         { "type": "string",  "default": "hello", "enum": ["hello", "hi"] },
+      "enableAnonVoting": { "type": "boolean", "default": false }
+    }
+  },
+  "updateSource": { "type": "github-release", "repo": "aymwoo/openlearn-canary" }
 }

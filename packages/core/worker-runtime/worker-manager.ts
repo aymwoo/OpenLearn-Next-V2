@@ -482,6 +482,9 @@ function createServiceProxies(serviceTokens) {
     (function(token) {
       services[token] = new Proxy({}, {
         get: function(_target, method) {
+          if (method === 'then' || method === 'catch' || method === 'finally' || typeof method === 'symbol') {
+            return undefined;
+          }
           return function() {
             var args = Array.prototype.slice.call(arguments);
             var invokeId = globalThis.crypto.randomUUID();
@@ -1068,6 +1071,12 @@ parentPort.on('message', async function(msg) {
           if (workerData.pluginDir) {
             try {
               var localRequire = createRequire(workerData.pluginDir + '/index.js');
+              var resolvedPath = localRequire.resolve(moduleName);
+              var normResolved = String(resolvedPath).replaceAll('\\\\', '/');
+              var normDir = String(workerData.pluginDir).replaceAll('\\\\', '/');
+              if (normResolved.indexOf(normDir + '/node_modules/') !== 0) {
+                throw new Error('Module "' + moduleName + '" cannot be resolved from host root node_modules');
+              }
               return localRequire(moduleName);
             } catch (err) {
               throw new Error('Failed to load local dependency "' + moduleName + '": ' + err.message);
@@ -1421,7 +1430,8 @@ export class WorkerManager {
         clearActivationTimer();
         cleanupActivationWorkerListeners();
         if (activationReject) {
-          activationReject(new WorkerActivateError(pluginId, (msg as { message?: string }).message ?? 'Unknown error'));
+          const errMsg = (msg as any).stack ? `${(msg as any).message}\n${(msg as any).stack}` : ((msg as any).message ?? 'Unknown error');
+          activationReject(new WorkerActivateError(pluginId, errMsg));
           activationResolve = null;
           activationReject = null;
         } else {

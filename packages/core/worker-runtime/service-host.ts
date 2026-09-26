@@ -646,7 +646,8 @@ export class ServiceHost {
         this.assertDatabaseAccessAllowed(sql);
         let result: unknown;
         if (msg.method === 'exec') {
-          result = db.exec(sql);
+          db.exec(sql);
+          result = undefined;
         } else if (msg.method === 'prepareAndRun') {
           const [, args] = msg.args as [string, unknown[]];
           result = db.prepare(sql).run(...args);

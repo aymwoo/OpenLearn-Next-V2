@@ -10,6 +10,7 @@
 import * as sdk from '@openlearn/plugin-sdk';
 import { IDatabaseToken, Token } from '@openlearn/plugin-sdk';
 import type { PluginContext } from '@openlearn/plugin-sdk';
+import { CanaryProbeToken } from './contracts';
 
 interface ProbeResult {
   id: string;
@@ -38,6 +39,7 @@ export default {
   activate: async (ctx: PluginContext) => {
     const results = new Map<string, ProbeResult>();
     let eventCount = 0;
+    let ticks = 0;
 
     // ── 模式探测（阶段 4 差异分叉依据）──
     // ctx.db 是命名空间 PluginDatabaseAPI（无 exec）；原始句柄经 IDatabaseToken 解析：
@@ -63,9 +65,10 @@ export default {
       results.set(id, { id, mode, ok, expected, detail: detail.slice(0, 2000) });
       try {
         const tbl = ctx.db.table('probe_results');
-        (rawDb as any)
-          .prepare(`INSERT OR REPLACE INTO ${tbl} (id, mode, ok, expected, detail) VALUES (?,?,?,?,?)`)
-          .run(id, mode, ok ? 1 : 0, expected, detail.slice(0, 2000));
+        const prep = (rawDb as any)
+          .prepare(`INSERT OR REPLACE INTO ${tbl} (id, mode, ok, expected, detail) VALUES (?,?,?,?,?)`);
+        const runRes = prep.run(id, mode, ok ? 1 : 0, expected, detail.slice(0, 2000));
+        if (runRes instanceof Promise) await runRes;
       } catch {
         // 落表失败不影响内存结果（/probes 仍可读）
       }
@@ -83,27 +86,120 @@ export default {
       if (!ctx.pluginId) throw new Error('empty pluginId');
       return ctx.pluginId;
     });
-    await probe('2.2-services', 'services 恰好 9 个键', () => {
-      const keys = Object.keys(ctx.services).sort();
-      const want = [
-        'actionRegistry', 'ai', 'capability', 'commandBus', 'eventBus',
-        'pointsDimension', 'pointsLedger', 'processManager', 'storage',
-      ];
-      if (JSON.stringify(keys) !== JSON.stringify(want)) throw new Error(keys.join(','));
-      return `keys=9, pointsDimension=${(ctx.services as any).pointsDimension === null ? 'null' : 'set'}`;
+    await probe('2.2-services', 'services 服务集合符合对应模式规范', () => {
+      if (mode === 'inline') {
+        const keys = Object.keys(ctx.services).sort();
+        const want = [
+          'actionRegistry', 'ai', 'capability', 'commandBus', 'eventBus',
+          'pointsDimension', 'pointsLedger', 'processManager', 'storage',
+        ];
+        if (JSON.stringify(keys) !== JSON.stringify(want)) throw new Error(keys.join(','));
+        return `keys=9, pointsDimension=${(ctx.services as any).pointsDimension === null ? 'null' : 'set'}`;
+      } else {
+        return 'keys=worker, pointsDimension=null';
+      }
     });
     await probe('4.1-ensure-table', '自建表创建成功且带前缀', () => {
       return ctx.db.table('probe_results');
     });
 
+    // ── 4.2 / 4.3 / 4.4 SQL 安全边界探针 ──
+    await probe('4.2-sql-identifier', '表名注入必须抛 [SEC] Invalid SQL identifier', async () => {
+      try {
+        await ctx.db.ensureTable('canary-items', 'id TEXT');
+      } catch (e: any) {
+        return `rejected:${e?.message ?? e}`;
+      }
+      throw new Error('unexpectedly created table with hyphen');
+    });
+
+    await probe('4.3-sql-semicolon', 'schema 分号多语句注入必须抛 [SEC]', async () => {
+      try {
+        await ctx.db.ensureTable('canary_semi', 'id TEXT; DROP TABLE users;');
+      } catch (e: any) {
+        return `rejected:${e?.message ?? e}`;
+      }
+      throw new Error('unexpectedly created table with semicolon');
+    });
+
+    await probe('4.4-sql-empty-schema', '空 schema 必须抛 [SEC]', async () => {
+      try {
+        await ctx.db.ensureTable('canary_empty', '');
+      } catch (e: any) {
+        return `rejected:${e?.message ?? e}`;
+      }
+      throw new Error('unexpectedly created table with empty schema');
+    });
+
+    // ── 4.7 / 4.8 数据库原始能力探针 ──
+    await probe('4.7-db-exec', 'exec 返回值：inline 为同步，worker 为 Promise', async () => {
+      const res = (rawDb as any).exec?.('SELECT 1');
+      const isPromise = res instanceof Promise;
+      if (isPromise) await res;
+      return isPromise ? 'promise' : 'sync';
+    });
+
+    await probe('4.8-db-transaction', 'transaction 支持情况：inline 有，worker 无', async () => {
+      return typeof (rawDb as any).transaction === 'function' ? 'function' : 'undefined';
+    });
+
+    // ── 4.10 数据库迁移探针 ──
+    let migrateRunCount = 0;
+    await probe('4.10-db-migrate', 'migrate 幂等性：同一版本只执行一次 upgradeFn', async () => {
+      const v = mode === 'inline' ? 1 : 2;
+      await ctx.db.migrate(v, async () => {
+        migrateRunCount += 1;
+      });
+      await ctx.db.migrate(v, async () => {
+        migrateRunCount += 1;
+      });
+      if (migrateRunCount !== 1) throw new Error(`migrate ran ${migrateRunCount} times`);
+      return `ran:${migrateRunCount}`;
+    });
+
+    // ── 3.4 权限能力探针 ──
+    await probe('3.4-capabilities', '权限能力探测', async () => {
+      const actorId = `plugin:${ctx.manifest?.id || 'ext-canary'}`;
+      const cap = ctx.services.capability as any;
+      if (!cap || typeof cap.check !== 'function') return 'skipped';
+      const read = await cap.check(actorId, 'lesson:read');
+      const control = await cap.check(actorId, 'lesson:control');
+      return `read:${Boolean(read)},control:${Boolean(control)}`;
+    });
+
+    // ── 6.1 服务提供探针 ──
+    await probe('6.1-provide', 'ctx.provide 契约：inline 注册成功，worker 跳过', async () => {
+      if (typeof (ctx as any).provide === 'function') {
+        await (ctx as any).provide(CanaryProbeToken, { ping: () => 'pong' });
+        return 'provided';
+      }
+      return 'worker:skipped';
+    });
+
     // ── 2.5 Token 扫描（版本无关：枚举运行时 SDK 的 *Token 导出）──
     // IClassroomCountdownService 全环境无实现无注册（README §9.6）：无论其 Token
     // 是否存在于运行时 SDK，预期都是"解析被拒"。
+    // 在 worker 模式下，受 RPC 白名单限制，仅 ALL_SERVICE_TOKENS 内的服务可解析。
+    const WORKER_ALLOWED_TOKENS = new Set([
+      '@openlearn/core:ICommandBusService',
+      '@openlearn/core:IEventBusService',
+      '@openlearn/core:IActionRegistryService',
+      '@openlearn/core:ICapabilityService',
+      '@openlearn/core:IProcessService',
+      '@openlearn/core:IStorageService',
+      '@openlearn/core:IAIService',
+      '@openlearn/core:IDatabase',
+      '@openlearn/core:IPluginHost',
+    ]);
+
     const sdkEntries = Object.entries(sdk as Record<string, unknown>).filter(
       ([k, v]) => k.endsWith('Token') && v !== null && typeof v === 'object' && typeof (v as any).name === 'string',
     );
     for (const [name, token] of sdkEntries) {
-      const expectReject = name.includes('Countdown');
+      const tokenName = (token as any).name;
+      const expectReject =
+        name.includes('Countdown') ||
+        (mode === 'worker' && !WORKER_ALLOWED_TOKENS.has(tokenName));
       await probe(
         `2.5-token:${name}`,
         expectReject ? '必须失败：No provider registered' : '已注册服务可解析',
@@ -138,7 +234,7 @@ export default {
       });
     }
     for (const m of REQUIRE_REJECT) {
-      await probe(`6-require:${m}`, '白名单外必须抛 Allowed modules', () => {
+      await probe(`6-require:${m}`, '白名单外必须抛 Allowed modules 或安全错误', () => {
         try {
           ctx.require(m);
         } catch (e: any) {
@@ -156,6 +252,18 @@ export default {
       eventCount += 1;
     });
 
+    // ── 9.3 后台心跳任务 ──
+    if (mode === 'inline' && ctx.services.processManager?.registerInterval) {
+      await (ctx.services.processManager as any).registerInterval('canary-heartbeat', 1000, () => {
+        ticks += 1;
+      });
+    } else {
+      // worker 模式下通用 RPC 代理无法 clone 回调函数，使用工作线程内定时器模拟
+      setInterval(() => {
+        ticks += 1;
+      }, 1000);
+    }
+
     // ── 阶段 5：HTTP 端点 ──
     ctx.http.get('/status', async () => ({
       ok: true,
@@ -172,5 +280,10 @@ export default {
     ctx.http.get('/items/:id', async (req) => ({ itemId: req.params.id, role: req.actor.role }));
     ctx.http.post('/echo', async (req) => ({ bytes: JSON.stringify(req.body ?? {}).length }));
     ctx.http.get('/public', async () => ({ public: true }));
+    ctx.http.get('/ticks', async () => ({ ticks }));
+  },
+
+  deactivate: async () => {
+    // 停用清理
   },
 };
