@@ -10,6 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **插件 REST 网关 GET 子路径被详情路由吞掉的缺陷修复（`server/routes/plugins.ts`）**：
+  - `GET /api/plugins/:id(*)`（插件详情）注册于网关 `/api/plugins/:pluginId/*` 之前，且 `:id(*)` 通配会捕获整条路径（如 `@scope/plugin-x/health`），导致**所有插件 REST API 的 GET 子路径请求永远无法到达网关**（V5.2 网关自此上线以来 GET 通道即不可用，POST 无通配路由不受影响）；
+  - 修复：详情路由检测到 id 含 `/`（即 manifest id + 子路径形态）时 `next()` 放行给网关；纯 id 查询行为不变。多段 manifest id（`@scope/name`）经 Express 单段参数匹配会拆分，插件 REST 调用约定使用**插件 DB UUID**（单段）+ 子路径。
+
+- **题库与随堂测验插件构建与安装验证（v2_plugins/plugin-exam-bank）**：
+  - 修复 `manifest.json` 含 JSON 注释导致构建失败；`main` 修正为 `index.js`（CLI 将产物平铺到 ZIP 根，`dist/` 前缀触发宿主兼容回退警告）；
+  - **幻影 REST 路由治理**：manifest 声明了 11 条 api.routes 但 `activate()` 只实现 `/health`——将业务逻辑抽为 `src/core.ts` 共享层，Command（`invokeCommand`）与 REST（`ctx.http`，网关 RBAC 前置）双通道共用同一组函数，REST 声明全部落地；
+  - **插件 id 迁离系统保留前缀**：`@openlearn/plugin-exam-bank` → `@teacher/plugin-exam-bank`——平台将 `@openlearn/*` 视为系统插件阻断 `update-zip-raw` 更新通道，且污染内核命令命名空间；
+  - 真实环境验证通过：构建产物预检（无裸导入/jsx 经典模式/external 对齐）→ 管理员 API 安装 → 激活 → 服务器重启自动恢复激活 → 网关 REST 录题/组卷/发布 → 学生提交判分（10/10）→ 重复提交 409 → 统计聚合正确。
+
 - **课堂会话恢复与作业上传链路的审计收敛修复**：
   - **feed 回放按会话隔离（classroom-feed-service.ts）**：`getFeedReplay` 由按 `lesson_id` 过滤改为按当前活动会话 `session_id` 过滤——同一课程重开的新会话不再回放上一次课的动态（无活动会话返回空）；
   - **上传失败回滚补全（assignment-hub.ts）**：`max_files` 超限分支此前直接返回 409 未删除已落盘文件，现在超限/超配额/写库失败一律回滚物理文件，不再留孤儿；

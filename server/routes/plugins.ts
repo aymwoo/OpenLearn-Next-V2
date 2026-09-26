@@ -499,9 +499,19 @@ export function registerPluginsRoutes(ctx: ServerContext) {
   });
 
   // GET single plugin by UUID or manifest.id alias (Placed AFTER /config, /toggle, /contributions)
-  app.get('/api/plugins/:id(*)', async (req, res) => {
+  app.get('/api/plugins/:id(*)', async (req, res, next) => {
+    // 插件 RESTful 网关（注册于本文件末尾）依赖 `/api/plugins/:pluginId/*` 匹配
+    // 「多段 manifest id + 子路径」的 GET 请求（如
+    // `/api/plugins/@openlearn/plugin-x/health`）。但本路由的 `:id(*)` 通配会先于
+    // 网关捕获整条路径（id = "@openlearn/plugin-x/health"），令插件 REST GET 子路径
+    // 全部 404。此处检测到 id 含 `/`（即 id 后还有子路径）时放行给网关处理；
+    // 纯 id（可能带 URL 编码的 %2F，Express 已解码为单段语义）仍走详情查询。
+    const rawIdPath = req.params.id ?? '';
+    if (rawIdPath.includes('/') && !rawIdPath.includes('%2F')) {
+      return next();
+    }
     try {
-      const rawId = decodeURIComponent(req.params.id);
+      const rawId = decodeURIComponent(rawIdPath);
       const cmd = kernelContainer.commandBus.createCommand('plugin.info', { pluginId: rawId }, getActorId(req));
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
