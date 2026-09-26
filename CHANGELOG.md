@@ -35,6 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **前端恢复逻辑（`LiveClassroomView.tsx` / `InteractiveWhiteboard.tsx`）**：动态流按 id 去重预填、环节与白板页一次性恢复（`initialPage` prop 只应用一次不覆盖后续手动切页）、`classroom:feed` socket 实时追加；
   - **「回到课堂」入口（`ClassroomEntryPortal.tsx`）**：所选课程存在进行中会话（IN_CLASS_TEACHING / WRAP_UP_EXIT_TICKET）时显示绿色脉冲提示条「课堂进行中 · 回到课堂」，一键直达恢复后的授课视图；
   - **E2E 测试（`server/__tests__/classroom-session-resume.test.ts`）**：教师开课→产生痕迹→离开（不发请求不清理状态）→「全新客户端」重进，验证 stage/started_at/页码/环节/动态回放/倒计时全部还原；含无会话与非法参数边界。
+  - **浏览器实测（Playwright，学生答题界面 + 实时推送弹窗）全链路通过**：学生 Cookie 登录 → 进课节（锁屏跟随）→ 教师端发布 → socket `exambank-survey-state` 推送 → 学生端自动弹出答题模态（课中浮层槽位）→ 作答提交 → 「已提交 ✓ 得分: 10/10」→ 教师端实时统计 `exambank-stats-update`（submission_count/选项分布）。实测抓出并修复 CSP blob 缺失与课中浮层槽位缺失两个平台缺陷。
 
 - **作业中心文件上传链路审计修复（`server/routes/assignment-hub.ts`）**：
   - **H1 跨班越权（IDOR）修复**：新增 `assertClassMembership` 班级归属校验——挂 `class_id` 的作业，学生必须属于该班才能读详情/上传/提交/互评（教师与管理员豁免），杜绝外班学生凭作业 ID 提交作业污染他班成绩册；课时作业（`class_id` 为 NULL）行为不变；

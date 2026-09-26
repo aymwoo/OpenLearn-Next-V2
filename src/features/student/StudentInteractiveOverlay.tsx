@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { StudentCountdownBanner } from './StudentCountdownBanner';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { AdaptiveExitTicketModal } from '../classroom/exit-ticket/AdaptiveExitTicketModal';
 
 export interface StudentInteractiveOverlayProps {
@@ -192,6 +193,13 @@ export function StudentInteractiveOverlay({
     <>
       {/* 课堂倒计时横幅（与教师端实时同步） */}
       <StudentCountdownBanner lessonId={lessonId} lang={lang} />
+
+      {/* 课中插件浮层槽位：插件可在此渲染随堂答题等模态弹窗
+          （学生上课中被锁定在课节视图，仪表盘的 student.view 槽位不可见） */}
+      <ExtensionPointRenderer
+        slot="student.classroom.overlay"
+        slotProps={{ studentId, lessonId }}
+      />
 
       {/* 悬浮学习节奏信号条 (底部浮动) */}
       <aside

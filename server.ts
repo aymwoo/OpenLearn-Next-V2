@@ -174,9 +174,12 @@ async function startServer() {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
+          // blob: — 插件前端加载通道：FrontendPluginHost 将插件源码包装为 Blob URL
+          // 再 dynamic import（见 src/plugin-host/plugin-host.ts activateRemotePlugin）。
+          // 缺失会导致所有插件前端激活失败（CSP 违规），扩展点永不渲染。
           scriptSrc: isProduction
-            ? ["'self'", "'unsafe-inline'"]
-            : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            ? ["'self'", "'unsafe-inline'", 'blob:']
+            : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'blob:'],
           scriptSrcAttr: ["'unsafe-inline'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
           styleSrcAttr: ["'unsafe-inline'"],
