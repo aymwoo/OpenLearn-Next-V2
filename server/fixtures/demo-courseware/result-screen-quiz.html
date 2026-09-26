@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>通用判断题测验（结算页探测通道）</title>
+<!--
+  通用考试课件 FIXTURE #2 — result-screen-quiz.html
+  ============================================
+  与平台零耦合。特点：不显式调用任何 LMS API，
+  仅在答完后展示一个「结算页」：
+    <div id="correctCount">8/10</div>
+  平台 Bridge SDK 的 Result Watcher（__lmsMaybeSubmitResult）
+  检测到「成绩/得分/完成」等结算页文案后，会从 #correctCount
+  读取 X/Y 比例并自动换算百分制提交。
+  测试用途：验证平台「结算页探测 + 比例归一化」逻辑。
+-->
+<style>
+  body { font-family: sans-serif; margin: 24px; }
+  .q { margin-bottom: 14px; }
+  #quiz { display: block; }
+  #resultScreen { display: none; }
+  .done { color: #b45309; font-size: 20px; font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="quiz">
+  <div class="q">1. 水的化学式是 H2O？<button data-answer="true">对</button> <button data-answer="false">错</button></div>
+  <div class="q">2. 光速比声速快？<button data-answer="true">对</button> <button data-answer="false">错</button></div>
+  <div class="q">3. 地球是太阳系中心？<button data-answer="true">对</button> <button data-answer="false">错</button></div>
+  <div class="q">4. Python 是解释型语言？<button data-answer="true">对</button> <button data-answer="false">错</button></div>
+  <div class="q">5. TCP 是面向连接的协议？<button data-answer="true">对</button> <button data-answer="false">错</button></div>
+</div>
+<div id="resultScreen">
+  <p class="done">测验完成</p>
+  <p>你的成绩：<span id="correctCount">0/5</span></p>
+</div>
+<script>
+  var CORRECT = { '1': 'true', '2': 'true', '3': 'false', '4': 'true', '5': 'true' };
+  var answered = 0, correct = 0;
+  var buttons = document.querySelectorAll('button[data-answer]');
+  for (var i = 0; i < buttons.length; i++) {
+    (function (btn) {
+      btn.addEventListener('click', function () {
+        var q = btn.closest('.q');
+        if (q.dataset.locked) return;
+        q.dataset.done = '1';
+        answered++;
+        if (btn.dataset.answer === CORRECT[q.textContent.slice(0, 1)]) correct++;
+        if (answered === 5) {
+          setTimeout(function () {
+            document.getElementById('quiz').style.display = 'none';
+            document.getElementById('resultScreen').style.display = 'block';
+            document.getElementById('correctCount').textContent = correct + '/5';
+          }, 100);
+        }
+      });
+    })(buttons[i]);
+  }
+</script>
+</body>
+</html>

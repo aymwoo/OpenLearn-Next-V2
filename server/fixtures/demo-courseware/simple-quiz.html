@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>通用单选题测验（LMS.submit 通道）</title>
+<!--
+  通用考试课件 FIXTURE #1 — simple-quiz.html
+  ============================================
+  与 OpenLearn 平台零耦合：不引用 /bridge.js、不认识 __LMS_STUDENT__。
+  仅按「任意 LMS 通用」的 postMessage 协议上报：
+    LMS_SUBMIT { payload: { score, completion } }
+  平台 Bridge SDK（window.LMS.submit → parent.postMessage）会自动携带
+  attempt_id（由注入的 Score Variable Monitor / LMS 上下文提供）。
+
+  测试用途：验证平台 lms-bridge 后端链路
+    POST /api/courseware/attempts/:id/submit → submission_result.score
+-->
+<style>
+  body { font-family: sans-serif; max-width: 560px; margin: 24px auto; }
+  .q { margin-bottom: 18px; }
+  .opt { display: block; margin: 4px 0; cursor: pointer; }
+  #result { font-size: 18px; font-weight: bold; margin-top: 18px; color: #16a34a; }
+  button { padding: 8px 20px; font-size: 14px; cursor: pointer; }
+</style>
+</head>
+<body>
+<h2>信息科技小测（3 题）</h2>
+<div class="q">1. 二进制 1010 等于十进制多少？<label class="opt"><input type="radio" name="q1" value="A">8</label><label class="opt"><input type="radio" name="q1" value="B">10</label><label class="opt"><input type="radio" name="q1" value="C">12</label></div>
+<div class="q">2. 1KB 等于多少字节？<label class="opt"><input type="radio" name="q2" value="A">1000</label><label class="opt"><input type="radio" name="q2" value="B">1024</label></div>
+<div class="q">3. CPU 的中文全称？<label class="opt"><input type="radio" name="q3" value="A">中央处理器</label><label class="opt"><input type="radio" name="q3" value="B">随机存储器</label></div>
+<button id="submitBtn">提交答卷</button>
+<div id="result"></div>
+<script>
+  var ANSWERS = { q1: 'B', q2: 'B', q3: 'A' }; // 每题 30 分，满分 90（非典型满分：验证 raw_full_score 换算）
+  function grade() {
+    var score = 0;
+    for (var q in ANSWERS) {
+      var picked = document.querySelector('input[name="' + q + '"]:checked');
+      if (picked && picked.value === ANSWERS[q]) score += 30;
+    }
+    return score;
+  }
+  document.getElementById('submitBtn').addEventListener('click', function () {
+    var score = grade();
+    // 通用 LMS 协议 1：显式提交（任何平台都会拦截 LMS_SUBMIT）
+    window.parent.postMessage({
+      type: 'LMS_SUBMIT',
+      payload: { score: score, completion: 1.0, comment: 'simple-quiz 提交' },
+    }, '*');
+    document.getElementById('result').textContent = '得分：' + score;
+  });
+</script>
+</body>
+</html>
