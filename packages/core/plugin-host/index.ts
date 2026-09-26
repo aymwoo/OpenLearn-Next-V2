@@ -122,10 +122,10 @@ export { OPENLEARN_VERSION };
 function createPluginStaticMiddleware(absDir: string) {
   return [
     (_req: any, res: any, next: any) => {
-      // SEC-SANDBOX: 强制沙箱隔离，禁止访问宿主 Cookie、localStorage 及发起同源特权请求，放行内联事件属性
+      // SEC-SANDBOX: 强制沙箱隔离，禁止访问宿主 Cookie、localStorage 及发起同源特权请求，放行内联事件属性（移除 unsafe-eval）
       res.setHeader(
         'Content-Security-Policy',
-        "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' blob: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data:; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline';",
+        "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' blob: data:; script-src 'self' 'unsafe-inline' blob: data:; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline';",
       );
       res.setHeader('X-Content-Type-Options', 'nosniff');
       next();

@@ -92,8 +92,8 @@ export function registerOsRoutes(ctx: ServerContext) {
     }
   });
 
-  // OS Capability: Submit Command Manually via Web App Shell API
-  app.post('/api/commands', requireAuth(), async (req, res) => {
+  // OS Capability: Submit Command Manually via Web App Shell API (SEC: 仅限教师与管理员调用)
+  app.post('/api/commands', requireAuth('teacher', 'administrator'), async (req, res) => {
     try {
       const { commandType, payload } = req.body;
 

@@ -99,6 +99,9 @@ import { registerClassroomRoutes } from './server/routes/classroom.js';
 import { registerClassroomExtrasRoutes } from './server/routes/classroom-extras.js';
 import { registerClassroomPeerReviewRoutes } from './server/routes/classroom-peer-review.js';
 
+// Module-level cleanup reference for graceful shutdown (H-8)
+let currentCleanup: (() => Promise<void>) | null = null;
+
 async function startServer() {
   // Bridge server startup through Platform Kernel Bootstrap Adapter (PI-005)
   await ServerBootstrapAdapter.bootstrap({
@@ -135,12 +138,19 @@ async function startServer() {
   kernelContainer.pluginHost.setExpressApp(app);
   const PORT = parseInt(process.env.PORT || '9000', 10);
 
-  // SEC-AUTH-03: 信任 Nginx 反向代理? X-Forwarded-Proto ?
-  // ? req.protocol / req.secure 能正确反映浏览器? Nginx 的实际协?
-  app.set('trust proxy', 1);
+  // SEC-AUTH-03: 信任反向代理（H-2: 环境变量可配置，直连环境防 X-Forwarded-Proto 伪造）
+  const rawTrustProxy = process.env.TRUST_PROXY;
+  if (rawTrustProxy !== undefined) {
+    const isBool = rawTrustProxy === 'true' || rawTrustProxy === 'false';
+    const parsed = isBool ? rawTrustProxy === 'true' : !isNaN(Number(rawTrustProxy)) ? Number(rawTrustProxy) : rawTrustProxy;
+    app.set('trust proxy', parsed);
+  } else {
+    // 默认开启 1 层代理信任（如果未显式配置），但允许通过 TRUST_PROXY=false 显式关闭
+    app.set('trust proxy', 1);
+  }
 
-  // ── 安全中间? ────────────────────────────────────────────────────
-  // SEC-NET-02: HTTP 安全头（helmet）— 严格 CSP 配置
+  // ── 安全中间件 ────────────────────────────────────────────────────
+  // SEC-NET-02: HTTP 安全头（helmet）— CSP 与自适应 HSTS（C-1）
   const frameAllowedOrigins = process.env.ALLOWED_FRAME_ORIGINS
     ? process.env.ALLOWED_FRAME_ORIGINS.split(',')
         .map((s) => s.trim())
@@ -153,16 +163,39 @@ async function startServer() {
         .filter(Boolean)
     : [];
 
+  const isProduction = process.env.NODE_ENV === 'production';
+  const enableHsts = process.env.ENABLE_HSTS === 'true' || (isProduction && process.env.FORCE_HTTPS === 'true');
+
   app.use(
     helmet({
       // 允许在 AI Studio 及外部受信任环境 iframe 中嵌入
       xFrameOptions: { action: 'sameorigin' },
-      contentSecurityPolicy: false,
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: isProduction
+            ? ["'self'", "'unsafe-inline'"]
+            : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          scriptSrcAttr: ["'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          styleSrcAttr: ["'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:', 'blob:'],
+          fontSrc: ["'self'", 'data:'],
+          connectSrc: ["'self'", 'ws:', 'wss:', 'http:', 'https:'],
+          frameSrc: ["'self'", 'blob:', 'data:', ...frameAllowedOrigins, ...ltiAllowedOrigins],
+          frameAncestors: ["'self'", ...frameAllowedOrigins, ...ltiAllowedOrigins],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          ...(enableHsts ? { upgradeInsecureRequests: [] } : {}),
+        },
+      },
       crossOriginOpenerPolicy: false,
       crossOriginEmbedderPolicy: false,
       crossOriginResourcePolicy: { policy: 'cross-origin' }, // 允许沙箱 iframe（opaque origin）加载静态资源
       originAgentCluster: false,
-      strictTransportSecurity: false, // 针对 HTTP 部署，禁用 HSTS（否则浏览器缓存后强制 HTTPS，导致 ERR_CONNECTION_REFUSED）
+      strictTransportSecurity: enableHsts
+        ? { maxAge: 31536000, includeSubDomains: true, preload: true }
+        : false, // 针对 HTTP / 局域网部署不锁死 HSTS，避免无证书机房被浏览器强制 HTTPS
     }),
   );
 
@@ -235,9 +268,12 @@ async function startServer() {
     // 允许无 origin（如移动端、curl 或同源请求）
     if (!origin) return true;
 
-    // 1. 显式配置的白名单（支持通配符 '*' 或匹配具体 origin）
+    // 1. 显式配置的白名单
     if (configuredOrigins.length > 0) {
-      if (configuredOrigins.includes('*') || configuredOrigins.includes(origin)) {
+      if (configuredOrigins.includes(origin)) {
+        return true;
+      }
+      if (configuredOrigins.includes('*')) {
         return true;
       }
     }
@@ -249,7 +285,9 @@ async function startServer() {
         if (originUrl.host === hostHeader) {
           return true;
         }
-      } catch {}
+      } catch (err) {
+        // 无效 URL 格式，不判定为同源
+      }
     }
 
     // 3. 本地回环（localhost / 127.0.0.1 / [::1] / 0.0.0.0）放行
@@ -259,7 +297,9 @@ async function startServer() {
       if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '0.0.0.0') {
         return true;
       }
-    } catch {}
+    } catch (err) {
+      // 无效 URL 格式，不判定为本地回环
+    }
 
     // 4. 开发环境宽松放行（Vite 默认端口 5173 / 4173 等）
     if (process.env.NODE_ENV !== 'production') {
@@ -473,7 +513,9 @@ async function startServer() {
       setTimeout(() => {
         try {
           httpServer.close();
-        } catch (e) {}
+        } catch (e) {
+          console.warn('[Server] Error closing server during port retry:', e);
+        }
         httpServer.listen(PORT, HOST);
       }, 1500);
     } else {
@@ -492,7 +534,9 @@ async function startServer() {
           }
         }
       }
-    } catch {}
+    } catch (err) {
+      console.warn('[Server] Failed to inspect network interfaces:', err);
+    }
     return ips;
   };
 
@@ -506,8 +550,9 @@ async function startServer() {
       } else {
         spawn('xdg-open', [targetUrl], { stdio: 'ignore', detached: true }).unref();
       }
-    } catch {
+    } catch (err) {
       // 忽略无桌面或无默认浏览器的静默异常
+      console.info('[Server] Auto-open browser skipped or unsupported in current environment.');
     }
   };
 
@@ -545,6 +590,33 @@ async function startServer() {
       openBrowser(primaryUrl);
     }
   });
+
+  const cleanup = async () => {
+    console.log('[Server] Cleaning up server resources...');
+    await new Promise<void>((resolve) => {
+      httpServer.close((err) => {
+        if (err) console.warn('[Server] Error while closing HTTP server:', err);
+        resolve();
+      });
+    });
+    try {
+      io.close();
+    } catch (err) {
+      console.warn('[Server] Error while closing Socket.IO:', err);
+    }
+    try {
+      if (kernelContainer?.db) {
+        kernelContainer.db.close();
+      }
+    } catch (err) {
+      console.warn('[Server] Error while closing SQLite database:', err);
+    }
+    console.log('[Server] Cleanup complete.');
+  };
+
+  currentCleanup = cleanup;
+
+  return { app, httpServer, io, cleanup };
 }
 
 // Export for CLI / programmatic usage
@@ -564,17 +636,20 @@ async function gracefulShutdown(signal: string) {
   shuttingDown = true;
   console.log(`[Server] Received ${signal}, starting graceful shutdown...`);
 
-  setTimeout(() => {
+  const forceTimeout = setTimeout(() => {
     console.error('[Server] Forced shutdown after timeout');
     process.exit(1);
   }, SHUTDOWN_TIMEOUT_MS);
 
   try {
-    // 注意：这些操作在模块作用域无法直接访�? Express �? httpServer
-    // 生产环境建议通过 startServer() 返回 cleanup 函数
-    console.log('[Server] Shutting down...');
+    if (currentCleanup) {
+      await currentCleanup();
+    }
+    clearTimeout(forceTimeout);
+    console.log('[Server] Graceful shutdown completed cleanly.');
     process.exit(0);
   } catch (e) {
+    clearTimeout(forceTimeout);
     console.error('[Server] Error during shutdown:', e);
     process.exit(1);
   }

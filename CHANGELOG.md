@@ -24,6 +24,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **`SemesterGradeService` 成绩同步多级兜底（`packages/core/di/semester-grade-service.ts`）**：在无日历排课（`schedules` 查不到 `class_id`）的即兴授课场景下，自动级联查询 `class_students` 及 `plugin_assignments`，彻底避免成绩同步抛错丢失。
   - **课程环节时间线更新序列化兼容（`server/routes/lessons.ts` & `packages/plugins/builtin.ts`）**：修复 `lesson.update_timeline` 接收数组或 JSON 字符串形式时的 `PayloadValidationError`，保证环节增删修改的健壮提交。
 
+### Security & Ops
+
+- **平台安全头部、命令鉴权与生命周期加固（Sprint 1: C-1, C-3, C-4, H-2, H-3, H-8, M-6）**：
+  - **CSP 指令映射与自适应 HSTS（`server.ts`）**：启用 Helmet 的 `contentSecurityPolicy`，补齐 `default-src`、`script-src`、`style-src`、`connect-src`（支持 Socket.IO 与 API）、`frame-src`（课件与 LMS 嵌入）等指令；根据 HTTPS/环境变量自适应配置 HSTS，避免无证书机房 HTTP 部署被浏览器永久锁死。
+  - **插件沙箱移除 `unsafe-eval`（`packages/core/plugin-host/index.ts`）**：在静态文件安全中间件中移除 `'unsafe-eval'`，消除沙箱逃逸敞口。
+  - **`/api/commands` 权限收敛（`server/routes/os.ts`）**：将命令总线手动触发端点限定为 `teacher` 和 `administrator` 角色，阻断学生身份执行特权命令。
+  - **`trust proxy` 环境变量解耦（`server.ts`）**：支持通过 `process.env.TRUST_PROXY` 灵活配置代理信任层数，直连时默认关闭防伪造。
+  - **CORS 规范合规化（`server.ts`）**：杜绝 `Access-Control-Allow-Origin: *` 与 `credentials: true` 共存，严格回填匹配的 Origin 头部。
+  - **`gracefulShutdown` 资源真实回收（`server.ts`）**：实现 `cleanup` 闭包，依次执行 `httpServer.close()` 停止接流、`io.close()` 断开客户端、`kernelContainer.db.close()` 确保 SQLite WAL 完整刷盘。
+  - **启动期与运行时空 catch 可见性（`server.ts`）**：为 4 处静默 catch 添加日志级别分级记录，启动异常对运维透明可见。
+
 ### Tests & Canary
 
 - **金丝雀探针步骤 2（`server/__tests__/canary/canary.step2.test.ts`）**：
