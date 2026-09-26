@@ -66,6 +66,75 @@ jobs:
               ].join('\n'),
             });
 
+  # 固定版本的真实插件作为宿主兼容性金丝雀。
+  # 更新插件基线时同步修改下方三处 ref；每个门禁运行都可复现相同插件源码。
+  plugin-compatibility:
+    name: Third-party plugin compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install platform dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Checkout attendance-record compatibility fixture
+        uses: actions/checkout@v4
+        with:
+          repository: openlearn-next/attendance-record
+          ref: ce8541e7a48b286574ffd620fa167cf5b139e451
+          path: .plugin-compatibility-sources/attendance-record
+
+      - name: Checkout class_manager compatibility fixture
+        uses: actions/checkout@v4
+        with:
+          repository: openlearn-next/class_manager
+          ref: 941b556f0017ec20e8a8d7a1f75d1dd9f80dd26f
+          path: .plugin-compatibility-sources/class_manager
+
+      - name: Checkout interactive-courseware compatibility fixture
+        uses: actions/checkout@v4
+        with:
+          repository: openlearn-next/interactive-courseware
+          ref: d622e0a54463813631f41589fa8d24082160b39d
+          path: .plugin-compatibility-sources/interactive-courseware
+
+      - name: Build attendance-record
+        working-directory: .plugin-compatibility-sources/attendance-record
+        run: npm install --no-audit --no-fund && npm run build
+
+      - name: Build class_manager
+        working-directory: .plugin-compatibility-sources/class_manager
+        # Its esbuild config bundles @openlearn/plugin-sdk with external: [],
+        # and the pinned SDK build imports uuid; supply the missing build-time dep.
+        run: npm install --no-audit --no-fund && npm install --no-save --no-audit --no-fund uuid@14.0.1 && npm run build
+
+      - name: Build interactive-courseware
+        working-directory: .plugin-compatibility-sources/interactive-courseware
+        run: pnpm install --no-frozen-lockfile && pnpm build
+
+      - name: Stage plugin ZIP fixtures
+        run: |
+          node scripts/stage-plugin-compat-fixture.mjs attendance-record .plugin-compatibility-sources/attendance-record .plugin-compatibility-fixtures
+          node scripts/stage-plugin-compat-fixture.mjs class_manager .plugin-compatibility-sources/class_manager .plugin-compatibility-fixtures
+          node scripts/stage-plugin-compat-fixture.mjs interactive-courseware .plugin-compatibility-sources/interactive-courseware .plugin-compatibility-fixtures
+
+      - name: Install and activate fixtures in the PR platform runtime
+        env:
+          OPENLEARN_PLUGIN_COMPAT_FIXTURES: .plugin-compatibility-fixtures
+        run: pnpm exec vitest run server/__tests__/canary/plugin-compatibility.test.ts
+
   docs-drift-audit:
     runs-on: ubuntu-latest
     permissions:
