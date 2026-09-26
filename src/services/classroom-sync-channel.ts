@@ -7,6 +7,8 @@
  * 3. 双向互动闭环：支持教师端教学指令广播与学生端动作（举手/签到/作答）即时回传。
  */
 
+import { getOptionalSocket } from './socket-service';
+
 export interface ClassroomCountdownState {
   lessonId: string | null;
   totalDuration: number;
@@ -32,12 +34,12 @@ export interface LiveClassSyncState {
 
 export type ClassroomSyncMessage =
   | { type: 'TEACHER_INIT_STATE'; payload: LiveClassSyncState }
-  | { type: 'TEACHER_CHANGE_LESSON'; payload: { lessonId: string | null } }
-  | { type: 'TEACHER_CHANGE_SEGMENT'; payload: { segmentId: string | null } }
-  | { type: 'TEACHER_CHANGE_TAB'; payload: { tab: 'whiteboard' | 'courseware' | 'assignment' } }
-  | { type: 'TEACHER_LOCK_CLASS'; payload: { locked: boolean } }
+  | { type: 'TEACHER_CHANGE_LESSON'; payload: { lessonId: string | null; classId?: string | null } }
+  | { type: 'TEACHER_CHANGE_SEGMENT'; payload: { segmentId: string | null; lessonId?: string | null } }
+  | { type: 'TEACHER_CHANGE_TAB'; payload: { tab: 'whiteboard' | 'courseware' | 'assignment'; lessonId?: string | null } }
+  | { type: 'TEACHER_LOCK_CLASS'; payload: { locked: boolean; lessonId?: string | null; classId?: string | null } }
   | { type: 'TEACHER_PICK_STUDENT'; payload: { studentId: string; studentName: string } }
-  | { type: 'TEACHER_SYNC_TIMER'; payload: { timeRemaining: number; isRunning: boolean } }
+  | { type: 'TEACHER_SYNC_TIMER'; payload: { timeRemaining: number; isRunning: boolean; lessonId?: string | null } }
   | { type: 'TEACHER_BROADCAST_COUNTDOWN'; payload: ClassroomCountdownState }
   | { type: 'TEACHER_PING_STUDENT'; payload: { studentId: string; message?: string } }
   | { type: 'TEACHER_BROADCAST_FULLSCREEN'; payload: { elementId: string | null; lessonId?: string } }
@@ -51,21 +53,51 @@ export class ClassroomSyncChannel {
   private channel: BroadcastChannel | null = null;
   private isDestroyed = false;
   private messageListeners: ((msg: ClassroomSyncMessage) => void)[] = [];
+  private lessonId: string | null = null;
+  private classId: string | null = null;
+  private socketCleanup?: () => void;
 
-  constructor(channelName: string = CLASSROOM_SYNC_CHANNEL_NAME) {
+  constructor(channelName: string = CLASSROOM_SYNC_CHANNEL_NAME, lessonId?: string | null, classId?: string | null) {
+    this.lessonId = lessonId || null;
+    this.classId = classId || null;
+
+    // 1. 本地同机 BroadcastChannel
     if (typeof window !== 'undefined' && typeof window.BroadcastChannel !== 'undefined') {
       this.channel = new BroadcastChannel(channelName);
       this.channel.onmessage = (event: MessageEvent<ClassroomSyncMessage>) => {
         if (this.isDestroyed || !event.data) return;
-        this.messageListeners.forEach((listener) => {
-          try {
-            listener(event.data);
-          } catch (e) {
-            console.error('[ClassroomSyncChannel] Listener error:', e);
-          }
-        });
+        this.emitToListeners(event.data);
       };
     }
+
+    // 2. 远端跨机 Socket.IO 双轨监听
+    const socket = getOptionalSocket();
+    if (socket) {
+      const handleRemoteSync = (data: { lessonId?: string; message?: ClassroomSyncMessage }) => {
+        if (this.isDestroyed || !data?.message) return;
+        if (this.lessonId && data.lessonId && data.lessonId !== this.lessonId) return;
+        this.emitToListeners(data.message);
+      };
+      socket.on('classroom:sync_message', handleRemoteSync);
+      this.socketCleanup = () => {
+        socket.off('classroom:sync_message', handleRemoteSync);
+      };
+    }
+  }
+
+  public setLessonContext(lessonId: string | null, classId?: string | null): void {
+    this.lessonId = lessonId;
+    if (classId !== undefined) this.classId = classId;
+  }
+
+  private emitToListeners(msg: ClassroomSyncMessage): void {
+    this.messageListeners.forEach((listener) => {
+      try {
+        listener(msg);
+      } catch (e) {
+        console.error('[ClassroomSyncChannel] Listener error:', e);
+      }
+    });
   }
 
   /**
@@ -79,14 +111,28 @@ export class ClassroomSyncChannel {
   }
 
   /**
-   * 发送同步消息
+   * 发送同步消息（同机 BroadcastChannel + 远程跨机 Socket.IO 双轨广播）
    */
   public postMessage(msg: ClassroomSyncMessage): void {
-    if (this.isDestroyed || !this.channel) return;
-    try {
-      this.channel.postMessage(msg);
-    } catch (e) {
-      console.warn('[ClassroomSyncChannel] Failed to post message:', e);
+    if (this.isDestroyed) return;
+    if (this.channel) {
+      try {
+        this.channel.postMessage(msg);
+      } catch (e) {
+        console.warn('[ClassroomSyncChannel] Failed to post message to BroadcastChannel:', e);
+      }
+    }
+
+    const socket = getOptionalSocket();
+    if (socket && this.lessonId) {
+      try {
+        socket.emit('teacher-sync-message', {
+          lessonId: this.lessonId,
+          message: msg,
+        });
+      } catch (e) {
+        console.warn('[ClassroomSyncChannel] Failed to emit socket sync message:', e);
+      }
     }
   }
 
@@ -97,19 +143,36 @@ export class ClassroomSyncChannel {
   }
 
   public broadcastChangeLesson(lessonId: string | null): void {
-    this.postMessage({ type: 'TEACHER_CHANGE_LESSON', payload: { lessonId } });
+    this.lessonId = lessonId;
+    this.postMessage({ type: 'TEACHER_CHANGE_LESSON', payload: { lessonId, classId: this.classId } });
+    const socket = getOptionalSocket();
+    if (socket && lessonId) {
+      socket.emit('teacher-broadcast-lesson', { lessonId, classId: this.classId });
+    }
   }
 
   public broadcastChangeSegment(segmentId: string | null): void {
-    this.postMessage({ type: 'TEACHER_CHANGE_SEGMENT', payload: { segmentId } });
+    this.postMessage({ type: 'TEACHER_CHANGE_SEGMENT', payload: { segmentId, lessonId: this.lessonId } });
+    const socket = getOptionalSocket();
+    if (socket && this.lessonId && segmentId) {
+      socket.emit('teacher-broadcast-segment', { lessonId: this.lessonId, activeSegmentId: segmentId });
+    }
   }
 
   public broadcastChangeTab(tab: 'whiteboard' | 'courseware' | 'assignment'): void {
-    this.postMessage({ type: 'TEACHER_CHANGE_TAB', payload: { tab } });
+    this.postMessage({ type: 'TEACHER_CHANGE_TAB', payload: { tab, lessonId: this.lessonId } });
+    const socket = getOptionalSocket();
+    if (socket && this.lessonId) {
+      socket.emit('teacher-broadcast-tab', { lessonId: this.lessonId, tab });
+    }
   }
 
   public broadcastLockClass(locked: boolean): void {
-    this.postMessage({ type: 'TEACHER_LOCK_CLASS', payload: { locked } });
+    this.postMessage({ type: 'TEACHER_LOCK_CLASS', payload: { locked, lessonId: this.lessonId, classId: this.classId } });
+    const socket = getOptionalSocket();
+    if (socket && this.lessonId) {
+      socket.emit('teacher-broadcast-lock', { lessonId: this.lessonId, locked, classId: this.classId });
+    }
   }
 
   public broadcastPickStudent(studentId: string, studentName: string): void {
@@ -117,7 +180,7 @@ export class ClassroomSyncChannel {
   }
 
   public broadcastSyncTimer(timeRemaining: number, isRunning: boolean): void {
-    this.postMessage({ type: 'TEACHER_SYNC_TIMER', payload: { timeRemaining, isRunning } });
+    this.postMessage({ type: 'TEACHER_SYNC_TIMER', payload: { timeRemaining, isRunning, lessonId: this.lessonId } });
   }
 
   public broadcastCountdown(countdown: ClassroomCountdownState): void {
@@ -128,10 +191,19 @@ export class ClassroomSyncChannel {
 
   public broadcastPingStudent(studentId: string, message?: string): void {
     this.postMessage({ type: 'TEACHER_PING_STUDENT', payload: { studentId, message } });
+    const socket = getOptionalSocket();
+    if (socket && this.lessonId) {
+      socket.emit('teacher-ping-student', { studentId, lessonId: this.lessonId, message });
+    }
   }
 
   public broadcastFullscreen(elementId: string | null, lessonId?: string): void {
-    this.postMessage({ type: 'TEACHER_BROADCAST_FULLSCREEN', payload: { elementId, lessonId } });
+    const targetLesson = lessonId || this.lessonId || undefined;
+    this.postMessage({ type: 'TEACHER_BROADCAST_FULLSCREEN', payload: { elementId, lessonId: targetLesson } });
+    const socket = getOptionalSocket();
+    if (socket && targetLesson) {
+      socket.emit('teacher-broadcast-fullscreen', { elementId, lessonId: targetLesson, classId: this.classId });
+    }
   }
 
   // ── 学生端快捷回传方法 ───────────────────────────────────────────────
@@ -154,6 +226,10 @@ export class ClassroomSyncChannel {
   public destroy(): void {
     this.isDestroyed = true;
     this.messageListeners = [];
+    if (this.socketCleanup) {
+      this.socketCleanup();
+      this.socketCleanup = undefined;
+    }
     if (this.channel) {
       this.channel.close();
       this.channel = null;

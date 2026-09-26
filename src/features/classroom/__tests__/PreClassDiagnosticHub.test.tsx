@@ -116,6 +116,39 @@ describe('PreClassDiagnosticHub & Pre-Class Enhancements', () => {
         expect(screen.getByText(/建议在环节二使用白板双色画笔逐一隔离/)).toBeDefined();
       });
     });
+
+    it('renders honest empty states when no diagnostic data exists', async () => {
+      fetchMock.mockImplementationOnce((url: string) => {
+        if (url.includes('/pre-class-diagnostic')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                lessonId: 'lesson-102',
+                prepSummary: {
+                  totalStudents: 30,
+                  completedCount: 0,
+                  pendingCount: 30,
+                  completionRate: 0,
+                  averageTimeSpentMins: 0,
+                },
+                topMistakes: [],
+                icebreakerStats: { fullPower: 0, needCoffee: 0, needHelp: 0 },
+              }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      render(<PreClassDiagnosticHub lessonId="lesson-102" classId="class-1" lang="zh" />);
+
+      await waitFor(() => {
+        expect(screen.getByText('0%')).toBeDefined();
+        expect(screen.getByText('(0/30 人)')).toBeDefined();
+        expect(screen.getByText(/等待学生课前打卡破冰/)).toBeDefined();
+        expect(screen.getByText(/暂无前置练习错题卡点/)).toBeDefined();
+      });
+    });
   });
 
   describe('PreflightHealthModal Component', () => {

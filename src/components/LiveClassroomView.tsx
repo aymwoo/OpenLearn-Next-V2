@@ -35,7 +35,7 @@ import { TopPerformersWidget } from '../features/teacher/TopPerformersWidget';
 import { io } from 'socket.io-client';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
-import { ClassroomSyncChannel } from '../services/classroom-sync-channel';
+import { ClassroomSyncChannel, CLASSROOM_SYNC_CHANNEL_NAME } from '../services/classroom-sync-channel';
 import { useErrorStore, errorStore } from '../store/errorStore';
 import { ClassroomInteractiveCockpit } from '../features/classroom/ClassroomInteractiveCockpit';
 import { PreClassReadyView } from '../features/classroom/PreClassReadyView';
@@ -486,7 +486,7 @@ export function LiveClassroomView({
   };
 
   useEffect(() => {
-    const channel = new ClassroomSyncChannel();
+    const channel = new ClassroomSyncChannel(CLASSROOM_SYNC_CHANNEL_NAME, selectedLesson, liveClassSelectedClassId);
     syncChannelRef.current = channel;
 
     const unsub = channel.onMessage((msg) => {
@@ -551,8 +551,9 @@ export function LiveClassroomView({
 
   // Reactive state broadcasts
   useEffect(() => {
+    syncChannelRef.current?.setLessonContext(selectedLesson, liveClassSelectedClassId);
     syncChannelRef.current?.broadcastChangeLesson(selectedLesson);
-  }, [selectedLesson]);
+  }, [selectedLesson, liveClassSelectedClassId]);
 
   useEffect(() => {
     syncChannelRef.current?.broadcastChangeSegment(activeSegmentId);

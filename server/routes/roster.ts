@@ -1110,10 +1110,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
         .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
         .get(req.params.id, req.params.id) as any;
 
-      const isSelf =
-        studentRow
-          ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
-          : currentUserId === req.params.id;
+      const isSelf = studentRow
+        ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
+        : currentUserId === req.params.id;
 
       if (!isPrivileged && !isSelf) {
         return res.status(403).json({ error: 'Cannot update progress for another student' });
@@ -1359,10 +1358,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
         .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
         .get(req.params.id, req.params.id) as any;
 
-      const isSelf =
-        studentRow
-          ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
-          : currentUserId === req.params.id;
+      const isSelf = studentRow
+        ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
+        : currentUserId === req.params.id;
 
       if (!isPrivileged && !isSelf) {
         return res.status(403).json({ error: 'Cannot access another student dashboard' });
@@ -1628,6 +1626,358 @@ export function registerRosterRoutes(ctx: ServerContext) {
       }
 
       res.json({ success: true, rollcall: payload });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // ── 班级分组（Class Groups）────────────────────────────────────────────
+
+  const parseGroupRow = (row: any) => {
+    if (!row) return row;
+    let memberIds: string[] = [];
+    try {
+      const parsed = JSON.parse(row.member_ids || '[]');
+      if (Array.isArray(parsed)) memberIds = parsed;
+    } catch {
+      memberIds = [];
+    }
+    return {
+      ...row,
+      is_default: !!row.is_default,
+      memberIds,
+    };
+  };
+
+  const publishGroupsChanged = (payload: { classId: string; scope: 'default' | 'temporary'; source?: string }) => {
+    if (io) {
+      io.to(`class-${payload.classId}`).emit('classroom:groups_changed', {
+        classId: payload.classId,
+        scope: payload.scope,
+        source: payload.source || 'teacher',
+        timestamp: Date.now(),
+      });
+    }
+  };
+
+  /** 上课默认分组方案：同一班级只保留一套默认方案，写入前先清空旧的默认标记 */
+  const clearDefaultMarker = (classId: string) => {
+    kernelContainer.db
+      .prepare('UPDATE class_groups SET is_default = 0 WHERE class_id = ? AND is_default = 1')
+      .run(classId);
+  };
+
+  /** 验证组长归属：组长 id 必须出现在该组成员列表中（存为 JSON 中的字符串 id） */
+  const resolveLeader = (classId: string, group: { memberIds: string[]; leaderId?: string | null }) => {
+    if (group.leaderId && !group.memberIds.includes(group.leaderId)) {
+      return { ok: false as const, error: '组长必须是本组有效成员' };
+    }
+    if (group.memberIds.length > 0) {
+      const rosterIdSet = new Set(
+        (
+          kernelContainer.db
+            .prepare(
+              'SELECT s.id FROM students s INNER JOIN class_students cs ON s.id = cs.student_id WHERE cs.class_id = ?',
+            )
+            .all(classId) as { id: string }[]
+        ).map((r) => r.id),
+      );
+      const unknown = group.memberIds.filter((id) => !rosterIdSet.has(id));
+      if (unknown.length > 0) {
+        return { ok: false as const, error: `以下学生不属于该班级：${unknown.join(', ')}` };
+      }
+    }
+    return { ok: true as const };
+  };
+
+  // 列出某班级的分组（可选 scope=default 只看默认方案）
+  app.get('/api/classes/:id/groups', requireAuth(), (req, res) => {
+    try {
+      let rows = kernelContainer.db
+        .prepare(
+          `
+        SELECT g.* FROM class_groups g WHERE g.class_id = ? ORDER BY g.sort_order ASC, g.created_at ASC
+      `,
+        )
+        .all(req.params.id) as any[];
+      if (req.query.scope === 'default') {
+        rows = rows.filter((r: any) => r.is_default);
+      }
+      res.json(rows.map(parseGroupRow));
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // 新建分组（scope=temporary 时用于课堂临时分组，写 classroom_sessions.settings_json）
+  app.post('/api/classes/:id/groups', requireAuth('teacher', 'administrator'), (req, res) => {
+    try {
+      const classId = req.params.id;
+      const { name, name_en: nameEn, color, memberIds, leaderId, isDefault, sortOrder } = req.body || {};
+
+      if (!classId || !name?.trim()) {
+        return res.status(400).json({ error: 'name is required' });
+      }
+
+      if (!kernelContainer.db.prepare('SELECT id FROM classes WHERE id = ?').get(classId)) {
+        return res.status(404).json({ error: `Class "${classId}" not found` });
+      }
+
+      const ids = Array.isArray(memberIds) ? memberIds.filter((v: any) => typeof v === 'string' && v.trim()) : [];
+
+      const rosterRows = kernelContainer.db
+        .prepare(
+          'SELECT s.id FROM students s INNER JOIN class_students cs ON s.id = cs.student_id WHERE cs.class_id = ?',
+        )
+        .all(classId) as { id: string }[];
+      const rosterIdSet = new Set<string>(rosterRows.map((r) => r.id));
+      const unknown = ids.filter((id) => !rosterIdSet.has(id));
+      if (unknown.length > 0) {
+        return res.status(400).json({ error: `以下学生不属于该班级：${unknown.join(', ')}` });
+      }
+      if (leaderId && !ids.includes(leaderId)) {
+        return res.status(400).json({ error: '组长必须是本组有效成员' });
+      }
+
+      const groupId = `grp_${crypto.randomUUID()}`;
+      const now = Date.now();
+      if (isDefault) clearDefaultMarker(classId);
+
+      kernelContainer.db
+        .prepare(
+          `
+        INSERT INTO class_groups (id, class_id, name, name_en, color, member_ids, leader_id, is_default, sort_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+        )
+        .run(
+          groupId,
+          classId,
+          name.trim(),
+          typeof nameEn === 'string' && nameEn.trim() ? nameEn.trim() : null,
+          typeof color === 'string' && color.trim() ? color.trim() : 'bg-indigo-500',
+          JSON.stringify(ids),
+          ids.includes(leaderId) ? leaderId : null,
+          isDefault ? 1 : 0,
+          Number.isFinite(sortOrder) ? Number(sortOrder) : 100,
+          now,
+          now,
+        );
+
+      const row = kernelContainer.db.prepare('SELECT * FROM class_groups WHERE id = ?').get(groupId);
+      const group = parseGroupRow(row);
+
+      publishGroupsChanged({ classId, scope: 'default' });
+
+      res.json({ success: true, group });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // 更新分组：支持改名、调整成员与组长、以及显式设为默认方案
+  app.put('/api/classes/:id/groups/:groupId', requireAuth('teacher', 'administrator'), (req, res) => {
+    try {
+      const classId = req.params.id;
+      const groupId = req.params.groupId;
+      const row = kernelContainer.db
+        .prepare('SELECT * FROM class_groups WHERE id = ? AND class_id = ?')
+        .get(groupId, classId) as any;
+      if (!row) return res.status(404).json({ error: 'Group not found' });
+
+      const { name, name_en: nameEn, color, memberIds, leaderId, isDefault, sortOrder } = req.body || {};
+      const sets: string[] = [];
+      const args: unknown[] = [];
+
+      if (typeof name === 'string' && name.trim()) {
+        sets.push('name = ?');
+        args.push(name.trim());
+      }
+      if (nameEn !== undefined) {
+        sets.push('name_en = ?');
+        args.push(typeof nameEn === 'string' && nameEn.trim() ? nameEn.trim() : null);
+      }
+      if (color !== undefined) {
+        sets.push('color = ?');
+        args.push(typeof color === 'string' && color.trim() ? color.trim() : 'bg-indigo-500');
+      }
+      if (Number.isFinite(sortOrder)) {
+        sets.push('sort_order = ?');
+        args.push(Number(sortOrder));
+      }
+
+      let finalIds = parseGroupRow(row).memberIds;
+      if (memberIds !== undefined) {
+        if (Array.isArray(memberIds)) {
+          finalIds = memberIds.filter((v: any) => typeof v === 'string' && v.trim());
+        } else {
+          return res.status(400).json({ error: 'memberIds must be an array' });
+        }
+      }
+
+      const rosterIdSet = new Set(
+        kernelContainer.db
+          .prepare(
+            'SELECT s.id FROM students s INNER JOIN class_students cs ON s.id = cs.student_id WHERE cs.class_id = ?',
+          )
+          .all(classId) as { id: string }[],
+      );
+      const unknown = finalIds.filter((id) => !rosterIdSet.has(id));
+      if (unknown.length > 0) {
+        return res.status(400).json({ error: `以下学生不属于该班级：${unknown.join(', ')}` });
+      }
+
+      let nextLeader = parseGroupRow(row).memberIds.includes(leaderId) ? leaderId : row.leader_id;
+      if (leaderId !== undefined) {
+        if (!finalIds.includes(leaderId)) {
+          return res.status(400).json({ error: '组长必须是本组有效成员' });
+        }
+        nextLeader = leaderId;
+      }
+
+      if (finalIds.length > 0 && nextLeader && !finalIds.includes(nextLeader)) {
+        return res.status(400).json({ error: '组长必须是本组有效成员' });
+      }
+
+      if (memberIds !== undefined) {
+        sets.push('member_ids = ?');
+        args.push(JSON.stringify(finalIds));
+      }
+      if (leaderId !== undefined) {
+        sets.push('leader_id = ?');
+        args.push(nextLeader);
+      }
+
+      if (isDefault === true) clearDefaultMarker(classId);
+      if (isDefault !== undefined) {
+        sets.push('is_default = ?');
+        args.push(isDefault ? 1 : 0);
+      }
+
+      if (sets.length === 0) {
+        return res.status(400).json({ error: '没有可更新的字段' });
+      }
+
+      sets.push('updated_at = ?');
+      args.push(Date.now());
+
+      const stmt = 'UPDATE class_groups SET ' + sets.join(', ') + ' WHERE id = ?';
+      args.push(groupId);
+      kernelContainer.db.prepare(stmt).run(...args);
+
+      const updated = kernelContainer.db.prepare('SELECT * FROM class_groups WHERE id = ?').get(groupId) as any;
+      // 组长被移出后组长为空，保持数据一致
+      const group = parseGroupRow(updated);
+      if (group.leader_id && !group.memberIds.includes(group.leader_id)) {
+        kernelContainer.db
+          .prepare('UPDATE class_groups SET leader_id = NULL, updated_at = ? WHERE id = ?')
+          .run(Date.now(), groupId);
+        group.leader_id = null;
+      }
+
+      publishGroupsChanged({ classId, scope: 'default' });
+
+      res.json({ success: true, group });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // 删除分组
+  app.delete('/api/classes/:id/groups/:groupId', requireAuth('teacher', 'administrator'), (req, res) => {
+    try {
+      const info = kernelContainer.db
+        .prepare('DELETE FROM class_groups WHERE id = ? AND class_id = ?')
+        .run(req.params.groupId, req.params.id);
+      if (!info.changes) return res.status(404).json({ error: 'Group not found' });
+      publishGroupsChanged({ classId: req.params.id, scope: 'default' });
+      res.json({ success: true });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  // 自动分组：将班级学生按组数随机均分，写入数据库并标记为默认方案
+  app.post('/api/classes/:id/groups/auto', requireAuth('teacher', 'administrator'), (req, res) => {
+    try {
+      const classId = req.params.id;
+      const { groupCount } = req.body || {};
+      const count = Math.max(1, Math.min(12, parseInt(groupCount, 10) || 4));
+
+      if (!kernelContainer.db.prepare('SELECT id FROM classes WHERE id = ?').get(classId)) {
+        return res.status(404).json({ error: `Class "${classId}" not found` });
+      }
+
+      const roster = kernelContainer.db
+        .prepare(
+          `
+        SELECT s.id FROM students s
+        INNER JOIN class_students cs ON s.id = cs.student_id
+        WHERE cs.class_id = ?
+        ORDER BY s.student_number, s.name
+      `,
+        )
+        .all(classId) as { id: string }[];
+
+      const shuffled = [...roster.map((r) => r.id)].sort(() => Math.random() - 0.5);
+      const perGroup = Math.ceil(shuffled.length / count);
+      const now = Date.now();
+
+      const tx = kernelContainer.db.transaction(() => {
+        // 同班旧方案整体替换，避免遗留过期小组
+        kernelContainer.db.prepare('DELETE FROM class_groups WHERE class_id = ?').run(classId);
+        const created: any[] = [];
+        const colors = [
+          'bg-indigo-500',
+          'bg-emerald-500',
+          'bg-amber-500',
+          'bg-rose-500',
+          'bg-cyan-500',
+          'bg-violet-500',
+        ];
+        for (let i = 0; i < count; i++) {
+          const chunk = shuffled.slice(i * perGroup, (i + 1) * perGroup);
+          if (chunk.length === 0) continue;
+          const groupId = `grp_${crypto.randomUUID()}`;
+          kernelContainer.db
+            .prepare(
+              `
+            INSERT INTO class_groups (id, class_id, name, color, member_ids, leader_id, is_default, sort_order, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+          `,
+            )
+            .run(
+              groupId,
+              classId,
+              `第 ${i + 1} 小组`,
+              colors[i % colors.length],
+              JSON.stringify(chunk),
+              i + 1,
+              now,
+              now,
+            );
+          created.push(
+            parseGroupRow(kernelContainer.db.prepare('SELECT * FROM class_groups WHERE id = ?').get(groupId)),
+          );
+        }
+        return created;
+      });
+
+      const groups = tx();
+
+      // 默认组长：取每组第一位成员
+      for (const group of groups) {
+        if (group.memberIds.length > 0) {
+          kernelContainer.db
+            .prepare('UPDATE class_groups SET leader_id = ?, updated_at = ? WHERE id = ?')
+            .run(group.memberIds[0], now, group.id);
+          group.leader_id = group.memberIds[0];
+        }
+      }
+
+      publishGroupsChanged({ classId, scope: 'default' });
+
+      res.json({ success: true, groups });
     } catch (e: any) {
       sendSafeError(res, e);
     }

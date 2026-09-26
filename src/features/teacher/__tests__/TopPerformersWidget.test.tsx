@@ -94,10 +94,10 @@ describe('TopPerformersWidget (随堂测验优秀榜组件)', () => {
     // Verify title and structure
     expect(screen.getByText(/随堂测验优秀榜/)).toBeTruthy();
     expect(screen.getByTestId('top-performers-widget')).toBeTruthy();
-    expect(screen.getByTestId('top-performers-chart')).toBeTruthy();
 
-    // Verify student name after fetch
+    // Verify student name and chart after fetch
     await waitFor(() => {
+      expect(screen.getByTestId('top-performers-chart')).toBeTruthy();
       expect(screen.getByText('Alice Smith')).toBeTruthy();
       expect(screen.getByText('Bob Johnson')).toBeTruthy();
     });
@@ -124,7 +124,19 @@ describe('TopPerformersWidget (随堂测验优秀榜组件)', () => {
     expect(countBtn.className).toContain('font-bold');
   });
 
-  it('triggers simulation API when clicking simulate button', async () => {
+  it('does NOT render simulate button in production mode by default', () => {
+    render(
+      <TopPerformersWidget
+        lang="zh"
+        lessonId="les-1"
+        lessons={mockLessons}
+        students={mockStudents as any}
+      />,
+    );
+    expect(screen.queryByTitle('模拟学生实时答题')).toBeNull();
+  });
+
+  it('triggers simulation API when clicking simulate button if allowSimulation is true', async () => {
     const mockAddToast = vi.fn();
     global.fetch = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/simulate-quiz-responses')) {
@@ -150,6 +162,7 @@ describe('TopPerformersWidget (随堂测验优秀榜组件)', () => {
         lessons={mockLessons}
         students={mockStudents as any}
         addToast={mockAddToast}
+        allowSimulation={true}
       />,
     );
 
@@ -168,6 +181,33 @@ describe('TopPerformersWidget (随堂测验优秀榜组件)', () => {
 
   it('triggers toast praise for the top performer', async () => {
     const mockAddToast = vi.fn();
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/classroom/sessions/les-1/top-performers')) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              success: true,
+              lessonId: 'les-1',
+              topPerformers: [
+                {
+                  rank: 1,
+                  studentId: 'st-1',
+                  studentName: 'Alice Smith',
+                  cumulativeScore: 300,
+                  totalQuizzesAnswered: 3,
+                  correctCount: 3,
+                  accuracy: 100,
+                  avgTimeSpentMs: 5000,
+                  lastSubmittedAt: Date.now(),
+                },
+              ],
+              summary: { totalParticipants: 1, totalResponses: 3, averageScore: 300 },
+            }),
+        });
+      }
+      return Promise.resolve({ ok: false });
+    });
 
     render(
       <TopPerformersWidget
@@ -179,9 +219,11 @@ describe('TopPerformersWidget (随堂测验优秀榜组件)', () => {
       />,
     );
 
-    const praiseBtn = screen.getByTitle('一键表扬榜首');
-    expect(praiseBtn).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByTitle('一键表扬榜首')).toBeTruthy();
+    });
 
+    const praiseBtn = screen.getByTitle('一键表扬榜首');
     fireEvent.click(praiseBtn);
 
     expect(mockAddToast).toHaveBeenCalledWith(

@@ -1454,37 +1454,39 @@ export function registerClassroomRoutes(
         });
       }
 
-      // 晴雨表与脉搏分布
+      // 晴雨表与脉搏分布（绝不编造 75/15/10 虚假繁荣数据）
       const pulseTotal = clearCount + confusedCount + tooFastCount;
-      const clearPercent = pulseTotal > 0 ? Math.round((clearCount / pulseTotal) * 100) : 75;
-      const confusedPercent = pulseTotal > 0 ? Math.round((confusedCount / pulseTotal) * 100) : 15;
-      const tooFastPercent = pulseTotal > 0 ? Math.round((tooFastCount / pulseTotal) * 100) : 10;
+      const clearPercent = pulseTotal > 0 ? Math.round((clearCount / pulseTotal) * 100) : 0;
+      const confusedPercent = pulseTotal > 0 ? Math.round((confusedCount / pulseTotal) * 100) : 0;
+      const tooFastPercent = pulseTotal > 0 ? Math.round((tooFastCount / pulseTotal) * 100) : 0;
 
       const recentBuckets = timelineData.slice(-3);
       const currentEngagement = Math.round(
         recentBuckets.reduce((acc, cur) => acc + cur.engagement, 0) / (recentBuckets.length || 1),
       );
 
-      let moodStatus: 'OPTIMAL' | 'HIGH_ENERGY' | 'CONFUSED' | 'TOO_FAST' | 'CALM' = 'OPTIMAL';
-      let moodLabel = '课堂节奏良好 · 专注度高';
-      let moodEmoji = '🌟';
+      let moodStatus: 'OPTIMAL' | 'HIGH_ENERGY' | 'CONFUSED' | 'TOO_FAST' | 'CALM' = 'CALM';
+      let moodLabel = '课堂平稳进行 · 等待学生反馈';
+      let moodEmoji = '🌱';
 
-      if (confusedCount > 0 && confusedCount >= clearCount) {
-        moodStatus = 'CONFUSED';
-        moodLabel = '存在疑虑 · 需放慢停顿讲解';
-        moodEmoji = '💡';
-      } else if (tooFastCount > 0 && tooFastCount > clearCount * 0.4) {
-        moodStatus = 'TOO_FAST';
-        moodLabel = '进度过快 · 学生要求减速';
-        moodEmoji = '⚡';
-      } else if (currentEngagement >= 85) {
-        moodStatus = 'HIGH_ENERGY';
-        moodLabel = '互动活跃 · 气氛极度高涨';
-        moodEmoji = '🔥';
-      } else if (currentEngagement < 60) {
-        moodStatus = 'CALM';
-        moodLabel = '注意力分散 · 建议发起提问';
-        moodEmoji = '💤';
+      if (pulseTotal > 0) {
+        if (confusedCount > 0 && confusedCount >= clearCount) {
+          moodStatus = 'CONFUSED';
+          moodLabel = '存在疑虑 · 需放慢停顿讲解';
+          moodEmoji = '💡';
+        } else if (tooFastCount > 0 && tooFastCount > clearCount * 0.4) {
+          moodStatus = 'TOO_FAST';
+          moodLabel = '进度过快 · 学生要求减速';
+          moodEmoji = '⚡';
+        } else if (currentEngagement >= 85) {
+          moodStatus = 'HIGH_ENERGY';
+          moodLabel = '互动活跃 · 气氛极度高涨';
+          moodEmoji = '🔥';
+        } else {
+          moodStatus = 'OPTIMAL';
+          moodLabel = '课堂节奏良好 · 专注度高';
+          moodEmoji = '🌟';
+        }
       }
 
       res.json({

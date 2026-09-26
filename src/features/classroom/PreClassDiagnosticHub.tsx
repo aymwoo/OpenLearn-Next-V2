@@ -82,42 +82,19 @@ export function PreClassDiagnosticHub({ lessonId, classId, lang = 'zh' }: PreCla
   }
 
   const prepSummary = data?.prepSummary || {
-    totalStudents: 32,
-    completedCount: 26,
-    pendingCount: 6,
-    completionRate: 81,
-    averageTimeSpentMins: 14,
+    totalStudents: 0,
+    completedCount: 0,
+    pendingCount: 0,
+    completionRate: 0,
+    averageTimeSpentMins: 0,
   };
 
-  const topMistakes = data?.topMistakes || [
-    {
-      rank: 1,
-      concept: '公式边界条件与临界状态推导',
-      mistakeRate: 62,
-      sampleQuestion: '边界受力突变时的临界条件判定及极值分析',
-      pedagogicalAdvice: '建议课中开篇安排 3 分钟受力拆解微探究，直击前置卡点',
-      status: 'high_priority',
-    },
-    {
-      rank: 2,
-      concept: '多状态过程量分析与守恒定律转化',
-      mistakeRate: 45,
-      sampleQuestion: '分段加速度非恒定时守恒定律的条件筛选',
-      pedagogicalAdvice: '建议在讲解环节利用白板图元进行动态过程逐段拆分',
-      status: 'medium_priority',
-    },
-    {
-      rank: 3,
-      concept: '单位量纲与极端物理意义校验',
-      mistakeRate: 31,
-      sampleQuestion: '极限状态下未知参数趋于零或无穷的合理性验证',
-      pedagogicalAdvice: '可在分层提问时指派给基础层同学强化概念识记与自信心',
-      status: 'low_priority',
-    },
-  ];
+  const topMistakes = data?.topMistakes || [];
 
-  const icebreaker = data?.icebreakerStats || { fullPower: 20, needCoffee: 9, needHelp: 3 };
-  const totalIcebreaker = Math.max(1, icebreaker.fullPower + icebreaker.needCoffee + icebreaker.needHelp);
+  const icebreaker = data?.icebreakerStats || { fullPower: 0, needCoffee: 0, needHelp: 0 };
+  const rawTotalIcebreaker = icebreaker.fullPower + icebreaker.needCoffee + icebreaker.needHelp;
+  const hasIcebreaker = rawTotalIcebreaker > 0;
+  const totalIcebreaker = Math.max(1, rawTotalIcebreaker);
 
   return (
     <div className="bg-surface border border-theme rounded-2xl p-4 shadow-sm flex flex-col gap-3">
@@ -169,22 +146,30 @@ export function PreClassDiagnosticHub({ lessonId, classId, lang = 'zh' }: PreCla
 
         <div className="p-2.5 rounded-xl bg-surface-secondary/60 border border-theme/60 flex flex-col justify-between">
           <span className="text-[11px] text-muted font-medium">{lang === 'zh' ? '全班心态基线调研' : 'Class Energy Baseline'}</span>
-          <div className="flex items-center justify-between gap-1 text-xs mt-1 font-bold">
-            <span className="text-amber-500 flex items-center gap-0.5 text-2xs" title="满格电量">
-              ⚡ {Math.round((icebreaker.fullPower / totalIcebreaker) * 100)}%
-            </span>
-            <span className="text-blue-500 flex items-center gap-0.5 text-2xs" title="需要充能">
-              ☕ {Math.round((icebreaker.needCoffee / totalIcebreaker) * 100)}%
-            </span>
-            <span className="text-rose-500 flex items-center gap-0.5 text-2xs" title="需要求助">
-              🆘 {Math.round((icebreaker.needHelp / totalIcebreaker) * 100)}%
-            </span>
-          </div>
-          <div className="w-full h-1.5 rounded-full overflow-hidden flex gap-0.5 mt-1.5 bg-slate-200 dark:bg-slate-700">
-            <div style={{ width: `${(icebreaker.fullPower / totalIcebreaker) * 100}%` }} className="bg-amber-400" />
-            <div style={{ width: `${(icebreaker.needCoffee / totalIcebreaker) * 100}%` }} className="bg-blue-400" />
-            <div style={{ width: `${(icebreaker.needHelp / totalIcebreaker) * 100}%` }} className="bg-rose-400" />
-          </div>
+          {hasIcebreaker ? (
+            <>
+              <div className="flex items-center justify-between gap-1 text-xs mt-1 font-bold">
+                <span className="text-amber-500 flex items-center gap-0.5 text-2xs" title="满格电量">
+                  ⚡ {Math.round((icebreaker.fullPower / totalIcebreaker) * 100)}%
+                </span>
+                <span className="text-blue-500 flex items-center gap-0.5 text-2xs" title="需要充能">
+                  ☕ {Math.round((icebreaker.needCoffee / totalIcebreaker) * 100)}%
+                </span>
+                <span className="text-rose-500 flex items-center gap-0.5 text-2xs" title="需要求助">
+                  🆘 {Math.round((icebreaker.needHelp / totalIcebreaker) * 100)}%
+                </span>
+              </div>
+              <div className="w-full h-1.5 rounded-full overflow-hidden flex gap-0.5 mt-1.5 bg-slate-200 dark:bg-slate-700">
+                <div style={{ width: `${(icebreaker.fullPower / totalIcebreaker) * 100}%` }} className="bg-amber-400" />
+                <div style={{ width: `${(icebreaker.needCoffee / totalIcebreaker) * 100}%` }} className="bg-blue-400" />
+                <div style={{ width: `${(icebreaker.needHelp / totalIcebreaker) * 100}%` }} className="bg-rose-400" />
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center py-2 text-2xs text-muted">
+              <span>{lang === 'zh' ? '等待学生课前打卡破冰' : 'Awaiting student check-in'}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -198,21 +183,28 @@ export function PreClassDiagnosticHub({ lessonId, classId, lang = 'zh' }: PreCla
           <span>{lang === 'zh' ? '点击展开以学定教建议' : 'Click for strategies'}</span>
         </div>
 
-        <div className="space-y-1.5">
-          {topMistakes.map((m) => {
-            const isExpanded = expandedMistake === m.rank;
-            return (
-              <div
-                key={m.rank}
-                onClick={() => setExpandedMistake(isExpanded ? null : m.rank)}
-                className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
-                  isExpanded
-                    ? 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-400/50 shadow-2xs'
-                    : 'bg-surface-secondary/40 border-theme/60 hover:bg-surface-secondary'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
+        {topMistakes.length === 0 ? (
+          <div className="p-3 rounded-xl border border-dashed border-theme/60 bg-surface-secondary/20 text-center text-2xs text-muted">
+            {lang === 'zh'
+              ? '暂无前置练习错题卡点，学生完成前置导学测验后将自动分析高频失分概念。'
+              : 'No diagnostic stumbling blocks found. Student quiz errors will appear here.'}
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {topMistakes.map((m) => {
+              const isExpanded = expandedMistake === m.rank;
+              return (
+                <div
+                  key={m.rank}
+                  onClick={() => setExpandedMistake(isExpanded ? null : m.rank)}
+                  className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+                    isExpanded
+                      ? 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-400/50 shadow-2xs'
+                      : 'bg-surface-secondary/40 border-theme/60 hover:bg-surface-secondary'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                     <span
                       className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
                         m.rank === 1
@@ -257,6 +249,7 @@ export function PreClassDiagnosticHub({ lessonId, classId, lang = 'zh' }: PreCla
             );
           })}
         </div>
+        )}
       </div>
     </div>
   );

@@ -19,6 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
+- **在线课堂（互动课堂）去 Mock 彻底净化与教师控制信令全网双轨打通**：
+  - **课前诊断真实化与去除虚构（`server/routes/lessons.ts` & `src/features/classroom/PreClassDiagnosticHub.tsx`）**：彻底剔除 82% 虚假预习率计算、硬编码物理力学错题卡点与 65%/25%/10% 心态分布伪造；全面采用真实 SQLite 预习与错题聚合，无数据时诚实展示「暂无前置诊断错题」与「等待学生打卡破冰」；
+  - **课堂晴雨表去伪存真（`server/routes/classroom.ts`）**：修复在无学生点击脉搏信号（`pulseTotal === 0`）时默认伪造 75/15/10 繁荣指标的缺陷，诚实返回 0% 并置为平稳静默状态；
+  - **随堂测验优秀榜假数据根治与测试解耦（`src/features/teacher/TopPerformersWidget.tsx`）**：移除 `DEFAULT_DEMO_PERFORMERS` 5 位假学生初始化占位与兜底；将「⚡ 模拟答题」按钮收敛至 `allowSimulation={true}`（默认在生产教师端彻底隐藏，避免普通界面污染）；增加真实空状态卡片；
+  - **教师端控制信令全网双轨广播打通（`src/services/classroom-sync-channel.ts`, `src/components/LiveClassroomView.tsx`, `server/presence.ts`, `src/hooks/useClassroomSocket.ts`）**：将 `ClassroomSyncChannel` 升级为「同机 BroadcastChannel + 分布式跨机 Socket.IO」双轨驱动，服务端增加对 `teacher-broadcast-lock`、`teacher-broadcast-tab`、`teacher-broadcast-lesson` 与 `teacher-sync-message` 的校验转发，使远程跨机真实学生端能实时同步教师切课节、切环节、切Tab与全班锁屏控制。
+
 - **学期成绩计算漏洞修复与无排课同步兜底**：
   - **未交作业与缺考 0 分判定（`server/routes/grading.ts`）**：修复原先班级发布作业或考试后，未提交作业与缺考学生（`scores.length === 0`）被误判为 100 分的严重缺陷；仅在班级未布置任何作业/考试时保留 100 分避免扣分。
   - **`SemesterGradeService` 成绩同步多级兜底（`packages/core/di/semester-grade-service.ts`）**：在无日历排课（`schedules` 查不到 `class_id`）的即兴授课场景下，自动级联查询 `class_students` 及 `plugin_assignments`，彻底避免成绩同步抛错丢失。

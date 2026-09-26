@@ -335,6 +335,21 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       }
     });
 
+    socket.on('student-lesson-tab-changed', (data: { lessonId?: string; tab?: 'whiteboard' | 'courseware' | 'assignment' }) => {
+      if (activeRoleRef.current === 'student' && data?.tab) {
+        if (!data.lessonId || data.lessonId === selectedLessonRef.current) {
+          setStudentLessonTab(data.tab);
+        }
+      }
+    });
+
+    socket.on('teacher-switched-lesson', (data: { lessonId?: string }) => {
+      if (activeRoleRef.current === 'student' && data?.lessonId) {
+        setSelectedLesson(data.lessonId);
+        setStudentViewStatus('lesson');
+      }
+    });
+
     socket.on('whiteboard-sync', (data: any) => {
       const { roomId, type } = data || {};
       if (type === 'refresh' && roomId) {

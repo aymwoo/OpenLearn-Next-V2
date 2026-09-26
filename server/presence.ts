@@ -254,6 +254,53 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceD
       }
     });
 
+    // 教师端全班锁屏指令全网广播
+    socket.on('teacher-broadcast-lock', (data: { lessonId: string; locked: boolean; classId?: string }) => {
+      if (session && !isTeacherOrAdmin) {
+        console.warn(`[Presence Security] Unauthorized teacher-broadcast-lock by ${session?.userId}`);
+        return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can broadcast lock' });
+      }
+      if (!data?.lessonId) return;
+      io.to(data.lessonId).emit('class-lock-status-changed', {
+        lessonId: data.lessonId,
+        locked: Boolean(data.locked),
+      });
+      if (data.classId) {
+        io.to(classRoom(data.classId)).emit('class-lock-status-changed', {
+          lessonId: data.lessonId,
+          locked: Boolean(data.locked),
+        });
+      }
+    });
+
+    // 教师端切换演示 Tab 广播
+    socket.on('teacher-broadcast-tab', (data: { lessonId: string; tab: string }) => {
+      if (session && !isTeacherOrAdmin) {
+        return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can broadcast tab' });
+      }
+      if (!data?.lessonId) return;
+      io.to(data.lessonId).emit('student-lesson-tab-changed', data);
+    });
+
+    // 教师端切换课节广播
+    socket.on('teacher-broadcast-lesson', (data: { lessonId: string; classId?: string }) => {
+      if (session && !isTeacherOrAdmin) {
+        return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can broadcast lesson switch' });
+      }
+      if (!data?.lessonId) return;
+      if (data.classId) {
+        io.to(classRoom(data.classId)).emit('teacher-switched-lesson', data);
+      }
+      io.emit('teacher-switched-lesson', data);
+    });
+
+    // 教师端课堂控制信令总线（透传至课节房间内所有远程学生端）
+    socket.on('teacher-sync-message', (data: { lessonId: string; message: any }) => {
+      if (session && !isTeacherOrAdmin) return;
+      if (!data?.lessonId || !data.message) return;
+      socket.to(data.lessonId).emit('classroom:sync_message', data);
+    });
+
     socket.on('disconnect', () => {
       if (registeredStudentId) {
         onlineStudents.delete(registeredStudentId);

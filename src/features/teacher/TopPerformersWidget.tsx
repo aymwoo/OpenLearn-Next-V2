@@ -60,6 +60,8 @@ export interface TopPerformersWidgetProps {
   addToast?: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   className?: string;
   compact?: boolean;
+  /** 仅在自动化测试或沙盒环境开启模拟答题按钮，默认 false */
+  allowSimulation?: boolean;
 }
 
 const RANK_COLORS = [
@@ -68,64 +70,6 @@ const RANK_COLORS = [
   '#10B981', // 3rd: Emerald
   '#3B82F6', // 4th: Sky Blue
   '#0EA5E9', // 5th: Cyan
-];
-
-const DEFAULT_DEMO_PERFORMERS: TopPerformerStudent[] = [
-  {
-    rank: 1,
-    studentId: 'st-001',
-    studentName: '李明轩 (Mingxuan Li)',
-    cumulativeScore: 380,
-    totalQuizzesAnswered: 4,
-    correctCount: 4,
-    accuracy: 100,
-    avgTimeSpentMs: 6400,
-    lastSubmittedAt: Date.now() - 30000,
-  },
-  {
-    rank: 2,
-    studentId: 'st-002',
-    studentName: '张芷晴 (Zhiqing Zhang)',
-    cumulativeScore: 350,
-    totalQuizzesAnswered: 4,
-    correctCount: 4,
-    accuracy: 95,
-    avgTimeSpentMs: 7800,
-    lastSubmittedAt: Date.now() - 55000,
-  },
-  {
-    rank: 3,
-    studentId: 'st-003',
-    studentName: '王梓豪 (Zihao Wang)',
-    cumulativeScore: 320,
-    totalQuizzesAnswered: 4,
-    correctCount: 3,
-    accuracy: 85,
-    avgTimeSpentMs: 8900,
-    lastSubmittedAt: Date.now() - 90000,
-  },
-  {
-    rank: 4,
-    studentId: 'st-004',
-    studentName: '陈晨 (Chen Chen)',
-    cumulativeScore: 290,
-    totalQuizzesAnswered: 3,
-    correctCount: 3,
-    accuracy: 90,
-    avgTimeSpentMs: 9500,
-    lastSubmittedAt: Date.now() - 140000,
-  },
-  {
-    rank: 5,
-    studentId: 'st-005',
-    studentName: '刘雨桐 (Yutong Liu)',
-    cumulativeScore: 260,
-    totalQuizzesAnswered: 3,
-    correctCount: 3,
-    accuracy: 88,
-    avgTimeSpentMs: 11200,
-    lastSubmittedAt: Date.now() - 190000,
-  },
 ];
 
 export function TopPerformersWidget({
@@ -139,17 +83,18 @@ export function TopPerformersWidget({
   addToast,
   className = '',
   compact = false,
+  allowSimulation = false,
 }: TopPerformersWidgetProps) {
   // Selected lesson state (fallback to prop or first available lesson)
   const [selectedLessonId, setSelectedLessonId] = useState<string>(lessonId || '');
   const [metricMode, setMetricMode] = useState<'score' | 'accuracy' | 'count'>('score');
   const [loading, setLoading] = useState<boolean>(false);
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
-  const [topPerformers, setTopPerformers] = useState<TopPerformerStudent[]>(DEFAULT_DEMO_PERFORMERS);
+  const [topPerformers, setTopPerformers] = useState<TopPerformerStudent[]>([]);
   const [summary, setSummary] = useState<TopPerformersSummary>({
-    totalParticipants: 5,
-    totalResponses: 18,
-    averageScore: 320,
+    totalParticipants: 0,
+    totalResponses: 0,
+    averageScore: 0,
   });
   const [lastLiveEventTime, setLastLiveEventTime] = useState<number | null>(null);
 
@@ -200,7 +145,9 @@ export function TopPerformersWidget({
                 return;
               }
             }
-            // Keep default mock performers for visual polish
+            // 无数据时诚实展示空列表与零统计，坚决不伪造数据
+            setTopPerformers([]);
+            setSummary({ totalParticipants: 0, totalResponses: 0, averageScore: 0 });
           }
         }
       } catch (err) {
@@ -491,16 +438,18 @@ export function TopPerformersWidget({
             </button>
           </div>
 
-          {/* Simulate button */}
-          <button
-            onClick={handleSimulateQuiz}
-            disabled={isSimulating}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
-            title={lang === 'zh' ? '模拟学生实时答题' : 'Simulate Quiz Responses'}
-          >
-            <Zap size={12} className={isSimulating ? 'animate-spin text-amber-600' : 'text-amber-600'} />
-            <span className="hidden sm:inline">{lang === 'zh' ? '模拟答题' : 'Simulate'}</span>
-          </button>
+          {/* Simulate button - 仅在测试模式显式启用 */}
+          {allowSimulation && (
+            <button
+              onClick={handleSimulateQuiz}
+              disabled={isSimulating}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+              title={lang === 'zh' ? '模拟学生实时答题' : 'Simulate Quiz Responses'}
+            >
+              <Zap size={12} className={isSimulating ? 'animate-spin text-amber-600' : 'text-amber-600'} />
+              <span className="hidden sm:inline">{lang === 'zh' ? '模拟答题' : 'Simulate'}</span>
+            </button>
+          )}
 
           {/* Refresh button */}
           <button
@@ -515,7 +464,8 @@ export function TopPerformersWidget({
           {/* Export button */}
           <button
             onClick={handleExportCSV}
-            className="p-1.5 rounded-lg border border-theme bg-surface hover:bg-surface-secondary text-muted hover:text-main transition-colors cursor-pointer shadow-xs"
+            disabled={topPerformers.length === 0}
+            className="p-1.5 rounded-lg border border-theme bg-surface hover:bg-surface-secondary text-muted hover:text-main transition-colors cursor-pointer shadow-xs disabled:opacity-40"
             title={lang === 'zh' ? '导出 Top 5 榜单 CSV' : 'Export CSV'}
           >
             <Download size={14} />
@@ -523,8 +473,22 @@ export function TopPerformersWidget({
         </div>
       </div>
 
-      {/* Top 3 Podium Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {topPerformers.length === 0 ? (
+        <div className="p-8 rounded-xl border border-dashed border-theme bg-surface-secondary/20 flex flex-col items-center justify-center text-center gap-2">
+          <Trophy size={28} className="text-muted/60" />
+          <p className="text-sm font-semibold text-main">
+            {lang === 'zh' ? '暂无随堂作答数据' : 'No Quiz Responses Yet'}
+          </p>
+          <p className="text-xs text-muted max-w-sm">
+            {lang === 'zh'
+              ? '学生开始作答随堂测验或白板互动题后，实时榜单与答题数据将自动刷新呈现。'
+              : 'Rankings and visual distribution will appear here once students submit answers.'}
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Top 3 Podium Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {topPerformers.slice(0, 3).map((st) => {
           const isGold = st.rank === 1;
           const isSilver = st.rank === 2;
@@ -690,6 +654,8 @@ export function TopPerformersWidget({
           </ResponsiveContainer>
         </div>
       </div>
+      </>
+      )}
 
       {/* Roster & Quick Action Footer */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted pt-1">
