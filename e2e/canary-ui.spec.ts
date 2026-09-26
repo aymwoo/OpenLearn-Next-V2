@@ -35,6 +35,116 @@ async function ensureLoggedIn(page: Page) {
   }
 }
 
+import Database from 'better-sqlite3';
+
+function purgeCanaryDirectFromDb() {
+  const dbPath = path.resolve(process.cwd(), 'packages/core/db/educational_os.db');
+  if (!fs.existsSync(dbPath)) return;
+  const db = new Database(dbPath);
+  try {
+    // 1. 查找并删除金丝雀插件目录及记录
+    const canaryPlugins = db.prepare('SELECT id FROM plugins WHERE name LIKE ? OR id LIKE ?').all('%金丝雀%', '%canary%') as { id: string }[];
+    for (const p of canaryPlugins) {
+      const pDir = path.resolve(process.cwd(), 'plugins', p.id);
+      if (fs.existsSync(pDir)) {
+        fs.rmSync(pDir, { recursive: true, force: true });
+      }
+      db.prepare('DELETE FROM plugins WHERE id = ?').run(p.id);
+    }
+
+    // 2. 删除测试班级与关联排座
+    const canaryClasses = db.prepare('SELECT id FROM classes WHERE name LIKE ?').all('%金丝雀%') as { id: string }[];
+    for (const c of canaryClasses) {
+      db.prepare('DELETE FROM student_seats WHERE class_id = ?').run(c.id);
+      db.prepare('DELETE FROM class_students WHERE class_id = ?').run(c.id);
+      db.prepare('DELETE FROM classes WHERE id = ?').run(c.id);
+    }
+
+    // 3. 删除测试机房
+    const canaryLabs = db.prepare('SELECT id FROM computer_labs WHERE room_number LIKE ? OR room_number = ?').all('%金丝雀%', '机房A-101') as { id: string }[];
+    for (const l of canaryLabs) {
+      db.prepare('DELETE FROM computer_labs WHERE id = ?').run(l.id);
+      db.prepare('DELETE FROM student_seats WHERE lab_id = ?').run(l.id);
+    }
+
+    // 4. 删除测试学生
+    const canaryStudents = db.prepare('SELECT id FROM students WHERE name LIKE ? OR student_number LIKE ?').all('%探针%', '%CANARY%') as { id: string }[];
+    for (const s of canaryStudents) {
+      db.prepare('DELETE FROM students WHERE id = ?').run(s.id);
+      db.prepare('DELETE FROM student_seats WHERE student_id = ?').run(s.id);
+      db.prepare('DELETE FROM class_students WHERE student_id = ?').run(s.id);
+    }
+  } finally {
+    db.close();
+  }
+}
+
+async function cleanupAllCanaryData(request: any) {
+  // 保证具备管理员权限进行 API 级正常卸载
+  await request.post('/api/auth/login', {
+    data: { entrance: 'teacher', username: 'admin', password: 'admin' },
+  }).catch(() => {});
+
+  // 1. 深度卸载与删除所有金丝雀探针插件
+  try {
+    const listRes = await request.get('/api/plugins');
+    if (listRes.ok()) {
+      const plugins = await listRes.json();
+      const arr = Array.isArray(plugins) ? plugins : plugins.plugins || [];
+      for (const p of arr) {
+        if (p.name?.includes('金丝雀') || p.id?.includes('canary') || p.manifest?.id?.includes('canary')) {
+          await request.delete(`/api/plugins/${encodeURIComponent(p.id)}`).catch(() => {});
+        }
+      }
+    }
+  } catch {}
+
+  // 2. 清理所有金丝雀测试班级
+  try {
+    const cRes = await request.get('/api/classes');
+    if (cRes.ok()) {
+      const classes = await cRes.json();
+      const arr = Array.isArray(classes) ? classes : [];
+      for (const c of arr) {
+        if (c.name?.includes('金丝雀') || c.name?.includes('canary')) {
+          await request.delete(`/api/classes/${encodeURIComponent(c.id)}`).catch(() => {});
+        }
+      }
+    }
+  } catch {}
+
+  // 3. 清理所有测试机房
+  try {
+    const lRes = await request.get('/api/labs');
+    if (lRes.ok()) {
+      const labs = await lRes.json();
+      const arr = Array.isArray(labs) ? labs : [];
+      for (const l of arr) {
+        if (l.room_number?.includes('金丝雀') || l.room_number === '机房A-101') {
+          await request.delete(`/api/labs/${encodeURIComponent(l.id)}`).catch(() => {});
+        }
+      }
+    }
+  } catch {}
+
+  // 4. 清理所有探针测试学生
+  try {
+    const sRes = await request.get('/api/students');
+    if (sRes.ok()) {
+      const students = await sRes.json();
+      const arr = Array.isArray(students) ? students : [];
+      for (const s of arr) {
+        if (s.name?.includes('探针') || s.student_number?.includes('CANARY')) {
+          await request.delete(`/api/students/${encodeURIComponent(s.id)}`).catch(() => {});
+        }
+      }
+    }
+  } catch {}
+
+  // 5. DB 级绝对彻底兜底清除
+  purgeCanaryDirectFromDb();
+}
+
 test.describe('金丝雀阶段 7：前端扩展槽位与 UI 真实渲染', () => {
   let installedPluginId: string | null = null;
   let testLabId: string | null = null;
@@ -59,17 +169,8 @@ test.describe('金丝雀阶段 7：前端扩展槽位与 UI 真实渲染', () =>
     });
     expect(loginRes.ok()).toBeTruthy();
 
-    // 2a. 前置幂等清理可能残留的金丝雀插件
-    const listRes = await request.get('/api/plugins');
-    if (listRes.ok()) {
-      const plugins = await listRes.json();
-      const arr = Array.isArray(plugins) ? plugins : plugins.plugins || [];
-      for (const p of arr) {
-        if (p.name?.includes('金丝雀') || p.id?.includes('canary')) {
-          await request.delete(`/api/plugins/${encodeURIComponent(p.id)}`);
-        }
-      }
-    }
+    // 2a. 前置幂等清扫：彻底清除任何金丝雀残留数据
+    await cleanupAllCanaryData(request);
 
     // 3. 上传安装金丝雀插件 (inline 模式)
     const uploadRes = await request.post('/api/plugins/upload-zip-raw', {
@@ -133,25 +234,8 @@ test.describe('金丝雀阶段 7：前端扩展槽位与 UI 真实渲染', () =>
   });
 
   test.afterAll(async ({ request }) => {
-    // 清理种子数据
-    if (testClassId) {
-      await request.delete(`/api/classes/${testClassId}`).catch(() => {});
-    }
-    if (testLabId) {
-      await request.delete(`/api/labs/${testLabId}`).catch(() => {});
-    }
-    for (const sid of testStudentIds) {
-      await request.delete(`/api/students/${sid}`).catch(() => {});
-    }
-
-    // 清理卸载金丝雀插件，还原环境
-    if (installedPluginId) {
-      try {
-        await request.delete(`/api/plugins/${encodeURIComponent(installedPluginId)}`);
-      } catch {
-        // 静默清理
-      }
-    }
+    // 后置无条件深度清理：确保日常环境中绝对零金丝雀残留
+    await cleanupAllCanaryData(request);
   });
 
   test('7.1 & 7.6 教师主导航金丝雀 Tab 挂载、React 面板渲染、截图与 Ping 互通 (Generates Artifact: Screenshot)', async ({ page }) => {
