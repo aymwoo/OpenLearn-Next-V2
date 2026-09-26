@@ -10,6 +10,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Features
+
+- **课程编辑器环节参数视觉增强与白板组件窗口化管控**：
+  - **环节参数高亮**：优化课程编辑器中环节参数配置区域的视觉焦点与高亮动画引导，帮助教师在编辑教案环节时快速定位配置项；
+  - **白板组件紧凑化与通用标题栏**：新增 `WidgetTitleBar`，为白板内置各组件（CodeSandbox, HelloWorld, MathGraph, RollCall 等）及第三方插件挂载组件提供统一样式的最大化、还原、最小化与属性配置抽屉按钮，大幅精简白板画布空间占用。
+  - **作业卡班级精准绑定**：白板作业卡属性抽屉透传当前课堂 `classId`，实现新建作业卡与班级实体的无缝关联。
+
+### Fixes
+
+- **学期成绩计算漏洞修复与无排课同步兜底**：
+  - **未交作业与缺考 0 分判定（`server/routes/grading.ts`）**：修复原先班级发布作业或考试后，未提交作业与缺考学生（`scores.length === 0`）被误判为 100 分的严重缺陷；仅在班级未布置任何作业/考试时保留 100 分避免扣分。
+  - **`SemesterGradeService` 成绩同步多级兜底（`packages/core/di/semester-grade-service.ts`）**：在无日历排课（`schedules` 查不到 `class_id`）的即兴授课场景下，自动级联查询 `class_students` 及 `plugin_assignments`，彻底避免成绩同步抛错丢失。
+  - **课程环节时间线更新序列化兼容（`server/routes/lessons.ts` & `packages/plugins/builtin.ts`）**：修复 `lesson.update_timeline` 接收数组或 JSON 字符串形式时的 `PayloadValidationError`，保证环节增删修改的健壮提交。
+
+### Tests & Canary
+
+- **金丝雀探针步骤 2（`server/__tests__/canary/canary.step2.test.ts`）**：
+  - 接入完整 32 个可解析 Token mock 与 `bootstrapSharedModules()` 真实共享模块；
+  - 验证探针自报告落表、Token 全量扫描与白名单加载/拦截机制（8/8 绿）。
+- **学期成绩计算回归测试（`server/__tests__/grading-calculation.test.ts`）**：
+  - 真实启动 Express 服务与 SQLite 回归断言已发布作业/考试下的零分判定与空班级满分行为（2/2 绿）。
+
 ## [0.3.22] - 2026-09-25
 
 ### Features
