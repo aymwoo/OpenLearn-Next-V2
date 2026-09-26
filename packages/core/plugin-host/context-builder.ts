@@ -182,7 +182,13 @@ function wrapCommandBus(
       const safeHandler: CommandHandler = {
         execute: async (command) => {
           try {
-            return await handler.execute(command);
+            if (typeof (handler as any) === 'function') {
+              return await (handler as any)(command);
+            }
+            if (typeof handler?.execute === 'function') {
+              return await handler.execute(command);
+            }
+            throw new Error(`Invalid command handler for ${prefixed}: must be a function or provide execute()`);
           } catch (e) {
             console.error(`[Plugin:${pluginId}] Error executing command ${prefixed}:`, e);
             throw e;

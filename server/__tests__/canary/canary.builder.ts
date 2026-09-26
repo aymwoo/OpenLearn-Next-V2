@@ -8,7 +8,10 @@ import esbuild from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
 import JSZip from 'jszip';
+import { fileURLToPath } from 'node:url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const SRC_DIR = path.resolve(__dirname, 'canary-src');
 
 export interface BuildOptions {
@@ -35,15 +38,39 @@ async function bundleIndex(): Promise<string> {
   return cachedBundle;
 }
 
-/** 组装金丝雀 ZIP（manifest.json + index.js 平铺在 ZIP 根） */
+let cachedFrontend: string | null = null;
+
+async function bundleFrontend(): Promise<string> {
+  const frontendPath = path.join(SRC_DIR, 'frontend.tsx');
+  if (!fs.existsSync(frontendPath)) return '';
+  const result = await esbuild.build({
+    entryPoints: [frontendPath],
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    jsx: 'transform',
+    external: ['react', 'react-dom', 'lucide-react', 'recharts'],
+    logLevel: 'silent',
+  });
+  cachedFrontend = result.outputFiles![0].text;
+  return cachedFrontend;
+}
+
+/** 组装金丝雀 ZIP（manifest.json + index.js + 可选 frontend.js 平铺在 ZIP 根） */
 export async function buildCanaryZip(opts: BuildOptions = {}): Promise<Buffer> {
   const indexJs = await bundleIndex();
+  const frontendJs = await bundleFrontend();
   const template = JSON.parse(fs.readFileSync(path.join(SRC_DIR, 'manifest.template.json'), 'utf-8'));
   const manifest = { ...template, ...opts.manifestOverrides };
 
   const zip = new JSZip();
   zip.file('manifest.json', JSON.stringify(manifest, null, 2));
   zip.file('index.js', indexJs);
+  if (frontendJs) {
+    zip.file('frontend.js', frontendJs);
+  }
   return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 

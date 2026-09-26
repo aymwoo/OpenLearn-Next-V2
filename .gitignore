@@ -57,3 +57,7 @@ audit-tools/__pycache__/
 
 # 金丝雀测试临时插件目录（崩溃残留防护）
 server/__tests__/canary/.tmp-plugins-*
+
+# 第三方插件兼容性 CI 的临时 checkout 与打包产物
+.plugin-compatibility-sources/
+.plugin-compatibility-fixtures/

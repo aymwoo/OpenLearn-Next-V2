@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **未交作业与缺考 0 分判定（`server/routes/grading.ts`）**：修复原先班级发布作业或考试后，未提交作业与缺考学生（`scores.length === 0`）被误判为 100 分的严重缺陷；仅在班级未布置任何作业/考试时保留 100 分避免扣分。
   - **`SemesterGradeService` 成绩同步多级兜底（`packages/core/di/semester-grade-service.ts`）**：在无日历排课（`schedules` 查不到 `class_id`）的即兴授课场景下，自动级联查询 `class_students` 及 `plugin_assignments`，彻底避免成绩同步抛错丢失。
   - **课程环节时间线更新序列化兼容（`server/routes/lessons.ts` & `packages/plugins/builtin.ts`）**：修复 `lesson.update_timeline` 接收数组或 JSON 字符串形式时的 `PayloadValidationError`，保证环节增删修改的健壮提交。
+  - **命令总线处理程序类型归一化增强（`packages/core/plugin-host/context-builder.ts`）**：增强沙箱插件 `commandBus.registerHandler` 兼容性，统一支持传统函数签名与标准包含 `execute` 方法的 `CommandHandler` 对象，杜绝第三方插件由于调用习惯差异引起的 `handler.execute is not a function` 异常。
 
 ### Security & Ops
 
@@ -40,6 +41,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **金丝雀探针步骤 2（`server/__tests__/canary/canary.step2.test.ts`）**：
   - 接入完整 32 个可解析 Token mock 与 `bootstrapSharedModules()` 真实共享模块；
   - 验证探针自报告落表、Token 全量扫描与白名单加载/拦截机制（8/8 绿）。
+- **金丝雀探针步骤 3（双模式全链路矩阵，`server/__tests__/canary/canary.e2e.test.ts`）**：
+  - 覆盖 inline 进程内与 worker 工作线程双模式；
+  - 全链路测试 131 组断言（包含 DB 隔离前缀、服务发现与多层生命周期，131/131 绿）。
+- **金丝雀探针步骤 4（毒丸防御拒绝矩阵，`server/__tests__/canary/canary.step4.test.ts`）**：
+  - 实现 8 大毒丸变体（`nested-zip`, `engine99`, `engine02`, `missing-entry`, `bomb` 301MB, `all-method`, `traversal`, `noprovides`）；
+  - 验证系统精准防御拒绝，零临时文件泄露，零脏数据残留（8/8 绿）。
+- **金丝雀探针步骤 5（生命周期深度回收与社区市场注册表归一化，`server/__tests__/canary/canary.step5.test.ts`）**：
+  - 验证 9.1~9.6 深度回收链条（停用状态与 503 路由解绑、权限彻底吊销、心跳定时器销毁、命令注销、卸载级联删除 DB 表与目录）；
+  - 验证社区市场注册表 5 组信封变体归一化、重复 ID 过滤、500 条截断上限、SSRF/安全协议白名单拦截及语义版本比对（14/14 绿）。
+- **金丝雀探针阶段 7（前端 UI 扩展槽位挂载与 Playwright E2E 真实渲染，`e2e/canary-ui.spec.ts`）**：
+  - 构建集成 `frontend.js` 与 `manifest.ui.extensionPoints` 的金丝雀安装包；
+  - 建立 Playwright E2E 测试体系（`playwright.config.ts`），自动化管理员登录、插件热插拔、主导航 Tab 动态挂载、Props 注入（`lessonId`, `classId`）；
+  - 产出端到端真实界面渲染全屏截图凭证（`artifacts/screenshots/canary_teacher_tab.png`）；
+  - 验证前端扩展面板点击按钮调用 `canary.ping` 跨进程前后端互通与即时回显（`{"pong":true,"mode":"inline","src":"direct"}`）。
 - **学期成绩计算回归测试（`server/__tests__/grading-calculation.test.ts`）**：
   - 真实启动 Express 服务与 SQLite 回归断言已发布作业/考试下的零分判定与空班级满分行为（2/2 绿）。
 

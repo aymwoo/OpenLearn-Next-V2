@@ -245,8 +245,10 @@ export default {
     }
 
     // ── 阶段 3：命令与事件 ──
-    await (ctx.services.commandBus as any).registerHandler('canary.ping', async (cmd: any) => {
-      return { pong: true, mode, src: cmd?.payload?.src ?? 'direct' };
+    await (ctx.services.commandBus as any).registerHandler('canary.ping', {
+      execute: async (cmd: any) => {
+        return { pong: true, mode, src: cmd?.payload?.src ?? 'direct' };
+      },
     });
     await ctx.services.eventBus.subscribe('lesson.created', () => {
       eventCount += 1;
