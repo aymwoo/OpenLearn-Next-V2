@@ -442,6 +442,15 @@ export function registerGradingRoutes(ctx: ServerContext) {
         examMap.get(e.student_id)!.push({ score: e.score, max: e.max_score });
       });
 
+      // Check if class has published assignments or exams
+      const totalPublishedAssignments = (kernelContainer.db
+        .prepare('SELECT COUNT(*) as count FROM assignments WHERE class_id = ?')
+        .get(classId) as any)?.count || 0;
+
+      const totalPublishedExams = (kernelContainer.db
+        .prepare('SELECT COUNT(*) as count FROM exams WHERE class_id = ?')
+        .get(classId) as any)?.count || 0;
+
       // 5. Compute grades for each student
       const result = students.map((student) => {
         const archived = archivedMap.get(student.id);
@@ -481,16 +490,16 @@ export function registerGradingRoutes(ctx: ServerContext) {
           progressScore = Math.round(progressPercents.reduce((acc, val) => acc + val, 0) / progressPercents.length);
         }
 
-        // Compute Assignment Score
+        // Compute Assignment Score: If class has published assignments, unsubmitted students get 0, not 100.
         const scores = assignmentMap.get(student.id) || [];
-        let assignmentScore = 100;
+        let assignmentScore = totalPublishedAssignments > 0 ? 0 : 100;
         if (scores.length > 0) {
           assignmentScore = Math.round(scores.reduce((acc, val) => acc + val, 0) / scores.length);
         }
 
-        // Compute Exam Score
+        // Compute Exam Score: If class has published exams, absent students get 0, not 100.
         const examScores = examMap.get(student.id) || [];
-        let examScore = 100;
+        let examScore = totalPublishedExams > 0 ? 0 : 100;
         if (examScores.length > 0) {
           const sum = examScores.reduce((acc, val) => acc + (val.score / val.max) * 100, 0);
           examScore = Math.round(sum / examScores.length);

@@ -80,6 +80,53 @@ describe('SemesterGradeService - Database Schemas & Sync Logic (Wave 2)', () => 
       .get(`plugin-lesson-${testLessonId}`, testStudentId) as any;
     expect(submission.score).toBe(95);
   });
+
+  it('should fallback to class_students when no schedule exists for the lesson', async () => {
+    const unscheduledLessonId = 'unscheduled-lesson-999';
+    const fallbackStudentId = 'fallback-student-888';
+    const fallbackClassId = 'fallback-class-777';
+
+    // Insert class_students enrollment without any schedule for this lesson
+    db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+      fallbackClassId,
+      fallbackStudentId,
+      Date.now(),
+    );
+
+    const service = new SemesterGradeService(db);
+    await service.saveSemesterGrade(unscheduledLessonId, fallbackStudentId, 92);
+
+    // Verify assignment was created with fallbackClassId
+    const assignment = db
+      .prepare('SELECT * FROM assignments WHERE id = ?')
+      .get(`plugin-lesson-${unscheduledLessonId}`) as any;
+    expect(assignment).toBeDefined();
+    expect(assignment.class_id).toBe(fallbackClassId);
+
+    // Verify submission exists with score 92
+    const submission = db
+      .prepare('SELECT * FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
+      .get(`plugin-lesson-${unscheduledLessonId}`, fallbackStudentId) as any;
+    expect(submission).toBeDefined();
+    expect(submission.score).toBe(92);
+
+    // Clean up
+    db.prepare('DELETE FROM class_students WHERE student_id = ?').run(fallbackStudentId);
+    db.prepare('DELETE FROM assignments WHERE id = ?').run(`plugin-lesson-${unscheduledLessonId}`);
+    db.prepare('DELETE FROM assignment_submissions WHERE assignment_id = ?').run(
+      `plugin-lesson-${unscheduledLessonId}`,
+    );
+  });
+
+  it('should throw clear error when no schedule and no student class can be resolved', async () => {
+    const orphanLessonId = 'orphan-lesson-000';
+    const orphanStudentId = 'orphan-student-000';
+    const service = new SemesterGradeService(db);
+
+    await expect(service.saveSemesterGrade(orphanLessonId, orphanStudentId, 85)).rejects.toThrow(
+      /No scheduled class or enrolled class found/,
+    );
+  });
 });
 
 describe('SemesterGradeService & AssignmentEvalPlugin Integration (Wave 3)', () => {

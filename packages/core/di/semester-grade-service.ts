@@ -13,13 +13,38 @@ export class SemesterGradeService implements ISemesterGradeService {
       throw new Error('lessonId and studentId are required');
     }
 
-    // 1. Get classId from schedules using lessonId
-    const schedule = this.db.prepare('SELECT class_id FROM schedules WHERE lesson_id = ?').get(lessonId) as
+    // 1. Get classId from schedules using lessonId, with fallbacks to student's class or plugin assignments
+    let classId: string | undefined;
+    const schedule = this.db.prepare('SELECT class_id FROM schedules WHERE lesson_id = ? LIMIT 1').get(lessonId) as
       { class_id: string } | undefined;
-    if (!schedule) {
-      throw new Error(`No scheduled class found for lesson: ${lessonId}`);
+    if (schedule?.class_id) {
+      classId = schedule.class_id;
+    } else {
+      // Fallback 1: Resolve from student's enrolled class
+      const studentClass = this.db
+        .prepare('SELECT class_id FROM class_students WHERE student_id = ? ORDER BY joined_at DESC LIMIT 1')
+        .get(studentId) as { class_id: string } | undefined;
+      if (studentClass?.class_id) {
+        classId = studentClass.class_id;
+      } else {
+        // Fallback 2: Check if plugin_assignments table exists and has a class_id for this lesson
+        const hasPluginTable = this.db
+          .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = 'plugin_assignments'")
+          .get();
+        if (hasPluginTable) {
+          const pluginAssignment = this.db
+            .prepare('SELECT class_id FROM plugin_assignments WHERE lesson_id = ? AND class_id IS NOT NULL LIMIT 1')
+            .get(lessonId) as { class_id: string } | undefined;
+          if (pluginAssignment?.class_id) {
+            classId = pluginAssignment.class_id;
+          }
+        }
+      }
     }
-    const classId = schedule.class_id;
+
+    if (!classId) {
+      throw new Error(`No scheduled class or enrolled class found for lesson: ${lessonId} and student: ${studentId}`);
+    }
     const assignmentId = `plugin-lesson-${lessonId}`;
 
     // 2. Ensure representative assignment exists in host assignments table
