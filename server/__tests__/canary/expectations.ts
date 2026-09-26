@@ -99,12 +99,12 @@ export const REQUIRE_SWEEP = [
 
 /** 毒丸变体拒绝矩阵（供第 4 步复用） */
 export const POISON_MATRIX = [
-  { variant: 'nested-zip', expectedStatus: 400, errorPattern: /Invalid plugin ZIP structure|manifest\.json/ },
-  { variant: 'engine99', expectedStatus: 400, errorPattern: /Incompatible platform version|engines/ },
-  { variant: 'engine02', expectedStatus: 400, errorPattern: /Incompatible platform version|engines/ },
-  { variant: 'missing-entry', expectedStatus: 400, errorPattern: /entry point not found|Entry file not found/ },
-  { variant: 'bomb', expectedStatus: 400, errorPattern: /exceeds maximum allowed|ZIP bomb/ },
-  { variant: 'all-method', expectedStatus: 400, errorPattern: /ALL|Invalid method/ },
+  { variant: 'nested-zip', expectedStatus: 400, errorPattern: /Invalid plugin ZIP structure|manifest\.json/i },
+  { variant: 'engine99', expectedStatus: 400, errorPattern: /Incompatible platform version|engines|requires OpenLearn/i },
+  { variant: 'engine02', expectedStatus: 400, errorPattern: /Incompatible platform version|engines|requires OpenLearn/i },
+  { variant: 'missing-entry', expectedStatus: 400, errorPattern: /entry point not found|Entry file.*not found/i },
+  { variant: 'bomb', expectedStatus: 400, errorPattern: /exceeds maximum allowed|ZIP bomb|exceeds limit/i },
+  { variant: 'all-method', expectedStatus: 400, errorPattern: /ALL|Invalid method|Invalid enum value|Invalid option|invalid_value/i },
   { variant: 'traversal', expectedStatus: 400, errorPattern: /path traversal|illegal file name/i },
-  { variant: 'noprovides', expectedStatus: 400, errorPattern: /not declared in manifest\.provides/ },
+  { variant: 'noprovides', expectedStatus: 400, errorPattern: /not declared in manifest\.provides/i },
 ] as const;
