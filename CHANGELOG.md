@@ -10,6 +10,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **课堂会话恢复与作业上传链路的审计收敛修复**：
+  - **feed 回放按会话隔离（classroom-feed-service.ts）**：`getFeedReplay` 由按 `lesson_id` 过滤改为按当前活动会话 `session_id` 过滤——同一课程重开的新会话不再回放上一次课的动态（无活动会话返回空）；
+  - **上传失败回滚补全（assignment-hub.ts）**：`max_files` 超限分支此前直接返回 409 未删除已落盘文件，现在超限/超配额/写库失败一律回滚物理文件，不再留孤儿；
+  - **教师代传豁免截止校验**：已截止且不允许迟交的作业，教师代学生上传放行（补收作业的合理教学场景），学生侧仍严格 409；作业状态校验保持全员生效；
+  - **下载/GC 路径守卫加固**：`storage/assignments` 前缀复核补尾部分隔符哨兵，阻断 `storage/assignments2/` 形态的前缀伪装；
+  - **消除测试对生产逻辑的手工复制**：`extractScoreCommentCompletion` 从 `courseware.ts` 路由闭包抽为 `server/utils/score-extract.ts` 导出模块，路由与 E2E 测试共用同一实现；删除测试侧的手工副本与 `fixture-messages.ts` 的 vm 沙箱死代码，修正误导注释（countByLesson docstring、测试断言注释漂移）；
+  - **命名规范收敛**：socket 事件 `classroom:feed` → `classroom:feed_appended`（过去式，对齐 AGENTS.md 事件命名）；`'ARCHIVED_REPORT'` 魔法字符串提取为共享常量 `ARCHIVED_REPORT_STAGE`（classroom-runtime-service.ts 导出，三处消费）。
+
+- **课堂会话保存与恢复（Session Persistence & Resume）**：教师离开课堂后可随时回到当前状态，学生数据、教师数据、作业数据、互动课件数据与课堂动态全部保留。
+  - **课堂动态流落库（`server/services/classroom-feed-service.ts` + `migrations/011_classroom_feed.sql`）**：新增 `classroom_feed` 表，feed 服务以 realtime-bridge 同款模式订阅内核事件总线（随堂作答/签到/表彰/作业提交与批改/进度/课件提交），写入会话级事实并向课节/班级房间广播 `classroom:feed` 实时事件——此前 liveClassFeed 是纯前端内存态（上限 50 条），离开即丢失；
+  - **视图状态回写（`POST /api/classroom/sessions/:lessonId/view-state`）**：教师切白板页/切教学环节时防抖 500ms 回写；`currentPage` 存 `settings_json.viewState`，`activeSegmentId` 激活休眠列 `current_segment_id`（007 迁移建列从未使用）；
+  - **恢复协议扩展（`GET /api/classroom/sessions/:lessonId`）**：在既有 stage/activePoll/activeBuzzer/activeCountdown 基础上新增 `viewState`（当前白板页）与 `feedReplay`（最近 20 条动态升序回放），前端重进课堂一次请求完整还原现场；
+  - **前端恢复逻辑（`LiveClassroomView.tsx` / `InteractiveWhiteboard.tsx`）**：动态流按 id 去重预填、环节与白板页一次性恢复（`initialPage` prop 只应用一次不覆盖后续手动切页）、`classroom:feed` socket 实时追加；
+  - **「回到课堂」入口（`ClassroomEntryPortal.tsx`）**：所选课程存在进行中会话（IN_CLASS_TEACHING / WRAP_UP_EXIT_TICKET）时显示绿色脉冲提示条「课堂进行中 · 回到课堂」，一键直达恢复后的授课视图；
+  - **E2E 测试（`server/__tests__/classroom-session-resume.test.ts`）**：教师开课→产生痕迹→离开（不发请求不清理状态）→「全新客户端」重进，验证 stage/started_at/页码/环节/动态回放/倒计时全部还原；含无会话与非法参数边界。
+
+- **作业中心文件上传链路审计修复（`server/routes/assignment-hub.ts`）**：
+  - **H1 跨班越权（IDOR）修复**：新增 `assertClassMembership` 班级归属校验——挂 `class_id` 的作业，学生必须属于该班才能读详情/上传/提交/互评（教师与管理员豁免），杜绝外班学生凭作业 ID 提交作业污染他班成绩册；课时作业（`class_id` 为 NULL）行为不变；
+  - **H2 上传侧状态与截止校验**：上传端点此前只挡最终提交，未发布/已关闭/已截止且不允许迟交的作业均可无限上传占盘；现在上传时即校验 `status === 'published'` 与 `due_at/allow_late`（409 拒绝）；
+  - **M1 同步写盘阻塞修复**：`fs.writeFileSync`（50MB 时阻塞事件循环、全班请求停摆）改为 `fs.promises.writeFile` 异步落盘；
+  - **M2 max_files 竞态修复**：文件数检查 + 插入放入 `db.transaction` 同步事务，消除并发双传突破上限的 TOCTOU；
+  - **L3 孤儿文件回滚**：写库失败时自动删除已落盘文件，不再留下无元数据的孤儿；
+  - **M4 软删除文件物理 GC**：新增 `gcSoftDeletedAssignmentFiles`（`deleted_at` 超过 7 天的物理删除，保留 `stored_path` 前缀复核防路径逃逸），注册路由时执行一次 + 每 24h 定时清理（unref 不阻塞退出）；
+  - **错误语义修正**：新增 `sendHubError` 统一尊重业务异常携带的 `err.status`（归属校验 403 不再误报 500）；
+  - **L1 实现 `allowed_ext` 每作业扩展名限制**：此前 `plugin_assignments.allowed_ext` 字段建而未用；新增 `parseAllowedExt`（`server/utils/assignment-upload-policy.ts`）解析每作业白名单，且只能「收紧」全局白名单（越界项过滤、全空回落全局），上传时校验 400 拒绝；
+  - **M3 学生存储配额**：新增 `STUDENT_ASSIGNMENT_QUOTA_BYTES`（200MB/学生，全作业累计，软删除文件不计入），上传事务内校验，超限 413；教师代传不受限；
+  - **L2 前后端白名单同步守护**：上传策略（白名单/容器族/大小上限/配额）抽为独立模块 `assignment-upload-policy.ts` 单一事实来源，新增测试直接比对前端 `ACCEPT_EXT` 与服务端白名单，杜绝手抄漂移；
+  - **回归测试**：`assignment-hub-routes.test.ts` 新增 7 个用例（外班学生 403 × 读/传/交、草稿/截止/迟交上传 409/200、GC 保留期与路径逃逸），20/20 全绿。
+
+- **通用考试课件得分采集链路集成测试与通用课件 FIXTURE（`server/__tests__/courseware-score-capture-e2e.test.ts` & `server/fixtures/demo-courseware/`）**：
+  - **3 套与平台零耦合的通用考试课件 FIXTURE**：`simple-quiz.html`（单选组卷 · `LMS_SUBMIT` 显式提交）、`result-screen-quiz.html`（判断题结算页探测 · `#correctCount` X/Y 比例自动换算）、`fill-answers-quiz.html`（填空题增量进度 · `LMS_SAVE_PROGRESS` 多样本 + `LMS_FINISH` 终态）。课件仅依赖「任意 LMS 通用」的 postMessage 协议，不引用 `/bridge.js`，验证的是平台通用采集能力而非定制课件；
+  - **postMessage → lms-bridge → submission_result 全链路验证**：覆盖 `LMS_SUBMIT / LMS_FINISH / LMS_SAVE_PROGRESS` 三条原生得分通道的 status 映射（`completed / inprogress`）与 `aggregateAttemptScore` 策略聚合（LATEST / MAX / AVERAGE / FIRST × 原始满分 → 目标满分归一化）；
+  - **学习情况与学期成绩贯通**：教师端 `/promote` 将课件成绩写入 `assignment_submissions`，经 `grading.ts` 的 `semester-grades` 接口按权重聚合进学期成绩 `assignment_score` 维度；并在 `server/event-routing.ts` 中新增 3 条内核事件 → Socket.IO 班级房间投递路由（问卷/测验发布、关闭、作答实时统计）。
+
 - **互动课堂学生到课与设备就绪监控在线状态全链路精准化修复**：
   - **纠正课前就绪界面传参错位（`src/components/LiveClassroomView.tsx`）**：修复原先将点名互动签到确认映射表（`liveClassAcknowledgedMap.keys()`）误当作在线学生名单传递给 `PreClassReadyView` 的致命缺陷，纠正为真实的 WebSocket 在线名单（`onlineStudentIds`），使已登录连入系统的学生能即时点亮绿色在线状态指示灯；
   - **学生在线双轨容错匹配（`src/features/classroom/PreClassReadyView.tsx`）**：抽离 `isStudentOnline` 判定函数，支持对学生数据库主键 `st.id` 与学号 `st.student_number` 的双轨匹配；在表头状态栏增加「设备连入」动态数与就绪率双重展示；

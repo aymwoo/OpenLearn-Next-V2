@@ -13,6 +13,7 @@
 
 import type { Server } from 'socket.io';
 import type { PlatformEvent } from '../packages/core/event-bus/index.js';
+import { classRoom } from './presence.js';
 
 /**
  * Minimal structural view of the kernel database the routes need.
@@ -196,6 +197,53 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
     socketEvent: 'whiteboard-quiz-answered',
     rooms: () => null,
     description: '随堂练习作答 → 全局广播（教师/学生面板均可摄取）',
+  },
+
+  // ── 题库与随堂测验插件（@openlearn/plugin-exam-bank）───────────────────
+  {
+    eventType: 'exambank.survey.published',
+    socketEvent: 'exambank-survey-state',
+    rooms: (event) => {
+      const classId = (event.payload as any)?.classId;
+      return typeof classId === 'string' && classId ? [classRoom(classId)] : [];
+    },
+    map: (event) => ({
+      action: 'published' as const,
+      surveyId: (event.payload as any).surveyId,
+      title: (event.payload as any).title,
+      mode: (event.payload as any).mode,
+      identity_mode: (event.payload as any).identity_mode,
+      config: (event.payload as any).config,
+      questions: (event.payload as any).questions,
+    }),
+    description: '问卷/测验发布 → 班级房间推送（学生端自动弹出答题界面）',
+  },
+  {
+    eventType: 'exambank.survey.closed',
+    socketEvent: 'exambank-survey-state',
+    rooms: (event) => {
+      const classId = (event.payload as any)?.classId;
+      return typeof classId === 'string' && classId ? [classRoom(classId)] : [];
+    },
+    map: (event) => ({
+      action: 'closed' as const,
+      surveyId: (event.payload as any).surveyId,
+    }),
+    description: '问卷/测验关闭 → 班级房间推送（学生端答题界面收起）',
+  },
+  {
+    eventType: 'exambank.answer.submitted',
+    socketEvent: 'exambank-stats-update',
+    rooms: (event) => {
+      const classId = (event.payload as any)?.classId;
+      return typeof classId === 'string' && classId ? [classRoom(classId)] : [];
+    },
+    map: (event) => ({
+      surveyId: (event.payload as any).surveyId,
+      surveyTitle: (event.payload as any).surveyTitle,
+      submissionCount: (event.payload as any).submissionCount,
+    }),
+    description: '作答提交 → 班级房间实时统计计数（教师投屏面板增量刷新）',
   },
 
   // ── 课堂状态 ────────────────────────────────────────────────────────────
