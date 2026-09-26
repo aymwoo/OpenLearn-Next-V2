@@ -9,6 +9,9 @@ import type {
   StageGuardResult,
 } from '../../packages/core/di/interfaces.js';
 
+/** 已归档会话阶段：getOrCreateSession/动态流等按「活动会话」查询时排除此阶段 */
+export const ARCHIVED_REPORT_STAGE = 'ARCHIVED_REPORT';
+
 export class ClassroomRuntimeService implements IClassroomLifecycleService, IInteractionRuntimeService {
   private db: Database.Database;
   private io?: Server;
@@ -37,7 +40,7 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
   public async getOrCreateSession(lessonId: string, teacherId: string, classId?: string): Promise<any> {
     let session = this.db
       .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1')
-      .get(lessonId, 'ARCHIVED_REPORT') as any;
+      .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
 
     if (!session) {
       const id = `cs_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -94,7 +97,7 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
     const now = Date.now();
     let session = this.db
       .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1')
-      .get(lessonId, 'ARCHIVED_REPORT') as any;
+      .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
 
     if (!session) {
       session = await this.getOrCreateSession(lessonId, actorId, classId);

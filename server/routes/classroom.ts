@@ -3,6 +3,8 @@ import type { Server } from 'socket.io';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { requireAuth, getActorId } from '../middleware/auth.js';
 import type { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
+import type { ClassroomFeedService } from '../services/classroom-feed-service.js';
+import { ARCHIVED_REPORT_STAGE } from '../services/classroom-runtime-service.js';
 import type { ServerContext } from '../context.js';
 import { getOnlineStudentIds } from '../presence.js';
 
@@ -90,6 +92,7 @@ const TEACHING_MODE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 export function registerClassroomRoutes(
   ctx: ServerContext,
   classroomService: ClassroomRuntimeService,
+  feedService?: ClassroomFeedService,
 ): void {
   const app: Express = ctx.app;
   const io: Server = (ctx as any).io;
@@ -353,7 +356,7 @@ export function registerClassroomRoutes(
       const { lessonId } = req.params;
       const session = db
         .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1')
-        .get(lessonId, 'ARCHIVED_REPORT') as any;
+        .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
 
       if (!session) {
         return res.json({
@@ -382,6 +385,17 @@ export function registerClassroomRoutes(
 
       const activeCountdown = getCountdownForLesson(lessonId);
 
+      // 会话恢复协议：视图状态（当前白板页）与动态流回放（最近 20 条）。
+      // 教师离开课堂再回来时，前端据此一次性恢复现场。
+      let viewState: Record<string, unknown> = {};
+      try {
+        const settings = session.settings_json ? JSON.parse(session.settings_json) : {};
+        viewState = settings.viewState ?? {};
+      } catch (_) {
+        viewState = {};
+      }
+      const feedReplay = feedService ? feedService.getFeedReplay(lessonId, 20) : [];
+
       res.json({
         hasActiveSession: true,
         stage: session.stage,
@@ -389,6 +403,8 @@ export function registerClassroomRoutes(
         activePoll,
         activeBuzzer,
         activeCountdown,
+        viewState,
+        feedReplay,
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -448,6 +464,54 @@ export function registerClassroomRoutes(
       db.prepare('UPDATE classroom_sessions SET teaching_mode_id = ? WHERE id = ?').run(modeValidation.id, session.id);
 
       res.json({ success: true, session });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // 会话视图状态回写（课堂会话保存与恢复）：
+  // 教师端切换白板页 / 教学环节时调用，前端防抖 500ms。
+  // currentPage 存 settings_json.viewState；activeSegmentId 存休眠列 current_segment_id。
+  app.post('/api/classroom/sessions/:lessonId/view-state', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
+    try {
+      const { lessonId } = req.params;
+      const { currentPage, activeSegmentId } = req.body || {};
+
+      const session = db
+        .prepare(
+          'SELECT id, settings_json FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
+        )
+        .get(lessonId, ARCHIVED_REPORT_STAGE) as { id: string; settings_json: string | null } | undefined;
+      if (!session) {
+        return res.status(404).json({ error: 'No active session for this lesson' });
+      }
+
+      let settings: Record<string, any> = {};
+      try {
+        settings = JSON.parse(session.settings_json || '{}');
+      } catch (_) {
+        settings = {};
+      }
+
+      if (currentPage !== undefined) {
+        const page = Number(currentPage);
+        if (!Number.isFinite(page) || page < 0 || page > 10000) {
+          return res.status(400).json({ error: 'Invalid currentPage' });
+        }
+        settings.viewState = { ...(settings.viewState ?? {}), currentPage: Math.floor(page) };
+      }
+
+      if (activeSegmentId !== undefined) {
+        const segId = activeSegmentId === null ? null : String(activeSegmentId).slice(0, 128);
+        db.prepare('UPDATE classroom_sessions SET current_segment_id = ? WHERE id = ?').run(segId, session.id);
+      }
+
+      db.prepare('UPDATE classroom_sessions SET settings_json = ? WHERE id = ?').run(
+        JSON.stringify(settings),
+        session.id,
+      );
+
+      res.json({ success: true, viewState: settings.viewState ?? {} });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

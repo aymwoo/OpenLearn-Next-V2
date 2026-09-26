@@ -30,6 +30,7 @@ import {
   IInteractionRuntimeServiceToken,
 } from './packages/core/di/interfaces.js';
 import { ClassroomRuntimeService } from './server/services/classroom-runtime-service.js';
+import { ClassroomFeedService, attachClassroomFeedService } from './server/services/classroom-feed-service.js';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import helmet from 'helmet';
@@ -431,7 +432,12 @@ async function startServer() {
   const classroomRuntimeService = new ClassroomRuntimeService(kernelContainer.db, io);
   await kernelContainer.serviceRegistry.register(IClassroomLifecycleServiceToken, classroomRuntimeService);
   await kernelContainer.serviceRegistry.register(IInteractionRuntimeServiceToken, classroomRuntimeService);
-  registerClassroomRoutes(ctx, classroomRuntimeService);
+
+  // Classroom Feed：课堂动态流持久化（会话保存与恢复）——订阅内核事件总线
+  // 落库 classroom_feed 并向课节房间广播 classroom:feed。
+  const classroomFeedService = new ClassroomFeedService(kernelContainer.db, io);
+  attachClassroomFeedService(classroomFeedService, kernelContainer.eventBus);
+  registerClassroomRoutes(ctx, classroomRuntimeService, classroomFeedService);
   registerClassroomExtrasRoutes(ctx.app);
   registerClassroomPeerReviewRoutes(ctx.app);
 
