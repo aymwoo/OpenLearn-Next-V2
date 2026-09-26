@@ -82,7 +82,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.put('/api/classes/:id', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      const { name, description, class_passcode } = req.body;
+      const { name, description, class_passcode, class_passcode_expires_at } = req.body;
       if (name) kernelContainer.db.prepare('UPDATE classes SET name = ? WHERE id = ?').run(name, req.params.id);
       if (description !== undefined)
         kernelContainer.db.prepare('UPDATE classes SET description = ? WHERE id = ?').run(description, req.params.id);
@@ -90,7 +90,47 @@ export function registerRosterRoutes(ctx: ServerContext) {
         kernelContainer.db
           .prepare('UPDATE classes SET class_passcode = ? WHERE id = ?')
           .run(class_passcode, req.params.id);
+      if (class_passcode_expires_at !== undefined)
+        kernelContainer.db
+          .prepare('UPDATE classes SET class_passcode_expires_at = ? WHERE id = ?')
+          .run(class_passcode_expires_at, req.params.id);
       res.json({ success: true });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  /**
+   * 预留给第三方插件/外部系统获取班级临时密码信息的扩展接口
+   */
+  app.get('/api/classes/:id/passcode', requireAuth(), (req, res) => {
+    try {
+      const cls = kernelContainer.db
+        .prepare('SELECT id, name, class_passcode, class_passcode_expires_at FROM classes WHERE id = ?')
+        .get(req.params.id) as any;
+
+      if (!cls) {
+        return res.status(404).json({ error: 'Class not found' });
+      }
+
+      const countRow = kernelContainer.db
+        .prepare('SELECT COUNT(*) as count FROM class_students WHERE class_id = ?')
+        .get(req.params.id) as any;
+
+      const now = Date.now();
+      const expiresAt = cls.class_passcode_expires_at ?? null;
+      const isExpired = expiresAt ? now > expiresAt : false;
+      const remainingSeconds = expiresAt && !isExpired ? Math.max(0, Math.floor((expiresAt - now) / 1000)) : null;
+
+      res.json({
+        classId: cls.id,
+        className: cls.name,
+        classPasscode: cls.class_passcode || null,
+        expiresAt,
+        isExpired,
+        remainingSeconds,
+        studentCount: countRow?.count ?? 0,
+      });
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -593,19 +633,29 @@ export function registerRosterRoutes(ctx: ServerContext) {
             console.log(`[Auth] Auto-upgraded password hash for student ${studentObj.student_number || studentObj.id}`);
           }
         }
-        // 旧明文密�?
-        else if (storedPwd === providedPassword) {
-          matchesOwnPassword = false;
+        // 旧明文密码
+        else if (storedPwd && storedPwd === providedPassword) {
+          matchesOwnPassword = true;
+          try {
+            kernelContainer.db
+              .prepare('UPDATE students SET password = ? WHERE id = ?')
+              .run(bcryptHashPassword(providedPassword), studentObj.id);
+            console.log(`[Auth] Auto-upgraded plain password hash for student ${studentObj.student_number || studentObj.id}`);
+          } catch (upgradeErr) {
+            console.error('[Auth] Failed to auto-upgrade plain password', upgradeErr);
+          }
         }
 
         // 2. Check temporary class passcodes for classes the student is enrolled in
         let matchesClassPasscode = false;
+        let isPasscodeExpired = false;
         if (!matchesOwnPassword) {
           try {
+            const now = Date.now();
             const enrolledClasses = kernelContainer.db
               .prepare(
                 `
-              SELECT c.class_passcode
+              SELECT c.id, c.name, c.class_passcode, c.class_passcode_expires_at
               FROM classes c
               INNER JOIN class_students cs ON c.id = cs.class_id
               WHERE cs.student_id = ?
@@ -613,16 +663,33 @@ export function registerRosterRoutes(ctx: ServerContext) {
               )
               .all(studentObj.id) as any[];
 
-            matchesClassPasscode = enrolledClasses.some(
-              (cls) => cls.class_passcode && cls.class_passcode.trim() === providedPassword,
-            );
+            for (const cls of enrolledClasses) {
+              if (cls.class_passcode && cls.class_passcode.trim() === providedPassword) {
+                // 检查有效期
+                if (cls.class_passcode_expires_at && now > cls.class_passcode_expires_at) {
+                  isPasscodeExpired = true;
+                } else {
+                  matchesClassPasscode = true;
+                  break;
+                }
+              }
+            }
           } catch (dbErr) {
             console.error('Failed to query active class passcodes', dbErr);
           }
         }
 
         if (!matchesOwnPassword && !matchesClassPasscode) {
-          return res.status(401).json({ error: 'Incorrect student password or temporary class passcode' });
+          if (isPasscodeExpired) {
+            return res.status(401).json({
+              error: '班级上课临时密码已过期，请向教师索取最新口令或使用学生个人密码登录。',
+              code: 'CLASS_PASSCODE_EXPIRED',
+            });
+          }
+          return res.status(401).json({
+            error: 'Incorrect student password or temporary class passcode',
+            code: 'AUTH_FAILED',
+          });
         }
 
         sessionData = {

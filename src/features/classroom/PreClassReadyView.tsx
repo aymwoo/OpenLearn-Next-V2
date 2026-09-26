@@ -20,10 +20,19 @@ import {
   HelpCircle,
   QrCode,
   KeyRound,
+  Copy,
+  Check,
+  RotateCcw,
+  Trash2,
+  Edit2,
+  Timer,
+  Save,
+  X,
 } from 'lucide-react';
 import type { StudentType } from '../../types/app';
 import { PreClassDiagnosticHub } from './PreClassDiagnosticHub';
 import { PreflightHealthModal } from './PreflightHealthModal';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export interface PreClassReadyViewProps {
   selectedLesson: string | null;
@@ -42,6 +51,7 @@ export interface PreClassReadyViewProps {
   isStudentWindowOpen: boolean;
   addToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   onBroadcastNotice?: (msg: string) => void;
+  onUpdateClassPasscode?: (classId: string, passcode: string | null) => void;
 }
 
 export function PreClassReadyView({
@@ -61,24 +71,151 @@ export function PreClassReadyView({
   isStudentWindowOpen,
   addToast,
   onBroadcastNotice,
+  onUpdateClassPasscode,
 }: PreClassReadyViewProps) {
   const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
-  const [dynamicCode, setDynamicCode] = useState(() => Math.floor(1000 + Math.random() * 9000).toString());
-  const [codeCountdown, setCodeCountdown] = useState(5);
 
-  // 动态签到码每 5 秒平滑轮换更新，防代签
+  // ── 班级上课临时密码状态管理 ─────────────────────────────────────────────
+  const [passcode, setPasscode] = useState<string | null>(null);
+  const [passcodeExpiresAt, setPasscodeExpiresAt] = useState<number | null>(null);
+  const [isLoadingPasscode, setIsLoadingPasscode] = useState(false);
+  const [isEditingPasscode, setIsEditingPasscode] = useState(false);
+  const [customPasscodeInput, setCustomPasscodeInput] = useState('');
+  const [passcodeDuration, setPasscodeDuration] = useState<'45m' | '2h' | 'today' | 'permanent'>('2h');
+  const [isCopied, setIsCopied] = useState(false);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // 1 秒定时器更新当前时间以精确刷新剩余有效秒数
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCodeCountdown((prev) => {
-        if (prev <= 1) {
-          setDynamicCode(Math.floor(1000 + Math.random() * 9000).toString());
-          return 5;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // 获取班级临时密码数据
+  const fetchPasscodeInfo = async () => {
+    if (!selectedClassId) {
+      setPasscode(null);
+      setPasscodeExpiresAt(null);
+      return;
+    }
+    try {
+      setIsLoadingPasscode(true);
+      const res = await fetch(`/api/classes/${selectedClassId}/passcode`);
+      if (res.ok) {
+        const data = await res.json();
+        setPasscode(data.classPasscode || null);
+        setPasscodeExpiresAt(data.expiresAt ?? null);
+        setCustomPasscodeInput(data.classPasscode || '');
+      }
+    } catch (err) {
+      console.error('Failed to fetch class passcode info', err);
+    } finally {
+      setIsLoadingPasscode(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPasscodeInfo();
+  }, [selectedClassId]);
+
+  // 计算过期时间戳辅助函数
+  const calculateExpiresAt = (duration: '45m' | '2h' | 'today' | 'permanent'): number | null => {
+    const now = Date.now();
+    if (duration === '45m') return now + 45 * 60 * 1000;
+    if (duration === '2h') return now + 2 * 3600 * 1000;
+    if (duration === 'today') {
+      const d = new Date();
+      d.setHours(23, 59, 59, 999);
+      return d.getTime();
+    }
+    return null; // permanent
+  };
+
+  // 保存密码与过期时间
+  const handleSavePasscode = async (newCode: string | null, newExpiresAt: number | null) => {
+    if (!selectedClassId) return;
+    try {
+      setIsLoadingPasscode(true);
+      const res = await fetch(`/api/classes/${selectedClassId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          class_passcode: newCode,
+          class_passcode_expires_at: newExpiresAt,
+        }),
+      });
+      if (res.ok) {
+        setPasscode(newCode);
+        setPasscodeExpiresAt(newExpiresAt);
+        setIsEditingPasscode(false);
+        if (onUpdateClassPasscode) {
+          onUpdateClassPasscode(selectedClassId, newCode);
+        }
+        addToast(
+          lang === 'zh' ? '班级临时密码已更新' : 'Class Passcode Updated',
+          newCode
+            ? lang === 'zh'
+              ? `已设定班级上课临时密码为 [${newCode}]，学生可凭此密码快速登录。`
+              : `Passcode [${newCode}] is now active for this class.`
+            : lang === 'zh'
+              ? '已清除班级临时密码，学生需使用个人自设密码登录。'
+              : 'Passcode cleared. Students will use personal passwords.',
+          'success',
+        );
+      } else {
+        addToast(
+          lang === 'zh' ? '更新失败' : 'Update Failed',
+          lang === 'zh' ? '无法保存班级临时密码，请稍后重试' : 'Could not save class passcode.',
+          'error',
+        );
+      }
+    } catch (err) {
+      addToast(lang === 'zh' ? '网络错误' : 'Network Error', String(err), 'error');
+    } finally {
+      setIsLoadingPasscode(false);
+    }
+  };
+
+  // 随机生成 4 位易读数字临时口令
+  const handleGenerateRandomPasscode = () => {
+    const pin = Math.floor(1000 + Math.random() * 9000).toString();
+    const exp = calculateExpiresAt(passcodeDuration);
+    handleSavePasscode(pin, exp);
+  };
+
+  // 清除临时密码
+  const handleClearPasscode = () => {
+    handleSavePasscode(null, null);
+  };
+
+  // 复制密码
+  const handleCopyPasscode = () => {
+    if (!passcode) return;
+    navigator.clipboard.writeText(passcode);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+    addToast(
+      lang === 'zh' ? '已复制临时密码' : 'Copied Passcode',
+      lang === 'zh' ? `密码 [${passcode}] 已复制到剪贴板` : `Passcode [${passcode}] copied to clipboard`,
+      'info',
+    );
+  };
+
+  // 有效期与剩余时间计算
+  const isPasscodeExpired = Boolean(passcode && passcodeExpiresAt && currentTime > passcodeExpiresAt);
+  const remainingSeconds =
+    passcodeExpiresAt && !isPasscodeExpired ? Math.max(0, Math.floor((passcodeExpiresAt - currentTime) / 1000)) : 0;
+
+  const formatRemainingTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    if (m >= 60) {
+      const h = Math.floor(m / 60);
+      const remM = m % 60;
+      return `${h}小时${remM}分`;
+    }
+    return `${m}分${s}秒`;
+  };
 
   // Pre-flight preparation checklists
   const [checklist, setChecklist] = useState<Record<string, boolean>>({
@@ -402,30 +539,228 @@ export function PreClassReadyView({
               />
             </div>
 
-            {/* Dynamic Anti-Proxy OTP Checkin Banner */}
-            <div className="p-2.5 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-800/40 flex items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                  <KeyRound size={16} />
+            {/* Class Temporary Passcode Card (班级上课临时密码设计) */}
+            <div className="p-3 rounded-2xl bg-gradient-to-r from-indigo-50/80 to-purple-50/60 dark:from-indigo-950/30 dark:to-purple-950/20 border border-indigo-200/80 dark:border-indigo-800/50 flex flex-col gap-2.5 text-xs shadow-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="p-1.5 rounded-xl bg-indigo-600 text-white shadow-xs">
+                    <KeyRound size={16} />
+                  </div>
+                  <div>
+                    <div className="font-black text-main flex items-center gap-2">
+                      <span>{lang === 'zh' ? '班级上课临时密码' : 'Class Temporary Passcode'}</span>
+                      {passcode ? (
+                        isPasscodeExpired ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                            {lang === 'zh' ? '已过期' : 'Expired'}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            {passcodeExpiresAt
+                              ? lang === 'zh'
+                                ? `有效 (剩 ${formatRemainingTime(remainingSeconds)})`
+                                : `Active (${formatRemainingTime(remainingSeconds)} left)`
+                              : lang === 'zh'
+                                ? '长期有效'
+                                : 'Permanent'}
+                          </span>
+                        )
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-800 text-muted">
+                          {lang === 'zh' ? '未设定' : 'Not set'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-muted">
+                      {lang === 'zh'
+                        ? '设置后所在班级学生可凭此临时密码或个人密码登录系统'
+                        : 'Students can login using this passcode or their personal passwords.'}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-bold text-main flex items-center gap-1.5">
-                    <span>{lang === 'zh' ? '防代签动态签到码' : 'Dynamic Check-in OTP'}</span>
-                    <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono font-bold">
-                      ({codeCountdown}s 后滚动)
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-muted">
-                    {lang === 'zh' ? '学生端在就绪屏输入该验证码或扫码即可秒就绪' : 'Students input code or scan to check in'}
-                  </div>
+
+                {/* 临时密码主展示与操作区 */}
+                <div className="flex items-center gap-2">
+                  {passcode && !isEditingPasscode ? (
+                    <div className="flex items-center gap-1.5">
+                      <div
+                        className={`px-3 py-1 rounded-xl font-mono text-base font-black tracking-widest border shadow-2xs select-all ${
+                          isPasscodeExpired
+                            ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-700/60 line-through'
+                            : 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 border-indigo-300 dark:border-indigo-700'
+                        }`}
+                        title={lang === 'zh' ? '当前班级上课临时密码' : 'Active class temporary passcode'}
+                      >
+                        {passcode}
+                      </div>
+
+                      {/* 复制按钮 */}
+                      <button
+                        type="button"
+                        onClick={handleCopyPasscode}
+                        disabled={isLoadingPasscode}
+                        className="p-1.5 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-main transition-colors cursor-pointer"
+                        title={lang === 'zh' ? '复制临时密码' : 'Copy passcode'}
+                      >
+                        {isCopied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                      </button>
+
+                      {/* 修改按钮 */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomPasscodeInput(passcode);
+                          setIsEditingPasscode(true);
+                        }}
+                        disabled={isLoadingPasscode}
+                        className="p-1.5 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-main transition-colors cursor-pointer"
+                        title={lang === 'zh' ? '编辑临时密码' : 'Edit passcode'}
+                      >
+                        <Edit2 size={14} />
+                      </button>
+
+                      {/* 清除按钮 */}
+                      <button
+                        type="button"
+                        onClick={handleClearPasscode}
+                        disabled={isLoadingPasscode}
+                        className="p-1.5 rounded-lg bg-surface hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-theme hover:border-rose-300 text-muted hover:text-rose-600 transition-colors cursor-pointer"
+                        title={lang === 'zh' ? '清除临时密码（恢复仅个人密码登录）' : 'Clear temporary passcode'}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {/* 随机生成或编辑输入 */}
+                  {isEditingPasscode ? (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={customPasscodeInput}
+                        onChange={(e) => setCustomPasscodeInput(e.target.value)}
+                        placeholder={lang === 'zh' ? '输入自定义密码' : 'Passcode'}
+                        className="w-24 px-2 py-1 text-xs font-mono font-bold bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-lg text-main outline-none focus:ring-1 focus:ring-indigo-500"
+                        maxLength={12}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!customPasscodeInput.trim()) {
+                            handleClearPasscode();
+                          } else {
+                            const exp = calculateExpiresAt(passcodeDuration);
+                            handleSavePasscode(customPasscodeInput.trim(), exp);
+                          }
+                        }}
+                        disabled={isLoadingPasscode}
+                        className="px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                      >
+                        <Save size={12} />
+                        <span>{lang === 'zh' ? '保存' : 'Save'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingPasscode(false)}
+                        className="p-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-muted cursor-pointer"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : !passcode ? (
+                    <button
+                      type="button"
+                      onClick={handleGenerateRandomPasscode}
+                      disabled={isLoadingPasscode || !selectedClassId}
+                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 cursor-pointer transition-all disabled:opacity-50"
+                    >
+                      <Sparkles size={13} />
+                      <span>{lang === 'zh' ? '随机生成密码' : 'Generate Passcode'}</span>
+                    </button>
+                  ) : null}
+
+                  {/* 重新生成按钮（已有密码时） */}
+                  {passcode && !isEditingPasscode && (
+                    <button
+                      type="button"
+                      onClick={handleGenerateRandomPasscode}
+                      disabled={isLoadingPasscode}
+                      className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition-colors cursor-pointer"
+                      title={lang === 'zh' ? '重新随机生成密码' : 'Regenerate random passcode'}
+                    >
+                      <RotateCcw size={14} className={isLoadingPasscode ? 'animate-spin' : ''} />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="px-3 py-1 bg-white dark:bg-slate-900 border-2 border-indigo-500 rounded-lg text-lg font-black font-mono text-indigo-600 dark:text-indigo-400 tracking-widest shadow-2xs">
-                  {dynamicCode}
+              {/* 第二行：有效期配置与第三方插件扩展插槽 */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-indigo-100 dark:border-indigo-900/40 text-[11px]">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted flex items-center gap-1">
+                    <Timer size={12} />
+                    <span>{lang === 'zh' ? '有效期限:' : 'Validity:'}</span>
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {(
+                      [
+                        { id: '45m', label: lang === 'zh' ? '45分钟' : '45m' },
+                        { id: '2h', label: lang === 'zh' ? '2小时' : '2h' },
+                        { id: 'today', label: lang === 'zh' ? '今日' : 'Today' },
+                        { id: 'permanent', label: lang === 'zh' ? '长期' : 'Permanent' },
+                      ] as const
+                    ).map((dur) => (
+                      <button
+                        key={dur.id}
+                        type="button"
+                        onClick={() => {
+                          setPasscodeDuration(dur.id);
+                          if (passcode && !isEditingPasscode) {
+                            const newExp = calculateExpiresAt(dur.id);
+                            handleSavePasscode(passcode, newExp);
+                          }
+                        }}
+                        className={`px-2 py-0.5 rounded-md font-medium cursor-pointer transition-colors ${
+                          passcodeDuration === dur.id
+                            ? 'bg-indigo-600 text-white font-bold'
+                            : 'bg-surface hover:bg-surface-secondary border border-theme text-muted'
+                        }`}
+                      >
+                        {dur.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 第三方插件操作按钮扩展槽 */}
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <ExtensionPointRenderer
+                    slot="classroom.preclass.passcode_action"
+                    slotProps={{
+                      classId: selectedClassId,
+                      className,
+                      classPasscode: passcode,
+                      expiresAt: passcodeExpiresAt,
+                      isExpired: isPasscodeExpired,
+                      onRefresh: fetchPasscodeInfo,
+                    }}
+                  />
                 </div>
               </div>
+
+              {/* 第三方插件卡片附加组件扩展槽 */}
+              <ExtensionPointRenderer
+                slot="classroom.preclass.passcode_addon"
+                slotProps={{
+                  classId: selectedClassId,
+                  className,
+                  classPasscode: passcode,
+                  expiresAt: passcodeExpiresAt,
+                  isExpired: isPasscodeExpired,
+                  onRefresh: fetchPasscodeInfo,
+                }}
+              />
             </div>
 
             {/* Students Table / Grid */}

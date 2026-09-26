@@ -211,6 +211,23 @@ export interface PeerReviewBadgeConfig {
   points?: number;
 }
 
+/** A contribution to the classroom.preclass.passcode_action slot. */
+export interface PreclassPasscodeActionConfig {
+  id: string;
+  label: string;
+  icon?: string;
+  order?: number;
+  command?: string;
+}
+
+/** A contribution to the classroom.preclass.passcode_addon slot. */
+export interface PreclassPasscodeAddonConfig {
+  id: string;
+  title: string;
+  description?: string;
+  order?: number;
+}
+
 /** Union of all contribution config shapes, keyed by slot name. */
 export type ContributionConfig =
   | ClassroomToolConfig
@@ -232,7 +249,9 @@ export type ContributionConfig =
   | CanvasWidgetConfig
   | BarometerMetricConfig
   | PeerReviewRubricConfig
-  | PeerReviewBadgeConfig;
+  | PeerReviewBadgeConfig
+  | PreclassPasscodeActionConfig
+  | PreclassPasscodeAddonConfig;
 
 
 /** A human-readable summary of what a plugin contributes. */

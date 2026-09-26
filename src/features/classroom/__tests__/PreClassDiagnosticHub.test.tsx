@@ -199,9 +199,9 @@ describe('PreClassDiagnosticHub & Pre-Class Enhancements', () => {
         />,
       );
 
-      // Verify dynamic OTP banner
-      expect(screen.getByText('防代签动态签到码')).toBeDefined();
-      expect(screen.getByText(/后滚动/)).toBeDefined();
+      // Verify temporary class passcode card
+      expect(screen.getByText('班级上课临时密码')).toBeDefined();
+      expect(screen.getByText(/设置后所在班级学生可凭此临时密码或个人密码登录系统/)).toBeDefined();
 
       // Verify environmental healthcheck trigger button
       const healthBtn = screen.getByText('环境一键飞检');

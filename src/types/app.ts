@@ -58,6 +58,7 @@ export type ClassType = {
   name: string;
   description: string;
   class_passcode?: string | null;
+  class_passcode_expires_at?: number | null;
   created_at: number;
   /** 班级学生数（来自 class_students�? */
   student_count?: number;

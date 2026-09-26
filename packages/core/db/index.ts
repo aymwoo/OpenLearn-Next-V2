@@ -153,6 +153,7 @@ db.exec(`
     name TEXT NOT NULL,
     description TEXT,
     class_passcode TEXT,
+    class_passcode_expires_at INTEGER,
     created_at INTEGER NOT NULL
   );
 
@@ -557,6 +558,12 @@ try {
 
 try {
   db.prepare('ALTER TABLE classes ADD COLUMN class_passcode TEXT').run();
+} catch (e) {
+  // column already exists
+}
+
+try {
+  db.prepare('ALTER TABLE classes ADD COLUMN class_passcode_expires_at INTEGER').run();
 } catch (e) {
   // column already exists
 }

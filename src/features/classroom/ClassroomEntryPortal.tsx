@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowRight,
   BookOpen,
+  Check,
   CheckCircle2,
   Clock,
   Cpu,
@@ -565,30 +566,43 @@ function ClassroomDeck({
         </span>
       }
     >
-      <div className="flex flex-col gap-3.5">
+      <div className="flex flex-col gap-2.5">
         {classes.length === 0 ? (
-          <p className="text-xs text-muted italic py-4 text-center">
+          <p className="text-xs text-muted italic py-3 text-center">
             {zh ? '暂无班级，请先在「班级管理」中创建' : 'No classes yet'}
           </p>
         ) : (
           <>
-            <label className="relative block">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
-              <input
-                type="search"
-                aria-label={zh ? '搜索班级' : 'Search classes'}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={zh ? '搜索全部班级...' : 'Search all classes...'}
-                className="w-full pl-8 pr-3 py-2 bg-surface-secondary border border-theme rounded-xl text-xs text-main placeholder-muted outline-none focus:border-primary-theme focus:ring-1 focus:ring-primary-theme"
-              />
-            </label>
+            {/* 紧凑工具栏：统计与快速检索 */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-muted">
+                <Users size={13} className="text-primary-theme shrink-0" />
+                <span>
+                  {zh ? `共 ${classes.length} 个班级` : `${classes.length} classes total`}
+                  {query.trim() && (zh ? ` · 筛选出 ${visibleClasses.length} 个` : ` · ${visibleClasses.length} matched`)}
+                </span>
+              </div>
+              {classes.length > 2 && (
+                <label className="relative block w-44 sm:w-52 shrink-0">
+                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+                  <input
+                    type="search"
+                    aria-label={zh ? '搜索班级' : 'Search classes'}
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={zh ? '筛选班级...' : 'Filter classes...'}
+                    className="w-full pl-7 pr-2.5 py-1 bg-surface-secondary border border-theme rounded-lg text-xs text-main placeholder-muted outline-none focus:border-primary-theme focus:ring-1 focus:ring-primary-theme transition-all"
+                  />
+                </label>
+              )}
+            </div>
+
             {visibleClasses.length === 0 ? (
-              <p className="text-xs text-muted italic py-4 text-center">
+              <p className="text-xs text-muted italic py-3 text-center">
                 {zh ? '没有匹配的班级' : 'No matching classes'}
               </p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-h-48 overflow-y-auto">
                 {visibleClasses.map((klass) => {
                   const active = klass.id === selectedClassId;
                   return (
@@ -597,16 +611,34 @@ function ClassroomDeck({
                       type="button"
                       onClick={() => onSelectClass(klass.id)}
                       aria-pressed={active}
-                      className={`text-left rounded-xl border p-3 transition-all cursor-pointer flex flex-col gap-1.5 ${
+                      className={`group text-left rounded-xl border px-3 py-2 transition-all cursor-pointer flex items-center justify-between gap-2 min-w-0 ${
                         active
-                          ? 'border-primary-theme bg-primary-theme-light shadow-3xs'
+                          ? 'border-primary-theme bg-primary-theme-light shadow-3xs ring-1 ring-primary-theme/30'
                           : 'border-theme bg-surface hover:border-primary-theme hover:bg-surface-secondary'
                       }`}
                     >
-                      <span className="font-bold text-xs text-main truncate">{klass.name}</span>
-                      <span className="text-2xs text-muted">
-                        {active ? (zh ? '当前授课班级' : 'Current class') : zh ? '点击选择' : 'Click to select'}
-                      </span>
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span
+                          className={`w-2 h-2 rounded-full shrink-0 ${
+                            active ? 'bg-primary-theme' : 'bg-muted/40 group-hover:bg-primary-theme/60'
+                          }`}
+                        />
+                        <span className="font-bold text-xs text-main truncate">{klass.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {klass.student_count !== undefined && (
+                          <span className="text-2xs font-mono text-muted">
+                            {klass.student_count}
+                            {zh ? '人' : ''}
+                          </span>
+                        )}
+                        {active && (
+                          <span className="inline-flex items-center gap-0.5 text-2xs font-bold text-primary-theme">
+                            <Check size={12} className="stroke-[3]" />
+                            <span>{zh ? '已选' : 'Selected'}</span>
+                          </span>
+                        )}
+                      </div>
                     </button>
                   );
                 })}

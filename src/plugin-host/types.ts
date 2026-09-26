@@ -132,7 +132,10 @@ export type ExtensionSlot =
   | 'classroom.seating.summary' // 座位图底部汇总区追加统计卡片
   // ── 白板自动保存扩展槽位 ──────────────────────────────────────────────
   | 'whiteboard.autosave.status' // 白板自动保存状态指示区扩展（插件可展示同步状态、第三方云备份等）
-  | 'whiteboard.autosave.action'; // 白板自动保存附加操作区扩展（如立即同步到外部网盘、版本快照打标）
+  | 'whiteboard.autosave.action' // 白板自动保存附加操作区扩展（如立即同步到外部网盘、版本快照打标）
+  // ── 互动课堂课前班级临时密码扩展槽位 ──────────────────────────────────────
+  | 'classroom.preclass.passcode_action' // 临时密码操作工具栏扩展按钮（如一键推送电子班牌、微校通知等）
+  | 'classroom.preclass.passcode_addon'; // 临时密码卡片附加面板（如第三方考勤门禁状态集成等）
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。

@@ -10,7 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-### Features
+- **互动课堂课前就绪「班级上课临时密码」与学生双轨登录鉴权**：
+  - **班级临时密码替换动态签到码（`src/features/classroom/PreClassReadyView.tsx`）**：将原本纯前端 5 秒滚动的“防代签动态签到码”重构为真实的班级上课临时密码面板。支持大号口令展示、一键复制、🎲 随机生成 4 位高可读数字密码、⏱️ 有效期快捷切换（45分钟 / 2小时 / 今日有效 / 长期有效）、✏️ 自定义口令输入以及 🗑️ 一键清除口令；
+  - **双轨登录鉴权体系（`server/routes/roster.ts` & `packages/core/db/index.ts`）**：`classes` 表增加 `class_passcode_expires_at` 字段及自动迁移支持；`POST /api/auth/login` 支持学生双轨登录（优先校验个人自设密码，未命中则验证所属班级上课临时密码及有效期）；严格隔离非本班学生访问；
+  - **预留第三方插件扩展槽与数据获取接口（UI Slots & REST API）**：注册 `classroom.preclass.passcode_action` 与 `classroom.preclass.passcode_addon` 插件扩展槽；新增 `GET /api/classes/:id/passcode` 接口供第三方考勤机、电子班牌及外部系统获取实时口令与剩余时效。
+
+- **互动课堂启动门户「挑选授课班级」紧凑化与极简 UI 优化（`src/features/classroom/ClassroomEntryPortal.tsx`）**：
+  - **高屏效微卡片胶囊**：重构班级大卡片为紧凑胶囊，去除多行冗余提示，卡片高度缩减近 45%（压缩至 36~38px），单行融合圆点状态、班级名称、人数统计与精致的 `✓ 已选` 标识；
+  - **多列自适应网格与一体化工具栏**：采用 `grid-cols-2 sm:grid-cols-3 lg:grid-cols-4` 自适应网格，搭配内嵌式紧凑搜索栏与班级数统计，大幅降低纵向空间浪费，优化同屏座位图与模式选择的排版体验。
 
 - **课程编辑器环节参数视觉增强与白板组件窗口化管控**：
   - **环节参数高亮**：优化课程编辑器中环节参数配置区域的视觉焦点与高亮动画引导，帮助教师在编辑教案环节时快速定位配置项；
