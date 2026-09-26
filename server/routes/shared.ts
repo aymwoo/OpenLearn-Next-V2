@@ -192,7 +192,7 @@ window.__LMS_COURSEWARE__ = {
   return html;
 }
 export const generateStudentNumber = (db: any): string => {
-  const rows = db.prepare('SELECT student_number FROM students WHERE student_number LIKE "S%"').all() as {
+  const rows = db.prepare('SELECT student_number FROM students WHERE student_number LIKE ?').all('S%') as {
     student_number: string;
   }[];
   let maxSeq = 0;

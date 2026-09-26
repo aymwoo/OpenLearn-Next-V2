@@ -1157,7 +1157,10 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
   app.post('/api/classes/:id/students', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
-      const { studentId } = req.body;
+      const studentId = req.body.studentId || req.body.student_id;
+      if (!studentId) {
+        return res.status(400).json({ error: 'Missing studentId' });
+      }
       kernelContainer.db
         .prepare('INSERT OR IGNORE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)')
         .run(req.params.id, studentId, Date.now());

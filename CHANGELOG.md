@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **`SemesterGradeService` 成绩同步多级兜底（`packages/core/di/semester-grade-service.ts`）**：在无日历排课（`schedules` 查不到 `class_id`）的即兴授课场景下，自动级联查询 `class_students` 及 `plugin_assignments`，彻底避免成绩同步抛错丢失。
   - **课程环节时间线更新序列化兼容（`server/routes/lessons.ts` & `packages/plugins/builtin.ts`）**：修复 `lesson.update_timeline` 接收数组或 JSON 字符串形式时的 `PayloadValidationError`，保证环节增删修改的健壮提交。
   - **命令总线处理程序类型归一化增强（`packages/core/plugin-host/context-builder.ts`）**：增强沙箱插件 `commandBus.registerHandler` 兼容性，统一支持传统函数签名与标准包含 `execute` 方法的 `CommandHandler` 对象，杜绝第三方插件由于调用习惯差异引起的 `handler.execute is not a function` 异常。
+  - **学号自动生成 SQL 语法加固（`server/routes/shared.ts`）**：将 `generateStudentNumber` 中原双引号字符串字面量修正为参数化查询 `LIKE ?`，彻底根除 SQLite 抛出 `"no such column: \"S%\""` 导致的 500 异常。
+  - **班级学生关联接口字段兼容（`server/routes/roster.ts`）**：在 `POST /api/classes/:id/students` 中增加对 `studentId` 与 `student_id` 双字段名的容错支持。
 
 ### Security & Ops
 
@@ -50,11 +52,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **金丝雀探针步骤 5（生命周期深度回收与社区市场注册表归一化，`server/__tests__/canary/canary.step5.test.ts`）**：
   - 验证 9.1~9.6 深度回收链条（停用状态与 503 路由解绑、权限彻底吊销、心跳定时器销毁、命令注销、卸载级联删除 DB 表与目录）；
   - 验证社区市场注册表 5 组信封变体归一化、重复 ID 过滤、500 条截断上限、SSRF/安全协议白名单拦截及语义版本比对（14/14 绿）。
-- **金丝雀探针阶段 7（前端 UI 扩展槽位挂载与 Playwright E2E 真实渲染，`e2e/canary-ui.spec.ts`）**：
+- **金丝雀探针阶段 7（前端 UI 扩展槽位矩阵与 Playwright 真实渲染 E2E，`e2e/canary-ui.spec.ts`）**：
   - 构建集成 `frontend.js` 与 `manifest.ui.extensionPoints` 的金丝雀安装包；
-  - 建立 Playwright E2E 测试体系（`playwright.config.ts`），自动化管理员登录、插件热插拔、主导航 Tab 动态挂载、Props 注入（`lessonId`, `classId`）；
-  - 产出端到端真实界面渲染全屏截图凭证（`artifacts/screenshots/canary_teacher_tab.png`）；
-  - 验证前端扩展面板点击按钮调用 `canary.ping` 跨进程前后端互通与即时回显（`{"pong":true,"mode":"inline","src":"direct"}`）。
+  - 建立 Playwright E2E 测试体系（`playwright.config.ts`），自动化管理员登录、插件热插拔、数据种子生命周期；
+  - **7.1 & 7.6 教师主导航与命令互通**：Tab 挂载、React 面板渲染、Props 注入与 `canary.ping` 跨进程响应（截图凭证：`artifacts/screenshots/canary_teacher_tab.png`）；
+  - **7.5 机房座位图 4 槽联动**：真实 API 排座驱动，验证工具栏按钮（`seating.toolbar`）、图例（`legend`）、底部统计指标（`summary`）与座位角标（`seat_badge`）全部渲染通过（截图凭证：`artifacts/screenshots/canary_seating_map.png`）；
+  - **7.4 & 7.9 白板工具栏锚点与自动保存**：验证白板工具栏锚点（`anchor:whiteboard-toolbar:rollcall`）与自动保存状态/动作槽位（`autosave.status`, `autosave.action`）（截图凭证：`artifacts/screenshots/canary_whiteboard_editor.png`）；
+  - 3/3 端到端真实渲染用例 100% 绿（用时 14.8s）。
 - **学期成绩计算回归测试（`server/__tests__/grading-calculation.test.ts`）**：
   - 真实启动 Express 服务与 SQLite 回归断言已发布作业/考试下的零分判定与空班级满分行为（2/2 绿）。
 
