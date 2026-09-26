@@ -7,18 +7,10 @@ import {
   Sparkles,
   Send,
   Bell,
-  Shield,
-  ShieldAlert,
   ShieldCheck,
-  ExternalLink,
   ListChecks,
-  AlertCircle,
   Activity,
   Layers,
-  FileText,
-  Volume2,
-  HelpCircle,
-  QrCode,
   KeyRound,
   Copy,
   Check,
@@ -63,12 +55,12 @@ export function PreClassReadyView({
   onlineStudentIds,
   timelineSegments,
   lang,
-  isClassLocked,
-  onToggleClassLock,
+  isClassLocked: _isClassLocked,
+  onToggleClassLock: _onToggleClassLock,
   onStartClass,
   onPingStudent,
-  onOpenStudentWindow,
-  isStudentWindowOpen,
+  onOpenStudentWindow: _onOpenStudentWindow,
+  isStudentWindowOpen: _isStudentWindowOpen,
   addToast,
   onBroadcastNotice,
   onUpdateClassPasscode,
@@ -275,11 +267,14 @@ export function PreClassReadyView({
 
   // Metrics
   const totalCount = students.length;
-  const onlineCount = students.filter((s) => onlineStudentIds.includes(s.id)).length;
   const readyCount = students.filter((s) => onlineStudentIds.includes(s.id) || markedPresentIds.has(s.id)).length;
   const readyPercent = totalCount > 0 ? Math.round((readyCount / totalCount) * 100) : 0;
-  const totalDuration = timelineSegments.reduce((acc, cur) => acc + (cur.duration || 300), 0);
-  const durationMins = Math.round(totalDuration / 60);
+  const totalDuration = timelineSegments.reduce((acc, cur) => {
+    const raw = cur?.duration;
+    const num = typeof raw === 'number' ? raw : parseInt(raw, 10);
+    return acc + (!isNaN(num) && num > 0 ? num : 300);
+  }, 0);
+  const durationMins = isNaN(totalDuration) || totalDuration <= 0 ? 45 : Math.round(totalDuration / 60);
 
   return (
     <div id="pre-class-ready-view" className="flex-1 flex flex-col min-h-0 bg-surface-secondary/20 p-4 gap-4 overflow-y-auto">
@@ -315,14 +310,14 @@ export function PreClassReadyView({
           </div>
         </div>
 
-        {/* Action Controls */}
+        {/* Action Controls: Focused Hero Actions (No duplicated global controls) */}
         <div className="flex items-center gap-2.5 flex-wrap w-full md:w-auto justify-end">
           {/* Pre-flight Environmental Healthcheck Button */}
           <button
             id="pre-class-healthcheck-btn"
             type="button"
             onClick={() => setIsHealthModalOpen(true)}
-            className="px-3 py-2 text-xs font-bold rounded-xl border border-teal-500/30 bg-teal-50/60 dark:bg-teal-950/20 text-teal-700 dark:text-teal-300 hover:bg-teal-100/60 dark:hover:bg-teal-900/40 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+            className="px-3.5 py-2.5 text-xs font-bold rounded-xl border border-teal-500/30 bg-teal-50/60 dark:bg-teal-950/20 text-teal-700 dark:text-teal-300 hover:bg-teal-100/60 dark:hover:bg-teal-900/40 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
             title={lang === 'zh' ? '一键自检局域网延迟、课件与沙箱健康度' : 'Environmental Healthcheck'}
           >
             <ShieldCheck size={14} className="text-teal-600 dark:text-teal-400" />
@@ -330,42 +325,15 @@ export function PreClassReadyView({
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           </button>
 
-          <button
-            id="pre-class-open-student-tab-btn"
-            type="button"
-            onClick={onOpenStudentWindow}
-            className={`px-3 py-2 text-xs font-bold rounded-xl border border-theme transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs hover:bg-surface-secondary ${
-              isStudentWindowOpen ? 'text-emerald-600 border-emerald-500/40 bg-emerald-50/50' : 'text-main'
-            }`}
-          >
-            <ExternalLink size={13} />
-            <span>{isStudentWindowOpen ? (lang === 'zh' ? '学生端已联动' : 'Student Linked') : (lang === 'zh' ? '学生视角联动Tab' : 'Student Tab')}</span>
-          </button>
-
-          <button
-            id="pre-class-toggle-lock-btn"
-            type="button"
-            onClick={onToggleClassLock}
-            disabled={!selectedClassId}
-            className={`px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs disabled:opacity-50 ${
-              isClassLocked
-                ? 'bg-rose-500/10 text-rose-600 border-rose-500/30 hover:bg-rose-500/20'
-                : 'bg-surface-secondary text-muted border-theme hover:text-main'
-            }`}
-          >
-            {isClassLocked ? <ShieldAlert size={13} className="text-rose-500" /> : <Shield size={13} />}
-            <span>{isClassLocked ? (lang === 'zh' ? '全班专注已锁定' : 'Focus Locked') : (lang === 'zh' ? '预设专注锁定' : 'Preset Lock')}</span>
-          </button>
-
-          {/* Primary Action Button: Enter In-Class Teaching */}
+          {/* Primary Action Button: Enter In-Class Teaching (Hero CTA) */}
           <button
             id="pre-class-start-teaching-btn"
             type="button"
             onClick={onStartClass}
             className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-2 shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
           >
-            <Play size={14} className="fill-white" />
-            <span>{lang === 'zh' ? '一键开启课中授课 (进入白板)' : 'Start In-Class Teaching (Launch Whiteboard)'}</span>
+            <Play size={14} className="fill-current" />
+            <span>{lang === 'zh' ? '一键开启课中授课 (进入白板)' : 'Start Live Teaching (Launch Whiteboard)'}</span>
           </button>
         </div>
       </div>

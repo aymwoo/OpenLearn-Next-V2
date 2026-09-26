@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **双轨登录鉴权体系（`server/routes/roster.ts` & `packages/core/db/index.ts`）**：`classes` 表增加 `class_passcode_expires_at` 字段及自动迁移支持；`POST /api/auth/login` 支持学生双轨登录（优先校验个人自设密码，未命中则验证所属班级上课临时密码及有效期）；严格隔离非本班学生访问；
   - **预留第三方插件扩展槽与数据获取接口（UI Slots & REST API）**：注册 `classroom.preclass.passcode_action` 与 `classroom.preclass.passcode_addon` 插件扩展槽；新增 `GET /api/classes/:id/passcode` 接口供第三方考勤机、电子班牌及外部系统获取实时口令与剩余时效。
 
+- **互动课堂课前就绪界面去重与预计时长健壮性优化（`src/features/classroom/PreClassReadyView.tsx`）**：
+  - **精简重复全局按钮**：移除卡片 Header Banner 中与全局顶栏功能完全重复的「学生视角联动Tab」与「全班专注已锁定」两个次级按钮，仅聚焦「🛡️ 环境一键飞检」与突出的主行动点「▶ 一键开启课中授课 (进入白板)」，形成清晰、专业、聚焦的视觉引导层次；
+  - **预计时长 NaN 缺陷修复**：在环节时间线时长累计计算中加入对未设置/非数字 durations 的整型安全转换与 45 分钟兜底逻辑，彻底根治未指定课件环节时长时出现的 `预计授课时长: NaN 分钟` 异常。
+
 - **互动课堂控制中心顶栏操作按钮纯图标化与单行排布优化（`src/components/LiveClassroomView.tsx`）**：
   - **纯图标微卡片改造**：将智能授课控制中心顶栏右侧 7 个扩展流程按钮（告警、AI 预测、小组拼板、多屏对比、家校通知、课堂宏、硬件网关）彻底改造为纯图标形式（Icon-only），每个按钮尺寸精简为 `w-8 h-8` 紧凑微卡片，总占用宽度由原本 ~600px 骤降至 ~230px（缩减超过 60%）；
   - **杜绝折叠换行与断层**：即使在笔记本小屏幕、浏览器分屏或侧边栏展开时，右侧工具按钮亦可与左侧课节/班级选择框和全班锁定控制保持平整单行排布，彻底杜绝换行折叠；完整保留 Hover 气泡提示（`title`）与无障碍属性（`aria-label`）。
