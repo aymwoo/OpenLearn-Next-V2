@@ -243,6 +243,14 @@ export interface IAIService {
    * @returns The trimmed response text.
    */
   generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string>;
+
+  /**
+   * 注册插件 AI 上下文切片提供者（P2: ai.context.provider）。
+   * fn 为服务端闭包（Inline 插件直接传函数），Agent 对话时按 lessonId 调用。
+   * 仅 Inline 插件可用（Worker 序列化边界无法传递函数）。
+   */
+  registerAIContextProvider?(id: string, fn: (lessonId: string | null) => string | null): void;
+  unregisterAIContextProvider?(id: string): void;
 }
 
 // ── Token instances (D-13) ────────────────────────────────────────────────

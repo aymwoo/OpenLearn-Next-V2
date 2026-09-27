@@ -20,6 +20,7 @@
 import type BetterSqlite3 from 'better-sqlite3';
 import type { IAIService } from './interfaces.js';
 import { AIProviderGateway } from '../ai/provider/provider-gateway.js';
+
 import { AIEventBus } from '../ai/event/ai-event-bus.js';
 import { AIProviderConfig } from '../ai/types/index.js';
 import { decryptApiKey, looksLikeCiphertext } from './api-key-crypto.js';
@@ -29,6 +30,35 @@ export class AIService implements IAIService {
 
   constructor(private db: BetterSqlite3.Database) {
     this.gateway = new AIProviderGateway(new AIEventBus());
+  }
+
+  /**
+   * 注册插件 AI 上下文切片提供者（P2: ai.context.provider）。
+   * fn 为服务端闭包（Inline 插件直接传函数），Agent 对话时按 lessonId 调用。
+   * 注册表真源在 server/ai-context-registry.ts，kernel AIService 委托写入。
+   */
+  private _contextDelegates: {
+    register?: (id: string, fn: (lessonId: string | null) => string | null) => void;
+    unregister?: (id: string) => void;
+  } = {};
+
+  /** 由 server 启动时接线（server/ai-context-registry.ts 的注册表为真源） */
+  bindContextRegistry(delegates: {
+    register: (id: string, fn: (lessonId: string | null) => string | null) => void;
+    unregister: (id: string) => void;
+  }): void {
+    this._contextDelegates = delegates;
+  }
+
+  registerAIContextProvider(id: string, fn: (lessonId: string | null) => string | null): void {
+    if (!this._contextDelegates.register) {
+      throw new Error('[AIService] AI context registry not bound (server boot required)');
+    }
+    this._contextDelegates.register(id, fn);
+  }
+
+  unregisterAIContextProvider(id: string): void {
+    this._contextDelegates.unregister?.(id);
   }
 
   async generateText(

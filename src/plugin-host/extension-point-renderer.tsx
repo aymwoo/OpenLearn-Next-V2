@@ -52,6 +52,56 @@ interface ErrorBoundaryProps {
   fallback?: React.ReactNode;
   /** React 在调用方通过 key 区分多个错误边界实例（JSX 属性，运行时由 React 消费） */
   key?: React.Key;
+  /** P2 熔断器：所属插件 ID（存在时启用连续崩溃计数与自动停用） */
+  pluginId?: string;
+  /** 熔断触发回调（达到阈值时调用一次 —— 宿主应停用插件并上报健康状态） */
+  onBreakerTrip?: (pluginId: string) => void;
+}
+
+// ── P2 插件前端熔断器 ────────────────────────────────────────────────
+// 同一插件连续崩溃达到阈值后自动停用（降级），防止坏插件反复崩溃拖垮宿主。
+// 窗口内成功渲染（hasError 复位）会清零计数。
+
+const CRASH_BREAKER_THRESHOLD = 3;
+const CRASH_BREAKER_WINDOW_MS = 5 * 60 * 1000;
+
+interface CrashRecord {
+  count: number;
+  lastAt: number;
+  blown: boolean;
+}
+
+/** pluginId → 熔断记录（模块级，跨渲染周期持久） */
+const pluginCrashRegistry = new Map<string, CrashRecord>();
+
+/** 记录一次插件前端崩溃；达到阈值返回 true（调用方应停用该插件） */
+function recordPluginCrash(pluginId: string): { shouldBreak: boolean; count: number } {
+  const now = Date.now();
+  const rec = pluginCrashRegistry.get(pluginId);
+  if (!rec || now - rec.lastAt > CRASH_BREAKER_WINDOW_MS) {
+    pluginCrashRegistry.set(pluginId, { count: 1, lastAt: now, blown: false });
+    return { shouldBreak: false, count: 1 };
+  }
+  rec.count += 1;
+  rec.lastAt = now;
+  const shouldBreak = rec.count >= CRASH_BREAKER_THRESHOLD;
+  if (shouldBreak) rec.blown = true;
+  return { shouldBreak, count: rec.count };
+}
+
+/** 渲染成功（子组件正常挂载）时清零该插件的连续崩溃计数 */
+function resetPluginCrash(pluginId: string): void {
+  pluginCrashRegistry.delete(pluginId);
+}
+
+/** 查询某插件是否已被熔断（停用降级中） */
+export function isPluginBlown(pluginId: string): boolean {
+  return pluginCrashRegistry.get(pluginId)?.blown ?? false;
+}
+
+/** 清除熔断状态（插件重激活/手动恢复时调用） */
+export function resetPluginBreaker(pluginId: string): void {
+  pluginCrashRegistry.delete(pluginId);
 }
 
 interface ErrorBoundaryState {
@@ -73,8 +123,31 @@ class ExtensionErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBo
     this.props = props;
   }
 
+  componentDidCatch(error: Error): void {
+    const pluginId = this.props.pluginId;
+    if (!pluginId) return;
+    const { shouldBreak, count } = recordPluginCrash(pluginId);
+    console.error(
+      `[ExtensionBreaker] Plugin "${pluginId}" frontend crash #${count}/${CRASH_BREAKER_THRESHOLD}` +
+        (shouldBreak ? ' — 达到熔断阈值，自动停用' : ''),
+      error?.message?.slice(0, 120),
+    );
+    if (shouldBreak) {
+      try {
+        this.props.onBreakerTrip?.(pluginId);
+      } catch (e) {
+        console.error('[ExtensionBreaker] breaker trip callback failed:', e);
+      }
+    }
+  }
+
   static getDerivedStateFromError(): ErrorBoundaryState {
     return { hasError: true };
+  }
+
+  componentDidMount(): void {
+    // 渲染成功清零连续崩溃计数（窗口语义：仅在连续失败时累积）
+    if (this.props.pluginId) resetPluginCrash(this.props.pluginId);
   }
 
   render() {
@@ -208,6 +281,8 @@ export function ExtensionPointRenderer({
   slotProps,
   placement,
 }: ExtensionPointRendererProps) {
+  // 熔断降级告警去重（每个组件实例只告警一次/插件）
+  const warnedPluginsRef = React.useRef<Set<string>>(new Set());
   // Hooks 顺序红线：全部无条件调用后再走早退分支（此前早退先于 hooks，
   // 触发 rules-of-hooks 存量违规）
   const host = useOptionalPluginHost();
@@ -267,6 +342,7 @@ export function ExtensionPointRenderer({
     return (
       <ExtensionErrorBoundary
         key={`${activeExt.pluginId}/${activeExt.id}`}
+        pluginId={activeExt.pluginId}
         fallback={<div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">扩展 Tab 加载失败</div>}
       >
         <Suspense fallback={<LoadingSkeleton />}>
@@ -317,9 +393,24 @@ export function ExtensionPointRenderer({
         if (slot === 'teacher.dashboard.widget' && visibility.get(ext.pluginId) === false) return null;
         if (!isReact && !isDOM) return null;
 
+        if (isPluginBlown(ext.pluginId)) {
+          if (!warnedPluginsRef.current.has(ext.pluginId)) {
+            warnedPluginsRef.current.add(ext.pluginId);
+            console.warn(
+              `[ExtensionBreaker] Plugin "${ext.pluginId}" 已熔断（连续崩溃 ≥3 次），跳过渲染。重新激活插件可恢复。`,
+            );
+          }
+          return null;
+        }
         return (
           <ExtensionErrorBoundary
             key={`${ext.pluginId}/${ext.id}`}
+            pluginId={ext.pluginId}
+            onBreakerTrip={(pid) => {
+              void host.deactivatePlugin(pid).catch((e) =>
+                console.error(`[ExtensionBreaker] auto-deactivate "${pid}" failed:`, e),
+              );
+            }}
             fallback={
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
                 <p>{lang === 'zh' ? '扩展组件加载失败' : 'Extension failed to load'}</p>

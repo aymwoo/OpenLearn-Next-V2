@@ -510,6 +510,13 @@ function wrapAI(aiService: IAIService): IAIService {
         }
       },
     ),
+    // P2: ai.context.provider —— 插件注册 AI 上下文切片（可选方法）
+    registerAIContextProvider: createSafeFunction((id: string, fn: (lessonId: string | null) => string | null) => {
+      return (aiService as any).registerAIContextProvider?.(id, fn);
+    }),
+    unregisterAIContextProvider: createSafeFunction((id: string) => {
+      return (aiService as any).unregisterAIContextProvider?.(id);
+    }),
   } as IAIService;
 }
 

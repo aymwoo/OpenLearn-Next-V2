@@ -31,6 +31,7 @@ import {
 } from './packages/core/di/interfaces.js';
 import { ClassroomRuntimeService } from './server/services/classroom-runtime-service.js';
 import { ClassroomFeedService, attachClassroomFeedService } from './server/services/classroom-feed-service.js';
+import { bindAIContextRegistry } from './server/ai-context-registry.js';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import helmet from 'helmet';
@@ -448,6 +449,11 @@ async function startServer() {
   // Extracted to server/realtime-bridge.ts so the monolith can be decomposed
   // without changing broadcast behavior. See server/__tests__/realtime-bridge.test.ts.
   setupRealtimeBridge({ eventBus: kernelContainer.eventBus, io, db: kernelContainer.db });
+
+  // P2: ai.context.provider —— 把插件上下文注册表委托给 kernel AIService
+  // （Inline 插件经 ctx.services.ai.registerAIContextProvider 注册的切片，
+  //   /agent/chat 组装 system instruction 时逐个收集）
+  bindAIContextRegistry(kernelContainer.aiService as any);
 
   setupPresence({
     io,

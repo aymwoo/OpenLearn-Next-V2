@@ -8,9 +8,14 @@
 import crypto from 'crypto';
 import { kernelContainer } from '../packages/core/kernel/index.js';
 import { lessonActiveSegments } from './shared-state.js';
+import { collectAIContextSlices } from './ai-context-registry.js';
 import type { AgentChatAttachment, AgentChatRequest, AgentToolExecution, StoredAIProvider } from './context.js';
 
-export const buildAgentSystemInstruction = (lang: 'zh' | 'en', currentLessonId?: string | null) => {
+export const buildAgentSystemInstruction = (
+  lang: 'zh' | 'en',
+  currentLessonId?: string | null,
+  pluginSlices?: string[],
+) => {
   let systemInstruction =
     lang === 'zh'
       ? '你是一个教育系统底层的 OS Agent。你需要理解老师的指令，并调用可用的工具（命令）去执行这些操作。如果老师让你创建一节课，请务必利用工具生成详细的初始课程内容。如果老师要求管理进程/任务，请使用 process.spawn, process.kill, process.list。如果需存储文件、素材或创建目录，请使用 vfs.* 并在需要时管理班级和学生。你支持通过 class_create 创建班级, student_create 创建学生, class_add_student 将学生加入班级。当老师要求从提供的数据（如CSV、JSON、Markdown或对话中）创建班级或学生时，请依次发出这些指令。如果上一阶段返回了创建成功的班级ID或学生ID，你需要在后续�? functionCall 中引用这些ID（例如：把刚创建的学生ID加入到刚创建的班级ID中）。通过往复的工具调用，你可以自动完成完整的流程�?'
@@ -18,6 +23,11 @@ export const buildAgentSystemInstruction = (lang: 'zh' | 'en', currentLessonId?:
 
   if (currentLessonId) {
     systemInstruction += `\n[Context] The current selected lesson ID is "${currentLessonId}". Use this ID if the teacher's instruction is about modifying or adding to the current lesson.\n\nAvailable tools (functions) can be used multiple times in sequence if needed.`;
+  }
+
+  // P2: ai.context.provider —— 插件注册的上下文切片（每个独立 try/catch，见 registry）
+  if (pluginSlices?.length) {
+    systemInstruction += '\n\n' + pluginSlices.join('\n\n');
   }
 
   return systemInstruction;
@@ -180,7 +190,11 @@ export const runGeminiAgentChat = async (request: AgentChatRequest) => {
 
 export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: AgentChatRequest) => {
   const { message, lang = 'zh', currentLessonId, attachments, callerRole, history } = request;
-  const systemInstruction = buildAgentSystemInstruction(lang, currentLessonId);
+  const systemInstruction = buildAgentSystemInstruction(
+    lang,
+    currentLessonId,
+    collectAIContextSlices(currentLessonId ?? null),
+  );
   const finalMessage = buildAgentFinalMessage(message, attachments);
   const tools = buildOpenAITools();
   const chatUrl = buildOpenAIChatUrl(provider.api_url);
