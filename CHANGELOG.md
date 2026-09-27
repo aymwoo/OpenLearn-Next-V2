@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-27
+
 - **课堂反馈情绪实时仪表盘与作业提交通知**：
   - **实时仪表盘（`src/features/classroom/PacingDashboardModal.tsx`）**：教师端顶栏「节奏晴雨表」现可点击打开全屏仪表盘——Recharts 环形饼图 + 四情绪（理解 💡 / 困惑 ❓ / 慢一点 🐇 / 快一点 🐢）进度条 + 中心「理解占比」健康度指标 + 基于聚合阈值的教学节奏建议（如「较多学生困惑，建议放慢并重新讲解」）；数据由 socket `classroom:pacing_updated` 实时驱动（服务端 5 分钟窗口聚合）。
   - **新增 SLOW（快一点/讲太慢）节奏信号**：服务端 pacing 白名单与聚合扩展为 4 信号；学生互动浮层新增 🐢「讲太慢」按钮（原有 🐇「讲太快」= 希望慢一点）。
