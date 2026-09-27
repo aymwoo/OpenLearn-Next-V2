@@ -20,6 +20,8 @@ export type AgentChatRequest = {
   attachments?: AgentChatAttachment[];
   providerId?: string | null;
   callerRole?: string;
+  /** P2: ai.agent.persona —— 选定的角色模板 id（面板下拉；空 = 默认助教） */
+  personaId?: string | null;
   /** Prior conversation turns (oldest first) used to give the agent memory. */
   history?: AgentChatTurn[];
 };

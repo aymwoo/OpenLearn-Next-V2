@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **P2 `ai.agent.persona` —— 插件可注册 AI Agent 角色模板**：
+  - 新增 `server/ai-persona-registry.ts` 注册表（kernel AIService 启动时 bind 委托，模式同 `ai.context.registry`），内置四个角色模板：`socratic_questioner`（苏格拉底追问者）、`debate_opponent`（反方辩论助手）、`historical_figure`（历史名人模拟对话）、`plain_assistant`（默认助教）。
+  - 插件经 `ctx.services.ai.registerAIPersona(persona)` 注册角色（`persona` 为可序列化静态模板，Inline / Worker 插件均可用；`registeredBy` 记为插件 id，`unregisterAIPersona` 仅允许注册者注销自身模板，内置角色不可注销）。
+  - `/api/agent/chat` 按 `personaId` 查找角色，以 `[Persona · <name>]` 段**叠加**在基础 Agent 指令之上（不替换工具链与基础行为）；`GET /api/agent/personas` 供教师聊天面板下拉选择。前端 `useAgentChat` / `RightSidebar` 增角色选择器。
+
 ## [0.4.2] - 2026-09-27
 
 - **P2 熔断器与 AI 上下文提供者（修正后审计清单收尾）**：

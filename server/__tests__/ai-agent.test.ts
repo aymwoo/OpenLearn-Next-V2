@@ -32,6 +32,41 @@ describe('AI-agent pure helpers', () => {
     expect(out).toContain('current selected lesson ID');
   });
 
+  it('buildAgentSystemInstruction injects the selected persona instruction block (zh)', () => {
+    const out = buildAgentSystemInstruction('zh', null, undefined, {
+      nameZh: '苏格拉底追问者',
+      nameEn: 'Socratic Questioner',
+      instructionZh: '只提问，不给答案。',
+      instructionEn: 'Only ask questions.',
+    });
+    expect(out).toContain('[Persona · 苏格拉底追问者]');
+    expect(out).toContain('只提问，不给答案。');
+    // Base instruction is preserved (persona is additive, not a replacement).
+    expect(out).toContain('OS Agent');
+  });
+
+  it('buildAgentSystemInstruction uses the English persona name/instruction for lang=en', () => {
+    const out = buildAgentSystemInstruction('en', null, undefined, {
+      nameZh: '苏格拉底追问者',
+      nameEn: 'Socratic Questioner',
+      instructionZh: '只提问，不给答案。',
+      instructionEn: 'Only ask questions.',
+    });
+    expect(out).toContain('[Persona · Socratic Questioner]');
+    expect(out).toContain('Only ask questions.');
+    expect(out).not.toContain('[Persona · 苏格拉底追问者]');
+  });
+
+  it('buildAgentSystemInstruction skips the default persona overlay', () => {
+    const out = buildAgentSystemInstruction('zh', null, undefined, {
+      nameZh: '普通助教（默认）',
+      nameEn: 'Plain Assistant (Default)',
+      instructionZh: '保持基础 OS Agent 行为，不附加任何角色设定。',
+      instructionEn: 'Base OS Agent behavior, no persona overlay.',
+    });
+    expect(out).not.toContain('[Persona ·');
+  });
+
   it('buildAgentFinalMessage appends the attached reference files section', () => {
     const attachments: AgentChatAttachment[] = [
       { name: 'notes.md', content: 'hello world' },

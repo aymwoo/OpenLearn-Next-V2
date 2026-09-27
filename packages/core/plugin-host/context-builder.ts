@@ -42,6 +42,7 @@ import type {
   IProcessService,
   IStorageService,
   IAIService,
+  AIPersonaDefinition,
   IPointsDimensionRegistry,
   IPointsLedgerService,
 } from '../di/interfaces.js';
@@ -498,7 +499,7 @@ function wrapStorage(storageService: IStorageService, db: any, manifestId: strin
  * PluginRuntime 的 ai 包装器内联 AI 提供者逻辑，但 Phase 2 的 AIService
  * 已包含该逻辑，因此此处仅做安全代理。
  */
-function wrapAI(aiService: IAIService): IAIService {
+function wrapAI(aiService: IAIService, pluginId: string): IAIService {
   return {
     generateText: createSafeFunction(
       async (prompt: string, options?: { systemInstruction?: string; temperature?: number }) => {
@@ -516,6 +517,14 @@ function wrapAI(aiService: IAIService): IAIService {
     }),
     unregisterAIContextProvider: createSafeFunction((id: string) => {
       return (aiService as any).unregisterAIContextProvider?.(id);
+    }),
+    // P2: ai.agent.persona —— 插件注册角色模板（registeredBy 记为插件 id，便于注销归属）
+    registerAIPersona: createSafeFunction((persona: AIPersonaDefinition) => {
+      return (aiService as any).registerAIPersona?.({ ...persona, registeredBy: pluginId });
+    }),
+    listAIPersonas: createSafeFunction(() => (aiService as any).listAIPersonas?.() ?? []),
+    unregisterAIPersona: createSafeFunction((id: string) => {
+      return (aiService as any).unregisterAIPersona?.(id, pluginId);
     }),
   } as IAIService;
 }
@@ -566,7 +575,7 @@ export async function buildContext(
   const wrappedActionRegistry = wrapActionRegistry(actionRegistryService, tracker, pluginId);
   const wrappedCapability = wrapCapability(capabilityService);
   const wrappedStorage = wrapStorage(storageService, db, manifest.id);
-  const wrappedAI = wrapAI(aiService);
+  const wrappedAI = wrapAI(aiService, pluginId);
   // Points 包装仅在服务已注册时生效；未注册则取 null（plugin 可检查 === null 降级）。
   const wrappedPointsDimension = pointsDimensionRegistry
     ? wrapPointsDimensionRegistry(pointsDimensionRegistry)

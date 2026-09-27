@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   Wand2,
   Terminal,
@@ -19,6 +19,8 @@ interface RightSidebarProps {
   effectiveAgentProviderId: string;
   agentProviderId: string;
   setAgentProviderId: (id: string) => void;
+  personaId?: string;
+  setPersonaId?: (id: string) => void;
   aiProviders: any[];
   selectedAgentProvider: any | null;
   chatLog: { role: string; content: string }[];
@@ -44,6 +46,8 @@ export function RightSidebar({
   effectiveAgentProviderId,
   agentProviderId,
   setAgentProviderId,
+  personaId,
+  setPersonaId,
   aiProviders,
   selectedAgentProvider,
   chatLog,
@@ -65,6 +69,18 @@ export function RightSidebar({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatLog]);
+
+  // P2: ai.agent.persona —— 拉取角色模板列表（侧栏可见时）
+  const [personaList, setPersonaList] = useState<Array<{ id: string; nameZh: string; nameEn: string; icon?: string; source: string }>>([]);
+  useEffect(() => {
+    if (!showRightSidebar || personaList.length > 0) return;
+    fetch('/api/agent/personas')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.success && Array.isArray(d.personas)) setPersonaList(d.personas);
+      })
+      .catch(() => {});
+  }, [showRightSidebar]);
 
   return (
     <div
@@ -161,6 +177,28 @@ export function RightSidebar({
                   </div>
                 </div>
               </div>
+
+              {/* P2: ai.agent.persona —— 角色下拉选择器（personaList 由 /api/agent/personas 提供） */}
+              {setPersonaId && personaList.length > 0 && (
+                <div className="mx-4 mb-3">
+                  <select
+                    value={personaId || ''}
+                    onChange={(e) => setPersonaId(e.target.value)}
+                    className="w-full appearance-none rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50 px-3 py-2 text-xs font-medium text-gray-700 shadow-xs outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                  >
+                    <option value="">
+                      {lang === 'zh' ? '🤖 助教角色：默认' : '🤖 Persona: Default'}
+                    </option>
+                    {personaList
+                      .filter((p) => p.id !== 'plain_assistant')
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.icon || '🎯'} {lang === 'zh' ? p.nameZh : p.nameEn}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
 
               {aiProviders.length === 0 && (
                 <div className="mx-4 mt-3 p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2 shadow-xs shrink-0">

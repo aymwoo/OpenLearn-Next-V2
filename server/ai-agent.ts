@@ -9,12 +9,14 @@ import crypto from 'crypto';
 import { kernelContainer } from '../packages/core/kernel/index.js';
 import { lessonActiveSegments } from './shared-state.js';
 import { collectAIContextSlices } from './ai-context-registry.js';
+import { getAIPersona } from './ai-persona-registry.js';
 import type { AgentChatAttachment, AgentChatRequest, AgentToolExecution, StoredAIProvider } from './context.js';
 
 export const buildAgentSystemInstruction = (
   lang: 'zh' | 'en',
   currentLessonId?: string | null,
   pluginSlices?: string[],
+  persona?: { nameZh: string; instructionZh: string; nameEn: string; instructionEn: string },
 ) => {
   let systemInstruction =
     lang === 'zh'
@@ -28,6 +30,15 @@ export const buildAgentSystemInstruction = (
   // P2: ai.context.provider —— 插件注册的上下文切片（每个独立 try/catch，见 registry）
   if (pluginSlices?.length) {
     systemInstruction += '\n\n' + pluginSlices.join('\n\n');
+  }
+
+  // P2: ai.agent.persona —— 角色指令叠加（不替换工具链与基础行为）
+  if (persona) {
+    const name = lang === 'zh' ? persona.nameZh : persona.nameEn;
+    const instruction = lang === 'zh' ? persona.instructionZh : persona.instructionEn;
+    if (instruction.trim() && !instruction.startsWith('保持基础')) {
+      systemInstruction += `\n\n[Persona · ${name}]\n${instruction.trim()}`;
+    }
   }
 
   return systemInstruction;
@@ -194,6 +205,7 @@ export const runOpenAIAgentChat = async (provider: StoredAIProvider, request: Ag
     lang,
     currentLessonId,
     collectAIContextSlices(currentLessonId ?? null),
+    getAIPersona(request.personaId),
   );
   const finalMessage = buildAgentFinalMessage(message, attachments);
   const tools = buildOpenAITools();

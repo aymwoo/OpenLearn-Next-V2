@@ -190,8 +190,26 @@ interface IStorageService {
   delete(key: string): Promise<void>;
 }
 
+interface AIPersonaDefinition {
+  id: string;
+  nameZh: string;
+  nameEn: string;
+  instructionZh: string;
+  instructionEn: string;
+  icon?: string;
+}
+
 interface IAIService {
   generateText(prompt: string, options?: { systemInstruction?: string; temperature?: number }): Promise<string>;
+  /**
+   * P2: ai.agent.persona —— 注册 AI Agent 角色模板（教师聊天面板可下拉选择）。
+   * persona 为可序列化静态模板，Inline / Worker 插件均可注册。
+   */
+  registerAIPersona?(persona: AIPersonaDefinition): void;
+  /** 列出全部角色模板（宿主内置 + 插件注册）。 */
+  listAIPersonas?(): AIPersonaDefinition[];
+  /** 注销插件注册的角色（宿主内置角色不可注销）。 */
+  unregisterAIPersona?(id: string): void;
 }
 
 // ── Logger ───────────────────────────────────────────────────────────────
@@ -1001,6 +1019,7 @@ export type {
   IProcessService,
   IStorageService,
   IAIService,
+  AIPersonaDefinition,
   SqliteDatabase,
   SqliteStatement,
   PointsDimensionSpec,

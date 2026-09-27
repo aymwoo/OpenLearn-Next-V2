@@ -50,6 +50,39 @@ export class AIService implements IAIService {
     this._contextDelegates = delegates;
   }
 
+  /** P2: ai.agent.persona —— 角色注册表委托（server/ai-persona-registry.ts 为真源） */
+  private _personaDelegates: {
+    register: (persona: any) => void;
+    list: () => any[];
+    unregister: (id: string, registeredBy?: string) => void;
+  } = {
+    register: () => {},
+    list: () => [],
+    unregister: () => {},
+  };
+
+  /** 由 server 启动时接线 */
+  bindPersonaRegistry(delegates: {
+    register: (persona: any) => void;
+    list: () => any[];
+    unregister: (id: string, registeredBy?: string) => void;
+  }): void {
+    this._personaDelegates = delegates;
+  }
+
+  /** 插件注册角色模板（Worker 亦可 —— persona 为静态模板，可序列化） */
+  registerAIPersona(persona: any): void {
+    this._personaDelegates.register(persona);
+  }
+
+  listAIPersonas(): any[] {
+    return this._personaDelegates.list();
+  }
+
+  unregisterAIPersona(id: string, registeredBy?: string): void {
+    this._personaDelegates.unregister(id, registeredBy);
+  }
+
   registerAIContextProvider(id: string, fn: (lessonId: string | null) => string | null): void {
     if (!this._contextDelegates.register) {
       throw new Error('[AIService] AI context registry not bound (server boot required)');

@@ -1341,6 +1341,8 @@ export default function App() {
   useLmsBridge(session);
 
   const {
+    personaId,
+    setPersonaId,
     chatLog,
     setChatLog,
     input,
@@ -2043,6 +2045,8 @@ export default function App() {
           effectiveAgentProviderId={effectiveAgentProviderId}
           agentProviderId={agentProviderId}
           setAgentProviderId={setAgentProviderId}
+          personaId={personaId}
+          setPersonaId={setPersonaId}
           aiProviders={aiProviders}
           selectedAgentProvider={selectedAgentProvider}
           chatLog={chatLog}

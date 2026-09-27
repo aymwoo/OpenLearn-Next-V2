@@ -251,6 +251,26 @@ export interface IAIService {
    */
   registerAIContextProvider?(id: string, fn: (lessonId: string | null) => string | null): void;
   unregisterAIContextProvider?(id: string): void;
+
+  /**
+   * P2: ai.agent.persona —— 注册 AI Agent 角色模板（教师聊天面板可选择）。
+   * persona 为可序列化静态模板，Inline / Worker 插件均可注册；宿主内置角色亦可被同名覆盖。
+   */
+  registerAIPersona?(persona: AIPersonaDefinition): void;
+  /** 列出全部角色模板（builtin + plugin）。 */
+  listAIPersonas?(): AIPersonaDefinition[];
+  /** 注销插件注册的角色（builtin 不可注销；仅注册者可注销自身模板）。 */
+  unregisterAIPersona?(id: string): void;
+}
+
+/** P2: ai.agent.persona —— 角色模板定义（可序列化，跨 Worker 边界安全）。 */
+export interface AIPersonaDefinition {
+  id: string;
+  nameZh: string;
+  nameEn: string;
+  instructionZh: string;
+  instructionEn: string;
+  icon?: string;
 }
 
 // ── Token instances (D-13) ────────────────────────────────────────────────

@@ -45,6 +45,8 @@ export function useAgentChat(options: UseAgentChatOptions) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
+  /** P2: ai.agent.persona —— 当前选定的角色模板 id（空 = 默认助教） */
+  const [personaId, setPersonaId] = useState<string>('');
 
   // Update initial message when language changes if no other messages
   useEffect(() => {
@@ -154,6 +156,7 @@ export function useAgentChat(options: UseAgentChatOptions) {
           currentLessonId: selectedLesson,
           attachments: attachmentsToSend,
           providerId: effectiveAgentProviderId || null,
+          personaId: personaId || null,
         }),
       });
       const data = await res.json();
@@ -188,6 +191,8 @@ export function useAgentChat(options: UseAgentChatOptions) {
   };
 
   return {
+    personaId,
+    setPersonaId,
     chatLog,
     setChatLog,
     input,

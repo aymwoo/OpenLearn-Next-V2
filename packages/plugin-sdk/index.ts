@@ -104,6 +104,7 @@ export type {
   IProcessService,
   IStorageService,
   IAIService,
+  AIPersonaDefinition,
   ILessonEngineService,
   IClassroomRuntimeService,
   IPresenceEngineService,

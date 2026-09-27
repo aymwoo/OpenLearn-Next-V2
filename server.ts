@@ -32,6 +32,7 @@ import {
 import { ClassroomRuntimeService } from './server/services/classroom-runtime-service.js';
 import { ClassroomFeedService, attachClassroomFeedService } from './server/services/classroom-feed-service.js';
 import { bindAIContextRegistry } from './server/ai-context-registry.js';
+import { bindAIPersonaRegistry } from './server/ai-persona-registry.js';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import helmet from 'helmet';
@@ -454,6 +455,7 @@ async function startServer() {
   // （Inline 插件经 ctx.services.ai.registerAIContextProvider 注册的切片，
   //   /agent/chat 组装 system instruction 时逐个收集）
   bindAIContextRegistry(kernelContainer.aiService as any);
+  bindAIPersonaRegistry(kernelContainer.aiService as any);
 
   setupPresence({
     io,

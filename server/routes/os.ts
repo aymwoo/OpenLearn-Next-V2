@@ -8,6 +8,7 @@ import { decryptApiKey, detectPromptInjection } from '../utils/crypto.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
 import { createActivityContext } from '../../packages/activity-ecosystem/index.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS } from './shared.js';
+import { listAIPersonas } from '../ai-persona-registry.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import type { ServerContext, StoredAIProvider, AgentChatAttachment, AgentChatRequest } from '../context.js';
 
@@ -241,6 +242,15 @@ export function registerOsRoutes(ctx: ServerContext) {
   });
 
   // OS Agent interaction
+  // P2: ai.agent.persona —— 角色模板列表（聊天面板下拉选择器）
+  app.get('/api/agent/personas', requireAuth(), (_req, res) => {
+    try {
+      res.json({ success: true, personas: listAIPersonas() });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post('/api/agent/chat', requireAuth(), aiLimiter, async (req, res) => {
     try {
       let { message, lang = 'zh', currentLessonId, attachments, providerId } = req.body as AgentChatRequest;
@@ -325,6 +335,7 @@ export function registerOsRoutes(ctx: ServerContext) {
         attachments,
         callerRole,
         history,
+        personaId: (req.body as AgentChatRequest)?.personaId ?? null,
       });
 
       // Persist this exchange so the kernel assistant remembers it next time
