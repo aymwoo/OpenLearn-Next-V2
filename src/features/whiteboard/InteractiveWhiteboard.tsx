@@ -1157,60 +1157,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       return () => window.removeEventListener('click', handleWindowClick);
     }, []);
 
-    const getElementFloatingPosition = (el: WhiteboardElement) => {
-      try {
-        const data = JSON.parse(el.data);
-        if (el.type === 'pen' && data.points) {
-          let minX = Infinity,
-            maxX = -Infinity,
-            minY = Infinity;
-          for (let i = 0; i < data.points.length; i += 2) {
-            const px = data.points[i];
-            const py = data.points[i + 1];
-            if (px < minX) minX = px;
-            if (px > maxX) maxX = px;
-            if (py < minY) minY = py;
-          }
-          return {
-            x: (minX + maxX) / 2,
-            y: minY - 36,
-          };
-        } else if (el.type === 'rectangle' || (el.type === 'shape' && data.shape === 'rect')) {
-          const rectX = data.x ?? 0;
-          const rectY = data.y ?? 0;
-          const rectW = data.width ?? 0;
-          const rectH = data.height ?? 0;
-          return {
-            x: rectX + rectW / 2,
-            y: (rectH < 0 ? rectY + rectH : rectY) - 36,
-          };
-        } else if (el.type === 'circle' || (el.type === 'shape' && data.shape === 'circle')) {
-          const circX = data.x ?? 0;
-          const circY = data.y ?? 0;
-          const circR = data.radius ?? 0;
-          return {
-            x: circX,
-            y: circY - circR - 36,
-          };
-        } else if (el.type === 'text') {
-          const textX = data.x ?? 0;
-          const textY = data.y ?? 0;
-          return {
-            x: textX + 40,
-            y: textY - 36,
-          };
-        } else if (data.x !== undefined && data.y !== undefined) {
-          return {
-            x: data.x + (data.width ? data.width / 2 : 150),
-            y: data.y - 36,
-          };
-        }
-      } catch (e) {
-        console.error(e);
-      }
-      return null;
-    };
-
     const handleElementDragStart = (e: React.PointerEvent, elementId: string, elementData: any) => {
       if (userRole !== 'teacher') return;
       e.preventDefault();
@@ -1863,17 +1809,25 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     // 与 drawElement 拖拽提交走完全相同的两步（onElementUpdate + 事件广播），
     // 因此平铺后的结果与用户手动拖动在持久化、广播、学生端同步上表现一致。
 
-    /** 当前页 + 当前环节下应渲染的元素（画布渲染与自动平铺共用同一份筛选规则） */
+    /** 判断元素是否属于当前页（不含环节筛选） */
+    const belongsToCurrentPage = (el: WhiteboardElement): boolean => {
+      if (el.type === 'page_meta') return false;
+      try {
+        const data = JSON.parse(el.data);
+        const elPage = data.page ?? 0;
+        const currentObj = pages[currentPage];
+        return data.pageId && currentObj?.id ? data.pageId === currentObj.id : elPage === currentPage;
+      } catch (e) {
+        return currentPage === 0;
+      }
+    };
+
+    /** 当前页 + 当前环节下应渲染的元素（画布渲染用） */
     const getCurrentPageElements = (): WhiteboardElement[] =>
       safeElements.filter((el) => {
-        if (el.type === 'page_meta') return false;
+        if (!belongsToCurrentPage(el)) return false;
         try {
           const data = JSON.parse(el.data);
-          const elPage = data.page ?? 0;
-          const currentObj = pages[currentPage];
-          const pageMatches =
-            data.pageId && currentObj?.id ? data.pageId === currentObj.id : elPage === currentPage;
-          if (!pageMatches) return false;
           if (activeSegmentId && data.segmentId && data.segmentId !== activeSegmentId) return false;
           return true;
         } catch (e) {
@@ -1881,52 +1835,82 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         }
       });
 
-    /** 把当前页所有可平铺元素按 BSP 二分树重排并落库 */
+    /**
+     * 画布上**全部**元素按页分组（自动平铺用）。
+     *
+     * 各页分别独立平铺是安全的：所有元素共用同一套扁平坐标，但画布一次只渲染
+     * 「当前页 + 当前环节」这一组，不同页永远不同屏，因此逐页平铺不会产生可见
+     * 重叠；每一页被查看时都能铺满整块画布。
+     *
+     * 刻意不按环节拆组：无环节标签的元素与当前环节元素会同屏渲染，若两者各自
+     * 铺满整块画布就会互相压住。按页平铺是既保证「每页铺满」又保证「不重叠」
+     * 的粒度。
+     */
+    const getElementsGroupedByPage = (): WhiteboardElement[][] => {
+      const groups = new Map<string, WhiteboardElement[]>();
+      for (const el of safeElements) {
+        if (!isTileableType(el.type)) continue;
+        let key = '0';
+        try {
+          const data = JSON.parse(el.data);
+          key = data.pageId ?? String(data.page ?? 0);
+        } catch (e) {
+          key = '0';
+        }
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(el);
+      }
+      return [...groups.values()].filter((list) => list.length > 0);
+    };
+
+    /** 把白板上**每一页**的可平铺元素按 BSP 二分树重排并落库 */
     const applyAutoTiling = useCallback(async () => {
       if (!onElementUpdate) return;
       if (containerSize.width <= 0 || containerSize.height <= 0) return;
 
-      const candidates: TileCandidate[] = [];
-      const rawDataById = new Map<string, Record<string, any>>();
-      for (const el of getCurrentPageElements()) {
-        let data: Record<string, any>;
-        try {
-          data = JSON.parse(el.data);
-        } catch {
-          continue;
-        }
-        const candidate = toTileCandidate(el, data, getDefaultElementSize(el.type, data));
-        if (!candidate) continue;
-        candidates.push(candidate);
-        rawDataById.set(el.id, data);
-      }
-      if (candidates.length === 0) return;
-
-      const results = computeTiling(candidates, containerSize);
-      if (results.length === 0) return;
-
       let changed = false;
       setIsSyncing(true);
       try {
-        for (let i = 0; i < candidates.length; i += 1) {
-          const candidate = candidates[i];
-          const current = rawDataById.get(candidate.id);
-          if (!current) continue;
-          const geometry = toTiledGeometry(candidate, results[i]) as Record<string, number>;
-          const keys = geometryKeys(candidate.shape);
-          // 已在目标位置则跳过，避免窗口缩放时反复触发自动保存与广播
-          if (sameGeometry(current, geometry, keys)) continue;
-          changed = true;
-          // 乐观更新：先落到本地渲染，再交给持久化，避免等待服务端回传
-          setLocalGeometry(candidate.id, geometry);
-          // 首次改动该元素时，把平铺前的几何快照写进 data，关闭平铺时据此还原。
-          // __tiled 记录我们写入的值，用于还原时判断元素是否被用户手动拖过。
-          const patch: Record<string, any> = { ...current, ...geometry };
-          if (!current.__preTile) {
-            patch.__preTile = extractGeometry(current, candidate.shape);
+        for (const group of getElementsGroupedByPage()) {
+          const candidates: TileCandidate[] = [];
+          const rawDataById = new Map<string, Record<string, any>>();
+          for (const el of group) {
+            let data: Record<string, any>;
+            try {
+              data = JSON.parse(el.data);
+            } catch {
+              continue;
+            }
+            const candidate = toTileCandidate(el, data, getDefaultElementSize(el.type, data));
+            if (!candidate) continue;
+            candidates.push(candidate);
+            rawDataById.set(el.id, data);
           }
-          patch.__tiled = geometry;
-          await onElementUpdate(candidate.id, patch);
+          if (candidates.length === 0) continue;
+
+          const results = computeTiling(candidates, containerSize);
+          if (results.length === 0) continue;
+
+          for (let i = 0; i < candidates.length; i += 1) {
+            const candidate = candidates[i];
+            const current = rawDataById.get(candidate.id);
+            if (!current) continue;
+            const geometry = toTiledGeometry(candidate, results[i]) as Record<string, number>;
+            const keys = geometryKeys(candidate.shape);
+            // 已在目标位置则跳过，避免窗口缩放时反复触发自动保存与广播
+            if (sameGeometry(current, geometry, keys)) continue;
+            changed = true;
+            // 乐观更新：先落到本地渲染，再交给持久化，避免等待服务端回传
+            setLocalGeometry(candidate.id, geometry);
+            // 首次改动该元素时，把平铺前的几何快照写进 data，关闭平铺时据此还原。
+            // __tiled 记录我们写入的值，用于还原时判断元素是否被用户手动拖过。
+            const patch: Record<string, any> = { ...current, ...geometry };
+            if (!current.__preTile) {
+              patch.__preTile = extractGeometry(current, candidate.shape);
+            }
+            patch.__tiled = geometry;
+            await onElementUpdate(candidate.id, patch);
+          }
         }
         if (!changed) return;
         frontendEventBus.publish({
@@ -1940,7 +1924,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       } finally {
         setIsSyncing(false);
       }
-    }, [onElementUpdate, containerSize, safeElements, pages, currentPage, activeSegmentId, lessonId]);
+    }, [onElementUpdate, containerSize, safeElements, lessonId]);
 
     /**
      * 关闭平铺模式时把元素还原到平铺前的几何。
@@ -1994,14 +1978,17 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       applyAutoTilingRef.current = applyAutoTiling;
     }, [applyAutoTiling]);
 
-    // 切换开关 / 增删元素 / 切页切环节后重排；拖拽不改变 id 集合，因此不会打断自由布局
+    // 切换开关 / 增删元素后重排；拖拽不改变 id 集合，因此不会打断自由布局。
+    // 依赖里刻意不含 activeSegmentId / currentPage —— 平铺一次覆盖**所有页**，
+    // 切页或切环节都不需要重排。
     const tileableIdsKey = useMemo(() => {
       if (!autoTileEnabled) return '';
-      return getCurrentPageElements()
+      return getElementsGroupedByPage()
+        .flat()
         .filter((el) => isTileableType(el.type))
         .map((el) => el.id)
         .join('|');
-    }, [autoTileEnabled, safeElements, pages, currentPage, activeSegmentId]);
+    }, [autoTileEnabled, safeElements]);
 
     useEffect(() => {
       if (!autoTileEnabled || !tileableIdsKey) return;
@@ -3455,40 +3442,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   </Stage>
                 ))}
 
-              {/* Floating Context-sensitive Deletion Pill above selected shape */}
-              {!readOnly &&
-                selectedShapeId &&
-                (() => {
-                  const selectedEl = safeElements.find((e) => e.id === selectedShapeId);
-                  if (!selectedEl) return null;
-                  const pos = getElementFloatingPosition(selectedEl);
-                  if (!pos) return null;
-
-                  const left = Math.max(10, Math.min(containerSize.width - 150, pos.x - 60));
-                  const top = Math.max(10, Math.min(containerSize.height - 50, pos.y));
-
-                  return (
-                    <div
-                      style={{ left: `${left}px`, top: `${top}px`, pointerEvents: 'auto' }}
-                      className="absolute bg-white text-gray-800 shadow-xl border border-red-200 rounded-lg py-1 px-2 flex items-center gap-1.5 z-30 animate-in fade-in slide-in-from-bottom-2 duration-150 animate-out fade-out duration-100"
-                    >
-                      <span className="text-xs font-semibold px-1 text-gray-500 capitalize select-none">
-                        {selectedEl.type}
-                      </span>
-                      <div className="w-[1px] h-3 bg-gray-200" />
-                      <button
-                        onClick={() => {
-                          handleElementDelete(selectedShapeId);
-                          setSelectedShapeId(null);
-                        }}
-                        className="flex items-center gap-1 text-xs text-red-600 hover:text-white hover:bg-red-600 px-2 py-0.5 rounded transition-all font-medium cursor-pointer"
-                      >
-                        <Trash2 size={12} />
-                        删除
-                      </button>
-                    </div>
-                  );
-                })()}
+              {/* 原先此处会在选中组件上方浮出一层「类型 + 删除」的悬浮药丸，与组件
+                  标题栏自带的删除按钮功能重复，已移除。删除入口保留在标题栏、右键
+                  菜单与工具栏三处。 */}
 
               {/* Elegant Right-Click Context Menu */}
               {!readOnly && contextMenu && (

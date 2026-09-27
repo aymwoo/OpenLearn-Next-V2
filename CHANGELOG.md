@@ -17,11 +17,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **白板自动平铺（Auto Tiling）—— 类 Linux tiling 窗口管理器布局**：
   - 新增纯布局算法 `src/features/whiteboard/utils/auto-tiling.ts`（不依赖 React/Konva/DOM）：i3 同源 BSP 二分树（首层左右分栏、逐层交替横竖切、`firstCount = floor(n/2)`，n=3 时退化为 i3 经典形态）。默认 `fillMode: 'fill'` —— 元素外框**精确铺满**整个格子、零留白，对齐 i3 窗口行为；白板元素外壳本身是 `flex flex-col`（标题栏 + `flex-grow overflow-auto` 内容区），撑满后内部自动重排。`fillMode: 'fit'`（保持宽高比居中）作为可选项保留。默认 `gap` / `padding` 各 8px，接近 i3 的细边框。
   - 工具栏新增平铺开关按钮（`LayoutGrid` 图标，开启时显示「平铺中」徽标），位于网格开关旁；`readOnly` 态（他人课程预览、学生端）不渲染该按钮。`WhiteboardToolbar` 在 `InteractiveWhiteboard` 内部渲染，故课程编辑器、互动课堂、学生端课节四处白板自动获得该能力。
-  - 持续模式语义：开启即重排当前页；此后增删元素、切页切环节、画布尺寸变化（250ms 防抖）均自动重排。拖拽不改变元素 id 集合，因此**不会打断自由布局**——两种效果共存。
+  - 持续模式语义：开启即**一次性重排白板上的所有页**（逐页独立计算 BSP 布局）；此后增删元素、画布尺寸变化（250ms 防抖）均自动重排。切页与切环节**不触发**重排。拖拽不改变元素 id 集合，因此**不会打断自由布局**——两种效果共存。
+  - **为什么按页而不是按环节分组**：所有白板元素共用同一套扁平坐标（`x/y` 即容器像素，不分页分环节），画布一次只渲染「当前页 + 当前环节」这一组。逐页独立平铺是安全的——不同页永远不同屏，故无可见重叠，每页被查看时都铺满画布；而按环节拆组会让「无环节标签元素」与「当前环节元素」各自铺满整块画布而直接互相压住。Playwright 实测：画布 1178×629 下三页共 8 个元素全部平铺完成，每页包围盒 1166×617（12px 差值 = padding 8 + gap/2 4）。
   - **关闭平铺自动还原**：元素首次被平铺改写时，把平铺前几何以 `__preTile` 写入该元素 `data`（另存 `__tiled` 记录本次写入值）。切回自由布局时据此还原并清除两个快照字段。**用户在平铺模式下手动拖动/缩放过的元素会被跳过还原**（当前几何与 `__tiled` 不符即视为用户已调整），避免覆盖其意图，但快照字段仍会清除以免下次误用过期基准。快照随元素落库，因此刷新页面后仍可还原。
   - 平铺写回完全复刻拖拽提交的两步（`onElementUpdate` + `whiteboard.element_updated` 事件广播），持久化、800ms 防抖自动保存与广播行为与手动拖动一致。
+  - **乐观几何覆盖层**：课程编辑器三条写入路径待遇不一致——`onElementAdd` / `onElementDelete` 写完都 `fetchElements()`，唯独 `onElementUpdate`（自动平铺走这条）只入队防抖自动保存、不回传，导致「已自动保存但布局没变」。新增 `localGeometryRef` 覆盖层，渲染优先级为「拖拽/缩放中 > 覆盖层 > 服务端 data」，写入点覆盖平铺、还原、拖拽 pointerup、缩放 pointerup；`elements` 变化后按 0.5px 容差比对自动摘除，切课程时整体作废。`Circle` 为独立渲染分支（圆心 + radius），已改读 `overlay.radius`。该修复同时消除了编辑器原有的「松手后等 refetch 期间可能弹回」。
   - 类型差异归一化：`circle` 走 `radius` 而非 `width/height`（写回时改写 radius，否则改动会静默失效）；`pen` / `highlighter` 为绝对坐标折线、`page_meta` 为分页元数据，三者排除出平铺范围。
-  - 抽出 `getCurrentPageElements()` 供画布渲染与自动平铺共用同一份「当前页 + 当前环节」筛选规则；`renderElement` 内联的 `getInitialWidth`/`getInitialHeight` 合并为模块级 `DEFAULT_ELEMENT_SIZE` 尺寸表，渲染与平铺不再有两份尺寸规则。
+  - 抽出 `belongsToCurrentPage()` / `getCurrentPageElements()` 供画布渲染筛选，渲染与平铺不再各写一份页/环节判定；`renderElement` 内联的 `getInitialWidth`/`getInitialHeight` 合并为模块级 `DEFAULT_ELEMENT_SIZE` 尺寸表，渲染与平铺不再有两份尺寸规则。
   - 测试 `whiteboard-auto-tiling.test.ts`（36 例）锁定面积守恒、任意两格不重叠、平铺幂等、fill 模式精确铺满、fit 模式宽高比不变、圆形内切取短边，以及快照辅助函数（几何键名、缺失值归零、0.5px 容差判等）等不变量。
 
 - **课程编辑器「学生视角」改为独立标签页打开**：
@@ -29,6 +31,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 必要性：教师已登录时新标签页走会话恢复会执行 `setActiveRole(data.session.role)` 默认回到教师视图，故必须靠显式模式参数才能在新标签页进学生端。
   - 视角切换器（👨‍🏫 教师视角 / 🎓 学生视角）移至工具栏右侧「返回课程库」按钮旁；教师视角仍就地切回，学生视角改为 `window.open` 新标签页并对弹窗拦截给出提示。
   - `useGlobalErrorCapture` / `SystemErrorCenterModal` 的学生端错误上报判定**不包含** `student_preview` —— 预览标签页运行在教师自己的浏览器里，将其错误记为学生机异常会污染教师端错误面板。
+
+- **白板组件操作入口去重与编辑器默认态精简**：
+  - 移除全屏浮层右上角的悬浮圆形 X 关闭按钮（`FullscreenRendererRegistry.tsx`）——与标题栏「退出全屏」调用同一个 `onClose`，功能完全重复；ESC 退出仍有效。
+  - 移除选中组件时浮出的「类型 + 删除」药丸层（`InteractiveWhiteboard.tsx`）——组件标题栏已有删除按钮；删除入口保留标题栏、右键菜单、工具栏三处。连带清理仅服务于该药丸的 `getElementFloatingPosition` 辅助函数（按 pen/rectangle/circle/text 类型算浮动定位，全项目再无引用）。
+  - 课程编辑器「环节参数」面板默认折叠（`useLessonTimeline` 的 `editorPanelsExpanded` 初值改为 `false`）：备课主视图是白板画布，收起后把纵向空间还给画布；工具栏按钮仍可随时展开。
 
 - **移除与「学生视角预览」重复的入口**：
   - 删除 `src/features/modals/StudentPreviewModal.tsx` 及其测试（进入回收站）。该弹窗内容被 `StudentLessonView` 完全覆盖且更弱（无作业 Tab、无实时同步），且其内部「独立Tab预览」按钮生成的 URL 与编辑器按钮逐字符相同。

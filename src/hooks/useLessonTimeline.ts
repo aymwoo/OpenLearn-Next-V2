@@ -16,7 +16,8 @@ export function useLessonTimeline(options: UseLessonTimelineOptions) {
   const [draggedSegmentIdx, setDraggedSegmentIdx] = useState<number | null>(null);
   const [editorSaveStatus, setEditorSaveStatus] = useState<'none' | 'saving' | 'saved' | 'error'>('none');
   const [editorLastSavedTime, setEditorLastSavedTime] = useState<Date | null>(null);
-  const [editorPanelsExpanded, setEditorPanelsExpanded] = useState(true);
+  // 环节参数面板默认折叠：备课主视图是白板画布，收起后把纵向空间还给画布
+  const [editorPanelsExpanded, setEditorPanelsExpanded] = useState(false);
 
   const lastSelectedLessonRef = useRef<string | null>(null);
 

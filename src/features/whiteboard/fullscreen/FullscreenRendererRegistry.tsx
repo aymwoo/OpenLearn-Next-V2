@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { BookOpen, Minimize2, X } from 'lucide-react';
+import { BookOpen, Minimize2 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { HtmlAppletFrame } from '../components/HtmlAppletFrame';
 
@@ -127,17 +127,8 @@ export const FullscreenOverlay: React.FC<{
             </span>
           )}
         </div>
-        {dismissible && (
-          <div className="absolute top-3 right-3 z-10">
-            <button
-              onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors cursor-pointer"
-              title="关闭 (ESC)"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        )}
+        {/* 原先此处还有一个右上角悬浮 X 关闭按钮，与标题栏的「退出全屏」功能完全
+            重复（两者都调用同一个 onClose），已移除。ESC 退出仍然有效。 */}
         <div
           className="flex-1 overflow-auto p-6 relative"
           style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
