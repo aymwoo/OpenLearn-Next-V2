@@ -37,7 +37,14 @@ export interface TilingOptions {
   gap?: number;
   /** 画布四周留白（像素） */
   padding?: number;
-  /** 元素放大倍率上限，默认不限制（即允许小元素铺满格子）。设为 1 则永不放大。 */
+  /**
+   * 填充策略：
+   *  - 'fill'（默认，i3 行为）：元素外框**精确铺满**整个格子，零留白。
+   *    白板元素外壳是 flex 纵向容器（标题栏 + flex-grow 内容区），撑满后内部自动重排。
+   *  - 'fit'：保持宽高比居中，比例不同时会在格子内留出空白。
+   */
+  fillMode?: 'fill' | 'fit';
+  /** 'fit' 模式下的放大倍率上限，默认不限制。'fill' 模式下忽略。 */
   maxScale?: number;
 }
 
@@ -65,8 +72,9 @@ export interface TileCandidate {
   shape?: 'rect' | 'circle';
 }
 
-export const DEFAULT_TILING_GAP = 16;
-export const DEFAULT_TILING_PADDING = 24;
+// 对齐 i3 的观感：窗口彼此紧邻，只留一道细边框
+export const DEFAULT_TILING_GAP = 8;
+export const DEFAULT_TILING_PADDING = 8;
 
 /**
  * 不参与自动平铺的元素类型。
@@ -134,6 +142,25 @@ export function splitArea(area: TilingRect, count: number, depth = 0): TilingRec
 }
 
 /**
+ * 把一个「自然尺寸」的元素放进格子。
+ *
+ * fillMode = 'fill'：直接返回整个格子（i3 行为，精确铺满、零留白）。
+ * fillMode = 'fit'  ：等比缩放并居中，缩放比取宽高约束的较小值，永不溢出格子。
+ */
+export function placeInTile(
+  tile: TilingRect,
+  naturalWidth: number,
+  naturalHeight: number,
+  fillMode: 'fill' | 'fit' = 'fill',
+  maxScale = Infinity,
+): TilingResult {
+  if (fillMode === 'fill' || tile.width <= 0 || tile.height <= 0) {
+    return { id: '', x: tile.x, y: tile.y, width: Math.max(0, tile.width), height: Math.max(0, tile.height) };
+  }
+  return fitIntoTile(tile, naturalWidth, naturalHeight, maxScale);
+}
+
+/**
  * 把一个「自然尺寸」的元素等比放进格子并居中。
  * 缩放比例取宽高约束的较小值，因此永远不会溢出格子。
  */
@@ -174,6 +201,7 @@ export function computeTiling(
 ): TilingResult[] {
   const gap = options.gap ?? DEFAULT_TILING_GAP;
   const padding = options.padding ?? DEFAULT_TILING_PADDING;
+  const fillMode = options.fillMode ?? 'fill';
   const maxScale = options.maxScale ?? Infinity;
 
   if (elements.length === 0) return [];
@@ -202,7 +230,7 @@ export function computeTiling(
       width: tile.width - inset * 2,
       height: tile.height - inset * 2,
     });
-    const fitted = fitIntoTile(inner, element.width, element.height, maxScale);
+    const fitted = placeInTile(inner, element.width, element.height, fillMode, maxScale);
     return { id: element.id, x: fitted.x, y: fitted.y, width: fitted.width, height: fitted.height };
   });
 }
@@ -241,6 +269,27 @@ export function toTileCandidate(
   };
 }
 
+/** 元素几何字段的键名（圆形走 radius 而非 width/height） */
+export function geometryKeys(shape: 'rect' | 'circle' = 'rect'): string[] {
+  return shape === 'circle' ? ['x', 'y', 'radius'] : ['x', 'y', 'width', 'height'];
+}
+
+/** 取出元素当前的几何补丁（键名随类型而定） */
+export function extractGeometry(data: Record<string, any>, shape: 'rect' | 'circle' = 'rect') {
+  const out: Record<string, number> = {};
+  for (const key of geometryKeys(shape)) {
+    const n = Number(data?.[key]);
+    out[key] = Number.isFinite(n) ? n : 0;
+  }
+  return out;
+}
+
+/** 两个几何补丁是否在 0.5px 容差内相等 */
+export function sameGeometry(a: Record<string, any>, b: Record<string, any>, keys: string[], tolerance = 0.5): boolean {
+  const toFinite = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  return keys.every((key) => Math.abs(toFinite(a?.[key]) - toFinite(b?.[key])) < tolerance);
+}
+
 /**
  * 把平铺结果翻译成要写回元素 data 的几何补丁。
  * 圆形必须改写 radius，否则改动会被白板静默忽略。
@@ -250,6 +299,7 @@ export function toTiledGeometry(
   result: TilingResult,
 ): { x: number; y: number; width: number; height: number } | { x: number; y: number; radius: number } {
   if (candidate.shape === 'circle') {
+    // 圆形取内切：撑满非方形格子会把圆压成椭圆，因此按短边确定半径
     const radius = Math.max(1, Math.min(result.width, result.height) / 2);
     return { x: result.x + result.width / 2, y: result.y + result.height / 2, radius };
   }

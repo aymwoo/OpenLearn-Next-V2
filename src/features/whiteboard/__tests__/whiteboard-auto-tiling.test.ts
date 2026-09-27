@@ -13,6 +13,9 @@ import {
   toTileCandidate,
   toTiledGeometry,
   isTileableType,
+  geometryKeys,
+  extractGeometry,
+  sameGeometry,
   NON_TILEABLE_TYPES,
   type TileCandidate,
   type TilingResult,
@@ -143,6 +146,39 @@ describe('fitIntoTile（保持比例居中）', () => {
   });
 });
 
+describe('geometryKeys / extractGeometry / sameGeometry（平铺快照支撑）', () => {
+  it('普通元素用 width/height，圆形用 radius', () => {
+    expect(geometryKeys('rect')).toEqual(['x', 'y', 'width', 'height']);
+    expect(geometryKeys('circle')).toEqual(['x', 'y', 'radius']);
+    expect(geometryKeys()).toEqual(['x', 'y', 'width', 'height']);
+  });
+
+  it('extractGeometry 取出对应键并把缺失值归零', () => {
+    expect(extractGeometry({ x: 10, y: 20, width: 300, height: 200 })).toEqual({
+      x: 10,
+      y: 20,
+      width: 300,
+      height: 200,
+    });
+    expect(extractGeometry({ x: 5 })).toEqual({ x: 5, y: 0, width: 0, height: 0 });
+    expect(extractGeometry({ radius: 30, x: 1, y: 2 }, 'circle')).toEqual({ x: 1, y: 2, radius: 30 });
+    // 脏值不产生 NaN
+    expect(extractGeometry({ x: 'abc' }).x).toBe(0);
+  });
+
+  it('sameGeometry 在 0.5px 容差内判等、容差外判不等', () => {
+    const keys = geometryKeys();
+    expect(sameGeometry({ x: 10, y: 10, width: 100, height: 100 }, { x: 10.4, y: 10.4, width: 100, height: 100 }, keys)).toBe(true);
+    expect(sameGeometry({ x: 10, y: 10, width: 100, height: 100 }, { x: 11, y: 10, width: 100, height: 100 }, keys)).toBe(false);
+  });
+
+  it('sameGeometry 只比较传入的键，忽略快照等无关字段', () => {
+    const keys = geometryKeys();
+    const withSnapshot = { x: 0, y: 0, width: 50, height: 50, __preTile: { x: 9, y: 9, width: 9, height: 9 } };
+    expect(sameGeometry(withSnapshot, { x: 0, y: 0, width: 50, height: 50 }, keys)).toBe(true);
+  });
+});
+
 describe('computeTiling', () => {
   it('空数组 / 非法容器尺寸返回空数组', () => {
     expect(computeTiling([], CONTAINER)).toEqual([]);
@@ -176,27 +212,57 @@ describe('computeTiling', () => {
     }
   });
 
-  it('单个元素时铺满一个维度、在另一维度居中（保持比例的必然结果）', () => {
+  it('默认 fill 模式：单个元素精确铺满整个可用区域（i3 行为）', () => {
     const results = computeTiling(makeCandidates(1, { width: 400, height: 300 }), CONTAINER, {
       padding: 0,
       gap: 0,
     });
-    // 400:300 与 1600:900 不同比，等比放大后由高度触顶，宽度留白并水平居中
-    expect(results[0].height).toBeCloseTo(CONTAINER.height);
-    expect(results[0].width).toBeCloseTo(1200);
-    expect(results[0].x).toBeCloseTo((CONTAINER.width - 1200) / 2);
+    expect(results[0].x).toBeCloseTo(0);
     expect(results[0].y).toBeCloseTo(0);
+    expect(results[0].width).toBeCloseTo(CONTAINER.width);
+    expect(results[0].height).toBeCloseTo(CONTAINER.height);
   });
 
-  it('单个元素且比例恰好匹配时铺满整个区域', () => {
-    const results = computeTiling(makeCandidates(1, { width: 1600, height: 900 }), CONTAINER, {
+  it('默认 fill 模式：格子被精确铺满，元素之间只留 gap 不留比例空白', () => {
+    // 用一个极端比例的元素验证：若仍走「保持比例」逻辑，宽度必然远小于格子
+    const results = computeTiling(makeCandidates(1, { width: 1600, height: 100 }), CONTAINER, {
       padding: 0,
       gap: 0,
     });
     expect(results[0].width).toBeCloseTo(CONTAINER.width);
     expect(results[0].height).toBeCloseTo(CONTAINER.height);
-    expect(results[0].x).toBeCloseTo(0);
-    expect(results[0].y).toBeCloseTo(0);
+  });
+
+  it('默认 fill 模式：多元素时每格都被自己的元素精确填满（无信箱式留白）', () => {
+    const results = computeTiling(makeCandidates(4, { width: 100, height: 100 }), CONTAINER, {
+      padding: 0,
+      gap: 0,
+    });
+    results.forEach((r) => {
+      expect(r.width).toBeCloseTo(CONTAINER.width / 2);
+      expect(r.height).toBeCloseTo(CONTAINER.height / 2);
+    });
+  });
+
+  it("fillMode: 'fit' 时恢复保持比例居中", () => {
+    const results = computeTiling(makeCandidates(1, { width: 400, height: 300 }), CONTAINER, {
+      padding: 0,
+      gap: 0,
+      fillMode: 'fit',
+    });
+    // 400:300 与 1600:900 不同比，等比放大后由高度触顶，宽度留白并水平居中
+    expect(results[0].height).toBeCloseTo(CONTAINER.height);
+    expect(results[0].width).toBeCloseTo(1200);
+    expect(results[0].x).toBeCloseTo((CONTAINER.width - 1200) / 2);
+  });
+
+  it("fillMode: 'fit' 时宽高比得以保持", () => {
+    const results = computeTiling(makeCandidates(4, { width: 640, height: 480 }), CONTAINER, {
+      fillMode: 'fit',
+    });
+    results.forEach((r) => {
+      expect(r.width / r.height).toBeCloseTo(640 / 480, 6);
+    });
   });
 
   it('所有结果都落在容器可视范围内', () => {
@@ -225,11 +291,25 @@ describe('computeTiling', () => {
     });
   });
 
-  it('宽高比在平铺后依然保持（内容不会被拉变形）', () => {
+  it('宽高比在 fit 模式下依然保持（内容不会被拉变形）', () => {
     const candidates = makeCandidates(4, { width: 640, height: 480 });
-    const results = computeTiling(candidates, CONTAINER);
+    const results = computeTiling(candidates, CONTAINER, { fillMode: 'fit' });
     results.forEach((r) => {
       expect(r.width / r.height).toBeCloseTo(640 / 480, 6);
+    });
+  });
+
+  it('默认 fill 模式下宽高比会随格子变化（i3 拉伸语义），元素重新计算后仍幂等', () => {
+    const first = computeTiling(makeCandidates(3, { width: 640, height: 480 }), CONTAINER);
+    const second = computeTiling(
+      first.map((r) => ({ id: r.id, x: r.x, y: r.y, width: r.width, height: r.height })),
+      CONTAINER,
+    );
+    first.forEach((r, i) => {
+      expect(second[i].x).toBeCloseTo(r.x, 6);
+      expect(second[i].y).toBeCloseTo(r.y, 6);
+      expect(second[i].width).toBeCloseTo(r.width, 6);
+      expect(second[i].height).toBeCloseTo(r.height, 6);
     });
   });
 });
@@ -269,6 +349,16 @@ describe('toTileCandidate / toTiledGeometry', () => {
     expect(c?.shape).toBe('circle');
     expect(c?.width).toBe(60);
     expect(c?.height).toBe(60);
+  });
+
+  it('圆形：fill 模式下取格子内切圆（不撑成椭圆）', () => {
+    const candidate = toTileCandidate({ id: 'c', type: 'circle' }, { radius: 30 }, { width: 40, height: 40 })!;
+    // 一个 800x400 的非方形格子
+    const [result] = computeTiling([candidate], { width: 800, height: 400 }, { padding: 0, gap: 0 });
+    const geo = toTiledGeometry(candidate, result) as { x: number; y: number; radius: number };
+    expect(geo.radius).toBeCloseTo(200); // 短边 400 的一半
+    expect(geo.x).toBeCloseTo(400); // 圆心仍在格子中心
+    expect(geo.y).toBeCloseTo(200);
   });
 
   it('圆形写回时改写 radius 而非 width/height（否则改动会静默失效）', () => {

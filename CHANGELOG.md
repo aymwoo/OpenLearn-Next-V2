@@ -15,13 +15,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - 互动课堂起始门户右侧遥测岛由 2×2 网格改为单行四格（`grid-cols-2 md:grid-cols-4`），配套压缩卡片内边距与图标尺寸，并将容器宽度由 440px 放宽至 620px，避免「保持比例」约束下的文字截断。
 
 - **白板自动平铺（Auto Tiling）—— 类 Linux tiling 窗口管理器布局**：
-  - 新增纯布局算法 `src/features/whiteboard/utils/auto-tiling.ts`（不依赖 React/Konva/DOM）：i3 同源 BSP 二分树（首层左右分栏、逐层交替横竖切、`firstCount = floor(n/2)`，n=3 时退化为 i3 经典形态），元素**保持宽高比居中**放入格子，缩放比取宽高约束较小值故永不溢出。
+  - 新增纯布局算法 `src/features/whiteboard/utils/auto-tiling.ts`（不依赖 React/Konva/DOM）：i3 同源 BSP 二分树（首层左右分栏、逐层交替横竖切、`firstCount = floor(n/2)`，n=3 时退化为 i3 经典形态）。默认 `fillMode: 'fill'` —— 元素外框**精确铺满**整个格子、零留白，对齐 i3 窗口行为；白板元素外壳本身是 `flex flex-col`（标题栏 + `flex-grow overflow-auto` 内容区），撑满后内部自动重排。`fillMode: 'fit'`（保持宽高比居中）作为可选项保留。默认 `gap` / `padding` 各 8px，接近 i3 的细边框。
   - 工具栏新增平铺开关按钮（`LayoutGrid` 图标，开启时显示「平铺中」徽标），位于网格开关旁；`readOnly` 态（他人课程预览、学生端）不渲染该按钮。`WhiteboardToolbar` 在 `InteractiveWhiteboard` 内部渲染，故课程编辑器、互动课堂、学生端课节四处白板自动获得该能力。
   - 持续模式语义：开启即重排当前页；此后增删元素、切页切环节、画布尺寸变化（250ms 防抖）均自动重排。拖拽不改变元素 id 集合，因此**不会打断自由布局**——两种效果共存。
+  - **关闭平铺自动还原**：元素首次被平铺改写时，把平铺前几何以 `__preTile` 写入该元素 `data`（另存 `__tiled` 记录本次写入值）。切回自由布局时据此还原并清除两个快照字段。**用户在平铺模式下手动拖动/缩放过的元素会被跳过还原**（当前几何与 `__tiled` 不符即视为用户已调整），避免覆盖其意图，但快照字段仍会清除以免下次误用过期基准。快照随元素落库，因此刷新页面后仍可还原。
   - 平铺写回完全复刻拖拽提交的两步（`onElementUpdate` + `whiteboard.element_updated` 事件广播），持久化、800ms 防抖自动保存与广播行为与手动拖动一致。
   - 类型差异归一化：`circle` 走 `radius` 而非 `width/height`（写回时改写 radius，否则改动会静默失效）；`pen` / `highlighter` 为绝对坐标折线、`page_meta` 为分页元数据，三者排除出平铺范围。
   - 抽出 `getCurrentPageElements()` 供画布渲染与自动平铺共用同一份「当前页 + 当前环节」筛选规则；`renderElement` 内联的 `getInitialWidth`/`getInitialHeight` 合并为模块级 `DEFAULT_ELEMENT_SIZE` 尺寸表，渲染与平铺不再有两份尺寸规则。
-  - 测试 `whiteboard-auto-tiling.test.ts`（27 例）锁定面积守恒、任意两格不重叠、平铺幂等、宽高比不变、圆形 radius 回写等不变量。
+  - 测试 `whiteboard-auto-tiling.test.ts`（36 例）锁定面积守恒、任意两格不重叠、平铺幂等、fill 模式精确铺满、fit 模式宽高比不变、圆形内切取短边，以及快照辅助函数（几何键名、缺失值归零、0.5px 容差判等）等不变量。
 
 - **课程编辑器「学生视角」改为独立标签页打开**：
   - 新增 `student_preview` 标签页模式（`?mode=student_preview&lessonId=…`），与课堂联动的 `student_live` 刻意区分：保留常规 AppHeader（品牌区/通知/登出）与琥珀色模拟学生横幅，**退出动作为「关闭此预览标签页」而非「返回教师端」**（该标签页内不存在教师端，原按钮是死路），且不接入课堂实时同步信道。

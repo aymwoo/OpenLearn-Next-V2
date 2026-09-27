@@ -63,6 +63,9 @@ import {
   toTileCandidate,
   toTiledGeometry,
   isTileableType,
+  geometryKeys,
+  extractGeometry,
+  sameGeometry,
   type TileCandidate,
 } from './utils/auto-tiling';
 import { useWhiteboardViewStore } from '../../store/whiteboardViewStore';
@@ -1837,7 +1840,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       const results = computeTiling(candidates, containerSize);
       if (results.length === 0) return;
 
-      const toFinite = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
       let changed = false;
       setIsSyncing(true);
       try {
@@ -1846,13 +1848,18 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           const current = rawDataById.get(candidate.id);
           if (!current) continue;
           const geometry = toTiledGeometry(candidate, results[i]) as Record<string, number>;
+          const keys = geometryKeys(candidate.shape);
           // 已在目标位置则跳过，避免窗口缩放时反复触发自动保存与广播
-          const unchanged = Object.keys(geometry).every(
-            (key) => Math.abs(toFinite(current[key]) - geometry[key]) < 0.5,
-          );
-          if (unchanged) continue;
+          if (sameGeometry(current, geometry, keys)) continue;
           changed = true;
-          await onElementUpdate(candidate.id, { ...current, ...geometry });
+          // 首次改动该元素时，把平铺前的几何快照写进 data，关闭平铺时据此还原。
+          // __tiled 记录我们写入的值，用于还原时判断元素是否被用户手动拖过。
+          const patch: Record<string, any> = { ...current, ...geometry };
+          if (!current.__preTile) {
+            patch.__preTile = extractGeometry(current, candidate.shape);
+          }
+          patch.__tiled = geometry;
+          await onElementUpdate(candidate.id, patch);
         }
         if (!changed) return;
         frontendEventBus.publish({
@@ -1867,6 +1874,49 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         setIsSyncing(false);
       }
     }, [onElementUpdate, containerSize, safeElements, pages, currentPage, activeSegmentId, lessonId]);
+
+    /**
+     * 关闭平铺模式时把元素还原到平铺前的几何。
+     * 被用户在平铺模式下手动拖动/缩放过的元素会被跳过（尊重用户意图，不覆盖其调整），
+     * 但快照字段仍会清除，避免下次平铺时误用过期基准。
+     */
+    const restoreAutoTiling = useCallback(async () => {
+      if (!onElementUpdate) return;
+      const restores: { id: string; patch: Record<string, any> }[] = [];
+
+      for (const el of safeElements) {
+        let data: Record<string, any>;
+        try {
+          data = JSON.parse(el.data);
+        } catch {
+          continue;
+        }
+        if (!data.__preTile) continue;
+        const { __preTile, __tiled, ...rest } = data;
+        const keys = geometryKeys(el.type === 'circle' ? 'circle' : 'rect');
+        // 几何仍是我们写入的值 → 用户没动过，安全还原
+        const untouched = !__tiled || sameGeometry(data, __tiled, keys);
+        restores.push({ id: el.id, patch: untouched ? { ...rest, ...__preTile } : rest });
+      }
+      if (restores.length === 0) return;
+
+      setIsSyncing(true);
+      try {
+        for (const { id, patch } of restores) {
+          await onElementUpdate(id, patch);
+        }
+        frontendEventBus.publish({
+          id: uuidv7(),
+          type: 'whiteboard.element_updated',
+          source: 'whiteboard',
+          payload: { lessonId },
+          timestamp: Date.now(),
+          correlationId: lessonId,
+        });
+      } finally {
+        setIsSyncing(false);
+      }
+    }, [onElementUpdate, safeElements, lessonId]);
 
     // 用 ref 持有最新的平铺实现，使下面的自动触发 effect 只依赖真正需要的变化
     const applyAutoTilingRef = useRef(applyAutoTiling);
@@ -1898,10 +1948,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       return () => clearTimeout(timer);
     }, [autoTileEnabled, containerSize.width, containerSize.height]);
 
-    /** 工具栏开关：开启即立刻重排，关闭即恢复完全自由的拖拽布局 */
+    /** 工具栏开关：开启即立刻重排并留下快照，关闭即还原到平铺前的布局 */
     const handleToggleAutoTile = useCallback(() => {
-      setAutoTileEnabled((prev) => !prev);
-    }, []);
+      if (autoTileEnabled) {
+        void restoreAutoTiling();
+      }
+      setAutoTileEnabled(!autoTileEnabled);
+    }, [autoTileEnabled, restoreAutoTiling]);
 
     const renderRemoteDrawings = () => {
       return Object.values(remoteDrawings).map((drawing, i) => (
