@@ -124,6 +124,30 @@ export function ClassroomInteractiveCockpit({
     };
   }, [lessonId]);
 
+  // 获取当前课程的预设投票题库（必须早于 `if (!lessonId) return null` —— 保持 Hook 调用顺序恒定）
+  const fetchPresetPolls = useCallback(async () => {
+    if (!lessonId) return;
+    setIsLoadingPresets(true);
+    try {
+      const res = await fetch(`/api/lessons/${lessonId}/preset-polls`);
+      if (res.ok) {
+        const json = await res.json();
+        setPresetPolls(json.presets || []);
+      }
+    } catch {
+      // 静默失败，不影响主流程
+    } finally {
+      setIsLoadingPresets(false);
+    }
+  }, [lessonId]);
+
+  // 打开弹窗时自动拉取预设题库
+  useEffect(() => {
+    if (isPollDialogOpen) {
+      fetchPresetPolls();
+    }
+  }, [isPollDialogOpen, fetchPresetPolls]);
+
   if (!lessonId) return null;
 
   // 阶段推进处理
@@ -164,30 +188,6 @@ export function ClassroomInteractiveCockpit({
       addToast('Error', e.message, 'error');
     }
   };
-
-  // 获取当前课程的预设投票题库
-  const fetchPresetPolls = useCallback(async () => {
-    if (!lessonId) return;
-    setIsLoadingPresets(true);
-    try {
-      const res = await fetch(`/api/lessons/${lessonId}/preset-polls`);
-      if (res.ok) {
-        const json = await res.json();
-        setPresetPolls(json.presets || []);
-      }
-    } catch {
-      // 静默失败，不影响主流程
-    } finally {
-      setIsLoadingPresets(false);
-    }
-  }, [lessonId]);
-
-  // 打开弹窗时自动拉取预设题库
-  useEffect(() => {
-    if (isPollDialogOpen) {
-      fetchPresetPolls();
-    }
-  }, [isPollDialogOpen, fetchPresetPolls]);
 
   // 切换题型时自动同步选项
   const handlePollTypeChange = (type: 'ABCD' | 'TF' | 'CUSTOM') => {

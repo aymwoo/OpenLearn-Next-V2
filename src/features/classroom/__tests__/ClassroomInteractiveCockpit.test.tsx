@@ -96,7 +96,7 @@ describe('ClassroomInteractiveCockpit & StageDisplayModal', () => {
     const pollBtn = screen.getByText('极速投票');
     fireEvent.click(pollBtn);
 
-    expect(screen.getByText('发起口播极速单选')).toBeDefined();
+    expect(screen.getByText('极速投票配置')).toBeDefined();
     expect(screen.getByText('ABCD 四选一')).toBeDefined();
     expect(screen.getByText('正确 / 错误')).toBeDefined();
   });
