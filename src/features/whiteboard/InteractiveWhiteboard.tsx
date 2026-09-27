@@ -725,6 +725,57 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       startPointerY: number;
       data: any;
     } | null>(null);
+
+    /**
+     * 乐观几何覆盖层。
+     *
+     * 课程编辑器的 onElementUpdate 只把变更入队（800ms 防抖自动保存），写完不会
+     * 立刻回传新的 elements；而 onElementAdd / onElementDelete 都会 fetchElements()
+     * 刷新。也就是说「更新」这条路径在服务端落库后，画布仍会继续渲染旧 prop——
+     * 自动平铺因此表现为「已保存但布局没变」。
+     *
+     * 这里保存「最近一次程序化写入的几何」，渲染时优先于 data 取用；等服务端数据
+     * 追上后自动移除对应条目，避免长期与真实数据脱节。
+     */
+    const localGeometryRef = useRef<Map<string, Record<string, number>>>(new Map());
+    const [localGeometryVersion, setLocalGeometryVersion] = useState(0);
+
+    const setLocalGeometry = useCallback((id: string, patch: Record<string, number>) => {
+      localGeometryRef.current.set(id, patch);
+      setLocalGeometryVersion((v) => v + 1);
+    }, []);
+
+    const clearLocalGeometry = useCallback((id: string) => {
+      if (localGeometryRef.current.delete(id)) {
+        setLocalGeometryVersion((v) => v + 1);
+      }
+    }, []);
+
+    // 切换课程时整体作废
+    useEffect(() => {
+      localGeometryRef.current.clear();
+      setLocalGeometryVersion((v) => v + 1);
+    }, [lessonId]);
+
+    // 服务端数据追上本地覆盖后，移除覆盖条目
+    useEffect(() => {
+      if (localGeometryRef.current.size === 0) return;
+      for (const el of elements) {
+        const overlay = localGeometryRef.current.get(el.id);
+        if (!overlay) continue;
+        try {
+          const data = JSON.parse(el.data);
+          const keys = Object.keys(overlay);
+          if (sameGeometry(data, overlay, keys)) {
+            localGeometryRef.current.delete(el.id);
+          }
+        } catch {
+          localGeometryRef.current.delete(el.id);
+        }
+      }
+      setLocalGeometryVersion((v) => v + 1);
+    }, [elements]);
+
     const dragRef = useRef<{
       id: string;
       currentX: number;
@@ -1263,6 +1314,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           setIsSyncing(true);
           try {
             await onElementUpdate(elementId, { ...elementData, x: finalX, y: finalY });
+            // 乐观更新：拖拽结果立即落画布，避免服务端回传前被覆盖层弹回
+            setLocalGeometry(elementId, {
+              ...extractGeometry(elementData, elementData?.radius !== undefined ? 'circle' : 'rect'),
+              x: finalX,
+              y: finalY,
+            });
             frontendEventBus.publish({
               id: uuidv7(),
               type: 'whiteboard.element_updated',
@@ -1285,7 +1342,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         window.removeEventListener('pointermove', onPointerMove);
         window.removeEventListener('pointerup', onPointerUp);
       };
-    }, [activeDragElement, onElementUpdate, lessonId]);
+    }, [activeDragElement, onElementUpdate, lessonId, setLocalGeometry]);
 
     // Window-level resizing event listeners
     useEffect(() => {
@@ -1365,6 +1422,14 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             const currentData = JSON.parse(targetEl.data);
             setIsSyncing(true);
             await onElementUpdate(id, { ...currentData, x, y, width, height });
+            // 乐观更新：缩放结果立即落画布
+            setLocalGeometry(id, {
+              ...extractGeometry(currentData, currentData?.radius !== undefined ? 'circle' : 'rect'),
+              x,
+              y,
+              width,
+              height,
+            });
             frontendEventBus.publish({
               id: uuidv7(),
               type: 'whiteboard.element_updated',
@@ -1387,7 +1452,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         window.removeEventListener('pointermove', onPointerMove);
         window.removeEventListener('pointerup', onPointerUp);
       };
-    }, [activeResizeElement, resizingState, elements, onElementUpdate, lessonId]);
+    }, [activeResizeElement, resizingState, elements, onElementUpdate, lessonId, setLocalGeometry]);
 
     const handleElementDelete = (elementId: string) => {
       // 只读跟随模式下禁止任何删除写入
@@ -1852,6 +1917,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           // 已在目标位置则跳过，避免窗口缩放时反复触发自动保存与广播
           if (sameGeometry(current, geometry, keys)) continue;
           changed = true;
+          // 乐观更新：先落到本地渲染，再交给持久化，避免等待服务端回传
+          setLocalGeometry(candidate.id, geometry);
           // 首次改动该元素时，把平铺前的几何快照写进 data，关闭平铺时据此还原。
           // __tiled 记录我们写入的值，用于还原时判断元素是否被用户手动拖过。
           const patch: Record<string, any> = { ...current, ...geometry };
@@ -1903,6 +1970,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       setIsSyncing(true);
       try {
         for (const { id, patch } of restores) {
+          // 乐观更新：还原结果立刻反映到画布
+          const shape = patch.radius !== undefined ? 'circle' : 'rect';
+          setLocalGeometry(id, extractGeometry(patch, shape));
           await onElementUpdate(id, patch);
         }
         frontendEventBus.publish({
@@ -1966,20 +2036,26 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const renderElement = (el: WhiteboardElement) => {
       try {
         const data = JSON.parse(el.data);
+        // localGeometryVersion 仅用于让覆盖层的增删触发重渲染
+        void localGeometryVersion;
+        const overlay = localGeometryRef.current.get(el.id);
         const isDraggingThis = activeDragElement?.id === el.id;
         const isResizingThis = resizingState?.id === el.id;
-        const displayX = isResizingThis ? resizingState.x : isDraggingThis ? activeDragElement.currentX : (data.x ?? 0);
-        const displayY = isResizingThis ? resizingState.y : isDraggingThis ? activeDragElement.currentY : (data.y ?? 0);
+        // 优先级：拖拽/缩放中的临时状态 > 乐观几何覆盖 > 服务端 data
+        const baseX = overlay?.x ?? data.x ?? 0;
+        const baseY = overlay?.y ?? data.y ?? 0;
+        const displayX = isResizingThis ? resizingState.x : isDraggingThis ? activeDragElement.currentX : baseX;
+        const displayY = isResizingThis ? resizingState.y : isDraggingThis ? activeDragElement.currentY : baseY;
 
         const getInitialWidth = (type: string) => getDefaultElementSize(type, data).width;
         const getInitialHeight = (type: string) => getDefaultElementSize(type, data).height;
 
-        const displayWidth = isResizingThis ? resizingState.width : (data.width ?? getInitialWidth(el.type));
+        const displayWidth = isResizingThis ? resizingState.width : (overlay?.width ?? data.width ?? getInitialWidth(el.type));
         const displayHeight = isResizingThis
           ? resizingState.height
           : data.isMinimized
             ? 36
-            : (data.height ?? getInitialHeight(el.type));
+            : (overlay?.height ?? data.height ?? getInitialHeight(el.type));
         const isThisSelected = selectedShapeId === el.id;
 
         const renderResizeHandles = () => {
@@ -2569,9 +2645,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             <Circle
               key={el.id}
               id={el.id}
-              x={data.x}
-              y={data.y}
-              radius={data.radius}
+              x={overlay?.x ?? data.x}
+              y={overlay?.y ?? data.y}
+              radius={overlay?.radius ?? data.radius}
               fill={data.fill || 'transparent'}
               stroke={isSelected ? '#3b82f6' : data.stroke || 'green'}
               strokeWidth={isSelected ? 3 : 1}
