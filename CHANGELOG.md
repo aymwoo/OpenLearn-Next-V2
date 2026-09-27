@@ -36,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **「回到课堂」入口（`ClassroomEntryPortal.tsx`）**：所选课程存在进行中会话（IN_CLASS_TEACHING / WRAP_UP_EXIT_TICKET）时显示绿色脉冲提示条「课堂进行中 · 回到课堂」，一键直达恢复后的授课视图；
   - **E2E 测试（`server/__tests__/classroom-session-resume.test.ts`）**：教师开课→产生痕迹→离开（不发请求不清理状态）→「全新客户端」重进，验证 stage/started_at/页码/环节/动态回放/倒计时全部还原；含无会话与非法参数边界。
   - **浏览器实测（Playwright，学生答题界面 + 实时推送弹窗）全链路通过**：学生 Cookie 登录 → 进课节（锁屏跟随）→ 教师端发布 → socket `exambank-survey-state` 推送 → 学生端自动弹出答题模态（课中浮层槽位）→ 作答提交 → 「已提交 ✓ 得分: 10/10」→ 教师端实时统计 `exambank-stats-update`（submission_count/选项分布）。实测抓出并修复 CSP blob 缺失与课中浮层槽位缺失两个平台缺陷。
+  - **多题型端到端浏览器实测通过**：多选/判断/填空/量表/简答五题型混合实名卷（晚进恢复 → 逐题型作答 → 判分 25/25 → 统计逐类聚合：多选分布 A:1/C:1、判断分布 true:1、填空高频 80、量表均值 5、简答答案列表、实名 roster）+ 匿名问卷（推送弹窗 → 提交落库 `student_id = anon:<token>` 不入学生档案、`avg_score = null`、`roster` 不输出）。实测抓出并修复两个插件缺陷：判断题 API 建题无选项兜底、统计分布对字符串答案按字符拆键。观察项：学生页面存在多 socket 连接竞态（插件已自愈，平台架构债另计）；`writeLimiter` 60 写/分钟/IP 在课中高频场景偏紧。
   - **教师端浏览器实测（Playwright）通过**：欢迎向导关闭 → `teacher.tab`「题库与测验」面板渲染与录题（列表项落库可见）→ 组卷与问卷设计器（选题保存草稿 → 发布）→ 统计报告面板渲染 → 白板工具栏 🧩 插件区按钮（数量角标）→ 下拉面板列出插件工具（portal 无挤压）。附带验证：入口门户遥测岛 2×2 无截断、「课堂进行中 · 回到课堂」横幅在真实会话下出现且可用。
 
 - **作业中心文件上传链路审计修复（`server/routes/assignment-hub.ts`）**：
