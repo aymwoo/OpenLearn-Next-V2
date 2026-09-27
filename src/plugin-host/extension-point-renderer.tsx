@@ -208,16 +208,15 @@ export function ExtensionPointRenderer({
   slotProps,
   placement,
 }: ExtensionPointRendererProps) {
+  // Hooks 顺序红线：全部无条件调用后再走早退分支（此前早退先于 hooks，
+  // 触发 rules-of-hooks 存量违规）
   const host = useOptionalPluginHost();
-  if (!host) return fallback ?? null;
-  let extensions = host.getExtensions(slot as ExtensionSlot);
-
   const visibility = usePluginHostStore((s) => s.dashboardVisibility);
-
-  // v5.1: 宿主统一注入的课堂上下文（课程/班级）。源头在 appStore，
-  // 由渲染器读取并注入到所有扩展点组件 props 的最底层（可被 slotProps 覆盖）。
   const selectedLesson = useAppStore((s) => s.selectedLesson);
   const liveClassSelectedClassId = useAppStore((s) => s.liveClassSelectedClassId);
+
+  if (!host) return fallback ?? null;
+  let extensions = host.getExtensions(slot as ExtensionSlot);
 
   // v0.2.6: anchor slot placement filtering —— 宿主在锚点按钮前后各渲染一次，
   // 本侧只渲染与 placement 匹配的扩展（未声明的默认视为 'after'）。
@@ -226,6 +225,61 @@ export function ExtensionPointRenderer({
   }
 
   if (extensions.length === 0) return null;
+
+  // class.tab with renderType 'button' — render compact tab buttons from
+  // extension metadata (same metadata-driven pattern as teacher.tab, but
+  // styled as class-detail tabs). Content is rendered separately by
+  // ClassesView via the same slot with renderType 'panel'.
+  if (slot === 'class.tab' && slotProps?.renderType === 'button') {
+    return (
+      <>
+        {extensions.map((ext) => {
+          const tabValue = `plugin:${ext.pluginId}/${ext.id}`;
+          const isActive = slotProps?.classActiveTab === tabValue;
+          const label = (ext as any).title || ext.label || ext.id;
+          return (
+            <button
+              key={`${ext.pluginId}/${ext.id}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                slotProps?.setClassActiveTab?.(tabValue);
+              }}
+              className={`py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
+                isActive ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+              }`}
+              title={label}
+            >
+              <Puzzle size={12} />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+      </>
+    );
+  }
+
+  // class.tab with renderType 'panel' — render the active plugin tab's panel.
+  // Renders NOTHING unless this class has the corresponding plugin tab active.
+  if (slot === 'class.tab' && slotProps?.renderType === 'panel') {
+    const expected = slotProps?.classActiveTab as string | undefined;
+    const activeExt = extensions.find((ext) => `plugin:${ext.pluginId}/${ext.id}` === expected);
+    if (!activeExt) return null;
+    return (
+      <ExtensionErrorBoundary
+        key={`${activeExt.pluginId}/${activeExt.id}`}
+        fallback={<div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">扩展 Tab 加载失败</div>}
+      >
+        <Suspense fallback={<LoadingSkeleton />}>
+          {React.createElement(resolveExtensionComponent(activeExt), {
+            classId: slotProps?.classId,
+            students: slotProps?.students,
+            lang: slotProps?.lang,
+            ...activeExt.slotProps,
+          })}
+        </Suspense>
+      </ExtensionErrorBoundary>
+    );
+  }
 
   // teacher.tab with renderType 'button' — render NavButton-style buttons
   // directly from extension metadata, bypassing plugin components entirely.

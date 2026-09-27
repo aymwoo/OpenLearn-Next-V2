@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **新增 SLOW（快一点/讲太慢）节奏信号**：服务端 pacing 白名单与聚合扩展为 4 信号；学生互动浮层新增 🐢「讲太慢」按钮（原有 🐇「讲太快」= 希望慢一点）。
   - **作业提交实时通知**：`assignment.submitted` 内核事件新增 event-routing 路由（课节/班级房间广播 `assignment-submitted-toast`）；`TeacherAssignmentGradePanel` 监听后自动重拉评分数据，教师不再需要手动刷新。
   - **浏览器实测（Playwright）通过**：教师进课堂 → API 注入 5 条学生情绪信号 → 打开仪表盘（饼图三色扇区/四进度条/理解占比 50%/教学建议渲染）→ 再注入 2 条困惑信号 → 顶栏与面板计数 socket 实时同步（❓ 1→3）。
+  - **班级管理域 P0 插槽落地（打破班级管理零插件状态）**：新增 5 个扩展槽位并接线——`class.tab`（班级详情扩展 Tab，元数据按钮 + 面板双渲染，ClassTabs/ClassesView）、`class.batch.action`（花名册批量操作流水线，含选中集与禁用态）、`student.row.panel`（学生行展开卡片插槽，所有展开 Tab 可见）、`editor.header.action`（备课编辑器头部动作）、`classroom.post_class.widget`（课后结课视图插件卡片）。附带入 `ExtensionPointRenderer` 两个渲染特例（button/panel）与存量 rules-of-hooks 修复（hooks 提前无条件调用）。
   - **`student.fullscreen` 考试模式接线（v5.1 休眠槽位激活）**：`StudentInteractiveOverlay` 挂载该槽位；插件侧新增考试模式——组卷面板「🔒 考试模式（全屏锁定）」开关 + 可选限时（分钟），发布后学生端**全屏深色接管**（标题锁定标识/交卷前不可退出/倒计时归零自动交卷/迟到学生显示「考试时间已结束」不交空卷）。浏览器实测：全屏接管 + 倒计时 + 作答 + 交卷判分 10/10。
 - **插件 REST 网关 GET 子路径被详情路由吞掉的缺陷修复（`server/routes/plugins.ts`）**：
   - `GET /api/plugins/:id(*)`（插件详情）注册于网关 `/api/plugins/:pluginId/*` 之前，且 `:id(*)` 通配会捕获整条路径（如 `@scope/plugin-x/health`），导致**所有插件 REST API 的 GET 子路径请求永远无法到达网关**（V5.2 网关自此上线以来 GET 通道即不可用，POST 无通配路由不受影响）；

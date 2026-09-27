@@ -1,7 +1,8 @@
 import { Users, Activity, Calendar as CalendarIcon, ClipboardList } from 'lucide-react';
 import type { ClassType } from '../../../types/app';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
-export type ClassTabKey = 'students' | 'assignments' | 'schedules' | 'seating' | 'grades';
+export type ClassTabKey = 'students' | 'assignments' | 'schedules' | 'seating' | 'grades' | (string & {});
 
 export interface ClassTabsProps {
   cls: ClassType;
@@ -72,6 +73,17 @@ export function ClassTabs({ cls, lang, classActiveTabs, setClassActiveTabs }: Cl
         <ClipboardList size={12} />
         <span>{lang === 'zh' ? '学期总评' : 'Grades'}</span>
       </button>
+      {/* 插件扩展 Tab（按钮由扩展点元数据渲染；面板由 ClassesView 渲染） */}
+      <ExtensionPointRenderer
+        slot="class.tab"
+        slotProps={{
+          renderType: 'button',
+          classId: cls.id,
+          lang,
+          classActiveTab: classActiveTabs[cls.id] || 'students',
+          setClassActiveTab: (tab: string) => setClassActiveTabs((prev) => ({ ...prev, [cls.id]: tab })),
+        }}
+      />
     </div>
   );
 }

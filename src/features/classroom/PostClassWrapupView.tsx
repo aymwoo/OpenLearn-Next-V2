@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   ChevronRight,
 } from 'lucide-react';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { TeacherAssignmentGradePanel } from '../../components/TeacherAssignmentGradePanel';
 import type { StudentType } from '../../types/app';
 import { ConceptWordcloudPanel } from './exit-ticket/ConceptWordcloudPanel';
@@ -227,6 +228,12 @@ export function PostClassWrapupView({
           </button>
         </div>
       </div>
+
+      {/* 插件扩展卡片（分层作业/勋章仪式/专注度报告等） */}
+      <ExtensionPointRenderer
+        slot="classroom.post_class.widget"
+        slotProps={{ lessonId: selectedLesson, classId: selectedClassId, lang }}
+      />
 
       {/* 2. Sub-tab Navigation */}
       <div className="flex items-center gap-2 bg-surface p-1.5 rounded-xl border border-theme shadow-xs shrink-0 overflow-x-auto">

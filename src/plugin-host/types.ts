@@ -135,7 +135,14 @@ export type ExtensionSlot =
   | 'whiteboard.autosave.action' // 白板自动保存附加操作区扩展（如立即同步到外部网盘、版本快照打标）
   // ── 互动课堂课前班级临时密码扩展槽位 ──────────────────────────────────────
   | 'classroom.preclass.passcode_action' // 临时密码操作工具栏扩展按钮（如一键推送电子班牌、微校通知等）
-  | 'classroom.preclass.passcode_addon'; // 临时密码卡片附加面板（如第三方考勤门禁状态集成等）
+  | 'classroom.preclass.passcode_addon' // 临时密码卡片附加面板（如第三方考勤门禁状态集成等）
+  // ── 班级与学生管理域扩展槽位（v0.4.1，打破班级管理零插件状态） ──
+  | 'class.tab' // 班级详情扩展 Tab（如综合素质评价 / 心理健康档案 / 班级积分商城）
+  | 'class.batch.action' // 花名册批量操作流水线扩展（如一键同步学籍系统 / 批量导出名册）
+  | 'student.row.panel' // 学生行展开面板扩展（知识图谱雷达 / 多维评价勋章等卡片）
+  // ── 备课与课后闭环扩展槽位 ──
+  | 'editor.header.action' // 备课编辑器头部动作扩展（导入教案库 / AI 合规审查 / 导出 PDF）
+  | 'classroom.post_class.widget' // 课后结课视图扩展卡片（分层作业 / 勋章仪式 / 专注度报告）
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。

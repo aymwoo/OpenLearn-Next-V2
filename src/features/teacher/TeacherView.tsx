@@ -1,4 +1,5 @@
 import React, { lazy, Suspense } from 'react';
+import type { ClassTabKey } from './classes/ClassTabs';
 import type { Dispatch, SetStateAction, MutableRefObject } from 'react';
 import { Loader2 } from 'lucide-react';
 import type {
@@ -217,7 +218,7 @@ export interface TeacherViewProps {
   fetchClasses: () => Promise<void>;
   classSubmissionFilters: Record<string, 'all' | 'submitted' | 'graded' | 'pending'>;
   setClassSubmissionFilters: Dispatch<SetStateAction<Record<string, 'all' | 'submitted' | 'graded' | 'pending'>>>;
-  classActiveTabs: Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>;
+  classActiveTabs: Record<string, ClassTabKey>;
   setClassActiveTabs: Dispatch<
     SetStateAction<Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>>
   >;

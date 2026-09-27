@@ -9,6 +9,7 @@ import { whiteboardViewStore } from './store/whiteboardViewStore';
 import { ProfileModal } from './components/ProfileModal';
 import { FontSizeSelector } from './components/FontSizeSelector';
 import { PALETTE_ITEM_MAP, getPaletteItemConfig } from './features/teacher/lesson-editor/paletteConfig';
+import type { ClassTabKey } from './features/teacher/classes/ClassTabs';
 import { generateTemplateContent } from './features/teacher/HelpView';
 import { StudentInteractiveOverlay } from './features/student/StudentInteractiveOverlay';
 
@@ -677,7 +678,7 @@ export default function App() {
     Record<string, 'all' | 'submitted' | 'graded' | 'pending'>
   >({});
   const [classActiveTabs, setClassActiveTabs] = useState<
-    Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>
+    Record<string, ClassTabKey>
   >({});
   const [studentActiveTabs, setStudentActiveTabs] = useState<Record<string, 'progress' | 'settings' | 'notes'>>({});
 

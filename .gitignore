@@ -1,6 +1,7 @@
 node_modules/
 build/
 dist/
+<<<<<<< Updated upstream
 /plugins/
 coverage/
 .DS_Store
@@ -61,3 +62,7 @@ server/__tests__/canary/.tmp-plugins-*
 # 第三方插件兼容性 CI 的临时 checkout 与打包产物
 .plugin-compatibility-sources/
 .plugin-compatibility-fixtures/
+# 产物 zip（插件构建产物不入库）
+*.zip
+# codegraph 索引与缓存
+/.codegraph

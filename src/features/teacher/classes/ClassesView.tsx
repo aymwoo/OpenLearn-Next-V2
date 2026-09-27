@@ -28,7 +28,8 @@ import {
 } from '../../../services/attendanceExportService';
 import { ClassRowHeader } from './ClassRowHeader.js';
 import { ClassPasscodeController } from './ClassPasscodeController.js';
-import { ClassTabs } from './ClassTabs.js';
+import { ClassTabs, type ClassTabKey } from './ClassTabs.js';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import { ClassSchedulesCharts } from './ClassSchedulesCharts';
 import { ClassAssignmentsPanel } from './ClassAssignmentsPanel.js';
 import { ClassScheduleAttendance } from './ClassScheduleAttendance';
@@ -89,9 +90,9 @@ export interface ClassesViewProps {
   fetchClasses: () => Promise<void>;
   classSubmissionFilters: Record<string, 'all' | 'submitted' | 'graded' | 'pending'>;
   setClassSubmissionFilters: Dispatch<SetStateAction<Record<string, 'all' | 'submitted' | 'graded' | 'pending'>>>;
-  classActiveTabs: Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>;
+  classActiveTabs: Record<string, ClassTabKey>;
   setClassActiveTabs: Dispatch<
-    SetStateAction<Record<string, 'students' | 'assignments' | 'schedules' | 'seating' | 'grades'>>
+    SetStateAction<Record<string, ClassTabKey>>
   >;
   classProgressMap: Record<string, { lesson_id: string; lesson_title: string; average_progress: number }[]>;
   classSchedulesMap: Record<string, ScheduleType[]>;
@@ -602,6 +603,19 @@ export function ClassesView(props: ClassesViewProps) {
                           fetchStudents={props.fetchStudents}
                           parseCSV={props.parseCSV}
                         />
+
+                        {(props.classActiveTabs[cls.id] || 'students').startsWith('plugin:') && (
+                          <ExtensionPointRenderer
+                            slot="class.tab"
+                            slotProps={{
+                              renderType: 'panel',
+                              classId: cls.id,
+                              students: cStudents,
+                              lang: props.lang,
+                              classActiveTab: props.classActiveTabs[cls.id],
+                            }}
+                          />
+                        )}
 
                         {(props.classActiveTabs[cls.id] || 'students') === 'grades' && (
                           <SemesterGradeManager

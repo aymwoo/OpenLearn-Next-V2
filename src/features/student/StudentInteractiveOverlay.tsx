@@ -207,6 +207,13 @@ export function StudentInteractiveOverlay({
         slotProps={{ studentId, lessonId }}
       />
 
+      {/* 考试模式全屏视图（v5.1 休眠槽位接线）：插件全屏接管（锁定退出 + 倒计时），
+          由插件组件自行决定渲染时机（仅考试模式的卷激活时） */}
+      <ExtensionPointRenderer
+        slot="student.fullscreen"
+        slotProps={{ studentId, lessonId }}
+      />
+
       {/* 悬浮学习节奏信号条 (底部浮动) */}
       <aside
         aria-label={lang === 'zh' ? '课堂互动工具栏' : 'Classroom interaction toolbar'}

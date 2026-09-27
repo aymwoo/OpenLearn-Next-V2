@@ -298,6 +298,11 @@ export function LessonEditorView({
                   lastSavedTime: editorLastSavedTime,
                 }}
               />
+              {/* 备课编辑器头部动作扩展（导入教案库 / AI 合规审查 / 导出 PDF 等） */}
+              <ExtensionPointRenderer
+                slot="editor.header.action"
+                slotProps={{ lessonId: selectedLesson, lang, onSave: handleSaveElementToServer }}
+              />
               <ExtensionPointRenderer
                 slot="whiteboard.autosave.action"
                 slotProps={{

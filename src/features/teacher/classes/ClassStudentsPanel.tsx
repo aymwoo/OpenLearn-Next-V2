@@ -18,6 +18,7 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
+import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import { StudentPrivateNotesEditor } from '../../../components/StudentPrivateNotesEditor';
 import { parseCSV } from '../../../utils/pluginParsers.js';
 import type { ClassType, StudentType, StudentProgressType, Lesson } from '../../../types/app';
@@ -444,6 +445,16 @@ export function ClassStudentsPanel({
                       >
                         <BookOpen size={13} /> {lang === 'zh' ? '设课程' : 'Lock Lesson'}
                       </button>
+                      {/* 插件批量操作流水线（如学籍同步/名册导出/实验套件分发） */}
+                      <ExtensionPointRenderer
+                        slot="class.batch.action"
+                        slotProps={{
+                          classId: cls.id,
+                          lang,
+                          selectedStudentIds: Array.from(selectedStudentIds),
+                          disabled: selectedStudentIds.size === 0,
+                        }}
+                      />
                     </div>
                   )}
                   <div
@@ -841,7 +852,15 @@ export function ClassStudentsPanel({
                                     }}
                                   />
                                 </div>
-                              ) : (
+                              ) : null}
+                              {/* 插件扩展卡片（多维评价/知识图谱雷达等）：所有展开 Tab 下可见 */}
+                              <div onClick={(e) => e.stopPropagation()}>
+                                <ExtensionPointRenderer
+                                  slot="student.row.panel"
+                                  slotProps={{ studentId: st.id, studentName: st.name, classId: cls.id, lang }}
+                                />
+                              </div>
+                              {stActiveTab !== 'notes' && (
                                 <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                                   {progress.length === 0 ? (
                                     <div className="text-xs text-gray-500 italic">
