@@ -10,9 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-27
+
 - **P2 熔断器与 AI 上下文提供者（修正后审计清单收尾）**：
   - **前端插件熔断器**：`ExtensionErrorBoundary` 升级——每个扩展点渲染异常按 pluginId 连续计数（3 次/5 分钟窗口），达到阈值自动停用插件并告警；成功渲染清零计数；已熔断插件跳过渲染并去重告警，重新激活即恢复。
   - **`ai.context.provider`**：新增 `server/ai-context-registry.ts` 注册表（kernel AIService 启动时 bind 委托）——Inline 插件经 `ctx.services.ai.registerAIContextProvider(id, fn)` 注册 AI 上下文切片提供者（fn 为服务端闭包，按 lessonId 返回插件实时状态如语法错误调用栈）；`/api/agent/chat` 组装 system instruction 时逐个调用并以 `[Plugin Context · <id>]` 段注入，单个提供者故障隔离不影响对话。
+
 ## [0.4.1] - 2026-09-27
 
 - **P1 课件播放器与题型扩展插槽**：
