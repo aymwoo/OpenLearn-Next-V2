@@ -89,8 +89,23 @@ export function AppHeader(props: AppHeaderProps) {
     onBlockedNavigate,
   } = props;
 
-  // 学生端被全班专注锁定时，禁止跳转到 Dashboard（品牌区 / 系统总览按钮）
+  // 学生端被全班专注锁定时，禁止跳转到首页（品牌区 / 系统总览按钮）
   const isStudentNavigationBlocked = activeRole === 'student' && isStudentLocked;
+
+  /** 品牌区 Logo：教师/管理员回首页（互动课堂），学生回 Dashboard */
+  const goToHome = () => {
+    if (isStudentNavigationBlocked) {
+      onBlockedNavigate?.();
+      return;
+    }
+    if (activeRole === 'teacher') {
+      setTeacherTab('live_class');
+    } else if (activeRole === 'student') {
+      setStudentViewStatus('dashboard');
+    }
+  };
+
+  /** 「系统总览」导航入口：始终去 Dashboard，教师端与学生端各自的 overview */
   const goToDashboard = () => {
     if (isStudentNavigationBlocked) {
       onBlockedNavigate?.();
@@ -106,18 +121,18 @@ export function AppHeader(props: AppHeaderProps) {
   return (
     <header className="h-16 border-b border-theme bg-surface text-main flex items-center px-6 justify-between shrink-0 shadow-sm relative z-20 transition-colors duration-200">
       <div className="flex items-center gap-4 sm:gap-6">
-        {/* 站点品牌区 (Site Brand & Logo) — click to dashboard */}
+        {/* 站点品牌区 (Site Brand & Logo) — click to home (教师端为互动课堂) */}
         <button
-          onClick={goToDashboard}
+          onClick={goToHome}
           className="flex items-center gap-2.5 shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
           title={
             isStudentNavigationBlocked
               ? lang === 'zh'
-                ? '全班专注锁定中，无法返回系统总览'
-                : 'Class focus locked — cannot return to dashboard'
+                ? '全班专注锁定中，无法返回首页'
+                : 'Class focus locked — cannot return to home'
               : lang === 'zh'
-                ? '返回系统总览'
-                : 'Back to Dashboard'
+                ? '返回首页'
+                : 'Back to Home'
           }
         >
           {siteInfo.logoUrl ? (

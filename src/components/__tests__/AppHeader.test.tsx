@@ -118,6 +118,31 @@ describe('AppHeader', () => {
     vi.unstubAllGlobals();
   });
 
+  it('logo returns the teacher to live_class, while the 系统总览 button still goes to dashboard', () => {
+    const setTeacherTab = vi.fn();
+    render(
+      <AppHeader
+        {...makeProps({
+          activeRole: 'teacher',
+          session: { name: 'Teacher', role: 'teacher', avatar: null },
+          lang: 'zh',
+          setTeacherTab,
+        })}
+      />,
+    );
+
+    // 品牌区 Logo：与登录落地页一致，回互动课堂
+    screen.getByTitle('返回首页').click();
+    expect(setTeacherTab).toHaveBeenCalledWith('live_class');
+
+    // 独立的「系统总览」导航入口仍去 dashboard
+    screen.getByText('系统总览').click();
+    expect(setTeacherTab).toHaveBeenCalledWith('dashboard');
+
+    expect(setTeacherTab).toHaveBeenNthCalledWith(1, 'live_class');
+    expect(setTeacherTab).toHaveBeenNthCalledWith(2, 'dashboard');
+  });
+
   describe('全班专注锁定 (class focus lock)', () => {
     it('blocks Dashboard navigation and notifies when a locked student clicks it', () => {
       const setStudentViewStatus = vi.fn();
@@ -157,7 +182,7 @@ describe('AppHeader', () => {
         />,
       );
 
-      screen.getByTitle('Class focus locked — cannot return to dashboard').click();
+      screen.getByTitle('Class focus locked — cannot return to home').click();
 
       expect(setStudentViewStatus).not.toHaveBeenCalled();
       expect(onBlockedNavigate).toHaveBeenCalledTimes(1);

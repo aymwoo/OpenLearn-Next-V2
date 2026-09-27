@@ -17,6 +17,7 @@ import {
   extractGeometry,
   sameGeometry,
   NON_TILEABLE_TYPES,
+  sortCandidatesForTiling,
   type TileCandidate,
   type TilingResult,
 } from '../utils/auto-tiling';
@@ -59,14 +60,20 @@ describe('splitArea（BSP 二分树）', () => {
   it('count = 3 时退化为 i3 经典形态（左 1 + 右上右下）', () => {
     const tiles = splitArea({ x: 0, y: 0, width: 1000, height: 600 }, 3);
     expect(tiles).toHaveLength(3);
-    // 左半整块
+    // 左半整块（50% 宽全高）
     expect(tiles[0].x).toBe(0);
-    expect(tiles[0].width).toBeCloseTo(1000 / 3);
+    expect(tiles[0].width).toBeCloseTo(500);
     expect(tiles[0].height).toBeCloseTo(600);
-    // 右半被上下切开
+    // 右半被上下切开（右上、右下各 50% 宽 50% 高）
+    expect(tiles[1].x).toBeCloseTo(500);
     expect(tiles[1].y).toBe(0);
+    expect(tiles[1].width).toBeCloseTo(500);
     expect(tiles[1].height).toBeCloseTo(300);
+
+    expect(tiles[2].x).toBeCloseTo(500);
     expect(tiles[2].y).toBeCloseTo(300);
+    expect(tiles[2].width).toBeCloseTo(500);
+    expect(tiles[2].height).toBeCloseTo(300);
   });
 
   it('任意 count 都恰好产出 count 个格子', () => {
@@ -332,7 +339,7 @@ describe('toTileCandidate / toTiledGeometry', () => {
   });
 
   it('缺省 width/height 时回退到类型默认尺寸', () => {
-    const c = toTileCandidate({ id: 'a', type: 'quiz' }, { x: 0, y: 0 }, { width: 300, height: 280 });
+    const c = toTileCandidate({ id: 'a', type: 'card' }, { x: 0, y: 0 }, { width: 300, height: 280 });
     expect(c?.width).toBe(300);
     expect(c?.height).toBe(280);
   });
@@ -378,3 +385,93 @@ describe('toTileCandidate / toTiledGeometry', () => {
     expect(geo).toEqual({ x: 1, y: 2, width: 300, height: 200 });
   });
 });
+
+describe('平铺模式下组件移走/删除后的空间重新填满（Auto-tiling Refill on Removal）', () => {
+  const CONTAINER = { width: 1600, height: 900 };
+
+  it('3 个组件移走其中任意 1 个后，剩余 2 个组件自动二分铺满整个容器（无空洞）', () => {
+    const candidates: TileCandidate[] = [
+      { id: 'el-1', x: 0, y: 0, width: 800, height: 900 },
+      { id: 'el-2', x: 800, y: 0, width: 800, height: 450 },
+      { id: 'el-3', x: 800, y: 450, width: 800, height: 450 },
+    ];
+
+    // 场景 A：移走 el-1，剩余 el-2 和 el-3
+    const remainingA = candidates.filter((el) => el.id !== 'el-1');
+    const orderMapA = new Map([
+      ['el-2', 1],
+      ['el-3', 2],
+    ]);
+    const sortedA = sortCandidatesForTiling(remainingA, orderMapA);
+    const tiledA = computeTiling(sortedA, CONTAINER);
+    expect(tiledA).toHaveLength(2);
+    // 两个元素各自平分宽度（area: width=1584, tile: 792, inner: 784, gap: 8）
+    expect(tiledA[0].x).toBe(12); // padding(8) + inset(4)
+    expect(tiledA[0].width).toBeCloseTo(784); // 792 - 8
+    expect(tiledA[0].height).toBeCloseTo(876); // 884 - 8
+    expect(tiledA[1].x).toBeCloseTo(804); // 800 + 4
+    expect(tiledA[1].width).toBeCloseTo(784);
+    expect(tiledA[1].height).toBeCloseTo(876);
+
+    // 场景 B：移走 el-3，剩余 el-1 和 el-2
+    const remainingB = candidates.filter((el) => el.id !== 'el-3');
+    const orderMapB = new Map([
+      ['el-1', 0],
+      ['el-2', 1],
+    ]);
+    const sortedB = sortCandidatesForTiling(remainingB, orderMapB);
+    const tiledB = computeTiling(sortedB, CONTAINER);
+    expect(tiledB).toHaveLength(2);
+    expect(tiledB[0].width).toBeCloseTo(784);
+    expect(tiledB[1].width).toBeCloseTo(784);
+    expect(tiledB[0].height).toBeCloseTo(876);
+    expect(tiledB[1].height).toBeCloseTo(876);
+  });
+
+  it('2 个组件移走其中 1 个后，剩余 1 个组件自动放大铺满 100% 容器可用区域', () => {
+    const candidates: TileCandidate[] = [
+      { id: 'el-1', x: 12, y: 12, width: 784, height: 876 },
+      { id: 'el-2', x: 804, y: 12, width: 784, height: 876 },
+    ];
+
+    // 移走 el-2，剩余 el-1
+    const remaining = candidates.filter((el) => el.id !== 'el-2');
+    const tiled = computeTiling(remaining, CONTAINER);
+    expect(tiled).toHaveLength(1);
+    expect(tiled[0].id).toBe('el-1');
+    expect(tiled[0].x).toBe(12);
+    expect(tiled[0].y).toBe(12);
+    expect(tiled[0].width).toBe(1576); // 1584 - 8
+    expect(tiled[0].height).toBe(876); // 884 - 8
+  });
+
+  it('4 个组件移走 1 个后，剩余 3 个组件重新退化为经典 i3 形态（左 1 + 右上右下）', () => {
+    const candidates: TileCandidate[] = [
+      { id: 'el-1', x: 0, y: 0, width: 400, height: 400 },
+      { id: 'el-2', x: 400, y: 0, width: 400, height: 400 },
+      { id: 'el-3', x: 0, y: 400, width: 400, height: 400 },
+      { id: 'el-4', x: 400, y: 400, width: 400, height: 400 },
+    ];
+
+    const remaining = candidates.filter((el) => el.id !== 'el-4');
+    const tiled = computeTiling(remaining, CONTAINER);
+    expect(tiled).toHaveLength(3);
+
+    // 左 1 大块：宽度约占一半，高度通栏
+    expect(tiled[0].x).toBe(12);
+    expect(tiled[0].width).toBeCloseTo(784);
+    expect(tiled[0].height).toBeCloseTo(876);
+
+    // 右上、右下小块
+    expect(tiled[1].x).toBeCloseTo(804);
+    expect(tiled[1].y).toBe(12);
+    expect(tiled[1].width).toBeCloseTo(784);
+    expect(tiled[1].height).toBeCloseTo(434);
+
+    expect(tiled[2].x).toBeCloseTo(804);
+    expect(tiled[2].y).toBe(454);
+    expect(tiled[2].width).toBeCloseTo(784);
+    expect(tiled[2].height).toBeCloseTo(434);
+  });
+});
+

@@ -102,6 +102,7 @@ function renderPortal(overrides: Partial<React.ComponentProps<typeof ClassroomEn
   const onEnterClassroom = vi.fn().mockResolvedValue(undefined);
   const setSelectedLesson = vi.fn();
   const setLiveClassSelectedClassId = vi.fn();
+  const onEditLesson = vi.fn();
   const utils = render(
     <ClassroomEntryPortal
       lessons={LESSONS}
@@ -116,11 +117,12 @@ function renderPortal(overrides: Partial<React.ComponentProps<typeof ClassroomEn
       lang="zh"
       addToast={vi.fn()}
       onEnterClassroom={onEnterClassroom}
+      onEditLesson={onEditLesson}
       fetcher={okFetcher()}
       {...overrides}
     />,
   );
-  return { ...utils, onEnterClassroom, setSelectedLesson, setLiveClassSelectedClassId };
+  return { ...utils, onEnterClassroom, setSelectedLesson, setLiveClassSelectedClassId, onEditLesson };
 }
 
 describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
@@ -132,7 +134,7 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       expect(screen.getByText('挑选授课班级')).toBeTruthy();
       expect(screen.getByText('本节课教学蓝图')).toBeTruthy();
       expect(screen.getByText('课前三项自检体检卡')).toBeTruthy();
-      expect(screen.getByRole('button', { name: /进入数字赋能课堂/ })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /开始上课/ })).toBeTruthy();
     });
 
     it('列出全部课程与班级', async () => {
@@ -188,6 +190,20 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
         .find(Boolean) as HTMLElement;
       expect(card.getAttribute('aria-pressed')).toBe('true');
       expect(within(card).getByText('已选')).toBeTruthy();
+    });
+
+    it('课程卡片渲染编辑按钮，点击后触发 onEditLesson 且不误触卡片选择', async () => {
+      const { onEditLesson, setSelectedLesson } = renderPortal();
+      await screen.findByText('选择授课课程');
+
+      const editButtons = screen.getAllByRole('button', { name: /编辑/ });
+      expect(editButtons.length).toBe(LESSONS.length);
+
+      // 点击第一个课程卡片的编辑按钮
+      fireEvent.click(editButtons[0]);
+
+      expect(onEditLesson).toHaveBeenCalledWith('les-1');
+      expect(setSelectedLesson).not.toHaveBeenCalled();
     });
 
     it('选择班级后展示席位矩阵', async () => {
@@ -250,7 +266,7 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       expect(await screen.findByText('暂无可用模式')).toBeTruthy();
       // 关键：教学模式失效不应连累课程选择与启动按钮
       expect(screen.getByText('Python 进阶与图形化编程')).toBeTruthy();
-      expect(screen.getByRole('button', { name: /进入数字赋能课堂/ })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /开始上课/ })).toBeTruthy();
     });
   });
 
@@ -259,21 +275,21 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       renderPortal();
       await screen.findByText('选择授课课程');
 
-      expect(screen.getByRole('button', { name: /进入数字赋能课堂/ })).toHaveProperty('disabled', true);
+      expect(screen.getByRole('button', { name: /开始上课/ })).toHaveProperty('disabled', true);
     });
 
     it('条件齐备时按钮可用', async () => {
       renderPortal({ selectedLesson: 'les-1', liveClassSelectedClassId: 'cls-1' });
       await screen.findByText('选择授课课程');
 
-      expect(screen.getByRole('button', { name: /进入数字赋能课堂/ })).toHaveProperty('disabled', false);
+      expect(screen.getByRole('button', { name: /开始上课/ })).toHaveProperty('disabled', false);
     });
 
     it('disables launch when stored course or class selections are stale', async () => {
       renderPortal({ selectedLesson: 'lesson-deleted', liveClassSelectedClassId: 'class-deleted' });
       await screen.findByText('选择授课课程');
 
-      expect(screen.getByRole('button', { name: /进入数字赋能课堂/ })).toHaveProperty('disabled', true);
+      expect(screen.getByRole('button', { name: /开始上课/ })).toHaveProperty('disabled', true);
     });
 
     it('点击后回调携带课程、班级与所选教学模式', async () => {
@@ -282,7 +298,7 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
         liveClassSelectedClassId: 'cls-1',
       });
 
-      const launch = await screen.findByRole('button', { name: /进入数字赋能课堂/ });
+      const launch = await screen.findByRole('button', { name: /开始上课/ });
       fireEvent.click(launch);
 
       await waitFor(() =>
@@ -301,7 +317,7 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       });
 
       fireEvent.click(await screen.findByRole('radio', { name: /协作式/ }));
-      fireEvent.click(screen.getByRole('button', { name: /进入数字赋能课堂/ }));
+      fireEvent.click(screen.getByRole('button', { name: /开始上课/ }));
 
       await waitFor(() =>
         expect(onEnterClassroom).toHaveBeenCalledWith(
@@ -320,7 +336,7 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
         onEnterClassroom,
       });
 
-      fireEvent.click(await screen.findByRole('button', { name: /进入数字赋能课堂/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /开始上课/ }));
 
       await waitFor(() => expect(addToast).toHaveBeenCalled());
       expect(addToast.mock.calls[0][2]).toBe('error');

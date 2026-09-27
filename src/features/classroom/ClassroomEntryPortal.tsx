@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Clock,
   Cpu,
+  Edit3,
   FlaskConical,
   FolderKanban,
   GraduationCap,
@@ -61,6 +62,8 @@ export interface ClassroomEntryPortalProps {
   onlineStudentIds: string[];
   lang: string;
   addToast?: (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error') => void;
+  /** 点击课程卡片上的「编辑」按钮进入课程编辑器 */
+  onEditLesson?: (lessonId: string) => void;
   /** 点击「进入课堂」时回调，由父组件切换到授课阶段 */
   onEnterClassroom: (payload: {
     lessonId: string;
@@ -248,11 +251,13 @@ function CourseDeck({
   lessons,
   selectedLesson,
   onSelect,
+  onEditLesson,
   lang,
 }: {
   lessons: any[];
   selectedLesson: string | null;
   onSelect: (id: string) => void;
+  onEditLesson?: (id: string) => void;
   lang: string;
 }) {
   const zh = lang === 'zh';
@@ -294,43 +299,64 @@ function CourseDeck({
               {visibleLessons.map((lesson) => {
                 const active = lesson.id === selectedLesson;
                 return (
-                  <button
+                  <div
                     key={lesson.id}
-                    type="button"
-                    onClick={() => onSelect(lesson.id)}
-                    aria-pressed={active}
-                    className={`text-left rounded-xl border p-3.5 transition-all cursor-pointer flex flex-col gap-2 h-full ${
+                    className={`rounded-xl border transition-all flex flex-col justify-between overflow-hidden ${
                       active
                         ? 'border-primary-theme bg-primary-theme-light shadow-3xs'
-                        : 'border-theme bg-surface hover:border-primary-theme hover:bg-surface-secondary'
+                        : 'border-theme bg-surface hover:border-primary-theme/60 hover:bg-surface-secondary/60'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="inline-flex items-center gap-1.5 text-2xs font-mono font-bold text-muted">
-                        <Layers size={11} />
-                        {zh ? '课节' : 'Lesson'}
-                      </span>
-                      {active ? (
-                        <span className="inline-flex items-center gap-1 text-2xs font-bold text-primary-theme">
-                          <CheckCircle2 size={12} />
-                          {zh ? '已选' : 'Selected'}
+                    <button
+                      type="button"
+                      onClick={() => onSelect(lesson.id)}
+                      aria-pressed={active}
+                      className="text-left p-3.5 pb-2 transition-all cursor-pointer flex flex-col gap-2 w-full focus:outline-none"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1.5 text-2xs font-mono font-bold text-muted">
+                          <Layers size={11} />
+                          {zh ? '课节' : 'Lesson'}
                         </span>
-                      ) : (
-                        <span className="w-3.5 h-3.5 rounded-full border border-theme" />
+                        {active ? (
+                          <span className="inline-flex items-center gap-1 text-2xs font-bold text-primary-theme">
+                            <CheckCircle2 size={12} />
+                            {zh ? '已选' : 'Selected'}
+                          </span>
+                        ) : (
+                          <span className="w-3.5 h-3.5 rounded-full border border-theme" />
+                        )}
+                      </div>
+                      <div className="font-bold text-xs text-main line-clamp-2 leading-relaxed">{lesson.title}</div>
+                    </button>
+
+                    <div className="px-3.5 pb-3 pt-1 flex items-center justify-between gap-2 text-2xs text-muted border-t border-theme/30 mt-auto">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <BookOpen size={11} className="shrink-0" />
+                        <span className="truncate">
+                          {Array.isArray(lesson.timeline)
+                            ? zh
+                              ? `${lesson.timeline.length} 个环节`
+                              : `${lesson.timeline.length} segments`
+                            : zh
+                              ? '按默认时长授课'
+                              : 'Default pacing'}
+                        </span>
+                      </div>
+                      {onEditLesson && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditLesson(lesson.id);
+                          }}
+                          title={zh ? '进入课程编辑器' : 'Edit course in Lesson Editor'}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-2xs font-medium text-primary-theme hover:bg-primary-theme/15 active:scale-95 border border-primary-theme/30 transition-all cursor-pointer shrink-0"
+                        >
+                          <Edit3 size={11} />
+                          <span>{zh ? '编辑' : 'Edit'}</span>
+                        </button>
                       )}
-                    </div>
-                    <div className="font-bold text-xs text-main line-clamp-2 leading-relaxed">{lesson.title}</div>
-                    <div className="mt-auto flex items-center gap-2 text-2xs text-muted">
-                      <BookOpen size={11} />
-                      <span className="truncate">
-                        {Array.isArray(lesson.timeline)
-                          ? zh
-                            ? `${lesson.timeline.length} 个环节`
-                            : `${lesson.timeline.length} segments`
-                          : zh
-                            ? '按默认时长授课'
-                            : 'Default pacing'}
-                      </span>
                     </div>
                     {/* 插件可在课程卡片上追加徽章/标签 */}
                     <ExtensionPointRenderer
@@ -338,7 +364,7 @@ function CourseDeck({
                       lang={lang}
                       slotProps={{ lessonId: lesson.id, lesson, isSelected: active }}
                     />
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -728,7 +754,7 @@ function LaunchDeck({
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-primary-theme text-white hover:bg-primary-theme-hover transition-colors shadow-3xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {launching ? <Loader2 size={13} className="animate-spin" /> : <Rocket size={13} />}
-          <span>{zh ? '进入数字赋能课堂' : 'Enter Classroom'}</span>
+          <span>{zh ? '开始上课' : 'Start Class'}</span>
           <ArrowRight size={13} />
         </button>
       </div>
@@ -964,6 +990,7 @@ export function ClassroomEntryPortal({
   onlineStudentIds,
   lang,
   addToast,
+  onEditLesson,
   onEnterClassroom,
   fetcher,
 }: ClassroomEntryPortalProps) {
@@ -1168,6 +1195,7 @@ export function ClassroomEntryPortal({
               lessons={lessons}
               selectedLesson={selectedLesson}
               onSelect={(id) => setSelectedLesson(id)}
+              onEditLesson={onEditLesson}
               lang={lang}
             />
             <ClassroomDeck

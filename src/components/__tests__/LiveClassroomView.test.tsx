@@ -173,4 +173,45 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
 
     expect(await screen.findByTestId('pre-class-ready-view')).toBeDefined();
   });
+
+  it('renders sidebar whiteboard outline and teaching progress sections in teaching mode', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/api/classroom/sessions/lesson-101')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { started_at: Date.now() - 60000 },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        });
+      }),
+    );
+
+    render(<LiveClassroomView {...(defaultProps as any)} />);
+
+    // Should display the sidebar outline section title
+    await waitFor(() => {
+      expect(screen.getByText('白板页面大纲')).toBeDefined();
+    });
+
+    // Should display the teaching steps section title
+    expect(screen.getByText('教学环节进度表')).toBeDefined();
+
+    // Should display timeline segment titles
+    expect(screen.getByText('导入环节')).toBeDefined();
+    expect(screen.getByText('探究环节')).toBeDefined();
+
+    // Should display the add page button in the outline header
+    const addPageButton = screen.getByTitle('新建白板页面');
+    expect(addPageButton).toBeDefined();
+  });
 });
+

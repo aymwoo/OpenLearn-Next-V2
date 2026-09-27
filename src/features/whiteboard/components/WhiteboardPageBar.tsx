@@ -54,8 +54,8 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
 }) => {
   return (
     <>
-      {/* Bottom Page Navigation Bar */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-surface/90 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-theme font-sans select-none text-main">
+      {/* Top Floating Page Navigation Bar */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 bg-surface/90 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-theme font-sans select-none text-main">
         {/* Page Outline / Drawer Button */}
         <button
           onClick={() => setShowPageDrawer(!showPageDrawer)}
@@ -137,7 +137,7 @@ export const WhiteboardPageBar: React.FC<WhiteboardPageBarProps> = ({
                 {/* Dropdown Options Menu */}
                 {activeMenuPageIdx === idx && (
                   <div
-                    className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-surface rounded-xl shadow-xl border border-theme py-1 w-36 z-50 text-xs font-normal text-main"
+                    className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-surface rounded-xl shadow-xl border border-theme py-1 w-36 z-50 text-xs font-normal text-main"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button

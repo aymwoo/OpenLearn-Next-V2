@@ -1,12 +1,5 @@
 import React from 'react';
-import {
-  Maximize2,
-  Minus,
-  Square,
-  SlidersHorizontal,
-  Trash2,
-  Lock,
-} from 'lucide-react';
+import { Maximize2, Minus, Square, SlidersHorizontal, Trash2, Lock } from 'lucide-react';
 
 export interface WidgetTitleBarProps {
   title: string;
@@ -63,6 +56,7 @@ export function WidgetTitleBar({
 
   return (
     <div
+      data-widget-titlebar="true"
       className={`px-3 py-1.5 flex justify-between items-center text-xs font-semibold border-b select-none shrink-0 transition-colors ${getThemeStyles()} ${
         readOnly ? 'cursor-default' : 'cursor-move'
       }`}

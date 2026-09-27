@@ -111,7 +111,7 @@ test('管理员可编辑课程、保存回读并按所选班级与模式开课',
     await classSearch.fill(className);
     await page.getByRole('button', { name: new RegExp(className) }).click();
     await page.getByRole('radio', { name: /讲授式/ }).click();
-    await page.getByRole('button', { name: /进入数字赋能课堂/ }).click();
+    await page.getByRole('button', { name: /开始上课/ }).click();
     await expect(page.locator('#pre-class-ready-view')).toBeVisible();
 
     await expect

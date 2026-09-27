@@ -1,15 +1,9 @@
-import React from 'react';
-import {
-  Plus,
-  Settings2,
-  CalendarClock,
-  Clock,
-  CheckCircle2,
-  GripVertical,
-} from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Plus, Settings2, CalendarClock, Clock, CheckCircle2, GripVertical } from 'lucide-react';
 import { DEFAULT_SEGMENT_COLOR, getSegmentType, getSegmentColor } from './timelineConfig';
+import type { WhiteboardDragState } from '../../whiteboard/InteractiveWhiteboard';
 
-interface TimelineRailProps {
+export interface TimelineRailProps {
   lang: 'zh' | 'en';
   segments: any[];
   activeSegmentId: string | null;
@@ -21,6 +15,8 @@ interface TimelineRailProps {
   readOnly?: boolean;
   editorPanelsExpanded: boolean;
   setEditorPanelsExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  dragState?: WhiteboardDragState | null;
+  onHoverDropTarget?: (target: { type: 'segment'; segmentId: string } | null) => void;
 }
 
 export function TimelineRail({
@@ -35,10 +31,48 @@ export function TimelineRail({
   readOnly = false,
   editorPanelsExpanded,
   setEditorPanelsExpanded,
+  dragState,
+  onHoverDropTarget,
 }: TimelineRailProps) {
   const activeIdx = segments.findIndex((s) => s.id === activeSegmentId);
   const progressPct = segments.length > 1 ? (activeIdx >= 0 ? activeIdx / (segments.length - 1) : 0) : 0;
   const activeColorMeta = activeIdx >= 0 ? getSegmentColor(segments[activeIdx].color) : null;
+
+  const railContainerRef = useRef<HTMLDivElement | null>(null);
+  const [hoveredDropSegmentId, setHoveredDropSegmentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!dragState) {
+      setHoveredDropSegmentId(null);
+      onHoverDropTarget?.(null);
+      return;
+    }
+
+    const { clientX, clientY } = dragState;
+
+    if (railContainerRef.current) {
+      // 检测鼠标悬停在哪一个教学环节节点上（纯节点高亮与接收放置，不触发展开下方的参数详情面板，避免遮挡/移走时间线）
+      if (segments && segments.length > 0) {
+        let matchedId: string | null = null;
+        const segEls = railContainerRef.current.querySelectorAll('[data-segment-id]');
+        segEls.forEach((el) => {
+          const rect = el.getBoundingClientRect();
+          if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+            const sId = el.getAttribute('data-segment-id');
+            if (sId) matchedId = sId;
+          }
+        });
+
+        if (matchedId !== null && matchedId !== dragState.initialSegmentId) {
+          setHoveredDropSegmentId(matchedId);
+          onHoverDropTarget?.({ type: 'segment', segmentId: matchedId });
+        } else {
+          setHoveredDropSegmentId(null);
+          onHoverDropTarget?.(null);
+        }
+      }
+    }
+  }, [dragState, segments, onHoverDropTarget]);
 
   // 计算总时长
   const totalMinutes = segments.reduce((sum, seg) => {
@@ -76,7 +110,12 @@ export function TimelineRail({
   };
 
   return (
-    <div className="relative flex items-center justify-between gap-3 px-3.5 py-2 border-b border-theme bg-surface-secondary/50 backdrop-blur-xs shrink-0 select-none overflow-x-auto text-main">
+    <div
+      ref={railContainerRef}
+      className={`sticky top-0 z-30 flex items-center justify-between gap-3 px-3.5 py-2 border-b border-theme bg-surface/95 backdrop-blur-md shrink-0 select-none overflow-x-auto text-main shadow-2xs transition-all ${
+        dragState ? 'ring-1 ring-primary-theme/30' : ''
+      }`}
+    >
       {/* 左侧流程标签与总时长 */}
       <div className="flex items-center gap-2 shrink-0 border-r border-theme pr-3">
         <div className="w-6 h-6 rounded-lg bg-primary-theme/10 text-primary-theme flex items-center justify-center">
@@ -109,18 +148,22 @@ export function TimelineRail({
           const isActive = seg.id === activeSegmentId;
           const isCompleted = activeIdx >= 0 && idx < activeIdx;
           const isDragging = draggedSegmentIdx === idx;
+          const isDropTarget = hoveredDropSegmentId === seg.id;
           const typeMeta = getSegmentType(seg.type);
           const colorMeta = getSegmentColor(seg.color);
           const Icon = typeMeta.icon;
-          const nodeCls = isActive
-            ? colorMeta.solid + ' shadow-md ring-2 ring-primary-theme/30 scale-105'
-            : isCompleted
-              ? 'bg-surface-secondary/90 text-main/80 border-primary-theme/30'
-              : colorMeta.color;
+          const nodeCls = isDropTarget
+            ? 'ring-2 ring-primary-theme ring-offset-2 border-dashed border-2 border-primary-theme bg-primary-theme/20 shadow-md scale-108 animate-pulse text-primary-theme font-bold'
+            : isActive
+              ? colorMeta.solid + ' shadow-md ring-2 ring-primary-theme/30 scale-105'
+              : isCompleted
+                ? 'bg-surface-secondary/90 text-main/80 border-primary-theme/30'
+                : colorMeta.color;
 
           return (
             <div
               key={seg.id}
+              data-segment-id={seg.id}
               draggable={!readOnly}
               onDragStart={(e) => {
                 if (readOnly) {
@@ -138,15 +181,18 @@ export function TimelineRail({
                 isDragging ? 'opacity-40 scale-95' : 'hover:scale-102'
               }`}
             >
-              <GripVertical
-                size={11}
-                className="opacity-0 group-hover:opacity-60 -ml-0.5 text-muted cursor-grab"
-              />
+              <GripVertical size={11} className="opacity-0 group-hover:opacity-60 -ml-0.5 text-muted cursor-grab" />
               <span className="text-[10px] font-mono font-bold opacity-75">{idx + 1}</span>
               <Icon size={12} className="shrink-0" />
               <span className="truncate max-w-[90px]">{seg.title}</span>
               <span className="text-[10px] font-mono opacity-60">({seg.duration || '10m'})</span>
               {isCompleted && <CheckCircle2 size={11} className="text-emerald-500 shrink-0 ml-0.5" />}
+              {isDropTarget && (
+                <span className="text-[10px] font-bold text-primary-theme animate-bounce flex items-center gap-0.5 ml-1">
+                  <span>📥</span>
+                  <span>{lang === 'zh' ? '移入此环节' : 'Move here'}</span>
+                </span>
+              )}
             </div>
           );
         })}
@@ -179,9 +225,7 @@ export function TimelineRail({
       >
         <Settings2 size={13} className={editorPanelsExpanded ? 'rotate-90 transition-transform text-white' : ''} />
         <span>{lang === 'zh' ? '环节参数' : 'Settings'}</span>
-        {editorPanelsExpanded && (
-          <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping ml-0.5" />
-        )}
+        {editorPanelsExpanded && <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping ml-0.5" />}
       </button>
     </div>
   );

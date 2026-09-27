@@ -365,6 +365,7 @@ export function TeacherView(props: TeacherViewProps) {
               <LiveClassroomView
                 selectedLesson={selectedLesson}
                 setSelectedLesson={setSelectedLesson}
+                setTeacherTab={setTeacherTab}
                 lessons={lessons}
                 classes={classes}
                 students={liveClassSelectedClassId ? classStudentsMap[liveClassSelectedClassId] || [] : []}

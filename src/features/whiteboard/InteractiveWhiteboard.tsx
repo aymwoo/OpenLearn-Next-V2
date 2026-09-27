@@ -66,7 +66,20 @@ import {
   geometryKeys,
   extractGeometry,
   sameGeometry,
+  findNeighborInDirection,
+  findTileUnderPoint,
+  sortCandidatesForTiling,
+  detectTilingSplitters,
+  applySplitterDrag,
+  detectDropZoneAction,
+  applyContainerSplit,
   type TileCandidate,
+  type BoxWithId,
+  type TilingDirection,
+  type TilingSplitter,
+  type DropZoneAction,
+  type DropZoneActionType,
+  type StackDirection,
 } from './utils/auto-tiling';
 import { useWhiteboardViewStore } from '../../store/whiteboardViewStore';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
@@ -185,9 +198,7 @@ fullscreenRendererRegistry.register('rollcall', ({ data }: FullscreenRendererPro
           {name || '等待抽取中...'}
         </div>
         {data.evaluation?.submitted && (
-          <div className="text-xl text-emerald-400 font-bold">
-            🌟 评价达成: +{data.evaluation.rewardCoins} 金币激励
-          </div>
+          <div className="text-xl text-emerald-400 font-bold">🌟 评价达成: +{data.evaluation.rewardCoins} 金币激励</div>
         )}
       </div>
     </div>
@@ -198,9 +209,7 @@ fullscreenRendererRegistry.register('html-applet', ({ data, lessonId, elementId 
   <HtmlAppletFrame data={data} lessonId={lessonId} elementId={elementId} className="w-full h-full rounded-xl border" />
 ));
 
-const ReadOnlyLockCover: React.FC<{ title?: string }> = ({
-  title = '教师已开启全班专注锁定，当前为只读演示视图',
-}) => (
+const ReadOnlyLockCover: React.FC<{ title?: string }> = ({ title = '教师已开启全班专注锁定，当前为只读演示视图' }) => (
   <div
     data-testid="whiteboard-readonly-lock-cover"
     className="absolute inset-0 z-50 bg-transparent cursor-not-allowed select-none"
@@ -290,6 +299,24 @@ export interface InteractiveWhiteboardProps {
    * 白板全屏/最大化状态变化回调（通知外层容器，如 LiveClassroomView 跨窗口信道广播）
    */
   onFullscreenSync?: (elementId: string | null) => void;
+  /** 是否隐藏画布内的白板分页大纲栏（例如已在外层备课边栏中独立渲染大纲） */
+  hidePageBar?: boolean;
+  /** 页面列表与当前页状态回调，供外层边栏渲染大纲 */
+  onPagesStateChange?: (state: { pages: WhiteboardPageItem[]; currentPage: number }) => void;
+  /** 组件拖拽状态变化通知（支持外部大纲与环节等区域感知与高亮） */
+  onElementDragChange?: (state: WhiteboardDragState | null) => void;
+  /** 检查指针释放是否由外部 Drop Target（大纲/环节）接管。若返回 true，内部跳过画布重绘与平铺 */
+  onElementDropCheck?: (e: PointerEvent, elementId: string) => boolean;
+}
+
+export interface WhiteboardDragState {
+  elementId: string;
+  elementType: string;
+  elementData: Record<string, any>;
+  clientX: number;
+  clientY: number;
+  initialPage: number;
+  initialSegmentId?: string | null;
 }
 
 export interface WhiteboardPageItem {
@@ -329,9 +356,17 @@ function getDefaultElementSize(type: string, data: any): { width: number; height
   return { width: data?.width || 300, height: data?.height || 300 };
 }
 
-// 命令式接口：供外部（如备课画板点击添加）在画板中央插入元素
+// 命令式接口：供外部（如备课画板点击添加）在画板中央插入元素，以及操作页面
 export interface WhiteboardHandle {
   addElementAtCenter: (type: string, contentData: Record<string, any>) => Promise<void>;
+  switchPage?: (idx: number) => void;
+  addPage?: (customTitle?: string) => void;
+  deletePage?: (idx: number) => void;
+  renamePage?: (idx: number, newTitle: string) => void;
+  duplicatePage?: (idx: number) => void;
+  movePage?: (idx: number, direction: 'left' | 'right') => void;
+  moveElementToPage?: (elementId: string, targetPageIndex: number) => Promise<void>;
+  moveElementToSegment?: (elementId: string, targetSegmentId: string) => Promise<void>;
 }
 
 export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhiteboardProps>(
@@ -358,6 +393,10 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       fullscreenBroadcastClassId = null,
       followRemoteFullscreen = false,
       onFullscreenSync,
+      hidePageBar = false,
+      onPagesStateChange,
+      onElementDragChange,
+      onElementDropCheck,
     }: InteractiveWhiteboardProps,
     ref,
   ) => {
@@ -381,12 +420,53 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const [showGrid, setShowGrid] = useState(true);
     /** 自动平铺模式：开启后当前页组件按 i3 式 BSP 镶嵌布局重排，可随时切回自由拖拽 */
     const [autoTileEnabled, setAutoTileEnabled] = useState(false);
+    /** 平铺拖拽互换目标组件 ID（用于视觉指示与松手交换） */
+    const [dragOverTileId, setDragOverTileId] = useState<string | null>(null);
+    const dragOverTileIdRef = useRef<string | null>(null);
+    useEffect(() => {
+      dragOverTileIdRef.current = dragOverTileId;
+    }, [dragOverTileId]);
+    const swapTileElementsRef = useRef<((idA: string, idB: string) => Promise<void>) | null>(null);
+
+    /** 当前活动的分割条拖拽状态（支持拖动上下/左右分割区域） */
+    const [activeSplitterDrag, setActiveSplitterDrag] = useState<{
+      splitter: TilingSplitter;
+      startPointerPos: number;
+      initialBoxes: BoxWithId[];
+    } | null>(null);
+    const activeSplitterDragRef = useRef<typeof activeSplitterDrag>(null);
+    useEffect(() => {
+      activeSplitterDragRef.current = activeSplitterDrag;
+    }, [activeSplitterDrag]);
+
+    /** 拖拽卡片边缘时的感应动作（上下左右切分或对调） */
+    const [activeDropZoneAction, setActiveDropZoneAction] = useState<DropZoneAction | null>(null);
+    const activeDropZoneActionRef = useRef<DropZoneAction | null>(null);
+    useEffect(() => {
+      activeDropZoneActionRef.current = activeDropZoneAction;
+    }, [activeDropZoneAction]);
+    const insertTileInDirectionRef = useRef<
+      ((sourceId: string, targetId: string, actionType: DropZoneActionType) => Promise<void>) | null
+    >(null);
+
+    /** 当前切分排布偏好（如 'bottom-full' 表示下方全宽上下切分） */
+    const [tileSplitPreference, setTileSplitPreference] = useState<StackDirection | undefined>(undefined);
+    const tileSplitPreferenceRef = useRef(tileSplitPreference);
+    useEffect(() => {
+      tileSplitPreferenceRef.current = tileSplitPreference;
+    }, [tileSplitPreference]);
+
     const [isDragOverBoard, setIsDragOverBoard] = useState(false);
     const [pages, setPages] = useState<WhiteboardPageItem[]>(DEFAULT_WHITEBOARD_PAGES);
     const [showPageDrawer, setShowPageDrawer] = useState(false);
     const [editingPageIdx, setEditingPageIdx] = useState<number | null>(null);
     const [editingPageTitle, setEditingPageTitle] = useState('');
     const [activeMenuPageIdx, setActiveMenuPageIdx] = useState<number | null>(null);
+
+    // 同步给外部监听者（如备课组件边栏的大纲）
+    useEffect(() => {
+      onPagesStateChange?.({ pages, currentPage });
+    }, [pages, currentPage, onPagesStateChange]);
 
     // Sync pages config from safeElements (type === 'page_meta')
     useEffect(() => {
@@ -413,8 +493,38 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         setCurrentPage(target);
       }
       initialPageAppliedRef.current = true;
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pages]);
+
+    const belongsToCurrentPage = useCallback(
+      (el: WhiteboardElement): boolean => {
+        if (el.type === 'page_meta') return false;
+        try {
+          const data = JSON.parse(el.data);
+          const elPage = data.page ?? 0;
+          const currentObj = pages[currentPage];
+          return data.pageId && currentObj?.id ? data.pageId === currentObj.id : elPage === currentPage;
+        } catch (e) {
+          return currentPage === 0;
+        }
+      },
+      [pages, currentPage],
+    );
+
+    /** 当前页 + 当前环节下应渲染的元素（画布渲染用） */
+    const getCurrentPageElements = useCallback(
+      (): WhiteboardElement[] =>
+        safeElements.filter((el) => {
+          if (!belongsToCurrentPage(el)) return false;
+          try {
+            const data = JSON.parse(el.data);
+            if (activeSegmentId && data.segmentId && data.segmentId !== activeSegmentId) return false;
+            return true;
+          } catch (e) {
+            return currentPage === 0;
+          }
+        }),
+      [safeElements, belongsToCurrentPage, activeSegmentId, currentPage],
+    );
 
     // 会话保存：教师切页时防抖回写（课堂会话恢复用）。学生端不发（视图跟随广播）。
     const viewStateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -775,6 +885,14 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       }
       setLocalGeometryVersion((v) => v + 1);
     }, [elements]);
+
+    const applyAutoTilingForElementsRef = useRef<
+      (
+        targetElements: WhiteboardElement[],
+        forcedStackDirection?: StackDirection,
+        customIdsOrder?: string[],
+      ) => Promise<void>
+    >(undefined);
 
     const dragRef = useRef<{
       id: string;
@@ -1157,6 +1275,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       return () => window.removeEventListener('click', handleWindowClick);
     }, []);
 
+    const onElementDragChangeRef = useRef(onElementDragChange);
+    useEffect(() => {
+      onElementDragChangeRef.current = onElementDragChange;
+    }, [onElementDragChange]);
+
+    const onElementDropCheckRef = useRef(onElementDropCheck);
+    useEffect(() => {
+      onElementDropCheckRef.current = onElementDropCheck;
+    }, [onElementDropCheck]);
+
     const handleElementDragStart = (e: React.PointerEvent, elementId: string, elementData: any) => {
       if (userRole !== 'teacher') return;
       e.preventDefault();
@@ -1172,6 +1300,17 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       };
       dragRef.current = dragInfo;
       setActiveDragElement(dragInfo);
+
+      const targetEl = safeElements.find((item) => item.id === elementId);
+      onElementDragChangeRef.current?.({
+        elementId,
+        elementType: targetEl?.type || 'unknown',
+        elementData,
+        clientX: e.clientX,
+        clientY: e.clientY,
+        initialPage: currentPage,
+        initialSegmentId: elementData.segmentId || activeSegmentId,
+      });
     };
 
     const handleElementDragMove = (e: React.PointerEvent) => {
@@ -1244,6 +1383,73 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         setActiveDragElement({
           ...dragRef.current,
         });
+
+        const targetEl = safeElements.find((item) => item.id === dragRef.current?.id);
+        onElementDragChangeRef.current?.({
+          elementId: dragRef.current.id,
+          elementType: targetEl?.type || 'unknown',
+          elementData: dragRef.current.data,
+          clientX: e.clientX,
+          clientY: e.clientY,
+          initialPage: currentPage,
+          initialSegmentId: dragRef.current.data?.segmentId || activeSegmentId,
+        });
+
+        // 平铺模式下的拖拽悬停碰撞检测（Drag to Swap）
+        if (autoTileEnabled) {
+          const containerRect = containerRef.current?.getBoundingClientRect();
+          if (containerRect) {
+            const pointerCanvasX = e.clientX - containerRect.left;
+            const pointerCanvasY = e.clientY - containerRect.top;
+
+            const tileBoxes: BoxWithId[] = [];
+            let totalTileCount = 0;
+            for (const el of getCurrentPageElements()) {
+              if (!isTileableType(el.type)) continue;
+              totalTileCount += 1;
+              if (el.id === dragRef.current.id) continue;
+              try {
+                const d = JSON.parse(el.data);
+                const cand = toTileCandidate(el, d, getDefaultElementSize(el.type, d));
+                if (!cand) continue;
+                const local = localGeometryRef.current.get(el.id);
+                tileBoxes.push({
+                  id: el.id,
+                  x: local?.x ?? cand.x,
+                  y: local?.y ?? cand.y,
+                  width: local?.width ?? cand.width,
+                  height: local?.height ?? cand.height,
+                });
+              } catch {}
+            }
+
+            const hit = findTileUnderPoint({ x: pointerCanvasX, y: pointerCanvasY }, tileBoxes);
+            if (hit) {
+              const padding = 12;
+              const activeContainerArea = {
+                x: padding,
+                y: padding,
+                width: Math.max(0, containerSize.width - padding * 2),
+                height: Math.max(0, containerSize.height - padding * 2),
+              };
+              const action = detectDropZoneAction(
+                hit,
+                { x: pointerCanvasX, y: pointerCanvasY },
+                activeContainerArea,
+                totalTileCount,
+              );
+              setActiveDropZoneAction(action);
+              if (dragOverTileIdRef.current !== hit.id) {
+                setDragOverTileId(hit.id);
+              }
+            } else {
+              setActiveDropZoneAction(null);
+              if (dragOverTileIdRef.current !== null) {
+                setDragOverTileId(null);
+              }
+            }
+          }
+        }
       };
 
       const onPointerUp = async (e: PointerEvent) => {
@@ -1253,8 +1459,32 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         const elementId = dragRef.current.id;
         const elementData = dragRef.current.data;
 
+        const isExternalHandled = onElementDropCheckRef.current?.(e, elementId);
+        onElementDragChangeRef.current?.(null);
+
+        const dropAction = activeDropZoneActionRef.current;
+        setActiveDropZoneAction(null);
+        setDragOverTileId(null);
         dragRef.current = null;
         setActiveDragElement(null);
+
+        if (isExternalHandled) {
+          return;
+        }
+
+        // 平铺模式下放开鼠标：若命中切分或对调动作则执行，否则弹回复位保持网格严密
+        if (autoTileEnabled) {
+          if (dropAction && dropAction.targetId && dropAction.targetId !== elementId) {
+            if (dropAction.type === 'swap') {
+              void swapTileElementsRef.current?.(elementId, dropAction.targetId);
+            } else {
+              void insertTileInDirectionRef.current?.(elementId, dropAction.targetId, dropAction.type);
+            }
+          } else {
+            void applyAutoTilingRef.current?.();
+          }
+          return;
+        }
 
         if (onElementUpdate) {
           setIsSyncing(true);
@@ -1288,7 +1518,82 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         window.removeEventListener('pointermove', onPointerMove);
         window.removeEventListener('pointerup', onPointerUp);
       };
-    }, [activeDragElement, onElementUpdate, lessonId, setLocalGeometry]);
+    }, [activeDragElement, onElementUpdate, lessonId, setLocalGeometry, autoTileEnabled, getCurrentPageElements]);
+
+    // 分割线（Splitter）拖拽拉伸监听：支持上下与左右分割区域自由拖拽调高/调宽
+    useEffect(() => {
+      if (!activeSplitterDrag) return;
+
+      const onPointerMove = (e: PointerEvent) => {
+        if (!activeSplitterDragRef.current) return;
+        const { splitter, startPointerPos, initialBoxes } = activeSplitterDragRef.current;
+        const isHorizontal = splitter.orientation === 'horizontal';
+        const currentPos = isHorizontal ? e.clientY : e.clientX;
+        const delta = currentPos - startPointerPos;
+
+        const patches = applySplitterDrag(splitter, delta, initialBoxes);
+        for (const [id, patch] of Object.entries(patches)) {
+          const currentBox = initialBoxes.find((b) => b.id === id);
+          if (currentBox) {
+            setLocalGeometry(id, {
+              x: currentBox.x,
+              y: currentBox.y,
+              width: currentBox.width,
+              height: currentBox.height,
+              ...patch,
+            });
+          }
+        }
+      };
+
+      const onPointerUp = async (e: PointerEvent) => {
+        if (!activeSplitterDragRef.current) return;
+        const { splitter, startPointerPos, initialBoxes } = activeSplitterDragRef.current;
+        const isHorizontal = splitter.orientation === 'horizontal';
+        const currentPos = isHorizontal ? e.clientY : e.clientX;
+        const delta = currentPos - startPointerPos;
+
+        const patches = applySplitterDrag(splitter, delta, initialBoxes);
+        setActiveSplitterDrag(null);
+
+        if (onElementUpdate && Object.keys(patches).length > 0) {
+          setIsSyncing(true);
+          try {
+            await Promise.all(
+              Object.entries(patches).map(async ([id, patch]) => {
+                const el = safeElements.find((item) => item.id === id);
+                if (!el) return;
+                try {
+                  const data = JSON.parse(el.data);
+                  const shape = el.type === 'circle' ? 'circle' : 'rect';
+                  const baseGeo = extractGeometry(data, shape);
+                  const updatedGeo = { ...baseGeo, ...patch };
+                  setLocalGeometry(id, updatedGeo);
+                  await onElementUpdate(id, { ...data, ...patch, __tiled: updatedGeo });
+                } catch {}
+              }),
+            );
+            frontendEventBus.publish({
+              id: uuidv7(),
+              type: 'whiteboard.element_updated',
+              source: 'whiteboard',
+              payload: { lessonId },
+              timestamp: Date.now(),
+              correlationId: lessonId,
+            });
+          } finally {
+            setIsSyncing(false);
+          }
+        }
+      };
+
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+      return () => {
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+      };
+    }, [activeSplitterDrag, onElementUpdate, safeElements, lessonId, setLocalGeometry]);
 
     // Window-level resizing event listeners
     useEffect(() => {
@@ -1410,6 +1715,19 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         onConfirm: async () => {
           setIsSyncing(true);
           try {
+            localGeometryRef.current.delete(elementId);
+            setLocalGeometryVersion((v) => v + 1);
+
+            // 若在平铺状态下删除，当前页面剩余组件立即自动重新排布并填满空间
+            if (autoTileEnabled) {
+              const currentRemaining = getCurrentPageElements().filter(
+                (el) => el.id !== elementId && isTileableType(el.type),
+              );
+              if (currentRemaining.length > 0) {
+                await applyAutoTilingForElementsRef.current?.(currentRemaining);
+              }
+            }
+
             if (onElementDelete) {
               await onElementDelete(elementId);
             } else {
@@ -1509,17 +1827,70 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
 
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
+        const target = e.target as HTMLElement;
+        const isEditingText = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
         if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId) {
-          const target = e.target as HTMLElement;
-          if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+          if (!isEditingText) {
             handleElementDelete(selectedShapeId);
             setSelectedShapeId(null);
+          }
+        }
+
+        // i3 Autotiling 风格快捷键：
+        // 1. Alt + Shift + 方向键 / HJKL: 物理方向对调平铺组件（Swap Window）
+        // 2. Alt + 方向键 / HJKL: 物理方向转移聚焦组件（Focus Window）
+        if (autoTileEnabled && selectedShapeId && !isEditingText && e.altKey) {
+          let direction: TilingDirection | null = null;
+          if (e.key === 'ArrowLeft' || e.key === 'h' || e.key === 'H') direction = 'left';
+          else if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'L') direction = 'right';
+          else if (e.key === 'ArrowUp' || e.key === 'k' || e.key === 'K') direction = 'up';
+          else if (e.key === 'ArrowDown' || e.key === 'j' || e.key === 'J') direction = 'down';
+
+          if (direction) {
+            const currentTiles: BoxWithId[] = [];
+            let currentBox: BoxWithId | null = null;
+            for (const el of getCurrentPageElements()) {
+              if (!isTileableType(el.type)) continue;
+              try {
+                const d = JSON.parse(el.data);
+                const cand = toTileCandidate(el, d, getDefaultElementSize(el.type, d));
+                if (!cand) continue;
+                const local = localGeometryRef.current.get(el.id);
+                const box: BoxWithId = {
+                  id: el.id,
+                  x: local?.x ?? cand.x,
+                  y: local?.y ?? cand.y,
+                  width: local?.width ?? cand.width,
+                  height: local?.height ?? cand.height,
+                };
+                currentTiles.push(box);
+                if (el.id === selectedShapeId) {
+                  currentBox = box;
+                }
+              } catch {}
+            }
+
+            if (currentBox && currentTiles.length > 1) {
+              const neighbor = findNeighborInDirection(currentBox, currentTiles, direction);
+              if (neighbor) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.shiftKey) {
+                  // Alt + Shift + 方向键: 对调位置，焦点保持在当前操作组件
+                  void swapTileElementsRef.current?.(selectedShapeId, neighbor.id);
+                } else {
+                  // Alt + 方向键: 焦点转移
+                  setSelectedShapeId(neighbor.id);
+                }
+              }
+            }
           }
         }
       };
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedShapeId]);
+    }, [selectedShapeId, autoTileEnabled, getCurrentPageElements]);
 
     const resetIdleTimer = () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -1809,32 +2180,6 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     // 与 drawElement 拖拽提交走完全相同的两步（onElementUpdate + 事件广播），
     // 因此平铺后的结果与用户手动拖动在持久化、广播、学生端同步上表现一致。
 
-    /** 判断元素是否属于当前页（不含环节筛选） */
-    const belongsToCurrentPage = (el: WhiteboardElement): boolean => {
-      if (el.type === 'page_meta') return false;
-      try {
-        const data = JSON.parse(el.data);
-        const elPage = data.page ?? 0;
-        const currentObj = pages[currentPage];
-        return data.pageId && currentObj?.id ? data.pageId === currentObj.id : elPage === currentPage;
-      } catch (e) {
-        return currentPage === 0;
-      }
-    };
-
-    /** 当前页 + 当前环节下应渲染的元素（画布渲染用） */
-    const getCurrentPageElements = (): WhiteboardElement[] =>
-      safeElements.filter((el) => {
-        if (!belongsToCurrentPage(el)) return false;
-        try {
-          const data = JSON.parse(el.data);
-          if (activeSegmentId && data.segmentId && data.segmentId !== activeSegmentId) return false;
-          return true;
-        } catch (e) {
-          return currentPage === 0;
-        }
-      });
-
     /**
      * 画布上**全部**元素按页分组（自动平铺用）。
      *
@@ -1846,85 +2191,186 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
      * 铺满整块画布就会互相压住。按页平铺是既保证「每页铺满」又保证「不重叠」
      * 的粒度。
      */
-    const getElementsGroupedByPage = (): WhiteboardElement[][] => {
-      const groups = new Map<string, WhiteboardElement[]>();
-      for (const el of safeElements) {
-        if (!isTileableType(el.type)) continue;
-        let key = '0';
-        try {
-          const data = JSON.parse(el.data);
-          key = data.pageId ?? String(data.page ?? 0);
-        } catch (e) {
-          key = '0';
-        }
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key)!.push(el);
-      }
-      return [...groups.values()].filter((list) => list.length > 0);
-    };
+    /** 把指定的元素列表按 i3 autotiling 规则重排并落库 */
+    const applyAutoTilingForElements = useCallback(
+      async (
+        targetElements: WhiteboardElement[],
+        forcedStackDirection?: StackDirection,
+        customIdsOrder?: string[],
+      ) => {
+        if (!onElementUpdate) return;
+        if (containerSize.width <= 0 || containerSize.height <= 0) return;
 
-    /** 把白板上**每一页**的可平铺元素按 BSP 二分树重排并落库 */
-    const applyAutoTiling = useCallback(async () => {
-      if (!onElementUpdate) return;
-      if (containerSize.width <= 0 || containerSize.height <= 0) return;
+        const tileableElements = targetElements.filter((el) => isTileableType(el.type));
+        if (tileableElements.length === 0) return;
 
-      let changed = false;
-      setIsSyncing(true);
-      try {
-        for (const group of getElementsGroupedByPage()) {
-          const candidates: TileCandidate[] = [];
-          const rawDataById = new Map<string, Record<string, any>>();
-          for (const el of group) {
-            let data: Record<string, any>;
-            try {
-              data = JSON.parse(el.data);
-            } catch {
-              continue;
-            }
-            const candidate = toTileCandidate(el, data, getDefaultElementSize(el.type, data));
-            if (!candidate) continue;
-            candidates.push(candidate);
-            rawDataById.set(el.id, data);
+        const candidates: TileCandidate[] = [];
+        const rawDataById = new Map<string, Record<string, any>>();
+        const tileOrderMap = new Map<string, number | undefined>();
+
+        let detectedStackDir: StackDirection | undefined = forcedStackDirection ?? tileSplitPreferenceRef.current;
+
+        for (const el of tileableElements) {
+          let data: Record<string, any>;
+          try {
+            data = JSON.parse(el.data);
+          } catch {
+            continue;
           }
-          if (candidates.length === 0) continue;
+          if (!detectedStackDir && data.tileStackDir) {
+            detectedStackDir = data.tileStackDir;
+          }
+          const candidate = toTileCandidate(el, data, getDefaultElementSize(el.type, data));
+          if (!candidate) continue;
+          candidates.push(candidate);
+          rawDataById.set(el.id, data);
+          if (customIdsOrder) {
+            const idx = customIdsOrder.indexOf(el.id);
+            tileOrderMap.set(el.id, idx >= 0 ? idx : undefined);
+          } else {
+            tileOrderMap.set(el.id, typeof data.tileOrder === 'number' ? data.tileOrder : undefined);
+          }
+        }
+        if (candidates.length === 0) return;
 
-          const results = computeTiling(candidates, containerSize);
-          if (results.length === 0) continue;
+        const sortedCandidates = sortCandidatesForTiling(candidates, tileOrderMap);
+        const results = computeTiling(sortedCandidates, containerSize, {
+          stackDirection: detectedStackDir,
+        });
+        if (results.length === 0) return;
 
-          for (let i = 0; i < candidates.length; i += 1) {
-            const candidate = candidates[i];
+        let changed = false;
+        setIsSyncing(true);
+        try {
+          for (let i = 0; i < sortedCandidates.length; i += 1) {
+            const candidate = sortedCandidates[i];
             const current = rawDataById.get(candidate.id);
             if (!current) continue;
             const geometry = toTiledGeometry(candidate, results[i]) as Record<string, number>;
             const keys = geometryKeys(candidate.shape);
-            // 已在目标位置则跳过，避免窗口缩放时反复触发自动保存与广播
-            if (sameGeometry(current, geometry, keys)) continue;
+            if (
+              sameGeometry(current, geometry, keys) &&
+              current.tileOrder === i &&
+              current.tileStackDir === detectedStackDir
+            ) {
+              continue;
+            }
             changed = true;
-            // 乐观更新：先落到本地渲染，再交给持久化，避免等待服务端回传
             setLocalGeometry(candidate.id, geometry);
-            // 首次改动该元素时，把平铺前的几何快照写进 data，关闭平铺时据此还原。
-            // __tiled 记录我们写入的值，用于还原时判断元素是否被用户手动拖过。
-            const patch: Record<string, any> = { ...current, ...geometry };
+            const patch: Record<string, any> = {
+              ...current,
+              ...geometry,
+              tileOrder: i,
+              tileStackDir: detectedStackDir,
+            };
             if (!current.__preTile) {
               patch.__preTile = extractGeometry(current, candidate.shape);
             }
             patch.__tiled = geometry;
+            const targetEl = targetElements.find((e) => e.id === candidate.id) || safeElements.find((e) => e.id === candidate.id);
+            if (targetEl) {
+              targetEl.data = JSON.stringify(patch);
+            }
             await onElementUpdate(candidate.id, patch);
           }
+          if (!changed) return;
+          frontendEventBus.publish({
+            id: uuidv7(),
+            type: 'whiteboard.element_updated',
+            source: 'whiteboard',
+            payload: { lessonId },
+            timestamp: Date.now(),
+            correlationId: lessonId,
+          });
+        } finally {
+          setIsSyncing(false);
         }
-        if (!changed) return;
-        frontendEventBus.publish({
-          id: uuidv7(),
-          type: 'whiteboard.element_updated',
-          source: 'whiteboard',
-          payload: { lessonId },
-          timestamp: Date.now(),
-          correlationId: lessonId,
-        });
-      } finally {
-        setIsSyncing(false);
-      }
-    }, [onElementUpdate, containerSize, safeElements, lessonId]);
+      },
+      [onElementUpdate, containerSize, safeElements, lessonId, setLocalGeometry],
+    );
+
+    /** 把当前可见视口（当前页 + 当前环节）的可平铺元素按 i3 autotiling 重排并落库 */
+    const applyAutoTiling = useCallback(
+      async (forcedStackDirection?: StackDirection, customIdsOrder?: string[]) => {
+        const visibleElements = getCurrentPageElements().filter((el) => isTileableType(el.type));
+        await applyAutoTilingForElements(visibleElements, forcedStackDirection, customIdsOrder);
+      },
+      [getCurrentPageElements, applyAutoTilingForElements],
+    );
+
+    /**
+     * 交换两个平铺组件的平铺位置（对齐 Linux i3 窗口互换机制）。
+     * 原子互换两者的几何坐标与 tileOrder，并触发乐观渲染与持久化。
+     */
+    const swapTileElements = useCallback(
+      async (idA: string, idB: string) => {
+        if (!onElementUpdate || idA === idB) return;
+        const elA = safeElements.find((el) => el.id === idA);
+        const elB = safeElements.find((el) => el.id === idB);
+        if (!elA || !elB) return;
+
+        let dataA: Record<string, any>;
+        let dataB: Record<string, any>;
+        try {
+          dataA = JSON.parse(elA.data);
+          dataB = JSON.parse(elB.data);
+        } catch {
+          return;
+        }
+
+        const geoA = extractGeometry(dataA, elA.type === 'circle' ? 'circle' : 'rect');
+        const geoB = extractGeometry(dataB, elB.type === 'circle' ? 'circle' : 'rect');
+        const localA = localGeometryRef.current.get(idA);
+        const localB = localGeometryRef.current.get(idB);
+        const effectiveGeoA = { ...geoA, ...(localA || {}) };
+        const effectiveGeoB = { ...geoB, ...(localB || {}) };
+
+        const currentTiles = getCurrentPageElements().filter((el) => isTileableType(el.type));
+        const indexA = currentTiles.findIndex((el) => el.id === idA);
+        const indexB = currentTiles.findIndex((el) => el.id === idB);
+        const orderA = typeof dataA.tileOrder === 'number' ? dataA.tileOrder : indexA >= 0 ? indexA : 0;
+        const orderB = typeof dataB.tileOrder === 'number' ? dataB.tileOrder : indexB >= 0 ? indexB : 1;
+
+        const patchA: Record<string, any> = {
+          ...dataA,
+          ...effectiveGeoB,
+          tileOrder: orderB,
+        };
+        const patchB: Record<string, any> = {
+          ...dataB,
+          ...effectiveGeoA,
+          tileOrder: orderA,
+        };
+
+        if (!dataA.__preTile) {
+          patchA.__preTile = extractGeometry(dataA, elA.type === 'circle' ? 'circle' : 'rect');
+        }
+        if (!dataB.__preTile) {
+          patchB.__preTile = extractGeometry(dataB, elB.type === 'circle' ? 'circle' : 'rect');
+        }
+        patchA.__tiled = effectiveGeoB;
+        patchB.__tiled = effectiveGeoA;
+
+        setLocalGeometry(idA, effectiveGeoB);
+        setLocalGeometry(idB, effectiveGeoA);
+
+        setIsSyncing(true);
+        try {
+          await Promise.all([onElementUpdate(idA, patchA), onElementUpdate(idB, patchB)]);
+          frontendEventBus.publish({
+            id: uuidv7(),
+            type: 'whiteboard.element_updated',
+            source: 'whiteboard',
+            payload: { lessonId },
+            timestamp: Date.now(),
+            correlationId: lessonId,
+          });
+        } finally {
+          setIsSyncing(false);
+        }
+      },
+      [onElementUpdate, safeElements, getCurrentPageElements, setLocalGeometry, lessonId],
+    );
 
     /**
      * 关闭平铺模式时把元素还原到平铺前的几何。
@@ -1943,7 +2389,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           continue;
         }
         if (!data.__preTile) continue;
-        const { __preTile, __tiled, ...rest } = data;
+        const { __preTile, __tiled, tileOrder, ...rest } = data;
         const keys = geometryKeys(el.type === 'circle' ? 'circle' : 'rect');
         // 几何仍是我们写入的值 → 用户没动过，安全还原
         const untouched = !__tiled || sameGeometry(data, __tiled, keys);
@@ -1970,25 +2416,112 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       } finally {
         setIsSyncing(false);
       }
-    }, [onElementUpdate, safeElements, lessonId]);
+    }, [onElementUpdate, safeElements, lessonId, setLocalGeometry]);
 
     // 用 ref 持有最新的平铺实现，使下面的自动触发 effect 只依赖真正需要的变化
     const applyAutoTilingRef = useRef(applyAutoTiling);
     useEffect(() => {
       applyAutoTilingRef.current = applyAutoTiling;
-    }, [applyAutoTiling]);
+      applyAutoTilingForElementsRef.current = applyAutoTilingForElements;
+    }, [applyAutoTiling, applyAutoTilingForElements]);
 
-    // 切换开关 / 增删元素后重排；拖拽不改变 id 集合，因此不会打断自由布局。
-    // 依赖里刻意不含 activeSegmentId / currentPage —— 平铺一次覆盖**所有页**，
-    // 切页或切环节都不需要重排。
+    useEffect(() => {
+      swapTileElementsRef.current = swapTileElements;
+    }, [swapTileElements]);
+
+    /**
+     * 将平铺组件定向切分插入到目标组件的上方/下方/左方/右方（类似 i3 / VS Code 边缘放置切分）。
+     */
+    const insertTileInDirection = useCallback(
+      async (sourceId: string, targetId: string, actionType: DropZoneActionType) => {
+        if (!onElementUpdate || sourceId === targetId) return;
+
+        const visibleElements = getCurrentPageElements().filter((el) => isTileableType(el.type));
+        const currentBoxes: BoxWithId[] = visibleElements.map((el) => {
+          let data: Record<string, any> = {};
+          try {
+            data = JSON.parse(el.data);
+          } catch {}
+          const defaultSize = getDefaultElementSize(el.type, data);
+          const overlay = localGeometryRef.current.get(el.id);
+          return {
+            id: el.id,
+            x: overlay?.x ?? data.x ?? 0,
+            y: overlay?.y ?? data.y ?? 0,
+            width: overlay?.width ?? data.width ?? defaultSize.width,
+            height: overlay?.height ?? data.height ?? defaultSize.height,
+          };
+        });
+
+        const padding = 12;
+        const activeContainerArea = {
+          x: padding,
+          y: padding,
+          width: Math.max(0, containerSize.width - padding * 2),
+          height: Math.max(0, containerSize.height - padding * 2),
+        };
+
+        const patches = applyContainerSplit(sourceId, targetId, actionType, currentBoxes, activeContainerArea);
+
+        if (Object.keys(patches).length === 0) return;
+
+        setIsSyncing(true);
+        try {
+          for (const [id, patch] of Object.entries(patches)) {
+            const currentBox = currentBoxes.find((b) => b.id === id);
+            if (currentBox) {
+              setLocalGeometry(id, {
+                x: currentBox.x,
+                y: currentBox.y,
+                width: currentBox.width,
+                height: currentBox.height,
+                ...patch,
+              });
+            }
+          }
+
+          await Promise.all(
+            Object.entries(patches).map(async ([id, patch]) => {
+              const el = safeElements.find((item) => item.id === id);
+              if (!el) return;
+              try {
+                const data = JSON.parse(el.data);
+                const shape = el.type === 'circle' ? 'circle' : 'rect';
+                const baseGeo = extractGeometry(data, shape);
+                const updatedGeo = { ...baseGeo, ...patch };
+                setLocalGeometry(id, updatedGeo);
+                await onElementUpdate(id, { ...data, ...patch, __tiled: updatedGeo });
+              } catch {}
+            }),
+          );
+
+          frontendEventBus.publish({
+            id: uuidv7(),
+            type: 'whiteboard.element_updated',
+            source: 'whiteboard',
+            payload: { lessonId },
+            timestamp: Date.now(),
+            correlationId: lessonId,
+          });
+        } finally {
+          setIsSyncing(false);
+        }
+      },
+      [onElementUpdate, safeElements, getCurrentPageElements, containerSize, setLocalGeometry, lessonId],
+    );
+
+    useEffect(() => {
+      insertTileInDirectionRef.current = insertTileInDirection;
+    }, [insertTileInDirection]);
+
+    // 切换开关 / 增删元素 / 切换环节或页面后重排；同一视图下拖拽不改变 id 集合，因此不打断自由布局
     const tileableIdsKey = useMemo(() => {
       if (!autoTileEnabled) return '';
-      return getElementsGroupedByPage()
-        .flat()
+      return getCurrentPageElements()
         .filter((el) => isTileableType(el.type))
         .map((el) => el.id)
         .join('|');
-    }, [autoTileEnabled, safeElements]);
+    }, [autoTileEnabled, safeElements, currentPage, activeSegmentId, pages]);
 
     useEffect(() => {
       if (!autoTileEnabled || !tileableIdsKey) return;
@@ -2012,6 +2545,57 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       }
       setAutoTileEnabled(!autoTileEnabled);
     }, [autoTileEnabled, restoreAutoTiling]);
+
+    /** 当前所有处于平铺模式下的组件包围盒 */
+    const currentTilingBoxes = useMemo<BoxWithId[]>(() => {
+      if (!autoTileEnabled) return [];
+      const visible = getCurrentPageElements().filter((el) => isTileableType(el.type));
+      return visible.map((el) => {
+        let data: Record<string, any> = {};
+        try {
+          data = JSON.parse(el.data);
+        } catch {}
+        const defaultSize = getDefaultElementSize(el.type, data);
+        const overlay = localGeometryRef.current.get(el.id);
+        return {
+          id: el.id,
+          x: overlay?.x ?? data.x ?? 0,
+          y: overlay?.y ?? data.y ?? 0,
+          width: overlay?.width ?? data.width ?? defaultSize.width,
+          height: overlay?.height ?? data.height ?? defaultSize.height,
+        };
+      });
+    }, [
+      autoTileEnabled,
+      safeElements,
+      currentPage,
+      activeSegmentId,
+      pages,
+      localGeometryVersion,
+      getCurrentPageElements,
+    ]);
+
+    /** 平铺组件之间所有可拖拽调整尺寸的分割线（水平上下分割条与垂直左右分割条） */
+    const tilingSplitters = useMemo(() => {
+      if (!autoTileEnabled || currentTilingBoxes.length < 2) return [];
+      return detectTilingSplitters(currentTilingBoxes);
+    }, [autoTileEnabled, currentTilingBoxes]);
+
+    /** 鼠标按下分割条：启动分割条拖动调整 */
+    const handleSplitterPointerDown = useCallback(
+      (e: React.PointerEvent, splitter: TilingSplitter) => {
+        if (readOnly) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const startPointerPos = splitter.orientation === 'horizontal' ? e.clientY : e.clientX;
+        setActiveSplitterDrag({
+          splitter,
+          startPointerPos,
+          initialBoxes: currentTilingBoxes,
+        });
+      },
+      [readOnly, currentTilingBoxes],
+    );
 
     const renderRemoteDrawings = () => {
       return Object.values(remoteDrawings).map((drawing, i) => (
@@ -2037,53 +2621,86 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         const getInitialWidth = (type: string) => getDefaultElementSize(type, data).width;
         const getInitialHeight = (type: string) => getDefaultElementSize(type, data).height;
 
-        const displayWidth = isResizingThis ? resizingState.width : (overlay?.width ?? data.width ?? getInitialWidth(el.type));
+        const displayWidth = isResizingThis
+          ? resizingState.width
+          : (overlay?.width ?? data.width ?? getInitialWidth(el.type));
         const displayHeight = isResizingThis
           ? resizingState.height
           : data.isMinimized
             ? 36
             : (overlay?.height ?? data.height ?? getInitialHeight(el.type));
         const isThisSelected = selectedShapeId === el.id;
+        const isSwapTarget = autoTileEnabled && dragOverTileId === el.id;
+        const hoverCardClass =
+          !readOnly && !isThisSelected
+            ? 'group hover:ring-2 hover:ring-indigo-400/80 hover:shadow-2xl transition-all duration-150'
+            : 'group transition-all duration-150';
 
         const renderResizeHandles = () => {
-          if (readOnly || !isThisSelected || data.isMinimized) return null;
+          if (isSwapTarget && activeDropZoneAction?.type === 'swap') {
+            return (
+              <div className="absolute -inset-1.5 z-50 rounded-xl border-2 border-dashed border-blue-500 bg-blue-500/20 pointer-events-none flex items-center justify-center backdrop-blur-[1px] animate-pulse shadow-xl">
+                <div className="bg-blue-600 text-white text-xs font-semibold px-2.5 py-1 rounded-full shadow flex items-center gap-1.5 select-none">
+                  <span>⇄ 松开对调位置</span>
+                </div>
+              </div>
+            );
+          }
+          if (readOnly || data.isMinimized) return null;
+          if (!isThisSelected) {
+            return (
+              <div className="absolute -inset-1 border-2 border-transparent group-hover:border-indigo-400/80 rounded-xl pointer-events-none transition-all duration-150 z-20" />
+            );
+          }
           return (
             <>
               {/* Outline highlight */}
               <div className="absolute -inset-1 border-2 border-indigo-500 rounded-lg pointer-events-none z-50 shadow-md animate-pulse duration-1000 animate-in fade-in" />
+              {/* 平铺模式快捷键浮层提示 */}
+              {autoTileEnabled && (
+                <div className="absolute -top-7 left-0 z-50 bg-indigo-700/90 text-white text-[10px] font-mono px-2 py-0.5 rounded shadow pointer-events-none select-none flex items-center gap-1.5 backdrop-blur">
+                  <span>Alt+Shift+方向键 对调</span>
+                  <span className="text-indigo-300">|</span>
+                  <span>Alt+方向键 换焦</span>
+                </div>
+              )}
               {/* Corner Resize Handles */}
-              <div
-                className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-full cursor-nwse-resize z-50 hover:bg-indigo-50 hover:scale-110 transition-transform shadow"
-                onPointerDown={(e) =>
-                  handleResizeStart(e, el.id, 'top-left', displayX, displayY, displayWidth, displayHeight)
-                }
-                onPointerMove={handleResizeMove}
-                onPointerUp={handleResizeEnd}
-              />
-              <div
-                className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-full cursor-nesw-resize z-50 hover:bg-indigo-50 hover:scale-110 transition-transform shadow"
-                onPointerDown={(e) =>
-                  handleResizeStart(e, el.id, 'top-right', displayX, displayY, displayWidth, displayHeight)
-                }
-                onPointerMove={handleResizeMove}
-                onPointerUp={handleResizeEnd}
-              />
-              <div
-                className="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-full cursor-nesw-resize z-50 hover:bg-indigo-50 hover:scale-110 transition-transform shadow"
-                onPointerDown={(e) =>
-                  handleResizeStart(e, el.id, 'bottom-left', displayX, displayY, displayWidth, displayHeight)
-                }
-                onPointerMove={handleResizeMove}
-                onPointerUp={handleResizeEnd}
-              />
-              <div
-                className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-full cursor-nwse-resize z-50 hover:bg-indigo-50 hover:scale-110 transition-transform shadow"
-                onPointerDown={(e) =>
-                  handleResizeStart(e, el.id, 'bottom-right', displayX, displayY, displayWidth, displayHeight)
-                }
-                onPointerMove={handleResizeMove}
-                onPointerUp={handleResizeEnd}
-              />
+              {!autoTileEnabled && (
+                <>
+                  <div
+                    className="absolute -top-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-full cursor-nwse-resize z-50 hover:bg-indigo-50 hover:scale-110 transition-transform shadow"
+                    onPointerDown={(e) =>
+                      handleResizeStart(e, el.id, 'top-left', displayX, displayY, displayWidth, displayHeight)
+                    }
+                    onPointerMove={handleResizeMove}
+                    onPointerUp={handleResizeEnd}
+                  />
+                  <div
+                    className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-full cursor-nesw-resize z-50 hover:bg-indigo-50 hover:scale-110 transition-transform shadow"
+                    onPointerDown={(e) =>
+                      handleResizeStart(e, el.id, 'top-right', displayX, displayY, displayWidth, displayHeight)
+                    }
+                    onPointerMove={handleResizeMove}
+                    onPointerUp={handleResizeEnd}
+                  />
+                  <div
+                    className="absolute -bottom-1.5 -left-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-full cursor-nesw-resize z-50 hover:bg-indigo-50 hover:scale-110 transition-transform shadow"
+                    onPointerDown={(e) =>
+                      handleResizeStart(e, el.id, 'bottom-left', displayX, displayY, displayWidth, displayHeight)
+                    }
+                    onPointerMove={handleResizeMove}
+                    onPointerUp={handleResizeEnd}
+                  />
+                  <div
+                    className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-white border-2 border-indigo-600 rounded-full cursor-nwse-resize z-50 hover:bg-indigo-50 hover:scale-110 transition-transform shadow"
+                    onPointerDown={(e) =>
+                      handleResizeStart(e, el.id, 'bottom-right', displayX, displayY, displayWidth, displayHeight)
+                    }
+                    onPointerMove={handleResizeMove}
+                    onPointerUp={handleResizeEnd}
+                  />
+                </>
+              )}
             </>
           );
         };
@@ -2181,8 +2798,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       });
                     }
                   }}
-                  className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative"
-                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  className={`bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative ${hoverCardClass}`}
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
                 >
                   <WidgetTitleBar
                     {...getWidgetTitleBarProps(
@@ -2230,8 +2852,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     setSelectedShapeId(el.id);
                     e.stopPropagation();
                   }}
-                  className="bg-transparent relative"
-                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  className={`bg-transparent relative rounded-lg ${hoverCardClass}`}
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
                 >
                   <HelloWorldWrapper
                     elementId={el.id}
@@ -2288,8 +2915,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       });
                     }
                   }}
-                  className="bg-transparent relative"
-                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  className={`bg-transparent relative rounded-lg ${hoverCardClass}`}
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
                 >
                   <RollCallWrapper
                     elementId={el.id}
@@ -2350,8 +2982,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       });
                     }
                   }}
-                  className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative select-none"
-                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  className={`bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative select-none ${hoverCardClass}`}
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
                 >
                   <WidgetTitleBar
                     {...getWidgetTitleBarProps(
@@ -2450,8 +3087,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       });
                     }
                   }}
-                  className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative"
-                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  className={`bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative ${hoverCardClass}`}
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
                 >
                   <WidgetTitleBar
                     {...getWidgetTitleBarProps(
@@ -2462,7 +3104,12 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   />
                   {!data.isMinimized && (
                     <div className="flex-1 bg-white overflow-hidden relative min-h-0">
-                      <HtmlAppletFrame data={data} lessonId={lessonId} elementId={el.id} className="w-full h-full border-none" />
+                      <HtmlAppletFrame
+                        data={data}
+                        lessonId={lessonId}
+                        elementId={el.id}
+                        className="w-full h-full border-none"
+                      />
                     </div>
                   )}
                   {readOnly && <ReadOnlyLockCover />}
@@ -2585,10 +3232,10 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             <Rect
               key={el.id}
               id={el.id}
-              x={data.x}
-              y={data.y}
-              width={data.width}
-              height={data.height}
+              x={overlay?.x ?? data.x}
+              y={overlay?.y ?? data.y}
+              width={overlay?.width ?? data.width}
+              height={overlay?.height ?? data.height}
               fill={data.fill || 'transparent'}
               stroke={isSelected ? '#3b82f6' : data.stroke || 'blue'}
               strokeWidth={isSelected ? 3 : 1}
@@ -2611,8 +3258,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 const deltaY = node.y();
                 node.x(0);
                 node.y(0);
+                const nextX = (overlay?.x ?? data.x) + deltaX;
+                const nextY = (overlay?.y ?? data.y) + deltaY;
                 if (onElementUpdate) {
-                  await onElementUpdate(el.id, { ...data, x: data.x + deltaX, y: data.y + deltaY });
+                  setLocalGeometry(el.id, {
+                    ...extractGeometry(data, 'rect'),
+                    ...(overlay ?? {}),
+                    x: nextX,
+                    y: nextY,
+                  });
+                  await onElementUpdate(el.id, { ...data, x: nextX, y: nextY });
                   frontendEventBus.publish({
                     id: uuidv7(),
                     type: 'whiteboard.element_updated',
@@ -2657,8 +3312,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 const deltaY = node.y();
                 node.x(0);
                 node.y(0);
+                const nextX = (overlay?.x ?? data.x) + deltaX;
+                const nextY = (overlay?.y ?? data.y) + deltaY;
                 if (onElementUpdate) {
-                  await onElementUpdate(el.id, { ...data, x: data.x + deltaX, y: data.y + deltaY });
+                  setLocalGeometry(el.id, {
+                    ...extractGeometry(data, 'circle'),
+                    ...(overlay ?? {}),
+                    x: nextX,
+                    y: nextY,
+                  });
+                  await onElementUpdate(el.id, { ...data, x: nextX, y: nextY });
                   frontendEventBus.publish({
                     id: uuidv7(),
                     type: 'whiteboard.element_updated',
@@ -2678,8 +3341,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             <KonvaText
               key={el.id}
               id={el.id}
-              x={data.x}
-              y={data.y}
+              x={overlay?.x ?? data.x}
+              y={overlay?.y ?? data.y}
               text={data.text}
               fontSize={Math.round((data.fontSize || 16) * fontScale)}
               fill={
@@ -2711,8 +3374,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 const deltaY = node.y();
                 node.x(0);
                 node.y(0);
+                const nextX = (overlay?.x ?? data.x) + deltaX;
+                const nextY = (overlay?.y ?? data.y) + deltaY;
                 if (onElementUpdate) {
-                  await onElementUpdate(el.id, { ...data, x: data.x + deltaX, y: data.y + deltaY });
+                  setLocalGeometry(el.id, {
+                    ...extractGeometry(data, 'rect'),
+                    ...(overlay ?? {}),
+                    x: nextX,
+                    y: nextY,
+                  });
+                  await onElementUpdate(el.id, { ...data, x: nextX, y: nextY });
                   frontendEventBus.publish({
                     id: uuidv7(),
                     type: 'whiteboard.element_updated',
@@ -2761,8 +3432,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       });
                     }
                   }}
-                  className="relative rounded-lg shadow-xl"
-                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  className={`relative rounded-lg shadow-xl ${hoverCardClass}`}
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
                 >
                   <CodeSandboxWrapper
                     elementId={el.id}
@@ -2867,8 +3543,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       });
                     }
                   }}
-                  className="relative rounded-lg shadow-xl"
-                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  className={`relative rounded-lg shadow-xl ${hoverCardClass}`}
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
                 >
                   <MathGraphWrapper
                     elementId={el.id}
@@ -2973,8 +3654,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       });
                     }
                   }}
-                  className="bg-white border border-gray-305 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative select-none"
-                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  className={`bg-white border border-gray-305 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative select-none ${hoverCardClass}`}
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
                 >
                   <WidgetTitleBar
                     {...getWidgetTitleBarProps(
@@ -2984,7 +3670,10 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     )}
                   />
                   {!data.isMinimized && (
-                    <div className="flex-1 min-h-0 relative bg-white" style={{ pointerEvents: readOnly ? 'none' : 'auto' }}>
+                    <div
+                      className="flex-1 min-h-0 relative bg-white"
+                      style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
+                    >
                       <RevealPresentationWrapper
                         elementId={el.id}
                         data={data}
@@ -3053,8 +3742,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       });
                     }
                   }}
-                  className="bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative"
-                  style={{ pointerEvents: readOnly ? 'none' : 'auto', userSelect: readOnly ? 'none' : 'auto', width: `${displayWidth}px`, height: `${displayHeight}px` }}
+                  className={`bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative ${hoverCardClass}`}
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
                 >
                   <WidgetTitleBar
                     {...getWidgetTitleBarProps(
@@ -3064,7 +3758,10 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     )}
                   />
                   {!data.isMinimized && (
-                    <div className="flex-1 bg-white overflow-hidden relative min-h-0" style={{ pointerEvents: readOnly ? 'none' : 'auto' }}>
+                    <div
+                      className="flex-1 bg-white overflow-hidden relative min-h-0"
+                      style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
+                    >
                       {PluginComponent ? (
                         <PluginComponent
                           elementId={el.id}
@@ -3203,7 +3900,135 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       }
     };
 
-    useImperativeHandle(ref, () => ({ addElementAtCenter }));
+    const handleMoveElementToPage = useCallback(
+      async (elementId: string, targetPageIndex: number) => {
+        if (targetPageIndex < 0 || targetPageIndex >= pages.length) return;
+        const el = safeElements.find((item) => item.id === elementId);
+        if (!el) return;
+        const targetPage = pages[targetPageIndex];
+        try {
+          const data = JSON.parse(el.data);
+          const sourcePageIndex = typeof data.page === 'number' ? data.page : currentPage;
+          const updated = {
+            ...data,
+            page: targetPageIndex,
+            pageId: targetPage?.id,
+          };
+          delete updated.__tiled;
+          delete updated.tileOrder;
+          el.data = JSON.stringify(updated);
+          localGeometryRef.current.delete(elementId);
+          setLocalGeometryVersion((v) => v + 1);
+
+          if (onElementUpdate) {
+            await onElementUpdate(elementId, updated);
+          }
+
+          // 平铺状态下，若该组件被移走，源页面的剩余组件自动重新排列填满空间
+          if (autoTileEnabled) {
+            const sourceRemaining = safeElements.filter((item) => {
+              if (item.id === elementId) return false;
+              if (!isTileableType(item.type)) return false;
+              try {
+                const d = JSON.parse(item.data);
+                const p = typeof d.page === 'number' ? d.page : 0;
+                if (p !== sourcePageIndex) return false;
+                if (activeSegmentId && d.segmentId && d.segmentId !== activeSegmentId) return false;
+                return true;
+              } catch {
+                return sourcePageIndex === 0;
+              }
+            });
+            if (sourceRemaining.length > 0) {
+              await applyAutoTilingForElements(sourceRemaining);
+            }
+          }
+
+          setSelectedShapeId(null);
+          frontendEventBus.publish({
+            id: uuidv7(),
+            type: 'whiteboard.element_updated',
+            source: 'whiteboard',
+            payload: { lessonId, elementId, targetPage: targetPageIndex },
+            timestamp: Date.now(),
+            correlationId: lessonId,
+          });
+        } catch (err) {
+          console.error('Failed to move element to page:', err);
+        }
+      },
+      [pages, safeElements, currentPage, activeSegmentId, autoTileEnabled, applyAutoTilingForElements, onElementUpdate, lessonId],
+    );
+
+    const handleMoveElementToSegment = useCallback(
+      async (elementId: string, targetSegmentId: string) => {
+        const el = safeElements.find((item) => item.id === elementId);
+        if (!el) return;
+        try {
+          const data = JSON.parse(el.data);
+          const sourceSegmentId = data.segmentId ?? activeSegmentId;
+          const updated = {
+            ...data,
+            segmentId: targetSegmentId,
+          };
+          delete updated.__tiled;
+          delete updated.tileOrder;
+          el.data = JSON.stringify(updated);
+          localGeometryRef.current.delete(elementId);
+          setLocalGeometryVersion((v) => v + 1);
+
+          if (onElementUpdate) {
+            await onElementUpdate(elementId, updated);
+          }
+
+          // 平铺状态下，若该组件被移走，原教学环节的剩余组件自动重新排列填满空间
+          if (autoTileEnabled) {
+            const sourceRemaining = safeElements.filter((item) => {
+              if (item.id === elementId) return false;
+              if (!isTileableType(item.type)) return false;
+              try {
+                const d = JSON.parse(item.data);
+                const s = d.segmentId ?? '';
+                if (s !== (sourceSegmentId ?? '')) return false;
+                if (!belongsToCurrentPage(item)) return false;
+                return true;
+              } catch {
+                return false;
+              }
+            });
+            if (sourceRemaining.length > 0) {
+              await applyAutoTilingForElements(sourceRemaining);
+            }
+          }
+
+          setSelectedShapeId(null);
+          frontendEventBus.publish({
+            id: uuidv7(),
+            type: 'whiteboard.element_updated',
+            source: 'whiteboard',
+            payload: { lessonId, elementId, targetSegmentId },
+            timestamp: Date.now(),
+            correlationId: lessonId,
+          });
+        } catch (err) {
+          console.error('Failed to move element to segment:', err);
+        }
+      },
+      [safeElements, activeSegmentId, belongsToCurrentPage, autoTileEnabled, applyAutoTilingForElements, onElementUpdate, lessonId],
+    );
+
+    useImperativeHandle(ref, () => ({
+      addElementAtCenter,
+      applyAutoTiling,
+      switchPage: handleSwitchPage,
+      addPage: handleAddPage,
+      deletePage: handleDeletePage,
+      renamePage: handleRenamePage,
+      duplicatePage: handleDuplicatePage,
+      movePage: handleMovePage,
+      moveElementToPage: handleMoveElementToPage,
+      moveElementToSegment: handleMoveElementToSegment,
+    }));
 
     const handleWhiteboardDrop = async (e: React.DragEvent) => {
       e.preventDefault();
@@ -3442,6 +4267,82 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                   </Stage>
                 ))}
 
+              {/* 自动平铺分割条交互层（支持上下水平分割线与左右垂直分割线拖拽调高/调宽） */}
+              {autoTileEnabled && !readOnly && tilingSplitters.length > 0 && (
+                <div className="absolute inset-0 pointer-events-none z-30">
+                  {tilingSplitters.map((sp) => {
+                    const isHorizontal = sp.orientation === 'horizontal';
+                    const isDraggingThis = activeSplitterDrag?.splitter.id === sp.id;
+                    return (
+                      <div
+                        key={sp.id}
+                        data-testid={`splitter-${sp.orientation}-${sp.id}`}
+                        className={`absolute pointer-events-auto group flex items-center justify-center select-none ${
+                          isHorizontal ? 'cursor-row-resize' : 'cursor-col-resize'
+                        }`}
+                        style={{
+                          left: `${sp.x}px`,
+                          top: `${sp.y}px`,
+                          width: `${isHorizontal ? sp.length : sp.thickness}px`,
+                          height: `${isHorizontal ? sp.thickness : sp.length}px`,
+                        }}
+                        onPointerDown={(e) => handleSplitterPointerDown(e, sp)}
+                        title={isHorizontal ? '拖动调整上下分割高度' : '拖动调整左右分割宽度'}
+                      >
+                        {/* 交互把手视觉线 */}
+                        <div
+                          className={`rounded-full transition-all duration-150 ${
+                            isHorizontal
+                              ? `w-full h-1 my-auto ${
+                                  isDraggingThis
+                                    ? 'bg-indigo-500 h-1.5 shadow-md'
+                                    : 'bg-transparent group-hover:bg-indigo-400/80 group-hover:h-1.5'
+                                }`
+                              : `h-full w-1 mx-auto ${
+                                  isDraggingThis
+                                    ? 'bg-indigo-500 w-1.5 shadow-md'
+                                    : 'bg-transparent group-hover:bg-indigo-400/80 group-hover:w-1.5'
+                                }`
+                          }`}
+                        />
+                        {/* 中间微缩把手点 */}
+                        <div
+                          className={`absolute rounded-full transition-all duration-150 flex items-center justify-center ${
+                            isDraggingThis
+                              ? 'bg-indigo-600 text-white scale-110 shadow-lg'
+                              : 'opacity-0 group-hover:opacity-100 bg-white/95 dark:bg-slate-800/95 text-indigo-600 shadow border border-indigo-200 dark:border-indigo-700'
+                          } ${isHorizontal ? 'w-8 h-3.5' : 'h-8 w-3.5'}`}
+                        >
+                          <div className={`flex ${isHorizontal ? 'flex-row gap-0.5' : 'flex-col gap-0.5'}`}>
+                            <div className="w-1 h-1 rounded-full bg-current opacity-70" />
+                            <div className="w-1 h-1 rounded-full bg-current opacity-70" />
+                            <div className="w-1 h-1 rounded-full bg-current opacity-70" />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 智能切分全域虚线预览框（撑满当前整个区域，不再局限于单一组件下半截） */}
+              {autoTileEnabled && !readOnly && activeDropZoneAction && activeDropZoneAction.type !== 'swap' && (
+                <div
+                  data-testid="directional-split-preview"
+                  className="absolute pointer-events-none rounded-2xl border-3 border-dashed border-indigo-500 bg-indigo-500/20 backdrop-blur-[2px] shadow-2xl flex items-center justify-center transition-all duration-150 z-40 animate-in fade-in zoom-in-95"
+                  style={{
+                    left: `${activeDropZoneAction.previewRect.x}px`,
+                    top: `${activeDropZoneAction.previewRect.y}px`,
+                    width: `${activeDropZoneAction.previewRect.width}px`,
+                    height: `${activeDropZoneAction.previewRect.height}px`,
+                  }}
+                >
+                  <div className="bg-indigo-600 text-white text-xs md:text-sm font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2 select-none animate-bounce">
+                    <span>{activeDropZoneAction.label}</span>
+                  </div>
+                </div>
+              )}
+
               {/* 原先此处会在选中组件上方浮出一层「类型 + 删除」的悬浮药丸，与组件
                   标题栏自带的删除按钮功能重复，已移除。删除入口保留在标题栏、右键
                   菜单与工具栏三处。 */}
@@ -3560,29 +4461,28 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 </div>
               )}
             </div>
+            {!readOnly && !hidePageBar && (
+              <WhiteboardPageBar
+                pages={pages}
+                currentPage={currentPage}
+                showPageDrawer={showPageDrawer}
+                setShowPageDrawer={setShowPageDrawer}
+                editingPageIdx={editingPageIdx}
+                setEditingPageIdx={setEditingPageIdx}
+                editingPageTitle={editingPageTitle}
+                setEditingPageTitle={setEditingPageTitle}
+                activeMenuPageIdx={activeMenuPageIdx}
+                setActiveMenuPageIdx={setActiveMenuPageIdx}
+                safeElements={safeElements}
+                handleSwitchPage={handleSwitchPage}
+                handleRenamePage={handleRenamePage}
+                handleDuplicatePage={handleDuplicatePage}
+                handleMovePage={handleMovePage}
+                handleDeletePage={handleDeletePage}
+                handleAddPage={handleAddPage}
+              />
+            )}
           </div>
-
-          {!readOnly && (
-            <WhiteboardPageBar
-              pages={pages}
-              currentPage={currentPage}
-              showPageDrawer={showPageDrawer}
-              setShowPageDrawer={setShowPageDrawer}
-              editingPageIdx={editingPageIdx}
-              setEditingPageIdx={setEditingPageIdx}
-              editingPageTitle={editingPageTitle}
-              setEditingPageTitle={setEditingPageTitle}
-              activeMenuPageIdx={activeMenuPageIdx}
-              setActiveMenuPageIdx={setActiveMenuPageIdx}
-              safeElements={safeElements}
-              handleSwitchPage={handleSwitchPage}
-              handleRenamePage={handleRenamePage}
-              handleDuplicatePage={handleDuplicatePage}
-              handleMovePage={handleMovePage}
-              handleDeletePage={handleDeletePage}
-              handleAddPage={handleAddPage}
-            />
-          )}
 
           <WhiteboardDialog
             dialog={dialog}
@@ -3610,9 +4510,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         </div>
 
         {/* Whiteboard event stream debug panel — only visible to teachers (and dev). */}
-        {userRole === 'teacher' && lessonId && (
-          <WhiteboardEventPanel lessonId={lessonId} defaultCollapsed />
-        )}
+        {userRole === 'teacher' && lessonId && <WhiteboardEventPanel lessonId={lessonId} defaultCollapsed />}
 
         {/* 注入右侧属性编辑器侧边栏 */}
         {isEditMode &&
@@ -3874,9 +4772,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                               }
                               return (
                                 <div key={field.key}>
-                                  <label className="block text-xs text-muted font-semibold mb-1">
-                                    {field.labelZh}
-                                  </label>
+                                  <label className="block text-xs text-muted font-semibold mb-1">{field.labelZh}</label>
                                   <input
                                     type="text"
                                     value={val}
@@ -4212,9 +5108,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                             onBlur={(e) => handlePropBlur('color', e.target.value)}
                             className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                           />
-                          <span className="font-mono text-xs text-muted">
-                            {editingProperties.color || '#000000'}
-                          </span>
+                          <span className="font-mono text-xs text-muted">{editingProperties.color || '#000000'}</span>
                         </div>
                       </div>
                     </div>
@@ -4234,9 +5128,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                             onBlur={(e) => handlePropBlur('stroke', e.target.value)}
                             className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                           />
-                          <span className="font-mono text-xs text-muted">
-                            {editingProperties.stroke || '#000000'}
-                          </span>
+                          <span className="font-mono text-xs text-muted">{editingProperties.stroke || '#000000'}</span>
                         </div>
                       </div>
                     </div>
@@ -4256,9 +5148,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                             onBlur={(e) => handlePropBlur('stroke', e.target.value)}
                             className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                           />
-                          <span className="font-mono text-xs text-muted">
-                            {editingProperties.stroke || '#000000'}
-                          </span>
+                          <span className="font-mono text-xs text-muted">{editingProperties.stroke || '#000000'}</span>
                         </div>
                       </div>
                     </div>
@@ -4278,9 +5168,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                             onBlur={(e) => handlePropBlur('color', e.target.value)}
                             className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                           />
-                          <span className="font-mono text-xs text-muted">
-                            {editingProperties.color || '#000000'}
-                          </span>
+                          <span className="font-mono text-xs text-muted">{editingProperties.color || '#000000'}</span>
                         </div>
                       </div>
                     </div>
@@ -4302,9 +5190,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                             onBlur={(e) => handlePropBlur('color', e.target.value)}
                             className="w-8 h-8 rounded border border-theme cursor-pointer shrink-0 bg-surface"
                           />
-                          <span className="font-mono text-xs text-muted">
-                            {editingProperties.color || '#facc15'}
-                          </span>
+                          <span className="font-mono text-xs text-muted">{editingProperties.color || '#facc15'}</span>
                         </div>
                       </div>
                     </div>

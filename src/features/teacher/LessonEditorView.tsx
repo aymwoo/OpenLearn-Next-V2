@@ -1,17 +1,8 @@
-import { useEffect, useState, type MutableRefObject } from 'react';
+import { useEffect, useState, useCallback, useRef, type MutableRefObject } from 'react';
 import type { Lesson, WhiteboardElement } from '../../store/appStore';
 import type { SessionType } from '../../types/app';
 import { useAppStore } from '../../store/appStore';
-import {
-  Wand2,
-  Loader2,
-  CheckCircle2,
-  X,
-  Database,
-  PenTool,
-  AlertTriangle,
-  Copy,
-} from 'lucide-react';
+import { Wand2, Loader2, CheckCircle2, X, Database, PenTool, AlertTriangle, Copy } from 'lucide-react';
 import { LazyWhiteboard } from '../../components/LazyWhiteboard';
 import { ClassroomSyncChannel } from '../../services/classroom-sync-channel';
 import { LessonPalette } from './lesson-editor/LessonPalette';
@@ -20,6 +11,7 @@ import { SegmentEditorCard } from './lesson-editor/SegmentEditorCard';
 import { PaletteCardEditModal } from './lesson-editor/PaletteCardEditModal';
 import { PALETTE_ITEM_MAP, getPaletteItemConfig } from './lesson-editor/paletteConfig';
 import { useWhiteboardAutoSave } from '../whiteboard/services/useWhiteboardAutoSave';
+import type { WhiteboardPageItem, WhiteboardDragState } from '../whiteboard/InteractiveWhiteboard';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export interface LessonEditorViewProps {
@@ -99,6 +91,18 @@ export function LessonEditorView({
   const canEdit = isAdmin || isOwner;
   const isReadOnly = !canEdit || activeRole !== 'teacher';
   const [paletteCollapsed, setPaletteCollapsed] = useState(false);
+  const [whiteboardPages, setWhiteboardPages] = useState<WhiteboardPageItem[]>([]);
+  const [currentWhiteboardPage, setCurrentWhiteboardPage] = useState<number>(0);
+  const [whiteboardDragState, setWhiteboardDragState] = useState<WhiteboardDragState | null>(null);
+  const hoveredPageDropTargetRef = useRef<{ type: 'page'; pageIndex: number } | null>(null);
+  const hoveredSegmentDropTargetRef = useRef<{ type: 'segment'; segmentId: string } | null>(null);
+
+  useEffect(() => {
+    if (!whiteboardDragState) {
+      hoveredPageDropTargetRef.current = null;
+      hoveredSegmentDropTargetRef.current = null;
+    }
+  }, [whiteboardDragState]);
 
   const handleSaveElementToServer = async (lId: string, elId: string, data: any): Promise<boolean> => {
     try {
@@ -114,7 +118,11 @@ export function LessonEditorView({
     }
   };
 
-  const { queueUpdate, flush: flushAutoSave, pendingCount } = useWhiteboardAutoSave({
+  const {
+    queueUpdate,
+    flush: flushAutoSave,
+    pendingCount,
+  } = useWhiteboardAutoSave({
     lessonId: selectedLesson,
     onSaveToServer: handleSaveElementToServer,
     debounceDelay: 800,
@@ -127,6 +135,35 @@ export function LessonEditorView({
       }
     },
   });
+
+  const handleElementDropCheck = useCallback(
+    (e: PointerEvent, elementId: string): boolean => {
+      const target = hoveredPageDropTargetRef.current || hoveredSegmentDropTargetRef.current;
+      if (!target) return false;
+      if (target.type === 'page') {
+        void (async () => {
+          await whiteboardRef.current?.moveElementToPage?.(elementId, target.pageIndex);
+          if (selectedLesson) {
+            await flushAutoSave();
+            await fetchElements(selectedLesson);
+          }
+        })();
+        return true;
+      }
+      if (target.type === 'segment') {
+        void (async () => {
+          await whiteboardRef.current?.moveElementToSegment?.(elementId, target.segmentId);
+          if (selectedLesson) {
+            await flushAutoSave();
+            await fetchElements(selectedLesson);
+          }
+        })();
+        return true;
+      }
+      return false;
+    },
+    [whiteboardRef, selectedLesson, flushAutoSave, fetchElements],
+  );
 
   // 备课与教案设计器：向打开的学生端Tab实时广播课节与环节变化
   useEffect(() => {
@@ -214,9 +251,7 @@ export function LessonEditorView({
                 >
                   <Loader2 size={11} className="animate-spin text-amber-600" />
                   <span>
-                    {lang === 'zh'
-                      ? `${pendingCount} 项待写入 (点击立即保存)`
-                      : `${pendingCount} pending (sync now)`}
+                    {lang === 'zh' ? `${pendingCount} 项待写入 (点击立即保存)` : `${pendingCount} pending (sync now)`}
                   </span>
                 </button>
               )}
@@ -368,8 +403,18 @@ export function LessonEditorView({
           readOnly={isReadOnly}
           collapsed={paletteCollapsed}
           onToggleCollapse={setPaletteCollapsed}
+          pages={whiteboardPages}
+          currentPage={currentWhiteboardPage}
+          onSwitchPage={(idx) => whiteboardRef.current?.switchPage?.(idx)}
+          onAddPage={(customTitle) => whiteboardRef.current?.addPage?.(customTitle)}
+          onDeletePage={(idx) => whiteboardRef.current?.deletePage?.(idx)}
+          onRenamePage={(idx, newTitle) => whiteboardRef.current?.renamePage?.(idx, newTitle)}
+          dragState={whiteboardDragState}
+          onHoverDropTarget={(target) => {
+            hoveredPageDropTargetRef.current = target;
+          }}
         />
-        <div className="flex-1 relative bg-surface flex flex-col min-w-0 overflow-y-auto">
+        <div className="flex-1 relative bg-surface flex flex-col min-w-0">
           <TimelineRail
             lang={lang}
             segments={timelineSegments}
@@ -382,7 +427,12 @@ export function LessonEditorView({
             readOnly={isReadOnly}
             editorPanelsExpanded={editorPanelsExpanded}
             setEditorPanelsExpanded={setEditorPanelsExpanded}
+            dragState={whiteboardDragState}
+            onHoverDropTarget={(target) => {
+              hoveredSegmentDropTargetRef.current = target;
+            }}
           />
+          <div className="flex-1 relative flex flex-col min-w-0 overflow-y-auto">
           {selectedLesson &&
             activeSegmentId &&
             editorPanelsExpanded &&
@@ -433,7 +483,20 @@ export function LessonEditorView({
                   readOnly={isReadOnly}
                   elements={elements}
                   activeSegmentId={activeSegmentId}
+                  hidePageBar={true}
+                  onPagesStateChange={({
+                    pages,
+                    currentPage,
+                  }: {
+                    pages: WhiteboardPageItem[];
+                    currentPage: number;
+                  }) => {
+                    setWhiteboardPages(pages);
+                    setCurrentWhiteboardPage(currentPage);
+                  }}
                   onSegmentSync={(segId: string) => setActiveSegmentId(segId)}
+                  onElementDragChange={setWhiteboardDragState}
+                  onElementDropCheck={handleElementDropCheck}
                   onElementAdd={async (type: string, data: any) => {
                     if (isReadOnly) return;
                     await flushAutoSave();
@@ -514,5 +577,6 @@ export function LessonEditorView({
         </div>
       </div>
     </div>
+  </div>
   );
 }
