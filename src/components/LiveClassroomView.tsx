@@ -32,6 +32,12 @@ import {
   Plus,
   ChevronDown,
   Radio,
+  School,
+  ArrowLeftRight,
+  AlertCircle,
+  ArrowDown,
+  MessageSquare,
+  Trash2,
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { useAppStore } from '../store/appStore';
@@ -173,6 +179,16 @@ export function LiveClassroomView({
   const [classroomStage, setClassroomStage] = useState<string>('PRE_CLASS_READY');
   /** 会话恢复：教师重进课堂时恢复到的白板页（undefined = 无恢复数据） */
   const [restoredCurrentPage, setRestoredCurrentPage] = useState<number | undefined>(undefined);
+  // 课程切换待选状态与确认弹窗
+  const [pendingLessonId, setPendingLessonId] = useState<string | null>(selectedLesson);
+  const [isSwitchLessonConfirmOpen, setIsSwitchLessonConfirmOpen] = useState(false);
+  // 课堂互动反馈流折叠状态
+  const [isFeedCollapsed, setIsFeedCollapsed] = useState(false);
+
+  useEffect(() => {
+    setPendingLessonId(selectedLesson);
+  }, [selectedLesson]);
+
   // 互动课堂起始门户：默认先展示「课程入口与班级选择门户」，
   // 教师确认课程 / 班级 / 教学模式后才进入授课视图（对应 Stitch 门户设计）。
   // 可通过 initialPortalOpen 关闭（既有单测直接断言授课视图时使用）。
@@ -1067,27 +1083,39 @@ export function LiveClassroomView({
     <div className="flex-grow flex-1 flex flex-col min-h-0 bg-surface border border-theme rounded-2xl shadow-xl text-main overflow-hidden font-sans">
       {/* 1. Header Control Bar */}
       <div className="bg-surface-secondary p-4 border-b border-theme flex flex-wrap items-center justify-between gap-4 shrink-0">
-        <div className="flex items-center gap-3 select-none">
-          <div className="relative flex items-center justify-center">
-            <span
-              className={`w-3 h-3 rounded-full ${liveClassIsActive ? 'bg-emerald-500 animate-ping' : 'bg-rose-500'} absolute`}
-            />
-            <span className={`w-2 h-2 rounded-full ${liveClassIsActive ? 'bg-emerald-500' : 'bg-rose-500'} relative`} />
+        <div className="flex items-center gap-3 select-none flex-wrap">
+          <div className="flex items-center gap-2.5">
+            <div className="relative flex items-center justify-center">
+              <span
+                className={`w-3 h-3 rounded-full ${liveClassIsActive ? 'bg-emerald-500 animate-ping' : 'bg-rose-500'} absolute`}
+              />
+              <span className={`w-2 h-2 rounded-full ${liveClassIsActive ? 'bg-emerald-500' : 'bg-rose-500'} relative`} />
+            </div>
+            <h2 className="text-sm font-extrabold tracking-tight text-main flex items-center gap-2">
+              {lang === 'zh' ? '🔴 在线课堂' : '🔴 Live Classroom'}
+            </h2>
           </div>
-          <h2 className="text-sm font-extrabold tracking-tight text-main flex items-center gap-2">
-            {lang === 'zh' ? '🔴 智能授课工作流控制中心' : '🔴 Active Lesson control center'}
-          </h2>
-        </div>
 
-        {/* Dropdown selectors */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="flex items-center gap-1.5">
+          {/* 班级优雅展示（只读不可改） */}
+          <div
+            id="live-classroom-current-class-badge"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-theme/10 border border-primary-theme/25 text-primary-theme text-xs font-bold select-none shrink-0"
+            title={lang === 'zh' ? '当前授课班级（上课期间固定）' : 'Active Class (Fixed during session)'}
+          >
+            <School size={12} className="shrink-0" />
+            <span className="truncate max-w-[120px] sm:max-w-[160px]">
+              {classes.find((c) => c.id === liveClassSelectedClassId)?.name || (lang === 'zh' ? '未分配班级' : 'No Class')}
+            </span>
+          </div>
+
+          {/* 课程选择与切换操作 */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             <select
-              value={selectedLesson || ''}
+              id="live-classroom-lesson-select"
+              value={pendingLessonId || ''}
               onChange={(e) => {
                 const val = e.target.value === '' ? null : e.target.value;
-                setSelectedLesson(val);
-                if (val) fetchElements(val);
+                setPendingLessonId(val);
               }}
               className="bg-surface border border-theme rounded-lg text-xs font-semibold px-3 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none cursor-pointer hover:bg-surface-secondary transition-colors"
             >
@@ -1098,6 +1126,27 @@ export function LiveClassroomView({
                 </option>
               ))}
             </select>
+
+            <button
+              type="button"
+              id="live-classroom-switch-lesson-btn"
+              disabled={!pendingLessonId || pendingLessonId === selectedLesson}
+              onClick={() => setIsSwitchLessonConfirmOpen(true)}
+              className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                pendingLessonId && pendingLessonId !== selectedLesson
+                  ? 'bg-primary-theme hover:opacity-90 text-white shadow-2xs ring-1 ring-primary-theme/50 active:scale-95'
+                  : 'bg-surface border border-theme/60 text-muted opacity-45 cursor-not-allowed'
+              }`}
+              title={
+                pendingLessonId && pendingLessonId !== selectedLesson
+                  ? (lang === 'zh' ? '点击切换上课课程（将弹出确认框）' : 'Switch lesson (confirmation needed)')
+                  : (lang === 'zh' ? '在下拉框选择不同课程后点击切换' : 'Select a different lesson to switch')
+              }
+            >
+              <ArrowLeftRight size={12} />
+              <span>{lang === 'zh' ? '切换' : 'Switch'}</span>
+            </button>
+
             {selectedLesson && (
               <button
                 type="button"
@@ -1110,21 +1159,7 @@ export function LiveClassroomView({
               </button>
             )}
           </div>
-
-          <div>
-            <select
-              value={liveClassSelectedClassId || ''}
-              onChange={(e) => setLiveClassSelectedClassId(e.target.value === '' ? null : e.target.value)}
-              className="bg-surface border border-theme rounded-lg text-xs font-semibold px-3 py-1.5 focus:ring-1 focus:ring-primary-theme text-main outline-none cursor-pointer hover:bg-surface-secondary transition-colors"
-            >
-              <option value="">{lang === 'zh' ? '-- 选择授课班级 --' : '-- Select Class --'}</option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        </div>
 
           {/* Lock & Student Tab Buttons */}
           <div className="flex items-center gap-2">
@@ -1240,9 +1275,19 @@ export function LiveClassroomView({
               🎛️
             </button>
             <EdgeLanStatusIndicator className="ml-1 shrink-0" />
+            <ClassroomCountdownWidget
+              variant="header"
+              lessonId={selectedLesson}
+              lang={lang as any}
+              syncChannel={syncChannelRef.current}
+              onlineStudentCount={onlineStudentIds?.length || liveClassAcknowledgedMap.size || 0}
+              onTimeRemainingChange={(timeRemaining, isRunning) => {
+                setLiveClassTimeRemaining(timeRemaining);
+                setLiveClassIsActive(isRunning);
+              }}
+            />
           </div>
         </div>
-      </div>
 
       {/* Interactive Classroom Cockpit (Stages, Polls, Buzzers, Exit Tickets, Stage Display) */}
       <ClassroomInteractiveCockpit
@@ -1350,7 +1395,7 @@ export function LiveClassroomView({
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-xs font-black text-main uppercase tracking-wider truncate">
-                    {lang === 'zh' ? '教学步骤与时间管理' : 'Lesson Flow & Timer'}
+                    {lang === 'zh' ? '教学步骤与页面大纲' : 'Lesson Flow & Outline'}
                   </h3>
                   <div className="text-[10px] text-muted flex items-center gap-1.5 font-medium">
                     <span>{timelineSegments.length} {lang === 'zh' ? '环节' : 'steps'}</span>
@@ -1370,22 +1415,7 @@ export function LiveClassroomView({
 
             {/* 滚动容器 */}
             <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3.5 scrollbar-thin">
-              {/* 模块 1：课堂计时器与时间管理 */}
-              <div className="bg-surface-secondary/40 rounded-xl border border-theme/60 p-2 shadow-2xs">
-                <ClassroomCountdownWidget
-                  lessonId={selectedLesson}
-                  lang={lang as any}
-                  compact={true}
-                  syncChannel={syncChannelRef.current}
-                  onlineStudentCount={onlineStudentIds?.length || liveClassAcknowledgedMap.size || 0}
-                  onTimeRemainingChange={(timeRemaining, isRunning) => {
-                    setLiveClassTimeRemaining(timeRemaining);
-                    setLiveClassIsActive(isRunning);
-                  }}
-                />
-              </div>
-
-              {/* 模块 2：白板页面大纲导航 */}
+              {/* 模块 1：白板页面大纲导航 */}
               <div className="bg-surface rounded-xl border border-theme p-2.5 flex flex-col gap-2 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <button
@@ -1959,31 +1989,36 @@ export function LiveClassroomView({
         </div>
 
         {/* Right Column: Students Status & Feedback Log */}
-        <div className="w-[260px] shrink-0 bg-surface p-3.5 border-l border-theme flex flex-col gap-3.5 overflow-hidden">
+        <div className="w-[264px] shrink-0 bg-surface p-3 border-l border-theme flex flex-col gap-2.5 overflow-hidden transition-all duration-300">
           {/* Student attendance grid */}
           <div className="flex-1 flex flex-col min-h-0 gap-2">
-            <h3 className="text-xs font-black uppercase text-muted tracking-wider select-none flex justify-between items-center shrink-0">
-              <span className="flex items-center gap-1">
-                <span>{lang === 'zh' ? '学生专注力监控' : 'Student Status Console'}</span>
+            <div className="flex items-center justify-between shrink-0 select-none pb-0.5">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-xs font-black uppercase tracking-wider text-muted truncate">
+                  {lang === 'zh' ? '学生专注力监控' : 'Student Focus Console'}
+                </span>
                 {liveClassSelectedClassId && (
                   <button
                     onClick={handleRandomPick}
                     disabled={students.length === 0 || isDrawing}
-                    className="ml-2 text-xs font-bold bg-primary-theme/10 text-primary-theme border border-primary-theme/20 px-1.5 py-0.5 rounded hover:bg-primary-theme/20 transition-colors flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+                    className="text-[11px] font-bold bg-primary-theme/10 text-primary-theme hover:bg-primary-theme/20 border border-primary-theme/25 px-2 py-0.5 rounded-full transition-all flex items-center gap-1 active:scale-95 disabled:opacity-50 cursor-pointer shadow-2xs shrink-0"
                     title={lang === 'zh' ? '随机抽取一名学生提问' : 'Pick a student randomly'}
                   >
-                    <Shuffle size={8.5} className={isDrawing ? 'animate-spin' : ''} />
-                    <span>{lang === 'zh' ? '随机抽问' : 'Pick Student'}</span>
+                    <Shuffle size={10} className={isDrawing ? 'animate-spin' : ''} />
+                    <span>{lang === 'zh' ? '抽问' : 'Pick'}</span>
                   </button>
                 )}
+              </div>
+              <span
+                className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-theme bg-surface-secondary text-muted shrink-0"
+                title={lang === 'zh' ? '已锁定学生屏幕人数' : 'Locked count'}
+              >
+                🔒 {students.filter((s) => s.locked_lesson_id === selectedLesson).length}/{students.length}
               </span>
-              <span className="text-xs bg-surface-secondary border border-theme text-muted font-mono px-1.5 py-0.5 rounded-md">
-                {students.filter((s) => s.locked_lesson_id === selectedLesson).length} / {students.length} Locked
-              </span>
-            </h3>
+            </div>
 
             {liveClassSelectedClassId ? (
-              <div className="overflow-y-auto flex-1 pr-1 grid grid-cols-3 gap-2 justify-items-center auto-rows-max scrollbar-thin py-2">
+              <div className="overflow-y-auto flex-1 pr-1 grid grid-cols-3 gap-1.5 justify-items-center auto-rows-max scrollbar-thin py-1">
                 {students.map((st) => {
                   const isStudentLocked = st.locked_lesson_id === selectedLesson;
                   const isCheckedIn = liveClassAcknowledgedMap.get(st.id);
@@ -2006,19 +2041,19 @@ export function LiveClassroomView({
                   const isActiveDraw = activeDrawStudentId === st.id;
 
                   // SVG ring calculation
-                  const radius = 22;
+                  const radius = 19.5;
                   const strokeWidth = 3;
-                  const circumference = 2 * Math.PI * radius; // 138.23
+                  const circumference = 2 * Math.PI * radius; // 122.52
                   const strokeDashoffset = circumference - (progPercent / 100) * circumference;
 
                   // Circular color system
-                  let ringColor = 'stroke-indigo-650'; // normal progress / in class
+                  let ringColor = 'stroke-primary-theme'; // normal progress / in class
                   if (isSelectedDraw) {
                     ringColor = 'stroke-amber-500 stroke-[3.5px]'; // jackpot winner!
                   } else if (isActiveDraw) {
                     ringColor = 'stroke-indigo-500 stroke-[3.5px] animate-pulse'; // flickering drawer
                   } else if (!isOnline) {
-                    ringColor = 'stroke-slate-200'; // offline
+                    ringColor = 'stroke-slate-200 dark:stroke-slate-700'; // offline
                   } else if (isStudentLocked) {
                     ringColor = 'stroke-rose-500 animate-pulse'; // focus locked
                   } else if (isBehind) {
@@ -2036,15 +2071,19 @@ export function LiveClassroomView({
                       key={st.id}
                       onMouseEnter={() => setHoveredStudentId(st.id)}
                       onMouseLeave={() => setHoveredStudentId(null)}
-                      className={`group relative flex flex-col items-center justify-center p-1 rounded-xl transition-all cursor-default ${
-                        isSelectedDraw ? 'z-20 duration-300' : isActiveDraw ? 'z-20' : 'hover:bg-slate-50'
+                      className={`group relative flex flex-col items-center justify-center p-1.5 rounded-xl transition-all cursor-default w-full ${
+                        isSelectedDraw
+                          ? 'z-20 duration-300 bg-amber-500/10 ring-2 ring-amber-400 shadow-md scale-105'
+                          : isActiveDraw
+                            ? 'z-20 ring-1 ring-primary-theme bg-primary-theme/5 scale-102'
+                            : 'hover:bg-surface-secondary/70'
                       }`}
                     >
                       {/* Main Circular Widget */}
                       <div
-                        className={`relative w-14 h-14 flex items-center justify-center rounded-full transition-all duration-300 ${
+                        className={`relative w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 ${
                           isSelectedDraw
-                            ? 'shadow-[0_0_15px_#f59e0b] scale-110 z-10 bg-amber-50 ring-2 ring-amber-400 ring-offset-1'
+                            ? 'shadow-[0_0_15px_#f59e0b] scale-105 z-10 bg-amber-50 ring-2 ring-amber-400'
                             : isActiveDraw
                               ? 'shadow-[0_0_10px_#6366f1] scale-105 z-10 bg-indigo-50 ring-1 ring-indigo-400'
                               : ''
@@ -2062,7 +2101,7 @@ export function LiveClassroomView({
                             className="absolute -top-1 -right-1 z-30 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-md cursor-pointer hover:scale-125 transition-transform"
                             title={`该学生端捕获到 ${stErrors.length} 处异常: ${stErrors[0].title || stErrors[0].message}`}
                           >
-                            <AlertTriangle size={10} className="animate-pulse" />
+                            <AlertTriangle size={9} className="animate-pulse" />
                           </button>
                         )}
 
@@ -2074,21 +2113,20 @@ export function LiveClassroomView({
                           />
                         )}
 
-
                         {/* Circular Progress Ring */}
-                        <svg className="absolute w-full h-full transform -rotate-90" viewBox="0 0 50 50">
+                        <svg className="absolute w-full h-full transform -rotate-90" viewBox="0 0 46 46">
                           {/* Inner circle background */}
                           <circle
-                            cx="25"
-                            cy="25"
+                            cx="23"
+                            cy="23"
                             r={radius}
-                            className="stroke-slate-100 fill-white"
+                            className="stroke-slate-100 dark:stroke-slate-800 fill-white dark:fill-slate-900"
                             strokeWidth={strokeWidth}
                           />
                           {/* Outer circle progress indicator */}
                           <circle
-                            cx="25"
-                            cy="25"
+                            cx="23"
+                            cy="23"
                             r={radius}
                             className={`fill-transparent transition-all duration-300 ${ringColor}`}
                             strokeWidth={strokeWidth}
@@ -2100,25 +2138,25 @@ export function LiveClassroomView({
 
                         {/* Name (Static) or Controls (Hover) */}
                         <div
-                          className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center overflow-hidden transition-colors ${
+                          className={`relative z-10 w-8.5 h-8.5 rounded-full flex items-center justify-center overflow-hidden transition-colors ${
                             isSelectedDraw ? 'bg-amber-100/90' : ''
                           }`}
                         >
                           {/* Name view: Visible by default, hidden on hover */}
                           <span
-                            className={`text-xs font-bold tracking-tight truncate max-w-[34px] group-hover:scale-0 group-hover:opacity-0 transition-all duration-200 select-none ${
+                            className={`text-[11px] font-bold tracking-tight truncate max-w-[32px] group-hover:scale-0 group-hover:opacity-0 transition-all duration-200 select-none ${
                               isSelectedDraw
                                 ? 'text-amber-900 font-extrabold'
                                 : !isOnline
                                   ? 'text-slate-400'
-                                  : 'text-slate-700'
+                                  : 'text-slate-700 dark:text-slate-200'
                             }`}
                           >
                             {st.name}
                           </span>
 
                           {/* Hover action overlay */}
-                          <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 bg-white/95 rounded-full shadow-inner">
+                          <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 bg-surface/95 rounded-full shadow-inner">
                             {/* Alert / Warning button */}
                             {selectedLesson && onPingStudent && (
                               <button
@@ -2134,14 +2172,14 @@ export function LiveClassroomView({
                                     'success',
                                   );
                                 }}
-                                className={`p-0.5 rounded-md hover:bg-slate-105 transition-colors shrink-0 cursor-pointer ${
+                                className={`p-0.5 rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer ${
                                   isBehind
                                     ? 'text-amber-500 hover:text-amber-600 animate-pulse'
-                                    : 'text-slate-400 hover:text-slate-650'
+                                    : 'text-slate-400 hover:text-primary-theme'
                                 }`}
                                 title="提醒"
                               >
-                                <Send size={10} />
+                                <Send size={9} />
                               </button>
                             )}
 
@@ -2149,27 +2187,27 @@ export function LiveClassroomView({
                             <button
                               onClick={() => handleToggleStudentLock(st.id, st.locked_lesson_id)}
                               disabled={!selectedLesson}
-                              className={`p-0.5 rounded-md hover:bg-slate-105 transition-colors shrink-0 cursor-pointer ${
+                              className={`p-0.5 rounded-md hover:bg-surface-secondary transition-colors shrink-0 cursor-pointer ${
                                 isStudentLocked
                                   ? 'text-rose-500 hover:text-rose-600'
-                                  : 'text-slate-400 hover:text-slate-655'
+                                  : 'text-slate-400 hover:text-rose-500'
                               }`}
                               title={isStudentLocked ? '解锁' : '锁定'}
                             >
-                              {isStudentLocked ? <ShieldAlert size={10} /> : <Shield size={10} />}
+                              {isStudentLocked ? <ShieldAlert size={9} /> : <Shield size={9} />}
                             </button>
                           </div>
                         </div>
 
                         {/* Top-Right Online/Lesson Badge Indicator or Jackpot winner target badge */}
                         {isSelectedDraw ? (
-                          <span className="absolute -top-1.5 -right-1.5 z-20 text-xs bg-amber-500 text-white rounded-full w-4 h-4 flex items-center justify-center font-bold shadow-md animate-bounce">
+                          <span className="absolute -top-1.5 -right-1.5 z-20 text-[10px] bg-amber-500 text-white rounded-full w-4 h-4 flex items-center justify-center font-bold shadow-md animate-bounce">
                             🎯
                           </span>
                         ) : (
                           isOnline && (
                             <span
-                              className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white shrink-0 ${
+                              className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-surface shrink-0 ${
                                 isInLesson ? 'bg-emerald-500' : 'bg-blue-400'
                               }`}
                               title={isInLesson ? '正在上课' : '在线(但未进课堂)'}
@@ -2180,7 +2218,7 @@ export function LiveClassroomView({
                         {/* Bottom-Right Acknowledged/Ready Indicator */}
                         {isCheckedIn === true && !isSelectedDraw && (
                           <span
-                            className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white bg-amber-500 shrink-0 animate-bounce"
+                            className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-surface bg-amber-500 shrink-0 animate-bounce"
                             title="已确认/就位"
                           />
                         )}
@@ -2188,12 +2226,16 @@ export function LiveClassroomView({
 
                       {/* Small Progress Label or Draw Winner Label */}
                       <span
-                        className={`text-xs mt-1 truncate max-w-[48px] select-none font-medium ${
+                        className={`text-[10px] font-mono mt-1 truncate max-w-[48px] select-none font-bold ${
                           isSelectedDraw
-                            ? 'text-amber-600 font-extrabold animate-bounce'
+                            ? 'text-amber-600 dark:text-amber-400 font-extrabold animate-bounce'
                             : !isOnline
-                              ? 'text-slate-350'
-                              : 'text-slate-505'
+                              ? 'text-slate-400'
+                              : progPercent === 100
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : isBehind
+                                  ? 'text-amber-600 dark:text-amber-400'
+                                  : 'text-muted'
                         }`}
                       >
                         {isSelectedDraw ? '🎯 抽中' : `${progPercent}%`}
@@ -2210,7 +2252,7 @@ export function LiveClassroomView({
           </div>
 
           {/* Hover Details / Class Summary Panel */}
-          <div className="bg-surface-secondary border border-theme rounded-xl p-3 flex flex-col gap-1.5 h-[135px] shrink-0 shadow-sm select-none justify-center">
+          <div className="bg-surface-secondary border border-theme rounded-xl p-3 flex flex-col gap-1.5 h-[128px] shrink-0 shadow-xs select-none justify-center">
             {hoveredStudentId ? (
               (() => {
                 const st = students.find((s) => s.id === hoveredStudentId);
@@ -2261,10 +2303,9 @@ export function LiveClassroomView({
                       </span>
                     </div>
 
-
                     <div className="grid grid-cols-2 gap-1.5 text-xs leading-tight shrink-0">
                       <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
-                        <span className="text-muted font-bold">随堂测验</span>
+                        <span className="text-muted font-bold text-[10px]">随堂测验</span>
                         <span
                           className={`font-bold font-mono text-xs ${studentProg != null && studentProg.quiz_score !== null ? 'text-primary-theme' : 'text-muted'}`}
                         >
@@ -2275,7 +2316,7 @@ export function LiveClassroomView({
                       </div>
 
                       <div className="flex flex-col gap-0.5 bg-surface p-1 rounded-lg border border-theme">
-                        <span className="text-muted font-bold">教学环节进度</span>
+                        <span className="text-muted font-bold text-[10px]">教学环节进度</span>
                         <span className="font-bold text-main text-xs">
                           {Array.isArray(completedSegIds) ? completedSegIds.length : 0} / {timelineSegments.length}
                         </span>
@@ -2290,7 +2331,7 @@ export function LiveClassroomView({
                           return (
                             <span
                               key={seg.id}
-                              className={`mr-1 px-1 py-0.2 rounded ${isSegCompleted ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-surface text-muted border border-theme'}`}
+                              className={`mr-1 px-1 py-0.2 rounded text-[10px] ${isSegCompleted ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-surface text-muted border border-theme'}`}
                               title={seg.title}
                             >
                               {sIdx + 1}:{isSegCompleted ? '✓' : '✗'}
@@ -2311,21 +2352,21 @@ export function LiveClassroomView({
                   <Activity size={12} className="text-primary-theme animate-pulse" />
                   <span>{lang === 'zh' ? '班级学情概况' : 'Class Overview'}</span>
                 </div>
-                <div className="grid grid-cols-3 gap-1.5 text-xs leading-tight mt-1.5 shrink-0">
-                  <div className="flex flex-col items-center bg-surface py-1 rounded-lg border border-theme">
-                    <span className="text-muted font-medium">在线/总数</span>
+                <div className="grid grid-cols-3 gap-1 text-xs leading-tight mt-1 shrink-0">
+                  <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
+                    <span className="text-muted font-medium text-[10px]">在线/总数</span>
                     <span className="font-bold font-mono text-emerald-600 text-xs mt-0.5">
                       {students.filter((s) => onlineStudentIds.includes(s.id)).length}/{students.length}
                     </span>
                   </div>
-                  <div className="flex flex-col items-center bg-surface py-1 rounded-lg border border-theme">
-                    <span className="text-muted font-medium">屏幕锁定</span>
+                  <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
+                    <span className="text-muted font-medium text-[10px]">屏幕锁定</span>
                     <span className="font-bold font-mono text-rose-500 text-xs mt-0.5">
                       {students.filter((s) => s.locked_lesson_id === selectedLesson).length}
                     </span>
                   </div>
-                  <div className="flex flex-col items-center bg-surface py-1 rounded-lg border border-theme">
-                    <span className="text-muted font-medium">平均进度</span>
+                  <div className="flex flex-col items-center bg-surface py-1 px-0.5 rounded-lg border border-theme">
+                    <span className="text-muted font-medium text-[10px]">平均进度</span>
                     <span className="font-bold font-mono text-primary-theme text-xs mt-0.5">
                       {(() => {
                         const inClassStudents = students.filter((s) => onlineStudentIds.includes(s.id));
@@ -2343,62 +2384,107 @@ export function LiveClassroomView({
             )}
           </div>
 
-          {/* Feedback log feed */}
-          <div className="h-[160px] flex flex-col border-t border-theme pt-3 min-h-0 gap-2 shrink-0">
-            <h3 className="text-xs font-black uppercase text-muted tracking-wider select-none flex justify-between items-center">
-              <span>{lang === 'zh' ? '课堂互动反馈流' : 'Live Classroom Feed'}</span>
-              <button
-                onClick={() =>
-                  setLiveClassFeed([
-                    {
-                      id: 'clear',
-                      time: new Date().toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                      }),
-                      type: 'info',
-                      message: '反馈流已清空。',
-                    },
-                  ])
-                }
-                className="text-xs hover:text-main text-muted underline transition-all"
-              >
-                Clear
-              </button>
-            </h3>
-
-            <div className="flex-1 bg-surface-secondary border border-theme rounded-xl p-2.5 font-mono text-xs leading-relaxed overflow-y-auto space-y-2 select-text text-left text-main shadow-inner scrollbar-thin">
-              {liveClassFeed.map((f) => (
-                <div key={f.id} className="border-b border-theme pb-1.5 last:border-b-0">
-                  <div className="flex justify-between items-center text-muted font-bold mb-0.5">
-                    <span>{f.time}</span>
-                    <span
-                      className={`px-1 rounded uppercase tracking-wide text-xs ${
-                        f.type === 'success'
-                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                          : f.type === 'warning'
-                            ? 'bg-amber-50 text-amber-600 border border-amber-100'
-                            : 'bg-surface text-muted border border-theme'
-                      }`}
-                    >
-                      {f.type}
-                    </span>
-                  </div>
-                  <p
-                    className={
-                      f.type === 'success'
-                        ? 'text-emerald-700 font-medium'
-                        : f.type === 'warning'
-                          ? 'text-amber-700 font-medium'
-                          : 'text-main'
+          {/* Feedback log feed (Collapsible) */}
+          <div
+            className={`flex flex-col border-t border-theme pt-2 min-h-0 gap-1.5 shrink-0 transition-all duration-300 ease-in-out ${
+              isFeedCollapsed ? 'h-[36px]' : 'h-[165px]'
+            }`}
+          >
+            <div
+              onClick={() => setIsFeedCollapsed((prev) => !prev)}
+              className="flex items-center justify-between text-xs font-black uppercase text-muted tracking-wider select-none cursor-pointer hover:text-main transition-colors px-0.5 group"
+              title={
+                isFeedCollapsed
+                  ? lang === 'zh'
+                    ? '点击展开课堂互动反馈流'
+                    : 'Click to expand feed'
+                  : lang === 'zh'
+                    ? '点击收起课堂互动反馈流'
+                    : 'Click to collapse feed'
+              }
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <ChevronDown
+                  size={13}
+                  className={`text-muted group-hover:text-primary-theme transition-transform duration-200 shrink-0 ${
+                    isFeedCollapsed ? '-rotate-90' : 'rotate-0'
+                  }`}
+                />
+                <MessageSquare size={12} className="text-primary-theme shrink-0" />
+                <span className="font-extrabold text-main text-xs truncate">
+                  {lang === 'zh' ? '课堂互动反馈流' : 'Live Feed'}
+                </span>
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-surface-secondary border border-theme text-muted shrink-0">
+                  {liveClassFeed.length}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                {!isFeedCollapsed && (
+                  <button
+                    onClick={() =>
+                      setLiveClassFeed([
+                        {
+                          id: 'clear',
+                          time: new Date().toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          }),
+                          type: 'info',
+                          message: '反馈流已清空。',
+                        },
+                      ])
                     }
+                    className="text-[10px] font-bold hover:text-rose-500 text-muted transition-colors flex items-center gap-0.5 px-1 py-0.5 rounded hover:bg-surface-secondary cursor-pointer"
+                    title={lang === 'zh' ? '清空互动反馈记录' : 'Clear feed'}
                   >
-                    {f.message}
-                  </p>
-                </div>
-              ))}
+                    <Trash2 size={10} />
+                    <span>Clear</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsFeedCollapsed((prev) => !prev)}
+                  className="text-[10px] text-muted hover:text-primary-theme font-medium cursor-pointer"
+                >
+                  {isFeedCollapsed ? (lang === 'zh' ? '展开' : 'Expand') : (lang === 'zh' ? '收起' : 'Collapse')}
+                </button>
+              </div>
             </div>
+
+            {!isFeedCollapsed && (
+              <div className="flex-1 bg-surface-secondary/70 border border-theme rounded-xl p-2 font-mono text-[11px] leading-relaxed overflow-y-auto space-y-1.5 select-text text-left text-main shadow-inner scrollbar-thin">
+                {liveClassFeed.map((f) => (
+                  <div key={f.id} className="border-b border-theme pb-1 last:border-b-0">
+                    <div className="flex justify-between items-center text-muted font-bold mb-0.5">
+                      <span className="text-[10px]">{f.time}</span>
+                      <span
+                        className={`px-1 rounded uppercase tracking-wide text-[9px] ${
+                          f.type === 'success'
+                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400'
+                            : f.type === 'warning'
+                              ? 'bg-amber-50 text-amber-600 border border-amber-100 dark:bg-amber-950/40 dark:text-amber-400'
+                              : 'bg-surface text-muted border border-theme'
+                        }`}
+                      >
+                        {f.type}
+                      </span>
+                    </div>
+                    <p
+                      className={
+                        f.type === 'success'
+                          ? 'text-emerald-700 dark:text-emerald-300 font-medium'
+                          : f.type === 'warning'
+                            ? 'text-amber-700 dark:text-amber-300 font-medium'
+                            : 'text-main'
+                      }
+                    >
+                      {f.message}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -2559,6 +2645,89 @@ export function LiveClassroomView({
         isHardwareSettingsOpen={isHardwareSettingsOpen}
         onCloseHardwareSettings={() => setIsHardwareSettingsOpen(false)}
       />
+
+      {/* ── 切换上课课程确认模态窗 ── */}
+      {isSwitchLessonConfirmOpen && (
+        <div
+          id="live-classroom-switch-lesson-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150 select-none"
+        >
+          <div className="bg-surface border border-theme rounded-2xl shadow-2xl max-w-md w-full p-5 flex flex-col gap-4 text-main">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 border border-amber-500/25 flex items-center justify-center shrink-0">
+                <AlertCircle size={22} />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-main">
+                  {lang === 'zh' ? '确认切换上课课程？' : 'Confirm Lesson Switch?'}
+                </h3>
+                <p className="text-xs text-muted mt-0.5">
+                  {lang === 'zh' ? '当前课堂将立即切换至新课程' : 'Current live session will switch to new lesson'}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-surface-secondary/70 border border-theme/60 rounded-xl flex flex-col gap-2 text-xs">
+              <div className="flex items-center justify-between text-muted">
+                <span>{lang === 'zh' ? '当前课程' : 'Current Lesson'}:</span>
+                <span className="font-semibold text-main truncate max-w-[240px]">
+                  {lessons.find((l) => l.id === selectedLesson)?.title || (lang === 'zh' ? '未选择' : 'None')}
+                </span>
+              </div>
+              <div className="flex items-center justify-center text-muted">
+                <ArrowDown size={14} className="text-primary-theme animate-bounce" />
+              </div>
+              <div className="flex items-center justify-between text-primary-theme font-bold">
+                <span>{lang === 'zh' ? '目标新课程' : 'New Lesson'}:</span>
+                <span className="truncate max-w-[240px]">
+                  {lessons.find((l) => l.id === pendingLessonId)?.title}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted leading-relaxed">
+              {lang === 'zh'
+                ? '切换后，课堂白板、教学环节步骤与已连接的学生端屏幕将同步切换至新课程。是否确认切换？'
+                : 'Switching lessons will update the whiteboard, lesson segments, and sync the screen for all connected students. Continue?'}
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-theme/60">
+              <button
+                type="button"
+                id="live-classroom-switch-lesson-cancel-btn"
+                onClick={() => {
+                  setPendingLessonId(selectedLesson);
+                  setIsSwitchLessonConfirmOpen(false);
+                }}
+                className="px-3.5 py-1.5 rounded-xl border border-theme hover:bg-surface-secondary text-xs font-semibold text-main transition-colors cursor-pointer"
+              >
+                {lang === 'zh' ? '取消' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                id="live-classroom-switch-lesson-confirm-btn"
+                onClick={() => {
+                  if (pendingLessonId) {
+                    setSelectedLesson(pendingLessonId);
+                    fetchElements(pendingLessonId);
+                    addToast?.(
+                      lang === 'zh' ? '课程已切换' : 'Lesson Switched',
+                      lang === 'zh'
+                        ? `已切换到课程《${lessons.find((l) => l.id === pendingLessonId)?.title}》`
+                        : 'Switched successfully',
+                      'success',
+                    );
+                  }
+                  setIsSwitchLessonConfirmOpen(false);
+                }}
+                className="px-4 py-1.5 rounded-xl bg-primary-theme hover:opacity-90 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+              >
+                {lang === 'zh' ? '确认切换' : 'Confirm Switch'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

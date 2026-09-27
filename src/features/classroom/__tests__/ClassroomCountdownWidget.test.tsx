@@ -8,6 +8,7 @@ describe('Classroom Countdown Timer & Sync (Teacher & Student)', () => {
   let mockSyncChannel: any;
 
   beforeEach(() => {
+    localStorage.clear();
     vi.clearAllMocks();
     mockSyncChannel = {
       broadcastCountdown: vi.fn(),
@@ -147,4 +148,34 @@ describe('Classroom Countdown Timer & Sync (Teacher & Student)', () => {
       expect(screen.getByText('随堂限时答题')).toBeDefined();
     });
   });
+
+  it('renders topbar variant header pill and toggles settings popover', async () => {
+    render(
+      <ClassroomCountdownWidget
+        variant="header"
+        lessonId="les-test-101"
+        lang="zh"
+        syncChannel={mockSyncChannel}
+        onlineStudentCount={30}
+      />,
+    );
+
+    // Header pill elements
+    expect(screen.getByText('05:00')).toBeDefined();
+    const plusOneBtn = screen.getByRole('button', { name: '+1m' });
+    expect(plusOneBtn).toBeDefined();
+
+    fireEvent.click(plusOneBtn);
+    await waitFor(() => {
+      expect(mockSyncChannel.broadcastCountdown).toHaveBeenCalled();
+    });
+
+    // Toggle settings popover
+    const toggleBtn = screen.getByTitle(/倒计时设置/);
+    fireEvent.click(toggleBtn);
+
+    expect(screen.getByText('课堂倒计时设置')).toBeDefined();
+    expect(screen.getByText('快捷预设')).toBeDefined();
+  });
 });
+

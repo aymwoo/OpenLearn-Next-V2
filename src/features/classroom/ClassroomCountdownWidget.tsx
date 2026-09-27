@@ -50,6 +50,7 @@ export interface ClassroomCountdownWidgetProps {
   lessonId: string | null;
   lang?: 'zh' | 'en';
   compact?: boolean;
+  variant?: 'card' | 'header';
   syncChannel?: ClassroomSyncChannel | null;
   onlineStudentCount?: number;
   onTimeRemainingChange?: (timeRemaining: number, isRunning: boolean) => void;
@@ -97,6 +98,7 @@ export function ClassroomCountdownWidget({
   lessonId,
   lang = 'zh',
   compact = false,
+  variant = 'card',
   syncChannel,
   onlineStudentCount = 0,
   onTimeRemainingChange,
@@ -120,6 +122,21 @@ export function ClassroomCountdownWidget({
   const [customLabelInput, setCustomLabelInput] = useState('');
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [pluginPresets, setPluginPresets] = useState<CountdownPreset[]>([]);
+
+  // 顶栏胶囊展开浮层控制
+  const [isHeaderPopoverOpen, setIsHeaderPopoverOpen] = useState(false);
+  const headerPopoverRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isHeaderPopoverOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (headerPopoverRef.current && !headerPopoverRef.current.contains(e.target as Node)) {
+        setIsHeaderPopoverOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isHeaderPopoverOpen]);
 
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef(countdown);
@@ -482,6 +499,338 @@ export function ClassroomCountdownWidget({
 
   const allPresets = [...DEFAULT_PRESETS, ...pluginPresets];
 
+  // ── 大屏投影模式全屏模态框 (Projector Mode) ──
+  const renderFullModal = () => {
+    if (!isFullModalOpen) return null;
+    return (
+      <div
+        id="classroom-countdown-projector-modal"
+        className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 select-none animate-in fade-in duration-200"
+      >
+        <div className="absolute top-6 right-6 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+          >
+            {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsFullModalOpen(false)}
+            className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+          >
+            <Minimize2 size={20} />
+          </button>
+        </div>
+
+        <div className="flex flex-col items-center gap-6 max-w-2xl w-full">
+          <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 text-white text-sm font-bold">
+            <Sparkles size={16} className="text-amber-300" />
+            <span>{countdown.label}</span>
+            <span className="text-xs text-white/60 ml-2">
+              {lang === 'zh' ? `全班 ${onlineStudentCount} 位学生正在同步` : `${onlineStudentCount} students connected`}
+            </span>
+          </div>
+
+          {/* 巨幅数字显示 */}
+          <div
+            className={`text-8xl md:text-9xl font-black font-mono tracking-widest drop-shadow-2xl transition-all ${
+              isUrgent ? 'text-rose-500 animate-pulse' : isWarning ? 'text-amber-400' : 'text-emerald-400'
+            }`}
+          >
+            {formatTime(countdown.timeRemaining)}
+          </div>
+
+          {/* 全宽大进度条 */}
+          <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden border border-white/20 shadow-inner">
+            <div
+              className={`h-full transition-all duration-500 ${
+                isUrgent ? 'bg-rose-500' : isWarning ? 'bg-amber-400' : 'bg-emerald-400'
+              }`}
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          {/* 大屏交互控制 */}
+          <div className="flex items-center gap-4 mt-2">
+            {countdown.isRunning ? (
+              <button
+                type="button"
+                onClick={handlePause}
+                className="px-8 py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-lg transition-transform active:scale-95 shadow-xl flex items-center gap-2 cursor-pointer"
+              >
+                <Pause size={20} />
+                <span>{lang === 'zh' ? '暂停' : 'Pause'}</span>
+              </button>
+            ) : countdown.isPaused ? (
+              <button
+                type="button"
+                onClick={handleResume}
+                className="px-8 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg transition-transform active:scale-95 shadow-xl flex items-center gap-2 cursor-pointer"
+              >
+                <Play size={20} />
+                <span>{lang === 'zh' ? '继续' : 'Resume'}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleStart(countdown.totalDuration || 300)}
+                className="px-8 py-3 rounded-2xl bg-primary-theme hover:opacity-90 text-white font-bold text-lg transition-transform active:scale-95 shadow-xl flex items-center gap-2 cursor-pointer"
+              >
+                <Play size={20} />
+                <span>{lang === 'zh' ? '开始' : 'Start'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => handleAddTime(60)}
+              className="px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-base transition-colors cursor-pointer border border-white/20"
+            >
+              +1 分钟
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAddTime(300)}
+              className="px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-base transition-colors cursor-pointer border border-white/20"
+            >
+              +5 分钟
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="p-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold transition-colors cursor-pointer border border-white/20"
+              title="重置"
+            >
+              <RotateCcw size={20} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (variant === 'header') {
+    return (
+      <div
+        ref={headerPopoverRef}
+        id="classroom-countdown-header-container"
+        className={`relative flex items-center shrink-0 ${className}`}
+      >
+        {/* Header Pill */}
+        <div
+          id="classroom-countdown-header-pill"
+          className={`h-7 sm:h-8 px-2 py-0.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 shadow-2xs select-none transition-all ${
+            countdown.isRunning
+              ? 'bg-primary-theme/10 border-primary-theme/40 text-primary-theme ring-1 ring-primary-theme/20'
+              : 'bg-surface border-theme text-main hover:bg-surface-secondary'
+          }`}
+        >
+          <Clock
+            size={13}
+            className={`shrink-0 ${countdown.isRunning ? 'animate-spin text-primary-theme' : 'text-muted'}`}
+            style={{ animationDuration: '6s' }}
+          />
+          <span className="text-[11px] font-medium text-muted hidden xl:inline truncate max-w-[68px]">
+            {countdown.label}
+          </span>
+          <span
+            id="classroom-countdown-digits"
+            className={`font-mono font-black text-xs sm:text-sm tracking-wider ${
+              isUrgent ? 'text-rose-500 animate-pulse' : countdown.isRunning ? 'text-primary-theme font-extrabold' : 'text-main'
+            }`}
+          >
+            {formatTime(countdown.timeRemaining)}
+          </span>
+
+          <div className="flex items-center gap-1 ml-0.5 border-l border-theme/60 pl-1.5">
+            {/* 快捷开始/暂停 */}
+            {countdown.isRunning ? (
+              <button
+                type="button"
+                id="classroom-countdown-pause-btn"
+                onClick={handlePause}
+                className="w-5 h-5 rounded-md bg-amber-500 text-white hover:bg-amber-600 flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
+                title={lang === 'zh' ? '暂停倒计时' : 'Pause'}
+              >
+                <Pause size={10} />
+              </button>
+            ) : countdown.isPaused ? (
+              <button
+                type="button"
+                id="classroom-countdown-resume-btn"
+                onClick={handleResume}
+                className="w-5 h-5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
+                title={lang === 'zh' ? '继续倒计时' : 'Resume'}
+              >
+                <Play size={10} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                id="classroom-countdown-start-btn"
+                onClick={() => handleStart(countdown.totalDuration || 300)}
+                className="w-5 h-5 rounded-md bg-primary-theme text-white hover:opacity-90 flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
+                title={lang === 'zh' ? '开始倒计时' : 'Start'}
+              >
+                <Play size={10} />
+              </button>
+            )}
+
+            {/* 快捷 +1m */}
+            <button
+              type="button"
+              onClick={() => handleAddTime(60)}
+              className="px-1.5 h-5 rounded bg-surface-secondary hover:bg-primary-theme/15 hover:text-primary-theme border border-theme/60 text-[10px] font-bold text-muted transition-colors cursor-pointer"
+              title={lang === 'zh' ? '增加1分钟' : '+1m'}
+            >
+              +1m
+            </button>
+
+            {/* 展开浮层设置 */}
+            <button
+              type="button"
+              id="classroom-countdown-settings-toggle"
+              onClick={() => setIsHeaderPopoverOpen(!isHeaderPopoverOpen)}
+              className={`w-5 h-5 rounded flex items-center justify-center text-muted hover:text-main hover:bg-surface-secondary transition-colors cursor-pointer ${
+                isHeaderPopoverOpen ? 'bg-surface-secondary text-main' : ''
+              }`}
+              title={lang === 'zh' ? '倒计时设置与大屏投放' : 'Settings & Projector'}
+            >
+              <ChevronDown size={11} className={`transition-transform duration-200 ${isHeaderPopoverOpen ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* 悬浮设置浮层 */}
+        {isHeaderPopoverOpen && (
+          <div
+            id="classroom-countdown-header-popover"
+            className="absolute right-0 top-full mt-1.5 w-72 bg-surface border border-theme rounded-2xl shadow-xl p-3 z-40 flex flex-col gap-2.5 animate-in fade-in slide-in-from-top-1 duration-150"
+          >
+            <div className="flex items-center justify-between border-b border-theme/60 pb-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-main">
+                <Clock size={13} className="text-primary-theme" />
+                <span>{lang === 'zh' ? '课堂倒计时设置' : 'Countdown Settings'}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setSoundEnabled(!soundEnabled)}
+                  className={`p-1 rounded-md text-xs transition-colors cursor-pointer border border-theme ${
+                    soundEnabled ? 'text-primary-theme bg-surface' : 'text-muted bg-surface/50'
+                  }`}
+                  title={soundEnabled ? (lang === 'zh' ? '提示音已开启' : 'Sound On') : lang === 'zh' ? '提示音已静音' : 'Muted'}
+                >
+                  {soundEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsFullModalOpen(true);
+                    setIsHeaderPopoverOpen(false);
+                  }}
+                  className="p-1 rounded-md text-xs text-muted hover:text-main bg-surface hover:bg-surface-secondary transition-colors cursor-pointer border border-theme"
+                  title={lang === 'zh' ? '大屏全屏投放' : 'Projector Mode'}
+                >
+                  <Maximize2 size={12} />
+                </button>
+              </div>
+            </div>
+
+            {/* 活动标签选择 */}
+            <div className="flex items-center justify-between gap-1 text-[11px]">
+              <span className="text-muted font-medium">{lang === 'zh' ? '当前任务:' : 'Task:'}</span>
+              <div className="flex items-center gap-1">
+                <select
+                  value={countdown.label}
+                  onChange={(e) => syncAndBroadcast({ ...countdown, label: e.target.value })}
+                  className="px-2 py-0.5 rounded-lg bg-surface border border-theme text-xs font-semibold text-main outline-none cursor-pointer"
+                >
+                  {DEFAULT_LABELS.map((lbl) => (
+                    <option key={lbl} value={lbl}>
+                      {lbl}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* 预设与快速时长选择 */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] text-muted font-semibold uppercase tracking-wider">
+                {lang === 'zh' ? '快捷预设' : 'Presets'}
+              </span>
+              <div className="grid grid-cols-3 gap-1">
+                {allPresets.slice(0, 6).map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => {
+                      handleStart(preset.duration, preset.label);
+                      setIsHeaderPopoverOpen(false);
+                    }}
+                    className={`px-1.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border flex items-center justify-center gap-1 ${
+                      countdown.totalDuration === preset.duration && countdown.isRunning
+                        ? 'bg-primary-theme text-white border-primary-theme shadow-2xs'
+                        : 'bg-surface hover:bg-surface-secondary text-main border-theme'
+                    }`}
+                    title={preset.label}
+                  >
+                    <span>{preset.icon || '⏱️'}</span>
+                    <span>{preset.duration / 60}m</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 调整与重置操作 */}
+            <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-theme/60">
+              <button
+                type="button"
+                id="classroom-countdown-header-reset-btn"
+                onClick={handleReset}
+                className="px-2 py-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-xs font-semibold text-muted hover:text-main transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw size={11} />
+                <span>{lang === 'zh' ? '重置' : 'Reset'}</span>
+              </button>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleAddTime(-60)}
+                  disabled={countdown.timeRemaining <= 60}
+                  className="px-2 py-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-xs font-bold text-muted hover:text-main disabled:opacity-40 transition-colors cursor-pointer"
+                >
+                  -1m
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddTime(60)}
+                  className="px-2 py-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-xs font-bold text-muted hover:text-main transition-colors cursor-pointer"
+                >
+                  +1m
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddTime(300)}
+                  className="px-2 py-1 rounded-lg bg-surface hover:bg-surface-secondary border border-theme text-xs font-bold text-primary-theme hover:bg-primary-theme/10 transition-colors cursor-pointer"
+                >
+                  +5m
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 大屏全屏投影模态框 */}
+        {renderFullModal()}
+      </div>
+    );
+  }
+
   return (
     <div
       id="classroom-countdown-widget"
@@ -762,113 +1111,7 @@ export function ClassroomCountdownWidget({
       />
 
       {/* ── 大屏投影模式全屏模态框 (Projector Mode) ── */}
-      {isFullModalOpen && (
-        <div
-          id="classroom-countdown-projector-modal"
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 select-none animate-in fade-in duration-200"
-        >
-          <div className="absolute top-6 right-6 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
-            >
-              {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsFullModalOpen(false)}
-              className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
-            >
-              <Minimize2 size={20} />
-            </button>
-          </div>
-
-          <div className="flex flex-col items-center gap-6 max-w-2xl w-full">
-            <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/20 text-white text-sm font-bold">
-              <Sparkles size={16} className="text-amber-300" />
-              <span>{countdown.label}</span>
-              <span className="text-xs text-white/60 ml-2">
-                {lang === 'zh' ? `全班 ${onlineStudentCount} 位学生正在同步` : `${onlineStudentCount} students connected`}
-              </span>
-            </div>
-
-            {/* 巨幅数字显示 */}
-            <div
-              className={`text-8xl md:text-9xl font-black font-mono tracking-widest drop-shadow-2xl transition-all ${
-                isUrgent ? 'text-rose-500 animate-pulse' : isWarning ? 'text-amber-400' : 'text-emerald-400'
-              }`}
-            >
-              {formatTime(countdown.timeRemaining)}
-            </div>
-
-            {/* 全宽大进度条 */}
-            <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden border border-white/20 shadow-inner">
-              <div
-                className={`h-full transition-all duration-500 ${
-                  isUrgent ? 'bg-rose-500' : isWarning ? 'bg-amber-400' : 'bg-emerald-400'
-                }`}
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-
-            {/* 大屏交互控制 */}
-            <div className="flex items-center gap-4 mt-2">
-              {countdown.isRunning ? (
-                <button
-                  type="button"
-                  onClick={handlePause}
-                  className="px-8 py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-lg transition-transform active:scale-95 shadow-xl flex items-center gap-2 cursor-pointer"
-                >
-                  <Pause size={20} />
-                  <span>{lang === 'zh' ? '暂停' : 'Pause'}</span>
-                </button>
-              ) : countdown.isPaused ? (
-                <button
-                  type="button"
-                  onClick={handleResume}
-                  className="px-8 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-lg transition-transform active:scale-95 shadow-xl flex items-center gap-2 cursor-pointer"
-                >
-                  <Play size={20} />
-                  <span>{lang === 'zh' ? '继续' : 'Resume'}</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleStart(countdown.totalDuration || 300)}
-                  className="px-8 py-3 rounded-2xl bg-primary-theme hover:opacity-90 text-white font-bold text-lg transition-transform active:scale-95 shadow-xl flex items-center gap-2 cursor-pointer"
-                >
-                  <Play size={20} />
-                  <span>{lang === 'zh' ? '开始' : 'Start'}</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => handleAddTime(60)}
-                className="px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-base transition-colors cursor-pointer border border-white/20"
-              >
-                +1 分钟
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAddTime(300)}
-                className="px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-base transition-colors cursor-pointer border border-white/20"
-              >
-                +5 分钟
-              </button>
-              <button
-                type="button"
-                onClick={handleReset}
-                className="p-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold transition-colors cursor-pointer border border-white/20"
-                title="重置"
-              >
-                <RotateCcw size={20} />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {renderFullModal()}
     </div>
   );
 }

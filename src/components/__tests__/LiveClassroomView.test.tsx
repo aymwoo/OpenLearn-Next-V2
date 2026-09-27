@@ -213,5 +213,139 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     const addPageButton = screen.getByTitle('新建白板页面');
     expect(addPageButton).toBeDefined();
   });
+
+  it('renders 在线课堂 and read-only class badge without class select dropdown', () => {
+    render(<LiveClassroomView {...(defaultProps as any)} />);
+
+    // Topbar title is "🔴 在线课堂"
+    expect(screen.getByText('🔴 在线课堂')).toBeDefined();
+    expect(screen.queryByText(/智能授课工作流控制中心/)).toBeNull();
+
+    // Read-only class badge
+    expect(screen.getByText('高一1班')).toBeDefined();
+    // No class dropdown selector
+    expect(screen.queryByText('-- 选择授课班级 --')).toBeNull();
+  });
+
+  it('handles lesson switching with secondary confirmation modal', async () => {
+    const setSelectedLessonMock = vi.fn();
+    const fetchElementsMock = vi.fn().mockResolvedValue(undefined);
+
+    const propsWithTwoLessons = {
+      ...defaultProps,
+      setSelectedLesson: setSelectedLessonMock,
+      fetchElements: fetchElementsMock,
+      lessons: [
+        { id: 'lesson-101', title: '物理探究实验课' },
+        { id: 'lesson-102', title: '第二节：机械能守恒' },
+      ],
+    };
+
+    render(<LiveClassroomView {...(propsWithTwoLessons as any)} />);
+
+    const selectEl = screen.getByRole('combobox');
+    const switchBtn = screen.getByRole('button', { name: /切换/ });
+
+    // Initially disabled because selectedLesson is already 'lesson-101'
+    expect(switchBtn).toHaveProperty('disabled', true);
+
+    // Select second lesson
+    fireEvent.change(selectEl, { target: { value: 'lesson-102' } });
+
+    // Now switch button is enabled
+    expect(switchBtn).toHaveProperty('disabled', false);
+
+    // Click switch button to open confirmation modal
+    fireEvent.click(switchBtn);
+
+    expect(screen.getByText('确认切换上课课程？')).toBeDefined();
+    expect(screen.getAllByText('第二节：机械能守恒').length).toBeGreaterThanOrEqual(2);
+
+    // Click confirm button
+    const confirmBtn = screen.getByRole('button', { name: '确认切换' });
+    fireEvent.click(confirmBtn);
+
+    expect(setSelectedLessonMock).toHaveBeenCalledWith('lesson-102');
+    expect(fetchElementsMock).toHaveBeenCalledWith('lesson-102');
+  });
+
+  it('renders student focus console and supports collapsible feedback feed', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/api/classroom/sessions/lesson-101')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              hasActiveSession: true,
+              stage: 'IN_CLASS_TEACHING',
+              session: { started_at: Date.now() - 60000 },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        });
+      }),
+    );
+
+    const setLiveClassFeedMock = vi.fn();
+    const props = {
+      ...defaultProps,
+      liveClassFeed: [
+        { id: '1', time: '10:00:01', type: 'info', message: '张小明 进入了课堂' },
+        { id: '2', time: '10:01:20', type: 'success', message: '李华 提交了随堂练习' },
+      ],
+      setLiveClassFeed: setLiveClassFeedMock,
+    };
+
+    render(<LiveClassroomView {...(props as any)} />);
+
+    // 1. Student focus console header & pick button
+    await waitFor(() => {
+      expect(screen.getByText('学生专注力监控')).toBeDefined();
+    });
+    expect(screen.getByRole('button', { name: /抽问/ })).toBeDefined();
+    expect(screen.getByText(/🔒 0\/2/)).toBeDefined();
+
+    // Students rendered
+    expect(screen.getByText('张小明')).toBeDefined();
+    expect(screen.getByText('李华')).toBeDefined();
+
+    // 2. Live feed header, count & clear button
+    expect(screen.getByText('课堂互动反馈流')).toBeDefined();
+    expect(screen.getAllByText('2').length).toBeGreaterThanOrEqual(1); // feed length badge
+    expect(screen.getByText('收起')).toBeDefined();
+    expect(screen.getByText('张小明 进入了课堂')).toBeDefined();
+    expect(screen.getByText('李华 提交了随堂练习')).toBeDefined();
+
+    // 3. Test collapse
+    const collapseBtn = screen.getByText('收起');
+    fireEvent.click(collapseBtn);
+
+    // After collapse, text becomes '展开', and feed list items are hidden
+    expect(screen.getByText('展开')).toBeDefined();
+    expect(screen.queryByText('张小明 进入了课堂')).toBeNull();
+
+    // 4. Test expand
+    const expandBtn = screen.getByText('展开');
+    fireEvent.click(expandBtn);
+
+    expect(screen.getByText('收起')).toBeDefined();
+    expect(screen.getByText('张小明 进入了课堂')).toBeDefined();
+
+    // 5. Test clear feed
+    const clearBtn = screen.getByRole('button', { name: /Clear/ });
+    fireEvent.click(clearBtn);
+    expect(setLiveClassFeedMock).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'clear',
+        type: 'info',
+        message: '反馈流已清空。',
+      }),
+    ]);
+  });
 });
+
 
