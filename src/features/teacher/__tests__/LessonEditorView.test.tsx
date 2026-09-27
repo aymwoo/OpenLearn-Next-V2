@@ -22,9 +22,6 @@ function makeProps(overrides: Partial<LessonEditorViewProps> = {}): LessonEditor
     setEditorSaveStatus: vi.fn(),
     editorLastSavedTime: null,
     setEditorLastSavedTime: vi.fn(),
-    setIsLessonPreviewVisible: vi.fn(),
-    setPreviewLessonTab: vi.fn(),
-    setPreviewSelectedCourseware: vi.fn(),
     setTeacherTab: vi.fn(),
     handlePaletteActivate: vi.fn(),
     timelineSegments: [],
@@ -103,8 +100,8 @@ describe('LessonEditorView', () => {
     expect(screen.queryByRole('button', { name: /加环节/ })).toBeNull();
   });
 
-  it('opens student preview in independent tab when "学生视角预览 (独立Tab)" is clicked', () => {
-    const openMock = vi.fn();
+  it('opens the student perspective in a new preview tab from the editor toolbar', () => {
+    const openMock = vi.fn(() => ({ focus: vi.fn(), closed: false }) as any);
     vi.stubGlobal('open', openMock);
 
     render(
@@ -116,16 +113,30 @@ describe('LessonEditorView', () => {
       />,
     );
 
-    const button = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
-    expect(button).toBeDefined();
-
-    button.click();
+    const studentBtn = screen.getByRole('button', { name: /学生视角/ });
+    studentBtn.click();
 
     expect(openMock).toHaveBeenCalledWith(
-      expect.stringContaining('mode=student_live&lessonId=lesson-42#/student_live'),
+      expect.stringContaining('mode=student_preview&lessonId=lesson-42#/student_preview'),
       '_blank',
     );
+    // 学生视角改为新标签页打开，不再就地切换角色
+    expect(makeProps().setActiveRole).not.toHaveBeenCalledWith('student');
 
     vi.unstubAllGlobals();
+  });
+
+  it('keeps the perspective switcher next to the "返回课程库" button', () => {
+    render(<LessonEditorView {...makeProps({ selectedLesson: 'lesson-42' })} />);
+
+    const studentBtn = screen.getByRole('button', { name: /学生视角/ });
+    const backBtn = screen.getByRole('button', { name: /返回课程库/ });
+    // 切换器的父级是右侧快捷操作按钮组，「返回课程库」是同组的兄弟节点
+    const rightGroup = studentBtn.parentElement?.parentElement;
+    expect(rightGroup?.contains(backBtn)).toBe(true);
+    // 且切换器排在「返回课程库」之前
+    expect(
+      rightGroup ? backBtn.compareDocumentPosition(studentBtn) & Node.DOCUMENT_POSITION_PRECEDING : 0,
+    ).toBeTruthy();
   });
 });

@@ -10,6 +10,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **互动课堂成为教师/管理员默认首页**：
+  - `uiStore` 默认 `teacherTab` 由 `courses` 改为 `live_class`；`App.tsx` 的 `handleLoginSuccess` 教师分支登录后落地页由 `dashboard` 改为 `live_class`（管理员 `role` 同为 `teacher`、靠 `subRole` 区分权限，故一并覆盖）。Hash 路由优先级不变，携带 `#/courses` 的深链行为不受影响。
+  - 互动课堂起始门户右侧遥测岛由 2×2 网格改为单行四格（`grid-cols-2 md:grid-cols-4`），配套压缩卡片内边距与图标尺寸，并将容器宽度由 440px 放宽至 620px，避免「保持比例」约束下的文字截断。
+
+- **白板自动平铺（Auto Tiling）—— 类 Linux tiling 窗口管理器布局**：
+  - 新增纯布局算法 `src/features/whiteboard/utils/auto-tiling.ts`（不依赖 React/Konva/DOM）：i3 同源 BSP 二分树（首层左右分栏、逐层交替横竖切、`firstCount = floor(n/2)`，n=3 时退化为 i3 经典形态），元素**保持宽高比居中**放入格子，缩放比取宽高约束较小值故永不溢出。
+  - 工具栏新增平铺开关按钮（`LayoutGrid` 图标，开启时显示「平铺中」徽标），位于网格开关旁；`readOnly` 态（他人课程预览、学生端）不渲染该按钮。`WhiteboardToolbar` 在 `InteractiveWhiteboard` 内部渲染，故课程编辑器、互动课堂、学生端课节四处白板自动获得该能力。
+  - 持续模式语义：开启即重排当前页；此后增删元素、切页切环节、画布尺寸变化（250ms 防抖）均自动重排。拖拽不改变元素 id 集合，因此**不会打断自由布局**——两种效果共存。
+  - 平铺写回完全复刻拖拽提交的两步（`onElementUpdate` + `whiteboard.element_updated` 事件广播），持久化、800ms 防抖自动保存与广播行为与手动拖动一致。
+  - 类型差异归一化：`circle` 走 `radius` 而非 `width/height`（写回时改写 radius，否则改动会静默失效）；`pen` / `highlighter` 为绝对坐标折线、`page_meta` 为分页元数据，三者排除出平铺范围。
+  - 抽出 `getCurrentPageElements()` 供画布渲染与自动平铺共用同一份「当前页 + 当前环节」筛选规则；`renderElement` 内联的 `getInitialWidth`/`getInitialHeight` 合并为模块级 `DEFAULT_ELEMENT_SIZE` 尺寸表，渲染与平铺不再有两份尺寸规则。
+  - 测试 `whiteboard-auto-tiling.test.ts`（27 例）锁定面积守恒、任意两格不重叠、平铺幂等、宽高比不变、圆形 radius 回写等不变量。
+
+- **课程编辑器「学生视角」改为独立标签页打开**：
+  - 新增 `student_preview` 标签页模式（`?mode=student_preview&lessonId=…`），与课堂联动的 `student_live` 刻意区分：保留常规 AppHeader（品牌区/通知/登出）与琥珀色模拟学生横幅，**退出动作为「关闭此预览标签页」而非「返回教师端」**（该标签页内不存在教师端，原按钮是死路），且不接入课堂实时同步信道。
+  - 必要性：教师已登录时新标签页走会话恢复会执行 `setActiveRole(data.session.role)` 默认回到教师视图，故必须靠显式模式参数才能在新标签页进学生端。
+  - 视角切换器（👨‍🏫 教师视角 / 🎓 学生视角）移至工具栏右侧「返回课程库」按钮旁；教师视角仍就地切回，学生视角改为 `window.open` 新标签页并对弹窗拦截给出提示。
+  - `useGlobalErrorCapture` / `SystemErrorCenterModal` 的学生端错误上报判定**不包含** `student_preview` —— 预览标签页运行在教师自己的浏览器里，将其错误记为学生机异常会污染教师端错误面板。
+
+- **移除与「学生视角预览」重复的入口**：
+  - 删除 `src/features/modals/StudentPreviewModal.tsx` 及其测试（进入回收站）。该弹窗内容被 `StudentLessonView` 完全覆盖且更弱（无作业 Tab、无实时同步），且其内部「独立Tab预览」按钮生成的 URL 与编辑器按钮逐字符相同。
+  - 顺带消除一个隐患：该「预览」弹窗实为**可写库**——给 `LazyWhiteboard` 传了 `userRole={activeRole}`（教师态）却未传 `readOnly`，并挂载了四个直接 POST/PUT/DELETE 的写库回调，在预览中落笔会真实覆盖白板。
+  - 连带清理 4 组 state（`isLessonPreviewVisible` / `previewSelectedCourseware` / `previewLessonTab` / `previewFullscreenPanel`）与跨 `App → AppShell → TeacherView → LessonEditorView` / `App → AppModals` 的完整 prop 转发链；`uiStore` 中同名死字段（`App` 用的是本地 `useState`，全项目无人读）一并移除。
+  - 同时移除课程编辑器工具栏的「学生视角预览 (独立Tab)」按钮——学生端联动能力收敛到互动课堂控制台（`LiveClassroomView`）单一入口，该入口及其测试原样保留。
+
 - **P2 `ai.agent.persona` —— 插件可注册 AI Agent 角色模板**：
   - 新增 `server/ai-persona-registry.ts` 注册表（kernel AIService 启动时 bind 委托，模式同 `ai.context.registry`），内置四个角色模板：`socratic_questioner`（苏格拉底追问者）、`debate_opponent`（反方辩论助手）、`historical_figure`（历史名人模拟对话）、`plain_assistant`（默认助教）。
   - 插件经 `ctx.services.ai.registerAIPersona(persona)` 注册角色（`persona` 为可序列化静态模板，Inline / Worker 插件均可用；`registeredBy` 记为插件 id，`unregisterAIPersona` 仅允许注册者注销自身模板，内置角色不可注销）。

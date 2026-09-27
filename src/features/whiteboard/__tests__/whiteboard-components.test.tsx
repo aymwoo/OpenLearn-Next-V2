@@ -74,6 +74,55 @@ describe('Whiteboard Extracted Components & Utilities', () => {
       fireEvent.click(penButton);
       expect(setTool).toHaveBeenCalledWith('pen');
     });
+
+    function renderToolbar(overrides: Record<string, any> = {}) {
+      return render(
+        <WhiteboardToolbar
+          tool="cursor"
+          setTool={vi.fn()}
+          setSelectedShapeId={vi.fn()}
+          highlighterColor="#facc15"
+          setHighlighterColor={vi.fn()}
+          onElementAdd={vi.fn()}
+          currentPage={0}
+          lessonId="lesson-1"
+          safeElements={[]}
+          selectedShapeId={null}
+          showGrid={true}
+          setShowGrid={vi.fn()}
+          isSyncing={false}
+          setIsSyncing={vi.fn()}
+          handleClearBoard={vi.fn()}
+          handleResetBoard={vi.fn()}
+          handleElementDelete={vi.fn()}
+          setDialog={vi.fn()}
+          setDialogInput={vi.fn()}
+          {...overrides}
+        />,
+      );
+    }
+
+    it('renders the auto-tiling toggle and flips its label with the mode', () => {
+      const onToggleAutoTile = vi.fn();
+      const { unmount } = renderToolbar({ autoTileEnabled: false, onToggleAutoTile });
+
+      const offButton = screen.getByTitle('开启自动平铺（i3 式镶嵌布局）');
+      fireEvent.click(offButton);
+      expect(onToggleAutoTile).toHaveBeenCalledTimes(1);
+      // 关闭状态下不显示「平铺中」徽标
+      expect(screen.queryByText('平铺中')).toBeNull();
+      unmount();
+
+      renderToolbar({ autoTileEnabled: true, onToggleAutoTile });
+      const onButton = screen.getByTitle('关闭自动平铺，恢复自由布局');
+      expect(onButton).toBeDefined();
+      expect(screen.getByText('平铺中')).toBeDefined();
+    });
+
+    it('hides the auto-tiling toggle in read-only mode', () => {
+      renderToolbar({ autoTileEnabled: false, onToggleAutoTile: vi.fn(), readOnly: true });
+      expect(screen.queryByTitle('开启自动平铺（i3 式镶嵌布局）')).toBeNull();
+    });
   });
 
   describe('WhiteboardDialog', () => {

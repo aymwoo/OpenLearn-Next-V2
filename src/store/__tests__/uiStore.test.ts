@@ -11,7 +11,6 @@ describe('uiStore', () => {
       isCourseWizardOpen: false,
       isImportLessonsOpen: false,
       isQuizGeneratorOpen: false,
-      isLessonPreviewVisible: false,
       isSystemResourceLibraryOpen: false,
       batchPicker: null,
       isExportWeightModalOpen: false,

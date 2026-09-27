@@ -1,4 +1,4 @@
-import { Loader2, Eye, LogOut, Maximize2, Sparkles, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Loader2, Eye, LogOut, Maximize2, Sparkles, CheckCircle2, RefreshCw, X } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { parseCSV } from './utils/pluginParsers.js';
 import { translations } from './i18n';
@@ -92,6 +92,16 @@ export default function App() {
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('lessonId') : null;
   const liveClassParam =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('classId') : null;
+
+  // ── 课程编辑器「学生视角」预览标签页 ────────────────────────────────────────
+  // 与 student_live 的区别：这是教师自己开的备课预览标签页，保留完整的常规顶栏与
+  // 模拟学生横幅（退出动作改为「关闭标签页」），且不接入课堂实时同步信道。
+  const isStudentPreviewMode =
+    typeof window !== 'undefined' &&
+    (new URLSearchParams(window.location.search).get('mode') === 'student_preview' ||
+      window.location.hash.includes('student_preview'));
+  // 需要强制进入学生端角色的两种标签页模式
+  const isStudentTabMode = isStudentLiveMode || isStudentPreviewMode;
 
   const [isFollowingTeacher, setIsFollowingTeacher] = useState(true);
   const [pickedAlertData, setPickedAlertData] = useState<{ studentId: string; studentName: string } | null>(null);
@@ -314,8 +324,8 @@ export default function App() {
           const data = await res.json();
           if (data.session) {
             setSession(data.session);
-            if (isStudentLiveMode) {
-              // 独立弹窗学生模式：强制进入学生端课节模式
+            if (isStudentTabMode) {
+              // 独立标签页学生模式（课堂联动 / 备课预览）：强制进入学生端课节模式
               setActiveRole('student');
               setStudentViewStatus('lesson');
               const targetStudentId = liveStudentParam || data.session.studentId;
@@ -625,10 +635,6 @@ export default function App() {
   const [studentLessonTab, setStudentLessonTab] = useState<'whiteboard' | 'courseware' | 'assignment'>('whiteboard');
   const [studentSelectedCourseware, setStudentSelectedCourseware] = useState<string | null>(null);
   const [selectedAssignment, setSelectedAssignment] = useState<any | null>(null);
-  const [isLessonPreviewVisible, setIsLessonPreviewVisible] = useState(false);
-  const [previewSelectedCourseware, setPreviewSelectedCourseware] = useState<string | null>(null);
-  const [previewLessonTab, setPreviewLessonTab] = useState<'whiteboard' | 'courseware'>('whiteboard');
-  const [previewFullscreenPanel, setPreviewFullscreenPanel] = useState<'none' | 'left' | 'right'>('none');
   const [studentFullscreenPanel, setStudentFullscreenPanel] = useState<'none' | 'left' | 'right'>('none');
   const [isStudentLessonContentCollapsed, setIsStudentLessonContentCollapsed] = useState(true);
 
@@ -1456,7 +1462,8 @@ export default function App() {
     setSession(newSession);
     if (newSession.role === 'teacher') {
       setActiveRole('teacher');
-      setTeacherTab('dashboard');
+      // 教师/管理员登录后的默认首页：互动课堂（管理员 role 同为 teacher，靠 subRole 区分）
+      setTeacherTab('live_class');
     } else {
       setActiveRole('student');
       setActiveStudentId(newSession.studentId);
@@ -1627,7 +1634,13 @@ export default function App() {
               <div className="flex items-center gap-2.5">
                 <span className="bg-black/20 text-amber-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider text-xs flex items-center gap-1">
                   <Eye size={12} />
-                  {lang === 'zh' ? '学生模拟模式' : 'Student View Mode'}
+                  {lang === 'zh'
+                    ? isStudentPreviewMode
+                      ? '学生视角预览'
+                      : '学生模拟模式'
+                    : isStudentPreviewMode
+                      ? 'Student Preview'
+                      : 'Student View Mode'}
                 </span>
                 <span>
                   {lang === 'zh'
@@ -1637,11 +1650,24 @@ export default function App() {
               </div>
               <button
                 type="button"
-                onClick={() => setActiveRole('teacher')}
+                onClick={() => {
+                  // 备课预览标签页里没有教师端可回，直接关闭该标签页
+                  if (isStudentPreviewMode) {
+                    window.close();
+                    return;
+                  }
+                  setActiveRole('teacher');
+                }}
                 className="bg-white text-amber-800 hover:bg-amber-50 active:bg-amber-100 font-bold px-3 py-1 rounded-md shadow-xs transition-all flex items-center gap-1.5 cursor-pointer text-xs"
               >
-                <LogOut size={13} />
-                {lang === 'zh' ? '退出模拟并返回教师端' : 'Exit Student View'}
+                {isStudentPreviewMode ? <X size={13} /> : <LogOut size={13} />}
+                {lang === 'zh'
+                  ? isStudentPreviewMode
+                    ? '关闭此预览标签页'
+                    : '退出模拟并返回教师端'
+                  : isStudentPreviewMode
+                    ? 'Close Preview Tab'
+                    : 'Exit Student View'}
               </button>
             </div>
           )}
@@ -1746,6 +1772,7 @@ export default function App() {
             <AppHeader
               activeRole={activeRole}
               setActiveRole={setActiveRole}
+              studentPreviewTab={isStudentPreviewMode}
               lang={lang}
               teacherTab={teacherTab}
               studentViewStatus={studentViewStatus}
@@ -1863,9 +1890,6 @@ export default function App() {
             setEditorSaveStatus={setEditorSaveStatus}
             editorLastSavedTime={editorLastSavedTime}
             setEditorLastSavedTime={setEditorLastSavedTime}
-            setIsLessonPreviewVisible={setIsLessonPreviewVisible}
-            setPreviewLessonTab={setPreviewLessonTab}
-            setPreviewSelectedCourseware={setPreviewSelectedCourseware}
             handlePaletteActivate={handlePaletteActivate}
             draggedSegmentIdx={draggedSegmentIdx}
             setDraggedSegmentIdx={setDraggedSegmentIdx}
@@ -2097,23 +2121,9 @@ export default function App() {
           handleCSVImportSubmit={handleCSVImportSubmit}
           lessons={lessons}
           fetchClassDashboard={fetchClassDashboard}
-          isLessonPreviewVisible={isLessonPreviewVisible}
-          setIsLessonPreviewVisible={setIsLessonPreviewVisible}
-          selectedLesson={selectedLesson}
-          previewFullscreenPanel={previewFullscreenPanel}
-          setPreviewFullscreenPanel={setPreviewFullscreenPanel}
-          previewLessonTab={previewLessonTab}
-          setPreviewLessonTab={setPreviewLessonTab}
-          activeRole={activeRole}
-          elements={elements}
-          activeSegmentId={activeSegmentId}
-          setActiveSegmentId={setActiveSegmentId}
-          fetchElements={fetchElements}
           currentVfsParent={currentVfsParent}
           setCurrentVfsParent={setCurrentVfsParent}
           vfsNodes={vfsNodes}
-          previewSelectedCourseware={previewSelectedCourseware}
-          setPreviewSelectedCourseware={setPreviewSelectedCourseware}
           showProcessLogs={showProcessLogs}
           setShowProcessLogs={setShowProcessLogs}
           processLogsContent={processLogsContent}

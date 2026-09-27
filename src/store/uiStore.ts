@@ -14,7 +14,6 @@ export interface UIState {
   isCourseWizardOpen: boolean;
   isImportLessonsOpen: boolean;
   isQuizGeneratorOpen: boolean;
-  isLessonPreviewVisible: boolean;
   isSystemResourceLibraryOpen: boolean;
   batchPicker: 'schedule' | 'lock' | 'transfer' | null;
   isExportWeightModalOpen: boolean;
@@ -31,7 +30,6 @@ export interface UIState {
   setIsCourseWizardOpen: (open: boolean) => void;
   setIsImportLessonsOpen: (open: boolean) => void;
   setIsQuizGeneratorOpen: (open: boolean) => void;
-  setIsLessonPreviewVisible: (visible: boolean) => void;
   setIsSystemResourceLibraryOpen: (open: boolean) => void;
   setBatchPicker: (batchPicker: 'schedule' | 'lock' | 'transfer' | null) => void;
   setIsExportWeightModalOpen: (open: boolean) => void;
@@ -43,13 +41,13 @@ export interface UIState {
 export const uiStore = createStore<UIState>((set) => ({
   lang: 'zh',
   activeRole: 'teacher',
-  teacherTab: 'courses',
+  // 教师/管理员的默认首页：互动课堂（live_class）
+  teacherTab: 'live_class',
 
   profileOpen: false,
   isCourseWizardOpen: false,
   isImportLessonsOpen: false,
   isQuizGeneratorOpen: false,
-  isLessonPreviewVisible: false,
   isSystemResourceLibraryOpen: false,
   batchPicker: null,
   isExportWeightModalOpen: false,
@@ -64,7 +62,6 @@ export const uiStore = createStore<UIState>((set) => ({
   setIsCourseWizardOpen: (isCourseWizardOpen) => set({ isCourseWizardOpen }),
   setIsImportLessonsOpen: (isImportLessonsOpen) => set({ isImportLessonsOpen }),
   setIsQuizGeneratorOpen: (isQuizGeneratorOpen) => set({ isQuizGeneratorOpen }),
-  setIsLessonPreviewVisible: (isLessonPreviewVisible) => set({ isLessonPreviewVisible }),
   setIsSystemResourceLibraryOpen: (isSystemResourceLibraryOpen) => set({ isSystemResourceLibraryOpen }),
   setBatchPicker: (batchPicker) => set({ batchPicker }),
   setIsExportWeightModalOpen: (isExportWeightModalOpen) => set({ isExportWeightModalOpen }),

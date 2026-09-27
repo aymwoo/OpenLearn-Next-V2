@@ -47,13 +47,20 @@ describe('StudentGrowthProfileModal (Stitch Screen 07fd3861)', () => {
     onAwardPoints: vi.fn(),
   };
 
+  const originalFetch = global.fetch;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    });
   });
 
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    global.fetch = originalFetch;
   });
 
   it('renders student header details, role tag, and focus status correctly', () => {
@@ -185,6 +192,49 @@ describe('StudentGrowthProfileModal (Stitch Screen 07fd3861)', () => {
     expect(screen.getByTestId('extension-slot-student.profile.dimension')).toBeDefined();
     expect(screen.getByTestId('extension-slot-student.profile.card')).toBeDefined();
     expect(screen.getByTestId('extension-slot-student.profile.timeline_item')).toBeDefined();
+  });
+
+  it('renders LearningProgressTrendChart when progressHistory prop is provided', () => {
+    const mockProgress = [
+      {
+        student_id: 's-101',
+        lesson_id: 'lesson-1',
+        lesson_title: '变量与表达式',
+        completed: 1,
+        progress_percent: 100,
+        assigned_at: 1700000000000,
+      },
+    ];
+
+    render(<StudentGrowthProfileModal {...defaultProps} progressHistory={mockProgress} />);
+    expect(screen.getByTestId('learning-progress-trend-chart')).toBeDefined();
+    expect(screen.getByText('课程学习进度趋势')).toBeDefined();
+  });
+
+  it('auto-fetches and renders progress history when progressHistory is omitted', async () => {
+    const mockFetched = [
+      {
+        student_id: 's-101',
+        lesson_id: 'lesson-2',
+        lesson_title: '条件与分支结构',
+        completed: 0,
+        progress_percent: 75,
+        assigned_at: 1700100000000,
+      },
+    ];
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockFetched,
+    });
+
+    render(<StudentGrowthProfileModal {...defaultProps} progressHistory={undefined} />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/students/s-101/progress');
+      expect(screen.getByTestId('learning-progress-trend-chart')).toBeDefined();
+      expect(screen.getByText('课程学习进度趋势')).toBeDefined();
+    });
   });
 });
 

@@ -91,6 +91,33 @@ describe('AppHeader', () => {
     expect(screen.queryByText('Exit Student View')).toBeNull();
   });
 
+  it('renders Close Tab instead of 返回教师端 in a student preview tab, and closes the window', () => {
+    const setActiveRole = vi.fn();
+    const closeMock = vi.fn();
+    vi.stubGlobal('close', closeMock);
+
+    render(
+      <AppHeader
+        {...makeProps({
+          activeRole: 'student',
+          session: { name: 'Teacher', role: 'teacher', avatar: null },
+          lang: 'zh',
+          setActiveRole,
+          studentPreviewTab: true,
+        })}
+      />,
+    );
+
+    // 预览标签页内不存在教师端，退出动作必须是「关闭预览」
+    expect(screen.queryByText('返回教师端')).toBeNull();
+    const closeBtn = screen.getByText('关闭预览');
+    closeBtn.click();
+    expect(closeMock).toHaveBeenCalledTimes(1);
+    expect(setActiveRole).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
   describe('全班专注锁定 (class focus lock)', () => {
     it('blocks Dashboard navigation and notifies when a locked student clicks it', () => {
       const setStudentViewStatus = vi.fn();

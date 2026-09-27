@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { Stage, Layer, Rect, Circle, Line, Text as KonvaText, Group } from 'react-konva';
 import {
@@ -58,6 +58,13 @@ import { frontendEventBus } from '../../services/event-bus';
 import { appStore } from '../../store/appStore';
 import { useThemeStore } from '../../store/themeStore';
 import { useFontSizeStore } from '../../store/fontSizeStore';
+import {
+  computeTiling,
+  toTileCandidate,
+  toTiledGeometry,
+  isTileableType,
+  type TileCandidate,
+} from './utils/auto-tiling';
 import { useWhiteboardViewStore } from '../../store/whiteboardViewStore';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
@@ -295,6 +302,30 @@ export const DEFAULT_WHITEBOARD_PAGES: WhiteboardPageItem[] = [
   { id: 'page-2', title: 'P3 · 互动练习', order: 2 },
 ];
 
+/**
+ * 元素类型的缺省尺寸表 —— 渲染与自动平铺共用同一份，避免两处尺寸规则漂移。
+ * plugin 类型允许 data 覆盖，其余类型以本表为准。
+ */
+const DEFAULT_ELEMENT_SIZE: Record<string, { width: number; height: number }> = {
+  'hello-world': { width: 160, height: 64 },
+  quiz: { width: 300, height: 280 },
+  rollcall: { width: 320, height: 310 },
+  assignment: { width: 310, height: 250 },
+  'html-applet': { width: 400, height: 300 },
+  'code-sandbox': { width: 400, height: 320 },
+  'math-graph': { width: 400, height: 350 },
+  presentation: { width: 600, height: 400 },
+  plugin: { width: 500, height: 400 },
+};
+
+function getDefaultElementSize(type: string, data: any): { width: number; height: number } {
+  const preset = DEFAULT_ELEMENT_SIZE[type];
+  if (preset) {
+    return { width: data?.width || preset.width, height: data?.height || preset.height };
+  }
+  return { width: data?.width || 300, height: data?.height || 300 };
+}
+
 // 命令式接口：供外部（如备课画板点击添加）在画板中央插入元素
 export interface WhiteboardHandle {
   addElementAtCenter: (type: string, contentData: Record<string, any>) => Promise<void>;
@@ -345,6 +376,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const [highlighterColor, setHighlighterColor] = useState('#facc15');
     const [currentPage, setCurrentPage] = useState(0);
     const [showGrid, setShowGrid] = useState(true);
+    /** 自动平铺模式：开启后当前页组件按 i3 式 BSP 镶嵌布局重排，可随时切回自由拖拽 */
+    const [autoTileEnabled, setAutoTileEnabled] = useState(false);
     const [isDragOverBoard, setIsDragOverBoard] = useState(false);
     const [pages, setPages] = useState<WhiteboardPageItem[]>(DEFAULT_WHITEBOARD_PAGES);
     const [showPageDrawer, setShowPageDrawer] = useState(false);
@@ -1758,6 +1791,118 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const renderActiveDrawing = () =>
       renderDrawingRaw(currentDrawing ? { ...currentDrawing, page: currentPage, segmentId: activeSegmentId } : null);
 
+    // ── 自动平铺（Auto Tiling）────────────────────────────────────────────────
+    // 与 drawElement 拖拽提交走完全相同的两步（onElementUpdate + 事件广播），
+    // 因此平铺后的结果与用户手动拖动在持久化、广播、学生端同步上表现一致。
+
+    /** 当前页 + 当前环节下应渲染的元素（画布渲染与自动平铺共用同一份筛选规则） */
+    const getCurrentPageElements = (): WhiteboardElement[] =>
+      safeElements.filter((el) => {
+        if (el.type === 'page_meta') return false;
+        try {
+          const data = JSON.parse(el.data);
+          const elPage = data.page ?? 0;
+          const currentObj = pages[currentPage];
+          const pageMatches =
+            data.pageId && currentObj?.id ? data.pageId === currentObj.id : elPage === currentPage;
+          if (!pageMatches) return false;
+          if (activeSegmentId && data.segmentId && data.segmentId !== activeSegmentId) return false;
+          return true;
+        } catch (e) {
+          return currentPage === 0;
+        }
+      });
+
+    /** 把当前页所有可平铺元素按 BSP 二分树重排并落库 */
+    const applyAutoTiling = useCallback(async () => {
+      if (!onElementUpdate) return;
+      if (containerSize.width <= 0 || containerSize.height <= 0) return;
+
+      const candidates: TileCandidate[] = [];
+      const rawDataById = new Map<string, Record<string, any>>();
+      for (const el of getCurrentPageElements()) {
+        let data: Record<string, any>;
+        try {
+          data = JSON.parse(el.data);
+        } catch {
+          continue;
+        }
+        const candidate = toTileCandidate(el, data, getDefaultElementSize(el.type, data));
+        if (!candidate) continue;
+        candidates.push(candidate);
+        rawDataById.set(el.id, data);
+      }
+      if (candidates.length === 0) return;
+
+      const results = computeTiling(candidates, containerSize);
+      if (results.length === 0) return;
+
+      const toFinite = (v: any) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+      let changed = false;
+      setIsSyncing(true);
+      try {
+        for (let i = 0; i < candidates.length; i += 1) {
+          const candidate = candidates[i];
+          const current = rawDataById.get(candidate.id);
+          if (!current) continue;
+          const geometry = toTiledGeometry(candidate, results[i]) as Record<string, number>;
+          // 已在目标位置则跳过，避免窗口缩放时反复触发自动保存与广播
+          const unchanged = Object.keys(geometry).every(
+            (key) => Math.abs(toFinite(current[key]) - geometry[key]) < 0.5,
+          );
+          if (unchanged) continue;
+          changed = true;
+          await onElementUpdate(candidate.id, { ...current, ...geometry });
+        }
+        if (!changed) return;
+        frontendEventBus.publish({
+          id: uuidv7(),
+          type: 'whiteboard.element_updated',
+          source: 'whiteboard',
+          payload: { lessonId },
+          timestamp: Date.now(),
+          correlationId: lessonId,
+        });
+      } finally {
+        setIsSyncing(false);
+      }
+    }, [onElementUpdate, containerSize, safeElements, pages, currentPage, activeSegmentId, lessonId]);
+
+    // 用 ref 持有最新的平铺实现，使下面的自动触发 effect 只依赖真正需要的变化
+    const applyAutoTilingRef = useRef(applyAutoTiling);
+    useEffect(() => {
+      applyAutoTilingRef.current = applyAutoTiling;
+    }, [applyAutoTiling]);
+
+    // 切换开关 / 增删元素 / 切页切环节后重排；拖拽不改变 id 集合，因此不会打断自由布局
+    const tileableIdsKey = useMemo(() => {
+      if (!autoTileEnabled) return '';
+      return getCurrentPageElements()
+        .filter((el) => isTileableType(el.type))
+        .map((el) => el.id)
+        .join('|');
+    }, [autoTileEnabled, safeElements, pages, currentPage, activeSegmentId]);
+
+    useEffect(() => {
+      if (!autoTileEnabled || !tileableIdsKey) return;
+      void applyAutoTilingRef.current();
+    }, [autoTileEnabled, tileableIdsKey]);
+
+    // 画布尺寸变化时重新平铺（防抖，避免拖拽窗口过程中写库风暴）
+    useEffect(() => {
+      if (!autoTileEnabled) return;
+      if (containerSize.width <= 0 || containerSize.height <= 0) return;
+      const timer = setTimeout(() => {
+        void applyAutoTilingRef.current();
+      }, 250);
+      return () => clearTimeout(timer);
+    }, [autoTileEnabled, containerSize.width, containerSize.height]);
+
+    /** 工具栏开关：开启即立刻重排，关闭即恢复完全自由的拖拽布局 */
+    const handleToggleAutoTile = useCallback(() => {
+      setAutoTileEnabled((prev) => !prev);
+    }, []);
+
     const renderRemoteDrawings = () => {
       return Object.values(remoteDrawings).map((drawing, i) => (
         <React.Fragment key={i}>{renderDrawingRaw(drawing)}</React.Fragment>
@@ -1773,31 +1918,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         const displayX = isResizingThis ? resizingState.x : isDraggingThis ? activeDragElement.currentX : (data.x ?? 0);
         const displayY = isResizingThis ? resizingState.y : isDraggingThis ? activeDragElement.currentY : (data.y ?? 0);
 
-        const getInitialWidth = (type: string) => {
-          if (type === 'plugin') return data.width || 500;
-          if (type === 'hello-world') return 160;
-          if (type === 'quiz') return 300;
-          if (type === 'rollcall') return 320;
-          if (type === 'assignment') return 310;
-          if (type === 'html-applet') return 400;
-          if (type === 'code-sandbox') return 400;
-          if (type === 'math-graph') return 400;
-          if (type === 'presentation') return 600;
-          return 300;
-        };
-
-        const getInitialHeight = (type: string) => {
-          if (type === 'plugin') return data.height || 400;
-          if (type === 'hello-world') return 64;
-          if (type === 'quiz') return 280;
-          if (type === 'rollcall') return 310;
-          if (type === 'assignment') return 250;
-          if (type === 'html-applet') return 300;
-          if (type === 'code-sandbox') return 320;
-          if (type === 'math-graph') return 350;
-          if (type === 'presentation') return 400;
-          return 300;
-        };
+        const getInitialWidth = (type: string) => getDefaultElementSize(type, data).width;
+        const getInitialHeight = (type: string) => getDefaultElementSize(type, data).height;
 
         const displayWidth = isResizingThis ? resizingState.width : (data.width ?? getInitialWidth(el.type));
         const displayHeight = isResizingThis
@@ -3041,6 +3163,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               selectedShapeId={selectedShapeId}
               showGrid={showGrid}
               setShowGrid={setShowGrid}
+              autoTileEnabled={autoTileEnabled}
+              onToggleAutoTile={handleToggleAutoTile}
+              readOnly={readOnly}
               userRole={userRole}
               isSyncing={isSyncing}
               setIsSyncing={setIsSyncing}
@@ -3192,23 +3317,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     className="w-full h-full cursor-crosshair"
                   >
                     <Layer>
-                      {safeElements
-                        .filter((el) => {
-                          if (el.type === 'page_meta') return false;
-                          try {
-                            const data = JSON.parse(el.data);
-                            const elPage = data.page ?? 0;
-                            const currentObj = pages[currentPage];
-                            const pageMatches =
-                              data.pageId && currentObj?.id ? data.pageId === currentObj.id : elPage === currentPage;
-                            if (!pageMatches) return false;
-                            if (activeSegmentId && data.segmentId && data.segmentId !== activeSegmentId) return false;
-                            return true;
-                          } catch (e) {
-                            return currentPage === 0;
-                          }
-                        })
-                        .map(renderElement)}
+                      {getCurrentPageElements().map(renderElement)}
                       {/* Show drawing in progress */}
                       {renderActiveDrawing()}
                       {/* Show remote drawings */}

@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { Lesson, ClassType, VFSNode, WhiteboardElement } from '../types/app';
+import type { Lesson, ClassType, VFSNode } from '../types/app';
 import type { WizardSegment } from '../features/modals/CourseWizardModal';
 import type { ImportRow, ImportStatus } from '../features/modals/ImportLessonsModal';
 import type { useCourseWizard } from '../hooks/useCourseWizard';
@@ -17,9 +17,6 @@ const ImportLessonsModal = lazy(() =>
 );
 const QuizGeneratorModal = lazy(() =>
   import('../features/modals/QuizGeneratorModal').then((m) => ({ default: m.QuizGeneratorModal })),
-);
-const StudentPreviewModal = lazy(() =>
-  import('../features/modals/StudentPreviewModal').then((m) => ({ default: m.StudentPreviewModal })),
 );
 const ProcessLogsModal = lazy(() =>
   import('../features/modals/ProcessLogsModal').then((m) => ({ default: m.ProcessLogsModal })),
@@ -123,29 +120,15 @@ export interface AppModalsProps {
   quizGeneratorClassId?: string | null;
   fetchClassDashboard?: (classId: string) => void;
 
-  // Student Preview Modal
-  isLessonPreviewVisible?: boolean;
-  setIsLessonPreviewVisible?: Dispatch<SetStateAction<boolean>>;
-  selectedLesson?: string | null;
-  previewFullscreenPanel?: 'none' | 'left' | 'right';
-  setPreviewFullscreenPanel?: Dispatch<SetStateAction<'none' | 'left' | 'right'>>;
-  previewLessonTab?: 'whiteboard' | 'courseware';
-  setPreviewLessonTab?: Dispatch<SetStateAction<'whiteboard' | 'courseware'>>;
-  activeRole?: 'teacher' | 'student';
-  elements?: WhiteboardElement[];
-  activeSegmentId?: string | null;
-  setActiveSegmentId?: Dispatch<SetStateAction<string | null>>;
-  fetchElements?: (lessonId: string) => void;
-  currentVfsParent?: string | null;
-  setCurrentVfsParent?: (id: string | null) => void;
-  vfsNodes?: VFSNode[];
-  previewSelectedCourseware?: string | null;
-  setPreviewSelectedCourseware?: Dispatch<SetStateAction<string | null>>;
-
   // Process Logs Modal
   showProcessLogs?: string | null;
   setShowProcessLogs?: (v: string | null) => void;
   processLogsContent?: string;
+
+  // VFS 浏览状态 —— Cloud Drive / System Resource Library 共用
+  currentVfsParent?: string | null;
+  setCurrentVfsParent?: (id: string | null) => void;
+  vfsNodes?: VFSNode[];
 
   // Cloud Drive Modal
   isCloudDriveOpen?: boolean;
@@ -247,23 +230,10 @@ export function AppModals(props: AppModalsProps) {
     handleCSVImportSubmit = () => {},
     lessons = [],
     fetchClassDashboard = () => {},
-    isLessonPreviewVisible = false,
-    setIsLessonPreviewVisible = () => {},
-    selectedLesson = null,
-    previewFullscreenPanel = 'none',
-    setPreviewFullscreenPanel = () => {},
-    previewLessonTab = 'whiteboard',
-    setPreviewLessonTab = () => {},
-    activeRole = 'teacher',
-    elements = [],
-    activeSegmentId = null,
-    setActiveSegmentId = () => {},
-    fetchElements = () => {},
+    // VFS 浏览状态（Cloud Drive / System Resource Library 共用）
     currentVfsParent = null,
     setCurrentVfsParent = () => {},
     vfsNodes = [],
-    previewSelectedCourseware = null,
-    setPreviewSelectedCourseware = () => {},
     showProcessLogs = null,
     setShowProcessLogs = () => {},
     processLogsContent = '',
@@ -444,27 +414,6 @@ export function AppModals(props: AppModalsProps) {
         setSavingQuiz={setSavingQuiz}
         quizGeneratorClassId={quizGeneratorClassId}
         fetchClassDashboard={fetchClassDashboard}
-      />
-
-      <StudentPreviewModal
-        isLessonPreviewVisible={isLessonPreviewVisible}
-        setIsLessonPreviewVisible={setIsLessonPreviewVisible}
-        lessons={lessons}
-        selectedLesson={selectedLesson}
-        previewFullscreenPanel={previewFullscreenPanel}
-        setPreviewFullscreenPanel={setPreviewFullscreenPanel}
-        previewLessonTab={previewLessonTab}
-        setPreviewLessonTab={setPreviewLessonTab}
-        activeRole={activeRole}
-        elements={elements}
-        activeSegmentId={activeSegmentId}
-        setActiveSegmentId={setActiveSegmentId}
-        fetchElements={fetchElements}
-        currentVfsParent={currentVfsParent}
-        setCurrentVfsParent={setCurrentVfsParent}
-        vfsNodes={vfsNodes}
-        previewSelectedCourseware={previewSelectedCourseware}
-        setPreviewSelectedCourseware={setPreviewSelectedCourseware}
       />
 
       <ProcessLogsModal

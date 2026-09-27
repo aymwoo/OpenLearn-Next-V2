@@ -11,6 +11,7 @@ import {
   Eye,
   LogOut,
   Lock,
+  X,
 } from 'lucide-react';
 import { UserMenu } from './UserMenu';
 import { ThemeSelector } from './ThemeSelector';
@@ -19,6 +20,11 @@ import { FontSizeSelector } from './FontSizeSelector';
 export interface AppHeaderProps {
   activeRole: 'teacher' | 'student';
   setActiveRole?: Dispatch<SetStateAction<'teacher' | 'student'>> | ((role: 'teacher' | 'student') => void);
+  /**
+   * 当前页是课程编辑器「学生视角」开出的独立预览标签页：
+   * 退出动作为「关闭标签页」而非「返回教师端」（该标签页内不存在教师端）。
+   */
+  studentPreviewTab?: boolean;
   lang: 'zh' | 'en';
   teacherTab: string;
   studentViewStatus: 'dashboard' | 'lesson' | 'assignment';
@@ -53,6 +59,7 @@ export interface AppHeaderProps {
 export function AppHeader(props: AppHeaderProps) {
   const {
     activeRole,
+    studentPreviewTab = false,
     lang,
     teacherTab,
     studentViewStatus,
@@ -175,17 +182,30 @@ export function AppHeader(props: AppHeaderProps) {
                 </option>
               ))}
             </select>
-            {setActiveRole && (
+            {(setActiveRole || studentPreviewTab) && (
               <button
                 type="button"
-                onClick={() => setActiveRole('teacher')}
+                onClick={() => {
+                  // 备课预览标签页内没有教师端可回，改为关闭该标签页
+                  if (studentPreviewTab) {
+                    window.close();
+                    return;
+                  }
+                  setActiveRole?.('teacher');
+                }}
                 className="ml-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white text-xs font-bold rounded-md flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
                 title={
-                  lang === 'zh' ? '退出模拟学生并返回教师端工作台' : 'Exit student view and return to teacher workspace'
+                  lang === 'zh'
+                    ? studentPreviewTab
+                      ? '关闭此学生视角预览标签页'
+                      : '退出模拟学生并返回教师端工作台'
+                    : studentPreviewTab
+                      ? 'Close this student preview tab'
+                      : 'Exit student view and return to teacher workspace'
                 }
               >
-                <LogOut size={12} />
-                {lang === 'zh' ? '返回教师端' : 'Exit Student View'}
+                {studentPreviewTab ? <X size={12} /> : <LogOut size={12} />}
+                {lang === 'zh' ? (studentPreviewTab ? '关闭预览' : '返回教师端') : studentPreviewTab ? 'Close Tab' : 'Exit Student View'}
               </button>
             )}
           </div>

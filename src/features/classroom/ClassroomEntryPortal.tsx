@@ -36,8 +36,8 @@ import { ComputerLabSeatingMap } from './ComputerLabSeatingMap';
  * ClassroomEntryPortal —— 互动课堂的起始门户（对应 Stitch「课程入口与班级选择门户」设计）。
  *
  * 教师进入互动课堂后先看到本页：确认课程 → 挑选班级（含席位矩阵）→ 选择教学模式
- * → 启动进入授课。设计三栏：顶部遥测岛（全宽）+ 左主栏（STEP1/STEP2/启动区）
- * + 右辅栏（教案蓝图 / 课前洞察 / 自检）。
+ * → 启动进入授课。设计三栏：顶部横幅（左：今日排期问候 + 右：单行四格遥测岛）
+ * + 左主栏（STEP1/STEP2/启动区）+ 右辅栏（教案蓝图 / 课前洞察 / 自检）。
  *
  * 实现约定：
  *  - 全部使用项目语义 token（bg-surface / text-main / border-theme / bg-primary-theme…），
@@ -177,18 +177,18 @@ function TelemetryIsland({
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-2.5">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
       {tiles.map((tile) => {
         const Icon = tile.icon;
         return (
           <div
             key={tile.label}
-            className="bg-surface border border-theme rounded-xl px-3 py-2.5 flex items-center gap-2.5 shadow-3xs min-w-0"
+            className="bg-surface border border-theme rounded-xl px-2.5 py-2 flex items-center gap-2 shadow-3xs min-w-0"
           >
-            <div className="w-8 h-8 rounded-lg bg-surface-secondary border border-theme-subtle flex items-center justify-center shrink-0">
-              <Icon size={15} className="text-primary-theme" />
+            <div className="w-7 h-7 rounded-lg bg-surface-secondary border border-theme-subtle flex items-center justify-center shrink-0">
+              <Icon size={14} className="text-primary-theme" />
             </div>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 leading-tight">
               <div className="text-2xs text-muted truncate" title={tile.label}>{tile.label}</div>
               <div className={`font-mono font-bold text-xs truncate ${tile.tone ? '' : 'text-main'}`}>
                 {tile.tone ? <span className={`px-1.5 py-0.5 rounded border ${tile.tone}`}>{tile.value}</span> : tile.value}
@@ -1119,7 +1119,7 @@ export function ClassroomEntryPortal({
             </p>
           </div>
 
-          <div className="xl:w-[440px] shrink-0">
+          <div className="xl:w-[620px] shrink-0">
             <TelemetryIsland
               lang={lang}
               seatCount={students.length}

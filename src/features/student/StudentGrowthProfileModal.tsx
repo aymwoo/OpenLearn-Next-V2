@@ -1,28 +1,22 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Trophy,
   Lightbulb,
   ShieldCheck,
   Users,
-  Award,
-  Sparkles,
   ArrowLeft,
   Code2,
   Download,
   MonitorPlay,
   TrendingUp,
-  FileText,
   X,
-  Plus,
-  Minus,
   CheckCircle2,
   Clock,
-  ExternalLink,
-  Flame,
   Bot,
-  Zap,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
+import { LearningProgressTrendChart } from '../../components/LearningProgressTrendChart';
+import type { StudentProgressType } from '../../types/app';
 
 export interface StudentProfileData {
   id: string;
@@ -72,6 +66,8 @@ export interface StudentGrowthProfileModalProps {
   onInspectSandbox?: (studentId: string, submissionId?: string) => void;
   onCastStudentScreen?: (studentId: string) => void;
   onAwardPoints?: (studentId: string, delta: number, reason?: string) => void;
+  /** Historical learning progress records for the student, used to render the trend chart */
+  progressHistory?: StudentProgressType[];
 }
 
 export function StudentGrowthProfileModal({
@@ -85,10 +81,41 @@ export function StudentGrowthProfileModal({
   onInspectSandbox,
   onCastStudentScreen,
   onAwardPoints,
+  progressHistory,
 }: StudentGrowthProfileModalProps) {
-  const [activeTab, setActiveTab] = useState<'profile' | 'timeline' | 'submissions'>('profile');
-  const [commentText, setCommentText] = useState('');
   const [awardingPoints, setAwardingPoints] = useState(false);
+  const [internalProgress, setInternalProgress] = useState<StudentProgressType[]>([]);
+
+  // Automatically fetch student progress history when not provided via prop
+  useEffect(() => {
+    if (progressHistory !== undefined) return;
+    if (!isOpen || !student?.id) {
+      setInternalProgress([]);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchProgress = async () => {
+      try {
+        const res = await fetch(`/api/students/${student.id}/progress`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && Array.isArray(data)) {
+            setInternalProgress(data);
+          }
+        }
+      } catch {
+        // Ignored if network or relative URL is unavailable in test environment
+      }
+    };
+
+    fetchProgress();
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, student?.id, progressHistory]);
+
+  const activeProgressHistory = progressHistory !== undefined ? progressHistory : internalProgress;
 
   // 五维计算思维与综合素养雷达图数据
   const competencyScores = student?.competencyScores;
@@ -279,8 +306,9 @@ export function StudentGrowthProfileModal({
         lang === 'zh' ? `已为学生 [${student.name}] ${delta >= 0 ? '+' : ''}${delta} 分（${reason}）` : `Awarded ${delta} pts to [${student.name}]`,
         'success',
       );
-    } catch (err: any) {
-      addToast?.('Error', err.message, 'error');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      addToast?.('Error', message, 'error');
     } finally {
       setAwardingPoints(false);
     }
@@ -689,6 +717,15 @@ ${
                 </span>
               </div>
             </div>
+
+            {/* ── Learning Progress Trend Chart (Recharts AreaChart) ── */}
+            {activeProgressHistory && activeProgressHistory.length > 0 && (
+              <LearningProgressTrendChart
+                progressHistory={activeProgressHistory}
+                lang={lang}
+                compact
+              />
+            )}
 
             {/* Plugin Slot: student.profile.card */}
             <ExtensionPointRenderer

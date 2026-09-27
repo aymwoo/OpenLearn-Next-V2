@@ -81,9 +81,6 @@ export interface TeacherViewProps {
   setEditorSaveStatus: (status: 'none' | 'saving' | 'saved' | 'error') => void;
   editorLastSavedTime: Date | null;
   setEditorLastSavedTime: (time: Date | null) => void;
-  setIsLessonPreviewVisible: (value: boolean) => void;
-  setPreviewLessonTab: (value: 'whiteboard' | 'courseware') => void;
-  setPreviewSelectedCourseware: (value: string | null) => void;
   handlePaletteActivate: (type: string) => void;
   timelineSegments: any[];
   activeSegmentId: string | null;

@@ -8,11 +8,9 @@ import {
   CheckCircle2,
   X,
   Database,
-  Eye,
   PenTool,
   AlertTriangle,
   Copy,
-  ExternalLink,
 } from 'lucide-react';
 import { LazyWhiteboard } from '../../components/LazyWhiteboard';
 import { ClassroomSyncChannel } from '../../services/classroom-sync-channel';
@@ -36,9 +34,6 @@ export interface LessonEditorViewProps {
   setEditorSaveStatus: (status: 'none' | 'saving' | 'saved' | 'error') => void;
   editorLastSavedTime: Date | null;
   setEditorLastSavedTime: (time: Date | null) => void;
-  setIsLessonPreviewVisible: (value: boolean) => void;
-  setPreviewLessonTab: (value: 'whiteboard' | 'courseware') => void;
-  setPreviewSelectedCourseware: (value: string | null) => void;
   setTeacherTab: (value: string) => void;
   handlePaletteActivate: (type: string) => void;
   timelineSegments: any[];
@@ -69,9 +64,6 @@ export function LessonEditorView({
   setEditorSaveStatus,
   editorLastSavedTime,
   setEditorLastSavedTime,
-  setIsLessonPreviewVisible,
-  setPreviewLessonTab,
-  setPreviewSelectedCourseware,
   setTeacherTab,
   handlePaletteActivate,
   timelineSegments,
@@ -208,33 +200,7 @@ export function LessonEditorView({
             </div>
           </div>
 
-          {/* 现代微药丸段控器角色切换 (Segmented Control) */}
-          <div className="bg-surface-secondary border border-theme p-1 rounded-xl flex items-center gap-1 shadow-2xs">
-            <button
-              type="button"
-              onClick={() => setActiveRole('teacher')}
-              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeRole === 'teacher'
-                  ? 'bg-surface text-primary-theme font-black shadow-xs border border-theme/60 scale-102'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <span>👨‍🏫</span>
-              <span>{lang === 'zh' ? '教师视角' : 'Teacher'}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveRole('student')}
-              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeRole === 'student'
-                  ? 'bg-primary-theme text-white font-black shadow-xs scale-102'
-                  : 'text-muted hover:text-main'
-              }`}
-            >
-              <span>🎓</span>
-              <span>{lang === 'zh' ? '学生视角' : 'Student'}</span>
-            </button>
-          </div>
+          {/* 现代微药丸段控器角色切换 (Segmented Control) —— 已移至右侧「返回课程库」旁 */}
 
           {/* 自动保存状态胶囊 */}
           {selectedLesson && (
@@ -317,38 +283,52 @@ export function LessonEditorView({
 
         {/* 顶部右侧快捷操作 */}
         <div className="flex items-center gap-2 shrink-0">
-          {selectedLesson && (
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  const studentUrl = `${window.location.origin}${window.location.pathname}?mode=student_live&lessonId=${encodeURIComponent(selectedLesson)}#/student_live`;
-                  window.open(studentUrl, '_blank');
-                }}
-                className="px-3 py-1.5 bg-primary-theme hover:bg-primary-theme-hover text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-2xs transition-all hover:scale-102 cursor-pointer"
-                title={
-                  lang === 'zh'
-                    ? '在独立浏览器标签页中开启学生视角双屏备课'
-                    : 'Open student perspective in a new independent tab'
+          {/* 视角切换：教师视角就地切回；学生视角在独立标签页打开，避免备课界面被整体替换 */}
+          <div className="bg-surface-secondary border border-theme p-1 rounded-xl flex items-center gap-1 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setActiveRole('teacher')}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeRole === 'teacher'
+                  ? 'bg-surface text-primary-theme font-black shadow-xs border border-theme/60 scale-102'
+                  : 'text-muted hover:text-main'
+              }`}
+              title={lang === 'zh' ? '在当前窗口切回教师编辑视角' : 'Switch back to the teacher editor view'}
+            >
+              <span>👨‍🏫</span>
+              <span>{lang === 'zh' ? '教师视角' : 'Teacher'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const studentUrl = `${window.location.origin}${window.location.pathname}?mode=student_preview&lessonId=${encodeURIComponent(
+                  selectedLesson || '',
+                )}#/student_preview`;
+                const opened = window.open(studentUrl, '_blank');
+                if (!opened) {
+                  alert(
+                    lang === 'zh'
+                      ? '新标签页被浏览器拦截，请允许本站打开弹出窗口后重试。'
+                      : 'The new tab was blocked. Please allow pop-ups for this site and retry.',
+                  );
                 }
-              >
-                <ExternalLink size={13} />
-                <span>{lang === 'zh' ? '学生视角预览 (独立Tab)' : 'Student Preview (Tab)'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsLessonPreviewVisible(true);
-                  setPreviewLessonTab('whiteboard');
-                  setPreviewSelectedCourseware(null);
-                }}
-                className="p-2 bg-surface hover:bg-surface-secondary border border-theme text-muted hover:text-main rounded-xl transition-all cursor-pointer shadow-2xs hover:scale-105"
-                title={lang === 'zh' ? '当前窗口快速弹窗预览' : 'Preview inside modal'}
-              >
-                <Eye size={14} />
-              </button>
-            </div>
-          )}
+              }}
+              className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeRole === 'student'
+                  ? 'bg-primary-theme text-white font-black shadow-xs scale-102'
+                  : 'text-muted hover:text-main'
+              }`}
+              title={
+                lang === 'zh'
+                  ? '在新标签页中以学生身份预览本课节（不影响当前备课窗口）'
+                  : 'Open a student-perspective preview of this lesson in a new tab'
+              }
+            >
+              <span>🎓</span>
+              <span>{lang === 'zh' ? '学生视角' : 'Student'}</span>
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={() => setTeacherTab('courses')}

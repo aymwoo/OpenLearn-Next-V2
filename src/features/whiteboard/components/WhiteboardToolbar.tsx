@@ -18,6 +18,7 @@ import {
   Wand2,
   UserCheck,
   Grid,
+  LayoutGrid,
   RotateCcw,
 } from 'lucide-react';
 import { v7 as uuidv7 } from 'uuid';
@@ -38,6 +39,12 @@ export interface WhiteboardToolbarProps {
   selectedShapeId: string | null;
   showGrid: boolean;
   setShowGrid: React.Dispatch<React.SetStateAction<boolean>>;
+  /** 自动平铺模式（i3 式 BSP 镶嵌布局）是否开启 */
+  autoTileEnabled?: boolean;
+  /** 切换自动平铺 / 自由布局 */
+  onToggleAutoTile?: () => void;
+  /** 只读态（他人课程预览、学生端）下不提供布局改写入口 */
+  readOnly?: boolean;
   userRole?: 'teacher' | 'student';
   isSyncing: boolean;
   setIsSyncing: (syncing: boolean) => void;
@@ -67,6 +74,9 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
   selectedShapeId,
   showGrid,
   setShowGrid,
+  autoTileEnabled = false,
+  onToggleAutoTile,
+  readOnly = false,
   userRole = 'teacher',
   isSyncing,
   setIsSyncing,
@@ -531,6 +541,27 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
           <Grid size={14} />
         </button>
         <ExtensionPointRenderer slot="anchor:whiteboard-toolbar:grid" placement="after" />
+
+        {!readOnly && onToggleAutoTile && (
+          <>
+            <button
+              onClick={onToggleAutoTile}
+              className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
+                autoTileEnabled
+                  ? 'text-primary-theme bg-primary-theme-light'
+                  : 'text-muted hover:bg-surface-secondary hover:text-main'
+              }`}
+              title={autoTileEnabled ? '关闭自动平铺，恢复自由布局' : '开启自动平铺（i3 式镶嵌布局）'}
+            >
+              <LayoutGrid size={14} />
+            </button>
+            {autoTileEnabled && (
+              <span className="text-2xs font-semibold text-primary-theme whitespace-nowrap" title="当前为自动平铺模式，新组件会自动落入下一个格子">
+                平铺中
+              </span>
+            )}
+          </>
+        )}
 
         {selectedShapeId && (
           <button
