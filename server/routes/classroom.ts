@@ -3,8 +3,8 @@ import type { Server } from 'socket.io';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { requireAuth, getActorId } from '../middleware/auth.js';
 import type { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
-import type { ClassroomFeedService } from '../services/classroom-feed-service.js';
 import { ARCHIVED_REPORT_STAGE } from '../services/classroom-runtime-service.js';
+import type { ClassroomFeedService } from '../services/classroom-feed-service.js';
 import type { ServerContext } from '../context.js';
 import { getOnlineStudentIds } from '../presence.js';
 
@@ -826,7 +826,8 @@ export function registerClassroomRoutes(
 
       // 兼容两种字段名（服务端契约为 signal，早期前端发的是 signalType）
       const pacingSignal = signal ?? signalType;
-      if (!['TOO_FAST', 'CONFUSED', 'CLEAR'].includes(pacingSignal)) {
+      // TOO_FAST=讲太快(希望慢一点) / SLOW=讲太慢(希望快一点) / CONFUSED=困惑 / CLEAR=理解
+      if (!['TOO_FAST', 'SLOW', 'CONFUSED', 'CLEAR'].includes(pacingSignal)) {
         return res.status(400).json({ error: 'Invalid pacing signal' });
       }
 
@@ -848,7 +849,7 @@ export function registerClassroomRoutes(
         GROUP BY signal_type
       `).all(sessionId, fiveMinsAgo) as { signal_type: string; count: number }[];
 
-      const summary: Record<string, number> = { TOO_FAST: 0, CONFUSED: 0, CLEAR: 0 };
+      const summary: Record<string, number> = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
       counts.forEach((c) => {
         summary[c.signal_type] = c.count;
       });
@@ -1879,6 +1880,129 @@ export function registerClassroomRoutes(
       }
 
       res.json({ success: true, count: results.length, submissions: results });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── 课程预设极速投票 CRUD (Lesson Preset Polls) ──────────────────────
+
+  /** 获取指定课程下的所有预设投票题 */
+  app.get('/api/lessons/:lessonId/preset-polls', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
+    try {
+      const { lessonId } = req.params;
+      const rows = db.prepare(
+        'SELECT * FROM lesson_preset_polls WHERE lesson_id = ? ORDER BY sort_order ASC, created_at ASC',
+      ).all(lessonId) as Array<{
+        id: string; lesson_id: string; title: string; question_type: string;
+        options_json: string; correct_option: string | null; sort_order: number;
+        created_at: number; updated_at: number;
+      }>;
+
+      const presets = rows.map((r) => ({
+        id: r.id,
+        lessonId: r.lesson_id,
+        title: r.title,
+        questionType: r.question_type,
+        options: JSON.parse(r.options_json),
+        correctOption: r.correct_option,
+        sortOrder: r.sort_order,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      }));
+
+      res.json({ success: true, presets });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  /** 新增预设投票题到指定课程 */
+  app.post('/api/lessons/:lessonId/preset-polls', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
+    try {
+      const { lessonId } = req.params;
+      const { title, questionType = 'ABCD', options, correctOption, sortOrder = 0 } = req.body;
+
+      if (!title || !options || !Array.isArray(options) || options.length < 2) {
+        res.status(400).json({ error: 'title and options (array with >= 2 items) are required' });
+        return;
+      }
+
+      const id = `preset_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const now = Date.now();
+
+      db.prepare(`
+        INSERT INTO lesson_preset_polls (id, lesson_id, title, question_type, options_json, correct_option, sort_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, lessonId, title, questionType, JSON.stringify(options), correctOption || null, sortOrder, now, now);
+
+      res.json({
+        success: true,
+        preset: { id, lessonId, title, questionType, options, correctOption: correctOption || null, sortOrder, createdAt: now, updatedAt: now },
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  /** 修改预设投票题 */
+  app.put('/api/lessons/:lessonId/preset-polls/:id', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
+    try {
+      const { lessonId, id } = req.params;
+      const { title, questionType, options, correctOption, sortOrder } = req.body;
+
+      const existing = db.prepare('SELECT id FROM lesson_preset_polls WHERE id = ? AND lesson_id = ?').get(id, lessonId);
+      if (!existing) {
+        res.status(404).json({ error: 'Preset poll not found' });
+        return;
+      }
+
+      const updates: string[] = [];
+      const params: any[] = [];
+
+      if (title !== undefined) { updates.push('title = ?'); params.push(title); }
+      if (questionType !== undefined) { updates.push('question_type = ?'); params.push(questionType); }
+      if (options !== undefined) { updates.push('options_json = ?'); params.push(JSON.stringify(options)); }
+      if (correctOption !== undefined) { updates.push('correct_option = ?'); params.push(correctOption || null); }
+      if (sortOrder !== undefined) { updates.push('sort_order = ?'); params.push(sortOrder); }
+
+      if (updates.length === 0) {
+        res.status(400).json({ error: 'No fields to update' });
+        return;
+      }
+
+      updates.push('updated_at = ?');
+      params.push(Date.now());
+      params.push(id);
+      params.push(lessonId);
+
+      db.prepare(`UPDATE lesson_preset_polls SET ${updates.join(', ')} WHERE id = ? AND lesson_id = ?`).run(...params);
+
+      const updated = db.prepare('SELECT * FROM lesson_preset_polls WHERE id = ?').get(id) as any;
+      res.json({
+        success: true,
+        preset: {
+          id: updated.id, lessonId: updated.lesson_id, title: updated.title,
+          questionType: updated.question_type, options: JSON.parse(updated.options_json),
+          correctOption: updated.correct_option, sortOrder: updated.sort_order,
+          createdAt: updated.created_at, updatedAt: updated.updated_at,
+        },
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  /** 删除预设投票题 */
+  app.delete('/api/lessons/:lessonId/preset-polls/:id', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
+    try {
+      const { lessonId, id } = req.params;
+      const result = db.prepare('DELETE FROM lesson_preset_polls WHERE id = ? AND lesson_id = ?').run(id, lessonId);
+      if ((result as any).changes === 0) {
+        res.status(404).json({ error: 'Preset poll not found' });
+        return;
+      }
+      res.json({ success: true });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

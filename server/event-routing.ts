@@ -199,6 +199,26 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
     description: '随堂练习作答 → 全局广播（教师/学生面板均可摄取）',
   },
 
+  // ── 作业中心（assignment-eval 插件）────────────────────────────────────
+  {
+    eventType: 'assignment.submitted',
+    socketEvent: 'assignment-submitted-toast',
+    rooms: (event) => {
+      const p = event.payload as any;
+      const rooms: string[] = [];
+      if (typeof p?.lessonId === 'string' && p.lessonId) rooms.push(p.lessonId);
+      if (typeof p?.classId === 'string' && p.classId) rooms.push(classRoom(p.classId));
+      return rooms.length > 0 ? rooms : null;
+    },
+    map: (event) => ({
+      assignmentId: (event.payload as any).assignmentId,
+      studentId: (event.payload as any).studentId,
+      version: (event.payload as any).version,
+      isLate: (event.payload as any).isLate,
+    }),
+    description: '学生提交作业 → 课节/班级房间通知（教师评分面板免刷新）',
+  },
+
   // ── 题库与随堂测验插件（@openlearn/plugin-exam-bank）───────────────────
   {
     eventType: 'exambank.survey.published',

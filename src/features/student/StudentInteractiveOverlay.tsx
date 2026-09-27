@@ -106,7 +106,7 @@ export function StudentInteractiveOverlay({
   if (!lessonId) return null;
 
   // 发送节奏信号
-  const sendPacingSignal = async (signalType: 'TOO_FAST' | 'CONFUSED' | 'CLEAR') => {
+  const sendPacingSignal = async (signalType: 'TOO_FAST' | 'SLOW' | 'CONFUSED' | 'CLEAR') => {
     try {
       await fetch(`/api/classroom/sessions/${lessonId}/pacing`, {
         method: 'POST',
@@ -114,7 +114,13 @@ export function StudentInteractiveOverlay({
         body: JSON.stringify({ signal: signalType }),
       });
       setPacingFeedback(
-        signalType === 'TOO_FAST' ? '🐇 太快' : signalType === 'CONFUSED' ? '❓ 困惑' : '💡 听懂了',
+        signalType === 'TOO_FAST'
+          ? '🐇 太快'
+          : signalType === 'SLOW'
+            ? '🐢 太慢'
+            : signalType === 'CONFUSED'
+              ? '❓ 困惑'
+              : '💡 听懂了',
       );
       setTimeout(() => setPacingFeedback(null), 2000);
     } catch (e) {
@@ -235,6 +241,14 @@ export function StudentInteractiveOverlay({
           >
             <span>🐇</span>
             <span className="hidden sm:inline">{lang === 'zh' ? '讲太快' : 'Too Fast'}</span>
+          </button>
+          <button
+            onClick={() => sendPacingSignal('SLOW')}
+            className="px-2.5 py-1.5 rounded-xl hover:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer"
+            title="讲太慢了，希望快一点"
+          >
+            <span>🐢</span>
+            <span className="hidden sm:inline">{lang === 'zh' ? '讲太慢' : 'Too Slow'}</span>
           </button>
         </div>
       </aside>

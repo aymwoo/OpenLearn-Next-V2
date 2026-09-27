@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getOptionalSocket } from '../services/socket-service';
 import {
   FileText,
   CheckCircle,
@@ -99,6 +100,21 @@ export function TeacherAssignmentGradePanel({ lessonId, lang, addToast }: Teache
     if (lessonId) {
       fetchData();
     }
+  }, [lessonId]);
+
+  // 实时刷新：学生提交作业时（event-routing 广播 assignment-submitted-toast）自动重拉
+  useEffect(() => {
+    const socket = getOptionalSocket();
+    if (!socket || !lessonId) return;
+    const handler = (payload: any) => {
+      // 课节级广播不携带本面板过滤字段，直接刷新（幂等 GET）
+      if (!payload?.lessonId || payload.lessonId === lessonId) fetchData();
+    };
+    socket.on('assignment-submitted-toast', handler);
+    return () => {
+      if (typeof socket.off === 'function') socket.off('assignment-submitted-toast', handler);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lessonId]);
 
   // Sync global default weights to individual students if they don't have grades yet

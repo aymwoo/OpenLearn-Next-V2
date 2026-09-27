@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Sparkles,
   Radio,
@@ -15,9 +15,18 @@ import {
   TrendingUp,
   Dices,
   Trophy,
+  Save,
+  Rocket,
+  Trash2,
+  Plus,
+  Star,
+  BookOpen,
+  ArrowDownToLine,
+  X,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { StageDisplayModal } from './StageDisplayModal';
+import { PacingDashboardModal } from './PacingDashboardModal';
 import { ClassroomAttributionModal } from './ClassroomAttributionModal';
 import { ClassroomLeaderboardModal } from './ClassroomLeaderboardModal';
 
@@ -30,6 +39,19 @@ export interface ClassroomInteractiveCockpitProps {
   currentStage?: string;
   onStageChange?: (stage: string) => void;
   students?: any[];
+}
+
+/** 课程预设投票题数据结构 */
+interface PresetPoll {
+  id: string;
+  lessonId: string;
+  title: string;
+  questionType: 'ABCD' | 'TF' | 'CUSTOM';
+  options: string[];
+  correctOption: string | null;
+  sortOrder: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export function ClassroomInteractiveCockpit({
@@ -55,10 +77,15 @@ export function ClassroomInteractiveCockpit({
   const [isLeaderboardModalOpen, setIsLeaderboardModalOpen] = useState(false);
   const [isPollDialogOpen, setIsPollDialogOpen] = useState(false);
   const [pollTitle, setPollTitle] = useState('课堂极速单选投票');
-  const [pollType, setPollType] = useState<'ABCD' | 'TF'>('ABCD');
+  const [pollType, setPollType] = useState<'ABCD' | 'TF' | 'CUSTOM'>('ABCD');
+  const [pollOptions, setPollOptions] = useState<string[]>(['A', 'B', 'C', 'D']);
+  const [pollCorrectOption, setPollCorrectOption] = useState<string>('');
+  const [presetPolls, setPresetPolls] = useState<PresetPoll[]>([]);
+  const [isLoadingPresets, setIsLoadingPresets] = useState(false);
   const [activePoll, setActivePoll] = useState<any>(null);
   const [activeBuzzer, setActiveBuzzer] = useState<any>(null);
-  const [pacingSignals, setPacingSignals] = useState({ TOO_FAST: 0, CONFUSED: 0, CLEAR: 0 });
+  const [pacingSignals, setPacingSignals] = useState({ TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 });
+  const [showPacingDashboard, setShowPacingDashboard] = useState(false);
   const [panoramicSummary, setPanoramicSummary] = useState<any>(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
 
@@ -82,7 +109,7 @@ export function ClassroomInteractiveCockpit({
         const stageRes = await fetch(`/api/classroom/stage/${lessonId}/data`);
         if (stageRes.ok && mounted) {
           const stageJson = await stageRes.json();
-          setPacingSignals(stageJson.pacing || { TOO_FAST: 0, CONFUSED: 0, CLEAR: 0 });
+          setPacingSignals(stageJson.pacing || { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 });
         }
       } catch (err) {
         // silent
@@ -138,17 +165,103 @@ export function ClassroomInteractiveCockpit({
     }
   };
 
-  // 发起极速投票
-  const handleStartQuickPoll = async () => {
+  // 获取当前课程的预设投票题库
+  const fetchPresetPolls = useCallback(async () => {
+    if (!lessonId) return;
+    setIsLoadingPresets(true);
     try {
-      const options = pollType === 'ABCD' ? ['A', 'B', 'C', 'D'] : ['正确', '错误'];
-      const res = await fetch(`/api/classroom/sessions/${lessonId}/quick-poll`, {
+      const res = await fetch(`/api/lessons/${lessonId}/preset-polls`);
+      if (res.ok) {
+        const json = await res.json();
+        setPresetPolls(json.presets || []);
+      }
+    } catch {
+      // 静默失败，不影响主流程
+    } finally {
+      setIsLoadingPresets(false);
+    }
+  }, [lessonId]);
+
+  // 打开弹窗时自动拉取预设题库
+  useEffect(() => {
+    if (isPollDialogOpen) {
+      fetchPresetPolls();
+    }
+  }, [isPollDialogOpen, fetchPresetPolls]);
+
+  // 切换题型时自动同步选项
+  const handlePollTypeChange = (type: 'ABCD' | 'TF' | 'CUSTOM') => {
+    setPollType(type);
+    if (type === 'ABCD') {
+      setPollOptions(['A', 'B', 'C', 'D']);
+    } else if (type === 'TF') {
+      setPollOptions(['正确', '错误']);
+    }
+    // CUSTOM 保留当前选项不变
+    setPollCorrectOption('');
+  };
+
+  // 保存当前编辑器内容为预设题到本课程
+  const handleSavePreset = async () => {
+    if (!lessonId || !pollTitle.trim()) {
+      addToast(lang === 'zh' ? '保存失败' : 'Save Failed', lang === 'zh' ? '题目标题不能为空' : 'Title required', 'warning');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/lessons/${lessonId}/preset-polls`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: pollTitle,
           questionType: pollType,
-          options,
+          options: pollOptions,
+          correctOption: pollCorrectOption || null,
+        }),
+      });
+      if (res.ok) {
+        addToast(lang === 'zh' ? '已保存' : 'Saved', lang === 'zh' ? '题目已保存到本课程题库' : 'Preset saved', 'success');
+        fetchPresetPolls();
+      }
+    } catch (e: any) {
+      addToast('Error', e.message, 'error');
+    }
+  };
+
+  // 删除预设题
+  const handleDeletePreset = async (presetId: string) => {
+    if (!lessonId) return;
+    try {
+      await fetch(`/api/lessons/${lessonId}/preset-polls/${presetId}`, { method: 'DELETE' });
+      setPresetPolls((prev) => prev.filter((p) => p.id !== presetId));
+    } catch (e: any) {
+      addToast('Error', e.message, 'error');
+    }
+  };
+
+  // 将预设题载入编辑器
+  const loadPresetToEditor = (preset: PresetPoll) => {
+    setPollTitle(preset.title);
+    setPollType(preset.questionType);
+    setPollOptions([...preset.options]);
+    setPollCorrectOption(preset.correctOption || '');
+  };
+
+  // 发起极速投票（使用当前编辑器中的数据）
+  const handleStartQuickPoll = async (title?: string, qType?: string, opts?: string[], correctOpt?: string | null) => {
+    try {
+      const finalTitle = title || pollTitle;
+      const finalType = qType || pollType;
+      const finalOptions = opts || pollOptions;
+      const finalCorrect = correctOpt !== undefined ? correctOpt : (pollCorrectOption || null);
+
+      const res = await fetch(`/api/classroom/sessions/${lessonId}/quick-poll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: finalTitle,
+          questionType: finalType,
+          options: finalOptions,
+          correctOption: finalCorrect,
         }),
       });
 
@@ -367,33 +480,56 @@ export function ClassroomInteractiveCockpit({
         />
       </div>
 
-      {/* 右侧：节奏晴雨表指示器 */}
+      {/* 右侧：节奏晴雨表指示器（点击打开实时情绪仪表盘） */}
       <div className="flex items-center gap-2 pl-2 border-l border-border/60">
-        <div className="flex items-center gap-1 text-[11px] font-semibold text-muted">
-          <TrendingUp size={12} className="text-primary-theme" />
-          <span>{lang === 'zh' ? '节奏晴雨表:' : 'Barometer:'}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span
-            className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]"
-            title="听懂了 / 节奏适宜"
-          >
-            💡 {pacingSignals.CLEAR || 0}
-          </span>
-          <span
-            className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px]"
-            title="有些困惑"
-          >
-            ❓ {pacingSignals.CONFUSED || 0}
-          </span>
-          <span
-            className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-[10px]"
-            title="讲太快了"
-          >
-            🐇 {pacingSignals.TOO_FAST || 0}
-          </span>
-        </div>
+        <button
+          onClick={() => setShowPacingDashboard(true)}
+          className="flex items-center gap-1.5 px-2 py-1 rounded-xl hover:bg-surface-secondary transition-colors cursor-pointer group"
+          title={lang === 'zh' ? '打开课堂反馈情绪仪表盘' : 'Open feedback dashboard'}
+        >
+          <div className="flex items-center gap-1 text-[11px] font-semibold text-muted group-hover:text-main">
+            <TrendingUp size={12} className="text-primary-theme" />
+            <span>{lang === 'zh' ? '节奏晴雨表:' : 'Barometer:'}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span
+              className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-[10px]"
+              title="理解 / 节奏适宜"
+            >
+              💡 {pacingSignals.CLEAR || 0}
+            </span>
+            <span
+              className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px]"
+              title="困惑"
+            >
+              ❓ {pacingSignals.CONFUSED || 0}
+            </span>
+            <span
+              className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold text-[10px]"
+              title="慢一点（讲太快）"
+            >
+              🐇 {pacingSignals.TOO_FAST || 0}
+            </span>
+            <span
+              className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold text-[10px]"
+              title="快一点（讲太慢）"
+            >
+              🐢 {pacingSignals.SLOW || 0}
+            </span>
+          </div>
+        </button>
       </div>
+
+      {/* 课堂反馈情绪实时仪表盘 */}
+      {showPacingDashboard && lessonId && (
+        <PacingDashboardModal
+          lessonId={lessonId}
+          lang={lang === 'zh' ? 'zh' : 'en'}
+          signals={pacingSignals}
+          onlineCount={students?.filter((s) => s.online).length || 0}
+          onClose={() => setShowPacingDashboard(false)}
+        />
+      )}
 
       {/* 大屏展台模态框 */}
       <StageDisplayModal
@@ -431,70 +567,217 @@ export function ClassroomInteractiveCockpit({
         }}
       />
 
-      {/* 极速出题配置对话框 */}
+      {/* 极速出题配置对话框（含预设题库 + 灵活编辑器） */}
       {isPollDialogOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-surface rounded-2xl border border-border p-6 w-full max-w-sm shadow-xl flex flex-col gap-4">
-            <h3 className="font-bold text-base text-foreground flex items-center gap-2">
-              <Sparkles size={18} className="text-amber-500" />
-              <span>{lang === 'zh' ? '发起口播极速单选' : 'Launch Quick Poll'}</span>
-            </h3>
+          <div className="bg-surface rounded-2xl border border-border p-6 w-full max-w-lg shadow-xl flex flex-col gap-4 max-h-[85vh] overflow-y-auto">
+            {/* 标题栏 */}
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base text-foreground flex items-center gap-2">
+                <Sparkles size={18} className="text-amber-500" />
+                <span>{lang === 'zh' ? '极速投票配置' : 'Quick Poll Setup'}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsPollDialogOpen(false)}
+                className="p-1.5 rounded-lg text-muted hover:bg-surface-secondary transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
 
+            {/* ── 预设题库区 ── */}
+            {presetPolls.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-muted">
+                  <BookOpen size={13} />
+                  <span>{lang === 'zh' ? `本课已保存题目 (${presetPolls.length})` : `Saved Presets (${presetPolls.length})`}</span>
+                </div>
+                <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
+                  {presetPolls.map((preset) => (
+                    <div
+                      key={preset.id}
+                      className="flex items-center gap-2 p-2 rounded-lg border border-border/60 bg-surface-secondary/50 hover:bg-surface-secondary transition-colors group"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-foreground truncate">{preset.title}</div>
+                        <div className="text-xs text-muted flex items-center gap-1.5 mt-0.5">
+                          <span className="px-1.5 py-0.5 rounded bg-surface-secondary border border-border text-[10px] font-bold">
+                            {preset.questionType === 'TF' ? '判断' : preset.questionType === 'ABCD' ? 'ABCD' : '自定义'}
+                          </span>
+                          <span className="truncate">{preset.options.join(' / ')}</span>
+                          {preset.correctOption && (
+                            <span className="flex items-center gap-0.5 text-emerald-500">
+                              <Star size={10} className="fill-current" />
+                              {preset.correctOption}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => loadPresetToEditor(preset)}
+                          className="p-1.5 rounded-md hover:bg-primary-theme/10 text-primary-theme transition-colors cursor-pointer"
+                          title={lang === 'zh' ? '引入到编辑器' : 'Load to editor'}
+                        >
+                          <ArrowDownToLine size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleStartQuickPoll(preset.title, preset.questionType, preset.options, preset.correctOption)}
+                          className="p-1.5 rounded-md hover:bg-emerald-500/10 text-emerald-500 transition-colors cursor-pointer"
+                          title={lang === 'zh' ? '直接发送' : 'Send now'}
+                        >
+                          <Rocket size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePreset(preset.id)}
+                          className="p-1.5 rounded-md hover:bg-red-500/10 text-red-400 transition-colors cursor-pointer"
+                          title={lang === 'zh' ? '删除' : 'Delete'}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {isLoadingPresets && (
+              <div className="text-xs text-muted text-center py-2">{lang === 'zh' ? '加载预设题库...' : 'Loading presets...'}</div>
+            )}
+
+            {/* ── 分割线 ── */}
+            {presetPolls.length > 0 && <div className="border-t border-border/60" />}
+
+            {/* ── 题干输入 ── */}
             <div className="flex flex-col gap-1.5">
               <label className="font-semibold text-muted text-xs">
-                {lang === 'zh' ? '投票标题 / 提示语' : 'Poll Title'}
+                {lang === 'zh' ? '投票标题 / 题干' : 'Poll Title / Question'}
               </label>
               <input
                 type="text"
                 value={pollTitle}
                 onChange={(e) => setPollTitle(e.target.value)}
+                placeholder={lang === 'zh' ? '例：下列哪个选项正确？' : 'e.g. Which is correct?'}
                 className="w-full px-3 py-2 bg-surface-secondary border border-border rounded-lg text-foreground text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-theme"
               />
             </div>
 
+            {/* ── 题型选择（三列） ── */}
             <div className="flex flex-col gap-1.5">
               <label className="font-semibold text-muted text-xs">
                 {lang === 'zh' ? '题型选择' : 'Question Type'}
               </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPollType('ABCD')}
-                  className={`p-2.5 rounded-lg border font-bold text-center transition-colors cursor-pointer ${
-                    pollType === 'ABCD'
-                      ? 'border-primary-theme bg-primary-theme/10 text-primary-theme'
-                      : 'border-border bg-surface-secondary text-muted'
-                  }`}
-                >
-                  ABCD 四选一
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPollType('TF')}
-                  className={`p-2.5 rounded-lg border font-bold text-center transition-colors cursor-pointer ${
-                    pollType === 'TF'
-                      ? 'border-primary-theme bg-primary-theme/10 text-primary-theme'
-                      : 'border-border bg-surface-secondary text-muted'
-                  }`}
-                >
-                  正确 / 错误
-                </button>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { key: 'ABCD' as const, label: 'ABCD 四选一' },
+                  { key: 'TF' as const, label: '正确 / 错误' },
+                  { key: 'CUSTOM' as const, label: '自定义选项' },
+                ]).map(({ key, label }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => handlePollTypeChange(key)}
+                    className={`p-2 rounded-lg border font-bold text-center text-xs transition-colors cursor-pointer ${
+                      pollType === key
+                        ? 'border-primary-theme bg-primary-theme/10 text-primary-theme'
+                        : 'border-border bg-surface-secondary text-muted'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2">
+            {/* ── 选项编辑区 ── */}
+            <div className="flex flex-col gap-1.5">
+              <label className="font-semibold text-muted text-xs">
+                {lang === 'zh' ? '选项列表' : 'Options'}{' '}
+                {pollCorrectOption && (
+                  <span className="text-emerald-500 ml-1">
+                    ✓ {lang === 'zh' ? '参考答案' : 'Answer'}: {pollCorrectOption}
+                  </span>
+                )}
+              </label>
+              <div className="flex flex-col gap-1.5">
+                {pollOptions.map((opt, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setPollCorrectOption(pollCorrectOption === opt ? '' : opt)}
+                      className={`p-1.5 rounded-md transition-colors cursor-pointer shrink-0 ${
+                        pollCorrectOption === opt
+                          ? 'text-emerald-500 bg-emerald-500/10'
+                          : 'text-muted/40 hover:text-emerald-400'
+                      }`}
+                      title={lang === 'zh' ? '设为参考答案' : 'Set as correct'}
+                    >
+                      <Star size={14} className={pollCorrectOption === opt ? 'fill-current' : ''} />
+                    </button>
+                    <input
+                      type="text"
+                      value={opt}
+                      onChange={(e) => {
+                        const next = [...pollOptions];
+                        next[idx] = e.target.value;
+                        setPollOptions(next);
+                        if (pollType !== 'CUSTOM') setPollType('CUSTOM');
+                      }}
+                      className="flex-1 px-3 py-1.5 bg-surface-secondary border border-border rounded-lg text-foreground text-sm focus:outline-hidden focus:ring-2 focus:ring-primary-theme"
+                    />
+                    {pollOptions.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = pollOptions.filter((_, i) => i !== idx);
+                          setPollOptions(next);
+                          if (pollCorrectOption === opt) setPollCorrectOption('');
+                          if (pollType !== 'CUSTOM') setPollType('CUSTOM');
+                        }}
+                        className="p-1.5 rounded-md text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {pollOptions.length < 8 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPollOptions([...pollOptions, `选项${pollOptions.length + 1}`]);
+                    if (pollType !== 'CUSTOM') setPollType('CUSTOM');
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-primary-theme hover:text-primary-theme-hover font-semibold mt-1 cursor-pointer"
+                >
+                  <Plus size={13} />
+                  {lang === 'zh' ? '添加选项' : 'Add Option'}{' '}
+                  <span className="text-muted font-normal">({pollOptions.length}/8)</span>
+                </button>
+              )}
+            </div>
+
+            {/* ── 操作栏 ── */}
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/60">
               <button
                 type="button"
-                onClick={() => setIsPollDialogOpen(false)}
-                className="px-4 py-2 rounded-lg text-muted hover:bg-surface-secondary transition-colors cursor-pointer"
+                onClick={handleSavePreset}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-muted hover:bg-surface-secondary border border-border/60 transition-colors cursor-pointer"
               >
-                {lang === 'zh' ? '取消' : 'Cancel'}
+                <Save size={14} />
+                {lang === 'zh' ? '保存到本课程' : 'Save to Lesson'}
               </button>
               <button
                 type="button"
-                onClick={handleStartQuickPoll}
-                className="px-4 py-2 bg-primary-theme text-white font-bold rounded-lg hover:bg-primary-theme-hover transition-colors cursor-pointer"
+                onClick={() => handleStartQuickPoll()}
+                className="flex items-center gap-1.5 px-4 py-2 bg-primary-theme text-white font-bold rounded-lg hover:bg-primary-theme-hover transition-colors cursor-pointer"
               >
+                <Rocket size={14} />
                 {lang === 'zh' ? '立即发布' : 'Launch'}
               </button>
             </div>

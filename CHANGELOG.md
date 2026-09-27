@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **课堂反馈情绪实时仪表盘与作业提交通知**：
+  - **实时仪表盘（`src/features/classroom/PacingDashboardModal.tsx`）**：教师端顶栏「节奏晴雨表」现可点击打开全屏仪表盘——Recharts 环形饼图 + 四情绪（理解 💡 / 困惑 ❓ / 慢一点 🐇 / 快一点 🐢）进度条 + 中心「理解占比」健康度指标 + 基于聚合阈值的教学节奏建议（如「较多学生困惑，建议放慢并重新讲解」）；数据由 socket `classroom:pacing_updated` 实时驱动（服务端 5 分钟窗口聚合）。
+  - **新增 SLOW（快一点/讲太慢）节奏信号**：服务端 pacing 白名单与聚合扩展为 4 信号；学生互动浮层新增 🐢「讲太慢」按钮（原有 🐇「讲太快」= 希望慢一点）。
+  - **作业提交实时通知**：`assignment.submitted` 内核事件新增 event-routing 路由（课节/班级房间广播 `assignment-submitted-toast`）；`TeacherAssignmentGradePanel` 监听后自动重拉评分数据，教师不再需要手动刷新。
+  - **浏览器实测（Playwright）通过**：教师进课堂 → API 注入 5 条学生情绪信号 → 打开仪表盘（饼图三色扇区/四进度条/理解占比 50%/教学建议渲染）→ 再注入 2 条困惑信号 → 顶栏与面板计数 socket 实时同步（❓ 1→3）。
 - **插件 REST 网关 GET 子路径被详情路由吞掉的缺陷修复（`server/routes/plugins.ts`）**：
   - `GET /api/plugins/:id(*)`（插件详情）注册于网关 `/api/plugins/:pluginId/*` 之前，且 `:id(*)` 通配会捕获整条路径（如 `@scope/plugin-x/health`），导致**所有插件 REST API 的 GET 子路径请求永远无法到达网关**（V5.2 网关自此上线以来 GET 通道即不可用，POST 无通配路由不受影响）；
   - 修复：详情路由检测到 id 含 `/`（即 manifest id + 子路径形态）时 `next()` 放行给网关；纯 id 查询行为不变。多段 manifest id（`@scope/name`）经 Express 单段参数匹配会拆分，插件 REST 调用约定使用**插件 DB UUID**（单段）+ 子路径。
