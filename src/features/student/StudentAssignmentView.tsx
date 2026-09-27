@@ -43,6 +43,7 @@ export function StudentAssignmentView(props: StudentAssignmentViewProps) {
         <StudentAssignmentQuestionPanel
           selectedAssignment={selectedAssignment}
           quizStudentAnswers={quizStudentAnswers}
+          setQuizStudentAnswers={setQuizStudentAnswers}
           submitQuizAssignment={submitQuizAssignment}
         />
         <StudentAssignmentWorkPanel

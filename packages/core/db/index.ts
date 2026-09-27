@@ -697,6 +697,22 @@ try {
   // index already exists
 }
 
+// 课程预设极速投票表 —— 按课程维度存储可复用的投票模板，支持跨班级一键引入
+db.exec(`
+  CREATE TABLE IF NOT EXISTS lesson_preset_polls (
+    id TEXT PRIMARY KEY,
+    lesson_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    question_type TEXT NOT NULL DEFAULT 'ABCD',
+    options_json TEXT NOT NULL,
+    correct_option TEXT,
+    sort_order INTEGER DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_lpp_lesson ON lesson_preset_polls(lesson_id);
+`);
+
 try {
   const countObj = db.prepare('SELECT COUNT(*) as cnt FROM users').get() as { cnt: number };
   if (countObj && countObj.cnt === 0) {

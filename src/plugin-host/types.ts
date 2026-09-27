@@ -143,6 +143,9 @@ export type ExtensionSlot =
   // ── 备课与课后闭环扩展槽位 ──
   | 'editor.header.action' // 备课编辑器头部动作扩展（导入教案库 / AI 合规审查 / 导出 PDF）
   | 'classroom.post_class.widget' // 课后结课视图扩展卡片（分层作业 / 勋章仪式 / 专注度报告）
+  // ── 课件播放器扩展槽位（P1） ──
+  | 'courseware.viewer.toolbar' // 课件播放器工具栏扩展（草稿本/批注/字幕/随堂笔记等）
+  | 'courseware.viewer.overlay' // 课件浮层 HUD 扩展（弹幕/防作弊水印/抢答悬浮球等）
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。
@@ -249,6 +252,9 @@ export interface FrontendPluginContext {
     /** 为课程设计备课画板注册自定义组件（在 activate() 内调用） */
     registerPaletteItem(item: PaletteItemConfig): void;
     unregisterPaletteItem(type: string): void;
+    /** 作业题型渲染器注册（P1 题型扩展：代码运行题/口语评测题等，在 activate() 内调用） */
+    registerAssignmentQuestionRenderer(config: import('../features/teacher/assignment-question-registry').AssignmentQuestionRendererConfig): void;
+    unregisterAssignmentQuestionRenderer(quizType: string): void;
   };
   /** 调用后端已注册的 Command Handler，自动添加插件命名空间前缀 */
   invokeCommand<T = any>(type: string, payload?: any): Promise<T>;

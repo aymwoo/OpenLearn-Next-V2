@@ -1,13 +1,58 @@
 import { Wand2, CheckCircle2 } from 'lucide-react';
+import { assignmentQuestionRendererRegistry } from '../teacher/assignment-question-registry';
 import Markdown from 'react-markdown';
 import type { StudentType, Lesson } from '../../types/app';
 
 export function StudentAssignmentQuestionPanel(props: {
   selectedAssignment: any;
   quizStudentAnswers: any;
+  setQuizStudentAnswers?: (updater: any) => void;
   submitQuizAssignment: (isFinal: boolean) => void;
 }) {
-  const { selectedAssignment, quizStudentAnswers, submitQuizAssignment } = props;
+  const { selectedAssignment, quizStudentAnswers, setQuizStudentAnswers, submitQuizAssignment } = props;
+
+  // P1 题型扩展：命中插件注册的题型渲染器时，整面板交给插件渲染
+  const pluginRenderer = assignmentQuestionRendererRegistry.match(selectedAssignment?.content);
+  if (pluginRenderer) {
+    const cfg = pluginRenderer.config;
+    const ctx = {
+      assignment: selectedAssignment,
+      answers: quizStudentAnswers,
+      setAnswers: (updater: any) => setQuizStudentAnswers?.(updater),
+      lang: 'zh' as const,
+    };
+    return (
+      <div className="w-1/3 border-r border-gray-100 pr-4 overflow-y-auto hidden md:block">
+        <div className="flex justify-between items-center mb-4">
+          <div className="text-xs font-semibold uppercase tracking-wider text-indigo-500 bg-indigo-50 border border-indigo-100 p-2.5 rounded-lg flex items-center gap-1.5 w-full">
+            {cfg.label}
+          </div>
+        </div>
+        {cfg.render(ctx)}
+        {!selectedAssignment.submission_status && (
+          <div className="mt-6 border-t border-gray-100 pt-4">
+            <button
+              onClick={async () => {
+                if (cfg.validate) {
+                  const err = cfg.validate(ctx);
+                  if (err) { window.alert(err); return; }
+                }
+                if (cfg.buildSubmission) {
+                  // 插件题型载荷写入 answers 引用（父级 submitQuizAssignment 读取 quizStudentAnswersRef）
+                  setQuizStudentAnswers?.(cfg.buildSubmission(ctx));
+                }
+                await submitQuizAssignment(false);
+              }}
+              className="w-full py-2 bg-indigo-600 text-white rounded-lg shadow font-medium hover:bg-indigo-700 transition"
+            >
+              Submit
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="w-1/3 border-r border-gray-100 pr-4 overflow-y-auto hidden md:block">
       <div className="flex justify-between items-center mb-4">

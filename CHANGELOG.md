@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **P1 课件播放器与题型扩展插槽**：
+  - **`courseware.viewer.toolbar`**：课件播放器顶栏标题区与控制按钮之间注入教辅工具（草稿本浮窗/截图批注/双语字幕/随堂笔记等）；
+  - **`courseware.viewer.overlay`**：课件 iframe 上方叠加 HUD 容器（弹幕/防作弊水印/抢答悬浮球；容器 `pointer-events-none`，插件子元素自行开启交互，不遮挡课件操作）；
+  - **`assignment.question.renderer` 题型扩展（P1 题型扩展）**：新增 `AssignmentQuestionRendererRegistry`（`src/features/teacher/assignment-question-registry.ts`）——第三方插件经 `ctx.ui.registerAssignmentQuestionRenderer` 注册学科专属题型（在线代码沙箱运行题/口语发音评分题/动态几何作图题），作业 content 以 `{"quizType":"<quizType>"` 命中即整面板交由插件渲染（label/render/validate/buildSubmission 四钩子）；内置 `mcq_learning_objectives` 与 Markdown 内容保持宿主路径；插件卸载时按 pluginId 所有权清理（`clearOwned`）。接线点：`StudentAssignmentQuestionPanel`（新增可选 `setQuizStudentAnswers` prop）。
+
 ## [0.4.0] - 2026-09-27
 
 - **课堂反馈情绪实时仪表盘与作业提交通知**：

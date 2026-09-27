@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Globe, Maximize2, Minimize2 } from 'lucide-react';
 import { useThemeStore, getThemeTokens } from '../../store/themeStore';
 import { broadcastThemeToIframes } from '../../services/lms-bridge';
+import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 interface InteractiveCoursewareViewerProps {
   coursewareId: string | null;
@@ -66,7 +67,12 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
           <Globe size={16} className="text-indigo-500" />
           <span className="font-semibold text-sm text-gray-700">Interactive Courseware</span>
         </div>
-        <div className="flex items-center gap-2">
+        {/* 插件工具栏扩展（草稿本浮窗/截图批注/双语字幕/随堂笔记等） */}
+        <ExtensionPointRenderer
+          slot="courseware.viewer.toolbar"
+          slotProps={{ coursewareId, classId: null, lessonId: null }}
+        />
+        <div className="flex items-center gap-2 ml-auto">
           <button
             onClick={toggleFullscreen}
             className="p-1 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors cursor-pointer"
@@ -85,6 +91,13 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
         </div>
       </div>
       <div className="flex-1 relative bg-white">
+        {/* 插件浮层 HUD（弹幕/防作弊水印/抢答悬浮球等；容器 pointer-events-none，插件自行开启子元素交互） */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <ExtensionPointRenderer
+            slot="courseware.viewer.overlay"
+            slotProps={{ coursewareId }}
+          />
+        </div>
         <iframe
           src={`/api/courseware/${coursewareId}`}
           sandbox="allow-scripts allow-forms allow-downloads"

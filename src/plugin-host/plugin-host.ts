@@ -44,6 +44,7 @@ import { fullscreenRendererRegistry } from '../features/whiteboard/fullscreen/Fu
 import { propertyEditorRegistry } from '../features/whiteboard/properties/PropertyEditorRegistry';
 import { coursewareSourceRegistry } from '../features/whiteboard/courseware/courseware-source-registry';
 import { paletteItemRegistry } from '../features/teacher/lesson-editor/palette-item-registry';
+import { assignmentQuestionRendererRegistry } from '../features/teacher/assignment-question-registry';
 
 // ── Module Loader type ───────────────────────────────────────────────────
 
@@ -457,6 +458,8 @@ export class FrontendPluginHost {
     propertyEditorRegistry.unregisterPlugin(pluginId);
     coursewareSourceRegistry.unregisterPlugin(pluginId);
     paletteItemRegistry.unregisterPlugin(pluginId);
+    // 注销该插件注册的全部题型渲染器
+    assignmentQuestionRendererRegistry.clearOwned(pluginId);
   }
 
   /**
@@ -534,6 +537,12 @@ export class FrontendPluginHost {
         },
         unregisterPaletteItem: (type) => {
           paletteItemRegistry.unregister(type, pluginId);
+        },
+        registerAssignmentQuestionRenderer: (config) => {
+          assignmentQuestionRendererRegistry.register(config, pluginId);
+        },
+        unregisterAssignmentQuestionRenderer: (quizType) => {
+          assignmentQuestionRendererRegistry.unregister(quizType, pluginId);
         },
       },
       navigation: {
