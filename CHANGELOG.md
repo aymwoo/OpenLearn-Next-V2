@@ -10,6 +10,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **课堂随堂测验与结课通票学情采集全链路修复**：
+  - **白板随堂测验（Quiz）交互与端到端答题闭环**：
+    - 修复普通白板画布（`InteractiveWhiteboard.tsx`）将 `quiz` 类型元素直接 `return null` 的展示断层，重构为具备卡片头部、题干摘要、选项列表与全屏作答入口的标准白板卡片；
+    - 全屏只读专注锁定（`FullscreenRendererRegistry.tsx`）放行 `quiz` 与 `assignment` 交互型微件的鼠标交互事件（`pointer-events-auto`），确保全班处于专注锁定时学生仍可正常交互作答；
+    - 全屏随堂测视图强化（`QuizFullscreenView.tsx`）：集成当前学生身份感知、选项点击选中与未提交防剧透保护、单题一键提交（`POST /api/lessons/:id/quiz-submit`）及得分即时反馈；针对教师/管理员模式与只读预览保持 100% 统计解析向后兼容。
+  - **随堂测验并发写入与读取权威一致性**：
+    - 改造 `server/routes/lessons.ts` 的 `GET /api/lessons/:id/quiz-submissions` 接口，增加对具备行级原子写入保证的 `lesson_quiz_submissions` 关系表的联合读取与内存映射补齐，彻底解决高并发抢答下白板 JSON 元素覆盖与数据丢失隐患。
+  - **全景学情报告（`panoramic-report`）结课通票与花名册查询修复**：
+    - 修复 `server/routes/classroom.ts` 中结课通票查询未查询 `student_id` 列，导致映射字典永远以 `undefined` 为键、学情报告中所有学生结课通票数据全部丢失的问题；
+    - 修复班级花名册查询直接在 `students` 表匹配 `class_id`（该列不存在）导致 SQLite 抛错并引发接口 500 的严重问题，重构为通过 `class_students` 关系表进行规范关联查询，并支持 query 显式传入 `classId`。
+  - **全链路自动化回归测试与防护网建设**：
+    - 新增端到端集成测试 `server/__tests__/classroom-student-interactive-e2e.test.ts`，涵盖快速投票生命周期与关闭拦截、白板随堂测原子落库与 Socket 广播、结课通票花名册联查与全景学情多维聚合、作业提交与防越权鉴权、教师批改记录以及 EventBus 事件总线通知闭环；
+    - 扩展 `server/__tests__/classroom-routes-contract.test.ts`，锁定多学生班级花名册（`class_students`）联查与缺卡学生兜底契约，防止 `panoramic-report` 发生 SQL 报错回归；
+    - 扩展 `src/features/whiteboard/__tests__/whiteboard-readonly-lock.test.tsx`，建立白板只读锁定（`readOnly`）防回归断言，确保全班专注锁定下普通课件只读、交互微件（`quiz`/`assignment`）持续放行作答与提交事件；
+    - **新增 Playwright E2E 真实浏览器自动化测试（`e2e/classroom-interactive-flow.spec.ts`）**：
+      - 覆盖真实 Chromium 浏览器环境下随堂测验（Quiz）白板卡片加载、展开全屏作答、防剧透、选项选择、提交与即时评分（100分），并在教师端接口验证原子学情落库采集；
+      - 覆盖极速单选投票（Quick Poll）教师下发、学生端浮层实时响应点击与提交、服务端全景大屏与讲台数据（`GET /api/classroom/stage/:lessonId/data`）实时聚合统计；
+      - 支持同时兼容 `/api/auth/session` 与 `/api/auth/me`，确保真实浏览器端身份解析零等待与防剧透状态首屏确定性。
+
 - **在线课堂授课页学生专注力监控 UI 升级与反馈流可伸缩改造**：
   - **学生专注力监控控制台 (Student Focus Console)**：优化右侧边栏排版与信息层级，新增快速随机抽问胶囊按钮与屏幕锁定计数徽章；重构 SVG 环形进度圈与头像气泡比例，解决姓名与百分比文字拥挤问题；增加悬停浮层快捷操作（进度预警提醒与单独屏幕锁定），支持实时学生学情明细展开与全班概况卡片。
   - **课堂互动反馈流可伸缩折叠 (Collapsible Live Feed)**：反馈流支持一键折叠（由 165px 收起至 36px 紧凑条带），带动态计数徽章与展开状态清空（Clear）功能；折叠后将下方垂直高度完整释放给上方学生专注力网格，使大班级教学时无需滚动即可查看更多学生状态。
@@ -36,7 +55,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **上课白板大纲整合入教学步骤与时间管理侧边栏**：
   - 将互动课堂（`LiveClassroomView`）白板界面的大纲组件移入教学步骤与时间管理边栏中，统一授课过程中的环节推进与页面大纲管理；
   - 优化边栏排版、折叠控制与各环节高亮切换视觉体验。
-
 
 - **互动课堂成为教师/管理员默认首页**：
   - `uiStore` 默认 `teacherTab` 由 `courses` 改为 `live_class`；`App.tsx` 的 `handleLoginSuccess` 教师分支登录后落地页由 `dashboard` 改为 `live_class`（管理员 `role` 同为 `teacher`、靠 `subRole` 区分权限，故一并覆盖）。Hash 路由优先级不变，携带 `#/courses` 的深链行为不受影响。
@@ -88,7 +106,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **`courseware.viewer.toolbar`**：课件播放器顶栏标题区与控制按钮之间注入教辅工具（草稿本浮窗/截图批注/双语字幕/随堂笔记等）；
   - **`courseware.viewer.overlay`**：课件 iframe 上方叠加 HUD 容器（弹幕/防作弊水印/抢答悬浮球；容器 `pointer-events-none`，插件子元素自行开启交互，不遮挡课件操作）；
   - **`assignment.question.renderer` 题型扩展（P1 题型扩展）**：新增 `AssignmentQuestionRendererRegistry`（`src/features/teacher/assignment-question-registry.ts`）——第三方插件经 `ctx.ui.registerAssignmentQuestionRenderer` 注册学科专属题型（在线代码沙箱运行题/口语发音评分题/动态几何作图题），作业 content 以 `{"quizType":"<quizType>"` 命中即整面板交由插件渲染（label/render/validate/buildSubmission 四钩子）；内置 `mcq_learning_objectives` 与 Markdown 内容保持宿主路径；插件卸载时按 pluginId 所有权清理（`clearOwned`）。接线点：`StudentAssignmentQuestionPanel`（新增可选 `setQuizStudentAnswers` prop）。
-
 
 ## [0.4.0] - 2026-09-27
 
@@ -238,7 +255,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixes
 
-- **AI 产物泄漏模型思考过程**：`pnpm dev` 浏览器实测发现，推理模型会把 `<think>…</think>` 思考块随正文返回，直接印进家长通知与学情评语。新增 `stripModelArtifacts()`（`server/routes/classroom-extras.ts`）：移除成对/未闭合的 `<think|thinking|reasoning|analysis>` 块（大小写不敏感、跨行）、```` ```think ```` 围栏、整体 json 围栏；**清洗后为空时回退原文**避免误删成空。家校通知的班级总评与逐生通知、AI 学情预测的 JSON 解析全部走该清洗。新增 7 例单测（含端到端断言产物中不含思考块）。
+- **AI 产物泄漏模型思考过程**：`pnpm dev` 浏览器实测发现，推理模型会把 `<think>…</think>` 思考块随正文返回，直接印进家长通知与学情评语。新增 `stripModelArtifacts()`（`server/routes/classroom-extras.ts`）：移除成对/未闭合的 `<think|thinking|reasoning|analysis>` 块（大小写不敏感、跨行）、` ```think ` 围栏、整体 json 围栏；**清洗后为空时回退原文**避免误删成空。家校通知的班级总评与逐生通知、AI 学情预测的 JSON 解析全部走该清洗。新增 7 例单测（含端到端断言产物中不含思考块）。
 - **Layout 治理：`LiveClassroomView` 拆分（2562 → 2317 行）**：抽出两个内聚单元 —— `src/components/classroom/ClassroomModalsHost.tsx`（6 个弹窗的编排层，只渲染不持状态，新增课堂弹窗不必再改动巨型组件）与 `src/features/classroom/hooks/usePeerReviewData.ts`（积分榜 + 互评数据 + 一键分配的数据层）。行为零变更，全部现有测试保持通过。
 
 ### Docs
@@ -405,7 +422,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **终态状态值不一致导致「已完成」永不生效**：`lms-bridge.ts` 提交时传 `status: 'submitted'`，而 `packages/plugins/builtin.ts` 的 `courseware.submit_attempt` 处理器只在 `status === 'completed'` 时更新 `courseware_attempt.finished_at/status`，导致 attempt 永远停在「进行中」，`HtmlAppletFrame` 的 `submittedAttempts` 覆盖层与提交列表的「已提交/完成」筛选全部失效。现统一提交终态为 `'completed'`。
 - **互动课堂提交列表徽标与列表口径不一致（徽标显示 8 条记录、列表却为空）**：`src/components/LiveClassroomView.tsx` 的徽标使用未过滤的 `attempts.length`，而列表使用按所选班级过滤后的结果，二者数据源不同造成自相矛盾的界面。现两者共用同一份派生数据（班级 + 搜索 + 状态筛选），徽标在发生过滤时额外以 `/ 总数` 形式提示总量；状态筛选口径统一为 `completed|submitted|finished`（终态）与 `active|inprogress|started`（进行中），修正原先只认 `'started'` 导致「进行中」筛选失效的问题。
 - **修复插件自建表 SQL 注入（`ensureTable` / `table` / `dropAllTables`）**：`ctx.db.ensureTable(tableName, schema)`、`ctx.db.table(tableName)` 的表名与 `CREATE TABLE` 的列定义片段都直接来自插件（ZIP 上传，属不可信输入），此前被原样拼进 DDL —— 形如 `t (x); DROP TABLE events; --` 的表名即可改写内核数据。现在 inline（`packages/core/plugin-host/context-builder.ts`）与 Worker（`packages/core/worker-runtime/worker-manager.ts`）双模式强制同等校验：表名必须匹配 `^[A-Za-z_][A-Za-z0-9_]{0,63}$`，列定义必须为非空字符串且不含 `;`（阻断多语句注入），`dropAllTables()` 从 `sqlite_master` 读到的表名二次校验 `^plugin_[A-Za-z0-9_]+$` 后才拼进 `DROP TABLE`。校验失败直接抛错，不再静默放行。
-- **消除插件更新检测的 Shell 命令注入，并为相关出站端点补鉴权**：`server/services/version-fetcher.ts` 原以 `execSync(`git ls-remote --tags "${url}"`)` 执行字符串拼接命令，而 `repo` 来自插件 manifest（安装时由上传方控制，属不可信输入），形如 `x"$(cmd)"` 的取值会触发 shell 命令替换（宿主 RCE）。现改为 `execFileSync('git', ['ls-remote', '--tags', url])` 参数数组执行（不经过 shell），并新增 `normalizeSource()` 白名单：仅接受 `owner/name` 形式的 GitHub / Gitee 仓库（长度 ≤ 140，正则为 `^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$`），非法值直接返回「无效的更新源：仅支持 owner/name 形式的 GitHub / Gitee 仓库」而**不发起任何出站请求**；缓存键与后续 URL 拼接一律改用已校验的值，避免未校验输入污染缓存。
+- **消除插件更新检测的 Shell 命令注入，并为相关出站端点补鉴权**：`server/services/version-fetcher.ts` 原以 `execSync(`git ls-remote --tags "${url}"`)` 执行字符串拼接命令，而 `repo` 来自插件 manifest（安装时由上传方控制，属不可信输入），形如 `x"$(cmd)"`的取值会触发 shell 命令替换（宿主 RCE）。现改为`execFileSync('git', ['ls-remote', '--tags', url])`参数数组执行（不经过 shell），并新增`normalizeSource()`白名单：仅接受`owner/name`形式的 GitHub / Gitee 仓库（长度 ≤ 140，正则为`^[A-Za-z0-9][A-Za-z0-9._-]\*\/[A-Za-z0-9][A-Za-z0-9._-]*$`），非法值直接返回「无效的更新源：仅支持 owner/name 形式的 GitHub / Gitee 仓库」而**不发起任何出站请求**；缓存键与后续 URL 拼接一律改用已校验的值，避免未校验输入污染缓存。
 - **`server/routes/plugins.ts` 三个端点补鉴权**：`GET /api/plugins/market` 与 `POST /api/plugins/:id(*)/check-update` 都会按插件声明的 `updateSource.repo` 触发服务端 git / HTTP 出站请求，此前无鉴权、可被未认证调用放大为出站请求放大器，现挂 `requireAuth()`（不限角色，插件中心教师亦需查看）；`POST /api/plugins/execute-command` 是插件宿主前端 → 后端的统一命令入口，此前无鉴权，现挂 `requireAuth()`，且**刻意不限制角色** —— 教师端与学生端共用同一插件宿主（`src/main.tsx` 单例），学生端学习面板与考试全屏视图也会派发命令，若限制为 teacher/administrator 会直接打断学生端功能。
 - **修复学生端诊断上报回退端点的鉴权后门与身份冒充**：`POST /api/diagnostics/report` 是 WebSocket 路径（`server/presence.ts` 的 `student-client-error`）的 HTTP 回退，却既无鉴权、也丢掉了 WS 路径已有的防冒充校验，使回退路径成为绕过身份校验的后门。现在：① 挂 `requireAuth()`；② 非教师/管理员时必须 `session.userId === data.studentId`，不符返回 403 并记 `[Diagnostics Security]` 警告（与 `presence.ts` 校验强度对齐）；③ 学生上报的 `studentName` 一律取服务端会话权威值（`session.username || session.studentId`），忽略客户端传值，阻断借 `studentName` 向全体教师广播任意文本的冒充/钓鱼；④ 同一账号 1 秒内只接受一次上报（超出返回 429），计数表超过 5000 条时清理 60 秒前的记录，避免被放大为写库 + 全量广播风暴；⑤ 收敛 payload：仅保留已知字段并截断长度（`type` ≤ 64、`message` ≤ 2000、`title` ≤ 200、`studentId` ≤ 64、`studentName` ≤ 100），防止超大包写进 `events` 审计表；⑥ 无有效载荷时保持静默成功（与历史行为一致，避免触发前端重试）。
 - **修复插件停用 / 卸载后的资源与能力残留**：`packages/core/plugin-host/index.ts` 中，Worker 模式插件的 `terminateWorker` 只在 `finally` 里改状态、**未调用** `this.resourceTracker.disposeAll(pluginId)`（只有 inline 路径 `deactivatePluginExclusive` 调用了），导致 worker 模式插件停用后命令、事件订阅、定时器与路由永久残留；非 ACTIVE 态（`ERROR` / `INACTIVE` / `INSTALLED`）的卸载分支既不执行停用逻辑、也不执行 `revokeAll`，使已授予能力残留在内存中（权限泄漏，典型场景：`activate` 中途失败或 reload 失败后直接卸载）。现在 Worker 终止的 `finally` 中无条件 `disposeAll`；卸载流程在「1b. 兜底资源回收」与「4b. 撤销插件能力」两处无条件执行 `resourceTracker.disposeAll(pluginId)`（幂等，对已回收过的插件为空操作）与 `capService.revokeAll('plugin:' + manifestId)`（失败仅 warn），与 inline 路径及 T-04-20 保持一致。
@@ -445,7 +462,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Security
 
 - **全面安全审计与修复（14 项）**：对平台进行系统性安全审计（覆盖 974 个源文件 / ~180K 行代码），发现并修复 4 项 CRITICAL、8 项 HIGH、3 项 MEDIUM 安全问题，全部修复通过 TypeScript 类型检查（0 错误）与完整测试套件（250 文件 / 1691 用例通过）验证：
-  - **[CRITICAL] 命令注入 RCE 修复**：`server/routes/os.ts` 的 `exec(\`pdfinfo "${filePath}"\`)` 替换为 `execFile('pdfinfo', [filePath])`，消除 shell 元字符注入风险；`/api/upload` 端点补加 `requireAuth('teacher', 'administrator')`，阻断未认证 RCE 攻击链。
+  - **[CRITICAL] 命令注入 RCE 修复**：`server/routes/os.ts` 的 `exec(\`pdfinfo "${filePath}"\`)`替换为`execFile('pdfinfo', [filePath])`，消除 shell 元字符注入风险；`/api/upload`端点补加`requireAuth('teacher', 'administrator')`，阻断未认证 RCE 攻击链。
   - **[CRITICAL] 16 个未认证端点加固**：`/api/db-status`（数据库 Schema 泄露）、`/files/*`（VFS 文件访问）、`/api/mfe/remotes`（微前端入口）、`/api/plugins` 系列（插件列表/配置/贡献点）、`/api/audit-report/download` 等管理报告下载、`/api/commands/registered`（命令注册表）、`/api/agent/conversations`（AI 对话历史）、`/api/activities` 系列（活动管理）全部补加 `requireAuth()` 中间件。管理报告下载限 `administrator` 角色。
   - **[HIGH] 明文密码回退移除**：`server/routes/roster.ts` 学生登录流程中，当存储密码既非 bcrypt 也非 SHA-256 时，原逻辑直接明文比较并自动升级。修复后该分支拒绝登录（`matchesOwnPassword = false`），遗留明文账户需管理员重置。
   - **[HIGH] 临时密码泄露修复**：`POST /api/students` 创建学生接口的响应中移除 `tempPassword` 字段（前端无引用，安全移除）。
@@ -528,7 +545,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   - **缺陷**：当教师开启“全班专注模式/禁言锁定”时，学生端白板画布虽有锁定提示遮罩，但白板内部渲染的各类教学组件（Reveal 演示文稿、代码沙箱、数理画板、点名器、互动课件等）仍可被学生独立点击和操作；
   - **修复**：在白板容器与所有内嵌教学小部件上联动 `isLocked` / `readOnly` 状态，对白板画布层全面注入交互阻断（`pointer-events-none`、只读参数穿透传递与操作拦截），确保专注锁定期间学生端所有内嵌组件完全处于只读观察状态；
   - **测试覆盖**：新增单元测试 `src/features/whiteboard/__tests__/whiteboard-readonly-lock.test.tsx` 严格验证只读遮罩与组件交互拦截逻辑。
-
 
 - **交互网页课件任意文件名 404 与自愈恢复机制 (Arbitrary HTML Courseware Entry & Self-Healing)**:
   - **缺陷**：在属性编辑器中选择单文件 HTML 课件时，系统固定寻址 `index.html`；若课件文件名为中文或自定义命名（如 `自适应五子棋.html`、`约翰·斯诺的霍乱地图.html`），运行时报错 `File not found: index.html`；且仅存放在 `system_resources` 原生表的课件在磁盘缺少物理文件时无法直接运行；
@@ -1444,5 +1460,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 Baseline release. System-wide version numbers harmonized to 0.1.10 and
 `@openlearn/plugin-sdk` to 3.3.1. (#4d1069a)
-
-

@@ -124,7 +124,7 @@ describe('教师端最大化 → 学生端同步', () => {
     it('emits fullscreen-change with the element id when the teacher maximizes', () => {
       renderBoard({ userRole: 'teacher', broadcastFullscreen: true });
 
-      fireEvent.click(screen.getByTitle('全屏'));
+      fireEvent.click(screen.getAllByTitle('全屏')[0]);
 
       expect(fullscreenEmissions()).toEqual(['el-assign-1']);
     });
@@ -132,7 +132,7 @@ describe('教师端最大化 → 学生端同步', () => {
     it('carries the lessonId and broadcast class id so class-room delivery works', () => {
       renderBoard({ userRole: 'teacher', broadcastFullscreen: true, fullscreenBroadcastClassId: 'c1' });
 
-      fireEvent.click(screen.getByTitle('全屏'));
+      fireEvent.click(screen.getAllByTitle('全屏')[0]);
 
       expect(fullscreenPayloads()).toEqual([{ classId: 'c1', lessonId: 'l1', elementId: 'el-assign-1' }]);
     });
@@ -140,7 +140,7 @@ describe('教师端最大化 → 学生端同步', () => {
     it('emits fullscreen-change null when the teacher closes the fullscreen overlay', () => {
       renderBoard({ userRole: 'teacher', broadcastFullscreen: true });
 
-      fireEvent.click(screen.getByTitle('全屏'));
+      fireEvent.click(screen.getAllByTitle('全屏')[0]);
       fakeSocket.emit.mockClear();
 
       fireEvent.click(screen.getByText('退出全屏'));
@@ -151,7 +151,7 @@ describe('教师端最大化 → 学生端同步', () => {
     it('emits fullscreen-change null when the teacher presses ESC to leave fullscreen', () => {
       renderBoard({ userRole: 'teacher', broadcastFullscreen: true });
 
-      fireEvent.click(screen.getByTitle('全屏'));
+      fireEvent.click(screen.getAllByTitle('全屏')[0]);
       fakeSocket.emit.mockClear();
 
       act(() => {
@@ -174,7 +174,7 @@ describe('教师端最大化 → 学生端同步', () => {
       const onFullscreenSync = vi.fn();
       renderBoard({ userRole: 'teacher', broadcastFullscreen: true, onFullscreenSync });
 
-      fireEvent.click(screen.getByTitle('全屏'));
+      fireEvent.click(screen.getAllByTitle('全屏')[0]);
       expect(onFullscreenSync).toHaveBeenCalledWith('el-assign-1');
 
       fireEvent.click(screen.getByText('退出全屏'));
@@ -184,7 +184,7 @@ describe('教师端最大化 → 学生端同步', () => {
     it('does not broadcast when broadcastFullscreen is not enabled (e.g. lesson editor)', () => {
       renderBoard({ userRole: 'teacher' });
 
-      fireEvent.click(screen.getByTitle('全屏'));
+      fireEvent.click(screen.getAllByTitle('全屏')[0]);
 
       expect(fullscreenEmissions()).toEqual([]);
     });
@@ -220,7 +220,7 @@ describe('教师端最大化 → 学生端同步', () => {
         window.dispatchEvent(new Event('resize'));
       });
 
-      fireEvent.click(screen.getByTitle('全屏'));
+      fireEvent.click(screen.getAllByTitle('全屏')[0]);
       fakeSocket.emit.mockClear();
       onFullscreenSync.mockClear();
 
@@ -235,13 +235,13 @@ describe('教师端最大化 → 学生端同步', () => {
   describe('学生端跟随（followRemoteFullscreen）', () => {
     it('renders the teacher-fullscreen overlay when the remote element arrives', () => {
       renderBoard({ userRole: 'student', followRemoteFullscreen: true });
-      expect(screen.queryByText('1 + 1 = ?')).toBeNull();
+      expect(screen.queryByTestId('quiz-question')).toBeNull();
 
       act(() => {
         whiteboardViewStore.getState().setRemoteFullscreenElementId('el-quiz-1');
       });
 
-      expect(screen.getByText('1 + 1 = ?')).toBeTruthy();
+      expect(screen.getByTestId('quiz-question').textContent).toContain('1 + 1 = ?');
     });
 
     it('does not let the student dismiss the synced overlay', () => {
@@ -268,7 +268,7 @@ describe('教师端最大化 → 学生端同步', () => {
 
       // 仍然停留在教师同步的视图中
       expect(whiteboardViewStore.getState().remoteFullscreenElementId).toBe('el-quiz-1');
-      expect(screen.getByText('1 + 1 = ?')).toBeTruthy();
+      expect(screen.getByTestId('quiz-question').textContent).toContain('1 + 1 = ?');
     });
 
     it('ignores the remote state when followRemoteFullscreen is not enabled', () => {
@@ -277,13 +277,13 @@ describe('教师端最大化 → 学生端同步', () => {
         whiteboardViewStore.getState().setRemoteFullscreenElementId('el-quiz-1');
       });
 
-      expect(screen.queryByText('1 + 1 = ?')).toBeNull();
+      expect(screen.queryByTestId('quiz-question')).toBeNull();
     });
 
     it('keeps the local maximize dismissible for a non-teacher-synced fullscreen', () => {
       renderBoard({ userRole: 'teacher' });
 
-      fireEvent.click(screen.getByTitle('全屏'));
+      fireEvent.click(screen.getAllByTitle('全屏')[0]);
 
       expect(screen.getByText('退出全屏')).toBeTruthy();
     });

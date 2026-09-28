@@ -617,7 +617,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
 
       // Record submission
       if (!dataObj.submissions) dataObj.submissions = {};
-      dataObj.submissions[studentId] = { answer, score, time: Date.now() };
+      dataObj.submissions[studentId] = { answer, score, isCorrect, time: Date.now() };
 
       // Persist updated data
       kernelContainer.db
@@ -697,18 +697,71 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         .prepare('SELECT id, type, data FROM whiteboard_elements WHERE lesson_id = ? AND type = ?')
         .all(lessonId, 'quiz') as { id: string; type: string; data: string }[];
 
+      // 尝试从关系型原子表查询该课节所有作答，避免仅读 JSON 遭遇高并发竞争覆盖
+      let relationalRows: Array<{
+        element_id: string;
+        student_id: string;
+        student_name: string | null;
+        answer: string;
+        score: number;
+        is_correct: number;
+        time_spent_ms: number;
+        submitted_at: number;
+      }> = [];
+      try {
+        relationalRows = kernelContainer.db
+          .prepare(
+            `SELECT element_id, student_id, student_name, answer, score, is_correct, time_spent_ms, submitted_at
+             FROM lesson_quiz_submissions
+             WHERE lesson_id = ?`,
+          )
+          .all(lessonId) as any[];
+      } catch {
+        // 未迁移时平滑回退
+      }
+
+      const relByElement = new Map<string, typeof relationalRows>();
+      for (const row of relationalRows) {
+        let list = relByElement.get(row.element_id);
+        if (!list) {
+          list = [];
+          relByElement.set(row.element_id, list);
+        }
+        list.push(row);
+      }
+
       const quizzes = elements.map((el) => {
         let parsed: any = {};
         try {
           parsed = JSON.parse(el.data);
         } catch (_) {}
+
+        const submissions: Record<string, any> = { ...(parsed.submissions || {}) };
+        const rows = relByElement.get(el.id) || [];
+        for (const row of rows) {
+          let parsedAnswer: any = row.answer;
+          try {
+            parsedAnswer = JSON.parse(row.answer);
+          } catch {
+            // keep as raw string
+          }
+          submissions[row.student_id] = {
+            answer: parsedAnswer,
+            score: row.score,
+            time: row.submitted_at,
+            studentName: row.student_name,
+            isCorrect: row.is_correct === 1,
+            timeSpentMs: row.time_spent_ms,
+          };
+        }
+
         return {
           elementId: el.id,
           question: parsed.question || '',
           options: parsed.options || [],
           correctAnswer: parsed.correctAnswer || null,
-          submissions: parsed.submissions || {},
-          submissionCount: Object.keys(parsed.submissions || {}).length,
+          submissions,
+          submissionCount: Object.keys(submissions).length,
         };
       });
 
@@ -918,7 +971,9 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       const lessonId = req.params.lessonId;
       const classId = req.query.classId as string | undefined;
 
-      const lesson = kernelContainer.db.prepare('SELECT id, title, content FROM lessons WHERE id = ?').get(lessonId) as any;
+      const lesson = kernelContainer.db
+        .prepare('SELECT id, title, content FROM lessons WHERE id = ?')
+        .get(lessonId) as any;
       if (!lesson) {
         return res.status(404).json({ error: 'Lesson not found' });
       }

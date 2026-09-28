@@ -117,57 +117,66 @@ export const FullscreenOverlay: React.FC<{
           ) : (
             <span
               className={`px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 select-none ${
-                readOnly
-                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                  : 'bg-indigo-100 text-indigo-600'
+                readOnly ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-indigo-100 text-indigo-600'
               }`}
               title={readOnly ? '教师已开启全班专注锁定，当前为只读演示视图' : '由教师端控制，无法在本地退出'}
             >
-              {readOnly ? '🔒 全班专注锁定中 · 演示视图' : <><Minimize2 size={12} /> 教师同步视图</>}
+              {readOnly ? (
+                '🔒 全班专注锁定中 · 演示视图'
+              ) : (
+                <>
+                  <Minimize2 size={12} /> 教师同步视图
+                </>
+              )}
             </span>
           )}
         </div>
         {/* 原先此处还有一个右上角悬浮 X 关闭按钮，与标题栏的「退出全屏」功能完全
             重复（两者都调用同一个 onClose），已移除。ESC 退出仍然有效。 */}
-        <div
-          className="flex-1 overflow-auto p-6 relative"
-          style={{ pointerEvents: readOnly ? 'none' : 'auto' }}
-        >
-          {Renderer ? (
-            <Renderer
-              elementType={type}
-              data={data}
-              onClose={handleClose}
-              containerSize={viewport}
-              lessonId={lessonId}
-              elementId={elementId}
-            />
-          ) : (
-            <DefaultFullscreenRenderer
-              elementType={type}
-              data={data}
-              onClose={handleClose}
-              containerSize={viewport}
-              lessonId={lessonId}
-            />
-          )}
-          {readOnly && (
+        {(() => {
+          const isInteractiveWidget = type === 'quiz' || type === 'assignment';
+          return (
             <div
-              data-testid="fullscreen-readonly-lock-cover"
-              className="absolute inset-0 z-50 cursor-not-allowed bg-transparent select-none"
-              style={{ pointerEvents: 'auto' }}
-              title="🔒 全班专注锁定中：组件为只读跟随模式"
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-              }}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-              }}
-            />
-          )}
-        </div>
+              className="flex-1 overflow-auto p-6 relative"
+              style={{ pointerEvents: readOnly && !isInteractiveWidget ? 'none' : 'auto' }}
+            >
+              {Renderer ? (
+                <Renderer
+                  elementType={type}
+                  data={data}
+                  onClose={handleClose}
+                  containerSize={viewport}
+                  lessonId={lessonId}
+                  elementId={elementId}
+                />
+              ) : (
+                <DefaultFullscreenRenderer
+                  elementType={type}
+                  data={data}
+                  onClose={handleClose}
+                  containerSize={viewport}
+                  lessonId={lessonId}
+                />
+              )}
+              {readOnly && !isInteractiveWidget && (
+                <div
+                  data-testid="fullscreen-readonly-lock-cover"
+                  className="absolute inset-0 z-50 cursor-not-allowed bg-transparent select-none"
+                  style={{ pointerEvents: 'auto' }}
+                  title="🔒 全班专注锁定中：组件为只读跟随模式"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                />
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

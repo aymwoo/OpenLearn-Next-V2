@@ -193,4 +193,71 @@ describe('InteractiveWhiteboard readOnly (全班专注锁定)', () => {
     expect(screen.getByText('🔒 全班专注锁定中 · 演示视图')).toBeTruthy();
     expect(screen.getByTestId('fullscreen-readonly-lock-cover')).toBeTruthy();
   });
+
+  it('does NOT lock FullscreenOverlay for quiz when readOnly, preserving student interaction', () => {
+    const { container } = render(
+      <FullscreenOverlay
+        type="quiz"
+        title="随堂测验"
+        data={{ question: '1+1=?', options: ['1', '2'], correctIndex: 1 }}
+        containerSize={{ width: 1000, height: 800 }}
+        dismissible={false}
+        onClose={vi.fn()}
+        lessonId="l1"
+        readOnly={true}
+      />,
+    );
+
+    expect(screen.queryByTestId('fullscreen-readonly-lock-cover')).toBeNull();
+    const contentBox = document.body.querySelector('.flex-1.overflow-auto.p-6.relative');
+    expect(contentBox).toBeTruthy();
+    expect((contentBox as HTMLElement).style.pointerEvents).toBe('auto');
+  });
+
+  it('does NOT lock FullscreenOverlay for assignment when readOnly, preserving student submission', () => {
+    render(
+      <FullscreenOverlay
+        type="assignment"
+        title="随堂练习"
+        data={{ title: '课堂作业' }}
+        containerSize={{ width: 1000, height: 800 }}
+        dismissible={false}
+        onClose={vi.fn()}
+        lessonId="l1"
+        readOnly={true}
+      />,
+    );
+
+    expect(screen.queryByTestId('fullscreen-readonly-lock-cover')).toBeNull();
+    const contentBox = document.body.querySelector('.flex-1.overflow-auto.p-6.relative');
+    expect(contentBox).toBeTruthy();
+    expect((contentBox as HTMLElement).style.pointerEvents).toBe('auto');
+  });
+
+  it('renders quiz element on whiteboard canvas and allows student to open fullscreen even under readOnly lock', () => {
+    const quizElement = {
+      id: 'quiz-elem-reg-1',
+      type: 'quiz',
+      data: JSON.stringify({
+        question: '在真空中光速是多少？',
+        options: ['3×10^8 m/s', '3×10^6 m/s', '340 m/s'],
+        correctIndex: 0,
+        submissions: { 'stu-1': { answer: 0, score: 100 } },
+      }),
+    };
+
+    // Render under readOnly = true (全班专注锁定)
+    renderBoard(true, [quizElement]);
+
+    // Quiz card should still be rendered (not returned null)
+    expect(screen.getByTestId('whiteboard-quiz-quiz-elem-reg-1')).toBeTruthy();
+    expect(screen.getByText('随堂测验 (Interactive Quiz)')).toBeTruthy();
+    expect(screen.getByText('在真空中光速是多少？')).toBeTruthy();
+    expect(screen.getByText(/1 人已交/)).toBeTruthy();
+    expect(screen.getByText('3×10^8 m/s')).toBeTruthy();
+
+    // The open fullscreen button must be present and interactable
+    const openBtn = screen.getByTestId('quiz-open-fullscreen');
+    expect(openBtn).toBeTruthy();
+  });
 });

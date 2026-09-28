@@ -886,13 +886,14 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       setLocalGeometryVersion((v) => v + 1);
     }, [elements]);
 
-    const applyAutoTilingForElementsRef = useRef<
-      (
-        targetElements: WhiteboardElement[],
-        forcedStackDirection?: StackDirection,
-        customIdsOrder?: string[],
-      ) => Promise<void>
-    >(undefined);
+    const applyAutoTilingForElementsRef =
+      useRef<
+        (
+          targetElements: WhiteboardElement[],
+          forcedStackDirection?: StackDirection,
+          customIdsOrder?: string[],
+        ) => Promise<void>
+      >(undefined);
 
     const dragRef = useRef<{
       id: string;
@@ -2193,11 +2194,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
      */
     /** 把指定的元素列表按 i3 autotiling 规则重排并落库 */
     const applyAutoTilingForElements = useCallback(
-      async (
-        targetElements: WhiteboardElement[],
-        forcedStackDirection?: StackDirection,
-        customIdsOrder?: string[],
-      ) => {
+      async (targetElements: WhiteboardElement[], forcedStackDirection?: StackDirection, customIdsOrder?: string[]) => {
         if (!onElementUpdate) return;
         if (containerSize.width <= 0 || containerSize.height <= 0) return;
 
@@ -2267,7 +2264,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
               patch.__preTile = extractGeometry(current, candidate.shape);
             }
             patch.__tiled = geometry;
-            const targetEl = targetElements.find((e) => e.id === candidate.id) || safeElements.find((e) => e.id === candidate.id);
+            const targetEl =
+              targetElements.find((e) => e.id === candidate.id) || safeElements.find((e) => e.id === candidate.id);
             if (targetEl) {
               targetEl.data = JSON.stringify(patch);
             }
@@ -2945,7 +2943,104 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         }
 
         if (el.type === 'quiz') {
-          return null;
+          const quizOptions = Array.isArray(data.options) ? data.options : [];
+          const submissionCount = Object.keys(data.submissions || {}).length;
+          return (
+            <Group key={el.id}>
+              <Html
+                divProps={{
+                  style: {
+                    position: 'absolute',
+                    top: `${displayY}px`,
+                    left: `${displayX}px`,
+                    pointerEvents: 'none',
+                    zIndex: isThisSelected ? 20 : 10,
+                  },
+                }}
+              >
+                <div
+                  onPointerDown={(e) => {
+                    if (readOnly) return;
+                    setSelectedShapeId(el.id);
+                    e.stopPropagation();
+                  }}
+                  onContextMenu={(e) => {
+                    if (readOnly) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return;
+                    }
+                    const containerRect = containerRef.current?.getBoundingClientRect();
+                    if (containerRect) {
+                      setContextMenu({
+                        x: e.clientX - containerRect.left,
+                        y: e.clientY - containerRect.top,
+                        elementId: el.id,
+                      });
+                    }
+                  }}
+                  data-testid={`whiteboard-quiz-${el.id}`}
+                  className={`bg-white border border-gray-300 rounded-lg shadow-xl overflow-hidden flex flex-col font-sans text-sm relative select-none ${hoverCardClass}`}
+                  style={{
+                    pointerEvents: readOnly ? 'none' : 'auto',
+                    userSelect: readOnly ? 'none' : 'auto',
+                    width: `${displayWidth}px`,
+                    height: `${displayHeight}px`,
+                  }}
+                >
+                  <WidgetTitleBar
+                    {...getWidgetTitleBarProps(
+                      '随堂测验 (Interactive Quiz)',
+                      <HelpCircle size={13} className="text-indigo-500" />,
+                      'indigo',
+                    )}
+                    onMaximize={() => applyFullscreen(el.id)}
+                  />
+                  {!data.isMinimized && (
+                    <div className="p-4 text-center flex-1 overflow-y-auto flex flex-col justify-between min-h-0">
+                      <div className="text-left space-y-2">
+                        <p className="font-semibold text-gray-800 text-xs line-clamp-2" title={data.question}>
+                          {data.question || '随堂测验题目'}
+                        </p>
+                        {quizOptions.length > 0 && (
+                          <div className="space-y-1">
+                            {quizOptions.slice(0, 4).map((opt: string, idx: number) => (
+                              <div
+                                key={idx}
+                                className="text-[11px] text-gray-600 bg-gray-50 border border-gray-100 rounded px-2 py-0.5 truncate text-left"
+                              >
+                                <span className="font-bold text-indigo-500 mr-1.5">
+                                  {String.fromCharCode(65 + idx)}.
+                                </span>
+                                {opt}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="pt-2">
+                        <button
+                          data-testid="quiz-open-fullscreen"
+                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-1.5 rounded transition-colors text-xs shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                          disabled={readOnly}
+                          onClick={() => {
+                            if (readOnly) return;
+                            applyFullscreen(el.id);
+                          }}
+                        >
+                          <span>
+                            {submissionCount > 0 ? `进入测验 (${submissionCount} 人已交)` : '点击全屏答题 / 查看'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {readOnly && <ReadOnlyLockCover />}
+                  {!data.isMinimized && renderResizeHandles()}
+                </div>
+              </Html>
+            </Group>
+          );
         }
         if (el.type === 'assignment') {
           return (
@@ -3957,7 +4052,16 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           console.error('Failed to move element to page:', err);
         }
       },
-      [pages, safeElements, currentPage, activeSegmentId, autoTileEnabled, applyAutoTilingForElements, onElementUpdate, lessonId],
+      [
+        pages,
+        safeElements,
+        currentPage,
+        activeSegmentId,
+        autoTileEnabled,
+        applyAutoTilingForElements,
+        onElementUpdate,
+        lessonId,
+      ],
     );
 
     const handleMoveElementToSegment = useCallback(
@@ -4014,7 +4118,15 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           console.error('Failed to move element to segment:', err);
         }
       },
-      [safeElements, activeSegmentId, belongsToCurrentPage, autoTileEnabled, applyAutoTilingForElements, onElementUpdate, lessonId],
+      [
+        safeElements,
+        activeSegmentId,
+        belongsToCurrentPage,
+        autoTileEnabled,
+        applyAutoTilingForElements,
+        onElementUpdate,
+        lessonId,
+      ],
     );
 
     useImperativeHandle(ref, () => ({

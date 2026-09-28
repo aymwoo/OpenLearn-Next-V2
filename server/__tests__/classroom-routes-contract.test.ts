@@ -25,10 +25,14 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
   let classroomService: ClassroomRuntimeService;
 
   const lessonId = 'les-room-contract-0001';
+  const classId = 'cls-room-contract-0001';
   const teacherId = 'usr-room-teacher-0001';
   const studentId = 'stu-room-0001';
+  const student2Id = 'stu-room-0002';
+  const student3Id = 'stu-room-0003';
   const teacherToken = 'tok-room-teacher-0001';
   const studentToken = 'tok-room-student-0001';
+  const student2Token = 'tok-room-student-0002';
 
   const db = kernelContainer.db as any;
   const cookie = (token: string) => ({ Cookie: `edu_os_token=${token}` });
@@ -56,16 +60,15 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
   };
 
   const votesOf = (pollId: string) =>
-    db.prepare('SELECT selected_option FROM classroom_poll_votes WHERE poll_id = ? ORDER BY selected_option').all(pollId) as {
+    db
+      .prepare('SELECT selected_option FROM classroom_poll_votes WHERE poll_id = ? ORDER BY selected_option')
+      .all(pollId) as {
       selected_option: string;
     }[];
 
   beforeAll(async () => {
     // 测试用内核库不一定已应用课堂迁移，显式补齐（runMigrations 幂等，按 _migrations 记账）
-    runMigrations(
-      db,
-      loadMigrationsFromDirectory(path.resolve(__dirname, '../../migrations')),
-    );
+    runMigrations(db, loadMigrationsFromDirectory(path.resolve(__dirname, '../../migrations')));
 
     const app = express();
     app.use(express.json());
@@ -79,7 +82,7 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
 
     const now = Date.now();
     db.prepare(
-      "INSERT OR REPLACE INTO users (id, username, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      'INSERT OR REPLACE INTO users (id, username, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     ).run(teacherId, 'room_teacher', '课堂契约教师', 'hash', 'teacher', now);
     db.prepare(
       'INSERT OR REPLACE INTO lessons (id, title, creator_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
@@ -93,11 +96,39 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
     db.prepare(
       'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
     ).run(studentToken, sessionData(studentId, 'student', '课堂契约学生'), now, now + 86400000);
+    db.prepare(
+      'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
+    ).run(student2Token, sessionData(student2Id, 'student', '课堂契约学生2'), now, now + 86400000);
+
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(
+      classId,
+      '契约测试班级',
+      now,
+    );
+    for (const s of [
+      { id: studentId, name: '课堂契约学生1', no: '202601' },
+      { id: student2Id, name: '课堂契约学生2', no: '202602' },
+      { id: student3Id, name: '课堂契约学生3', no: '202603' },
+    ]) {
+      db.prepare('INSERT OR REPLACE INTO students (id, name, student_number, created_at) VALUES (?, ?, ?, ?)').run(
+        s.id,
+        s.name,
+        s.no,
+        now,
+      );
+      db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+        classId,
+        s.id,
+        now,
+      );
+    }
   });
 
   afterAll(async () => {
     await new Promise<void>((resolve) => server?.close(() => resolve()));
-    db.prepare('DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE lesson_id = ?)').run(lessonId);
+    db.prepare(
+      'DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE lesson_id = ?)',
+    ).run(lessonId);
     // classroom_pacing_signals 只有 session_id（经由会话间接关联课节）
     db.prepare(
       'DELETE FROM classroom_pacing_signals WHERE session_id IN (SELECT id FROM classroom_sessions WHERE lesson_id = ?)',
@@ -111,7 +142,10 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
     ]) {
       db.prepare(`DELETE FROM ${table} WHERE lesson_id = ?`).run(lessonId);
     }
-    db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?)').run(teacherToken, studentToken);
+    db.prepare('DELETE FROM class_students WHERE class_id = ?').run(classId);
+    db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
+    db.prepare('DELETE FROM students WHERE id IN (?, ?, ?)').run(studentId, student2Id, student3Id);
+    db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?, ?)').run(teacherToken, studentToken, student2Token);
     db.prepare('DELETE FROM lessons WHERE id = ?').run(lessonId);
     db.prepare('DELETE FROM users WHERE id = ?').run(teacherId);
   });
@@ -207,6 +241,68 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
       expect(row!.rating).toBe(4);
       expect(row!.puzzled_concept).toBe('熵增');
       expect(row!.feedback).toBe('希望再讲一遍热力学第二定律');
+    });
+
+    it('全景学情报告正确映射学生的结课通票评分与困惑概念', async () => {
+      const res = await fetch(`${baseUrl}/api/classroom/sessions/${lessonId}/panoramic-report`, {
+        headers: cookie(teacherToken),
+      });
+      const text = await res.text();
+      expect(res.status, text).toBe(200);
+      const json: any = JSON.parse(text);
+      expect(json.success).toBe(true);
+      const student = json.students.find((s: any) => s.studentId === studentId);
+      expect(student).toBeDefined();
+      expect(student.exitRating).toBe(4);
+      expect(student.puzzledConcept).toBe('熵增');
+      expect(student.attendance).toBe(true);
+    });
+
+    it('班级花名册联查与多学生全景学情聚合不会发生 500，且能精准映射每位学生的作答状态', async () => {
+      // 学生2提交通票
+      const res2 = await post(`/api/classroom/sessions/${lessonId}/exit-ticket`, student2Token, {
+        rating: 2,
+        puzzledConcept: '卡诺循环',
+        feedback: '希望补充卡诺循环推导',
+      });
+      expect(res2.status).toBe(200);
+
+      // 教师拉取带 classId 的全景学情报告
+      const resReport = await fetch(
+        `${baseUrl}/api/classroom/sessions/${lessonId}/panoramic-report?classId=${classId}`,
+        {
+          headers: cookie(teacherToken),
+        },
+      );
+      expect(resReport.status).toBe(200);
+      const json: any = await resReport.json();
+      expect(json.success).toBe(true);
+      expect(Array.isArray(json.students)).toBe(true);
+
+      // 验证通过 class_students 联查包含全部3位学生
+      const s1 = json.students.find((s: any) => s.studentId === studentId);
+      const s2 = json.students.find((s: any) => s.studentId === student2Id);
+      const s3 = json.students.find((s: any) => s.studentId === student3Id);
+
+      expect(s1).toBeDefined();
+      expect(s1.exitRating).toBe(4);
+      expect(s1.puzzledConcept).toBe('熵增');
+      expect(s1.attendance).toBe(true);
+
+      expect(s2).toBeDefined();
+      expect(s2.exitRating).toBe(2);
+      expect(s2.puzzledConcept).toBe('卡诺循环');
+      expect(s2.attendance).toBe(true);
+
+      // 学生3在班级花名册中但未提交结课通票，必须安全返回空值而不能造成整体抛错或映射错位
+      expect(s3).toBeDefined();
+      expect(s3.exitRating).toBeNull();
+      expect(s3.puzzledConcept).toBeNull();
+
+      // 验证概念词频聚合包含两位学生的困惑概念与评分均值
+      expect(json.metrics.topPuzzledConcepts).toContain('熵增');
+      expect(json.metrics.topPuzzledConcepts).toContain('卡诺循环');
+      expect(json.metrics.exitTicketsAvgRating).toBe(3); // (4 + 2) / 2 = 3.0
     });
   });
 

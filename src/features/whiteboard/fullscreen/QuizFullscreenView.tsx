@@ -22,8 +22,21 @@ const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
  * 单独抽出该文件，是为了方便在不加载 InteractiveWhiteboard 整体（包含 react-konva
  * 等重型依赖）的情况下单独对该渲染器做单元测试。
  */
-export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data }) => {
+export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data, lessonId, elementId }) => {
   const [studentMap, setStudentMap] = useState<Record<string, string>>({});
+  const [currentUser, setCurrentUser] = useState<{ id: string; role: string; studentId?: string } | null>(null);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitFeedback, setSubmitFeedback] = useState<{ isCorrect: boolean; score: number; answer?: string } | null>(
+    null,
+  );
+  const [localSubmissions, setLocalSubmissions] = useState<Record<string, QuizSubmission>>(
+    (data.submissions || {}) as Record<string, QuizSubmission>,
+  );
+
+  useEffect(() => {
+    setLocalSubmissions((data.submissions || {}) as Record<string, QuizSubmission>);
+  }, [data.submissions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,16 +49,41 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data }) 
         setStudentMap(map);
       })
       .catch(() => {});
+
+    const fetchUser = async () => {
+      try {
+        let r = await fetch('/api/auth/session').catch(() => null);
+        if (!r || !r.ok) r = await fetch('/api/auth/me').catch(() => null);
+        if (r && r.ok && !cancelled) {
+          const raw = await r.json();
+          const u = raw.session || raw;
+          if (u && typeof u === 'object' && !Array.isArray(u) && u.role) {
+            setCurrentUser({ id: u.id || u.userId, role: u.role, studentId: u.studentId || u.userId || u.id });
+          }
+        }
+      } catch (_e) {}
+    };
+    fetchUser();
+
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const submissions = (data.submissions || {}) as Record<string, QuizSubmission>;
-  const entries = Object.entries(submissions);
-  const correctIndex: number | undefined =
-    typeof data.correctIndex === 'number' ? data.correctIndex : undefined;
+  const entries = Object.entries(localSubmissions);
+  const correctIndex: number | undefined = typeof data.correctIndex === 'number' ? data.correctIndex : undefined;
   const passScore: number = typeof data.passScore === 'number' ? data.passScore : 60;
+
+  const currentStudentId = currentUser?.studentId || currentUser?.id;
+  const mySubmission = currentStudentId ? localSubmissions[currentStudentId] : null;
+  const isStudentLiveMode =
+    typeof window !== 'undefined' &&
+    (new URLSearchParams(window.location?.search || '').get('mode') === 'student_live' ||
+      (window.location?.hash || '').includes('student_live'));
+  const isStudent = currentUser?.role === 'student' || isStudentLiveMode;
+  const hasSubmitted = Boolean(mySubmission) || Boolean(submitFeedback);
+  // 教师、管理员或已提交作答的学生可查看正确答案解析；未作答的学生不剧透
+  const canShowAnswers = !isStudent || hasSubmitted;
 
   const parseScore = (v: any): number | null => {
     if (typeof v === 'number' && !isNaN(v)) return v;
@@ -63,6 +101,47 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data }) 
     }
     if (typeof v.optionIndex === 'number') return v.optionIndex;
     return undefined;
+  };
+
+  const handleStudentSubmit = async () => {
+    if (selectedIdx === null || isSubmitting) return;
+    setIsSubmitting(true);
+    const chosenLetter = LETTERS[selectedIdx] || String(selectedIdx);
+    const chosenText = (data.options || [])[selectedIdx];
+    let answerToSend: string | number = chosenLetter;
+    if (data.correctAnswer && !LETTERS.includes(data.correctAnswer.toUpperCase()) && chosenText) {
+      answerToSend = chosenText;
+    }
+
+    try {
+      const targetLessonId = lessonId || 'current';
+      const targetElementId = elementId || data.id || 'quiz';
+      const res = await fetch(`/api/lessons/${encodeURIComponent(targetLessonId)}/quiz-submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          elementId: targetElementId,
+          answer: answerToSend,
+        }),
+      });
+      const resData = await res.json().catch(() => null);
+      if (res.ok && resData?.success) {
+        setSubmitFeedback({ isCorrect: resData.isCorrect, score: resData.score, answer: chosenLetter });
+        const sid = resData.studentId || currentStudentId || 'me';
+        setLocalSubmissions((prev) => ({
+          ...prev,
+          [sid]: {
+            answer: selectedIdx,
+            score: resData.score,
+            time: Date.now(),
+          },
+        }));
+      }
+    } catch (_e) {
+      // silent
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const scored = entries.map(([sid, v]) => {
@@ -96,29 +175,76 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data }) 
       <h3 className="text-xl font-bold text-gray-800" data-testid="quiz-question">
         {data.question}
       </h3>
+
+      {/* 提交反馈横幅 */}
+      {submitFeedback && (
+        <div
+          data-testid="quiz-feedback"
+          className={`p-4 rounded-xl border flex items-center justify-between text-sm font-bold ${
+            submitFeedback.isCorrect
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+              : 'bg-rose-50 border-rose-300 text-rose-800'
+          }`}
+        >
+          <span>
+            {submitFeedback.isCorrect
+              ? `🎉 回答正确！得分：${submitFeedback.score} 分`
+              : `❌ 回答错误。得分：${submitFeedback.score} 分`}
+          </span>
+          <span className="text-xs font-normal">提交已实时同步至教师大屏</span>
+        </div>
+      )}
+
+      {/* 选项作答与展示区 */}
       <div className="flex flex-col gap-3">
-        {(data.options || []).map((opt: string, i: number) => (
-          <div
-            key={i}
-            className={`px-5 py-4 text-left rounded-xl text-base border-2 ${
-              correctIndex === i
-                ? 'bg-green-50 border-green-300 text-green-800'
-                : 'bg-gray-50 border-gray-200 text-gray-700'
-            }`}
-          >
-            <span className="font-bold text-indigo-600 mr-3">{LETTERS[i]}.</span>
-            {opt}
-            {correctIndex === i && (
-              <span className="ml-2 text-xs font-bold text-green-600">✓ 正确答案</span>
-            )}
-          </div>
-        ))}
+        {(data.options || []).map((opt: string, i: number) => {
+          const isSelected = selectedIdx === i;
+          const isCorrect = correctIndex === i;
+          let itemStyle = 'bg-gray-50 border-gray-200 text-gray-700';
+
+          if (canShowAnswers && isCorrect) {
+            itemStyle = 'bg-green-50 border-green-300 text-green-800';
+          } else if (isSelected) {
+            itemStyle = 'bg-indigo-50 border-indigo-400 text-indigo-900 ring-2 ring-indigo-200 shadow-xs';
+          } else if (isStudent && !hasSubmitted) {
+            itemStyle = 'bg-white hover:bg-gray-50 border-gray-200 text-gray-800 cursor-pointer';
+          }
+
+          return (
+            <div
+              key={i}
+              data-testid={`quiz-option-${i}`}
+              onClick={() => {
+                if (isStudent && !hasSubmitted) {
+                  setSelectedIdx(i);
+                }
+              }}
+              className={`px-5 py-4 text-left rounded-xl text-base border-2 transition-all ${itemStyle}`}
+            >
+              <span className="font-bold text-indigo-600 mr-3">{LETTERS[i]}.</span>
+              {opt}
+              {canShowAnswers && isCorrect && <span className="ml-2 text-xs font-bold text-green-600">✓ 正确答案</span>}
+            </div>
+          );
+        })}
       </div>
 
-      {submittedCount === 0 ? (
-        <div className="mt-4 p-4 bg-gray-50 rounded-xl text-center text-sm text-gray-400">
-          暂无学生提交
+      {/* 学生提交动作栏 */}
+      {isStudent && !hasSubmitted && (
+        <div className="pt-2 flex justify-end">
+          <button
+            data-testid="quiz-submit-btn"
+            disabled={selectedIdx === null || isSubmitting}
+            onClick={handleStudentSubmit}
+            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl shadow-sm transition-all cursor-pointer"
+          >
+            {isSubmitting ? '提交中...' : '提交答案'}
+          </button>
         </div>
+      )}
+
+      {submittedCount === 0 ? (
+        <div className="mt-4 p-4 bg-gray-50 rounded-xl text-center text-sm text-gray-400">暂无学生提交</div>
       ) : (
         <div className="mt-4 space-y-4">
           <div className="grid grid-cols-4 gap-3" data-testid="quiz-summary">
@@ -140,9 +266,7 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data }) 
             </div>
             <div className="bg-amber-50 rounded-xl p-3 text-center">
               <div className="text-xs text-gray-400">均分</div>
-              <div className="text-xl font-bold text-amber-600">
-                {avgScore !== null ? avgScore.toFixed(1) : '-'}
-              </div>
+              <div className="text-xl font-bold text-amber-600">{avgScore !== null ? avgScore.toFixed(1) : '-'}</div>
             </div>
           </div>
 
@@ -159,23 +283,13 @@ export const QuizFullscreenView: React.FC<FullscreenRendererProps> = ({ data }) 
               <tbody className="divide-y divide-gray-100">
                 {scored.map(({ sid, v, answerIdx, scoreNum, isCorrect }) => {
                   const answerLetter =
-                    answerIdx !== undefined && answerIdx >= 0 && answerIdx < LETTERS.length
-                      ? LETTERS[answerIdx]
-                      : '-';
+                    answerIdx !== undefined && answerIdx >= 0 && answerIdx < LETTERS.length ? LETTERS[answerIdx] : '-';
                   const displayScore = scoreNum !== null ? scoreNum : isCorrect ? 100 : 0;
                   const studentName = studentMap[sid] || sid;
                   return (
-                    <tr
-                      key={sid}
-                      className="hover:bg-gray-50"
-                      data-testid={`quiz-row-${sid}`}
-                    >
+                    <tr key={sid} className="hover:bg-gray-50" data-testid={`quiz-row-${sid}`}>
                       <td className="px-4 py-2 font-medium text-gray-700">{studentName}</td>
-                      <td
-                        className={`px-4 py-2 font-mono ${
-                          isCorrect ? 'text-green-600 font-bold' : 'text-red-500'
-                        }`}
-                      >
+                      <td className={`px-4 py-2 font-mono ${isCorrect ? 'text-green-600 font-bold' : 'text-red-500'}`}>
                         {answerLetter}
                         {isCorrect ? ' ✓' : ''}
                       </td>

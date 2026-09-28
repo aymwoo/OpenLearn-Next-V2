@@ -196,7 +196,9 @@ export function registerClassroomRoutes(
     // 持久化到数据库
     try {
       const session = db
-        .prepare('SELECT id, settings_json FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+        .prepare(
+          'SELECT id, settings_json FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
+        )
         .get(lessonId) as any;
       if (session) {
         let settings: Record<string, any> = {};
@@ -351,548 +353,646 @@ export function registerClassroomRoutes(
   // ── 1. 课堂会话与生命周期阶段 ──────────────────────────────────────────
 
   // 获取指定课程当前活动会话
-  app.get('/api/classroom/sessions/:lessonId', requireAuth('student', 'teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const session = db
-        .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1')
-        .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
-
-      if (!session) {
-        return res.json({
-          hasActiveSession: false,
-          stage: 'PRE_CLASS_READY',
-          session: null,
-        });
-      }
-
-      // 附加当前活动互动（如果有）
-      const activePoll = db
-        .prepare('SELECT * FROM classroom_quick_polls WHERE session_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1')
-        .get(session.id, 'ACTIVE') as any;
-
-      if (activePoll) {
-        try {
-          activePoll.options = JSON.parse(activePoll.options_json);
-        } catch (_) {
-          activePoll.options = [];
-        }
-      }
-
-      const activeBuzzer = db
-        .prepare('SELECT * FROM classroom_buzzers WHERE session_id = ? ORDER BY created_at DESC LIMIT 1')
-        .get(session.id) as any;
-
-      const activeCountdown = getCountdownForLesson(lessonId);
-
-      // 会话恢复协议：视图状态（当前白板页）与动态流回放（最近 20 条）。
-      // 教师离开课堂再回来时，前端据此一次性恢复现场。
-      let viewState: Record<string, unknown> = {};
+  app.get(
+    '/api/classroom/sessions/:lessonId',
+    requireAuth('student', 'teacher', 'administrator'),
+    async (req: Request, res: Response) => {
       try {
-        const settings = session.settings_json ? JSON.parse(session.settings_json) : {};
-        viewState = settings.viewState ?? {};
-      } catch (_) {
-        viewState = {};
-      }
-      const feedReplay = feedService ? feedService.getFeedReplay(lessonId, 20) : [];
+        const { lessonId } = req.params;
+        const session = db
+          .prepare(
+            'SELECT * FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
+          )
+          .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
 
-      res.json({
-        hasActiveSession: true,
-        stage: session.stage,
-        session,
-        activePoll,
-        activeBuzzer,
-        activeCountdown,
-        viewState,
-        feedReplay,
-      });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+        if (!session) {
+          return res.json({
+            hasActiveSession: false,
+            stage: 'PRE_CLASS_READY',
+            session: null,
+          });
+        }
+
+        // 附加当前活动互动（如果有）
+        const activePoll = db
+          .prepare(
+            'SELECT * FROM classroom_quick_polls WHERE session_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1',
+          )
+          .get(session.id, 'ACTIVE') as any;
+
+        if (activePoll) {
+          try {
+            activePoll.options = JSON.parse(activePoll.options_json);
+          } catch (_) {
+            activePoll.options = [];
+          }
+        }
+
+        const activeBuzzer = db
+          .prepare('SELECT * FROM classroom_buzzers WHERE session_id = ? ORDER BY created_at DESC LIMIT 1')
+          .get(session.id) as any;
+
+        const activeCountdown = getCountdownForLesson(lessonId);
+
+        // 会话恢复协议：视图状态（当前白板页）与动态流回放（最近 20 条）。
+        // 教师离开课堂再回来时，前端据此一次性恢复现场。
+        let viewState: Record<string, unknown> = {};
+        try {
+          const settings = session.settings_json ? JSON.parse(session.settings_json) : {};
+          viewState = settings.viewState ?? {};
+        } catch (_) {
+          viewState = {};
+        }
+        const feedReplay = feedService ? feedService.getFeedReplay(lessonId, 20) : [];
+
+        res.json({
+          hasActiveSession: true,
+          stage: session.stage,
+          session,
+          activePoll,
+          activeBuzzer,
+          activeCountdown,
+          viewState,
+          feedReplay,
+        });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    },
+  );
 
   // 获取课堂倒计时状态（支持学生、教师与第三方插件查询）
-  app.get('/api/classroom/sessions/:lessonId/countdown', requireAuth('student', 'teacher', 'administrator'), (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const countdown = getCountdownForLesson(lessonId);
-      res.json({ success: true, countdown });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+  app.get(
+    '/api/classroom/sessions/:lessonId/countdown',
+    requireAuth('student', 'teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const countdown = getCountdownForLesson(lessonId);
+        res.json({ success: true, countdown });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    },
+  );
 
   // 操作课堂倒计时（启动、暂停、继续、重置、追加时长、自定义设置）
-  app.post('/api/classroom/sessions/:lessonId/countdown', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const { action = 'start', duration, addSeconds, label } = req.body;
-      const countdown = applyCountdownAction(lessonId, action, { duration, addSeconds, label });
-      res.json({ success: true, countdown });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+  app.post(
+    '/api/classroom/sessions/:lessonId/countdown',
+    requireAuth('teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const { action = 'start', duration, addSeconds, label } = req.body;
+        const countdown = applyCountdownAction(lessonId, action, { duration, addSeconds, label });
+        res.json({ success: true, countdown });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    },
+  );
 
   // 启动/初始化会话
-  app.post('/api/classroom/sessions/:lessonId/init', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const { classId, teachingModeId } = req.body || {};
-      const teacherId = getActorId(req) || 'teacher';
+  app.post(
+    '/api/classroom/sessions/:lessonId/init',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const { classId, teachingModeId } = req.body || {};
+        const teacherId = getActorId(req) || 'teacher';
 
-      if (!db.prepare('SELECT id FROM lessons WHERE id = ?').get(lessonId)) {
-        return res.status(404).json({ error: `Lesson "${lessonId}" not found` });
+        if (!db.prepare('SELECT id FROM lessons WHERE id = ?').get(lessonId)) {
+          return res.status(404).json({ error: `Lesson "${lessonId}" not found` });
+        }
+
+        const normalizedClassId = typeof classId === 'string' && classId.trim() ? classId.trim() : null;
+        if (classId !== undefined && classId !== null && !normalizedClassId) {
+          return res.status(400).json({ error: 'Invalid classId' });
+        }
+        if (normalizedClassId && !db.prepare('SELECT id FROM classes WHERE id = ?').get(normalizedClassId)) {
+          return res.status(404).json({ error: `Class "${normalizedClassId}" not found` });
+        }
+
+        const modeValidation = validateTeachingModeId(teachingModeId);
+        if (modeValidation.ok === false) {
+          return res.status(modeValidation.status).json({ error: modeValidation.error });
+        }
+
+        const session = await classroomService.getOrCreateSession(lessonId, teacherId, normalizedClassId ?? undefined);
+
+        // 课堂启动门户会在启动课堂时一并提交所选教学模式
+        db.prepare('UPDATE classroom_sessions SET teaching_mode_id = ? WHERE id = ?').run(
+          modeValidation.id,
+          session.id,
+        );
+
+        res.json({ success: true, session });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      const normalizedClassId = typeof classId === 'string' && classId.trim() ? classId.trim() : null;
-      if (classId !== undefined && classId !== null && !normalizedClassId) {
-        return res.status(400).json({ error: 'Invalid classId' });
-      }
-      if (normalizedClassId && !db.prepare('SELECT id FROM classes WHERE id = ?').get(normalizedClassId)) {
-        return res.status(404).json({ error: `Class "${normalizedClassId}" not found` });
-      }
-
-      const modeValidation = validateTeachingModeId(teachingModeId);
-      if (modeValidation.ok === false) {
-        return res.status(modeValidation.status).json({ error: modeValidation.error });
-      }
-
-      const session = await classroomService.getOrCreateSession(lessonId, teacherId, normalizedClassId ?? undefined);
-
-      // 课堂启动门户会在启动课堂时一并提交所选教学模式
-      db.prepare('UPDATE classroom_sessions SET teaching_mode_id = ? WHERE id = ?').run(modeValidation.id, session.id);
-
-      res.json({ success: true, session });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // 会话视图状态回写（课堂会话保存与恢复）：
   // 教师端切换白板页 / 教学环节时调用，前端防抖 500ms。
   // currentPage 存 settings_json.viewState；activeSegmentId 存休眠列 current_segment_id。
-  app.post('/api/classroom/sessions/:lessonId/view-state', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const { currentPage, activeSegmentId } = req.body || {};
-
-      const session = db
-        .prepare(
-          'SELECT id, settings_json FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
-        )
-        .get(lessonId, ARCHIVED_REPORT_STAGE) as { id: string; settings_json: string | null } | undefined;
-      if (!session) {
-        return res.status(404).json({ error: 'No active session for this lesson' });
-      }
-
-      let settings: Record<string, any> = {};
+  app.post(
+    '/api/classroom/sessions/:lessonId/view-state',
+    requireAuth('teacher', 'administrator'),
+    (req: Request, res: Response) => {
       try {
-        settings = JSON.parse(session.settings_json || '{}');
-      } catch (_) {
-        settings = {};
-      }
+        const { lessonId } = req.params;
+        const { currentPage, activeSegmentId } = req.body || {};
 
-      if (currentPage !== undefined) {
-        const page = Number(currentPage);
-        if (!Number.isFinite(page) || page < 0 || page > 10000) {
-          return res.status(400).json({ error: 'Invalid currentPage' });
+        const session = db
+          .prepare(
+            'SELECT id, settings_json FROM classroom_sessions WHERE lesson_id = ? AND stage != ? ORDER BY created_at DESC LIMIT 1',
+          )
+          .get(lessonId, ARCHIVED_REPORT_STAGE) as { id: string; settings_json: string | null } | undefined;
+        if (!session) {
+          return res.status(404).json({ error: 'No active session for this lesson' });
         }
-        settings.viewState = { ...(settings.viewState ?? {}), currentPage: Math.floor(page) };
+
+        let settings: Record<string, any> = {};
+        try {
+          settings = JSON.parse(session.settings_json || '{}');
+        } catch (_) {
+          settings = {};
+        }
+
+        if (currentPage !== undefined) {
+          const page = Number(currentPage);
+          if (!Number.isFinite(page) || page < 0 || page > 10000) {
+            return res.status(400).json({ error: 'Invalid currentPage' });
+          }
+          settings.viewState = { ...(settings.viewState ?? {}), currentPage: Math.floor(page) };
+        }
+
+        if (activeSegmentId !== undefined) {
+          const segId = activeSegmentId === null ? null : String(activeSegmentId).slice(0, 128);
+          db.prepare('UPDATE classroom_sessions SET current_segment_id = ? WHERE id = ?').run(segId, session.id);
+        }
+
+        db.prepare('UPDATE classroom_sessions SET settings_json = ? WHERE id = ?').run(
+          JSON.stringify(settings),
+          session.id,
+        );
+
+        res.json({ success: true, viewState: settings.viewState ?? {} });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      if (activeSegmentId !== undefined) {
-        const segId = activeSegmentId === null ? null : String(activeSegmentId).slice(0, 128);
-        db.prepare('UPDATE classroom_sessions SET current_segment_id = ? WHERE id = ?').run(segId, session.id);
-      }
-
-      db.prepare('UPDATE classroom_sessions SET settings_json = ? WHERE id = ?').run(
-        JSON.stringify(settings),
-        session.id,
-      );
-
-      res.json({ success: true, viewState: settings.viewState ?? {} });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // 推进课堂阶段 (PRE_CLASS_READY -> IN_CLASS_TEACHING -> WRAP_UP_EXIT_TICKET -> ARCHIVED_REPORT)
-  app.post('/api/classroom/sessions/:lessonId/stage', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const { stage, classId } = req.body;
-      const teacherId = getActorId(req) || 'teacher';
+  app.post(
+    '/api/classroom/sessions/:lessonId/stage',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const { stage, classId } = req.body;
+        const teacherId = getActorId(req) || 'teacher';
 
-      if (!['PRE_CLASS_READY', 'IN_CLASS_TEACHING', 'WRAP_UP_EXIT_TICKET', 'ARCHIVED_REPORT'].includes(stage)) {
-        return res.status(400).json({ error: `Invalid stage: ${stage}` });
+        if (!['PRE_CLASS_READY', 'IN_CLASS_TEACHING', 'WRAP_UP_EXIT_TICKET', 'ARCHIVED_REPORT'].includes(stage)) {
+          return res.status(400).json({ error: `Invalid stage: ${stage}` });
+        }
+
+        const result = await classroomService.transitionStage(lessonId, stage, teacherId, classId);
+        if (!result.success) {
+          return res.status(403).json({ error: result.reason || 'Stage transition blocked' });
+        }
+
+        res.json({ success: true, stage: result.stage });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      const result = await classroomService.transitionStage(lessonId, stage, teacherId, classId);
-      if (!result.success) {
-        return res.status(403).json({ error: result.reason || 'Stage transition blocked' });
-      }
-
-      res.json({ success: true, stage: result.stage });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // ── 2. 课堂口播极速投票 (Quick Poll) ──────────────────────────────────
 
   // 教师发起极速投票
-  app.post('/api/classroom/sessions/:lessonId/quick-poll', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const { questionType = 'ABCD', title = '课堂极速单选投票', options = ['A', 'B', 'C', 'D'], correctOption } = req.body;
-      const teacherId = getActorId(req) || 'teacher';
+  app.post(
+    '/api/classroom/sessions/:lessonId/quick-poll',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const {
+          questionType = 'ABCD',
+          title = '课堂极速单选投票',
+          options = ['A', 'B', 'C', 'D'],
+          correctOption,
+        } = req.body;
+        const teacherId = getActorId(req) || 'teacher';
 
-      const session = await classroomService.getOrCreateSession(lessonId, teacherId);
+        const session = await classroomService.getOrCreateSession(lessonId, teacherId);
 
-      // 将之前未关闭的投票置为 CLOSED
-      db.prepare('UPDATE classroom_quick_polls SET status = ? WHERE session_id = ? AND status = ?').run(
-        'CLOSED',
-        session.id,
-        'ACTIVE',
-      );
+        // 将之前未关闭的投票置为 CLOSED
+        db.prepare('UPDATE classroom_quick_polls SET status = ? WHERE session_id = ? AND status = ?').run(
+          'CLOSED',
+          session.id,
+          'ACTIVE',
+        );
 
-      const pollId = `poll_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      const now = Date.now();
+        const pollId = `poll_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const now = Date.now();
 
-      db.prepare(`
+        db.prepare(
+          `
         INSERT INTO classroom_quick_polls (id, session_id, lesson_id, question_type, title, options_json, correct_option, status, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)
-      `).run(pollId, session.id, lessonId, questionType, title, JSON.stringify(options), correctOption || null, now);
+      `,
+        ).run(pollId, session.id, lessonId, questionType, title, JSON.stringify(options), correctOption || null, now);
 
-      const pollData = {
-        id: pollId,
-        sessionId: session.id,
-        lessonId,
-        questionType,
-        title,
-        options,
-        correctOption: correctOption || null,
-        status: 'ACTIVE',
-        votes: {},
-        totalVotes: 0,
-      };
+        const pollData = {
+          id: pollId,
+          sessionId: session.id,
+          lessonId,
+          questionType,
+          title,
+          options,
+          correctOption: correctOption || null,
+          status: 'ACTIVE',
+          votes: {},
+          totalVotes: 0,
+        };
 
-      // 广播给学生端和大屏展台
-      if (io) {
-        io.to(`lesson-${lessonId}`).emit('classroom:quick_poll_started', pollData);
-        io.emit('classroom:quick_poll_started', pollData);
+        // 广播给学生端和大屏展台
+        if (io) {
+          io.to(`lesson-${lessonId}`).emit('classroom:quick_poll_started', pollData);
+          io.emit('classroom:quick_poll_started', pollData);
+        }
+
+        res.json({ success: true, poll: pollData });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      res.json({ success: true, poll: pollData });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // 学生投票
-  app.post('/api/classroom/sessions/:lessonId/quick-poll/:pollId/vote', requireAuth('student', 'teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId, pollId } = req.params;
-      const { option, selectedOption } = req.body;
-      const session = (req as any).session;
-      const studentId = session.studentId || session.userId || getActorId(req) || 'student';
-      const studentName = session.studentName || session.name || studentId;
-
-      // 兼容两种字段名（服务端契约为 option，早期前端发的是 selectedOption）
-      const votedOption =
-        typeof option === 'string' && option.length > 0
-          ? option
-          : typeof selectedOption === 'string' && selectedOption.length > 0
-            ? selectedOption
-            : '';
-
-      const poll = db.prepare('SELECT * FROM classroom_quick_polls WHERE id = ?').get(pollId) as any;
-      if (!poll || poll.status !== 'ACTIVE') {
-        return res.status(400).json({ error: 'Poll is closed or not found' });
-      }
-
-      if (!votedOption) {
-        return res.status(400).json({ error: 'Missing vote option' });
-      }
-
-      // 选项必须是该投票的可选项之一，否则会落库 "undefined" 之类的脏值
-      let allowedOptions: unknown = [];
+  app.post(
+    '/api/classroom/sessions/:lessonId/quick-poll/:pollId/vote',
+    requireAuth('student', 'teacher', 'administrator'),
+    async (req: Request, res: Response) => {
       try {
-        allowedOptions = poll.options_json ? JSON.parse(poll.options_json) : [];
-      } catch {
-        allowedOptions = [];
-      }
-      if (Array.isArray(allowedOptions) && allowedOptions.length > 0 && !allowedOptions.includes(votedOption)) {
-        return res.status(400).json({ error: 'Invalid vote option' });
-      }
+        const { lessonId, pollId } = req.params;
+        const { option, selectedOption } = req.body;
+        const session = (req as any).session;
+        const studentId = session.studentId || session.userId || getActorId(req) || 'student';
+        const studentName = session.studentName || session.name || studentId;
 
-      const voteId = `vote_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      const now = Date.now();
+        // 兼容两种字段名（服务端契约为 option，早期前端发的是 selectedOption）
+        const votedOption =
+          typeof option === 'string' && option.length > 0
+            ? option
+            : typeof selectedOption === 'string' && selectedOption.length > 0
+              ? selectedOption
+              : '';
 
-      db.prepare(`
+        const poll = db.prepare('SELECT * FROM classroom_quick_polls WHERE id = ?').get(pollId) as any;
+        if (!poll || poll.status !== 'ACTIVE') {
+          return res.status(400).json({ error: 'Poll is closed or not found' });
+        }
+
+        if (!votedOption) {
+          return res.status(400).json({ error: 'Missing vote option' });
+        }
+
+        // 选项必须是该投票的可选项之一，否则会落库 "undefined" 之类的脏值
+        let allowedOptions: unknown = [];
+        try {
+          allowedOptions = poll.options_json ? JSON.parse(poll.options_json) : [];
+        } catch {
+          allowedOptions = [];
+        }
+        if (Array.isArray(allowedOptions) && allowedOptions.length > 0 && !allowedOptions.includes(votedOption)) {
+          return res.status(400).json({ error: 'Invalid vote option' });
+        }
+
+        const voteId = `vote_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const now = Date.now();
+
+        db.prepare(
+          `
         INSERT INTO classroom_poll_votes (id, poll_id, student_id, student_name, selected_option, voted_at)
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(poll_id, student_id) DO UPDATE SET
           selected_option = excluded.selected_option,
           voted_at = excluded.voted_at
-      `).run(voteId, pollId, studentId, studentName, votedOption, now);
+      `,
+        ).run(voteId, pollId, studentId, studentName, votedOption, now);
 
-      // 计算实时汇总聚合（保护学生隐私）
-      const rows = db.prepare('SELECT selected_option, COUNT(*) as count FROM classroom_poll_votes WHERE poll_id = ? GROUP BY selected_option').all(pollId) as { selected_option: string; count: number }[];
-      const distribution: Record<string, number> = {};
-      let total = 0;
-      rows.forEach((r) => {
-        distribution[r.selected_option] = r.count;
-        total += r.count;
-      });
+        // 计算实时汇总聚合（保护学生隐私）
+        const rows = db
+          .prepare(
+            'SELECT selected_option, COUNT(*) as count FROM classroom_poll_votes WHERE poll_id = ? GROUP BY selected_option',
+          )
+          .all(pollId) as { selected_option: string; count: number }[];
+        const distribution: Record<string, number> = {};
+        let total = 0;
+        rows.forEach((r) => {
+          distribution[r.selected_option] = r.count;
+          total += r.count;
+        });
 
-      // 实时广播聚合数据
-      if (io) {
-        const updatePayload = {
-          pollId,
-          lessonId,
-          distribution,
-          totalVotes: total,
-          latestVoter: studentName,
-        };
-        io.to(`lesson-${lessonId}`).emit('classroom:quick_poll_updated', updatePayload);
-        io.emit('classroom:quick_poll_updated', updatePayload);
+        // 实时广播聚合数据
+        if (io) {
+          const updatePayload = {
+            pollId,
+            lessonId,
+            distribution,
+            totalVotes: total,
+            latestVoter: studentName,
+          };
+          io.to(`lesson-${lessonId}`).emit('classroom:quick_poll_updated', updatePayload);
+          io.emit('classroom:quick_poll_updated', updatePayload);
+        }
+
+        res.json({ success: true, distribution, totalVotes: total });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      res.json({ success: true, distribution, totalVotes: total });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // 教师结束投票
-  app.post('/api/classroom/sessions/:lessonId/quick-poll/:pollId/close', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId, pollId } = req.params;
-      db.prepare('UPDATE classroom_quick_polls SET status = ? WHERE id = ?').run('CLOSED', pollId);
+  app.post(
+    '/api/classroom/sessions/:lessonId/quick-poll/:pollId/close',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId, pollId } = req.params;
+        db.prepare('UPDATE classroom_quick_polls SET status = ? WHERE id = ?').run('CLOSED', pollId);
 
-      const rows = db.prepare('SELECT selected_option, COUNT(*) as count FROM classroom_poll_votes WHERE poll_id = ? GROUP BY selected_option').all(pollId) as { selected_option: string; count: number }[];
-      const distribution: Record<string, number> = {};
-      let total = 0;
-      rows.forEach((r) => {
-        distribution[r.selected_option] = r.count;
-        total += r.count;
-      });
+        const rows = db
+          .prepare(
+            'SELECT selected_option, COUNT(*) as count FROM classroom_poll_votes WHERE poll_id = ? GROUP BY selected_option',
+          )
+          .all(pollId) as { selected_option: string; count: number }[];
+        const distribution: Record<string, number> = {};
+        let total = 0;
+        rows.forEach((r) => {
+          distribution[r.selected_option] = r.count;
+          total += r.count;
+        });
 
-      if (io) {
-        io.to(`lesson-${lessonId}`).emit('classroom:quick_poll_closed', { pollId, distribution, totalVotes: total });
-        io.emit('classroom:quick_poll_closed', { pollId, distribution, totalVotes: total });
+        if (io) {
+          io.to(`lesson-${lessonId}`).emit('classroom:quick_poll_closed', { pollId, distribution, totalVotes: total });
+          io.emit('classroom:quick_poll_closed', { pollId, distribution, totalVotes: total });
+        }
+
+        res.json({ success: true, distribution, totalVotes: total });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      res.json({ success: true, distribution, totalVotes: total });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // ── 3. 毫秒级竞技抢答器 (Buzzer) ──────────────────────────────────────
 
   // 教师启动抢答
-  app.post('/api/classroom/sessions/:lessonId/buzzer', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const { title = '全班极速抢答' } = req.body;
-      const teacherId = getActorId(req) || 'teacher';
-      const session = await classroomService.getOrCreateSession(lessonId, teacherId);
+  app.post(
+    '/api/classroom/sessions/:lessonId/buzzer',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const { title = '全班极速抢答' } = req.body;
+        const teacherId = getActorId(req) || 'teacher';
+        const session = await classroomService.getOrCreateSession(lessonId, teacherId);
 
-      const buzzerId = `bz_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      const now = Date.now();
+        const buzzerId = `bz_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const now = Date.now();
 
-      db.prepare(`
+        db.prepare(
+          `
         INSERT INTO classroom_buzzers (id, session_id, lesson_id, title, status, created_at)
         VALUES (?, ?, ?, ?, 'READY', ?)
-      `).run(buzzerId, session.id, lessonId, title, now);
+      `,
+        ).run(buzzerId, session.id, lessonId, title, now);
 
-      const buzzerData = {
-        id: buzzerId,
-        sessionId: session.id,
-        lessonId,
-        title,
-        status: 'READY',
-        winner: null,
-        startTime: now,
-      };
+        const buzzerData = {
+          id: buzzerId,
+          sessionId: session.id,
+          lessonId,
+          title,
+          status: 'READY',
+          winner: null,
+          startTime: now,
+        };
 
-      if (io) {
-        io.to(`lesson-${lessonId}`).emit('classroom:buzzer_ready', buzzerData);
-        io.emit('classroom:buzzer_ready', buzzerData);
+        if (io) {
+          io.to(`lesson-${lessonId}`).emit('classroom:buzzer_ready', buzzerData);
+          io.emit('classroom:buzzer_ready', buzzerData);
+        }
+
+        res.json({ success: true, buzzer: buzzerData });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      res.json({ success: true, buzzer: buzzerData });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // 学生按下抢答按钮（原子裁决：先到先得）
-  app.post('/api/classroom/sessions/:lessonId/buzzer/:buzzerId/buzz', requireAuth('student', 'teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId, buzzerId } = req.params;
-      const session = (req as any).session;
-      const studentId = session.studentId || session.userId || getActorId(req) || 'student';
-      const studentName = session.studentName || session.name || studentId;
+  app.post(
+    '/api/classroom/sessions/:lessonId/buzzer/:buzzerId/buzz',
+    requireAuth('student', 'teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId, buzzerId } = req.params;
+        const session = (req as any).session;
+        const studentId = session.studentId || session.userId || getActorId(req) || 'student';
+        const studentName = session.studentName || session.name || studentId;
 
-      const buzzer = db.prepare('SELECT * FROM classroom_buzzers WHERE id = ?').get(buzzerId) as any;
-      if (!buzzer) {
-        return res.status(404).json({ error: 'Buzzer not found' });
-      }
+        const buzzer = db.prepare('SELECT * FROM classroom_buzzers WHERE id = ?').get(buzzerId) as any;
+        if (!buzzer) {
+          return res.status(404).json({ error: 'Buzzer not found' });
+        }
 
-      if (buzzer.status === 'LOCKED') {
-        return res.json({
-          success: false,
-          won: false,
-          winner: {
-            studentId: buzzer.winner_student_id,
-            studentName: buzzer.winner_student_name,
-            responseTimeMs: buzzer.winner_response_time_ms,
-          },
-        });
-      }
+        if (buzzer.status === 'LOCKED') {
+          return res.json({
+            success: false,
+            won: false,
+            winner: {
+              studentId: buzzer.winner_student_id,
+              studentName: buzzer.winner_student_name,
+              responseTimeMs: buzzer.winner_response_time_ms,
+            },
+          });
+        }
 
-      const responseTimeMs = Math.max(0, Date.now() - buzzer.created_at);
+        const responseTimeMs = Math.max(0, Date.now() - buzzer.created_at);
 
-      // 原子性 UPDATE：仅当 status 仍为 READY 时生效
-      const updateResult = db.prepare(`
+        // 原子性 UPDATE：仅当 status 仍为 READY 时生效
+        const updateResult = db
+          .prepare(
+            `
         UPDATE classroom_buzzers
         SET status = 'LOCKED', winner_student_id = ?, winner_student_name = ?, winner_response_time_ms = ?
         WHERE id = ? AND status = 'READY'
-      `).run(studentId, studentName, responseTimeMs, buzzerId);
+      `,
+          )
+          .run(studentId, studentName, responseTimeMs, buzzerId);
 
-      const won = updateResult.changes > 0;
+        const won = updateResult.changes > 0;
 
-      if (won) {
-        const winnerPayload = {
-          buzzerId,
-          lessonId,
-          winnerStudentId: studentId,
-          winnerStudentName: studentName,
-          responseTimeMs,
-        };
-        if (io) {
-          io.to(`lesson-${lessonId}`).emit('classroom:buzzer_winner', winnerPayload);
-          io.emit('classroom:buzzer_winner', winnerPayload);
+        if (won) {
+          const winnerPayload = {
+            buzzerId,
+            lessonId,
+            winnerStudentId: studentId,
+            winnerStudentName: studentName,
+            responseTimeMs,
+          };
+          if (io) {
+            io.to(`lesson-${lessonId}`).emit('classroom:buzzer_winner', winnerPayload);
+            io.emit('classroom:buzzer_winner', winnerPayload);
+          }
         }
-      }
 
-      res.json({
-        success: true,
-        won,
-        winner: won
-          ? { studentId, studentName, responseTimeMs }
-          : { studentId: buzzer.winner_student_id, studentName: buzzer.winner_student_name },
-      });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+        res.json({
+          success: true,
+          won,
+          winner: won
+            ? { studentId, studentName, responseTimeMs }
+            : { studentId: buzzer.winner_student_id, studentName: buzzer.winner_student_name },
+        });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    },
+  );
 
   // 教师重置抢答器
-  app.post('/api/classroom/sessions/:lessonId/buzzer/:buzzerId/reset', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId, buzzerId } = req.params;
-      const now = Date.now();
-      db.prepare(`
+  app.post(
+    '/api/classroom/sessions/:lessonId/buzzer/:buzzerId/reset',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId, buzzerId } = req.params;
+        const now = Date.now();
+        db.prepare(
+          `
         UPDATE classroom_buzzers
         SET status = 'READY', winner_student_id = NULL, winner_student_name = NULL, winner_response_time_ms = NULL, created_at = ?
         WHERE id = ?
-      `).run(now, buzzerId);
+      `,
+        ).run(now, buzzerId);
 
-      if (io) {
-        io.to(`lesson-${lessonId}`).emit('classroom:buzzer_reset', { buzzerId, lessonId });
-        io.emit('classroom:buzzer_reset', { buzzerId, lessonId });
+        if (io) {
+          io.to(`lesson-${lessonId}`).emit('classroom:buzzer_reset', { buzzerId, lessonId });
+          io.emit('classroom:buzzer_reset', { buzzerId, lessonId });
+        }
+
+        res.json({ success: true });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      res.json({ success: true });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // ── 4. 听懂反馈晴雨表 (Pacing Signal) ──────────────────────────────────
 
   // 学生发送学习节奏信号
-  app.post('/api/classroom/sessions/:lessonId/pacing', requireAuth('student', 'teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const { signal, signalType } = req.body; // 'TOO_FAST' | 'CONFUSED' | 'CLEAR'
-      const session = (req as any).session;
-      const studentId = session.studentId || session.userId || getActorId(req) || 'student';
+  app.post(
+    '/api/classroom/sessions/:lessonId/pacing',
+    requireAuth('student', 'teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const { signal, signalType } = req.body; // 'TOO_FAST' | 'CONFUSED' | 'CLEAR'
+        const session = (req as any).session;
+        const studentId = session.studentId || session.userId || getActorId(req) || 'student';
 
-      // 兼容两种字段名（服务端契约为 signal，早期前端发的是 signalType）
-      const pacingSignal = signal ?? signalType;
-      // TOO_FAST=讲太快(希望慢一点) / SLOW=讲太慢(希望快一点) / CONFUSED=困惑 / CLEAR=理解
-      if (!['TOO_FAST', 'SLOW', 'CONFUSED', 'CLEAR'].includes(pacingSignal)) {
-        return res.status(400).json({ error: 'Invalid pacing signal' });
-      }
+        // 兼容两种字段名（服务端契约为 signal，早期前端发的是 signalType）
+        const pacingSignal = signal ?? signalType;
+        // TOO_FAST=讲太快(希望慢一点) / SLOW=讲太慢(希望快一点) / CONFUSED=困惑 / CLEAR=理解
+        if (!['TOO_FAST', 'SLOW', 'CONFUSED', 'CLEAR'].includes(pacingSignal)) {
+          return res.status(400).json({ error: 'Invalid pacing signal' });
+        }
 
-      const activeSession = db.prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1').get(lessonId) as any;
-      const sessionId = activeSession ? activeSession.id : `s_${lessonId}`;
+        const activeSession = db
+          .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+          .get(lessonId) as any;
+        const sessionId = activeSession ? activeSession.id : `s_${lessonId}`;
 
-      const signalId = `ps_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      db.prepare(`
+        const signalId = `ps_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        db.prepare(
+          `
         INSERT INTO classroom_pacing_signals (id, session_id, student_id, signal_type, created_at)
         VALUES (?, ?, ?, ?, ?)
-      `).run(signalId, sessionId, studentId, pacingSignal, Date.now());
+      `,
+        ).run(signalId, sessionId, studentId, pacingSignal, Date.now());
 
-      // 计算过去 5 分钟内的信号聚合
-      const fiveMinsAgo = Date.now() - 5 * 60 * 1000;
-      const counts = db.prepare(`
+        // 计算过去 5 分钟内的信号聚合
+        const fiveMinsAgo = Date.now() - 5 * 60 * 1000;
+        const counts = db
+          .prepare(
+            `
         SELECT signal_type, COUNT(*) as count
         FROM classroom_pacing_signals
         WHERE session_id = ? AND created_at > ?
         GROUP BY signal_type
-      `).all(sessionId, fiveMinsAgo) as { signal_type: string; count: number }[];
+      `,
+          )
+          .all(sessionId, fiveMinsAgo) as { signal_type: string; count: number }[];
 
-      const summary: Record<string, number> = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
-      counts.forEach((c) => {
-        summary[c.signal_type] = c.count;
-      });
+        const summary: Record<string, number> = { TOO_FAST: 0, SLOW: 0, CONFUSED: 0, CLEAR: 0 };
+        counts.forEach((c) => {
+          summary[c.signal_type] = c.count;
+        });
 
-      if (io) {
-        io.to(`lesson-${lessonId}`).emit('classroom:pacing_updated', { lessonId, summary });
-        io.emit('classroom:pacing_updated', { lessonId, summary });
+        if (io) {
+          io.to(`lesson-${lessonId}`).emit('classroom:pacing_updated', { lessonId, summary });
+          io.emit('classroom:pacing_updated', { lessonId, summary });
+        }
+
+        res.json({ success: true, summary });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      res.json({ success: true, summary });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // ── 5. 结课通票 (Exit Ticket) ──────────────────────────────────────────
 
   // 学生提交 60s 结课通票
-  app.post('/api/classroom/sessions/:lessonId/exit-ticket', requireAuth('student', 'teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const {
-        rating = 5,
-        puzzledConcept = '',
-        feedback = '',
-        feedbackNotes = '',
-        coreAnswer = null,
-        isCorrect = null,
-        tierLevel = 'passed',
-        challengeAnswer = null,
-      } = req.body;
-      const session = (req as any).session;
-      const studentId = session.studentId || session.userId || getActorId(req) || 'student';
-      const studentName = session.studentName || session.name || studentId;
-
-      const activeSession = db.prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1').get(lessonId) as any;
-      const sessionId = activeSession ? activeSession.id : `s_${lessonId}`;
-
-      const ticketId = `ticket_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      const now = Date.now();
-
+  app.post(
+    '/api/classroom/sessions/:lessonId/exit-ticket',
+    requireAuth('student', 'teacher', 'administrator'),
+    async (req: Request, res: Response) => {
       try {
-        db.prepare(`
+        const { lessonId } = req.params;
+        const {
+          rating = 5,
+          puzzledConcept = '',
+          feedback = '',
+          feedbackNotes = '',
+          coreAnswer = null,
+          isCorrect = null,
+          tierLevel = 'passed',
+          challengeAnswer = null,
+        } = req.body;
+        const session = (req as any).session;
+        const studentId = session.studentId || session.userId || getActorId(req) || 'student';
+        const studentName = session.studentName || session.name || studentId;
+
+        const activeSession = db
+          .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+          .get(lessonId) as any;
+        const sessionId = activeSession ? activeSession.id : `s_${lessonId}`;
+
+        const ticketId = `ticket_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const now = Date.now();
+
+        try {
+          db.prepare(
+            `
           INSERT INTO classroom_exit_tickets (
             id, session_id, lesson_id, student_id, student_name, rating, puzzled_concept, feedback,
             core_answer, is_correct, tier_level, challenge_answer, created_at
@@ -907,13 +1007,26 @@ export function registerClassroomRoutes(
             tier_level = excluded.tier_level,
             challenge_answer = excluded.challenge_answer,
             created_at = excluded.created_at
-        `).run(
-          ticketId, sessionId, lessonId, studentId, studentName, rating, puzzledConcept, feedback || feedbackNotes,
-          coreAnswer, isCorrect ? 1 : 0, tierLevel, challengeAnswer, now
-        );
-      } catch {
-        // Fallback to legacy schema for unmigrated test DBs
-        db.prepare(`
+        `,
+          ).run(
+            ticketId,
+            sessionId,
+            lessonId,
+            studentId,
+            studentName,
+            rating,
+            puzzledConcept,
+            feedback || feedbackNotes,
+            coreAnswer,
+            isCorrect ? 1 : 0,
+            tierLevel,
+            challengeAnswer,
+            now,
+          );
+        } catch {
+          // Fallback to legacy schema for unmigrated test DBs
+          db.prepare(
+            `
           INSERT INTO classroom_exit_tickets (id, session_id, lesson_id, student_id, student_name, rating, puzzled_concept, feedback, created_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(session_id, student_id) DO UPDATE SET
@@ -921,75 +1034,102 @@ export function registerClassroomRoutes(
             puzzled_concept = excluded.puzzled_concept,
             feedback = excluded.feedback,
             created_at = excluded.created_at
-        `).run(ticketId, sessionId, lessonId, studentId, studentName, rating, puzzledConcept, feedback || feedbackNotes, now);
+        `,
+          ).run(
+            ticketId,
+            sessionId,
+            lessonId,
+            studentId,
+            studentName,
+            rating,
+            puzzledConcept,
+            feedback || feedbackNotes,
+            now,
+          );
+        }
+
+        const countRow = db
+          .prepare('SELECT COUNT(*) as count FROM classroom_exit_tickets WHERE session_id = ?')
+          .get(sessionId) as any;
+
+        if (io) {
+          io.to(`lesson-${lessonId}`).emit('classroom:exit_ticket_submitted', {
+            lessonId,
+            totalSubmitted: countRow?.count || 1,
+          });
+        }
+
+        res.json({ success: true, totalSubmitted: countRow?.count || 1 });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      const countRow = db.prepare('SELECT COUNT(*) as count FROM classroom_exit_tickets WHERE session_id = ?').get(sessionId) as any;
-
-      if (io) {
-        io.to(`lesson-${lessonId}`).emit('classroom:exit_ticket_submitted', {
-          lessonId,
-          totalSubmitted: countRow?.count || 1,
-        });
-      }
-
-      res.json({ success: true, totalSubmitted: countRow?.count || 1 });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // 教师获取结课通票自适应梯级分析与疑点汇总
-  app.get('/api/classroom/sessions/:lessonId/exit-ticket-summary', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const activeSession = db.prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1').get(lessonId) as any;
-      const sessionId = activeSession ? activeSession.id : `s_${lessonId}`;
-
-      let rows: any[] = [];
+  app.get(
+    '/api/classroom/sessions/:lessonId/exit-ticket-summary',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
       try {
-        rows = db.prepare(`
+        const { lessonId } = req.params;
+        const activeSession = db
+          .prepare('SELECT id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+          .get(lessonId) as any;
+        const sessionId = activeSession ? activeSession.id : `s_${lessonId}`;
+
+        let rows: any[] = [];
+        try {
+          rows = db
+            .prepare(
+              `
           SELECT student_id, student_name, rating, puzzled_concept, feedback, core_answer, is_correct, tier_level, challenge_answer, created_at
           FROM classroom_exit_tickets
           WHERE session_id = ?
-        `).all(sessionId) as any[];
-      } catch {
-        rows = db.prepare(`
+        `,
+            )
+            .all(sessionId) as any[];
+        } catch {
+          rows = db
+            .prepare(
+              `
           SELECT student_id, student_name, rating, puzzled_concept, feedback, created_at
           FROM classroom_exit_tickets
           WHERE session_id = ?
-        `).all(sessionId) as any[];
+        `,
+            )
+            .all(sessionId) as any[];
+        }
+
+        const totalCount = rows.length;
+        const avgRating =
+          totalCount > 0
+            ? parseFloat((rows.reduce((acc, r) => acc + (r.rating || 5), 0) / totalCount).toFixed(1))
+            : 5.0;
+
+        const tierDistribution = {
+          passed: rows.filter((r) => r.tier_level === 'passed').length,
+          remediation: rows.filter((r) => r.tier_level === 'remediation').length,
+          challenge_done: rows.filter((r) => r.tier_level === 'challenge_done').length,
+        };
+
+        const puzzledConcepts = rows.map((r) => (r.puzzled_concept || '').trim()).filter(Boolean);
+
+        res.json({
+          success: true,
+          sessionId,
+          lessonId,
+          totalCount,
+          avgRating,
+          tierDistribution,
+          puzzledConcepts,
+          submissions: rows,
+        });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      const totalCount = rows.length;
-      const avgRating = totalCount > 0
-        ? parseFloat((rows.reduce((acc, r) => acc + (r.rating || 5), 0) / totalCount).toFixed(1))
-        : 5.0;
-
-      const tierDistribution = {
-        passed: rows.filter((r) => r.tier_level === 'passed').length,
-        remediation: rows.filter((r) => r.tier_level === 'remediation').length,
-        challenge_done: rows.filter((r) => r.tier_level === 'challenge_done').length,
-      };
-
-      const puzzledConcepts = rows
-        .map((r) => (r.puzzled_concept || '').trim())
-        .filter(Boolean);
-
-      res.json({
-        success: true,
-        sessionId,
-        lessonId,
-        totalCount,
-        avgRating,
-        tierDistribution,
-        puzzledConcepts,
-        submissions: rows,
-      });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // ── 6. 大屏公开脱敏数据接口 (Stage Display) ────────────────────────────
 
@@ -1005,11 +1145,17 @@ export function registerClassroomRoutes(
       let activePollData = null;
       if (session) {
         const poll = db
-          .prepare('SELECT * FROM classroom_quick_polls WHERE session_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1')
+          .prepare(
+            'SELECT * FROM classroom_quick_polls WHERE session_id = ? AND status = ? ORDER BY created_at DESC LIMIT 1',
+          )
           .get(session.id, 'ACTIVE') as any;
 
         if (poll) {
-          const rows = db.prepare('SELECT selected_option, COUNT(*) as count FROM classroom_poll_votes WHERE poll_id = ? GROUP BY selected_option').all(poll.id) as { selected_option: string; count: number }[];
+          const rows = db
+            .prepare(
+              'SELECT selected_option, COUNT(*) as count FROM classroom_poll_votes WHERE poll_id = ? GROUP BY selected_option',
+            )
+            .all(poll.id) as { selected_option: string; count: number }[];
           const distribution: Record<string, number> = {};
           let total = 0;
           rows.forEach((r) => {
@@ -1036,7 +1182,9 @@ export function registerClassroomRoutes(
       // 提取活动抢答器（仅展示胜出者昵称，不暴露敏感身份）
       let activeBuzzerData = null;
       if (session) {
-        const buzzer = db.prepare('SELECT * FROM classroom_buzzers WHERE session_id = ? ORDER BY created_at DESC LIMIT 1').get(session.id) as any;
+        const buzzer = db
+          .prepare('SELECT * FROM classroom_buzzers WHERE session_id = ? ORDER BY created_at DESC LIMIT 1')
+          .get(session.id) as any;
         if (buzzer) {
           activeBuzzerData = {
             id: buzzer.id,
@@ -1051,12 +1199,16 @@ export function registerClassroomRoutes(
       // 提取课堂节奏晴雨表（过去 10 分钟脱敏汇总）
       const tenMinsAgo = Date.now() - 10 * 60 * 1000;
       const pacingRows = session
-        ? (db.prepare(`
+        ? (db
+            .prepare(
+              `
             SELECT signal_type, COUNT(*) as count
             FROM classroom_pacing_signals
             WHERE session_id = ? AND created_at > ?
             GROUP BY signal_type
-          `).all(session.id, tenMinsAgo) as { signal_type: string; count: number }[])
+          `,
+            )
+            .all(session.id, tenMinsAgo) as { signal_type: string; count: number }[])
         : [];
 
       const pacingSummary: Record<string, number> = { TOO_FAST: 0, CONFUSED: 0, CLEAR: 0 };
@@ -1079,61 +1231,71 @@ export function registerClassroomRoutes(
 
   // ── 7. 全景课堂学情简报 (Panoramic Report) ─────────────────────────────
 
-  app.get('/api/classroom/sessions/:lessonId/panoramic-report', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
+  app.get(
+    '/api/classroom/sessions/:lessonId/panoramic-report',
+    requireAuth('teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
 
-      const session = db
-        .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
-        .get(lessonId) as any;
+        const session = db
+          .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+          .get(lessonId) as any;
 
-      if (!session) {
-        return res.status(404).json({ error: 'No classroom session found for this lesson' });
-      }
+        if (!session) {
+          return res.status(404).json({ error: 'No classroom session found for this lesson' });
+        }
 
-      // 测验表现汇总
-      const quizSubmissions = db
-        .prepare('SELECT score, is_correct, time_spent_ms FROM lesson_quiz_submissions WHERE lesson_id = ?')
-        .all(lessonId) as { score: number; is_correct: number; time_spent_ms: number }[];
+        // 测验表现汇总
+        const quizSubmissions = db
+          .prepare('SELECT score, is_correct, time_spent_ms FROM lesson_quiz_submissions WHERE lesson_id = ?')
+          .all(lessonId) as { score: number; is_correct: number; time_spent_ms: number }[];
 
-      const totalQuizSubmissions = quizSubmissions.length;
-      const correctQuizSubmissions = quizSubmissions.filter((s) => s.is_correct === 1).length;
-      const avgQuizAccuracy = totalQuizSubmissions > 0 ? Math.round((correctQuizSubmissions / totalQuizSubmissions) * 100) : 0;
+        const totalQuizSubmissions = quizSubmissions.length;
+        const correctQuizSubmissions = quizSubmissions.filter((s) => s.is_correct === 1).length;
+        const avgQuizAccuracy =
+          totalQuizSubmissions > 0 ? Math.round((correctQuizSubmissions / totalQuizSubmissions) * 100) : 0;
 
-      // 投票参与汇总
-      const pollVotesCount = (
-        db.prepare(`
+        // 投票参与汇总
+        const pollVotesCount =
+          (
+            db
+              .prepare(
+                `
           SELECT COUNT(*) as count
           FROM classroom_poll_votes v
           JOIN classroom_quick_polls p ON v.poll_id = p.id
           WHERE p.session_id = ?
-        `).get(session.id) as any
-      )?.count || 0;
+        `,
+              )
+              .get(session.id) as any
+          )?.count || 0;
 
-      // 结课通票汇总
-      const exitTickets = db
-        .prepare('SELECT rating, puzzled_concept, feedback FROM classroom_exit_tickets WHERE session_id = ?')
-        .all(session.id) as { rating: number; puzzled_concept: string; feedback: string }[];
+        // 结课通票汇总
+        const exitTickets = db
+          .prepare(
+            'SELECT student_id, rating, puzzled_concept, feedback FROM classroom_exit_tickets WHERE session_id = ?',
+          )
+          .all(session.id) as { student_id: string; rating: number; puzzled_concept: string; feedback: string }[];
 
-      const avgRating = exitTickets.length > 0
-        ? (exitTickets.reduce((sum, t) => sum + (t.rating || 5), 0) / exitTickets.length).toFixed(1)
-        : '5.0';
+        const avgRating =
+          exitTickets.length > 0
+            ? (exitTickets.reduce((sum, t) => sum + (t.rating || 5), 0) / exitTickets.length).toFixed(1)
+            : '5.0';
 
-      const puzzledConcepts = exitTickets
-        .map((t) => t.puzzled_concept?.trim())
-        .filter((c) => Boolean(c));
+        const puzzledConcepts = exitTickets.map((t) => t.puzzled_concept?.trim()).filter((c) => Boolean(c));
 
-      // ── 逐生真实明细（供学情简报 / CSV 导出） ──────────────────────
-      // 口径：
-      //   quizScore   = 该生本节所有随堂测得分的平均值（无作答 → null）
-      //   accuracy    = 该生本节随堂测正确率（无作答 → null）
-      //   pollsAnswered = 该生在本次会话中的投票次数（真实计数）
-      //   exitRating  = 该生结课通票评分（未提交 → null）
-      //   attendance  = 是否出现在投票/测验/通票任一真实互动记录中
-      // 绝不使用前端伪计算（旧版曾用 score = 80 + ((i * 7) % 21)）。
-      const quizByStudent = db
-        .prepare(
-          `SELECT student_id,
+        // ── 逐生真实明细（供学情简报 / CSV 导出） ──────────────────────
+        // 口径：
+        //   quizScore   = 该生本节所有随堂测得分的平均值（无作答 → null）
+        //   accuracy    = 该生本节随堂测正确率（无作答 → null）
+        //   pollsAnswered = 该生在本次会话中的投票次数（真实计数）
+        //   exitRating  = 该生结课通票评分（未提交 → null）
+        //   attendance  = 是否出现在投票/测验/通票任一真实互动记录中
+        // 绝不使用前端伪计算（旧版曾用 score = 80 + ((i * 7) % 21)）。
+        const quizByStudent = db
+          .prepare(
+            `SELECT student_id,
                   MAX(student_name) as student_name,
                   ROUND(AVG(score), 1) as avg_score,
                   ROUND(AVG(is_correct) * 100, 1) as accuracy,
@@ -1141,102 +1303,113 @@ export function registerClassroomRoutes(
            FROM lesson_quiz_submissions
            WHERE lesson_id = ?
            GROUP BY student_id`,
-        )
-        .all(lessonId) as Array<{
-        student_id: string;
-        student_name: string | null;
-        avg_score: number | null;
-        accuracy: number | null;
-        quiz_count: number;
-      }>;
+          )
+          .all(lessonId) as Array<{
+          student_id: string;
+          student_name: string | null;
+          avg_score: number | null;
+          accuracy: number | null;
+          quiz_count: number;
+        }>;
 
-      const votesByStudent = db
-        .prepare(
-          `SELECT v.student_id, COUNT(*) as votes
+        const votesByStudent = db
+          .prepare(
+            `SELECT v.student_id, COUNT(*) as votes
            FROM classroom_poll_votes v
            JOIN classroom_quick_polls p ON v.poll_id = p.id
            WHERE p.session_id = ?
            GROUP BY v.student_id`,
-        )
-        .all(session.id) as Array<{ student_id: string; votes: number }>;
+          )
+          .all(session.id) as Array<{ student_id: string; votes: number }>;
 
-      const exitByStudent = new Map<string, { rating: number | null; puzzledConcept: string | null }>();
-      for (const t of exitTickets as Array<any>) {
-        exitByStudent.set(t.student_id, {
-          rating: typeof t.rating === 'number' ? t.rating : null,
-          puzzledConcept: t.puzzled_concept ?? null,
+        const exitByStudent = new Map<string, { rating: number | null; puzzledConcept: string | null }>();
+        for (const t of exitTickets as Array<any>) {
+          exitByStudent.set(t.student_id, {
+            rating: typeof t.rating === 'number' ? t.rating : null,
+            puzzledConcept: t.puzzled_concept ?? null,
+          });
+        }
+
+        // 以「本节有真实互动记录的学生」为主键集合，并集上班级花名册
+        const targetClassId = (req.query.classId as string) || session.class_id;
+        const roster = targetClassId
+          ? (db
+              .prepare(
+                `SELECT s.id, s.name, s.student_number
+               FROM students s
+               JOIN class_students cs ON s.id = cs.student_id
+               WHERE cs.class_id = ?
+               ORDER BY s.student_number, s.name`,
+              )
+              .all(targetClassId) as Array<{ id: string; name: string; student_number: string | null }>)
+          : [];
+
+        const votesMap = new Map(votesByStudent.map((v) => [v.student_id, v.votes]));
+        const quizMap = new Map(quizByStudent.map((q) => [q.student_id, q]));
+
+        const seen = new Set<string>();
+        const studentBreakdown: any[] = [];
+        const pushStudent = (studentId: string, fallbackName?: string | null) => {
+          if (seen.has(studentId)) return;
+          seen.add(studentId);
+          const q = quizMap.get(studentId);
+          const votes = votesMap.get(studentId) ?? 0;
+          const exit = exitByStudent.get(studentId);
+          studentBreakdown.push({
+            studentId,
+            studentName: q?.student_name || fallbackName || studentId,
+            attendance: Boolean(q) || votes > 0 || Boolean(exit),
+            quizScore: q?.avg_score ?? null,
+            quizCount: q?.quiz_count ?? 0,
+            accuracy: q?.accuracy ?? null,
+            pollsAnswered: votes,
+            exitRating: exit?.rating ?? null,
+            puzzledConcept: exit?.puzzledConcept ?? null,
+          });
+        };
+
+        // 1) 先放有真实互动记录的学生（按成绩降序，便于简报排序）
+        const interacted = new Set<string>([
+          ...quizByStudent.map((q) => q.student_id),
+          ...votesByStudent.map((v) => v.student_id),
+          ...exitByStudent.keys(),
+        ]);
+        for (const id of Array.from(interacted).sort((a, b) => {
+          const sa = quizMap.get(a)?.avg_score ?? -1;
+          const sb = quizMap.get(b)?.avg_score ?? -1;
+          return sb - sa;
+        })) {
+          pushStudent(id, quizMap.get(id)?.student_name);
+        }
+        // 2) 再补花名册中未产生互动的学生（attendance=false，成绩 null）
+        for (const st of roster) pushStudent(st.id, st.name);
+
+        res.json({
+          success: true,
+          session: {
+            id: session.id,
+            lessonId,
+            stage: session.stage,
+            startedAt: session.started_at,
+            endedAt: session.ended_at,
+            durationMin:
+              session.started_at && session.ended_at ? Math.round((session.ended_at - session.started_at) / 60000) : 0,
+          },
+          metrics: {
+            quizCount: totalQuizSubmissions,
+            quizAccuracy: avgQuizAccuracy,
+            pollVotesTotal: pollVotesCount,
+            exitTicketsCount: exitTickets.length,
+            exitTicketsAvgRating: parseFloat(avgRating),
+            topPuzzledConcepts: puzzledConcepts.slice(0, 10),
+          },
+          students: studentBreakdown,
         });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      // 以「本节有真实互动记录的学生」为主键集合，并集上班级花名册
-      const roster = db
-        .prepare('SELECT id, name, student_number FROM students WHERE class_id = ? ORDER BY student_number, name')
-        .all(session.class_id) as Array<{ id: string; name: string; student_number: string | null }>;
-
-      const votesMap = new Map(votesByStudent.map((v) => [v.student_id, v.votes]));
-      const quizMap = new Map(quizByStudent.map((q) => [q.student_id, q]));
-
-      const seen = new Set<string>();
-      const studentBreakdown: any[] = [];
-      const pushStudent = (studentId: string, fallbackName?: string | null) => {
-        if (seen.has(studentId)) return;
-        seen.add(studentId);
-        const q = quizMap.get(studentId);
-        const votes = votesMap.get(studentId) ?? 0;
-        const exit = exitByStudent.get(studentId);
-        studentBreakdown.push({
-          studentId,
-          studentName: q?.student_name || fallbackName || studentId,
-          attendance: Boolean(q) || votes > 0 || Boolean(exit),
-          quizScore: q?.avg_score ?? null,
-          quizCount: q?.quiz_count ?? 0,
-          accuracy: q?.accuracy ?? null,
-          pollsAnswered: votes,
-          exitRating: exit?.rating ?? null,
-          puzzledConcept: exit?.puzzledConcept ?? null,
-        });
-      };
-
-      // 1) 先放有真实互动记录的学生（按成绩降序，便于简报排序）
-      const interacted = new Set<string>([
-        ...quizByStudent.map((q) => q.student_id),
-        ...votesByStudent.map((v) => v.student_id),
-        ...exitByStudent.keys(),
-      ]);
-      for (const id of Array.from(interacted).sort((a, b) => {
-        const sa = quizMap.get(a)?.avg_score ?? -1;
-        const sb = quizMap.get(b)?.avg_score ?? -1;
-        return sb - sa;
-      })) {
-        pushStudent(id, quizMap.get(id)?.student_name);
-      }
-      // 2) 再补花名册中未产生互动的学生（attendance=false，成绩 null）
-      for (const st of roster) pushStudent(st.id, st.name);
-
-      res.json({
-        success: true,
-        session: {
-          id: session.id,
-          lessonId,
-          stage: session.stage,
-          startedAt: session.started_at,
-          endedAt: session.ended_at,
-          durationMin: session.started_at && session.ended_at ? Math.round((session.ended_at - session.started_at) / 60000) : 0,
-        },
-        metrics: {
-          quizCount: totalQuizSubmissions,
-          quizAccuracy: avgQuizAccuracy,
-          pollVotesTotal: pollVotesCount,
-          exitTicketsCount: exitTickets.length,
-          exitTicketsAvgRating: parseFloat(avgRating),
-          topPuzzledConcepts: puzzledConcepts.slice(0, 10),
-        },
-        students: studentBreakdown,
-      });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // ── 8. 实时课堂情绪与参与度追踪 (Real-time Classroom Mood Tracker) ─────────
 
@@ -1244,7 +1417,8 @@ export function registerClassroomRoutes(
   app.get('/api/classroom/active-sessions', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
     try {
       const activeSessions = db
-        .prepare(`
+        .prepare(
+          `
           SELECT s.*, l.title as lesson_title, c.name as class_name
           FROM classroom_sessions s
           LEFT JOIN lessons l ON s.lesson_id = l.id
@@ -1252,7 +1426,8 @@ export function registerClassroomRoutes(
           WHERE s.stage != 'ARCHIVED_REPORT'
           ORDER BY s.created_at DESC
           LIMIT 10
-        `)
+        `,
+        )
         .all() as any[];
 
       res.json({ success: true, sessions: activeSessions });
@@ -1265,9 +1440,7 @@ export function registerClassroomRoutes(
   // 内置模式以代码常量兜底，数据库记录优先，便于管理员与插件在不发版的情况下扩展。
   app.get('/api/classroom/teaching-modes', requireAuth(), (req: Request, res: Response) => {
     try {
-      const rows = db
-        .prepare('SELECT * FROM teaching_modes ORDER BY sort_order ASC, created_at ASC')
-        .all() as any[];
+      const rows = db.prepare('SELECT * FROM teaching_modes ORDER BY sort_order ASC, created_at ASC').all() as any[];
 
       const stored: TeachingMode[] = rows.map((r) => ({
         id: r.id,
@@ -1295,9 +1468,7 @@ export function registerClassroomRoutes(
     try {
       const { id, name, nameEn, description, descriptionEn, icon, color, sortOrder } = req.body || {};
       if (typeof id !== 'string' || !TEACHING_MODE_ID_PATTERN.test(id)) {
-        return res
-          .status(400)
-          .json({ error: 'Invalid id：仅允许字母数字与 . _ -，以字母数字开头，最长 64 字符' });
+        return res.status(400).json({ error: 'Invalid id：仅允许字母数字与 . _ -，以字母数字开头，最长 64 字符' });
       }
       if (typeof name !== 'string' || !name.trim()) {
         return res.status(400).json({ error: 'name is required' });
@@ -1419,7 +1590,10 @@ export function registerClassroomRoutes(
         }
 
         const session = await classroomService.getOrCreateSession(lessonId, teacherId, classId);
-        db.prepare('UPDATE classroom_sessions SET teaching_mode_id = ? WHERE id = ?').run(modeValidation.id, session.id);
+        db.prepare('UPDATE classroom_sessions SET teaching_mode_id = ? WHERE id = ?').run(
+          modeValidation.id,
+          session.id,
+        );
 
         res.json({ success: true, sessionId: session.id, teachingModeId: modeValidation.id });
       } catch (e: any) {
@@ -1429,213 +1603,229 @@ export function registerClassroomRoutes(
   );
 
   // 课堂情绪与专注度时间序列与统计聚合
-  app.get('/api/classroom/sessions/:lessonId/mood-tracker', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const windowMinutes = Math.min(60, Math.max(5, parseInt(req.query.minutes as string) || 15));
-      const now = Date.now();
-      const startTime = now - windowMinutes * 60 * 1000;
+  app.get(
+    '/api/classroom/sessions/:lessonId/mood-tracker',
+    requireAuth('teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const windowMinutes = Math.min(60, Math.max(5, parseInt(req.query.minutes as string) || 15));
+        const now = Date.now();
+        const startTime = now - windowMinutes * 60 * 1000;
 
-      const session = db
-        .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
-        .get(lessonId) as any;
+        const session = db
+          .prepare('SELECT * FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+          .get(lessonId) as any;
 
-      const sessionId = session ? session.id : null;
+        const sessionId = session ? session.id : null;
 
-      let pacingSignals: any[] = [];
-      let pollVotes: any[] = [];
-      let buzzers: any[] = [];
-      let exitTickets: any[] = [];
+        let pacingSignals: any[] = [];
+        let pollVotes: any[] = [];
+        let buzzers: any[] = [];
+        let exitTickets: any[] = [];
 
-      if (sessionId) {
-        pacingSignals = db
-          .prepare('SELECT signal_type, created_at FROM classroom_pacing_signals WHERE session_id = ? AND created_at >= ? ORDER BY created_at ASC')
-          .all(sessionId, startTime) as any[];
+        if (sessionId) {
+          pacingSignals = db
+            .prepare(
+              'SELECT signal_type, created_at FROM classroom_pacing_signals WHERE session_id = ? AND created_at >= ? ORDER BY created_at ASC',
+            )
+            .all(sessionId, startTime) as any[];
 
-        pollVotes = db
-          .prepare(`
+          pollVotes = db
+            .prepare(
+              `
             SELECT v.selected_option, v.voted_at
             FROM classroom_poll_votes v
             JOIN classroom_quick_polls p ON v.poll_id = p.id
             WHERE p.session_id = ? AND v.voted_at >= ?
             ORDER BY v.voted_at ASC
-          `)
-          .all(sessionId, startTime) as any[];
+          `,
+            )
+            .all(sessionId, startTime) as any[];
 
-        buzzers = db
-          .prepare('SELECT created_at, status FROM classroom_buzzers WHERE session_id = ? AND created_at >= ?')
-          .all(sessionId, startTime) as any[];
+          buzzers = db
+            .prepare('SELECT created_at, status FROM classroom_buzzers WHERE session_id = ? AND created_at >= ?')
+            .all(sessionId, startTime) as any[];
 
-        exitTickets = db
-          .prepare('SELECT rating, created_at FROM classroom_exit_tickets WHERE session_id = ? AND created_at >= ?')
-          .all(sessionId, startTime) as any[];
-      }
-
-      // 按分钟切片生成时间序列
-      const bucketCount = windowMinutes;
-      const bucketSizeMs = 60 * 1000;
-      const timelineData = [];
-
-      let clearCount = 0;
-      let confusedCount = 0;
-      let tooFastCount = 0;
-
-      for (let i = bucketCount - 1; i >= 0; i--) {
-        const bucketStart = now - (i + 1) * bucketSizeMs;
-        const bucketEnd = now - i * bucketSizeMs;
-        const dateObj = new Date(bucketEnd);
-        const timeLabel = `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`;
-
-        const sliceSignals = pacingSignals.filter((s) => s.created_at >= bucketStart && s.created_at < bucketEnd);
-        const sliceVotes = pollVotes.filter((v) => v.voted_at >= bucketStart && v.voted_at < bucketEnd);
-        const sliceBuzzers = buzzers.filter((b) => b.created_at >= bucketStart && b.created_at < bucketEnd);
-
-        const sliceClear = sliceSignals.filter((s) => s.signal_type === 'CLEAR').length;
-        const sliceConfused = sliceSignals.filter((s) => s.signal_type === 'CONFUSED').length;
-        const sliceTooFast = sliceSignals.filter((s) => s.signal_type === 'TOO_FAST').length;
-
-        clearCount += sliceClear;
-        confusedCount += sliceConfused;
-        tooFastCount += sliceTooFast;
-
-        const interactionFrequency = sliceSignals.length + sliceVotes.length + sliceBuzzers.length;
-
-        // 专注度与能量动态加权模型
-        let rawScore = 68 + interactionFrequency * 5 + sliceClear * 4 - sliceConfused * 7 - sliceTooFast * 5;
-        if (interactionFrequency === 0 && sliceSignals.length === 0) {
-          rawScore = 72;
+          exitTickets = db
+            .prepare('SELECT rating, created_at FROM classroom_exit_tickets WHERE session_id = ? AND created_at >= ?')
+            .all(sessionId, startTime) as any[];
         }
-        const engagementScore = Math.min(100, Math.max(20, Math.round(rawScore)));
-        const energyLevel = Math.min(100, Math.max(10, Math.round(50 + interactionFrequency * 10)));
 
-        timelineData.push({
-          time: timeLabel,
-          timestamp: bucketEnd,
-          engagement: engagementScore,
-          energy: energyLevel,
-          interactions: interactionFrequency,
-          clear: sliceClear,
-          confused: sliceConfused,
-          tooFast: sliceTooFast,
-        });
-      }
+        // 按分钟切片生成时间序列
+        const bucketCount = windowMinutes;
+        const bucketSizeMs = 60 * 1000;
+        const timelineData = [];
 
-      // 晴雨表与脉搏分布（绝不编造 75/15/10 虚假繁荣数据）
-      const pulseTotal = clearCount + confusedCount + tooFastCount;
-      const clearPercent = pulseTotal > 0 ? Math.round((clearCount / pulseTotal) * 100) : 0;
-      const confusedPercent = pulseTotal > 0 ? Math.round((confusedCount / pulseTotal) * 100) : 0;
-      const tooFastPercent = pulseTotal > 0 ? Math.round((tooFastCount / pulseTotal) * 100) : 0;
+        let clearCount = 0;
+        let confusedCount = 0;
+        let tooFastCount = 0;
 
-      const recentBuckets = timelineData.slice(-3);
-      const currentEngagement = Math.round(
-        recentBuckets.reduce((acc, cur) => acc + cur.engagement, 0) / (recentBuckets.length || 1),
-      );
+        for (let i = bucketCount - 1; i >= 0; i--) {
+          const bucketStart = now - (i + 1) * bucketSizeMs;
+          const bucketEnd = now - i * bucketSizeMs;
+          const dateObj = new Date(bucketEnd);
+          const timeLabel = `${dateObj.getHours().toString().padStart(2, '0')}:${dateObj.getMinutes().toString().padStart(2, '0')}`;
 
-      let moodStatus: 'OPTIMAL' | 'HIGH_ENERGY' | 'CONFUSED' | 'TOO_FAST' | 'CALM' = 'CALM';
-      let moodLabel = '课堂平稳进行 · 等待学生反馈';
-      let moodEmoji = '🌱';
+          const sliceSignals = pacingSignals.filter((s) => s.created_at >= bucketStart && s.created_at < bucketEnd);
+          const sliceVotes = pollVotes.filter((v) => v.voted_at >= bucketStart && v.voted_at < bucketEnd);
+          const sliceBuzzers = buzzers.filter((b) => b.created_at >= bucketStart && b.created_at < bucketEnd);
 
-      if (pulseTotal > 0) {
-        if (confusedCount > 0 && confusedCount >= clearCount) {
-          moodStatus = 'CONFUSED';
-          moodLabel = '存在疑虑 · 需放慢停顿讲解';
-          moodEmoji = '💡';
-        } else if (tooFastCount > 0 && tooFastCount > clearCount * 0.4) {
-          moodStatus = 'TOO_FAST';
-          moodLabel = '进度过快 · 学生要求减速';
-          moodEmoji = '⚡';
-        } else if (currentEngagement >= 85) {
-          moodStatus = 'HIGH_ENERGY';
-          moodLabel = '互动活跃 · 气氛极度高涨';
-          moodEmoji = '🔥';
-        } else {
-          moodStatus = 'OPTIMAL';
-          moodLabel = '课堂节奏良好 · 专注度高';
-          moodEmoji = '🌟';
+          const sliceClear = sliceSignals.filter((s) => s.signal_type === 'CLEAR').length;
+          const sliceConfused = sliceSignals.filter((s) => s.signal_type === 'CONFUSED').length;
+          const sliceTooFast = sliceSignals.filter((s) => s.signal_type === 'TOO_FAST').length;
+
+          clearCount += sliceClear;
+          confusedCount += sliceConfused;
+          tooFastCount += sliceTooFast;
+
+          const interactionFrequency = sliceSignals.length + sliceVotes.length + sliceBuzzers.length;
+
+          // 专注度与能量动态加权模型
+          let rawScore = 68 + interactionFrequency * 5 + sliceClear * 4 - sliceConfused * 7 - sliceTooFast * 5;
+          if (interactionFrequency === 0 && sliceSignals.length === 0) {
+            rawScore = 72;
+          }
+          const engagementScore = Math.min(100, Math.max(20, Math.round(rawScore)));
+          const energyLevel = Math.min(100, Math.max(10, Math.round(50 + interactionFrequency * 10)));
+
+          timelineData.push({
+            time: timeLabel,
+            timestamp: bucketEnd,
+            engagement: engagementScore,
+            energy: energyLevel,
+            interactions: interactionFrequency,
+            clear: sliceClear,
+            confused: sliceConfused,
+            tooFast: sliceTooFast,
+          });
         }
-      }
 
-      res.json({
-        success: true,
-        session: session
-          ? {
-              id: session.id,
-              stage: session.stage,
-              lessonId,
-              startedAt: session.started_at,
-            }
-          : null,
-        metrics: {
-          currentEngagement,
-          moodStatus,
-          moodLabel,
-          moodEmoji,
-          totalInteractions: pacingSignals.length + pollVotes.length + buzzers.length,
-          interactionFrequencyPerMin: (
-            (pacingSignals.length + pollVotes.length + buzzers.length) /
-            windowMinutes
-          ).toFixed(1),
-          pulseDistribution: {
-            clearCount,
-            confusedCount,
-            tooFastCount,
-            total: pulseTotal,
-            clearPercent,
-            confusedPercent,
-            tooFastPercent,
+        // 晴雨表与脉搏分布（绝不编造 75/15/10 虚假繁荣数据）
+        const pulseTotal = clearCount + confusedCount + tooFastCount;
+        const clearPercent = pulseTotal > 0 ? Math.round((clearCount / pulseTotal) * 100) : 0;
+        const confusedPercent = pulseTotal > 0 ? Math.round((confusedCount / pulseTotal) * 100) : 0;
+        const tooFastPercent = pulseTotal > 0 ? Math.round((tooFastCount / pulseTotal) * 100) : 0;
+
+        const recentBuckets = timelineData.slice(-3);
+        const currentEngagement = Math.round(
+          recentBuckets.reduce((acc, cur) => acc + cur.engagement, 0) / (recentBuckets.length || 1),
+        );
+
+        let moodStatus: 'OPTIMAL' | 'HIGH_ENERGY' | 'CONFUSED' | 'TOO_FAST' | 'CALM' = 'CALM';
+        let moodLabel = '课堂平稳进行 · 等待学生反馈';
+        let moodEmoji = '🌱';
+
+        if (pulseTotal > 0) {
+          if (confusedCount > 0 && confusedCount >= clearCount) {
+            moodStatus = 'CONFUSED';
+            moodLabel = '存在疑虑 · 需放慢停顿讲解';
+            moodEmoji = '💡';
+          } else if (tooFastCount > 0 && tooFastCount > clearCount * 0.4) {
+            moodStatus = 'TOO_FAST';
+            moodLabel = '进度过快 · 学生要求减速';
+            moodEmoji = '⚡';
+          } else if (currentEngagement >= 85) {
+            moodStatus = 'HIGH_ENERGY';
+            moodLabel = '互动活跃 · 气氛极度高涨';
+            moodEmoji = '🔥';
+          } else {
+            moodStatus = 'OPTIMAL';
+            moodLabel = '课堂节奏良好 · 专注度高';
+            moodEmoji = '🌟';
+          }
+        }
+
+        res.json({
+          success: true,
+          session: session
+            ? {
+                id: session.id,
+                stage: session.stage,
+                lessonId,
+                startedAt: session.started_at,
+              }
+            : null,
+          metrics: {
+            currentEngagement,
+            moodStatus,
+            moodLabel,
+            moodEmoji,
+            totalInteractions: pacingSignals.length + pollVotes.length + buzzers.length,
+            interactionFrequencyPerMin: (
+              (pacingSignals.length + pollVotes.length + buzzers.length) /
+              windowMinutes
+            ).toFixed(1),
+            pulseDistribution: {
+              clearCount,
+              confusedCount,
+              tooFastCount,
+              total: pulseTotal,
+              clearPercent,
+              confusedPercent,
+              tooFastPercent,
+            },
           },
-        },
-        timeline: timelineData,
-      });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+          timeline: timelineData,
+        });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    },
+  );
 
   // 教师发起即时脉搏快检 (Pulse Check)
-  app.post('/api/classroom/sessions/:lessonId/pulse-check', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const { prompt = '当前教学节奏与理解度实时脉搏自检', durationSec = 30 } = req.body;
-      const teacherId = getActorId(req) || 'teacher';
+  app.post(
+    '/api/classroom/sessions/:lessonId/pulse-check',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const { prompt = '当前教学节奏与理解度实时脉搏自检', durationSec = 30 } = req.body;
+        const teacherId = getActorId(req) || 'teacher';
 
-      const session = await classroomService.getOrCreateSession(lessonId, teacherId);
+        const session = await classroomService.getOrCreateSession(lessonId, teacherId);
 
-      const pulseCheckPayload = {
-        sessionId: session.id,
-        lessonId,
-        prompt,
-        durationSec,
-        options: [
-          { type: 'CLEAR', label: '听懂了，跟得上节奏 🟢' },
-          { type: 'CONFUSED', label: '有疑问，希望能细讲 🟡' },
-          { type: 'TOO_FAST', label: '讲太快，建议慢一点 🔴' },
-        ],
-        timestamp: Date.now(),
-      };
+        const pulseCheckPayload = {
+          sessionId: session.id,
+          lessonId,
+          prompt,
+          durationSec,
+          options: [
+            { type: 'CLEAR', label: '听懂了，跟得上节奏 🟢' },
+            { type: 'CONFUSED', label: '有疑问，希望能细讲 🟡' },
+            { type: 'TOO_FAST', label: '讲太快，建议慢一点 🔴' },
+          ],
+          timestamp: Date.now(),
+        };
 
-      if (io) {
-        io.to(`lesson-${lessonId}`).emit('classroom:pulse_check_requested', pulseCheckPayload);
-        io.emit('classroom:pulse_check_requested', pulseCheckPayload);
+        if (io) {
+          io.to(`lesson-${lessonId}`).emit('classroom:pulse_check_requested', pulseCheckPayload);
+          io.emit('classroom:pulse_check_requested', pulseCheckPayload);
+        }
+
+        res.json({ success: true, pulseCheck: pulseCheckPayload });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      res.json({ success: true, pulseCheck: pulseCheckPayload });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // ── 课堂随堂测验优秀榜 (Top 5 Performers based on cumulative scores from live quiz responses) ──
-  app.get('/api/classroom/sessions/:lessonId/top-performers', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const limit = Math.min(20, Math.max(1, parseInt(req.query.limit as string) || 5));
-
-      // 1. 从关系型 lesson_quiz_submissions 表查询当前课节学生的累计得分与作答统计
-      let rows: any[] = [];
+  app.get(
+    '/api/classroom/sessions/:lessonId/top-performers',
+    requireAuth('teacher', 'administrator'),
+    (req: Request, res: Response) => {
       try {
-        rows = db
-          .prepare(`
+        const { lessonId } = req.params;
+        const limit = Math.min(20, Math.max(1, parseInt(req.query.limit as string) || 5));
+
+        // 1. 从关系型 lesson_quiz_submissions 表查询当前课节学生的累计得分与作答统计
+        let rows: any[] = [];
+        try {
+          rows = db
+            .prepare(
+              `
             SELECT 
               s.student_id,
               COALESCE(s.student_name, stu.name, s.student_id) as student_name,
@@ -1651,118 +1841,118 @@ export function registerClassroomRoutes(
             GROUP BY s.student_id
             ORDER BY cumulative_score DESC, accuracy DESC, correct_count DESC
             LIMIT ?
-          `)
-          .all(lessonId, limit) as any[];
-      } catch (err: any) {
-        console.warn('[top-performers] query from lesson_quiz_submissions failed:', err?.message);
-      }
+          `,
+            )
+            .all(lessonId, limit) as any[];
+        } catch (err: any) {
+          console.warn('[top-performers] query from lesson_quiz_submissions failed:', err?.message);
+        }
 
-      // 2. 如果关系表暂时无作答数据，补充从 whiteboard_elements (type='quiz') 摄取聚合
-      if (!rows || rows.length === 0) {
-        try {
-          const quizElements = db
-            .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'quiz'")
-            .all(lessonId) as { data: string }[];
+        // 2. 如果关系表暂时无作答数据，补充从 whiteboard_elements (type='quiz') 摄取聚合
+        if (!rows || rows.length === 0) {
+          try {
+            const quizElements = db
+              .prepare("SELECT data FROM whiteboard_elements WHERE lesson_id = ? AND type = 'quiz'")
+              .all(lessonId) as { data: string }[];
 
-          if (quizElements.length > 0) {
-            const studentMap: Record<
-              string,
-              {
-                studentId: string;
-                studentName: string;
-                cumulativeScore: number;
-                totalQuizzesAnswered: number;
-                correctCount: number;
-                lastSubmittedAt: number;
-              }
-            > = {};
-
-            for (const el of quizElements) {
-              try {
-                const parsed = JSON.parse(el.data || '{}');
-                const subs = parsed.submissions || {};
-                const correctAnswer = parsed.correctAnswer;
-                for (const [stId, subData] of Object.entries(subs) as [string, any][]) {
-                  if (!studentMap[stId]) {
-                    const stRow = db.prepare('SELECT name FROM students WHERE id = ?').get(stId) as any;
-                    studentMap[stId] = {
-                      studentId: stId,
-                      studentName: stRow?.name || stId,
-                      cumulativeScore: 0,
-                      totalQuizzesAnswered: 0,
-                      correctCount: 0,
-                      lastSubmittedAt: subData.time || Date.now(),
-                    };
-                  }
-                  const score =
-                    typeof subData.score === 'number'
-                      ? subData.score
-                      : subData.answer === correctAnswer
-                        ? 100
-                        : 0;
-                  studentMap[stId].cumulativeScore += score;
-                  studentMap[stId].totalQuizzesAnswered += 1;
-                  if (score > 0) studentMap[stId].correctCount += 1;
-                  if (subData.time && subData.time > studentMap[stId].lastSubmittedAt) {
-                    studentMap[stId].lastSubmittedAt = subData.time;
-                  }
+            if (quizElements.length > 0) {
+              const studentMap: Record<
+                string,
+                {
+                  studentId: string;
+                  studentName: string;
+                  cumulativeScore: number;
+                  totalQuizzesAnswered: number;
+                  correctCount: number;
+                  lastSubmittedAt: number;
                 }
-              } catch (_) {}
+              > = {};
+
+              for (const el of quizElements) {
+                try {
+                  const parsed = JSON.parse(el.data || '{}');
+                  const subs = parsed.submissions || {};
+                  const correctAnswer = parsed.correctAnswer;
+                  for (const [stId, subData] of Object.entries(subs) as [string, any][]) {
+                    if (!studentMap[stId]) {
+                      const stRow = db.prepare('SELECT name FROM students WHERE id = ?').get(stId) as any;
+                      studentMap[stId] = {
+                        studentId: stId,
+                        studentName: stRow?.name || stId,
+                        cumulativeScore: 0,
+                        totalQuizzesAnswered: 0,
+                        correctCount: 0,
+                        lastSubmittedAt: subData.time || Date.now(),
+                      };
+                    }
+                    const score =
+                      typeof subData.score === 'number' ? subData.score : subData.answer === correctAnswer ? 100 : 0;
+                    studentMap[stId].cumulativeScore += score;
+                    studentMap[stId].totalQuizzesAnswered += 1;
+                    if (score > 0) studentMap[stId].correctCount += 1;
+                    if (subData.time && subData.time > studentMap[stId].lastSubmittedAt) {
+                      studentMap[stId].lastSubmittedAt = subData.time;
+                    }
+                  }
+                } catch (_) {}
+              }
+
+              rows = Object.values(studentMap)
+                .map((s) => ({
+                  student_id: s.studentId,
+                  student_name: s.studentName,
+                  cumulative_score: s.cumulativeScore,
+                  total_quizzes_answered: s.totalQuizzesAnswered,
+                  correct_count: s.correctCount,
+                  accuracy:
+                    s.totalQuizzesAnswered > 0 ? Math.round((s.correctCount / s.totalQuizzesAnswered) * 100) : 0,
+                  avg_time_spent_ms: 12000,
+                  last_submitted_at: s.lastSubmittedAt,
+                }))
+                .sort((a, b) => b.cumulative_score - a.cumulative_score || b.accuracy - a.accuracy)
+                .slice(0, limit);
             }
+          } catch (_) {}
+        }
 
-            rows = Object.values(studentMap)
-              .map((s) => ({
-                student_id: s.studentId,
-                student_name: s.studentName,
-                cumulative_score: s.cumulativeScore,
-                total_quizzes_answered: s.totalQuizzesAnswered,
-                correct_count: s.correctCount,
-                accuracy:
-                  s.totalQuizzesAnswered > 0 ? Math.round((s.correctCount / s.totalQuizzesAnswered) * 100) : 0,
-                avg_time_spent_ms: 12000,
-                last_submitted_at: s.lastSubmittedAt,
-              }))
-              .sort((a, b) => b.cumulative_score - a.cumulative_score || b.accuracy - a.accuracy)
-              .slice(0, limit);
-          }
+        // 3. 统计全班答题总览
+        let totalResponses = 0;
+        let averageScore = 0;
+        try {
+          const stats = db
+            .prepare(
+              'SELECT COUNT(*) as count, AVG(score) as avg_score FROM lesson_quiz_submissions WHERE lesson_id = ?',
+            )
+            .get(lessonId) as any;
+          totalResponses = stats?.count || 0;
+          averageScore = Math.round(stats?.avg_score || 0);
         } catch (_) {}
+
+        res.json({
+          success: true,
+          lessonId,
+          topPerformers: (rows || []).map((r, index) => ({
+            rank: index + 1,
+            studentId: r.student_id,
+            studentName: r.student_name || `Student ${String(r.student_id).slice(-4)}`,
+            cumulativeScore: Number(r.cumulative_score) || 0,
+            totalQuizzesAnswered: Number(r.total_quizzes_answered) || 0,
+            correctCount: Number(r.correct_count) || 0,
+            accuracy: Number(r.accuracy) || 0,
+            avgTimeSpentMs: Number(r.avg_time_spent_ms) || 0,
+            lastSubmittedAt: Number(r.last_submitted_at) || Date.now(),
+          })),
+          summary: {
+            totalParticipants: rows ? rows.length : 0,
+            totalResponses,
+            averageScore,
+          },
+        });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      // 3. 统计全班答题总览
-      let totalResponses = 0;
-      let averageScore = 0;
-      try {
-        const stats = db
-          .prepare('SELECT COUNT(*) as count, AVG(score) as avg_score FROM lesson_quiz_submissions WHERE lesson_id = ?')
-          .get(lessonId) as any;
-        totalResponses = stats?.count || 0;
-        averageScore = Math.round(stats?.avg_score || 0);
-      } catch (_) {}
-
-      res.json({
-        success: true,
-        lessonId,
-        topPerformers: (rows || []).map((r, index) => ({
-          rank: index + 1,
-          studentId: r.student_id,
-          studentName: r.student_name || `Student ${String(r.student_id).slice(-4)}`,
-          cumulativeScore: Number(r.cumulative_score) || 0,
-          totalQuizzesAnswered: Number(r.total_quizzes_answered) || 0,
-          correctCount: Number(r.correct_count) || 0,
-          accuracy: Number(r.accuracy) || 0,
-          avgTimeSpentMs: Number(r.avg_time_spent_ms) || 0,
-          lastSubmittedAt: Number(r.last_submitted_at) || Date.now(),
-        })),
-        summary: {
-          totalParticipants: rows ? rows.length : 0,
-          totalResponses,
-          averageScore,
-        },
-      });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // 通用顶尖答题表现榜单查询
   app.get('/api/classroom/top-performers', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
@@ -1775,7 +1965,8 @@ export function registerClassroomRoutes(
 
       const limit = Math.min(20, Math.max(1, parseInt(req.query.limit as string) || 5));
       const rows = db
-        .prepare(`
+        .prepare(
+          `
           SELECT 
             s.student_id,
             COALESCE(s.student_name, stu.name, s.student_id) as student_name,
@@ -1790,7 +1981,8 @@ export function registerClassroomRoutes(
           GROUP BY s.student_id
           ORDER BY cumulative_score DESC, accuracy DESC, correct_count DESC
           LIMIT ?
-        `)
+        `,
+        )
         .all(limit) as any[];
 
       res.json({
@@ -1821,33 +2013,40 @@ export function registerClassroomRoutes(
   });
 
   // 模拟产生实时随堂测验作答数据（供教师端测试、预览与演示）
-  app.post('/api/classroom/sessions/:lessonId/simulate-quiz-responses', requireAuth('teacher', 'administrator'), async (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const studentsList = db.prepare('SELECT id, name FROM students LIMIT 8').all() as { id: string; name: string }[];
+  app.post(
+    '/api/classroom/sessions/:lessonId/simulate-quiz-responses',
+    requireAuth('teacher', 'administrator'),
+    async (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const studentsList = db.prepare('SELECT id, name FROM students LIMIT 8').all() as {
+          id: string;
+          name: string;
+        }[];
 
-      if (studentsList.length === 0) {
-        return res.status(400).json({ error: 'No students found in system' });
-      }
+        if (studentsList.length === 0) {
+          return res.status(400).json({ error: 'No students found in system' });
+        }
 
-      const dummyElementId = `quiz_sim_${Date.now()}`;
-      const questions = [
-        'Newton Second Law F=ma',
-        'Kinetic Energy Formula 1/2mv^2',
-        'Gravitational Constant G',
-        'Conservation of Momentum',
-      ];
-      const chosenQuestion = questions[Math.floor(Math.random() * questions.length)];
+        const dummyElementId = `quiz_sim_${Date.now()}`;
+        const questions = [
+          'Newton Second Law F=ma',
+          'Kinetic Energy Formula 1/2mv^2',
+          'Gravitational Constant G',
+          'Conservation of Momentum',
+        ];
+        const chosenQuestion = questions[Math.floor(Math.random() * questions.length)];
 
-      const results = [];
-      for (const st of studentsList) {
-        const isCorrect = Math.random() > 0.2;
-        const score = isCorrect ? Math.floor(Math.random() * 20 + 80) : Math.floor(Math.random() * 40);
-        const timeSpent = Math.floor(Math.random() * 15000 + 4000);
-        const subId = `sim-quiz-${lessonId}-${st.id}-${Date.now()}`;
+        const results = [];
+        for (const st of studentsList) {
+          const isCorrect = Math.random() > 0.2;
+          const score = isCorrect ? Math.floor(Math.random() * 20 + 80) : Math.floor(Math.random() * 40);
+          const timeSpent = Math.floor(Math.random() * 15000 + 4000);
+          const subId = `sim-quiz-${lessonId}-${st.id}-${Date.now()}`;
 
-        try {
-          db.prepare(`
+          try {
+            db.prepare(
+              `
             INSERT INTO lesson_quiz_submissions
               (id, lesson_id, element_id, student_id, student_name, answer, score, is_correct, time_spent_ms, submitted_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1856,157 +2055,228 @@ export function registerClassroomRoutes(
               is_correct = excluded.is_correct,
               time_spent_ms = excluded.time_spent_ms,
               submitted_at = excluded.submitted_at
-          `).run(subId, lessonId, dummyElementId, st.id, st.name, 'A', score, isCorrect ? 1 : 0, timeSpent, Date.now());
-        } catch (_) {}
+          `,
+            ).run(
+              subId,
+              lessonId,
+              dummyElementId,
+              st.id,
+              st.name,
+              'A',
+              score,
+              isCorrect ? 1 : 0,
+              timeSpent,
+              Date.now(),
+            );
+          } catch (_) {}
 
-        const eventPayload = {
-          lessonId,
-          elementId: dummyElementId,
-          studentId: st.id,
-          studentName: st.name,
-          answer: 'A',
-          score,
-          isCorrect,
-          time: Date.now(),
-          question: chosenQuestion,
-        };
+          const eventPayload = {
+            lessonId,
+            elementId: dummyElementId,
+            studentId: st.id,
+            studentName: st.name,
+            answer: 'A',
+            score,
+            isCorrect,
+            time: Date.now(),
+            question: chosenQuestion,
+          };
 
-        if (io) {
-          io.to(`lesson-${lessonId}`).emit('whiteboard-quiz-answered', eventPayload);
-          io.emit('whiteboard-quiz-answered', eventPayload);
+          if (io) {
+            io.to(`lesson-${lessonId}`).emit('whiteboard-quiz-answered', eventPayload);
+            io.emit('whiteboard-quiz-answered', eventPayload);
+          }
+
+          results.push({ studentId: st.id, name: st.name, score, isCorrect });
         }
 
-        results.push({ studentId: st.id, name: st.name, score, isCorrect });
+        res.json({ success: true, count: results.length, submissions: results });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      res.json({ success: true, count: results.length, submissions: results });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // ── 课程预设极速投票 CRUD (Lesson Preset Polls) ──────────────────────
 
   /** 获取指定课程下的所有预设投票题 */
-  app.get('/api/lessons/:lessonId/preset-polls', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const rows = db.prepare(
-        'SELECT * FROM lesson_preset_polls WHERE lesson_id = ? ORDER BY sort_order ASC, created_at ASC',
-      ).all(lessonId) as Array<{
-        id: string; lesson_id: string; title: string; question_type: string;
-        options_json: string; correct_option: string | null; sort_order: number;
-        created_at: number; updated_at: number;
-      }>;
+  app.get(
+    '/api/lessons/:lessonId/preset-polls',
+    requireAuth('teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const rows = db
+          .prepare('SELECT * FROM lesson_preset_polls WHERE lesson_id = ? ORDER BY sort_order ASC, created_at ASC')
+          .all(lessonId) as Array<{
+          id: string;
+          lesson_id: string;
+          title: string;
+          question_type: string;
+          options_json: string;
+          correct_option: string | null;
+          sort_order: number;
+          created_at: number;
+          updated_at: number;
+        }>;
 
-      const presets = rows.map((r) => ({
-        id: r.id,
-        lessonId: r.lesson_id,
-        title: r.title,
-        questionType: r.question_type,
-        options: JSON.parse(r.options_json),
-        correctOption: r.correct_option,
-        sortOrder: r.sort_order,
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-      }));
+        const presets = rows.map((r) => ({
+          id: r.id,
+          lessonId: r.lesson_id,
+          title: r.title,
+          questionType: r.question_type,
+          options: JSON.parse(r.options_json),
+          correctOption: r.correct_option,
+          sortOrder: r.sort_order,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+        }));
 
-      res.json({ success: true, presets });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+        res.json({ success: true, presets });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    },
+  );
 
   /** 新增预设投票题到指定课程 */
-  app.post('/api/lessons/:lessonId/preset-polls', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
-    try {
-      const { lessonId } = req.params;
-      const { title, questionType = 'ABCD', options, correctOption, sortOrder = 0 } = req.body;
+  app.post(
+    '/api/lessons/:lessonId/preset-polls',
+    requireAuth('teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { lessonId } = req.params;
+        const { title, questionType = 'ABCD', options, correctOption, sortOrder = 0 } = req.body;
 
-      if (!title || !options || !Array.isArray(options) || options.length < 2) {
-        res.status(400).json({ error: 'title and options (array with >= 2 items) are required' });
-        return;
-      }
+        if (!title || !options || !Array.isArray(options) || options.length < 2) {
+          res.status(400).json({ error: 'title and options (array with >= 2 items) are required' });
+          return;
+        }
 
-      const id = `preset_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      const now = Date.now();
+        const id = `preset_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const now = Date.now();
 
-      db.prepare(`
+        db.prepare(
+          `
         INSERT INTO lesson_preset_polls (id, lesson_id, title, question_type, options_json, correct_option, sort_order, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, lessonId, title, questionType, JSON.stringify(options), correctOption || null, sortOrder, now, now);
+      `,
+        ).run(id, lessonId, title, questionType, JSON.stringify(options), correctOption || null, sortOrder, now, now);
 
-      res.json({
-        success: true,
-        preset: { id, lessonId, title, questionType, options, correctOption: correctOption || null, sortOrder, createdAt: now, updatedAt: now },
-      });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+        res.json({
+          success: true,
+          preset: {
+            id,
+            lessonId,
+            title,
+            questionType,
+            options,
+            correctOption: correctOption || null,
+            sortOrder,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    },
+  );
 
   /** 修改预设投票题 */
-  app.put('/api/lessons/:lessonId/preset-polls/:id', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
-    try {
-      const { lessonId, id } = req.params;
-      const { title, questionType, options, correctOption, sortOrder } = req.body;
+  app.put(
+    '/api/lessons/:lessonId/preset-polls/:id',
+    requireAuth('teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { lessonId, id } = req.params;
+        const { title, questionType, options, correctOption, sortOrder } = req.body;
 
-      const existing = db.prepare('SELECT id FROM lesson_preset_polls WHERE id = ? AND lesson_id = ?').get(id, lessonId);
-      if (!existing) {
-        res.status(404).json({ error: 'Preset poll not found' });
-        return;
+        const existing = db
+          .prepare('SELECT id FROM lesson_preset_polls WHERE id = ? AND lesson_id = ?')
+          .get(id, lessonId);
+        if (!existing) {
+          res.status(404).json({ error: 'Preset poll not found' });
+          return;
+        }
+
+        const updates: string[] = [];
+        const params: any[] = [];
+
+        if (title !== undefined) {
+          updates.push('title = ?');
+          params.push(title);
+        }
+        if (questionType !== undefined) {
+          updates.push('question_type = ?');
+          params.push(questionType);
+        }
+        if (options !== undefined) {
+          updates.push('options_json = ?');
+          params.push(JSON.stringify(options));
+        }
+        if (correctOption !== undefined) {
+          updates.push('correct_option = ?');
+          params.push(correctOption || null);
+        }
+        if (sortOrder !== undefined) {
+          updates.push('sort_order = ?');
+          params.push(sortOrder);
+        }
+
+        if (updates.length === 0) {
+          res.status(400).json({ error: 'No fields to update' });
+          return;
+        }
+
+        updates.push('updated_at = ?');
+        params.push(Date.now());
+        params.push(id);
+        params.push(lessonId);
+
+        db.prepare(`UPDATE lesson_preset_polls SET ${updates.join(', ')} WHERE id = ? AND lesson_id = ?`).run(
+          ...params,
+        );
+
+        const updated = db.prepare('SELECT * FROM lesson_preset_polls WHERE id = ?').get(id) as any;
+        res.json({
+          success: true,
+          preset: {
+            id: updated.id,
+            lessonId: updated.lesson_id,
+            title: updated.title,
+            questionType: updated.question_type,
+            options: JSON.parse(updated.options_json),
+            correctOption: updated.correct_option,
+            sortOrder: updated.sort_order,
+            createdAt: updated.created_at,
+            updatedAt: updated.updated_at,
+          },
+        });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-
-      const updates: string[] = [];
-      const params: any[] = [];
-
-      if (title !== undefined) { updates.push('title = ?'); params.push(title); }
-      if (questionType !== undefined) { updates.push('question_type = ?'); params.push(questionType); }
-      if (options !== undefined) { updates.push('options_json = ?'); params.push(JSON.stringify(options)); }
-      if (correctOption !== undefined) { updates.push('correct_option = ?'); params.push(correctOption || null); }
-      if (sortOrder !== undefined) { updates.push('sort_order = ?'); params.push(sortOrder); }
-
-      if (updates.length === 0) {
-        res.status(400).json({ error: 'No fields to update' });
-        return;
-      }
-
-      updates.push('updated_at = ?');
-      params.push(Date.now());
-      params.push(id);
-      params.push(lessonId);
-
-      db.prepare(`UPDATE lesson_preset_polls SET ${updates.join(', ')} WHERE id = ? AND lesson_id = ?`).run(...params);
-
-      const updated = db.prepare('SELECT * FROM lesson_preset_polls WHERE id = ?').get(id) as any;
-      res.json({
-        success: true,
-        preset: {
-          id: updated.id, lessonId: updated.lesson_id, title: updated.title,
-          questionType: updated.question_type, options: JSON.parse(updated.options_json),
-          correctOption: updated.correct_option, sortOrder: updated.sort_order,
-          createdAt: updated.created_at, updatedAt: updated.updated_at,
-        },
-      });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   /** 删除预设投票题 */
-  app.delete('/api/lessons/:lessonId/preset-polls/:id', requireAuth('teacher', 'administrator'), (req: Request, res: Response) => {
-    try {
-      const { lessonId, id } = req.params;
-      const result = db.prepare('DELETE FROM lesson_preset_polls WHERE id = ? AND lesson_id = ?').run(id, lessonId);
-      if ((result as any).changes === 0) {
-        res.status(404).json({ error: 'Preset poll not found' });
-        return;
+  app.delete(
+    '/api/lessons/:lessonId/preset-polls/:id',
+    requireAuth('teacher', 'administrator'),
+    (req: Request, res: Response) => {
+      try {
+        const { lessonId, id } = req.params;
+        const result = db.prepare('DELETE FROM lesson_preset_polls WHERE id = ? AND lesson_id = ?').run(id, lessonId);
+        if ((result as any).changes === 0) {
+          res.status(404).json({ error: 'Preset poll not found' });
+          return;
+        }
+        res.json({ success: true });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
       }
-      res.json({ success: true });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    },
+  );
 
   // 主动查询当前在线学生名单（仅教师/管理员）
   app.get('/api/presence', requireAuth('teacher', 'administrator'), (_req, res) => {

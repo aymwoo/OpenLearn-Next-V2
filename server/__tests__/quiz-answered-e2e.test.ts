@@ -28,6 +28,8 @@ import { io as ioClient, type Socket as ClientSocket } from 'socket.io-client';
 import { registerLessonsRoutes } from '../routes/lessons.js';
 import { setupRealtimeBridge } from '../realtime-bridge.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { loadMigrationsFromDirectory, runMigrations } from '../utils/migrate.js';
+import path from 'path';
 
 interface WhiteboardQuizAnswered {
   lessonId?: string;
@@ -55,6 +57,8 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
   const correctAnswer = 'B';
 
   beforeAll(async () => {
+    runMigrations(kernelContainer.db as any, loadMigrationsFromDirectory(path.resolve(__dirname, '../../migrations')));
+
     // ── Boot Express + Socket.io (mirroring server.ts wiring) ────────
     app = express();
     app.use(express.json());
@@ -92,13 +96,9 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
     baseUrl = `http://127.0.0.1:${port}`;
 
     // ── Seed a quiz element so /quiz-submit has a target ─────────────
+    kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE id = ?').run(elementId);
     kernelContainer.db
-      .prepare('DELETE FROM whiteboard_elements WHERE id = ?')
-      .run(elementId);
-    kernelContainer.db
-      .prepare(
-        'INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)',
-      )
+      .prepare('INSERT INTO whiteboard_elements (id, lesson_id, type, data, created_at) VALUES (?, ?, ?, ?, ?)')
       .run(
         elementId,
         lessonId,
@@ -120,9 +120,7 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
     const studentToken = `sess_quiz_e2e_stu_${Date.now()}`;
     kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(studentToken);
     kernelContainer.db
-      .prepare(
-        'INSERT INTO client_sessions (id, session_data, expires_at, updated_at) VALUES (?, ?, ?, ?)',
-      )
+      .prepare('INSERT INTO client_sessions (id, session_data, expires_at, updated_at) VALUES (?, ?, ?, ?)')
       .run(
         studentToken,
         JSON.stringify({ userId: studentId, username: 'student_e2e', role: 'student', studentId }),
@@ -130,6 +128,18 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
         Date.now(),
       );
     (globalThis as any).__quizE2EStudentToken = studentToken;
+
+    const teacherToken = `sess_quiz_e2e_tch_${Date.now()}`;
+    kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(teacherToken);
+    kernelContainer.db
+      .prepare('INSERT INTO client_sessions (id, session_data, expires_at, updated_at) VALUES (?, ?, ?, ?)')
+      .run(
+        teacherToken,
+        JSON.stringify({ userId: teacherId, username: 'teacher_e2e', role: 'teacher' }),
+        Date.now() + 3600000,
+        Date.now(),
+      );
+    (globalThis as any).__quizE2ETeacherToken = teacherToken;
 
     // ── Connect a real socket.io client ─────────────────────────────
     client = ioClient(baseUrl, {
@@ -150,6 +160,8 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
     kernelContainer.db.prepare('DELETE FROM whiteboard_elements WHERE id = ?').run(elementId);
     const token = (globalThis as any).__quizE2EStudentToken;
     if (token) kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(token);
+    const tchToken = (globalThis as any).__quizE2ETeacherToken;
+    if (tchToken) kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(tchToken);
   });
 
   it('student quiz-submit → emits whiteboard-quiz-answered with correct shape', async () => {
@@ -237,5 +249,22 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
     expect(events).toHaveLength(1);
     expect(events[0].elementId).toBe('el-quiz-e2e-002');
     expect(events[0].isCorrect).toBe(false);
+  });
+
+  it('teacher GET /api/lessons/:id/quiz-submissions successfully retrieves merged relational submissions', async () => {
+    const teacherToken = (globalThis as any).__quizE2ETeacherToken;
+    const res = await fetch(`${baseUrl}/api/lessons/${lessonId}/quiz-submissions`, {
+      headers: { Cookie: `edu_os_token=${teacherToken}` },
+    });
+    expect(res.status).toBe(200);
+    const json: any = await res.json();
+    expect(json.success).toBe(true);
+    expect(Array.isArray(json.quizzes)).toBe(true);
+    const quiz = json.quizzes.find((q: any) => q.elementId === elementId);
+    expect(quiz).toBeDefined();
+    expect(quiz.submissions[studentId]).toBeDefined();
+    expect(quiz.submissions[studentId].answer).toBe(correctAnswer);
+    expect(quiz.submissions[studentId].isCorrect).toBe(true);
+    expect(quiz.submissions[studentId].score).toBe(100);
   });
 });

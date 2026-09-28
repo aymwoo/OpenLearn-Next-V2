@@ -291,7 +291,19 @@ export function registerRosterRoutes(ctx: ServerContext) {
       if (!session) {
         return res.json({ session: null });
       }
-      res.json({ session });
+      res.json({ session, ...(session as any) });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  app.get('/api/auth/me', (req, res) => {
+    try {
+      const token = getCookieToken(req);
+      if (!token) return res.json({ session: null, role: null });
+      const session = getValidSession(token);
+      if (!session) return res.json({ session: null, role: null });
+      res.json({ session, ...(session as any) });
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -640,7 +652,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
             kernelContainer.db
               .prepare('UPDATE students SET password = ? WHERE id = ?')
               .run(bcryptHashPassword(providedPassword), studentObj.id);
-            console.log(`[Auth] Auto-upgraded plain password hash for student ${studentObj.student_number || studentObj.id}`);
+            console.log(
+              `[Auth] Auto-upgraded plain password hash for student ${studentObj.student_number || studentObj.id}`,
+            );
           } catch (upgradeErr) {
             console.error('[Auth] Failed to auto-upgrade plain password', upgradeErr);
           }

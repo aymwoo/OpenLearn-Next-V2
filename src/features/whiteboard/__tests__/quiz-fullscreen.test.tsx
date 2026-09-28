@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import { QuizFullscreenView } from '../fullscreen/QuizFullscreenView';
 import type { FullscreenRendererProps } from '../fullscreen/FullscreenRendererRegistry';
 
@@ -189,5 +189,62 @@ describe('QuizFullscreenView', () => {
     await waitFor(() => {
       expect(screen.getByTestId('quiz-stat-passed').textContent).toBe('1');
     });
+  });
+
+  it('allows student to select an option, submit answer and see feedback', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/auth/session' || url === '/api/auth/me') {
+        return {
+          ok: true,
+          json: async () => ({ session: { id: 'stu-current', studentId: 'stu-current', role: 'student' } }),
+        };
+      }
+      if (url === '/api/students') {
+        return { ok: true, json: async () => [] };
+      }
+      if (url.includes('/quiz-submit')) {
+        return {
+          ok: true,
+          json: async () => ({ success: true, isCorrect: true, score: 100, studentId: 'stu-current' }),
+        };
+      }
+      return { ok: true, json: async () => [] };
+    });
+
+    render(
+      <QuizFullscreenView
+        {...baseProps}
+        elementId="el-quiz-001"
+        data={{
+          question: '光合作用产物？',
+          options: ['氧气', '二氧化碳'],
+          correctIndex: 0,
+          submissions: {},
+        }}
+      />,
+    );
+
+    // 学生未作答时，不剧透 "✓ 正确答案"
+    await waitFor(() => {
+      expect(screen.queryByText('✓ 正确答案')).toBeNull();
+    });
+
+    // 选中第一个选项 A
+    const opt0 = screen.getByTestId('quiz-option-0');
+    fireEvent.click(opt0);
+
+    // 提交按钮可用并点击
+    const submitBtn = screen.getByTestId('quiz-submit-btn');
+    expect(submitBtn.getAttribute('disabled')).toBeNull();
+    fireEvent.click(submitBtn);
+
+    // 提交成功，显示反馈与得分
+    await waitFor(() => {
+      expect(screen.getByTestId('quiz-feedback')).toBeDefined();
+      expect(screen.getByText(/🎉 回答正确！得分：100 分/)).toBeDefined();
+    });
+
+    // 提交后展示正确答案标签
+    expect(screen.getByText('✓ 正确答案')).toBeDefined();
   });
 });
