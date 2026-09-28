@@ -165,7 +165,15 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
     pluginHost.registerPreloadedPlugin(pluginId, AssignmentEvalPlugin);
     db.prepare(
       'INSERT INTO plugins (id, name, manifest, source_code, status, created_at, loader_version) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    ).run(pluginId, 'Assignment Eval', JSON.stringify(AssignmentEvalPlugin.manifest), '', 'installed', Date.now(), 'esm');
+    ).run(
+      pluginId,
+      'Assignment Eval',
+      JSON.stringify(AssignmentEvalPlugin.manifest),
+      '',
+      'installed',
+      Date.now(),
+      'esm',
+    );
     await pluginHost.activatePlugin(pluginId);
   });
 
@@ -317,7 +325,11 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
     // 重复分配不会产生重复任务
     await execute('assignment.assign_peer_reviews', 'user:t1:teacher', { assignmentId, reviewerCount: 1 });
     expect(
-      (db.prepare('SELECT COUNT(*) AS c FROM plugin_peer_review_tasks WHERE assignment_id = ?').get(assignmentId) as { c: number }).c,
+      (
+        db.prepare('SELECT COUNT(*) AS c FROM plugin_peer_review_tasks WHERE assignment_id = ?').get(assignmentId) as {
+          c: number;
+        }
+      ).c,
     ).toBe(3);
 
     // 自评被拒
@@ -344,9 +356,11 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
     expect(storedReview.assignment_id).toBe(assignmentId);
     expect(storedReview.status).toBe('submitted');
     expect(
-      (db
-        .prepare("SELECT status FROM plugin_peer_review_tasks WHERE submission_id = ? AND reviewer_id = ?")
-        .get(submissions['stu-1'], firstTask.reviewer_id) as { status: string }).status,
+      (
+        db
+          .prepare('SELECT status FROM plugin_peer_review_tasks WHERE submission_id = ? AND reviewer_id = ?')
+          .get(submissions['stu-1'], firstTask.reviewer_id) as { status: string }
+      ).status,
     ).toBe('submitted');
   });
 
@@ -428,7 +442,11 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
       peerWeight: 0.4,
     })) as any;
 
-    const sub1 = (await execute('assignment.submit', 'user:stu-1:student', { assignmentId, studentId: 'stu-1', filePath: '/1.pdf' })) as any;
+    const sub1 = (await execute('assignment.submit', 'user:stu-1:student', {
+      assignmentId,
+      studentId: 'stu-1',
+      filePath: '/1.pdf',
+    })) as any;
     await execute('assignment.submit', 'user:stu-2:student', { assignmentId, studentId: 'stu-2', filePath: '/2.pdf' });
 
     await execute('assignment.peer_review', 'user:stu-2:student', {
@@ -572,7 +590,9 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
     await execute('assignment.assign_peer_reviews', 'user:t1:teacher', { assignmentId, reviewerCount: 1 });
 
     const task = db
-      .prepare('SELECT submission_id, reviewer_id FROM plugin_peer_review_tasks WHERE assignment_id = ? AND submission_id = ?')
+      .prepare(
+        'SELECT submission_id, reviewer_id FROM plugin_peer_review_tasks WHERE assignment_id = ? AND submission_id = ?',
+      )
       .get(assignmentId, mine.submissionId) as any;
     expect(task.reviewer_id).toBe('stu-2');
 
@@ -606,9 +626,7 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
     expect(teacherView.peerProgress.tasks).toBe(2);
     expect(teacherView.peerProgress.pending).toBe(2);
     expect(teacherView.peerProgress.completed).toBe(0);
-    expect(
-      teacherView.peerProgress.reviewers.map((item: any) => item.name).sort(),
-    ).toEqual(['stu-1', 'stu-2']);
+    expect(teacherView.peerProgress.reviewers.map((item: any) => item.name).sort()).toEqual(['stu-1', 'stu-2']);
     expect(teacherView.peerProgress.flags.some((flag: any) => flag.type === 'peer_review_pending')).toBe(true);
   });
 
@@ -642,7 +660,9 @@ describe('AssignmentEvalPlugin（作业中心）', () => {
     expect(Number(assignmentRow.peer_review_due_at)).toBeLessThan(Date.now());
 
     const task = db
-      .prepare('SELECT submission_id, reviewer_id, due_at FROM plugin_peer_review_tasks WHERE assignment_id = ? AND submission_id = ?')
+      .prepare(
+        'SELECT submission_id, reviewer_id, due_at FROM plugin_peer_review_tasks WHERE assignment_id = ? AND submission_id = ?',
+      )
       .get(assignmentId, first.submissionId) as any;
     expect(Number(task.due_at)).toBeLessThan(Date.now());
 

@@ -1430,7 +1430,9 @@ export class WorkerManager {
         clearActivationTimer();
         cleanupActivationWorkerListeners();
         if (activationReject) {
-          const errMsg = (msg as any).stack ? `${(msg as any).message}\n${(msg as any).stack}` : ((msg as any).message ?? 'Unknown error');
+          const errMsg = (msg as any).stack
+            ? `${(msg as any).message}\n${(msg as any).stack}`
+            : ((msg as any).message ?? 'Unknown error');
           activationReject(new WorkerActivateError(pluginId, errMsg));
           activationResolve = null;
           activationReject = null;

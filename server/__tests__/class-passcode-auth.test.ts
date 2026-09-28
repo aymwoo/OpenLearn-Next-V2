@@ -62,27 +62,25 @@ describe('班级上课临时密码与双轨登录鉴权', () => {
     // 3. Students
     db.prepare('DELETE FROM students WHERE id IN (?, ?)').run(studentId1, studentId2);
     const hash = bcrypt.hashSync(studentPersonalPwd, 10);
-    db.prepare('INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-      studentId1,
-      'STU101',
-      '张明',
-      'zhang@school.edu',
-      hash,
-      now,
-    );
-    db.prepare('INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-      studentId2,
-      'STU102',
-      '李红',
-      'li@school.edu',
-      hash,
-      now,
-    );
+    db.prepare(
+      'INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(studentId1, 'STU101', '张明', 'zhang@school.edu', hash, now);
+    db.prepare(
+      'INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(studentId2, 'STU102', '李红', 'li@school.edu', hash, now);
 
     // 4. Enrollments (studentId1 在 classId1, studentId2 在 classId2)
     db.prepare('DELETE FROM class_students WHERE student_id IN (?, ?)').run(studentId1, studentId2);
-    db.prepare('INSERT INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(classId1, studentId1, now);
-    db.prepare('INSERT INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(classId2, studentId2, now);
+    db.prepare('INSERT INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+      classId1,
+      studentId1,
+      now,
+    );
+    db.prepare('INSERT INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
+      classId2,
+      studentId2,
+      now,
+    );
   });
 
   afterAll(async () => {

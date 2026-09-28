@@ -146,10 +146,10 @@ function TelemetryIsland({
     measuredAt === null
       ? 'text-muted bg-surface-secondary border-theme'
       : quality === 'smooth'
-      ? 'text-emerald-700 bg-emerald-50 border-emerald-200/80 dark:bg-emerald-950/40 dark:border-emerald-800/80 dark:text-emerald-300'
-      : quality === 'fair'
-        ? 'text-amber-700 bg-amber-50 border-amber-200/80 dark:bg-amber-950/40 dark:border-amber-800/80 dark:text-amber-300'
-        : 'text-rose-700 bg-rose-50 border-rose-200/80 dark:bg-rose-950/40 dark:border-rose-800/80 dark:text-rose-300';
+        ? 'text-emerald-700 bg-emerald-50 border-emerald-200/80 dark:bg-emerald-950/40 dark:border-emerald-800/80 dark:text-emerald-300'
+        : quality === 'fair'
+          ? 'text-amber-700 bg-amber-50 border-amber-200/80 dark:bg-amber-950/40 dark:border-amber-800/80 dark:text-amber-300'
+          : 'text-rose-700 bg-rose-50 border-rose-200/80 dark:bg-rose-950/40 dark:border-rose-800/80 dark:text-rose-300';
 
   const tiles = [
     {
@@ -192,11 +192,19 @@ function TelemetryIsland({
               <Icon size={14} className="text-primary-theme" />
             </div>
             <div className="min-w-0 flex-1 leading-tight">
-              <div className="text-2xs text-muted truncate" title={tile.label}>{tile.label}</div>
-              <div className={`font-mono font-bold text-xs truncate ${tile.tone ? '' : 'text-main'}`}>
-                {tile.tone ? <span className={`px-1.5 py-0.5 rounded border ${tile.tone}`}>{tile.value}</span> : tile.value}
+              <div className="text-2xs text-muted truncate" title={tile.label}>
+                {tile.label}
               </div>
-              <div className="text-2xs text-subtle truncate" title={tile.hint}>{tile.hint}</div>
+              <div className={`font-mono font-bold text-xs truncate ${tile.tone ? '' : 'text-main'}`}>
+                {tile.tone ? (
+                  <span className={`px-1.5 py-0.5 rounded border ${tile.tone}`}>{tile.value}</span>
+                ) : (
+                  tile.value
+                )}
+              </div>
+              <div className="text-2xs text-subtle truncate" title={tile.hint}>
+                {tile.hint}
+              </div>
             </div>
           </div>
         );
@@ -605,7 +613,8 @@ function ClassroomDeck({
                 <Users size={13} className="text-primary-theme shrink-0" />
                 <span>
                   {zh ? `共 ${classes.length} 个班级` : `${classes.length} classes total`}
-                  {query.trim() && (zh ? ` · 筛选出 ${visibleClasses.length} 个` : ` · ${visibleClasses.length} matched`)}
+                  {query.trim() &&
+                    (zh ? ` · 筛选出 ${visibleClasses.length} 个` : ` · ${visibleClasses.length} matched`)}
                 </span>
               </div>
               {classes.length > 2 && (
@@ -797,7 +806,8 @@ function LessonBlueprint({
             <ol className="flex flex-col gap-1.5">
               {segments.slice(0, 6).map((seg, idx) => {
                 const mins = Math.round((seg.duration || 300) / 60);
-                const width = totalSeconds > 0 ? Math.max(8, Math.round(((seg.duration || 300) / totalSeconds) * 100)) : 0;
+                const width =
+                  totalSeconds > 0 ? Math.max(8, Math.round(((seg.duration || 300) / totalSeconds) * 100)) : 0;
                 return (
                   <li key={seg.id || idx} className="flex flex-col gap-1">
                     <div className="flex items-center justify-between gap-2 text-2xs">
@@ -825,7 +835,15 @@ function LessonBlueprint({
 
 // ── 右栏：课前洞察（扩展点 + 内置兜底） ────────────────────────────────────
 
-function InsightDeck({ students, onlineStudentIds, lang }: { students: any[]; onlineStudentIds: string[]; lang: string }) {
+function InsightDeck({
+  students,
+  onlineStudentIds,
+  lang,
+}: {
+  students: any[];
+  onlineStudentIds: string[];
+  lang: string;
+}) {
   const zh = lang === 'zh';
   // 内置简化实现：把尚未连接的席位列为「需关注」，作为插件不可用时的兜底。
   // 真正的 AI 学情诊断可由插件通过 classroom.portal.insight 槽位替换。
@@ -864,7 +882,9 @@ function InsightDeck({ students, onlineStudentIds, lang }: { students: any[]; on
                   ) : null}
                 </div>
                 <p className="text-2xs text-muted leading-relaxed">
-                  {zh ? '学生端尚未连接，建议课前确认设备或网络状态。' : 'Student端 not connected yet — check device or network.'}
+                  {zh
+                    ? '学生端尚未连接，建议课前确认设备或网络状态。'
+                    : 'Student端 not connected yet — check device or network.'}
                 </p>
               </div>
               <AlertTriangle size={12} className="text-amber-500 shrink-0 mt-0.5" />
@@ -903,37 +923,34 @@ function PreflightDeck({
     {
       icon: CheckCircle2,
       label: zh ? '课程与班级配置' : 'Course and class selection',
-      value: hasSelectedLesson && hasSelectedClass ? (zh ? '已选择' : 'Selected') : (zh ? '待选择' : 'Select both'),
+      value: hasSelectedLesson && hasSelectedClass ? (zh ? '已选择' : 'Selected') : zh ? '待选择' : 'Select both',
       ok: hasSelectedLesson && hasSelectedClass,
     },
     {
       icon: Server,
       label: zh ? '学生端在线连接' : 'Student connections',
-      value: seatCount
-        ? `${onlineCount}/${seatCount} ${zh ? '在线' : 'online'}`
-        : zh
-          ? '暂无学生名单'
-          : 'No roster',
+      value: seatCount ? `${onlineCount}/${seatCount} ${zh ? '在线' : 'online'}` : zh ? '暂无学生名单' : 'No roster',
       ok: seatCount > 0 && onlineCount === seatCount,
     },
     {
       icon: Radio,
       label: zh ? '平台网络连接' : 'Platform network',
-      value: measuredAt === null
-        ? zh
-          ? '检测中'
-          : 'Checking'
-        : isOnline
-        ? quality === 'poor'
+      value:
+        measuredAt === null
           ? zh
-            ? '时延偏高'
-            : 'High latency'
-          : zh
-            ? '网络可达'
-            : 'Network reachable'
-        : zh
-          ? '离线'
-          : 'Offline',
+            ? '检测中'
+            : 'Checking'
+          : isOnline
+            ? quality === 'poor'
+              ? zh
+                ? '时延偏高'
+                : 'High latency'
+              : zh
+                ? '网络可达'
+                : 'Network reachable'
+            : zh
+              ? '离线'
+              : 'Offline',
       ok: measuredAt !== null && isOnline && quality !== 'poor',
     },
   ];
@@ -1051,10 +1068,7 @@ export function ClassroomEntryPortal({
     };
   }, [selectedLesson, fetcher]);
 
-  const currentLesson = useMemo(
-    () => lessons.find((l) => l.id === selectedLesson) ?? null,
-    [lessons, selectedLesson],
-  );
+  const currentLesson = useMemo(() => lessons.find((l) => l.id === selectedLesson) ?? null, [lessons, selectedLesson]);
   const currentClass = useMemo(
     () => classes.find((c) => c.id === liveClassSelectedClassId) ?? null,
     [classes, liveClassSelectedClassId],
@@ -1223,11 +1237,7 @@ export function ClassroomEntryPortal({
           </div>
 
           <div className="xl:col-span-4 flex flex-col gap-4 min-w-0">
-            <LessonBlueprint
-              lessonTitle={currentLesson?.title ?? ''}
-              timelineSegments={timelineSegments}
-              lang={lang}
-            />
+            <LessonBlueprint lessonTitle={currentLesson?.title ?? ''} timelineSegments={timelineSegments} lang={lang} />
             <InsightDeck students={students} onlineStudentIds={onlineStudentIds} lang={lang} />
             <PreflightDeck
               hasSelectedLesson={Boolean(currentLesson)}

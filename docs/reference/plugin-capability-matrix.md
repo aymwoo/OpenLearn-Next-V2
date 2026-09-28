@@ -19,11 +19,11 @@
 
 ### `lesson:*`
 
-| 权限            | 使用位置（节选）                                                                                    |
-| --------------- | --------------------------------------------------------------------------------------------------- |
-| `lesson:read`   | builtin.ts:1502,1527；ai-planner.ts；CapabilityGuard 默认授予 `teacher-demo`                          |
-| `lesson:write`  | builtin.ts:66,104,140,185,253,1139,1347,1547；ai-planner.ts:111                                     |
-| `lesson:delete` | builtin.ts:323                                                                                      |
+| 权限             | 使用位置（节选）                                                                                                                                                                                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lesson:read`    | builtin.ts:1502,1527；ai-planner.ts；CapabilityGuard 默认授予 `teacher-demo`                                                                                                                                                                                  |
+| `lesson:write`   | builtin.ts:66,104,140,185,253,1139,1347,1547；ai-planner.ts:111                                                                                                                                                                                               |
+| `lesson:delete`  | builtin.ts:323                                                                                                                                                                                                                                                |
 | `lesson:control` | activity-ecosystem/default-providers.ts:72,86,100,114,142；classroom-runtime/types.ts:12；permission-manager.ts:13 —— **活动生态 `startActivity` 所需**，使用 `IActivityRegistryToken` 的插件必须在 `capabilitiesProposed` 中声明，否则抛 `PERMISSION_DENIED` |
 
 ### `whiteboard:*`
@@ -83,13 +83,13 @@
 
 ### `assignment:*`
 
-| 权限                | 使用位置                                                                                                 | 备注                                                                       |
-| ------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `assignment:write`  | ai-planner.ts:187（manifest 亦声明于 `plugin-ai-planner/manifest.json`）                                 | 仅 AI 规划器使用                                                           |
-| `assignment:read`   | assignment-eval.ts:300,360；`CapabilityGuard` 教师兜底（capability-system/index.ts:69）与学生兜底（:93） | 作业列表 / 详情读取                                                        |
-| `assignment:submit` | assignment-eval.ts:428；`CapabilityGuard` 教师兜底（:70）与学生兜底（:94）                               | 学生提交（教师可代交）                                                     |
-| `assignment:review` | assignment-eval.ts:540；`CapabilityGuard` 教师兜底（:71）与学生兜底（:95）                               | 互评                                                                       |
-| `assignment:manage` | assignment-eval.ts:195,631,693；`CapabilityGuard` 教师兜底（:72）                                        | 建/改作业、分配互评、终评                                                  |
+| 权限                | 使用位置                                                                                                 | 备注                      |
+| ------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `assignment:write`  | ai-planner.ts:187（manifest 亦声明于 `plugin-ai-planner/manifest.json`）                                 | 仅 AI 规划器使用          |
+| `assignment:read`   | assignment-eval.ts:300,360；`CapabilityGuard` 教师兜底（capability-system/index.ts:69）与学生兜底（:93） | 作业列表 / 详情读取       |
+| `assignment:submit` | assignment-eval.ts:428；`CapabilityGuard` 教师兜底（:70）与学生兜底（:94）                               | 学生提交（教师可代交）    |
+| `assignment:review` | assignment-eval.ts:540；`CapabilityGuard` 教师兜底（:71）与学生兜底（:95）                               | 互评                      |
+| `assignment:manage` | assignment-eval.ts:195,631,693；`CapabilityGuard` 教师兜底（:72）                                        | 建/改作业、分配互评、终评 |
 
 > 注意：作业中心插件（`packages/plugins/assignment-eval.ts`，plugin id `@openlearn/plugin-assignment-eval`）的四个动作分别要求
 > `assignment:read` / `assignment:submit` / `assignment:review` / `assignment:manage`。

@@ -159,10 +159,7 @@ const DEMO_WEEKLY_PROGRESS: WeekDataPoint[] = [
   },
 ];
 
-export function WeeklyProgressTrendChart({
-  assignments = [],
-  lang = 'en',
-}: WeeklyProgressTrendChartProps) {
+export function WeeklyProgressTrendChart({ assignments = [], lang = 'en' }: WeeklyProgressTrendChartProps) {
   const [selectedClass, setSelectedClass] = useState<string>('all');
   const [timeHorizon, setTimeHorizon] = useState<'4weeks' | '8weeks' | 'all'>('all');
   const [showBenchmark, setShowBenchmark] = useState<boolean>(true);
@@ -186,8 +183,7 @@ export function WeeklyProgressTrendChart({
     );
 
     // Apply class filter if selected
-    const filteredByClass =
-      selectedClass === 'all' ? graded : graded.filter((ast) => ast.class_name === selectedClass);
+    const filteredByClass = selectedClass === 'all' ? graded : graded.filter((ast) => ast.class_name === selectedClass);
 
     // Check if we have sufficient actual records (at least 2 graded assignments)
     if (filteredByClass.length < 2) {
@@ -379,9 +375,7 @@ export function WeeklyProgressTrendChart({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-extrabold text-gray-950 text-base flex items-center gap-1.5">
-                {texts.title}
-              </h3>
+              <h3 className="font-extrabold text-gray-950 text-base flex items-center gap-1.5">{texts.title}</h3>
               <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200/60 rounded-full px-2 py-0.5 text-xs font-bold">
                 <Sparkles size={11} className="text-indigo-500" />
                 {texts.badge}
@@ -423,7 +417,9 @@ export function WeeklyProgressTrendChart({
             <button
               onClick={() => setTimeHorizon('4weeks')}
               className={`px-2.5 py-1 rounded-md transition-all ${
-                timeHorizon === '4weeks' ? 'bg-white text-indigo-700 font-bold shadow-2xs' : 'text-gray-600 hover:text-gray-900'
+                timeHorizon === '4weeks'
+                  ? 'bg-white text-indigo-700 font-bold shadow-2xs'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               {texts.scope4}
@@ -431,7 +427,9 @@ export function WeeklyProgressTrendChart({
             <button
               onClick={() => setTimeHorizon('8weeks')}
               className={`px-2.5 py-1 rounded-md transition-all ${
-                timeHorizon === '8weeks' ? 'bg-white text-indigo-700 font-bold shadow-2xs' : 'text-gray-600 hover:text-gray-900'
+                timeHorizon === '8weeks'
+                  ? 'bg-white text-indigo-700 font-bold shadow-2xs'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               {texts.scope8}
@@ -439,7 +437,9 @@ export function WeeklyProgressTrendChart({
             <button
               onClick={() => setTimeHorizon('all')}
               className={`px-2.5 py-1 rounded-md transition-all ${
-                timeHorizon === 'all' ? 'bg-white text-indigo-700 font-bold shadow-2xs' : 'text-gray-600 hover:text-gray-900'
+                timeHorizon === 'all'
+                  ? 'bg-white text-indigo-700 font-bold shadow-2xs'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               {texts.scopeAll}
@@ -469,11 +469,7 @@ export function WeeklyProgressTrendChart({
             <span>{texts.statCurrent}</span>
             <span
               className={`inline-flex items-center text-xs font-bold ${
-                stats.growthTrend > 0
-                  ? 'text-emerald-600'
-                  : stats.growthTrend < 0
-                    ? 'text-rose-600'
-                    : 'text-gray-500'
+                stats.growthTrend > 0 ? 'text-emerald-600' : stats.growthTrend < 0 ? 'text-rose-600' : 'text-gray-500'
               }`}
             >
               {stats.growthTrend > 0 ? (
@@ -507,9 +503,7 @@ export function WeeklyProgressTrendChart({
 
         <div className="p-3 bg-white border border-gray-100 rounded-xl shadow-2xs flex flex-col justify-center">
           <span className="text-xs font-semibold text-gray-500">{texts.statSubmissions}</span>
-          <span className="text-xl font-black text-slate-900 font-mono mt-0.5">
-            {stats.totalSubmissions}
-          </span>
+          <span className="text-xl font-black text-slate-900 font-mono mt-0.5">{stats.totalSubmissions}</span>
         </div>
       </div>
 

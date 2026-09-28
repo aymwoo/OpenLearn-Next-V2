@@ -807,11 +807,7 @@ interface ICoursewareRuntimeScriptRegistry {
 
 // ── Classroom Lifecycle & Interaction Extensibility (v0.3.22) ────────────
 
-type ClassroomLifecycleStage =
-  | 'PRE_CLASS_READY'
-  | 'IN_CLASS_TEACHING'
-  | 'WRAP_UP_EXIT_TICKET'
-  | 'ARCHIVED_REPORT';
+type ClassroomLifecycleStage = 'PRE_CLASS_READY' | 'IN_CLASS_TEACHING' | 'WRAP_UP_EXIT_TICKET' | 'ARCHIVED_REPORT';
 
 interface StageGuardResult {
   allowed: boolean;

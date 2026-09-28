@@ -213,7 +213,9 @@ export const UserGuideViewer: React.FC<UserGuideViewerProps> = ({ copiedId, hand
             <div className="p-3 bg-gray-50 rounded-xl border border-gray-150 text-xs text-gray-500 leading-relaxed">
               💡 <span className="font-semibold text-gray-700">常规课表与临时调整：</span>
               如果需要将某一天的课程临时调换为星期几的常规安排（如将下周一临时指定为星期五课表），可在"课表看板"或使用{' '}
-              <code className="bg-gray-100 font-mono text-rose-600 px-1 rounded">schedule.update_date_mapping</code>{' '}
+              <code className="bg-gray-100 font-mono text-rose-600 px-1 rounded">
+                schedule.update_date_mapping
+              </code>{' '}
               指令进行快速热重载，数据库将自动持久化这种临时的映射规则。
             </div>
           </div>

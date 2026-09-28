@@ -1,15 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import {
-  Trophy,
-  Sparkles,
-  Shuffle,
-  ChevronRight,
-  X,
-  Code2,
-  Medal,
-  Flame,
-  TrendingUp,
-} from 'lucide-react';
+import { Trophy, Sparkles, Shuffle, ChevronRight, X, Code2, Medal, Flame, TrendingUp } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { StudentGrowthProfileModal } from '../student/StudentGrowthProfileModal';
 
@@ -201,7 +191,7 @@ export function ClassroomAttributionModal({
 
       setStudentPointsMap((prev) => ({
         ...prev,
-        [selectedStudent.id]: (prev[selectedStudent.id] ?? (selectedStudent.currentPoints ?? 0)) + deltaPoints,
+        [selectedStudent.id]: (prev[selectedStudent.id] ?? selectedStudent.currentPoints ?? 0) + deltaPoints,
       }));
 
       setRecentBonusAnimation(`${deltaPoints >= 0 ? '+' : ''}${deltaPoints} ${reason}`);
@@ -221,7 +211,7 @@ export function ClassroomAttributionModal({
 
   const currentPoints = useMemo(() => {
     if (!selectedStudent) return 0;
-    return studentPointsMap[selectedStudent.id] ?? (selectedStudent.currentPoints ?? 0);
+    return studentPointsMap[selectedStudent.id] ?? selectedStudent.currentPoints ?? 0;
   }, [selectedStudent, studentPointsMap]);
 
   if (!isOpen) return null;
@@ -243,7 +233,9 @@ export function ClassroomAttributionModal({
                 {lang === 'zh' ? '课堂抽问与表现激励' : 'Classroom Question & Attribution Points'}
               </h3>
               <p className="text-[11px] text-muted">
-                {lang === 'zh' ? '即时评价学生表现，积分同步至小组与大屏勋章榜' : 'Live reward attribution synced to team leaderboard'}
+                {lang === 'zh'
+                  ? '即时评价学生表现，积分同步至小组与大屏勋章榜'
+                  : 'Live reward attribution synced to team leaderboard'}
               </p>
             </div>
           </div>
@@ -288,16 +280,16 @@ export function ClassroomAttributionModal({
                   <div className="flex items-center gap-2.5 text-xs">
                     <span className="inline-flex items-center gap-1 font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-300/40 px-2 py-0.5 rounded-md">
                       <Trophy size={12} className="text-amber-500" />
-                      <span>{lang === 'zh' ? '当前积分' : 'Points'}: <strong>{currentPoints}分</strong></span>
+                      <span>
+                        {lang === 'zh' ? '当前积分' : 'Points'}: <strong>{currentPoints}分</strong>
+                      </span>
                     </span>
                     <span className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-300/40 px-2 py-0.5 rounded-md">
                       <Flame size={12} className="text-emerald-500" />
                       <span>
                         {lang === 'zh' ? '专注度' : 'Focus'}:{' '}
                         <strong>
-                          {typeof selectedStudent.focusScore === 'number'
-                            ? `${selectedStudent.focusScore}%`
-                            : '—'}
+                          {typeof selectedStudent.focusScore === 'number' ? `${selectedStudent.focusScore}%` : '—'}
                         </strong>
                       </span>
                     </span>
@@ -434,9 +426,7 @@ export function ClassroomAttributionModal({
                   <div className="font-bold text-xs text-foreground group-hover:text-primary-theme">
                     {lang === 'zh' ? aw.nameZh : aw.nameEn}
                   </div>
-                  <div className="text-[10px] text-muted line-clamp-1">
-                    {lang === 'zh' ? aw.descZh : aw.descEn}
-                  </div>
+                  <div className="text-[10px] text-muted line-clamp-1">{lang === 'zh' ? aw.descZh : aw.descEn}</div>
                 </button>
               ))}
             </div>
@@ -471,8 +461,8 @@ export function ClassroomAttributionModal({
               <div>
                 <div className="font-bold text-foreground">
                   {lang === 'zh'
-                    ? `榜首小队：${students.length > 0 ? (students[0]?.groupName || '未分组') : '数据不足'}`
-                    : `Top Group: ${students.length > 0 ? (students[0]?.groupName || 'Ungrouped') : 'No data'}`}
+                    ? `榜首小队：${students.length > 0 ? students[0]?.groupName || '未分组' : '数据不足'}`
+                    : `Top Group: ${students.length > 0 ? students[0]?.groupName || 'Ungrouped' : 'No data'}`}
                 </div>
                 <div className="text-[10px] text-muted">
                   {lang === 'zh' ? '累计 104 积分 · 领跑全班' : '104 cumulative points · Leading'}

@@ -46,8 +46,8 @@ export const SdkGuideViewer: React.FC<SdkGuideViewerProps> = ({
             <p className="text-xs text-gray-600 leading-relaxed">
               Openlearn Next 基于 <span className="font-semibold text-indigo-600">CommandBus（命令总线）</span> +{' '}
               <span className="font-semibold text-indigo-600">EventBus（事件总线）</span> 微内核架构。 插件通过标准 ESM
-              模块导出 <code className="bg-gray-100 text-rose-600 px-1 rounded text-xs">activate(ctx)</code>{' '}
-              函数接收 <span className="font-semibold">PluginContext</span>， 进而访问 7 大内核服务。本页提供完整的 API
+              模块导出 <code className="bg-gray-100 text-rose-600 px-1 rounded text-xs">activate(ctx)</code> 函数接收{' '}
+              <span className="font-semibold">PluginContext</span>， 进而访问 7 大内核服务。本页提供完整的 API
               参考、参数说明和可运行示例。
             </p>
             <div className="flex flex-wrap gap-2 pt-1">

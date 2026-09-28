@@ -1646,7 +1646,9 @@ export const BuiltinPlugin = {
         //    （LATEST / MAX / AVERAGE / FIRST）从 submission_raw 的分数样本历史中算出官方成绩。
         let aggregation: ScoreAggregation | null = null;
         try {
-          const attemptRow = db.prepare('SELECT courseware_id FROM courseware_attempt WHERE id = ?').get(attemptId) as any;
+          const attemptRow = db
+            .prepare('SELECT courseware_id FROM courseware_attempt WHERE id = ?')
+            .get(attemptId) as any;
           aggregation = aggregateAttemptScore(db as any, attemptId, {
             coursewareId: attemptRow?.courseware_id ?? null,
           });
@@ -1670,8 +1672,7 @@ export const BuiltinPlugin = {
             JSON.stringify({ ...extra, ...aggregationExtra }),
           );
         } else {
-          const finalScore =
-            aggregatedScore !== null ? aggregatedScore : score !== undefined ? score : existing.score;
+          const finalScore = aggregatedScore !== null ? aggregatedScore : score !== undefined ? score : existing.score;
           const finalComment = comment || existing.comment;
           const finalCompletion = completion !== undefined ? completion : existing.completion;
 

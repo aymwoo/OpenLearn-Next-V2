@@ -108,7 +108,6 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
     }
   });
 
-
   // ── MFE Remote Entries ─────────────────────────────────────────────────
   app.get('/api/mfe/remotes', requireAuth(), (req, res) => {
     try {

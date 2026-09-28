@@ -9,6 +9,7 @@
 **现象**：启动报 `Error: listen EADDRINUSE: address already in use :::9000`。
 
 **A:**
+
 ```bash
 # 找到占用 9000 端口的进程
 lsof -i :9000        # 或 ss -ltnp | grep 9000
@@ -33,6 +34,7 @@ PORT=9001 pnpm dev   # npx 场景：npx openlearn-next -p 9001
 **现象**：插件状态卡在 `ACTIVATING` 后进入 `ERROR`，日志出现激活超时或 `could not be cloned`。
 
 **A:**
+
 - Worker 模式激活默认 **60 秒**超时（inline 为 5 秒）；耗时初始化在插件内周期调用 `ctx.reportProgress(stage, message)` 滑动续期（见 [plugin-update-distribution §5](../reference/plugin-update-distribution)）；
 - 可用环境变量 `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` 调大超时排查；
 - 报错含 `could not be cloned`：Worker RPC 只能传结构化克隆数据——不要在 Worker 模式下 `ctx.provide()` 函数/类实例，也不要把回调经命令总线跨线程传递；
@@ -43,6 +45,7 @@ PORT=9001 pnpm dev   # npx 场景：npx openlearn-next -p 9001
 **现象**：安装时报 `manifest.main 必须指定入口文件路径` 等，或激活时 Token 解析失败。
 
 **A:**
+
 - Manifest 经 Zod 强校验（`packages/core/esm-loader/manifest-schema.ts`），常见错误：缺 `main`、`api.routes.method` 使用了不支持的 `ALL`、`requires` Token 名不满足 `domain:Name` 格式；
 - `ctx.resolve` 只接受 `Token<T>` 实例，不接受普通对象；自定义服务 Token 名必须满足 `(@scope/)?domain:Name`；
 - `updateSource` 不在 Zod 强校验范围（passthrough），其 `repo` 白名单校验发生在服务端更新检测时；

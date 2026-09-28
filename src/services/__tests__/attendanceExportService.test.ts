@@ -254,9 +254,7 @@ describe('attendanceExportService', () => {
     });
 
     it('exportAllClassesAttendanceCSV exports consolidated attendance for all classes', async () => {
-      const classes: ClassType[] = [
-        { id: 'c1', name: 'Art 101', description: 'Visual arts', created_at: Date.now() },
-      ];
+      const classes: ClassType[] = [{ id: 'c1', name: 'Art 101', description: 'Visual arts', created_at: Date.now() }];
       const classSchedulesMap: Record<string, ScheduleType[]> = {
         c1: [{ id: 'sch-art', lesson_title: 'Color Theory', scheduled_date: '2026-06-01' } as any],
       };

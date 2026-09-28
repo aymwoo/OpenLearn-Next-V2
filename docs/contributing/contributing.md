@@ -12,11 +12,11 @@ type(scope): message
 
 ## 2. CHANGELOG 分层
 
-| 变更对象 | 记录位置 |
-| --- | --- |
-| 平台宿主（`openlearn-next`） | 根 根目录 `CHANGELOG.md`，SemVer 标题 + `Features / Fixes / Refactor / Docs / Breaking Changes` 小节；开发中变更写入 `## [Unreleased]` |
-| Plugin SDK（`@openlearn/plugin-sdk`） | `packages/plugin-sdk/CHANGELOG.md` |
-| 单个插件（`v2_plugins/<plugin-id>`） | 各插件目录内 `CHANGELOG.md` |
+| 变更对象                              | 记录位置                                                                                                                               |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 平台宿主（`openlearn-next`）          | 根 根目录 `CHANGELOG.md`，SemVer 标题 + `Features / Fixes / Refactor / Docs / Breaking Changes` 小节；开发中变更写入 `## [Unreleased]` |
+| Plugin SDK（`@openlearn/plugin-sdk`） | `packages/plugin-sdk/CHANGELOG.md`                                                                                                     |
+| 单个插件（`v2_plugins/<plugin-id>`）  | 各插件目录内 `CHANGELOG.md`                                                                                                            |
 
 发版流程：bump 根 `package.json` → 移动 Unreleased 条目到 `## [X.Y.Z] - 日期` → 打 tag `vX.Y.Z`。SDK 版本独立演进（当前 3.7.0），不要在文档中写死版本号（用 `<!-- doc-version: sdk=X.Y.Z -->` 标记代替）。
 

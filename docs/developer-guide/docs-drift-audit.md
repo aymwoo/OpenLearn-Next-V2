@@ -10,14 +10,14 @@
 
 ## 什么时候需要手动跑审计
 
-| 改动类型 | 是否需要手动跑 | 说明 |
-|---|---|---|
-| 改业务逻辑 | ❌ 不需要 | 架构没变 |
-| **新增 subsystem 目录** | ✅ **必须** | CI 会拦住，先跑一遍确认能写出文档 |
-| **删除 subsystem 目录** | ✅ **必须** | CI 会拦住，必须删对应文档 |
-| **重命名 subsystem 目录** | ✅ **必须** | CI 会拦住，必须改文档 + 改脚本 |
-| 改 plugin 行为 | ❌ 不需要 | plugin 本身有 plugin 文档体系 |
-| 改 capability 名称 | ⚠️ 可能需要 | 看 `normalize.py` 是否仍能归一化 |
+| 改动类型                  | 是否需要手动跑 | 说明                              |
+| ------------------------- | -------------- | --------------------------------- |
+| 改业务逻辑                | ❌ 不需要      | 架构没变                          |
+| **新增 subsystem 目录**   | ✅ **必须**    | CI 会拦住，先跑一遍确认能写出文档 |
+| **删除 subsystem 目录**   | ✅ **必须**    | CI 会拦住，必须删对应文档         |
+| **重命名 subsystem 目录** | ✅ **必须**    | CI 会拦住，必须改文档 + 改脚本    |
+| 改 plugin 行为            | ❌ 不需要      | plugin 本身有 plugin 文档体系     |
+| 改 capability 名称        | ⚠️ 可能需要    | 看 `normalize.py` 是否仍能归一化  |
 
 ---
 
@@ -44,6 +44,7 @@ cat audit-tools/reports/drift_report.md
 ### L1 — CI 自动检查（最关键，必备）
 
 `.github/workflows/ci.yml` 中新增了 `docs-drift-audit` job：
+
 - 触发：所有 PR 和 push 到 main
 - 行为：跑 `audit-tools/run.sh`，drift > 0 时 **PR 合并被阻止**
 - 失败时：自动上传 `audit-tools/reports/drift_report.md` 到 PR Artifacts，并在 PR 评论中贴出报告

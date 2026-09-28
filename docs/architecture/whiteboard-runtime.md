@@ -103,4 +103,3 @@ rendererRegistry.registerRenderer('geogebra-widget', GeoGebraRenderer);
    - **进阶题梯度**：面向班级中坚学生群体；
    - **拔高题梯度**：重点匹配学优生，激发高阶挑战欲。
 3. **即时积分金币与声光特效**：抽问评价后，教师一键派发成长金币，学生机端实时展示声光徽章特效。
-

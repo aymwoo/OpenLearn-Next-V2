@@ -145,7 +145,8 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       if (activeRoleRef.current === 'student' && activeStudentIdRef.current) {
         socket.emit('register-student', {
           studentId: activeStudentIdRef.current,
-          name: studentsRef.current.find((s) => s.id === activeStudentIdRef.current)?.name || activeStudentIdRef.current,
+          name:
+            studentsRef.current.find((s) => s.id === activeStudentIdRef.current)?.name || activeStudentIdRef.current,
         });
 
         if (studentViewStatusRef.current === 'lesson' && selectedLessonRef.current) {
@@ -257,7 +258,6 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       },
     );
 
-
     socket.on('assignment-graded-toast', (data: any) => {
       if (
         activeRoleRef.current === 'student' &&
@@ -350,13 +350,16 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
       }
     });
 
-    socket.on('student-lesson-tab-changed', (data: { lessonId?: string; tab?: 'whiteboard' | 'courseware' | 'assignment' }) => {
-      if (activeRoleRef.current === 'student' && data?.tab) {
-        if (!data.lessonId || data.lessonId === selectedLessonRef.current) {
-          setStudentLessonTab(data.tab);
+    socket.on(
+      'student-lesson-tab-changed',
+      (data: { lessonId?: string; tab?: 'whiteboard' | 'courseware' | 'assignment' }) => {
+        if (activeRoleRef.current === 'student' && data?.tab) {
+          if (!data.lessonId || data.lessonId === selectedLessonRef.current) {
+            setStudentLessonTab(data.tab);
+          }
         }
-      }
-    });
+      },
+    );
 
     socket.on('teacher-switched-lesson', (data: { lessonId?: string }) => {
       if (activeRoleRef.current === 'student' && data?.lessonId) {

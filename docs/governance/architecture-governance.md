@@ -8,11 +8,11 @@
 
 第三方插件发起的每个命令（`commandBus.execute`）依次经过：
 
-| 层级 | 机制 | 实现 | 拦截效果 |
-| --- | --- | --- | --- |
-| ① 命令级权限 | `CapabilityGuard` 校验 `ActionDescriptor.capabilityRequired`（如 `lesson:write`） | `packages/core/capability-system/` + `packages/core/registry/` | 无权限抛 `PERMISSION_DENIED`；角色默认授权矩阵见 [capability-matrix](../reference/plugin-capability-matrix) |
-| ② 高危审批闸门 | `isHighRisk: true` 的动作不直接执行，进入 Approvals Gateway 待教师/管理员批准 | `server/routes/os.ts` 的 pending commands 流程 | 未批准前命令停在 pending 状态 |
-| ③ 插件能力网关 | `PluginCapabilityGateway` 统一能力发现/解析/执行，宿主只授予 `capabilitiesProposed` 中声明的字符串 | `packages/core/plugin-host/plugin-capability-gateway.ts` | 未声明的能力无法获得（例：`lesson:control` 未声明则 `startActivity` 被拒） |
+| 层级           | 机制                                                                                               | 实现                                                           | 拦截效果                                                                                                    |
+| -------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| ① 命令级权限   | `CapabilityGuard` 校验 `ActionDescriptor.capabilityRequired`（如 `lesson:write`）                  | `packages/core/capability-system/` + `packages/core/registry/` | 无权限抛 `PERMISSION_DENIED`；角色默认授权矩阵见 [capability-matrix](../reference/plugin-capability-matrix) |
+| ② 高危审批闸门 | `isHighRisk: true` 的动作不直接执行，进入 Approvals Gateway 待教师/管理员批准                      | `server/routes/os.ts` 的 pending commands 流程                 | 未批准前命令停在 pending 状态                                                                               |
+| ③ 插件能力网关 | `PluginCapabilityGateway` 统一能力发现/解析/执行，宿主只授予 `capabilitiesProposed` 中声明的字符串 | `packages/core/plugin-host/plugin-capability-gateway.ts`       | 未声明的能力无法获得（例：`lesson:control` 未声明则 `startActivity` 被拒）                                  |
 
 ## 2. 插件沙箱审核标准
 

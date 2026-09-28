@@ -71,7 +71,9 @@ export function RightSidebar({
   }, [chatLog]);
 
   // P2: ai.agent.persona —— 拉取角色模板列表（侧栏可见时）
-  const [personaList, setPersonaList] = useState<Array<{ id: string; nameZh: string; nameEn: string; icon?: string; source: string }>>([]);
+  const [personaList, setPersonaList] = useState<
+    Array<{ id: string; nameZh: string; nameEn: string; icon?: string; source: string }>
+  >([]);
   useEffect(() => {
     if (!showRightSidebar || personaList.length > 0) return;
     fetch('/api/agent/personas')
@@ -142,9 +144,7 @@ export function RightSidebar({
                           value=""
                           className="w-full appearance-none rounded-xl border border-amber-200 bg-amber-50/50 px-3 py-2 pr-9 text-xs font-medium text-amber-700 shadow-xs outline-none cursor-not-allowed"
                         >
-                          <option value="">
-                            {lang === 'zh' ? '未配置 AI 提供商' : 'No AI Provider'}
-                          </option>
+                          <option value="">{lang === 'zh' ? '未配置 AI 提供商' : 'No AI Provider'}</option>
                         </select>
                       ) : (
                         <select
@@ -186,9 +186,7 @@ export function RightSidebar({
                     onChange={(e) => setPersonaId(e.target.value)}
                     className="w-full appearance-none rounded-xl border border-gray-200 bg-gradient-to-b from-white to-gray-50 px-3 py-2 text-xs font-medium text-gray-700 shadow-xs outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                   >
-                    <option value="">
-                      {lang === 'zh' ? '🤖 助教角色：默认' : '🤖 Persona: Default'}
-                    </option>
+                    <option value="">{lang === 'zh' ? '🤖 助教角色：默认' : '🤖 Persona: Default'}</option>
                     {personaList
                       .filter((p) => p.id !== 'plain_assistant')
                       .map((p) => (
@@ -204,7 +202,9 @@ export function RightSidebar({
                 <div className="mx-4 mt-3 p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2 shadow-xs shrink-0">
                   <AlertTriangle size={15} className="shrink-0 text-amber-600 mt-0.5" />
                   <div className="flex-1 leading-relaxed">
-                    <span className="font-semibold">{lang === 'zh' ? '未配置 AI 提供商' : 'No AI Provider Configured'}</span>
+                    <span className="font-semibold">
+                      {lang === 'zh' ? '未配置 AI 提供商' : 'No AI Provider Configured'}
+                    </span>
                     <p className="mt-0.5 text-amber-700">
                       {lang === 'zh'
                         ? '请前往「系统管理 -> AI 提供商管理」添加大模型服务（如 DeepSeek、Qwen、OpenAI 等）。'

@@ -37,14 +37,7 @@ const DEFAULT_PRESETS: CountdownPreset[] = [
   { id: '45m', label: '45 分钟完整自习', duration: 2700, icon: '⏱️' },
 ];
 
-const DEFAULT_LABELS = [
-  '📝 随堂小测',
-  '👥 小组研讨',
-  '🎯 专注练习',
-  '⚡ 限时答题',
-  '📖 课前预热',
-  '💬 自由提问',
-];
+const DEFAULT_LABELS = ['📝 随堂小测', '👥 小组研讨', '🎯 专注练习', '⚡ 限时答题', '📖 课前预热', '💬 自由提问'];
 
 export interface ClassroomCountdownWidgetProps {
   lessonId: string | null;
@@ -477,25 +470,18 @@ export function ClassroomCountdownWidget({
     return `${pad(mins)}:${pad(secs)}`;
   };
 
-  const progressPercent = countdown.totalDuration > 0
-    ? Math.min(100, Math.max(0, (countdown.timeRemaining / countdown.totalDuration) * 100))
-    : 0;
+  const progressPercent =
+    countdown.totalDuration > 0
+      ? Math.min(100, Math.max(0, (countdown.timeRemaining / countdown.totalDuration) * 100))
+      : 0;
 
   const isUrgent = countdown.timeRemaining > 0 && countdown.timeRemaining <= 60;
   const isWarning = countdown.timeRemaining > 60 && countdown.timeRemaining <= 180;
 
   // 进度条与高亮颜色
-  const themeColorClass = isUrgent
-    ? 'text-rose-500'
-    : isWarning
-    ? 'text-amber-500'
-    : 'text-primary-theme';
+  const themeColorClass = isUrgent ? 'text-rose-500' : isWarning ? 'text-amber-500' : 'text-primary-theme';
 
-  const progressBgClass = isUrgent
-    ? 'bg-rose-500'
-    : isWarning
-    ? 'bg-amber-500'
-    : 'bg-primary-theme';
+  const progressBgClass = isUrgent ? 'bg-rose-500' : isWarning ? 'bg-amber-500' : 'bg-primary-theme';
 
   const allPresets = [...DEFAULT_PRESETS, ...pluginPresets];
 
@@ -638,7 +624,11 @@ export function ClassroomCountdownWidget({
           <span
             id="classroom-countdown-digits"
             className={`font-mono font-black text-xs sm:text-sm tracking-wider ${
-              isUrgent ? 'text-rose-500 animate-pulse' : countdown.isRunning ? 'text-primary-theme font-extrabold' : 'text-main'
+              isUrgent
+                ? 'text-rose-500 animate-pulse'
+                : countdown.isRunning
+                  ? 'text-primary-theme font-extrabold'
+                  : 'text-main'
             }`}
           >
             {formatTime(countdown.timeRemaining)}
@@ -698,7 +688,10 @@ export function ClassroomCountdownWidget({
               }`}
               title={lang === 'zh' ? '倒计时设置与大屏投放' : 'Settings & Projector'}
             >
-              <ChevronDown size={11} className={`transition-transform duration-200 ${isHeaderPopoverOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown
+                size={11}
+                className={`transition-transform duration-200 ${isHeaderPopoverOpen ? 'rotate-180' : ''}`}
+              />
             </button>
           </div>
         </div>
@@ -721,7 +714,15 @@ export function ClassroomCountdownWidget({
                   className={`p-1 rounded-md text-xs transition-colors cursor-pointer border border-theme ${
                     soundEnabled ? 'text-primary-theme bg-surface' : 'text-muted bg-surface/50'
                   }`}
-                  title={soundEnabled ? (lang === 'zh' ? '提示音已开启' : 'Sound On') : lang === 'zh' ? '提示音已静音' : 'Muted'}
+                  title={
+                    soundEnabled
+                      ? lang === 'zh'
+                        ? '提示音已开启'
+                        : 'Sound On'
+                      : lang === 'zh'
+                        ? '提示音已静音'
+                        : 'Muted'
+                  }
                 >
                   {soundEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
                 </button>
@@ -840,7 +841,11 @@ export function ClassroomCountdownWidget({
       <div className="flex items-center justify-between gap-1 select-none">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="p-1 rounded-lg bg-primary-theme/10 text-primary-theme shrink-0">
-            <Clock size={13} className={countdown.isRunning ? 'animate-spin' : ''} style={{ animationDuration: '6s' }} />
+            <Clock
+              size={13}
+              className={countdown.isRunning ? 'animate-spin' : ''}
+              style={{ animationDuration: '6s' }}
+            />
           </span>
           <div className="flex flex-col min-w-0">
             <span className="text-xs font-black uppercase tracking-wider text-main truncate flex items-center gap-1">
@@ -854,8 +859,8 @@ export function ClassroomCountdownWidget({
                     ? `实时广播中 (${onlineStudentCount}人)`
                     : `Broadcasting (${onlineStudentCount})`
                   : lang === 'zh'
-                  ? '就绪'
-                  : 'Ready'}
+                    ? '就绪'
+                    : 'Ready'}
               </span>
             </div>
           </div>
@@ -868,7 +873,9 @@ export function ClassroomCountdownWidget({
             className={`p-1 rounded-md text-xs transition-colors cursor-pointer border border-theme ${
               soundEnabled ? 'text-primary-theme bg-surface' : 'text-muted bg-surface/50'
             }`}
-            title={soundEnabled ? (lang === 'zh' ? '提示音已开启' : 'Sound On') : lang === 'zh' ? '提示音已静音' : 'Muted'}
+            title={
+              soundEnabled ? (lang === 'zh' ? '提示音已开启' : 'Sound On') : lang === 'zh' ? '提示音已静音' : 'Muted'
+            }
           >
             {soundEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
           </button>

@@ -865,12 +865,10 @@ export function registerPluginsRoutes(ctx: ServerContext) {
       if (response.ok) {
         res.json({ success: true, message: 'Successfully connected and received response.' });
       } else {
-        res
-          .status(response.status)
-          .json({
-            success: false,
-            error: `API responded with status ${response.status}: ${responseText.slice(0, 200)}`,
-          });
+        res.status(response.status).json({
+          success: false,
+          error: `API responded with status ${response.status}: ${responseText.slice(0, 200)}`,
+        });
       }
     } catch (e: any) {
       sendSafeError(res, e, 500, 'Connection failed');

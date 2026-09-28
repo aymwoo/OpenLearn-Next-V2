@@ -1,9 +1,4 @@
-import type {
-  FollowupTierType,
-  FollowupTierGroup,
-  TierStudentItem,
-  StudentPersonalDigest,
-} from './types';
+import type { FollowupTierType, FollowupTierGroup, TierStudentItem, StudentPersonalDigest } from './types';
 
 export interface RawStudentRecord {
   id: string;
@@ -39,10 +34,7 @@ export function classifyStudentTier(student: RawStudentRecord): FollowupTierType
 /**
  * 将班级学生按能力与掌握度聚类为三级差异化课后跟进任务组
  */
-export function buildFollowupTiers(
-  students: RawStudentRecord[],
-  lessonTitle: string = '本节课',
-): FollowupTierGroup[] {
+export function buildFollowupTiers(students: RawStudentRecord[], lessonTitle: string = '本节课'): FollowupTierGroup[] {
   const tierAStudents: TierStudentItem[] = [];
   const tierBStudents: TierStudentItem[] = [];
   const tierCStudents: TierStudentItem[] = [];

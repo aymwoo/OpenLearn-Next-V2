@@ -106,10 +106,7 @@ export class CoursewareRuntimeScriptRegistry implements ICoursewareRuntimeScript
    * - 未限定 `coursewareId` 也未限定 `coursewareUuid` → 全局脚本，对所有课件生效；
    * - 限定了任一者 → 需要与传入的 `courseware` 对应字段精确相等（两者都命中任一即算命中）。
    */
-  private matches(
-    entry: IRegisteredCoursewareRuntimeScript,
-    courseware?: { id?: string; uuid?: string },
-  ): boolean {
+  private matches(entry: IRegisteredCoursewareRuntimeScript, courseware?: { id?: string; uuid?: string }): boolean {
     const scopedById = typeof entry.coursewareId === 'string' && entry.coursewareId.length > 0;
     const scopedByUuid = typeof entry.coursewareUuid === 'string' && entry.coursewareUuid.length > 0;
     if (!scopedById && !scopedByUuid) return true;

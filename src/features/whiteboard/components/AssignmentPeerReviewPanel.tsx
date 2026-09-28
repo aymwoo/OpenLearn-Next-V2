@@ -191,7 +191,18 @@ export function AssignmentPeerReviewPanel({
     } finally {
       setSubmitting(false);
     }
-  }, [activeIndex, activeTask, assignmentId, comment, deadlinePassed, notify, onSubmitted, resolvedScore, submitting, zh]);
+  }, [
+    activeIndex,
+    activeTask,
+    assignmentId,
+    comment,
+    deadlinePassed,
+    notify,
+    onSubmitted,
+    resolvedScore,
+    submitting,
+    zh,
+  ]);
 
   if (tasks.length === 0) {
     return (
@@ -231,7 +242,9 @@ export function AssignmentPeerReviewPanel({
                 type="button"
                 onClick={() => setActiveTaskId(task.taskId)}
                 className={`w-full flex items-center justify-between gap-1 rounded-lg border px-2 py-1.5 text-left text-xs transition-colors ${
-                  active ? 'border-orange-300 bg-orange-50 text-main' : 'border-theme bg-surface text-muted hover:bg-surface-secondary'
+                  active
+                    ? 'border-orange-300 bg-orange-50 text-main'
+                    : 'border-theme bg-surface text-muted hover:bg-surface-secondary'
                 }`}
               >
                 <span className="truncate">{peerLabel(index, task.anonymous, zh)}</span>
@@ -251,7 +264,9 @@ export function AssignmentPeerReviewPanel({
           {activeTask?.stale && (
             <div className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
               <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-              {zh ? '该作者在你评价后又更新了提交，建议复核后再提交一次。' : 'The author resubmitted after your review.'}
+              {zh
+                ? '该作者在你评价后又更新了提交，建议复核后再提交一次。'
+                : 'The author resubmitted after your review.'}
             </div>
           )}
 
@@ -326,7 +341,9 @@ export function AssignmentPeerReviewPanel({
                       disabled={deadlinePassed}
                       onClick={() => pickLevel(criterion.key, level.key)}
                       className={`px-1.5 py-0.5 rounded border text-[11px] transition-colors disabled:opacity-50 ${
-                        active ? 'border-orange-300 bg-orange-50 text-main' : 'border-theme text-muted hover:bg-surface-secondary'
+                        active
+                          ? 'border-orange-300 bg-orange-50 text-main'
+                          : 'border-theme text-muted hover:bg-surface-secondary'
                       }`}
                     >
                       {zh ? level.zh : level.en}

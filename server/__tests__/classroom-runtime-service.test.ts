@@ -27,8 +27,12 @@ describe('ClassroomRuntimeService & Interactive Classroom Engine', () => {
     runMigrations(db, migrations);
 
     // Seed mock teacher and lesson
-    db.prepare("INSERT INTO users (id, username, name, password_hash, role, created_at) VALUES ('t1', 'teacher1', 'Teacher One', 'hash', 'teacher', 1000)").run();
-    db.prepare("INSERT INTO lessons (id, title, creator_id, created_at, updated_at) VALUES ('les_101', 'Interactive Physics', 't1', 1000, 1000)").run();
+    db.prepare(
+      "INSERT INTO users (id, username, name, password_hash, role, created_at) VALUES ('t1', 'teacher1', 'Teacher One', 'hash', 'teacher', 1000)",
+    ).run();
+    db.prepare(
+      "INSERT INTO lessons (id, title, creator_id, created_at, updated_at) VALUES ('les_101', 'Interactive Physics', 't1', 1000, 1000)",
+    ).run();
 
     service = new ClassroomRuntimeService(db, mockIo);
   });
@@ -111,38 +115,52 @@ describe('ClassroomRuntimeService & Interactive Classroom Engine', () => {
   it('guarantees atomic buzzer winner determination with first-to-buzz win', () => {
     // Seed buzzer
     const now = Date.now();
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO classroom_buzzers (id, session_id, lesson_id, title, status, created_at)
       VALUES ('bz_1', 'cs_1', 'les_101', 'Speed Buzz', 'READY', ?)
-    `).run(now);
+    `,
+    ).run(now);
 
     // Student A buzzes in first
-    const updateA = db.prepare(`
+    const updateA = db
+      .prepare(
+        `
       UPDATE classroom_buzzers
       SET status = 'LOCKED', winner_student_id = 's_alice', winner_student_name = 'Alice', winner_response_time_ms = 450
       WHERE id = 'bz_1' AND status = 'READY'
-    `).run();
+    `,
+      )
+      .run();
     expect(updateA.changes).toBe(1);
 
     // Student B buzzes in 10ms later - atomic check fails because status is already LOCKED
-    const updateB = db.prepare(`
+    const updateB = db
+      .prepare(
+        `
       UPDATE classroom_buzzers
       SET status = 'LOCKED', winner_student_id = 's_bob', winner_student_name = 'Bob', winner_response_time_ms = 460
       WHERE id = 'bz_1' AND status = 'READY'
-    `).run();
+    `,
+      )
+      .run();
     expect(updateB.changes).toBe(0);
 
-    const winner = db.prepare('SELECT winner_student_id, winner_student_name FROM classroom_buzzers WHERE id = ?').get('bz_1') as any;
+    const winner = db
+      .prepare('SELECT winner_student_id, winner_student_name FROM classroom_buzzers WHERE id = ?')
+      .get('bz_1') as any;
     expect(winner.winner_student_id).toBe('s_alice');
     expect(winner.winner_student_name).toBe('Alice');
   });
 
   it('aggregates quick poll votes accurately and protects voter privacy', () => {
     const now = Date.now();
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO classroom_quick_polls (id, session_id, lesson_id, question_type, title, options_json, status, created_at)
       VALUES ('poll_1', 'cs_1', 'les_101', 'ABCD', 'Quiz Question', '["A","B","C","D"]', 'ACTIVE', ?)
-    `).run(now);
+    `,
+    ).run(now);
 
     // 3 students vote A, 2 students vote B
     const insertVote = db.prepare(`
@@ -156,12 +174,16 @@ describe('ClassroomRuntimeService & Interactive Classroom Engine', () => {
     insertVote.run('v4', 's4', 'Student 4', 'B', now);
     insertVote.run('v5', 's5', 'Student 5', 'B', now);
 
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(
+        `
       SELECT selected_option, COUNT(*) as count
       FROM classroom_poll_votes
       WHERE poll_id = 'poll_1'
       GROUP BY selected_option
-    `).all() as { selected_option: string; count: number }[];
+    `,
+      )
+      .all() as { selected_option: string; count: number }[];
 
     const distribution: Record<string, number> = {};
     rows.forEach((r) => {

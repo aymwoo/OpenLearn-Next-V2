@@ -137,9 +137,7 @@ export function ScheduledLessonsProgressChart({
             <Activity size={14} />
           </div>
           <div className="min-w-0">
-            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider truncate">
-              {t.averageProgress}
-            </div>
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider truncate">{t.averageProgress}</div>
             <div className="text-xs font-bold text-gray-800 font-mono mt-0.5">{statistics.avgProg}%</div>
           </div>
         </div>
@@ -163,9 +161,7 @@ export function ScheduledLessonsProgressChart({
             <Clock size={14} />
           </div>
           <div className="min-w-0">
-            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider truncate">
-              {t.activeLessons}
-            </div>
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider truncate">{t.activeLessons}</div>
             <div className="text-xs font-bold text-gray-800 font-mono mt-0.5">{statistics.activeCount}</div>
           </div>
         </div>
@@ -175,9 +171,7 @@ export function ScheduledLessonsProgressChart({
             <BookOpen size={14} />
           </div>
           <div className="min-w-0">
-            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider truncate">
-              {t.pendingLessons}
-            </div>
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider truncate">{t.pendingLessons}</div>
             <div className="text-xs font-bold text-gray-800 font-mono mt-0.5">{statistics.pendingCount}</div>
           </div>
         </div>

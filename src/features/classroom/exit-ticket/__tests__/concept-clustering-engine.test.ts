@@ -29,10 +29,7 @@ describe('concept-clustering-engine', () => {
   });
 
   it('能过滤日常语气停用词（老师、感觉、这个、请问）', () => {
-    const rawInputs = [
-      '老师请问这个概念感觉大家可以',
-      '老师请问这个概念感觉大家可以',
-    ];
+    const rawInputs = ['老师请问这个概念感觉大家可以', '老师请问这个概念感觉大家可以'];
 
     const clusters = clusterPuzzledConcepts(rawInputs, 3);
     expect(clusters.length).toBeGreaterThanOrEqual(1);

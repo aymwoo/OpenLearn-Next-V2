@@ -127,7 +127,11 @@ describe('EventBus', () => {
       calls += 1;
     });
 
-    await Promise.all([bus.publish(evt('classroom.test')), bus.publish(evt('classroom.test')), bus.publish(evt('classroom.test'))]);
+    await Promise.all([
+      bus.publish(evt('classroom.test')),
+      bus.publish(evt('classroom.test')),
+      bus.publish(evt('classroom.test')),
+    ]);
 
     expect(calls).toBe(3);
   });

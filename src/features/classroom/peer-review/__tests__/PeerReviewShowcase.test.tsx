@@ -20,9 +20,7 @@ import type {
 
 // Mock plugin renderer
 vi.mock('../../../../plugin-host/extension-point-renderer', () => ({
-  ExtensionPointRenderer: ({ slot }: { slot: string }) => (
-    <div data-testid={`extension-slot-${slot}`}>{slot}</div>
-  ),
+  ExtensionPointRenderer: ({ slot }: { slot: string }) => <div data-testid={`extension-slot-${slot}`}>{slot}</div>,
 }));
 
 describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
@@ -116,9 +114,7 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
     visualType: 'rect_matrix',
     visualBadgeText: '缩进修复运行成功',
     codeTitle: '修复了缩进错位后的四边形矩阵',
-    codeLines: [
-      { text: 't.forward(step * 2)', isSuccess: true, comment: '# ✓ 修正：已对齐4空格' },
-    ],
+    codeLines: [{ text: 't.forward(step * 2)', isSuccess: true, comment: '# ✓ 修正：已对齐4空格' }],
   };
 
   const sampleAnnotations: TeacherPeerAnnotation[] = [
@@ -134,8 +130,20 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
   ];
 
   const sampleDimensions: RubricDimensionItem[] = [
-    { id: 'd1', label: '算法逻辑正确性', percentage: 98, colorClass: 'text-indigo-400', barColorClass: 'bg-indigo-500' },
-    { id: 'd2', label: '代码规范与缩进', percentage: 96, colorClass: 'text-emerald-400', barColorClass: 'bg-emerald-500' },
+    {
+      id: 'd1',
+      label: '算法逻辑正确性',
+      percentage: 98,
+      colorClass: 'text-indigo-400',
+      barColorClass: 'bg-indigo-500',
+    },
+    {
+      id: 'd2',
+      label: '代码规范与缩进',
+      percentage: 96,
+      colorClass: 'text-emerald-400',
+      barColorClass: 'bg-emerald-500',
+    },
   ];
 
   const samplePodium: NominatedStudent[] = [
@@ -216,13 +224,7 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
 
   describe('2. PeerReviewMatrixPanel', () => {
     it('renders smart cross matching feed and live badge stream', () => {
-      render(
-        <PeerReviewMatrixPanel
-          matchingItems={sampleMatchingItems}
-          badges={sampleBadges}
-          isAnonymous={false}
-        />,
-      );
+      render(<PeerReviewMatrixPanel matchingItems={sampleMatchingItems} badges={sampleBadges} isAnonymous={false} />);
 
       expect(screen.getByText('智能交叉互评')).toBeDefined();
       expect(screen.getByText('1生评2份')).toBeDefined();
@@ -234,13 +236,7 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
     });
 
     it('masks student names when isAnonymous is true', () => {
-      render(
-        <PeerReviewMatrixPanel
-          matchingItems={sampleMatchingItems}
-          badges={sampleBadges}
-          isAnonymous={true}
-        />,
-      );
+      render(<PeerReviewMatrixPanel matchingItems={sampleMatchingItems} badges={sampleBadges} isAnonymous={true} />);
 
       expect(screen.getByText(/张\*\*/)).toBeDefined();
       expect(screen.getByText(/陈\*\* · 标杆五边形螺旋/)).toBeDefined();
@@ -290,9 +286,7 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
   describe('4. PeerReviewRubricStats', () => {
     it('renders 3D rubric bars and responds to reaction clicks', () => {
       const onReaction = vi.fn();
-      const reactions = [
-        { id: 'like', emoji: '❤️', label: '超赞', count: 68, colorClass: 'text-indigo-400' },
-      ];
+      const reactions = [{ id: 'like', emoji: '❤️', label: '超赞', count: 68, colorClass: 'text-indigo-400' }];
 
       render(
         <PeerReviewRubricStats
@@ -378,12 +372,7 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
       const addToast = vi.fn();
 
       render(
-        <PeerReviewShowcaseModal
-          isOpen={true}
-          onClose={onClose}
-          onAdvanceToStage3={onAdvance}
-          addToast={addToast}
-        />,
+        <PeerReviewShowcaseModal isOpen={true} onClose={onClose} onAdvanceToStage3={onAdvance} addToast={addToast} />,
       );
 
       expect(screen.getByText('STAGE 02.4')).toBeDefined();
@@ -425,17 +414,19 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
               badges: [],
             } as any
           }
-          podiumStudents={[
-            {
-              rank: 1,
-              name: '真实学生甲',
-              votes: 92,
-              workTitle: '92% 正确率',
-              honorTitle: '本节最高分',
-              rankBadgeClass: 'bg-[#ffb95f] text-[#2a1700]',
-              tagBadgeClass: 'bg-[#ca8100]/20 text-[#ffb95f]',
-            },
-          ] as any}
+          podiumStudents={
+            [
+              {
+                rank: 1,
+                name: '真实学生甲',
+                votes: 92,
+                workTitle: '92% 正确率',
+                honorTitle: '本节最高分',
+                rankBadgeClass: 'bg-[#ffb95f] text-[#2a1700]',
+                tagBadgeClass: 'bg-[#ca8100]/20 text-[#ffb95f]',
+              },
+            ] as any
+          }
         />,
       );
 
@@ -457,12 +448,7 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
     it('handles Escape hotkey to close modal directly', () => {
       const onClose = vi.fn();
 
-      render(
-        <PeerReviewShowcaseModal
-          isOpen={true}
-          onClose={onClose}
-        />,
-      );
+      render(<PeerReviewShowcaseModal isOpen={true} onClose={onClose} />);
 
       // Press Escape to close
       fireEvent.keyDown(window, { key: 'Escape' });

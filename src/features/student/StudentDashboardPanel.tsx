@@ -123,9 +123,7 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
 
   // Toggle collapsed state
   const handleToggleCollapse = (widgetId: DashboardWidgetId) => {
-    const updated = layout.map((item) =>
-      item.id === widgetId ? { ...item, collapsed: !item.collapsed } : item,
-    );
+    const updated = layout.map((item) => (item.id === widgetId ? { ...item, collapsed: !item.collapsed } : item));
     saveLayout(updated);
   };
 
@@ -342,7 +340,9 @@ export function StudentDashboardPanel(props: StudentDashboardPanelProps) {
             id="academic-trajectory"
             key={widget.id}
             title={lang === 'zh' ? '长期学业成长轨迹与评定历史' : 'Academic Growth Trajectory & History'}
-            subtitle={lang === 'zh' ? '学期绩点走势、近3月表现与评分时间轴' : 'Semester grade trends & evaluation timeline'}
+            subtitle={
+              lang === 'zh' ? '学期绩点走势、近3月表现与评分时间轴' : 'Semester grade trends & evaluation timeline'
+            }
             icon={<Award size={18} className="text-purple-600" />}
             size={widget.size}
             collapsed={widget.collapsed}

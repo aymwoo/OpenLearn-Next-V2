@@ -70,6 +70,7 @@ stateDiagram-v2
 `ClassroomCreated` / `ClassroomPrepared` / `ClassroomReady` / `ClassroomTeaching` / `ClassroomPaused` / `ClassroomResumed` / `ClassroomFinished` / `ClassroomArchived` / `ClassroomDisposed`。
 
 **特殊转换**：
+
 - `resume()` 内部会调用 `startTeaching()`——因为 resume = 回到 teaching。
 - `dispose()` 可从任意阶段进入（不校验 `allowedFrom`），是应急逃生口。
 
@@ -96,16 +97,16 @@ public attachRuntimes(runtimes: {
 
 `ClassroomContextFacade`（54 行）把 session 和 context 封装成**单一 facade**，对外暴露只读 getter：
 
-| Getter | 返回 |
-|---|---|
-| `classroomId` | string |
-| `stage` | ClassroomStage |
-| `lesson` | unknown（lessonSession） |
-| `whiteboard` | unknown（whiteboardEngine） |
-| `ai` | unknown（aiRuntime） |
-| `plugin` | unknown（pluginHost） |
-| `analytics` | unknown（analyticsEngine） |
-| `resource` | unknown（resourceRegistry） |
+| Getter         | 返回                             |
+| -------------- | -------------------------------- |
+| `classroomId`  | string                           |
+| `stage`        | ClassroomStage                   |
+| `lesson`       | unknown（lessonSession）         |
+| `whiteboard`   | unknown（whiteboardEngine）      |
+| `ai`           | unknown（aiRuntime）             |
+| `plugin`       | unknown（pluginHost）            |
+| `analytics`    | unknown（analyticsEngine）       |
+| `resource`     | unknown（resourceRegistry）      |
 | `getSession()` | ClassroomSession（用于高级操作） |
 
 **设计意图**：课堂 UI 代码只依赖 `ClassroomContextFacade`，不直接接触 6 个底层 runtime 的类型定义——后者按需懒解析。这样 plugin 或能力扩展可以**替换底层实现**而不需要改 frontend。
@@ -116,19 +117,19 @@ public attachRuntimes(runtimes: {
 
 `ClassroomRegistry`（55 行）提供 3 类扩展 slot：
 
-| 存储 | Key | Value | 用途 |
-|---|---|---|---|
-| `services` | serviceId | `ClassroomServiceDescriptor` | 业务服务（execute 语义） |
-| `actions` | actionId | `ClassroomActionExtension` | 课堂动作扩展（handler 语义） |
-| `widgets` | widgetId | `{ id, name, slot }` | 课堂 UI 控件挂载 |
+| 存储       | Key       | Value                        | 用途                         |
+| ---------- | --------- | ---------------------------- | ---------------------------- |
+| `services` | serviceId | `ClassroomServiceDescriptor` | 业务服务（execute 语义）     |
+| `actions`  | actionId  | `ClassroomActionExtension`   | 课堂动作扩展（handler 语义） |
+| `widgets`  | widgetId  | `{ id, name, slot }`         | 课堂 UI 控件挂载             |
 
 ### ClassroomServiceDescriptor vs ClassroomActionExtension
 
-| 维度 | ServiceDescriptor | ActionExtension |
-|---|---|---|
-| 语义 | 可重用的"业务能力" | 单次执行的"动作" |
+| 维度     | ServiceDescriptor      | ActionExtension      |
+| -------- | ---------------------- | -------------------- |
+| 语义     | 可重用的"业务能力"     | 单次执行的"动作"     |
 | 生命周期 | 注册后可被多次 execute | 注册后被业务按需触发 |
-| 典型用例 | "成绩统计服务" | "开启投票动作" |
+| 典型用例 | "成绩统计服务"         | "开启投票动作"       |
 
 ### ClassroomService（门面层）
 
@@ -152,9 +153,15 @@ public clear(): void;                                   // disposeAll + registry
 
 ```typescript
 export type ClassroomEventType =
-  | 'classroom.created' | 'classroom.prepared' | 'classroom.ready'
-  | 'classroom.teaching' | 'classroom.paused' | 'classroom.resumed'
-  | 'classroom.finished' | 'classroom.archived' | 'classroom.disposed';
+  | 'classroom.created'
+  | 'classroom.prepared'
+  | 'classroom.ready'
+  | 'classroom.teaching'
+  | 'classroom.paused'
+  | 'classroom.resumed'
+  | 'classroom.finished'
+  | 'classroom.archived'
+  | 'classroom.disposed';
 ```
 
 事件命名遵循 `classroom.<stage>` 风格，便于跨模块按 namespace 订阅：
@@ -172,6 +179,7 @@ bus.subscribe('*', (event) => { ... });
 `subscribe()` 返回 `() => void` 类型的 unsubscribe 函数（PI-010 风格）。
 
 **与 `ClassroomSession.emitEvent` 的关系**：
+
 - `ClassroomSession.emitEvent` → 直接回调注册的 `ClassroomEventListener`（in-process，session 范围）
 - `ClassroomEventBus.publish` → 走全局 EventBus（跨模块，跨进程可扩展）
 
@@ -181,13 +189,13 @@ bus.subscribe('*', (event) => { ... });
 
 ## 跨前后端实现
 
-| 维度 | 前端 (`src/features/classroom-runtime/`) | 后端 (`packages/core/classroom-runtime/`) |
-|---|---|---|
-| 用途 | UI 状态编排、6 个 client runtime 协调 | 服务端权威状态机、持久化、与 DB 同步 |
-| 9 阶段状态机 | ✅ | ✅ |
-| `IClassroomContext` | ✅ 持有 client runtime 引用 | ✅ 持有 service-side runtime 引用 |
-| EventBus | 复用全局 EventBus（前端 ESM 版） | 复用全局 EventBus（后端 Node 版） |
-| 业务边界 | 不持久化，刷新即失 | 持久化课堂状态到 DB |
+| 维度                | 前端 (`src/features/classroom-runtime/`) | 后端 (`packages/core/classroom-runtime/`) |
+| ------------------- | ---------------------------------------- | ----------------------------------------- |
+| 用途                | UI 状态编排、6 个 client runtime 协调    | 服务端权威状态机、持久化、与 DB 同步      |
+| 9 阶段状态机        | ✅                                       | ✅                                        |
+| `IClassroomContext` | ✅ 持有 client runtime 引用              | ✅ 持有 service-side runtime 引用         |
+| EventBus            | 复用全局 EventBus（前端 ESM 版）         | 复用全局 EventBus（后端 Node 版）         |
+| 业务边界            | 不持久化，刷新即失                       | 持久化课堂状态到 DB                       |
 
 **同步机制**（不在本子系统范围内）：前端 `ClassroomService` 通过 WebSocket / RPC 调用后端 `ClassroomRuntimeKernel` 的对应方法，后端事件通过推送（push）反向同步到前端 event bus。前后端 9 阶段状态机**可能暂时不一致**（网络延迟），前端以**乐观更新**为主，最终一致性由后端修正。
 
@@ -197,10 +205,10 @@ bus.subscribe('*', (event) => { ... });
 
 参考 [`platform-kernel.md`](./platform-kernel.md) Layer 2_6 节点（`ClassroomRuntimeKernel`）：
 
-| Kernel 属性 | 前后端实现 |
-|---|---|
-| `classroomRuntime` | `ClassroomService` (前端) / `ClassroomRuntimeKernel` (后端) |
-| 6 个被协调的 runtime | lesson / whiteboard / ai / plugin / analytics / resource |
+| Kernel 属性          | 前后端实现                                                  |
+| -------------------- | ----------------------------------------------------------- |
+| `classroomRuntime`   | `ClassroomService` (前端) / `ClassroomRuntimeKernel` (后端) |
+| 6 个被协调的 runtime | lesson / whiteboard / ai / plugin / analytics / resource    |
 
 Classroom Runtime 是 Layer 2 中**唯一的"协调型" runtime**——其他 runtime（lesson-runtime、whiteboard-runtime 等）都是**单一职责型**，只有它负责跨 runtime 编排。
 
@@ -243,6 +251,7 @@ Classroom Runtime 是 Layer 2 中**唯一的"协调型" runtime**——其他 ru
 在实际教学落地（`src/features/classroom/` 与 `LiveClassroomView.tsx`）中，系统将课堂抽象为**四阶段主生命周期**，贯穿课前、课中、课尾与课后：
 
 ### 1. 课前准备阶段（Pre-Class Ready）
+
 - **预习学情穿透看板 (`PreClassDiagnosticHub.tsx`)**：
   - 课前穿透展示学生微课视频完播率与前置导学测验错误率最高 Top 3 知识点卡点，实现“以学定教”。
 - **环境一键飞检预检 (`PreflightHealthModal.tsx`)**：
@@ -251,6 +260,7 @@ Classroom Runtime 是 Layer 2 中**唯一的"协调型" runtime**——其他 ru
   - 5 秒滚动动态 OTP 二维码防代签，配合全班心态基线破冰题调研。
 
 ### 2. 课中授课与深度互动阶段（In-Class Teaching）
+
 - **智能随机抽问与分层轮盘 (`FairPickerEngine.ts` / `RollCallWrapper.tsx`)**：
   - 结合历史发言频次进行公平降采样惩罚，支持基础/进阶/拔高难度自适应分层匹配，回答后触发即时成长金币声光特效。
 - **随堂小组协作与画廊互评展台 (`GroupCollabWhiteboardModal.tsx` / `breakout-engine.ts`)**：
@@ -259,6 +269,7 @@ Classroom Runtime 是 Layer 2 中**唯一的"协调型" runtime**——其他 ru
   - 支持 2~4 屏多端作答并排比对，搭载激光笔光晕拖尾与荧光笔半透明覆盖批注图层。
 
 ### 3. 课尾反馈与结课阶段（Wrap-up Exit Ticket）
+
 - **自适应梯级 Exit Ticket (`AdaptiveExitTicketModal.tsx`)**：
   - 核心概念通关必做题 ➔ 答对动态解锁进阶探究挑战题，答错动态解锁支架概念解析卡分支。
 - **疑难词云与卡点聚类 (`ConceptWordcloudPanel.tsx` / `concept-clustering-engine.ts`)**：
@@ -267,6 +278,7 @@ Classroom Runtime 是 Layer 2 中**唯一的"协调型" runtime**——其他 ru
   - 全班核心知识图谱节点由灰暗转为亮起，直观呈现当堂达成度。
 
 ### 4. 课后复盘与学情沉淀阶段（Archived Report & Follow-up）
+
 - **AI 教学副驾反思建议 (`copilot-reflection-engine.ts`)**：
   - 结合讲授时长占比（高讲授预警）、提问覆盖率、晴雨表时序波峰定位，输出量化归因反思报告与下一课时针对性温故策略。
 - **差异化课后巩固派发中枢 (`DifferentiatedFollowupHub.tsx`)**：
@@ -307,4 +319,3 @@ graph LR
    - 统一抽象 RF 433MHz 物理答题器、数位板、无线翻页笔按键为系统事件（`CLICKER_SUBMIT_OPTION`、`CLICKER_BUZZER_PRESS`、`PRESENTER_NEXT_PAGE` 等），打通实体教具与虚拟软件的交互隔阂。
 3. **课堂宏动作编排 (Classroom Action Macros)**：
    - 调度执行器支持一键自动化编排串联多步原子教学动作（倒计时总线、学生端防切屏全屏锁定、实时动态榜切换与自动收卷）。
-

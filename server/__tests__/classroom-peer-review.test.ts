@@ -60,12 +60,21 @@ describe('课中互评 API（classroom-peer-review）', () => {
       'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
     );
     const exp = now + 3600_000;
-    insSession.run(teacherToken, JSON.stringify({ userId: teacherId, role: 'teacher', username: 'pr_teacher' }), now, exp);
+    insSession.run(
+      teacherToken,
+      JSON.stringify({ userId: teacherId, role: 'teacher', username: 'pr_teacher' }),
+      now,
+      exp,
+    );
     insSession.run(tokenA, JSON.stringify({ userId: studentA, role: 'student', username: 'pr_a' }), now, exp);
     insSession.run(tokenB, JSON.stringify({ userId: studentB, role: 'student', username: 'pr_b' }), now, exp);
     insSession.run(tokenC, JSON.stringify({ userId: studentC, role: 'student', username: 'pr_c' }), now, exp);
 
-    db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(classId, '互评测试班', now);
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(
+      classId,
+      '互评测试班',
+      now,
+    );
     db.prepare('INSERT OR REPLACE INTO lessons (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)').run(
       lessonId,
       '互评测试课节',
@@ -78,9 +87,12 @@ describe('课中互评 API（classroom-peer-review）', () => {
       [studentB, '学生乙'],
       [studentC, '学生丙'],
     ] as const) {
-      db.prepare(
-        'INSERT OR REPLACE INTO students (id, name, student_number, created_at) VALUES (?, ?, ?, ?)',
-      ).run(id, name, name, now);
+      db.prepare('INSERT OR REPLACE INTO students (id, name, student_number, created_at) VALUES (?, ?, ?, ?)').run(
+        id,
+        name,
+        name,
+        now,
+      );
       db.prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(
         classId,
         id,
@@ -213,7 +225,12 @@ describe('课中互评 API（classroom-peer-review）', () => {
         `INSERT OR REPLACE INTO classroom_sessions (id, lesson_id, class_id, teacher_id, stage, started_at, created_at)
          VALUES (?, ?, ?, ?, 'IN_CLASS_TEACHING', ?, ?)`,
       ).run('sess-pr-empty', emptyLesson, emptyClass, teacherId, now, now);
-      const res = await call('POST', `/api/classroom/sessions/${emptyLesson}/peer-review/auto-assign`, teacherToken, {});
+      const res = await call(
+        'POST',
+        `/api/classroom/sessions/${emptyLesson}/peer-review/auto-assign`,
+        teacherToken,
+        {},
+      );
       expect(res.status).toBe(400);
       const body = (await res.json()) as any;
       expect(body.error).toMatch(/Not enough submitted works/);
@@ -235,7 +252,12 @@ describe('课中互评 API（classroom-peer-review）', () => {
         `INSERT OR REPLACE INTO classroom_sessions (id, lesson_id, class_id, teacher_id, stage, started_at, created_at)
          VALUES (?, ?, ?, ?, 'IN_CLASS_TEACHING', ?, ?)`,
       ).run('sess-pr-nocw', otherLesson, classId, teacherId, now, now);
-      const res = await call('POST', `/api/classroom/sessions/${otherLesson}/peer-review/auto-assign`, teacherToken, {});
+      const res = await call(
+        'POST',
+        `/api/classroom/sessions/${otherLesson}/peer-review/auto-assign`,
+        teacherToken,
+        {},
+      );
       expect(res.status).toBe(200);
       const body = (await res.json()) as any;
       // 班级里有三份真实作答 → 走 class 回退口径
@@ -274,12 +296,9 @@ describe('课中互评 API（classroom-peer-review）', () => {
         .prepare('SELECT id, reviewer_id FROM classroom_peer_review_tasks WHERE lesson_id = ? LIMIT 1')
         .get(lessonId) as any;
       const token = task.reviewer_id === studentA ? tokenA : task.reviewer_id === studentB ? tokenB : tokenC;
-      const res = await call(
-        'POST',
-        `/api/classroom/sessions/${lessonId}/peer-review/tasks/${task.id}/submit`,
-        token,
-        { score: 9 },
-      );
+      const res = await call('POST', `/api/classroom/sessions/${lessonId}/peer-review/tasks/${task.id}/submit`, token, {
+        score: 9,
+      });
       expect(res.status).toBe(400);
     });
 
@@ -313,9 +332,7 @@ describe('课中互评 API（classroom-peer-review）', () => {
       expect(r2.status).toBe(200);
 
       const rows = db
-        .prepare(
-          'SELECT score, comment FROM classroom_peer_reviews WHERE lesson_id = ? AND reviewer_id = ?',
-        )
+        .prepare('SELECT score, comment FROM classroom_peer_reviews WHERE lesson_id = ? AND reviewer_id = ?')
         .all(lessonId, task.reviewer_id) as any[];
       expect(rows).toHaveLength(1);
       expect(rows[0].score).toBe(5);
@@ -344,9 +361,9 @@ describe('课中互评 API（classroom-peer-review）', () => {
       expect(r1.status).toBe(200);
       const r2 = await call('POST', url, tokenA, { receiverId: studentB, badgeKey: 'brilliant_idea' });
       expect(r2.status).toBe(200);
-      const count = (db
-        .prepare('SELECT COUNT(*) as c FROM classroom_peer_badges WHERE lesson_id = ?')
-        .get(lessonId) as any).c;
+      const count = (
+        db.prepare('SELECT COUNT(*) as c FROM classroom_peer_badges WHERE lesson_id = ?').get(lessonId) as any
+      ).c;
       expect(count).toBe(1);
     });
 

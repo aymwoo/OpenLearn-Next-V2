@@ -41,11 +41,7 @@ import type {
   DiffStamp,
   DiffStampType,
 } from './types';
-import {
-  DIFF_STAMP_PRESETS,
-  HIGHLIGHTER_COLORS,
-  PEN_COLORS,
-} from './diff-presets';
+import { DIFF_STAMP_PRESETS, HIGHLIGHTER_COLORS, PEN_COLORS } from './diff-presets';
 import { DiffAnnotationCanvas } from './DiffAnnotationCanvas';
 
 export interface ShowcaseDiffModalProps {
@@ -73,14 +69,15 @@ export const ShowcaseDiffModal: React.FC<ShowcaseDiffModalProps> = ({
   const worksPool = useMemo<DiffStudentWork[]>(() => {
     if (propWorks && propWorks.length > 0) return propWorks;
 
-    const baseStudents = availableStudents.length > 0
-      ? availableStudents
-      : [
-          { id: 'stu-1', name: '张子豪', seatNumber: 'A-01' },
-          { id: 'stu-2', name: '李晓彤', seatNumber: 'A-02' },
-          { id: 'stu-3', name: '王一诺', seatNumber: 'B-03' },
-          { id: 'stu-4', name: '赵梓涵', seatNumber: 'B-04' },
-        ];
+    const baseStudents =
+      availableStudents.length > 0
+        ? availableStudents
+        : [
+            { id: 'stu-1', name: '张子豪', seatNumber: 'A-01' },
+            { id: 'stu-2', name: '李晓彤', seatNumber: 'A-02' },
+            { id: 'stu-3', name: '王一诺', seatNumber: 'B-03' },
+            { id: 'stu-4', name: '赵梓涵', seatNumber: 'B-04' },
+          ];
 
     const templates = [
       {
@@ -182,23 +179,26 @@ const L = T - V; // 拉格朗日量
   }, [selectedIds, worksPool]);
 
   // 选人复选切换
-  const toggleStudentSelection = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      if (prev.includes(id)) {
-        if (prev.length <= 2) {
-          addToast?.('提示', '对比屏幕至少保留 2 位学生', 'info');
-          return prev;
+  const toggleStudentSelection = useCallback(
+    (id: string) => {
+      setSelectedIds((prev) => {
+        if (prev.includes(id)) {
+          if (prev.length <= 2) {
+            addToast?.('提示', '对比屏幕至少保留 2 位学生', 'info');
+            return prev;
+          }
+          return prev.filter((item) => item !== id);
+        } else {
+          if (prev.length >= 4) {
+            addToast?.('提示', '多屏对比最多支持 4 位学生同时投屏', 'warning');
+            return prev;
+          }
+          return [...prev, id];
         }
-        return prev.filter((item) => item !== id);
-      } else {
-        if (prev.length >= 4) {
-          addToast?.('提示', '多屏对比最多支持 4 位学生同时投屏', 'warning');
-          return prev;
-        }
-        return [...prev, id];
-      }
-    });
-  }, [addToast]);
+      });
+    },
+    [addToast],
+  );
 
   // 快速对比预设快捷切换
   const applyPresetCompare = (type: 'typical_error_diff' | 'all_top') => {
@@ -293,7 +293,9 @@ const L = T - V; // 拉格朗日量
               title={lang === 'zh' ? '匿名脱敏模式（保护学生隐私）' : 'Anonymous Mode'}
             >
               {isAnonymous ? <EyeOff size={13} /> : <Eye size={13} />}
-              <span>{isAnonymous ? (lang === 'zh' ? '盲评匿名中' : 'Anonymous') : (lang === 'zh' ? '实名显示' : 'Real Name')}</span>
+              <span>
+                {isAnonymous ? (lang === 'zh' ? '盲评匿名中' : 'Anonymous') : lang === 'zh' ? '实名显示' : 'Real Name'}
+              </span>
             </button>
 
             {/* 广播推流 */}
@@ -508,14 +510,20 @@ const L = T - V; // 拉格朗日量
                             {work.seatNumber}
                           </span>
                         </div>
-                        <span className={`text-3xs font-mono font-bold px-1.5 py-0.5 rounded ${
-                          work.category === 'exemplary'
-                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                        <span
+                          className={`text-3xs font-mono font-bold px-1.5 py-0.5 rounded ${
+                            work.category === 'exemplary'
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                              : work.category === 'typical_error'
+                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                                : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                          }`}
+                        >
+                          {work.category === 'exemplary'
+                            ? '示范'
                             : work.category === 'typical_error'
-                              ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                              : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                        }`}>
-                          {work.category === 'exemplary' ? '示范' : work.category === 'typical_error' ? '典型错误' : '创新'}
+                              ? '典型错误'
+                              : '创新'}
                         </span>
                       </div>
                       <p className="text-[11px] text-muted truncate pl-6 font-medium">{work.title}</p>
@@ -552,9 +560,7 @@ const L = T - V; // 拉格朗日量
               }`}
             >
               {activeWorks.map((work, idx) => {
-                const displayName = isAnonymous
-                  ? `作答方案 ${String.fromCharCode(65 + idx)}`
-                  : work.studentName;
+                const displayName = isAnonymous ? `作答方案 ${String.fromCharCode(65 + idx)}` : work.studentName;
 
                 return (
                   <div
@@ -587,11 +593,13 @@ const L = T - V; // 拉格朗日量
                             {Math.floor(work.durationSec / 60)}分{work.durationSec % 60}秒
                           </span>
                         )}
-                        <span className={`px-2 py-0.5 rounded-full text-2xs font-bold font-mono ${
-                          (work.accuracyScore ?? 0) >= 90
-                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                            : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                        }`}>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-2xs font-bold font-mono ${
+                            (work.accuracyScore ?? 0) >= 90
+                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                              : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                          }`}
+                        >
                           {work.accuracyScore}%
                         </span>
                       </div>

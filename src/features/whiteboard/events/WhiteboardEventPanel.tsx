@@ -24,10 +24,7 @@ export interface WhiteboardEventPanelProps {
   defaultCollapsed?: boolean;
 }
 
-export function WhiteboardEventPanel({
-  lessonId,
-  defaultCollapsed = true,
-}: WhiteboardEventPanelProps) {
+export function WhiteboardEventPanel({ lessonId, defaultCollapsed = true }: WhiteboardEventPanelProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [typeFilter, setTypeFilter] = useState<string>('');
   const [sourceFilter, setSourceFilter] = useState<string>('');
@@ -56,11 +53,7 @@ export function WhiteboardEventPanel({
   const typeOptions = useMemo(() => Object.keys(stats.byType).sort(), [stats]);
 
   return (
-    <div
-      data-testid="whiteboard-event-panel"
-      className="fixed bottom-4 right-4 z-50"
-      style={{ maxWidth: 380 }}
-    >
+    <div data-testid="whiteboard-event-panel" className="fixed bottom-4 right-4 z-50" style={{ maxWidth: 380 }}>
       {collapsed ? (
         <button
           type="button"
@@ -135,10 +128,7 @@ export function WhiteboardEventPanel({
             </select>
           </div>
 
-          <div
-            data-testid="whiteboard-event-panel-list"
-            className="space-y-1 max-h-80 overflow-y-auto"
-          >
+          <div data-testid="whiteboard-event-panel-list" className="space-y-1 max-h-80 overflow-y-auto">
             {visibleEvents.length === 0 ? (
               <div className="text-center text-gray-400 py-4">暂无事件</div>
             ) : (
@@ -156,9 +146,7 @@ function EventRow({ event }: { event: WhiteboardEvent }) {
   const time = new Date(event.timestamp).toLocaleTimeString();
   const isScore = event.type === 'courseware.submitted';
   const scoreText =
-    isScore &&
-    typeof event.payload.score === 'number' &&
-    typeof event.payload.total === 'number'
+    isScore && typeof event.payload.score === 'number' && typeof event.payload.total === 'number'
       ? ` · ${event.payload.score}/${event.payload.total}`
       : '';
   const isCompleted = isScore && (event.payload.score as number) >= 60;
@@ -169,16 +157,10 @@ function EventRow({ event }: { event: WhiteboardEvent }) {
       className="border border-gray-100 rounded p-1.5 bg-white/80 hover:bg-white"
     >
       <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="flex-1 text-left"
-        >
+        <button type="button" onClick={() => setExpanded((v) => !v)} className="flex-1 text-left">
           <span className="font-mono text-gray-400 text-[10px]">{time}</span>{' '}
           <span
-            className={`font-semibold ${
-              isCompleted ? 'text-green-600' : isScore ? 'text-red-500' : 'text-gray-700'
-            }`}
+            className={`font-semibold ${isCompleted ? 'text-green-600' : isScore ? 'text-red-500' : 'text-gray-700'}`}
           >
             {event.type}
           </span>

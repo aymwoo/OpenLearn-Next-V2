@@ -466,7 +466,10 @@ export function AdminPanel({
   });
 
   return (
-    <div className="flex-1 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col min-h-0 overflow-hidden h-full" id="admin_panel_root">
+    <div
+      className="flex-1 bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col min-h-0 overflow-hidden h-full"
+      id="admin_panel_root"
+    >
       {/* Admin Panel Header Banner */}
       <div className="px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white shrink-0">
         <div>
@@ -474,7 +477,13 @@ export function AdminPanel({
             <Shield className="text-indigo-600 shrink-0" size={20} />
             <span>{lang === 'zh' ? '系统管理与教职后台' : 'Staff Directory & System Admin'}</span>
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100/80">
-              {currentUserRole === 'administrator' ? (lang === 'zh' ? '超级管理员' : 'Admin') : (lang === 'zh' ? '教师' : 'Teacher')}
+              {currentUserRole === 'administrator'
+                ? lang === 'zh'
+                  ? '超级管理员'
+                  : 'Admin'
+                : lang === 'zh'
+                  ? '教师'
+                  : 'Teacher'}
             </span>
           </h2>
           <p className="text-xs text-gray-500 mt-1">
@@ -532,9 +541,7 @@ export function AdminPanel({
           <button
             onClick={() => setActiveAdminTab('sqlite')}
             className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeAdminTab === 'sqlite'
-                ? 'bg-white text-indigo-700 shadow-xs'
-                : 'text-gray-500 hover:text-gray-800'
+              activeAdminTab === 'sqlite' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'
             }`}
           >
             <Database size={14} />
@@ -559,7 +566,9 @@ export function AdminPanel({
             href="/api/audit-report/download"
             download="OpenLearn-V2-代码质量与架构审计报告.md"
             className="px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-all shrink-0 cursor-pointer shadow-xs"
-            title={lang === 'zh' ? '下载全栈代码质量与架构审计报告' : 'Download Code Quality & Architecture Audit Report'}
+            title={
+              lang === 'zh' ? '下载全栈代码质量与架构审计报告' : 'Download Code Quality & Architecture Audit Report'
+            }
           >
             <FileText size={14} className="text-indigo-600" />
             <span>{lang === 'zh' ? '下载审计报告' : 'Download Audit Report'}</span>
@@ -583,7 +592,11 @@ export function AdminPanel({
             href="/api/classroom-optimization-plan/download"
             download="OpenLearn-V2-互动课堂与编辑器优化方案.md"
             className="px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition-all shrink-0 cursor-pointer shadow-xs"
-            title={lang === 'zh' ? '下载互动课堂及课程编辑器深度优化方案' : 'Download Interactive Classroom & Lesson Editor Optimization Plan'}
+            title={
+              lang === 'zh'
+                ? '下载互动课堂及课程编辑器深度优化方案'
+                : 'Download Interactive Classroom & Lesson Editor Optimization Plan'
+            }
           >
             <Compass size={14} className="text-amber-600" />
             <span>{lang === 'zh' ? '下载课堂优化方案' : 'Download Plan'}</span>
@@ -1459,9 +1472,7 @@ export function AdminPanel({
                           )}
                           <span
                             className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                              isUserAdmin
-                                ? 'bg-indigo-900 text-indigo-200'
-                                : 'bg-gray-100 text-gray-600'
+                              isUserAdmin ? 'bg-indigo-900 text-indigo-200' : 'bg-gray-100 text-gray-600'
                             }`}
                           >
                             {user.role}

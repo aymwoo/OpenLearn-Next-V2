@@ -190,7 +190,9 @@ describe('courseware-score helpers', () => {
         /unknown scorePolicy/,
       );
       expect(() => saveScoreConfig(db as any, { coursewareId: 'cw-1', rawFullScore: 0 })).toThrow(/rawFullScore/);
-      expect(() => saveScoreConfig(db as any, { coursewareId: 'cw-1', targetFullScore: -5 })).toThrow(/targetFullScore/);
+      expect(() => saveScoreConfig(db as any, { coursewareId: 'cw-1', targetFullScore: -5 })).toThrow(
+        /targetFullScore/,
+      );
       expect(() => saveScoreConfig(db as any, { coursewareId: 'cw-1', weightPercentage: 5000 })).toThrow(
         /weightPercentage/,
       );

@@ -97,15 +97,11 @@ describe('ClassroomBriefingView: 课后学情复盘与分层派发集成', () =>
 
     // 验证 AI 教学副驾反思建议
     await waitFor(() => {
-      expect(
-        screen.getByText(/AI 教学副驾反思建议 \(Teaching Co-Pilot\)/i),
-      ).toBeTruthy();
+      expect(screen.getByText(/AI 教学副驾反思建议 \(Teaching Co-Pilot\)/i)).toBeTruthy();
     });
 
     // 验证差异化任务分流中枢已渲染
-    expect(
-      screen.getByText('差异化课后巩固派发中枢 (Differentiated Follow-up Hub)'),
-    ).toBeTruthy();
+    expect(screen.getByText('差异化课后巩固派发中枢 (Differentiated Follow-up Hub)')).toBeTruthy();
 
     // 验证梯队自动归入
     expect(screen.getByText(/A 梯队 · 通关拔高型/)).toBeTruthy();

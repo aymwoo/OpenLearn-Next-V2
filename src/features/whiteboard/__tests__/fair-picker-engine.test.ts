@@ -72,9 +72,7 @@ describe('FairPickerEngine', () => {
     });
 
     it('gracefully falls back to all candidates if no student matches requested tier', () => {
-      const singleGroup: PickerStudent[] = [
-        { id: 's1', name: '张明', tier: 'basic' },
-      ];
+      const singleGroup: PickerStudent[] = [{ id: 's1', name: '张明', tier: 'basic' }];
       const { filtered, fallback } = filterCandidatesByTier(singleGroup, 'advanced');
       expect(fallback).toBe(true);
       expect(filtered.length).toBe(1);

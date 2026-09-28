@@ -14,9 +14,30 @@ describe('RollCallWrapper Tiered Picker & Evaluation', () => {
           ok: true,
           json: () =>
             Promise.resolve([
-              { id: 's1', name: '张明', student_number: '101', tier: 'basic', term_picked_count: 0, lesson_picked_count: 0 },
-              { id: 's2', name: '李华', student_number: '102', tier: 'intermediate', term_picked_count: 1, lesson_picked_count: 0 },
-              { id: 's3', name: '王超', student_number: '103', tier: 'advanced', term_picked_count: 2, lesson_picked_count: 0 },
+              {
+                id: 's1',
+                name: '张明',
+                student_number: '101',
+                tier: 'basic',
+                term_picked_count: 0,
+                lesson_picked_count: 0,
+              },
+              {
+                id: 's2',
+                name: '李华',
+                student_number: '102',
+                tier: 'intermediate',
+                term_picked_count: 1,
+                lesson_picked_count: 0,
+              },
+              {
+                id: 's3',
+                name: '王超',
+                student_number: '103',
+                tier: 'advanced',
+                term_picked_count: 2,
+                lesson_picked_count: 0,
+              },
             ]),
         });
       }

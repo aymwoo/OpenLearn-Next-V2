@@ -102,7 +102,7 @@ describe('ClassroomMoodTracker (实时课堂情绪与专注度追踪器)', () =>
         lessons={mockLessons as any}
         schedules={mockSchedules as any}
         addToast={vi.fn()}
-      />
+      />,
     );
 
     // Verify title and badges
@@ -162,7 +162,7 @@ describe('ClassroomMoodTracker (实时课堂情绪与专注度追踪器)', () =>
         lessons={mockLessons as any}
         schedules={mockSchedules as any}
         addToast={addToast}
-      />
+      />,
     );
 
     const pulseBtn = screen.getByText('发起30s即时脉搏检');
@@ -172,7 +172,7 @@ describe('ClassroomMoodTracker (实时课堂情绪与专注度追踪器)', () =>
       expect(addToast).toHaveBeenCalledWith(
         '脉搏检测已下发',
         expect.stringContaining('已向全体听课学生弹出'),
-        'success'
+        'success',
       );
     });
   });
@@ -184,7 +184,7 @@ describe('ClassroomMoodTracker (实时课堂情绪与专注度追踪器)', () =>
         lessons={mockLessons as any}
         schedules={mockSchedules as any}
         addToast={vi.fn()}
-      />
+      />,
     );
 
     const simBtn = screen.getByText('模拟数据流');

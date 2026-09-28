@@ -52,10 +52,8 @@ export function ClassSummaryStats({ classDashboardMap, classes, lang }: ClassSum
     }
 
     const avgGrade = totalScoreCount > 0 ? Math.round(totalScoreSum / totalScoreCount) : null;
-    const attendanceRate =
-      totalStudents > 0 ? Math.round((totalSubmittedStudents / totalStudents) * 100) : null;
-    const participationScore =
-      totalRollcallStudents > 0 ? (totalRollcallSum / totalRollcallStudents).toFixed(1) : null;
+    const attendanceRate = totalStudents > 0 ? Math.round((totalSubmittedStudents / totalStudents) * 100) : null;
+    const participationScore = totalRollcallStudents > 0 ? (totalRollcallSum / totalRollcallStudents).toFixed(1) : null;
 
     return { avgGrade, attendanceRate, participationScore, classCount: classIds.length };
   }, [classDashboardMap]);
@@ -65,9 +63,7 @@ export function ClassSummaryStats({ classDashboardMap, classes, lang }: ClassSum
       <div className="bg-surface border border-theme rounded-2xl p-5 shadow-sm">
         <div className="flex items-center gap-2 mb-3">
           <BarChart3 size={16} className="text-primary-theme" />
-          <h3 className="text-sm font-black text-main">
-            {zh ? '班级综合数据概览' : 'Class Summary Stats'}
-          </h3>
+          <h3 className="text-sm font-black text-main">{zh ? '班级综合数据概览' : 'Class Summary Stats'}</h3>
         </div>
         <p className="text-xs text-muted text-center py-6">
           {zh ? '暂无班级数据，展开班级卡片后将自动加载' : 'No class data yet — expand a class card to load data'}
@@ -111,9 +107,7 @@ export function ClassSummaryStats({ classDashboardMap, classes, lang }: ClassSum
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <BarChart3 size={16} className="text-primary-theme" />
-          <h3 className="text-sm font-black text-main">
-            {zh ? '班级综合数据概览' : 'Class Summary Stats'}
-          </h3>
+          <h3 className="text-sm font-black text-main">{zh ? '班级综合数据概览' : 'Class Summary Stats'}</h3>
         </div>
         <span className="text-2xs font-semibold text-muted px-2 py-0.5 rounded-lg bg-surface-secondary border border-theme">
           {zh ? `已加载 ${stats.classCount} 个班级` : `${stats.classCount} class(es) loaded`}
@@ -139,9 +133,7 @@ export function ClassSummaryStats({ classDashboardMap, classes, lang }: ClassSum
                   <span className={`text-lg font-black font-mono leading-none ${card.tone.split(' ')[0]}`}>
                     {card.value}
                   </span>
-                  {card.suffix && (
-                    <span className="text-2xs text-muted font-medium">{card.suffix}</span>
-                  )}
+                  {card.suffix && <span className="text-2xs text-muted font-medium">{card.suffix}</span>}
                 </div>
                 <div className="text-2xs text-subtle mt-1 truncate">{card.hint}</div>
               </div>

@@ -28,13 +28,7 @@ interface CheckResult {
   healthScore: number;
 }
 
-export function PreflightHealthModal({
-  isOpen,
-  onClose,
-  classId,
-  className,
-  lang = 'zh',
-}: PreflightHealthModalProps) {
+export function PreflightHealthModal({ isOpen, onClose, classId, className, lang = 'zh' }: PreflightHealthModalProps) {
   const [isChecking, setIsChecking] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
 
@@ -140,7 +134,9 @@ export function PreflightHealthModal({
               className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
             >
               <RefreshCw size={12} className={isChecking ? 'animate-spin' : ''} />
-              <span>{isChecking ? (lang === 'zh' ? '飞检中...' : 'Checking...') : (lang === 'zh' ? '重新飞检' : 'Re-check')}</span>
+              <span>
+                {isChecking ? (lang === 'zh' ? '飞检中...' : 'Checking...') : lang === 'zh' ? '重新飞检' : 'Re-check'}
+              </span>
             </button>
           </div>
 
@@ -151,7 +147,9 @@ export function PreflightHealthModal({
               <div className="flex items-center gap-2.5">
                 <Zap size={15} className="text-amber-500 shrink-0" />
                 <div>
-                  <div className="font-bold text-main">{lang === 'zh' ? '局域网内核响应时延' : 'Local Kernel Latency'}</div>
+                  <div className="font-bold text-main">
+                    {lang === 'zh' ? '局域网内核响应时延' : 'Local Kernel Latency'}
+                  </div>
                   <div className="text-2xs text-muted">Express + SQLite API ping-pong</div>
                 </div>
               </div>
@@ -168,8 +166,12 @@ export function PreflightHealthModal({
               <div className="flex items-center gap-2.5">
                 <HardDrive size={15} className="text-blue-500 shrink-0" />
                 <div>
-                  <div className="font-bold text-main">{lang === 'zh' ? '课件音视频与交互资源' : 'Courseware & Static Media'}</div>
-                  <div className="text-2xs text-muted">{result?.staticResources.message || '静态文件与 HTML 沙箱资源完整'}</div>
+                  <div className="font-bold text-main">
+                    {lang === 'zh' ? '课件音视频与交互资源' : 'Courseware & Static Media'}
+                  </div>
+                  <div className="text-2xs text-muted">
+                    {result?.staticResources.message || '静态文件与 HTML 沙箱资源完整'}
+                  </div>
                 </div>
               </div>
               <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
@@ -180,8 +182,12 @@ export function PreflightHealthModal({
               <div className="flex items-center gap-2.5">
                 <Cpu size={15} className="text-purple-500 shrink-0" />
                 <div>
-                  <div className="font-bold text-main">{lang === 'zh' ? '微前端与安全沙箱隔离' : 'Plugin Sandbox & CSP'}</div>
-                  <div className="text-2xs text-muted">{result?.pluginSandbox.message || 'Bridge SDK Proxy 拦截通道就绪'}</div>
+                  <div className="font-bold text-main">
+                    {lang === 'zh' ? '微前端与安全沙箱隔离' : 'Plugin Sandbox & CSP'}
+                  </div>
+                  <div className="text-2xs text-muted">
+                    {result?.pluginSandbox.message || 'Bridge SDK Proxy 拦截通道就绪'}
+                  </div>
                 </div>
               </div>
               <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
@@ -192,7 +198,9 @@ export function PreflightHealthModal({
               <div className="flex items-center gap-2.5">
                 <Network size={15} className="text-emerald-500 shrink-0" />
                 <div>
-                  <div className="font-bold text-main">{lang === 'zh' ? '学生机 Socket.IO 局域网连通率' : 'Student LAN Socket Mesh'}</div>
+                  <div className="font-bold text-main">
+                    {lang === 'zh' ? '学生机 Socket.IO 局域网连通率' : 'Student LAN Socket Mesh'}
+                  </div>
                   <div className="text-2xs text-muted">{result?.socketMesh.message || 'WebSocket 双向通道通畅'}</div>
                 </div>
               </div>

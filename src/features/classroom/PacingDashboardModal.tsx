@@ -59,27 +59,43 @@ export function PacingDashboardModal({ lessonId, lang, signals, onlineCount = 0,
 
   const counts = SIGNAL_KEYS.map((k) => ({ key: k, count: Number(windowSignals[k] ?? 0) }));
   const total = counts.reduce((a, c) => a + c.count, 0);
-  const confusion = Number(windowSignals.CONFUSED ?? 0) + Number(windowSignals.TOO_FAST ?? 0) + Number(windowSignals.SLOW ?? 0);
+  const confusion =
+    Number(windowSignals.CONFUSED ?? 0) + Number(windowSignals.TOO_FAST ?? 0) + Number(windowSignals.SLOW ?? 0);
   // 节奏健康度：理解占比（0-100），仅在有信号时计算
-  const health = total > 0 ? Math.round(((Number(windowSignals.CLEAR ?? 0)) / total) * 100) : null;
+  const health = total > 0 ? Math.round((Number(windowSignals.CLEAR ?? 0) / total) * 100) : null;
 
   const buildAdvice = useCallback((): { text: string; tone: string } => {
     if (total === 0) return { text: zh ? '暂无学生反馈，等待中…' : 'No feedback yet', tone: 'text-muted' };
     if (Number(windowSignals.CONFUSED ?? 0) >= Math.max(2, total * 0.3))
-      return { text: zh ? '⚠ 较多学生困惑，建议放慢并重新讲解当前环节' : '⚠ Many students are confused — slow down and re-explain', tone: 'text-amber-600' };
+      return {
+        text: zh
+          ? '⚠ 较多学生困惑，建议放慢并重新讲解当前环节'
+          : '⚠ Many students are confused — slow down and re-explain',
+        tone: 'text-amber-600',
+      };
     if (Number(windowSignals.TOO_FAST ?? 0) >= Math.max(2, total * 0.3))
       return { text: zh ? '🐇 较多学生希望放慢节奏' : '🐇 Many students want you to slow down', tone: 'text-rose-600' };
     if (Number(windowSignals.SLOW ?? 0) >= Math.max(2, total * 0.3))
-      return { text: zh ? '🐢 较多学生希望加快节奏' : '🐢 Many students want you to speed up', tone: 'text-indigo-600' };
+      return {
+        text: zh ? '🐢 较多学生希望加快节奏' : '🐢 Many students want you to speed up',
+        tone: 'text-indigo-600',
+      };
     return { text: zh ? '✓ 节奏反馈健康，可按当前节奏继续' : '✓ Pace is healthy — carry on', tone: 'text-emerald-600' };
   }, [windowSignals, total, zh]);
 
   const pieData = counts
     .filter((c) => c.count > 0)
-    .map((c) => ({ name: META[c.key as keyof typeof META][zh ? 'zh' : 'en'], value: c.count, color: META[c.key as keyof typeof META].color }));
+    .map((c) => ({
+      name: META[c.key as keyof typeof META][zh ? 'zh' : 'en'],
+      value: c.count,
+      color: META[c.key as keyof typeof META].color,
+    }));
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/60 backdrop-blur-2xs" onPointerDown={onClose}>
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/60 backdrop-blur-2xs"
+      onPointerDown={onClose}
+    >
       <div
         className="bg-surface border border-theme rounded-2xl shadow-2xl w-[560px] max-w-[92vw] max-h-[86vh] overflow-y-auto p-5 font-sans text-main"
         onPointerDown={(e) => e.stopPropagation()}
@@ -102,7 +118,11 @@ export function PacingDashboardModal({ lessonId, lang, signals, onlineCount = 0,
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-secondary text-muted cursor-pointer" title={zh ? '关闭' : 'Close'}>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-surface-secondary text-muted cursor-pointer"
+            title={zh ? '关闭' : 'Close'}
+          >
             <X size={16} />
           </button>
         </div>
@@ -137,7 +157,9 @@ export function PacingDashboardModal({ lessonId, lang, signals, onlineCount = 0,
               <span className="text-2xs text-muted flex items-center gap-1">
                 <Users size={10} /> {onlineCount} {zh ? '在线' : 'online'}
               </span>
-              <span className={`text-xl font-black ${health === null ? 'text-muted' : health >= 60 ? 'text-emerald-600' : health >= 30 ? 'text-amber-600' : 'text-rose-600'}`}>
+              <span
+                className={`text-xl font-black ${health === null ? 'text-muted' : health >= 60 ? 'text-emerald-600' : health >= 30 ? 'text-amber-600' : 'text-rose-600'}`}
+              >
                 {health === null ? '—' : `${health}%`}
               </span>
               <span className="text-2xs text-muted">{zh ? '理解占比' : 'clear ratio'}</span>

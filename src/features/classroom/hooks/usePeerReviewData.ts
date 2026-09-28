@@ -155,11 +155,7 @@ export function usePeerReviewData({
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) {
-        addToast?.(
-          lang === 'zh' ? '分配失败' : 'Assign failed',
-          body?.error ?? `HTTP ${res.status}`,
-          'error',
-        );
+        addToast?.(lang === 'zh' ? '分配失败' : 'Assign failed', body?.error ?? `HTTP ${res.status}`, 'error');
         return;
       }
       addToast?.(
@@ -193,12 +189,8 @@ export function usePeerReviewData({
       };
     }
 
-    const validAttempts = attempts.filter(
-      (a) => a?.studentId && a.studentId !== 'teacher' && a.studentId !== 'guest',
-    );
-    const ranked = [...validAttempts].sort(
-      (a, b) => (Number(b.score) || 0) - (Number(a.score) || 0),
-    );
+    const validAttempts = attempts.filter((a) => a?.studentId && a.studentId !== 'teacher' && a.studentId !== 'guest');
+    const ranked = [...validAttempts].sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
 
     const toWork = (a: CoursewareAttemptLike | undefined, slot: 'A' | 'B') => {
       if (!a) return null;
@@ -215,9 +207,7 @@ export function usePeerReviewData({
             ? a.status === 'completed'
               ? '已完成提交'
               : '作答中'
-            : `得分 ${score}${
-                typeof a.completion === 'number' ? ` · 完成度 ${Math.round(a.completion * 100)}%` : ''
-              }`,
+            : `得分 ${score}${typeof a.completion === 'number' ? ` · 完成度 ${Math.round(a.completion * 100)}%` : ''}`,
         // rating 平台无来源 → 不填（UI 显示「—」）
         badges: [],
       };

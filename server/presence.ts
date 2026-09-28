@@ -294,7 +294,9 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceD
     // 教师端切换课节广播
     socket.on('teacher-broadcast-lesson', (data: { lessonId: string; classId?: string }) => {
       if (session && !isTeacherOrAdmin) {
-        return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can broadcast lesson switch' });
+        return socket.emit('error', {
+          message: 'Forbidden: Only teachers or administrators can broadcast lesson switch',
+        });
       }
       if (!data?.lessonId) return;
       if (data.classId) {

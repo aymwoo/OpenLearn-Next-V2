@@ -81,21 +81,30 @@ export const ConceptWordcloudPanel: React.FC<ConceptWordcloudPanelProps> = ({
       {/* 梯级达成度小看板 */}
       <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-surface-secondary/60 border border-theme/60 text-center text-xs">
         <div className="flex flex-col items-center">
-          <span className="text-3xs text-muted font-bold">{lang === 'zh' ? '思维跃迁(挑战完成)' : 'Challenge Done'}</span>
+          <span className="text-3xs text-muted font-bold">
+            {lang === 'zh' ? '思维跃迁(挑战完成)' : 'Challenge Done'}
+          </span>
           <span className="font-mono font-black text-emerald-600 text-sm mt-0.5">
-            {tierDistribution.challenge_done} <span className="text-3xs text-muted">({Math.round((tierDistribution.challenge_done / totalTier) * 100)}%)</span>
+            {tierDistribution.challenge_done}{' '}
+            <span className="text-3xs text-muted">
+              ({Math.round((tierDistribution.challenge_done / totalTier) * 100)}%)
+            </span>
           </span>
         </div>
         <div className="flex flex-col items-center border-x border-theme/60">
           <span className="text-3xs text-muted font-bold">{lang === 'zh' ? '基础通关(掌握良好)' : 'Core Passed'}</span>
           <span className="font-mono font-black text-indigo-600 text-sm mt-0.5">
-            {tierDistribution.passed} <span className="text-3xs text-muted">({Math.round((tierDistribution.passed / totalTier) * 100)}%)</span>
+            {tierDistribution.passed}{' '}
+            <span className="text-3xs text-muted">({Math.round((tierDistribution.passed / totalTier) * 100)}%)</span>
           </span>
         </div>
         <div className="flex flex-col items-center">
           <span className="text-3xs text-muted font-bold">{lang === 'zh' ? '支架补强(存在卡点)' : 'Remediation'}</span>
           <span className="font-mono font-black text-rose-500 text-sm mt-0.5">
-            {tierDistribution.remediation} <span className="text-3xs text-muted">({Math.round((tierDistribution.remediation / totalTier) * 100)}%)</span>
+            {tierDistribution.remediation}{' '}
+            <span className="text-3xs text-muted">
+              ({Math.round((tierDistribution.remediation / totalTier) * 100)}%)
+            </span>
           </span>
         </div>
       </div>
@@ -111,11 +120,8 @@ export const ConceptWordcloudPanel: React.FC<ConceptWordcloudPanelProps> = ({
           {concepts.map((item, idx) => {
             const isActive = activeConceptIndex === idx;
             // 依据权重自适应气泡尺寸
-            const sizeClass = idx === 0
-              ? 'text-xs px-3.5 py-1.5'
-              : idx === 1
-                ? 'text-xs px-3 py-1.2'
-                : 'text-2xs px-2.5 py-1';
+            const sizeClass =
+              idx === 0 ? 'text-xs px-3.5 py-1.5' : idx === 1 ? 'text-xs px-3 py-1.2' : 'text-2xs px-2.5 py-1';
 
             return (
               <button
@@ -130,9 +136,11 @@ export const ConceptWordcloudPanel: React.FC<ConceptWordcloudPanelProps> = ({
               >
                 <span>🔥</span>
                 <span>{item.concept}</span>
-                <span className={`font-mono text-3xs px-1.5 py-0.2 rounded-full ${
-                  isActive ? 'bg-amber-700/60 text-white' : 'bg-surface border border-theme text-muted'
-                }`}>
+                <span
+                  className={`font-mono text-3xs px-1.5 py-0.2 rounded-full ${
+                    isActive ? 'bg-amber-700/60 text-white' : 'bg-surface border border-theme text-muted'
+                  }`}
+                >
                   {item.frequency}人
                 </span>
                 {isActive ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -158,14 +166,16 @@ export const ConceptWordcloudPanel: React.FC<ConceptWordcloudPanelProps> = ({
               onClick={() => handleCopyAdvice(concepts[activeConceptIndex].remediationAdvice, activeConceptIndex)}
               className="px-2 py-0.5 rounded-md bg-surface text-main border border-theme text-3xs font-bold hover:bg-surface-secondary flex items-center gap-1 cursor-pointer transition-colors"
             >
-              {copiedIndex === activeConceptIndex ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+              {copiedIndex === activeConceptIndex ? (
+                <Check size={11} className="text-emerald-500" />
+              ) : (
+                <Copy size={11} />
+              )}
               <span>{copiedIndex === activeConceptIndex ? '已复制' : '复制话术'}</span>
             </button>
           </div>
 
-          <p className="text-2xs leading-relaxed font-medium">
-            {concepts[activeConceptIndex].remediationAdvice}
-          </p>
+          <p className="text-2xs leading-relaxed font-medium">{concepts[activeConceptIndex].remediationAdvice}</p>
         </div>
       )}
     </div>

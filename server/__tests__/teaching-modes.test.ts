@@ -36,7 +36,9 @@ describe('教学模式 API（课堂启动门户）', () => {
   const call = (method: string, urlPath: string, token: string | null, body?: unknown) =>
     fetch(`${baseUrl}${urlPath}`, {
       method,
-      headers: token ? { 'Content-Type': 'application/json', ...cookie(token) } : { 'Content-Type': 'application/json' },
+      headers: token
+        ? { 'Content-Type': 'application/json', ...cookie(token) }
+        : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
 

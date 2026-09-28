@@ -242,11 +242,7 @@ export async function exportClassAllSchedulesAttendanceCSV(options: {
 
   // Ensure all schedule attendance is loaded
   const scheduleIds = schedules.map((s) => s.id);
-  const loadedAttendanceMap = await ensureAttendanceLoaded(
-    scheduleIds,
-    scheduleAttendanceMap,
-    fetchScheduleAttendance,
-  );
+  const loadedAttendanceMap = await ensureAttendanceLoaded(scheduleIds, scheduleAttendanceMap, fetchScheduleAttendance);
 
   const headers =
     lang === 'zh'
@@ -312,8 +308,14 @@ export async function exportAllClassesAttendanceCSV(options: {
   lang?: 'zh' | 'en';
   fetchScheduleAttendance?: (scheduleId: string) => Promise<void> | void;
 }): Promise<void> {
-  const { classes, classSchedulesMap, classStudentsMap, scheduleAttendanceMap, lang = 'en', fetchScheduleAttendance } =
-    options;
+  const {
+    classes,
+    classSchedulesMap,
+    classStudentsMap,
+    scheduleAttendanceMap,
+    lang = 'en',
+    fetchScheduleAttendance,
+  } = options;
 
   // Gather all schedule IDs across all classes
   const allScheduleIds: string[] = [];

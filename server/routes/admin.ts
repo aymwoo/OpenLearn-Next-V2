@@ -230,7 +230,10 @@ export function registerAdminRoutes(ctx: ServerContext) {
   });
 
   app.get('/api/classroom-optimization-plan/download', requireAuth('administrator'), (_req, res) => {
-    const planPath = path.join(process.cwd(), 'docs/architecture/interactive-classroom-and-editor-optimization-plan.md');
+    const planPath = path.join(
+      process.cwd(),
+      'docs/architecture/interactive-classroom-and-editor-optimization-plan.md',
+    );
     if (fs.existsSync(planPath)) {
       res.download(planPath, 'OpenLearn-V2-Classroom-Optimization-Plan.md');
     } else {

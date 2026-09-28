@@ -1,15 +1,5 @@
 import React, { useState } from 'react';
-import {
-  X,
-  Sparkles,
-  TreeDeciduous,
-  Award,
-  CheckCircle2,
-  Lock,
-  ArrowRight,
-  TrendingUp,
-  Share2,
-} from 'lucide-react';
+import { X, Sparkles, TreeDeciduous, Award, CheckCircle2, Lock, ArrowRight, TrendingUp, Share2 } from 'lucide-react';
 import type { KnowledgeTreeNode } from './types';
 
 export interface KnowledgeTreeLightingModalProps {
@@ -67,11 +57,7 @@ export const KnowledgeTreeLightingModal: React.FC<KnowledgeTreeLightingModalProp
     setIsLighting(true);
     setTimeout(() => {
       setNodes((prev) =>
-        prev.map((n) =>
-          n.id === 'node-core' || n.id === 'node-adv'
-            ? { ...n, status: 'illuminated' }
-            : n,
-        ),
+        prev.map((n) => (n.id === 'node-core' || n.id === 'node-adv' ? { ...n, status: 'illuminated' } : n)),
       );
       setIsLighting(false);
       setIsFullyLit(true);
@@ -187,7 +173,15 @@ export const KnowledgeTreeLightingModal: React.FC<KnowledgeTreeLightingModalProp
                 className="px-8 py-3 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 hover:scale-105 text-white font-black text-sm flex items-center gap-2 shadow-xl shadow-amber-500/25 transition-all cursor-pointer"
               >
                 <Sparkles size={18} />
-                <span>{isLighting ? (lang === 'zh' ? '正在连接知识图谱...' : 'Lighting...') : (lang === 'zh' ? '🌟 点亮本堂课知识树' : 'Light Up Tree')}</span>
+                <span>
+                  {isLighting
+                    ? lang === 'zh'
+                      ? '正在连接知识图谱...'
+                      : 'Lighting...'
+                    : lang === 'zh'
+                      ? '🌟 点亮本堂课知识树'
+                      : 'Light Up Tree'}
+                </span>
               </button>
             ) : (
               <div

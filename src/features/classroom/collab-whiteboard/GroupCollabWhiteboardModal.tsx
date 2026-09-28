@@ -29,12 +29,7 @@ import {
   HelpCircle,
   Edit3,
 } from 'lucide-react';
-import {
-  executeGrouping,
-  type GroupingStrategy,
-  type BreakoutGroup,
-  type StudentCandidate,
-} from './breakout-engine';
+import { executeGrouping, type GroupingStrategy, type BreakoutGroup, type StudentCandidate } from './breakout-engine';
 
 // ── 类型 ────────────────────────────────────────────────────────────
 
@@ -150,7 +145,9 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
 
     addToast(
       lang === 'zh' ? '✅ 自动分配完成' : '✅ Auto-assigned',
-      lang === 'zh' ? `已按「${strategyLabel}」将 ${candidates.length} 名学生自动分配完毕。` : `Assigned by ${strategyLabel}.`,
+      lang === 'zh'
+        ? `已按「${strategyLabel}」将 ${candidates.length} 名学生自动分配完毕。`
+        : `Assigned by ${strategyLabel}.`,
       'success',
     );
   }, [groups.length, availableStudents, groupingStrategy, addToast, lang]);
@@ -317,7 +314,13 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
               </div>
               <p className="text-2xs text-muted mt-0.5">
                 {groups.length} {lang === 'zh' ? '个探究小组' : 'groups'} ·{' '}
-                {isGalleryMode ? (lang === 'zh' ? '当前处于画廊大屏互评并览' : 'Gallery Walk Active') : (lang === 'zh' ? '当前处于组内精修' : 'Single Canvas Active')}
+                {isGalleryMode
+                  ? lang === 'zh'
+                    ? '当前处于画廊大屏互评并览'
+                    : 'Gallery Walk Active'
+                  : lang === 'zh'
+                    ? '当前处于组内精修'
+                    : 'Single Canvas Active'}
               </p>
             </div>
           </div>
@@ -333,7 +336,15 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
               }`}
             >
               <LayoutGrid size={13} />
-              <span>{isGalleryMode ? (lang === 'zh' ? '返回单组画布' : 'Exit Gallery') : (lang === 'zh' ? '画廊互评大屏并览 (Gallery Walk)' : 'Gallery Walk')}</span>
+              <span>
+                {isGalleryMode
+                  ? lang === 'zh'
+                    ? '返回单组画布'
+                    : 'Exit Gallery'
+                  : lang === 'zh'
+                    ? '画廊互评大屏并览 (Gallery Walk)'
+                    : 'Gallery Walk'}
+              </span>
             </button>
 
             <button
@@ -391,7 +402,9 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
                   <button
                     onClick={() => setGroupingStrategy('heterogeneous')}
                     className={`py-1 text-2xs font-bold rounded transition-colors ${
-                      groupingStrategy === 'heterogeneous' ? 'bg-primary-theme text-white' : 'text-muted hover:text-main'
+                      groupingStrategy === 'heterogeneous'
+                        ? 'bg-primary-theme text-white'
+                        : 'text-muted hover:text-main'
                     }`}
                     title={lang === 'zh' ? '拼板互助（1优+2中+1潜）' : 'Heterogeneous'}
                   >
@@ -580,7 +593,9 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
                               <rect width="1200" height="800" fill="#ffffff" />
                               {groupStrokes.map((s) => {
                                 if (s.tool === 'pen' || s.tool === 'eraser') {
-                                  const pathD = s.points.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+                                  const pathD = s.points
+                                    .map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`))
+                                    .join(' ');
                                   return (
                                     <path
                                       key={s.id}
@@ -726,7 +741,15 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
                       }`}
                     >
                       {showAllGroups ? <Eye size={12} /> : <EyeOff size={12} />}
-                      <span>{showAllGroups ? (lang === 'zh' ? '查看全部' : 'All groups') : (lang === 'zh' ? '仅当前' : 'Single')}</span>
+                      <span>
+                        {showAllGroups
+                          ? lang === 'zh'
+                            ? '查看全部'
+                            : 'All groups'
+                          : lang === 'zh'
+                            ? '仅当前'
+                            : 'Single'}
+                      </span>
                     </button>
 
                     <button
@@ -768,7 +791,9 @@ export const GroupCollabWhiteboardModal: React.FC<GroupCollabWhiteboardModalProp
 
                     {visibleStrokes.map((s) => {
                       if (s.tool === 'pen' || s.tool === 'eraser') {
-                        const pathD = s.points.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+                        const pathD = s.points
+                          .map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`))
+                          .join(' ');
                         return (
                           <path
                             key={s.id}

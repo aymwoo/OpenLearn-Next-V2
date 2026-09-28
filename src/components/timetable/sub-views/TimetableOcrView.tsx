@@ -1,5 +1,17 @@
 import React from 'react';
-import { Camera, Sparkles, ImagePlus, X, Eye, Loader2, ScanLine, XCircle, CheckCircle2, Check, AlertTriangle } from 'lucide-react';
+import {
+  Camera,
+  Sparkles,
+  ImagePlus,
+  X,
+  Eye,
+  Loader2,
+  ScanLine,
+  XCircle,
+  CheckCircle2,
+  Check,
+  AlertTriangle,
+} from 'lucide-react';
 import type { ClassType } from '../types';
 
 export interface TimetableOcrViewProps {

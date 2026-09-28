@@ -204,15 +204,56 @@ describe('金丝雀第 2 步：探针报告与 Token/require 扫描', () => {
 
     // 基础 9 服务（复刻步骤 1）
     services = {
-      commandBus: { execute: vi.fn().mockResolvedValue(undefined), registerHandler: vi.fn().mockResolvedValue(undefined), unregisterHandler: vi.fn().mockResolvedValue(undefined), createCommand: vi.fn().mockResolvedValue({}), setInterceptor: vi.fn().mockResolvedValue(undefined) },
-      eventBus: { publish: vi.fn().mockResolvedValue(undefined), subscribe: vi.fn().mockResolvedValue(undefined), unsubscribe: vi.fn().mockResolvedValue(undefined) },
-      actionRegistry: { register: vi.fn().mockResolvedValue(undefined), unregister: vi.fn().mockResolvedValue(undefined), getAllActions: vi.fn().mockResolvedValue([]), getAgentTools: vi.fn().mockResolvedValue([]), getActionByToolName: vi.fn().mockResolvedValue(undefined), getActionByCommandType: vi.fn().mockResolvedValue(undefined) },
-      capability: { grant: vi.fn().mockResolvedValue(undefined), revokeAll: vi.fn().mockResolvedValue(undefined), check: vi.fn().mockResolvedValue(true) },
-      processManager: { spawn: vi.fn().mockResolvedValue('p'), kill: vi.fn().mockResolvedValue(undefined), registerHandler: vi.fn().mockResolvedValue(undefined), unregisterHandler: vi.fn().mockResolvedValue(undefined), registerInterval: vi.fn().mockResolvedValue('i'), restore: vi.fn().mockResolvedValue(undefined) },
-      storage: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue(undefined), delete: vi.fn().mockResolvedValue(undefined) },
+      commandBus: {
+        execute: vi.fn().mockResolvedValue(undefined),
+        registerHandler: vi.fn().mockResolvedValue(undefined),
+        unregisterHandler: vi.fn().mockResolvedValue(undefined),
+        createCommand: vi.fn().mockResolvedValue({}),
+        setInterceptor: vi.fn().mockResolvedValue(undefined),
+      },
+      eventBus: {
+        publish: vi.fn().mockResolvedValue(undefined),
+        subscribe: vi.fn().mockResolvedValue(undefined),
+        unsubscribe: vi.fn().mockResolvedValue(undefined),
+      },
+      actionRegistry: {
+        register: vi.fn().mockResolvedValue(undefined),
+        unregister: vi.fn().mockResolvedValue(undefined),
+        getAllActions: vi.fn().mockResolvedValue([]),
+        getAgentTools: vi.fn().mockResolvedValue([]),
+        getActionByToolName: vi.fn().mockResolvedValue(undefined),
+        getActionByCommandType: vi.fn().mockResolvedValue(undefined),
+      },
+      capability: {
+        grant: vi.fn().mockResolvedValue(undefined),
+        revokeAll: vi.fn().mockResolvedValue(undefined),
+        check: vi.fn().mockResolvedValue(true),
+      },
+      processManager: {
+        spawn: vi.fn().mockResolvedValue('p'),
+        kill: vi.fn().mockResolvedValue(undefined),
+        registerHandler: vi.fn().mockResolvedValue(undefined),
+        unregisterHandler: vi.fn().mockResolvedValue(undefined),
+        registerInterval: vi.fn().mockResolvedValue('i'),
+        restore: vi.fn().mockResolvedValue(undefined),
+      },
+      storage: {
+        get: vi.fn().mockResolvedValue(null),
+        set: vi.fn().mockResolvedValue(undefined),
+        delete: vi.fn().mockResolvedValue(undefined),
+      },
       ai: { generateText: vi.fn().mockResolvedValue('ai') },
-      pointsDimension: { registerDimension: vi.fn(), getDimension: vi.fn(), listDimensions: vi.fn().mockReturnValue([]) },
-      pointsLedger: { addPoints: vi.fn().mockResolvedValue({}), getLogs: vi.fn().mockResolvedValue([]), getStudentTotalByDimension: vi.fn().mockResolvedValue(0), getStudentDimensionSummary: vi.fn().mockResolvedValue({}) },
+      pointsDimension: {
+        registerDimension: vi.fn(),
+        getDimension: vi.fn(),
+        listDimensions: vi.fn().mockReturnValue([]),
+      },
+      pointsLedger: {
+        addPoints: vi.fn().mockResolvedValue({}),
+        getLogs: vi.fn().mockResolvedValue([]),
+        getStudentTotalByDimension: vi.fn().mockResolvedValue(0),
+        getStudentDimensionSummary: vi.fn().mockResolvedValue({}),
+      },
     };
     const basePairs: Array<[any, unknown]> = [
       [ICommandBusServiceToken, services.commandBus],
@@ -276,11 +317,23 @@ describe('金丝雀第 2 步：探针报告与 Token/require 扫描', () => {
 
     // 拉取探针报告
     const res = await host.dispatchHttpRequest('ext-canary', {
-      method: 'GET', path: '/probes', params: {}, query: {}, headers: {}, body: null, ip: '127.0.0.1',
+      method: 'GET',
+      path: '/probes',
+      params: {},
+      query: {},
+      headers: {},
+      body: null,
+      ip: '127.0.0.1',
       actor: { actorId: 'test-admin', role: 'administrator' },
     } as PluginApiRequest);
     expect(res.status).toBe(200);
-    const list = (res.body as any).probes as Array<{ id: string; mode: string; ok: boolean; expected: string; detail: string }>;
+    const list = (res.body as any).probes as Array<{
+      id: string;
+      mode: string;
+      ok: boolean;
+      expected: string;
+      detail: string;
+    }>;
     eventCount = (res.body as any).eventCount;
     probes = new Map(list.map((p) => [p.id, p]));
   }, 120_000);
@@ -336,9 +389,9 @@ describe('金丝雀第 2 步：探针报告与 Token/require 扫描', () => {
 
   it('2h. 探针结果已持久化到自建表（plugin_<uuid>_probe_results）', () => {
     const tbl = `plugin_${pluginId.replace(/[^a-zA-Z0-9_]/g, '_')}_probe_results`;
-    const row = (db as unknown as { prepare(sql: string): { get(): unknown } }).prepare(
-      `SELECT COUNT(*) AS c FROM ${tbl}`,
-    ).get() as { c: number };
+    const row = (db as unknown as { prepare(sql: string): { get(): unknown } })
+      .prepare(`SELECT COUNT(*) AS c FROM ${tbl}`)
+      .get() as { c: number };
     expect(row.c).toBeGreaterThan(0);
   });
 });

@@ -35,7 +35,10 @@ export function StudentAssignmentQuestionPanel(props: {
               onClick={async () => {
                 if (cfg.validate) {
                   const err = cfg.validate(ctx);
-                  if (err) { window.alert(err); return; }
+                  if (err) {
+                    window.alert(err);
+                    return;
+                  }
                 }
                 if (cfg.buildSubmission) {
                   // 插件题型载荷写入 answers 引用（父级 submitQuizAssignment 读取 quizStudentAnswersRef）

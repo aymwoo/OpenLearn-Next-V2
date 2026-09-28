@@ -81,7 +81,7 @@ export type ExtensionSlot =
   | 'stage.display.card' // 大屏展台卡片扩展
   | 'editor.timeline_segment' // 课程编辑器步骤类型扩展
   | 'editor.palette_item' // 课程编辑器白板图元扩展
-// ── 本地新增槽位 ──
+  // ── 本地新增槽位 ──
   | 'classroom.countdown.widget' // 课堂倒计时挂件扩展
   | 'classroom.countdown.action' // 课堂倒计时快捷操作扩展
   | 'student.classroom.countdown' // 学生端倒计时通知扩展
@@ -145,7 +145,7 @@ export type ExtensionSlot =
   | 'classroom.post_class.widget' // 课后结课视图扩展卡片（分层作业 / 勋章仪式 / 专注度报告）
   // ── 课件播放器扩展槽位（P1） ──
   | 'courseware.viewer.toolbar' // 课件播放器工具栏扩展（草稿本/批注/字幕/随堂笔记等）
-  | 'courseware.viewer.overlay' // 课件浮层 HUD 扩展（弹幕/防作弊水印/抢答悬浮球等）
+  | 'courseware.viewer.overlay'; // 课件浮层 HUD 扩展（弹幕/防作弊水印/抢答悬浮球等）
 
 /**
  * Anchor slot — 锚点扩展槽（v0.2.6）。
@@ -253,7 +253,9 @@ export interface FrontendPluginContext {
     registerPaletteItem(item: PaletteItemConfig): void;
     unregisterPaletteItem(type: string): void;
     /** 作业题型渲染器注册（P1 题型扩展：代码运行题/口语评测题等，在 activate() 内调用） */
-    registerAssignmentQuestionRenderer(config: import('../features/teacher/assignment-question-registry').AssignmentQuestionRendererConfig): void;
+    registerAssignmentQuestionRenderer(
+      config: import('../features/teacher/assignment-question-registry').AssignmentQuestionRendererConfig,
+    ): void;
     unregisterAssignmentQuestionRenderer(quizType: string): void;
   };
   /** 调用后端已注册的 Command Handler，自动添加插件命名空间前缀 */

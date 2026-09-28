@@ -320,9 +320,7 @@ describe('ClassroomEntryPortal（互动课堂起始门户）', () => {
       fireEvent.click(screen.getByRole('button', { name: /开始上课/ }));
 
       await waitFor(() =>
-        expect(onEnterClassroom).toHaveBeenCalledWith(
-          expect.objectContaining({ teachingModeId: 'collaborative' }),
-        ),
+        expect(onEnterClassroom).toHaveBeenCalledWith(expect.objectContaining({ teachingModeId: 'collaborative' })),
       );
     });
 

@@ -73,7 +73,6 @@
 
 ---
 
-
 ## 快速开始
 
 ### 一键运行（无需 clone 项目）
@@ -113,6 +112,7 @@ pnpm dev
 # 浏览器访问
 open http://localhost:9000
 ```
+
 > 首次启动后，可在管理后台「AI Provider 管理」中配置您的大模型 API 密钥（DeepSeek、OpenAI、Ollama 等）。
 
 ---
@@ -131,29 +131,29 @@ chmod +x deploy.sh
 
 ## 常用开发命令 (CLI Scripts)
 
-| 命令 | 说明 |
-| :--- | :--- |
-| `pnpm dev` | 启动全栈开发服务（Express + Vite HMR，端口 9000） |
-| `pnpm build` | 生产级全量构建（Vite 前端构建 ➔ 插件打包 ➔ esbuild 服务端打包） |
-| `pnpm start` | 运行生产打包服务（从 `dist/server.cjs` 启动） |
-| `pnpm test` | 执行 Vitest 自动化测试套件（支持并行 worker 隔离 SQLite 测试库） |
-| `pnpm lint` | TypeScript 静态类型检查（`tsc --noEmit`） |
-| `pnpm lint:eslint` | ESLint 代码规范检查 |
-| `pnpm format` | Prettier 代码自动化格式化 |
-| `pnpm db:backup` | 数据库安全在线冷备 |
-| `pnpm db:reset` | 重置本地测试数据库环境 |
+| 命令               | 说明                                                             |
+| :----------------- | :--------------------------------------------------------------- |
+| `pnpm dev`         | 启动全栈开发服务（Express + Vite HMR，端口 9000）                |
+| `pnpm build`       | 生产级全量构建（Vite 前端构建 ➔ 插件打包 ➔ esbuild 服务端打包）  |
+| `pnpm start`       | 运行生产打包服务（从 `dist/server.cjs` 启动）                    |
+| `pnpm test`        | 执行 Vitest 自动化测试套件（支持并行 worker 隔离 SQLite 测试库） |
+| `pnpm lint`        | TypeScript 静态类型检查（`tsc --noEmit`）                        |
+| `pnpm lint:eslint` | ESLint 代码规范检查                                              |
+| `pnpm format`      | Prettier 代码自动化格式化                                        |
+| `pnpm db:backup`   | 数据库安全在线冷备                                               |
+| `pnpm db:reset`    | 重置本地测试数据库环境                                           |
 
 ---
 
 ## ⚙️ 环境变量
 
-| 变量 | 必需 | 默认值 | 说明 |
-| :--- | :---: | :---: | :--- |
-| `ENCRYPTION_KEY` | ✅ | — | 64 位 Hex 字符串，用于 AI Provider API Key 加密（`deploy.sh` 会自动生成） |
-| `PORT` | — | `9000` | HTTP 服务监听端口 |
-| `OPENLEARN_DB_PATH` | — | `./packages/core/db/educational_os.db` | SQLite 数据库文件路径（npx 运行时默认为 `~/openlearn-next/data.db`） |
-| `ALLOWED_ORIGINS` | — | `*` | CORS 跨域白名单（逗号分隔） |
-| `LOG_LEVEL` | — | `info` | 系统日志输出级别（`debug` / `info` / `warn` / `error`） |
+| 变量                | 必需 |                 默认值                 | 说明                                                                      |
+| :------------------ | :--: | :------------------------------------: | :------------------------------------------------------------------------ |
+| `ENCRYPTION_KEY`    |  ✅  |                   —                    | 64 位 Hex 字符串，用于 AI Provider API Key 加密（`deploy.sh` 会自动生成） |
+| `PORT`              |  —   |                 `9000`                 | HTTP 服务监听端口                                                         |
+| `OPENLEARN_DB_PATH` |  —   | `./packages/core/db/educational_os.db` | SQLite 数据库文件路径（npx 运行时默认为 `~/openlearn-next/data.db`）      |
+| `ALLOWED_ORIGINS`   |  —   |                  `*`                   | CORS 跨域白名单（逗号分隔）                                               |
+| `LOG_LEVEL`         |  —   |                 `info`                 | 系统日志输出级别（`debug` / `info` / `warn` / `error`）                   |
 
 ---
 
@@ -162,6 +162,7 @@ chmod +x deploy.sh
 根据平台近期代码与架构深度审计结果（相关一致性由 [架构文档漂移审计](docs/developer-guide/docs-drift-audit.md) 在 CI 中持续看守），OpenLearn 制定了分阶段的演进路线：
 
 ### 🎯 阶段一：稳固与安全收敛 (v0.3.21 - 当前阶段)
+
 - [x] **P0 严重安全缺陷彻底闭环**：
   - [x] 为 `/api/plugins/execute-command` 挂载全局有效会话鉴权（`requireAuth()`），消除未授权命令执行面
   - [x] 插件更新检查器（`version-fetcher.ts`）消除 Shell 命令注入，采用安全参数化执行（`execFileSync`）与仓库白名单正则校验
@@ -176,6 +177,7 @@ chmod +x deploy.sh
 - [ ] **自动化测试体系清理**：解耦对未提交外部目录的物理路径硬依赖，使 215 个套件的全量测试达到 100% 绿灯
 
 ### 🚀 阶段二：K12 课堂交互与智能伴随深化 (v0.4.0 - 中期演进)
+
 - [ ] **课件状态双向镜像与远程协助**：
   - 教师端可按需拉取单个学生的课件作答实时快照（DOM/Canvas 镜像）
   - 支持教师端一键向指定学生或全班推送课件交互指令（如强制锁屏、重置题目、跳转指定页）
@@ -205,4 +207,3 @@ chmod +x deploy.sh
 ## 📄 开源许可证
 
 本项目基于 MIT License 开源发布（声明见 [package.json](package.json) 的 `license` 字段）。
-

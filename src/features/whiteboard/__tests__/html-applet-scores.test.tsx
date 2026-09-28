@@ -43,12 +43,7 @@ const emitSocket = (event: string, ...args: any[]) => {
 describe('HtmlAppletFrame score overlay', () => {
   it('does not render score toggle when there are no attempts', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => [] });
-    render(
-      <HtmlAppletFrame
-        data={{ title: '课件', coursewareUuid: 'abc-123' }}
-        lessonId="lesson-1"
-      />,
-    );
+    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
     // No toggle button when attempts array is empty (showOverlay guard)
     await waitFor(() => {
       expect(screen.queryByTestId('courseware-scores-toggle')).toBeNull();
@@ -87,12 +82,7 @@ describe('HtmlAppletFrame score overlay', () => {
       ],
     });
 
-    render(
-      <HtmlAppletFrame
-        data={{ title: '课件', coursewareUuid: 'abc-123' }}
-        lessonId="lesson-1"
-      />,
-    );
+    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
 
     // 拉取了一次
     await waitFor(() => {
@@ -141,12 +131,7 @@ describe('HtmlAppletFrame score overlay', () => {
         },
       ],
     });
-    render(
-      <HtmlAppletFrame
-        data={{ title: '课件', coursewareUuid: 'abc-456' }}
-        lessonId="lesson-1"
-      />,
-    );
+    render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-456' }} lessonId="lesson-1" />);
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -163,10 +148,7 @@ describe('HtmlAppletFrame score overlay', () => {
   it('unsubscribes on unmount to avoid memory leak', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => [] });
     const { unmount } = render(
-      <HtmlAppletFrame
-        data={{ title: '课件', coursewareUuid: 'abc-789' }}
-        lessonId="lesson-1"
-      />,
+      <HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-789' }} lessonId="lesson-1" />,
     );
     await waitFor(() => {
       expect(mockSocket.on).toHaveBeenCalled();

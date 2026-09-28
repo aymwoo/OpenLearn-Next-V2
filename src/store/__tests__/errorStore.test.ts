@@ -1,10 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  errorStore,
-  formatSingleErrorReport,
-  formatBatchErrorReport,
-  registerErrorListener,
-} from '../errorStore';
+import { errorStore, formatSingleErrorReport, formatBatchErrorReport, registerErrorListener } from '../errorStore';
 import type { SystemErrorItem } from '../../types/error';
 
 describe('errorStore', () => {
@@ -235,4 +230,3 @@ describe('errorStore', () => {
     expect(captured).toBeNull();
   });
 });
-

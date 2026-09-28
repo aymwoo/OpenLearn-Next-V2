@@ -466,7 +466,15 @@ export function ClassroomMoodTracker({
             }
           >
             <Sparkles size={13} className={isLiveSimulating ? 'text-amber-600 animate-spin' : 'text-slate-400'} />
-            <span>{isLiveSimulating ? (lang === 'zh' ? '实时模拟中' : 'Simulating') : (lang === 'zh' ? '模拟数据流' : 'Simulate')}</span>
+            <span>
+              {isLiveSimulating
+                ? lang === 'zh'
+                  ? '实时模拟中'
+                  : 'Simulating'
+                : lang === 'zh'
+                  ? '模拟数据流'
+                  : 'Simulate'}
+            </span>
           </button>
 
           {/* Dispatch Pulse Check Button */}

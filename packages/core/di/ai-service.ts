@@ -135,4 +135,3 @@ export class AIService implements IAIService {
     return this.gateway.generateText(prompt, options, config);
   }
 }
-

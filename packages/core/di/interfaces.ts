@@ -703,10 +703,7 @@ export const ICoursewareRuntimeScriptRegistryToken = new Token<ICoursewareRuntim
  * 课堂生命周期阶段
  */
 export type ClassroomLifecycleStage =
-  | 'PRE_CLASS_READY'
-  | 'IN_CLASS_TEACHING'
-  | 'WRAP_UP_EXIT_TICKET'
-  | 'ARCHIVED_REPORT';
+  'PRE_CLASS_READY' | 'IN_CLASS_TEACHING' | 'WRAP_UP_EXIT_TICKET' | 'ARCHIVED_REPORT';
 
 export interface StageGuardResult {
   allowed: boolean;
@@ -782,5 +779,3 @@ export interface IClassroomCountdownService {
 export const IClassroomCountdownServiceToken = new Token<IClassroomCountdownService>(
   '@openlearn/core:IClassroomCountdownService',
 );
-
-

@@ -24,16 +24,12 @@ describe('Adaptive Exit Ticket & Knowledge Tree Subsystem', () => {
     });
 
     it('关闭时不渲染任何元素', () => {
-      const { container } = render(
-        <AdaptiveExitTicketModal isOpen={false} onClose={vi.fn()} lessonId="les-1" />,
-      );
+      const { container } = render(<AdaptiveExitTicketModal isOpen={false} onClose={vi.fn()} lessonId="les-1" />);
       expect(container.firstChild).toBeNull();
     });
 
     it('回答正确时动态解锁 Lv.2 挑战题分支', () => {
-      render(
-        <AdaptiveExitTicketModal isOpen={true} onClose={vi.fn()} lessonId="les-1" />,
-      );
+      render(<AdaptiveExitTicketModal isOpen={true} onClose={vi.fn()} lessonId="les-1" />);
 
       expect(screen.getByText('1. 核心概念过关题')).toBeTruthy();
 
@@ -51,9 +47,7 @@ describe('Adaptive Exit Ticket & Knowledge Tree Subsystem', () => {
     });
 
     it('回答错误时动态解锁核心概念支架提示卡分支', () => {
-      render(
-        <AdaptiveExitTicketModal isOpen={true} onClose={vi.fn()} lessonId="les-1" />,
-      );
+      render(<AdaptiveExitTicketModal isOpen={true} onClose={vi.fn()} lessonId="les-1" />);
 
       // 选择错误选项 A
       const optionA = screen.getByText(/可以直接利用恒力做功公式/);
@@ -69,14 +63,7 @@ describe('Adaptive Exit Ticket & Knowledge Tree Subsystem', () => {
 
     it('提交自适应结课通票并调用 API', async () => {
       const onSuccess = vi.fn();
-      render(
-        <AdaptiveExitTicketModal
-          isOpen={true}
-          onClose={vi.fn()}
-          lessonId="les-1"
-          onSubmitSuccess={onSuccess}
-        />,
-      );
+      render(<AdaptiveExitTicketModal isOpen={true} onClose={vi.fn()} lessonId="les-1" onSubmitSuccess={onSuccess} />);
 
       // 答题
       fireEvent.click(screen.getByText(/可将位移划分为无限小微元/));
@@ -110,13 +97,7 @@ describe('Adaptive Exit Ticket & Knowledge Tree Subsystem', () => {
     ];
 
     it('渲染词云气泡与梯级达成度概况', () => {
-      render(
-        <ConceptWordcloudPanel
-          concepts={mockConcepts}
-          totalFeedbackCount={26}
-          avgRating={4.7}
-        />,
-      );
+      render(<ConceptWordcloudPanel concepts={mockConcepts} totalFeedbackCount={26} avgRating={4.7} />);
 
       expect(screen.getByText('全班困惑概念聚类词云与收口总结')).toBeTruthy();
       expect(screen.getByText('变力做功微元累加')).toBeTruthy();
@@ -124,13 +105,7 @@ describe('Adaptive Exit Ticket & Knowledge Tree Subsystem', () => {
     });
 
     it('点击气泡展开 2 分钟收口突破话术建议', () => {
-      render(
-        <ConceptWordcloudPanel
-          concepts={mockConcepts}
-          totalFeedbackCount={26}
-          avgRating={4.7}
-        />,
-      );
+      render(<ConceptWordcloudPanel concepts={mockConcepts} totalFeedbackCount={26} avgRating={4.7} />);
 
       const adviceBox = screen.getByTestId('recap-advice-box');
       expect(adviceBox).toBeTruthy();

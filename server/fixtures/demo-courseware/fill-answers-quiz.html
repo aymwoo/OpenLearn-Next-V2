@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh">
-<head>
-<meta charset="utf-8">
-<title>通用填空题测验（SAVE_PROGRESS 增量上报通道）</title>
-<!--
+  <head>
+    <meta charset="utf-8" />
+    <title>通用填空题测验（SAVE_PROGRESS 增量上报通道）</title>
+    <!--
   通用考试课件 FIXTURE #3 — fill-answers-quiz.html
   ============================================
   与平台零耦合。特点：每答完一题就把**当前得分**经
@@ -13,53 +13,77 @@
   FINISH 视为终态提交；SCORE Monitor 兜底亦可从 window.totalScore
   变量轮询发现分值变化。
 -->
-<style>
-  body { font-family: sans-serif; margin: 24px; }
-  .q { margin-bottom: 12px; }
-  input.text { padding: 4px 8px; margin-left: 6px; }
-  #finalScore { font-size: 18px; font-weight: bold; color: #2563eb; margin-top: 14px; }
-</style>
-</head>
-<body>
-<div class="q">1. HTML 表示超文本标记语言的英文缩写全文是 <input class="a" data-key="1" data-score="40" placeholder="…"></div>
-<div class="q">2. 20 以内最大的质数是 <input class="a" data-key="2" data-score="30" placeholder="数字"></div>
-<div class="q">3. 计算机美国发明的第一台通用电子数字计算机名字是 <input class="a" data-key="3" data-score="30" placeholder="4字母"></div>
-<button id="finishBtn">交卷</button>
-<div id="finalScore"></div>
-<script>
-  var ANSWERS = { '1': 'hypertext markup language', '2': '19', '3': 'eniac' };
-  var totalScore = 0; // window.totalScore —— SCORE Monitor 轮询的目标变量
-  function check() {
-    totalScore = 0;
-    var inputs = document.querySelectorAll('input.a');
-    for (var i = 0; i < inputs.length; i++) {
-      var val = (inputs[i].value || '').trim().toLowerCase();
-      if (val && ANSWERS[inputs[i].dataset.key] === val) totalScore += Number(inputs[i].dataset.score);
-    }
-    return totalScore;
-  }
-  var inputs = document.querySelectorAll('input.a');
-  for (var j = 0; j < inputs.length; j++) {
-    (function (inp) {
-      inp.addEventListener('change', function () {
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 24px;
+      }
+      .q {
+        margin-bottom: 12px;
+      }
+      input.text {
+        padding: 4px 8px;
+        margin-left: 6px;
+      }
+      #finalScore {
+        font-size: 18px;
+        font-weight: bold;
+        color: #2563eb;
+        margin-top: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="q">
+      1. HTML 表示超文本标记语言的英文缩写全文是 <input class="a" data-key="1" data-score="40" placeholder="…" />
+    </div>
+    <div class="q">2. 20 以内最大的质数是 <input class="a" data-key="2" data-score="30" placeholder="数字" /></div>
+    <div class="q">
+      3. 计算机美国发明的第一台通用电子数字计算机名字是
+      <input class="a" data-key="3" data-score="30" placeholder="4字母" />
+    </div>
+    <button id="finishBtn">交卷</button>
+    <div id="finalScore"></div>
+    <script>
+      var ANSWERS = { 1: 'hypertext markup language', 2: '19', 3: 'eniac' };
+      var totalScore = 0; // window.totalScore —— SCORE Monitor 轮询的目标变量
+      function check() {
+        totalScore = 0;
+        var inputs = document.querySelectorAll('input.a');
+        for (var i = 0; i < inputs.length; i++) {
+          var val = (inputs[i].value || '').trim().toLowerCase();
+          if (val && ANSWERS[inputs[i].dataset.key] === val) totalScore += Number(inputs[i].dataset.score);
+        }
+        return totalScore;
+      }
+      var inputs = document.querySelectorAll('input.a');
+      for (var j = 0; j < inputs.length; j++) {
+        (function (inp) {
+          inp.addEventListener('change', function () {
+            var s = check();
+            // 通用 LMS 协议 2：进度保存（不终态，仅累积）
+            window.parent.postMessage(
+              {
+                type: 'LMS_SAVE_PROGRESS',
+                payload: { score: s, completion: Math.min(1, s / 100), watch: window },
+              },
+              '*',
+            );
+          });
+        })(inputs[j]);
+      }
+      document.getElementById('finishBtn').addEventListener('click', function () {
         var s = check();
-        // 通用 LMS 协议 2：进度保存（不终态，仅累积）
-        window.parent.postMessage({
-          type: 'LMS_SAVE_PROGRESS',
-          payload: { score: s, completion: Math.min(1, s / 100), watch: window },
-        }, '*');
+        document.getElementById('finalScore').textContent = '总分 ' + s;
+        // 通用 LMS 协议 3：显式终态
+        window.parent.postMessage(
+          {
+            type: 'LMS_FINISH',
+            payload: { score: s, completion: 1.0 },
+          },
+          '*',
+        );
       });
-    })(inputs[j]);
-  }
-  document.getElementById('finishBtn').addEventListener('click', function () {
-    var s = check();
-    document.getElementById('finalScore').textContent = '总分 ' + s;
-    // 通用 LMS 协议 3：显式终态
-    window.parent.postMessage({
-      type: 'LMS_FINISH',
-      payload: { score: s, completion: 1.0 },
-    }, '*');
-  });
-</script>
-</body>
+    </script>
+  </body>
 </html>

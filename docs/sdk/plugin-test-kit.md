@@ -39,16 +39,16 @@ describe('My Plugin Unit Tests', () => {
 
 `createMockContext()` 自动为插件构造了全套隔离的 Mock 上下文对象，包括：
 
-| 上下文属性     | 类型                  | 测试功能与行为                                                                    |
-| :------------- | :-------------------- | :-------------------------------------------------------------------------------- |
-| `ctx.pluginId` | `string`              | 插件唯一标识（默认 `'ext-test'`，可通过参数指定）                                |
-| `ctx.manifest` | `Manifest`            | 模拟的 Manifest 元数据                                                            |
+| 上下文属性     | 类型                  | 测试功能与行为                                                                                                             |
+| :------------- | :-------------------- | :------------------------------------------------------------------------------------------------------------------------- |
+| `ctx.pluginId` | `string`              | 插件唯一标识（默认 `'ext-test'`，可通过参数指定）                                                                          |
+| `ctx.manifest` | `Manifest`            | 模拟的 Manifest 元数据                                                                                                     |
 | `ctx.services` | `Record<string, any>` | 内核 9 大服务 Mock 桩（支持 `commandBus`, `eventBus`, `storage`, `ai` 等；`pointsDimension` / `pointsLedger` 恒为 `null`） |
-| `ctx.db`       | `PluginDatabaseAPI`   | 内存 SQLite / 模拟数据库（支持 `ensureTable`, `table`, `migrate`）                |
-| `ctx.log`      | `IPluginLogger`       | 内存日志捕获（`debug`, `info`, `warn`, `error`），可断言日志输出                  |
-| `ctx.http`     | `PluginHttpRouter`    | **内置 RESTful 路由器（v0.3.11 新增）**，无需启动 HTTP 服务即可离线测试 HTTP 接口 |
-| `ctx.resolve`  | `Function`            | DI 服务解析模拟（可通过 `ctx.provide` 事先注入）                                  |
-| `ctx.provide`  | `Function`            | DI 自定义服务提供                                                                 |
+| `ctx.db`       | `PluginDatabaseAPI`   | 内存 SQLite / 模拟数据库（支持 `ensureTable`, `table`, `migrate`）                                                         |
+| `ctx.log`      | `IPluginLogger`       | 内存日志捕获（`debug`, `info`, `warn`, `error`），可断言日志输出                                                           |
+| `ctx.http`     | `PluginHttpRouter`    | **内置 RESTful 路由器（v0.3.11 新增）**，无需启动 HTTP 服务即可离线测试 HTTP 接口                                          |
+| `ctx.resolve`  | `Function`            | DI 服务解析模拟（可通过 `ctx.provide` 事先注入）                                                                           |
+| `ctx.provide`  | `Function`            | DI 自定义服务提供                                                                                                          |
 
 ---
 
@@ -56,13 +56,13 @@ describe('My Plugin Unit Tests', () => {
 
 Mock 上下文为测试便利**刻意放宽**了部分生产校验，以下差异必须知晓，不要把 Mock 行为当作宿主契约：
 
-| 行为            | Mock（`createMockContext`）                          | 生产宿主（`context-builder`）                                            |
-| --------------- | ---------------------------------------------------- | ------------------------------------------------------------------------ |
-| `ctx.provide`   | **不校验** `manifest.provides` 声明，直接注册        | 校验 `token.name` 必须完整出现在 `manifest.provides`，否则抛错           |
-| `ctx.db.ensureTable` / `table()` | **无 SEC 校验**                      | 强制表名正则 `/^[A-Za-z_][A-Za-z0-9_]{0,63}$/`、schema ≤ 4000 字符、禁分号（见 [插件数据库 API](../reference/plugin-database-api)） |
-| `ctx.db`        | 内存 SQLite（per-test 隔离）                         | 平台共享库 + `plugin_<pluginId>_` 前缀命名空间                           |
-| `ctx.require`   | 直接抛错                                             | 白名单共享模块（`recharts` / `exceljs` / `jspdf` / …）                   |
-| `pointsDimension` / `pointsLedger` | 恒为 `null`                        | Inline 模式注入真实服务；**Worker 模式同样为 `null`**（见 worker-manager 白名单说明） |
+| 行为                               | Mock（`createMockContext`）                   | 生产宿主（`context-builder`）                                                                                                       |
+| ---------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `ctx.provide`                      | **不校验** `manifest.provides` 声明，直接注册 | 校验 `token.name` 必须完整出现在 `manifest.provides`，否则抛错                                                                      |
+| `ctx.db.ensureTable` / `table()`   | **无 SEC 校验**                               | 强制表名正则 `/^[A-Za-z_][A-Za-z0-9_]{0,63}$/`、schema ≤ 4000 字符、禁分号（见 [插件数据库 API](../reference/plugin-database-api)） |
+| `ctx.db`                           | 内存 SQLite（per-test 隔离）                  | 平台共享库 + `plugin_<pluginId>_` 前缀命名空间                                                                                      |
+| `ctx.require`                      | 直接抛错                                      | 白名单共享模块（`recharts` / `exceljs` / `jspdf` / …）                                                                              |
+| `pointsDimension` / `pointsLedger` | 恒为 `null`                                   | Inline 模式注入真实服务；**Worker 模式同样为 `null`**（见 worker-manager 白名单说明）                                               |
 
 因此：涉及 `ensureTable` 命名/分号、`provide` 未声明、`require` 白名单的代码路径，请额外用「上传真实 ZIP → 插件中心安装 → 激活」做一次集成验证（或对照 [examples/verifiable-examples](../examples/verifiable-examples) 的契约断言）。
 

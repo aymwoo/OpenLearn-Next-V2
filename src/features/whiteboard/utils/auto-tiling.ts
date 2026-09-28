@@ -126,12 +126,7 @@ function clampRect(rect: TilingRect): TilingRect {
  * @param count     需要的格子数
  * @param _depth    兼容旧接口签名，内部按几何长宽比动态自适应
  */
-export function splitArea(
-  area: TilingRect,
-  count: number,
-  _depth = 0,
-  stackDirection?: StackDirection,
-): TilingRect[] {
+export function splitArea(area: TilingRect, count: number, _depth = 0, stackDirection?: StackDirection): TilingRect[] {
   if (count <= 0) return [];
   if (count === 1) return [clampRect(area)];
 
@@ -457,12 +452,7 @@ export function findTileUnderPoint<T extends BoxWithId>(
 ): T | null {
   for (const item of candidates) {
     if (item.id === excludeId) continue;
-    if (
-      point.x >= item.x &&
-      point.x <= item.x + item.width &&
-      point.y >= item.y &&
-      point.y <= item.y + item.height
-    ) {
+    if (point.x >= item.x && point.x <= item.x + item.width && point.y >= item.y && point.y <= item.y + item.height) {
       return item;
     }
   }

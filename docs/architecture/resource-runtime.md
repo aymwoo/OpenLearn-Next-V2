@@ -27,9 +27,19 @@ Teaching Resource Runtime 在前端架构中扮演**教学资源与 Workspace �
 
 ```typescript
 export type ResourceType =
-  | 'PDF' | 'PPT' | 'Image' | 'Video' | 'Markdown' | 'Notebook'
-  | 'Mermaid' | 'MindMap' | 'GeoGebra' | 'Blockly' | 'Scratch'
-  | 'HTML' | 'Plugin';
+  | 'PDF'
+  | 'PPT'
+  | 'Image'
+  | 'Video'
+  | 'Markdown'
+  | 'Notebook'
+  | 'Mermaid'
+  | 'MindMap'
+  | 'GeoGebra'
+  | 'Blockly'
+  | 'Scratch'
+  | 'HTML'
+  | 'Plugin';
 ```
 
 ### ResourceDescriptor（不可变资源描述符）
@@ -41,8 +51,8 @@ export interface ResourceDescriptor {
   readonly type: ResourceType;
   readonly url?: string;
   readonly content?: unknown;
-  pinned?: boolean;            // 可变：pin() 操作翻转
-  favorited?: boolean;         // 可变：favorite() 操作翻转
+  pinned?: boolean; // 可变：pin() 操作翻转
+  favorited?: boolean; // 可变：favorite() 操作翻转
   readonly metadata?: Record<string, unknown>;
 }
 ```
@@ -52,10 +62,10 @@ export interface ResourceDescriptor {
 ```typescript
 export interface ResourceProvider {
   readonly id: string;
-  readonly type: ResourceType;  // 每个 provider 只服务一种 type
-  preview?:  (resource: ResourceDescriptor) => unknown;
-  open?:     (resource: ResourceDescriptor) => unknown;
-  toolbar?:  (resource: ResourceDescriptor) => unknown;
+  readonly type: ResourceType; // 每个 provider 只服务一种 type
+  preview?: (resource: ResourceDescriptor) => unknown;
+  open?: (resource: ResourceDescriptor) => unknown;
+  toolbar?: (resource: ResourceDescriptor) => unknown;
   contextMenu?: (resource: ResourceDescriptor) => unknown;
 }
 ```
@@ -63,9 +73,7 @@ export interface ResourceProvider {
 ### ResourceAction（7 种可执行动作）
 
 ```typescript
-export type ResourceAction =
-  | 'preview' | 'open' | 'pin' | 'favorite'
-  | 'annotate' | 'share' | 'fullscreen';
+export type ResourceAction = 'preview' | 'open' | 'pin' | 'favorite' | 'annotate' | 'share' | 'fullscreen';
 ```
 
 ---
@@ -93,22 +101,22 @@ graph LR
 
 双 `Map` 存储：
 
-| 存储 | Key | Value | 方法 |
-|---|---|---|---|
-| `providers` | `ResourceType` | `ResourceProvider` | `registerProvider` / `unregisterProvider` / `getProvider` |
-| `resources` | `resourceId` | `ResourceDescriptor` | `registerResource` / `unregisterResource` / `getResource` / `listResources` |
+| 存储        | Key            | Value                | 方法                                                                        |
+| ----------- | -------------- | -------------------- | --------------------------------------------------------------------------- |
+| `providers` | `ResourceType` | `ResourceProvider`   | `registerProvider` / `unregisterProvider` / `getProvider`                   |
+| `resources` | `resourceId`   | `ResourceDescriptor` | `registerResource` / `unregisterResource` / `getResource` / `listResources` |
 
 ### `executeAction()` 行为矩阵
 
-| action | 有 provider 行为 | 无 provider 行为（fallback） |
-|---|---|---|
-| `preview` | `provider.preview(resource)` | `{ previewUrl: resource.url }` |
-| `open` | `provider.open(resource)` | `{ openUrl: resource.url }` |
-| `pin` | — | 翻转 `resource.pinned`，返回 `{ pinned }` |
-| `favorite` | — | 翻转 `resource.favorited`，返回 `{ favorited }` |
-| `annotate` | — | `{ annotate: true, resourceId, params }` |
-| `share` | — | `{ shareUrl: resource.url ?? "resource://<id>" }` |
-| `fullscreen` | — | `{ fullscreen: true, resourceId }` |
+| action       | 有 provider 行为             | 无 provider 行为（fallback）                      |
+| ------------ | ---------------------------- | ------------------------------------------------- |
+| `preview`    | `provider.preview(resource)` | `{ previewUrl: resource.url }`                    |
+| `open`       | `provider.open(resource)`    | `{ openUrl: resource.url }`                       |
+| `pin`        | —                            | 翻转 `resource.pinned`，返回 `{ pinned }`         |
+| `favorite`   | —                            | 翻转 `resource.favorited`，返回 `{ favorited }`   |
+| `annotate`   | —                            | `{ annotate: true, resourceId, params }`          |
+| `share`      | —                            | `{ shareUrl: resource.url ?? "resource://<id>" }` |
+| `fullscreen` | —                            | `{ fullscreen: true, resourceId }`                |
 
 **关键点**：`pin` / `favorite` 是 registry 自身副作用（修改 `ResourceDescriptor` 字段），不需要 provider。`preview` / `open` 优先调用 provider，未注册 provider 时退化为 URL 返回。
 
@@ -159,12 +167,12 @@ reg.unregisterProvider('my-plugin.video-provider');
 
 参考 [`platform-kernel.md`](./platform-kernel.md) Layer 2_6 节点。Teaching Resource Runtime 是**前端独有的协作领域引擎**，与 Interaction Runtime、Classroom Runtime 平行存在。
 
-| 维度 | Teaching Resource | Interaction | Classroom |
-|---|---|---|---|
-| 作用层 | 资源-UI 适配层 | 事件归一化层 | 业务编排层 |
-| 状态 | 资源条目可变 | Focus/Selection 状态可变 | 9 阶段状态机 |
-| 跨域 | 仅前端 | 仅前端 | 跨前后端 |
-| Provider 模型 | 每 type 一个 provider | 每 handler 一个 id | 每 service 一个 id |
+| 维度          | Teaching Resource     | Interaction              | Classroom          |
+| ------------- | --------------------- | ------------------------ | ------------------ |
+| 作用层        | 资源-UI 适配层        | 事件归一化层             | 业务编排层         |
+| 状态          | 资源条目可变          | Focus/Selection 状态可变 | 9 阶段状态机       |
+| 跨域          | 仅前端                | 仅前端                   | 跨前后端           |
+| Provider 模型 | 每 type 一个 provider | 每 handler 一个 id       | 每 service 一个 id |
 
 ---
 

@@ -237,9 +237,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                   <p className="text-xs text-slate-400 font-medium">
                     {zh ? '当前已提交版本' : 'Currently Submitted Version'}
                   </p>
-                  <p className="text-sm font-semibold text-slate-700 truncate">
-                    {describeSubmission(mySubmission)}
-                  </p>
+                  <p className="text-sm font-semibold text-slate-700 truncate">{describeSubmission(mySubmission)}</p>
                 </div>
                 <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full border border-indigo-200">
                   V{mySubmission.version}
@@ -264,9 +262,7 @@ export function StudentAssignmentEvalPanel({ lessonId, studentId, lang, addToast
                 (Array.isArray(mySubmission.files) && mySubmission.files.length > 0)) && (
                 <div className="border-t border-slate-100 pt-2.5 space-y-1 text-xs text-slate-600">
                   {mySubmission.textContent && (
-                    <p className="whitespace-pre-wrap break-all max-h-20 overflow-hidden">
-                      {mySubmission.textContent}
-                    </p>
+                    <p className="whitespace-pre-wrap break-all max-h-20 overflow-hidden">{mySubmission.textContent}</p>
                   )}
                   {mySubmission.linkUrl && (
                     <a

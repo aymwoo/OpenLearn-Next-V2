@@ -64,6 +64,7 @@ curl -s -X POST http://localhost:9000/api/lessons/<LESSON_ID>/quiz-submit \
 ```
 
 期望响应：
+
 ```json
 { "success": true, "isCorrect": true, "score": 100, "studentId": "..." }
 ```
@@ -72,18 +73,18 @@ curl -s -X POST http://localhost:9000/api/lessons/<LESSON_ID>/quiz-submit \
 
 ## 故障排查
 
-| 现象 | 原因 | 排查 |
-|---|---|---|
-| WhiteboardEventPanel 不显示 | userRole !== 'teacher' | 检查 InteractiveWhiteboard 的 userRole prop 是否传入 |
-| 事件不显示在 Panel | socket 连接断开 | 打开 Network → WS，看 socket.io 是否 connected |
-| Panel 显示了，但 RecentSubmissionsCard 没有 | 教师端没挂载该组件 | 检查 TeacherPanel 是否引用 `RecentSubmissionsCard` |
-| HTTP quiz-submit 401 | session 失效 | 重新登录拿新 token |
+| 现象                                        | 原因                   | 排查                                                 |
+| ------------------------------------------- | ---------------------- | ---------------------------------------------------- |
+| WhiteboardEventPanel 不显示                 | userRole !== 'teacher' | 检查 InteractiveWhiteboard 的 userRole prop 是否传入 |
+| 事件不显示在 Panel                          | socket 连接断开        | 打开 Network → WS，看 socket.io 是否 connected       |
+| Panel 显示了，但 RecentSubmissionsCard 没有 | 教师端没挂载该组件     | 检查 TeacherPanel 是否引用 `RecentSubmissionsCard`   |
+| HTTP quiz-submit 401                        | session 失效           | 重新登录拿新 token                                   |
 
 ## 与自动化测试的对应关系
 
-| 手工验证步骤 | 自动化测试 |
-|---|---|
-| 后端 emit 事件 | `server/__tests__/quiz-answered-e2e.test.ts` (Test 1, 2) |
-| 前端 ingest 到 WhiteboardEventSlot | `src/hooks/__tests__/whiteboard-quiz-ingest.test.tsx` |
-| WhiteboardEventPanel 渲染 | `src/features/whiteboard/__tests__/whiteboard-event-slot.test.ts` |
-| RecentSubmissionsCard 渲染 | 暂无（Todo: 加测试覆盖） |
+| 手工验证步骤                       | 自动化测试                                                        |
+| ---------------------------------- | ----------------------------------------------------------------- |
+| 后端 emit 事件                     | `server/__tests__/quiz-answered-e2e.test.ts` (Test 1, 2)          |
+| 前端 ingest 到 WhiteboardEventSlot | `src/hooks/__tests__/whiteboard-quiz-ingest.test.tsx`             |
+| WhiteboardEventPanel 渲染          | `src/features/whiteboard/__tests__/whiteboard-event-slot.test.ts` |
+| RecentSubmissionsCard 渲染         | 暂无（Todo: 加测试覆盖）                                          |

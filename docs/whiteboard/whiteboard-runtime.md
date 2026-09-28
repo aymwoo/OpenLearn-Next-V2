@@ -109,35 +109,29 @@ whiteboardEventSlot.ingest({
 });
 
 // React Hook 订阅（带过滤 + 自动回放）
-const events = useWhiteboardEvents(
-  { types: ['courseware.submitted'], lessonId },
-  { replay: 10, maxItems: 50 },
-);
+const events = useWhiteboardEvents({ types: ['courseware.submitted'], lessonId }, { replay: 10, maxItems: 50 });
 // events: WhiteboardEvent[] 最新在前
 
 // 副作用订阅（不需要 React state）
-useWhiteboardEventListener(
-  { coursewareUuid },
-  (e) => {
-    if (e.type === 'courseware.submitted') {
-      console.log('学生提交分数:', e.payload.score);
-    }
-  },
-);
+useWhiteboardEventListener({ coursewareUuid }, (e) => {
+  if (e.type === 'courseware.submitted') {
+    console.log('学生提交分数:', e.payload.score);
+  }
+});
 ```
 
 ### 事件类型 (`type`)
 
-| 类型                          | 来源                   | 触发时机                                           |
-| ----------------------------- | ---------------------- | -------------------------------------------------- |
-| `courseware.submitted`        | `iframe.postMessage` / `applet.score` | 课件内调用 `LMS.submit` / `OpenLearn.submit` |
-| `courseware.progress_saved`   | `iframe.postMessage`   | 课件内调用 `LMS.saveProgress`                      |
-| `courseware.finished`         | `iframe.postMessage`   | 课件内调用 `LMS.finish`                            |
-| `courseware.unknown`          | `iframe.postMessage`   | 其他 `LMS_*` 协议事件（便于调试）                  |
-| `courseware.event_logged`     | `iframe.bridge`        | `lms-bridge.ts` 转发到后端前的本地镜像             |
-| `courseware.config_reported`  | `iframe.bridge`        | iframe 上报 `LMS_CONFIG`                           |
-| `quiz.answered`               | `widget.quiz`          | 原生 quiz widget 提交                              |
-| `whiteboard.*`                | `manual`               | 白板自身的 UI 事件                                 |
+| 类型                         | 来源                                  | 触发时机                                     |
+| ---------------------------- | ------------------------------------- | -------------------------------------------- |
+| `courseware.submitted`       | `iframe.postMessage` / `applet.score` | 课件内调用 `LMS.submit` / `OpenLearn.submit` |
+| `courseware.progress_saved`  | `iframe.postMessage`                  | 课件内调用 `LMS.saveProgress`                |
+| `courseware.finished`        | `iframe.postMessage`                  | 课件内调用 `LMS.finish`                      |
+| `courseware.unknown`         | `iframe.postMessage`                  | 其他 `LMS_*` 协议事件（便于调试）            |
+| `courseware.event_logged`    | `iframe.bridge`                       | `lms-bridge.ts` 转发到后端前的本地镜像       |
+| `courseware.config_reported` | `iframe.bridge`                       | iframe 上报 `LMS_CONFIG`                     |
+| `quiz.answered`              | `widget.quiz`                         | 原生 quiz widget 提交                        |
+| `whiteboard.*`               | `manual`                              | 白板自身的 UI 事件                           |
 
 ### 调试面板
 
@@ -184,13 +178,13 @@ WhiteboardEventSlot
 
 **修复**（`src/features/whiteboard/components/HtmlAppletFrame.tsx`）：组件挂载后注册 `window.addEventListener('message')`，仅信任本组件的 iframe（通过 `event.source === iframe.contentWindow` 过滤）。识别以下协议：
 
-| `event.data.type`              | 归一化事件                           |
-| ----------------------------- | ------------------------------------ |
-| `LMS_SUBMIT`                  | `courseware.submitted` (score/total/completion/comment) |
-| `LMS_SAVE_PROGRESS`           | `courseware.progress_saved` (score/completion)          |
-| `LMS_FINISH`                  | `courseware.finished`                                     |
-| `courseware:score` / `openlearn-cw-sdk:score` | `courseware.submitted` (source: openlearn-cw-sdk) |
-| 其他 `LMS_*`                  | `courseware.unknown`（保留 raw）                        |
+| `event.data.type`                             | 归一化事件                                              |
+| --------------------------------------------- | ------------------------------------------------------- |
+| `LMS_SUBMIT`                                  | `courseware.submitted` (score/total/completion/comment) |
+| `LMS_SAVE_PROGRESS`                           | `courseware.progress_saved` (score/completion)          |
+| `LMS_FINISH`                                  | `courseware.finished`                                   |
+| `courseware:score` / `openlearn-cw-sdk:score` | `courseware.submitted` (source: openlearn-cw-sdk)       |
+| 其他 `LMS_*`                                  | `courseware.unknown`（保留 raw）                        |
 
 父组件（`InteractiveWhiteboard.tsx` / `FullscreenOverlay`）必须传入 `elementId` 才能正确关联到白板元素：
 
@@ -199,7 +193,7 @@ WhiteboardEventSlot
 ```
 
 同时 `lms-bridge.ts` 的全局监听器（`useLmsBridge(session)`）处理 `LMS_SUBMIT` 时也会同步写入事件槽，source 标记为 `iframe.bridge`（与 `HtmlAppletFrame` 局部监听互补，不冲突）。
-| `math-graph`   | `MathGraphWrapper`（Canvas）   | 智能默认（equation 字段）      | 公式输入                |
-| `presentation` | `RevealPresentationWrapper`    | 智能默认（markdown 字段）      | Markdown 编辑           |
-| `rollcall`     | `RollCallWrapper`（点名面板）  | 注册表（rollcall renderer）    | 点名按钮                |
-| `plugin-*`     | `PluginCardRenderer`           | 可注册/智能默认                | 可注册/通用属性         |
+| `math-graph` | `MathGraphWrapper`（Canvas） | 智能默认（equation 字段） | 公式输入 |
+| `presentation` | `RevealPresentationWrapper` | 智能默认（markdown 字段） | Markdown 编辑 |
+| `rollcall` | `RollCallWrapper`（点名面板） | 注册表（rollcall renderer） | 点名按钮 |
+| `plugin-*` | `PluginCardRenderer` | 可注册/智能默认 | 可注册/通用属性 |

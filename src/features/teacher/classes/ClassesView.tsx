@@ -91,9 +91,7 @@ export interface ClassesViewProps {
   classSubmissionFilters: Record<string, 'all' | 'submitted' | 'graded' | 'pending'>;
   setClassSubmissionFilters: Dispatch<SetStateAction<Record<string, 'all' | 'submitted' | 'graded' | 'pending'>>>;
   classActiveTabs: Record<string, ClassTabKey>;
-  setClassActiveTabs: Dispatch<
-    SetStateAction<Record<string, ClassTabKey>>
-  >;
+  setClassActiveTabs: Dispatch<SetStateAction<Record<string, ClassTabKey>>>;
   classProgressMap: Record<string, { lesson_id: string; lesson_title: string; average_progress: number }[]>;
   classSchedulesMap: Record<string, ScheduleType[]>;
   classDashboardMap: Record<string, any>;
@@ -251,11 +249,7 @@ export function ClassesView(props: ClassesViewProps) {
               <button
                 type="button"
                 id="classroom-export-attendance-btn"
-                onClick={
-                  props.expandedClassId
-                    ? handleExportCurrentClassAttendance
-                    : handleExportAllAttendanceCombined
-                }
+                onClick={props.expandedClassId ? handleExportCurrentClassAttendance : handleExportAllAttendanceCombined}
                 disabled={isExportingAttendance}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-linear-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white font-medium rounded-lg shadow-sm transition-all cursor-pointer select-none disabled:opacity-50"
                 title={

@@ -76,12 +76,7 @@ describe('Security Hardening Suite (P0 Vulnerabilities)', () => {
       kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id = ?').run(token);
       kernelContainer.db
         .prepare('INSERT INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)')
-        .run(
-          token,
-          JSON.stringify({ role: 'student', studentId: 'stu_alice' }),
-          Date.now(),
-          Date.now() + 100000,
-        );
+        .run(token, JSON.stringify({ role: 'student', studentId: 'stu_alice' }), Date.now(), Date.now() + 100000);
 
       const req = { headers: { cookie: `edu_os_token=${token}` } } as any;
       const next = vi.fn();

@@ -395,17 +395,13 @@ export function SemesterGradeTrendChart({ assignments = [], lang = 'en' }: Semes
                               </span>
                             </div>
                             <p className="text-xs font-black text-slate-800 leading-snug">{d.fullTitle}</p>
-                            <p className="text-xs text-slate-400 mt-1 leading-normal font-medium">
-                              {d.fullDateLabel}
-                            </p>
+                            <p className="text-xs text-slate-400 mt-1 leading-normal font-medium">{d.fullDateLabel}</p>
 
                             <div className="mt-2 bg-gradient-to-r from-violet-50/50 to-indigo-50/40 p-2 rounded-lg border border-violet-100/50">
                               <span className="text-xs font-black text-violet-850 uppercase block tracking-wider mb-0.5">
                                 {t.feedbackTitle}
                               </span>
-                              <p className="text-xs text-slate-700 italic font-sans leading-normal">
-                                "{d.feedback}"
-                              </p>
+                              <p className="text-xs text-slate-700 italic font-sans leading-normal">"{d.feedback}"</p>
                             </div>
                           </div>
                         );

@@ -15,8 +15,7 @@ import { StudentAssignmentEvalPanel } from '../StudentAssignmentEvalPanel';
  * 本用例锁定：`file_path` 为 null（自己与他人）时不得抛错，且要展示真实内容物。
  */
 
-const jsonResponse = (data: unknown) =>
-  Promise.resolve({ ok: true, json: async () => data } as any);
+const jsonResponse = (data: unknown) => Promise.resolve({ ok: true, json: async () => data } as any);
 
 const lessonId = 'lesson-eval-1';
 const studentId = 'stu-eval-1';
@@ -65,9 +64,7 @@ describe('StudentAssignmentEvalPanel 空 file_path', () => {
       [],
     );
 
-    render(
-      <StudentAssignmentEvalPanel lessonId={lessonId} studentId={studentId} lang="zh" addToast={noopToast} />,
-    );
+    render(<StudentAssignmentEvalPanel lessonId={lessonId} studentId={studentId} lang="zh" addToast={noopToast} />);
 
     // 附件名（describeSubmission 取单附件名）+ 文字作答内容都要出现
     const nameNodes = await screen.findAllByText('探究报告.pdf');
@@ -105,9 +102,7 @@ describe('StudentAssignmentEvalPanel 空 file_path', () => {
       ],
     );
 
-    render(
-      <StudentAssignmentEvalPanel lessonId={lessonId} studentId={studentId} lang="zh" addToast={noopToast} />,
-    );
+    render(<StudentAssignmentEvalPanel lessonId={lessonId} studentId={studentId} lang="zh" addToast={noopToast} />);
 
     expect(await screen.findByText('小红的文字作业内容')).toBeDefined();
     expect(screen.getByText('文字作答 (V1)')).toBeDefined();
@@ -138,9 +133,7 @@ describe('StudentAssignmentEvalPanel 空 file_path', () => {
       [],
     );
 
-    render(
-      <StudentAssignmentEvalPanel lessonId={lessonId} studentId={studentId} lang="zh" addToast={noopToast} />,
-    );
+    render(<StudentAssignmentEvalPanel lessonId={lessonId} studentId={studentId} lang="zh" addToast={noopToast} />);
 
     expect(await screen.findByText('my-homework.pdf')).toBeDefined();
     expect(await screen.findByText('/files/homework/my-homework.pdf')).toBeDefined();
@@ -149,9 +142,7 @@ describe('StudentAssignmentEvalPanel 空 file_path', () => {
   it('未提交任何作业时不渲染提交卡片', async () => {
     mockFetchWith({ submission: null, reviewsWritten: [], grade: null }, []);
 
-    render(
-      <StudentAssignmentEvalPanel lessonId={lessonId} studentId={studentId} lang="zh" addToast={noopToast} />,
-    );
+    render(<StudentAssignmentEvalPanel lessonId={lessonId} studentId={studentId} lang="zh" addToast={noopToast} />);
 
     await waitFor(() => {
       expect(screen.getByText('我的作业提交')).toBeDefined();

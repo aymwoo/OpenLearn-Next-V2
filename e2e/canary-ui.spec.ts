@@ -43,7 +43,9 @@ function purgeCanaryDirectFromDb() {
   const db = new Database(dbPath);
   try {
     // 1. 查找并删除金丝雀插件目录及记录
-    const canaryPlugins = db.prepare('SELECT id FROM plugins WHERE name LIKE ? OR id LIKE ?').all('%金丝雀%', '%canary%') as { id: string }[];
+    const canaryPlugins = db
+      .prepare('SELECT id FROM plugins WHERE name LIKE ? OR id LIKE ?')
+      .all('%金丝雀%', '%canary%') as { id: string }[];
     for (const p of canaryPlugins) {
       const pDir = path.resolve(process.cwd(), 'plugins', p.id);
       if (fs.existsSync(pDir)) {
@@ -61,14 +63,18 @@ function purgeCanaryDirectFromDb() {
     }
 
     // 3. 删除测试机房
-    const canaryLabs = db.prepare('SELECT id FROM computer_labs WHERE room_number LIKE ? OR room_number = ?').all('%金丝雀%', '机房A-101') as { id: string }[];
+    const canaryLabs = db
+      .prepare('SELECT id FROM computer_labs WHERE room_number LIKE ? OR room_number = ?')
+      .all('%金丝雀%', '机房A-101') as { id: string }[];
     for (const l of canaryLabs) {
       db.prepare('DELETE FROM computer_labs WHERE id = ?').run(l.id);
       db.prepare('DELETE FROM student_seats WHERE lab_id = ?').run(l.id);
     }
 
     // 4. 删除测试学生
-    const canaryStudents = db.prepare('SELECT id FROM students WHERE name LIKE ? OR student_number LIKE ?').all('%探针%', '%CANARY%') as { id: string }[];
+    const canaryStudents = db
+      .prepare('SELECT id FROM students WHERE name LIKE ? OR student_number LIKE ?')
+      .all('%探针%', '%CANARY%') as { id: string }[];
     for (const s of canaryStudents) {
       db.prepare('DELETE FROM students WHERE id = ?').run(s.id);
       db.prepare('DELETE FROM student_seats WHERE student_id = ?').run(s.id);
@@ -81,9 +87,11 @@ function purgeCanaryDirectFromDb() {
 
 async function cleanupAllCanaryData(request: any) {
   // 保证具备管理员权限进行 API 级正常卸载
-  await request.post('/api/auth/login', {
-    data: { entrance: 'teacher', username: 'admin', password: 'admin' },
-  }).catch(() => {});
+  await request
+    .post('/api/auth/login', {
+      data: { entrance: 'teacher', username: 'admin', password: 'admin' },
+    })
+    .catch(() => {});
 
   // 1. 深度卸载与删除所有金丝雀探针插件
   try {
@@ -238,7 +246,9 @@ test.describe('金丝雀阶段 7：前端扩展槽位与 UI 真实渲染', () =>
     await cleanupAllCanaryData(request);
   });
 
-  test('7.1 & 7.6 教师主导航金丝雀 Tab 挂载、React 面板渲染、截图与 Ping 互通 (Generates Artifact: Screenshot)', async ({ page }) => {
+  test('7.1 & 7.6 教师主导航金丝雀 Tab 挂载、React 面板渲染、截图与 Ping 互通 (Generates Artifact: Screenshot)', async ({
+    page,
+  }) => {
     await ensureLoggedIn(page);
 
     const canaryTabButton = page.locator('button[title="金丝雀"], button:has-text("金丝雀")').first();
@@ -266,7 +276,9 @@ test.describe('金丝雀阶段 7：前端扩展槽位与 UI 真实渲染', () =>
     expect(outputText).toContain('pong');
   });
 
-  test('7.5 机房座位图 4 大扩展槽位（toolbar/legend/summary/seat_badge）渲染与截图 (Generates Artifact: Screenshot)', async ({ page }) => {
+  test('7.5 机房座位图 4 大扩展槽位（toolbar/legend/summary/seat_badge）渲染与截图 (Generates Artifact: Screenshot)', async ({
+    page,
+  }) => {
     await ensureLoggedIn(page);
 
     // 1. 导航到「互动课堂」
@@ -315,7 +327,7 @@ test.describe('金丝雀阶段 7：前端扩展槽位与 UI 真实渲染', () =>
 - Seating Summary Rendered: true (Assigned: 3)
 - Seating Seat Badges Count: 3
 - Seating Screenshot: ${SEATING_SCREENSHOT}
-`
+`,
     );
   });
 
@@ -328,7 +340,9 @@ test.describe('金丝雀阶段 7：前端扩展槽位与 UI 真实渲染', () =>
     await coursesTab.click();
 
     // 2. 点击首个课程进入备课编辑器 (LessonEditorView)
-    const viewCourseBtn = page.locator('button[title*="查看与编辑"], button[title*="查看只读"], button:has-text("查看教案")').first();
+    const viewCourseBtn = page
+      .locator('button[title*="查看与编辑"], button[title*="查看只读"], button:has-text("查看教案")')
+      .first();
     await expect(viewCourseBtn).toBeVisible({ timeout: 10000 });
     await viewCourseBtn.click();
 
@@ -360,7 +374,7 @@ test.describe('金丝雀阶段 7：前端扩展槽位与 UI 真实渲染', () =>
 - Whiteboard Autosave Action Rendered: true
 - Whiteboard Anchor Button Rendered: true
 - Whiteboard Screenshot: ${WHITEBOARD_SCREENSHOT}
-`
+`,
     );
   });
 });

@@ -202,10 +202,7 @@ describe('Whiteboard Extracted Components & Utilities', () => {
   describe('HtmlAppletFrame', () => {
     it('should render iframe with credentialless="true" attribute', () => {
       const { container } = render(
-        <HtmlAppletFrame
-          data={{ title: 'Test Applet', code: '<div>Test</div>' }}
-          lessonId="lesson-1"
-        />,
+        <HtmlAppletFrame data={{ title: 'Test Applet', code: '<div>Test</div>' }} lessonId="lesson-1" />,
       );
       const iframe = container.querySelector('iframe');
       expect(iframe).not.toBeNull();
@@ -280,4 +277,3 @@ describe('Whiteboard Extracted Components & Utilities', () => {
     });
   });
 });
-

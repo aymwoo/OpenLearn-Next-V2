@@ -154,10 +154,9 @@ Output pure JSON only without markdown code blocks, matching this structure:
         .prepare('SELECT id, student_number FROM students WHERE id = ? OR student_number = ?')
         .get(studentId, studentId) as any;
 
-      const isSelf =
-        studentRow
-          ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
-          : currentUserId === studentId;
+      const isSelf = studentRow
+        ? currentUserId === studentRow.id || (studentRow.student_number && currentUserId === studentRow.student_number)
+        : currentUserId === studentId;
 
       if (!isPrivileged && !isSelf) {
         return res.status(403).json({ error: 'Cannot submit assignment on behalf of another student' });

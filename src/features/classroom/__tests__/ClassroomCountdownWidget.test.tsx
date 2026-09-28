@@ -76,13 +76,7 @@ describe('Classroom Countdown Timer & Sync (Teacher & Student)', () => {
   });
 
   it('supports selecting countdown presets (e.g. 3m, 10m)', async () => {
-    render(
-      <ClassroomCountdownWidget
-        lessonId="les-test-101"
-        lang="zh"
-        syncChannel={mockSyncChannel}
-      />,
-    );
+    render(<ClassroomCountdownWidget lessonId="les-test-101" lang="zh" syncChannel={mockSyncChannel} />);
 
     const preset3m = screen.getByRole('button', { name: /3m/i });
     fireEvent.click(preset3m);
@@ -93,13 +87,7 @@ describe('Classroom Countdown Timer & Sync (Teacher & Student)', () => {
   });
 
   it('allows quick extension actions such as +1m and reset', async () => {
-    render(
-      <ClassroomCountdownWidget
-        lessonId="les-test-101"
-        lang="zh"
-        syncChannel={mockSyncChannel}
-      />,
-    );
+    render(<ClassroomCountdownWidget lessonId="les-test-101" lang="zh" syncChannel={mockSyncChannel} />);
 
     const addTimeBtn = screen.getByRole('button', { name: '+1m' });
     fireEvent.click(addTimeBtn);
@@ -111,11 +99,7 @@ describe('Classroom Countdown Timer & Sync (Teacher & Student)', () => {
 
   it('renders student countdown banner when active countdown is broadcast', async () => {
     const { rerender } = render(
-      <StudentCountdownBanner
-        lessonId="les-test-101"
-        lang="zh"
-        syncChannel={mockSyncChannel}
-      />,
+      <StudentCountdownBanner lessonId="les-test-101" lang="zh" syncChannel={mockSyncChannel} />,
     );
 
     // Simulate incoming broadcast countdown update
@@ -136,13 +120,7 @@ describe('Classroom Countdown Timer & Sync (Teacher & Student)', () => {
       }),
     );
 
-    rerender(
-      <StudentCountdownBanner
-        lessonId="les-test-101"
-        lang="zh"
-        syncChannel={mockSyncChannel}
-      />,
-    );
+    rerender(<StudentCountdownBanner lessonId="les-test-101" lang="zh" syncChannel={mockSyncChannel} />);
 
     await waitFor(() => {
       expect(screen.getByText('随堂限时答题')).toBeDefined();
@@ -178,4 +156,3 @@ describe('Classroom Countdown Timer & Sync (Teacher & Student)', () => {
     expect(screen.getByText('快捷预设')).toBeDefined();
   });
 });
-

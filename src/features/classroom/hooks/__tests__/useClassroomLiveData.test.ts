@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  deriveStudentMetrics,
-  deriveHighlights,
-  deriveStages,
-  computeElapsedMin,
-} from '../useClassroomLiveData';
+import { deriveStudentMetrics, deriveHighlights, deriveStages, computeElapsedMin } from '../useClassroomLiveData';
 
 /**
  * 课堂真实数据派生层单测。
@@ -94,11 +89,7 @@ describe('useClassroomLiveData 派生逻辑', () => {
 
     it('studentName 回退顺序：name → student_number → id', () => {
       const metrics = deriveStudentMetrics(
-        [
-          { id: 's1', name: '甲' },
-          { id: 's2', student_number: '2402' },
-          { id: 's3' },
-        ],
+        [{ id: 's1', name: '甲' }, { id: 's2', student_number: '2402' }, { id: 's3' }],
         [],
         [],
         [],

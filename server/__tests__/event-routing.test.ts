@@ -93,9 +93,10 @@ describe('createRouteDispatcher', () => {
 
   it('broadcasts courseware.attempt_updated globally', () => {
     const { emitted, deps } = buildDeps();
-    createRouteDispatcher(SOCKET_ROUTES, deps)(
-      event('courseware.attempt_updated', { attemptId: 'att_1', type: 'submit' }, 'att_1'),
-    );
+    createRouteDispatcher(
+      SOCKET_ROUTES,
+      deps,
+    )(event('courseware.attempt_updated', { attemptId: 'att_1', type: 'submit' }, 'att_1'));
 
     expect(emitted).toEqual([
       expect.objectContaining({

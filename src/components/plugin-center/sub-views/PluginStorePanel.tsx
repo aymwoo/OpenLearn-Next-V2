@@ -210,10 +210,7 @@ export function PluginStorePanel({
                       )}
                     </div>
                     {manifestInfo.manifestId && (
-                      <p
-                        className="text-xs text-gray-400 font-mono truncate mt-0.5"
-                        title={manifestInfo.manifestId}
-                      >
+                      <p className="text-xs text-gray-400 font-mono truncate mt-0.5" title={manifestInfo.manifestId}>
                         {manifestInfo.manifestId}
                       </p>
                     )}

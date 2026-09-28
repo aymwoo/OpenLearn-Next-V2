@@ -148,7 +148,8 @@ export function generateCoPilotReflection(input: TelemetryInput): CoPilotReflect
   if (lectureRatio > recommendedLectureMaxRatio) {
     actionableSuggestions.push({
       title: '重构课堂结构，增加拼板探究与画廊互评',
-      suggestion: '下节课建议采用「随堂拼板教学」，将 15 分钟的例题讲解拆为“小组白板分工探索 + 画廊互评展台”，提升生生互动。',
+      suggestion:
+        '下节课建议采用「随堂拼板教学」，将 15 分钟的例题讲解拆为“小组白板分工探索 + 画廊互评展台”，提升生生互动。',
       timing: 'next_in_class',
     });
   }

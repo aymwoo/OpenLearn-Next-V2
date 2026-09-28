@@ -20,11 +20,7 @@ import {
 } from 'lucide-react';
 import { useScreenResize, ScreenResizeInfo } from '../../../hooks/useScreenResize';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
-import {
-  StudentQuickActionItem,
-  studentQuickActionsRegistry,
-  QuickActionBadgeVariant,
-} from '../types/quickActions';
+import { StudentQuickActionItem, studentQuickActionsRegistry, QuickActionBadgeVariant } from '../types/quickActions';
 
 export type { StudentQuickActionItem, QuickActionBadgeVariant };
 
@@ -193,8 +189,7 @@ export function StudentQuickActionsFloatingMenu({
   useEffect(() => {
     const handleCollapse = () => setIsOpen(false);
     const handleOpen = () => setIsOpen(true);
-    const handleToggleCompact = () =>
-      setUserCompactOverride((prev) => (prev === null ? !screenInfo.isMobile : !prev));
+    const handleToggleCompact = () => setUserCompactOverride((prev) => (prev === null ? !screenInfo.isMobile : !prev));
     const handleRegisterAction = (e: Event) => {
       const customEvent = e as CustomEvent<StudentQuickActionItem>;
       if (customEvent.detail && customEvent.detail.id) {
@@ -226,10 +221,7 @@ export function StudentQuickActionsFloatingMenu({
     [rollcalls, readNotifications],
   );
 
-  const pendingAssignments = useMemo(
-    () => assignments.filter((a: any) => !a.submission_status),
-    [assignments],
-  );
+  const pendingAssignments = useMemo(() => assignments.filter((a: any) => !a.submission_status), [assignments]);
 
   // Active / next live session
   const activeSessionSchedule = useMemo(() => {
@@ -839,13 +831,7 @@ export function StudentQuickActionsFloatingMenu({
             {/* In expanded mode, show label text. In compact mobile mode, collapse into icon-only to preserve screen space! */}
             {!isCompact && (
               <span className="text-xs font-extrabold tracking-tight hidden sm:inline-block">
-                {isOpen
-                  ? lang === 'zh'
-                    ? '关闭指令'
-                    : 'Close'
-                  : lang === 'zh'
-                    ? '快捷指令'
-                    : 'Quick Actions'}
+                {isOpen ? (lang === 'zh' ? '关闭指令' : 'Close') : lang === 'zh' ? '快捷指令' : 'Quick Actions'}
               </span>
             )}
           </button>

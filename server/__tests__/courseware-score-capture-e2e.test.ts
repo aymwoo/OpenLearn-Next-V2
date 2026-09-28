@@ -87,14 +87,9 @@ beforeAll(async () => {
 
   // 课件行 —— 3 套通用课件各自一行
   for (const name of ['simple-quiz', 'result-screen-quiz', 'fill-answers-quiz']) {
-    db.prepare('INSERT OR REPLACE INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-      `cw-cap-${name}`,
-      `cw-cap-uuid-${name}`,
-      `通用课件 · ${name}`,
-      'html',
-      'index.html',
-      now,
-    );
+    db.prepare(
+      'INSERT OR REPLACE INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(`cw-cap-${name}`, `cw-cap-uuid-${name}`, `通用课件 · ${name}`, 'html', 'index.html', now);
   }
 
   lessonId = `lesson-capture-${now}`;
@@ -164,10 +159,7 @@ afterAll(async () => {
 // —— lms-bridge 模拟：通用课件 postMessage 消息 → 平台 HTTP 提交 ——
 // 复刻 src/services/lms-bridge.ts 的关键路由语义（isSubmit / isSaveProgress → status 映射），
 // 以 HTTP 方式驱动真实路由（produce submission_result），等同于前端 bridge 的行为。
-async function bridgeDeliver(
-  attemptId: string,
-  message: { type: string; payload: any },
-): Promise<Response> {
+async function bridgeDeliver(attemptId: string, message: { type: string; payload: any }): Promise<Response> {
   const isSubmit = message.type === 'LMS_SUBMIT' || message.type === 'LMS_FINISH';
   const status = isSubmit ? 'completed' : 'inprogress';
   const res = await fetch(`${baseUrl}/api/courseware/attempts/${attemptId}/submit`, {
@@ -186,16 +178,18 @@ async function bridgeDeliver(
 async function startAttempt(coursewareId: string, studentId = 'stu-capture-001'): Promise<string> {
   const attemptId = `att-capture-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   kernelContainer.db
-    .prepare('INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, status) VALUES (?, ?, ?, ?, ?)')
+    .prepare(
+      'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, status) VALUES (?, ?, ?, ?, ?)',
+    )
     .run(attemptId, coursewareId, studentId, Date.now(), 'active');
   createdAttemptIds.push(attemptId);
   return attemptId;
 }
 
 function expectScoreRow(attemptId: string) {
-  const row = kernelContainer.db
-    .prepare('SELECT score FROM submission_result WHERE attempt_id = ?')
-    .get(attemptId) as { score: number };
+  const row = kernelContainer.db.prepare('SELECT score FROM submission_result WHERE attempt_id = ?').get(attemptId) as {
+    score: number;
+  };
   expect(row).toBeTruthy();
   return row.score;
 }
@@ -278,9 +272,12 @@ describe('通用考试课件得分采集 → 学习情况 / 学期成绩 全链�
 
   it('promote 后的成绩能被学期成绩接口（grading）按权重聚合可见', async () => {
     // 前面已经 promote 过一次（40 分）。这里直接查学期成绩看 assignment 维度
-    const res = await fetch(`${baseUrl}/api/classes/${classId}/semester-grades?semesterName=${encodeURIComponent(semesterName)}`, {
-      headers: { cookie: `edu_os_token=${TEACHER_TOKEN}` },
-    });
+    const res = await fetch(
+      `${baseUrl}/api/classes/${classId}/semester-grades?semesterName=${encodeURIComponent(semesterName)}`,
+      {
+        headers: { cookie: `edu_os_token=${TEACHER_TOKEN}` },
+      },
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);

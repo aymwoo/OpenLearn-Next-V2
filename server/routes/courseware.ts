@@ -71,7 +71,6 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
-
   app.post('/api/courseware/attempts/:attemptId/log', async (req, res) => {
     try {
       const { attemptId } = req.params;
@@ -245,11 +244,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       if (status !== undefined && status !== null) payload.status = status;
       if (extra && typeof extra === 'object' && !Array.isArray(extra)) payload.extra = extra;
 
-      const cmd = kernelContainer.commandBus.createCommand(
-        'courseware.submit_attempt',
-        payload,
-        actorId,
-      );
+      const cmd = kernelContainer.commandBus.createCommand('courseware.submit_attempt', payload, actorId);
       const result = await kernelContainer.commandBus.execute(cmd);
       await publishAttemptUpdated(attemptId, 'submit');
       res.json(result);
@@ -289,9 +284,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       const db = kernelContainer.db;
       const attemptRow = db
         .prepare('SELECT id, courseware_id, student_id, status FROM courseware_attempt WHERE id = ?')
-        .get(attemptId) as
-        | { id: string; courseware_id: string; student_id: string; status: string }
-        | undefined;
+        .get(attemptId) as { id: string; courseware_id: string; student_id: string; status: string } | undefined;
       if (!attemptRow) {
         return res.status(404).json({ error: 'Attempt not found' });
       }
@@ -355,14 +348,11 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     try {
       const session = (req as any).session as { role?: string; subRole?: string } | undefined;
       const isStaff =
-        session?.role === 'teacher' ||
-        session?.role === 'administrator' ||
-        session?.subRole === 'administrator';
+        session?.role === 'teacher' || session?.role === 'administrator' || session?.subRole === 'administrator';
 
       // ?coursewareUuid=<uuid> 用于白板 HtmlAppletFrame 在嵌入某个具体课件时只拉取该课件的成绩，
       // 避免一次性回传整个 attempts 表（学生量大时会显著降低首屏 + 实时 socket 重拉的负载）。
-      const coursewareUuid =
-        typeof req.query.coursewareUuid === 'string' ? req.query.coursewareUuid.trim() : '';
+      const coursewareUuid = typeof req.query.coursewareUuid === 'string' ? req.query.coursewareUuid.trim() : '';
       const baseSql = `
         SELECT a.id as attemptId, a.started_at, a.finished_at, a.status,
                cw.name as coursewareName, cw.uuid as coursewareUuid,
@@ -452,8 +442,14 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
   app.get('/api/courseware/attempts/:attemptId/progress', requireAuth(), (req, res) => {
     try {
       const { attemptId } = req.params;
-      const session = (req as any).session as { role?: string; subRole?: string; userId?: string; studentId?: string } | undefined;
-      if (session && session.role !== 'teacher' && session.role !== 'administrator' && session.subRole !== 'administrator') {
+      const session = (req as any).session as
+        { role?: string; subRole?: string; userId?: string; studentId?: string } | undefined;
+      if (
+        session &&
+        session.role !== 'teacher' &&
+        session.role !== 'administrator' &&
+        session.subRole !== 'administrator'
+      ) {
         const owner = kernelContainer.db
           .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
           .get(attemptId) as { student_id: string } | undefined;

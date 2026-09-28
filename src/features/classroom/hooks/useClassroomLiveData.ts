@@ -172,8 +172,7 @@ export function deriveStudentMetrics(
     const completion = typeof a.completion === 'number' ? a.completion : undefined;
     scoreMap.set(a.studentId, {
       score: score === undefined ? prev.score : Math.max(prev.score ?? -Infinity, score),
-      completion:
-        completion === undefined ? prev.completion : Math.max(prev.completion ?? -Infinity, completion),
+      completion: completion === undefined ? prev.completion : Math.max(prev.completion ?? -Infinity, completion),
     });
   }
 
@@ -295,10 +294,7 @@ export function useClassroomLiveData(input: UseClassroomLiveDataInput): Classroo
       highlights: deriveHighlights(feed),
       stages: deriveStages(segments, elapsedMin, classroomStage),
       elapsedMin,
-      plannedTotalMin: segments.reduce(
-        (acc, s) => acc + Math.max(0, Math.round((Number(s.duration) || 0) / 60)),
-        0,
-      ),
+      plannedTotalMin: segments.reduce((acc, s) => acc + Math.max(0, Math.round((Number(s.duration) || 0) / 60)), 0),
       onlineCount: studentMetrics.filter((m) => m.online).length,
       submittedCount,
       hasRealData:

@@ -42,7 +42,6 @@ export function getAllSegmentTypes(): SegmentTypeMeta[] {
 }
 
 export const SEGMENT_COLORS: SegmentColorMeta[] = [
-
   {
     name: 'Blue',
     color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',

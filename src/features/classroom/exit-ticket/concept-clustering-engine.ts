@@ -1,16 +1,50 @@
 import type { ClusteredConcept } from './types';
 
 const STOP_WORDS = new Set([
-  '老师', '今天', '这个', '我们', '概念', '感觉', '还是', '什么', '没有',
-  '关于', '为什么', '有点', '不太', '不懂', '听不懂', '不是很', '想问',
-  '请问', '这道题', '课件', '大家', '自己', '一些', '可以', '需要', '以及',
-  'the', 'a', 'an', 'and', 'or', 'in', 'of', 'to', 'is', 'for', 'with',
+  '老师',
+  '今天',
+  '这个',
+  '我们',
+  '概念',
+  '感觉',
+  '还是',
+  '什么',
+  '没有',
+  '关于',
+  '为什么',
+  '有点',
+  '不太',
+  '不懂',
+  '听不懂',
+  '不是很',
+  '想问',
+  '请问',
+  '这道题',
+  '课件',
+  '大家',
+  '自己',
+  '一些',
+  '可以',
+  '需要',
+  '以及',
+  'the',
+  'a',
+  'an',
+  'and',
+  'or',
+  'in',
+  'of',
+  'to',
+  'is',
+  'for',
+  'with',
 ]);
 
 const CANONICAL_CONCEPT_MAP: Record<string, { standard: string; advice: string }> = {
   微元: {
     standard: '变力做功与微元累加法',
-    advice: '提示学生：变力无法直接用 W=Fs，必须将位移无限细分为小段 Δs，在每小段内力近似恒定，其几何本质即为 F-s 图象下的面积！',
+    advice:
+      '提示学生：变力无法直接用 W=Fs，必须将位移无限细分为小段 Δs，在每小段内力近似恒定，其几何本质即为 F-s 图象下的面积！',
   },
   积分: {
     standard: '变力做功与微元累加法',
@@ -18,7 +52,8 @@ const CANONICAL_CONCEPT_MAP: Record<string, { standard: string; advice: string }
   },
   临界: {
     standard: '斜面滑动临界条件与摩擦突变',
-    advice: '强调静摩擦力与滑动摩擦力的突变边界：当 tanθ=μ 时物块恰好匀速下滑；若外界压力突变，摩擦力立刻进入动摩擦计算。',
+    advice:
+      '强调静摩擦力与滑动摩擦力的突变边界：当 tanθ=μ 时物块恰好匀速下滑；若外界压力突变，摩擦力立刻进入动摩擦计算。',
   },
   摩擦: {
     standard: '斜面滑动临界条件与摩擦突变',
@@ -45,10 +80,7 @@ const CANONICAL_CONCEPT_MAP: Record<string, { standard: string; advice: string }
 /**
  * 聚类全班学生填写的疑点概念，并输出 Top 卡点与教师 2 分钟收口教学建议
  */
-export function clusterPuzzledConcepts(
-  rawInputs: string[],
-  topN = 3,
-): ClusteredConcept[] {
+export function clusterPuzzledConcepts(rawInputs: string[], topN = 3): ClusteredConcept[] {
   if (!rawInputs || rawInputs.length === 0) {
     return [
       {

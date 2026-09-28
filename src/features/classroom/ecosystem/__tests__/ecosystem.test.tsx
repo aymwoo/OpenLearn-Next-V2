@@ -141,11 +141,7 @@ describe('Ecosystem & Architecture Subsystem', () => {
       fireEvent.click(runBtn);
 
       await waitFor(() => {
-        expect(addToast).toHaveBeenCalledWith(
-          expect.stringContaining('教学动作流启动'),
-          expect.any(String),
-          'info',
-        );
+        expect(addToast).toHaveBeenCalledWith(expect.stringContaining('教学动作流启动'), expect.any(String), 'info');
       });
     });
   });

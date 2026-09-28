@@ -42,15 +42,10 @@ export const PeerReviewRubricStats: React.FC<PeerReviewRubricStatsProps> = ({
       {/* 2. Dimensions Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {dimensions.map((dim) => (
-          <div
-            key={dim.id}
-            className="bg-[#171f33] p-2.5 rounded-lg flex flex-col gap-1.5 border border-[#2d3449]/50"
-          >
+          <div key={dim.id} className="bg-[#171f33] p-2.5 rounded-lg flex flex-col gap-1.5 border border-[#2d3449]/50">
             <div className="flex justify-between text-xs">
               <span className="text-[#908fa0] truncate">{dim.label}</span>
-              <span className={`font-mono font-medium ${dim.colorClass}`}>
-                {dim.percentage}%
-              </span>
+              <span className={`font-mono font-medium ${dim.colorClass}`}>{dim.percentage}%</span>
             </div>
             <div className="w-full bg-[#2d3449] h-1.5 rounded-full overflow-hidden">
               <div
@@ -77,9 +72,7 @@ export const PeerReviewRubricStats: React.FC<PeerReviewRubricStatsProps> = ({
             >
               <span>{r.emoji}</span>
               <span className="font-medium group-hover:text-white">{r.label}</span>
-              <span className={`font-mono font-semibold ${r.colorClass}`}>
-                +{r.count}
-              </span>
+              <span className={`font-mono font-semibold ${r.colorClass}`}>+{r.count}</span>
             </button>
           ))}
         </div>

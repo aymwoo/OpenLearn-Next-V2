@@ -33,11 +33,7 @@ export function DifferentiatedFollowupHub({
 
   const totalAssigned = tiers.reduce((acc, t) => acc + t.students.length, 0);
 
-  const handleMoveStudent = (
-    student: TierStudentItem,
-    fromTier: FollowupTierType,
-    toTier: FollowupTierType,
-  ) => {
+  const handleMoveStudent = (student: TierStudentItem, fromTier: FollowupTierType, toTier: FollowupTierType) => {
     if (fromTier === toTier) return;
     setTiers((prev) =>
       prev.map((group) => {
@@ -67,11 +63,7 @@ export function DifferentiatedFollowupHub({
       if (onDispatchHomework) {
         onDispatchHomework(tiers);
       }
-      addToast(
-        '✓ 差异化课后任务已成功派发',
-        `已向全班 ${totalAssigned} 名同学精准分流推送对应学习资源包。`,
-        'success',
-      );
+      addToast('✓ 差异化课后任务已成功派发', `已向全班 ${totalAssigned} 名同学精准分流推送对应学习资源包。`, 'success');
     }, 600);
   };
 
@@ -90,9 +82,7 @@ export function DifferentiatedFollowupHub({
                 AI 自动分流
               </span>
             </h2>
-            <p className="text-xs text-muted">
-              依据测验表现与 Exit Ticket 卡点自动聚类，支持微调并一键派发至学生端。
-            </p>
+            <p className="text-xs text-muted">依据测验表现与 Exit Ticket 卡点自动聚类，支持微调并一键派发至学生端。</p>
           </div>
         </div>
 
@@ -117,11 +107,7 @@ export function DifferentiatedFollowupHub({
           >
             <Send size={13} className={dispatching ? 'animate-spin' : ''} />
             <span>
-              {dispatching
-                ? '派发中...'
-                : isDispatched
-                  ? '重新派发任务包'
-                  : `一键派发至全班 (${totalAssigned}人)`}
+              {dispatching ? '派发中...' : isDispatched ? '重新派发任务包' : `一键派发至全班 (${totalAssigned}人)`}
             </span>
           </button>
         </div>
@@ -175,12 +161,8 @@ export function DifferentiatedFollowupHub({
 
                 {/* 资源包摘要 */}
                 <div className="p-2.5 rounded-xl bg-surface border border-theme/80 flex flex-col gap-1 shadow-2xs">
-                  <span className="text-[11px] font-bold text-main line-clamp-1">
-                    {group.packageTitle}
-                  </span>
-                  <p className="text-[10px] text-muted line-clamp-2 leading-relaxed">
-                    {group.packageDescription}
-                  </p>
+                  <span className="text-[11px] font-bold text-main line-clamp-1">{group.packageTitle}</span>
+                  <p className="text-[10px] text-muted line-clamp-2 leading-relaxed">{group.packageDescription}</p>
                 </div>
               </div>
 
@@ -210,9 +192,7 @@ export function DifferentiatedFollowupHub({
                           {student.studentName}
                         </span>
                         {student.quizScore !== null && (
-                          <span className="text-[9px] font-mono text-muted">
-                            ({student.quizScore}分)
-                          </span>
+                          <span className="text-[9px] font-mono text-muted">({student.quizScore}分)</span>
                         )}
 
                         {/* 快捷微调梯队下拉/按钮 */}
@@ -221,9 +201,7 @@ export function DifferentiatedFollowupHub({
                             <button
                               type="button"
                               title="上调至 A 梯队"
-                              onClick={() =>
-                                handleMoveStudent(student, group.tier, 'TIER_A_ADVANCED')
-                              }
+                              onClick={() => handleMoveStudent(student, group.tier, 'TIER_A_ADVANCED')}
                               className="text-[9px] px-1 py-0.2 bg-emerald-500/20 text-emerald-600 rounded hover:bg-emerald-500/40"
                             >
                               ↑A
@@ -233,9 +211,7 @@ export function DifferentiatedFollowupHub({
                             <button
                               type="button"
                               title="调整至 B 梯队"
-                              onClick={() =>
-                                handleMoveStudent(student, group.tier, 'TIER_B_STANDARD')
-                              }
+                              onClick={() => handleMoveStudent(student, group.tier, 'TIER_B_STANDARD')}
                               className="text-[9px] px-1 py-0.2 bg-blue-500/20 text-blue-600 rounded hover:bg-blue-500/40"
                             >
                               B
@@ -245,9 +221,7 @@ export function DifferentiatedFollowupHub({
                             <button
                               type="button"
                               title="下调至 C 梯队"
-                              onClick={() =>
-                                handleMoveStudent(student, group.tier, 'TIER_C_REINFORCE')
-                              }
+                              onClick={() => handleMoveStudent(student, group.tier, 'TIER_C_REINFORCE')}
                               className="text-[9px] px-1 py-0.2 bg-amber-500/20 text-amber-600 rounded hover:bg-amber-500/40"
                             >
                               ↓C

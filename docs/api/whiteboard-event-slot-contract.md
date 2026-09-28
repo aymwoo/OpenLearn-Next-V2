@@ -5,6 +5,7 @@
 > 白板内**前端事件采集 / 队列 / 分发**层的契约文档。
 >
 > 对应实现位于 `src/features/whiteboard/events/`：
+>
 > - `types.ts` — 类型定义
 > - `WhiteboardEventSlot.ts` — 核心单例类（采集 / 队列 / 分发）
 > - `useWhiteboardEvents.ts` — React Hook（订阅 + state）
@@ -40,16 +41,16 @@ WhiteboardEventSlot (单例)
 
 ```ts
 interface WhiteboardEvent {
-  id: string;                                  // uuid v7
-  timestamp: number;                           // Date.now()
-  source: WhiteboardEventSource;               // 见 §2
-  type: string;                                // 见 §3
-  payload: Record<string, unknown>;            // 标准化后的字段
-  raw?: unknown;                               // 原始数据
+  id: string; // uuid v7
+  timestamp: number; // Date.now()
+  source: WhiteboardEventSource; // 见 §2
+  type: string; // 见 §3
+  payload: Record<string, unknown>; // 标准化后的字段
+  raw?: unknown; // 原始数据
   lessonId?: string;
-  elementId?: string;                          // 白板 shapeId
-  coursewareUuid?: string;                     // courseware.uuid
-  attemptId?: string;                          // courseware_attempt.id
+  elementId?: string; // 白板 shapeId
+  coursewareUuid?: string; // courseware.uuid
+  attemptId?: string; // courseware_attempt.id
   studentId?: string;
   studentName?: string;
 }
@@ -57,28 +58,28 @@ interface WhiteboardEvent {
 
 `payload` 中的字段约定：
 
-| 字段             | 类型     | 含义                                                         |
-| ---------------- | -------- | ------------------------------------------------------------ |
-| `score`          | `number` | 学生得分（已归一化为 number，不接受字符串）                   |
-| `total`          | `number` | 满分                                                          |
-| `completion`     | `number` | 完成度（0-100，已百分制）                                     |
-| `comment`        | `string` | 评语 / 反馈                                                    |
-| `detail`         | `unknown`| 课件 SDK 上报的明细（结构由课件决定）                          |
-| `originalType`   | `string` | 仅 `courseware.unknown` 事件使用，记录未识别的 LMS_* 协议类型 |
+| 字段           | 类型      | 含义                                                          |
+| -------------- | --------- | ------------------------------------------------------------- |
+| `score`        | `number`  | 学生得分（已归一化为 number，不接受字符串）                   |
+| `total`        | `number`  | 满分                                                          |
+| `completion`   | `number`  | 完成度（0-100，已百分制）                                     |
+| `comment`      | `string`  | 评语 / 反馈                                                   |
+| `detail`       | `unknown` | 课件 SDK 上报的明细（结构由课件决定）                         |
+| `originalType` | `string`  | 仅 `courseware.unknown` 事件使用，记录未识别的 LMS_* 协议类型 |
 
 ---
 
 ## 2. 事件来源 (`WhiteboardEventSource`)
 
-| 值                    | 含义                                                         | 典型采集层                                       |
-| --------------------- | ------------------------------------------------------------ | ------------------------------------------------ |
-| `iframe.postMessage`  | iframe 直接 postMessage（未规范化）                          | `HtmlAppletFrame.messageHandler`                 |
-| `iframe.bridge`       | 父窗口 LMS Bridge 处理后的协议事件                            | `lms-bridge.ts` 全局监听 (`useLmsBridge`)        |
-| `applet.score`        | 来自 HtmlAppletFrame 解析后的成绩事件                        | `HtmlAppletFrame.messageHandler` (courseware:score 分支) |
-| `widget.quiz`         | 原生 quiz widget                                              | （待接入）                                       |
-| `widget.canvas`       | 原生画布 widget                                                | （待接入）                                       |
-| `widget.custom`       | 通用自定义 widget                                              | （待接入）                                       |
-| `manual`              | 手动 emit（UI / 调试代码 / 业务事件）                          | 任意代码直接调用 `whiteboardEventSlot.ingest`    |
+| 值                   | 含义                                  | 典型采集层                                               |
+| -------------------- | ------------------------------------- | -------------------------------------------------------- |
+| `iframe.postMessage` | iframe 直接 postMessage（未规范化）   | `HtmlAppletFrame.messageHandler`                         |
+| `iframe.bridge`      | 父窗口 LMS Bridge 处理后的协议事件    | `lms-bridge.ts` 全局监听 (`useLmsBridge`)                |
+| `applet.score`       | 来自 HtmlAppletFrame 解析后的成绩事件 | `HtmlAppletFrame.messageHandler` (courseware:score 分支) |
+| `widget.quiz`        | 原生 quiz widget                      | （待接入）                                               |
+| `widget.canvas`      | 原生画布 widget                       | （待接入）                                               |
+| `widget.custom`      | 通用自定义 widget                     | （待接入）                                               |
+| `manual`             | 手动 emit（UI / 调试代码 / 业务事件） | 任意代码直接调用 `whiteboardEventSlot.ingest`            |
 
 ---
 
@@ -88,22 +89,22 @@ interface WhiteboardEvent {
 
 ### 3.1 `courseware.*` （白板内 HTML 课件 / courseware-hub 插件）
 
-| `type`                       | 触发时机                                                   | `payload` 字段                                             |
-| ---------------------------- | ---------------------------------------------------------- | --------------------------------------------------------- |
-| `courseware.submitted`       | iframe 内 `LMS.submit` / `OpenLearn.submit` 被调用；或 server `courseware-attempt-updated` type=`submit` 广播 | `score`, `total`, `completion`, `comment`, `source`       |
-| `courseware.progress_saved`  | iframe 内 `LMS.saveProgress` 被调用                        | `score`, `completion`                                     |
-| `courseware.finished`        | iframe 内 `LMS.finish` 被调用；或 server promote 动作      | —                                                         |
-| `courseware.config_reported` | iframe 内 `LMS_CONFIG` 上报                                | （取决于课件；通常包含互动能力清单）                       |
-| `courseware.event_logged`    | lms-bridge 处理未知协议或杂项时写入；或 server log 动作     | （取决于 iframe 消息内容）                                 |
-| `courseware.unknown`         | 未识别的 `LMS_*` 协议事件                                   | `originalType`                                             |
+| `type`                       | 触发时机                                                                                                      | `payload` 字段                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `courseware.submitted`       | iframe 内 `LMS.submit` / `OpenLearn.submit` 被调用；或 server `courseware-attempt-updated` type=`submit` 广播 | `score`, `total`, `completion`, `comment`, `source` |
+| `courseware.progress_saved`  | iframe 内 `LMS.saveProgress` 被调用                                                                           | `score`, `completion`                               |
+| `courseware.finished`        | iframe 内 `LMS.finish` 被调用；或 server promote 动作                                                         | —                                                   |
+| `courseware.config_reported` | iframe 内 `LMS_CONFIG` 上报                                                                                   | （取决于课件；通常包含互动能力清单）                |
+| `courseware.event_logged`    | lms-bridge 处理未知协议或杂项时写入；或 server log 动作                                                       | （取决于 iframe 消息内容）                          |
+| `courseware.unknown`         | 未识别的 `LMS_*` 协议事件                                                                                     | `originalType`                                      |
 
 **双路径汇合**：plugin `submitScore` (courseware-hub) 和 LMS Bridge 都会触发 server 的 `courseware-attempt-updated` 广播。`useClassroomSocket` 统一将该事件映射到 WhiteboardEventSlot (`source='iframe.bridge'`, `type` 按 server 的 `data.type` 取 `submit`/`log`/`promote`)，保证两种提交路径都在 TeacherPanel "最近提交" 小卡可见。
 
 ### 3.2 `quiz.*` （原生 quiz widget）
 
-| `type`           | 触发时机                                                          | `payload` 字段                                         |
-| ---------------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
-| `quiz.answered`  | 学生提交 quiz 答案后，服务端 `/api/lessons/:id/quiz-submit` 成功   | `answer`, `score`, `isCorrect`, `correctAnswer`, `question`, `time` |
+| `type`          | 触发时机                                                         | `payload` 字段                                                      |
+| --------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `quiz.answered` | 学生提交 quiz 答案后，服务端 `/api/lessons/:id/quiz-submit` 成功 | `answer`, `score`, `isCorrect`, `correctAnswer`, `question`, `time` |
 
 **数据流**：学生点击 quiz 答案 → POST `/api/lessons/:id/quiz-submit`（`server/routes/lessons.ts:549`）→ 写入 `whiteboard_elements.data.submissions[studentId]` → `io.emit('whiteboard-quiz-answered', {...})` → 前端 `useClassroomSocket` 监听 → `whiteboardEventSlot.ingest({ source:'widget.quiz', type:'quiz.answered', ...})`。
 
@@ -169,16 +170,10 @@ unsub();
 import { useWhiteboardEvents, useWhiteboardEventListener } from '@/features/whiteboard/events';
 
 // 维护 React state（事件列表）
-const events = useWhiteboardEvents(
-  { types: ['courseware.submitted'], lessonId },
-  { replay: 10, maxItems: 50 },
-);
+const events = useWhiteboardEvents({ types: ['courseware.submitted'], lessonId }, { replay: 10, maxItems: 50 });
 
 // 仅副作用监听
-useWhiteboardEventListener(
-  { coursewareUuid },
-  (e) => console.log('分数:', e.payload.score),
-);
+useWhiteboardEventListener({ coursewareUuid }, (e) => console.log('分数:', e.payload.score));
 ```
 
 ### 4.4 查询 / 统计
@@ -204,9 +199,9 @@ whiteboardEventSlot.clear();
 
 ```ts
 interface EventFilter {
-  types?: string[];                   // 任一命中即可
+  types?: string[]; // 任一命中即可
   sources?: WhiteboardEventSource[];
-  lessonId?: string;                  // 精确匹配
+  lessonId?: string; // 精确匹配
   elementId?: string;
   coursewareUuid?: string;
   studentId?: string;
@@ -235,12 +230,17 @@ interface EventFilter {
 function toPlatformEvent(event: WhiteboardEvent): PlatformEvent {
   return {
     id: event.id,
-    type: event.type,                              // 'courseware.submitted' 等
-    source: `whiteboard.slot.${event.source}`,     // 'whiteboard.slot.iframe.postMessage' 等
+    type: event.type, // 'courseware.submitted' 等
+    source: `whiteboard.slot.${event.source}`, // 'whiteboard.slot.iframe.postMessage' 等
     payload: {
-      lessonId, elementId, coursewareUuid, attemptId, studentId, studentName,
+      lessonId,
+      elementId,
+      coursewareUuid,
+      attemptId,
+      studentId,
+      studentName,
       ...event.payload,
-      __raw: event.raw,                            // 原始数据放 payload 末尾
+      __raw: event.raw, // 原始数据放 payload 末尾
     },
     timestamp: event.timestamp,
     correlationId: event.lessonId,
@@ -251,6 +251,7 @@ function toPlatformEvent(event: WhiteboardEvent): PlatformEvent {
 而 `frontendEventBus` 的 `SOCKET_FORWARD_PREFIXES = ['whiteboard.', 'courseware.', 'quiz.', 'rollcall.']`，因此 **`courseware.*` 事件会自动通过 socket 转发到服务端 EventBus**，供 AI Agent / 服务端插件订阅。
 
 > ⚠️ **同步双重写入**：`lms-bridge.ts` 的 `emitCoursewareEvent` 同时调用 `frontendEventBus.publish` **和** `whiteboardEventSlot.ingest`。这是有意为之：
+>
 > - frontendEventBus 走 socket 转发链（保证与原行为一致）
 > - whiteboardEventSlot 提供本地可订阅的实时队列
 > - 两个写入互不影响（各自由订阅者过滤）
@@ -263,10 +264,11 @@ function toPlatformEvent(event: WhiteboardEvent): PlatformEvent {
 import { WhiteboardEventPanel } from '@/features/whiteboard/events';
 
 // 白板右下角浮窗（开发/调试用）
-<WhiteboardEventPanel lessonId={lessonId} defaultCollapsed />
+<WhiteboardEventPanel lessonId={lessonId} defaultCollapsed />;
 ```
 
 功能：
+
 - 实时显示最近 100 条事件
 - 按 `type` / `source` 过滤
 - 暂停 / 清空

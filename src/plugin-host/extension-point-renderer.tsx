@@ -320,7 +320,9 @@ export function ExtensionPointRenderer({
                 slotProps?.setClassActiveTab?.(tabValue);
               }}
               className={`py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer ${
-                isActive ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
+                isActive
+                  ? 'bg-white text-indigo-600 shadow-xs font-bold border border-slate-200/50'
+                  : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
               }`}
               title={label}
             >
@@ -343,7 +345,9 @@ export function ExtensionPointRenderer({
       <ExtensionErrorBoundary
         key={`${activeExt.pluginId}/${activeExt.id}`}
         pluginId={activeExt.pluginId}
-        fallback={<div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">扩展 Tab 加载失败</div>}
+        fallback={
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">扩展 Tab 加载失败</div>
+        }
       >
         <Suspense fallback={<LoadingSkeleton />}>
           {React.createElement(resolveExtensionComponent(activeExt), {
@@ -407,9 +411,9 @@ export function ExtensionPointRenderer({
             key={`${ext.pluginId}/${ext.id}`}
             pluginId={ext.pluginId}
             onBreakerTrip={(pid) => {
-              void host.deactivatePlugin(pid).catch((e) =>
-                console.error(`[ExtensionBreaker] auto-deactivate "${pid}" failed:`, e),
-              );
+              void host
+                .deactivatePlugin(pid)
+                .catch((e) => console.error(`[ExtensionBreaker] auto-deactivate "${pid}" failed:`, e));
             }}
             fallback={
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">

@@ -6,17 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import {
-  X,
-  Copy,
-  Check,
-  Download,
-  Sparkles,
-  Users,
-  AlertTriangle,
-  FileText,
-  RefreshCw,
-} from 'lucide-react';
+import { X, Copy, Check, Download, Sparkles, Users, AlertTriangle, FileText, RefreshCw } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 
 // ── 输入数据类型 ──────────────────────────────────────────────────────
@@ -125,11 +115,7 @@ export const ParentNotificationModal: React.FC<ParentNotificationModalProps> = (
         'success',
       );
     } catch (e: any) {
-      addToast(
-        lang === 'zh' ? '❌ 生成失败' : '❌ Generation failed',
-        e?.message ?? 'Unknown error',
-        'error',
-      );
+      addToast(lang === 'zh' ? '❌ 生成失败' : '❌ Generation failed', e?.message ?? 'Unknown error', 'error');
     } finally {
       setLoading(false);
     }
@@ -152,8 +138,8 @@ export const ParentNotificationModal: React.FC<ParentNotificationModalProps> = (
 
   const currentMarkdown =
     activeTab === 'class'
-      ? response?.classMarkdown ?? ''
-      : response?.studentNotifications.find((n) => n.studentId === selectedStudentId)?.markdown ?? '';
+      ? (response?.classMarkdown ?? '')
+      : (response?.studentNotifications.find((n) => n.studentId === selectedStudentId)?.markdown ?? '');
 
   const copyToClipboard = useCallback(async () => {
     try {
@@ -176,9 +162,7 @@ export const ParentNotificationModal: React.FC<ParentNotificationModalProps> = (
       [
         response.classMarkdown,
         '\n\n---\n\n',
-        response.studentNotifications
-          .map((n) => `## ${n.studentName}\n\n${n.markdown}`)
-          .join('\n\n---\n\n'),
+        response.studentNotifications.map((n) => `## ${n.studentName}\n\n${n.markdown}`).join('\n\n---\n\n'),
       ],
       { type: 'text/markdown;charset=utf-8' },
     );
@@ -284,9 +268,7 @@ export const ParentNotificationModal: React.FC<ParentNotificationModalProps> = (
                 <p className="text-sm font-bold">
                   {lang === 'zh' ? 'AI 正在生成家校通知…' : 'AI is generating notifications…'}
                 </p>
-                <p className="text-xs">
-                  {lang === 'zh' ? '通常需要 5-15 秒' : 'Usually takes 5-15s'}
-                </p>
+                <p className="text-xs">{lang === 'zh' ? '通常需要 5-15 秒' : 'Usually takes 5-15s'}</p>
               </div>
             ) : activeTab === 'students' && !selectedStudentId ? (
               <div className="flex-1 flex flex-col items-center justify-center gap-2 text-muted p-8">
@@ -309,8 +291,7 @@ export const ParentNotificationModal: React.FC<ParentNotificationModalProps> = (
             {response && (
               <>
                 <span>
-                  {lang === 'zh' ? '生成时间' : 'Generated'}:{' '}
-                  {new Date(response.generatedAt).toLocaleTimeString()}
+                  {lang === 'zh' ? '生成时间' : 'Generated'}: {new Date(response.generatedAt).toLocaleTimeString()}
                 </span>
                 {response.counts.highlights > 0 && (
                   <span className="inline-flex items-center gap-1 text-emerald-600">
@@ -346,13 +327,7 @@ export const ParentNotificationModal: React.FC<ParentNotificationModalProps> = (
               }`}
             >
               {copied ? <Check size={12} /> : <Copy size={12} />}
-              {copied
-                ? lang === 'zh'
-                  ? '已复制'
-                  : 'Copied'
-                : lang === 'zh'
-                ? '复制到剪贴板'
-                : 'Copy'}
+              {copied ? (lang === 'zh' ? '已复制' : 'Copied') : lang === 'zh' ? '复制到剪贴板' : 'Copy'}
             </button>
           </div>
         </div>
@@ -373,9 +348,7 @@ const TabButton: React.FC<{
   <button
     onClick={onClick}
     className={`px-4 py-2 text-xs font-bold rounded-t-lg transition-colors flex items-center gap-1.5 ${
-      active
-        ? 'bg-surface text-main border-b-2 border-primary-theme'
-        : 'text-muted hover:text-main'
+      active ? 'bg-surface text-main border-b-2 border-primary-theme' : 'text-muted hover:text-main'
     }`}
   >
     {icon}

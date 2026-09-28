@@ -51,7 +51,9 @@ function isPrivileged(req: Request): boolean {
 function resolveSession(lessonId: string): { id: string; lessonId: string; classId: string | null } | null {
   const db = kernelContainer.db as any;
   const row = db
-    .prepare('SELECT id, lesson_id, class_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+    .prepare(
+      'SELECT id, lesson_id, class_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1',
+    )
     .get(lessonId) as { id: string; lesson_id: string; class_id: string | null } | undefined;
   if (!row) return null;
   return { id: row.id, lessonId: row.lesson_id, classId: row.class_id };
@@ -124,8 +126,7 @@ function ensureRoutes(app: Express): void {
               const uuid = parsed?.coursewareUuid ?? parsed?.uuid;
               if (typeof uuid === 'string' && uuid.trim()) {
                 const cw = db.prepare('SELECT id FROM courseware WHERE uuid = ?').get(uuid.trim()) as
-                  | { id: string }
-                  | undefined;
+                  { id: string } | undefined;
                 if (cw?.id && !coursewareIds.includes(cw.id)) coursewareIds.push(cw.id);
               }
             } catch {
@@ -217,7 +218,8 @@ function ensureRoutes(app: Express): void {
             const target = tiers[(i + k) % tiers.length];
             if (target.studentId === reviewer.studentId) continue; // 不评自己
             // 标杆与攻坚交叉：3 人以上时优先让标杆评攻坚、攻坚评标杆
-            const wantTier = tiers.length >= 4 ? (reviewer.tier === 'benchmark' ? 'improve' : 'benchmark') : target.tier;
+            const wantTier =
+              tiers.length >= 4 ? (reviewer.tier === 'benchmark' ? 'improve' : 'benchmark') : target.tier;
             const pick = tiers.find(
               (t) => t.tier === wantTier && t.studentId !== reviewer.studentId && t.attemptId === target.attemptId,
             );
@@ -284,8 +286,7 @@ function ensureRoutes(app: Express): void {
           targetStudentName: t.target_student_name || t.target_student_id,
           targetWorkTitle: t.target_work_title || '课件作品',
           status: t.status === 'submitted' ? 'submitted' : t.status === 'in_progress' ? 'in_progress' : 'pending',
-          statusLabel:
-            t.status === 'submitted' ? '已提交评语' : t.status === 'in_progress' ? '正在评阅' : '待评阅',
+          statusLabel: t.status === 'submitted' ? '已提交评语' : t.status === 'in_progress' ? '正在评阅' : '待评阅',
           score: typeof t.score === 'number' ? t.score : undefined,
           maxScore: 5,
           stars: typeof t.score === 'number' ? Math.round(t.score) : undefined,
@@ -408,7 +409,13 @@ function ensureRoutes(app: Express): void {
         const reactions = [
           { id: 'reviews', emoji: '❤️', label: '互评条数', count: reviews.length, colorClass: 'text-[#c0c1ff]' },
           { id: 'badges', emoji: '💡', label: '微勋章', count: Number(totalBadges) || 0, colorClass: 'text-[#ffb95f]' },
-          { id: 'nominations', emoji: '📐', label: '提名次数', count: nomRows.reduce((a, r) => a + (Number(r.votes) || 0), 0), colorClass: 'text-[#4edea3]' },
+          {
+            id: 'nominations',
+            emoji: '📐',
+            label: '提名次数',
+            count: nomRows.reduce((a, r) => a + (Number(r.votes) || 0), 0),
+            colorClass: 'text-[#4edea3]',
+          },
         ];
 
         // 2.7 评阅进度
@@ -497,9 +504,10 @@ function ensureRoutes(app: Express): void {
           );
         }
 
-        db.prepare(
-          `UPDATE classroom_peer_review_tasks SET status = 'submitted', submitted_at = ? WHERE id = ?`,
-        ).run(now, taskId);
+        db.prepare(`UPDATE classroom_peer_review_tasks SET status = 'submitted', submitted_at = ? WHERE id = ?`).run(
+          now,
+          taskId,
+        );
 
         return res.json({ success: true, taskId, score: numericScore });
       } catch (e: any) {
@@ -536,7 +544,17 @@ function ensureRoutes(app: Express): void {
           `INSERT OR IGNORE INTO classroom_peer_badges
              (id, session_id, lesson_id, sender_id, sender_name, receiver_id, receiver_name, badge_key, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        ).run(makeId('cpb'), session.id, lessonId, senderId, senderName, receiverId, receiverName, badgeKey, Date.now());
+        ).run(
+          makeId('cpb'),
+          session.id,
+          lessonId,
+          senderId,
+          senderName,
+          receiverId,
+          receiverName,
+          badgeKey,
+          Date.now(),
+        );
 
         return res.json({ success: true });
       } catch (e: any) {

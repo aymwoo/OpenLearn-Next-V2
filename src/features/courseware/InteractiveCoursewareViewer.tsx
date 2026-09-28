@@ -93,10 +93,7 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
       <div className="flex-1 relative bg-white">
         {/* 插件浮层 HUD（弹幕/防作弊水印/抢答悬浮球等；容器 pointer-events-none，插件自行开启子元素交互） */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <ExtensionPointRenderer
-            slot="courseware.viewer.overlay"
-            slotProps={{ coursewareId }}
-          />
+          <ExtensionPointRenderer slot="courseware.viewer.overlay" slotProps={{ coursewareId }} />
         </div>
         <iframe
           src={`/api/courseware/${coursewareId}`}

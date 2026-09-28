@@ -17,7 +17,6 @@ describe('SystemErrorCenterModal', () => {
     copySpy = vi.spyOn(clipboardModule, 'copyToClipboard').mockResolvedValue(true);
   });
 
-
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
@@ -135,7 +134,6 @@ describe('SystemErrorCenterModal', () => {
       } as any,
     });
 
-
     errorStore.getState().addStudentError({
       id: 'st-err-test',
       studentId: 'stu-999',
@@ -166,4 +164,3 @@ describe('SystemErrorCenterModal', () => {
     appStore.setState({ session: null });
   });
 });
-

@@ -178,11 +178,7 @@ export function ClassroomInteractiveCockpit({
         }
       } else {
         const err = await res.json();
-        addToast(
-          lang === 'zh' ? '阶段切换被拦截' : 'Stage Transition Blocked',
-          err.error || 'Check guards',
-          'warning',
-        );
+        addToast(lang === 'zh' ? '阶段切换被拦截' : 'Stage Transition Blocked', err.error || 'Check guards', 'warning');
       }
     } catch (e: any) {
       addToast('Error', e.message, 'error');
@@ -204,7 +200,11 @@ export function ClassroomInteractiveCockpit({
   // 保存当前编辑器内容为预设题到本课程
   const handleSavePreset = async () => {
     if (!lessonId || !pollTitle.trim()) {
-      addToast(lang === 'zh' ? '保存失败' : 'Save Failed', lang === 'zh' ? '题目标题不能为空' : 'Title required', 'warning');
+      addToast(
+        lang === 'zh' ? '保存失败' : 'Save Failed',
+        lang === 'zh' ? '题目标题不能为空' : 'Title required',
+        'warning',
+      );
       return;
     }
     try {
@@ -219,7 +219,11 @@ export function ClassroomInteractiveCockpit({
         }),
       });
       if (res.ok) {
-        addToast(lang === 'zh' ? '已保存' : 'Saved', lang === 'zh' ? '题目已保存到本课程题库' : 'Preset saved', 'success');
+        addToast(
+          lang === 'zh' ? '已保存' : 'Saved',
+          lang === 'zh' ? '题目已保存到本课程题库' : 'Preset saved',
+          'success',
+        );
         fetchPresetPolls();
       }
     } catch (e: any) {
@@ -252,7 +256,7 @@ export function ClassroomInteractiveCockpit({
       const finalTitle = title || pollTitle;
       const finalType = qType || pollType;
       const finalOptions = opts || pollOptions;
-      const finalCorrect = correctOpt !== undefined ? correctOpt : (pollCorrectOption || null);
+      const finalCorrect = correctOpt !== undefined ? correctOpt : pollCorrectOption || null;
 
       const res = await fetch(`/api/classroom/sessions/${lessonId}/quick-poll`, {
         method: 'POST',
@@ -380,7 +384,9 @@ export function ClassroomInteractiveCockpit({
           >
             <CheckCircle2 size={13} />
             <span>
-              {lang === 'zh' ? `结束投票 (${activePoll.totalVotes || 0}人)` : `Close Poll (${activePoll.totalVotes || 0})`}
+              {lang === 'zh'
+                ? `结束投票 (${activePoll.totalVotes || 0}人)`
+                : `Close Poll (${activePoll.totalVotes || 0})`}
             </span>
           </button>
         ) : (
@@ -591,7 +597,9 @@ export function ClassroomInteractiveCockpit({
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-muted">
                   <BookOpen size={13} />
-                  <span>{lang === 'zh' ? `本课已保存题目 (${presetPolls.length})` : `Saved Presets (${presetPolls.length})`}</span>
+                  <span>
+                    {lang === 'zh' ? `本课已保存题目 (${presetPolls.length})` : `Saved Presets (${presetPolls.length})`}
+                  </span>
                 </div>
                 <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
                   {presetPolls.map((preset) => (
@@ -625,7 +633,14 @@ export function ClassroomInteractiveCockpit({
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleStartQuickPoll(preset.title, preset.questionType, preset.options, preset.correctOption)}
+                          onClick={() =>
+                            handleStartQuickPoll(
+                              preset.title,
+                              preset.questionType,
+                              preset.options,
+                              preset.correctOption,
+                            )
+                          }
                           className="p-1.5 rounded-md hover:bg-emerald-500/10 text-emerald-500 transition-colors cursor-pointer"
                           title={lang === 'zh' ? '直接发送' : 'Send now'}
                         >
@@ -646,7 +661,9 @@ export function ClassroomInteractiveCockpit({
               </div>
             )}
             {isLoadingPresets && (
-              <div className="text-xs text-muted text-center py-2">{lang === 'zh' ? '加载预设题库...' : 'Loading presets...'}</div>
+              <div className="text-xs text-muted text-center py-2">
+                {lang === 'zh' ? '加载预设题库...' : 'Loading presets...'}
+              </div>
             )}
 
             {/* ── 分割线 ── */}
@@ -668,15 +685,13 @@ export function ClassroomInteractiveCockpit({
 
             {/* ── 题型选择（三列） ── */}
             <div className="flex flex-col gap-1.5">
-              <label className="font-semibold text-muted text-xs">
-                {lang === 'zh' ? '题型选择' : 'Question Type'}
-              </label>
+              <label className="font-semibold text-muted text-xs">{lang === 'zh' ? '题型选择' : 'Question Type'}</label>
               <div className="grid grid-cols-3 gap-2">
-                {([
+                {[
                   { key: 'ABCD' as const, label: 'ABCD 四选一' },
                   { key: 'TF' as const, label: '正确 / 错误' },
                   { key: 'CUSTOM' as const, label: '自定义选项' },
-                ]).map(({ key, label }) => (
+                ].map(({ key, label }) => (
                   <button
                     key={key}
                     type="button"
@@ -819,9 +834,7 @@ export function ClassroomInteractiveCockpit({
                 <span className="text-3xl font-black text-emerald-500 font-mono">
                   {panoramicSummary.metrics?.quizAccuracy || 0}%
                 </span>
-                <span className="text-[10px] text-muted mt-1">
-                  {panoramicSummary.metrics?.quizCount || 0} 题次提交
-                </span>
+                <span className="text-[10px] text-muted mt-1">{panoramicSummary.metrics?.quizCount || 0} 题次提交</span>
               </div>
 
               <div className="p-4 bg-surface-secondary rounded-2xl border border-border/80 flex flex-col items-center text-center">

@@ -48,4 +48,3 @@ export function usePluginHost(): FrontendPluginHost {
 export function useOptionalPluginHost(): FrontendPluginHost | null {
   return useContext(PluginHostContext);
 }
-

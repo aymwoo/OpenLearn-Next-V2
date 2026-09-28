@@ -381,4 +381,3 @@ export function broadcastFontScaleToIframes(scale: number): void {
     // 忽略异常
   }
 }
-

@@ -104,13 +104,7 @@ describe('ClassroomInteractiveCockpit & StageDisplayModal', () => {
   it('renders stage display modal and handles close action', () => {
     const onClose = vi.fn();
     render(
-      <StageDisplayModal
-        isOpen={true}
-        onClose={onClose}
-        lessonId="les_1"
-        lessonTitle="牛顿力学大屏展台"
-        lang="zh"
-      />,
+      <StageDisplayModal isOpen={true} onClose={onClose} lessonId="les_1" lessonTitle="牛顿力学大屏展台" lang="zh" />,
     );
 
     expect(screen.getByText('牛顿力学大屏展台')).toBeDefined();

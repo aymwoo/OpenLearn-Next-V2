@@ -471,8 +471,7 @@ export default function App() {
   // 锁定状态由 students 表中的 locked_lesson_id 派生，或由 ClassroomSyncChannel 广播实时下发。
   const isStudentLocked =
     activeRole === 'student' &&
-    ((!!activeStudentId && !!students.find((s) => s.id === activeStudentId)?.locked_lesson_id) ||
-      liveClassFocusLocked);
+    ((!!activeStudentId && !!students.find((s) => s.id === activeStudentId)?.locked_lesson_id) || liveClassFocusLocked);
 
   const notifyLockedNavigation = () => {
     addToast(
@@ -591,10 +590,9 @@ export default function App() {
     if (typeof window === 'undefined') return '';
     return window.localStorage.getItem(AGENT_PROVIDER_STORAGE_KEY) || '';
   });
-  const effectiveAgentProviderId =
-    aiProviders.some((provider) => provider.id === agentProviderId)
-      ? agentProviderId
-      : (aiProviders[0]?.id || '');
+  const effectiveAgentProviderId = aiProviders.some((provider) => provider.id === agentProviderId)
+    ? agentProviderId
+    : aiProviders[0]?.id || '';
   const selectedAgentProvider = aiProviders.find((provider) => provider.id === effectiveAgentProviderId) || null;
   const [studentViewStatus, setStudentViewStatusState] = useState<'dashboard' | 'lesson' | 'assignment'>('dashboard');
 
@@ -683,9 +681,7 @@ export default function App() {
   const [classSubmissionFilters, setClassSubmissionFilters] = useState<
     Record<string, 'all' | 'submitted' | 'graded' | 'pending'>
   >({});
-  const [classActiveTabs, setClassActiveTabs] = useState<
-    Record<string, ClassTabKey>
-  >({});
+  const [classActiveTabs, setClassActiveTabs] = useState<Record<string, ClassTabKey>>({});
   const [studentActiveTabs, setStudentActiveTabs] = useState<Record<string, 'progress' | 'settings' | 'notes'>>({});
 
   // ── Hook: 学者通知系统 ──
@@ -755,10 +751,7 @@ export default function App() {
   }, [agentProviderId]);
 
   useEffect(() => {
-    if (
-      aiProviders.length > 0 &&
-      !aiProviders.some((provider) => provider.id === agentProviderId)
-    ) {
+    if (aiProviders.length > 0 && !aiProviders.some((provider) => provider.id === agentProviderId)) {
       setAgentProviderId(aiProviders[0].id);
     }
   }, [aiProviders, agentProviderId]);

@@ -56,11 +56,7 @@ export function EdgeLanStatusIndicator({ className = '', onRefreshManual }: Edge
         {isDisconnected && <WifiOff size={12} />}
 
         <span className="hidden sm:inline">
-          {isOnline
-            ? '云端在线'
-            : isEdgeLan
-              ? '局域网高可用模式'
-              : '网络已断开'}
+          {isOnline ? '云端在线' : isEdgeLan ? '局域网高可用模式' : '网络已断开'}
         </span>
 
         {isEdgeLan && state.bufferedOfflineEventsCount > 0 && (
@@ -96,14 +92,18 @@ export function EdgeLanStatusIndicator({ className = '', onRefreshManual }: Edge
 
             <div className="flex items-center justify-between">
               <span className="text-muted">智慧教室本地主机</span>
-              <span className={`font-mono font-bold ${state.isLocalServerReachable ? 'text-emerald-600' : 'text-rose-500'}`}>
+              <span
+                className={`font-mono font-bold ${state.isLocalServerReachable ? 'text-emerald-600' : 'text-rose-500'}`}
+              >
                 {state.isLocalServerReachable ? '✓ 正常响应' : '✗ 未响应'}
               </span>
             </div>
 
             <div className="flex items-center justify-between">
               <span className="text-muted">校园外网云端连接</span>
-              <span className={`font-mono font-bold ${state.isInternetReachable ? 'text-emerald-600' : 'text-amber-600'}`}>
+              <span
+                className={`font-mono font-bold ${state.isInternetReachable ? 'text-emerald-600' : 'text-amber-600'}`}
+              >
                 {state.isInternetReachable ? '✓ 连通' : '离线 (自动降级)'}
               </span>
             </div>
@@ -118,7 +118,8 @@ export function EdgeLanStatusIndicator({ className = '', onRefreshManual }: Edge
             <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
               <ShieldAlert size={14} className="shrink-0 mt-0.5" />
               <span>
-                外网中断不影响当堂授课：师生抢答、白板同步、投屏与测验均基于本地 Socket.IO 正常运转，待网络恢复后自动完成云端数据对账。
+                外网中断不影响当堂授课：师生抢答、白板同步、投屏与测验均基于本地 Socket.IO
+                正常运转，待网络恢复后自动完成云端数据对账。
               </span>
             </div>
           )}

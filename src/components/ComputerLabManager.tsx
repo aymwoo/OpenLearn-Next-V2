@@ -198,11 +198,9 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
     return classStudents
       .filter((s) => !assignedStudentIds.has(s.id))
       .sort((a, b) =>
-        String(a.student_number ?? a.name ?? '').localeCompare(
-          String(b.student_number ?? b.name ?? ''),
-          'zh-Hans-CN',
-          { numeric: true },
-        ),
+        String(a.student_number ?? a.name ?? '').localeCompare(String(b.student_number ?? b.name ?? ''), 'zh-Hans-CN', {
+          numeric: true,
+        }),
       );
   }, [classStudents, assignedStudentIds]);
 
@@ -501,7 +499,9 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                       <div className="flex items-center gap-3">
                         <div
                           className={`p-2 rounded-lg ${
-                            isSelected ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200'
+                            isSelected
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200'
                           }`}
                         >
                           <Monitor size={16} />
@@ -936,8 +936,8 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                             {lang === 'zh' ? '待排座学生池：' : 'Unassigned Students Pool:'}
                           </span>
                           <span className="text-[11px] font-mono text-slate-400">
-                            {unassignedStudents.length} {lang === 'zh' ? '人未排' : 'unplaced'} /{' '}
-                            {classStudents.length} {lang === 'zh' ? '人总计' : 'total'}
+                            {unassignedStudents.length} {lang === 'zh' ? '人未排' : 'unplaced'} / {classStudents.length}{' '}
+                            {lang === 'zh' ? '人总计' : 'total'}
                           </span>
                           {selectedStudentToPlace && (
                             <span className="bg-indigo-900/80 text-indigo-300 border border-indigo-700 text-[11px] px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
@@ -982,9 +982,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                               <button
                                 key={st.id}
                                 type="button"
-                                onClick={() =>
-                                  setSelectedStudentToPlace(isSelected ? null : st)
-                                }
+                                onClick={() => setSelectedStudentToPlace(isSelected ? null : st)}
                                 className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all cursor-pointer flex items-center gap-1.5 ${
                                   isSelected
                                     ? 'bg-indigo-600 text-white border-indigo-400 ring-2 ring-indigo-400/50 shadow-md'
@@ -1033,9 +1031,7 @@ export function ComputerLabManager({ computerLabs, onRefresh, lang, classes: pro
                         {lang === 'zh' ? ' 总列数：' : ' Columns: '}
                         <span className="text-indigo-400 font-bold">{activePreviewLab.cols}</span> |
                         {lang === 'zh' ? ' 配置席位：' : ' Total: '}
-                        <span className="text-white font-bold">
-                          {activePreviewLab.rows * activePreviewLab.cols}
-                        </span>
+                        <span className="text-white font-bold">{activePreviewLab.rows * activePreviewLab.cols}</span>
                       </div>
                     </div>
                   )}

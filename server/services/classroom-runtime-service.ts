@@ -47,10 +47,12 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
       const checkinCode = Math.floor(1000 + Math.random() * 9000).toString();
       const now = Date.now();
       this.db
-        .prepare(`
+        .prepare(
+          `
           INSERT INTO classroom_sessions (id, lesson_id, class_id, teacher_id, stage, checkin_code, created_at)
           VALUES (?, ?, ?, ?, 'PRE_CLASS_READY', ?, ?)
-        `)
+        `,
+        )
         .run(id, lessonId, classId || null, teacherId, checkinCode, now);
 
       session = this.db.prepare('SELECT * FROM classroom_sessions WHERE id = ?').get(id);
@@ -107,11 +109,13 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
     const endedAt = toStage === 'ARCHIVED_REPORT' ? now : session.ended_at;
 
     this.db
-      .prepare(`
+      .prepare(
+        `
         UPDATE classroom_sessions
         SET stage = ?, class_id = coalesce(?, class_id), started_at = ?, ended_at = ?
         WHERE id = ?
-      `)
+      `,
+      )
       .run(toStage, classId || null, startedAt, endedAt, session.id);
 
     // Broadcast stage transition to both lesson and class socket rooms

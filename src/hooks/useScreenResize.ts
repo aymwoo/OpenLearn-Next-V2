@@ -232,17 +232,9 @@ export function useScreenResize(options: ScreenResizeOptions = {}): ScreenResize
   // Compute initial state
   const getInitialState = (): ScreenResizeInfo => {
     const width =
-      typeof initialWidth === 'number'
-        ? initialWidth
-        : typeof window !== 'undefined'
-          ? window.innerWidth
-          : 1024;
+      typeof initialWidth === 'number' ? initialWidth : typeof window !== 'undefined' ? window.innerWidth : 1024;
     const height =
-      typeof initialHeight === 'number'
-        ? initialHeight
-        : typeof window !== 'undefined'
-          ? window.innerHeight
-          : 768;
+      typeof initialHeight === 'number' ? initialHeight : typeof window !== 'undefined' ? window.innerHeight : 768;
     return screenResizeManager.calculateInfo(width, height, mobileBreakpoint, tabletBreakpoint);
   };
 

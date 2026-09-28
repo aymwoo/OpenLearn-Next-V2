@@ -190,9 +190,7 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
   };
 
   const handleReactionClick = (id: string) => {
-    setReactions((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, count: r.count + 1 } : r)),
-    );
+    setReactions((prev) => prev.map((r) => (r.id === id ? { ...r, count: r.count + 1 } : r)));
     setReviewState((prev) => ({ ...prev, totalLikes: prev.totalLikes + 1 }));
   };
 
@@ -224,11 +222,7 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
   };
 
   const handleAwardPeerReviewPoints = () => {
-    addToast?.(
-      '微勋章已分发',
-      '已向全员认真参与互评的学生批量发放 +2 过程性积分！',
-      'success',
-    );
+    addToast?.('微勋章已分发', '已向全员认真参与互评的学生批量发放 +2 过程性积分！', 'success');
   };
 
   const handleArchiveTopWorks = () => {
@@ -244,27 +238,15 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
   };
 
   const handleCallStudentMic = (studentName: string) => {
-    addToast?.(
-      '连麦请求已发起',
-      `正在向 ${studentName} 的学生端发起实时语音连麦...`,
-      'info',
-    );
+    addToast?.('连麦请求已发起', `正在向 ${studentName} 的学生端发起实时语音连麦...`, 'info');
   };
 
   const handleInviteScreenShare = (studentName: string) => {
-    addToast?.(
-      '投屏邀请已下发',
-      `已向 ${studentName} 发送大屏投屏演示邀请。`,
-      'info',
-    );
+    addToast?.('投屏邀请已下发', `已向 ${studentName} 发送大屏投屏演示邀请。`, 'info');
   };
 
   const handleAdvanceToStage3 = () => {
-    addToast?.(
-      '互评阶段已结束',
-      '正在推进至 Stage 03 结课巡查与全堂总积分榜...',
-      'success',
-    );
+    addToast?.('互评阶段已结束', '正在推进至 Stage 03 结课巡查与全堂总积分榜...', 'success');
     if (onAdvanceToStage3) {
       onAdvanceToStage3();
     }
@@ -281,9 +263,7 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
         state={reviewState}
         onToggleAnonymous={handleToggleAnonymous}
         onOpenRubricModal={() => setIsRubricOpen(true)}
-        onToggleVoiceDanmaku={() =>
-          setReviewState((prev) => ({ ...prev, showDanmaku: !prev.showDanmaku }))
-        }
+        onToggleVoiceDanmaku={() => setReviewState((prev) => ({ ...prev, showDanmaku: !prev.showDanmaku }))}
         onAdvanceStage={handleAdvanceToStage3}
         onAddMinute={handleAddMinute}
         onTogglePauseTimer={handleTogglePauseTimer}
@@ -354,21 +334,21 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
               </div>
             )}
             {workA || workB ? (
-            <SpotlightDualWorkArena
-              workA={workA as SpotlightWorkItem}
-              workB={workB}
-              annotations={annotations}
-              isAnonymous={reviewState.isAnonymous}
-              onFullscreenCanvas={handleToggleFullscreen}
-              onSyncSandboxToClass={() => {
-                addToast?.(
-                  '沙箱广播已生效',
-                  `对比范本已同步至全班 ${reviewState.totalStudents || 0} 台学生机控制台`,
-                  'success',
-                );
-              }}
-              onAddAnnotation={handleAddAnnotation}
-            />
+              <SpotlightDualWorkArena
+                workA={workA as SpotlightWorkItem}
+                workB={workB}
+                annotations={annotations}
+                isAnonymous={reviewState.isAnonymous}
+                onFullscreenCanvas={handleToggleFullscreen}
+                onSyncSandboxToClass={() => {
+                  addToast?.(
+                    '沙箱广播已生效',
+                    `对比范本已同步至全班 ${reviewState.totalStudents || 0} 台学生机控制台`,
+                    'success',
+                  );
+                }}
+                onAddAnnotation={handleAddAnnotation}
+              />
             ) : null}
 
             <PeerReviewRubricStats
@@ -396,10 +376,7 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
       </main>
 
       {/* 3. Detailed Rubric Preview Modal */}
-      <PeerReviewRubricModal
-        isOpen={isRubricOpen}
-        onClose={() => setIsRubricOpen(false)}
-      />
+      <PeerReviewRubricModal isOpen={isRubricOpen} onClose={() => setIsRubricOpen(false)} />
     </div>
   );
 };

@@ -34,10 +34,7 @@ function buildProps() {
   return {
     cls: makeClass(),
     classStudentsMap: {
-      'class-1': [
-        makeStudent('s-1', 'Alice', 'STU2026001'),
-        makeStudent('s-2', 'Bob', 'STU2026002'),
-      ],
+      'class-1': [makeStudent('s-1', 'Alice', 'STU2026001'), makeStudent('s-2', 'Bob', 'STU2026002')],
     },
     students: [
       makeStudent('s-1', 'Alice', 'STU2026001'),

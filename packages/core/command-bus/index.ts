@@ -87,8 +87,7 @@ export class CommandBus {
       throw new Error(`No handler registered for command: ${normalizedCommand.type}`);
     }
 
-    const isQuiet =
-      normalizedCommand.metadata?.silent === true || DEFAULT_QUIET_COMMANDS.has(normalizedCommand.type);
+    const isQuiet = normalizedCommand.metadata?.silent === true || DEFAULT_QUIET_COMMANDS.has(normalizedCommand.type);
 
     if (!isQuiet || process.env.DEBUG?.includes('commandbus') || process.env.DEBUG_COMMAND_BUS === 'true') {
       console.log(

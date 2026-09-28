@@ -1,11 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import type {
-  DiffToolType,
-  DiffAnnotationStroke,
-  DiffStamp,
-  DiffStampType,
-  DiffPoint,
-} from './types';
+import type { DiffToolType, DiffAnnotationStroke, DiffStamp, DiffStampType, DiffPoint } from './types';
 import { DIFF_STAMP_PRESETS } from './diff-presets';
 
 export interface DiffAnnotationCanvasProps {

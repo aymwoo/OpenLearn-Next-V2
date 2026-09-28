@@ -133,7 +133,9 @@ export function ClassroomLeaderboardModal({
                 {lang === 'zh' ? '全班积分榜与小组积分明细' : 'Class Points & Team Leaderboard'}
               </h3>
               <p className="text-[11px] text-muted">
-                {lang === 'zh' ? '随堂表现实时积分累加，激发小组合作共进' : 'Live classroom performance points & teamwork league'}
+                {lang === 'zh'
+                  ? '随堂表现实时积分累加，激发小组合作共进'
+                  : 'Live classroom performance points & teamwork league'}
               </p>
             </div>
           </div>
@@ -144,9 +146,7 @@ export function ClassroomLeaderboardModal({
               <button
                 onClick={() => setActiveTab('groups')}
                 className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                  activeTab === 'groups'
-                    ? 'bg-primary-theme text-white shadow-3xs'
-                    : 'text-muted hover:text-foreground'
+                  activeTab === 'groups' ? 'bg-primary-theme text-white shadow-3xs' : 'text-muted hover:text-foreground'
                 }`}
               >
                 {lang === 'zh' ? '小组联赛' : 'Teams'}
@@ -373,13 +373,10 @@ export function ClassroomLeaderboardModal({
                   <div className="flex items-center gap-3">
                     <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold text-[11px]">
                       <Flame size={12} />
-                      <span>
-                        {typeof student.focusScore === 'number' ? `${student.focusScore}%` : '—'}
-                      </span>
+                      <span>{typeof student.focusScore === 'number' ? `${student.focusScore}%` : '—'}</span>
                     </span>
                     <span className="font-mono font-extrabold text-sm text-primary-theme">
-                      {student.currentPoints ?? 0}{' '}
-                      <span className="text-xs font-normal text-muted">分</span>
+                      {student.currentPoints ?? 0} <span className="text-xs font-normal text-muted">分</span>
                     </span>
                     <button
                       onClick={() => {
@@ -425,10 +422,7 @@ export function ClassroomLeaderboardModal({
 
           <div className="flex items-center gap-2">
             {/* Third-Party Plugin Extension Slot */}
-            <ExtensionPointRenderer
-              slot="classroom.leaderboard.action"
-              slotProps={{ classId, lessonId, groups }}
-            />
+            <ExtensionPointRenderer slot="classroom.leaderboard.action" slotProps={{ classId, lessonId, groups }} />
 
             <button
               onClick={onClose}

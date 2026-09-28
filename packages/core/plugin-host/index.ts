@@ -312,9 +312,7 @@ export class PluginHost {
     if (fs.existsSync(linkPath)) return;
     const sdkDir = resolveHostSdkDir();
     if (!sdkDir) {
-      console.warn(
-        '[PluginHost] 未能定位宿主的 @openlearn/plugin-sdk，插件加载可能因缺少运行时依赖而失败',
-      );
+      console.warn('[PluginHost] 未能定位宿主的 @openlearn/plugin-sdk，插件加载可能因缺少运行时依赖而失败');
       return;
     }
     try {

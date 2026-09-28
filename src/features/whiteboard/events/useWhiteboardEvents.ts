@@ -29,13 +29,16 @@ export function useWhiteboardEvents(
   const filterRef = useRef(filter);
   filterRef.current = filter;
 
-  const handle = useCallback((e: WhiteboardEvent) => {
-    setEvents((prev) => {
-      const next = [e, ...prev];
-      if (next.length > maxItems) next.length = maxItems;
-      return next;
-    });
-  }, [maxItems]);
+  const handle = useCallback(
+    (e: WhiteboardEvent) => {
+      setEvents((prev) => {
+        const next = [e, ...prev];
+        if (next.length > maxItems) next.length = maxItems;
+        return next;
+      });
+    },
+    [maxItems],
+  );
 
   useEffect(() => {
     // 重新拉取历史（filter 变了）
@@ -70,11 +73,7 @@ export function useWhiteboardEventListener(
   filterRef.current = filter;
 
   useEffect(() => {
-    const unsubscribe = whiteboardEventSlot.subscribe(
-      filterRef.current,
-      (e) => handlerRef.current(e),
-      options,
-    );
+    const unsubscribe = whiteboardEventSlot.subscribe(filterRef.current, (e) => handlerRef.current(e), options);
     return unsubscribe;
   }, [JSON.stringify(filter), options.replay]);
 }

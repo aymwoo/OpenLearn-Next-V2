@@ -48,7 +48,7 @@ describe('Classroom Workflow Stage Specific Views', () => {
           isStudentWindowOpen={false}
           addToast={vi.fn()}
           onBroadcastNotice={onBroadcastNotice}
-        />
+        />,
       );
 
       // Verify header and ready indicators
@@ -109,7 +109,7 @@ describe('Classroom Workflow Stage Specific Views', () => {
           onReturnToTeaching={onReturnToTeaching}
           addToast={vi.fn()}
           onBroadcastNotice={vi.fn()}
-        />
+        />,
       );
 
       expect(screen.getByText('阶段 3 / 4 · 课后小结与作业批改')).toBeDefined();
@@ -186,7 +186,7 @@ describe('Classroom Workflow Stage Specific Views', () => {
           onReturnToTeaching={onReturnToTeaching}
           onReturnToPreClass={vi.fn()}
           addToast={vi.fn()}
-        />
+        />,
       );
 
       // Wait for async fetch to populate stats

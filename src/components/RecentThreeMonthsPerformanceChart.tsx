@@ -288,9 +288,7 @@ export function RecentThreeMonthsPerformanceChart({
                       return (
                         <div className="p-3 bg-white/95 border border-rose-100 rounded-xl shadow-xl max-w-[260px] backdrop-blur-xs font-sans">
                           <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-1 mb-1 border-opacity-50">
-                            <span className="text-xs text-gray-400 font-bold uppercase font-mono">
-                              {d.className}
-                            </span>
+                            <span className="text-xs text-gray-400 font-bold uppercase font-mono">{d.className}</span>
                             <span className="inline-flex items-center bg-rose-50 text-rose-700 px-2 py-0.5 rounded-full text-xs font-bold font-mono border border-rose-100">
                               {d.score}%
                             </span>

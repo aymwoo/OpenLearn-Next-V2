@@ -184,7 +184,9 @@ export function NavigationSidebar({
                 onClick={() => setTeacherTab('admin_directory')}
                 id="nav_btn_admin_directory"
                 className={`flex items-center gap-2.5 px-2.5 py-2 transition-colors text-sm font-medium text-indigo-700 hover:bg-indigo-50 border border-indigo-100/80 dark:border-indigo-950/40 rounded-xl ${
-                  teacherTab === 'admin_directory' ? 'bg-indigo-50/70 border-indigo-200' : 'bg-slate-50/50 dark:bg-slate-900/30'
+                  teacherTab === 'admin_directory'
+                    ? 'bg-indigo-50/70 border-indigo-200'
+                    : 'bg-slate-50/50 dark:bg-slate-900/30'
                 } ${mainNavCollapsed ? 'justify-center px-2' : ''}`}
                 title={lang === 'zh' ? '管理后台' : '⭐ Admin Center'}
               >
@@ -293,14 +295,7 @@ interface NavGroupHeaderProps {
   lang: string;
 }
 
-function NavGroupHeader({
-  label,
-  groupKey,
-  mainNavCollapsed,
-  isCollapsed,
-  onToggle,
-  lang,
-}: NavGroupHeaderProps) {
+function NavGroupHeader({ label, groupKey, mainNavCollapsed, isCollapsed, onToggle, lang }: NavGroupHeaderProps) {
   if (mainNavCollapsed) return <div className="h-px bg-border-theme-subtle my-1 w-full opacity-60" />;
 
   return (
@@ -310,7 +305,7 @@ function NavGroupHeader({
       aria-expanded={!isCollapsed}
       data-testid={`nav_group_${groupKey}`}
       className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-surface-secondary/40 hover:bg-surface-secondary/80 border-0 text-xs font-semibold text-muted hover:text-main cursor-pointer transition-all duration-150 select-none group mt-1.5"
-      title={`${label} (${isCollapsed ? (lang === 'zh' ? '点击展开' : 'Click to expand') : (lang === 'zh' ? '点击折叠' : 'Click to collapse')})`}
+      title={`${label} (${isCollapsed ? (lang === 'zh' ? '点击展开' : 'Click to expand') : lang === 'zh' ? '点击折叠' : 'Click to collapse'})`}
     >
       <div className="flex items-center gap-2 min-w-0">
         <span className="w-1 h-3 rounded-full bg-primary-theme/75 group-hover:bg-primary-theme transition-colors shrink-0" />

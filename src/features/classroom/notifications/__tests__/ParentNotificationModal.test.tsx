@@ -51,9 +51,7 @@ describe('ParentNotificationModal', () => {
       }),
     } as any);
 
-    render(
-      <ParentNotificationModal isOpen={true} onClose={noopToast} snapshot={baseSnapshot} addToast={noopToast} />,
-    );
+    render(<ParentNotificationModal isOpen={true} onClose={noopToast} snapshot={baseSnapshot} addToast={noopToast} />);
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -83,9 +81,7 @@ describe('ParentNotificationModal', () => {
       }),
     } as any);
 
-    render(
-      <ParentNotificationModal isOpen={true} onClose={noopToast} snapshot={baseSnapshot} addToast={noopToast} />,
-    );
+    render(<ParentNotificationModal isOpen={true} onClose={noopToast} snapshot={baseSnapshot} addToast={noopToast} />);
 
     await screen.findByText(/class-md|班级学情简报/);
 
@@ -104,16 +100,10 @@ describe('ParentNotificationModal', () => {
       text: async () => 'boom',
     } as any);
 
-    render(
-      <ParentNotificationModal isOpen={true} onClose={noopToast} snapshot={baseSnapshot} addToast={noopToast} />,
-    );
+    render(<ParentNotificationModal isOpen={true} onClose={noopToast} snapshot={baseSnapshot} addToast={noopToast} />);
 
     await waitFor(() => {
-      expect(noopToast).toHaveBeenCalledWith(
-        expect.stringContaining('生成失败'),
-        expect.any(String),
-        'error',
-      );
+      expect(noopToast).toHaveBeenCalledWith(expect.stringContaining('生成失败'), expect.any(String), 'error');
     });
   });
 

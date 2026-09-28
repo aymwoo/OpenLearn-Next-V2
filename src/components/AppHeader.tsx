@@ -220,7 +220,13 @@ export function AppHeader(props: AppHeaderProps) {
                 }
               >
                 {studentPreviewTab ? <X size={12} /> : <LogOut size={12} />}
-                {lang === 'zh' ? (studentPreviewTab ? '关闭预览' : '返回教师端') : studentPreviewTab ? 'Close Tab' : 'Exit Student View'}
+                {lang === 'zh'
+                  ? studentPreviewTab
+                    ? '关闭预览'
+                    : '返回教师端'
+                  : studentPreviewTab
+                    ? 'Close Tab'
+                    : 'Exit Student View'}
               </button>
             )}
           </div>

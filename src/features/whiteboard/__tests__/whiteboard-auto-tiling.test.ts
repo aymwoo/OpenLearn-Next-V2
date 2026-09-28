@@ -175,8 +175,12 @@ describe('geometryKeys / extractGeometry / sameGeometry（平铺快照支撑）'
 
   it('sameGeometry 在 0.5px 容差内判等、容差外判不等', () => {
     const keys = geometryKeys();
-    expect(sameGeometry({ x: 10, y: 10, width: 100, height: 100 }, { x: 10.4, y: 10.4, width: 100, height: 100 }, keys)).toBe(true);
-    expect(sameGeometry({ x: 10, y: 10, width: 100, height: 100 }, { x: 11, y: 10, width: 100, height: 100 }, keys)).toBe(false);
+    expect(
+      sameGeometry({ x: 10, y: 10, width: 100, height: 100 }, { x: 10.4, y: 10.4, width: 100, height: 100 }, keys),
+    ).toBe(true);
+    expect(
+      sameGeometry({ x: 10, y: 10, width: 100, height: 100 }, { x: 11, y: 10, width: 100, height: 100 }, keys),
+    ).toBe(false);
   });
 
   it('sameGeometry 只比较传入的键，忽略快照等无关字段', () => {
@@ -474,4 +478,3 @@ describe('平铺模式下组件移走/删除后的空间重新填满（Auto-tili
     expect(tiled[2].height).toBeCloseTo(434);
   });
 });
-

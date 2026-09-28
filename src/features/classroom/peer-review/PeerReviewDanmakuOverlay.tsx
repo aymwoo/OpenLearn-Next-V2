@@ -32,10 +32,7 @@ export const PeerReviewDanmakuOverlay: React.FC<PeerReviewDanmakuOverlayProps> =
   };
 
   return (
-    <div
-      id="peer-review-danmaku-overlay"
-      className="absolute inset-0 pointer-events-none overflow-hidden z-20"
-    >
+    <div id="peer-review-danmaku-overlay" className="absolute inset-0 pointer-events-none overflow-hidden z-20">
       {/* Floating Danmaku Items */}
       {danmakuList.map((item) => (
         <div

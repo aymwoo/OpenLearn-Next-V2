@@ -22,12 +22,12 @@ export type HardwareDeviceType = 'RF_CLICKER' | 'PRESENTER_PEN' | 'DIGITAL_TABLE
 
 export type HardwareStandardAction =
   | 'CLICKER_SUBMIT_OPTION' // 物理答题器选择 A/B/C/D
-  | 'CLICKER_BUZZER_PRESS'  // 物理答题器抢答
-  | 'PRESENTER_PREV_PAGE'   // 翻页笔上一页
-  | 'PRESENTER_NEXT_PAGE'   // 翻页笔下一页
-  | 'PRESENTER_LASER_TOGGLE'// 翻页笔激光笔开关
-  | 'PRESENTER_BLANK_SCREEN'// 翻页笔黑屏/全屏
-  | 'TABLET_DRAW_STROKE';   // 数位板压感笔触
+  | 'CLICKER_BUZZER_PRESS' // 物理答题器抢答
+  | 'PRESENTER_PREV_PAGE' // 翻页笔上一页
+  | 'PRESENTER_NEXT_PAGE' // 翻页笔下一页
+  | 'PRESENTER_LASER_TOGGLE' // 翻页笔激光笔开关
+  | 'PRESENTER_BLANK_SCREEN' // 翻页笔黑屏/全屏
+  | 'TABLET_DRAW_STROKE'; // 数位板压感笔触
 
 export interface HardwareEvent {
   deviceId: string;

@@ -259,9 +259,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
                 />
               </div>
               <div>
-                <div className="text-xs uppercase font-bold tracking-wider opacity-75">
-                  Learning Curve & Trajectory
-                </div>
+                <div className="text-xs uppercase font-bold tracking-wider opacity-75">Learning Curve & Trajectory</div>
                 <h4 className="text-sm font-extrabold mt-0.5 flex items-center gap-2 text-slate-900">
                   <span>{trajectoryLabel}</span>
                   {trajectoryDelta !== 0 && (
@@ -280,9 +278,7 @@ export function StudentGradedTimeline({ assignments }: StudentGradedTimelineProp
               </div>
             </div>
             <div className="text-xs font-semibold px-3 py-2 bg-white/95 rounded-lg shadow-3xs border border-slate-100 text-slate-700 md:self-center">
-              <div className="text-slate-400 font-bold uppercase text-xs mb-0.5 tracking-wider">
-                Growth Comparison
-              </div>
+              <div className="text-slate-400 font-bold uppercase text-xs mb-0.5 tracking-wider">Growth Comparison</div>
               <span className="font-bold text-indigo-900">
                 {Math.round(
                   scores.slice(0, Math.ceil(scores.length / 2)).reduce((a, b) => a + b, 0) /

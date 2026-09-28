@@ -57,11 +57,7 @@ function describeEvent(e: WhiteboardEvent): { label: string; tone: 'good' | 'bad
   return { label: e.type, tone: 'neutral', detail: '' };
 }
 
-export const RecentSubmissionsCard: React.FC<RecentSubmissionsCardProps> = ({
-  lessonId,
-  className,
-  maxItems = 5,
-}) => {
+export const RecentSubmissionsCard: React.FC<RecentSubmissionsCardProps> = ({ lessonId, className, maxItems = 5 }) => {
   const events = useWhiteboardEvents(
     {
       types: ['quiz.answered', 'courseware.submitted', 'courseware.progress_saved', 'courseware.finished'],
@@ -90,9 +86,7 @@ export const RecentSubmissionsCard: React.FC<RecentSubmissionsCardProps> = ({
   return (
     <div
       data-testid="recent-submissions-card"
-      className={
-        'rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 shadow-sm ' + (className || '')
-      }
+      className={'rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 shadow-sm ' + (className || '')}
     >
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-xs font-bold text-indigo-700">📋 最近提交</h4>
@@ -113,9 +107,7 @@ export const RecentSubmissionsCard: React.FC<RecentSubmissionsCardProps> = ({
               data-testid={`recent-submission-row-${e.id}`}
               className="flex items-center gap-2 px-2 py-1 rounded-md text-xs"
             >
-              <span className={`shrink-0 px-1.5 py-0.5 rounded font-mono font-bold ${toneClass}`}>
-                {desc.label}
-              </span>
+              <span className={`shrink-0 px-1.5 py-0.5 rounded font-mono font-bold ${toneClass}`}>{desc.label}</span>
               <span className="flex-1 truncate text-gray-700" title={desc.detail}>
                 {desc.detail}
               </span>

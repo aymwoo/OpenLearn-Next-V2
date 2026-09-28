@@ -285,50 +285,52 @@ export function MathGraphWrapper({
       {!isMinimized && (
         <>
           <div className="p-3 border-b border-gray-200 flex-none flex flex-col gap-1">
-        <span className="text-gray-500 text-xs">y = f(x)</span>
-        <input
-          type="text"
-          value={equation}
-          disabled={readOnly}
-          onChange={(e) => setEquation(e.target.value)}
-          onBlur={handleBlur}
-          className="w-full border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-500 font-mono text-xs disabled:bg-gray-100 disabled:cursor-not-allowed"
-          placeholder="e.g. Math.sin(x) * x"
-          onPointerDown={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-        />
-        {error && <div className="text-red-500 text-xs mt-1">{error}</div>}
-      </div>
-      <div className="flex-1 relative overflow-hidden bg-white min-h-0" ref={graphContainerRef}>
-        <svg
-          width={containerDimensions.width}
-          height={containerDimensions.height}
-          viewBox={`0 0 ${containerDimensions.width} ${containerDimensions.height}`}
-          className="absolute top-0 left-0"
-        >
-          {/* Grid */}
-          <line
-            x1={containerDimensions.width / 2}
-            y1="0"
-            x2={containerDimensions.width / 2}
-            y2={containerDimensions.height}
-            stroke="#e5e7eb"
-            strokeWidth="1"
-          />
-          <line
-            x1="0"
-            y1={containerDimensions.height / 2}
-            x2={containerDimensions.width}
-            y2={containerDimensions.height / 2}
-            stroke="#e5e7eb"
-            strokeWidth="1"
-          />
-          {/* Path */}
-          {points && <polyline points={points} fill="none" stroke="#6366f1" strokeWidth="2" strokeLinejoin="round" />}
-        </svg>
-      </div>
-    </>
-  )}
-</div>
-);
+            <span className="text-gray-500 text-xs">y = f(x)</span>
+            <input
+              type="text"
+              value={equation}
+              disabled={readOnly}
+              onChange={(e) => setEquation(e.target.value)}
+              onBlur={handleBlur}
+              className="w-full border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-indigo-500 font-mono text-xs disabled:bg-gray-100 disabled:cursor-not-allowed"
+              placeholder="e.g. Math.sin(x) * x"
+              onPointerDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+            {error && <div className="text-red-500 text-xs mt-1">{error}</div>}
+          </div>
+          <div className="flex-1 relative overflow-hidden bg-white min-h-0" ref={graphContainerRef}>
+            <svg
+              width={containerDimensions.width}
+              height={containerDimensions.height}
+              viewBox={`0 0 ${containerDimensions.width} ${containerDimensions.height}`}
+              className="absolute top-0 left-0"
+            >
+              {/* Grid */}
+              <line
+                x1={containerDimensions.width / 2}
+                y1="0"
+                x2={containerDimensions.width / 2}
+                y2={containerDimensions.height}
+                stroke="#e5e7eb"
+                strokeWidth="1"
+              />
+              <line
+                x1="0"
+                y1={containerDimensions.height / 2}
+                x2={containerDimensions.width}
+                y2={containerDimensions.height / 2}
+                stroke="#e5e7eb"
+                strokeWidth="1"
+              />
+              {/* Path */}
+              {points && (
+                <polyline points={points} fill="none" stroke="#6366f1" strokeWidth="2" strokeLinejoin="round" />
+              )}
+            </svg>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }

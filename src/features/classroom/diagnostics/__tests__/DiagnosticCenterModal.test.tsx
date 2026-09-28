@@ -42,9 +42,7 @@ describe('DiagnosticCenterModal', () => {
   });
 
   it('关闭时不渲染', () => {
-    const { container } = render(
-      <DiagnosticCenterModal isOpen={false} onClose={noopToast} addToast={noopToast} />,
-    );
+    const { container } = render(<DiagnosticCenterModal isOpen={false} onClose={noopToast} addToast={noopToast} />);
     expect(container.firstChild).toBeNull();
   });
 

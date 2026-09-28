@@ -322,7 +322,9 @@ export function ClassStudentsPanel({
                 </div>
                 <input
                   type="text"
-                  placeholder={lang === 'zh' ? '搜索姓名、学号或邮箱...' : 'Search student by name, student number or email...'}
+                  placeholder={
+                    lang === 'zh' ? '搜索姓名、学号或邮箱...' : 'Search student by name, student number or email...'
+                  }
                   value={rosterSearchQuery}
                   onChange={(e) => setRosterSearchQuery(e.target.value)}
                   className="w-full pl-8 pr-8 py-1.5 bg-white border border-gray-200 hover:border-gray-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg text-xs font-sans transition-all focus:outline-none"
@@ -517,7 +519,10 @@ export function ClassStudentsPanel({
                                       {copiedStudentId === st.id ? (
                                         <Check size={10} className="text-emerald-600 shrink-0" />
                                       ) : (
-                                        <Copy size={10} className="text-slate-400 group-hover:text-indigo-600 shrink-0" />
+                                        <Copy
+                                          size={10}
+                                          className="text-slate-400 group-hover:text-indigo-600 shrink-0"
+                                        />
                                       )}
                                     </button>
                                   )}

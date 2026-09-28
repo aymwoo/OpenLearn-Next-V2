@@ -269,7 +269,9 @@ describe('金丝雀第 4 步：毒丸变体拒绝矩阵（POISON_MATRIX）', () 
         expect(caughtError!.message).toMatch(errorPattern);
 
         // 验证数据库中没有该插件的残留记录
-        const row = db.prepare('SELECT COUNT(*) as count FROM plugins WHERE manifest LIKE ?').get(`%ext-canary%`) as { count: number };
+        const row = db.prepare('SELECT COUNT(*) as count FROM plugins WHERE manifest LIKE ?').get(`%ext-canary%`) as {
+          count: number;
+        };
         expect(row.count).toBe(0);
       }
     },

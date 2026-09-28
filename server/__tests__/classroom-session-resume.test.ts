@@ -38,7 +38,12 @@ beforeAll(async () => {
 
   db.prepare(
     'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
-  ).run(teacherToken, JSON.stringify({ userId: teacherId, role: 'teacher', username: 'resume_teacher' }), now, now + 3600_000);
+  ).run(
+    teacherToken,
+    JSON.stringify({ userId: teacherId, role: 'teacher', username: 'resume_teacher' }),
+    now,
+    now + 3600_000,
+  );
   db.prepare(
     'INSERT OR REPLACE INTO classes (id, name, description, class_passcode, created_at) VALUES (?, ?, ?, ?, ?)',
   ).run(classId, '恢复E2E班', '会话恢复测试', 'pass-resume', now);
@@ -58,8 +63,14 @@ beforeAll(async () => {
     next();
   });
 
-  const runtime = new ClassroomRuntimeService(db, { emit: () => {}, to: () => ({ emit: () => {} }) } as unknown as SocketIOServer);
-  feedService = new ClassroomFeedService(db, { emit: () => {}, to: () => ({ emit: () => {} }) } as unknown as SocketIOServer);
+  const runtime = new ClassroomRuntimeService(db, {
+    emit: () => {},
+    to: () => ({ emit: () => {} }),
+  } as unknown as SocketIOServer);
+  feedService = new ClassroomFeedService(db, {
+    emit: () => {},
+    to: () => ({ emit: () => {} }),
+  } as unknown as SocketIOServer);
   attachClassroomFeedService(feedService, kernelContainer.eventBus as any);
   registerClassroomRoutes({ app, io: { emit: () => {}, to: () => ({ emit: () => {} }) } } as any, runtime, feedService);
 

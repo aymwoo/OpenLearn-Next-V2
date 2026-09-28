@@ -38,12 +38,12 @@ interface PluginDatabaseAPI {
 
 插件通过 ZIP 上传，表名与 schema 属**不可信输入**，宿主在拼接 DDL 前强制校验（inline 与 Worker 双模式同等实现）：
 
-| 规则 | 约束 | 违例报错 |
-| --- | --- | --- |
-| 表名格式 | 正则 `/^[A-Za-z_][A-Za-z0-9_]{0,63}$/` —— 字母/下划线开头，仅字母数字下划线，**最长 64 字符**（不允许连字符 `-`、点 `.`、`$`） | `[SEC] Invalid SQL identifier for ensureTable(tableName): …` |
-| schema 长度 | 非空字符串，**≤ 4000 字符** | `[SEC] createTable schema must be a non-empty string (max 4000 chars)` |
-| schema 内容 | **禁止包含分号 `;`**（阻断多语句注入，如 `…); DROP TABLE events; --`） | `[SEC] createTable schema must not contain ";" …` |
-| 表名前缀 | 实际表名为 `plugin_<pluginId>_` + tableName；pluginId 中非 `[A-Za-z0-9_]` 字符会被替换为 `_`（UUID 型 id 的前缀形如 `plugin_9f2c______`） | — |
+| 规则        | 约束                                                                                                                                      | 违例报错                                                               |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| 表名格式    | 正则 `/^[A-Za-z_][A-Za-z0-9_]{0,63}$/` —— 字母/下划线开头，仅字母数字下划线，**最长 64 字符**（不允许连字符 `-`、点 `.`、`$`）            | `[SEC] Invalid SQL identifier for ensureTable(tableName): …`           |
+| schema 长度 | 非空字符串，**≤ 4000 字符**                                                                                                               | `[SEC] createTable schema must be a non-empty string (max 4000 chars)` |
+| schema 内容 | **禁止包含分号 `;`**（阻断多语句注入，如 `…); DROP TABLE events; --`）                                                                    | `[SEC] createTable schema must not contain ";" …`                      |
+| 表名前缀    | 实际表名为 `plugin_<pluginId>_` + tableName；pluginId 中非 `[A-Za-z0-9_]` 字符会被替换为 `_`（UUID 型 id 的前缀形如 `plugin_9f2c______`） | —                                                                      |
 
 另有两个配套防护：`dropAllTables()` 只清理本插件前缀的表、对 `sqlite_master` 返回的表名二次校验后才拼 DDL；ZIP 安装时有 300MB 解压总大小上限与路径穿越（`..` / 前导 `/`）检查。
 

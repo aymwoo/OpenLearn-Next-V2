@@ -92,16 +92,12 @@ describe('GET /api/courseware/attempts coursewareUuid filter', () => {
 
   afterAll(async () => {
     // Cleanup
-    kernelContainer.db.prepare('DELETE FROM submission_result WHERE attempt_id IN (?, ?, ?)').run(
-      'att-A-1',
-      'att-A-2',
-      'att-B-1',
-    );
-    kernelContainer.db.prepare('DELETE FROM courseware_attempt WHERE id IN (?, ?, ?)').run(
-      'att-A-1',
-      'att-A-2',
-      'att-B-1',
-    );
+    kernelContainer.db
+      .prepare('DELETE FROM submission_result WHERE attempt_id IN (?, ?, ?)')
+      .run('att-A-1', 'att-A-2', 'att-B-1');
+    kernelContainer.db
+      .prepare('DELETE FROM courseware_attempt WHERE id IN (?, ?, ?)')
+      .run('att-A-1', 'att-A-2', 'att-B-1');
     kernelContainer.db.prepare('DELETE FROM courseware WHERE id IN (?, ?)').run(cwAId, cwBId);
     kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(studentId);
     kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?)').run(teacherToken, studentToken);

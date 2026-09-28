@@ -1089,9 +1089,7 @@ const commandBus = ctx.services.commandBus;
 // 用 createCommand() 构造命令；inline 模式同步返回，Worker 模式返回 Promise，统一 await 即可。
 
 // 查询所有资源
-const { resources } = await commandBus.execute(
-  await commandBus.createCommand('resource.list', {}, 'system'),
-);
+const { resources } = await commandBus.execute(await commandBus.createCommand('resource.list', {}, 'system'));
 
 // 创建 HTML 课件资源
 const { id } = await commandBus.execute(
@@ -1103,9 +1101,7 @@ const { id } = await commandBus.execute(
 );
 
 // 读取资源内容
-const { resource } = await commandBus.execute(
-  await commandBus.createCommand('resource.get', { id }, 'system'),
-);
+const { resource } = await commandBus.execute(await commandBus.createCommand('resource.get', { id }, 'system'));
 console.log(resource.content);
 ```
 
@@ -1151,7 +1147,9 @@ management:write — 写入管理数据
 自 OpenLearn V2 `v0.3.11`（SDK `3.6.0`）起，平台正式支持插件对外导出标准 RESTful API，使插件能够与外部系统、前端交互组件或第三方工具直接进行 HTTP 通信。
 
 #### 1. 统一挂载路径规范
+
 所有插件的 HTTP 路由均统一由平台主安全网关挂载至：
+
 ```text
 /api/plugins/:pluginId/*
 ```
@@ -1370,19 +1368,19 @@ interface IStorageService {
 
 ### 6.4 可用的 UI 扩展槽位
 
-| Slot                       | 用途                          |
-| -------------------------- | ----------------------------- |
-| `teacher.tab`              | 教师标签页                    |
-| `teacher.panel`            | 教师独立全宽管理面板（v3.2）  |
-| `teacher.dashboard.widget` | 教师仪表盘小部件              |
-| `student.view`             | 学生视图                      |
-| `student.fullscreen`       | 学生全屏视图/考试模式（v3.2） |
-| `student.lesson.tool`      | 学生学习工具                  |
-| `classroom.tool`           | 课堂工具                      |
-| `global.setting`           | 全局设置页扩展（v3.2）        |
-| `nav.user_menu`            | 顶部 Header 用户菜单扩展（v0.3.x） |
+| Slot                       | 用途                                                                              |
+| -------------------------- | --------------------------------------------------------------------------------- |
+| `teacher.tab`              | 教师标签页                                                                        |
+| `teacher.panel`            | 教师独立全宽管理面板（v3.2）                                                      |
+| `teacher.dashboard.widget` | 教师仪表盘小部件                                                                  |
+| `student.view`             | 学生视图                                                                          |
+| `student.fullscreen`       | 学生全屏视图/考试模式（v3.2）                                                     |
+| `student.lesson.tool`      | 学生学习工具                                                                      |
+| `classroom.tool`           | 课堂工具                                                                          |
+| `global.setting`           | 全局设置页扩展（v3.2）                                                            |
+| `nav.user_menu`            | 顶部 Header 用户菜单扩展（v0.3.x）                                                |
 | `anchor:*`                 | 宿主原生按钮/元素前后插入按钮（v0.2.6，锚点目录见 `docs/plugin/anchor-slots.md`） |
-| `palette.item`             | 备课画板组件面板与白板画布专属教学组件扩展（v0.3.17） |
+| `palette.item`             | 备课画板组件面板与白板画布专属教学组件扩展（v0.3.17）                             |
 
 > 上表为教程演示用的常用子集（早期版本为完整清单，现已扩展至 55 个槽位）；完整目录与各槽位 Props 见 [`docs/reference/plugin-ui-extension-slots.md`](../reference/plugin-ui-extension-slots.md)。
 

@@ -69,10 +69,7 @@ export function computeAttemptRanks(attempts: CoursewareAttempt[]): Map<string, 
 /**
  * 按名次排序（未评分排最后，同分按姓名稳定排序）——学生与教师看到同一顺序。
  */
-export function sortAttemptsByRank(
-  attempts: CoursewareAttempt[],
-  ranks: Map<string, number>,
-): CoursewareAttempt[] {
+export function sortAttemptsByRank(attempts: CoursewareAttempt[], ranks: Map<string, number>): CoursewareAttempt[] {
   return attempts.slice().sort((a, b) => {
     const ra = ranks.get(a.attemptId) ?? Number.MAX_SAFE_INTEGER;
     const rb = ranks.get(b.attemptId) ?? Number.MAX_SAFE_INTEGER;
@@ -255,9 +252,7 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
       ? `/api/resources/${data.resourceId}/`
       : (customSrc ?? undefined);
 
-  const submittedAttempts = attempts.filter(
-    (a) => a.finished_at !== null && a.finished_at !== undefined,
-  );
+  const submittedAttempts = attempts.filter((a) => a.finished_at !== null && a.finished_at !== undefined);
   const scoredAttempts = submittedAttempts.filter((a) => a.score !== null && a.score !== undefined);
   const avgScore =
     scoredAttempts.length > 0
@@ -267,16 +262,13 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
 
   // ── 全班成绩榜（学生与教师共用同一套数据源与顺序）────────────────────────
   // 只有学生身份才谈「我的成绩」：教师/管理员看的是全班名单，不参与排名
-  const myStudentId =
-    session?.role === 'student' ? (session.studentId || session.userId || null) : null;
+  const myStudentId = session?.role === 'student' ? session.studentId || session.userId || null : null;
   const ranks = computeAttemptRanks(attempts);
   const leaderboardAttempts = submittedAttempts.filter(
     (a) => !PLACEHOLDER_STUDENT_IDS.has(a.studentId) || a.studentId === myStudentId,
   );
   const orderedAttempts = sortAttemptsByRank(leaderboardAttempts, ranks);
-  const myAttempt = myStudentId
-    ? (leaderboardAttempts.find((a) => a.studentId === myStudentId) ?? null)
-    : null;
+  const myAttempt = myStudentId ? (leaderboardAttempts.find((a) => a.studentId === myStudentId) ?? null) : null;
   const myRank = myAttempt ? (ranks.get(myAttempt.attemptId) ?? null) : null;
   const rankedCount = ranks.size;
 
@@ -343,8 +335,7 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
                 <div className="space-y-1.5">
                   {orderedAttempts.map((a) => {
                     const scoreNum = typeof a.score === 'number' ? a.score : null;
-                    const completionPct =
-                      typeof a.completion === 'number' ? Math.round(a.completion * 100) : null;
+                    const completionPct = typeof a.completion === 'number' ? Math.round(a.completion * 100) : null;
                     const rank = ranks.get(a.attemptId);
                     const isSelf = !!myStudentId && a.studentId === myStudentId;
                     return (
@@ -355,25 +346,19 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
                         }`}
                         data-testid={`courseware-attempt-row-${a.attemptId}`}
                       >
-                        <span className="w-4 shrink-0 text-right font-mono text-gray-400">
-                          {rank ?? '-'}
-                        </span>
+                        <span className="w-4 shrink-0 text-right font-mono text-gray-400">{rank ?? '-'}</span>
                         <span className="font-medium text-gray-700 truncate flex-1">
                           {a.studentName || a.studentId}
                           {isSelf && <span className="ml-1 font-normal text-blue-600">（我）</span>}
                         </span>
                         <span
                           className={`font-mono font-bold ${
-                            scoreNum !== null && scoreNum >= passScore
-                              ? 'text-green-600'
-                              : 'text-red-500'
+                            scoreNum !== null && scoreNum >= passScore ? 'text-green-600' : 'text-red-500'
                           }`}
                         >
                           {scoreNum !== null ? scoreNum : '-'}
                           {completionPct !== null && (
-                            <span className="ml-1 text-gray-400 font-normal">
-                              {completionPct}%
-                            </span>
+                            <span className="ml-1 text-gray-400 font-normal">{completionPct}%</span>
                           )}
                         </span>
                       </div>

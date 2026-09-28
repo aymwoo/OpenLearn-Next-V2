@@ -95,10 +95,7 @@ describe('WhiteboardEventSlot', () => {
 
   it('filter by lessonId / elementId / coursewareUuid', () => {
     const handler = vi.fn();
-    slot.subscribe(
-      { lessonId: 'L1', elementId: 'el1', coursewareUuid: 'cw-1' },
-      handler,
-    );
+    slot.subscribe({ lessonId: 'L1', elementId: 'el1', coursewareUuid: 'cw-1' }, handler);
     slot.emit('a', {}, { lessonId: 'L1', elementId: 'el1', coursewareUuid: 'cw-1' });
     slot.emit('a', {}, { lessonId: 'L1', elementId: 'el1', coursewareUuid: 'cw-2' });
     slot.emit('a', {}, { lessonId: 'L2', elementId: 'el1', coursewareUuid: 'cw-1' });
@@ -155,12 +152,9 @@ describe('WhiteboardEventSlot', () => {
 
   it('handler error does not stop dispatch', () => {
     const handler2 = vi.fn();
-    slot.subscribe(
-      {},
-      () => {
-        throw new Error('boom');
-      },
-    );
+    slot.subscribe({}, () => {
+      throw new Error('boom');
+    });
     slot.subscribe({}, handler2);
     slot.emit('a', {});
     expect(handler2).toHaveBeenCalledTimes(1);

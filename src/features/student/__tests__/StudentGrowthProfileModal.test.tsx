@@ -110,12 +110,7 @@ describe('StudentGrowthProfileModal (Stitch Screen 07fd3861)', () => {
   });
 
   it('无 competencyScores 时雷达图标记「暂无数据」而不是硬编码 95/90/88/96/98', () => {
-    render(
-      <StudentGrowthProfileModal
-        {...defaultProps}
-        student={{ id: 's-nodata', name: '无数据学生' } as any}
-      />,
-    );
+    render(<StudentGrowthProfileModal {...defaultProps} student={{ id: 's-nodata', name: '无数据学生' } as any} />);
     expect(screen.getByText('暂无数据')).toBeDefined();
     expect(screen.getByText(/无法生成掌握度评语/)).toBeDefined();
   });

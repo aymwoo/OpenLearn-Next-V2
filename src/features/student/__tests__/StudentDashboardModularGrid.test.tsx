@@ -84,7 +84,7 @@ describe('StudentDashboardPanel Modular CSS Grid Layout', () => {
     const { container } = render(
       <PluginHostProvider host={new FrontendPluginHost()}>
         <StudentDashboardPanel {...defaultProps} />
-      </PluginHostProvider>
+      </PluginHostProvider>,
     );
 
     const grid = container.querySelector('#student-dashboard-modular-grid');
@@ -97,7 +97,7 @@ describe('StudentDashboardPanel Modular CSS Grid Layout', () => {
     render(
       <PluginHostProvider host={new FrontendPluginHost()}>
         <StudentDashboardPanel {...defaultProps} />
-      </PluginHostProvider>
+      </PluginHostProvider>,
     );
 
     expect(screen.getByText(/周度学习进度走势/)).toBeTruthy();
@@ -109,7 +109,7 @@ describe('StudentDashboardPanel Modular CSS Grid Layout', () => {
     const { container } = render(
       <PluginHostProvider host={new FrontendPluginHost()}>
         <StudentDashboardPanel {...defaultProps} addToast={addToast} />
-      </PluginHostProvider>
+      </PluginHostProvider>,
     );
 
     const progressWidget = container.querySelector('#widget-progress-trends');
@@ -143,11 +143,11 @@ describe('StudentDashboardPanel Modular CSS Grid Layout', () => {
     const { container } = render(
       <PluginHostProvider host={new FrontendPluginHost()}>
         <StudentDashboardPanel {...defaultProps} />
-      </PluginHostProvider>
+      </PluginHostProvider>,
     );
 
     const initialWidgets = Array.from(container.querySelectorAll('[data-widget-id]')).map((el) =>
-      el.getAttribute('data-widget-id')
+      el.getAttribute('data-widget-id'),
     );
 
     // Initial first widget should be 'quick-stats'
@@ -163,7 +163,7 @@ describe('StudentDashboardPanel Modular CSS Grid Layout', () => {
     }
 
     const updatedWidgets = Array.from(container.querySelectorAll('[data-widget-id]')).map((el) =>
-      el.getAttribute('data-widget-id')
+      el.getAttribute('data-widget-id'),
     );
 
     // After move right, quick-stats should now be at index 1
@@ -175,7 +175,7 @@ describe('StudentDashboardPanel Modular CSS Grid Layout', () => {
     const { container } = render(
       <PluginHostProvider host={new FrontendPluginHost()}>
         <StudentDashboardPanel {...defaultProps} addToast={addToast} />
-      </PluginHostProvider>
+      </PluginHostProvider>,
     );
 
     const assignmentsFocusBtn = screen.getByText('作业攻坚模式');
@@ -185,10 +185,6 @@ describe('StudentDashboardPanel Modular CSS Grid Layout', () => {
     const assignmentsWidget = container.querySelector('#widget-upcoming-assignments');
     expect(assignmentsWidget?.getAttribute('data-widget-size')).toBe('full');
 
-    expect(addToast).toHaveBeenCalledWith(
-      '预设布局已应用',
-      expect.stringContaining('作业攻坚模式'),
-      'success'
-    );
+    expect(addToast).toHaveBeenCalledWith('预设布局已应用', expect.stringContaining('作业攻坚模式'), 'success');
   });
 });

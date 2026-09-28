@@ -49,14 +49,14 @@ OpenLearn V2 采用分层解耦的模块化设计，平台内核（Kernel）清�
 
 ## 平台技术栈
 
-| 模块           | 选型与技术                                                   |
-| -------------- | ------------------------------------------------------------ |
-| **后端运行时** | Node.js (ESM), Express, Socket.IO, SQLite (`better-sqlite3`) |
-| **前端框架**   | React 19, TypeScript, Vite                                   |
-| **核心内核**   | Custom Micro-kernel (`packages/core`) with DI Container      |
+| 模块           | 选型与技术                                                                           |
+| -------------- | ------------------------------------------------------------------------------------ |
+| **后端运行时** | Node.js (ESM), Express, Socket.IO, SQLite (`better-sqlite3`)                         |
+| **前端框架**   | React 19, TypeScript, Vite                                                           |
+| **核心内核**   | Custom Micro-kernel (`packages/core`) with DI Container                              |
 | **插件 SDK**   | `@openlearn/plugin-sdk`（版本随平台发布同步，见 `packages/plugin-sdk/package.json`） |
-| **测试框架**   | Vitest with jsdom environment                                |
-| **文档引擎**   | Sphinx with MyST Parser, Mermaid, RTD Theme                  |
+| **测试框架**   | Vitest with jsdom environment                                                        |
+| **文档引擎**   | Sphinx with MyST Parser, Mermaid, RTD Theme                                          |
 
 ---
 

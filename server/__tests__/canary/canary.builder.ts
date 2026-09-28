@@ -133,9 +133,7 @@ export async function buildPoisonZip(variant: string): Promise<Buffer> {
         manifestOverrides: {
           api: {
             baseRoute: '/canary',
-            routes: [
-              { method: 'ALL', path: '/all' },
-            ],
+            routes: [{ method: 'ALL', path: '/all' }],
           },
         },
       });

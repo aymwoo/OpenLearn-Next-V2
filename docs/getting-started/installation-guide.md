@@ -139,13 +139,13 @@ LOG_LEVEL=info
 ALLOWED_ORIGINS=http://localhost:5173
 ```
 
-| 变量                | 必需 | 说明                                                                                   |
-| ------------------- | :--: | -------------------------------------------------------------------------------------- |
-| `PORT`              |  —   | 服务端口，默认 `9000`                                                                  |
+| 变量                | 必需 | 说明                                                                                                                                                                                   |
+| ------------------- | :--: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`              |  —   | 服务端口，默认 `9000`                                                                                                                                                                  |
 | `ENCRYPTION_KEY`    |  —   | 64 位 hex，用于加密 AI Provider API Key。**非必需**：首次用到时若未配置，系统会自动生成并写回 `.env` 持久化（`packages/core/di/api-key-crypto.ts`）；生产环境也可用 `deploy.sh` 预生成 |
-| `OPENLEARN_DB_PATH` |  —   | SQLite 数据库路径。npx 默认 `~/openlearn-next/data.db`，本地开发默认项目目录           |
-| `LOG_LEVEL`         |  —   | 日志级别：`debug` / `info` / `warn` / `error`，默认 `info`                             |
-| `ALLOWED_ORIGINS`   |  —   | CORS 白名单，逗号分隔                                                                  |
+| `OPENLEARN_DB_PATH` |  —   | SQLite 数据库路径。npx 默认 `~/openlearn-next/data.db`，本地开发默认项目目录                                                                                                           |
+| `LOG_LEVEL`         |  —   | 日志级别：`debug` / `info` / `warn` / `error`，默认 `info`                                                                                                                             |
+| `ALLOWED_ORIGINS`   |  —   | CORS 白名单，逗号分隔                                                                                                                                                                  |
 
 > **提示**：系统完全采用后台动态 AI 提供商管理（OpenAI 兼容 API），系统启动后在「系统管理 -> AI 提供商管理」中配置即可，无需在环境变量中写入 AI 密钥。
 

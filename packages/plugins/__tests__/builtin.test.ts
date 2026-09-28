@@ -220,7 +220,9 @@ describe('BuiltinPlugin', () => {
 
     await pluginHost.activatePlugin(pluginId);
 
-    const registry = (await serviceRegistry.resolve(ICoursewareRuntimeScriptRegistryToken)) as CoursewareRuntimeScriptRegistry;
+    const registry = (await serviceRegistry.resolve(
+      ICoursewareRuntimeScriptRegistryToken,
+    )) as CoursewareRuntimeScriptRegistry;
     const scripts = registry.list({ id: 'cw-1', uuid: 'cw-1' });
     const monitor = scripts.find((script) => script.id === 'score-variable-monitor') as any;
     expect(monitor).toBeDefined();

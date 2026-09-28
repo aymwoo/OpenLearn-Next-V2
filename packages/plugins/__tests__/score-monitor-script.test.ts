@@ -35,7 +35,8 @@ describe('platform native score monitor script', () => {
     delete (window as any).__LMS_WATCH__;
     // jsdom 下 getBoundingClientRect 恒为 0，会造成可见性判定失败 → 稳定桩为非零尺寸
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
-      () => ({ width: 120, height: 24, top: 0, left: 0, right: 120, bottom: 24, x: 0, y: 0, toJSON: () => ({}) }) as any,
+      () =>
+        ({ width: 120, height: 24, top: 0, left: 0, right: 120, bottom: 24, x: 0, y: 0, toJSON: () => ({}) }) as any,
     );
   });
 

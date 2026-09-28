@@ -126,9 +126,7 @@ describe('eval-submissions / eval-status 鉴权与内容回填', () => {
     expect(rows.length).toBe(1);
     expect(rows[0].file_path).toBeNull();
     expect(rows[0].student_name).toBe('互评学生');
-    expect(rows[0].files).toEqual([
-      { fileId: 'af-evalauth-1', name: '闹钟.html', size: 1024, mime: 'text/html' },
-    ]);
+    expect(rows[0].files).toEqual([{ fileId: 'af-evalauth-1', name: '闹钟.html', size: 1024, mime: 'text/html' }]);
     expect(rows[0].textContent).toBeNull();
     expect(rows[0].linkUrl).toBeNull();
     // 内部字段不再泄露给前端

@@ -1,16 +1,5 @@
 import React, { useState } from 'react';
-import {
-  X,
-  Award,
-  Star,
-  Copy,
-  Check,
-  Share2,
-  Sparkles,
-  BookOpen,
-  MessageSquare,
-  UserCheck,
-} from 'lucide-react';
+import { X, Award, Star, Copy, Check, Share2, Sparkles, BookOpen, MessageSquare, UserCheck } from 'lucide-react';
 import type { StudentPersonalDigest } from './types';
 
 export interface StudentLearningDigestModalProps {
@@ -19,11 +8,7 @@ export interface StudentLearningDigestModalProps {
   addToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
 }
 
-export function StudentLearningDigestModal({
-  digest,
-  onClose,
-  addToast,
-}: StudentLearningDigestModalProps) {
+export function StudentLearningDigestModal({ digest, onClose, addToast }: StudentLearningDigestModalProps) {
   const [copied, setCopied] = useState(false);
   const [reportText, setReportText] = useState(digest?.parentReportText || '');
 
@@ -91,9 +76,7 @@ export function StudentLearningDigestModal({
 
           <div className="p-3 rounded-xl bg-surface-secondary border border-theme flex flex-col">
             <span className="text-[10px] text-muted font-bold">答题互动</span>
-            <span className="text-lg font-black font-mono text-amber-500 mt-0.5">
-              {digest.pollsAnswered} 次
-            </span>
+            <span className="text-lg font-black font-mono text-amber-500 mt-0.5">{digest.pollsAnswered} 次</span>
           </div>
 
           <div className="p-3 rounded-xl bg-surface-secondary border border-theme flex flex-col">
@@ -105,9 +88,7 @@ export function StudentLearningDigestModal({
 
           <div className="p-3 rounded-xl bg-surface-secondary border border-theme flex flex-col">
             <span className="text-[10px] text-muted font-bold">出勤状态</span>
-            <span className="text-lg font-black text-emerald-600 mt-0.5">
-              {digest.attendance}
-            </span>
+            <span className="text-lg font-black text-emerald-600 mt-0.5">{digest.attendance}</span>
           </div>
         </div>
 
@@ -126,9 +107,7 @@ export function StudentLearningDigestModal({
               >
                 <span className="text-2xl">{badge.icon}</span>
                 <div className="flex flex-col">
-                  <span className="text-xs font-bold text-amber-700 dark:text-amber-400">
-                    {badge.name}
-                  </span>
+                  <span className="text-xs font-bold text-amber-700 dark:text-amber-400">{badge.name}</span>
                   <span className="text-[10px] text-muted leading-tight">{badge.desc}</span>
                 </div>
               </div>

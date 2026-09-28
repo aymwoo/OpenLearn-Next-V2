@@ -30,7 +30,6 @@ export function getOptionalSocket(): Socket | null {
   return _socket;
 }
 
-
 export class SocketService implements ISocketService {
   private socket: Socket;
 

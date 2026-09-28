@@ -80,11 +80,7 @@ export class WhiteboardEventSlot {
   }
 
   /** 便捷 emit */
-  emit(
-    type: string,
-    payload: Record<string, unknown>,
-    meta: Partial<WhiteboardEventPayload> = {},
-  ): WhiteboardEvent {
+  emit(type: string, payload: Record<string, unknown>, meta: Partial<WhiteboardEventPayload> = {}): WhiteboardEvent {
     return this.ingest({
       ...meta,
       type,
@@ -94,11 +90,7 @@ export class WhiteboardEventSlot {
   }
 
   /** 订阅（返回取消订阅函数） */
-  subscribe(
-    filter: EventFilter,
-    handler: Handler,
-    options: SubscribeOptions = {},
-  ): () => void {
+  subscribe(filter: EventFilter, handler: Handler, options: SubscribeOptions = {}): () => void {
     const sub: Subscription = { filter, handler };
     this.subscriptions.push(sub);
 
@@ -185,9 +177,7 @@ export class WhiteboardEventSlot {
   private dispatch(event: WhiteboardEvent): void {
     // 优先用类型索引筛掉明显不匹配的订阅者
     const candidateSet = event.type ? this.byType.get(event.type) : undefined;
-    const candidates: Subscription[] = candidateSet
-      ? Array.from(candidateSet)
-      : this.subscriptions;
+    const candidates: Subscription[] = candidateSet ? Array.from(candidateSet) : this.subscriptions;
 
     for (const sub of candidates) {
       if (!matchesFilter(event, sub.filter)) continue;

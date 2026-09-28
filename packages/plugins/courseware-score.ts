@@ -118,7 +118,10 @@ export function round2(value: number): number {
 
 export function isKnownScorePolicy(value: unknown): boolean {
   if (typeof value !== 'string') return false;
-  const raw = value.trim().toUpperCase().replace(/[\s-]+/g, '_');
+  const raw = value
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
   return KNOWN_POLICY_ALIASES.has(raw);
 }
 
@@ -146,7 +149,13 @@ const KNOWN_POLICY_ALIASES = new Set([
 ]);
 
 export function normalizeScorePolicy(value: unknown): ScorePolicy {
-  const raw = typeof value === 'string' ? value.trim().toUpperCase().replace(/[\s-]+/g, '_') : '';
+  const raw =
+    typeof value === 'string'
+      ? value
+          .trim()
+          .toUpperCase()
+          .replace(/[\s-]+/g, '_')
+      : '';
   if (['MAX', 'MAXIMUM', 'HIGHEST', 'MAX_SCORE', '最高', '最高分'].includes(raw)) return 'MAX';
   if (['AVERAGE', 'AVG', 'MEAN', '平均', '平均分'].includes(raw)) return 'AVERAGE';
   if (['FIRST', 'EARLIEST', '首个', '最早'].includes(raw)) return 'FIRST';
@@ -231,7 +240,9 @@ function scanForScore(node: any, depth: number, budget: { count: number }): numb
         return null;
       }
     }
-    const keyValue = /(?:^|[?&\s,;])(?:score|point|points|grade|mark|correct|right)=([+-]?\d+(?:\.\d+)?)/i.exec(trimmed);
+    const keyValue = /(?:^|[?&\s,;])(?:score|point|points|grade|mark|correct|right)=([+-]?\d+(?:\.\d+)?)/i.exec(
+      trimmed,
+    );
     if (keyValue) return Number(keyValue[1]);
     const ratio = /^([+-]?\d+(?:\.\d+)?)\s*\/\s*([+-]?\d+(?:\.\d+)?)$/.exec(trimmed);
     if (ratio) return Number(ratio[1]);
@@ -290,9 +301,7 @@ export function pickScoreFromPayload(payload: any, fields?: unknown): number | n
 
 /** 按策略把原始分样本聚合为一个分值 */
 export function aggregateScores(scores: unknown, policy: unknown): number | null {
-  const list = (Array.isArray(scores) ? scores : [])
-    .map((s) => toNumber(s))
-    .filter((n): n is number => n !== null);
+  const list = (Array.isArray(scores) ? scores : []).map((s) => toNumber(s)).filter((n): n is number => n !== null);
   if (list.length === 0) return null;
   const resolved = normalizeScorePolicy(policy);
   if (resolved === 'MAX') return list.reduce((a, b) => (b > a ? b : a), list[0]);
@@ -315,7 +324,8 @@ export function normalizeScoreConfig(row: any): CoursewareScoreConfig {
   const updatedAt = toNumber(row.updated_at);
   return {
     courseware_id: String(row.courseware_id ?? GLOBAL_SCORE_CONFIG_KEY),
-    courseware_name: row.courseware_name === undefined || row.courseware_name === null ? null : String(row.courseware_name),
+    courseware_name:
+      row.courseware_name === undefined || row.courseware_name === null ? null : String(row.courseware_name),
     score_policy: normalizeScorePolicy(row.score_policy),
     score_fields: typeof row.score_fields === 'string' ? row.score_fields : '',
     raw_full_score: positive(row.raw_full_score, 100),
@@ -331,9 +341,7 @@ export function resolveScoreConfig(db: SqliteLike, coursewareId?: string | null)
   const id = coursewareId === null || coursewareId === undefined ? '' : String(coursewareId).trim();
   if (id && id !== GLOBAL_SCORE_CONFIG_KEY) {
     try {
-      const row = db
-        .prepare(`SELECT * FROM ${SCORE_CONFIG_TABLE} WHERE courseware_id = ?`)
-        .get(id) as any;
+      const row = db.prepare(`SELECT * FROM ${SCORE_CONFIG_TABLE} WHERE courseware_id = ?`).get(id) as any;
       if (row) return { config: normalizeScoreConfig(row), source: 'courseware' };
     } catch (e) {
       /* 表尚未迁移时静默回落 */
@@ -382,7 +390,11 @@ export interface SaveScoreConfigInput {
   lesson_id?: string | null;
 }
 
-function pickInput<T>(input: SaveScoreConfigInput, camel: keyof SaveScoreConfigInput, snake: keyof SaveScoreConfigInput): T | undefined {
+function pickInput<T>(
+  input: SaveScoreConfigInput,
+  camel: keyof SaveScoreConfigInput,
+  snake: keyof SaveScoreConfigInput,
+): T | undefined {
   if (input[camel] !== undefined) return input[camel] as unknown as T;
   if (input[snake] !== undefined) return input[snake] as unknown as T;
   return undefined;
@@ -390,21 +402,26 @@ function pickInput<T>(input: SaveScoreConfigInput, camel: keyof SaveScoreConfigI
 
 export function saveScoreConfig(db: SqliteLike, input: SaveScoreConfigInput): CoursewareScoreConfig {
   if (!input || typeof input !== 'object') throw new Error('save_score_config: invalid payload');
-  const coursewareId = String(
-    pickInput<string>(input, 'coursewareId', 'courseware_id') ?? '',
-  ).trim();
+  const coursewareId = String(pickInput<string>(input, 'coursewareId', 'courseware_id') ?? '').trim();
   if (!coursewareId) throw new Error('save_score_config: coursewareId is required');
   if (coursewareId.length > 128) throw new Error('save_score_config: coursewareId is too long');
 
   const policyRaw = pickInput<string | number>(input, 'scorePolicy', 'score_policy');
-  if (policyRaw !== undefined && policyRaw !== null && String(policyRaw).trim() !== '' && !isKnownScorePolicy(String(policyRaw))) {
+  if (
+    policyRaw !== undefined &&
+    policyRaw !== null &&
+    String(policyRaw).trim() !== '' &&
+    !isKnownScorePolicy(String(policyRaw))
+  ) {
     throw new Error(
       `save_score_config: unknown scorePolicy "${policyRaw}" (expected one of LATEST / MAX / AVERAGE / FIRST)`,
     );
   }
 
   const fieldsRaw = pickInput<string | string[]>(input, 'scoreFields', 'score_fields');
-  const fields = Array.isArray(fieldsRaw) ? parseScoreFields(fieldsRaw).join(',') : parseScoreFields(fieldsRaw ?? '').join(',');
+  const fields = Array.isArray(fieldsRaw)
+    ? parseScoreFields(fieldsRaw).join(',')
+    : parseScoreFields(fieldsRaw ?? '').join(',');
   if (fields.length > 2000) throw new Error('save_score_config: scoreFields is too long');
 
   const nameRaw = pickInput<string | null>(input, 'coursewareName', 'courseware_name');
@@ -422,7 +439,8 @@ export function saveScoreConfig(db: SqliteLike, input: SaveScoreConfigInput): Co
   const targetFull = toNumber(pickInput<string | number>(input, 'targetFullScore', 'target_full_score'));
   const weight = toNumber(pickInput<string | number>(input, 'weightPercentage', 'weight_percentage'));
 
-  if (rawFull !== undefined && rawFull !== null && rawFull <= 0) throw new Error('save_score_config: rawFullScore must be > 0');
+  if (rawFull !== undefined && rawFull !== null && rawFull <= 0)
+    throw new Error('save_score_config: rawFullScore must be > 0');
   if (targetFull !== undefined && targetFull !== null && targetFull <= 0)
     throw new Error('save_score_config: targetFullScore must be > 0');
   if (weight !== undefined && weight !== null && (weight < 0 || weight > 1000))
@@ -432,21 +450,21 @@ export function saveScoreConfig(db: SqliteLike, input: SaveScoreConfigInput): Co
     courseware_id: coursewareId,
     courseware_name:
       nameRaw === undefined
-        ? existing?.courseware_name ?? (coursewareId === GLOBAL_SCORE_CONFIG_KEY ? '全局默认策略' : null)
+        ? (existing?.courseware_name ?? (coursewareId === GLOBAL_SCORE_CONFIG_KEY ? '全局默认策略' : null))
         : nameRaw === null
           ? null
           : String(nameRaw).slice(0, 200),
     score_policy:
       policyRaw === undefined || policyRaw === null || String(policyRaw).trim() === ''
-        ? existing?.score_policy ?? DEFAULT_SCORE_POLICY
+        ? (existing?.score_policy ?? DEFAULT_SCORE_POLICY)
         : normalizeScorePolicy(policyRaw),
-    score_fields: fields || (fieldsRaw === undefined ? existing?.score_fields ?? '' : ''),
+    score_fields: fields || (fieldsRaw === undefined ? (existing?.score_fields ?? '') : ''),
     raw_full_score: rawFull ?? existing?.raw_full_score ?? 100,
     target_full_score: targetFull ?? existing?.target_full_score ?? 100,
     weight_percentage: weight ?? existing?.weight_percentage ?? 100,
     lesson_id:
       lessonRaw === undefined
-        ? existing?.lesson_id ?? null
+        ? (existing?.lesson_id ?? null)
         : lessonRaw === null
           ? null
           : String(lessonRaw).slice(0, 128),
@@ -502,7 +520,9 @@ export function collectScoreSamples(db: SqliteLike, attemptId: string, fields?: 
   try {
     rows =
       (db
-        .prepare('SELECT event_type, payload_json, created_at FROM submission_raw WHERE attempt_id = ? ORDER BY created_at ASC')
+        .prepare(
+          'SELECT event_type, payload_json, created_at FROM submission_raw WHERE attempt_id = ? ORDER BY created_at ASC',
+        )
         .all(attemptId) as any[]) || [];
   } catch (e) {
     return [];

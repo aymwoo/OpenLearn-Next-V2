@@ -762,9 +762,7 @@ export function PluginInstallWizard({
                                 {risk.label}
                               </span>
                             </div>
-                            <p className={`text-xs leading-relaxed font-medium mt-1 ${risk.descClass}`}>
-                              {risk.desc}
-                            </p>
+                            <p className={`text-xs leading-relaxed font-medium mt-1 ${risk.descClass}`}>{risk.desc}</p>
                           </div>
                         );
                       })}

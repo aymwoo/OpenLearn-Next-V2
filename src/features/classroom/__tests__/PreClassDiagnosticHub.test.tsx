@@ -155,13 +155,7 @@ describe('PreClassDiagnosticHub & Pre-Class Enhancements', () => {
     it('runs preflight environmental healthcheck and displays latency and overall score', async () => {
       const onClose = vi.fn();
       render(
-        <PreflightHealthModal
-          isOpen={true}
-          onClose={onClose}
-          classId="class-1"
-          className="高一(3)班"
-          lang="zh"
-        />,
+        <PreflightHealthModal isOpen={true} onClose={onClose} classId="class-1" className="高一(3)班" lang="zh" />,
       );
 
       expect(screen.getAllByText(/课前环境一键预检飞检/).length).toBeGreaterThanOrEqual(1);

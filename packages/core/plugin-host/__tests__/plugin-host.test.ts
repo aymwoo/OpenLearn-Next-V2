@@ -35,10 +35,7 @@ import type {
   IPointsDimensionRegistry,
   IPointsLedgerService,
 } from '../../di/interfaces.js';
-import {
-  IPointsDimensionRegistryToken,
-  IPointsLedgerServiceToken,
-} from '../../di/interfaces.js';
+import { IPointsDimensionRegistryToken, IPointsLedgerServiceToken } from '../../di/interfaces.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

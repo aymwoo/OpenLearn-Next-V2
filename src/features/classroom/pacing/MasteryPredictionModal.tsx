@@ -114,11 +114,7 @@ export const MasteryPredictionModal: React.FC<MasteryPredictionModalProps> = ({
       const data: PredictionResponse = await res.json();
       setResponse(data);
     } catch (e: any) {
-      addToast(
-        lang === 'zh' ? '❌ 预测失败' : '❌ Prediction failed',
-        e?.message ?? 'Unknown error',
-        'error',
-      );
+      addToast(lang === 'zh' ? '❌ 预测失败' : '❌ Prediction failed', e?.message ?? 'Unknown error', 'error');
     } finally {
       setLoading(false);
     }
@@ -155,13 +151,14 @@ export const MasteryPredictionModal: React.FC<MasteryPredictionModalProps> = ({
     : [];
 
   // 风险聚合
-  const riskCounts = response?.predictions.reduce(
-    (acc, p) => {
-      acc[p.risk] = (acc[p.risk] ?? 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>,
-  ) ?? {};
+  const riskCounts =
+    response?.predictions.reduce(
+      (acc, p) => {
+        acc[p.risk] = (acc[p.risk] ?? 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    ) ?? {};
 
   return (
     <div className="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
@@ -203,14 +200,9 @@ export const MasteryPredictionModal: React.FC<MasteryPredictionModalProps> = ({
         {/* ── Progress Bar + Risk Summary ──────────────────── */}
         <div className="px-6 py-3 border-b border-theme bg-surface shrink-0">
           <div className="flex items-center gap-3 mb-2">
-            <span className="text-xs font-bold text-muted">
-              {lang === 'zh' ? '课堂进度' : 'Progress'}
-            </span>
+            <span className="text-xs font-bold text-muted">{lang === 'zh' ? '课堂进度' : 'Progress'}</span>
             <div className="flex-1 h-2 rounded-full bg-surface-secondary overflow-hidden">
-              <div
-                className="h-full bg-primary-theme transition-all"
-                style={{ width: `${progressPercent}%` }}
-              />
+              <div className="h-full bg-primary-theme transition-all" style={{ width: `${progressPercent}%` }} />
             </div>
             <span className="text-xs font-bold text-main">{progressPercent}%</span>
           </div>
@@ -278,9 +270,7 @@ export const MasteryPredictionModal: React.FC<MasteryPredictionModalProps> = ({
               {lang === 'zh' ? '暂无学生数据' : 'No student data'}
             </div>
           ) : (
-            sortedPredictions.map((p) => (
-              <StudentPredictionCard key={p.studentId} prediction={p} lang={lang} />
-            ))
+            sortedPredictions.map((p) => <StudentPredictionCard key={p.studentId} prediction={p} lang={lang} />)
           )}
         </div>
 
@@ -290,8 +280,7 @@ export const MasteryPredictionModal: React.FC<MasteryPredictionModalProps> = ({
             {response && (
               <>
                 {lang === 'zh' ? '预测基于' : 'Based on'}: {studentSnapshots.length}{' '}
-                {lang === 'zh' ? '位学生实时数据' : 'students'} ·{' '}
-                {new Date(response.generatedAt).toLocaleTimeString()}
+                {lang === 'zh' ? '位学生实时数据' : 'students'} · {new Date(response.generatedAt).toLocaleTimeString()}
               </>
             )}
           </span>
@@ -309,10 +298,7 @@ export const MasteryPredictionModal: React.FC<MasteryPredictionModalProps> = ({
 
 // ── 子组件 ──────────────────────────────────────────────────────────
 
-const StudentPredictionCard: React.FC<{ prediction: Prediction; lang: 'zh' | 'en' }> = ({
-  prediction,
-  lang,
-}) => {
+const StudentPredictionCard: React.FC<{ prediction: Prediction; lang: 'zh' | 'en' }> = ({ prediction, lang }) => {
   const composite = Object.values(prediction.prediction).reduce((s, v) => s + v, 0) / 5;
   const trend = composite >= 75 ? 'up' : composite >= 55 ? 'flat' : 'down';
   const TrendIcon = trend === 'up' ? TrendingUp : trend === 'flat' ? Minus : TrendingDown;
@@ -320,8 +306,8 @@ const StudentPredictionCard: React.FC<{ prediction: Prediction; lang: 'zh' | 'en
     prediction.risk === 'high'
       ? 'border-rose-500 bg-rose-50'
       : prediction.risk === 'medium'
-      ? 'border-amber-500 bg-amber-50'
-      : 'border-emerald-500 bg-emerald-50';
+        ? 'border-amber-500 bg-amber-50'
+        : 'border-emerald-500 bg-emerald-50';
 
   return (
     <div className={`border-2 rounded-xl p-4 bg-surface ${riskColor}`}>
@@ -333,9 +319,7 @@ const StudentPredictionCard: React.FC<{ prediction: Prediction; lang: 'zh' | 'en
         <div className="flex items-center gap-1.5 text-xs">
           <TrendIcon
             size={14}
-            className={
-              trend === 'up' ? 'text-emerald-600' : trend === 'flat' ? 'text-muted' : 'text-rose-600'
-            }
+            className={trend === 'up' ? 'text-emerald-600' : trend === 'flat' ? 'text-muted' : 'text-rose-600'}
           />
           <span className="font-bold text-main">{Math.round(composite)}</span>
           <span className="text-muted">{lang === 'zh' ? '综合' : 'Avg'}</span>
@@ -375,13 +359,23 @@ const RiskBadge: React.FC<{ level: 'low' | 'medium' | 'high'; count: number; lan
   lang,
 }) => {
   const color =
-    level === 'high' ? 'bg-rose-100 text-rose-700' : level === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700';
+    level === 'high'
+      ? 'bg-rose-100 text-rose-700'
+      : level === 'medium'
+        ? 'bg-amber-100 text-amber-700'
+        : 'bg-emerald-100 text-emerald-700';
   const label =
     level === 'high'
-      ? lang === 'zh' ? '高风险' : 'High Risk'
+      ? lang === 'zh'
+        ? '高风险'
+        : 'High Risk'
       : level === 'medium'
-      ? lang === 'zh' ? '中风险' : 'Medium'
-      : lang === 'zh' ? '低风险' : 'Low';
+        ? lang === 'zh'
+          ? '中风险'
+          : 'Medium'
+        : lang === 'zh'
+          ? '低风险'
+          : 'Low';
   return (
     <span className={`px-2 py-0.5 rounded-full font-bold ${color}`}>
       {label}: {count}
@@ -394,15 +388,21 @@ const RiskPill: React.FC<{ level: 'low' | 'medium' | 'high'; lang: 'zh' | 'en' }
     level === 'high'
       ? 'bg-rose-500 text-white'
       : level === 'medium'
-      ? 'bg-amber-500 text-white'
-      : 'bg-emerald-500 text-white';
+        ? 'bg-amber-500 text-white'
+        : 'bg-emerald-500 text-white';
   const Icon = level === 'low' ? CheckCircle2 : AlertTriangle;
   const label =
     level === 'high'
-      ? lang === 'zh' ? '需关注' : 'Alert'
+      ? lang === 'zh'
+        ? '需关注'
+        : 'Alert'
       : level === 'medium'
-      ? lang === 'zh' ? '观察' : 'Watch'
-      : lang === 'zh' ? '良好' : 'Good';
+        ? lang === 'zh'
+          ? '观察'
+          : 'Watch'
+        : lang === 'zh'
+          ? '良好'
+          : 'Good';
   return (
     <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold inline-flex items-center gap-1 ${color}`}>
       <Icon size={10} />

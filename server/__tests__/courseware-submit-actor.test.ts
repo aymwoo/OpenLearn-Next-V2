@@ -19,7 +19,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
  *
  * 同时覆盖 `GET /api/courseware/attempts/:attemptId/raw` 的鉴权（修复前无 requireAuth
  * 且 actorId 硬编码 'teacher-demo'，任何人凭 attemptId 即可读取学生原始作答）。
- */describe('courseware /submit actorId 归一化（Cookie 会话 + 角色兜底）', () => {
+ */ describe('courseware /submit actorId 归一化（Cookie 会话 + 角色兜底）', () => {
   let app: express.Express;
   let server: Server;
   let baseUrl: string;
@@ -94,22 +94,16 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 
   afterAll(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
-    kernelContainer.db.prepare('DELETE FROM courseware_attempt WHERE id IN (?, ?, ?)').run(
-      studentAttemptId,
-      otherAttemptId,
-      teacherAttemptId,
-    );
+    kernelContainer.db
+      .prepare('DELETE FROM courseware_attempt WHERE id IN (?, ?, ?)')
+      .run(studentAttemptId, otherAttemptId, teacherAttemptId);
     kernelContainer.db.prepare('DELETE FROM client_sessions WHERE id IN (?, ?)').run(studentToken, teacherToken);
-    kernelContainer.db.prepare('DELETE FROM submission_raw WHERE attempt_id IN (?, ?, ?)').run(
-      studentAttemptId,
-      otherAttemptId,
-      teacherAttemptId,
-    );
-    kernelContainer.db.prepare('DELETE FROM submission_result WHERE attempt_id IN (?, ?, ?)').run(
-      studentAttemptId,
-      otherAttemptId,
-      teacherAttemptId,
-    );
+    kernelContainer.db
+      .prepare('DELETE FROM submission_raw WHERE attempt_id IN (?, ?, ?)')
+      .run(studentAttemptId, otherAttemptId, teacherAttemptId);
+    kernelContainer.db
+      .prepare('DELETE FROM submission_result WHERE attempt_id IN (?, ?, ?)')
+      .run(studentAttemptId, otherAttemptId, teacherAttemptId);
   });
 
   it('学生用 Cookie 会话提交自己的 attempt → 200 并落库（不再 500）', async () => {

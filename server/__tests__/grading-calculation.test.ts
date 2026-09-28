@@ -17,7 +17,7 @@ describe('学期成绩结算计算漏洞回归测试（未交作业/缺考 0 分
   const classEmptyId = 'cls-grade-empty';
 
   const studentAliceId = 'stu-grade-alice'; // 作业 90，考试 80
-  const studentBobId = 'stu-grade-bob';     // 未交作业，缺考
+  const studentBobId = 'stu-grade-bob'; // 未交作业，缺考
 
   const studentCharlieId = 'stu-grade-charlie'; // 在空班级中
 
@@ -71,9 +71,12 @@ describe('学期成绩结算计算漏洞回归测试（未交作业/缺考 0 分
 
     // 3. 有作业班级的作业与提交
     const assignmentId = 'asg-grade-01';
-    db.prepare(
-      'INSERT OR REPLACE INTO assignments (id, class_id, title, created_at) VALUES (?, ?, ?, ?)',
-    ).run(assignmentId, classWithWorkId, '第一单元练习', now);
+    db.prepare('INSERT OR REPLACE INTO assignments (id, class_id, title, created_at) VALUES (?, ?, ?, ?)').run(
+      assignmentId,
+      classWithWorkId,
+      '第一单元练习',
+      now,
+    );
 
     db.prepare(
       'INSERT OR REPLACE INTO assignment_submissions (assignment_id, student_id, score, status, submitted_at, graded_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -82,13 +85,20 @@ describe('学期成绩结算计算漏洞回归测试（未交作业/缺考 0 分
 
     // 4. 有作业班级的考试与成绩
     const examId = 'exam-grade-01';
-    db.prepare(
-      'INSERT OR REPLACE INTO exams (id, class_id, title, max_score, created_at) VALUES (?, ?, ?, ?, ?)',
-    ).run(examId, classWithWorkId, '期末测试', 100, now);
+    db.prepare('INSERT OR REPLACE INTO exams (id, class_id, title, max_score, created_at) VALUES (?, ?, ?, ?, ?)').run(
+      examId,
+      classWithWorkId,
+      '期末测试',
+      100,
+      now,
+    );
 
-    db.prepare(
-      'INSERT OR REPLACE INTO exam_scores (exam_id, student_id, score, recorded_at) VALUES (?, ?, ?, ?)',
-    ).run(examId, studentAliceId, 80, now);
+    db.prepare('INSERT OR REPLACE INTO exam_scores (exam_id, student_id, score, recorded_at) VALUES (?, ?, ?, ?)').run(
+      examId,
+      studentAliceId,
+      80,
+      now,
+    );
     // 注意：Bob 不插入 exam_scores（缺考）
 
     // 5. 启动测试 Express 服务并挂载 grading 路由

@@ -34,10 +34,7 @@ export const GROUP_COLORS = [
  * 同质分层分组算法：
  * 将学生按学情梯队（advanced -> intermediate -> basic）聚合，同层学生在同组进行针对性攻坚
  */
-export function groupStudentsHomogeneous(
-  students: StudentCandidate[],
-  groupCount: number = 4,
-): BreakoutGroup[] {
+export function groupStudentsHomogeneous(students: StudentCandidate[], groupCount: number = 4): BreakoutGroup[] {
   if (groupCount <= 0) return [];
   const count = Math.max(1, groupCount);
 
@@ -86,10 +83,7 @@ export function groupStudentsHomogeneous(
  * 异质互助拼板分组算法（以优带新）：
  * 轮转蛇形或分池轮流抽取，确保每个小组均衡包含不同梯队学生
  */
-export function groupStudentsHeterogeneous(
-  students: StudentCandidate[],
-  groupCount: number = 4,
-): BreakoutGroup[] {
+export function groupStudentsHeterogeneous(students: StudentCandidate[], groupCount: number = 4): BreakoutGroup[] {
   if (groupCount <= 0) return [];
   const count = Math.max(1, groupCount);
 

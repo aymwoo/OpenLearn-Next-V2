@@ -82,14 +82,7 @@ describe('TopPerformersWidget (随堂测验优秀榜组件)', () => {
       return Promise.resolve({ ok: false });
     });
 
-    render(
-      <TopPerformersWidget
-        lang="zh"
-        lessonId="les-1"
-        lessons={mockLessons}
-        students={mockStudents as any}
-      />,
-    );
+    render(<TopPerformersWidget lang="zh" lessonId="les-1" lessons={mockLessons} students={mockStudents as any} />);
 
     // Verify title and structure
     expect(screen.getByText(/随堂测验优秀榜/)).toBeTruthy();
@@ -104,14 +97,7 @@ describe('TopPerformersWidget (随堂测验优秀榜组件)', () => {
   });
 
   it('switches metric display mode between score, accuracy, and count', async () => {
-    render(
-      <TopPerformersWidget
-        lang="zh"
-        lessonId="les-1"
-        lessons={mockLessons}
-        students={mockStudents as any}
-      />,
-    );
+    render(<TopPerformersWidget lang="zh" lessonId="les-1" lessons={mockLessons} students={mockStudents as any} />);
 
     const accuracyBtn = screen.getByTitle('按正确率排序');
     expect(accuracyBtn).toBeTruthy();
@@ -125,14 +111,7 @@ describe('TopPerformersWidget (随堂测验优秀榜组件)', () => {
   });
 
   it('does NOT render simulate button in production mode by default', () => {
-    render(
-      <TopPerformersWidget
-        lang="zh"
-        lessonId="les-1"
-        lessons={mockLessons}
-        students={mockStudents as any}
-      />,
-    );
+    render(<TopPerformersWidget lang="zh" lessonId="les-1" lessons={mockLessons} students={mockStudents as any} />);
     expect(screen.queryByTitle('模拟学生实时答题')).toBeNull();
   });
 
@@ -172,10 +151,7 @@ describe('TopPerformersWidget (随堂测验优秀榜组件)', () => {
     fireEvent.click(simBtn);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/simulate-quiz-responses'),
-        expect.anything(),
-      );
+      expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/simulate-quiz-responses'), expect.anything());
     });
   });
 

@@ -443,13 +443,13 @@ export function registerGradingRoutes(ctx: ServerContext) {
       });
 
       // Check if class has published assignments or exams
-      const totalPublishedAssignments = (kernelContainer.db
-        .prepare('SELECT COUNT(*) as count FROM assignments WHERE class_id = ?')
-        .get(classId) as any)?.count || 0;
+      const totalPublishedAssignments =
+        (kernelContainer.db.prepare('SELECT COUNT(*) as count FROM assignments WHERE class_id = ?').get(classId) as any)
+          ?.count || 0;
 
-      const totalPublishedExams = (kernelContainer.db
-        .prepare('SELECT COUNT(*) as count FROM exams WHERE class_id = ?')
-        .get(classId) as any)?.count || 0;
+      const totalPublishedExams =
+        (kernelContainer.db.prepare('SELECT COUNT(*) as count FROM exams WHERE class_id = ?').get(classId) as any)
+          ?.count || 0;
 
       // 5. Compute grades for each student
       const result = students.map((student) => {
@@ -813,7 +813,9 @@ ${examsText}
           const data = await response.json();
           text = data.choices?.[0]?.message?.content?.trim() || '';
         } else {
-          return res.status(400).json({ error: '未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。' });
+          return res
+            .status(400)
+            .json({ error: '未检测到可用的 AI 提供商。请前往「系统管理 -> AI 提供商管理」添加并配置大模型服务。' });
         }
 
         res.json({ success: true, aiEvaluation: text });

@@ -6,8 +6,21 @@ import { MasteryPredictionModal, type StudentPaceSnapshot } from '../MasteryPred
 afterEach(cleanup);
 
 const snapshots: StudentPaceSnapshot[] = [
-  { studentId: 'stu-1', studentName: '张子豪', participationScore: 92, quizScore: 88, paceIndicator: 'on-track', behaviorSignals: ['主动提问'] },
-  { studentId: 'stu-2', studentName: '李晓彤', participationScore: 22, paceIndicator: 'stalled', behaviorSignals: ['长时间无操作'] },
+  {
+    studentId: 'stu-1',
+    studentName: '张子豪',
+    participationScore: 92,
+    quizScore: 88,
+    paceIndicator: 'on-track',
+    behaviorSignals: ['主动提问'],
+  },
+  {
+    studentId: 'stu-2',
+    studentName: '李晓彤',
+    participationScore: 22,
+    paceIndicator: 'stalled',
+    behaviorSignals: ['长时间无操作'],
+  },
 ];
 
 const noopToast = vi.fn();
@@ -106,7 +119,11 @@ describe('MasteryPredictionModal', () => {
   });
 
   it('请求失败弹出错误 toast', async () => {
-    vi.spyOn(global, 'fetch' as any).mockResolvedValue({ ok: false, status: 502, text: async () => 'bad gateway' } as any);
+    vi.spyOn(global, 'fetch' as any).mockResolvedValue({
+      ok: false,
+      status: 502,
+      text: async () => 'bad gateway',
+    } as any);
     renderModal();
 
     await waitFor(() =>

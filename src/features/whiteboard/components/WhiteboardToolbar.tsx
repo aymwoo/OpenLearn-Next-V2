@@ -139,9 +139,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
             >
               <div className="px-2 py-1.5 text-2xs font-black uppercase tracking-wider text-muted flex items-center gap-1.5 sticky top-0 bg-surface">
                 <Puzzle size={11} className="text-primary-theme" />
-                {classroomTools.length > 0
-                  ? `互动工具 · ${classroomTools.length} 个插件`
-                  : '互动工具'}
+                {classroomTools.length > 0 ? `互动工具 · ${classroomTools.length} 个插件` : '互动工具'}
               </div>
               {classroomTools.length > 0 ? (
                 classroomTools.map((tool) => (
@@ -157,9 +155,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-xs font-bold text-main truncate">{tool.name}</span>
-                      <span className="block text-2xs text-muted truncate mt-0.5">
-                        {tool.description || tool.name}
-                      </span>
+                      <span className="block text-2xs text-muted truncate mt-0.5">{tool.description || tool.name}</span>
                     </span>
                   </button>
                 ))
@@ -202,9 +198,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
           <button
             onClick={() => setTool('pen')}
             className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
-              tool === 'pen'
-                ? 'bg-primary-theme text-white shadow-2xs'
-                : 'text-muted hover:bg-surface hover:text-main'
+              tool === 'pen' ? 'bg-primary-theme text-white shadow-2xs' : 'text-muted hover:bg-surface hover:text-main'
             }`}
             title="画笔工具 (Pen)"
           >
@@ -252,9 +246,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
           <button
             onClick={() => setTool('rect')}
             className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
-              tool === 'rect'
-                ? 'bg-primary-theme text-white shadow-2xs'
-                : 'text-muted hover:bg-surface hover:text-main'
+              tool === 'rect' ? 'bg-primary-theme text-white shadow-2xs' : 'text-muted hover:bg-surface hover:text-main'
             }`}
             title="矩形工具 (Rectangle)"
           >
@@ -274,9 +266,7 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
           <button
             onClick={() => setTool('text')}
             className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
-              tool === 'text'
-                ? 'bg-primary-theme text-white shadow-2xs'
-                : 'text-muted hover:bg-surface hover:text-main'
+              tool === 'text' ? 'bg-primary-theme text-white shadow-2xs' : 'text-muted hover:bg-surface hover:text-main'
             }`}
             title="文本工具 (Text)"
           >
@@ -556,7 +546,10 @@ export const WhiteboardToolbar: React.FC<WhiteboardToolbarProps> = ({
               <LayoutGrid size={14} />
             </button>
             {autoTileEnabled && (
-              <span className="text-2xs font-semibold text-primary-theme whitespace-nowrap" title="当前为自动平铺模式，新组件会自动落入下一个格子">
+              <span
+                className="text-2xs font-semibold text-primary-theme whitespace-nowrap"
+                title="当前为自动平铺模式，新组件会自动落入下一个格子"
+              >
                 平铺中
               </span>
             )}

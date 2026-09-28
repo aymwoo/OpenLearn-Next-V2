@@ -368,13 +368,7 @@ describe('AssignmentPeerReviewPanel（学生端互评面板）', () => {
   });
 
   it('手输分数会覆盖量规估算，越界分数直接拒绝提交', async () => {
-    render(
-      <AssignmentPeerReviewPanel
-        assignmentId="asg-1"
-        tasks={[makeTask() as any]}
-        lang="zh"
-      />,
-    );
+    render(<AssignmentPeerReviewPanel assignmentId="asg-1" tasks={[makeTask() as any]} lang="zh" />);
     const scoreInput = document.querySelector('input[type="number"]') as HTMLInputElement;
     fireEvent.change(scoreInput, { target: { value: '120' } });
     fireEvent.click(screen.getByRole('button', { name: /提交互评/ }));
@@ -408,12 +402,7 @@ describe('AssignmentPeerProgressPanel（教师端互评进度）', () => {
 
     const onAssigned = vi.fn();
     render(
-      <AssignmentPeerProgressPanel
-        assignmentId="asg-1"
-        progress={PROGRESS as any}
-        onAssigned={onAssigned}
-        lang="zh"
-      />,
+      <AssignmentPeerProgressPanel assignmentId="asg-1" progress={PROGRESS as any} onAssigned={onAssigned} lang="zh" />,
     );
 
     expect(screen.getByText('互评进度')).toBeTruthy();

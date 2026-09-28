@@ -253,7 +253,6 @@ export type ContributionConfig =
   | PreclassPasscodeActionConfig
   | PreclassPasscodeAddonConfig;
 
-
 /** A human-readable summary of what a plugin contributes. */
 export interface ContributionSummary {
   slot: string;

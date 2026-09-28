@@ -67,7 +67,11 @@ export function SystemErrorCenterModal() {
     }
   };
 
-  const handleCopyItem = async (e: React.MouseEvent, item: SystemErrorItem | StudentErrorItem, isStudentErr = false) => {
+  const handleCopyItem = async (
+    e: React.MouseEvent,
+    item: SystemErrorItem | StudentErrorItem,
+    isStudentErr = false,
+  ) => {
     e.stopPropagation();
     const markdown = isStudentErr
       ? formatSingleStudentErrorReport(item as StudentErrorItem)
@@ -111,8 +115,10 @@ export function SystemErrorCenterModal() {
   return (
     <>
       {/* 1. Floating Diagnostics Indicator (Minimal Icon Badge for Students; Detailed Pill for Teachers/Admins) */}
-      {hasAnyErrors && !isOpen && !isPillDismissed && (
-        isStudent ? (
+      {hasAnyErrors &&
+        !isOpen &&
+        !isPillDismissed &&
+        (isStudent ? (
           // 学生端极简模式：仅显示感叹号图标 + 红色数字角标，降低干扰
           <motion.button
             type="button"
@@ -156,9 +162,7 @@ export function SystemErrorCenterModal() {
               </span>
               <span>处系统异常</span>
               {studentErrors.length > 0 && (
-                <span className="text-[10px] text-rose-300 font-normal">
-                  (含学生端 {studentErrors.length})
-                </span>
+                <span className="text-[10px] text-rose-300 font-normal">(含学生端 {studentErrors.length})</span>
               )}
             </div>
             <button
@@ -179,8 +183,7 @@ export function SystemErrorCenterModal() {
               <X size={13} />
             </button>
           </motion.div>
-        )
-      )}
+        ))}
 
       {/* 2. System Diagnostics Modal Dialog */}
       <AnimatePresence>
@@ -377,7 +380,9 @@ export function SystemErrorCenterModal() {
                           {isExpanded && (
                             <div className="px-4 py-3 bg-slate-900 text-slate-200 border-t border-gray-100 dark:border-gray-800 text-xs font-mono space-y-2.5">
                               <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-1.5">
-                                <span>学生: {item.studentName || '未知'} ({item.studentId})</span>
+                                <span>
+                                  学生: {item.studentName || '未知'} ({item.studentId})
+                                </span>
                                 <span>页面地址: {item.url || '未知'}</span>
                                 <span>时间: {new Date(item.timestamp).toLocaleString()}</span>
                               </div>
@@ -405,112 +410,110 @@ export function SystemErrorCenterModal() {
                       );
                     })
                   )
+                ) : /* 2. Local Errors Tab View */
+                errors.length === 0 ? (
+                  <div className="py-16 text-center text-gray-400 dark:text-gray-500 space-y-2">
+                    <Check size={32} className="mx-auto text-emerald-500 opacity-80" />
+                    <p className="text-sm font-semibold">暂无捕获到的系统异常</p>
+                    <p className="text-xs opacity-75">系统运行顺畅，所有模块均在正常状态下运作。</p>
+                  </div>
                 ) : (
-                  /* 2. Local Errors Tab View */
-                  errors.length === 0 ? (
-                    <div className="py-16 text-center text-gray-400 dark:text-gray-500 space-y-2">
-                      <Check size={32} className="mx-auto text-emerald-500 opacity-80" />
-                      <p className="text-sm font-semibold">暂无捕获到的系统异常</p>
-                      <p className="text-xs opacity-75">系统运行顺畅，所有模块均在正常状态下运作。</p>
-                    </div>
-                  ) : (
-                    errors.map((item, index) => {
-                      const isExpanded = expandedIds.has(item.id);
-                      const isCopied = copiedItemId === item.id;
+                  errors.map((item, index) => {
+                    const isExpanded = expandedIds.has(item.id);
+                    const isCopied = copiedItemId === item.id;
 
-                      return (
+                    return (
+                      <div
+                        key={item.id}
+                        className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-2xs hover:border-gray-300 dark:hover:border-gray-700 transition-colors"
+                      >
+                        {/* Item Summary Bar */}
                         <div
-                          key={item.id}
-                          className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden shadow-2xs hover:border-gray-300 dark:hover:border-gray-700 transition-colors"
+                          onClick={() => toggleExpand(item.id)}
+                          className="px-4 py-3 flex items-start justify-between gap-3 cursor-pointer select-none hover:bg-gray-50/50 dark:hover:bg-slate-850/50 transition-colors"
                         >
-                          {/* Item Summary Bar */}
-                          <div
-                            onClick={() => toggleExpand(item.id)}
-                            className="px-4 py-3 flex items-start justify-between gap-3 cursor-pointer select-none hover:bg-gray-50/50 dark:hover:bg-slate-850/50 transition-colors"
-                          >
-                            <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                              <span className="text-gray-400 mt-0.5 shrink-0">
-                                {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                              </span>
-                              <div className="space-y-1 min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  {getTypeBadge(item.type)}
-                                  <span className="font-bold text-xs text-gray-900 dark:text-gray-100 truncate">
-                                    #{errors.length - index} {item.title}
-                                  </span>
-                                  <span className="text-xs text-gray-400 font-mono">
-                                    {new Date(item.timestamp).toLocaleTimeString()}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-rose-600 dark:text-rose-400 font-mono break-all line-clamp-2">
-                                  {item.message}
-                                </p>
-                                {item.endpoint && (
-                                  <p className="text-xs text-gray-500 font-mono truncate">接口: {item.endpoint}</p>
-                                )}
+                          <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                            <span className="text-gray-400 mt-0.5 shrink-0">
+                              {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                            </span>
+                            <div className="space-y-1 min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {getTypeBadge(item.type)}
+                                <span className="font-bold text-xs text-gray-900 dark:text-gray-100 truncate">
+                                  #{errors.length - index} {item.title}
+                                </span>
+                                <span className="text-xs text-gray-400 font-mono">
+                                  {new Date(item.timestamp).toLocaleTimeString()}
+                                </span>
                               </div>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={(e) => handleCopyItem(e, item, false)}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                                  isCopied
-                                    ? 'bg-emerald-600 text-white'
-                                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-gray-200'
-                                }`}
-                                title="一键复制此条错误报告"
-                              >
-                                {isCopied ? <Check size={11} /> : <Copy size={11} />}
-                                <span>{isCopied ? '已复制' : '复制'}</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removeError(item.id);
-                                }}
-                                className="p-1 text-gray-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
-                                title="移除此项"
-                              >
-                                <X size={13} />
-                              </button>
+                              <p className="text-xs text-rose-600 dark:text-rose-400 font-mono break-all line-clamp-2">
+                                {item.message}
+                              </p>
+                              {item.endpoint && (
+                                <p className="text-xs text-gray-500 font-mono truncate">接口: {item.endpoint}</p>
+                              )}
                             </div>
                           </div>
 
-                          {/* Expandable Stack Trace & Environment Details */}
-                          {isExpanded && (
-                            <div className="px-4 py-3 bg-slate-900 text-slate-200 border-t border-gray-100 dark:border-gray-800 text-xs font-mono space-y-2.5">
-                              <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-1.5">
-                                <span>页面地址: {item.url || '未知'}</span>
-                                <span>时间: {new Date(item.timestamp).toLocaleString()}</span>
-                              </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => handleCopyItem(e, item, false)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                isCopied
+                                  ? 'bg-emerald-600 text-white'
+                                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-gray-200'
+                              }`}
+                              title="一键复制此条错误报告"
+                            >
+                              {isCopied ? <Check size={11} /> : <Copy size={11} />}
+                              <span>{isCopied ? '已复制' : '复制'}</span>
+                            </button>
 
-                              {item.stack && (
-                                <div>
-                                  <span className="text-rose-400 font-bold block mb-1">Stack Trace:</span>
-                                  <pre className="whitespace-pre-wrap text-xs leading-relaxed max-h-48 overflow-y-auto opacity-90">
-                                    {item.stack}
-                                  </pre>
-                                </div>
-                              )}
-
-                              {item.componentStack && (
-                                <div className="pt-2 border-t border-slate-800">
-                                  <span className="text-amber-400 font-bold block mb-1">Component Stack:</span>
-                                  <pre className="whitespace-pre-wrap text-xs leading-relaxed max-h-36 overflow-y-auto opacity-80">
-                                    {item.componentStack}
-                                  </pre>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeError(item.id);
+                              }}
+                              className="p-1 text-gray-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
+                              title="移除此项"
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
                         </div>
-                      );
-                    })
-                  )
+
+                        {/* Expandable Stack Trace & Environment Details */}
+                        {isExpanded && (
+                          <div className="px-4 py-3 bg-slate-900 text-slate-200 border-t border-gray-100 dark:border-gray-800 text-xs font-mono space-y-2.5">
+                            <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-1.5">
+                              <span>页面地址: {item.url || '未知'}</span>
+                              <span>时间: {new Date(item.timestamp).toLocaleString()}</span>
+                            </div>
+
+                            {item.stack && (
+                              <div>
+                                <span className="text-rose-400 font-bold block mb-1">Stack Trace:</span>
+                                <pre className="whitespace-pre-wrap text-xs leading-relaxed max-h-48 overflow-y-auto opacity-90">
+                                  {item.stack}
+                                </pre>
+                              </div>
+                            )}
+
+                            {item.componentStack && (
+                              <div className="pt-2 border-t border-slate-800">
+                                <span className="text-amber-400 font-bold block mb-1">Component Stack:</span>
+                                <pre className="whitespace-pre-wrap text-xs leading-relaxed max-h-36 overflow-y-auto opacity-80">
+                                  {item.componentStack}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </motion.div>
@@ -520,4 +523,3 @@ export function SystemErrorCenterModal() {
     </>
   );
 }
-

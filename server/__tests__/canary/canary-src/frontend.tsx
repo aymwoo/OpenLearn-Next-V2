@@ -52,11 +52,15 @@ export default {
               <div className="mt-6 p-4 bg-gray-50 rounded-xl space-y-2 text-sm font-mono">
                 <div>
                   <span className="text-gray-400">Props lessonId: </span>
-                  <span data-testid="canary-prop-lesson-id" className="font-semibold">{String(props?.lessonId ?? 'null')}</span>
+                  <span data-testid="canary-prop-lesson-id" className="font-semibold">
+                    {String(props?.lessonId ?? 'null')}
+                  </span>
                 </div>
                 <div>
                   <span className="text-gray-400">Props classId: </span>
-                  <span data-testid="canary-prop-class-id" className="font-semibold">{String(props?.classId ?? 'null')}</span>
+                  <span data-testid="canary-prop-class-id" className="font-semibold">
+                    {String(props?.classId ?? 'null')}
+                  </span>
                 </div>
               </div>
 
@@ -71,7 +75,10 @@ export default {
                 </button>
                 <div className="text-sm">
                   <span className="text-gray-500">探针回显响应：</span>
-                  <code data-testid="canary-ping-output" className="px-2 py-1 bg-gray-100 rounded text-indigo-700 font-mono">
+                  <code
+                    data-testid="canary-ping-output"
+                    className="px-2 py-1 bg-gray-100 rounded text-indigo-700 font-mono"
+                  >
                     {pingResult}
                   </code>
                 </div>
@@ -139,7 +146,10 @@ export default {
       label: '探针图例',
       component: function CanarySeatingLegend(_props: any) {
         return (
-          <span data-testid="canary-seating-legend" className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
+          <span
+            data-testid="canary-seating-legend"
+            className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium"
+          >
             <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-xs" />
             <span>探针就绪</span>
           </span>
@@ -199,7 +209,9 @@ export default {
             className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-medium flex items-center gap-1.5"
           >
             <span>🐤 云端镜像</span>
-            <span data-testid="canary-autosave-lesson-id" className="font-mono text-2xs">{props?.lessonId ?? 'none'}</span>
+            <span data-testid="canary-autosave-lesson-id" className="font-mono text-2xs">
+              {props?.lessonId ?? 'none'}
+            </span>
           </div>
         );
       },

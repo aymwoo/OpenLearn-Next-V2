@@ -147,36 +147,33 @@ export function registerClassroomExtrasRoutes(app: Application): void {
   );
 
   // ── #2 AI 实时学情预测 ─────────────────────────────────────────────
-  app.post(
-    '/api/classroom/:lessonId/predict-mastery',
-    requireAuth('teacher', 'administrator'),
-    async (req, res) => {
-      try {
-        const { lessonId } = req.params;
-        const snapshot = req.body as {
-          lessonTitle: string;
-          currentStageName: string;
-          elapsedMin: number;
-          plannedTotalMin: number;
-          studentSnapshots: Array<{
-            studentId: string;
-            studentName: string;
-            participationScore: number;
-            quizScore?: number;
-            paceIndicator: 'fast' | 'on-track' | 'slow' | 'stalled';
-            behaviorSignals: string[];
-          }>;
-        };
+  app.post('/api/classroom/:lessonId/predict-mastery', requireAuth('teacher', 'administrator'), async (req, res) => {
+    try {
+      const { lessonId } = req.params;
+      const snapshot = req.body as {
+        lessonTitle: string;
+        currentStageName: string;
+        elapsedMin: number;
+        plannedTotalMin: number;
+        studentSnapshots: Array<{
+          studentId: string;
+          studentName: string;
+          participationScore: number;
+          quizScore?: number;
+          paceIndicator: 'fast' | 'on-track' | 'slow' | 'stalled';
+          behaviorSignals: string[];
+        }>;
+      };
 
-        if (!snapshot || !Array.isArray(snapshot.studentSnapshots)) {
-          return res.status(400).json({ error: 'Missing required field: studentSnapshots' });
-        }
+      if (!snapshot || !Array.isArray(snapshot.studentSnapshots)) {
+        return res.status(400).json({ error: 'Missing required field: studentSnapshots' });
+      }
 
-        const actorId = getActorId(req);
-        const ai = kernelContainer.aiService;
+      const actorId = getActorId(req);
+      const ai = kernelContainer.aiService;
 
-        // 一次 AI 调用，对全班学生批量预测（避免 N 次调用）
-        const prompt = `你是一位资深教师，正在分析本节课当前阶段的学情。请根据下面的实时数据，预测本节课结束时全班每位学生在 5 个维度（算法逻辑 / 代码工程 / 创新思维 / 团队协作 / 课堂专注）上的掌握度（0-100）。
+      // 一次 AI 调用，对全班学生批量预测（避免 N 次调用）
+      const prompt = `你是一位资深教师，正在分析本节课当前阶段的学情。请根据下面的实时数据，预测本节课结束时全班每位学生在 5 个维度（算法逻辑 / 代码工程 / 创新思维 / 团队协作 / 课堂专注）上的掌握度（0-100）。
 
 课程：${snapshot.lessonTitle}
 当前阶段：${snapshot.currentStageName}
@@ -195,61 +192,59 @@ ${snapshot.studentSnapshots
 
 严格按 JSON 数组返回，每项：\{ "studentId": string, "studentName": string, "prediction": \{ "algorithmic": number, "engineering": number, "creativity": number, "collaboration": number, "focus": number \}, "risk": "low|medium|high", "note": "一句话说明（不超过 30 字）" \}。不要任何额外文字。`;
 
-
-        let predictions: any[] = [];
-        let aiSucceeded = false;
-        try {
-          // 先剥离 <think> 等思考块与代码围栏，再解析 JSON
-          const cleaned = stripModelArtifacts(await ai.generateText(prompt));
-          const parsed = JSON.parse(cleaned);
-          if (Array.isArray(parsed)) {
-            predictions = parsed;
-            aiSucceeded = true;
-          }
-        } catch (e: any) {
-          // AI 失败时降级为本地启发式
-          predictions = [];
+      let predictions: any[] = [];
+      let aiSucceeded = false;
+      try {
+        // 先剥离 <think> 等思考块与代码围栏，再解析 JSON
+        const cleaned = stripModelArtifacts(await ai.generateText(prompt));
+        const parsed = JSON.parse(cleaned);
+        if (Array.isArray(parsed)) {
+          predictions = parsed;
+          aiSucceeded = true;
         }
+      } catch (e: any) {
+        // AI 失败时降级为本地启发式
+        predictions = [];
+      }
 
-        // 降级方案：基于 participationScore 推算默认 60 基础分 + 加成
-        if (!aiSucceeded) {
-          predictions = snapshot.studentSnapshots.map((s) => {
-            const base = Math.min(100, Math.max(20, s.participationScore));
-            const adjusted = Math.max(0, Math.min(100, base + (s.quizScore ? (s.quizScore - 70) * 0.3 : 0)));
-            return {
-              studentId: s.studentId,
-              studentName: s.studentName,
-              prediction: {
-                algorithmic: Math.round(adjusted),
-                engineering: Math.round(adjusted * 0.95),
-                creativity: Math.round(adjusted * 0.9),
-                collaboration: Math.round(adjusted * 1.05),
-                focus: Math.round(base * 0.9),
-              },
-              risk:
-                s.paceIndicator === 'stalled' || s.participationScore < 30
-                  ? 'high'
-                  : s.paceIndicator === 'slow' || s.participationScore < 60
+      // 降级方案：基于 participationScore 推算默认 60 基础分 + 加成
+      if (!aiSucceeded) {
+        predictions = snapshot.studentSnapshots.map((s) => {
+          const base = Math.min(100, Math.max(20, s.participationScore));
+          const adjusted = Math.max(0, Math.min(100, base + (s.quizScore ? (s.quizScore - 70) * 0.3 : 0)));
+          return {
+            studentId: s.studentId,
+            studentName: s.studentName,
+            prediction: {
+              algorithmic: Math.round(adjusted),
+              engineering: Math.round(adjusted * 0.95),
+              creativity: Math.round(adjusted * 0.9),
+              collaboration: Math.round(adjusted * 1.05),
+              focus: Math.round(base * 0.9),
+            },
+            risk:
+              s.paceIndicator === 'stalled' || s.participationScore < 30
+                ? 'high'
+                : s.paceIndicator === 'slow' || s.participationScore < 60
                   ? 'medium'
                   : 'low',
-              note: s.paceIndicator === 'stalled' ? '建议课后单独辅导' : '节奏正常',
-            };
-          });
-        }
-
-        return res.json({
-          lessonId,
-          actorId,
-          generatedAt: Date.now(),
-          aiSucceeded,
-          currentStage: snapshot.currentStageName,
-          predictions,
+            note: s.paceIndicator === 'stalled' ? '建议课后单独辅导' : '节奏正常',
+          };
         });
-      } catch (e: any) {
-        sendSafeError(res, e);
       }
-    },
-  );
+
+      return res.json({
+        lessonId,
+        actorId,
+        generatedAt: Date.now(),
+        aiSucceeded,
+        currentStage: snapshot.currentStageName,
+        predictions,
+      });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
 }
 
 /**

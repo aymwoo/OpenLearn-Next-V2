@@ -529,7 +529,9 @@ db.exec(`
 // 重建发生在 migrations/005_assignment_hub.sql（服务器启动时执行，晚于本文件的 schema 块）。
 // 所以这里的索引创建必须容错：老库会失败并静默跳过，随后由 005 迁移建好。
 try {
-  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_plugin_submissions_assignment_student ON plugin_submissions(assignment_id, student_id)');
+  db.exec(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_plugin_submissions_assignment_student ON plugin_submissions(assignment_id, student_id)',
+  );
   db.exec(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_plugin_submissions_legacy ON plugin_submissions(lesson_id, student_id) WHERE assignment_id IS NULL',
   );

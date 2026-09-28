@@ -7,10 +7,7 @@ export interface PeerReviewRubricModalProps {
   onClose: () => void;
 }
 
-export const PeerReviewRubricModal: React.FC<PeerReviewRubricModalProps> = ({
-  isOpen,
-  onClose,
-}) => {
+export const PeerReviewRubricModal: React.FC<PeerReviewRubricModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
@@ -55,9 +52,17 @@ export const PeerReviewRubricModal: React.FC<PeerReviewRubricModalProps> = ({
               </span>
             </div>
             <ul className="text-xs text-[#c7c4d7] space-y-1.5 pl-8 list-disc">
-              <li><strong className="text-white">5.0分（优秀）：</strong>算法逻辑自适应，无死循环或边界越界，自适应笔触与角度动态计算完全闭合。</li>
-              <li><strong className="text-white">4.0分（良好）：</strong>核心功能正常，少数极端情况存在未自增或微小卡顿。</li>
-              <li><strong className="text-white">3.0分（需改进）：</strong>存在语法报错或死循环，需在互评中指明行号与修复要点。</li>
+              <li>
+                <strong className="text-white">5.0分（优秀）：</strong>
+                算法逻辑自适应，无死循环或边界越界，自适应笔触与角度动态计算完全闭合。
+              </li>
+              <li>
+                <strong className="text-white">4.0分（良好）：</strong>核心功能正常，少数极端情况存在未自增或微小卡顿。
+              </li>
+              <li>
+                <strong className="text-white">3.0分（需改进）：</strong>
+                存在语法报错或死循环，需在互评中指明行号与修复要点。
+              </li>
             </ul>
           </div>
 
@@ -75,9 +80,16 @@ export const PeerReviewRubricModal: React.FC<PeerReviewRubricModalProps> = ({
               </span>
             </div>
             <ul className="text-xs text-[#c7c4d7] space-y-1.5 pl-8 list-disc">
-              <li><strong className="text-white">5.0分（优秀）：</strong>遵循 PEP8 规范，严格对齐 4 空格缩进，变量语义化规范清晰，关键算子附有说明注释。</li>
-              <li><strong className="text-white">4.0分（良好）：</strong>缩进基本统一，可读性良好。</li>
-              <li><strong className="text-white">3.0分（需改进）：</strong>Tab 与空格混用，循环体代码未有效缩进。</li>
+              <li>
+                <strong className="text-white">5.0分（优秀）：</strong>遵循 PEP8 规范，严格对齐 4
+                空格缩进，变量语义化规范清晰，关键算子附有说明注释。
+              </li>
+              <li>
+                <strong className="text-white">4.0分（良好）：</strong>缩进基本统一，可读性良好。
+              </li>
+              <li>
+                <strong className="text-white">3.0分（需改进）：</strong>Tab 与空格混用，循环体代码未有效缩进。
+              </li>
             </ul>
           </div>
 
@@ -95,9 +107,16 @@ export const PeerReviewRubricModal: React.FC<PeerReviewRubricModalProps> = ({
               </span>
             </div>
             <ul className="text-xs text-[#c7c4d7] space-y-1.5 pl-8 list-disc">
-              <li><strong className="text-white">5.0分（优秀）：</strong>巧妙运用数学模运算（`i % 3`）或外角定理，呈现层次丰富的动态发散图形。</li>
-              <li><strong className="text-white">4.0分（良好）：</strong>图形规则美观，配色和谐。</li>
-              <li><strong className="text-white">3.0分（需改进）：</strong>单色基础图形，未探索步长或角度变化。</li>
+              <li>
+                <strong className="text-white">5.0分（优秀）：</strong>巧妙运用数学模运算（`i %
+                3`）或外角定理，呈现层次丰富的动态发散图形。
+              </li>
+              <li>
+                <strong className="text-white">4.0分（良好）：</strong>图形规则美观，配色和谐。
+              </li>
+              <li>
+                <strong className="text-white">3.0分（需改进）：</strong>单色基础图形，未探索步长或角度变化。
+              </li>
             </ul>
           </div>
 

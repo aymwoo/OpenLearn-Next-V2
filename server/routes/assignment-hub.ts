@@ -98,14 +98,17 @@ function scheduleAssignmentFileGC(): void {
   } catch {
     /* 首次执行的失败不影响路由注册 */
   }
-  const timer = setInterval(() => {
-    try {
-      const removed = gcSoftDeletedAssignmentFiles(kernelContainer.db as any);
-      if (removed > 0) console.log(`[assignment-hub] GC removed ${removed} soft-deleted files`);
-    } catch (e) {
-      console.warn('[assignment-hub] file GC failed:', e);
-    }
-  }, 24 * 60 * 60 * 1000);
+  const timer = setInterval(
+    () => {
+      try {
+        const removed = gcSoftDeletedAssignmentFiles(kernelContainer.db as any);
+        if (removed > 0) console.log(`[assignment-hub] GC removed ${removed} soft-deleted files`);
+      } catch (e) {
+        console.warn('[assignment-hub] file GC failed:', e);
+      }
+    },
+    24 * 60 * 60 * 1000,
+  );
   timer.unref?.();
 }
 
@@ -144,7 +147,7 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       .prepare('SELECT 1 AS ok FROM class_students WHERE class_id = ? AND student_id = ? LIMIT 1')
       .get(assignment.class_id, studentId) as { ok: number } | undefined;
     if (!enrolled) {
-      const err: any = new Error('Forbidden: You are not enrolled in this assignment\'s class');
+      const err: any = new Error("Forbidden: You are not enrolled in this assignment's class");
       err.status = 403;
       throw err;
     }
@@ -208,7 +211,9 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       if (isPrivileged) {
         payload.includePeerProgress = true;
       }
-      const cmd = kernelContainer.commandBus.createCommand('assignment.get', payload, getActorId(req), { silent: true });
+      const cmd = kernelContainer.commandBus.createCommand('assignment.get', payload, getActorId(req), {
+        silent: true,
+      });
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
@@ -291,7 +296,10 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
           return res.status(400).json({ success: false, error: 'Empty file body' });
         }
 
-        const sizeLimit = Math.min(Number(assignment.max_file_size) || SIZE_LIMITS.assignment, ASSIGNMENT_MAX_FILE_SIZE);
+        const sizeLimit = Math.min(
+          Number(assignment.max_file_size) || SIZE_LIMITS.assignment,
+          ASSIGNMENT_MAX_FILE_SIZE,
+        );
         if (buffer.length > sizeLimit) {
           return res.status(413).json({ success: false, error: `File too large (limit ${sizeLimit} bytes)` });
         }
@@ -547,18 +555,22 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
     }
   });
 
-  app.post('/api/assignments/:assignmentId/assign-peer-reviews', requireAuth('teacher', 'administrator'), async (req, res) => {
-    try {
-      const body = req.body || {};
-      const cmd = kernelContainer.commandBus.createCommand(
-        'assignment.assign_peer_reviews',
-        { assignmentId: req.params.assignmentId, reviewerCount: body.reviewerCount, dueAt: body.dueAt },
-        getActorId(req),
-      );
-      const result = await kernelContainer.commandBus.execute(cmd);
-      res.json(result);
-    } catch (e: any) {
-      sendHubError(res, e);
-    }
-  });
+  app.post(
+    '/api/assignments/:assignmentId/assign-peer-reviews',
+    requireAuth('teacher', 'administrator'),
+    async (req, res) => {
+      try {
+        const body = req.body || {};
+        const cmd = kernelContainer.commandBus.createCommand(
+          'assignment.assign_peer_reviews',
+          { assignmentId: req.params.assignmentId, reviewerCount: body.reviewerCount, dueAt: body.dueAt },
+          getActorId(req),
+        );
+        const result = await kernelContainer.commandBus.execute(cmd);
+        res.json(result);
+      } catch (e: any) {
+        sendHubError(res, e);
+      }
+    },
+  );
 }

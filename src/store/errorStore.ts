@@ -240,4 +240,3 @@ export const errorStore = createStore<ErrorStoreState>((set, get) => ({
 export function useErrorStore<T = ErrorStoreState>(selector?: (state: ErrorStoreState) => T): T {
   return useStore(errorStore, selector || ((s) => s as unknown as T));
 }
-

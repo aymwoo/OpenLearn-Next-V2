@@ -206,7 +206,7 @@ export function DashboardWidgetCard({
             <button
               type="button"
               onClick={onToggleCollapse}
-              title={collapsed ? (lang === 'zh' ? '展开卡片' : 'Expand') : (lang === 'zh' ? '收起卡片' : 'Collapse')}
+              title={collapsed ? (lang === 'zh' ? '展开卡片' : 'Expand') : lang === 'zh' ? '收起卡片' : 'Collapse'}
               className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 rounded-lg transition-colors cursor-pointer"
             >
               {collapsed ? <ChevronDown size={15} /> : <ChevronUp size={15} />}

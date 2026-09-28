@@ -1,10 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import {
-  registerAIPersona,
-  getAIPersona,
-  listAIPersonas,
-  unregisterAIPersona,
-} from '../ai-persona-registry.js';
+import { registerAIPersona, getAIPersona, listAIPersonas, unregisterAIPersona } from '../ai-persona-registry.js';
 
 /**
  * P2: ai.agent.persona —— 角色注册表行为锁定。
@@ -69,10 +64,7 @@ describe('ai-persona-registry', () => {
   });
 
   it('only allows the owning plugin to unregister its persona', () => {
-    registerAIPersona(
-      { id: CUSTOM_ID, nameZh: 'x', nameEn: 'x', instructionZh: 'x', instructionEn: 'x' },
-      PLUGIN_ID,
-    );
+    registerAIPersona({ id: CUSTOM_ID, nameZh: 'x', nameEn: 'x', instructionZh: 'x', instructionEn: 'x' }, PLUGIN_ID);
     // A different owner must not be able to remove it.
     unregisterAIPersona(CUSTOM_ID, '@test/other-plugin');
     expect(getAIPersona(CUSTOM_ID)).toBeDefined();

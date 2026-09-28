@@ -1,14 +1,5 @@
 import React, { useMemo } from 'react';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceLine,
-  ResponsiveContainer,
-} from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts';
 import { TrendingUp, BookOpen, CheckCircle2, AlertCircle } from 'lucide-react';
 import type { StudentProgressType } from '../types/app';
 
@@ -52,10 +43,7 @@ export function LearningProgressTrendChart({
     () => ({
       title: lang === 'zh' ? '课程学习进度趋势' : 'Learning Progress Trend',
       badge: lang === 'zh' ? '历史趋势' : 'History',
-      subtitle:
-        lang === 'zh'
-          ? '按课程追踪学习完成度与进度变化曲线'
-          : 'Track lesson completion progress over time',
+      subtitle: lang === 'zh' ? '按课程追踪学习完成度与进度变化曲线' : 'Track lesson completion progress over time',
       emptyTitle: lang === 'zh' ? '暂无学习进度记录' : 'No Progress Records Yet',
       emptyDesc:
         lang === 'zh'
@@ -124,7 +112,10 @@ export function LearningProgressTrendChart({
   // Empty state
   if (chartData.length === 0) {
     return (
-      <div className="bg-surface rounded-xl border border-border/80 p-3.5 shadow-3xs" data-testid="learning-progress-trend-empty">
+      <div
+        className="bg-surface rounded-xl border border-border/80 p-3.5 shadow-3xs"
+        data-testid="learning-progress-trend-empty"
+      >
         <div className="flex items-center gap-1.5 mb-2">
           <TrendingUp size={15} className="text-primary-theme" />
           <h4 className="text-xs font-bold text-foreground">{texts.title}</h4>
@@ -141,7 +132,10 @@ export function LearningProgressTrendChart({
   const chartHeight = compact ? 180 : 220;
 
   return (
-    <div className="bg-surface rounded-xl border border-border/80 p-3.5 shadow-3xs" data-testid="learning-progress-trend-chart">
+    <div
+      className="bg-surface rounded-xl border border-border/80 p-3.5 shadow-3xs"
+      data-testid="learning-progress-trend-chart"
+    >
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
@@ -229,16 +223,12 @@ export function LearningProgressTrendChart({
                   <div className="bg-slate-900 text-white rounded-xl p-2.5 shadow-xl border border-slate-700/80 text-xs min-w-[180px] z-50">
                     <div className="flex items-center gap-1.5 pb-1.5 border-b border-slate-800">
                       <BookOpen size={12} className="text-indigo-300" />
-                      <span className="font-bold text-indigo-300 truncate max-w-[150px]">
-                        {data.lessonTitle}
-                      </span>
+                      <span className="font-bold text-indigo-300 truncate max-w-[150px]">{data.lessonTitle}</span>
                     </div>
                     <div className="pt-1.5 space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="text-slate-300">{texts.tooltipProgress}:</span>
-                        <span className="font-extrabold text-emerald-400 font-mono">
-                          {data.progressPercent}%
-                        </span>
+                        <span className="font-extrabold text-emerald-400 font-mono">{data.progressPercent}%</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-slate-300">{texts.tooltipDate}:</span>

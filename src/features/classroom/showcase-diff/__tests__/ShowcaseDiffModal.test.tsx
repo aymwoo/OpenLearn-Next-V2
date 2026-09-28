@@ -97,7 +97,11 @@ describe('ShowcaseDiffModal (Showcase & Dual-Screen Diff)', () => {
     const presetBtn = within(drawer).getByText('🎯 典范 vs 错解');
     fireEvent.click(presetBtn);
 
-    expect(noopToast).toHaveBeenCalledWith('对比模式更新', expect.stringContaining('规范典范 vs 典型思维死角'), 'success');
+    expect(noopToast).toHaveBeenCalledWith(
+      '对比模式更新',
+      expect.stringContaining('规范典范 vs 典型思维死角'),
+      'success',
+    );
   });
 
   it('支持一键开启匿名脱敏模式（脱敏为「作答方案 A/B...」）', () => {

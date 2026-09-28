@@ -30,7 +30,11 @@ function playStudentChime() {
   } catch (_) {}
 }
 
-export function StudentCountdownBanner({ lessonId, lang = 'zh', syncChannel: propSyncChannel }: StudentCountdownBannerProps) {
+export function StudentCountdownBanner({
+  lessonId,
+  lang = 'zh',
+  syncChannel: propSyncChannel,
+}: StudentCountdownBannerProps) {
   const [countdown, setCountdown] = useState<ClassroomCountdownState | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -168,9 +172,10 @@ export function StudentCountdownBanner({ lessonId, lang = 'zh', syncChannel: pro
     return `${pad(mins)}:${pad(secs)}`;
   };
 
-  const progressPercent = countdown.totalDuration > 0
-    ? Math.min(100, Math.max(0, (countdown.timeRemaining / countdown.totalDuration) * 100))
-    : 0;
+  const progressPercent =
+    countdown.totalDuration > 0
+      ? Math.min(100, Math.max(0, (countdown.timeRemaining / countdown.totalDuration) * 100))
+      : 0;
 
   const isUrgent = countdown.timeRemaining > 0 && countdown.timeRemaining <= 60;
   const isWarning = countdown.timeRemaining > 60 && countdown.timeRemaining <= 180;
@@ -189,10 +194,10 @@ export function StudentCountdownBanner({ lessonId, lang = 'zh', syncChannel: pro
           isUrgent
             ? 'border-rose-500/80 shadow-rose-500/20'
             : isWarning
-            ? 'border-amber-500/80 shadow-amber-500/20'
-            : isFinished
-            ? 'border-emerald-500/80 shadow-emerald-500/20'
-            : 'border-theme shadow-primary-theme/10'
+              ? 'border-amber-500/80 shadow-amber-500/20'
+              : isFinished
+                ? 'border-emerald-500/80 shadow-emerald-500/20'
+                : 'border-theme shadow-primary-theme/10'
         }`}
       >
         {/* 顶部标签与状态 */}
@@ -203,15 +208,21 @@ export function StudentCountdownBanner({ lessonId, lang = 'zh', syncChannel: pro
                 isUrgent
                   ? 'bg-rose-500 animate-pulse'
                   : isWarning
-                  ? 'bg-amber-500'
-                  : isFinished
-                  ? 'bg-emerald-500'
-                  : 'bg-primary-theme'
+                    ? 'bg-amber-500'
+                    : isFinished
+                      ? 'bg-emerald-500'
+                      : 'bg-primary-theme'
               }`}
             >
-              <Clock size={12} className={countdown.isRunning ? 'animate-spin' : ''} style={{ animationDuration: '6s' }} />
+              <Clock
+                size={12}
+                className={countdown.isRunning ? 'animate-spin' : ''}
+                style={{ animationDuration: '6s' }}
+              />
             </span>
-            <span className="text-xs font-bold text-main truncate">{countdown.label || (lang === 'zh' ? '课堂任务' : 'Task')}</span>
+            <span className="text-xs font-bold text-main truncate">
+              {countdown.label || (lang === 'zh' ? '课堂任务' : 'Task')}
+            </span>
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
@@ -244,10 +255,10 @@ export function StudentCountdownBanner({ lessonId, lang = 'zh', syncChannel: pro
                   isUrgent
                     ? 'text-rose-500 animate-pulse'
                     : isWarning
-                    ? 'text-amber-500'
-                    : isFinished
-                    ? 'text-emerald-500'
-                    : 'text-primary-theme'
+                      ? 'text-amber-500'
+                      : isFinished
+                        ? 'text-emerald-500'
+                        : 'text-primary-theme'
                 }`}
               >
                 {formatTime(countdown.timeRemaining)}
@@ -258,12 +269,12 @@ export function StudentCountdownBanner({ lessonId, lang = 'zh', syncChannel: pro
                     ? '🎉 时间已截止！'
                     : 'Time is up!'
                   : countdown.isPaused
-                  ? lang === 'zh'
-                    ? '⏸️ 老师已暂停计时'
-                    : 'Paused'
-                  : lang === 'zh'
-                  ? '与全班同步中'
-                  : 'Synced'}
+                    ? lang === 'zh'
+                      ? '⏸️ 老师已暂停计时'
+                      : 'Paused'
+                    : lang === 'zh'
+                      ? '与全班同步中'
+                      : 'Synced'}
               </span>
             </div>
 
@@ -271,7 +282,13 @@ export function StudentCountdownBanner({ lessonId, lang = 'zh', syncChannel: pro
             <div className="w-full h-1.5 bg-surface-secondary rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-500 ${
-                  isUrgent ? 'bg-rose-500' : isWarning ? 'bg-amber-500' : isFinished ? 'bg-emerald-500' : 'bg-primary-theme'
+                  isUrgent
+                    ? 'bg-rose-500'
+                    : isWarning
+                      ? 'bg-amber-500'
+                      : isFinished
+                        ? 'bg-emerald-500'
+                        : 'bg-primary-theme'
                 }`}
                 style={{ width: `${progressPercent}%` }}
               />

@@ -347,5 +347,3 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     ]);
   });
 });
-
-

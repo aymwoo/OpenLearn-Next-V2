@@ -200,9 +200,7 @@ describe('上课流程扩展端点（classroom-extras）', () => {
     });
 
     it('AI 抛错：逐生降级为模板，整体仍 200', async () => {
-      const spy = vi
-        .spyOn(kernelContainer.aiService, 'generateText')
-        .mockRejectedValue(new Error('upstream 500'));
+      const spy = vi.spyOn(kernelContainer.aiService, 'generateText').mockRejectedValue(new Error('upstream 500'));
 
       const res = await call('POST', `/api/classroom/${lessonId}/parent-notification`, teacherToken, baseSummary);
       expect(res.status).toBe(200);
@@ -235,7 +233,9 @@ describe('上课流程扩展端点（classroom-extras）', () => {
           note: '建议单独辅导',
         },
       ]);
-      const spy = vi.spyOn(kernelContainer.aiService, 'generateText').mockResolvedValue('```json\n' + aiPayload + '\n```');
+      const spy = vi
+        .spyOn(kernelContainer.aiService, 'generateText')
+        .mockResolvedValue('```json\n' + aiPayload + '\n```');
 
       const res = await call('POST', `/api/classroom/${lessonId}/predict-mastery`, teacherToken, baseSnapshot);
       expect(res.status).toBe(200);
@@ -266,14 +266,12 @@ describe('上课流程扩展端点（classroom-extras）', () => {
   });
   // ── 模型输出清洗（浏览器实测发现的真实缺陷）─────────────────────────
   it('AI 返回带 <think> 的内容时，产物 Markdown 中不含思考块', async () => {
-    const spy = vi
-      .spyOn(kernelContainer.aiService, 'generateText')
-      .mockImplementation(async (prompt: string) => {
-        if (prompt.includes('学生家长')) {
-          return '<think>推理：该生参与度高</think>\n\n张子豪本节参与积极，建议保持。';
-        }
-        return '<think>推理：班级节奏正常</think>\n\n本节课堂节奏良好。';
-      });
+    const spy = vi.spyOn(kernelContainer.aiService, 'generateText').mockImplementation(async (prompt: string) => {
+      if (prompt.includes('学生家长')) {
+        return '<think>推理：该生参与度高</think>\n\n张子豪本节参与积极，建议保持。';
+      }
+      return '<think>推理：班级节奏正常</think>\n\n本节课堂节奏良好。';
+    });
 
     const res = await call('POST', `/api/classroom/${lessonId}/parent-notification`, teacherToken, baseSummary);
     const body = (await res.json()) as any;
@@ -289,7 +287,6 @@ describe('上课流程扩展端点（classroom-extras）', () => {
     expect(body.studentNotifications[0].markdown).toContain('张子豪本节参与积极');
     spy.mockRestore();
   });
-
 });
 
 /**
@@ -326,15 +323,11 @@ describe('stripModelArtifacts', () => {
 
   it('清洗后为空时回退原文（避免误删成空）', async () => {
     const { stripModelArtifacts } = await import('../routes/classroom-extras.js');
-    expect(stripModelArtifacts('<think>只有推理没有正文</think>')).toBe(
-      '<think>只有推理没有正文</think>',
-    );
+    expect(stripModelArtifacts('<think>只有推理没有正文</think>')).toBe('<think>只有推理没有正文</think>');
   });
 
   it('正常正文不被改动', async () => {
     const { stripModelArtifacts } = await import('../routes/classroom-extras.js');
     expect(stripModelArtifacts('张子豪今天表现出色，建议保持。')).toBe('张子豪今天表现出色，建议保持。');
   });
-
-
 });

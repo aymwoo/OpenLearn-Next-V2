@@ -80,12 +80,7 @@ function formatTime(value?: number | null): string {
   }
 }
 
-export function AssignmentSubmitDialog({
-  assignmentId,
-  onClose,
-  onToast,
-  lang = 'zh',
-}: AssignmentSubmitDialogProps) {
+export function AssignmentSubmitDialog({ assignmentId, onClose, onToast, lang = 'zh' }: AssignmentSubmitDialogProps) {
   const zh = lang === 'zh';
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -376,7 +371,9 @@ export function AssignmentSubmitDialog({
                   </span>
                 ) : null}
                 {assignment.allow_late ? <span>{zh ? '允许迟交' : 'late allowed'}</span> : null}
-                {stats ? <span>{zh ? `已提交 ${stats.submissionCount}` : `${stats.submissionCount} submitted`}</span> : null}
+                {stats ? (
+                  <span>{zh ? `已提交 ${stats.submissionCount}` : `${stats.submissionCount} submitted`}</span>
+                ) : null}
               </div>
             )}
           </div>
@@ -415,12 +412,16 @@ export function AssignmentSubmitDialog({
               type="button"
               onClick={() => setTab('peer')}
               className={`px-2.5 py-1.5 text-xs rounded-t-lg border-b-2 transition-colors inline-flex items-center gap-1.5 ${
-                tab === 'peer' ? 'border-orange-500 text-main font-medium' : 'border-transparent text-muted hover:text-main'
+                tab === 'peer'
+                  ? 'border-orange-500 text-main font-medium'
+                  : 'border-transparent text-muted hover:text-main'
               }`}
             >
               {zh ? '互评任务' : 'Peer review'}
               <span className="text-[11px]">
-                {pendingPeerReviews > 0 ? `${peerTasks.length - pendingPeerReviews}/${peerTasks.length}` : peerTasks.length}
+                {pendingPeerReviews > 0
+                  ? `${peerTasks.length - pendingPeerReviews}/${peerTasks.length}`
+                  : peerTasks.length}
               </span>
               {pendingPeerReviews > 0 && (
                 <span className="px-1 rounded-full bg-amber-100 text-amber-700 text-[10px]">
@@ -574,7 +575,10 @@ export function AssignmentSubmitDialog({
                         </div>
                         {item.status === 'uploading' && (
                           <div className="mt-1 h-1 rounded-full bg-surface-secondary overflow-hidden">
-                            <div className="h-full bg-orange-500 transition-all" style={{ width: `${item.progress}%` }} />
+                            <div
+                              className="h-full bg-orange-500 transition-all"
+                              style={{ width: `${item.progress}%` }}
+                            />
                           </div>
                         )}
                         {item.status === 'error' && item.error ? (
@@ -660,9 +664,11 @@ export function AssignmentSubmitDialog({
           <span className="text-[11px] text-muted">
             {notice ? (
               <span className={notice.type === 'warning' ? 'text-amber-700' : 'text-emerald-700'}>{notice.text}</span>
-            ) : zh
-              ? `本次将提交 ${doneFileIds.length} 个附件${textContent.trim() ? ' + 文本' : ''}${linkUrl.trim() ? ' + 链接' : ''}`
-              : `${doneFileIds.length} file(s)`}
+            ) : zh ? (
+              `本次将提交 ${doneFileIds.length} 个附件${textContent.trim() ? ' + 文本' : ''}${linkUrl.trim() ? ' + 链接' : ''}`
+            ) : (
+              `${doneFileIds.length} file(s)`
+            )}
           </span>
           <div className="flex items-center gap-2">
             <button

@@ -55,9 +55,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
 
     // 真实会话行：/api/courseware/attempts 现在需要登录（成绩榜对学生开放，但必须先鉴权）
     kernelContainer.db
-      .prepare(
-        'INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)',
-      )
+      .prepare('INSERT OR REPLACE INTO client_sessions (id, session_data, updated_at, expires_at) VALUES (?, ?, ?, ?)')
       .run(
         teacherToken,
         JSON.stringify({ userId: teacherId, role: 'teacher', username: 'e2e_teacher' }),
@@ -74,9 +72,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
 
     // Student
     kernelContainer.db
-      .prepare(
-        'INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
-      )
+      .prepare('INSERT OR REPLACE INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)')
       .run(studentId, 'stu-e2e-001-num', studentName, 'xm@test', now);
     kernelContainer.db
       .prepare('INSERT OR REPLACE INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)')
@@ -97,9 +93,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
       'utf8',
     );
     kernelContainer.db
-      .prepare(
-        'INSERT OR REPLACE INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      )
+      .prepare('INSERT OR REPLACE INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)')
       .run(coursewareId, coursewareUuid, coursewareName, 'html', 'index.html', now);
 
     // ── 2. 创建 lesson ────────────────────────────────────────────
@@ -302,9 +296,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
 
     // F.2 — assignment_submissions 出现该生分数
     const submission = kernelContainer.db
-      .prepare(
-        'SELECT score, status, feedback FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?',
-      )
+      .prepare('SELECT score, status, feedback FROM assignment_submissions WHERE assignment_id = ? AND student_id = ?')
       .get(promoteJson.assignmentId, studentId) as { score: number; status: string; feedback: string };
     expect(submission.score).toBe(88);
     expect(submission.status).toBe('graded');
@@ -312,9 +304,7 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
 
     // F.3 — student_lesson_progress 标记为 100% 完成
     const progress = kernelContainer.db
-      .prepare(
-        'SELECT completed, progress_percent FROM student_lesson_progress WHERE student_id = ? AND lesson_id = ?',
-      )
+      .prepare('SELECT completed, progress_percent FROM student_lesson_progress WHERE student_id = ? AND lesson_id = ?')
       .get(studentId, lessonId) as { completed: number; progress_percent: number };
     expect(progress.completed).toBe(1);
     expect(progress.progress_percent).toBe(100);

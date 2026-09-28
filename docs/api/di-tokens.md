@@ -65,26 +65,26 @@ interface PluginContext {
 
 ### A. 核心 9 服务 Token（`interfaces.ts:267-318`）
 
-| 导出 Token                    | 解析类型                 | 标识字符串                               |
-| ----------------------------- | ------------------------ | ---------------------------------------- |
-| `ICommandBusServiceToken`     | `ICommandBusService`     | `@openlearn/core:ICommandBusService`     |
-| `IEventBusServiceToken`       | `IEventBusService`       | `@openlearn/core:IEventBusService`       |
-| `IActionRegistryServiceToken` | `IActionRegistryService` | `@openlearn/core:IActionRegistryService` |
-| `ICapabilityServiceToken`     | `ICapabilityService`     | `@openlearn/core:ICapabilityService`     |
-| `IProcessServiceToken`        | `IProcessService`        | `@openlearn/core:IProcessService`        |
-| `IStorageServiceToken`        | `IStorageService`        | `@openlearn/core:IStorageService`        |
-| `IAIServiceToken`             | `IAIService`             | `@openlearn/core:IAIService`             |
+| 导出 Token                      | 解析类型                   | 标识字符串                                 |
+| ------------------------------- | -------------------------- | ------------------------------------------ |
+| `ICommandBusServiceToken`       | `ICommandBusService`       | `@openlearn/core:ICommandBusService`       |
+| `IEventBusServiceToken`         | `IEventBusService`         | `@openlearn/core:IEventBusService`         |
+| `IActionRegistryServiceToken`   | `IActionRegistryService`   | `@openlearn/core:IActionRegistryService`   |
+| `ICapabilityServiceToken`       | `ICapabilityService`       | `@openlearn/core:ICapabilityService`       |
+| `IProcessServiceToken`          | `IProcessService`          | `@openlearn/core:IProcessService`          |
+| `IStorageServiceToken`          | `IStorageService`          | `@openlearn/core:IStorageService`          |
+| `IAIServiceToken`               | `IAIService`               | `@openlearn/core:IAIService`               |
 | `IPointsDimensionRegistryToken` | `IPointsDimensionRegistry` | `@openlearn/core:IPointsDimensionRegistry` |
-| `IPointsLedgerServiceToken`   | `IPointsLedgerService`   | `@openlearn/core:IPointsLedgerService`   |
+| `IPointsLedgerServiceToken`     | `IPointsLedgerService`     | `@openlearn/core:IPointsLedgerService`     |
 
 > `pointsDimension` 和 `pointsLedger` 通过 `tryResolve` 获取，未注册时值为 `null`（插件可检查 `=== null` 降级）。
 
 ### B. 内核 / 基础设施 Token
 
-| 导出 Token         | 解析类型                                          | 标识字符串                    |
-| ------------------ | ------------------------------------------------- | ----------------------------- |
+| 导出 Token         | 解析类型                                                                                                              | 标识字符串                    |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
 | `IDatabaseToken`   | `SqliteDatabase`（better-sqlite3 兼容的原始句柄，无包装；SDK 导出自包含类型，避免消费方依赖 better-sqlite3 类型解析） | `@openlearn/core:IDatabase`   |
-| `IPluginHostToken` | `PluginHost`（**类，非纯接口**）                  | `@openlearn/core:IPluginHost` |
+| `IPluginHostToken` | `PluginHost`（**类，非纯接口**）                                                                                      | `@openlearn/core:IPluginHost` |
 
 ### C. P7-A2 统一插件平台 Token（`interfaces.ts:348-390`）
 
@@ -99,9 +99,9 @@ interface PluginContext {
 
 ### D. 积分 / 学期 Token
 
-| 导出 Token                   | 解析类型                | 标识字符串                                 |
-| ---------------------------- | ----------------------- | ------------------------------------------ |
-| `ISemesterGradeServiceToken` | `ISemesterGradeService` | `@openlearn/core:ISemesterGradeService`    |
+| 导出 Token                   | 解析类型                | 标识字符串                              |
+| ---------------------------- | ----------------------- | --------------------------------------- |
+| `ISemesterGradeServiceToken` | `ISemesterGradeService` | `@openlearn/core:ISemesterGradeService` |
 
 > `IPointsDimensionRegistryToken` 和 `IPointsLedgerServiceToken` 已归入 §A 核心 9 服务。
 
@@ -133,12 +133,12 @@ interface PluginContext {
 
 ### H. 课件运行时 / 课堂扩展 Token
 
-| 导出 Token                                | 解析类型                            | 标识字符串                                              |
-| ----------------------------------------- | ----------------------------------- | ------------------------------------------------------- |
-| `ICoursewareRuntimeScriptRegistryToken`   | `ICoursewareRuntimeScriptRegistry`  | `@openlearn/core:ICoursewareRuntimeScriptRegistry`      |
-| `IClassroomLifecycleServiceToken`         | `IClassroomLifecycleService`        | `@openlearn/core:IClassroomLifecycleService`            |
-| `IInteractionRuntimeServiceToken`         | `IInteractionRuntimeService`        | `@openlearn/core:IInteractionRuntimeService`            |
-| `IClassroomCountdownServiceToken`         | `IClassroomCountdownService`        | `@openlearn/core:IClassroomCountdownService`            |
+| 导出 Token                              | 解析类型                           | 标识字符串                                         |
+| --------------------------------------- | ---------------------------------- | -------------------------------------------------- |
+| `ICoursewareRuntimeScriptRegistryToken` | `ICoursewareRuntimeScriptRegistry` | `@openlearn/core:ICoursewareRuntimeScriptRegistry` |
+| `IClassroomLifecycleServiceToken`       | `IClassroomLifecycleService`       | `@openlearn/core:IClassroomLifecycleService`       |
+| `IInteractionRuntimeServiceToken`       | `IInteractionRuntimeService`       | `@openlearn/core:IInteractionRuntimeService`       |
+| `IClassroomCountdownServiceToken`       | `IClassroomCountdownService`       | `@openlearn/core:IClassroomCountdownService`       |
 
 ---
 

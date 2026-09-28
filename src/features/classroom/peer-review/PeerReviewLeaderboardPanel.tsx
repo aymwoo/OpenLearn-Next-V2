@@ -1,14 +1,5 @@
 import React from 'react';
-import {
-  Trophy,
-  Award,
-  BookOpen,
-  Mic,
-  Cast,
-  ArrowRight,
-  Sparkles,
-  CheckCircle,
-} from 'lucide-react';
+import { Trophy, Award, BookOpen, Mic, Cast, ArrowRight, Sparkles, CheckCircle } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import type { NominatedStudent } from './types';
 
@@ -38,10 +29,7 @@ export const PeerReviewLeaderboardPanel: React.FC<PeerReviewLeaderboardPanelProp
   };
 
   return (
-    <div
-      id="peer-review-leaderboard-panel"
-      className="flex flex-col gap-4 w-full select-none"
-    >
+    <div id="peer-review-leaderboard-panel" className="flex flex-col gap-4 w-full select-none">
       {/* 1. Top Nominated Podium */}
       <div className="bg-[#131b2e] p-4 rounded-xl border border-[#2d3449]/60 flex flex-col gap-3 shadow-md">
         <div className="flex items-center justify-between">
@@ -69,13 +57,9 @@ export const PeerReviewLeaderboardPanel: React.FC<PeerReviewLeaderboardPanelProp
                   >
                     {st.rank}
                   </span>
-                  <span className="text-xs font-semibold text-[#dae2fd]">
-                    {maskName(st.name, isAnonymous)}
-                  </span>
+                  <span className="text-xs font-semibold text-[#dae2fd]">{maskName(st.name, isAnonymous)}</span>
                 </div>
-                <span className="font-mono text-xs font-semibold text-[#ffb95f]">
-                  {st.votes} 票推荐
-                </span>
+                <span className="font-mono text-xs font-semibold text-[#ffb95f]">{st.votes} 票推荐</span>
               </div>
 
               <div className="flex items-center justify-between text-xs">
@@ -152,9 +136,7 @@ export const PeerReviewLeaderboardPanel: React.FC<PeerReviewLeaderboardPanelProp
                 >
                   <span className="flex items-center gap-2">
                     <Mic size={14} className="text-[#c0c1ff]" />
-                    <span>
-                      {top ? `连麦作者 ${maskName(top, isAnonymous)} (分享思路)` : '暂无提名，无法连麦'}
-                    </span>
+                    <span>{top ? `连麦作者 ${maskName(top, isAnonymous)} (分享思路)` : '暂无提名，无法连麦'}</span>
                   </span>
                   <span className="text-[#908fa0] text-[10px] font-mono">连线</span>
                 </button>
@@ -167,9 +149,7 @@ export const PeerReviewLeaderboardPanel: React.FC<PeerReviewLeaderboardPanelProp
                 >
                   <span className="flex items-center gap-2">
                     <Cast size={14} className="text-[#4edea3]" />
-                    <span>
-                      {second ? `邀请 ${maskName(second, isAnonymous)} 投屏分享` : '暂无提名，无法投屏'}
-                    </span>
+                    <span>{second ? `邀请 ${maskName(second, isAnonymous)} 投屏分享` : '暂无提名，无法投屏'}</span>
                   </span>
                   <span className="text-[#908fa0] text-[10px] font-mono">邀请</span>
                 </button>
@@ -192,9 +172,7 @@ export const PeerReviewLeaderboardPanel: React.FC<PeerReviewLeaderboardPanelProp
             <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </button>
           <div className="text-center mt-2">
-            <span className="text-[10px] font-mono text-[#908fa0]">
-              HOTKEY: PRESS ENTER TO ADVANCE TO STAGE 03
-            </span>
+            <span className="text-[10px] font-mono text-[#908fa0]">HOTKEY: PRESS ENTER TO ADVANCE TO STAGE 03</span>
           </div>
         </div>
       </div>

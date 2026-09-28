@@ -1,20 +1,6 @@
 import React, { useState } from 'react';
-import {
-  CheckCircle2,
-  X,
-  Star,
-  Sparkles,
-  HelpCircle,
-  AlertCircle,
-  Award,
-  ChevronRight,
-  BookOpen,
-} from 'lucide-react';
-import type {
-  AdaptiveCoreQuestion,
-  AdaptiveChallengeQuestion,
-  ExitTicketTier,
-} from './types';
+import { CheckCircle2, X, Star, Sparkles, HelpCircle, AlertCircle, Award, ChevronRight, BookOpen } from 'lucide-react';
+import type { AdaptiveCoreQuestion, AdaptiveChallengeQuestion, ExitTicketTier } from './types';
 
 export interface AdaptiveExitTicketModalProps {
   isOpen: boolean;
@@ -173,11 +159,13 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
                   <span>1. 核心概念过关题</span>
                 </span>
                 {coreAnswered && (
-                  <span className={`text-2xs font-bold px-2 py-0.5 rounded-full ${
-                    isCoreCorrect
-                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                      : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
-                  }`}>
+                  <span
+                    className={`text-2xs font-bold px-2 py-0.5 rounded-full ${
+                      isCoreCorrect
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                        : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                    }`}
+                  >
                     {isCoreCorrect ? '✓ 概念通关' : '需巩固'}
                   </span>
                 )}
@@ -281,10 +269,7 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
                     onClick={() => setRating(star)}
                     className="p-0.5 text-xl transition-transform hover:scale-125 cursor-pointer"
                   >
-                    <Star
-                      size={20}
-                      className={star <= rating ? 'text-amber-400 fill-amber-400' : 'text-slate-300'}
-                    />
+                    <Star size={20} className={star <= rating ? 'text-amber-400 fill-amber-400' : 'text-slate-300'} />
                   </button>
                 ))}
                 <span className="text-2xs font-bold text-amber-500 font-mono ml-1">{rating}.0 星</span>
@@ -326,7 +311,15 @@ export const AdaptiveExitTicketModal: React.FC<AdaptiveExitTicketModalProps> = (
               onClick={handleSubmit}
               className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl transition-colors cursor-pointer shadow-md text-xs flex items-center justify-center gap-1.5"
             >
-              <span>{isSubmitting ? (lang === 'zh' ? '正在提交...' : 'Submitting...') : (lang === 'zh' ? '提交自适应结课通票' : 'Submit Exit Ticket')}</span>
+              <span>
+                {isSubmitting
+                  ? lang === 'zh'
+                    ? '正在提交...'
+                    : 'Submitting...'
+                  : lang === 'zh'
+                    ? '提交自适应结课通票'
+                    : 'Submit Exit Ticket'}
+              </span>
             </button>
           </div>
         )}

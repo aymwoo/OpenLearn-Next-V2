@@ -1,8 +1,4 @@
-import type {
-  HardwareDeviceType,
-  HardwareStandardAction,
-  HardwareEvent,
-} from '../types';
+import type { HardwareDeviceType, HardwareStandardAction, HardwareEvent } from '../types';
 
 export type HardwareEventListener = (event: HardwareEvent) => void;
 

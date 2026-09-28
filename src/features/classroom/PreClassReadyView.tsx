@@ -267,8 +267,7 @@ export function PreClassReadyView({
 
   // Helper: 判断学生是否在线（双轨兼容学生 id 与学号 student_number）
   const isStudentOnline = (st: StudentType) =>
-    onlineStudentIds.includes(st.id) ||
-    Boolean(st.student_number && onlineStudentIds.includes(st.student_number));
+    onlineStudentIds.includes(st.id) || Boolean(st.student_number && onlineStudentIds.includes(st.student_number));
 
   // Metrics
   const totalCount = students.length;
@@ -283,7 +282,10 @@ export function PreClassReadyView({
   const durationMins = isNaN(totalDuration) || totalDuration <= 0 ? 45 : Math.round(totalDuration / 60);
 
   return (
-    <div id="pre-class-ready-view" className="flex-1 flex flex-col min-h-0 bg-surface-secondary/20 p-4 gap-4 overflow-y-auto">
+    <div
+      id="pre-class-ready-view"
+      className="flex-1 flex flex-col min-h-0 bg-surface-secondary/20 p-4 gap-4 overflow-y-auto"
+    >
       {/* 1. Header Banner: Hero Call-to-Action */}
       <div className="bg-surface border border-theme rounded-2xl p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
@@ -349,11 +351,7 @@ export function PreClassReadyView({
         {/* Left Column (5 cols): Diagnostic Hub & Checklist */}
         <div className="lg:col-span-5 flex flex-col gap-4">
           {/* Pre-lesson Diagnostic Hub: Top 3 Mistake Concepts & Video Prep */}
-          <PreClassDiagnosticHub
-            lessonId={selectedLesson}
-            classId={selectedClassId}
-            lang={lang}
-          />
+          <PreClassDiagnosticHub lessonId={selectedLesson} classId={selectedClassId} lang={lang} />
 
           {/* Card: Pre-flight Checklist */}
           <div className="bg-surface border border-theme rounded-2xl p-4 shadow-sm flex flex-col gap-3">
@@ -379,8 +377,12 @@ export function PreClassReadyView({
                   className="mt-0.5 rounded text-primary-theme focus:ring-primary-theme cursor-pointer"
                 />
                 <div className="flex-1">
-                  <div className="text-xs font-bold text-main">{lang === 'zh' ? '课件与互动资源已就绪' : 'Courseware & Resources Ready'}</div>
-                  <div className="text-[11px] text-muted">{lang === 'zh' ? '已校验实验沙箱、微前端挂载点及白板插槽' : 'Sandbox and extensions verified'}</div>
+                  <div className="text-xs font-bold text-main">
+                    {lang === 'zh' ? '课件与互动资源已就绪' : 'Courseware & Resources Ready'}
+                  </div>
+                  <div className="text-[11px] text-muted">
+                    {lang === 'zh' ? '已校验实验沙箱、微前端挂载点及白板插槽' : 'Sandbox and extensions verified'}
+                  </div>
                 </div>
                 {checklist.resources && <CheckCircle2 size={13} className="text-emerald-500 shrink-0 mt-0.5" />}
               </label>
@@ -396,8 +398,14 @@ export function PreClassReadyView({
                   className="mt-0.5 rounded text-primary-theme focus:ring-primary-theme cursor-pointer"
                 />
                 <div className="flex-1">
-                  <div className="text-xs font-bold text-main">{lang === 'zh' ? '广播同步信道与大屏投屏' : 'Broadcast & Stage Mirroring'}</div>
-                  <div className="text-[11px] text-muted">{lang === 'zh' ? 'Socket.IO 实时通信广播就绪，全屏大屏展台待命' : 'Real-time WebSocket connection active'}</div>
+                  <div className="text-xs font-bold text-main">
+                    {lang === 'zh' ? '广播同步信道与大屏投屏' : 'Broadcast & Stage Mirroring'}
+                  </div>
+                  <div className="text-[11px] text-muted">
+                    {lang === 'zh'
+                      ? 'Socket.IO 实时通信广播就绪，全屏大屏展台待命'
+                      : 'Real-time WebSocket connection active'}
+                  </div>
                 </div>
                 {checklist.audioVideo && <CheckCircle2 size={13} className="text-emerald-500 shrink-0 mt-0.5" />}
               </label>
@@ -413,8 +421,12 @@ export function PreClassReadyView({
                   className="mt-0.5 rounded text-primary-theme focus:ring-primary-theme cursor-pointer"
                 />
                 <div className="flex-1">
-                  <div className="text-xs font-bold text-main">{lang === 'zh' ? '安全沙箱与专注模式策略' : 'Sandbox & Anti-Distraction Guard'}</div>
-                  <div className="text-[11px] text-muted">{lang === 'zh' ? 'iframe CSP 隔离与学生端防作弊专注锁定待发' : 'CSP frame sandbox configured'}</div>
+                  <div className="text-xs font-bold text-main">
+                    {lang === 'zh' ? '安全沙箱与专注模式策略' : 'Sandbox & Anti-Distraction Guard'}
+                  </div>
+                  <div className="text-[11px] text-muted">
+                    {lang === 'zh' ? 'iframe CSP 隔离与学生端防作弊专注锁定待发' : 'CSP frame sandbox configured'}
+                  </div>
                 </div>
                 {checklist.sandbox && <CheckCircle2 size={13} className="text-emerald-500 shrink-0 mt-0.5" />}
               </label>
@@ -430,8 +442,12 @@ export function PreClassReadyView({
                   className="mt-0.5 rounded text-primary-theme focus:ring-primary-theme cursor-pointer"
                 />
                 <div className="flex-1">
-                  <div className="text-xs font-bold text-main">{lang === 'zh' ? '教学目标与重难点梳理' : 'Key Teaching Goals Set'}</div>
-                  <div className="text-[11px] text-muted">{lang === 'zh' ? '导入、探究、练习与评价环节时序已锚定' : 'Segments timing calibrated'}</div>
+                  <div className="text-xs font-bold text-main">
+                    {lang === 'zh' ? '教学目标与重难点梳理' : 'Key Teaching Goals Set'}
+                  </div>
+                  <div className="text-[11px] text-muted">
+                    {lang === 'zh' ? '导入、探究、练习与评价环节时序已锚定' : 'Segments timing calibrated'}
+                  </div>
                 </div>
                 {checklist.objective && <CheckCircle2 size={13} className="text-emerald-500 shrink-0 mt-0.5" />}
               </label>
@@ -494,7 +510,9 @@ export function PreClassReadyView({
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>{onlineCount} {lang === 'zh' ? '设备连入' : 'Online'}</span>
+                  <span>
+                    {onlineCount} {lang === 'zh' ? '设备连入' : 'Online'}
+                  </span>
                 </span>
               </div>
 
@@ -757,7 +775,9 @@ export function PreClassReadyView({
                       <div className="flex items-center gap-2.5 min-w-0">
                         <span
                           className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                            isOnline ? 'bg-emerald-500 shadow-xs shadow-emerald-500/50' : 'bg-slate-300 dark:bg-slate-600'
+                            isOnline
+                              ? 'bg-emerald-500 shadow-xs shadow-emerald-500/50'
+                              : 'bg-slate-300 dark:bg-slate-600'
                           }`}
                           title={isOnline ? '在线连接活跃' : '离线未连入'}
                         />
@@ -777,7 +797,7 @@ export function PreClassReadyView({
                               : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
                           }`}
                         >
-                          {isReady ? (lang === 'zh' ? '✓ 已就绪' : 'Ready') : (lang === 'zh' ? '未就绪' : 'Pending')}
+                          {isReady ? (lang === 'zh' ? '✓ 已就绪' : 'Ready') : lang === 'zh' ? '未就绪' : 'Pending'}
                         </button>
 
                         <button
@@ -807,7 +827,9 @@ export function PreClassReadyView({
                 <Sparkles size={14} className="text-amber-500" />
                 <span>{lang === 'zh' ? '课前热身提示与学生端广播' : 'Pre-Class Warm-up Notice'}</span>
               </span>
-              <span className="text-[11px] text-muted">{lang === 'zh' ? '实时推送至学生待命屏' : 'Pushed to student stand-by UI'}</span>
+              <span className="text-[11px] text-muted">
+                {lang === 'zh' ? '实时推送至学生待命屏' : 'Pushed to student stand-by UI'}
+              </span>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -815,7 +837,9 @@ export function PreClassReadyView({
                 value={warmupText}
                 onChange={(e) => setWarmupText(e.target.value)}
                 rows={2}
-                placeholder={lang === 'zh' ? '输入广播给全班学生的课前热身指导...' : 'Type a warm-up prompt for students...'}
+                placeholder={
+                  lang === 'zh' ? '输入广播给全班学生的课前热身指导...' : 'Type a warm-up prompt for students...'
+                }
                 className="w-full bg-surface-secondary border border-theme rounded-xl p-2.5 text-xs text-main placeholder-muted focus:ring-1 focus:ring-primary-theme outline-none resize-none"
               />
 
@@ -824,7 +848,11 @@ export function PreClassReadyView({
                   <span>{lang === 'zh' ? '预设提示：' : 'Presets:'}</span>
                   <button
                     type="button"
-                    onClick={() => setWarmupText(lang === 'zh' ? '请大家翻到课本对应章节，准备思考探究题。' : 'Open chapter materials.')}
+                    onClick={() =>
+                      setWarmupText(
+                        lang === 'zh' ? '请大家翻到课本对应章节，准备思考探究题。' : 'Open chapter materials.',
+                      )
+                    }
                     className="hover:text-primary-theme underline cursor-pointer"
                   >
                     {lang === 'zh' ? '预备教材' : 'Textbook'}
@@ -832,7 +860,13 @@ export function PreClassReadyView({
                   <span>·</span>
                   <button
                     type="button"
-                    onClick={() => setWarmupText(lang === 'zh' ? '课前思考：如何用生活中的常见现象解释本节核心定律？' : 'Pre-class thought starter')}
+                    onClick={() =>
+                      setWarmupText(
+                        lang === 'zh'
+                          ? '课前思考：如何用生活中的常见现象解释本节核心定律？'
+                          : 'Pre-class thought starter',
+                      )
+                    }
                     className="hover:text-primary-theme underline cursor-pointer"
                   >
                     {lang === 'zh' ? '思考题' : 'Question'}
@@ -846,7 +880,15 @@ export function PreClassReadyView({
                   className="px-3.5 py-1.5 bg-primary-theme hover:bg-primary-theme-hover text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-50"
                 >
                   <Send size={12} />
-                  <span>{isBroadcastingNotice ? (lang === 'zh' ? '广播中...' : 'Sending...') : (lang === 'zh' ? '广播到学生端' : 'Broadcast to Students')}</span>
+                  <span>
+                    {isBroadcastingNotice
+                      ? lang === 'zh'
+                        ? '广播中...'
+                        : 'Sending...'
+                      : lang === 'zh'
+                        ? '广播到学生端'
+                        : 'Broadcast to Students'}
+                  </span>
                 </button>
               </div>
             </div>

@@ -331,9 +331,7 @@ export function AcademicGrowthTrajectoryChart({ assignments = [], lang = 'en' }:
                               <span className="block text-xs text-emerald-600 uppercase font-black">
                                 {lang === 'zh' ? '累积移动平均' : 'RUNNING AVG'}
                               </span>
-                              <span className="text-xs font-black font-mono text-emerald-800">
-                                {d.runningAverage}%
-                              </span>
+                              <span className="text-xs font-black font-mono text-emerald-800">{d.runningAverage}%</span>
                             </div>
                           </div>
 

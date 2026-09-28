@@ -437,16 +437,12 @@ function wrapPointsLedgerService(service: IPointsLedgerService): IPointsLedgerSe
     getLogs: createSafeFunction(async (studentId: string, classId?: string) => {
       return service.getLogs(studentId, classId);
     }),
-    getStudentTotalByDimension: createSafeFunction(
-      async (studentId: string, classId: string, dimensionId: string) => {
-        return service.getStudentTotalByDimension(studentId, classId, dimensionId);
-      },
-    ),
-    getStudentDimensionSummary: createSafeFunction(
-      async (studentId: string, classId: string) => {
-        return service.getStudentDimensionSummary(studentId, classId);
-      },
-    ),
+    getStudentTotalByDimension: createSafeFunction(async (studentId: string, classId: string, dimensionId: string) => {
+      return service.getStudentTotalByDimension(studentId, classId, dimensionId);
+    }),
+    getStudentDimensionSummary: createSafeFunction(async (studentId: string, classId: string) => {
+      return service.getStudentDimensionSummary(studentId, classId);
+    }),
   } as IPointsLedgerService;
 }
 
@@ -577,12 +573,8 @@ export async function buildContext(
   const wrappedStorage = wrapStorage(storageService, db, manifest.id);
   const wrappedAI = wrapAI(aiService, pluginId);
   // Points 包装仅在服务已注册时生效；未注册则取 null（plugin 可检查 === null 降级）。
-  const wrappedPointsDimension = pointsDimensionRegistry
-    ? wrapPointsDimensionRegistry(pointsDimensionRegistry)
-    : null;
-  const wrappedPointsLedger = pointsLedgerService
-    ? wrapPointsLedgerService(pointsLedgerService)
-    : null;
+  const wrappedPointsDimension = pointsDimensionRegistry ? wrapPointsDimensionRegistry(pointsDimensionRegistry) : null;
+  const wrappedPointsLedger = pointsLedgerService ? wrapPointsLedgerService(pointsLedgerService) : null;
 
   // 3. 冻结包装对象的原型链（迁移自 PluginRuntime lines 512-518）
   Object.setPrototypeOf(wrappedCommandBus, null);

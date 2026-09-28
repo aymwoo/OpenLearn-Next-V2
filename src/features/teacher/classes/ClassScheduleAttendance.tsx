@@ -222,9 +222,7 @@ export function ClassScheduleAttendance(props: ClassScheduleAttendanceProps) {
                         }}
                         className="flex items-center gap-1 px-2 py-0.5 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition-colors cursor-pointer"
                         title={
-                          lang === 'zh'
-                            ? '导出此排课考勤表 (CSV)'
-                            : `Export this schedule's attendance records (CSV)`
+                          lang === 'zh' ? '导出此排课考勤表 (CSV)' : `Export this schedule's attendance records (CSV)`
                         }
                       >
                         <Download size={11} />

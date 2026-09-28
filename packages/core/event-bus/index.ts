@@ -96,8 +96,7 @@ export class EventBus {
       maxSameTypeDepth: options.maxSameTypeDepth ?? DEFAULT_MAX_SAME_TYPE_DEPTH,
       onSubscriberError:
         options.onSubscriberError ??
-        ((info) =>
-          console.error(`Error in event subscriber for ${info.event.type} (${info.event.id}):`, info.error)),
+        ((info) => console.error(`Error in event subscriber for ${info.event.type} (${info.event.id}):`, info.error)),
       onRecursionDropped:
         options.onRecursionDropped ??
         ((info) =>

@@ -26,7 +26,7 @@ UI 事件  ─┘                                                            ▲
 
 ```typescript
 export interface InteractionEvent<T = Record<string, unknown>> {
-  readonly id: string;             // 自动生成 evt_<domain>_<ts>_<rand>
+  readonly id: string; // 自动生成 evt_<domain>_<ts>_<rand>
   readonly domain: InteractionDomain;
   readonly targetId?: string;
   readonly payload: T;
@@ -38,8 +38,7 @@ export interface InteractionEvent<T = Record<string, unknown>> {
 
 ```typescript
 export type InteractionDomain =
-  | 'Keyboard' | 'Mouse' | 'Touch' | 'Gesture' | 'Drag'
-  | 'Clipboard' | 'Focus' | 'ContextMenu' | 'Selection';
+  'Keyboard' | 'Mouse' | 'Touch' | 'Gesture' | 'Drag' | 'Clipboard' | 'Focus' | 'ContextMenu' | 'Selection';
 ```
 
 ### InteractionHandler（优先级处理器）
@@ -48,7 +47,7 @@ export type InteractionDomain =
 export interface InteractionHandler {
   readonly id: string;
   readonly domain: InteractionDomain;
-  readonly priority?: number;      // 数值越大优先级越高
+  readonly priority?: number; // 数值越大优先级越高
   readonly handle: (event: InteractionEvent) => boolean | void;
   // 返回 true 表示事件已被消费（截断）
 }
@@ -75,29 +74,29 @@ graph LR
 
 `Map<string, InteractionHandler>` 存储：
 
-| 方法 | 行为 |
-|---|---|
-| `register(handler)` | 校验 id 非空，按 id 覆盖 |
-| `unregister(handlerId)` | 返回 boolean |
-| `getHandlers(domain)` | 按 `priority` 降序返回冻结数组 |
-| `dispatch(event)` | 顺序调用，返回首个 `handle() === true` 的结果 |
-| `clear()` | 清空所有 handler |
+| 方法                    | 行为                                          |
+| ----------------------- | --------------------------------------------- |
+| `register(handler)`     | 校验 id 非空，按 id 覆盖                      |
+| `unregister(handlerId)` | 返回 boolean                                  |
+| `getHandlers(domain)`   | 按 `priority` 降序返回冻结数组                |
+| `dispatch(event)`       | 顺序调用，返回首个 `handle() === true` 的结果 |
+| `clear()`               | 清空所有 handler                              |
 
 ### InteractionRuntimeService（门面层）
 
 提供 9 个领域派发 helper + 插件贡献 API：
 
-| 方法 | 领域 |
-|---|---|
-| `dispatchKeyboard(key, shortcut?, targetId?)` | Keyboard |
-| `dispatchMouse(type, x, y, targetId?)` | Mouse |
-| `dispatchTouch(type, touches, targetId?)` | Touch |
-| `dispatchGesture(type, scale?, rotation?, targetId?)` | Gesture |
-| `dispatchDrag(phase, deltaX, deltaY, targetId?)` | Drag |
-| `dispatchClipboard(action, content?, targetId?)` | Clipboard |
-| `setFocus(targetId) / getFocusedTargetId()` | Focus（持有状态） |
-| `openContextMenu(x, y, menuItems?, targetId?)` | ContextMenu |
-| `setSelection(ids, targetId?) / getSelection()` | Selection（持有状态） |
+| 方法                                                  | 领域                  |
+| ----------------------------------------------------- | --------------------- |
+| `dispatchKeyboard(key, shortcut?, targetId?)`         | Keyboard              |
+| `dispatchMouse(type, x, y, targetId?)`                | Mouse                 |
+| `dispatchTouch(type, touches, targetId?)`             | Touch                 |
+| `dispatchGesture(type, scale?, rotation?, targetId?)` | Gesture               |
+| `dispatchDrag(phase, deltaX, deltaY, targetId?)`      | Drag                  |
+| `dispatchClipboard(action, content?, targetId?)`      | Clipboard             |
+| `setFocus(targetId) / getFocusedTargetId()`           | Focus（持有状态）     |
+| `openContextMenu(x, y, menuItems?, targetId?)`        | ContextMenu           |
+| `setSelection(ids, targetId?) / getSelection()`       | Selection（持有状态） |
 
 `emitEvent()` 内部自动生成 `id` 和 `timestamp`，构造 `InteractionEvent` 后调用 `registry.dispatch()`。
 
@@ -127,6 +126,7 @@ svc.removeHandler('my-plugin.shortcut-ctrl-s');
 ```
 
 **优先级语义**：
+
 - 数值大者**先**执行；
 - 任一 handler 返回 `true` 即截断（"事件被消费"）；
 - 未截断的 handler 仍会按序执行完。
@@ -137,11 +137,11 @@ svc.removeHandler('my-plugin.shortcut-ctrl-s');
 
 参考 [`platform-kernel.md`](./platform-kernel.md) Layer 2_6 节点（`ClassroomRuntimeKernel`）。Interaction Runtime 是**前端独有的协作领域引擎**，与 Layer 2 中其他 runtime（`LessonRuntime` / `ClassroomRuntime` / `PresenceEngine` 等）平行存在；它**不参与课堂生命周期**，只负责低层交互事件归一化。
 
-| 维度 | Interaction Runtime | Classroom Runtime |
-|---|---|---|
-| 作用层 | UI 交互层（DOM 事件归一化） | 业务编排层（课堂生命周期） |
-| 状态 | Focus / Selection 状态可保留 | 9 阶段状态机 |
-| 跨域 | 仅前端 | 跨前后端（前后端各一份实现） |
+| 维度   | Interaction Runtime          | Classroom Runtime            |
+| ------ | ---------------------------- | ---------------------------- |
+| 作用层 | UI 交互层（DOM 事件归一化）  | 业务编排层（课堂生命周期）   |
+| 状态   | Focus / Selection 状态可保留 | 9 阶段状态机                 |
+| 跨域   | 仅前端                       | 跨前后端（前后端各一份实现） |
 
 ---
 

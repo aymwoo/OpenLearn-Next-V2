@@ -137,9 +137,7 @@ export function AssignmentPeerProgressPanel({
           <Users size={11} /> {zh ? '互评进度' : 'Peer review'}
           {local ? (
             <span className="font-normal text-muted">
-              {zh
-                ? `${local.completed} / ${local.tasks} 已完成`
-                : `${local.completed} / ${local.tasks} done`}
+              {zh ? `${local.completed} / ${local.tasks} 已完成` : `${local.completed} / ${local.tasks} done`}
             </span>
           ) : null}
           {flagCount > 0 ? (

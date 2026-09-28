@@ -103,30 +103,26 @@ export function ClassroomBriefingView({
   const studentRecords = useMemo(() => {
     const breakdown: any[] = Array.isArray(reportData?.students) ? reportData.students : [];
     // 服务端未就绪（如未建会话）时，用花名册占位但所有指标为 null（诚实空态）
-    const rows = breakdown.length > 0
-      ? breakdown
-      : students.map((st) => ({
-          studentId: st.id,
-          studentName: st.name,
-          studentNumber: st.student_number,
-          attendance: false,
-          quizScore: null,
-          accuracy: null,
-          pollsAnswered: 0,
-          exitRating: null,
-          puzzledConcept: null,
-        }));
+    const rows =
+      breakdown.length > 0
+        ? breakdown
+        : students.map((st) => ({
+            studentId: st.id,
+            studentName: st.name,
+            studentNumber: st.student_number,
+            attendance: false,
+            quizScore: null,
+            accuracy: null,
+            pollsAnswered: 0,
+            exitRating: null,
+            puzzledConcept: null,
+          }));
 
     return rows.map((r) => {
       const score = typeof r.quizScore === 'number' ? r.quizScore : null;
-      const status =
-        score === null ? '无数据' : score >= 90 ? '优秀' : score >= 75 ? '良好' : '需关注';
+      const status = score === null ? '无数据' : score >= 90 ? '优秀' : score >= 75 ? '良好' : '需关注';
       const note =
-        score === null
-          ? '本节无可用的随堂测记录'
-          : score < 75
-            ? '建议课后补充探究微练习'
-            : '课堂掌握扎实，互动积极';
+        score === null ? '本节无可用的随堂测记录' : score < 75 ? '建议课后补充探究微练习' : '课堂掌握扎实，互动积极';
       return {
         id: r.studentId,
         name: r.studentName,
@@ -143,9 +139,10 @@ export function ClassroomBriefingView({
     });
   }, [reportData, students]);
 
-  const filteredRecords = studentRecords.filter((r) =>
-    r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.studentNumber.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filteredRecords = studentRecords.filter(
+    (r) =>
+      r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      r.studentNumber.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   // 教学副驾反思与量化归因计算
@@ -190,8 +187,7 @@ export function ClassroomBriefingView({
     ]);
 
     const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' +
-      [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+      'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
@@ -213,7 +209,10 @@ export function ClassroomBriefingView({
   };
 
   return (
-    <div id="classroom-briefing-view" className="flex-1 flex flex-col min-h-0 bg-surface-secondary/20 p-4 gap-4 overflow-y-auto">
+    <div
+      id="classroom-briefing-view"
+      className="flex-1 flex flex-col min-h-0 bg-surface-secondary/20 p-4 gap-4 overflow-y-auto"
+    >
       {/* 1. Header Banner */}
       <div className="bg-surface border border-theme rounded-2xl p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
@@ -275,31 +274,45 @@ export function ClassroomBriefingView({
       {/* 2. Key Metrics 5-Card Bento Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         <div className="bg-surface rounded-2xl border border-theme p-4 shadow-sm flex flex-col">
-          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">{lang === 'zh' ? '全班出勤率' : 'Attendance'}</span>
+          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
+            {lang === 'zh' ? '全班出勤率' : 'Attendance'}
+          </span>
           <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1">100%</div>
-          <span className="text-[10px] text-muted mt-1">{totalStudents} / {totalStudents} 人到课</span>
+          <span className="text-[10px] text-muted mt-1">
+            {totalStudents} / {totalStudents} 人到课
+          </span>
         </div>
 
         <div className="bg-surface rounded-2xl border border-theme p-4 shadow-sm flex flex-col">
-          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">{lang === 'zh' ? '随堂测验正确率' : 'Quiz Accuracy'}</span>
+          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
+            {lang === 'zh' ? '随堂测验正确率' : 'Quiz Accuracy'}
+          </span>
           <div className="text-2xl font-black text-primary-theme font-mono mt-1">{quizAccuracy}%</div>
           <span className="text-[10px] text-muted mt-1">{lang === 'zh' ? '交互题作答均分' : 'Interactive Avg'}</span>
         </div>
 
         <div className="bg-surface rounded-2xl border border-theme p-4 shadow-sm flex flex-col">
-          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">{lang === 'zh' ? '口播投票与抢答' : 'Interactions'}</span>
-          <div className="text-2xl font-black text-amber-500 font-mono mt-1">{pollVotes} <span className="text-xs font-normal">人次</span></div>
+          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
+            {lang === 'zh' ? '口播投票与抢答' : 'Interactions'}
+          </span>
+          <div className="text-2xl font-black text-amber-500 font-mono mt-1">
+            {pollVotes} <span className="text-xs font-normal">人次</span>
+          </div>
           <span className="text-[10px] text-muted mt-1">{lang === 'zh' ? '高参与度活跃' : 'High engagement'}</span>
         </div>
 
         <div className="bg-surface rounded-2xl border border-theme p-4 shadow-sm flex flex-col">
-          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">{lang === 'zh' ? '结课通票评分' : 'Exit Rating'}</span>
+          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
+            {lang === 'zh' ? '结课通票评分' : 'Exit Rating'}
+          </span>
           <div className="text-2xl font-black text-indigo-500 font-mono mt-1">{exitRating} ★</div>
           <span className="text-[10px] text-muted mt-1">{lang === 'zh' ? '掌握度 5.0 满分制' : 'Out of 5.0'}</span>
         </div>
 
         <div className="bg-surface rounded-2xl border border-theme p-4 shadow-sm flex flex-col">
-          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">{lang === 'zh' ? '教学节奏晴雨表' : 'Pacing Score'}</span>
+          <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
+            {lang === 'zh' ? '教学节奏晴雨表' : 'Pacing Score'}
+          </span>
           <div className="text-2xl font-black text-teal-600 dark:text-teal-400 font-mono mt-1">{clearPercent}%</div>
           <span className="text-[10px] text-muted mt-1">{lang === 'zh' ? '反馈节奏适宜' : 'Clear & Optimal'}</span>
         </div>
@@ -322,8 +335,12 @@ export function ClassroomBriefingView({
             <div className="flex flex-col gap-2.5">
               <div>
                 <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">💡 听懂了 / 节奏适宜</span>
-                  <span className="font-mono">{pacingData.CLEAR} 人 ({clearPercent}%)</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    💡 听懂了 / 节奏适宜
+                  </span>
+                  <span className="font-mono">
+                    {pacingData.CLEAR} 人 ({clearPercent}%)
+                  </span>
                 </div>
                 <div className="w-full bg-surface-secondary h-2 rounded-full overflow-hidden">
                   <div className="bg-emerald-500 h-full" style={{ width: `${clearPercent}%` }} />
@@ -332,8 +349,12 @@ export function ClassroomBriefingView({
 
               <div>
                 <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">❓ 有些困惑 / 需要细讲</span>
-                  <span className="font-mono">{pacingData.CONFUSED} 人 ({confusedPercent}%)</span>
+                  <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    ❓ 有些困惑 / 需要细讲
+                  </span>
+                  <span className="font-mono">
+                    {pacingData.CONFUSED} 人 ({confusedPercent}%)
+                  </span>
                 </div>
                 <div className="w-full bg-surface-secondary h-2 rounded-full overflow-hidden">
                   <div className="bg-amber-500 h-full" style={{ width: `${confusedPercent}%` }} />
@@ -343,7 +364,9 @@ export function ClassroomBriefingView({
               <div>
                 <div className="flex justify-between text-xs font-semibold mb-1">
                   <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1">🐇 讲太快了 / 跟不上</span>
-                  <span className="font-mono">{pacingData.TOO_FAST} 人 ({fastPercent}%)</span>
+                  <span className="font-mono">
+                    {pacingData.TOO_FAST} 人 ({fastPercent}%)
+                  </span>
                 </div>
                 <div className="w-full bg-surface-secondary h-2 rounded-full overflow-hidden">
                   <div className="bg-rose-500 h-full" style={{ width: `${fastPercent}%` }} />
@@ -392,14 +415,18 @@ export function ClassroomBriefingView({
           <div className="flex flex-wrap items-center justify-between border-b border-theme pb-3 gap-2">
             <span className="text-xs font-black uppercase text-main tracking-wider flex items-center gap-1.5">
               <Lightbulb size={14} className="text-indigo-500" />
-              <span>{lang === 'zh' ? 'AI 教学副驾反思建议 (Teaching Co-Pilot)' : 'AI Teaching Reflection & Insights'}</span>
+              <span>
+                {lang === 'zh' ? 'AI 教学副驾反思建议 (Teaching Co-Pilot)' : 'AI Teaching Reflection & Insights'}
+              </span>
             </span>
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
-                reflectionReport.lectureRatio > reflectionReport.recommendedLectureMaxRatio
-                  ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
-                  : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
-              }`}>
+              <span
+                className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                  reflectionReport.lectureRatio > reflectionReport.recommendedLectureMaxRatio
+                    ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
+                    : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                }`}
+              >
                 讲授用时 {reflectionReport.lectureRatio}%
               </span>
               <span className="text-[11px] px-2 py-0.5 bg-primary-theme/10 text-primary-theme rounded-full font-bold border border-primary-theme/20">
@@ -411,7 +438,10 @@ export function ClassroomBriefingView({
           <div className="flex flex-col gap-3 text-xs leading-relaxed max-h-[460px] overflow-y-auto pr-1">
             {/* 亮点 Strengths */}
             {reflectionReport.strengths.map((str, idx) => (
-              <div key={idx} className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col gap-1">
+              <div
+                key={idx}
+                className="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col gap-1"
+              >
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
                     <CheckCircle2 size={13} />
@@ -429,7 +459,10 @@ export function ClassroomBriefingView({
 
             {/* 瓶颈归因 Bottlenecks */}
             {reflectionReport.bottlenecks.map((btn, idx) => (
-              <div key={idx} className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 flex flex-col gap-1.5">
+              <div
+                key={idx}
+                className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 flex flex-col gap-1.5"
+              >
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1">
                     <AlertTriangle size={13} />
@@ -450,7 +483,10 @@ export function ClassroomBriefingView({
 
             {/* 下一课时策略 Action Items */}
             {reflectionReport.actionableSuggestions.map((act, idx) => (
-              <div key={idx} className="p-3.5 rounded-xl bg-indigo-500/5 border border-indigo-500/20 flex flex-col gap-1">
+              <div
+                key={idx}
+                className="p-3.5 rounded-xl bg-indigo-500/5 border border-indigo-500/20 flex flex-col gap-1"
+              >
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1">
                     <Lightbulb size={13} />
@@ -558,9 +594,7 @@ export function ClassroomBriefingView({
                     <button
                       type="button"
                       onClick={() =>
-                        setSelectedStudentForDigest(
-                          generateStudentPersonalDigest(r, lessonTitle, className),
-                        )
+                        setSelectedStudentForDigest(generateStudentPersonalDigest(r, lessonTitle, className))
                       }
                       className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-theme bg-surface hover:bg-primary-theme hover:text-white transition-colors cursor-pointer inline-flex items-center gap-1 shadow-2xs"
                     >

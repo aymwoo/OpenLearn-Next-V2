@@ -23,19 +23,19 @@
 
 ## 1. 表格：端点速览
 
-| 方法   | 路径                                              | 角色   | 用途                       |
-| ------ | ------------------------------------------------- | ------ | -------------------------- |
-| POST   | `/api/courseware/attempts/:attemptId/log`         | 学生/教师 | 学生答题过程事件流             |
-| POST   | `/api/courseware/attempts/:attemptId/submit`      | 学生/教师 | 学生最终提交分数                  |
-| GET    | `/api/courseware/attempts`                        | 教师   | 列出全部 attempts（可选过滤）     |
-| GET    | `/api/courseware/attempts/:attemptId/raw`         | 教师   | 拉取 attempt 的原始事件流      |
-| GET    | `/api/courseware/attempts/:attemptId/progress`    | 教师   | 拉取 attempt 当前成绩快照    |
-| POST   | `/api/courseware/attempts/:attemptId/promote`     | 教师   | 把成绩写入作业/进度         |
-| GET    | `/api/courseware/attempts/:attemptId/progress`    | 学生   | 学生端轮询自己的成绩         |
-| POST   | `/api/courseware/confirm`                         | 教师   | 上传课件后入库                  |
-| GET    | `/api/courseware/list`                            | 教师   | 课件列表                          |
-| POST   | `/api/courseware/:id`                             | 教师   | 删除课件                          |
-| GET    | `/api/courseware/:id`                             | 教师   | 单课件详情（VFS 节点）            |
+| 方法 | 路径                                           | 角色      | 用途                          |
+| ---- | ---------------------------------------------- | --------- | ----------------------------- |
+| POST | `/api/courseware/attempts/:attemptId/log`      | 学生/教师 | 学生答题过程事件流            |
+| POST | `/api/courseware/attempts/:attemptId/submit`   | 学生/教师 | 学生最终提交分数              |
+| GET  | `/api/courseware/attempts`                     | 教师      | 列出全部 attempts（可选过滤） |
+| GET  | `/api/courseware/attempts/:attemptId/raw`      | 教师      | 拉取 attempt 的原始事件流     |
+| GET  | `/api/courseware/attempts/:attemptId/progress` | 教师      | 拉取 attempt 当前成绩快照     |
+| POST | `/api/courseware/attempts/:attemptId/promote`  | 教师      | 把成绩写入作业/进度           |
+| GET  | `/api/courseware/attempts/:attemptId/progress` | 学生      | 学生端轮询自己的成绩          |
+| POST | `/api/courseware/confirm`                      | 教师      | 上传课件后入库                |
+| GET  | `/api/courseware/list`                         | 教师      | 课件列表                      |
+| POST | `/api/courseware/:id`                          | 教师      | 删除课件                      |
+| GET  | `/api/courseware/:id`                          | 教师      | 单课件详情（VFS 节点）        |
 
 > 仅本表中的端点在本契约范围；其他 `/api/courseware/*`（上传 / VFS）见 （上传 / VFS 契约文档尚未建立，待补）。
 
@@ -44,6 +44,7 @@
 ## 2. `POST /api/courseware/attempts/:attemptId/log` — 答题事件流
 
 ### 用途
+
 学生答题过程中的实时事件上报：每答一道题、上传一段进度，都打一次 log。`extractScoreCommentCompletion()` 会自动从 payload 里抠出 `score` / `comment` / `completion`，并 UPSERT 到 `submission_result`。
 
 ### 请求
@@ -65,6 +66,7 @@ Content-Type: application/json
 ```
 
 ### `extractScoreCommentCompletion()` 搜索规则
+
 - 顶层键: `score` / `grade` / `result` / `point` / `points` / `mark` / `marks` / `score_val` / `scoreval`
 - 顶层键: `comment` / `feedback` / `msg` / `message` / `text` / `note` / `memo`
 - 顶层键: `completion` / `progress` / `done` / `finished` / `completed` / `percentage`
@@ -79,10 +81,12 @@ Content-Type: application/json
 ```
 
 ### 错误
+
 - `401 { error: "Authentication required" }` — 未登录
 - `403 { error: "Forbidden: Cannot modify logs for another student" }` — 学生操作他人 attempt
 
 ### 副作用
+
 1. 写入 `submission_raw` 表（新行）
 2. 若 extracted score/comment/completion 任一存在：UPSERT `submission_result`（已存在则 UPDATE score/comment/completion/extra_json）
 3. `io.emit('courseware-attempt-updated', { attemptId, type: 'log' })`
@@ -93,23 +97,25 @@ Content-Type: application/json
 ## 3. `POST /api/courseware/attempts/:attemptId/submit` — 最终提交
 
 ### 用途
+
 学生完成作答后，由 LMS Bridge 自动调用（或教师手动指定）触发。最终成绩入库，`courseware_attempt.status` 切到终态。
 
 ### 请求
 
 ```json
 {
-  "score": 88,                       // 可选 — 0-100 整数或 0-1 浮点（推荐 0-100，避免与 promote 归一化歧义）
-  "completion": 1,                   // 可选 — 0-1；不传则从 extractScoreCommentCompletion 推断
-  "status": "completed",             // 关键字段！传 "completed" 才把 attempt.status 切到终态
-                                       // 可选值: "active" / "in_progress" / "completed" / "abandoned"
-                                       // 推荐统一用 "completed"
-  "comment": "all questions done",   // 可选
-  "extra": {                         // 可选 — 任意扩展，写入 submission_raw.payload_json 与 submission_result.extra_json
+  "score": 88, // 可选 — 0-100 整数或 0-1 浮点（推荐 0-100，避免与 promote 归一化歧义）
+  "completion": 1, // 可选 — 0-1；不传则从 extractScoreCommentCompletion 推断
+  "status": "completed", // 关键字段！传 "completed" 才把 attempt.status 切到终态
+  // 可选值: "active" / "in_progress" / "completed" / "abandoned"
+  // 推荐统一用 "completed"
+  "comment": "all questions done", // 可选
+  "extra": {
+    // 可选 — 任意扩展，写入 submission_raw.payload_json 与 submission_result.extra_json
     "q1": "B",
     "q2": "C"
   },
-  "lessonId": "lesson-abc"           // 可选 — 关联 lesson，写入 submission_raw.payload_json（仅供审计）
+  "lessonId": "lesson-abc" // 可选 — 关联 lesson，写入 submission_raw.payload_json（仅供审计）
 }
 ```
 
@@ -126,12 +132,14 @@ Content-Type: application/json
 ```
 
 ### 副作用
+
 1. 写 `submission_raw`（event_type=`submit_lms`，payload_json={score, comment, completion, status, ...extra}）
 2. 若 `status === 'completed'`：`UPDATE courseware_attempt SET finished_at=now, status='completed' WHERE id=:attemptId`
 3. UPSERT `submission_result`（score/comment/completion/extra_json）
 4. `io.emit('courseware-attempt-updated', { attemptId, type: 'submit' })`
 
 ### 错误
+
 - `401` 未登录 / `403` 越权 / `500` 内部错误（如 CapabilityGuard 拦截 — 需用户具备 `student:write` capability）
 
 ---
@@ -140,9 +148,9 @@ Content-Type: application/json
 
 ### Query 参数
 
-| 名称              | 类型   | 必填 | 描述                                                                 |
-| ----------------- | ------ | ---- | -------------------------------------------------------------------- |
-| `coursewareUuid`  | string | 否   | 过滤该课件的 attempts；缺省返回全部。**白板 HtmlAppletFrame 实时面板必须传此参数**避免拉整张表 |
+| 名称             | 类型   | 必填 | 描述                                                                                           |
+| ---------------- | ------ | ---- | ---------------------------------------------------------------------------------------------- |
+| `coursewareUuid` | string | 否   | 过滤该课件的 attempts；缺省返回全部。**白板 HtmlAppletFrame 实时面板必须传此参数**避免拉整张表 |
 
 ### 响应（200 OK）
 
@@ -152,21 +160,22 @@ Content-Type: application/json
     "attemptId": "att-xyz",
     "started_at": 1735689600000,
     "finished_at": 1735689700000,
-    "status": "completed",          // 注意：DB 实际存 "completed"，见 §3 注释
+    "status": "completed", // 注意：DB 实际存 "completed"，见 §3 注释
     "coursewareName": "课件 A",
     "coursewareUuid": "cw-uuid-001",
-    "studentName": "小明",          // 关联 students.name 失败时回退到 raw student_id
+    "studentName": "小明", // 关联 students.name 失败时回退到 raw student_id
     "studentId": "stu-001",
-    "score": 88,                    // submission_result.score（可能为 null）
-    "comment": "finished",          // submission_result.comment（可能为 null）
-    "completion": 1,                // submission_result.completion（可能为 null）
+    "score": 88, // submission_result.score（可能为 null）
+    "comment": "finished", // submission_result.comment（可能为 null）
+    "completion": 1, // submission_result.completion（可能为 null）
     "extra_json": "{\"q1\":\"B\"}", // 原始 JSON 字符串
-    "isPromoted": 0                 // 已晋升作业的次数（同一学生在该课件下产生的 assignment_submissions 行数）
+    "isPromoted": 0 // 已晋升作业的次数（同一学生在该课件下产生的 assignment_submissions 行数）
   }
 ]
 ```
 
 ### 排序
+
 按 `a.started_at DESC`，最近作答在前。
 
 ### 实现 SQL（节选）
@@ -194,14 +203,15 @@ ORDER BY a.started_at DESC;
 ## 5. `POST /api/courseware/attempts/:attemptId/promote` — 写入作业成绩
 
 ### 用途
+
 教师在 LiveClassroom 看到成绩后，点击「保存为作业成绩」时调用。把这次 attempt 的最终成绩**自动建作业**、**UPSERT 作业提交**、**UPSERT 学生课程进度**三件事一次性做完。
 
 ### 请求
 
 ```json
 {
-  "lessonId": "lesson-abc",         // 必填 — 关联到 lesson_id（写进 assignments.lesson_id 与 student_lesson_progress）
-  "classId": "cls-001"              // 必填 — 关联到班级（写进 assignments.class_id）
+  "lessonId": "lesson-abc", // 必填 — 关联到 lesson_id（写进 assignments.lesson_id 与 student_lesson_progress）
+  "classId": "cls-001" // 必填 — 关联到班级（写进 assignments.class_id）
 }
 ```
 
@@ -211,8 +221,8 @@ ORDER BY a.started_at DESC;
 // 200 OK
 {
   "success": true,
-  "assignmentId": "ast-cw-<hex>",   // 新建或已存在的 assignment.id
-  "score": 88                       // 归一化后的最终分数（注意：是 "score"，不是 "finalScore"）
+  "assignmentId": "ast-cw-<hex>", // 新建或已存在的 assignment.id
+  "score": 88 // 归一化后的最终分数（注意：是 "score"，不是 "finalScore"）
 }
 ```
 
@@ -220,12 +230,12 @@ ORDER BY a.started_at DESC;
 
 `submission_result.score` 归一化规则：
 
-| 原始值范围       | 处理                   | 备注                                 |
-| ---------------- | ---------------------- | ------------------------------------ |
-| `null` / `undefined` | 视为 100（兜底）         | promote 不区分「未提交」与「满分」    |
-| `0 < x ≤ 1.0`     | `Math.round(x * 100)`   | 0.85 → 85；这是**唯一**会被乘 100 的分支 |
-| 其它（> 1 或 < 0）| `Math.round(x)`         | 88 → 88；-5 → -5（不截断）            |
-| 整数 0            | 视为 100                | ⚠️ 历史陷阱：0 被当作「未填」归为满分 |
+| 原始值范围           | 处理                  | 备注                                     |
+| -------------------- | --------------------- | ---------------------------------------- |
+| `null` / `undefined` | 视为 100（兜底）      | promote 不区分「未提交」与「满分」       |
+| `0 < x ≤ 1.0`        | `Math.round(x * 100)` | 0.85 → 85；这是**唯一**会被乘 100 的分支 |
+| 其它（> 1 或 < 0）   | `Math.round(x)`       | 88 → 88；-5 → -5（不截断）               |
+| 整数 0               | 视为 100              | ⚠️ 历史陷阱：0 被当作「未填」归为满分    |
 
 > 真实生产中 `LMS.submit(88, 100, ...)` 是 0-100 范围，所以归一化不会触发；但**自研课件若用了 0-1 比例务必传对**，否则 promote 会得到意外结果。
 
@@ -240,11 +250,13 @@ ORDER BY a.started_at DESC;
 4. `io.emit('student-progress-updated', { studentId, lessonId, progressPercent: 100, completed: true, completedSegments: [] })`
 
 ### 错误
+
 - `400 { error: "Missing lessonId or classId" }`
 - `404 { error: "Attempt not found" }`
 - `500` 内部错误
 
 ### 幂等性
+
 - 同 attempt 重复 promote：assignment 不会重建（按 class_id + lesson_id + title 查询已存在则复用），但 assignment_submissions 行通过 `ON CONFLICT DO UPDATE` 保持单行
 - 已 promote 的 attempt 在 `GET /api/courseware/attempts` 中 `isPromoted >= 1`，前端可据此显示「✓ 已保存为作业」徽标
 
@@ -253,6 +265,7 @@ ORDER BY a.started_at DESC;
 ## 6. `GET /api/courseware/attempts/:attemptId/progress` — 单条成绩快照
 
 ### 用途
+
 学生端轮询自己的当前成绩（教师端实时面板也可用）。**需登录**（`requireAuth`）：教师/管理员可读取任意 attempt；学生仅能读取 `student_id` 等于自身的 attempt，越权返回 403。attempt 无成绩时返回 `{ progress: null }`。
 
 ### 响应
@@ -277,19 +290,21 @@ ORDER BY a.started_at DESC;
 ## 7. `GET /api/courseware/attempts/:attemptId/raw` — 原始事件流
 
 ### 用途
+
 教师复盘：拉取 attempt 的全部原始 LMS Bridge 事件流（submission_raw 表）。
 
 ### 响应
+
 由 `courseware.get_attempt_raw_data` command handler 返回，详见 `packages/plugins/builtin.ts`。Schema 不稳定，不在本契约范围。
 
 ---
 
 ## 8. 实时事件
 
-| 事件名                          | 触发条件                            | Payload                                                              |
-| ------------------------------- | ----------------------------------- | -------------------------------------------------------------------- |
-| `courseware-attempt-updated`    | `/log`、`/submit`、`/promote` 调用后 | `{ attemptId, type: 'log' \| 'submit' \| 'promote' }`                |
-| `student-progress-updated`      | `/promote` 调用后（且涉及 student_lesson_progress 变更） | `{ studentId, lessonId, progressPercent, completed, completedSegments }` |
+| 事件名                       | 触发条件                                                 | Payload                                                                  |
+| ---------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `courseware-attempt-updated` | `/log`、`/submit`、`/promote` 调用后                     | `{ attemptId, type: 'log' \| 'submit' \| 'promote' }`                    |
+| `student-progress-updated`   | `/promote` 调用后（且涉及 student_lesson_progress 变更） | `{ studentId, lessonId, progressPercent, completed, completedSegments }` |
 
 前端订阅示例（白板 `HtmlAppletFrame`）：
 
@@ -318,13 +333,13 @@ socket.on('courseware-attempt-updated', async (payload) => {
 
 ## 10. 相关源文件
 
-| 路径                                            | 内容                                                       |
-| ----------------------------------------------- | ---------------------------------------------------------- |
-| `server/routes/courseware.ts`                   | 全部 HTTP 端点实现                                         |
-| `packages/plugins/builtin.ts`                   | `courseware.submit_attempt` / `courseware.get_attempt_raw_data` command handler |
-| `packages/core/capability-system/index.ts`     | 学生需具备 `student:write` capability 才能 submit_attempt   |
-| `server/utils/bridge-sdk.ts`                    | LMS Bridge SDK 服务端代理                                 |
-| `src/features/whiteboard/utils/bridgeUtils.ts`  | LMS Bridge SDK 前端注入（`wrapSrcDocWithBridge`）          |
-| `src/features/whiteboard/components/HtmlAppletFrame.tsx` | 白板课件 iframe + 实时成绩浮层                    |
-| `server/__tests__/courseware-e2e-flow.test.ts`  | 本契约的回归测试                                            |
-| `server/__tests__/courseware-attempts-filter.test.ts` | `/api/courseware/attempts?coursewareUuid=` 过滤测试  |
+| 路径                                                     | 内容                                                                            |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `server/routes/courseware.ts`                            | 全部 HTTP 端点实现                                                              |
+| `packages/plugins/builtin.ts`                            | `courseware.submit_attempt` / `courseware.get_attempt_raw_data` command handler |
+| `packages/core/capability-system/index.ts`               | 学生需具备 `student:write` capability 才能 submit_attempt                       |
+| `server/utils/bridge-sdk.ts`                             | LMS Bridge SDK 服务端代理                                                       |
+| `src/features/whiteboard/utils/bridgeUtils.ts`           | LMS Bridge SDK 前端注入（`wrapSrcDocWithBridge`）                               |
+| `src/features/whiteboard/components/HtmlAppletFrame.tsx` | 白板课件 iframe + 实时成绩浮层                                                  |
+| `server/__tests__/courseware-e2e-flow.test.ts`           | 本契约的回归测试                                                                |
+| `server/__tests__/courseware-attempts-filter.test.ts`    | `/api/courseware/attempts?coursewareUuid=` 过滤测试                             |

@@ -106,7 +106,7 @@ describe('StudentQuickActionsFloatingMenu', () => {
         setSelectedLesson={setSelectedLesson}
         setStudentViewStatus={setStudentViewStatus}
         addToast={addToast}
-      />
+      />,
     );
 
     const fab = document.getElementById('student-quick-actions-fab-btn')!;
@@ -120,7 +120,7 @@ describe('StudentQuickActionsFloatingMenu', () => {
     expect(addToast).toHaveBeenCalledWith(
       expect.stringContaining('面授课堂'),
       expect.stringContaining('Mechanics & Dynamics'),
-      'success'
+      'success',
     );
   });
 
@@ -133,12 +133,7 @@ describe('StudentQuickActionsFloatingMenu', () => {
     dummyWidget.scrollIntoView = vi.fn();
     document.body.appendChild(dummyWidget);
 
-    render(
-      <StudentQuickActionsFloatingMenu
-        {...defaultProps}
-        onExpandWidget={onExpandWidget}
-      />
-    );
+    render(<StudentQuickActionsFloatingMenu {...defaultProps} onExpandWidget={onExpandWidget} />);
 
     const fab = document.getElementById('student-quick-actions-fab-btn')!;
     fireEvent.click(fab);
@@ -161,7 +156,7 @@ describe('StudentQuickActionsFloatingMenu', () => {
         {...defaultProps}
         setSelectedAssignment={setSelectedAssignment}
         setStudentViewStatus={setStudentViewStatus}
-      />
+      />,
     );
 
     const fab = document.getElementById('student-quick-actions-fab-btn')!;
@@ -183,7 +178,7 @@ describe('StudentQuickActionsFloatingMenu', () => {
         {...defaultProps}
         setReadNotifications={setReadNotifications}
         addToast={addToast}
-      />
+      />,
     );
 
     const fab = document.getElementById('student-quick-actions-fab-btn')!;
@@ -204,13 +199,13 @@ describe('StudentQuickActionsFloatingMenu', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ notificationId: 'rc-101' }),
-        })
+        }),
       );
       expect(setReadNotifications).toHaveBeenCalled();
       expect(addToast).toHaveBeenCalledWith(
         expect.stringContaining('点名确认成功'),
         expect.stringContaining('教师端大屏'),
-        'success'
+        'success',
       );
     });
   });
@@ -235,12 +230,7 @@ describe('StudentQuickActionsFloatingMenu', () => {
     Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 480 });
     const onCompactChange = vi.fn();
 
-    const { unmount } = render(
-      <StudentQuickActionsFloatingMenu
-        {...defaultProps}
-        onCompactChange={onCompactChange}
-      />
-    );
+    const { unmount } = render(<StudentQuickActionsFloatingMenu {...defaultProps} onCompactChange={onCompactChange} />);
 
     const fab = document.getElementById('student-quick-actions-fab-btn')!;
     expect(fab.getAttribute('data-compact')).toBe('true');
@@ -287,12 +277,7 @@ describe('StudentQuickActionsFloatingMenu', () => {
       onClick: vi.fn(),
     };
 
-    render(
-      <StudentQuickActionsFloatingMenu
-        {...defaultProps}
-        pluginActions={[customPluginAction]}
-      />
-    );
+    render(<StudentQuickActionsFloatingMenu {...defaultProps} pluginActions={[customPluginAction]} />);
 
     const fab = document.getElementById('student-quick-actions-fab-btn')!;
     fireEvent.click(fab);
@@ -309,7 +294,7 @@ describe('StudentQuickActionsFloatingMenu', () => {
     expect(customPluginAction.onClick).toHaveBeenCalledWith(
       expect.objectContaining({
         activeStudentId: 'student-bob',
-      })
+      }),
     );
   });
 

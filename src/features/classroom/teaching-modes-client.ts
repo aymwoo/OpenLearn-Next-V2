@@ -99,27 +99,27 @@ export async function deleteTeachingMode(id: string): Promise<{ id: string }> {
  * 必须写成完整字面量：Tailwind 在构建期扫描源码里的类名字符串，
  * 动态拼接（如 `bg-${color}-50`）不会被生成。
  */
-export const TEACHING_MODE_COLORS: Record<
-  string,
-  { chipActive: string; iconActive: string; dot: string }
-> = {
+export const TEACHING_MODE_COLORS: Record<string, { chipActive: string; iconActive: string; dot: string }> = {
   indigo: {
     chipActive: 'bg-primary-theme-light border-primary-theme text-primary-theme',
     iconActive: 'text-primary-theme',
     dot: 'bg-primary-theme',
   },
   emerald: {
-    chipActive: 'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300',
+    chipActive:
+      'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300',
     iconActive: 'text-emerald-600 dark:text-emerald-400',
     dot: 'bg-emerald-500',
   },
   amber: {
-    chipActive: 'bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300',
+    chipActive:
+      'bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300',
     iconActive: 'text-amber-600 dark:text-amber-400',
     dot: 'bg-amber-500',
   },
   violet: {
-    chipActive: 'bg-violet-50 border-violet-300 text-violet-700 dark:bg-violet-950/40 dark:border-violet-800 dark:text-violet-300',
+    chipActive:
+      'bg-violet-50 border-violet-300 text-violet-700 dark:bg-violet-950/40 dark:border-violet-800 dark:text-violet-300',
     iconActive: 'text-violet-600 dark:text-violet-400',
     dot: 'bg-violet-500',
   },

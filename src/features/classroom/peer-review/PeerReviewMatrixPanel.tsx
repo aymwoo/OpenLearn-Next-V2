@@ -1,14 +1,5 @@
 import React from 'react';
-import {
-  Shuffle,
-  ArrowRight,
-  Star,
-  Activity,
-  CheckCircle2,
-  Sparkles,
-  Lightbulb,
-  Zap,
-} from 'lucide-react';
+import { Shuffle, ArrowRight, Star, Activity, CheckCircle2, Sparkles, Lightbulb, Zap } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import type { PeerMatchingItem, LivePeerBadge } from './types';
 
@@ -32,10 +23,7 @@ export const PeerReviewMatrixPanel: React.FC<PeerReviewMatrixPanelProps> = ({
   };
 
   return (
-    <div
-      id="peer-review-matrix-panel"
-      className="flex flex-col gap-4 w-full select-none"
-    >
+    <div id="peer-review-matrix-panel" className="flex flex-col gap-4 w-full select-none">
       {/* 1. Section Header: Smart Cross-Matching */}
       <div className="bg-[#131b2e] p-4 rounded-xl border border-[#2d3449]/60 flex flex-col gap-2.5">
         <div className="flex items-center justify-between">

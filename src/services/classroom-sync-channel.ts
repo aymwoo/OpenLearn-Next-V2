@@ -36,7 +36,10 @@ export type ClassroomSyncMessage =
   | { type: 'TEACHER_INIT_STATE'; payload: LiveClassSyncState }
   | { type: 'TEACHER_CHANGE_LESSON'; payload: { lessonId: string | null; classId?: string | null } }
   | { type: 'TEACHER_CHANGE_SEGMENT'; payload: { segmentId: string | null; lessonId?: string | null } }
-  | { type: 'TEACHER_CHANGE_TAB'; payload: { tab: 'whiteboard' | 'courseware' | 'assignment'; lessonId?: string | null } }
+  | {
+      type: 'TEACHER_CHANGE_TAB';
+      payload: { tab: 'whiteboard' | 'courseware' | 'assignment'; lessonId?: string | null };
+    }
   | { type: 'TEACHER_LOCK_CLASS'; payload: { locked: boolean; lessonId?: string | null; classId?: string | null } }
   | { type: 'TEACHER_PICK_STUDENT'; payload: { studentId: string; studentName: string } }
   | { type: 'TEACHER_SYNC_TIMER'; payload: { timeRemaining: number; isRunning: boolean; lessonId?: string | null } }
@@ -168,7 +171,10 @@ export class ClassroomSyncChannel {
   }
 
   public broadcastLockClass(locked: boolean): void {
-    this.postMessage({ type: 'TEACHER_LOCK_CLASS', payload: { locked, lessonId: this.lessonId, classId: this.classId } });
+    this.postMessage({
+      type: 'TEACHER_LOCK_CLASS',
+      payload: { locked, lessonId: this.lessonId, classId: this.classId },
+    });
     const socket = getOptionalSocket();
     if (socket && this.lessonId) {
       socket.emit('teacher-broadcast-lock', { lessonId: this.lessonId, locked, classId: this.classId });

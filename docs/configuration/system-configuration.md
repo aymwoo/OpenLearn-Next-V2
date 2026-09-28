@@ -8,31 +8,31 @@
 
 > `.env` 由用户自建（可参考 `.env.example`，其刻意只包含最少项）。以下为服务端实际读取的全部变量：
 
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `PORT` | `9000` | HTTP 服务端口（`cli.mjs -p` 可覆盖） |
-| `HOST` | `0.0.0.0` | 监听地址（`cli.mjs -H` 可覆盖） |
-| `NODE_ENV` | dev 自动设 `development` / prod `production` | 影响 HMR、静态资源策略、部分测试分支 |
-| `OPEN_BROWSER` | 关闭 | 设为 `true` 启动后自动打开浏览器（`cli.mjs -o`） |
-| `DISABLE_HMR` | 关闭 | `true` 时禁用 Vite HMR（watch/中间件关闭） |
-| `ALLOWED_ORIGINS` | 生产仅同源 | CORS 白名单，逗号分隔（`cli.mjs --cors`）；开发环境默认放行 localhost |
-| `ALLOWED_FRAME_ORIGINS` | 同源 | Helmet `frame-src` / `frame-ancestors` 白名单，逗号分隔（课件 iframe 场景） |
-| `LTI_ALLOWED_LMS_ORIGINS` | 无 | 允许发起 LTI 1.3 启动的 LMS 平台来源白名单 |
-| `ENCRYPTION_KEY` | 自动生成 | 64 位 hex，加密 AI Provider API Key。**非必需**：首次使用时自动生成并写回 `.env`（`packages/core/di/api-key-crypto.ts`） |
-| `OPENLEARN_DB_PATH` | 见 §2 | SQLite 数据库文件路径 |
-| `PLUGIN_COMMUNITY_REGISTRY_URL` | 无 | 社区插件注册表 JSON 地址，由服务端代取（见 [community-plugin-registry](../plugin/community-plugin-registry)） |
-| `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS` | `60000` | Worker 插件激活超时（inline 模式固定 5000ms） |
-| `OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS` | — | `ctx.reportProgress` 心跳滑动续期窗口 |
-| `DEBUG_COMMAND_BUS` | 关闭 | `true` 时 CommandBus 打印全部命令日志（含默认静默的只读指令）；`DEBUG=commandbus` 等效 |
+| 变量                                          | 默认值                                       | 说明                                                                                                                     |
+| --------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `PORT`                                        | `9000`                                       | HTTP 服务端口（`cli.mjs -p` 可覆盖）                                                                                     |
+| `HOST`                                        | `0.0.0.0`                                    | 监听地址（`cli.mjs -H` 可覆盖）                                                                                          |
+| `NODE_ENV`                                    | dev 自动设 `development` / prod `production` | 影响 HMR、静态资源策略、部分测试分支                                                                                     |
+| `OPEN_BROWSER`                                | 关闭                                         | 设为 `true` 启动后自动打开浏览器（`cli.mjs -o`）                                                                         |
+| `DISABLE_HMR`                                 | 关闭                                         | `true` 时禁用 Vite HMR（watch/中间件关闭）                                                                               |
+| `ALLOWED_ORIGINS`                             | 生产仅同源                                   | CORS 白名单，逗号分隔（`cli.mjs --cors`）；开发环境默认放行 localhost                                                    |
+| `ALLOWED_FRAME_ORIGINS`                       | 同源                                         | Helmet `frame-src` / `frame-ancestors` 白名单，逗号分隔（课件 iframe 场景）                                              |
+| `LTI_ALLOWED_LMS_ORIGINS`                     | 无                                           | 允许发起 LTI 1.3 启动的 LMS 平台来源白名单                                                                               |
+| `ENCRYPTION_KEY`                              | 自动生成                                     | 64 位 hex，加密 AI Provider API Key。**非必需**：首次使用时自动生成并写回 `.env`（`packages/core/di/api-key-crypto.ts`） |
+| `OPENLEARN_DB_PATH`                           | 见 §2                                        | SQLite 数据库文件路径                                                                                                    |
+| `PLUGIN_COMMUNITY_REGISTRY_URL`               | 无                                           | 社区插件注册表 JSON 地址，由服务端代取（见 [community-plugin-registry](../plugin/community-plugin-registry)）            |
+| `OPENLEARN_WORKER_ACTIVATE_TIMEOUT_MS`        | `60000`                                      | Worker 插件激活超时（inline 模式固定 5000ms）                                                                            |
+| `OPENLEARN_WORKER_ACTIVATE_PROGRESS_SLIDE_MS` | —                                            | `ctx.reportProgress` 心跳滑动续期窗口                                                                                    |
+| `DEBUG_COMMAND_BUS`                           | 关闭                                         | `true` 时 CommandBus 打印全部命令日志（含默认静默的只读指令）；`DEBUG=commandbus` 等效                                   |
 
 ## 2. SQLite 数据库路径
 
-| 场景 | 路径 |
-| --- | --- |
-| 本地开发（`pnpm dev`） | `packages/core/db/educational_os.db`（相对项目根） |
-| npx 安装 | `~/openlearn-next/data.db` |
-| `--db-path` / `OPENLEARN_DB_PATH` | 任意指定路径 |
-| Vitest | `/tmp/openlearn_test_dbs/` per-worker 临时库（按 `VITEST_POOL_ID` 隔离） |
+| 场景                              | 路径                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------ |
+| 本地开发（`pnpm dev`）            | `packages/core/db/educational_os.db`（相对项目根）                       |
+| npx 安装                          | `~/openlearn-next/data.db`                                               |
+| `--db-path` / `OPENLEARN_DB_PATH` | 任意指定路径                                                             |
+| Vitest                            | `/tmp/openlearn_test_dbs/` per-worker 临时库（按 `VITEST_POOL_ID` 隔离） |
 
 ## 3. 会话与密钥
 

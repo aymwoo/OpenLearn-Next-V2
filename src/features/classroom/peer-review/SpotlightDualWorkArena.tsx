@@ -52,10 +52,7 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
   };
 
   return (
-    <div
-      id="spotlight-dual-work-arena"
-      className="flex flex-col gap-4 w-full select-none"
-    >
+    <div id="spotlight-dual-work-arena" className="flex flex-col gap-4 w-full select-none">
       {/* 1. Main Showcase Header */}
       <div className="bg-[#131b2e] p-4 rounded-xl border border-[#2d3449]/60 flex flex-wrap items-center justify-between gap-3 shadow-md">
         <div className="flex items-center gap-3">
@@ -71,7 +68,8 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
               </span>
             </div>
             <span className="text-xs text-[#c7c4d7] mt-0.5">
-              标杆创新解法 ({maskName(workA.studentName, isAnonymous)}) ⟷ 经典逆风翻盘解法 ({maskName(workB.studentName, isAnonymous)})
+              标杆创新解法 ({maskName(workA.studentName, isAnonymous)}) ⟷ 经典逆风翻盘解法 (
+              {maskName(workB.studentName, isAnonymous)})
             </span>
           </div>
         </div>
@@ -132,10 +130,7 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
           {/* Badges */}
           <div className="flex flex-wrap gap-1.5">
             {workA.badges.map((b, idx) => (
-              <span
-                key={idx}
-                className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${b.colorClass}`}
-              >
+              <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${b.colorClass}`}>
                 {b.label}
               </span>
             ))}
@@ -237,10 +232,7 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
           {/* Badges */}
           <div className="flex flex-wrap gap-1.5">
             {workB.badges.map((b, idx) => (
-              <span
-                key={idx}
-                className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${b.colorClass}`}
-              >
+              <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${b.colorClass}`}>
                 {b.label}
               </span>
             ))}
@@ -248,10 +240,7 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
 
           {/* Canvas Visual Simulation (Rotating Matrix) */}
           <div className="w-full h-44 rounded-lg bg-[#060e20] flex items-center justify-center relative overflow-hidden border border-[#2d3449]/60 group">
-            <svg
-              className="w-36 h-36 transition-transform duration-700 group-hover:scale-110"
-              viewBox="0 0 100 100"
-            >
+            <svg className="w-36 h-36 transition-transform duration-700 group-hover:scale-110" viewBox="0 0 100 100">
               <circle cx="50" cy="50" r="42" fill="none" stroke="#2d3449" strokeWidth="1" />
               <rect
                 x="25"
@@ -367,24 +356,17 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
               key={ann.id}
               className="bg-[#171f33] p-3 rounded-lg flex flex-col gap-1.5 relative overflow-hidden border border-[#2d3449]/50"
             >
-              <div
-                className="w-1 absolute left-0 top-0 bottom-0"
-                style={{ backgroundColor: ann.borderColor }}
-              />
+              <div className="w-1 absolute left-0 top-0 bottom-0" style={{ backgroundColor: ann.borderColor }} />
               <div className="flex items-center justify-between pl-2">
                 <div className="flex items-center gap-1.5">
                   <span
                     className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
-                      ann.authorType === 'teacher'
-                        ? 'bg-[#8083ff] text-white'
-                        : 'bg-[#00a572] text-white'
+                      ann.authorType === 'teacher' ? 'bg-[#8083ff] text-white' : 'bg-[#00a572] text-white'
                     }`}
                   >
                     {ann.authorRole}
                   </span>
-                  <span className="text-xs font-semibold text-[#dae2fd]">
-                    {maskName(ann.authorName, isAnonymous)}
-                  </span>
+                  <span className="text-xs font-semibold text-[#dae2fd]">{maskName(ann.authorName, isAnonymous)}</span>
                 </div>
                 <span className="text-[10px] font-mono text-[#908fa0]">{ann.timeAgo}</span>
               </div>

@@ -24,4 +24,3 @@ export interface StudentErrorItem extends SystemErrorItem {
   lessonId?: string | null;
   classId?: string | null;
 }
-

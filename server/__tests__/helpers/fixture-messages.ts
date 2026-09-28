@@ -15,7 +15,10 @@ interface LmsMessage {
 }
 
 /** FIXTURE #1 simple-quiz.html —— 学生点「提交答卷」触发 LMS_SUBMIT（默认按 2 对 1 错 = 60/90 分） */
-export function readLmsSubmitFromFixture(_html: string, overrideScore?: { score?: number; completion?: number }): LmsMessage {
+export function readLmsSubmitFromFixture(
+  _html: string,
+  overrideScore?: { score?: number; completion?: number },
+): LmsMessage {
   return {
     type: 'LMS_SUBMIT',
     payload: {

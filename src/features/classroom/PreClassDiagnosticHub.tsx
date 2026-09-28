@@ -127,7 +127,9 @@ export function PreClassDiagnosticHub({ lessonId, classId, lang = 'zh' }: PreCla
       {/* 预习完成进度概览 */}
       <div className="grid grid-cols-2 gap-2">
         <div className="p-2.5 rounded-xl bg-surface-secondary/60 border border-theme/60 flex flex-col justify-between">
-          <span className="text-[11px] text-muted font-medium">{lang === 'zh' ? '预习视频/导学完成' : 'Prep Completed'}</span>
+          <span className="text-[11px] text-muted font-medium">
+            {lang === 'zh' ? '预习视频/导学完成' : 'Prep Completed'}
+          </span>
           <div className="flex items-baseline gap-1.5 mt-1">
             <span className="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">
               {prepSummary.completionRate}%
@@ -145,7 +147,9 @@ export function PreClassDiagnosticHub({ lessonId, classId, lang = 'zh' }: PreCla
         </div>
 
         <div className="p-2.5 rounded-xl bg-surface-secondary/60 border border-theme/60 flex flex-col justify-between">
-          <span className="text-[11px] text-muted font-medium">{lang === 'zh' ? '全班心态基线调研' : 'Class Energy Baseline'}</span>
+          <span className="text-[11px] text-muted font-medium">
+            {lang === 'zh' ? '全班心态基线调研' : 'Class Energy Baseline'}
+          </span>
           {hasIcebreaker ? (
             <>
               <div className="flex items-center justify-between gap-1 text-xs mt-1 font-bold">
@@ -205,50 +209,52 @@ export function PreClassDiagnosticHub({ lessonId, classId, lang = 'zh' }: PreCla
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
-                        m.rank === 1
-                          ? 'bg-rose-500 text-white'
-                          : m.rank === 2
-                            ? 'bg-amber-500 text-white'
-                            : 'bg-slate-400 text-white'
-                      }`}
-                    >
-                      {m.rank}
-                    </span>
-                    <span className="text-xs font-bold text-main truncate">{m.concept}</span>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-2xs font-mono font-bold text-rose-600 dark:text-rose-400">
-                      错率 {m.mistakeRate}%
-                    </span>
-                    <ChevronRight
-                      size={12}
-                      className={`text-muted transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
-                    />
-                  </div>
-                </div>
-
-                {isExpanded && (
-                  <div className="mt-2 pt-2 border-t border-rose-200/50 dark:border-rose-900/50 space-y-1.5 text-2xs animate-fadeIn">
-                    <div className="text-muted">
-                      <span className="font-semibold text-main">{lang === 'zh' ? '典型错题：' : 'Sample Trap: '}</span>
-                      {m.sampleQuestion}
-                    </div>
-                    <div className="flex items-start gap-1 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 p-1.5 rounded-lg border border-emerald-500/20 font-medium">
-                      <Lightbulb size={12} className="shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
-                      <span>
-                        <span className="font-bold">{lang === 'zh' ? '以学定教建议：' : 'Teaching Strategy: '}</span>
-                        {m.pedagogicalAdvice}
+                      <span
+                        className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                          m.rank === 1
+                            ? 'bg-rose-500 text-white'
+                            : m.rank === 2
+                              ? 'bg-amber-500 text-white'
+                              : 'bg-slate-400 text-white'
+                        }`}
+                      >
+                        {m.rank}
                       </span>
+                      <span className="text-xs font-bold text-main truncate">{m.concept}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-2xs font-mono font-bold text-rose-600 dark:text-rose-400">
+                        错率 {m.mistakeRate}%
+                      </span>
+                      <ChevronRight
+                        size={12}
+                        className={`text-muted transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}
+                      />
                     </div>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+
+                  {isExpanded && (
+                    <div className="mt-2 pt-2 border-t border-rose-200/50 dark:border-rose-900/50 space-y-1.5 text-2xs animate-fadeIn">
+                      <div className="text-muted">
+                        <span className="font-semibold text-main">
+                          {lang === 'zh' ? '典型错题：' : 'Sample Trap: '}
+                        </span>
+                        {m.sampleQuestion}
+                      </div>
+                      <div className="flex items-start gap-1 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 p-1.5 rounded-lg border border-emerald-500/20 font-medium">
+                        <Lightbulb size={12} className="shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>
+                          <span className="font-bold">{lang === 'zh' ? '以学定教建议：' : 'Teaching Strategy: '}</span>
+                          {m.pedagogicalAdvice}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

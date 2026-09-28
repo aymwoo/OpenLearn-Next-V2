@@ -348,18 +348,20 @@ export function CourseManagement({
                           }`}
                           title={
                             copiedLessonId === lesson.id
-                              ? lang === 'zh' ? '已复制!' : 'Copied!'
-                              : lang === 'zh' ? '复制课程 ID' : 'Copy Course ID'
+                              ? lang === 'zh'
+                                ? '已复制!'
+                                : 'Copied!'
+                              : lang === 'zh'
+                                ? '复制课程 ID'
+                                : 'Copy Course ID'
                           }
                         >
-                          {copiedLessonId === lesson.id ? (
-                            <ClipboardCheck size={12} />
-                          ) : (
-                            <Clipboard size={12} />
-                          )}
+                          {copiedLessonId === lesson.id ? <ClipboardCheck size={12} /> : <Clipboard size={12} />}
                           <span className="font-mono">
                             {copiedLessonId === lesson.id
-                              ? (lang === 'zh' ? '已复制!' : 'Copied!')
+                              ? lang === 'zh'
+                                ? '已复制!'
+                                : 'Copied!'
                               : `${lesson.id.substring(0, 8)}…`}
                           </span>
                         </button>

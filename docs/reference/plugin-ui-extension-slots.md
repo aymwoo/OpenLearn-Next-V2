@@ -19,69 +19,69 @@ export type ExtensionSlot =
   | 'classroom.tool'
   | 'teacher.dashboard.widget'
   | 'student.lesson.tool'
-  | 'teacher.panel'                    // v0.3.x: 教师独立全宽管理面板
-  | 'student.fullscreen'               // v0.3.x: 学生全屏视图（考试模式）
-  | 'global.setting'                   // v0.3.x: 全局设置页扩展
-  | 'nav.user_menu'                    // v0.3.x: 顶部 Header 用户菜单扩展
+  | 'teacher.panel' // v0.3.x: 教师独立全宽管理面板
+  | 'student.fullscreen' // v0.3.x: 学生全屏视图（考试模式）
+  | 'global.setting' // v0.3.x: 全局设置页扩展
+  | 'nav.user_menu' // v0.3.x: 顶部 Header 用户菜单扩展
   // ── 课堂互动扩展 ──
-  | 'classroom.quick_activity'         // 极速课堂互动扩展
-  | 'stage.display.card'               // 大屏展台卡片扩展
-  | 'editor.timeline_segment'          // 课程编辑器步骤类型扩展
-  | 'editor.palette_item'              // 课程编辑器白板图元扩展
+  | 'classroom.quick_activity' // 极速课堂互动扩展
+  | 'stage.display.card' // 大屏展台卡片扩展
+  | 'editor.timeline_segment' // 课程编辑器步骤类型扩展
+  | 'editor.palette_item' // 课程编辑器白板图元扩展
   // ── 倒计时扩展 ──
-  | 'classroom.countdown.widget'       // 课堂倒计时挂件
-  | 'classroom.countdown.action'       // 课堂倒计时快捷操作
-  | 'student.classroom.countdown'      // 学生端倒计时通知
+  | 'classroom.countdown.widget' // 课堂倒计时挂件
+  | 'classroom.countdown.action' // 课堂倒计时快捷操作
+  | 'student.classroom.countdown' // 学生端倒计时通知
   // ── 学生端快捷指令 ──
-  | 'student.quick_actions.item'       // 快捷指令菜单项
-  | 'student.quick_actions.action'     // 快捷指令操作
-  | 'student.quick_actions.fab'        // 快捷指令悬浮球
+  | 'student.quick_actions.item' // 快捷指令菜单项
+  | 'student.quick_actions.action' // 快捷指令操作
+  | 'student.quick_actions.fab' // 快捷指令悬浮球
   // ── 课堂启动门户（Classroom Entry Portal）──
-  | 'classroom.portal.telemetry'       // 顶部遥测岛指标
-  | 'classroom.portal.course_badge'    // 课程卡片徽章
-  | 'classroom.portal.teaching_mode'   // 自定义教学模式
-  | 'classroom.portal.insight'         // 课前学情洞察卡
-  | 'classroom.portal.preflight'       // 课前检查项
-  | 'classroom.portal.launch_action'   // 启动区附加操作
+  | 'classroom.portal.telemetry' // 顶部遥测岛指标
+  | 'classroom.portal.course_badge' // 课程卡片徽章
+  | 'classroom.portal.teaching_mode' // 自定义教学模式
+  | 'classroom.portal.insight' // 课前学情洞察卡
+  | 'classroom.portal.preflight' // 课前检查项
+  | 'classroom.portal.launch_action' // 启动区附加操作
   // ── 课堂流程扩展页面 ──
-  | 'classroom.notification.tabs'      // 家校通知生成器标签页
-  | 'classroom.pacing.dashboard'       // AI 学情预测仪表
-  | 'classroom.diagnostic.feed'        // 课堂异常告警实时流
-  | 'classroom.collab.canvas'          // 小组协作白板工具
+  | 'classroom.notification.tabs' // 家校通知生成器标签页
+  | 'classroom.pacing.dashboard' // AI 学情预测仪表
+  | 'classroom.diagnostic.feed' // 课堂异常告警实时流
+  | 'classroom.collab.canvas' // 小组协作白板工具
   // ── 统一顶栏 / 归因 / 积分榜 ──
-  | 'classroom.topbar.action'          // 顶栏快捷操作
-  | 'classroom.topbar.pill'            // 顶栏状态胶囊
-  | 'classroom.attribution.award'      // 课堂归因加分维度
-  | 'classroom.attribution.action'     // 课堂归因动作
-  | 'classroom.leaderboard.action'     // 班级积分榜操作
+  | 'classroom.topbar.action' // 顶栏快捷操作
+  | 'classroom.topbar.pill' // 顶栏状态胶囊
+  | 'classroom.attribution.award' // 课堂归因加分维度
+  | 'classroom.attribution.action' // 课堂归因动作
+  | 'classroom.leaderboard.action' // 班级积分榜操作
   // ── 学生多维素养 / 成长档案 ──
-  | 'student.profile.dimension'        // 多维素养雷达维度
-  | 'student.profile.card'             // 成长档案扩展卡片
-  | 'student.profile.action'           // 成长档案操作动作
-  | 'student.profile.timeline_item'    // 答题与互动轨迹项
+  | 'student.profile.dimension' // 多维素养雷达维度
+  | 'student.profile.card' // 成长档案扩展卡片
+  | 'student.profile.action' // 成长档案操作动作
+  | 'student.profile.timeline_item' // 答题与互动轨迹项
   // ── 全局顶栏 / 晴雨表 / 环节 ──
-  | 'classroom.header.action'          // 全局顶栏右侧快捷动作
-  | 'classroom.barometer.metric'       // 课堂节奏晴雨表指标
-  | 'classroom.agenda.action'          // 教学环节步骤卡片动作
+  | 'classroom.header.action' // 全局顶栏右侧快捷动作
+  | 'classroom.barometer.metric' // 课堂节奏晴雨表指标
+  | 'classroom.agenda.action' // 教学环节步骤卡片动作
   // ── 白板扩展 ──
-  | 'whiteboard.dock.plugin'           // 白板活跃插件悬浮坞
-  | 'whiteboard.canvas.widget'         // 白板画布可拖拽任务卡片
+  | 'whiteboard.dock.plugin' // 白板活跃插件悬浮坞
+  | 'whiteboard.canvas.widget' // 白板画布可拖拽任务卡片
   // ── 审计 ──
-  | 'classroom.audit.event'            // 课堂互动分级审计流
+  | 'classroom.audit.event' // 课堂互动分级审计流
   // ── 全班大屏互评 ──
-  | 'peer_review.rubric.dimension'     // 互评量规维度
-  | 'peer_review.badge'                // 互评微勋章
-  | 'peer_review.action'               // 互评操作
-  | 'peer_review.showcase.widget'      // 焦点作品对比分析组件
+  | 'peer_review.rubric.dimension' // 互评量规维度
+  | 'peer_review.badge' // 互评微勋章
+  | 'peer_review.action' // 互评操作
+  | 'peer_review.showcase.widget' // 焦点作品对比分析组件
   // ── 机房座位图（v0.3.22）──
-  | 'classroom.seating.toolbar'        // 座位图工具栏右侧按钮（如"远程开机"、"锁屏"）
-  | 'classroom.seating.legend'         // 座位图底部图例区追加
-  | 'classroom.seating.seat_badge'     // 每个座位卡片内叠加徽章/图标
-  | 'classroom.seating.seat_actions'   // 座位右键/长按菜单项
-  | 'classroom.seating.summary'        // 座位图底部汇总区追加统计卡片
+  | 'classroom.seating.toolbar' // 座位图工具栏右侧按钮（如"远程开机"、"锁屏"）
+  | 'classroom.seating.legend' // 座位图底部图例区追加
+  | 'classroom.seating.seat_badge' // 每个座位卡片内叠加徽章/图标
+  | 'classroom.seating.seat_actions' // 座位右键/长按菜单项
+  | 'classroom.seating.summary' // 座位图底部汇总区追加统计卡片
   // ── 白板自动保存（v0.3.22 末 / 阶段1）──
-  | 'whiteboard.autosave.status'       // 白板自动保存状态指示区（同步状态、第三方云备份展示）
-  | 'whiteboard.autosave.action';      // 白板自动保存附加操作区（立即同步外部网盘、版本快照打标）
+  | 'whiteboard.autosave.status' // 白板自动保存状态指示区（同步状态、第三方云备份展示）
+  | 'whiteboard.autosave.action'; // 白板自动保存附加操作区（立即同步外部网盘、版本快照打标）
 
 // v0.2.6: 锚点槽位（开放命名空间）
 export type AnchorSlot = `anchor:${string}`;
@@ -100,54 +100,54 @@ export type AnyExtensionSlot = ExtensionSlot | AnchorSlot | (string & {});
 
 ### 已实际挂载渲染器（有真实 `ExtensionPointRenderer` 调用点）的槽位
 
-| 槽位                          | 渲染调用点                                                                                                      | 宿主注入的 slotProps             |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| `student.view`                | `src/features/student-workspace/widgets/student-default-widgets.tsx`（及 `InteractiveWhiteboard.tsx` 学生分支） | `{ studentId: activeStudentId }` |
-| `teacher.tab`                 | `src/plugin-host/extension-point-renderer.tsx`（按钮形态）/ `src/components/PluginTabPanel.tsx`（面板形态）     | 见 §2                            |
-| `classroom.tool`              | `src/features/whiteboard/components/WhiteboardToolbar.tsx`（工具栏按钮）/ 备课画板组件列表卡片                  | 无（仅 `route?`）                |
-| `anchor:*`                    | `src/features/whiteboard/components/WhiteboardToolbar.tsx`（锚点按钮前后，`placement="before\|after"`）         | 无（仅 `route?`）                |
-| `teacher.dashboard.widget`    | `src/features/teacher/Dashboard.tsx`                                                                            | 无（仅 `route?`）                |
-| `help.plugin_docs`            | `src/features/teacher/help/PluginDocsViewer.tsx`                                                                | 无（仅 `route?`）                |
-| `whiteboard.fullscreen`       | `InteractiveWhiteboard.tsx`（`FullscreenOverlay` 通过 `fullscreenRendererRegistry` 查找）                       | 见 §5                            |
-| `whiteboard.property-editor`  | `InteractiveWhiteboard.tsx`（属性面板通过 `propertyEditorRegistry` 查找）                                       | 见 §6                            |
-| `palette.item` (备课画板组件) | `LessonPalette.tsx`（左侧面板聚合）/ `InteractiveWhiteboard.tsx`（画布卡片渲染与通用属性表单）                  | 见 §9                            |
-| `classroom.quick_activity`    | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                        | 无（仅 `route?`）                |
-| `stage.display.card`          | `src/features/classroom/StageDisplayModal.tsx`                                                                  | 无（仅 `route?`）                |
-| `classroom.countdown.widget`  | `src/features/classroom/ClassroomCountdownWidget.tsx`                                                           | 无（仅 `route?`）                |
-| `classroom.countdown.action`  | `src/features/classroom/ClassroomCountdownWidget.tsx`                                                           | 无（仅 `route?`）                |
-| `student.classroom.countdown` | `src/features/student/StudentCountdownBanner.tsx`                                                               | 无（仅 `route?`）                |
-| `student.quick_actions.item`   | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                           | 无（仅 `route?`）                |
-| `student.quick_actions.action` | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                           | 无（仅 `route?`）                |
-| `student.quick_actions.fab`    | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                           | 无（仅 `route?`）                |
-| `classroom.portal.telemetry`   | `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                |
-| `classroom.portal.course_badge`| `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                |
-| `classroom.portal.teaching_mode`| `src/features/classroom/ClassroomEntryPortal.tsx`                                                              | 无（仅 `route?`）                |
-| `classroom.portal.insight`     | `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                |
-| `classroom.portal.preflight`   | `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                |
-| `classroom.portal.launch_action`| `src/features/classroom/ClassroomEntryPortal.tsx`                                                              | 无（仅 `route?`）                |
-| `classroom.notification.tabs`  | `src/features/classroom/notifications/ParentNotificationModal.tsx`                                              | 无（仅 `route?`）                |
-| `classroom.pacing.dashboard`   | `src/features/classroom/pacing/MasteryPredictionModal.tsx`                                                     | 无（仅 `route?`）                |
-| `classroom.diagnostic.feed`    | `src/features/classroom/diagnostics/DiagnosticCenterModal.tsx`                                                  | 无（仅 `route?`）                |
-| `classroom.collab.canvas`      | `src/features/classroom/collab-whiteboard/GroupCollabWhiteboardModal.tsx`                                       | 无（仅 `route?`）                |
-| `classroom.topbar.action`      | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                        | 无（仅 `route?`）                |
-| `classroom.topbar.pill`        | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                        | 无（仅 `route?`）                |
-| `classroom.attribution.award`  | `src/features/classroom/ClassroomAttributionModal.tsx`                                                          | 无（仅 `route?`）                |
-| `classroom.attribution.action` | `src/features/classroom/ClassroomAttributionModal.tsx`                                                          | 无（仅 `route?`）                |
-| `classroom.leaderboard.action` | `src/features/classroom/ClassroomLeaderboardModal.tsx`                                                          | 无（仅 `route?`）                |
-| `student.profile.dimension`    | `src/features/student/StudentGrowthProfileModal.tsx`                                                            | 无（仅 `route?`）                |
-| `student.profile.card`         | `src/features/student/StudentGrowthProfileModal.tsx`                                                            | 无（仅 `route?`）                |
-| `student.profile.action`       | `src/features/student/StudentGrowthProfileModal.tsx`                                                            | 无（仅 `route?`）                |
-| `student.profile.timeline_item`| `src/features/student/StudentGrowthProfileModal.tsx`                                                            | 无（仅 `route?`）                |
-| `peer_review.rubric.dimension` | `src/features/classroom/peer-review/PeerReviewRubricStats.tsx`、`PeerReviewRubricModal.tsx`                     | 无（仅 `route?`）                |
-| `peer_review.badge`            | `src/features/classroom/peer-review/PeerReviewMatrixPanel.tsx`                                                  | 无（仅 `route?`）                |
-| `peer_review.action`           | `src/features/classroom/peer-review/PeerReviewLeaderboardPanel.tsx`、`PeerReviewTelemetryHeader.tsx`            | 无（仅 `route?`）                |
-| `peer_review.showcase.widget`  | `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`                                                 | 无（仅 `route?`）                |
-| `classroom.seating.toolbar`    | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                              | `{ classId, lab, stats }`        |
-| `classroom.seating.legend`     | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                              | `{ classId, stats }`             |
-| `classroom.seating.summary`    | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                              | `{ classId, stats }`             |
-| `classroom.seating.seat_badge` | `src/features/classroom/ComputerLabSeatingMap.tsx`（每个座位内渲染）                                             | `{ seat, student, isOnline, classId }` |
-| `whiteboard.autosave.status`   | `src/features/teacher/LessonEditorView.tsx`                                                                     | `{ lessonId, status, pendingCount, lastSavedTime }` |
-| `whiteboard.autosave.action`   | `src/features/teacher/LessonEditorView.tsx`                                                                     | `{ lessonId, flush, pendingCount }` |
+| 槽位                             | 渲染调用点                                                                                                      | 宿主注入的 slotProps                                |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `student.view`                   | `src/features/student-workspace/widgets/student-default-widgets.tsx`（及 `InteractiveWhiteboard.tsx` 学生分支） | `{ studentId: activeStudentId }`                    |
+| `teacher.tab`                    | `src/plugin-host/extension-point-renderer.tsx`（按钮形态）/ `src/components/PluginTabPanel.tsx`（面板形态）     | 见 §2                                               |
+| `classroom.tool`                 | `src/features/whiteboard/components/WhiteboardToolbar.tsx`（工具栏按钮）/ 备课画板组件列表卡片                  | 无（仅 `route?`）                                   |
+| `anchor:*`                       | `src/features/whiteboard/components/WhiteboardToolbar.tsx`（锚点按钮前后，`placement="before\|after"`）         | 无（仅 `route?`）                                   |
+| `teacher.dashboard.widget`       | `src/features/teacher/Dashboard.tsx`                                                                            | 无（仅 `route?`）                                   |
+| `help.plugin_docs`               | `src/features/teacher/help/PluginDocsViewer.tsx`                                                                | 无（仅 `route?`）                                   |
+| `whiteboard.fullscreen`          | `InteractiveWhiteboard.tsx`（`FullscreenOverlay` 通过 `fullscreenRendererRegistry` 查找）                       | 见 §5                                               |
+| `whiteboard.property-editor`     | `InteractiveWhiteboard.tsx`（属性面板通过 `propertyEditorRegistry` 查找）                                       | 见 §6                                               |
+| `palette.item` (备课画板组件)    | `LessonPalette.tsx`（左侧面板聚合）/ `InteractiveWhiteboard.tsx`（画布卡片渲染与通用属性表单）                  | 见 §9                                               |
+| `classroom.quick_activity`       | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                        | 无（仅 `route?`）                                   |
+| `stage.display.card`             | `src/features/classroom/StageDisplayModal.tsx`                                                                  | 无（仅 `route?`）                                   |
+| `classroom.countdown.widget`     | `src/features/classroom/ClassroomCountdownWidget.tsx`                                                           | 无（仅 `route?`）                                   |
+| `classroom.countdown.action`     | `src/features/classroom/ClassroomCountdownWidget.tsx`                                                           | 无（仅 `route?`）                                   |
+| `student.classroom.countdown`    | `src/features/student/StudentCountdownBanner.tsx`                                                               | 无（仅 `route?`）                                   |
+| `student.quick_actions.item`     | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                           | 无（仅 `route?`）                                   |
+| `student.quick_actions.action`   | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                           | 无（仅 `route?`）                                   |
+| `student.quick_actions.fab`      | `src/features/student/components/StudentQuickActionsFloatingMenu.tsx`                                           | 无（仅 `route?`）                                   |
+| `classroom.portal.telemetry`     | `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                                   |
+| `classroom.portal.course_badge`  | `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                                   |
+| `classroom.portal.teaching_mode` | `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                                   |
+| `classroom.portal.insight`       | `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                                   |
+| `classroom.portal.preflight`     | `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                                   |
+| `classroom.portal.launch_action` | `src/features/classroom/ClassroomEntryPortal.tsx`                                                               | 无（仅 `route?`）                                   |
+| `classroom.notification.tabs`    | `src/features/classroom/notifications/ParentNotificationModal.tsx`                                              | 无（仅 `route?`）                                   |
+| `classroom.pacing.dashboard`     | `src/features/classroom/pacing/MasteryPredictionModal.tsx`                                                      | 无（仅 `route?`）                                   |
+| `classroom.diagnostic.feed`      | `src/features/classroom/diagnostics/DiagnosticCenterModal.tsx`                                                  | 无（仅 `route?`）                                   |
+| `classroom.collab.canvas`        | `src/features/classroom/collab-whiteboard/GroupCollabWhiteboardModal.tsx`                                       | 无（仅 `route?`）                                   |
+| `classroom.topbar.action`        | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                        | 无（仅 `route?`）                                   |
+| `classroom.topbar.pill`          | `src/features/classroom/ClassroomInteractiveCockpit.tsx`                                                        | 无（仅 `route?`）                                   |
+| `classroom.attribution.award`    | `src/features/classroom/ClassroomAttributionModal.tsx`                                                          | 无（仅 `route?`）                                   |
+| `classroom.attribution.action`   | `src/features/classroom/ClassroomAttributionModal.tsx`                                                          | 无（仅 `route?`）                                   |
+| `classroom.leaderboard.action`   | `src/features/classroom/ClassroomLeaderboardModal.tsx`                                                          | 无（仅 `route?`）                                   |
+| `student.profile.dimension`      | `src/features/student/StudentGrowthProfileModal.tsx`                                                            | 无（仅 `route?`）                                   |
+| `student.profile.card`           | `src/features/student/StudentGrowthProfileModal.tsx`                                                            | 无（仅 `route?`）                                   |
+| `student.profile.action`         | `src/features/student/StudentGrowthProfileModal.tsx`                                                            | 无（仅 `route?`）                                   |
+| `student.profile.timeline_item`  | `src/features/student/StudentGrowthProfileModal.tsx`                                                            | 无（仅 `route?`）                                   |
+| `peer_review.rubric.dimension`   | `src/features/classroom/peer-review/PeerReviewRubricStats.tsx`、`PeerReviewRubricModal.tsx`                     | 无（仅 `route?`）                                   |
+| `peer_review.badge`              | `src/features/classroom/peer-review/PeerReviewMatrixPanel.tsx`                                                  | 无（仅 `route?`）                                   |
+| `peer_review.action`             | `src/features/classroom/peer-review/PeerReviewLeaderboardPanel.tsx`、`PeerReviewTelemetryHeader.tsx`            | 无（仅 `route?`）                                   |
+| `peer_review.showcase.widget`    | `src/features/classroom/peer-review/SpotlightDualWorkArena.tsx`                                                 | 无（仅 `route?`）                                   |
+| `classroom.seating.toolbar`      | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                              | `{ classId, lab, stats }`                           |
+| `classroom.seating.legend`       | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                              | `{ classId, stats }`                                |
+| `classroom.seating.summary`      | `src/features/classroom/ComputerLabSeatingMap.tsx`                                                              | `{ classId, stats }`                                |
+| `classroom.seating.seat_badge`   | `src/features/classroom/ComputerLabSeatingMap.tsx`（每个座位内渲染）                                            | `{ seat, student, isOnline, classId }`              |
+| `whiteboard.autosave.status`     | `src/features/teacher/LessonEditorView.tsx`                                                                     | `{ lessonId, status, pendingCount, lastSavedTime }` |
+| `whiteboard.autosave.action`     | `src/features/teacher/LessonEditorView.tsx`                                                                     | `{ lessonId, flush, pendingCount }`                 |
 
 > `student.lesson.tool` / `teacher.panel` / `student.fullscreen` / `global.setting` / `nav.user_menu` / `editor.timeline_segment` / `editor.palette_item` / `classroom.header.action` / `classroom.barometer.metric` / `classroom.agenda.action` / `whiteboard.dock.plugin` / `whiteboard.canvas.widget` / `classroom.audit.event` 仅出现在 `ExtensionSlot` 联合类型中，**尚无渲染器挂载**，当前不会渲染任何内容。
 > `classroom.seating.*` 五个座位图槽位中 **4 个已挂载渲染器**（`ComputerLabSeatingMap.tsx`，见上表），仅 `classroom.seating.seat_actions`（座位右键菜单项）尚未挂载——声明后暂不渲染。

@@ -60,9 +60,7 @@ describe('Sprint 1 安全与生命周期加固验证套件 (C-1, C-3, C-4, H-2, 
         contentSecurityPolicy: {
           directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: isProduction
-              ? ["'self'", "'unsafe-inline'"]
-              : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+            scriptSrc: isProduction ? ["'self'", "'unsafe-inline'"] : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
             scriptSrcAttr: ["'unsafe-inline'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
             styleSrcAttr: ["'unsafe-inline'"],
@@ -130,12 +128,11 @@ describe('Sprint 1 安全与生命周期加固验证套件 (C-1, C-3, C-4, H-2, 
   it('C-3: packages/core/plugin-host 静态沙箱中间件 CSP 中不包含 unsafe-eval', async () => {
     const fs = await import('fs');
     const path = await import('path');
-    const fileContent = fs.readFileSync(
-      path.resolve(process.cwd(), 'packages/core/plugin-host/index.ts'),
-      'utf-8',
-    );
+    const fileContent = fs.readFileSync(path.resolve(process.cwd(), 'packages/core/plugin-host/index.ts'), 'utf-8');
     // 验证 createPluginStaticMiddleware 中的 Content-Security-Policy 没有 'unsafe-eval'
-    const sandboxMatch = fileContent.match(/createPluginStaticMiddleware[\s\S]*?res\.setHeader\(\s*'Content-Security-Policy'[\s\S]*?\);/);
+    const sandboxMatch = fileContent.match(
+      /createPluginStaticMiddleware[\s\S]*?res\.setHeader\(\s*'Content-Security-Policy'[\s\S]*?\);/,
+    );
     expect(sandboxMatch).not.toBeNull();
     expect(sandboxMatch![0]).not.toContain("'unsafe-eval'");
   });

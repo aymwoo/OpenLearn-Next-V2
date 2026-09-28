@@ -184,7 +184,14 @@ export const AssignmentEvalPlugin = {
           'SELECT id, version, text_content, link_url, submitted_at, is_late FROM plugin_submission_versions WHERE submission_id = ? ORDER BY version DESC LIMIT 1',
         )
         .get(submissionId) as
-        | { id: string; version: number; text_content: string | null; link_url: string | null; submitted_at: number; is_late: number }
+        | {
+            id: string;
+            version: number;
+            text_content: string | null;
+            link_url: string | null;
+            submitted_at: number;
+            is_late: number;
+          }
         | undefined;
 
     const filesOfVersion = (versionId: string) =>
@@ -221,12 +228,12 @@ export const AssignmentEvalPlugin = {
             'SELECT score, comment, status, updated_at FROM plugin_peer_reviews WHERE submission_id = ? AND reviewer_id = ?',
           )
           .get(task.submission_id, reviewerId) as
-          | { score: number; comment: string | null; status: string; updated_at: number | null }
-          | undefined;
+          { score: number; comment: string | null; status: string; updated_at: number | null } | undefined;
         const submissionUpdatedAt =
-          (db.prepare('SELECT updated_at FROM plugin_submissions WHERE id = ?').get(task.submission_id) as
-            | { updated_at: number }
-            | undefined)?.updated_at ?? null;
+          (
+            db.prepare('SELECT updated_at FROM plugin_submissions WHERE id = ?').get(task.submission_id) as
+              { updated_at: number } | undefined
+          )?.updated_at ?? null;
         return {
           taskId: task.id,
           submissionId: task.submission_id,
@@ -237,8 +244,8 @@ export const AssignmentEvalPlugin = {
           // 我评完之后作者又改过提交 → 提醒复核
           stale: Boolean(
             review?.status === 'submitted' &&
-              submissionUpdatedAt &&
-              Number(review.updated_at || 0) < Number(submissionUpdatedAt),
+            submissionUpdatedAt &&
+            Number(review.updated_at || 0) < Number(submissionUpdatedAt),
           ),
           review: review
             ? { score: review.score, comment: review.comment || '', submittedAt: review.updated_at ?? null }
@@ -263,7 +270,8 @@ export const AssignmentEvalPlugin = {
     const buildPeerProgress = (assignmentId: string) => {
       const nameOf = (studentId: string) => {
         try {
-          const row = db.prepare('SELECT name FROM students WHERE id = ?').get(studentId) as { name: string } | undefined;
+          const row = db.prepare('SELECT name FROM students WHERE id = ?').get(studentId) as
+            { name: string } | undefined;
           return row?.name || studentId;
         } catch {
           // students 表可能不存在（精简部署 / 单元测试），退化为用户 ID
@@ -277,9 +285,12 @@ export const AssignmentEvalPlugin = {
 
       const byReviewer = new Map<string, { studentId: string; name: string; pending: number; submitted: number }>();
       for (const task of tasks) {
-        const entry =
-          byReviewer.get(task.reviewer_id) ||
-          { studentId: task.reviewer_id, name: nameOf(task.reviewer_id), pending: 0, submitted: 0 };
+        const entry = byReviewer.get(task.reviewer_id) || {
+          studentId: task.reviewer_id,
+          name: nameOf(task.reviewer_id),
+          pending: 0,
+          submitted: 0,
+        };
         if (task.status === 'submitted') entry.submitted += 1;
         else entry.pending += 1;
         byReviewer.set(task.reviewer_id, entry);
@@ -516,8 +527,11 @@ export const AssignmentEvalPlugin = {
 
         const assignments = rows.map((row) => {
           const submission = db
-            .prepare('SELECT id, version, file_path, updated_at FROM plugin_submissions WHERE assignment_id = ? AND student_id = ?')
-            .get(row.id, studentId) as { id: string; version: number; file_path: string | null; updated_at: number } | undefined;
+            .prepare(
+              'SELECT id, version, file_path, updated_at FROM plugin_submissions WHERE assignment_id = ? AND student_id = ?',
+            )
+            .get(row.id, studentId) as
+            { id: string; version: number; file_path: string | null; updated_at: number } | undefined;
           const grade = submission
             ? (db
                 .prepare('SELECT calculated_final_score, status FROM plugin_grades WHERE submission_id = ?')
@@ -566,7 +580,11 @@ export const AssignmentEvalPlugin = {
             submissionCount: submissions.length,
             gradedCount: gradedIds.size,
             pendingPeerReviews: (
-              db.prepare("SELECT COUNT(*) AS c FROM plugin_peer_review_tasks WHERE assignment_id = ? AND status = 'pending'").get(assignmentId) as { c: number }
+              db
+                .prepare(
+                  "SELECT COUNT(*) AS c FROM plugin_peer_review_tasks WHERE assignment_id = ? AND status = 'pending'",
+                )
+                .get(assignmentId) as { c: number }
             ).c,
           },
         };
@@ -645,7 +663,9 @@ export const AssignmentEvalPlugin = {
           throw new Error('Access Denied: Link answers are not allowed for this assignment');
         }
 
-        const fileIds: string[] = Array.isArray(payload.fileIds) ? payload.fileIds.filter((f: unknown) => typeof f === 'string') : [];
+        const fileIds: string[] = Array.isArray(payload.fileIds)
+          ? payload.fileIds.filter((f: unknown) => typeof f === 'string')
+          : [];
         if (fileIds.length > Number(assignment.max_files)) {
           throw new Error(`Access Denied: At most ${assignment.max_files} files are allowed`);
         }
@@ -666,7 +686,16 @@ export const AssignmentEvalPlugin = {
           db.prepare(
             `INSERT INTO plugin_submissions (id, assignment_id, lesson_id, student_id, file_path, version, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          ).run(submissionId, assignment.id, assignment.lesson_id ?? null, studentId, filePath ?? null, version, now, now);
+          ).run(
+            submissionId,
+            assignment.id,
+            assignment.lesson_id ?? null,
+            studentId,
+            filePath ?? null,
+            version,
+            now,
+            now,
+          );
         }
 
         // 把本次引用的文件挂到该提交版本上（仅限本人、同一作业、未被占用的文件）
@@ -694,7 +723,18 @@ export const AssignmentEvalPlugin = {
           `INSERT INTO plugin_submission_versions
              (id, submission_id, assignment_id, student_id, version, files_json, text_content, link_url, is_late, submitted_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        ).run(versionId, submissionId, assignment.id, studentId, version, filesJson, textContent ?? null, linkUrl ?? null, isLate, now);
+        ).run(
+          versionId,
+          submissionId,
+          assignment.id,
+          studentId,
+          version,
+          filesJson,
+          textContent ?? null,
+          linkUrl ?? null,
+          isLate,
+          now,
+        );
 
         await publishEvent(
           'assignment.submitted',
@@ -762,7 +802,9 @@ export const AssignmentEvalPlugin = {
         // 分配式互评：作业一旦建立了互评任务，就只允许任务持有人提交（未分配到的学生会被拒绝）；
         // 没有任何互评任务时保持旧的开放互评行为（课时级历史入口仍可用）。
         const task = db
-          .prepare('SELECT id, due_at, status FROM plugin_peer_review_tasks WHERE submission_id = ? AND reviewer_id = ?')
+          .prepare(
+            'SELECT id, due_at, status FROM plugin_peer_review_tasks WHERE submission_id = ? AND reviewer_id = ?',
+          )
           .get(submissionId, reviewerId) as { id: string; due_at: number | null; status: string } | undefined;
         if (!task && submission.assignment_id) {
           const taskCount = (
@@ -840,7 +882,10 @@ export const AssignmentEvalPlugin = {
         const assignment = loadAssignment(assignmentId);
         if (!assignment) throw new Error(`Assignment not found: ${assignmentId}`);
 
-        const reviewerCount = Math.max(1, Math.min(10, Number((command.payload as any).reviewerCount ?? assignment.peer_review_count) || 1));
+        const reviewerCount = Math.max(
+          1,
+          Math.min(10, Number((command.payload as any).reviewerCount ?? assignment.peer_review_count) || 1),
+        );
         const submissions = db
           .prepare('SELECT id, student_id FROM plugin_submissions WHERE assignment_id = ? ORDER BY created_at ASC')
           .all(assignmentId) as { id: string; student_id: string }[];
@@ -867,7 +912,14 @@ export const AssignmentEvalPlugin = {
                  VALUES (?, ?, ?, ?, 1, 'pending', ?, ?)
                  ON CONFLICT(submission_id, reviewer_id) DO NOTHING`,
               )
-              .run(taskId, assignmentId, submission.id, candidate.student_id, dueAt ?? assignment.peer_review_due_at ?? null, now);
+              .run(
+                taskId,
+                assignmentId,
+                submission.id,
+                candidate.student_id,
+                dueAt ?? assignment.peer_review_due_at ?? null,
+                now,
+              );
             if ((result as { changes: number }).changes > 0) {
               created += 1;
               pools.set(candidate.student_id, (pools.get(candidate.student_id) || 0) + 1);
@@ -931,8 +983,12 @@ export const AssignmentEvalPlugin = {
         }
 
         const assignment = submission.assignment_id ? loadAssignment(submission.assignment_id) : undefined;
-        const teacherWeight = payload.teacherWeight === undefined ? Number(assignment?.teacher_weight ?? 0.6) : Number(payload.teacherWeight);
-        const peerWeight = payload.peerWeight === undefined ? Number(assignment?.peer_weight ?? 0.4) : Number(payload.peerWeight);
+        const teacherWeight =
+          payload.teacherWeight === undefined
+            ? Number(assignment?.teacher_weight ?? 0.6)
+            : Number(payload.teacherWeight);
+        const peerWeight =
+          payload.peerWeight === undefined ? Number(assignment?.peer_weight ?? 0.4) : Number(payload.peerWeight);
         const totalWeight = teacherWeight + peerWeight;
         if (Math.abs(totalWeight - 1.0) > 0.001) {
           throw new Error('Access Denied: The sum of teacherWeight and peerWeight must equal 1.0');
@@ -1025,15 +1081,7 @@ export const AssignmentEvalPlugin = {
                  feedback = excluded.feedback,
                  graded_at = excluded.graded_at,
                  status = 'graded'`,
-            ).run(
-              assignment.id,
-              submission.student_id,
-              '',
-              calculatedFinalScore,
-              teacherComment || '',
-              now,
-              now,
-            );
+            ).run(assignment.id, submission.student_id, '', calculatedFinalScore, teacherComment || '', now, now);
           }
 
           await publishEvent(

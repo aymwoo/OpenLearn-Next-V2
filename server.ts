@@ -145,7 +145,11 @@ async function startServer() {
   const rawTrustProxy = process.env.TRUST_PROXY;
   if (rawTrustProxy !== undefined) {
     const isBool = rawTrustProxy === 'true' || rawTrustProxy === 'false';
-    const parsed = isBool ? rawTrustProxy === 'true' : !isNaN(Number(rawTrustProxy)) ? Number(rawTrustProxy) : rawTrustProxy;
+    const parsed = isBool
+      ? rawTrustProxy === 'true'
+      : !isNaN(Number(rawTrustProxy))
+        ? Number(rawTrustProxy)
+        : rawTrustProxy;
     app.set('trust proxy', parsed);
   } else {
     // 默认开启 1 层代理信任（如果未显式配置），但允许通过 TRUST_PROXY=false 显式关闭
@@ -199,9 +203,7 @@ async function startServer() {
       crossOriginEmbedderPolicy: false,
       crossOriginResourcePolicy: { policy: 'cross-origin' }, // 允许沙箱 iframe（opaque origin）加载静态资源
       originAgentCluster: false,
-      strictTransportSecurity: enableHsts
-        ? { maxAge: 31536000, includeSubDomains: true, preload: true }
-        : false, // 针对 HTTP / 局域网部署不锁死 HSTS，避免无证书机房被浏览器强制 HTTPS
+      strictTransportSecurity: enableHsts ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false, // 针对 HTTP / 局域网部署不锁死 HSTS，避免无证书机房被浏览器强制 HTTPS
     }),
   );
 

@@ -54,9 +54,7 @@ export function StageDisplayModal({
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      setCurrentTime(
-        now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      );
+      setCurrentTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     };
     updateTime();
     const timer = setInterval(updateTime, 1000);
@@ -190,9 +188,7 @@ export function StageDisplayModal({
                   <span className="text-xs uppercase tracking-widest text-slate-400 font-bold mb-2">
                     {lang === 'zh' ? '课堂入课口令' : 'Class Code'}
                   </span>
-                  <span className="text-6xl font-mono font-black tracking-wider text-blue-400">
-                    {data.checkinCode}
-                  </span>
+                  <span className="text-6xl font-mono font-black tracking-wider text-blue-400">{data.checkinCode}</span>
                 </div>
               )}
             </div>

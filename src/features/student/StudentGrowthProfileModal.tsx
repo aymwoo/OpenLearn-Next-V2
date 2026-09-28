@@ -224,7 +224,7 @@ export function StudentGrowthProfileModal({
     const count = 5;
 
     const getCoord = (radius: number, index: number) => {
-      const angle = -Math.PI / 2 + (2 * Math.PI / count) * index;
+      const angle = -Math.PI / 2 + ((2 * Math.PI) / count) * index;
       return {
         x: center + radius * Math.cos(angle),
         y: center + radius * Math.sin(angle),
@@ -303,7 +303,9 @@ export function StudentGrowthProfileModal({
       }
       addToast?.(
         lang === 'zh' ? '成长积分已发放' : 'Points Awarded',
-        lang === 'zh' ? `已为学生 [${student.name}] ${delta >= 0 ? '+' : ''}${delta} 分（${reason}）` : `Awarded ${delta} pts to [${student.name}]`,
+        lang === 'zh'
+          ? `已为学生 [${student.name}] ${delta >= 0 ? '+' : ''}${delta} 分（${reason}）`
+          : `Awarded ${delta} pts to [${student.name}]`,
         'success',
       );
     } catch (err: unknown) {
@@ -335,7 +337,9 @@ ${defaultDimensions.map((d) => `- **${d.label}**: ${d.score} / 100`).join('\n')}
 ## 3. 本堂答题与互动轨迹
 ${
   timelineEvents.length > 0
-    ? timelineEvents.map((e) => `- [${e.time}] ${e.title} (${e.points ? '+' + e.points + '分' : ''}) - ${e.description}`).join('\n')
+    ? timelineEvents
+        .map((e) => `- [${e.time}] ${e.title} (${e.points ? '+' + e.points + '分' : ''}) - ${e.description}`)
+        .join('\n')
     : '- 本节暂无作答或互动记录'
 }
 
@@ -423,8 +427,7 @@ ${
                   <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.2 rounded-full font-medium">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     <span>
-                      {typeof focusRate === 'number' ? `${focusRate}%` : '—'}{' '}
-                      {lang === 'zh' ? '专注在线' : 'Focus'}
+                      {typeof focusRate === 'number' ? `${focusRate}%` : '—'} {lang === 'zh' ? '专注在线' : 'Focus'}
                     </span>
                   </span>
                 </div>
@@ -437,7 +440,9 @@ ${
                   <span className="text-border">|</span>
                   <span>{student.className || (lang === 'zh' ? '示范班级' : 'Class')}</span>
                   <span className="text-border">|</span>
-                  <span className="text-primary-theme font-medium">{lang === 'zh' ? '个人综合成长档案' : 'Growth Profile'}</span>
+                  <span className="text-primary-theme font-medium">
+                    {lang === 'zh' ? '个人综合成长档案' : 'Growth Profile'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -457,10 +462,7 @@ ${
             )}
 
             {/* Plugin Extension: student.profile.action */}
-            <ExtensionPointRenderer
-              slot="student.profile.action"
-              slotProps={{ student, lessonId, classId }}
-            />
+            <ExtensionPointRenderer slot="student.profile.action" slotProps={{ student, lessonId, classId }} />
 
             <button
               onClick={onClose}
@@ -479,7 +481,8 @@ ${
             <div>
               <div className="text-[11px] text-muted font-medium">{lang === 'zh' ? '本节总积分' : 'Total Points'}</div>
               <div className="text-lg font-extrabold text-indigo-700 dark:text-indigo-300 font-mono flex items-baseline gap-1">
-                {studentPoints} <span className="text-[10px] text-muted font-normal">{lang === 'zh' ? '分' : 'pts'}</span>
+                {studentPoints}{' '}
+                <span className="text-[10px] text-muted font-normal">{lang === 'zh' ? '分' : 'pts'}</span>
                 <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-1 py-0.2 rounded ml-0.5">
                   +{studentDelta}
                 </span>
@@ -508,7 +511,8 @@ ${
               </div>
               <div className="text-[10px] text-muted mt-0.5">
                 {lang === 'zh' ? '击败全班 ' : 'Top '}
-                <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">96%</strong> {lang === 'zh' ? '同学' : 'students'}
+                <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">96%</strong>{' '}
+                {lang === 'zh' ? '同学' : 'students'}
               </div>
             </div>
             <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-lg shadow-3xs">
@@ -546,7 +550,9 @@ ${
           {/* Card 4: Peer Assistance */}
           <div className="bg-surface p-2.5 rounded-xl border border-border/80 shadow-3xs flex items-center justify-between">
             <div>
-              <div className="text-[11px] text-muted font-medium">{lang === 'zh' ? '互助答疑频次' : 'Collaboration'}</div>
+              <div className="text-[11px] text-muted font-medium">
+                {lang === 'zh' ? '互助答疑频次' : 'Collaboration'}
+              </div>
               <div className="text-lg font-extrabold text-sky-600 dark:text-sky-400 font-mono flex items-baseline gap-1">
                 {helpCount} <span className="text-[10px] text-muted font-normal">{lang === 'zh' ? '次' : 'times'}</span>
               </div>
@@ -720,18 +726,11 @@ ${
 
             {/* ── Learning Progress Trend Chart (Recharts AreaChart) ── */}
             {activeProgressHistory && activeProgressHistory.length > 0 && (
-              <LearningProgressTrendChart
-                progressHistory={activeProgressHistory}
-                lang={lang}
-                compact
-              />
+              <LearningProgressTrendChart progressHistory={activeProgressHistory} lang={lang} compact />
             )}
 
             {/* Plugin Slot: student.profile.card */}
-            <ExtensionPointRenderer
-              slot="student.profile.card"
-              slotProps={{ student, lessonId, classId }}
-            />
+            <ExtensionPointRenderer slot="student.profile.card" slotProps={{ student, lessonId, classId }} />
           </div>
 
           {/* Right Column: Live Timeline & Submissions (7 Cols) */}
@@ -768,9 +767,7 @@ ${
                     <div className="flex-1 bg-surface-secondary/40 rounded-xl p-2.5 border border-border/80 hover:border-primary-theme/40 transition">
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-primary-theme text-[10px]">
-                            {evt.time}
-                          </span>
+                          <span className="font-mono font-bold text-primary-theme text-[10px]">{evt.time}</span>
                           <span className="font-bold text-foreground text-xs">{evt.title}</span>
                         </div>
                         {evt.points !== undefined && (
@@ -816,9 +813,7 @@ ${
         <footer className="px-5 py-3 bg-surface border-t border-border/80 flex flex-wrap items-center justify-between gap-3 shrink-0">
           {/* Quick Attribution Points Micro-Adjustment Bar */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-muted font-medium">
-              {lang === 'zh' ? '快速表现激励:' : 'Quick Award:'}
-            </span>
+            <span className="text-xs text-muted font-medium">{lang === 'zh' ? '快速表现激励:' : 'Quick Award:'}</span>
             <button
               onClick={() => handleAward(1, lang === 'zh' ? '勇于发言' : 'Active Speaking')}
               disabled={awardingPoints}

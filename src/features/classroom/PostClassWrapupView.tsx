@@ -178,7 +178,10 @@ export function PostClassWrapupView({
   });
 
   return (
-    <div id="post-class-wrapup-view" className="flex-1 flex flex-col min-h-0 bg-surface-secondary/20 p-4 gap-4 overflow-y-auto">
+    <div
+      id="post-class-wrapup-view"
+      className="flex-1 flex flex-col min-h-0 bg-surface-secondary/20 p-4 gap-4 overflow-y-auto"
+    >
       {/* 1. Header Banner */}
       <div className="bg-surface border border-theme rounded-2xl p-5 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
@@ -195,7 +198,9 @@ export function PostClassWrapupView({
               </span>
             </div>
             <h1 className="text-lg font-black text-main tracking-tight mt-1 flex items-center gap-2">
-              <span>{lang === 'zh' ? '随堂作业评定、60s通票反馈与课后任务下发' : 'Post-Class Evaluation & Feedback'}</span>
+              <span>
+                {lang === 'zh' ? '随堂作业评定、60s通票反馈与课后任务下发' : 'Post-Class Evaluation & Feedback'}
+              </span>
             </h1>
             <p className="text-xs text-muted mt-0.5">
               {lang === 'zh'
@@ -263,7 +268,11 @@ export function PostClassWrapupView({
           }`}
         >
           <Database size={13} />
-          <span>{lang === 'zh' ? `随堂互动提交明细 (${displayAttempts.length})` : `Interactive Submissions (${displayAttempts.length})`}</span>
+          <span>
+            {lang === 'zh'
+              ? `随堂互动提交明细 (${displayAttempts.length})`
+              : `Interactive Submissions (${displayAttempts.length})`}
+          </span>
         </button>
 
         <button
@@ -365,9 +374,13 @@ export function PostClassWrapupView({
             {/* Table */}
             <div className="flex-1 overflow-y-auto">
               {loadingAttempts ? (
-                <div className="text-center py-12 text-xs text-muted">{lang === 'zh' ? '正在加载作答数据...' : 'Loading submissions...'}</div>
+                <div className="text-center py-12 text-xs text-muted">
+                  {lang === 'zh' ? '正在加载作答数据...' : 'Loading submissions...'}
+                </div>
               ) : displayAttempts.length === 0 ? (
-                <div className="text-center py-12 text-xs text-muted italic">{lang === 'zh' ? '暂无匹配的随堂提交记录' : 'No matching submissions found'}</div>
+                <div className="text-center py-12 text-xs text-muted italic">
+                  {lang === 'zh' ? '暂无匹配的随堂提交记录' : 'No matching submissions found'}
+                </div>
               ) : (
                 <table className="w-full border-collapse text-left text-xs text-main">
                   <thead>
@@ -381,7 +394,10 @@ export function PostClassWrapupView({
                   </thead>
                   <tbody className="divide-y divide-border/60">
                     {displayAttempts.map((a) => (
-                      <tr key={a.attemptId || Math.random()} className="hover:bg-surface-secondary/40 transition-colors">
+                      <tr
+                        key={a.attemptId || Math.random()}
+                        className="hover:bg-surface-secondary/40 transition-colors"
+                      >
                         <td className="p-3 font-bold text-main">{a.studentName || 'Unknown Student'}</td>
                         <td className="p-3 text-muted">{a.coursewareName || 'Interactive Exercise'}</td>
                         <td className="p-3">
@@ -393,8 +409,12 @@ export function PostClassWrapupView({
                             }`}
                           >
                             {a.status === 'completed' || a.status === 'finished' || a.status === 'submitted'
-                              ? lang === 'zh' ? '已提交' : 'Submitted'
-                              : lang === 'zh' ? '作答中' : 'In Progress'}
+                              ? lang === 'zh'
+                                ? '已提交'
+                                : 'Submitted'
+                              : lang === 'zh'
+                                ? '作答中'
+                                : 'In Progress'}
                           </span>
                         </td>
                         <td className="p-3 text-center font-mono font-bold text-main">
@@ -505,7 +525,9 @@ export function PostClassWrapupView({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-muted">{lang === 'zh' ? '任务要求与说明' : 'Instructions'}</label>
+                <label className="text-xs font-bold text-muted">
+                  {lang === 'zh' ? '任务要求与说明' : 'Instructions'}
+                </label>
                 <textarea
                   value={homeworkReq}
                   onChange={(e) => setHomeworkReq(e.target.value)}

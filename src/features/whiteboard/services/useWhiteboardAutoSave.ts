@@ -1,9 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import {
-  whiteboardAutoSaveRegistry,
-  AutoSaveStatus,
-  SaveElementHandler,
-} from './whiteboard-autosave-manager';
+import { whiteboardAutoSaveRegistry, AutoSaveStatus, SaveElementHandler } from './whiteboard-autosave-manager';
 
 export interface UseWhiteboardAutoSaveOptions {
   lessonId: string | null;
@@ -19,12 +15,8 @@ export function useWhiteboardAutoSave({
   onStatusChange,
 }: UseWhiteboardAutoSaveOptions) {
   const [status, setStatus] = useState<AutoSaveStatus>(() => whiteboardAutoSaveRegistry.getStatus());
-  const [lastSavedTime, setLastSavedTime] = useState<Date | null>(() =>
-    whiteboardAutoSaveRegistry.getLastSavedTime(),
-  );
-  const [pendingCount, setPendingCount] = useState<number>(() =>
-    whiteboardAutoSaveRegistry.getPendingCount(),
-  );
+  const [lastSavedTime, setLastSavedTime] = useState<Date | null>(() => whiteboardAutoSaveRegistry.getLastSavedTime());
+  const [pendingCount, setPendingCount] = useState<number>(() => whiteboardAutoSaveRegistry.getPendingCount());
 
   const onSaveToServerRef = useRef(onSaveToServer);
   onSaveToServerRef.current = onSaveToServer;

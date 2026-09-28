@@ -1,15 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  LabelList,
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts';
 import {
   Trophy,
   Award,
@@ -322,8 +312,7 @@ export function TopPerformersWidget({
   const chartData = useMemo(() => {
     return topPerformers.map((st) => {
       // Shorten name if too long for axis
-      const displayName =
-        st.studentName.length > 8 ? `${st.studentName.slice(0, 7)}…` : st.studentName;
+      const displayName = st.studentName.length > 8 ? `${st.studentName.slice(0, 7)}…` : st.studentName;
 
       return {
         rank: st.rank,
@@ -489,172 +478,171 @@ export function TopPerformersWidget({
         <>
           {/* Top 3 Podium Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {topPerformers.slice(0, 3).map((st) => {
-          const isGold = st.rank === 1;
-          const isSilver = st.rank === 2;
-          const isBronze = st.rank === 3;
+            {topPerformers.slice(0, 3).map((st) => {
+              const isGold = st.rank === 1;
+              const isSilver = st.rank === 2;
+              const isBronze = st.rank === 3;
 
-          const cardBorder = isGold
-            ? 'border-amber-400/50 bg-amber-500/5'
-            : isSilver
-              ? 'border-indigo-400/40 bg-indigo-500/5'
-              : 'border-emerald-400/40 bg-emerald-500/5';
+              const cardBorder = isGold
+                ? 'border-amber-400/50 bg-amber-500/5'
+                : isSilver
+                  ? 'border-indigo-400/40 bg-indigo-500/5'
+                  : 'border-emerald-400/40 bg-emerald-500/5';
 
-          const badgeColor = isGold
-            ? 'bg-amber-500 text-white'
-            : isSilver
-              ? 'bg-indigo-500 text-white'
-              : 'bg-emerald-500 text-white';
+              const badgeColor = isGold
+                ? 'bg-amber-500 text-white'
+                : isSilver
+                  ? 'bg-indigo-500 text-white'
+                  : 'bg-emerald-500 text-white';
 
-          const icon = isGold ? '🥇' : isSilver ? '🥈' : '🥉';
+              const icon = isGold ? '🥇' : isSilver ? '🥈' : '🥉';
 
-          return (
-            <div
-              key={st.studentId}
-              data-testid="top-performers-item"
-              className={`p-3.5 rounded-xl border ${cardBorder} flex flex-col justify-between gap-3 relative transition-all hover:shadow-sm`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center font-extrabold text-sm shadow-xs ${badgeColor}`}
-                  >
-                    {icon}
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-main leading-tight truncate max-w-[130px]">
-                      {st.studentName}
-                    </h4>
-                    <span className="text-xs text-muted flex items-center gap-1 mt-0.5">
-                      <CheckCircle2 size={11} className="text-emerald-500" />
-                      {st.correctCount}/{st.totalQuizzesAnswered} {lang === 'zh' ? '题全对' : 'correct'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <div className="text-base font-extrabold text-main font-mono">
-                    {st.cumulativeScore} <span className="text-xs font-normal text-muted">{lang === 'zh' ? '分' : 'pts'}</span>
-                  </div>
-                  <span className="text-xs font-semibold px-1.5 py-0.2 rounded bg-surface border border-theme text-primary-theme">
-                    {st.accuracy}% {lang === 'zh' ? '正确率' : 'acc'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-xs text-muted pt-2 border-t border-theme/40">
-                <span className="flex items-center gap-1 font-mono">
-                  <Clock size={11} /> {(st.avgTimeSpentMs / 1000).toFixed(1)}s {lang === 'zh' ? '均速' : 'avg'}
-                </span>
-                {isGold && (
-                  <button
-                    onClick={() => handlePraiseTop(st)}
-                    className="flex items-center gap-1 text-xs font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
-                    title={lang === 'zh' ? '一键表扬榜首' : 'Praise top performer'}
-                  >
-                    <Sparkles size={11} /> {lang === 'zh' ? '一键表扬' : 'Praise'}
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Recharts Bar Chart Visualization */}
-      <div className="bg-surface-secondary/40 border border-theme rounded-xl p-4 flex flex-col gap-2">
-        <div className="flex items-center justify-between text-xs text-muted px-1">
-          <span className="font-semibold text-main flex items-center gap-1.5">
-            <BarChart3 size={14} className="text-primary-theme" />
-            {lang === 'zh'
-              ? `Top 5 答题得分可视化分布 (${metricMode === 'score' ? '累计得分' : metricMode === 'accuracy' ? '正确率%' : '答题数'})`
-              : `Top 5 Visual Distribution (${metricMode.toUpperCase()})`}
-          </span>
-          <span className="text-xs text-muted font-mono">
-            {lang === 'zh'
-              ? `全班平均得分: ${summary.averageScore} 分 | 参与人次: ${summary.totalResponses}`
-              : `Class Avg: ${summary.averageScore} pts | Responses: ${summary.totalResponses}`}
-          </span>
-        </div>
-
-        {/* Responsive Container for Recharts */}
-        <div data-testid="top-performers-chart" className="w-full h-56 pt-2">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart
-              data={chartData}
-              layout="vertical"
-              margin={{ top: 8, right: 36, left: 10, bottom: 8 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="currentColor" className="text-theme/40" />
-              <XAxis
-                type="number"
-                domain={[0, metricMode === 'accuracy' ? 100 : 'auto']}
-                tick={{ fontSize: 11, fill: 'currentColor' }}
-                className="text-muted"
-                unit={metricMode === 'accuracy' ? '%' : ''}
-              />
-              <YAxis
-                type="category"
-                dataKey="name"
-                tick={{ fontSize: 12, fill: 'currentColor', fontWeight: 600 }}
-                className="text-main"
-                width={85}
-              />
-              <Tooltip
-                content={({ active, payload }) => {
-                  if (active && payload && payload.length) {
-                    const data = payload[0].payload;
-                    return (
-                      <div className="bg-surface border border-theme p-3 rounded-xl shadow-lg text-xs flex flex-col gap-1.5 min-w-[180px] z-50">
-                        <div className="flex items-center justify-between font-bold text-main border-b border-theme/60 pb-1">
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-5 h-5 rounded-full bg-primary-theme/10 text-primary-theme flex items-center justify-center font-mono">
-                              #{data.rank}
-                            </span>
-                            {data.fullName}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-muted pt-1">
-                          <span>{lang === 'zh' ? '累计得分:' : 'Total Score:'}</span>
-                          <span className="font-bold text-main font-mono text-right">{data.score} 分</span>
-                          <span>{lang === 'zh' ? '正确率:' : 'Accuracy:'}</span>
-                          <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono text-right">
-                            {data.accuracy}%
-                          </span>
-                          <span>{lang === 'zh' ? '答对题次:' : 'Correct Count:'}</span>
-                          <span className="font-mono text-right">
-                            {data.correctCount} / {data.count} 题
-                          </span>
-                          <span>{lang === 'zh' ? '平均答题速度:' : 'Avg Speed:'}</span>
-                          <span className="font-mono text-right">{data.avgTimeSec} 秒</span>
-                        </div>
+              return (
+                <div
+                  key={st.studentId}
+                  data-testid="top-performers-item"
+                  className={`p-3.5 rounded-xl border ${cardBorder} flex flex-col justify-between gap-3 relative transition-all hover:shadow-sm`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center font-extrabold text-sm shadow-xs ${badgeColor}`}
+                      >
+                        {icon}
                       </div>
-                    );
-                  }
-                  return null;
-                }}
-              />
-              <Bar dataKey="chartValue" radius={[0, 6, 6, 0]} barSize={22}>
-                {chartData.map((entry, index) => (
-                  <Cell
-                    key={`cell-${entry.studentId}-${index}`}
-                    fill={RANK_COLORS[index % RANK_COLORS.length]}
+                      <div>
+                        <h4 className="text-sm font-bold text-main leading-tight truncate max-w-[130px]">
+                          {st.studentName}
+                        </h4>
+                        <span className="text-xs text-muted flex items-center gap-1 mt-0.5">
+                          <CheckCircle2 size={11} className="text-emerald-500" />
+                          {st.correctCount}/{st.totalQuizzesAnswered} {lang === 'zh' ? '题全对' : 'correct'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-base font-extrabold text-main font-mono">
+                        {st.cumulativeScore}{' '}
+                        <span className="text-xs font-normal text-muted">{lang === 'zh' ? '分' : 'pts'}</span>
+                      </div>
+                      <span className="text-xs font-semibold px-1.5 py-0.2 rounded bg-surface border border-theme text-primary-theme">
+                        {st.accuracy}% {lang === 'zh' ? '正确率' : 'acc'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-muted pt-2 border-t border-theme/40">
+                    <span className="flex items-center gap-1 font-mono">
+                      <Clock size={11} /> {(st.avgTimeSpentMs / 1000).toFixed(1)}s {lang === 'zh' ? '均速' : 'avg'}
+                    </span>
+                    {isGold && (
+                      <button
+                        onClick={() => handlePraiseTop(st)}
+                        className="flex items-center gap-1 text-xs font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                        title={lang === 'zh' ? '一键表扬榜首' : 'Praise top performer'}
+                      >
+                        <Sparkles size={11} /> {lang === 'zh' ? '一键表扬' : 'Praise'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Recharts Bar Chart Visualization */}
+          <div className="bg-surface-secondary/40 border border-theme rounded-xl p-4 flex flex-col gap-2">
+            <div className="flex items-center justify-between text-xs text-muted px-1">
+              <span className="font-semibold text-main flex items-center gap-1.5">
+                <BarChart3 size={14} className="text-primary-theme" />
+                {lang === 'zh'
+                  ? `Top 5 答题得分可视化分布 (${metricMode === 'score' ? '累计得分' : metricMode === 'accuracy' ? '正确率%' : '答题数'})`
+                  : `Top 5 Visual Distribution (${metricMode.toUpperCase()})`}
+              </span>
+              <span className="text-xs text-muted font-mono">
+                {lang === 'zh'
+                  ? `全班平均得分: ${summary.averageScore} 分 | 参与人次: ${summary.totalResponses}`
+                  : `Class Avg: ${summary.averageScore} pts | Responses: ${summary.totalResponses}`}
+              </span>
+            </div>
+
+            {/* Responsive Container for Recharts */}
+            <div data-testid="top-performers-chart" className="w-full h-56 pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} layout="vertical" margin={{ top: 8, right: 36, left: 10, bottom: 8 }}>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    horizontal={false}
+                    stroke="currentColor"
+                    className="text-theme/40"
                   />
-                ))}
-                <LabelList
-                  dataKey="chartValue"
-                  position="right"
-                  formatter={(val: any) =>
-                    metricMode === 'accuracy' ? `${val}%` : metricMode === 'score' ? `${val}分` : `${val}题`
-                  }
-                  className="fill-main text-xs font-bold font-mono"
-                />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-      </>
+                  <XAxis
+                    type="number"
+                    domain={[0, metricMode === 'accuracy' ? 100 : 'auto']}
+                    tick={{ fontSize: 11, fill: 'currentColor' }}
+                    className="text-muted"
+                    unit={metricMode === 'accuracy' ? '%' : ''}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tick={{ fontSize: 12, fill: 'currentColor', fontWeight: 600 }}
+                    className="text-main"
+                    width={85}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-surface border border-theme p-3 rounded-xl shadow-lg text-xs flex flex-col gap-1.5 min-w-[180px] z-50">
+                            <div className="flex items-center justify-between font-bold text-main border-b border-theme/60 pb-1">
+                              <span className="flex items-center gap-1.5">
+                                <span className="w-5 h-5 rounded-full bg-primary-theme/10 text-primary-theme flex items-center justify-center font-mono">
+                                  #{data.rank}
+                                </span>
+                                {data.fullName}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-muted pt-1">
+                              <span>{lang === 'zh' ? '累计得分:' : 'Total Score:'}</span>
+                              <span className="font-bold text-main font-mono text-right">{data.score} 分</span>
+                              <span>{lang === 'zh' ? '正确率:' : 'Accuracy:'}</span>
+                              <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono text-right">
+                                {data.accuracy}%
+                              </span>
+                              <span>{lang === 'zh' ? '答对题次:' : 'Correct Count:'}</span>
+                              <span className="font-mono text-right">
+                                {data.correctCount} / {data.count} 题
+                              </span>
+                              <span>{lang === 'zh' ? '平均答题速度:' : 'Avg Speed:'}</span>
+                              <span className="font-mono text-right">{data.avgTimeSec} 秒</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar dataKey="chartValue" radius={[0, 6, 6, 0]} barSize={22}>
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${entry.studentId}-${index}`} fill={RANK_COLORS[index % RANK_COLORS.length]} />
+                    ))}
+                    <LabelList
+                      dataKey="chartValue"
+                      position="right"
+                      formatter={(val: any) =>
+                        metricMode === 'accuracy' ? `${val}%` : metricMode === 'score' ? `${val}分` : `${val}题`
+                      }
+                      className="fill-main text-xs font-bold font-mono"
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Roster & Quick Action Footer */}

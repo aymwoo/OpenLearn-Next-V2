@@ -1,15 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  X,
-  Play,
-  Square,
-  Sparkles,
-  Layers,
-  Clock,
-  CheckCircle2,
-  Terminal,
-  Activity,
-} from 'lucide-react';
+import { X, Play, Square, Sparkles, Layers, Clock, CheckCircle2, Terminal, Activity } from 'lucide-react';
 import { classroomMacroEngine } from './classroom-macro-engine';
 import { CLASSROOM_MACRO_PRESETS } from './macro-presets';
 import type { MacroPreset, MacroExecutionState, MacroId } from '../types';

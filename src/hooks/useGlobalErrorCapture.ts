@@ -117,23 +117,11 @@ export function useGlobalErrorCapture() {
         if (!isStudent) return;
 
         const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-        const studentId =
-          state.session?.userId ||
-          urlParams?.get('studentId') ||
-          'anonymous_student';
+        const studentId = state.session?.userId || urlParams?.get('studentId') || 'anonymous_student';
         const studentName =
-          state.session?.name ||
-          state.session?.username ||
-          urlParams?.get('studentName') ||
-          studentId;
-        const lessonId =
-          state.selectedLesson ||
-          urlParams?.get('lessonId') ||
-          null;
-        const classId =
-          state.liveClassSelectedClassId ||
-          urlParams?.get('classId') ||
-          null;
+          state.session?.name || state.session?.username || urlParams?.get('studentName') || studentId;
+        const lessonId = state.selectedLesson || urlParams?.get('lessonId') || null;
+        const classId = state.liveClassSelectedClassId || urlParams?.get('classId') || null;
 
         const payload = {
           studentId,
@@ -177,4 +165,3 @@ export function useGlobalErrorCapture() {
     };
   }, []);
 }
-

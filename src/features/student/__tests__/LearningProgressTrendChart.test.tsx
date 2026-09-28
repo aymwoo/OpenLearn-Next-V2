@@ -41,7 +41,13 @@ describe('LearningProgressTrendChart', () => {
     const progressHistory: StudentProgressType[] = [
       makeProgress({ lesson_id: 'l1', lesson_title: 'Python 基础', progress_percent: 30, assigned_at: 1700000000000 }),
       makeProgress({ lesson_id: 'l2', lesson_title: '循环结构', progress_percent: 65, assigned_at: 1700100000000 }),
-      makeProgress({ lesson_id: 'l3', lesson_title: '函数定义', progress_percent: 100, completed: 1, assigned_at: 1700200000000 }),
+      makeProgress({
+        lesson_id: 'l3',
+        lesson_title: '函数定义',
+        progress_percent: 100,
+        completed: 1,
+        assigned_at: 1700200000000,
+      }),
     ];
 
     const { container } = render(<LearningProgressTrendChart progressHistory={progressHistory} lang="zh" />);
@@ -55,8 +61,19 @@ describe('LearningProgressTrendChart', () => {
 
   it('renders chart in English mode', () => {
     const progressHistory: StudentProgressType[] = [
-      makeProgress({ lesson_id: 'l1', lesson_title: 'Intro to Python', progress_percent: 80, assigned_at: 1700000000000 }),
-      makeProgress({ lesson_id: 'l2', lesson_title: 'Loops', progress_percent: 90, completed: 1, assigned_at: 1700100000000 }),
+      makeProgress({
+        lesson_id: 'l1',
+        lesson_title: 'Intro to Python',
+        progress_percent: 80,
+        assigned_at: 1700000000000,
+      }),
+      makeProgress({
+        lesson_id: 'l2',
+        lesson_title: 'Loops',
+        progress_percent: 90,
+        completed: 1,
+        assigned_at: 1700100000000,
+      }),
     ];
 
     render(<LearningProgressTrendChart progressHistory={progressHistory} lang="en" />);

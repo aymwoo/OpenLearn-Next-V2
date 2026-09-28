@@ -14,7 +14,17 @@
 
 ```typescript
 interface PluginContext {
-  services: { commandBus; eventBus; actionRegistry; capability; processManager; storage; ai; pointsDimension; pointsLedger };
+  services: {
+    commandBus;
+    eventBus;
+    actionRegistry;
+    capability;
+    processManager;
+    storage;
+    ai;
+    pointsDimension;
+    pointsLedger;
+  };
   pluginId: string;
   manifest: Manifest;
   resolve<T>(token: Token<T>): Promise<T>;

@@ -108,13 +108,7 @@ describe('LessonEditor Drag To Outline & Timeline (Auto-expand & Drop Targeting)
 
     it('auto-expands collapsed outline after 250ms hover', () => {
       const { container, rerender } = render(
-        <LessonPalette
-          lang="zh"
-          onActivate={vi.fn()}
-          pages={dummyPages}
-          currentPage={0}
-          dragState={null}
-        />,
+        <LessonPalette lang="zh" onActivate={vi.fn()} pages={dummyPages} currentPage={0} dragState={null} />,
       );
 
       // Click to collapse outline
@@ -153,13 +147,7 @@ describe('LessonEditor Drag To Outline & Timeline (Auto-expand & Drop Targeting)
       };
 
       rerender(
-        <LessonPalette
-          lang="zh"
-          onActivate={vi.fn()}
-          pages={dummyPages}
-          currentPage={0}
-          dragState={dragState}
-        />,
+        <LessonPalette lang="zh" onActivate={vi.fn()} pages={dummyPages} currentPage={0} dragState={dragState} />,
       );
 
       // Fast-forward 250ms

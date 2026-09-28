@@ -7,17 +7,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import {
-  X,
-  Copy,
-  Trash2,
-  AlertTriangle,
-  AlertOctagon,
-  Info,
-  RefreshCw,
-  Cpu,
-  Users,
-} from 'lucide-react';
+import { X, Copy, Trash2, AlertTriangle, AlertOctagon, Info, RefreshCw, Cpu, Users } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import { useErrorStore } from '../../../store/errorStore';
 import type { SystemErrorItem, StudentErrorItem, SystemErrorType } from '../../../types/error';
@@ -66,8 +56,7 @@ export const DiagnosticCenterModal: React.FC<DiagnosticCenterModalProps> = ({
   }, [isOpen, studentErrors.length]);
 
   const filteredStudentErrors = useMemo(
-    () =>
-      studentErrors.filter((e) => filterType === 'all' || e.type === filterType),
+    () => studentErrors.filter((e) => filterType === 'all' || e.type === filterType),
     [studentErrors, filterType],
   );
   const filteredLocalErrors = useMemo(
@@ -167,9 +156,7 @@ export const DiagnosticCenterModal: React.FC<DiagnosticCenterModalProps> = ({
               </button>
             )}
             <button
-              onClick={() =>
-                activeTab === 'student' ? clearStudentErrors() : clearErrors()
-              }
+              onClick={() => (activeTab === 'student' ? clearStudentErrors() : clearErrors())}
               disabled={totalCount === 0}
               className="px-2.5 py-1 text-xs font-bold rounded-lg border border-rose-500 text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -190,8 +177,8 @@ export const DiagnosticCenterModal: React.FC<DiagnosticCenterModalProps> = ({
                     ? '暂无学生端异常'
                     : 'No student errors'
                   : lang === 'zh'
-                  ? '暂无本机异常'
-                  : 'No local errors'}
+                    ? '暂无本机异常'
+                    : 'No local errors'}
               </p>
             </div>
           ) : (
@@ -223,18 +210,14 @@ export const DiagnosticCenterModal: React.FC<DiagnosticCenterModalProps> = ({
                 ? `共 ${totalCount} 条异常`
                 : `${totalCount} total`
               : lang === 'zh'
-              ? '一切正常'
-              : 'All clear'}
+                ? '一切正常'
+                : 'All clear'}
           </span>
           <button
             onClick={() => {
               // 触发学生端错误上报刷新（hook 内部 setErrors）
               // 这里只更新本地视图，不发请求
-              addToast(
-                lang === 'zh' ? '已刷新' : 'Refreshed',
-                lang === 'zh' ? '本机列表' : 'Local list',
-                'info',
-              );
+              addToast(lang === 'zh' ? '已刷新' : 'Refreshed', lang === 'zh' ? '本机列表' : 'Local list', 'info');
             }}
             className="inline-flex items-center gap-1 text-muted hover:text-main transition-colors"
           >
@@ -272,11 +255,7 @@ const TabButton: React.FC<{
     {count > 0 && (
       <span
         className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-          active
-            ? accent === 'rose'
-              ? 'bg-rose-500 text-white'
-              : 'bg-amber-500 text-white'
-            : 'bg-surface text-muted'
+          active ? (accent === 'rose' ? 'bg-rose-500 text-white' : 'bg-amber-500 text-white') : 'bg-surface text-muted'
         }`}
       >
         {count}
@@ -296,10 +275,9 @@ const StudentErrorRow: React.FC<{
     tone === 'rose'
       ? 'border-rose-500 bg-rose-50'
       : tone === 'amber'
-      ? 'border-amber-500 bg-amber-50'
-      : 'border-blue-500 bg-blue-50';
-  const iconColor =
-    tone === 'rose' ? 'text-rose-600' : tone === 'amber' ? 'text-amber-600' : 'text-blue-600';
+        ? 'border-amber-500 bg-amber-50'
+        : 'border-blue-500 bg-blue-50';
+  const iconColor = tone === 'rose' ? 'text-rose-600' : tone === 'amber' ? 'text-amber-600' : 'text-blue-600';
 
   return (
     <div className={`border-l-4 ${color} rounded-lg p-3 flex items-start gap-3 bg-surface`}>
@@ -308,9 +286,7 @@ const StudentErrorRow: React.FC<{
         <div className="flex items-center gap-2 mb-1">
           <span className="font-bold text-sm text-main">{error.studentName ?? error.studentId}</span>
           <span className="text-[10px] text-muted font-mono">{error.studentId}</span>
-          <span className="text-[10px] text-muted">
-            {new Date(error.timestamp).toLocaleTimeString()}
-          </span>
+          <span className="text-[10px] text-muted">{new Date(error.timestamp).toLocaleTimeString()}</span>
         </div>
         <div className="text-xs font-bold text-main mb-1">{error.title}</div>
         <div className="text-xs text-muted line-clamp-2">{error.message}</div>
@@ -337,10 +313,9 @@ const LocalErrorRow: React.FC<{
     tone === 'rose'
       ? 'border-rose-500 bg-rose-50'
       : tone === 'amber'
-      ? 'border-amber-500 bg-amber-50'
-      : 'border-blue-500 bg-blue-50';
-  const iconColor =
-    tone === 'rose' ? 'text-rose-600' : tone === 'amber' ? 'text-amber-600' : 'text-blue-600';
+        ? 'border-amber-500 bg-amber-50'
+        : 'border-blue-500 bg-blue-50';
+  const iconColor = tone === 'rose' ? 'text-rose-600' : tone === 'amber' ? 'text-amber-600' : 'text-blue-600';
 
   return (
     <div className={`border-l-4 ${color} rounded-lg p-3 flex items-start gap-3 bg-surface`}>
@@ -349,9 +324,7 @@ const LocalErrorRow: React.FC<{
         <div className="flex items-center gap-2 mb-1">
           <span className="font-bold text-sm text-main">{error.title}</span>
           {error.endpoint && <span className="text-[10px] text-muted">[{error.endpoint}]</span>}
-          <span className="text-[10px] text-muted">
-            {new Date(error.timestamp).toLocaleTimeString()}
-          </span>
+          <span className="text-[10px] text-muted">{new Date(error.timestamp).toLocaleTimeString()}</span>
         </div>
         <div className="text-xs text-muted line-clamp-3">{error.message}</div>
       </div>
