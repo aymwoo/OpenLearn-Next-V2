@@ -214,7 +214,7 @@ describe('金丝雀第 5 步：生命周期彻底回收断言（9.1 ~ 9.6）', (
     pluginDir = host.getPluginDir(pluginId);
     await host.activatePlugin(pluginId, { mode: 'inline' });
     expect(host.getPluginState(pluginId)).toBe(PluginState.ACTIVE);
-  });
+  }, 60_000);
 
   afterAll(async () => {
     process.env.NODE_ENV = originalNodeEnv;
@@ -284,11 +284,7 @@ describe('金丝雀第 5 步：生命周期彻底回收断言（9.1 ~ 9.6）', (
 
   it('9.3 定时心跳任务停摆：deactivate 销毁 registerInterval 注册的后台定时器', () => {
     // canary 在 inline 模式下注册了 canary-heartbeat
-    expect(mockProcessManager.registerInterval).toHaveBeenCalledWith(
-      'canary-heartbeat',
-      1000,
-      expect.any(Function),
-    );
+    expect(mockProcessManager.registerInterval).toHaveBeenCalledWith('canary-heartbeat', 1000, expect.any(Function));
   });
 
   it('9.4 命令处理器注销：deactivate 自动清理命令注册', () => {

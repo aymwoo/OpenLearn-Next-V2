@@ -35,10 +35,7 @@ export default defineConfig({
     // CHANGELOG[v0.3.21]：lti-provider-plugin.test.ts 引用 v2_plugins/*/*源码、
     // v2_plugins/ 被 .gitignore 排除，新克隆必红。这是预期的（v2 插件是独立仓库），
     // 跳过以避免 CI 失败。本地机器若有 v2_plugins 仓库仍可通过 `pnpm test:l2i` 单独跑。
-    exclude: [
-      '**/node_modules/**',
-      'packages/core/__tests__/lti-provider-plugin.test.ts',
-    ],
+    exclude: ['**/node_modules/**', 'packages/core/__tests__/lti-provider-plugin.test.ts'],
 
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
@@ -49,6 +46,7 @@ export default defineConfig({
     },
     // Kernel integration tests include ZIP plugin seeding which can take >5s
     testTimeout: 60000,
+    hookTimeout: 60000,
     fileParallelism: true,
   },
 });
