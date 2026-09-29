@@ -10,6 +10,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **互动大屏展台：清除全部写死的假数据，缺失指标补齐真实接口**：
+  - **审计结论**：展台原有 4 类假数据 —— ① 投票选项 `options || ['A','B','C','D']` 兜底，接口无数据时画出 4 条不存在的选项柱；② 互评量规均分写死 `95.3`；③ 已同步学生机写死 `32` 台（且 `PeerReviewRubricStats` 里还有 `syncedStudentsCount = 32` 的默认值）；④ **作品「可视化预览」是写死的五边形/旋转矩形 SVG**，与任何真实作品无关 —— 投到大屏上学生会以为那就是该同学的作品。另有批注署名写死「陈老师」、弹幕写死「主讲教师」、语音时长编造 `4` 秒、阶段写死 `STAGE 02.4`。
+  - **展台「作业互评赏析」原本是空壳**：`StageDisplayPanel` 只传了 `lessonTitle`，没传 `lessonId`，导致数据源 `usePeerReviewData` 完全没接上。现通过 `usePeerReviewData` 接入真实互评数据（焦点作品 / 互评矩阵 / 提名榜 / 量规 / 弹幕 / 评阅进度），并支持教师「一键分配互评」。
+  - **作品预览改为渲染真实作答**：`usePeerReviewData` 新增 `summarizeWorkContent`，从 `submission_raw`（`/api/courseware/attempts/:id/raw`，权限校验已在）提取学生的真实作答，判定形态（代码 / 文本 / 结构化答案 / 数值）并渲染。无可展示内容时**明确说明**而非画假图形。顺带删除与预览区重复渲染同一份 `codeLines` 的旧「Code Snippet」区块（内容原本显示两遍）。
+  - **量规均分改为真实计算**：新增 `weightedRubricAverage` 按维度权重算出；无真实维度数据时返回 `null`，UI 显示「—」而非某个写死分数。`PeerReviewRubricStats` 的 `averagePercentage` 类型放宽为 `number | null`，并移除了 `syncedStudentsCount = 32` 的默认值。
+  - **接口补齐四类真实指标**：`GET /api/classroom/stage/:lessonId/data` 新增 `attendance`（在线 / 本班在线 / 应到 / 实到，来自 presence 实时在线名单 + `class_students` + 课堂痕迹去重统计）、`feed`（`classroom_feed` 最近 12 条）、`courseware`（`courseware_attempt` + `submission_result` 聚合的参与人数 / 完成数 / 平均完成度）、`exitTicketSubmitted`，以及 `classId` / `sessionId` / `stageStartedAt`。展台右栏新增「课堂出勤」「互动课件参与」「课堂动态」「结课通票进度」四块。
+  - **无数据时的诚实呈现**：无班级名单时不出勤率显示「—」并说明原因（**不显示 0%** —— 那会被误读成「无人到课」）；无课件活动、无动态流、无进行中互动时均给出明确说明，不再是空白或假内容。
+  - **修复两个真实 SQL 缺陷**（由新增的跑真实 SQLite 的服务端测试暴露，mock 测不出）：
+    - 出勤查询用了 `?1` 具名参数，**better-sqlite3 不支持**（那是 SQLite C API 写法）→ 抛错后被 catch，且 catch 把已成功查出的 `expected` 一并清零，导致**展台「应到人数」永远显示 0**；
+    - `attended` 的 UNION 里 `classroom_poll_votes` 被当作有 `session_id` 列，但该表只有 `poll_id`，须 `JOIN classroom_quick_polls` 过滤 → 实到人数恒为 0。同时把两个查询拆成独立 try，避免一方失败连带清掉另一方的真实结果。
+  - **顺带修复**：`StageDisplayPanel` 新增的「等待课堂互动」空态漏 import `Presentation` 图标，导致展台在无互动时抛 `TypeError: Illegal constructor` 整页白屏。
+  - **回归测试**：新增 `server/__tests__/classroom-stage-display-data.test.ts`（9 用例，跑真实 SQLite，含「应到人数 = 班级名单人数」的针对性回归断言）与 `src/features/classroom/__tests__/stage-display-data-honesty.test.tsx`（17 用例，锁定「无真实数据就不编」：不兜底 A/B/C/D、不显示 0% 出勤率、量规无数据返回 null、作品内容提取、等待态渲染）。
+
+- **修复「打开大屏展台」读取成绩规则时报 HTTP 500 `No handler registered for command: undefined`**：
+  - **根因**：新增的自动录入规则读写误用了 `/api/commands` 的请求体契约。该接口的契约是 `{ commandType, payload }`（见 `server/routes/os.ts`），我传了 `type`，导致服务端拿到 `commandType === undefined` 而找不到处理器。同时响应体是 `{ success, result }`，我原先从顶层读字段，即使不报错也读不到值（同文件既有调用见 `LiveClassroomView` 的插件工具面板，正确写法是 `commandType`）。
+  - **修复**：请求体改用 `commandType`；响应统一按 `json.result` 解包（并保留对无 `result` 包装的兜底）；保存接口额外校验 `success === false` 以捕获命令总线返回的业务失败。
+  - **防回归**：测试 mock 改为**严格按真实契约**实现 —— `commandType` 不匹配即返回 500，这样契约漂移会直接被测试拦住，而不会等到运行时才发现；另新增一条专门断言「所有 `/api/commands` 请求都必须带 `commandType` 且不得出现 `type`」。验证：把代码改回错误写法后 3 个用例失败。
+
+- **大屏展台改为独立窗口常驻 + 课程状态变化实时提示**：
+  - **新开独立窗口**：「打开大屏展台」由同页模态框改为 `window.open` 拉起独立窗口（`?mode=stage_display&lessonId=…`），授课界面留在主窗口继续操作 —— 此前展台是 `fixed inset-0 z-[9999]` 全屏覆盖，讲台上等于教师自己被挡在屏幕外。由 `useStageDisplayWindow` 管理窗口引用，处理三个现实问题：**弹窗被拦截则降级为同页模态框并明确提示教师去地址栏放行**（否则点了像坏了）、**已开的窗口复用聚焦而非重复开**（连点不会开两个展台抢屏幕）、**教师手动关掉标签页后能重新打开**（3s 探活清理失效引用）。
+  - **保持连接**：新增 `useStageDisplayFeed`，由原来的 **2s 无条件轮询** 改为 **Socket 主导 + 20s 低频对账兜底**。监听 12 类课堂事件（`classroom:stage_changed` / `quick_poll_*` / `buzzer_*` / `countdown_updated` / `pacing_updated` / `exit_ticket_submitted` / `feed_appended` / `pulse_check_requested`）即时拉取；密集事件 120ms 内合并为一次请求；带请求代次防止慢响应覆盖新响应。独立窗口自行建连、自行轮询，**不依赖主窗口生命周期** —— 教师切课节、切标签页都不会中断展台数据流。
+  - **连接状态可见**：顶栏新增连接指示灯（实时连接 / 重连中 / 轮询同步 / 连接异常 + 最近同步时刻）。这是刻意加的：展台常驻投影且无人操作，内容若已过期而无人察觉，学生是看得见的。
+  - **课程状态变化提示**：新增 `stage-notices.ts`（纯函数 diff，便于单测）+ `StageNoticeStack` 浮层。覆盖 **环节推进**（含结课通票与归档的不同语气与跟进建议）、**投票开始/结束**（带作答人数）、**抢答开始/产生赢家/重置**（带姓名与毫秒数）、**连接断开与恢复**。首帧不提示（首次加载不是"变化"）；按 `dedupeKey` 8s 窗口去重、队列限长 40 条、最多同屏 4 条，6s 自动消失且可手动关闭（投影上误触无法撤销，不能要求操作）。
+  - **展示层复用**：`StageDisplayModal` 重写为薄壳，展示内容抽到 `StageDisplayPanel` 供「同页模态框（降级路径/旧调用方）」与「独立窗口（主路径）」共用，避免两处 UI 文案漂移。独立窗口不渲染关闭按钮（关标签页即关闭，再给一个按钮只会让教师误以为关掉了主窗口），未选课节时给出明确等待态而非白屏。
+  - **顺带修掉**：socket 挂载时重复触发一次拉取（首次同步已由轮询 effect 负责）；`isFullscreen` 初始恒为 false，未按「退出全屏」按钮时全屏图标与实际状态不符（改为监听 `fullscreenchange`）。
+  - **回归测试**：新增 41 个用例 —— `stage-display-notices.test.ts`（19，状态 diff 纯函数）、`stage-display-window.test.tsx`（14，连接保持与窗口生命周期，含事件合并/课节过滤/断连恢复/监听清理/弹窗拦截降级）、`stage-display-view.test.tsx`（8，端到端串起「事件 → 拉取 → diff → 提示」）。
+
+- **修复服务端集成测试的间歇性失败（`no such table: classroom_sessions`）**：
+  - **根因**：课堂相关表（`classroom_sessions` / `classroom_feed` / `teaching_modes` …）只存在于 `migrations/*.sql` —— `packages/core/db/index.ts` 的内联 schema 块里并没有，而 `runMigrations` 只在 `server.ts` 启动时执行，**测试环境从不在 setup 阶段跑迁移**。于是有 7 个测试文件各自在 `beforeAll` 手动 `runMigrations` 兜底，而 `classroom-session-resume.test.ts` 没有兜底，只能依赖「同 worker 里恰好有别的文件先跑过迁移」。在 `vitest.config.ts` 的 `fileParallelism: true` 下文件到 worker 的分配不确定 —— 该文件独占一个全新 worker 时必然缺表，于是时好时坏（单独运行稳定复现 4 failed）。
+  - **修法**：新增 `server/__tests__/helpers/test-schema.ts` 导出幂等的 `ensureTestSchema()`，并在 `vitest.setup.ts` 中**按测试文件路径条件性**调用（仅 `server/__tests__/` 下的测试加载 DB 并补齐迁移，避免让 200+ 个纯前端测试付出加载 `better-sqlite3` 与读迁移文件的代价）。`runMigrations` 本身按 `_migrations` 记账幂等，模块级标记保证同一 worker 只真正执行一次。
+  - **顺带去重**：将原先 5 个文件里重复的 `loadMigrationsFromDirectory(path.resolve(__dirname, '../../migrations'))` 样板（含各自重复的 `import path`）替换为 `ensureTestSchema()`；`classroom-runtime-service.test.ts` 使用独立的 `:memory:` 库，语义不同，予以保留。
+  - **文档同步**：`docs/developer-guide/testing-strategy.md` 补充「服务端测试的数据库 Schema」条目，明确禁止依赖同 worker 内其他文件的执行顺序。
+  - **验证**：`classroom-session-resume` 等 6 个文件在「清空 DB 后独占运行」场景下全部通过；全量套件连跑 3 次稳定 284 文件 / 2138 测试 0 失败。
+
+- **学生提交数据页：手动「录入成绩」升级为「可配置规则 + 自动录入」**：
+  - **根因（按钮长期灰着）**：`LiveClassroomView.tsx` 表格行的 `isFinished` 只认 `finished`/`submitted`，**漏掉 `completed`** —— 而 `completed` 正是数据库实际写入的终态（`packages/plugins/builtin.ts` 的 `submit_lms` 仅在该取值下更新 `finished_at`/`status`）。结果：同一文件里筛选下拉的 `FINISHED_STATUSES` 含 `completed` 能筛出这些行，但这些行的「录入成绩」按钮恒为灰色。现把状态口径收敛到模块级常量，并与服务端 `FINISHED_ATTEMPT_STATUSES` 对齐。
+  - **堵住「无分数记满分」**：`server/routes/courseware.ts` 的 promote 路由原本 `let finalScore = 100`，在 `submission_result.score` 为 NULL 时会把「没作答」直接记成 **100 分**。现改为无分数一律拒绝录入（422 + 明确原因），前端同步禁用并提示「该提交没有分数，无法录入（不会凭空记分）」。
+  - **自动录入规则**：在既有 `courseware_score_config` 上新增 `auto_record_enabled`（默认**关闭**，不改变历史行为）与 `auto_record_min_completion`（完成度门槛 0~1）两列（迁移 `012_auto_record_score.sql`），复用其「课件专属 → 全局 `*` → 内置默认」三级继承，避免出现两套成绩配置。规则可在「学生提交数据」页直接开关与拖动门槛调整，也可经 `courseware.save_score_config` 命令修改；老库缺列时 `saveScoreConfig` 优雅降级，不影响其余字段写入。
+  - **双触发路径**：① 学生提交课件时实时录入 —— 服务端从「班级 + 进行中的课堂会话」反查课节（刻意不接受前端上报 lessonId，避免错配/伪造），查不到则不实时录入；② 教师打开「学生提交数据」页时自动补录，并提供「立即补录」按钮显式重跑。
+  - **核心逻辑抽出于 `server/utils/auto-record-score.ts`**：手动与自动两条路径共用同一 `promoteAttemptToGrade` 落库实现，保证口径一致。状态门槛与完成度门槛**仅约束自动路径**；手动录入保留教师显式判断的能力（与改动前一致）。全部操作对同一 (作业, 学生) 幂等覆盖，重复触发不产生重复行、不叠加总分。
+  - **稳定性**：`fetchAttempts` 与 `addToast` 经 `useCallback` / `addToastRef` 稳定化 —— 二者原本每次渲染重建，若直接进依赖会触发「补录 → setState → 重渲染 → 补录」的无限循环。
+  - **回归测试**：新增 `server/__tests__/auto-record-score.test.ts`（23 用例，含三条铁律断言）与 `src/components/__tests__/LiveClassroomViewSubmissionsAutoRecord.test.tsx`（8 用例，覆盖 completed 可点击、无分数禁用、补录不重复触发）；其中 7 个前端用例在修复前失败。
+
+- **学生端抢答题无法退出的严重缺陷修复**（`src/features/student/StudentInteractiveOverlay.tsx`）：
+  - **根因**：服务端 `GET /api/classroom/sessions/:lessonId` 返回 session 下**最新一条** `classroom_buzzers` 且不过滤 `status`，而学生端弹窗渲染条件仅为 `activeBuzzer` 非空，且弹窗是 `fixed inset-0` 全屏遮罩却**没有任何关闭入口**。抢答器一旦创建，学生即被永久锁死在「恭喜你率先抢答！」页面。
+  - **退出通道**：抢答弹窗新增右上角关闭按钮、结果页「知道了，返回课堂」按钮，并支持点击遮罩关闭；通过 `dismissedBuzzerId` 记录本轮已关闭，保证同一轮不反复弹出、教师开启新一轮（新的 `buzzerId`）时自动重新出现。
+  - **教师重置后状态复位**：原同步逻辑只处理 `LOCKED` 分支，教师点击 reset（同一 `buzzerId`、`status` 回到 `READY`）时 `buzzStatus` 永久停留在 `WINNER`/`MISSED`，现补齐 `READY` 复位分支，允许学生再次抢答。
+  - **在途快照竞态**：抢答瞬间已发出的轮询请求会带回抢答前的过期 `READY` 快照，把刚判定的结果冲回 `IDLE`。现引入单调递增的轮询序号水位（`pollSeqRef` / `buzzPollSeqRef`），凡诞生于抢答之前的响应一律忽略；已判定结果按 `buzzerId` 锁定，不再被后续轮询翻转。采用序号而非 `Date.now()`，因同一毫秒内的请求与抢答无法用时间戳区分先后。
+  - **无限轮询自激（性能缺陷）**：`activePoll` / `activeBuzzer` / `exitTicketSubmitted` 原本处于轮询 `useEffect` 依赖中，而服务端每次轮询都返回全新对象引用，形成「轮询 → 写入新对象 → 依赖变化 → effect 重建并立即再次轮询」的自激循环，2.5s 节流被完全绕过，学生端以 CPU 速度持续打接口。现改用 ref 镜像仅作「新的一轮」比较，effect 依赖收敛为 `[lessonId, studentId]`。
+  - **健壮性与体验**：补齐 `BUZZED` 中间态渲染（此前无对应分支，等待响应期间弹窗为空白卡片，观感上等同卡死）；抢答请求失败时回退到可重试状态而非判定为 `MISSED`；未抢到时立即从 `POST .../buzz` 响应写入获胜者姓名，无需等下一次 2.5s 轮询。
+  - **回归测试**：新增 `src/features/student/__tests__/StudentInteractiveOverlayBuzzer.test.tsx`（9 个用例），覆盖关闭退出、教师 reset 后重新抢答、新一轮自动重弹、未抢到分支、请求失败回退、在途过期快照竞态、2.5s 节流不被自激绕过；其中 6 个用例在修复前失败。
+
 - **课堂随堂测验与结课通票学情采集全链路修复**：
   - **白板随堂测验（Quiz）交互与端到端答题闭环**：
     - 修复普通白板画布（`InteractiveWhiteboard.tsx`）将 `quiz` 类型元素直接 `return null` 的展示断层，重构为具备卡片头部、题干摘要、选项列表与全屏作答入口的标准白板卡片；
