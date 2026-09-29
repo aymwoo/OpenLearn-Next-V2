@@ -356,6 +356,15 @@ function getDefaultElementSize(type: string, data: any): { width: number; height
   return { width: data?.width || 300, height: data?.height || 300 };
 }
 
+/**
+ * 判定「这是一次真正的拖拽」所需的最小指针位移（px）。
+ *
+ * 指针未越过该阈值时，释放不触发拖放到页/环节 —— 否则组件恰好覆盖在环节栏上方时，
+ * 双击标题栏（两轮零位移 pointerdown/up）会被误判成「把组件丢进了那个环节」，
+ * 组件的 page/segmentId 被改写后从当前视图消失。取值与浏览器判定拖拽的常见阈值一致。
+ */
+export const DRAG_ACTIVATION_THRESHOLD_PX = 4;
+
 // 命令式接口：供外部（如备课画板点击添加）在画板中央插入元素，以及操作页面
 export interface WhiteboardHandle {
   addElementAtCenter: (type: string, contentData: Record<string, any>) => Promise<void>;
@@ -1459,8 +1468,26 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         const finalY = dragRef.current.currentY;
         const elementId = dragRef.current.id;
         const elementData = dragRef.current.data;
+        const startPointerX = dragRef.current.startPointerX;
+        const startPointerY = dragRef.current.startPointerY;
 
-        const isExternalHandled = onElementDropCheckRef.current?.(e, elementId);
+        /**
+         * 只有指针**实际移动过**才允许「拖放到页 / 环节」接管。
+         *
+         * 修复：双击组件标题栏会触发两轮完整的 pointerdown/up，而两轮位移都是 0。
+         * 此前这里无条件调用 onElementDropCheck，于是当组件恰好覆盖在环节栏/页面栏
+         * 上方时（鼠标正落在某个节点矩形内），双击会被判定为「把组件拖到了那个环节」，
+         * 组件的 page/segmentId 被改写并持久化，随后从当前视图消失 —— 用户看到的就是
+         * 「双击标题栏，组件不见了」。
+         *
+         * 单击同样可能命中，只因只触发一次、pointerup 后立刻清理，肉眼不易察觉；
+         * 双击把它稳定复现成数据丢失。
+         */
+        const hasMoved =
+          Math.abs(e.clientX - startPointerX) > DRAG_ACTIVATION_THRESHOLD_PX ||
+          Math.abs(e.clientY - startPointerY) > DRAG_ACTIVATION_THRESHOLD_PX;
+
+        const isExternalHandled = hasMoved ? onElementDropCheckRef.current?.(e, elementId) : false;
         onElementDragChangeRef.current?.(null);
 
         const dropAction = activeDropZoneActionRef.current;
