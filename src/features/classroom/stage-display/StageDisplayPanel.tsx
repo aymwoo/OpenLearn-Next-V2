@@ -28,6 +28,7 @@ import { PeerReviewShowcaseModal, type PeerReviewShowcaseModalProps } from '../p
 import { EMPTY_STAGE_DATA, type StageDisplayData, type FeedHealth } from './useStageDisplayFeed';
 import { stageLabel } from './stage-notices';
 import { ConnectionBadge } from './StageNoticeStack';
+import { useViewportFullscreen } from './useViewportFullscreen';
 import { StageAttendanceCard, StageCoursewareCard, StageExitTicketProgress, StageFeedCard } from './StageRealDataCards';
 
 export interface StageDisplayPanelProps {
@@ -70,7 +71,7 @@ export function StageDisplayPanel({
   onOpenPeerReview,
   onClosePeerReview,
 }: StageDisplayPanelProps) {
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const { isFullscreen, toggle: toggleFullscreen } = useViewportFullscreen();
   const [currentTime, setCurrentTime] = useState('');
   // 受控优先（独立窗口需要先拉真实数据再打开）；未受控时保留内部状态（同页模态框用法）
   const [peerReviewOpenInternal, setPeerReviewOpenInternal] = useState(false);
@@ -92,22 +93,8 @@ export function StageDisplayPanel({
     return () => clearInterval(timer);
   }, []);
 
-  // 全屏状态可能被用户按 Esc 改变，需与实际状态同步，否则按钮图标会失真
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
-
-  const toggleFullscreen = () => {
-    if (typeof document === 'undefined') return;
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.().catch(() => {});
-    } else {
-      document.exitFullscreen?.().catch(() => {});
-    }
-  };
+  // 全屏（含原生全屏被拒后的「仅占满视口」降级态）的进入/退出与 Esc 交由
+  // useViewportFullscreen 统一处理，见该文件顶部对降级必要性的说明。
 
   const pacing = data.pacing ?? EMPTY_STAGE_DATA.pacing;
   const totalPacing = (pacing.TOO_FAST || 0) + (pacing.CONFUSED || 0) + (pacing.CLEAR || 0);

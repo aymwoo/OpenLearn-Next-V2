@@ -48,6 +48,10 @@ vi.mock('../widgets/PluginCardRenderer', () => ({
   PluginCardRenderer: () => <div data-testid="third-party-widget">第三方组件内容</div>,
 }));
 
+vi.mock('../components/HtmlAppletFrame', () => ({
+  HtmlAppletFrame: () => <div data-testid="applet">互动课件内容</div>,
+}));
+
 const { fakeSocket } = vi.hoisted(() => ({
   fakeSocket: { id: 'sock-1', emit: vi.fn(), on: vi.fn(), off: vi.fn() },
 }));
@@ -61,6 +65,7 @@ import { InteractiveWhiteboard } from '../InteractiveWhiteboard';
 import { WidgetFrame, BROWSER_FULLSCREEN_Z } from '../widgets/WidgetFrame';
 import { BrowserFullscreenHost } from '../widgets/BrowserFullscreenHost';
 import { isNativeFullscreenSupported, useBrowserFullscreen } from '../widgets/useBrowserFullscreen';
+import { FullscreenOverlay, fullscreenRendererRegistry } from '../fullscreen/FullscreenRendererRegistry';
 import { whiteboardViewStore } from '../../../store/whiteboardViewStore';
 
 const ELEMENTS = [
@@ -79,6 +84,10 @@ beforeAll(() => {
   };
   Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get: () => 1024 });
   Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => 768 });
+  // 白板全屏的内容区用 clientWidth/clientHeight 实测尺寸（jsdom 恒为 0），
+  // 不桩化的话 Stage 会因 0 尺寸不挂载，测不到「内容被 Stage 包裹」
+  Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 900 });
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 600 });
 });
 
 afterEach(() => {
@@ -445,5 +454,127 @@ describe('浏览器全屏 · 集成路径（宿主真实渲染）', () => {
     await act(async () => {});
 
     expect(container.querySelector('[data-widget-frame="true"]')).toBeTruthy();
+  });
+});
+
+/**
+ * 白板全屏（board fullscreen）与浏览器全屏的内容来源统一。
+ *
+ * 此前白板全屏走 DefaultFullscreenRenderer 的字段预览兜底（注册表从未被注册），
+ * 于是互动课件变源码文本、作业退化成不可提交 —— 与画布内的真实组件不是同一个东西。
+ */
+describe('白板全屏 · 渲染真实组件', () => {
+  async function enterBoardFullscreen(type: string, data: Record<string, unknown>) {
+    Object.defineProperty(document.documentElement, 'requestFullscreen', {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(undefined),
+    });
+
+    render(
+      <InteractiveWhiteboard
+        lessonId="l1"
+        elements={[{ id: 'el-1', type, data: JSON.stringify({ x: 20, y: 20, width: 400, height: 300, ...data }) }]}
+        onElementAdd={vi.fn(async () => {}) as any}
+        onElementUpdate={vi.fn(async () => {}) as any}
+        userRole="teacher"
+        hidePageBar
+      />,
+    );
+    await act(async () => {});
+
+    const btn = getTitleBar().querySelector('[data-testid="widget-titlebar-board-fullscreen"]') as HTMLElement;
+    expect(btn).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(btn);
+    });
+  }
+
+  for (const c of [
+    { type: 'html-applet', data: { title: '互动课件' } },
+    { type: 'assignment', data: { title: '作业', description: '作业内容', assignmentId: 'a-1' } },
+  ]) {
+    it(`${c.type}：白板全屏渲染真实组件，而非字段预览兜底`, async () => {
+      await enterBoardFullscreen(c.type, c.data);
+
+      const overlay = document.querySelector('[data-testid="fullscreen-content"]') as HTMLElement;
+      expect(overlay).toBeTruthy();
+      if (c.type === 'assignment') {
+        expect(overlay.textContent).toContain('作业内容');
+        // 真实组件渲染的是带 onClick 的「提交作业」（点击打开真实提交弹窗）；
+        // 旧的全屏渲染器给的是个没有任何 handler 的「Upload File」假按钮。
+        // 这最能说明「逐类型手写的第二套实现必然漂移」
+        expect(overlay.querySelector('[data-testid="assignment-submit-button"]')).toBeTruthy();
+        expect(overlay.textContent).not.toContain('Upload File');
+      } else {
+        // 课件 iframe 被真实渲染（mock 提供）
+        expect(overlay.querySelector('[data-testid="applet"]')).toBeTruthy();
+      }
+    });
+  }
+
+  it('白板全屏内容被 Stage 包裹（konva 节点离开 Stage 会抛 FiberProvider 错误）', async () => {
+    await enterBoardFullscreen('html-applet', { title: '互动课件' });
+
+    const overlay = document.querySelector('[data-testid="fullscreen-content"]') as HTMLElement;
+    // 关键：renderElement 返回 konva 节点，必须有 <Stage> 提供 FiberProvider 上下文，
+    // 否则真机上进入全屏瞬间整页白屏（useFiber must be called within a <FiberProvider />）
+    expect(overlay.querySelector('[data-testid="widget-fullscreen-stage"]')).toBeTruthy();
+    expect(overlay.querySelector('[data-konva="Stage"]')).toBeTruthy();
+  });
+
+  it('浏览器全屏内容同样被 Stage 包裹', async () => {
+    Object.defineProperty(document.documentElement, 'requestFullscreen', {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(undefined),
+    });
+
+    renderBoard({ hidePageBar: true });
+    await act(async () => {});
+
+    await act(async () => {
+      fireEvent.click(document.querySelector('[data-testid="widget-titlebar-browser-fullscreen"]') as HTMLElement);
+    });
+
+    const host = screen.getByTestId('browser-fullscreen-host');
+    expect(host.querySelector('[data-testid="widget-fullscreen-stage"]')).toBeTruthy();
+  });
+
+  it('插件注册的自定义全屏渲染器优先级高于宿主注入（保留插件通道）', () => {
+    const { unmount } = render(
+      <FullscreenOverlay
+        type="plugin-custom"
+        title="插件全屏"
+        data={{}}
+        containerSize={{ width: 1024, height: 768 }}
+        onClose={vi.fn()}
+        lessonId="l1"
+        renderContent={() => <div data-testid="host-render">宿主渲染</div>}
+      />,
+    );
+    expect(screen.getByTestId('host-render')).toBeTruthy();
+    unmount();
+
+    fullscreenRendererRegistry.register(
+      'plugin-custom',
+      () => <div data-testid="plugin-render">插件渲染</div>,
+      'ext-demo',
+    );
+    try {
+      render(
+        <FullscreenOverlay
+          type="plugin-custom"
+          title="插件全屏"
+          data={{}}
+          containerSize={{ width: 1024, height: 768 }}
+          onClose={vi.fn()}
+          lessonId="l1"
+          renderContent={() => <div data-testid="host-render">宿主渲染</div>}
+        />,
+      );
+      expect(screen.getByTestId('plugin-render')).toBeTruthy();
+      expect(screen.queryByTestId('host-render')).toBeNull();
+    } finally {
+      fullscreenRendererRegistry.unregister('plugin-custom', 'ext-demo');
+    }
   });
 });

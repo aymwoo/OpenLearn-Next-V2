@@ -10,6 +10,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **统一两种「全屏」的内容来源：白板全屏改为渲染真实组件，不再降级为简化版**：
+  - **先纠正上一轮的一处错误结论**：我当时判断「`fullscreenRendererRegistry` 从未被注册，所有组件都落到 `DefaultFullscreenRenderer` 字段预览兜底」。这个判断是错的 —— 注册调用在 `InteractiveWhiteboard` 顶部（不在注册表文件内），实际有 5 个宿主内置渲染器。但**结论方向不变，甚至更糟**：那批渲染器是**逐类型手写的第二套实现**，与画布内的真实组件已经漂移。最直接的证据是 `assignment` 的全屏版渲染出一个 `Upload File` 按钮 —— **没有任何 `onClick`**，而画布内的真实组件是「提交作业」且绑定真实提交弹窗；`rollcall` 全屏版只剩一个被抽中的姓名，丢掉了全部操作能力；`timer` 是纯文本倒计时。
+  - **改为宿主注入真实组件**：`FullscreenOverlay` 新增 `renderContent(size)` 逃生口（与 `BrowserFullscreenHost` 同一模式），由 `InteractiveWhiteboard` 复用 `renderElement` 渲染。两种全屏从此看的是同一个组件，不会再各自漂移。
+  - **注册表区分两条通道**：新增 `registerHostBuiltin` 与 `getEffectiveRenderer`，只有**插件注册**的或**明确标记为宿主内置**的渲染器才生效；早期用 `register` 无 `pluginId` 注册的那批不再生效。`quiz` 改走 `registerHostBuiltin` 保留 —— `QuizFullscreenView` 并非简化版，而是带提交、评分与成绩表格的完整实现，且有独立单测覆盖。
+  - **修复一个上一轮引入的真实回归（浏览器全屏在真机上会白屏）**：`renderElement` 返回的是 konva 节点，而 konva 的 reconciler 依赖 `<Stage>` 提供的 `FiberProvider` 上下文 —— 直接放进普通 DOM 容器会抛 `useFiber must be called within a <FiberProvider />`，真机表现是进入全屏瞬间整页白屏。上一轮的测试之所以「通过」，是因为把 `react-konva` 整个 mock 掉了。新增 `WidgetFullscreenStage` 作为承载层，两种全屏共用。
+  - **顺带修掉「全屏内容闪一帧空白」**：内容区尺寸改用 ref 回调 + `useLayoutEffect` 同步实测（`clientWidth/clientHeight` 扣除内边距）。原先依赖 `useEffect` 测量，而内容经 `createPortal` 渲染、与宿主 effect 不同步，首帧常读到 `null` 导致尺寸停在 0，konva Stage 不挂载。
+  - **回归测试**：新增 6 个集成路径用例（真实组件渲染 / Stage 包裹 / 插件通道优先级 / 浏览器全屏 Stage 包裹）。**反向验证**：回退修复后 3 个用例失败。另为 `WidgetTitleBar` 的白板全屏按钮与 assignment 真实提交按钮补 `data-testid`，使断言不依赖文案。
+
+- **大屏展台全屏：补上原生全屏被拒时的降级与 Esc 退出**：
+  - **先纠正一处错误结论**：上一轮我说「展台无 Esc 退出」，这是错的 —— 原生 Fullscreen API 的 Esc 是浏览器内建行为，展台一直可用。
+  - **真实缺口在于降级路径**：`requestFullscreen()` 可能因权限策略 / 缺少用户手势被拒绝，此时浏览器不进入原生全屏，**Esc 也完全失效**（Esc 只在原生全屏态下由浏览器接管）。而展台原先只监听 `document.fullscreenElement`，被拒时既不进入全屏态、也没有 `fullscreenchange` 事件 —— 表现为「点了全屏按钮没反应，且 Esc 也退不出」。
+  - **修复**：新增 `useViewportFullscreen`（视口级，对应白板既有的元素级 `useBrowserFullscreen`）。进入时若原生调用被拒，仍进入「占满视口」并置全屏态，此时由自己接管 Esc；同时保留 `fullscreenchange` 反向同步，用户经浏览器 UI / 系统 Esc 退出时状态一并退回。补 5 个用例，**反向验证**回退后 2 个失败。
+
 - **修复「整个浏览器全屏」未真正生效，并补上集成路径回归测试**：
   - **这是上一轮实现的一个假通过**：需求是「全屏时隐藏标题栏、保留悬浮退出按钮」，但实际只做到了后者。浏览器全屏的真实渲染链路是 `BrowserFullscreenHost` + `renderElement(el)`，走的是**画布内那条渲染分支**，从未经过 `WidgetFrame` 的 `isBrowserFullscreen` 分支 —— 那段「隐藏标题栏」的代码自加入起就一次都没执行过。原因是我当时的测试直接给 `WidgetFrame` 传 `isBrowserFullscreen`，测的是组件契约而非集成路径（与此前双击删组件那次假通过同一类错误）。
   - **同时发现更严重的问题：全屏时元素根本没放大**。`renderElement` 里元素用 `displayX/displayY/displayWidth/displayHeight` 绝对定位，而这三个值直接来自 `data` —— 也就是说全屏只是把「画布里 400×300 的那个小卡片」原样搬到视口左上角，尺寸不变，所谓「全屏」名不副实。

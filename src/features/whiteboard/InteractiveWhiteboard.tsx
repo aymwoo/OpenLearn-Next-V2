@@ -143,6 +143,7 @@ import { WidgetTitleBar } from './widgets/WidgetTitleBar';
 import { WidgetFrame } from './widgets/WidgetFrame';
 import { useBrowserFullscreen } from './widgets/useBrowserFullscreen';
 import { BrowserFullscreenHost, BROWSER_FULLSCREEN_PADDING } from './widgets/BrowserFullscreenHost';
+import { WidgetFullscreenStage } from './widgets/WidgetFullscreenStage';
 import { PluginCardRenderer } from './widgets/PluginCardRenderer';
 import { RollCallWrapper } from './widgets/RollCallWrapper';
 import { CodeSandboxWrapper } from './widgets/CodeSandboxWrapper';
@@ -166,51 +167,21 @@ import { paletteItemRegistry } from '../teacher/lesson-editor/palette-item-regis
 
 // ── 自定义全屏渲染器注册 ─────────────────────────────────────────────────
 
-fullscreenRendererRegistry.register('quiz', QuizFullscreenView);
-
-fullscreenRendererRegistry.register('timer', ({ data }: FullscreenRendererProps) => (
-  <div className="flex items-center justify-center h-full">
-    <div className="text-center">
-      <div className="text-8xl font-mono font-bold text-orange-600 mb-4">
-        {String(Math.floor((data.remaining ?? data.duration ?? 60) / 60)).padStart(2, '0')}:
-        {String((data.remaining ?? data.duration ?? 60) % 60).padStart(2, '0')}
-      </div>
-      <p className="text-lg text-gray-500">{data.label || '计时器'}</p>
-    </div>
-  </div>
-));
-
-fullscreenRendererRegistry.register('assignment', ({ data }: FullscreenRendererProps) => (
-  <div className="max-w-2xl mx-auto space-y-6">
-    <h3 className="text-xl font-bold text-gray-800">{data.title}</h3>
-    <p className="text-gray-600 text-base whitespace-pre-wrap">{data.description}</p>
-    <button className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-3 rounded-xl transition-colors text-base shadow-sm cursor-pointer">
-      Upload File
-    </button>
-  </div>
-));
-
-fullscreenRendererRegistry.register('rollcall', ({ data }: FullscreenRendererProps) => {
-  const student = data.selectedStudent;
-  const name = typeof student === 'object' ? student?.name : student;
-  return (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center space-y-3">
-        <div className="text-2xl text-indigo-400 font-semibold tracking-wider">🎯 幸运答题者</div>
-        <div className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 mb-2">
-          {name || '等待抽取中...'}
-        </div>
-        {data.evaluation?.submitted && (
-          <div className="text-xl text-emerald-400 font-bold">🌟 评价达成: +{data.evaluation.rewardCoins} 金币激励</div>
-        )}
-      </div>
-    </div>
-  );
-});
-
-fullscreenRendererRegistry.register('html-applet', ({ data, lessonId, elementId }: FullscreenRendererProps) => (
-  <HtmlAppletFrame data={data} lessonId={lessonId} elementId={elementId} className="w-full h-full rounded-xl border" />
-));
+/**
+ * 只有 quiz 保留宿主注册的专用渲染器。
+ *
+ * 其余类型（assignment / rollcall / timer / html-applet）原先也各注册了一个，
+ * 但那批是**逐类型手写的第二套实现**，与画布内的真实组件必然漂移：
+ * assignment 的全屏版渲染出一个「Upload File」假按钮 —— 没有任何 onClick，
+ * 而画布内的真实组件是「提交作业」且绑定提交逻辑；rollcall / timer 则丢掉了
+ * 全部操作能力。它们现已被宿主的 renderContent（真实组件）取代。
+ *
+ * quiz 保留是因为 QuizFullscreenView 并非简化版，而是带提交、评分与成绩表格的
+ * 完整实现，且有独立单测覆盖。
+ */
+// quiz 的渲染器是宿主注册的完整实现（提交 + 评分 + 成绩表格，有独立单测覆盖），
+// 走「宿主保留」通道而非插件通道
+fullscreenRendererRegistry.registerHostBuiltin('quiz', QuizFullscreenView);
 
 const ReadOnlyLockCover: React.FC<{ title?: string }> = ({ title = '教师已开启全班专注锁定，当前为只读演示视图' }) => (
   <div
@@ -3193,6 +3164,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       <p className="font-semibold text-gray-800 mb-1 text-xs">{data.title}</p>
                       <p className="text-xs text-gray-500 mb-3 line-clamp-3">{data.description}</p>
                       <button
+                        data-testid="assignment-submit-button"
                         className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-1.5 rounded transition-colors text-xs shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={readOnly}
                         onClick={() => {
@@ -4421,15 +4393,17 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         onExit={() => void browserFullscreen.exit()}
                         // 复用画布内已有的元素渲染，避免复制一份必然漂移；
                         // 传入视口尺寸使元素在全屏下铺满（而非保持画布内尺寸）
-                        renderContent={(viewport) =>
-                          renderElement(bfsEl, {
-                            fullscreen: {
-                              width: viewport.width,
-                              height: viewport.height,
-                              padding: BROWSER_FULLSCREEN_PADDING,
-                            },
-                          })
-                        }
+                        renderContent={(viewport) => (
+                          <WidgetFullscreenStage width={viewport.width} height={viewport.height}>
+                            {renderElement(bfsEl, {
+                              fullscreen: {
+                                width: viewport.width,
+                                height: viewport.height,
+                                padding: BROWSER_FULLSCREEN_PADDING,
+                              },
+                            })}
+                          </WidgetFullscreenStage>
+                        )}
                       />
                     );
                   })()
@@ -4474,6 +4448,15 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         lessonId={lessonId}
                         elementId={fsEl.id}
                         readOnly={readOnly}
+                        // 渲染真实组件而非字段预览兜底：全屏里看到的就是它本来的样子
+                        // （此前互动课件退化成源码文本、作业退化成不可提交）
+                        renderContent={(size) => (
+                          <WidgetFullscreenStage width={size.width} height={size.height}>
+                            {renderElement(fsEl, {
+                              fullscreen: { width: size.width, height: size.height, padding: 0 },
+                            })}
+                          </WidgetFullscreenStage>
+                        )}
                       />
                     );
                   })()

@@ -150,6 +150,7 @@ export function WidgetTitleBar({
           {onMaximize && (
             <button
               type="button"
+              data-testid="widget-titlebar-board-fullscreen"
               onClick={onMaximize}
               disabled={isMaximized}
               className={`p-1 rounded-lg transition-all flex items-center justify-center ${

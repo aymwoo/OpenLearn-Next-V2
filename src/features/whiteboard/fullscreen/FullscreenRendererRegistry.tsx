@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, Minimize2 } from 'lucide-react';
 import Markdown from 'react-markdown';
@@ -17,14 +17,38 @@ export type FullscreenRendererProps = {
 export type FullscreenRenderer = React.FC<FullscreenRendererProps>;
 
 class FullscreenRendererRegistry {
-  private renderers = new Map<string, { impl: FullscreenRenderer; pluginId?: string }>();
+  private renderers = new Map<string, { impl: FullscreenRenderer; pluginId?: string; hostBuiltin?: boolean }>();
 
   register(type: string, renderer: FullscreenRenderer, pluginId?: string): void {
     this.renderers.set(type, { impl: renderer, pluginId });
   }
 
+  /**
+   * 注册**宿主内置**的专用全屏渲染器。
+   *
+   * 与 `register`（插件通道）的区别：宿主内置渲染器是逐类型手写的第二套实现，
+   * 天然会与画布内的真实组件漂移，因此只在「该实现确实是完整版、不是简化版」时
+   * 才用它（目前仅 quiz）。其余类型应让宿主的 renderContent 注入真实组件。
+   */
+  registerHostBuiltin(type: string, renderer: FullscreenRenderer): void {
+    this.renderers.set(type, { impl: renderer, hostBuiltin: true });
+  }
+
   get(type: string): FullscreenRenderer | undefined {
     return this.renderers.get(type)?.impl;
+  }
+
+  /**
+   * 取应当生效的全屏渲染器：**插件注册的** 或 **明确标记为宿主内置的**。
+   *
+   * 早期用 `register` 无 pluginId 注册的那批（assignment / rollcall / timer /
+   * html-applet）不生效 —— 它们是简化实现，与画布内漂移（assignment 全屏版的
+   * 「Upload File」按钮没有任何 handler）。它们已改由 renderContent 渲染真实组件。
+   */
+  getEffectiveRenderer(type: string): FullscreenRenderer | undefined {
+    const entry = this.renderers.get(type);
+    if (!entry) return undefined;
+    return entry.pluginId || entry.hostBuiltin ? entry.impl : undefined;
   }
 
   has(type: string): boolean {
@@ -74,7 +98,33 @@ export const FullscreenOverlay: React.FC<{
    * 只读跟随模式（全班专注锁定）：阻断全屏内容交互，展示只读演示视图徽标
    */
   readOnly?: boolean;
-}> = ({ type, title, data, containerSize, onClose, lessonId, elementId, dismissible = true, readOnly = false }) => {
+  /**
+   * 由宿主注入「真实组件」渲染。
+   *
+   * 优先级高于注册表里的**宿主内置**渲染器：那批渲染器是逐类型手写的第二套实现，
+   * 必然与画布内漂移 —— 最直接的例子是 assignment 的全屏版渲染出一个
+   * 「Upload File」假按钮（点了没有任何 handler），而画布内真实组件是「提交作业」
+   * 且绑定提交逻辑。rollcall / timer 同理，丢掉了操作能力。
+   *
+   * 插件通过 register 注册的渲染器仍然优先（那是插件自定义视图的正式通道）。
+   *
+   * 传入的节点是 konva 节点，调用方需自行套一层 <Stage>（WidgetFullscreenStage）。
+   *
+   * @param size 内容区可用尺寸（已扣除内边距）—— 供调用方设定 Stage 宽高
+   */
+  renderContent?: (size: { width: number; height: number }) => React.ReactNode;
+}> = ({
+  type,
+  title,
+  data,
+  containerSize,
+  onClose,
+  lessonId,
+  elementId,
+  dismissible = true,
+  readOnly = false,
+  renderContent,
+}) => {
   React.useEffect(() => {
     if (!dismissible) return;
     const handleEsc = (e: KeyboardEvent) => {
@@ -87,7 +137,8 @@ export const FullscreenOverlay: React.FC<{
   // 不可关闭时，即便插件自定义渲染器主动调用 onClose 也不生效
   const handleClose = dismissible ? onClose : () => {};
 
-  const Renderer = fullscreenRendererRegistry.get(type);
+  // 插件注册的 或 明确标记为宿主内置的渲染器；其余走 renderContent 注入真实组件
+  const Renderer = fullscreenRendererRegistry.getEffectiveRenderer(type);
 
   const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
   useEffect(() => {
@@ -95,6 +146,43 @@ export const FullscreenOverlay: React.FC<{
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // 内容区实测尺寸：konva Stage 需要数值宽高，而容器高度还受顶部标题栏、
+  // p-6 内边距与 flex 分配影响，用测量而非算式才能始终贴合。
+  //
+  // ref 回调只负责挂上观察者（内容经 createPortal 渲染，与本组件 effect 不同步，
+  // effect 里首次读取可能拿到 null）；尺寸在 layout 阶段同步读取一次，
+  // 这样首帧就有正确尺寸 —— 否则 konva Stage 会因 0 尺寸先渲染空内容再跳变。
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
+  const [contentSize, setContentSize] = useState({ width: 0, height: 0 });
+  const contentRO = React.useRef<ResizeObserver | null>(null);
+  const readContentSize = React.useCallback(() => {
+    const node = contentRef.current;
+    if (!node) return;
+    const style = window.getComputedStyle(node);
+    const w = node.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+    const h = node.clientHeight - (parseFloat(style.paddingTop) || 0) - (parseFloat(style.paddingBottom) || 0);
+    setContentSize({ width: Math.max(0, w), height: Math.max(0, h) });
+  }, []);
+  const attachContent = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      contentRef.current = node;
+      // 换节点 / 卸载时断开上一个观察者，否则每次重挂都留下一个孤儿 observer
+      contentRO.current?.disconnect();
+      contentRO.current = null;
+      if (!node) return;
+      if (typeof ResizeObserver !== 'undefined') {
+        contentRO.current = new ResizeObserver(readContentSize);
+        contentRO.current.observe(node);
+      }
+    },
+    [readContentSize],
+  );
+
+  // layout 阶段读一次，保证首帧即有尺寸（否则内容先空白一帧再出现）
+  useLayoutEffect(() => {
+    readContentSize();
+  }, [readContentSize]);
 
   const overlay = (
     <div
@@ -137,9 +225,12 @@ export const FullscreenOverlay: React.FC<{
           const isInteractiveWidget = type === 'quiz' || type === 'assignment';
           return (
             <div
+              ref={attachContent}
+              data-testid="fullscreen-content"
               className="flex-1 overflow-auto p-6 relative"
               style={{ pointerEvents: readOnly && !isInteractiveWidget ? 'none' : 'auto' }}
             >
+              {/* 插件注册的自定义全屏视图 > 宿主注入的真实组件 > 字段预览兜底 */}
               {Renderer ? (
                 <Renderer
                   elementType={type}
@@ -149,6 +240,8 @@ export const FullscreenOverlay: React.FC<{
                   lessonId={lessonId}
                   elementId={elementId}
                 />
+              ) : renderContent ? (
+                renderContent(contentSize)
               ) : (
                 <DefaultFullscreenRenderer
                   elementType={type}

@@ -84,6 +84,10 @@ beforeAll(() => {
   };
   Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get: () => 1024 });
   Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => 768 });
+  // 全屏内容区用 clientWidth/clientHeight 实测尺寸（jsdom 恒为 0），
+  // 不桩化则承载 konva 节点的 Stage 会因 0 尺寸不挂载
+  Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 900 });
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 600 });
 });
 
 afterEach(() => {
