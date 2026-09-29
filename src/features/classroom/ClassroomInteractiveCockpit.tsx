@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 import { StageDisplayModal } from './StageDisplayModal';
+import { useStageDisplayWindow } from './stage-display/useStageDisplayWindow';
 import { PacingDashboardModal } from './PacingDashboardModal';
 import { ClassroomAttributionModal } from './ClassroomAttributionModal';
 import { ClassroomLeaderboardModal } from './ClassroomLeaderboardModal';
@@ -73,6 +74,22 @@ export function ClassroomInteractiveCockpit({
   };
 
   const [isStageModalOpen, setIsStageModalOpen] = useState(false);
+  // 大屏展台走独立窗口；fallbackOpen 仅在浏览器拦截 window.open 时启用
+  const {
+    fallbackOpen: stageFallbackOpen,
+    blocked: stageWindowBlocked,
+    openStageWindow,
+    closeFallback: closeStageFallback,
+    clearBlockedHint: clearStageBlockedHint,
+  } = useStageDisplayWindow();
+
+  const handleOpenStageDisplay = () => {
+    openStageWindow({
+      lessonId: lessonId || '',
+      lessonTitle,
+      lang: lang === 'zh' ? 'zh' : 'en',
+    });
+  };
   const [isAttributionModalOpen, setIsAttributionModalOpen] = useState(false);
   const [isLeaderboardModalOpen, setIsLeaderboardModalOpen] = useState(false);
   const [isPollDialogOpen, setIsPollDialogOpen] = useState(false);
@@ -428,10 +445,16 @@ export function ClassroomInteractiveCockpit({
           <span>{lang === 'zh' ? '60s 通票' : 'Exit Ticket'}</span>
         </button>
 
-        {/* 大屏展台模式 */}
+        {/* 大屏展台：主路径是「新开独立窗口」投到副屏/投影，
+            弹窗被拦截时降级为同页模态框（见 useStageDisplayWindow） */}
         <button
-          onClick={() => setIsStageModalOpen(true)}
+          onClick={handleOpenStageDisplay}
           className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-3xs cursor-pointer"
+          title={
+            lang === 'zh'
+              ? '新开窗口投放大屏展台到副屏/投影，授课界面留在当前窗口'
+              : 'Open the stage display in a new window for a second screen'
+          }
         >
           <MonitorPlay size={13} className="text-blue-500" />
           <span>{lang === 'zh' ? '打开大屏展台' : 'Stage Display'}</span>
@@ -537,14 +560,39 @@ export function ClassroomInteractiveCockpit({
         />
       )}
 
-      {/* 大屏展台模态框 */}
+      {/* 大屏展台：独立窗口（主路径）。下方模态框仅作弹窗被拦截时的降级展示。 */}
       <StageDisplayModal
-        isOpen={isStageModalOpen}
-        onClose={() => setIsStageModalOpen(false)}
+        isOpen={isStageModalOpen || stageFallbackOpen}
+        onClose={() => {
+          setIsStageModalOpen(false);
+          closeStageFallback();
+          clearStageBlockedHint();
+        }}
         lessonId={lessonId}
         lessonTitle={lessonTitle}
         lang={lang}
       />
+
+      {/* 弹窗被拦截时明确告知：否则教师会以为按钮坏了 */}
+      {stageWindowBlocked && (
+        <div
+          data-testid="stage-window-blocked-hint"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10001] px-4 py-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs font-semibold flex items-center gap-3 shadow-2xl backdrop-blur-md"
+          role="alert"
+        >
+          <span>
+            {lang === 'zh'
+              ? '浏览器拦截了新窗口，已临时在当前页展示。请在地址栏放行弹窗后可再次打开独立展台。'
+              : 'The new window was blocked; showing the stage inline. Allow pop-ups to open it in a separate window.'}
+          </span>
+          <button
+            onClick={clearStageBlockedHint}
+            className="shrink-0 px-2 py-1 rounded-lg border border-amber-500/40 hover:bg-amber-500/20 transition-colors cursor-pointer"
+          >
+            {lang === 'zh' ? '知道了' : 'Got it'}
+          </button>
+        </div>
+      )}
 
       {/* 课堂抽问与归因表现激励弹窗 (Stitch 88b094e6) */}
       <ClassroomAttributionModal

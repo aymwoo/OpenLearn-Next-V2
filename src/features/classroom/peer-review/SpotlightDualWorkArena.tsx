@@ -10,6 +10,7 @@ import {
   Flame,
   TrendingUp,
   Sparkles,
+  FileQuestion,
 } from 'lucide-react';
 import { ExtensionPointRenderer } from '../../../plugin-host/extension-point-renderer';
 import type { SpotlightWorkItem, TeacherPeerAnnotation } from './types';
@@ -136,72 +137,61 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
             ))}
           </div>
 
-          {/* Canvas Visual Simulation (60 FPS SANDBOX SVG) */}
-          <div className="w-full h-44 rounded-lg bg-[#060e20] flex items-center justify-center relative overflow-hidden border border-[#2d3449]/60 group">
-            <svg
-              className="w-36 h-36 transform -rotate-12 transition-transform duration-700 group-hover:scale-110"
-              viewBox="0 0 100 100"
-            >
-              <polygon
-                points="50,10 88,38 73,82 27,82 12,38"
-                fill="none"
-                stroke="#c0c1ff"
-                strokeWidth="1.2"
-                opacity="0.3"
-              />
-              <polygon
-                points="50,15 84,39 71,78 29,78 16,39"
-                fill="none"
-                stroke="#8083ff"
-                strokeWidth="1.4"
-                opacity="0.5"
-                transform="rotate(10 50 50)"
-              />
-              <polygon
-                points="50,20 80,41 68,74 32,74 20,41"
-                fill="none"
-                stroke="#4edea3"
-                strokeWidth="1.6"
-                opacity="0.7"
-                transform="rotate(22 50 50)"
-              />
-              <polygon
-                points="50,26 76,43 65,70 35,70 24,43"
-                fill="none"
-                stroke="#ffb95f"
-                strokeWidth="1.8"
-                opacity="0.85"
-                transform="rotate(35 50 50)"
-              />
-              <polygon
-                points="50,32 72,45 63,66 37,66 28,45"
-                fill="none"
-                stroke="#c0c1ff"
-                strokeWidth="2.2"
-                opacity="1.0"
-                transform="rotate(50 50 50)"
-              />
-              <circle cx="50" cy="50" r="3" fill="#4edea3" />
-            </svg>
-            <span className="absolute bottom-2 right-2 text-[10px] font-mono text-[#908fa0] bg-[#131b2e]/90 px-1.5 py-0.5 rounded border border-[#2d3449]/50">
-              {workA.visualBadgeText}
-            </span>
+          {/*
+            作品预览：渲染**学生真实作答内容**（由 usePeerReviewData 从 submission_raw 提取）。
+            此前这里是一段写死的五边形 SVG —— 与任何真实作品无关，投到大屏上会让学生
+            以为那就是该同学的作品。无真实内容时明确说明，不画假图形。
+          */}
+          <div
+            data-testid={`work-preview-${workA.slot}`}
+            className="w-full h-44 rounded-lg bg-[#060e20] flex flex-col justify-center relative overflow-hidden border border-[#2d3449]/60"
+          >
+            {workA.codeLines && workA.codeLines.length > 0 ? (
+              <pre className="px-4 py-3 font-mono text-[11px] leading-5 text-[#dae2fd] overflow-y-auto max-h-full whitespace-pre-wrap break-words">
+                {workA.codeLines.map((line, idx) => (
+                  <div
+                    key={idx}
+                    className={line.isHighlight ? 'text-[#4edea3]' : ''}
+                    style={{ paddingLeft: `${(line.indent || 0) * 12}px` }}
+                  >
+                    {line.text}
+                  </div>
+                ))}
+              </pre>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-2 px-6 text-center">
+                <FileQuestion size={28} className="text-[#4a5570]" />
+                <span className="text-[11px] text-[#908fa0] leading-relaxed">
+                  该作品没有可展示的作答内容
+                  <br />
+                  <span className="text-[10px] opacity-70">（原始作答流水为空或为纯数值型）</span>
+                </span>
+              </div>
+            )}
+            {workA.workContent && (
+              <span className="absolute bottom-2 right-2 text-[10px] font-mono text-[#908fa0] bg-[#131b2e]/90 px-1.5 py-0.5 rounded border border-[#2d3449]/50">
+                真实作答 · {workA.workContent.eventCount} 条事件
+              </span>
+            )}
           </div>
 
-          {/* Code Snippet */}
-          <div className="bg-[#060e20] rounded-lg p-3 font-mono text-[11px] leading-5 border border-[#2d3449]/60 overflow-x-auto text-[#dae2fd]">
-            <div className="text-[#908fa0] mb-1"># {workA.codeTitle ?? ''}</div>
-            {(workA.codeLines ?? []).map((line, idx) => (
-              <div
-                key={idx}
-                className={`${line.isHighlight ? 'bg-[#8083ff]/20 px-1 rounded -mx-1 text-[#dae2fd]' : ''}`}
-                style={{ paddingLeft: `${(line.indent || 0) * 12}px` }}
-              >
-                <span>{line.text}</span>
-                {line.comment && <span className="text-[#908fa0] ml-2">{line.comment}</span>}
-              </div>
-            ))}
-          </div>
+          {/*
+            原本此处还有一个独立的「Code Snippet」区块，与上方预览区渲染同一份
+            codeLines（内容重复两遍）。预览区已承担展示职责，这里改为只补充
+            逐行 comment（预览区不渲染 comment，避免噪音）。
+          */}
+          {workA.codeLines?.some((l) => l.comment) ? (
+            <div className="bg-[#060e20] rounded-lg p-3 font-mono text-[11px] leading-5 border border-[#2d3449]/60 overflow-x-auto text-[#dae2fd]">
+              <div className="text-[#908fa0] mb-1"># {workA.codeTitle ?? ''}</div>
+              {workA.codeLines
+                .filter((l) => l.comment)
+                .map((line, idx) => (
+                  <div key={idx} className={line.isHighlight ? 'bg-[#8083ff]/20 px-1 rounded -mx-1' : ''}>
+                    <span className="text-[#908fa0]">{line.comment}</span>
+                  </div>
+                ))}
+            </div>
+          ) : null}
         </div>
 
         {/* SUB-CARD B：作品 B（学生名/标题来自真实 workB 入参） */}
@@ -238,75 +228,55 @@ export const SpotlightDualWorkArena: React.FC<SpotlightDualWorkArenaProps> = ({
             ))}
           </div>
 
-          {/* Canvas Visual Simulation (Rotating Matrix) */}
-          <div className="w-full h-44 rounded-lg bg-[#060e20] flex items-center justify-center relative overflow-hidden border border-[#2d3449]/60 group">
-            <svg className="w-36 h-36 transition-transform duration-700 group-hover:scale-110" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="42" fill="none" stroke="#2d3449" strokeWidth="1" />
-              <rect
-                x="25"
-                y="25"
-                width="50"
-                height="50"
-                fill="none"
-                stroke="#4edea3"
-                strokeWidth="1.8"
-                transform="rotate(0 50 50)"
-              />
-              <rect
-                x="25"
-                y="25"
-                width="50"
-                height="50"
-                fill="none"
-                stroke="#6ffbbe"
-                strokeWidth="1.8"
-                opacity="0.8"
-                transform="rotate(18 50 50)"
-              />
-              <rect
-                x="25"
-                y="25"
-                width="50"
-                height="50"
-                fill="none"
-                stroke="#ffb95f"
-                strokeWidth="1.8"
-                opacity="0.7"
-                transform="rotate(36 50 50)"
-              />
-              <rect
-                x="25"
-                y="25"
-                width="50"
-                height="50"
-                fill="none"
-                stroke="#c0c1ff"
-                strokeWidth="1.8"
-                opacity="0.6"
-                transform="rotate(54 50 50)"
-              />
-              <circle cx="50" cy="50" r="3" fill="#ffb95f" />
-            </svg>
-            <span className="absolute bottom-2 right-2 text-[10px] font-mono text-[#4edea3] bg-[#131b2e]/90 px-1.5 py-0.5 rounded border border-[#2d3449]/50 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#4edea3]" />
-              {workB.visualBadgeText}
-            </span>
+          {/*
+            与作品 A 同理：渲染学生真实作答内容，不再用写死的旋转矩形示意。
+          */}
+          <div
+            data-testid={`work-preview-${workB.slot}`}
+            className="w-full h-44 rounded-lg bg-[#060e20] flex flex-col justify-center relative overflow-hidden border border-[#2d3449]/60"
+          >
+            {workB.codeLines && workB.codeLines.length > 0 ? (
+              <pre className="px-4 py-3 font-mono text-[11px] leading-5 text-[#dae2fd] overflow-y-auto max-h-full whitespace-pre-wrap break-words">
+                {workB.codeLines.map((line, idx) => (
+                  <div
+                    key={idx}
+                    className={line.isHighlight ? 'text-[#4edea3]' : ''}
+                    style={{ paddingLeft: `${(line.indent || 0) * 12}px` }}
+                  >
+                    {line.text}
+                  </div>
+                ))}
+              </pre>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-2 px-6 text-center">
+                <FileQuestion size={28} className="text-[#4a5570]" />
+                <span className="text-[11px] text-[#908fa0] leading-relaxed">
+                  该作品没有可展示的作答内容
+                  <br />
+                  <span className="text-[10px] opacity-70">（原始作答流水为空或为纯数值型）</span>
+                </span>
+              </div>
+            )}
+            {workB.workContent && (
+              <span className="absolute bottom-2 right-2 text-[10px] font-mono text-[#908fa0] bg-[#131b2e]/90 px-1.5 py-0.5 rounded border border-[#2d3449]/50">
+                真实作答 · {workB.workContent.eventCount} 条事件
+              </span>
+            )}
           </div>
 
           {/* Code Snippet with Success Fix Highlight */}
-          <div className="bg-[#060e20] rounded-lg p-3 font-mono text-[11px] leading-5 border border-[#2d3449]/60 overflow-x-auto text-[#dae2fd]">
-            <div className="text-[#908fa0] mb-1"># {workB.codeTitle ?? ''}</div>
-            {(workB.codeLines ?? []).map((line, idx) => (
-              <div
-                key={idx}
-                className={`${line.isSuccess ? 'bg-[#00a572]/20 px-1 rounded -mx-1 text-[#4edea3] font-medium' : ''}`}
-                style={{ paddingLeft: `${(line.indent || 0) * 12}px` }}
-              >
-                <span>{line.text}</span>
-                {line.comment && <span className="text-[#4edea3] text-[10px] ml-2">{line.comment}</span>}
-              </div>
-            ))}
-          </div>
+          {workB.codeLines?.some((l) => l.comment) ? (
+            <div className="bg-[#060e20] rounded-lg p-3 font-mono text-[11px] leading-5 border border-[#2d3449]/60 overflow-x-auto text-[#dae2fd]">
+              <div className="text-[#908fa0] mb-1"># {workB.codeTitle ?? ''}</div>
+              {workB.codeLines
+                .filter((l) => l.comment)
+                .map((line, idx) => (
+                  <div key={idx} className={line.isSuccess ? 'bg-[#00a572]/20 px-1 rounded -mx-1' : ''}>
+                    <span className="text-[#4edea3] text-[10px]">{line.comment}</span>
+                  </div>
+                ))}
+            </div>
+          ) : null}
         </div>
       </div>
 

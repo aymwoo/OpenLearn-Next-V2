@@ -69,6 +69,7 @@ import {
   submitCSVLessons,
 } from './services/bulkImportService';
 import { SystemErrorCenterModal } from './features/modals/SystemErrorCenterModal';
+import { StageDisplayView } from './features/classroom/stage-display/StageDisplayView';
 import { useGlobalErrorCapture } from './hooks/useGlobalErrorCapture';
 
 const AGENT_PROVIDER_STORAGE_KEY = 'openlearnv2.agentProviderId';
@@ -92,6 +93,20 @@ export default function App() {
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('lessonId') : null;
   const liveClassParam =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('classId') : null;
+
+  // ── 大屏展台独立窗口（副屏 / 投影） ─────────────────────────────────────────
+  // 教师在「在线课堂」点「打开大屏展台」后由 window.open 拉起（带 lessonId）。
+  // 该窗口自行维持连接（Socket 主导 + 低频轮询兜底），与主窗口互不依赖：
+  // 教师切课节、切标签页都不会中断展台的数据流。
+  const isStageDisplayMode =
+    typeof window !== 'undefined' &&
+    (new URLSearchParams(window.location.search).get('mode') === 'stage_display' ||
+      window.location.hash.includes('stage_display'));
+  const stageLessonParam =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('lessonId') : null;
+  const stageTitleParam =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('title') : null;
+  const stageLangParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('lang') : null;
 
   // ── 课程编辑器「学生视角」预览标签页 ────────────────────────────────────────
   // 与 student_live 的区别：这是教师自己开的备课预览标签页，保留完整的常规顶栏与
@@ -1618,617 +1633,632 @@ export default function App() {
 
   return (
     <>
-      <div className="flex h-screen bg-app text-main font-sans transition-colors duration-150">
-        {/* Main Content Area: App Shell representing the Plugin Views */}
-        <div className="flex-1 flex flex-col bg-app h-full overflow-hidden">
-          {/* 全局模拟学生提示条 (Top Impersonation Banner) */}
-          {session?.role === 'teacher' && activeRole === 'student' && !isStudentLiveMode && (
-            <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 text-white px-6 py-1.5 flex items-center justify-between text-xs font-medium shadow-sm z-30 shrink-0 border-b border-amber-600/30">
-              <div className="flex items-center gap-2.5">
-                <span className="bg-black/20 text-amber-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider text-xs flex items-center gap-1">
-                  <Eye size={12} />
-                  {lang === 'zh'
-                    ? isStudentPreviewMode
-                      ? '学生视角预览'
-                      : '学生模拟模式'
-                    : isStudentPreviewMode
-                      ? 'Student Preview'
-                      : 'Student View Mode'}
-                </span>
-                <span>
-                  {lang === 'zh'
-                    ? `您当前正在以学生身份（${students.find((s) => s.id === activeStudentId)?.name || '未选择'}）预览系统界面与交互。`
-                    : `You are currently previewing the platform as student (${students.find((s) => s.id === activeStudentId)?.name || 'None'}).`}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  // 备课预览标签页里没有教师端可回，直接关闭该标签页
-                  if (isStudentPreviewMode) {
-                    window.close();
-                    return;
-                  }
-                  setActiveRole('teacher');
-                }}
-                className="bg-white text-amber-800 hover:bg-amber-50 active:bg-amber-100 font-bold px-3 py-1 rounded-md shadow-xs transition-all flex items-center gap-1.5 cursor-pointer text-xs"
-              >
-                {isStudentPreviewMode ? <X size={13} /> : <LogOut size={13} />}
-                {lang === 'zh'
-                  ? isStudentPreviewMode
-                    ? '关闭此预览标签页'
-                    : '退出模拟并返回教师端'
-                  : isStudentPreviewMode
-                    ? 'Close Preview Tab'
-                    : 'Exit Student View'}
-              </button>
-            </div>
-          )}
+      {/* 大屏展台独立窗口：占满整个视口，不渲染平台外壳（导航/侧栏/顶栏都无意义） */}
+      {isStageDisplayMode && (
+        <StageDisplayView
+          lessonId={stageLessonParam || selectedLesson}
+          lessonTitle={stageTitleParam || lessons.find((l) => l.id === (stageLessonParam || selectedLesson))?.title}
+          lang={stageLangParam === 'en' ? 'en' : 'zh'}
+        />
+      )}
 
-          {/* Top Navbar: 独立弹窗模式下渲染轻量化互动课堂专属 Header */}
-          {isStudentLiveMode ? (
-            <header className="h-13 bg-surface/95 backdrop-blur-md border-b border-theme px-4 flex items-center justify-between z-20 shrink-0 select-none shadow-xs">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-pink-500 to-rose-600 flex items-center justify-center text-white font-black shadow-sm text-sm">
-                  🎓
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h1 className="text-sm font-black text-main tracking-wide">
-                      {lang === 'zh' ? '互动课堂 · 学生端' : 'Interactive Classroom · Student Client'}
-                    </h1>
-                    <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      {lang === 'zh' ? '已与教师中控台实时联动' : 'Synced with Teacher'}
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted flex items-center gap-2">
-                    <span>
-                      {activeStudentId
-                        ? `学生: ${students.find((s) => s.id === activeStudentId)?.name || activeStudentId}`
-                        : '学生端'}
-                    </span>
-                    <span>•</span>
-                    <span>
-                      {selectedLesson
-                        ? `课节: ${lessons.find((l) => l.id === selectedLesson)?.title || selectedLesson}`
-                        : '等待教师推流课节...'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (isStudentLocked) {
-                      notifyLockedNavigation();
-                      return;
-                    }
-                    setIsFollowingTeacher(!isFollowingTeacher);
-                  }}
-                  disabled={isStudentLocked}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 shadow-2xs ${
-                    isStudentLocked ? 'cursor-not-allowed' : 'cursor-pointer'
-                  } ${
-                    isFollowingTeacher
-                      ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800'
-                      : 'bg-surface text-muted border-theme hover:text-main'
-                  } ${isStudentLocked ? 'opacity-70' : ''}`}
-                  title={
-                    isStudentLocked
-                      ? lang === 'zh'
-                        ? '全班专注锁定中，已强制跟随教师步调'
-                        : 'Class focus is locked; following the teacher is enforced'
-                      : lang === 'zh'
-                        ? '开启后，教师端切换课节/环节/Tab时，学生端将自动同步跟随'
-                        : 'Follow teacher navigation'
-                  }
-                >
-                  <RefreshCw size={12} className={isFollowingTeacher ? 'animate-spin' : ''} />
+      {!isStageDisplayMode && (
+        <div className="flex h-screen bg-app text-main font-sans transition-colors duration-150">
+          {/* Main Content Area: App Shell representing the Plugin Views */}
+          <div className="flex-1 flex flex-col bg-app h-full overflow-hidden">
+            {/* 全局模拟学生提示条 (Top Impersonation Banner) */}
+            {session?.role === 'teacher' && activeRole === 'student' && !isStudentLiveMode && (
+              <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-orange-500 text-white px-6 py-1.5 flex items-center justify-between text-xs font-medium shadow-sm z-30 shrink-0 border-b border-amber-600/30">
+                <div className="flex items-center gap-2.5">
+                  <span className="bg-black/20 text-amber-100 px-2 py-0.5 rounded font-bold uppercase tracking-wider text-xs flex items-center gap-1">
+                    <Eye size={12} />
+                    {lang === 'zh'
+                      ? isStudentPreviewMode
+                        ? '学生视角预览'
+                        : '学生模拟模式'
+                      : isStudentPreviewMode
+                        ? 'Student Preview'
+                        : 'Student View Mode'}
+                  </span>
                   <span>
                     {lang === 'zh'
-                      ? `跟随教师步调: ${isFollowingTeacher ? '开' : '关'}`
-                      : `Follow Teacher: ${isFollowingTeacher ? 'ON' : 'OFF'}`}
+                      ? `您当前正在以学生身份（${students.find((s) => s.id === activeStudentId)?.name || '未选择'}）预览系统界面与交互。`
+                      : `You are currently previewing the platform as student (${students.find((s) => s.id === activeStudentId)?.name || 'None'}).`}
                   </span>
-                </button>
-
-                <FontSizeSelector lang={lang} />
-
+                </div>
                 <button
                   type="button"
                   onClick={() => {
-                    if (!document.fullscreenElement) {
-                      document.documentElement.requestFullscreen().catch(() => {});
-                    } else {
-                      document.exitFullscreen().catch(() => {});
+                    // 备课预览标签页里没有教师端可回，直接关闭该标签页
+                    if (isStudentPreviewMode) {
+                      window.close();
+                      return;
                     }
+                    setActiveRole('teacher');
                   }}
-                  className="p-1.5 text-muted hover:text-main rounded-lg border border-theme hover:bg-surface-secondary transition-colors cursor-pointer"
-                  title={lang === 'zh' ? '切换全屏' : 'Toggle Fullscreen'}
+                  className="bg-white text-amber-800 hover:bg-amber-50 active:bg-amber-100 font-bold px-3 py-1 rounded-md shadow-xs transition-all flex items-center gap-1.5 cursor-pointer text-xs"
                 >
-                  <Maximize2 size={14} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => window.close()}
-                  className="px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-lg transition-colors cursor-pointer"
-                  title={lang === 'zh' ? '关闭学生端Tab' : 'Close Tab'}
-                >
-                  {lang === 'zh' ? '关闭Tab' : 'Close Tab'}
+                  {isStudentPreviewMode ? <X size={13} /> : <LogOut size={13} />}
+                  {lang === 'zh'
+                    ? isStudentPreviewMode
+                      ? '关闭此预览标签页'
+                      : '退出模拟并返回教师端'
+                    : isStudentPreviewMode
+                      ? 'Close Preview Tab'
+                      : 'Exit Student View'}
                 </button>
               </div>
-            </header>
-          ) : (
-            <AppHeader
-              activeRole={activeRole}
-              setActiveRole={setActiveRole}
-              studentPreviewTab={isStudentPreviewMode}
-              lang={lang}
-              teacherTab={teacherTab}
-              studentViewStatus={studentViewStatus}
-              session={session}
-              activeStudentId={activeStudentId}
-              students={students}
-              studentDashboardData={studentDashboardData}
-              isNotificationsOpen={isNotificationsOpen}
-              studentNotifications={studentNotifications}
-              unreadNotifications={unreadNotifications}
-              readNotifications={readNotifications}
-              selectedNotificationForModal={selectedNotificationForModal}
-              dbConnected={dbConnected}
-              dbStatus={dbStatus}
-              siteInfo={siteInfo}
-              setActiveStudentId={setActiveStudentId}
-              setReadNotifications={setReadNotifications}
-              setIsSystemResourceLibraryOpen={setIsSystemResourceLibraryOpen}
-              setProfileOpen={setProfileOpen}
-              setTeacherTab={setTeacherTab}
-              setStudentViewStatus={setStudentViewStatus}
-              setIsNotificationsOpen={setIsNotificationsOpen}
-              setSelectedNotificationForModal={setSelectedNotificationForModal}
-              handleLogout={handleLogout}
-              toggleLanguage={toggleLanguage}
-              isStudentLocked={isStudentLocked}
-              onBlockedNavigate={notifyLockedNavigation}
-            />
-          )}
+            )}
 
-          <ProfileModal
-            open={profileOpen}
-            session={session}
+            {/* Top Navbar: 独立弹窗模式下渲染轻量化互动课堂专属 Header */}
+            {isStudentLiveMode ? (
+              <header className="h-13 bg-surface/95 backdrop-blur-md border-b border-theme px-4 flex items-center justify-between z-20 shrink-0 select-none shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-pink-500 to-rose-600 flex items-center justify-center text-white font-black shadow-sm text-sm">
+                    🎓
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-sm font-black text-main tracking-wide">
+                        {lang === 'zh' ? '互动课堂 · 学生端' : 'Interactive Classroom · Student Client'}
+                      </h1>
+                      <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        {lang === 'zh' ? '已与教师中控台实时联动' : 'Synced with Teacher'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted flex items-center gap-2">
+                      <span>
+                        {activeStudentId
+                          ? `学生: ${students.find((s) => s.id === activeStudentId)?.name || activeStudentId}`
+                          : '学生端'}
+                      </span>
+                      <span>•</span>
+                      <span>
+                        {selectedLesson
+                          ? `课节: ${lessons.find((l) => l.id === selectedLesson)?.title || selectedLesson}`
+                          : '等待教师推流课节...'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isStudentLocked) {
+                        notifyLockedNavigation();
+                        return;
+                      }
+                      setIsFollowingTeacher(!isFollowingTeacher);
+                    }}
+                    disabled={isStudentLocked}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 shadow-2xs ${
+                      isStudentLocked ? 'cursor-not-allowed' : 'cursor-pointer'
+                    } ${
+                      isFollowingTeacher
+                        ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800'
+                        : 'bg-surface text-muted border-theme hover:text-main'
+                    } ${isStudentLocked ? 'opacity-70' : ''}`}
+                    title={
+                      isStudentLocked
+                        ? lang === 'zh'
+                          ? '全班专注锁定中，已强制跟随教师步调'
+                          : 'Class focus is locked; following the teacher is enforced'
+                        : lang === 'zh'
+                          ? '开启后，教师端切换课节/环节/Tab时，学生端将自动同步跟随'
+                          : 'Follow teacher navigation'
+                    }
+                  >
+                    <RefreshCw size={12} className={isFollowingTeacher ? 'animate-spin' : ''} />
+                    <span>
+                      {lang === 'zh'
+                        ? `跟随教师步调: ${isFollowingTeacher ? '开' : '关'}`
+                        : `Follow Teacher: ${isFollowingTeacher ? 'ON' : 'OFF'}`}
+                    </span>
+                  </button>
+
+                  <FontSizeSelector lang={lang} />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!document.fullscreenElement) {
+                        document.documentElement.requestFullscreen().catch(() => {});
+                      } else {
+                        document.exitFullscreen().catch(() => {});
+                      }
+                    }}
+                    className="p-1.5 text-muted hover:text-main rounded-lg border border-theme hover:bg-surface-secondary transition-colors cursor-pointer"
+                    title={lang === 'zh' ? '切换全屏' : 'Toggle Fullscreen'}
+                  >
+                    <Maximize2 size={14} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => window.close()}
+                    className="px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-lg transition-colors cursor-pointer"
+                    title={lang === 'zh' ? '关闭学生端Tab' : 'Close Tab'}
+                  >
+                    {lang === 'zh' ? '关闭Tab' : 'Close Tab'}
+                  </button>
+                </div>
+              </header>
+            ) : (
+              <AppHeader
+                activeRole={activeRole}
+                setActiveRole={setActiveRole}
+                studentPreviewTab={isStudentPreviewMode}
+                lang={lang}
+                teacherTab={teacherTab}
+                studentViewStatus={studentViewStatus}
+                session={session}
+                activeStudentId={activeStudentId}
+                students={students}
+                studentDashboardData={studentDashboardData}
+                isNotificationsOpen={isNotificationsOpen}
+                studentNotifications={studentNotifications}
+                unreadNotifications={unreadNotifications}
+                readNotifications={readNotifications}
+                selectedNotificationForModal={selectedNotificationForModal}
+                dbConnected={dbConnected}
+                dbStatus={dbStatus}
+                siteInfo={siteInfo}
+                setActiveStudentId={setActiveStudentId}
+                setReadNotifications={setReadNotifications}
+                setIsSystemResourceLibraryOpen={setIsSystemResourceLibraryOpen}
+                setProfileOpen={setProfileOpen}
+                setTeacherTab={setTeacherTab}
+                setStudentViewStatus={setStudentViewStatus}
+                setIsNotificationsOpen={setIsNotificationsOpen}
+                setSelectedNotificationForModal={setSelectedNotificationForModal}
+                handleLogout={handleLogout}
+                toggleLanguage={toggleLanguage}
+                isStudentLocked={isStudentLocked}
+                onBlockedNavigate={notifyLockedNavigation}
+              />
+            )}
+
+            <ProfileModal
+              open={profileOpen}
+              session={session}
+              lang={lang}
+              onClose={() => setProfileOpen(false)}
+              onSaved={(name) => {
+                if (session) setSession({ ...session, name });
+                setProfileOpen(false);
+              }}
+              onAvatar={(avatar) => {
+                if (session) setSession({ ...session, avatar: avatar ?? undefined });
+              }}
+            />
+
+            <AppShell
+              students={students}
+              activeStudentId={activeStudentId}
+              isStudentLocked={isStudentLocked}
+              studentViewStatus={studentViewStatus}
+              studentDashboardData={studentDashboardData}
+              readNotifications={readNotifications}
+              setReadNotifications={setReadNotifications}
+              addToast={addToast}
+              lang={lang}
+              setSelectedLesson={setSelectedLesson}
+              setStudentViewStatus={setStudentViewStatus}
+              setSelectedAssignment={setSelectedAssignment}
+              setQuizStudentAnswers={setQuizStudentAnswers}
+              setSubAssignmentTab={setSubAssignmentTab}
+              lessons={lessons}
+              selectedLesson={selectedLesson}
+              studentFullscreenPanel={studentFullscreenPanel}
+              setStudentFullscreenPanel={setStudentFullscreenPanel}
+              timelineSegments={timelineSegments}
+              activeSegmentId={activeSegmentId}
+              setActiveSegmentId={setActiveSegmentId}
+              localProgressPercent={localProgressPercent}
+              setLocalProgressPercent={setLocalProgressPercent}
+              updateStudentProgress={updateStudentProgress}
+              isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
+              setIsStudentLessonContentCollapsed={setIsStudentLessonContentCollapsed}
+              studentLessonTab={studentLessonTab}
+              setStudentLessonTab={setStudentLessonTab}
+              elements={elements}
+              activeRole={activeRole}
+              fetchElements={fetchElements}
+              currentVfsParent={currentVfsParent}
+              setCurrentVfsParent={setCurrentVfsParent}
+              vfsNodes={vfsNodes}
+              studentSelectedCourseware={studentSelectedCourseware}
+              setStudentSelectedCourseware={setStudentSelectedCourseware}
+              selectedAssignment={selectedAssignment}
+              quizStudentAnswers={quizStudentAnswers}
+              submitQuizAssignment={submitQuizAssignment}
+              subAssignmentTab={subAssignmentTab}
+              mainNavCollapsed={mainNavCollapsed}
+              setMainNavCollapsed={setMainNavCollapsed}
+              teacherTab={teacherTab}
+              setTeacherTab={setTeacherTab}
+              session={session}
+              todaySchedules={todaySchedules}
+              t={t}
+              classes={classes}
+              approvals={approvals}
+              processes={processes}
+              isApprovalsCollapsed={isApprovalsCollapsed}
+              setIsApprovalsCollapsed={setIsApprovalsCollapsed}
+              isProcessesCollapsed={isProcessesCollapsed}
+              setIsProcessesCollapsed={setIsProcessesCollapsed}
+              scoreOverrides={scoreOverrides}
+              setScoreOverrides={setScoreOverrides}
+              handleApprove={handleApprove}
+              handleReject={handleReject}
+              showLogs={showLogs}
+              setShowLogs={setShowLogs}
+              processLogsContent={processLogsContent}
+              showProcessLogs={showProcessLogs}
+              fetchProcessLogs={fetchProcessLogs}
+              setShowProcessLogs={setShowProcessLogs}
+              handleQuickScheduleClass={handleQuickScheduleClass}
+              handleQuickGenerateAssignment={handleQuickGenerateAssignment}
+              handleQuickCreateLesson={handleQuickCreateLesson}
+              setActiveRole={setActiveRole}
+              editorSaveStatus={editorSaveStatus}
+              setEditorSaveStatus={setEditorSaveStatus}
+              editorLastSavedTime={editorLastSavedTime}
+              setEditorLastSavedTime={setEditorLastSavedTime}
+              handlePaletteActivate={handlePaletteActivate}
+              draggedSegmentIdx={draggedSegmentIdx}
+              setDraggedSegmentIdx={setDraggedSegmentIdx}
+              saveTimeline={saveTimeline}
+              editorPanelsExpanded={editorPanelsExpanded}
+              setEditorPanelsExpanded={setEditorPanelsExpanded}
+              whiteboardRef={whiteboardRef}
+              paletteEdit={paletteEdit}
+              handlePaletteConfirm={handlePaletteConfirm}
+              setPaletteEdit={setPaletteEdit}
+              plugins={plugins}
+              liveClassSelectedClassId={liveClassSelectedClassId}
+              setLiveClassSelectedClassId={setLiveClassSelectedClassId}
+              liveClassIsActive={liveClassIsActive}
+              setLiveClassIsActive={setLiveClassIsActive}
+              liveClassTimeRemaining={liveClassTimeRemaining}
+              setLiveClassTimeRemaining={setLiveClassTimeRemaining}
+              liveClassFeed={liveClassFeed}
+              setLiveClassFeed={setLiveClassFeed}
+              liveClassAcknowledgedMap={liveClassAcknowledgedMap}
+              setLiveClassAcknowledgedMap={setLiveClassAcknowledgedMap}
+              onlineStudentIds={onlineStudentIds}
+              activeStudentLessons={activeStudentLessons}
+              liveClassStudentProgress={liveClassStudentProgress}
+              storeTab={storeTab}
+              setStoreTab={setStoreTab}
+              pluginCode={pluginCode}
+              setPluginCode={setPluginCode}
+              installingPlugin={installingPlugin}
+              onInstall={handleInstallPlugin}
+              onZipUpload={handleZipPluginUpload}
+              onToggle={handleTogglePlugin}
+              onDelete={handleDeletePlugin}
+              lessonsSearchQuery={lessonsSearchQuery}
+              setLessonsSearchQuery={setLessonsSearchQuery}
+              lessonsSortOrder={lessonsSortOrder}
+              setLessonsSortOrder={setLessonsSortOrder}
+              filteredLessons={filteredAndSortedLessons}
+              onOpenImportLessons={() => {
+                setImportStatus('idle');
+                setImportProgress(0);
+                setImportProgressTotal(0);
+                setImportErrorMsg('');
+                setPreviewImportData([]);
+                setIsImportLessonsOpen(true);
+              }}
+              onOpenCourseWizard={() => {
+                setWizardStep(1);
+                setIsCourseWizardOpen(true);
+              }}
+              onViewCourse={(lessonId) => {
+                setTeacherTab('lesson_editor');
+                setSelectedLesson(lessonId);
+              }}
+              onDeleteCourse={handleDeleteCourse}
+              onCopyCourse={handleCopyCourse}
+              filterEnrollment={filterEnrollment}
+              setFilterEnrollment={setFilterEnrollment}
+              filterHasContent={filterHasContent}
+              setFilterHasContent={setFilterHasContent}
+              filterThisMonth={filterThisMonth}
+              setFilterThisMonth={setFilterThisMonth}
+              copyingLessonId={copyingLessonId}
+              onSchedulesUpdated={fetchTodaySchedules}
+              onLogout={handleLogout}
+              aiProviders={aiProviders}
+              testingProviderId={testingProviderId}
+              onAIProvidersChanged={fetchAIProviders}
+              onTriggerTour={() => setIsTourOpen(true)}
+              siteInfo={siteInfo}
+              onSiteInfoChanged={setSiteInfo}
+              computerLabs={computerLabs}
+              onRefresh={fetchLabs}
+              registeredCommands={registeredCommands}
+              fetchRegisteredCommands={fetchRegisteredCommands}
+              batchMode={batchMode}
+              selectedClassIds={selectedClassIds}
+              setSelectedClassIds={setSelectedClassIds}
+              setSelectedStudentIds={setSelectedStudentIds}
+              setBatchMode={setBatchMode}
+              expandedClassId={expandedClassId}
+              setExpandedClassId={setExpandedClassId}
+              exportTooltipOpen={exportTooltipOpen}
+              setExportTooltipOpen={setExportTooltipOpen}
+              exportDropdownOpen={exportDropdownOpen}
+              setExportDropdownOpen={setExportDropdownOpen}
+              isExportingAllCombined={isExportingAllCombined}
+              loadingExportClassId={loadingExportClassId}
+              classStudentsMap={classStudentsMap}
+              setClassStudentsMap={setClassStudentsMap}
+              expandedStudentId={expandedStudentId}
+              setExpandedStudentId={setExpandedStudentId}
+              selectedStudentIds={selectedStudentIds}
+              rosterViewMode={rosterViewMode}
+              setRosterViewMode={setRosterViewMode}
+              rosterSearchQuery={rosterSearchQuery}
+              setRosterSearchQuery={setRosterSearchQuery}
+              rosterTagFilter={rosterTagFilter}
+              setRosterTagFilter={setRosterTagFilter}
+              toggleSelectAllStudents={toggleSelectAllStudents}
+              handleBatchDeleteStudents={handleBatchDeleteStudents}
+              handleBatchResetPassword={handleBatchResetPassword}
+              handleBatchTransferStudents={handleBatchTransferStudents}
+              handleBatchSetLockedLesson={handleBatchSetLockedLesson}
+              toggleStudentSelection={toggleStudentSelection}
+              get30DayAverageWarning={get30DayAverageWarning}
+              studentProgressMap={studentProgressMap}
+              studentActiveTabs={studentActiveTabs}
+              setStudentActiveTabs={setStudentActiveTabs}
+              setStudents={setStudents}
+              fetchClassStudents={fetchClassStudents}
+              fetchStudents={fetchStudents}
+              parseCSV={parseCSV}
+              setImportError={setImportError}
+              setImportSuccess={setImportSuccess}
+              setShowImportModal={setShowImportModal}
+              fetchClasses={fetchClasses}
+              classSubmissionFilters={classSubmissionFilters}
+              setClassSubmissionFilters={setClassSubmissionFilters}
+              classActiveTabs={classActiveTabs}
+              setClassActiveTabs={setClassActiveTabs}
+              classProgressMap={classProgressMap}
+              classSchedulesMap={classSchedulesMap}
+              classDashboardMap={classDashboardMap}
+              assignmentSortOrder={assignmentSortOrder}
+              setAssignmentSortOrder={setAssignmentSortOrder}
+              isGeneratingPDFReport={isGeneratingPDFReport}
+              handleGeneratePDFReport={handleGeneratePDFReport}
+              setExportClassId={setExportClassId}
+              setExportClassName={setExportClassName}
+              setQuizzesWeight={setQuizzesWeight}
+              setAssignmentsWeight={setAssignmentsWeight}
+              setCustomCategoryOverrides={setCustomCategoryOverrides}
+              setIsExportWeightModalOpen={setIsExportWeightModalOpen}
+              isGeneratingAssignment={isGeneratingAssignment}
+              setQuizGeneratorClassId={setQuizGeneratorClassId}
+              setQuizGenMode={setQuizGenMode}
+              setQuizGenSelectedLessonId={setQuizGenSelectedLessonId}
+              setQuizGenTopic={setQuizGenTopic}
+              setSuggestedObjectives={setSuggestedObjectives}
+              setSuggestedQuestions={setSuggestedQuestions}
+              setIsQuizGeneratorOpen={setIsQuizGeneratorOpen}
+              setActiveStudentId={setActiveStudentId}
+              isGrading={isGrading}
+              setIsGrading={setIsGrading}
+              fetchClassDashboard={fetchClassDashboard}
+              newScheduleDate={newScheduleDate}
+              setNewScheduleDate={setNewScheduleDate}
+              newScheduleLessonId={newScheduleLessonId}
+              setNewScheduleLessonId={setNewScheduleLessonId}
+              expandedScheduleId={expandedScheduleId}
+              setExpandedScheduleId={setExpandedScheduleId}
+              fetchScheduleAttendance={fetchScheduleAttendance}
+              scheduleAttendanceMap={scheduleAttendanceMap}
+              toggleSelectAllClasses={toggleSelectAllClasses}
+              handleBatchDeleteClasses={handleBatchDeleteClasses}
+              handleBatchExportClasses={handleBatchExportClasses}
+              handleBatchSetPasscode={handleBatchSetPasscode}
+              handleBatchScheduleClasses={handleBatchScheduleClasses}
+              handleExportAllClassesCombined={handleExportAllClassesCombined}
+              triggerExportForClass={triggerExportForClass}
+              fetchClassProgress={fetchClassProgress}
+              fetchClassSchedules={fetchClassSchedules}
+              fetchStudentProgress={fetchStudentProgress}
+              toggleClassSelection={toggleClassSelection}
+              socketRef={socketRef}
+              setShowCoursewareHub={setShowCoursewareHub}
+              fetchTodaySchedules={fetchTodaySchedules}
+            />
+          </div>
+
+          <RightSidebar
+            showRightSidebar={showRightSidebar}
+            setShowRightSidebar={setShowRightSidebar}
+            rightSidebarTab={rightSidebarTab}
+            setRightSidebarTab={setRightSidebarTab}
+            effectiveAgentProviderId={effectiveAgentProviderId}
+            agentProviderId={agentProviderId}
+            setAgentProviderId={setAgentProviderId}
+            personaId={personaId}
+            setPersonaId={setPersonaId}
+            aiProviders={aiProviders}
+            selectedAgentProvider={selectedAgentProvider}
+            chatLog={chatLog}
+            loading={loading}
+            input={input}
+            setInput={setInput}
+            handleSend={handleSend}
+            chatAttachments={chatAttachments}
+            setChatAttachments={setChatAttachments}
+            handleChatFileChange={handleChatFileChange}
+            handleChatDrop={handleChatDrop}
+            onClearAgentMemory={handleClearAgentMemory}
+            events={events}
             lang={lang}
-            onClose={() => setProfileOpen(false)}
-            onSaved={(name) => {
-              if (session) setSession({ ...session, name });
-              setProfileOpen(false);
-            }}
-            onAvatar={(avatar) => {
-              if (session) setSession({ ...session, avatar: avatar ?? undefined });
-            }}
+            t={t}
           />
 
-          <AppShell
-            students={students}
-            activeStudentId={activeStudentId}
-            isStudentLocked={isStudentLocked}
-            studentViewStatus={studentViewStatus}
-            studentDashboardData={studentDashboardData}
-            readNotifications={readNotifications}
-            setReadNotifications={setReadNotifications}
+          <AppModals
+            lang={lang as 'zh' | 'en'}
+            t={t}
+            courseWizard={courseWizard}
+            quizGenerator={quizGenerator}
+            classBatch={classBatch}
+            studentNotificationsHook={studentNotificationsHook}
+            showImportModal={showImportModal}
+            setShowImportModal={setShowImportModal}
+            handleImportFile={handleImportFile}
+            importError={importError}
+            importSuccess={importSuccess}
+            isImporting={isImporting}
+            downloadCSVTemplate={downloadCSVTemplate}
             addToast={addToast}
-            lang={lang}
-            setSelectedLesson={setSelectedLesson}
-            setStudentViewStatus={setStudentViewStatus}
-            setSelectedAssignment={setSelectedAssignment}
-            setQuizStudentAnswers={setQuizStudentAnswers}
-            setSubAssignmentTab={setSubAssignmentTab}
+            generateTemplateContent={generateTemplateContent}
+            isImportLessonsOpen={isImportLessonsOpen}
+            setIsImportLessonsOpen={setIsImportLessonsOpen}
+            importStatus={importStatus}
+            setIsDraggingImport={setIsDraggingImport}
+            handleCSVFileChange={handleCSVFileChange}
+            downloadCsvTemplate={downloadCsvTemplate}
+            isDraggingImport={isDraggingImport}
+            previewImportData={previewImportData}
+            setPreviewImportData={setPreviewImportData}
+            setImportStatus={setImportStatus}
+            importProgress={importProgress}
+            importProgressTotal={importProgressTotal}
+            importErrorMsg={importErrorMsg}
+            setImportErrorMsg={setImportErrorMsg}
+            handleCSVImportSubmit={handleCSVImportSubmit}
             lessons={lessons}
-            selectedLesson={selectedLesson}
-            studentFullscreenPanel={studentFullscreenPanel}
-            setStudentFullscreenPanel={setStudentFullscreenPanel}
-            timelineSegments={timelineSegments}
-            activeSegmentId={activeSegmentId}
-            setActiveSegmentId={setActiveSegmentId}
-            localProgressPercent={localProgressPercent}
-            setLocalProgressPercent={setLocalProgressPercent}
-            updateStudentProgress={updateStudentProgress}
-            isStudentLessonContentCollapsed={isStudentLessonContentCollapsed}
-            setIsStudentLessonContentCollapsed={setIsStudentLessonContentCollapsed}
-            studentLessonTab={studentLessonTab}
-            setStudentLessonTab={setStudentLessonTab}
-            elements={elements}
-            activeRole={activeRole}
-            fetchElements={fetchElements}
+            fetchClassDashboard={fetchClassDashboard}
             currentVfsParent={currentVfsParent}
             setCurrentVfsParent={setCurrentVfsParent}
             vfsNodes={vfsNodes}
-            studentSelectedCourseware={studentSelectedCourseware}
-            setStudentSelectedCourseware={setStudentSelectedCourseware}
-            selectedAssignment={selectedAssignment}
-            quizStudentAnswers={quizStudentAnswers}
-            submitQuizAssignment={submitQuizAssignment}
-            subAssignmentTab={subAssignmentTab}
-            mainNavCollapsed={mainNavCollapsed}
-            setMainNavCollapsed={setMainNavCollapsed}
-            teacherTab={teacherTab}
-            setTeacherTab={setTeacherTab}
-            session={session}
-            todaySchedules={todaySchedules}
-            t={t}
-            classes={classes}
-            approvals={approvals}
-            processes={processes}
-            isApprovalsCollapsed={isApprovalsCollapsed}
-            setIsApprovalsCollapsed={setIsApprovalsCollapsed}
-            isProcessesCollapsed={isProcessesCollapsed}
-            setIsProcessesCollapsed={setIsProcessesCollapsed}
-            scoreOverrides={scoreOverrides}
-            setScoreOverrides={setScoreOverrides}
-            handleApprove={handleApprove}
-            handleReject={handleReject}
-            showLogs={showLogs}
-            setShowLogs={setShowLogs}
-            processLogsContent={processLogsContent}
             showProcessLogs={showProcessLogs}
-            fetchProcessLogs={fetchProcessLogs}
             setShowProcessLogs={setShowProcessLogs}
-            handleQuickScheduleClass={handleQuickScheduleClass}
-            handleQuickGenerateAssignment={handleQuickGenerateAssignment}
-            handleQuickCreateLesson={handleQuickCreateLesson}
-            setActiveRole={setActiveRole}
-            editorSaveStatus={editorSaveStatus}
-            setEditorSaveStatus={setEditorSaveStatus}
-            editorLastSavedTime={editorLastSavedTime}
-            setEditorLastSavedTime={setEditorLastSavedTime}
-            handlePaletteActivate={handlePaletteActivate}
-            draggedSegmentIdx={draggedSegmentIdx}
-            setDraggedSegmentIdx={setDraggedSegmentIdx}
-            saveTimeline={saveTimeline}
-            editorPanelsExpanded={editorPanelsExpanded}
-            setEditorPanelsExpanded={setEditorPanelsExpanded}
-            whiteboardRef={whiteboardRef}
-            paletteEdit={paletteEdit}
-            handlePaletteConfirm={handlePaletteConfirm}
-            setPaletteEdit={setPaletteEdit}
-            plugins={plugins}
-            liveClassSelectedClassId={liveClassSelectedClassId}
-            setLiveClassSelectedClassId={setLiveClassSelectedClassId}
-            liveClassIsActive={liveClassIsActive}
-            setLiveClassIsActive={setLiveClassIsActive}
-            liveClassTimeRemaining={liveClassTimeRemaining}
-            setLiveClassTimeRemaining={setLiveClassTimeRemaining}
-            liveClassFeed={liveClassFeed}
-            setLiveClassFeed={setLiveClassFeed}
-            liveClassAcknowledgedMap={liveClassAcknowledgedMap}
-            setLiveClassAcknowledgedMap={setLiveClassAcknowledgedMap}
-            onlineStudentIds={onlineStudentIds}
-            activeStudentLessons={activeStudentLessons}
-            liveClassStudentProgress={liveClassStudentProgress}
-            storeTab={storeTab}
-            setStoreTab={setStoreTab}
-            pluginCode={pluginCode}
-            setPluginCode={setPluginCode}
-            installingPlugin={installingPlugin}
-            onInstall={handleInstallPlugin}
-            onZipUpload={handleZipPluginUpload}
-            onToggle={handleTogglePlugin}
-            onDelete={handleDeletePlugin}
-            lessonsSearchQuery={lessonsSearchQuery}
-            setLessonsSearchQuery={setLessonsSearchQuery}
-            lessonsSortOrder={lessonsSortOrder}
-            setLessonsSortOrder={setLessonsSortOrder}
-            filteredLessons={filteredAndSortedLessons}
-            onOpenImportLessons={() => {
-              setImportStatus('idle');
-              setImportProgress(0);
-              setImportProgressTotal(0);
-              setImportErrorMsg('');
-              setPreviewImportData([]);
-              setIsImportLessonsOpen(true);
-            }}
-            onOpenCourseWizard={() => {
-              setWizardStep(1);
-              setIsCourseWizardOpen(true);
-            }}
-            onViewCourse={(lessonId) => {
-              setTeacherTab('lesson_editor');
-              setSelectedLesson(lessonId);
-            }}
-            onDeleteCourse={handleDeleteCourse}
-            onCopyCourse={handleCopyCourse}
-            filterEnrollment={filterEnrollment}
-            setFilterEnrollment={setFilterEnrollment}
-            filterHasContent={filterHasContent}
-            setFilterHasContent={setFilterHasContent}
-            filterThisMonth={filterThisMonth}
-            setFilterThisMonth={setFilterThisMonth}
-            copyingLessonId={copyingLessonId}
-            onSchedulesUpdated={fetchTodaySchedules}
-            onLogout={handleLogout}
-            aiProviders={aiProviders}
-            testingProviderId={testingProviderId}
-            onAIProvidersChanged={fetchAIProviders}
-            onTriggerTour={() => setIsTourOpen(true)}
-            siteInfo={siteInfo}
-            onSiteInfoChanged={setSiteInfo}
-            computerLabs={computerLabs}
-            onRefresh={fetchLabs}
-            registeredCommands={registeredCommands}
-            fetchRegisteredCommands={fetchRegisteredCommands}
-            batchMode={batchMode}
-            selectedClassIds={selectedClassIds}
-            setSelectedClassIds={setSelectedClassIds}
-            setSelectedStudentIds={setSelectedStudentIds}
-            setBatchMode={setBatchMode}
+            processLogsContent={processLogsContent}
+            isCloudDriveOpen={isCloudDriveOpen}
+            setIsCloudDriveOpen={setIsCloudDriveOpen}
+            cloudDrivePreviewNode={cloudDrivePreviewNode}
+            setCloudDrivePreviewNode={setCloudDrivePreviewNode}
+            isSystemResourceLibraryOpen={isSystemResourceLibraryOpen}
+            setIsSystemResourceLibraryOpen={setIsSystemResourceLibraryOpen}
+            systemResourceTab={systemResourceTab}
+            setSystemResourceTab={setSystemResourceTab}
+            selectedLibraryResourceId={selectedLibraryResourceId}
+            setSelectedLibraryResourceId={setSelectedLibraryResourceId}
+            loadingLibraryResources={loadingLibraryResources}
+            libraryResources={libraryResources}
+            fetchLibraryResources={fetchLibraryResources}
+            classes={classes}
             expandedClassId={expandedClassId}
-            setExpandedClassId={setExpandedClassId}
-            exportTooltipOpen={exportTooltipOpen}
-            setExportTooltipOpen={setExportTooltipOpen}
-            exportDropdownOpen={exportDropdownOpen}
-            setExportDropdownOpen={setExportDropdownOpen}
-            isExportingAllCombined={isExportingAllCombined}
-            loadingExportClassId={loadingExportClassId}
-            classStudentsMap={classStudentsMap}
-            setClassStudentsMap={setClassStudentsMap}
-            expandedStudentId={expandedStudentId}
-            setExpandedStudentId={setExpandedStudentId}
-            selectedStudentIds={selectedStudentIds}
-            rosterViewMode={rosterViewMode}
-            setRosterViewMode={setRosterViewMode}
-            rosterSearchQuery={rosterSearchQuery}
-            setRosterSearchQuery={setRosterSearchQuery}
-            rosterTagFilter={rosterTagFilter}
-            setRosterTagFilter={setRosterTagFilter}
-            toggleSelectAllStudents={toggleSelectAllStudents}
-            handleBatchDeleteStudents={handleBatchDeleteStudents}
-            handleBatchResetPassword={handleBatchResetPassword}
-            handleBatchTransferStudents={handleBatchTransferStudents}
-            handleBatchSetLockedLesson={handleBatchSetLockedLesson}
-            toggleStudentSelection={toggleStudentSelection}
-            get30DayAverageWarning={get30DayAverageWarning}
-            studentProgressMap={studentProgressMap}
-            studentActiveTabs={studentActiveTabs}
-            setStudentActiveTabs={setStudentActiveTabs}
-            setStudents={setStudents}
-            fetchClassStudents={fetchClassStudents}
-            fetchStudents={fetchStudents}
-            parseCSV={parseCSV}
-            setImportError={setImportError}
-            setImportSuccess={setImportSuccess}
-            setShowImportModal={setShowImportModal}
-            fetchClasses={fetchClasses}
-            classSubmissionFilters={classSubmissionFilters}
-            setClassSubmissionFilters={setClassSubmissionFilters}
-            classActiveTabs={classActiveTabs}
-            setClassActiveTabs={setClassActiveTabs}
-            classProgressMap={classProgressMap}
-            classSchedulesMap={classSchedulesMap}
-            classDashboardMap={classDashboardMap}
-            assignmentSortOrder={assignmentSortOrder}
-            setAssignmentSortOrder={setAssignmentSortOrder}
-            isGeneratingPDFReport={isGeneratingPDFReport}
-            handleGeneratePDFReport={handleGeneratePDFReport}
-            setExportClassId={setExportClassId}
-            setExportClassName={setExportClassName}
-            setQuizzesWeight={setQuizzesWeight}
-            setAssignmentsWeight={setAssignmentsWeight}
-            setCustomCategoryOverrides={setCustomCategoryOverrides}
+            isExportWeightModalOpen={isExportWeightModalOpen}
             setIsExportWeightModalOpen={setIsExportWeightModalOpen}
-            isGeneratingAssignment={isGeneratingAssignment}
-            setQuizGeneratorClassId={setQuizGeneratorClassId}
-            setQuizGenMode={setQuizGenMode}
-            setQuizGenSelectedLessonId={setQuizGenSelectedLessonId}
-            setQuizGenTopic={setQuizGenTopic}
-            setSuggestedObjectives={setSuggestedObjectives}
-            setSuggestedQuestions={setSuggestedQuestions}
-            setIsQuizGeneratorOpen={setIsQuizGeneratorOpen}
-            setActiveStudentId={setActiveStudentId}
-            isGrading={isGrading}
-            setIsGrading={setIsGrading}
-            fetchClassDashboard={fetchClassDashboard}
-            newScheduleDate={newScheduleDate}
-            setNewScheduleDate={setNewScheduleDate}
-            newScheduleLessonId={newScheduleLessonId}
-            setNewScheduleLessonId={setNewScheduleLessonId}
-            expandedScheduleId={expandedScheduleId}
-            setExpandedScheduleId={setExpandedScheduleId}
-            fetchScheduleAttendance={fetchScheduleAttendance}
-            scheduleAttendanceMap={scheduleAttendanceMap}
-            toggleSelectAllClasses={toggleSelectAllClasses}
-            handleBatchDeleteClasses={handleBatchDeleteClasses}
-            handleBatchExportClasses={handleBatchExportClasses}
-            handleBatchSetPasscode={handleBatchSetPasscode}
-            handleBatchScheduleClasses={handleBatchScheduleClasses}
-            handleExportAllClassesCombined={handleExportAllClassesCombined}
-            triggerExportForClass={triggerExportForClass}
-            fetchClassProgress={fetchClassProgress}
-            fetchClassSchedules={fetchClassSchedules}
-            fetchStudentProgress={fetchStudentProgress}
-            toggleClassSelection={toggleClassSelection}
-            socketRef={socketRef}
+            quizzesWeight={quizzesWeight}
+            setQuizzesWeight={setQuizzesWeight}
+            assignmentsWeight={assignmentsWeight}
+            setAssignmentsWeight={setAssignmentsWeight}
+            handleQuizzesWeightChange={handleQuizzesWeightChange}
+            handleAssignmentsWeightChange={handleAssignmentsWeightChange}
+            customCategoryOverrides={customCategoryOverrides}
+            setCustomCategoryOverrides={setCustomCategoryOverrides}
+            classDashboardMap={classDashboardMap}
+            exportClassId={exportClassId}
+            exportClassName={exportClassName}
+            csvPreviewData={csvPreviewData}
+            handleExportGrades={handleExportGrades}
+            setSelectedAssignment={setSelectedAssignment}
+            setStudentViewStatus={setStudentViewStatus}
+            setQuizStudentAnswers={setQuizStudentAnswers}
+            setSubAssignmentTab={setSubAssignmentTab}
+            isTourOpen={isTourOpen}
+            setIsTourOpen={setIsTourOpen}
+            handleSeedSuccess={handleSeedSuccess}
+            setTeacherTab={setTeacherTab}
+            showCoursewareHub={showCoursewareHub}
             setShowCoursewareHub={setShowCoursewareHub}
-            fetchTodaySchedules={fetchTodaySchedules}
           />
-        </div>
 
-        <RightSidebar
-          showRightSidebar={showRightSidebar}
-          setShowRightSidebar={setShowRightSidebar}
-          rightSidebarTab={rightSidebarTab}
-          setRightSidebarTab={setRightSidebarTab}
-          effectiveAgentProviderId={effectiveAgentProviderId}
-          agentProviderId={agentProviderId}
-          setAgentProviderId={setAgentProviderId}
-          personaId={personaId}
-          setPersonaId={setPersonaId}
-          aiProviders={aiProviders}
-          selectedAgentProvider={selectedAgentProvider}
-          chatLog={chatLog}
-          loading={loading}
-          input={input}
-          setInput={setInput}
-          handleSend={handleSend}
-          chatAttachments={chatAttachments}
-          setChatAttachments={setChatAttachments}
-          handleChatFileChange={handleChatFileChange}
-          handleChatDrop={handleChatDrop}
-          onClearAgentMemory={handleClearAgentMemory}
-          events={events}
-          lang={lang}
-          t={t}
-        />
-
-        <AppModals
-          lang={lang as 'zh' | 'en'}
-          t={t}
-          courseWizard={courseWizard}
-          quizGenerator={quizGenerator}
-          classBatch={classBatch}
-          studentNotificationsHook={studentNotificationsHook}
-          showImportModal={showImportModal}
-          setShowImportModal={setShowImportModal}
-          handleImportFile={handleImportFile}
-          importError={importError}
-          importSuccess={importSuccess}
-          isImporting={isImporting}
-          downloadCSVTemplate={downloadCSVTemplate}
-          addToast={addToast}
-          generateTemplateContent={generateTemplateContent}
-          isImportLessonsOpen={isImportLessonsOpen}
-          setIsImportLessonsOpen={setIsImportLessonsOpen}
-          importStatus={importStatus}
-          setIsDraggingImport={setIsDraggingImport}
-          handleCSVFileChange={handleCSVFileChange}
-          downloadCsvTemplate={downloadCsvTemplate}
-          isDraggingImport={isDraggingImport}
-          previewImportData={previewImportData}
-          setPreviewImportData={setPreviewImportData}
-          setImportStatus={setImportStatus}
-          importProgress={importProgress}
-          importProgressTotal={importProgressTotal}
-          importErrorMsg={importErrorMsg}
-          setImportErrorMsg={setImportErrorMsg}
-          handleCSVImportSubmit={handleCSVImportSubmit}
-          lessons={lessons}
-          fetchClassDashboard={fetchClassDashboard}
-          currentVfsParent={currentVfsParent}
-          setCurrentVfsParent={setCurrentVfsParent}
-          vfsNodes={vfsNodes}
-          showProcessLogs={showProcessLogs}
-          setShowProcessLogs={setShowProcessLogs}
-          processLogsContent={processLogsContent}
-          isCloudDriveOpen={isCloudDriveOpen}
-          setIsCloudDriveOpen={setIsCloudDriveOpen}
-          cloudDrivePreviewNode={cloudDrivePreviewNode}
-          setCloudDrivePreviewNode={setCloudDrivePreviewNode}
-          isSystemResourceLibraryOpen={isSystemResourceLibraryOpen}
-          setIsSystemResourceLibraryOpen={setIsSystemResourceLibraryOpen}
-          systemResourceTab={systemResourceTab}
-          setSystemResourceTab={setSystemResourceTab}
-          selectedLibraryResourceId={selectedLibraryResourceId}
-          setSelectedLibraryResourceId={setSelectedLibraryResourceId}
-          loadingLibraryResources={loadingLibraryResources}
-          libraryResources={libraryResources}
-          fetchLibraryResources={fetchLibraryResources}
-          classes={classes}
-          expandedClassId={expandedClassId}
-          isExportWeightModalOpen={isExportWeightModalOpen}
-          setIsExportWeightModalOpen={setIsExportWeightModalOpen}
-          quizzesWeight={quizzesWeight}
-          setQuizzesWeight={setQuizzesWeight}
-          assignmentsWeight={assignmentsWeight}
-          setAssignmentsWeight={setAssignmentsWeight}
-          handleQuizzesWeightChange={handleQuizzesWeightChange}
-          handleAssignmentsWeightChange={handleAssignmentsWeightChange}
-          customCategoryOverrides={customCategoryOverrides}
-          setCustomCategoryOverrides={setCustomCategoryOverrides}
-          classDashboardMap={classDashboardMap}
-          exportClassId={exportClassId}
-          exportClassName={exportClassName}
-          csvPreviewData={csvPreviewData}
-          handleExportGrades={handleExportGrades}
-          setSelectedAssignment={setSelectedAssignment}
-          setStudentViewStatus={setStudentViewStatus}
-          setQuizStudentAnswers={setQuizStudentAnswers}
-          setSubAssignmentTab={setSubAssignmentTab}
-          isTourOpen={isTourOpen}
-          setIsTourOpen={setIsTourOpen}
-          handleSeedSuccess={handleSeedSuccess}
-          setTeacherTab={setTeacherTab}
-          showCoursewareHub={showCoursewareHub}
-          setShowCoursewareHub={setShowCoursewareHub}
-        />
-
-        {/* 课堂随机提问/点名互动应答模态框 (Student Picked Alert Modal) */}
-        {pickedAlertData && (
-          <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-surface border-2 border-amber-500 rounded-2xl shadow-2xl p-6 max-w-md w-full text-center space-y-4 animate-in zoom-in-95 duration-300">
-              <div className="w-16 h-16 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto animate-bounce">
-                <Sparkles size={36} />
-              </div>
-              <h3 className="text-xl font-black text-main">
-                {lang === 'zh' ? '⚡️ 闪电点名：老师选中了你！' : '⚡️ Classroom Pick: Teacher Selected You!'}
-              </h3>
-              <p className="text-sm text-muted">
-                {lang === 'zh' ? (
-                  <>
-                    老师在课堂点名中抽中了【
-                    <span className="font-bold text-amber-600 dark:text-amber-400">{pickedAlertData.studentName}</span>
-                    】，请立即集中注意力参与课堂互动回答！
-                  </>
-                ) : (
-                  <>
-                    The teacher selected{' '}
-                    <span className="font-bold text-amber-600 dark:text-amber-400">{pickedAlertData.studentName}</span>{' '}
-                    to answer in class. Please respond now!
-                  </>
-                )}
-              </p>
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const channel = new ClassroomSyncChannel();
-                    channel.acknowledgePick(pickedAlertData.studentId);
-                    channel.destroy();
-                    setPickedAlertData(null);
-                    addToast(
-                      lang === 'zh' ? '🙋‍♂️ 已确认答到' : '🙋‍♂️ Acknowledged',
-                      lang === 'zh' ? '已向老师中控台发送举手答到信号！' : 'Sent acknowledge signal to teacher!',
-                      'success',
-                    );
-                  }}
-                  className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-black text-sm rounded-xl shadow-lg shadow-amber-500/30 transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <CheckCircle2 size={18} />
-                  <span>
-                    {lang === 'zh' ? '🙋‍♂️ 我已准备好 / 确认答到 (反馈给老师)' : '🙋‍♂️ Ready / Acknowledge to Teacher'}
-                  </span>
-                </button>
+          {/* 课堂随机提问/点名互动应答模态框 (Student Picked Alert Modal) */}
+          {pickedAlertData && (
+            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="bg-surface border-2 border-amber-500 rounded-2xl shadow-2xl p-6 max-w-md w-full text-center space-y-4 animate-in zoom-in-95 duration-300">
+                <div className="w-16 h-16 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto animate-bounce">
+                  <Sparkles size={36} />
+                </div>
+                <h3 className="text-xl font-black text-main">
+                  {lang === 'zh' ? '⚡️ 闪电点名：老师选中了你！' : '⚡️ Classroom Pick: Teacher Selected You!'}
+                </h3>
+                <p className="text-sm text-muted">
+                  {lang === 'zh' ? (
+                    <>
+                      老师在课堂点名中抽中了【
+                      <span className="font-bold text-amber-600 dark:text-amber-400">
+                        {pickedAlertData.studentName}
+                      </span>
+                      】，请立即集中注意力参与课堂互动回答！
+                    </>
+                  ) : (
+                    <>
+                      The teacher selected{' '}
+                      <span className="font-bold text-amber-600 dark:text-amber-400">
+                        {pickedAlertData.studentName}
+                      </span>{' '}
+                      to answer in class. Please respond now!
+                    </>
+                  )}
+                </p>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const channel = new ClassroomSyncChannel();
+                      channel.acknowledgePick(pickedAlertData.studentId);
+                      channel.destroy();
+                      setPickedAlertData(null);
+                      addToast(
+                        lang === 'zh' ? '🙋‍♂️ 已确认答到' : '🙋‍♂️ Acknowledged',
+                        lang === 'zh' ? '已向老师中控台发送举手答到信号！' : 'Sent acknowledge signal to teacher!',
+                        'success',
+                      );
+                    }}
+                    className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-black text-sm rounded-xl shadow-lg shadow-amber-500/30 transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 size={18} />
+                    <span>
+                      {lang === 'zh' ? '🙋‍♂️ 我已准备好 / 确认答到 (反馈给老师)' : '🙋‍♂️ Ready / Acknowledge to Teacher'}
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* 学生端实时互动浮层 (Pacing Signals, Quick Polls, Buzzer, 60s Exit Ticket) */}
-        {(activeRole === 'student' || isStudentLiveMode) && (
-          <StudentInteractiveOverlay
-            lessonId={selectedLesson}
-            studentId={activeStudentId || liveStudentParam || undefined}
-            studentName={students.find((s) => s.id === (activeStudentId || liveStudentParam))?.name || undefined}
-            lang={lang as any}
-          />
-        )}
+          {/* 学生端实时互动浮层 (Pacing Signals, Quick Polls, Buzzer, 60s Exit Ticket) */}
+          {(activeRole === 'student' || isStudentLiveMode) && (
+            <StudentInteractiveOverlay
+              lessonId={selectedLesson}
+              studentId={activeStudentId || liveStudentParam || undefined}
+              studentName={students.find((s) => s.id === (activeStudentId || liveStudentParam))?.name || undefined}
+              lang={lang as any}
+            />
+          )}
 
-        {/* Real-time Toast Notifications */}
-        <ToastContainer />
+          {/* Real-time Toast Notifications */}
+          <ToastContainer />
 
-        {/* Global System Error Diagnostics Center & Floating Pill */}
-        <SystemErrorCenterModal />
-      </div>
+          {/* Global System Error Diagnostics Center & Floating Pill */}
+          <SystemErrorCenterModal />
+        </div>
+      )}
     </>
   );
 }

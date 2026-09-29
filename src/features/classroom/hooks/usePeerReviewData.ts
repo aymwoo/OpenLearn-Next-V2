@@ -13,6 +13,15 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type {
+  PeerMatchingItem,
+  LivePeerBadge,
+  SpotlightWorkItem,
+  NominatedStudent,
+  DanmakuItem,
+  RubricDimensionItem,
+} from '../peer-review/types';
+import type { ReactionCountItem } from '../peer-review/PeerReviewRubricStats';
 
 export interface TopPerformerRow {
   studentId: string;
@@ -33,14 +42,14 @@ export interface CoursewareAttemptLike {
 }
 
 export interface PeerReviewData {
-  workA: unknown;
-  workB: unknown;
-  matchingItems: unknown;
-  badges: unknown;
-  podiumStudents: unknown;
-  danmaku: unknown;
-  reactions: unknown;
-  rubricDimensions: unknown;
+  workA: SpotlightWorkItem | null;
+  workB: SpotlightWorkItem | null;
+  matchingItems: PeerMatchingItem[];
+  badges: LivePeerBadge[];
+  podiumStudents: NominatedStudent[];
+  danmaku: DanmakuItem[];
+  reactions: ReactionCountItem[];
+  rubricDimensions: RubricDimensionItem[];
   reviewProgress: { completed: number; total: number };
   fromServer: boolean;
 }
@@ -62,6 +71,125 @@ export interface UsePeerReviewDataResult {
   autoAssign: () => Promise<void>;
   refresh: () => Promise<void>;
 }
+
+/**
+ * 作品的真实作答内容摘要（供大屏预览渲染，替代原先写死的假 SVG）。
+ */
+export interface WorkContent {
+  /** 判定出的内容形态：code / text / structured / numeric / empty */
+  kind: 'code' | 'text' | 'structured' | 'numeric' | 'empty';
+  /** 用于渲染的行（每行带缩进与是否高亮） */
+  lines: Array<{ text: string; indent: number; isHighlight?: boolean }>;
+  /** 关键结论（如正确率、答案列表），结构化作答才有意义 */
+  summary?: string;
+  /** 原始事件条数，用于说明内容完整度 */
+  eventCount: number;
+}
+
+const CODE_HINT = /\b(function|const|let|var|class|def|import|return|if|for|while|print|console)\b|[{};]\s*$/;
+
+/** 从 submission_raw 事件流中提炼可展示的真实内容 */
+export function summarizeWorkContent(events: any[]): WorkContent {
+  const list = Array.isArray(events) ? events.filter(Boolean) : [];
+  if (list.length === 0) return { kind: 'empty', lines: [], eventCount: 0 };
+
+  // 优先取 submit / finish 类事件（学生最终的作答）
+  const scored = list.filter((e) => {
+    const t = String(e?.eventType ?? e?.event_type ?? '').toLowerCase();
+    return t.includes('submit') || t.includes('finish') || t.includes('complete');
+  });
+  const source = scored.length > 0 ? scored : list;
+  const last = source[source.length - 1];
+  const payload = (last?.payload ?? last?.payloadJson ?? last?.data ?? {}) as Record<string, unknown>;
+
+  // 1) 代码：payload 里有源码字段
+  const code = pickString(payload, ['code', 'source', 'src', 'program', 'html', 'content', 'answer']);
+  if (code && (CODE_HINT.test(code) || code.includes('\n') || code.length > 120)) {
+    return {
+      kind: 'code',
+      lines: code
+        .split('\n')
+        .slice(0, 14)
+        .map((line) => ({
+          text: line.slice(0, 160),
+          indent: Math.floor((line.match(/^\s*/)?.[0].length ?? 0) / 2),
+          isHighlight: /correct|answer|正确|对|错|✓|✗/i.test(line),
+        })),
+      eventCount: list.length,
+    };
+  }
+
+  // 2) 结构化答案：解析出若干键值对
+  const entries = Object.entries(payload).filter(([, v]) => typeof v !== 'object' || v === null);
+  const nonMeta = entries.filter(([k]) => !META_KEYS.has(k.toLowerCase()));
+  if (nonMeta.length >= 3) {
+    return {
+      kind: 'structured',
+      lines: nonMeta.slice(0, 10).map(([k, v]) => ({ text: `${k}: ${formatValue(v)}`, indent: 0 })),
+      eventCount: list.length,
+    };
+  }
+
+  // 3) 纯文本
+  if (code) {
+    return {
+      kind: 'text',
+      lines: code
+        .split('\n')
+        .slice(0, 12)
+        .map((line) => ({ text: line.slice(0, 200), indent: 0 })),
+      eventCount: list.length,
+    };
+  }
+
+  // 4) 数值型（分数/正确率）
+  const nums = entries.filter(([, v]) => typeof v === 'number');
+  if (nums.length > 0) {
+    return {
+      kind: 'numeric',
+      lines: nums.slice(0, 6).map(([k, v]) => ({ text: `${k}: ${v}`, indent: 0 })),
+      eventCount: list.length,
+    };
+  }
+
+  return { kind: 'empty', lines: [], eventCount: list.length };
+}
+
+const META_KEYS = new Set([
+  'type',
+  'score',
+  'comment',
+  'completion',
+  'timestamp',
+  't',
+  'watch',
+  'attemptsd',
+  'eventtype',
+  'payload',
+]);
+
+function pickString(obj: Record<string, unknown>, keys: string[]): string | null {
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (typeof v === 'string' && v.trim()) return v;
+  }
+  return null;
+}
+
+function formatValue(v: unknown): string {
+  if (v === null || v === undefined) return '—';
+  if (Array.isArray(v)) return v.map((x) => String(x)).join('、');
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+
+export const KIND_LABELS: Record<WorkContent['kind'], string> = {
+  code: '代码',
+  text: '文本作答',
+  structured: '结构化答案',
+  numeric: '数值结果',
+  empty: '无内容',
+};
 
 const EMPTY_DATA: PeerReviewData = {
   workA: null,
@@ -121,6 +249,36 @@ export function usePeerReviewData({
       clearInterval(timer);
     };
   }, [lessonId]);
+
+  // ── 焦点作品真实作答内容 ────────────────────────────────────────────
+  // 大屏「作品可视化预览」原先是一段写死的五边形 SVG，与任何真实作品无关。
+  // 真实来源是 submission_raw 里学生实际产生的作答事件（/raw 接口已具备权限校验），
+  // 这里取最近若干条事件的 payload 摘要，供大屏渲染成文字/代码/结构化答案。
+  const [workContents, setWorkContents] = useState<Record<string, WorkContent>>({});
+
+  const loadWorkContent = useCallback(async (attemptId: string) => {
+    if (!attemptId) return;
+    try {
+      const res = await fetch(`/api/courseware/attempts/${encodeURIComponent(attemptId)}/raw`);
+      if (!res.ok) return;
+      const body = await res.json();
+      const events: any[] = Array.isArray(body?.events) ? body.events : Array.isArray(body) ? body : [];
+      if (events.length === 0) return;
+      setWorkContents((prev) => ({ ...prev, [attemptId]: summarizeWorkContent(events) }));
+    } catch {
+      /* 该 attempt 无原始流水时保持空态，由 UI 说明 */
+    }
+  }, []);
+
+  useEffect(() => {
+    const top = [...attempts]
+      .filter((a) => a?.studentId && a.studentId !== 'teacher' && a.studentId !== 'guest')
+      .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0))
+      .slice(0, 2);
+    for (const a of top) {
+      if (a.attemptId && !workContents[a.attemptId]) void loadWorkContent(String(a.attemptId));
+    }
+  }, [attempts, workContents, loadWorkContent]);
 
   // ── 真实互评数据 ────────────────────────────────────────────────────
   const refresh = useCallback(async () => {
@@ -196,8 +354,10 @@ export function usePeerReviewData({
       if (!a) return null;
       const name = String(a.studentName || a.studentId);
       const score = typeof a.score === 'number' ? a.score : null;
+      const attemptId = String(a.attemptId ?? `work-${slot}`);
+      const content = workContents[attemptId];
       return {
-        id: String(a.attemptId ?? `work-${slot}`),
+        id: attemptId,
         slot,
         studentName: name,
         studentInitial: name.slice(0, 1),
@@ -210,6 +370,11 @@ export function usePeerReviewData({
             : `得分 ${score}${typeof a.completion === 'number' ? ` · 完成度 ${Math.round(a.completion * 100)}%` : ''}`,
         // rating 平台无来源 → 不填（UI 显示「—」）
         badges: [],
+        // 真实作答内容：替代原先写死的五边形 SVG
+        workContent: content ?? null,
+        // 明确的内容类型标注，供 UI 决定渲染方式
+        codeTitle: content ? `真实作答内容（${KIND_LABELS[content.kind]}）` : undefined,
+        codeLines: content?.lines.length ? content.lines : undefined,
       };
     };
 
@@ -233,7 +398,7 @@ export function usePeerReviewData({
         total: studentCount,
       },
     };
-  }, [serverData, attempts, topPerformers, studentCount]);
+  }, [serverData, attempts, topPerformers, studentCount, workContents]);
 
   return { data, topPerformers, autoAssigning, autoAssign, refresh };
 }

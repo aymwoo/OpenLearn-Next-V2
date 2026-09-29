@@ -48,6 +48,16 @@ export interface SpotlightWorkItem {
   visualBadgeText?: string;
   /** 代码片段标题与内容：真实作品无代码源时为空，UI 显示占位说明 */
   codeTitle?: string;
+  /**
+   * 学生真实作答内容摘要（从 submission_raw 提取）。
+   * 大屏「作品可视化预览」用它渲染，取代原先与真实作品无关的写死 SVG。
+   */
+  workContent?: {
+    kind: 'code' | 'text' | 'structured' | 'numeric' | 'empty';
+    lines: Array<{ text: string; indent: number; isHighlight?: boolean }>;
+    summary?: string;
+    eventCount: number;
+  } | null;
   codeLines?: Array<{
     text: string;
     isHighlight?: boolean;

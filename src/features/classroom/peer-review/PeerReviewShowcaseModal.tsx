@@ -17,6 +17,28 @@ import type {
   DanmakuItem,
 } from './types';
 
+/**
+ * 量规加权均分：由真实维度得分按权重算出。
+ * 无任何真实维度数据时返回 null（UI 显示「—」），而不是回退到某个写死分数 ——
+ * 大屏上凭空出现「95.3」会让教师以为全班打了 95.3 分。
+ */
+export function weightedRubricAverage(dimensions: RubricDimensionItem[] | undefined): number | null {
+  if (!Array.isArray(dimensions) || dimensions.length === 0) return null;
+  let weighted = 0;
+  let totalWeight = 0;
+  for (const d of dimensions) {
+    const raw = d as unknown as Record<string, unknown>;
+    const score = Number(raw.score ?? raw.percentage ?? raw.value);
+    if (!Number.isFinite(score)) continue;
+    const weight = Number(raw.weight ?? 0);
+    if (!Number.isFinite(weight) || weight <= 0) continue;
+    weighted += score * weight;
+    totalWeight += weight;
+  }
+  if (totalWeight <= 0) return null;
+  return Math.round((weighted / totalWeight) * 10) / 10;
+}
+
 export interface PeerReviewShowcaseModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -50,6 +72,15 @@ export interface PeerReviewShowcaseModalProps {
   onAutoAssign?: () => void | Promise<void>;
   /** 分配进行中（按钮禁用） */
   autoAssigning?: boolean;
+  /**
+   * 已同步到学生机的真实台数。用于替代原先写死的 32 ——
+   * 大屏上凭空显示「32 台已同步」会让教师误判真实投放进度。
+   */
+  syncedStudentsCount?: number;
+  /** 当前主讲教师姓名（用于批注/弹幕署名），缺省时显示「教师」而非编造的人名 */
+  teacherName?: string;
+  /** 互评阶段标识（来自课堂阶段），缺省时按真实阶段推断 */
+  stageLabel?: string;
 }
 
 export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = ({
@@ -71,11 +102,15 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
   reactions: reactionsProp,
   podiumStudents: podiumStudentsProp,
   danmaku: danmakuProp,
+  syncedStudentsCount,
+  teacherName,
+  stageLabel,
 }) => {
   // ── State ─────────────────────────────────────────────────────────────
   // 评阅状态：进度与倒计时来自真实入参；缺失时为 0（不再写死 28/32、142、138s）
+  // stage 同样来自真实入参，不再固定显示 'STAGE 02.4'
   const [reviewState, setReviewState] = useState<PeerReviewState>({
-    stage: 'STAGE 02.4',
+    stage: stageLabel || '',
     isLocked: true,
     isDualScreen: true,
     isAnonymous: true,
@@ -199,7 +234,7 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
       id: `ann-${Date.now()}`,
       authorType: 'teacher',
       authorRole: '主讲教师',
-      authorName: '陈老师',
+      authorName: teacherName || '教师',
       timeAgo: '刚刚',
       content,
       borderColor: '#8083ff',
@@ -211,10 +246,12 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
   const handleSendDanmaku = (text: string, type: 'text' | 'voice' = 'text') => {
     const newDanmaku: DanmakuItem = {
       id: `d-${Date.now()}`,
-      sender: '主讲教师',
+      sender: teacherName || '教师',
       text,
       type,
-      voiceDuration: type === 'voice' ? 4 : undefined,
+      // 不伪造语音时长：真实时长需要 MediaRecorder 录制，平台尚未接入。
+      // 没有真实音频时留空（UI 退化为纯文字弹幕），而不是编一个 4 秒。
+      voiceDuration: undefined,
       topPercent: Math.floor(Math.random() * 60) + 15,
       color: 'text-[#4edea3]',
     };
@@ -353,10 +390,13 @@ export const PeerReviewShowcaseModal: React.FC<PeerReviewShowcaseModalProps> = (
 
             <PeerReviewRubricStats
               dimensions={dimensions}
-              averagePercentage={95.3}
+              // 均分由真实量规维度加权算出；没有维度数据时传 null 让 UI 显示「—」，
+              // 绝不用 95.3 之类的写死值（那会让教师以为全班都打了 95.3 分）
+              averagePercentage={weightedRubricAverage(dimensions)}
               reactions={reactions}
               onReactionClick={handleReactionClick}
-              syncedStudentsCount={32}
+              // 已同步台数来自调用方的真实投放数据；无数据时传 null 显示「—」
+              syncedStudentsCount={syncedStudentsCount ?? null}
             />
           </div>
 

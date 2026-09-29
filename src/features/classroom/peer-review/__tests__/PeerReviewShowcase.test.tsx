@@ -256,11 +256,48 @@ describe('PeerReviewShowcase Subsystem (Stitch Screen 21e2dac1)', () => {
 
       expect(screen.getByText('大屏焦点作品对比赏析')).toBeDefined();
       expect(screen.getByText(/陈子墨 \(作品 A\)/)).toBeDefined();
-      expect(screen.getByText('60 FPS SANDBOX')).toBeDefined();
+      // 预览区渲染的是学生真实作答内容（codeLines），不再是写死的假图形
+      expect(screen.getByTestId('work-preview-A')).toBeDefined();
+      expect(screen.getByTestId('work-preview-B')).toBeDefined();
+      expect(screen.getByText(/colors = /)).toBeDefined();
+      expect(screen.getByText(/for i in range\(120\):/)).toBeDefined();
       expect(screen.getByText(/张子豪 \(作品 B\)/)).toBeDefined();
-      expect(screen.getByText('缩进修复运行成功')).toBeDefined();
+      // 作品 B 的逐行批注（comment）来自真实入参
+      expect(screen.getByText('# ✓ 修正：已对齐4空格')).toBeDefined();
+      // 旧假图形的角标（visualBadgeText）随假 SVG 一并移除
+      expect(screen.queryByText('缩进修复运行成功')).toBeNull();
       expect(screen.getByText(/大家重点看作品B第4-5行/)).toBeDefined();
       expect(screen.getByTestId('extension-slot-peer_review.showcase.widget')).toBeDefined();
+    });
+
+    it('【无假数据】作品没有真实作答内容时明确说明，不画示意图形', () => {
+      const emptyWork = { ...sampleWorkA, codeLines: undefined, workContent: null };
+      render(
+        <SpotlightDualWorkArena
+          workA={emptyWork}
+          workB={{ ...sampleWorkB, codeLines: undefined, workContent: null }}
+          annotations={[]}
+        />,
+      );
+
+      // 明确告知「没有可展示内容」…
+      expect(screen.getAllByText(/该作品没有可展示的作答内容/).length).toBe(2);
+      // …且不再出现任何写死的示意图形标识（如旧的 '60 FPS SANDBOX'）
+      expect(screen.queryByText(/60 FPS SANDBOX/)).toBeNull();
+      expect(document.querySelectorAll('svg polygon, svg rect').length).toBe(0);
+    });
+
+    it('【真实数据】有真实作答内容时标注事件条数', () => {
+      const realWork = {
+        ...sampleWorkA,
+        codeLines: [{ text: 'const g = 9.8;', indent: 0 }],
+        workContent: { kind: 'code' as const, lines: [{ text: 'const g = 9.8;', indent: 0 }], eventCount: 7 },
+      };
+      render(<SpotlightDualWorkArena workA={realWork} workB={realWork} annotations={[]} />);
+
+      // A、B 两份作品都标注了事件条数
+      expect(screen.getAllByText(/真实作答 · 7 条事件/).length).toBe(2);
+      expect(screen.getAllByText('const g = 9.8;').length).toBe(2);
     });
 
     it('supports adding a teacher annotation', () => {

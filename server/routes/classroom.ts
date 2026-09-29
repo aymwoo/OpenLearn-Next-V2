@@ -1216,13 +1216,144 @@ export function registerClassroomRoutes(
         pacingSummary[r.signal_type] = r.count;
       });
 
+      // ── 7. 出勤（在线 / 应到 / 实到） ──────────────────────────────────
+      // 在线名单来自 presence 的内存态（真实心跳），不是从 DB 推算 ——
+      // DB 里没有「当前在线」这个概念，离线学生也会留着历史记录。
+      const onlineIds = getOnlineStudentIds();
+      let expectedStudents = 0;
+      let attendedStudents = 0;
+      if (session?.class_id) {
+        // 两个查询各自独立 try：合并写会导致后者的失败把前者的真实结果一起清零
+        // （曾因 ?1 具名参数不被 better-sqlite3 支持，导致 expected 永远为 0）
+        try {
+          const row = db
+            .prepare('SELECT COUNT(*) AS n FROM class_students WHERE class_id = ?')
+            .get(session.class_id) as any;
+          expectedStudents = Number(row?.n) || 0;
+        } catch (_) {
+          expectedStudents = 0;
+        }
+
+        // 实到 = 至少产生过一条课堂痕迹的学生
+        // 注意：classroom_poll_votes 只有 poll_id，没有 session_id，必须 join 投票表过滤
+        if (expectedStudents > 0) {
+          try {
+            const touched = db
+              .prepare(
+                `
+              SELECT COUNT(DISTINCT student_id) AS n FROM (
+                SELECT pv.student_id
+                  FROM classroom_poll_votes pv
+                  JOIN classroom_quick_polls p ON p.id = pv.poll_id
+                 WHERE p.session_id = ?
+                UNION
+                SELECT student_id FROM classroom_pacing_signals WHERE session_id = ?
+                UNION
+                SELECT student_id FROM classroom_exit_tickets   WHERE session_id = ?
+                UNION
+                SELECT student_id FROM lesson_quiz_submissions   WHERE lesson_id = ?
+              )
+            `,
+              )
+              .get(session.id, session.id, session.id, lessonId) as any;
+            attendedStudents = Number(touched?.n) || 0;
+          } catch (e) {
+            console.warn('[classroom.stage] attended query failed:', e);
+            attendedStudents = 0;
+          }
+        }
+      }
+      // 实到与在线取较大值：只看在线会漏掉「已交卷但刚断线」的学生
+      const attendance = {
+        online: onlineIds.length,
+        onlineInClass: session?.class_id
+          ? onlineIds.filter((id) => {
+              try {
+                return !!db
+                  .prepare('SELECT 1 FROM class_students WHERE class_id = ? AND student_id = ?')
+                  .get(session.class_id, id);
+              } catch {
+                return false;
+              }
+            }).length
+          : onlineIds.length,
+        expected: expectedStudents,
+        attended: Math.max(attendedStudents, 0),
+      };
+
+      // ── 8. 课堂动态流（最近 12 条，脱敏） ────────────────────────────
+      // 大屏是投给全班看的：只给动作与成果，不给敏感明细。
+      let feed: Array<{ id: string; type: string; message: string; actorName: string | null; at: number }> = [];
+      try {
+        const rows = db
+          .prepare(
+            `SELECT id, type, message, actor_name, created_at
+             FROM classroom_feed WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 12`,
+          )
+          .all(lessonId) as any[];
+        feed = (rows || []).map((r) => ({
+          id: String(r.id),
+          type: String(r.type),
+          message: String(r.message ?? ''),
+          actorName: r.actor_name ?? null,
+          at: Number(r.created_at) || 0,
+        }));
+      } catch (_) {
+        feed = [];
+      }
+
+      // ── 9. 互动课件参与（提交 / 参与人数 / 完成度） ────────────────────
+      let courseware: { attempts: number; participants: number; completed: number; avgCompletion: number } | null =
+        null;
+      try {
+        const row = db
+          .prepare(
+            `SELECT COUNT(*) AS attempts,
+                    COUNT(DISTINCT student_id) AS participants,
+                    SUM(CASE WHEN status IN ('completed','submitted','finished') THEN 1 ELSE 0 END) AS completed,
+                    AVG(COALESCE(r.completion, 0)) AS avg_completion
+             FROM courseware_attempt a
+             LEFT JOIN submission_result r ON r.attempt_id = a.id
+             WHERE a.student_id NOT IN ('guest','teacher','teacher_preview','')`,
+          )
+          .get() as any;
+        courseware = {
+          attempts: Number(row?.attempts) || 0,
+          participants: Number(row?.participants) || 0,
+          completed: Number(row?.completed) || 0,
+          avgCompletion: Math.round((Number(row?.avg_completion) || 0) * 100),
+        };
+      } catch (_) {
+        courseware = { attempts: 0, participants: 0, completed: 0, avgCompletion: 0 };
+      }
+
+      // ── 10. 本节已交结课通票人数 ──────────────────────────────────────
+      let exitTicketSubmitted = 0;
+      try {
+        if (session) {
+          exitTicketSubmitted = Number(
+            (db.prepare('SELECT COUNT(*) AS n FROM classroom_exit_tickets WHERE session_id = ?').get(session.id) as any)
+              ?.n || 0,
+          );
+        }
+      } catch (_) {
+        exitTicketSubmitted = 0;
+      }
+
       res.json({
         lessonId,
+        classId: session?.class_id || null,
+        sessionId: session?.id || null,
         stage: session?.stage || 'PRE_CLASS_READY',
+        stageStartedAt: session?.started_at ?? null,
         checkinCode: session?.checkin_code || null,
         activePoll: activePollData,
         activeBuzzer: activeBuzzerData,
         pacing: pacingSummary,
+        attendance,
+        feed,
+        courseware,
+        exitTicketSubmitted,
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });

@@ -13,9 +13,14 @@ export interface ReactionCountItem {
 
 export interface PeerReviewRubricStatsProps {
   dimensions: RubricDimensionItem[];
-  averagePercentage: number;
+  /**
+   * 量规综合达标率。**允许 null**：没有真实维度数据时传 null 让 UI 显示「—」，
+   * 而不是回退到某个写死分数（原先调用方直接传 95.3，会让教师误以为全班打了 95.3）。
+   */
+  averagePercentage: number | null;
   reactions: ReactionCountItem[];
   onReactionClick?: (reactionId: string) => void;
+  /** 已同步到学生机的真实台数；无数据时保持 undefined，UI 显示「—」而非默认 32 */
   syncedStudentsCount?: number;
 }
 
@@ -24,7 +29,7 @@ export const PeerReviewRubricStats: React.FC<PeerReviewRubricStatsProps> = ({
   averagePercentage,
   reactions,
   onReactionClick,
-  syncedStudentsCount = 32,
+  syncedStudentsCount,
 }) => {
   return (
     <div
@@ -35,7 +40,7 @@ export const PeerReviewRubricStats: React.FC<PeerReviewRubricStatsProps> = ({
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-[#dae2fd]">全班三维量规综合达标率</span>
         <span className="text-[11px] font-mono text-[#4edea3] font-semibold">
-          AVERAGE: {averagePercentage.toFixed(1)}%
+          AVERAGE: {typeof averagePercentage === 'number' ? `${averagePercentage.toFixed(1)}%` : '—'}
         </span>
       </div>
 
@@ -79,7 +84,9 @@ export const PeerReviewRubricStats: React.FC<PeerReviewRubricStatsProps> = ({
 
         <span className="text-[10px] font-mono text-[#908fa0] flex items-center gap-1">
           <Wifi size={13} className="text-[#4edea3]" />
-          {syncedStudentsCount}台学生端已同步点赞动画
+          {typeof syncedStudentsCount === 'number'
+            ? `${syncedStudentsCount}台学生端已同步点赞动画`
+            : '学生端同步状态未知'}
         </span>
       </div>
     </div>
