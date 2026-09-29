@@ -25,6 +25,8 @@ export function StudentInteractiveOverlay({
   const [selectedPollOption, setSelectedPollOption] = useState<string | null>(null);
   const [pollSubmitted, setPollSubmitted] = useState(false);
   const [buzzStatus, setBuzzStatus] = useState<'IDLE' | 'BUZZED' | 'WINNER' | 'MISSED'>('IDLE');
+  /** 学生主动关闭弹窗后记录的 buzzerId：用于「同一轮不反复弹出，新一轮自动重开」 */
+  const [dismissedBuzzerId, setDismissedBuzzerId] = useState<string | null>(null);
   const [pacingFeedback, setPacingFeedback] = useState<string | null>(null);
   const [isExitTicketOpen, setIsExitTicketOpen] = useState(false);
   const [exitTicketSubmitted, setExitTicketSubmitted] = useState(false);
@@ -33,6 +35,32 @@ export function StudentInteractiveOverlay({
   const [feedbackNotes, setFeedbackNotes] = useState('');
 
   const buzzerArmedTimeRef = useRef<number>(Date.now());
+  /**
+   * 本轮抢答已裁决的结果（按 buzzerId 记忆）。
+   * 作用：一旦判定为 WINNER/MISSED 就不再被后续轮询改写，
+   * 避免本地 studentId 与服务端会话 ID 不一致时在两个结果间来回跳变。
+   */
+  const buzzOutcomeRef = useRef<{ buzzerId: string; status: 'WINNER' | 'MISSED' } | null>(null);
+  /**
+   * 轮询请求序号（单调递增）+ 本次抢答时的水位线。
+   * 用于识别「在途轮询返回的过期快照」：抢答提交瞬间会记下当时已发出的请求水位，
+   * 凡是序号 ≤ 水位的响应都诞生于抢答之前，它带回的 READY 只是旧状态，
+   * 绝不能据此把已判定的结果复位掉。
+   *
+   * 用序号而非时间戳：同一毫秒内发出的请求与抢答，用 Date.now() 无法区分先后。
+   */
+  const pollSeqRef = useRef(0);
+  const buzzPollSeqRef = useRef(0);
+  /**
+   * 轮询状态镜像：只供「是否为新的一轮」做比较，不参与渲染。
+   * 必须用 ref 而非 state —— 服务端每次轮询都返回全新对象，若把 activePoll /
+   * activeBuzzer 放进 effect 依赖，会形成
+   * 「轮询 → 写入新对象 → 依赖变化 → effect 重建并立即再次轮询」的自激循环，
+   * 2.5s 节流被完全绕过，学生端会以 CPU 速度持续打接口。
+   */
+  const activePollRef = useRef<any>(null);
+  const activeBuzzerRef = useRef<any>(null);
+  const exitTicketSubmittedRef = useRef(false);
 
   // 轮询活跃互动与阶段
   useEffect(() => {
@@ -40,6 +68,8 @@ export function StudentInteractiveOverlay({
 
     let mounted = true;
     const pollClassroomState = async () => {
+      // 本次请求的序号（响应到达时据此判断快照是否诞生于抢答之前）
+      const mySeq = ++pollSeqRef.current;
       try {
         const res = await fetch(`/api/classroom/sessions/${lessonId}`);
         if (res.ok && mounted) {
@@ -48,36 +78,65 @@ export function StudentInteractiveOverlay({
             setStage(json.stage);
 
             // 如果处于结课通票阶段且尚未提交，打开通票模态框
-            if (json.stage === 'WRAP_UP_EXIT_TICKET' && !exitTicketSubmitted) {
+            if (json.stage === 'WRAP_UP_EXIT_TICKET' && !exitTicketSubmittedRef.current) {
               setIsExitTicketOpen(true);
             }
 
             // 同步投票
-            if (json.activePoll && (!activePoll || activePoll.id !== json.activePoll.id)) {
+            if (json.activePoll && (!activePollRef.current || activePollRef.current.id !== json.activePoll.id)) {
+              activePollRef.current = json.activePoll;
               setActivePoll(json.activePoll);
               setSelectedPollOption(null);
               setPollSubmitted(false);
-            } else if (!json.activePoll) {
+            } else if (!json.activePoll && activePollRef.current) {
+              activePollRef.current = null;
               setActivePoll(null);
             }
 
             // 同步抢答器
-            if (json.activeBuzzer && (!activeBuzzer || activeBuzzer.id !== json.activeBuzzer.id)) {
-              setActiveBuzzer(json.activeBuzzer);
-              setBuzzStatus('IDLE');
-              buzzerArmedTimeRef.current = Date.now();
-            } else if (json.activeBuzzer && activeBuzzer) {
-              if (json.activeBuzzer.status === 'LOCKED') {
-                if (json.activeBuzzer.winner_student_id === studentId) {
-                  setBuzzStatus('WINNER');
-                } else {
-                  setBuzzStatus('MISSED');
+            const prevBuzzer = activeBuzzerRef.current;
+            if (json.activeBuzzer) {
+              const isNewBuzzer = !prevBuzzer || prevBuzzer.id !== json.activeBuzzer.id;
+              if (isNewBuzzer) {
+                // 教师开启新一轮：武装抢答，允许弹窗再次出现
+                activeBuzzerRef.current = json.activeBuzzer;
+                setActiveBuzzer(json.activeBuzzer);
+                setBuzzStatus('IDLE');
+                setDismissedBuzzerId(null);
+                buzzOutcomeRef.current = null;
+                buzzerArmedTimeRef.current = Date.now();
+              } else if (json.activeBuzzer.status === 'LOCKED') {
+                // 本轮已出结果：结果一经判定即锁定，不被后续轮询翻转
+                const decided =
+                  buzzOutcomeRef.current?.buzzerId === json.activeBuzzer.id
+                    ? buzzOutcomeRef.current.status
+                    : json.activeBuzzer.winner_student_id === studentId
+                      ? 'WINNER'
+                      : 'MISSED';
+                buzzOutcomeRef.current = { buzzerId: json.activeBuzzer.id, status: decided };
+                activeBuzzerRef.current = json.activeBuzzer;
+                setBuzzStatus(decided);
+                setActiveBuzzer(json.activeBuzzer);
+              } else if (json.activeBuzzer.status === 'READY') {
+                // 「READY」有两种来源，必须区分：
+                //  a) 教师重置了同一轮（buzzOutcomeRef 里已有本轮结果）→ 复位，允许再抢；
+                //  b) 本次请求是在抢答之前发出的在途快照（DB 尚未提交 / 响应竞态）→ 必须忽略，
+                //     否则会把刚判定出的 WINNER/MISSED 冲回 IDLE，学生看到按钮反复闪回。
+                const isStaleSnapshot = mySeq <= buzzPollSeqRef.current;
+                if (!isStaleSnapshot && buzzOutcomeRef.current?.buzzerId === json.activeBuzzer.id) {
+                  buzzOutcomeRef.current = null;
+                  activeBuzzerRef.current = json.activeBuzzer;
+                  setBuzzStatus('IDLE');
+                  setActiveBuzzer(json.activeBuzzer);
+                  setDismissedBuzzerId(null);
+                  buzzerArmedTimeRef.current = Date.now();
                 }
               }
-              setActiveBuzzer(json.activeBuzzer);
-            } else if (!json.activeBuzzer) {
+            } else if (prevBuzzer) {
+              activeBuzzerRef.current = null;
               setActiveBuzzer(null);
               setBuzzStatus('IDLE');
+              buzzOutcomeRef.current = null;
             }
           }
         }
@@ -92,7 +151,9 @@ export function StudentInteractiveOverlay({
       mounted = false;
       clearInterval(timer);
     };
-  }, [lessonId, exitTicketSubmitted, activePoll, activeBuzzer, studentId]);
+    // 仅依赖真正需要重建轮询的值。activePoll / activeBuzzer / exitTicketSubmitted
+    // 一律通过上面的 ref 读取：把它们放进依赖会导致自激轮询（见 activeBuzzerRef 注释）。
+  }, [lessonId, studentId]);
 
   if (!lessonId) return null;
 
@@ -142,6 +203,8 @@ export function StudentInteractiveOverlay({
     if (!activeBuzzer || activeBuzzer.status !== 'READY' || buzzStatus !== 'IDLE') return;
 
     const responseTimeMs = Date.now() - buzzerArmedTimeRef.current;
+    // 记下抢答时已发出的轮询水位：这些在途响应的状态快照诞生于抢答之前，须被忽略
+    buzzPollSeqRef.current = pollSeqRef.current;
     setBuzzStatus('BUZZED');
 
     try {
@@ -156,14 +219,31 @@ export function StudentInteractiveOverlay({
 
       if (res.ok) {
         const json = await res.json();
-        if (json.winner) {
-          setBuzzStatus('WINNER');
-        } else {
-          setBuzzStatus('MISSED');
+        // 服务端契约：命中先到先得时返回 won=true；已被别人抢先则返回 won=false + winner 信息
+        const won = json.won ?? json.winner === true;
+        const next: 'WINNER' | 'MISSED' = won ? 'WINNER' : 'MISSED';
+        buzzOutcomeRef.current = { buzzerId: activeBuzzer.id, status: next };
+        setBuzzStatus(next);
+
+        // 未抢到时立刻把获胜者信息写回，避免要等下一次 2.5s 轮询才显示姓名
+        if (!won && json.winner) {
+          const lockedBuzzer = {
+            ...activeBuzzer,
+            status: 'LOCKED' as const,
+            winner_student_id: json.winner.studentId ?? null,
+            winner_student_name: json.winner.studentName ?? null,
+            winner_response_time_ms: json.winner.responseTimeMs ?? null,
+          };
+          activeBuzzerRef.current = lockedBuzzer;
+          setActiveBuzzer(lockedBuzzer);
         }
+      } else {
+        // 提交失败（如网络/鉴权）：回退到待抢答，允许学生重试
+        setBuzzStatus('IDLE');
       }
     } catch (e) {
-      setBuzzStatus('MISSED');
+      // 请求异常同样回退，避免停在无内容的「BUZZED」空壳界面
+      setBuzzStatus('IDLE');
     }
   };
 
@@ -179,6 +259,7 @@ export function StudentInteractiveOverlay({
           feedback: feedbackNotes,
         }),
       });
+      exitTicketSubmittedRef.current = true;
       setExitTicketSubmitted(true);
       setIsExitTicketOpen(false);
     } catch (e) {
@@ -287,14 +368,38 @@ export function StudentInteractiveOverlay({
         </div>
       )}
 
-      {/* 抢答器弹窗 */}
-      {activeBuzzer && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-surface rounded-3xl border border-rose-500/50 p-8 w-full max-w-sm shadow-2xl flex flex-col items-center text-center gap-4 animate-scale-up">
+      {/* 抢答器弹窗：同一轮可被学生主动关闭（dismissedBuzzerId），
+          教师开启新一轮（新的 buzzerId）或重置同一轮时自动重新弹出 */}
+      {activeBuzzer && dismissedBuzzerId !== activeBuzzer.id && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setDismissedBuzzerId(activeBuzzer.id)}
+        >
+          <div
+            className="relative bg-surface rounded-3xl border border-rose-500/50 p-8 w-full max-w-sm shadow-2xl flex flex-col items-center text-center gap-4 animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 关闭出口：学生必须能自行退出全屏遮罩 */}
+            <button
+              onClick={() => setDismissedBuzzerId(activeBuzzer.id)}
+              aria-label={lang === 'zh' ? '关闭抢答' : 'Close buzzer'}
+              className="absolute top-3 right-3 p-1.5 rounded-full text-muted hover:text-foreground hover:bg-surface-secondary transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
             <h3 className="text-xl font-black text-foreground flex items-center gap-2">
               <Bell size={22} className="text-rose-500 animate-bounce" />
               <span>{activeBuzzer.title || '全班极速抢答'}</span>
             </h3>
+
+            {buzzStatus === 'BUZZED' && (
+              <div className="my-4 p-6 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col items-center text-center">
+                <span className="text-4xl mb-2 animate-pulse">⚡</span>
+                <span className="text-base font-bold text-foreground">正在提交抢答…</span>
+                <span className="text-xs text-muted mt-1">请稍候，马上公布结果</span>
+              </div>
+            )}
 
             {buzzStatus === 'IDLE' && activeBuzzer.status === 'READY' && (
               <div className="my-4 flex flex-col items-center gap-3">
@@ -314,6 +419,12 @@ export function StudentInteractiveOverlay({
                 <span className="text-4xl mb-2">🎉</span>
                 <span className="text-lg font-black text-emerald-500">恭喜你率先抢答！</span>
                 <span className="text-xs text-muted mt-1">请起立或开麦回答老师的问题</span>
+                <button
+                  onClick={() => setDismissedBuzzerId(activeBuzzer.id)}
+                  className="mt-3 px-4 py-1.5 rounded-xl text-xs font-bold text-muted hover:text-foreground hover:bg-surface-secondary transition-colors cursor-pointer"
+                >
+                  {lang === 'zh' ? '知道了，返回课堂' : 'Got it, back to class'}
+                </button>
               </div>
             )}
 
@@ -324,6 +435,12 @@ export function StudentInteractiveOverlay({
                   已被 {activeBuzzer.winner_student_name || '其他同学'} 抢先一步！
                 </span>
                 <span className="text-xs text-muted mt-1">下次手速要更快哦</span>
+                <button
+                  onClick={() => setDismissedBuzzerId(activeBuzzer.id)}
+                  className="mt-3 px-4 py-1.5 rounded-xl text-xs font-bold text-muted hover:text-foreground hover:bg-surface-secondary transition-colors cursor-pointer"
+                >
+                  {lang === 'zh' ? '知道了，返回课堂' : 'Got it, back to class'}
+                </button>
               </div>
             )}
           </div>
@@ -338,6 +455,7 @@ export function StudentInteractiveOverlay({
         studentName={studentName}
         lang={lang}
         onSubmitSuccess={() => {
+          exitTicketSubmittedRef.current = true;
           setExitTicketSubmitted(true);
         }}
       />
