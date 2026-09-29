@@ -405,48 +405,64 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
      * 事件由服务端投递到课节房间 **和** 班级房间，因此学生无论处于
      * 课节白板、互动课件、作业标签页还是作业工作区都能收到。
      */
-    socket.on('whiteboard-fullscreen-changed', (data: { lessonId?: string; elementId?: string | null }) => {
-      if (activeRoleRef.current !== 'student') return;
-      const targetLesson = data?.lessonId;
-      const elementId = data?.elementId ?? null;
+    socket.on(
+      'whiteboard-fullscreen-changed',
+      (data: { lessonId?: string; elementId?: string | null; mode?: 'board' | 'browser' }) => {
+        if (activeRoleRef.current !== 'student') return;
+        const targetLesson = data?.lessonId;
+        const elementId = data?.elementId ?? null;
+        // 两种全屏独立记录：退出其中一种不应影响另一种
+        const isBrowserMode = data?.mode === 'browser';
+        const store = whiteboardViewStore.getState();
 
-      if (!elementId) {
-        // 教师退出最大化（或离开白板 / 元素被删 / 重连兜底）：原路返回
-        restoreInterruptedView();
-        return;
-      }
-      if (!targetLesson) return;
+        if (!elementId) {
+          // 教师退出该模式的全屏（或离开白板 / 元素被删 / 重连兜底）：原路返回
+          if (isBrowserMode) {
+            store.setRemoteBrowserFullscreenElementId(null);
+            if (!store.remoteFullscreenElementId) restoreInterruptedView();
+            return;
+          }
+          restoreInterruptedView();
+          return;
+        }
+        if (!targetLesson) return;
 
-      // 仅在学生确实在听这节授课时才打断：
-      //  - 课节视图：必须是同一节课（避免把自学另一节课的学生拉走）
-      //  - 作业工作区：不论手上是哪份作业（含从学习面板直接打开的）
-      // 停留在学习面板的学生不打扰。
-      const viewStatus = studentViewStatusRef.current;
-      const isAttending =
-        viewStatus === 'lesson' ? selectedLessonRef.current === targetLesson : viewStatus === 'assignment';
-      if (!isAttending) return;
+        // 仅在学生确实在听这节授课时才打断：
+        //  - 课节视图：必须是同一节课（避免把自学另一节课的学生拉走）
+        //  - 作业工作区：不论手上是哪份作业（含从学习面板直接打开的）
+        // 停留在学习面板的学生不打扰。
+        const viewStatus = studentViewStatusRef.current;
+        const isAttending =
+          viewStatus === 'lesson' ? selectedLessonRef.current === targetLesson : viewStatus === 'assignment';
+        if (!isAttending) return;
 
-      if (!whiteboardViewStore.getState().remoteFullscreenElementId) {
-        interruptedViewRef.current = {
-          viewStatus,
-          lessonTab: studentLessonTabRef.current,
-          lessonId: selectedLessonRef.current,
-          // 仅作业工作区需要暂存 / 写回作业上下文
-          assignment: viewStatus === 'assignment' ? selectedAssignmentRef.current : null,
-        };
-      }
+        if (!store.remoteFullscreenElementId && !store.remoteBrowserFullscreenElementId) {
+          interruptedViewRef.current = {
+            viewStatus,
+            lessonTab: studentLessonTabRef.current,
+            lessonId: selectedLessonRef.current,
+            // 仅作业工作区需要暂存 / 写回作业上下文
+            assignment: viewStatus === 'assignment' ? selectedAssignmentRef.current : null,
+          };
+        }
 
-      whiteboardViewStore.getState().setRemoteFullscreenElementId(elementId);
-      if (viewStatus === 'assignment') {
-        // 清空作业上下文，避免 useAppPolling 同时拉取「作业白板」与「课节白板」
-        // 两个房间的 elements 互相覆盖；教师退出时再写回
-        setSelectedAssignment(null);
-      }
-      setSelectedLesson(targetLesson);
-      fetchElements(targetLesson);
-      setStudentViewStatus('lesson');
-      setStudentLessonTab('whiteboard');
-    });
+        if (isBrowserMode) {
+          // 学生端只跟随「占满视口」；浏览器原生全屏是本机权限/体验选择，不代其开启
+          store.setRemoteBrowserFullscreenElementId(elementId);
+        } else {
+          store.setRemoteFullscreenElementId(elementId);
+        }
+        if (viewStatus === 'assignment') {
+          // 清空作业上下文，避免 useAppPolling 同时拉取「作业白板」与「课节白板」
+          // 两个房间的 elements 互相覆盖；教师退出时再写回
+          setSelectedAssignment(null);
+        }
+        setSelectedLesson(targetLesson);
+        fetchElements(targetLesson);
+        setStudentViewStatus('lesson');
+        setStudentLessonTab('whiteboard');
+      },
+    );
 
     // 安全网：教师端崩溃 / 断线时收不到「退出最大化」广播，
     // 学生重连后清空远程最大化状态并恢复被打断的视图，避免被永久困在

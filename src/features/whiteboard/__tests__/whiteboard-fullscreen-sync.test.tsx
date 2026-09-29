@@ -124,7 +124,7 @@ describe('教师端最大化 → 学生端同步', () => {
     it('emits fullscreen-change with the element id when the teacher maximizes', () => {
       renderBoard({ userRole: 'teacher', broadcastFullscreen: true });
 
-      fireEvent.click(screen.getAllByTitle('全屏')[0]);
+      fireEvent.click(screen.getAllByTitle('白板全屏（组件在画布内最大化）')[0]);
 
       expect(fullscreenEmissions()).toEqual(['el-assign-1']);
     });
@@ -132,15 +132,18 @@ describe('教师端最大化 → 学生端同步', () => {
     it('carries the lessonId and broadcast class id so class-room delivery works', () => {
       renderBoard({ userRole: 'teacher', broadcastFullscreen: true, fullscreenBroadcastClassId: 'c1' });
 
-      fireEvent.click(screen.getAllByTitle('全屏')[0]);
+      fireEvent.click(screen.getAllByTitle('白板全屏（组件在画布内最大化）')[0]);
 
-      expect(fullscreenPayloads()).toEqual([{ classId: 'c1', lessonId: 'l1', elementId: 'el-assign-1' }]);
+      // payload 现在带 mode 区分「白板全屏」与「整个浏览器全屏」，用包含性断言
+      expect(fullscreenPayloads()).toEqual([
+        expect.objectContaining({ classId: 'c1', lessonId: 'l1', elementId: 'el-assign-1', mode: 'board' }),
+      ]);
     });
 
     it('emits fullscreen-change null when the teacher closes the fullscreen overlay', () => {
       renderBoard({ userRole: 'teacher', broadcastFullscreen: true });
 
-      fireEvent.click(screen.getAllByTitle('全屏')[0]);
+      fireEvent.click(screen.getAllByTitle('白板全屏（组件在画布内最大化）')[0]);
       fakeSocket.emit.mockClear();
 
       fireEvent.click(screen.getByText('退出全屏'));
@@ -151,7 +154,7 @@ describe('教师端最大化 → 学生端同步', () => {
     it('emits fullscreen-change null when the teacher presses ESC to leave fullscreen', () => {
       renderBoard({ userRole: 'teacher', broadcastFullscreen: true });
 
-      fireEvent.click(screen.getAllByTitle('全屏')[0]);
+      fireEvent.click(screen.getAllByTitle('白板全屏（组件在画布内最大化）')[0]);
       fakeSocket.emit.mockClear();
 
       act(() => {
@@ -167,14 +170,19 @@ describe('教师端最大化 → 学生端同步', () => {
 
       unmount();
 
-      expect(fullscreenEmissions()).toEqual([null]);
+      // 两种全屏状态彼此独立，卸载时分别广播一次 null 清除，避免学生端残留其中一种
+      const modes = fullscreenPayloads()
+        .map((p: any) => p.mode)
+        .sort();
+      expect(fullscreenEmissions()).toEqual([null, null]);
+      expect(modes).toEqual(['board', 'browser']);
     });
 
     it('calls onFullscreenSync callback with elementId on maximize and null on close', () => {
       const onFullscreenSync = vi.fn();
       renderBoard({ userRole: 'teacher', broadcastFullscreen: true, onFullscreenSync });
 
-      fireEvent.click(screen.getAllByTitle('全屏')[0]);
+      fireEvent.click(screen.getAllByTitle('白板全屏（组件在画布内最大化）')[0]);
       expect(onFullscreenSync).toHaveBeenCalledWith('el-assign-1');
 
       fireEvent.click(screen.getByText('退出全屏'));
@@ -184,7 +192,7 @@ describe('教师端最大化 → 学生端同步', () => {
     it('does not broadcast when broadcastFullscreen is not enabled (e.g. lesson editor)', () => {
       renderBoard({ userRole: 'teacher' });
 
-      fireEvent.click(screen.getAllByTitle('全屏')[0]);
+      fireEvent.click(screen.getAllByTitle('白板全屏（组件在画布内最大化）')[0]);
 
       expect(fullscreenEmissions()).toEqual([]);
     });
@@ -220,7 +228,7 @@ describe('教师端最大化 → 学生端同步', () => {
         window.dispatchEvent(new Event('resize'));
       });
 
-      fireEvent.click(screen.getAllByTitle('全屏')[0]);
+      fireEvent.click(screen.getAllByTitle('白板全屏（组件在画布内最大化）')[0]);
       fakeSocket.emit.mockClear();
       onFullscreenSync.mockClear();
 
@@ -283,7 +291,7 @@ describe('教师端最大化 → 学生端同步', () => {
     it('keeps the local maximize dismissible for a non-teacher-synced fullscreen', () => {
       renderBoard({ userRole: 'teacher' });
 
-      fireEvent.click(screen.getAllByTitle('全屏')[0]);
+      fireEvent.click(screen.getAllByTitle('白板全屏（组件在画布内最大化）')[0]);
 
       expect(screen.getByText('退出全屏')).toBeTruthy();
     });

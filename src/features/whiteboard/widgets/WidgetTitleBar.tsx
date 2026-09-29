@@ -1,5 +1,5 @@
 import React from 'react';
-import { Maximize2, Minus, Square, SlidersHorizontal, Trash2, Lock } from 'lucide-react';
+import { Maximize2, Minus, Square, SlidersHorizontal, Trash2, Lock, MonitorUp } from 'lucide-react';
 
 export interface WidgetTitleBarProps {
   title: string;
@@ -15,7 +15,13 @@ export interface WidgetTitleBarProps {
   onOpenProperties?: () => void;
   onMinimize?: () => void;
   onRestore?: () => void;
+  /** 白板全屏：组件在画布内最大化 */
   onMaximize?: () => void;
+  /**
+   * 整个浏览器全屏：组件脱离白板占满视口 + 进入浏览器原生全屏。
+   * 与 onMaximize（白板全屏）是两个不同能力，标题栏同时提供两个按钮。
+   */
+  onBrowserFullscreen?: () => void;
   onDelete?: () => void;
   extraActions?: React.ReactNode;
 }
@@ -35,6 +41,7 @@ export function WidgetTitleBar({
   onMinimize,
   onRestore,
   onMaximize,
+  onBrowserFullscreen,
   onDelete,
   extraActions,
 }: WidgetTitleBarProps) {
@@ -129,7 +136,7 @@ export function WidgetTitleBar({
             </button>
           )}
 
-          {/* 最大化按钮 */}
+          {/* 最大化按钮（白板全屏：组件在画布内放大） */}
           {onMaximize && (
             <button
               type="button"
@@ -140,9 +147,22 @@ export function WidgetTitleBar({
                   ? 'opacity-30 cursor-not-allowed text-muted'
                   : 'text-muted hover:text-main hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer'
               }`}
-              title="全屏"
+              title="白板全屏（组件在画布内最大化）"
             >
               <Maximize2 size={11} />
+            </button>
+          )}
+
+          {/* 整个浏览器全屏（脱离白板 + 原生全屏） */}
+          {onBrowserFullscreen && (
+            <button
+              type="button"
+              data-testid="widget-titlebar-browser-fullscreen"
+              onClick={onBrowserFullscreen}
+              className="p-1 rounded-lg text-muted hover:text-main hover:bg-black/5 dark:hover:bg-white/10 transition-all cursor-pointer flex items-center justify-center"
+              title="整个浏览器全屏（脱离白板并铺满屏幕，适合投屏）"
+            >
+              <MonitorUp size={11} />
             </button>
           )}
 

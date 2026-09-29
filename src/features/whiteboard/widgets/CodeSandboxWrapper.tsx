@@ -18,6 +18,7 @@ export function CodeSandboxWrapper({
   onMinimize,
   onRestore,
   onMaximize,
+  onBrowserFullscreen,
 }: {
   elementId: string;
   data: any;
@@ -34,6 +35,8 @@ export function CodeSandboxWrapper({
   onMinimize?: () => void;
   onRestore?: () => void;
   onMaximize?: () => void;
+  /** 整个浏览器全屏（脱离白板 + 原生全屏），由宿主统一注入 */
+  onBrowserFullscreen?: () => void;
 }) {
   const [code, setCode] = useState(data.code || "console.log('Hello from sandbox!');");
   const [output, setOutput] = useState('');
@@ -119,6 +122,7 @@ export function CodeSandboxWrapper({
         onMinimize={onMinimize}
         onRestore={onRestore}
         onMaximize={onMaximize}
+        onBrowserFullscreen={onBrowserFullscreen}
         onDelete={onDelete}
         extraActions={
           !readOnly ? (

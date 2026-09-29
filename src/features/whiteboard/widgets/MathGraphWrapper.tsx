@@ -197,6 +197,7 @@ export function MathGraphWrapper({
   onMinimize,
   onRestore,
   onMaximize,
+  onBrowserFullscreen,
 }: {
   elementId: string;
   data: any;
@@ -213,6 +214,8 @@ export function MathGraphWrapper({
   onMinimize?: () => void;
   onRestore?: () => void;
   onMaximize?: () => void;
+  /** 整个浏览器全屏（脱离白板 + 原生全屏），由宿主统一注入 */
+  onBrowserFullscreen?: () => void;
 }) {
   const [equation, setEquation] = useState<string>(data.equation || 'sin(x)');
   const [points, setPoints] = useState<string>('');
@@ -280,6 +283,7 @@ export function MathGraphWrapper({
         onMinimize={onMinimize}
         onRestore={onRestore}
         onMaximize={onMaximize}
+        onBrowserFullscreen={onBrowserFullscreen}
         onDelete={onDelete}
       />
       {!isMinimized && (

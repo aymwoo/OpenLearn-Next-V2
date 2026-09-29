@@ -214,7 +214,7 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceD
 
     socket.on(
       'teacher-broadcast-fullscreen',
-      (data: { classId?: string | null; lessonId: string; elementId: string | null }) => {
+      (data: { classId?: string | null; lessonId: string; elementId: string | null; mode?: 'board' | 'browser' }) => {
         // SEC-AUTH: 仅教师或管理员可广播授课白板的最大化视图
         if (session && !isTeacherOrAdmin) {
           console.warn(`[Presence Security] Unauthorized teacher-broadcast-fullscreen by ${session?.userId}`);
@@ -224,7 +224,13 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceD
         }
         if (!data?.lessonId) return;
 
-        const payload = { lessonId: data.lessonId, elementId: data.elementId ?? null };
+        // mode 区分「白板内最大化」与「整个浏览器全屏」：两者状态独立，
+        // 学生端需要分别记录，退出一种不应影响另一种。
+        const payload = {
+          lessonId: data.lessonId,
+          elementId: data.elementId ?? null,
+          mode: data.mode === 'browser' ? ('browser' as const) : ('board' as const),
+        };
         // 投递到课节房间：学生正停留在该课节的任意标签页（白板/课件/作业）
         io.to(data.lessonId).emit(WHITEBOARD_FULLSCREEN_CHANGED, payload);
         // 再投递到班级房间：学生可能在作业工作区（已 leave-lesson）

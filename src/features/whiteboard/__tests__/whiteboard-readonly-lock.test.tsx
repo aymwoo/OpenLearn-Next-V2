@@ -161,7 +161,7 @@ describe('InteractiveWhiteboard readOnly (全班专注锁定)', () => {
     expect((appletContainer as HTMLElement).style.pointerEvents).toBe('none');
 
     // 只读锁定时，全屏和删除按钮被隐藏
-    expect(screen.queryByTitle('全屏')).toBeNull();
+    expect(screen.queryByTitle('白板全屏（组件在画布内最大化）')).toBeNull();
     expect(screen.queryByTitle('删除组件')).toBeNull();
   });
 
@@ -173,7 +173,7 @@ describe('InteractiveWhiteboard readOnly (全班专注锁定)', () => {
     const appletContainer = container.querySelector('.bg-white.border.border-gray-300.rounded-lg.shadow-xl');
     expect(appletContainer).toBeTruthy();
     expect((appletContainer as HTMLElement).style.pointerEvents).toBe('auto');
-    expect(screen.getAllByTitle('全屏').length).toBeGreaterThan(0);
+    expect(screen.getAllByTitle('白板全屏（组件在画布内最大化）').length).toBeGreaterThan(0);
   });
 
   it('locks FullscreenOverlay when readOnly and renders lock cover badge', () => {

@@ -245,7 +245,7 @@ describe('Whiteboard Extracted Components & Utilities', () => {
       fireEvent.click(restoreBtn);
       expect(onRestore).toHaveBeenCalledTimes(1);
 
-      const maxBtn = getByTitle('全屏');
+      const maxBtn = getByTitle('白板全屏（组件在画布内最大化）');
       fireEvent.click(maxBtn);
       expect(onMaximize).toHaveBeenCalledTimes(1);
 
@@ -272,7 +272,7 @@ describe('Whiteboard Extracted Components & Utilities', () => {
       expect(queryByTitle('属性配置')).toBeNull();
       expect(queryByTitle('最小化组件')).toBeNull();
       expect(queryByTitle('还原组件')).toBeNull();
-      expect(queryByTitle('全屏')).toBeNull();
+      expect(queryByTitle('白板全屏（组件在画布内最大化）')).toBeNull();
       expect(queryByTitle('删除组件')).toBeNull();
     });
   });

@@ -140,6 +140,9 @@ import {
 } from './teaching-object/index.js';
 
 import { WidgetTitleBar } from './widgets/WidgetTitleBar';
+import { WidgetFrame } from './widgets/WidgetFrame';
+import { useBrowserFullscreen } from './widgets/useBrowserFullscreen';
+import { BrowserFullscreenHost } from './widgets/BrowserFullscreenHost';
 import { PluginCardRenderer } from './widgets/PluginCardRenderer';
 import { RollCallWrapper } from './widgets/RollCallWrapper';
 import { CodeSandboxWrapper } from './widgets/CodeSandboxWrapper';
@@ -758,6 +761,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const [quizSubmitting, setQuizSubmitting] = useState<Record<string, boolean>>({});
     // Fullscreen: when set, only this element is rendered full-viewport
     const [fullscreenElementId, setFullscreenElementId] = useState<string | null>(null);
+    // 整个浏览器全屏（脱离白板 + 原生全屏）的本地状态
+    const [localBrowserFullscreenElementId, setLocalBrowserFullscreenElementId] = useState<string | null>(null);
 
     // ── 教师端最大化视图 → 学生端同步 ────────────────────────────────────
     // 远程状态放在 store 中（而非组件内），因为学生切到互动课件/作业标签页时
@@ -767,6 +772,42 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     // 远程视图优先：教师正在展示组件时，学生本地的最大化不能覆盖它
     const effectiveFullscreenElementId = isRemoteFullscreen ? remoteFullscreenElementId : fullscreenElementId;
     const isFullscreenDismissible = !isRemoteFullscreen;
+
+    // ── 整个浏览器全屏（与上面的「白板全屏」是两种能力）────────────────────
+    // 白板全屏：组件在画布内最大化，仍能看到白板周边。
+    // 浏览器全屏：组件脱离白板占满视口，并（教师端）进入浏览器原生全屏，用于投屏。
+    const remoteBrowserFullscreenElementId = useWhiteboardViewStore((s) => s.remoteBrowserFullscreenElementId);
+    const isRemoteBrowserFullscreen = followRemoteFullscreen && !!remoteBrowserFullscreenElementId;
+    const browserFullscreenElementId = isRemoteBrowserFullscreen
+      ? remoteBrowserFullscreenElementId
+      : localBrowserFullscreenElementId;
+    // 学生端跟随教师时同样不可本地退出：与白板全屏保持一致口径
+    const isBrowserFullscreenDismissible = !isRemoteBrowserFullscreen;
+
+    const browserFullscreen = useBrowserFullscreen({
+      elementId: browserFullscreenElementId,
+      // 只有本机控制端才发起原生全屏，学生端只跟随「占满视口」
+      enableNativeFullscreen: !isRemoteBrowserFullscreen,
+      onChange: (id) => {
+        setLocalBrowserFullscreenElementId(id);
+        // 广播给其他客户端：他们跟随「占满视口」，但不代其打开原生全屏
+        if (broadcastFullscreen && socketRef.current) {
+          socketRef.current.emit('teacher-broadcast-fullscreen', {
+            classId: fullscreenBroadcastClassId,
+            lessonId,
+            elementId: id,
+            mode: 'browser',
+          });
+        }
+      },
+    });
+
+    // 被删除 / 换课节后兜底退出浏览器全屏，避免残留在全屏黑屏状态
+    useEffect(() => {
+      if (browserFullscreenElementId && !safeElements.some((el) => el.id === browserFullscreenElementId)) {
+        void browserFullscreen.exit();
+      }
+    }, [browserFullscreenElementId, safeElements, browserFullscreen]);
 
     /**
      * 教师端进入 / 退出组件最大化。广播会同时下发 elementId：
@@ -792,21 +833,21 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           classId: fullscreenBroadcastClassId,
           lessonId,
           elementId,
+          mode: 'board',
         });
       }
     };
 
     // 教师端离开白板（切中控台 Tab / 换课节 / 卸载）时解除学生端的最大化，
     // 否则学生将卡在一个无法自行退出的全屏视图里。
+    // 两种全屏分别广播：学生端状态独立，退出一种不应误清另一种。
     useEffect(() => {
       if (!broadcastFullscreen) return;
       return () => {
         onFullscreenSyncRef.current?.(null);
-        socketRef.current?.emit('teacher-broadcast-fullscreen', {
-          classId: fullscreenBroadcastClassId,
-          lessonId,
-          elementId: null,
-        });
+        const common = { classId: fullscreenBroadcastClassId, lessonId, elementId: null };
+        socketRef.current?.emit('teacher-broadcast-fullscreen', { ...common, mode: 'board' });
+        socketRef.current?.emit('teacher-broadcast-fullscreen', { ...common, mode: 'browser' });
       };
     }, [broadcastFullscreen, fullscreenBroadcastClassId, lessonId]);
 
@@ -2781,6 +2822,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             }
           },
           onMaximize: () => applyFullscreen(el.id),
+          // 整个浏览器全屏：宿主统一注入，组件内容无需任何实现
+          onBrowserFullscreen: () => void browserFullscreen.enter(el.id),
           onDelete: () => handleElementDelete(el.id),
         });
 
@@ -2831,24 +2874,26 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     height: `${displayHeight}px`,
                   }}
                 >
-                  <WidgetTitleBar
+                  {/*
+                    第三方 widget 同样被宿主的统一窗口框架包住 ——
+                    插件内容无需（也无法）自己实现标题栏、全屏、删除。
+                  */}
+                  <WidgetFrame
                     {...getWidgetTitleBarProps(
                       'Plugin Component',
                       <Blocks size={13} className="text-indigo-600" />,
                       'indigo',
                     )}
-                  />
-                  {!data.isMinimized && (
-                    <div className="flex-grow bg-white overflow-auto relative min-h-0 p-2">
-                      <PluginCardRenderer
-                        pluginId={data.pluginId}
-                        slot={slot}
-                        widgetId={widgetId}
-                        elementId={el.id}
-                        lessonId={lessonId}
-                      />
-                    </div>
-                  )}
+                    contentClassName="flex-grow bg-white overflow-auto relative min-h-0 p-2"
+                  >
+                    <PluginCardRenderer
+                      pluginId={data.pluginId}
+                      slot={slot}
+                      widgetId={widgetId}
+                      elementId={el.id}
+                      lessonId={lessonId}
+                    />
+                  </WidgetFrame>
                   {readOnly && <ReadOnlyLockCover />}
                   {!data.isMinimized && renderResizeHandles()}
                 </div>
@@ -3022,6 +3067,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       'indigo',
                     )}
                     onMaximize={() => applyFullscreen(el.id)}
+                    onBrowserFullscreen={() => void browserFullscreen.enter(el.id)}
                   />
                   {!data.isMinimized && (
                     <div className="p-4 text-center flex-1 overflow-y-auto flex flex-col justify-between min-h-0">
@@ -3603,6 +3649,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       }
                     }}
                     onMaximize={() => applyFullscreen(el.id)}
+                    onBrowserFullscreen={() => void browserFullscreen.enter(el.id)}
                     onElementUpdate={
                       onElementUpdate
                         ? async (id, d) => {
@@ -3714,6 +3761,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                       }
                     }}
                     onMaximize={() => applyFullscreen(el.id)}
+                    onBrowserFullscreen={() => void browserFullscreen.enter(el.id)}
                     onElementUpdate={
                       onElementUpdate
                         ? async (id, d) => {
@@ -4299,7 +4347,8 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                 return currentPage === 0;
               }
             }).length === 0 &&
-              !effectiveFullscreenElementId && (
+              !effectiveFullscreenElementId &&
+              !browserFullscreenElementId && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none text-muted p-6 z-0">
                   <div className="w-16 h-16 rounded-2xl bg-primary-theme-light border border-theme flex items-center justify-center mb-3 shadow-2xs">
                     <Sparkles className="w-7 h-7 text-primary-theme animate-pulse" />
@@ -4317,7 +4366,40 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
             >
               {containerSize.width > 0 &&
                 containerSize.height > 0 &&
-                (effectiveFullscreenElementId ? (
+                (browserFullscreenElementId ? (
+                  // 浏览器全屏优先于白板全屏：它脱离白板、占满视口
+                  (() => {
+                    const bfsEl = safeElements.find((e) => e.id === browserFullscreenElementId);
+                    if (!bfsEl) {
+                      if (isRemoteBrowserFullscreen) {
+                        return (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-xs text-white">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-400 mb-3" />
+                            <p className="text-xs font-medium text-slate-200">正在同步教师端的浏览器全屏组件...</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }
+                    let bfsData: Record<string, any> = {};
+                    try {
+                      bfsData = JSON.parse(bfsEl.data);
+                    } catch (_) {}
+                    return (
+                      <BrowserFullscreenHost
+                        elementId={browserFullscreenElementId}
+                        type={bfsEl.type}
+                        data={bfsData}
+                        lessonId={lessonId}
+                        readOnly={readOnly}
+                        dismissible={isBrowserFullscreenDismissible}
+                        onExit={() => void browserFullscreen.exit()}
+                        // 复用画布内已有的元素渲染，避免复制一份必然漂移
+                        renderContent={() => renderElement(bfsEl)}
+                      />
+                    );
+                  })()
+                ) : effectiveFullscreenElementId ? (
                   (() => {
                     const fsEl = safeElements.find((e) => e.id === effectiveFullscreenElementId);
                     if (!fsEl) {

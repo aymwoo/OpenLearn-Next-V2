@@ -19,12 +19,21 @@ export interface WhiteboardViewState {
   remoteFullscreenElementId: string | null;
   setRemoteFullscreenElementId: (elementId: string | null) => void;
   clearRemoteFullscreen: () => void;
+  /**
+   * 教师端当前「整个浏览器全屏」的组件 id（null 表示未进入）。
+   * 与 `remoteFullscreenElementId`（白板内最大化）是两种能力，分开记录：
+   * 退出其中一种不应影响另一种。原生全屏只在本机发起，学生端只跟随占满视口。
+   */
+  remoteBrowserFullscreenElementId: string | null;
+  setRemoteBrowserFullscreenElementId: (elementId: string | null) => void;
 }
 
 export const whiteboardViewStore = createStore<WhiteboardViewState>((set) => ({
   remoteFullscreenElementId: null,
   setRemoteFullscreenElementId: (remoteFullscreenElementId) => set({ remoteFullscreenElementId }),
   clearRemoteFullscreen: () => set({ remoteFullscreenElementId: null }),
+  remoteBrowserFullscreenElementId: null,
+  setRemoteBrowserFullscreenElementId: (remoteBrowserFullscreenElementId) => set({ remoteBrowserFullscreenElementId }),
 }));
 
 export const useWhiteboardViewStore = <T>(selector: (state: WhiteboardViewState) => T) =>
