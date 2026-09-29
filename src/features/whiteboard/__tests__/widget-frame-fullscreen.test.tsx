@@ -334,3 +334,116 @@ describe('浏览器全屏 · 学生端跟随', () => {
     expect(requestFullscreen).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * 集成路径回归（走 InteractiveWhiteboard 真实渲染，而非直接测 WidgetFrame 组件）。
+ *
+ * 为什么必须单独测：浏览器全屏的实际渲染是 `BrowserFullscreenHost` + `renderElement(el)`，
+ * 它**不经过** WidgetFrame 的 isBrowserFullscreen 分支。只测组件契约会全部通过，
+ * 但真实链路上「隐藏标题栏」与「铺满视口」都可能完全没生效 —— 这类假通过已经发生过一次。
+ */
+describe('浏览器全屏 · 集成路径（宿主真实渲染）', () => {
+  const CASES = [
+    { type: 'plugin', extra: { pluginId: 'ext-demo' }, label: '第三方 widget' },
+    { type: 'html-applet', extra: { title: '互动课件' }, label: '互动课件' },
+    { type: 'assignment', extra: { title: '作业' }, label: '作业' },
+    { type: 'rollcall', extra: { title: '点名' }, label: '随机点名' },
+    { type: 'quiz', extra: { title: '快问快答', options: ['A', 'B'] }, label: '快问快答' },
+  ];
+
+  for (const c of CASES) {
+    it(`${c.label}：全屏内无标题栏（沉浸展示）`, async () => {
+      Object.defineProperty(document.documentElement, 'requestFullscreen', {
+        configurable: true,
+        value: vi.fn().mockResolvedValue(undefined),
+      });
+
+      render(
+        <InteractiveWhiteboard
+          lessonId="l1"
+          elements={[
+            {
+              id: 'el-1',
+              type: c.type,
+              data: JSON.stringify({ ...c.extra, x: 20, y: 20, width: 400, height: 300 }),
+            },
+          ]}
+          onElementAdd={vi.fn(async () => {}) as any}
+          onElementUpdate={vi.fn(async () => {}) as any}
+          userRole="teacher"
+          hidePageBar
+        />,
+      );
+      await act(async () => {});
+
+      // 画布内标题栏存在（前提：按钮可点）
+      expect(getTitleBar()).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.click(document.querySelector('[data-testid="widget-titlebar-browser-fullscreen"]') as HTMLElement);
+      });
+
+      const host = screen.getByTestId('browser-fullscreen-host');
+      // 关键断言：全屏内不得残留任何标题栏
+      expect(host.querySelectorAll('[data-widget-titlebar="true"]').length).toBe(0);
+      // 退出出口必须保留，否则学生会被困在沉浸态
+      expect(host.querySelector('[data-testid="browser-fullscreen-exit"]')).toBeTruthy();
+    });
+  }
+
+  it('全屏内元素铺满视口（而非保持画布内的原始尺寸）', async () => {
+    Object.defineProperty(document.documentElement, 'requestFullscreen', {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(undefined),
+    });
+
+    render(
+      <InteractiveWhiteboard
+        lessonId="l1"
+        elements={[
+          {
+            id: 'el-1',
+            type: 'html-applet',
+            data: JSON.stringify({ title: '互动课件', x: 20, y: 20, width: 400, height: 300 }),
+          },
+        ]}
+        onElementAdd={vi.fn(async () => {}) as any}
+        onElementUpdate={vi.fn(async () => {}) as any}
+        userRole="teacher"
+        hidePageBar
+      />,
+    );
+    await act(async () => {});
+
+    await act(async () => {
+      fireEvent.click(document.querySelector('[data-testid="widget-titlebar-browser-fullscreen"]') as HTMLElement);
+    });
+
+    const host = screen.getByTestId('browser-fullscreen-host');
+    const content = host.querySelector('[data-testid="browser-fullscreen-content"]') as HTMLElement;
+    expect(content.style.width).toBe('1024px');
+    expect(content.style.height).toBe('768px');
+  });
+
+  it('html-applet 也被宿主 WidgetFrame 包裹（与第三方 widget 同一套窗口能力）', async () => {
+    const { container } = render(
+      <InteractiveWhiteboard
+        lessonId="l1"
+        elements={[
+          {
+            id: 'el-1',
+            type: 'html-applet',
+            data: JSON.stringify({ title: '互动课件', x: 20, y: 20, width: 400, height: 300 }),
+          },
+        ]}
+        onElementAdd={vi.fn(async () => {}) as any}
+        onElementUpdate={vi.fn(async () => {}) as any}
+        userRole="teacher"
+        hidePageBar
+      />,
+    );
+    await act(async () => {});
+
+    expect(container.querySelector('[data-widget-frame="true"]')).toBeTruthy();
+  });
+});

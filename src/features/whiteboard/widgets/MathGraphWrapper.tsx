@@ -192,6 +192,7 @@ export function MathGraphWrapper({
   readOnly = false,
   isMinimized = false,
   isMaximized = false,
+  hidden = false,
   isPropertiesOpen = false,
   onOpenProperties,
   onMinimize,
@@ -209,6 +210,8 @@ export function MathGraphWrapper({
   onDelete: () => void;
   isMinimized?: boolean;
   isMaximized?: boolean;
+  /** 浏览器全屏时隐藏标题栏（宿主统一注入） */
+  hidden?: boolean;
   isPropertiesOpen?: boolean;
   onOpenProperties?: () => void;
   onMinimize?: () => void;
@@ -274,6 +277,7 @@ export function MathGraphWrapper({
         readOnly={readOnly}
         isMinimized={isMinimized}
         isMaximized={isMaximized}
+        hidden={hidden}
         isPropertiesOpen={isPropertiesOpen}
         themeColor="default"
         onPointerDown={onPointerDown}

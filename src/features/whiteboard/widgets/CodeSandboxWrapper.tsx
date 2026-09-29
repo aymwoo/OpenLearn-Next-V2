@@ -13,6 +13,7 @@ export function CodeSandboxWrapper({
   readOnly = false,
   isMinimized = false,
   isMaximized = false,
+  hidden = false,
   isPropertiesOpen = false,
   onOpenProperties,
   onMinimize,
@@ -30,6 +31,8 @@ export function CodeSandboxWrapper({
   onDelete: () => void;
   isMinimized?: boolean;
   isMaximized?: boolean;
+  /** 浏览器全屏时隐藏标题栏（宿主统一注入） */
+  hidden?: boolean;
   isPropertiesOpen?: boolean;
   onOpenProperties?: () => void;
   onMinimize?: () => void;
@@ -113,6 +116,7 @@ export function CodeSandboxWrapper({
         readOnly={readOnly}
         isMinimized={isMinimized}
         isMaximized={isMaximized}
+        hidden={hidden}
         isPropertiesOpen={isPropertiesOpen}
         themeColor="default"
         onPointerDown={onPointerDown}

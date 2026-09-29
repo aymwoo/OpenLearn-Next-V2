@@ -10,6 +10,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **修复「整个浏览器全屏」未真正生效，并补上集成路径回归测试**：
+  - **这是上一轮实现的一个假通过**：需求是「全屏时隐藏标题栏、保留悬浮退出按钮」，但实际只做到了后者。浏览器全屏的真实渲染链路是 `BrowserFullscreenHost` + `renderElement(el)`，走的是**画布内那条渲染分支**，从未经过 `WidgetFrame` 的 `isBrowserFullscreen` 分支 —— 那段「隐藏标题栏」的代码自加入起就一次都没执行过。原因是我当时的测试直接给 `WidgetFrame` 传 `isBrowserFullscreen`，测的是组件契约而非集成路径（与此前双击删组件那次假通过同一类错误）。
+  - **同时发现更严重的问题：全屏时元素根本没放大**。`renderElement` 里元素用 `displayX/displayY/displayWidth/displayHeight` 绝对定位，而这三个值直接来自 `data` —— 也就是说全屏只是把「画布里 400×300 的那个小卡片」原样搬到视口左上角，尺寸不变，所谓「全屏」名不副实。
+  - **修复**：`renderElement` 增加可选 `fullscreen` 参数，在**定位计算的唯一入口**统一覆盖为「内缩 24px 铺满视口」。9 个元素类型共享同一套定位计算，因此一处改动即对所有类型生效，也保证后续新增类型自动一致。同时把「全屏隐藏标题栏」抽成 `WidgetTitleBar` 的 `hidden` prop，由宿主的 `getWidgetTitleBarProps` 统一注入 —— 各分支无需各自判断，第三方 widget 也自动生效。
+  - **`BrowserFullscreenHost` 暴露视口尺寸**：新增 `data-testid="browser-fullscreen-content"` 容器并监听 `resize`（含原生全屏切换导致的尺寸变化），让元素能真正铺满而不是停在进入瞬间的尺寸。
+  - **顺带修复 `rollcall` / `hello-world` 拿不到「浏览器全屏」按钮**：`RollCallWrapper`、`HelloWorldWrapper` 把标题栏属性硬编码、丢弃了宿主传入的 `onBrowserFullscreen`，导致这两个组件**至今无法进入浏览器全屏**（同批的 `CodeSandboxWrapper` / `MathGraphWrapper` 转发正常）。
+  - **回归测试**：新增 7 个**集成路径**用例（走 `InteractiveWhiteboard` 真实渲染，覆盖 plugin / html-applet / assignment / rollcall / quiz 五类，断言全屏内标题栏数量为 0 且退出出口存在，并断言内容容器铺满视口）。**反向验证**：回退修复后 5 个用例失败，确认是真实回归测试而非再次假通过。
+  - 另补 `presence.test.ts` 中 `mode: 'board'` 透传断言（上一次提交遗漏）。
+
+- **互动课件（html-applet）收口到统一窗口框架 `WidgetFrame`**：
+  - 此前它虽然已能拿到 `getWidgetTitleBarProps`（含两种全屏），但仍手工渲染 `WidgetTitleBar` + 手工控制 `isMinimized` 时的内容显隐，与 plugin 分支写法分叉。现在改为与第三方 widget 完全一致的结构：内容交给 `WidgetFrame` 包裹，课件只提供内容本身，窗口能力（最小化 / 两种全屏 / 删除）由宿主统一保证。
+  - 澄清一点技术前提：iframe `sandbox` 未开 `allow-same-origin`，父页面本就读不到课件内部 DOM —— 窗口框架位于 **iframe 外部**，因此**不存在**「往 iframe 内注入样式 / 跨文档通信」的成本。
+
 - **互动大屏展台：清除全部写死的假数据，缺失指标补齐真实接口**：
   - **审计结论**：展台原有 4 类假数据 —— ① 投票选项 `options || ['A','B','C','D']` 兜底，接口无数据时画出 4 条不存在的选项柱；② 互评量规均分写死 `95.3`；③ 已同步学生机写死 `32` 台（且 `PeerReviewRubricStats` 里还有 `syncedStudentsCount = 32` 的默认值）；④ **作品「可视化预览」是写死的五边形/旋转矩形 SVG**，与任何真实作品无关 —— 投到大屏上学生会以为那就是该同学的作品。另有批注署名写死「陈老师」、弹幕写死「主讲教师」、语音时长编造 `4` 秒、阶段写死 `STAGE 02.4`。
   - **展台「作业互评赏析」原本是空壳**：`StageDisplayPanel` 只传了 `lessonTitle`，没传 `lessonId`，导致数据源 `usePeerReviewData` 完全没接上。现通过 `usePeerReviewData` 接入真实互评数据（焦点作品 / 互评矩阵 / 提名榜 / 量规 / 弹幕 / 评阅进度），并支持教师「一键分配互评」。

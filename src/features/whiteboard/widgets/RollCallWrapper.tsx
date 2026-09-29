@@ -40,6 +40,10 @@ export interface RollCallWrapperProps {
   readOnly?: boolean;
   isMinimized?: boolean;
   isMaximized?: boolean;
+  /** 浏览器全屏时隐藏标题栏（宿主统一注入） */
+  hidden?: boolean;
+  /** 进入「整个浏览器全屏」（宿主注入） */
+  onBrowserFullscreen?: () => void;
   isPropertiesOpen?: boolean;
   onOpenProperties?: () => void;
   onMinimize?: () => void;
@@ -60,6 +64,8 @@ export function RollCallWrapper({
   readOnly = false,
   isMinimized = false,
   isMaximized = false,
+  hidden = false,
+  onBrowserFullscreen,
   isPropertiesOpen = false,
   onOpenProperties,
   onMinimize,
@@ -323,6 +329,8 @@ export function RollCallWrapper({
         readOnly={readOnly}
         isMinimized={isMinimized}
         isMaximized={isMaximized}
+        hidden={hidden}
+        onBrowserFullscreen={onBrowserFullscreen}
         isPropertiesOpen={isPropertiesOpen}
         themeColor="indigo"
         onPointerDown={onPointerDown}

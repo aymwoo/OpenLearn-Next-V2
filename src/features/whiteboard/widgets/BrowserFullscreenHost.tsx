@@ -8,9 +8,12 @@
  * 组件渲染逻辑已经在 `InteractiveWhiteboard` 内按元素类型分支好了，
  * 复制一份必然漂移。这里只负责「外层容器 + 退出出口」。
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Minimize2 } from 'lucide-react';
 import { BROWSER_FULLSCREEN_Z } from './WidgetFrame';
+
+/** 元素与视口边缘的留白 */
+export const BROWSER_FULLSCREEN_PADDING = 24;
 
 export interface BrowserFullscreenHostProps {
   elementId: string;
@@ -25,8 +28,11 @@ export interface BrowserFullscreenHostProps {
    */
   dismissible?: boolean;
   onExit: () => void;
-  /** 由调用方渲染组件内容（复用白板内已有的元素渲染逻辑） */
-  renderContent: () => React.ReactNode;
+  /**
+   * 由调用方渲染组件内容（复用白板内已有的元素渲染逻辑）。
+   * 传入当前视口尺寸 —— 元素需据此铺满全屏，而非保持画布内的原始尺寸。
+   */
+  renderContent: (viewport: { width: number; height: number }) => React.ReactNode;
 }
 
 export function BrowserFullscreenHost({
@@ -47,6 +53,17 @@ export function BrowserFullscreenHost({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onExit, dismissible]);
+
+  // 视口尺寸：元素要在全屏下铺满，必须跟随窗口变化（含原生全屏切换时的尺寸变化）
+  const [viewport, setViewport] = useState(() => ({
+    width: typeof window === 'undefined' ? 1024 : window.innerWidth,
+    height: typeof window === 'undefined' ? 768 : window.innerHeight,
+  }));
+  useEffect(() => {
+    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   return (
     <div
@@ -77,7 +94,13 @@ export function BrowserFullscreenHost({
         </span>
       )}
 
-      <div className="flex-1 min-h-0 overflow-auto">{renderContent()}</div>
+      <div
+        data-testid="browser-fullscreen-content"
+        className="flex-1 min-h-0 overflow-auto"
+        style={{ width: viewport.width, height: viewport.height }}
+      >
+        {renderContent(viewport)}
+      </div>
 
       {/* 供自动化测试/调试确认上下文，不影响视觉 */}
       <span hidden data-lesson-id={lessonId} />

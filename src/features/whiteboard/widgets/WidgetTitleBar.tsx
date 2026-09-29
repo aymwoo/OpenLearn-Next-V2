@@ -4,6 +4,12 @@ import { Maximize2, Minus, Square, SlidersHorizontal, Trash2, Lock, MonitorUp } 
 export interface WidgetTitleBarProps {
   title: string;
   icon?: React.ReactNode;
+  /**
+   * 隐藏整条标题栏。
+   * 「整个浏览器全屏」下使用：沉浸展示，退出交由悬浮按钮 / Esc 负责。
+   * 由宿主的 getWidgetTitleBarProps 统一注入，各元素分支无需自行判断。
+   */
+  hidden?: boolean;
   readOnly?: boolean;
   isMinimized?: boolean;
   isMaximized?: boolean;
@@ -29,6 +35,7 @@ export interface WidgetTitleBarProps {
 export function WidgetTitleBar({
   title,
   icon,
+  hidden = false,
   readOnly = false,
   isMinimized = false,
   isMaximized = false,
@@ -60,6 +67,9 @@ export function WidgetTitleBar({
         return 'bg-surface-secondary/90 text-main border-theme';
     }
   };
+
+  // 浏览器全屏：整条 chrome 退场，元素内容铺满视口
+  if (hidden) return null;
 
   return (
     <div

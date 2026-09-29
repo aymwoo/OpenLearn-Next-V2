@@ -142,7 +142,7 @@ import {
 import { WidgetTitleBar } from './widgets/WidgetTitleBar';
 import { WidgetFrame } from './widgets/WidgetFrame';
 import { useBrowserFullscreen } from './widgets/useBrowserFullscreen';
-import { BrowserFullscreenHost } from './widgets/BrowserFullscreenHost';
+import { BrowserFullscreenHost, BROWSER_FULLSCREEN_PADDING } from './widgets/BrowserFullscreenHost';
 import { PluginCardRenderer } from './widgets/PluginCardRenderer';
 import { RollCallWrapper } from './widgets/RollCallWrapper';
 import { CodeSandboxWrapper } from './widgets/CodeSandboxWrapper';
@@ -2669,8 +2669,20 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
       ));
     };
 
-    // Render incoming elements
-    const renderElement = (el: WhiteboardElement) => {
+    /**
+     * 渲染单个白板元素。
+     *
+     * `opts.fullscreen` 用于「整个浏览器全屏」：此时元素脱离画布、铺满视口，
+     * 且隐藏窗口 chrome（标题栏）—— 沉浸展示，退出由 BrowserFullscreenHost 的
+     * 悬浮按钮与 Esc 负责。
+     *
+     * 之所以做成参数而不是另写一套渲染：所有元素类型共用同一套定位计算
+     * （displayX/Y/Width/Height），在这里统一覆盖，9 个分支零改动即可获得全屏布局。
+     */
+    const renderElement = (
+      el: WhiteboardElement,
+      opts?: { fullscreen?: { width: number; height: number; padding: number } },
+    ) => {
       try {
         const data = JSON.parse(el.data);
         // localGeometryVersion 仅用于让覆盖层的增删触发重渲染
@@ -2681,20 +2693,28 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         // 优先级：拖拽/缩放中的临时状态 > 乐观几何覆盖 > 服务端 data
         const baseX = overlay?.x ?? data.x ?? 0;
         const baseY = overlay?.y ?? data.y ?? 0;
-        const displayX = isResizingThis ? resizingState.x : isDraggingThis ? activeDragElement.currentX : baseX;
-        const displayY = isResizingThis ? resizingState.y : isDraggingThis ? activeDragElement.currentY : baseY;
+        const dragX = isResizingThis ? resizingState.x : isDraggingThis ? activeDragElement.currentX : baseX;
+        const dragY = isResizingThis ? resizingState.y : isDraggingThis ? activeDragElement.currentY : baseY;
 
         const getInitialWidth = (type: string) => getDefaultElementSize(type, data).width;
         const getInitialHeight = (type: string) => getDefaultElementSize(type, data).height;
 
-        const displayWidth = isResizingThis
+        const rawDisplayWidth = isResizingThis
           ? resizingState.width
           : (overlay?.width ?? data.width ?? getInitialWidth(el.type));
-        const displayHeight = isResizingThis
+        const rawDisplayHeight = isResizingThis
           ? resizingState.height
           : data.isMinimized
             ? 36
             : (overlay?.height ?? data.height ?? getInitialHeight(el.type));
+
+        // 浏览器全屏：铺满可用视口（内缩 padding 留出呼吸位），并忽略最小化高度
+        const fs = opts?.fullscreen;
+        const inBrowserFullscreen = !!fs;
+        const displayX = fs ? fs.padding : dragX;
+        const displayY = fs ? fs.padding : dragY;
+        const displayWidth = fs ? Math.max(240, fs.width - fs.padding * 2) : rawDisplayWidth;
+        const displayHeight = fs ? Math.max(180, fs.height - fs.padding * 2) : rawDisplayHeight;
         const isThisSelected = selectedShapeId === el.id;
         const isSwapTarget = autoTileEnabled && dragOverTileId === el.id;
         const hoverCardClass =
@@ -2779,6 +2799,9 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         ) => ({
           title: data.title || defaultTitle,
           icon,
+          // 浏览器全屏时整条标题栏退场（沉浸展示）。在这里统一注入，
+          // 9 个元素分支与第三方 widget 无需各自判断 —— 这也保证了新类型自动一致。
+          hidden: inBrowserFullscreen,
           readOnly,
           isMinimized: !!data.isMinimized,
           isMaximized: effectiveFullscreenElementId === el.id,
@@ -3263,23 +3286,25 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     height: `${displayHeight}px`,
                   }}
                 >
-                  <WidgetTitleBar
+                  {/*
+                    与 plugin 分支一致：内容交给宿主的 WidgetFrame 包裹，
+                    课件只需提供内容本身，窗口能力（最小化/全屏/删除）由宿主统一保证。
+                  */}
+                  <WidgetFrame
                     {...getWidgetTitleBarProps(
                       data.title || 'Interactive Courseware',
                       <Globe size={13} className="text-primary-theme" />,
                       'default',
                     )}
-                  />
-                  {!data.isMinimized && (
-                    <div className="flex-1 bg-white overflow-hidden relative min-h-0">
-                      <HtmlAppletFrame
-                        data={data}
-                        lessonId={lessonId}
-                        elementId={el.id}
-                        className="w-full h-full border-none"
-                      />
-                    </div>
-                  )}
+                    contentClassName="flex-1 bg-white overflow-hidden relative min-h-0"
+                  >
+                    <HtmlAppletFrame
+                      data={data}
+                      lessonId={lessonId}
+                      elementId={el.id}
+                      className="w-full h-full border-none"
+                    />
+                  </WidgetFrame>
                   {readOnly && <ReadOnlyLockCover />}
                   {!data.isMinimized && renderResizeHandles()}
                 </div>
@@ -4394,8 +4419,17 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                         readOnly={readOnly}
                         dismissible={isBrowserFullscreenDismissible}
                         onExit={() => void browserFullscreen.exit()}
-                        // 复用画布内已有的元素渲染，避免复制一份必然漂移
-                        renderContent={() => renderElement(bfsEl)}
+                        // 复用画布内已有的元素渲染，避免复制一份必然漂移；
+                        // 传入视口尺寸使元素在全屏下铺满（而非保持画布内尺寸）
+                        renderContent={(viewport) =>
+                          renderElement(bfsEl, {
+                            fullscreen: {
+                              width: viewport.width,
+                              height: viewport.height,
+                              padding: BROWSER_FULLSCREEN_PADDING,
+                            },
+                          })
+                        }
                       />
                     );
                   })()
@@ -4479,7 +4513,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
                     className="w-full h-full cursor-crosshair"
                   >
                     <Layer>
-                      {getCurrentPageElements().map(renderElement)}
+                      {getCurrentPageElements().map((el) => renderElement(el))}
                       {/* Show drawing in progress */}
                       {renderActiveDrawing()}
                       {/* Show remote drawings */}

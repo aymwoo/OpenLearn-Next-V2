@@ -269,13 +269,13 @@ describe('setupPresence', () => {
           scope: 'room',
           room: 'L1',
           event: 'whiteboard-fullscreen-changed',
-          payload: { lessonId: 'L1', elementId: 'el-1' },
+          payload: { lessonId: 'L1', elementId: 'el-1', mode: 'board' },
         },
         {
           scope: 'room',
           room: 'class-c1',
           event: 'whiteboard-fullscreen-changed',
-          payload: { lessonId: 'L1', elementId: 'el-1' },
+          payload: { lessonId: 'L1', elementId: 'el-1', mode: 'board' },
         },
       ]);
     });
@@ -292,7 +292,7 @@ describe('setupPresence', () => {
           scope: 'room',
           room: 'L1',
           event: 'whiteboard-fullscreen-changed',
-          payload: { lessonId: 'L1', elementId: null },
+          payload: { lessonId: 'L1', elementId: null, mode: 'board' },
         },
       ]);
     });
