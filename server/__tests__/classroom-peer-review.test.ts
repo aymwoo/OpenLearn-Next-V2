@@ -2,10 +2,9 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
-import path from 'path';
 import { registerClassroomPeerReviewRoutes } from '../routes/classroom-peer-review.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { loadMigrationsFromDirectory, runMigrations } from '../utils/migrate.js';
+import { ensureTestSchema } from './helpers/test-schema.js';
 
 /**
  * 课中互评 API 契约测试（Stitch 21e2dac1 全班大屏互评）。
@@ -45,7 +44,8 @@ describe('课中互评 API（classroom-peer-review）', () => {
     });
 
   beforeAll(async () => {
-    runMigrations(db, loadMigrationsFromDirectory(path.resolve(__dirname, '../../migrations')));
+    // 补齐课堂迁移（vitest.setup.ts 已统一兜底，此处显式声明依赖，幂等）
+    ensureTestSchema();
 
     const now = Date.now();
     const insUser = db.prepare(

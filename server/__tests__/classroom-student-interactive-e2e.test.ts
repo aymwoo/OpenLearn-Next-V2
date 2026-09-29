@@ -16,7 +16,6 @@ import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
 import { Server as SocketServer } from 'socket.io';
 import { io as ioClient, type Socket as ClientSocket } from 'socket.io-client';
-import path from 'path';
 
 import { registerClassroomRoutes } from '../routes/classroom.js';
 import { registerLessonsRoutes } from '../routes/lessons.js';
@@ -24,7 +23,7 @@ import { registerAssignmentsRoutes } from '../routes/assignments.js';
 import { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
 import { setupRealtimeBridge } from '../realtime-bridge.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { loadMigrationsFromDirectory, runMigrations } from '../utils/migrate.js';
+import { ensureTestSchema } from './helpers/test-schema.js';
 
 describe('课堂学生互动与教师采集全链路自动化测试 (End-to-End Regression)', () => {
   let app: express.Express;
@@ -66,8 +65,8 @@ describe('课堂学生互动与教师采集全链路自动化测试 (End-to-End 
     });
 
   beforeAll(async () => {
-    // 1. 初始化数据库迁移
-    runMigrations(db, loadMigrationsFromDirectory(path.resolve(__dirname, '../../migrations')));
+    // 1. 初始化数据库迁移（vitest.setup.ts 已统一兜底，此处显式声明依赖，幂等）
+    ensureTestSchema();
 
     // 2. 初始化 Express 与 Socket.IO
     app = express();

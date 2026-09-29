@@ -2,11 +2,10 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
-import path from 'path';
 import { registerClassroomRoutes, BUILTIN_TEACHING_MODES } from '../routes/classroom.js';
 import { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { loadMigrationsFromDirectory, runMigrations } from '../utils/migrate.js';
+import { ensureTestSchema } from './helpers/test-schema.js';
 
 /**
  * 教学模式（Teaching Modes）API 契约测试 —— 课堂启动门户的模式选择器数据源。
@@ -50,8 +49,8 @@ describe('教学模式 API（课堂启动门户）', () => {
   };
 
   beforeAll(async () => {
-    // 测试库不一定已应用课堂/教学模式迁移，显式补齐（runMigrations 幂等，按 _migrations 记账）
-    runMigrations(db, loadMigrationsFromDirectory(path.resolve(__dirname, '../../migrations')));
+    // 补齐课堂/教学模式迁移（vitest.setup.ts 已统一兜底，此处显式声明依赖，幂等）
+    ensureTestSchema();
 
     const now = Date.now();
     const insertUser = db.prepare(

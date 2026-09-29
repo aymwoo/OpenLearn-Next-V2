@@ -28,8 +28,7 @@ import { io as ioClient, type Socket as ClientSocket } from 'socket.io-client';
 import { registerLessonsRoutes } from '../routes/lessons.js';
 import { setupRealtimeBridge } from '../realtime-bridge.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { loadMigrationsFromDirectory, runMigrations } from '../utils/migrate.js';
-import path from 'path';
+import { ensureTestSchema } from './helpers/test-schema.js';
 
 interface WhiteboardQuizAnswered {
   lessonId?: string;
@@ -57,7 +56,8 @@ describe('quiz.answered E2E — server emits socket event after quiz-submit', ()
   const correctAnswer = 'B';
 
   beforeAll(async () => {
-    runMigrations(kernelContainer.db as any, loadMigrationsFromDirectory(path.resolve(__dirname, '../../migrations')));
+    // 补齐课堂相关迁移（vitest.setup.ts 已统一兜底，此处显式声明依赖，幂等）
+    ensureTestSchema();
 
     // ── Boot Express + Socket.io (mirroring server.ts wiring) ────────
     app = express();

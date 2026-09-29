@@ -5,8 +5,7 @@ import type { AddressInfo } from 'net';
 import { registerClassroomRoutes } from '../routes/classroom.js';
 import { ClassroomRuntimeService } from '../services/classroom-runtime-service.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
-import { loadMigrationsFromDirectory, runMigrations } from '../utils/migrate.js';
-import path from 'path';
+import { ensureTestSchema } from './helpers/test-schema.js';
 
 /**
  * 互动课堂路由的**请求契约**回归测试。
@@ -67,8 +66,8 @@ describe('互动课堂路由请求契约（投票 / 节奏信号 / 结课通票�
     }[];
 
   beforeAll(async () => {
-    // 测试用内核库不一定已应用课堂迁移，显式补齐（runMigrations 幂等，按 _migrations 记账）
-    runMigrations(db, loadMigrationsFromDirectory(path.resolve(__dirname, '../../migrations')));
+    // 补齐课堂迁移（vitest.setup.ts 已统一兜底，此处显式声明依赖，幂等）
+    ensureTestSchema();
 
     const app = express();
     app.use(express.json());
