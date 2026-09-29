@@ -1740,6 +1740,15 @@ export const BuiltinPlugin = {
           targetFullScore: { type: 'NUMBER', description: '归集后的目标满分' },
           weightPercentage: { type: 'NUMBER', description: '该课件在总评中的权重（百分比）' },
           lessonId: { type: 'STRING', description: '关联课时 ID（可选）' },
+          autoRecordEnabled: {
+            type: 'BOOLEAN',
+            description: '是否开启「自动录入成绩」：提交后由服务端按规则直接写入学期成绩，免去教师逐条点击',
+          },
+          autoRecordMinCompletion: {
+            type: 'NUMBER',
+            description:
+              '自动录入的完成度门槛（0~1）。完成度低于该值的提交不自动录入，留给教师人工判定。0 表示不设门槛',
+          },
         },
         required: ['coursewareId'],
       },

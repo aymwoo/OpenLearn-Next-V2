@@ -9,6 +9,13 @@ import { aggregateAttemptScore, describeAggregation } from '../../packages/plugi
 import { sendSafeError } from '../utils/error-handler.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import { extractScoreCommentCompletion } from '../utils/score-extract.js';
+import {
+  autoRecordAttempt,
+  autoRecordForLesson,
+  describePromoteReason,
+  findActiveLessonForStudent,
+  promoteAttemptToGrade,
+} from '../utils/auto-record-score.js';
 
 export function registerCoursewareRoutes(ctx: ServerContext) {
   const { app, io } = ctx;
@@ -198,10 +205,10 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       if (!session) {
         return res.status(401).json({ error: 'Authentication required to submit attempt scores' });
       }
+      const attemptRow = kernelContainer.db
+        .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
+        .get(attemptId) as { student_id: string } | undefined;
       if (session.role !== 'teacher' && session.role !== 'administrator') {
-        const attemptRow = kernelContainer.db
-          .prepare('SELECT student_id FROM courseware_attempt WHERE id = ?')
-          .get(attemptId) as { student_id: string } | undefined;
         if (attemptRow && attemptRow.student_id !== session.userId) {
           return res.status(403).json({ error: 'Forbidden: Cannot submit scores for another student' });
         }
@@ -247,7 +254,30 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       const cmd = kernelContainer.commandBus.createCommand('courseware.submit_attempt', payload, actorId);
       const result = await kernelContainer.commandBus.execute(cmd);
       await publishAttemptUpdated(attemptId, 'submit');
-      res.json(result);
+
+      // 自动录入（实时路径）：教师预设规则后，学生提交即刻写入学期成绩。
+      //
+      // 安全边界：规则由教师在设置里开启；这里只会录入**调用者自己** attempt 的分数
+      // （上方已校验 attempt 归属），且 promoteAttemptToGrade 对同一 (作业, 学生) 幂等覆盖，
+      // 因此重复提交不会刷分、不会叠加。
+      // 任何异常都必须吞掉 —— 成绩录入是附加能力，绝不能让学生提交失败。
+      let autoRecord: { recorded: boolean; reason?: string } | null = null;
+      try {
+        const studentId = attemptRow?.student_id || session.userId || session.studentId;
+        const activeLesson = studentId ? findActiveLessonForStudent(kernelContainer.db as any, studentId) : null;
+        if (activeLesson) {
+          const outcome = autoRecordAttempt(kernelContainer.db as any, attemptId, activeLesson);
+          autoRecord = outcome.ok ? { recorded: true } : { recorded: false, reason: outcome.reason };
+        } else {
+          // 上课之外（或查不到进行中的课节）不实时录入，交由「学生提交数据」页补录兜底
+          autoRecord = { recorded: false, reason: 'no-active-lesson' };
+        }
+      } catch (autoErr) {
+        console.warn('[courseware.submit] auto-record skipped:', autoErr);
+        autoRecord = { recorded: false, reason: 'auto-record-error' };
+      }
+
+      res.json({ ...(result as object), autoRecord });
     } catch (e: any) {
       sendSafeError(res, e);
     }
@@ -486,106 +516,29 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'Missing lessonId or classId' });
       }
 
-      const attempt = kernelContainer.db
-        .prepare(
-          `
-        SELECT a.*, cw.name as courseware_name, cw.uuid as courseware_uuid,
-               r.score, r.comment, r.completion, r.extra_json
-        FROM courseware_attempt a
-        JOIN courseware cw ON a.courseware_id = cw.id
-        LEFT JOIN submission_result r ON a.id = r.attempt_id
-        WHERE a.id = ?
-      `,
-        )
-        .get(attemptId) as any;
-
-      if (!attempt) {
-        return res.status(404).json({ error: 'Attempt not found' });
-      }
-
-      const studentId = attempt.student_id;
-      const coursewareName = attempt.courseware_name || '互动课件';
-      const rawScore = attempt.score;
-      const completion = attempt.completion || 0;
-
-      let finalScore = 100;
-      if (rawScore !== null && rawScore !== undefined) {
-        if (rawScore >= 0 && rawScore <= 1.0 && rawScore !== 0) {
-          finalScore = Math.round(rawScore * 100);
-        } else {
-          finalScore = Math.round(rawScore);
-        }
-      }
-
-      const assignmentTitle = `互动课件: ${coursewareName}`;
-      const promoteTx = kernelContainer.db.transaction(() => {
-        let assignment = kernelContainer.db
-          .prepare('SELECT id FROM assignments WHERE class_id = ? AND lesson_id = ? AND title = ?')
-          .get(classId, lessonId, assignmentTitle) as any;
-
-        let assignmentId = assignment?.id;
-        if (!assignmentId) {
-          assignmentId = 'ast-cw-' + crypto.randomBytes(8).toString('hex');
-          kernelContainer.db
-            .prepare(
-              'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            )
-            .run(
-              assignmentId,
-              classId,
-              lessonId,
-              assignmentTitle,
-              `来自互动课件 [${coursewareName}] 的随堂学习提交数据记录`,
-              JSON.stringify({ type: 'interactive_courseware', attemptId, coursewareUuid: attempt.courseware_uuid }),
-              Date.now(),
-            );
-        }
-
-        kernelContainer.db
-          .prepare(
-            `
-        INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'graded')
-        ON CONFLICT(assignment_id, student_id) DO UPDATE SET
-          content = excluded.content,
-          score = excluded.score,
-          feedback = excluded.feedback,
-          submitted_at = excluded.submitted_at,
-          graded_at = excluded.graded_at,
-          status = 'graded'
-      `,
-          )
-          .run(
-            assignmentId,
-            studentId,
-            attempt.extra_json || '{}',
-            finalScore,
-            `由教师在课堂中保存录入。课件完成度: ${Math.round(completion * 100)}%。课件原始反�?: ${attempt.comment || '�?'}`,
-            Date.now(),
-            Date.now(),
-          );
-
-        kernelContainer.db
-          .prepare(
-            `
-        INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at)
-        VALUES (?, ?, 1, 100, '[]', ?)
-        ON CONFLICT(student_id, lesson_id) DO UPDATE SET
-          completed = 1,
-          progress_percent = 100
-      `,
-          )
-          .run(studentId, lessonId, Date.now());
-
-        return assignmentId;
+      // 与「自动录入规则」共用同一落库实现，保证手动/自动两条路径口径一致。
+      // ignoreNotFinished / ignoreMinCompletion：手动录入是教师的显式判断，
+      // 不被规则的门槛与状态校验收窄能力（与改动前的行为保持一致）。
+      // 注意「没有分数」两条路径都拒绝 —— 无从搬运的分数绝不凭空生成。
+      const result = promoteAttemptToGrade(kernelContainer.db as any, attemptId, {
+        lessonId,
+        classId,
+        sourceLabel: '教师在课堂中保存录入',
+        ignoreMinCompletion: true,
+        ignoreNotFinished: true,
       });
 
-      const assignmentId = promoteTx();
+      if (!result.ok) {
+        const status = result.reason === 'attempt-not-found' ? 404 : 422;
+        return res
+          .status(status)
+          .json({ success: false, error: describePromoteReason(result.reason), reason: result.reason });
+      }
 
       await publishClassroomEvent(
         CLASSROOM_EVENTS.STUDENT_PROGRESS_UPDATED,
         {
-          studentId,
+          studentId: result.studentId,
           lessonId,
           progressPercent: 100,
           completed: true,
@@ -594,7 +547,24 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         { correlationId: lessonId },
       );
 
-      res.json({ success: true, assignmentId, score: finalScore });
+      res.json({ success: true, assignmentId: result.assignmentId, score: result.score });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
+  /**
+   * 自动录入成绩：把某课节 + 班级下已提交但尚未录入的 attempt 按规则补录。
+   * 教师打开「学生提交数据」页时自动调用，也可手动点「立即补录」强制重跑。
+   */
+  app.post('/api/courseware/attempts/auto-record', requireAuth('teacher', 'administrator'), async (req, res) => {
+    try {
+      const { lessonId, classId, limit } = req.body || {};
+      if (!lessonId || !classId) {
+        return res.status(400).json({ error: 'Missing lessonId or classId' });
+      }
+      const report = autoRecordForLesson(kernelContainer.db as any, { lessonId, classId, limit });
+      res.json({ success: true, ...report });
     } catch (e: any) {
       sendSafeError(res, e);
     }

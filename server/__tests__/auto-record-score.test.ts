@@ -1,0 +1,410 @@
+/**
+ * 自动录入成绩（auto-record）核心逻辑测试
+ *
+ * 覆盖三条铁律：
+ *   1. 没有分数一律不录（历史缺陷：promote 的 finalScore 默认 100 会把「没作答」记成满分）
+ *   2. 只处理已完成的 attempt
+ *   3. 幂等：重复触发不产生重复行
+ * 以及规则开关、完成度门槛、批量补录的分类统计。
+ */
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import Database from 'better-sqlite3';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+import {
+  autoRecordAttempt,
+  autoRecordForLesson,
+  evaluateAutoRecord,
+  findActiveLessonForStudent,
+  normalizePercentScore,
+  promoteAttemptToGrade,
+} from '../utils/auto-record-score.js';
+import { saveScoreConfig, resolveScoreConfig } from '../../packages/plugins/courseware-score.js';
+
+let db: Database.Database;
+let dbPath: string;
+
+const LESSON = 'lesson_1';
+const CLASS_ID = 'class_1';
+
+function seedCourseware(id = 'cw_1', name = '分数乐园') {
+  db.prepare('INSERT INTO courseware (id, uuid, name, type, entry, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
+    id,
+    `uuid-${id}`,
+    name,
+    'html',
+    'index.html',
+    Date.now(),
+  );
+}
+
+function seedStudent(id: string, name: string) {
+  db.prepare('INSERT OR IGNORE INTO students (id, name) VALUES (?, ?)').run(id, name);
+  db.prepare('INSERT OR IGNORE INTO class_students (class_id, student_id) VALUES (?, ?)').run(CLASS_ID, id);
+}
+
+function seedAttempt(opts: {
+  attemptId: string;
+  studentId: string;
+  status?: string;
+  score?: number | null;
+  completion?: number | null;
+  coursewareId?: string;
+}) {
+  const { attemptId, studentId, status = 'completed', score = null, completion = 1, coursewareId = 'cw_1' } = opts;
+  db.prepare(
+    'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, finished_at, status) VALUES (?, ?, ?, ?, ?, ?)',
+  ).run(attemptId, coursewareId, studentId, Date.now(), Date.now(), status);
+  if (score !== null) {
+    db.prepare(
+      'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(`res-${attemptId}`, attemptId, score, 'ok', completion, '{}');
+  }
+}
+
+/** 该（作业, 学生）是否已有成绩行 */
+function submissionRow(attemptCoursewareName: string, studentId: string) {
+  return db
+    .prepare(
+      `SELECT s.score, s.feedback FROM assignment_submissions s
+       JOIN assignments a ON a.id = s.assignment_id
+       WHERE a.class_id = ? AND a.lesson_id = ? AND a.title = ? AND s.student_id = ?`,
+    )
+    .get(CLASS_ID, LESSON, `互动课件: ${attemptCoursewareName}`, studentId) as any;
+}
+
+function enableRule(minCompletion = 0) {
+  saveScoreConfig(db as any, {
+    coursewareId: '*',
+    autoRecordEnabled: true,
+    autoRecordMinCompletion: minCompletion,
+  });
+}
+
+beforeEach(() => {
+  dbPath = path.join(
+    os.tmpdir(),
+    `auto-record-test-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.db`,
+  );
+  db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
+
+  db.exec(`
+    CREATE TABLE courseware (
+      id TEXT PRIMARY KEY, uuid TEXT UNIQUE NOT NULL, name TEXT NOT NULL,
+      type TEXT, entry TEXT NOT NULL, created_at INTEGER NOT NULL
+    );
+    CREATE TABLE courseware_attempt (
+      id TEXT PRIMARY KEY, courseware_id TEXT NOT NULL, student_id TEXT NOT NULL,
+      started_at INTEGER NOT NULL, finished_at INTEGER, status TEXT NOT NULL
+    );
+    CREATE TABLE submission_result (
+      id TEXT PRIMARY KEY, attempt_id TEXT NOT NULL, score REAL, comment TEXT,
+      completion REAL, extra_json TEXT
+    );
+    CREATE TABLE courseware_score_config (
+      courseware_id TEXT PRIMARY KEY, courseware_name TEXT,
+      score_policy TEXT NOT NULL DEFAULT 'LATEST', score_fields TEXT NOT NULL DEFAULT '',
+      raw_full_score REAL NOT NULL DEFAULT 100, target_full_score REAL NOT NULL DEFAULT 100,
+      weight_percentage REAL NOT NULL DEFAULT 100, lesson_id TEXT, updated_at INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE assignments (
+      id TEXT PRIMARY KEY, class_id TEXT NOT NULL, lesson_id TEXT NOT NULL, title TEXT NOT NULL,
+      description TEXT, content TEXT, created_at INTEGER NOT NULL
+    );
+    CREATE TABLE assignment_submissions (
+      id TEXT PRIMARY KEY, assignment_id TEXT NOT NULL, student_id TEXT NOT NULL,
+      content TEXT, score REAL, feedback TEXT, submitted_at INTEGER, graded_at INTEGER, status TEXT
+    );
+    CREATE UNIQUE INDEX idx_assignment_submissions_unique
+      ON assignment_submissions(assignment_id, student_id);
+    CREATE TABLE student_lesson_progress (
+      student_id TEXT NOT NULL, lesson_id TEXT NOT NULL, completed INTEGER,
+      progress_percent REAL, completed_segments TEXT, assigned_at INTEGER,
+      PRIMARY KEY (student_id, lesson_id)
+    );
+    CREATE TABLE students (id TEXT PRIMARY KEY, name TEXT);
+    CREATE TABLE classes (id TEXT PRIMARY KEY, name TEXT);
+    CREATE TABLE class_students (class_id TEXT NOT NULL, student_id TEXT NOT NULL);
+    CREATE TABLE classroom_sessions (
+      id TEXT PRIMARY KEY, lesson_id TEXT NOT NULL, class_id TEXT, stage TEXT,
+      created_at INTEGER NOT NULL
+    );
+  `);
+
+  // 模拟 012 迁移新增的两列
+  db.exec(`
+    ALTER TABLE courseware_score_config ADD COLUMN auto_record_enabled INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE courseware_score_config ADD COLUMN auto_record_min_completion REAL NOT NULL DEFAULT 0;
+  `);
+
+  db.prepare('INSERT INTO classes (id, name) VALUES (?, ?)').run(CLASS_ID, '一班');
+  seedCourseware();
+  seedStudent('s1', '小明');
+  seedStudent('s2', '小红');
+});
+
+afterEach(() => {
+  db.close();
+  for (const suffix of ['', '-wal', '-shm']) {
+    try {
+      fs.unlinkSync(dbPath + suffix);
+    } catch {
+      /* ignore */
+    }
+  }
+});
+
+describe('normalizePercentScore', () => {
+  it('无分数一律返回 null，绝不兜底成 0 或 100', () => {
+    expect(normalizePercentScore(null)).toBeNull();
+    expect(normalizePercentScore(undefined)).toBeNull();
+    expect(normalizePercentScore('')).toBeNull();
+    expect(normalizePercentScore('abc')).toBeNull();
+    expect(normalizePercentScore(NaN)).toBeNull();
+  });
+
+  it('0~1 比率换算为百分制，0 保持 0', () => {
+    expect(normalizePercentScore(0.85)).toBe(85);
+    expect(normalizePercentScore(0)).toBe(0);
+    expect(normalizePercentScore(1)).toBe(100);
+  });
+
+  it('已是百分制的值原样取整，并夹到 0~100', () => {
+    expect(normalizePercentScore(88.6)).toBe(89);
+    expect(normalizePercentScore(150)).toBe(100);
+    expect(normalizePercentScore(-5)).toBe(0);
+  });
+});
+
+describe('promoteAttemptToGrade', () => {
+  it('【铁律 1】没有分数时拒绝录入，而不是给满分', () => {
+    seedAttempt({ attemptId: 'att_noscore', studentId: 's1', score: null });
+    const result = promoteAttemptToGrade(db as any, 'att_noscore', { lessonId: LESSON, classId: CLASS_ID });
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('missing-score');
+    // 关键：绝不能落库任何分数，尤其不能是 100
+    expect(submissionRow('分数乐园', 's1')).toBeUndefined();
+  });
+
+  it('【铁律 2】自动路径不录进行中的 attempt，但手动路径保留该能力', () => {
+    seedAttempt({ attemptId: 'att_active', studentId: 's1', status: 'active', score: 90 });
+
+    // 默认（即自动路径）：进行中不录
+    const auto = promoteAttemptToGrade(db as any, 'att_active', { lessonId: LESSON, classId: CLASS_ID });
+    expect(auto.ok).toBe(false);
+    expect(auto.reason).toBe('not-finished');
+    expect(submissionRow('分数乐园', 's1')).toBeUndefined();
+
+    // 手动路径：教师显式判断，不被规则收窄能力（与改动前行为一致）
+    const manual = promoteAttemptToGrade(db as any, 'att_active', {
+      lessonId: LESSON,
+      classId: CLASS_ID,
+      ignoreNotFinished: true,
+    });
+    expect(manual.ok).toBe(true);
+    expect(submissionRow('分数乐园', 's1').score).toBe(90);
+  });
+
+  it('自动路径不会因为开启了规则就放行进行中的 attempt', () => {
+    seedAttempt({ attemptId: 'att_active', studentId: 's1', status: 'active', score: 90 });
+    enableRule();
+
+    const result = autoRecordAttempt(db as any, 'att_active', { lessonId: LESSON, classId: CLASS_ID });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('not-finished');
+  });
+
+  it('【历史 bug 回归】completed 状态必须被认作终态', () => {
+    // 曾经前端只认 finished/submitted，导致 completed 的行「录入成绩」按钮长期灰着
+    seedAttempt({ attemptId: 'att_completed', studentId: 's1', status: 'completed', score: 92 });
+    const result = promoteAttemptToGrade(db as any, 'att_completed', { lessonId: LESSON, classId: CLASS_ID });
+
+    expect(result.ok).toBe(true);
+    expect(result.score).toBe(92);
+    expect(submissionRow('分数乐园', 's1').score).toBe(92);
+  });
+
+  it('访客/教师预览记录不记入学生成绩', () => {
+    seedAttempt({ attemptId: 'att_guest', studentId: 'guest', score: 100 });
+    const result = promoteAttemptToGrade(db as any, 'att_guest', { lessonId: LESSON, classId: CLASS_ID });
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('placeholder-student');
+  });
+
+  it('【铁律 3】重复录入幂等：只更新同一行，不新增', () => {
+    seedAttempt({ attemptId: 'att_1', studentId: 's1', score: 70 });
+
+    promoteAttemptToGrade(db as any, 'att_1', { lessonId: LESSON, classId: CLASS_ID });
+    promoteAttemptToGrade(db as any, 'att_1', { lessonId: LESSON, classId: CLASS_ID });
+    promoteAttemptToGrade(db as any, 'att_1', { lessonId: LESSON, classId: CLASS_ID });
+
+    const count = db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM assignment_submissions s
+         JOIN assignments a ON a.id = s.assignment_id
+         WHERE a.class_id = ? AND a.lesson_id = ?`,
+      )
+      .get(CLASS_ID, LESSON) as { n: number };
+    expect(count.n).toBe(1);
+  });
+
+  it('完成度门槛不满足时拒绝（手动录入可绕过）', () => {
+    seedAttempt({ attemptId: 'att_low', studentId: 's1', score: 80, completion: 0.3 });
+
+    const blocked = promoteAttemptToGrade(db as any, 'att_low', {
+      lessonId: LESSON,
+      classId: CLASS_ID,
+      minCompletion: 0.6,
+    });
+    expect(blocked.ok).toBe(false);
+    expect(blocked.reason).toBe('below-min-completion');
+
+    const manual = promoteAttemptToGrade(db as any, 'att_low', {
+      lessonId: LESSON,
+      classId: CLASS_ID,
+      minCompletion: 0.6,
+      ignoreMinCompletion: true,
+    });
+    expect(manual.ok).toBe(true);
+  });
+
+  it('同时更新学生课节进度为 100%', () => {
+    seedAttempt({ attemptId: 'att_1', studentId: 's1', score: 70 });
+    promoteAttemptToGrade(db as any, 'att_1', { lessonId: LESSON, classId: CLASS_ID });
+
+    const progress = db
+      .prepare('SELECT completed, progress_percent FROM student_lesson_progress WHERE student_id = ? AND lesson_id = ?')
+      .get('s1', LESSON) as any;
+    expect(progress.completed).toBe(1);
+    expect(progress.progress_percent).toBe(100);
+  });
+});
+
+describe('规则开关与门槛', () => {
+  it('默认关闭：升级后行为不变', () => {
+    const resolved = resolveScoreConfig(db as any, 'cw_1');
+    expect(resolved.config.auto_record_enabled).toBe(false);
+    expect(resolved.config.auto_record_min_completion).toBe(0);
+  });
+
+  it('规则关闭时不自动录入', () => {
+    seedAttempt({ attemptId: 'att_1', studentId: 's1', score: 88 });
+    expect(saveScoreConfig(db as any, { coursewareId: '*' }).auto_record_enabled).toBe(false);
+
+    const result = autoRecordAttempt(db as any, 'att_1', { lessonId: LESSON, classId: CLASS_ID });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('rule-disabled');
+    expect(submissionRow('分数乐园', 's1')).toBeUndefined();
+  });
+
+  it('开启规则后自动录入，并带上来源标记', () => {
+    seedAttempt({ attemptId: 'att_1', studentId: 's1', score: 88 });
+    enableRule();
+
+    const result = autoRecordAttempt(db as any, 'att_1', { lessonId: LESSON, classId: CLASS_ID });
+    expect(result.ok).toBe(true);
+    expect(result.score).toBe(88);
+    expect(submissionRow('分数乐园', 's1').feedback).toContain('自动录入规则');
+  });
+
+  it('规则门槛会拦住低完成度的提交', () => {
+    seedAttempt({ attemptId: 'att_1', studentId: 's1', score: 88, completion: 0.4 });
+    enableRule(0.8);
+
+    const decision = evaluateAutoRecord(db as any, 'att_1');
+    expect(decision.shouldRecord).toBe(false);
+    expect(decision.reason).toBe('below-min-completion');
+  });
+
+  it('课件专属配置可覆盖全局规则', () => {
+    seedAttempt({ attemptId: 'att_1', studentId: 's1', score: 88, completion: 0.5 });
+    enableRule(0.9); // 全局门槛 90%
+    saveScoreConfig(db as any, { coursewareId: 'cw_1', autoRecordEnabled: true, autoRecordMinCompletion: 0 });
+
+    const decision = evaluateAutoRecord(db as any, 'att_1');
+    expect(decision.ruleSource).toBe('courseware');
+    expect(decision.shouldRecord).toBe(true);
+  });
+
+  it('门槛越界会被拒绝', () => {
+    expect(() => saveScoreConfig(db as any, { coursewareId: '*', autoRecordMinCompletion: 1.5 })).toThrow(
+      /autoRecordMinCompletion/,
+    );
+  });
+});
+
+describe('autoRecordForLesson 批量补录', () => {
+  it('按规则分类：已录入的跳过，无分数的跳过，低门槛的录进来', () => {
+    seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 90 });
+    seedAttempt({ attemptId: 'att_b', studentId: 's2', score: null }); // 无分数
+    seedAttempt({ attemptId: 'att_c', studentId: 's1', coursewareId: 'cw_2', score: 60, completion: 0.2 });
+    seedCourseware('cw_2', '闯关课件');
+    seedAttempt({ attemptId: 'att_d', studentId: 's1', status: 'active', score: 95 }); // 进行中
+    enableRule(0.5);
+
+    const report = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+
+    // 只有 att_a（分数 90、完成度 1）满足规则
+    expect(report.recorded).toBe(1);
+    expect(submissionRow('分数乐园', 's1').score).toBe(90);
+    expect(submissionRow('闯关课件', 's1')).toBeUndefined();
+
+    const reasons = report.details.map((d) => `${d.attemptId}:${d.reason ?? 'ok'}`).sort();
+    expect(reasons).toEqual(expect.arrayContaining(['att_a:ok', 'att_b:missing-score', 'att_c:below-min-completion']));
+  });
+
+  it('重复补录不会重复记分', () => {
+    seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 90 });
+    enableRule();
+
+    const first = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(first.recorded).toBe(1);
+
+    const second = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(second.recorded).toBe(0);
+    expect(second.skipped).toBe(1);
+    expect(second.details[0].reason).toBe('already-recorded');
+
+    const count = db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM assignment_submissions s JOIN assignments a ON a.id = s.assignment_id
+         WHERE a.lesson_id = ?`,
+      )
+      .get(LESSON) as { n: number };
+    expect(count.n).toBe(1);
+  });
+
+  it('报告里带出学生姓名，便于教师核对', () => {
+    seedAttempt({ attemptId: 'att_a', studentId: 's2', score: 77 });
+    enableRule();
+
+    const report = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    const entry = report.details.find((d) => d.attemptId === 'att_a');
+    expect(entry?.studentName).toBe('小红');
+  });
+});
+
+describe('findActiveLessonForStudent', () => {
+  it('上课期间能反查到进行中的课节', () => {
+    db.prepare(
+      'INSERT INTO classroom_sessions (id, lesson_id, class_id, stage, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run('sess_1', LESSON, CLASS_ID, 'IN_CLASS_TEACHING', Date.now());
+    expect(findActiveLessonForStudent(db as any, 's1')).toEqual({ lessonId: LESSON, classId: CLASS_ID });
+  });
+
+  it('课节已结束则查不到（不实时录入，交给补录兜底）', () => {
+    db.prepare(
+      'INSERT INTO classroom_sessions (id, lesson_id, class_id, stage, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run('sess_1', LESSON, CLASS_ID, 'ARCHIVED_REPORT', Date.now());
+    expect(findActiveLessonForStudent(db as any, 's1')).toBeNull();
+  });
+
+  it('查不到时不报错', () => {
+    expect(findActiveLessonForStudent(db as any, 'unknown')).toBeNull();
+  });
+});

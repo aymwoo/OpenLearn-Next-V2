@@ -41,6 +41,16 @@ export interface CoursewareScoreConfig {
   target_full_score: number;
   weight_percentage: number;
   lesson_id: string | null;
+  /**
+   * 是否启用「自动录入成绩」：课件被提交后由服务端按规则直接把成绩写入学期成绩，
+   * 免去教师在「学生提交数据」页逐条手动点击。默认关闭（不改变历史行为）。
+   */
+  auto_record_enabled: boolean;
+  /**
+   * 自动录入的完成度门槛（0~1）。完成度低于该值的提交不自动录入，留给教师人工判定。
+   * 0 表示不设门槛。
+   */
+  auto_record_min_completion: number;
   updated_at: number;
 }
 
@@ -80,6 +90,9 @@ export const DEFAULT_SCORE_CONFIG: CoursewareScoreConfig = {
   target_full_score: 100,
   weight_percentage: 100,
   lesson_id: null,
+  // 自动录入默认关闭：必须由教师显式开启，避免升级后行为突变
+  auto_record_enabled: false,
+  auto_record_min_completion: 0,
   updated_at: 0,
 };
 
@@ -109,6 +122,18 @@ export function clamp(value: number, min: number, max: number): number {
   if (value < min) return min;
   if (value > max) return max;
   return value;
+}
+
+/**
+ * 宽松布尔解析：SQLite INTEGER（0/1）、'true'/'false'、true/false 都接受。
+ * 迁移前的老行没有该列，值为 undefined → false（不改变历史行为）。
+ */
+export function isTruthyFlag(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  const text = String(value).trim().toLowerCase();
+  return text === '1' || text === 'true' || text === 'yes' || text === 'on';
 }
 
 export function round2(value: number): number {
@@ -332,6 +357,9 @@ export function normalizeScoreConfig(row: any): CoursewareScoreConfig {
     target_full_score: positive(row.target_full_score, 100),
     weight_percentage: weight === null ? 100 : clamp(weight, 0, 1000),
     lesson_id: row.lesson_id === undefined || row.lesson_id === null ? null : String(row.lesson_id),
+    // SQLite 用 INTEGER 存布尔：0/1 → false，其余非空值（含 'true'）视为开启
+    auto_record_enabled: isTruthyFlag(row.auto_record_enabled),
+    auto_record_min_completion: clamp(toNumber(row.auto_record_min_completion) ?? 0, 0, 1),
     updated_at: updatedAt ?? 0,
   };
 }
@@ -388,6 +416,12 @@ export interface SaveScoreConfigInput {
   weight_percentage?: number | string;
   lessonId?: string | null;
   lesson_id?: string | null;
+  /** 是否启用自动录入成绩（true / 1 / 'true' 均可） */
+  autoRecordEnabled?: boolean | number | string;
+  auto_record_enabled?: boolean | number | string;
+  /** 自动录入的完成度门槛，0~1 */
+  autoRecordMinCompletion?: number | string;
+  auto_record_min_completion?: number | string;
 }
 
 function pickInput<T>(
@@ -438,6 +472,10 @@ export function saveScoreConfig(db: SqliteLike, input: SaveScoreConfigInput): Co
   const rawFull = toNumber(pickInput<string | number>(input, 'rawFullScore', 'raw_full_score'));
   const targetFull = toNumber(pickInput<string | number>(input, 'targetFullScore', 'target_full_score'));
   const weight = toNumber(pickInput<string | number>(input, 'weightPercentage', 'weight_percentage'));
+  const autoRecordRaw = pickInput<unknown>(input, 'autoRecordEnabled', 'auto_record_enabled');
+  const autoRecordMinCompletion = toNumber(
+    pickInput<string | number>(input, 'autoRecordMinCompletion', 'auto_record_min_completion'),
+  );
 
   if (rawFull !== undefined && rawFull !== null && rawFull <= 0)
     throw new Error('save_score_config: rawFullScore must be > 0');
@@ -445,6 +483,8 @@ export function saveScoreConfig(db: SqliteLike, input: SaveScoreConfigInput): Co
     throw new Error('save_score_config: targetFullScore must be > 0');
   if (weight !== undefined && weight !== null && (weight < 0 || weight > 1000))
     throw new Error('save_score_config: weightPercentage must be within [0, 1000]');
+  if (autoRecordMinCompletion !== null && (autoRecordMinCompletion < 0 || autoRecordMinCompletion > 1))
+    throw new Error('save_score_config: autoRecordMinCompletion must be within [0, 1] (0~100% 的比率)');
 
   const next: CoursewareScoreConfig = {
     courseware_id: coursewareId,
@@ -468,11 +508,39 @@ export function saveScoreConfig(db: SqliteLike, input: SaveScoreConfigInput): Co
         : lessonRaw === null
           ? null
           : String(lessonRaw).slice(0, 128),
+    auto_record_enabled:
+      autoRecordRaw === undefined ? (existing?.auto_record_enabled ?? false) : isTruthyFlag(autoRecordRaw),
+    auto_record_min_completion:
+      autoRecordMinCompletion !== undefined
+        ? clamp(autoRecordMinCompletion, 0, 1)
+        : (existing?.auto_record_min_completion ?? 0),
     updated_at: Date.now(),
   };
 
+  // 自动录入两列由迁移 012 引入。老库尚未应用该迁移时优雅降级为旧版语句，
+  // 避免整个成绩配置写入 500（其余字段照常保存，仅自动录入规则不可配置）。
+  const hasAutoRecordColumns = tableHasColumns(db, SCORE_CONFIG_TABLE, [
+    'auto_record_enabled',
+    'auto_record_min_completion',
+  ]);
+
   db.prepare(
-    `INSERT INTO ${SCORE_CONFIG_TABLE}
+    hasAutoRecordColumns
+      ? `INSERT INTO ${SCORE_CONFIG_TABLE}
+       (courseware_id, courseware_name, score_policy, score_fields, raw_full_score, target_full_score, weight_percentage, lesson_id, auto_record_enabled, auto_record_min_completion, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(courseware_id) DO UPDATE SET
+       courseware_name = excluded.courseware_name,
+       score_policy = excluded.score_policy,
+       score_fields = excluded.score_fields,
+       raw_full_score = excluded.raw_full_score,
+       target_full_score = excluded.target_full_score,
+       weight_percentage = excluded.weight_percentage,
+       lesson_id = excluded.lesson_id,
+       auto_record_enabled = excluded.auto_record_enabled,
+       auto_record_min_completion = excluded.auto_record_min_completion,
+       updated_at = excluded.updated_at`
+      : `INSERT INTO ${SCORE_CONFIG_TABLE}
        (courseware_id, courseware_name, score_policy, score_fields, raw_full_score, target_full_score, weight_percentage, lesson_id, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(courseware_id) DO UPDATE SET
@@ -493,10 +561,22 @@ export function saveScoreConfig(db: SqliteLike, input: SaveScoreConfigInput): Co
     next.target_full_score,
     next.weight_percentage,
     next.lesson_id,
+    ...(hasAutoRecordColumns ? [next.auto_record_enabled ? 1 : 0, next.auto_record_min_completion] : []),
     next.updated_at,
   );
 
   return next;
+}
+
+/** 表是否同时具备全部给定列（用于老库缺列时优雅降级） */
+export function tableHasColumns(db: SqliteLike, table: string, columns: string[]): boolean {
+  try {
+    const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    const present = new Set((rows || []).map((r) => String(r?.name ?? '')));
+    return columns.every((c) => present.has(c));
+  } catch (e) {
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------

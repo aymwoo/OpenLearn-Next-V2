@@ -1,0 +1,468 @@
+/**
+ * 自动录入成绩（auto-record）核心逻辑
+ *
+ * 背景：教师此前只能在「学生提交数据」页逐条点击「录入成绩」，
+ * 40 人 × 5 个课件 = 200 次点击，在课堂场景下不可持续。
+ * 本模块把这一步改为「按可配置规则自动执行」，并保留手动按钮处理例外。
+ *
+ * 三条铁律（都源于历史缺陷，任何改动都不得放宽）：
+ *   1. **没有分数就不录**。历史 promote 的 `let finalScore = 100` 会在
+ *      submission_result.score 为 NULL 时直接给满分，把「没作答」记成「满分」。
+ *   2. **自动录入只处理已完成的 attempt**。进行中（active）的提交不录。
+ *   3. **幂等**。重复触发（实时 + 补录双路径）只更新同一条 assignment_submissions，
+ *      不产生重复行、不叠加总分。
+ */
+
+import type { SqliteLike } from '../../packages/plugins/courseware-score.js';
+import { resolveScoreConfig, type CoursewareScoreConfig } from '../../packages/plugins/courseware-score.js';
+
+/** 视为「已完成」的 attempt 终态。
+ *  注意与前端 LiveClassroomView 的 FINISHED_STATUSES 保持一致 —— 曾因前端漏掉
+ *  'completed'（数据库实际写入的终态）导致「录入成绩」按钮长期灰着。 */
+export const FINISHED_ATTEMPT_STATUSES = ['completed', 'submitted', 'finished'] as const;
+
+/** 不应记入学期成绩的占位身份：无登录会话的访客 / 教师预览 */
+const PLACEHOLDER_STUDENT_IDS = new Set(['guest', 'teacher', 'teacher_preview', '']);
+
+export interface PromoteResult {
+  ok: boolean;
+  /** 失败/跳过原因，供 UI 解释「为什么这条没录」 */
+  reason?:
+    | 'attempt-not-found'
+    | 'not-finished'
+    | 'placeholder-student'
+    | 'missing-score'
+    | 'below-min-completion'
+    | 'rule-disabled'
+    | 'already-recorded';
+  score?: number;
+  assignmentId?: string;
+  studentId?: string;
+  coursewareName?: string;
+}
+
+/**
+ * 归一化分数到 0~100 的百分制。
+ * 返回 null 表示「没有可用分数」—— 调用方必须拒绝录入，绝不能兜底成 0 或 100。
+ */
+export function normalizePercentScore(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const num = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(num)) return null;
+  // 课件常以 0~1 的比率上报分数（0.85 → 85 分）。0 保持为 0，不能当成比率。
+  const percent = num > 0 && num <= 1 ? Math.round(num * 100) : Math.round(num);
+  return Math.max(0, Math.min(100, percent));
+}
+
+interface AttemptRow {
+  id: string;
+  courseware_id: string;
+  student_id: string;
+  status: string;
+  score: number | null;
+  completion: number | null;
+  extra_json: string | null;
+  comment: string | null;
+  courseware_name: string | null;
+  courseware_uuid: string | null;
+}
+
+function loadAttempt(db: SqliteLike, attemptId: string): AttemptRow | null {
+  try {
+    const row = db
+      .prepare(
+        `SELECT a.id, a.courseware_id, a.student_id, a.status,
+                r.score, r.completion, r.extra_json, r.comment,
+                cw.name AS courseware_name, cw.uuid AS courseware_uuid
+         FROM courseware_attempt a
+         JOIN courseware cw ON a.courseware_id = cw.id
+         LEFT JOIN submission_result r ON a.id = r.attempt_id
+         WHERE a.id = ?`,
+      )
+      .get(attemptId) as AttemptRow | undefined;
+    return row ?? null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export interface PromoteOptions {
+  lessonId: string;
+  classId: string;
+  /** 完成度门槛（0~1）。不满足则拒绝录入。 */
+  minCompletion?: number;
+  /** 记入学期成绩时写入的反馈说明前缀，用于区分「自动」与「教师手动」 */
+  sourceLabel?: string;
+  /** 强制忽略完成度门槛（手动录入时教师已自行判断） */
+  ignoreMinCompletion?: boolean;
+  /**
+   * 忽略「必须已完成」的状态校验。
+   * 仅供**手动**录入使用：教师显式点「录入成绩」本身就是判断，不应被规则收窄能力
+   * （历史上教师可以对 SAVE_PROGRESS 中途的 attempt 手工录入）。
+   * 自动路径永远不设此选项 —— 规则只自动化「确定性足够」的记录。
+   */
+  ignoreNotFinished?: boolean;
+}
+
+/**
+ * 把一条 attempt 的成绩写入学期成绩（assignment_submissions）。
+ * 手动按钮与自动规则共用此实现，保证两条路径的落库口径完全一致。
+ */
+export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options: PromoteOptions): PromoteResult {
+  const { lessonId, classId } = options;
+  if (!lessonId || !classId) {
+    return { ok: false, reason: 'attempt-not-found' };
+  }
+
+  const attempt = loadAttempt(db, attemptId);
+  if (!attempt) return { ok: false, reason: 'attempt-not-found' };
+
+  if (
+    !options.ignoreNotFinished &&
+    !FINISHED_ATTEMPT_STATUSES.includes(attempt.status as (typeof FINISHED_ATTEMPT_STATUSES)[number])
+  ) {
+    return { ok: false, reason: 'not-finished', studentId: attempt.student_id };
+  }
+  if (PLACEHOLDER_STUDENT_IDS.has(attempt.student_id)) {
+    return { ok: false, reason: 'placeholder-student', studentId: attempt.student_id };
+  }
+
+  // 铁律 1：没有聚合分就不录
+  const finalScore = normalizePercentScore(attempt.score);
+  if (finalScore === null) {
+    return { ok: false, reason: 'missing-score', studentId: attempt.student_id };
+  }
+
+  const completion = Number.isFinite(attempt.completion as number) ? (attempt.completion as number) : 0;
+  const minCompletion = options.ignoreMinCompletion ? 0 : (options.minCompletion ?? 0);
+  if (completion < minCompletion) {
+    return {
+      ok: false,
+      reason: 'below-min-completion',
+      score: finalScore,
+      studentId: attempt.student_id,
+    };
+  }
+
+  const coursewareName = attempt.courseware_name || '互动课件';
+  const assignmentTitle = `互动课件: ${coursewareName}`;
+  const now = Date.now();
+  const sourceLabel = options.sourceLabel ?? '教师在课堂中保存录入';
+
+  const run = (): string => {
+    const existing = db
+      .prepare('SELECT id FROM assignments WHERE class_id = ? AND lesson_id = ? AND title = ?')
+      .get(classId, lessonId, assignmentTitle) as { id: string } | undefined;
+
+    let assignmentId = existing?.id;
+    if (!assignmentId) {
+      assignmentId = 'ast-cw-' + randomHex(8);
+      db.prepare(
+        'INSERT INTO assignments (id, class_id, lesson_id, title, description, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ).run(
+        assignmentId,
+        classId,
+        lessonId,
+        assignmentTitle,
+        `来自互动课件 [${coursewareName}] 的随堂学习提交数据记录`,
+        JSON.stringify({ type: 'interactive_courseware', attemptId, coursewareUuid: attempt.courseware_uuid }),
+        now,
+      );
+    }
+
+    // 幂等：同一 assignment + student 只保留一行，重跑即覆盖
+    db.prepare(
+      `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'graded')
+       ON CONFLICT(assignment_id, student_id) DO UPDATE SET
+         content = excluded.content,
+         score = excluded.score,
+         feedback = excluded.feedback,
+         submitted_at = excluded.submitted_at,
+         graded_at = excluded.graded_at,
+         status = 'graded'`,
+    ).run(
+      assignmentId,
+      attempt.student_id,
+      attempt.extra_json || '{}',
+      finalScore,
+      `由${sourceLabel}。课件完成度: ${Math.round(completion * 100)}%。课件原始反馈: ${attempt.comment || '—'}`,
+      now,
+      now,
+    );
+
+    db.prepare(
+      `INSERT INTO student_lesson_progress (student_id, lesson_id, completed, progress_percent, completed_segments, assigned_at)
+       VALUES (?, ?, 1, 100, '[]', ?)
+       ON CONFLICT(student_id, lesson_id) DO UPDATE SET
+         completed = 1,
+         progress_percent = 100`,
+    ).run(attempt.student_id, lessonId, now);
+
+    return assignmentId;
+  };
+
+  // better-sqlite3 风格的 transaction；非事务环境（Worker RPC 代理）直接执行。
+  // 必须以 db.transaction(run)() 调用：解构出 transaction 再调会丢失 this 绑定。
+  const assignmentId = typeof (db as any).transaction === 'function' ? (db as any).transaction(run)() : run();
+
+  return {
+    ok: true,
+    score: finalScore,
+    assignmentId,
+    studentId: attempt.student_id,
+    coursewareName,
+  };
+}
+
+function randomHex(bytes: number): string {
+  // Node 与 Worker 两侧都可用；避免为 8 个字节引入 node:crypto 依赖
+  let out = '';
+  for (let i = 0; i < bytes; i++)
+    out += Math.floor(Math.random() * 256)
+      .toString(16)
+      .padStart(2, '0');
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// 规则引擎
+// ---------------------------------------------------------------------------
+
+export interface AutoRecordDecision {
+  /** 规则是否命中（开关 + 门槛都满足） */
+  shouldRecord: boolean;
+  rule: CoursewareScoreConfig;
+  /** 规则来源，便于 UI 告诉教师「这个规则来自全局默认还是课件专属」 */
+  ruleSource: 'courseware' | 'global' | 'builtin';
+  reason?: PromoteResult['reason'];
+}
+
+/**
+ * 判定某条 attempt 是否应自动录入。
+ * 纯判定，不落库 —— 便于单测，也便于批量补录时先筛选再执行。
+ */
+export function evaluateAutoRecord(db: SqliteLike, attemptId: string): AutoRecordDecision {
+  const attempt = loadAttempt(db, attemptId);
+  const resolved = resolveScoreConfig(db, attempt?.courseware_id ?? null);
+  const rule = resolved.config;
+
+  if (!attempt) {
+    return { shouldRecord: false, rule, ruleSource: resolved.source, reason: 'attempt-not-found' };
+  }
+  if (!rule.auto_record_enabled) {
+    return { shouldRecord: false, rule, ruleSource: resolved.source, reason: 'rule-disabled' };
+  }
+  if (!FINISHED_ATTEMPT_STATUSES.includes(attempt.status as (typeof FINISHED_ATTEMPT_STATUSES)[number])) {
+    return { shouldRecord: false, rule, ruleSource: resolved.source, reason: 'not-finished' };
+  }
+  if (PLACEHOLDER_STUDENT_IDS.has(attempt.student_id)) {
+    return { shouldRecord: false, rule, ruleSource: resolved.source, reason: 'placeholder-student' };
+  }
+  if (normalizePercentScore(attempt.score) === null) {
+    return { shouldRecord: false, rule, ruleSource: resolved.source, reason: 'missing-score' };
+  }
+  const completion = Number.isFinite(attempt.completion as number) ? (attempt.completion as number) : 0;
+  if (completion < rule.auto_record_min_completion) {
+    return { shouldRecord: false, rule, ruleSource: resolved.source, reason: 'below-min-completion' };
+  }
+
+  return { shouldRecord: true, rule, ruleSource: resolved.source };
+}
+
+/** 按规则自动录入单条 attempt */
+export function autoRecordAttempt(
+  db: SqliteLike,
+  attemptId: string,
+  context: { lessonId: string; classId: string },
+): PromoteResult & { ruleSource?: AutoRecordDecision['ruleSource'] } {
+  const decision = evaluateAutoRecord(db, attemptId);
+  if (!decision.shouldRecord) {
+    return { ok: false, reason: decision.reason, ruleSource: decision.ruleSource };
+  }
+  const result = promoteAttemptToGrade(db, attemptId, {
+    lessonId: context.lessonId,
+    classId: context.classId,
+    minCompletion: decision.rule.auto_record_min_completion,
+    sourceLabel: '自动录入规则',
+  });
+  return { ...result, ruleSource: decision.ruleSource };
+}
+
+export interface AutoRecordReport {
+  /** 实际录入条数 */
+  recorded: number;
+  /** 因规则/数据原因未录入的条数 */
+  skipped: number;
+  /** 明细：attemptId / studentName / coursewareName / 分数 / 未录原因 */
+  details: Array<{
+    attemptId: string;
+    studentId: string;
+    studentName: string;
+    coursewareName: string;
+    score: number | null;
+    recorded: boolean;
+    reason?: PromoteResult['reason'];
+  }>;
+}
+
+/**
+ * 批量补录：把某个课节 + 班级下已提交但尚未录入的 attempt 按规则补录。
+ *
+ * 「尚未录入」的判定：assignment_submissions 里不存在
+ * (互动课件:{name} 作业, studentId) 这一行。已录入的跳过，保证幂等。
+ */
+export function autoRecordForLesson(
+  db: SqliteLike,
+  context: { lessonId: string; classId: string; limit?: number },
+): AutoRecordReport {
+  const { lessonId, classId } = context;
+  const limit = Math.max(1, Math.min(context.limit ?? 1000, 5000));
+
+  let rows: any[] = [];
+  try {
+    rows = db
+      .prepare(
+        `SELECT a.id AS attempt_id, a.student_id, cw.name AS courseware_name,
+                r.score, r.completion
+         FROM courseware_attempt a
+         JOIN courseware cw ON a.courseware_id = cw.id
+         JOIN class_students cst ON cst.student_id = a.student_id AND cst.class_id = ?
+         LEFT JOIN submission_result r ON r.attempt_id = a.id
+         WHERE a.status IN ('completed', 'submitted', 'finished')
+           AND a.student_id NOT IN ('guest', 'teacher', 'teacher_preview', '')
+         ORDER BY a.finished_at DESC, a.started_at DESC
+         LIMIT ?`,
+      )
+      .all(classId, limit) as any[];
+  } catch (e) {
+    return { recorded: 0, skipped: 0, details: [] };
+  }
+
+  const report: AutoRecordReport = { recorded: 0, skipped: 0, details: [] };
+
+  // 学生姓名：仅用于报告可读性，查询失败不阻断录入。
+  // 注意 students 表没有 class_id 列，必须经 class_students 关联（本项目的老坑）。
+  const studentNames = new Map<string, string>();
+  try {
+    const nameRows = db
+      .prepare(
+        `SELECT cst.student_id, s.name
+         FROM class_students cst
+         JOIN students s ON s.id = cst.student_id
+         WHERE cst.class_id = ?`,
+      )
+      .all(classId) as any[];
+    for (const r of nameRows) studentNames.set(r.student_id, r.name);
+  } catch {
+    /* 名单查询失败不阻断 */
+  }
+
+  for (const row of rows) {
+    const attemptId = String(row.attempt_id);
+    const studentId = String(row.student_id);
+    const coursewareName = String(row.courseware_name ?? '互动课件');
+
+    // 幂等：已经录过同一课件的这一行就跳过，不重复覆盖教师手动调整过的分数
+    if (hasRecordedGrade(db, classId, lessonId, coursewareName, studentId)) {
+      report.skipped += 1;
+      report.details.push({
+        attemptId,
+        studentId,
+        studentName: studentNames.get(studentId) ?? studentId,
+        coursewareName,
+        score: normalizePercentScore(row.score),
+        recorded: false,
+        reason: 'already-recorded',
+      });
+      continue;
+    }
+
+    const result = autoRecordAttempt(db, attemptId, { lessonId, classId });
+    if (result.ok) {
+      report.recorded += 1;
+    } else {
+      report.skipped += 1;
+    }
+    report.details.push({
+      attemptId,
+      studentId,
+      studentName: studentNames.get(studentId) ?? studentId,
+      coursewareName,
+      score: result.score ?? normalizePercentScore(row.score),
+      recorded: result.ok,
+      reason: result.reason,
+    });
+  }
+
+  return report;
+}
+
+/** 该（课节, 班级, 课件, 学生）是否已有学期成绩行 */
+function hasRecordedGrade(
+  db: SqliteLike,
+  classId: string,
+  lessonId: string,
+  coursewareName: string,
+  studentId: string,
+): boolean {
+  try {
+    const row = db
+      .prepare(
+        `SELECT 1 AS hit FROM assignment_submissions s
+         JOIN assignments a ON a.id = s.assignment_id
+         WHERE a.class_id = ? AND a.lesson_id = ? AND a.title = ? AND s.student_id = ?
+         LIMIT 1`,
+      )
+      .get(classId, lessonId, `互动课件: ${coursewareName}`, studentId);
+    return !!row;
+  } catch (e) {
+    return false;
+  }
+}
+
+/** 未录入原因的中文说明。服务端与前端共用同一份文案，避免解释不一致。 */
+export const PROMOTE_REASON_TEXT: Record<NonNullable<PromoteResult['reason']>, string> = {
+  'attempt-not-found': '提交记录不存在',
+  'not-finished': '该提交尚未完成（进行中），无法录入学期成绩',
+  'placeholder-student': '访客/教师预览记录，不记入学生成绩',
+  'missing-score': '该提交没有可用分数，不自动录入（避免凭空记分）',
+  'below-min-completion': '完成度未达到规则设定的门槛',
+  'rule-disabled': '自动录入规则未开启',
+  'already-recorded': '已录入学期成绩，无需重复录入',
+};
+
+export function describePromoteReason(reason: PromoteResult['reason'] | undefined): string {
+  if (!reason) return '未知原因';
+  return PROMOTE_REASON_TEXT[reason] ?? '未知原因';
+}
+
+/**
+ * 反查某个学生当前正在上的课节（用于学生提交时触发实时自动录入）。
+ *
+ * 刻意不让前端上报 lessonId：服务端从「班级 + 正在进行的课堂会话」推导，
+ * 避免伪造/错配。上课之外查不到会话 → 返回 null → 不触发实时录入，
+ * 由教师打开「学生提交数据」页时的补录兜底。
+ */
+export function findActiveLessonForStudent(
+  db: SqliteLike,
+  studentId: string,
+): { lessonId: string; classId: string } | null {
+  try {
+    const row = db
+      .prepare(
+        `SELECT cs.lesson_id, cs.class_id
+         FROM classroom_sessions cs
+         JOIN class_students cst ON cst.class_id = cs.class_id
+         WHERE cst.student_id = ?
+           AND cs.stage = 'IN_CLASS_TEACHING'
+         ORDER BY cs.created_at DESC
+         LIMIT 1`,
+      )
+      .get(studentId) as { lesson_id: string; class_id: string } | undefined;
+    if (!row?.lesson_id || !row?.class_id) return null;
+    return { lessonId: row.lesson_id, classId: row.class_id };
+  } catch (e) {
+    return null;
+  }
+}

@@ -23,3 +23,6 @@
 | 007  | 007_interactive_classroom.sql     | 互动课堂与课节生命周期（lesson_quiz_submissions / classroom_sessions / classroom_quick_polls / classroom_poll_votes / classroom_buzzers / classroom_exit_tickets / classroom_pacing_signals） |
 | 008  | 008_teaching_modes.sql            | 教学模式表 teaching_modes 与 classroom_sessions.teaching_mode_id（课堂启动门户的模式选择器数据源）                                                                                            |
 | 009  | 009_classroom_peer_review.sql     | 课中互评（classroom_peer_review_groups / classroom_peer_review_submissions）                                                                                                                  |
+| 010  | 010_class_groups.sql              | 小组（class_groups）                                                                                                                                                                            |
+| 011  | 011_classroom_feed.sql            | 课堂动态流（classroom_feed）                                                                                                                                                                     |
+| 012  | 012_auto_record_score.sql         | `courseware_score_config` 补自动录入规则列（auto_record_enabled / auto_record_min_completion），把「学生提交数据」页的逐条手动「录入成绩」升级为按规则自动录入 |

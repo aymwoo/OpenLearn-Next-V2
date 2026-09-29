@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Play,
   Square,
@@ -38,6 +38,7 @@ import {
   ArrowDown,
   MessageSquare,
   Trash2,
+  Zap,
 } from 'lucide-react';
 import * as Icons from 'lucide-react';
 import { useAppStore } from '../store/appStore';
@@ -60,6 +61,13 @@ import { useClassroomLiveData } from '../features/classroom/hooks/useClassroomLi
 import { ClassroomModalsHost } from './classroom/ClassroomModalsHost';
 import { usePeerReviewData } from '../features/classroom/hooks/usePeerReviewData';
 import { EdgeLanStatusIndicator } from '../features/classroom/ecosystem';
+
+// ── 学生提交数据：attempt 状态口径 ─────────────────────────────────────
+// 必须与服务端 server/utils/auto-record-score.ts 的 FINISHED_ATTEMPT_STATUSES 一致。
+// 历史缺陷：此处曾只认 finished/submitted 而漏掉 completed（数据库实际写入的终态），
+// 导致「已提交/完成」筛选能筛出这些行，但同一行的「录入成绩」按钮却是灰的。
+export const FINISHED_STATUSES = ['completed', 'submitted', 'finished'];
+export const IN_PROGRESS_STATUSES = ['active', 'inprogress', 'started'];
 
 // Dynamic Icon component to render Lucide icons by name string
 function DynamicIcon({ name, ...props }: { name: string; [key: string]: any }) {
@@ -388,7 +396,35 @@ export function LiveClassroomView({
   const [submissionFilter, setSubmissionFilter] = useState<'all' | 'submitted' | 'started'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchAttempts = async () => {
+  // ── 自动录入成绩规则（可在 UI 中开关与调整门槛） ──────────────────────
+  const [autoRecordRule, setAutoRecordRule] = useState<{ enabled: boolean; minCompletion: number }>({
+    enabled: false,
+    minCompletion: 0,
+  });
+  const [autoRecordRuleLoaded, setAutoRecordRuleLoaded] = useState(false);
+  const [savingAutoRecordRule, setSavingAutoRecordRule] = useState(false);
+  const [autoRecordReport, setAutoRecordReport] = useState<{ recorded: number; skipped: number } | null>(null);
+  const [autoRecordRunning, setAutoRecordRunning] = useState(false);
+
+  /**
+   * 稳定化 addToast。
+   * addToast 是 App 每次渲染重建的普通函数，若直接进 useCallback 依赖，
+   * runAutoRecord 就会每次渲染都变 → 触发下方 effect 重跑 → setState → 再次渲染，
+   * 形成无限循环（这正是本仓库其他模块用 addToastRef 的原因）。
+   */
+  const addToastRef = useRef(addToast);
+  useEffect(() => {
+    addToastRef.current = addToast;
+  }, [addToast]);
+  const stableAddToast = useCallback(
+    (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') =>
+      addToastRef.current(title, message, type),
+    [],
+  );
+
+  // 稳定化：内部只用 setState（引用恒定），可安全作为 useCallback 依赖，
+  // 否则会连带让 runAutoRecord 每次渲染重建。
+  const fetchAttempts = useCallback(async () => {
     setLoadingAttempts(true);
     try {
       const res = await fetch('/api/courseware/attempts');
@@ -401,7 +437,7 @@ export function LiveClassroomView({
     } finally {
       setLoadingAttempts(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (middleTab === 'submissions') {
@@ -463,6 +499,115 @@ export function LiveClassroomView({
     }
   };
 
+  // ── 自动录入规则：读取（全局默认行 '*'）与保存 ────────────────────────
+  const loadAutoRecordRule = useCallback(async () => {
+    try {
+      const res = await fetch('/api/commands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // /api/commands 的契约是 { commandType, payload }，响应为 { success, result }。
+        // 用 type 而非 commandType 会得到 HTTP 500「No handler registered for command: undefined」。
+        body: JSON.stringify({ commandType: 'courseware.get_score_config', payload: { coursewareId: '*' } }),
+      });
+      if (!res.ok) return;
+      const json = await res.json();
+      const config = json?.result ?? json;
+      setAutoRecordRule({
+        enabled: Boolean(config?.auto_record_enabled ?? config?.autoRecordEnabled),
+        minCompletion: Number(config?.auto_record_min_completion ?? config?.autoRecordMinCompletion ?? 0) || 0,
+      });
+    } catch {
+      // 静默：规则读取失败不应阻断页面
+    } finally {
+      setAutoRecordRuleLoaded(true);
+    }
+  }, []);
+
+  const saveAutoRecordRule = async (next: { enabled: boolean; minCompletion: number }) => {
+    const previous = autoRecordRule;
+    setAutoRecordRule(next); // 乐观更新，失败时回滚
+    setSavingAutoRecordRule(true);
+    try {
+      const res = await fetch('/api/commands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commandType: 'courseware.save_score_config',
+          payload: {
+            coursewareId: '*',
+            autoRecordEnabled: next.enabled,
+            autoRecordMinCompletion: next.minCompletion,
+          },
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to save rule');
+      const json = await res.json();
+      if (json && json.success === false) throw new Error(json.error || 'save_score_config rejected');
+      stableAddToast(
+        lang === 'zh' ? '✓ 规则已保存' : '✓ Rule Saved',
+        next.enabled
+          ? lang === 'zh'
+            ? `学生提交课件后将自动录入学期成绩（完成度门槛 ${Math.round(next.minCompletion * 100)}%）`
+            : `Scores will be recorded automatically (completion ≥ ${Math.round(next.minCompletion * 100)}%)`
+          : lang === 'zh'
+            ? '已关闭自动录入，仍可逐条手动录入'
+            : 'Auto-record disabled; manual recording still available',
+        'success',
+      );
+    } catch (e) {
+      setAutoRecordRule(previous);
+      console.error('[LiveClassroomView] save auto-record rule failed:', e);
+      stableAddToast(
+        lang === 'zh' ? '❌ 规则保存失败' : '❌ Failed to save rule',
+        lang === 'zh' ? '请检查网络后重试。' : 'Please retry.',
+        'warning',
+      );
+    } finally {
+      setSavingAutoRecordRule(false);
+    }
+  };
+
+  /** 批量补录：把本课节本班已提交但未录入的记录按规则补录（幂等） */
+  const runAutoRecord = useCallback(
+    async (silent = false) => {
+      if (!selectedLesson || !liveClassSelectedClassId) return;
+      setAutoRecordRunning(true);
+      try {
+        const res = await fetch('/api/courseware/attempts/auto-record', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lessonId: selectedLesson, classId: liveClassSelectedClassId }),
+        });
+        if (!res.ok) throw new Error('auto-record failed');
+        const data = await res.json();
+        setAutoRecordReport({ recorded: data.recorded ?? 0, skipped: data.skipped ?? 0 });
+        if ((data.recorded ?? 0) > 0) {
+          await fetchAttempts();
+        }
+        if (!silent) {
+          stableAddToast(
+            lang === 'zh' ? '✓ 自动录入完成' : '✓ Auto-record done',
+            lang === 'zh'
+              ? `已录入 ${data.recorded ?? 0} 条，跳过 ${data.skipped ?? 0} 条（已录入 / 无分数 / 未达门槛）`
+              : `Recorded ${data.recorded ?? 0}, skipped ${data.skipped ?? 0}`,
+            'success',
+          );
+        }
+      } catch (e) {
+        if (!silent) {
+          stableAddToast(
+            lang === 'zh' ? '❌ 自动录入失败' : '❌ Auto-record failed',
+            lang === 'zh' ? '请稍后重试，或使用逐条手动录入。' : 'Please retry or record manually.',
+            'warning',
+          );
+        }
+      } finally {
+        setAutoRecordRunning(false);
+      }
+    },
+    [selectedLesson, liveClassSelectedClassId, fetchAttempts, stableAddToast, lang],
+  );
+
   const handleViewRaw = async (attempt: any) => {
     setSelectedAttempt(attempt);
     setLoadingRaw(true);
@@ -486,6 +631,24 @@ export function LiveClassroomView({
   const isClassLocked = !!(
     liveClassSelectedClassId && students.filter((s) => s.locked_lesson_id === selectedLesson).length > 0
   );
+
+  // 规则读取：进入「学生提交数据」页时拉一次（教师/管理员才有可配置权限）
+  useEffect(() => {
+    if (middleTab !== 'submissions') return;
+    void loadAutoRecordRule();
+  }, [middleTab, loadAutoRecordRule]);
+
+  /**
+   * 打开页面时自动补录：把历史上「已提交但未录入」的记录按当前规则补上。
+   * 只在规则开启时跑（runAutoRecord 内部与服务端都会再判一次，幂等安全）。
+   * 依赖刻意不含 autoRecordRule —— 避免规则开关本身触发补录循环；
+   * 教师改完规则可点「立即补录」显式重跑。
+   */
+  useEffect(() => {
+    if (middleTab !== 'submissions' || !autoRecordRuleLoaded || !autoRecordRule.enabled) return;
+    if (!selectedLesson || !liveClassSelectedClassId) return;
+    void runAutoRecord(true);
+  }, [middleTab, autoRecordRuleLoaded, selectedLesson, liveClassSelectedClassId, runAutoRecord]);
 
   // ── 跨浏览器Tab学生端同步信道机制 ───────────────────────────────────────
   const handleOpenStudentWindow = () => {
@@ -1035,9 +1198,7 @@ export function LiveClassroomView({
       a.studentName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       a.coursewareName?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // 终态状态值归一到一处：后端落库可能是 completed，客户端历史上传过 submitted/finished。
-    const FINISHED_STATUSES = ['completed', 'submitted', 'finished'];
-    const IN_PROGRESS_STATUSES = ['active', 'inprogress', 'started'];
+    // 终态状态值归一到模块级常量（与后端一致），避免同一文件里出现两套口径
     const matchesStatus =
       submissionFilter === 'all' ||
       (submissionFilter === 'submitted' && FINISHED_STATUSES.includes(a.status)) ||
@@ -1853,6 +2014,87 @@ export function LiveClassroomView({
                       </div>
                     </div>
 
+                    {/* 自动录入规则条：开关 + 完成度门槛 + 立即补录 */}
+                    <div className="flex items-center gap-3 flex-wrap mb-3 shrink-0 px-3 py-2 rounded-lg border border-theme bg-surface-secondary/40">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={autoRecordRule.enabled}
+                          disabled={!autoRecordRuleLoaded || savingAutoRecordRule}
+                          onChange={(e) => void saveAutoRecordRule({ ...autoRecordRule, enabled: e.target.checked })}
+                          className="w-3.5 h-3.5 accent-primary-theme cursor-pointer disabled:opacity-50"
+                        />
+                        <span className="text-xs font-bold text-main flex items-center gap-1">
+                          <Zap size={12} className="text-primary-theme" />
+                          {lang === 'zh' ? '自动录入成绩' : 'Auto-record scores'}
+                        </span>
+                      </label>
+
+                      <span
+                        className="text-[11px] text-muted"
+                        title={
+                          lang === 'zh'
+                            ? '规则在「全局默认策略」上配置，个别课件可在成绩配置中单独覆盖。学生提交后由服务端直接写入学期成绩，无需逐条点击「录入成绩」。'
+                            : 'Configured on the global default; individual courseware can override.'
+                        }
+                      >
+                        {autoRecordRule.enabled
+                          ? lang === 'zh'
+                            ? `已开启 · 完成后自动写入学期成绩${autoRecordReport ? `（本次 ${autoRecordReport.recorded} 条）` : ''}`
+                            : `On${autoRecordReport ? ` (${autoRecordReport.recorded} recorded)` : ''}`
+                          : lang === 'zh'
+                            ? '关闭中 · 仍可逐条手动录入'
+                            : 'Off · manual recording still available'}
+                      </span>
+
+                      {autoRecordRule.enabled && (
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <span className="text-[11px] text-muted whitespace-nowrap">
+                            {lang === 'zh' ? '完成度门槛' : 'Min completion'}
+                          </span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            step={5}
+                            value={Math.round(autoRecordRule.minCompletion * 100)}
+                            disabled={savingAutoRecordRule}
+                            onChange={(e) =>
+                              setAutoRecordRule((r) => ({ ...r, minCompletion: Number(e.target.value) / 100 }))
+                            }
+                            onMouseUp={() => void saveAutoRecordRule(autoRecordRule)}
+                            onTouchEnd={() => void saveAutoRecordRule(autoRecordRule)}
+                            className="w-24 accent-primary-theme cursor-pointer disabled:opacity-50"
+                          />
+                          <span className="text-[11px] font-bold font-mono text-main w-9 text-right">
+                            {Math.round(autoRecordRule.minCompletion * 100)}%
+                          </span>
+                        </label>
+                      )}
+
+                      <button
+                        onClick={() => void runAutoRecord(false)}
+                        disabled={autoRecordRunning || !selectedLesson || !liveClassSelectedClassId}
+                        className="px-2.5 py-1 bg-primary-theme/10 hover:bg-primary-theme/20 text-primary-theme border border-primary-theme/30 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={
+                          lang === 'zh'
+                            ? '按当前规则，把本课节本班已提交但未录入的记录补录进来（重复点击不会重复记分）'
+                            : 'Record any submitted-but-unrecorded rows per the current rule (idempotent)'
+                        }
+                      >
+                        <Database size={12} className={autoRecordRunning ? 'animate-pulse' : ''} />
+                        <span>
+                          {autoRecordRunning
+                            ? lang === 'zh'
+                              ? '补录中…'
+                              : 'Recording…'
+                            : lang === 'zh'
+                              ? '立即补录'
+                              : 'Run now'}
+                        </span>
+                      </button>
+                    </div>
+
                     {/* Table area */}
                     <div className="flex-1 overflow-y-auto border border-theme rounded-xl scrollbar-thin">
                       {loadingAttempts ? (
@@ -1896,7 +2138,21 @@ export function LiveClassroomView({
                               </thead>
                               <tbody className="divide-y divide-border-theme">
                                 {displayAttempts.map((a) => {
-                                  const isFinished = a.status === 'finished' || a.status === 'submitted';
+                                  // 与筛选下拉共用同一口径：completed 也是终态（历史遗漏导致按钮长期灰着）
+                                  const isFinished = FINISHED_STATUSES.includes(a.status);
+                                  // 没有聚合分就不允许录入：服务端已拒绝「无分数记满分」，
+                                  // 前端同步禁用并给出原因，避免教师点了只看到一个失败提示
+                                  const hasScore = a.score !== null && a.score !== undefined;
+                                  const canRecord = isFinished && hasScore;
+                                  const recordDisabledReason = !isFinished
+                                    ? lang === 'zh'
+                                      ? '该提交仍在进行中，完成后才能录入学期成绩'
+                                      : 'Still in progress'
+                                    : !hasScore
+                                      ? lang === 'zh'
+                                        ? '该提交没有分数，无法录入（不会凭空记分）'
+                                        : 'No score available'
+                                      : undefined;
                                   const formattedTime = a.started_at
                                     ? new Date(a.started_at).toLocaleTimeString([], {
                                         hour: '2-digit',
@@ -1969,16 +2225,17 @@ export function LiveClassroomView({
                                           ) : (
                                             <button
                                               onClick={() => handlePromoteAttempt(a.attemptId)}
-                                              disabled={!isFinished}
+                                              disabled={!canRecord}
                                               className={`px-2 py-1 text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm transition-all active:scale-95 cursor-pointer border ${
-                                                isFinished
+                                                canRecord
                                                   ? 'bg-primary-theme hover:bg-primary-theme-hover text-white border-primary-theme'
                                                   : 'bg-surface-secondary text-muted border-theme cursor-not-allowed opacity-60'
                                               }`}
                                               title={
-                                                lang === 'zh'
+                                                recordDisabledReason ??
+                                                (lang === 'zh'
                                                   ? '将分数和进度作为随堂学习数据存入数据库，记入学期成绩'
-                                                  : 'Save to DB & Semester grade'
+                                                  : 'Save to DB & Semester grade')
                                               }
                                             >
                                               <Database size={11} />
