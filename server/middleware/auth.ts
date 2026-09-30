@@ -130,9 +130,46 @@ export function requireAuth(...roles: string[]) {
   };
 }
 
+// ── SEC-AUTH-06: 默认密码强制改密 ─────────────────────────────────
+
+/** 改密强制期仍可访问的路径（查询/登出/改密本身） */
+const PASSWORD_CHANGE_EXEMPT_PATHS = new Set([
+  '/api/auth/change-password',
+  '/api/auth/logout',
+  '/api/auth/session',
+  '/api/auth/me',
+]);
+
+/**
+ * 默认密码写操作拦截。
+ *
+ * 背景：种子账号 admin/admin、teacher/teacher 仅在登录时打 `mustChangePassword`
+ * 标记（存入 session_data，见 roster.ts login），前端全屏强制改密；
+ * 本中间件在服务端兜底 —— 带标记的会话发起**非 GET** 请求（除豁免路径）一律 403，
+ * 防止绕过前端直接调 API。GET 保持可用（登录后 /api/auth/session 恢复会话需要）。
+ *
+ * 适用面：teacher/administrator 入口（种子默认密码所在）；学生口令策略属另一议题。
+ */
+export function enforcePasswordChanged(req: Request, res: Response, next: NextFunction): void {
+  if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
+    if (!PASSWORD_CHANGE_EXEMPT_PATHS.has(req.path)) {
+      const token = getCookieToken(req);
+      if (token) {
+        const session = getValidSession(token);
+        if (session && (session as any).mustChangePassword) {
+          res
+            .status(403)
+            .json({ success: false, code: 'FORBIDDEN_DEFAULT_PASSWORD', error: 'Default password must be changed first' });
+          return;
+        }
+      }
+    }
+  }
+  next();
+}
+
 /** 教师/管理员检查（旧版兼容包装） */
-export function checkIsTeacherOrAdmin(req: Request): boolean {
-  const token = getCookieToken(req);
+export function checkIsTeacherOrAdmin(req: Request): boolean {  const token = getCookieToken(req);
   if (!token) return false;
   try {
     const session = getValidSession(token);

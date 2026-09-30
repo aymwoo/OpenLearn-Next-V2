@@ -367,6 +367,15 @@ export function registerRosterRoutes(ctx: ServerContext) {
         kernelContainer.db
           .prepare('DELETE FROM client_sessions WHERE id != ? AND session_data LIKE ?')
           .run(token, `%${session.userId}%`);
+        // SEC-AUTH-06: 改密成功后清除当前会话的默认密码标记（其余会话已被删除）
+        try {
+          const updatedSession = { ...session, mustChangePassword: false };
+          kernelContainer.db
+            .prepare('UPDATE client_sessions SET session_data = ? WHERE id = ?')
+            .run(JSON.stringify(updatedSession), token);
+        } catch (clearErr) {
+          console.warn('[Auth] Failed to clear mustChangePassword flag:', clearErr);
+        }
         return res.json({ success: true, message: 'Password changed. All other devices have been logged out.' });
       }
 
@@ -602,6 +611,12 @@ export function registerRosterRoutes(ctx: ServerContext) {
           kernelContainer.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, userObj.id);
           console.log(`[Auth] Auto-upgraded password hash for user ${userObj.username}`);
         }
+        // SEC-AUTH-06: 种子默认密码（admin/admin、teacher/teacher，特征为密码=用户名）
+        // 登录成功即打标：前端强制改密 + 服务端 enforcePasswordChanged 拦截写操作
+        const mustChangePassword = password === userObj.username;
+        if (mustChangePassword) {
+          console.warn(`[SECURITY] User ${userObj.username} logged in with default password; forcing change`);
+        }
         sessionData = {
           role: 'teacher',
           userId: userObj.id,
@@ -609,6 +624,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
           subRole: userObj.role,
           name: userObj.name,
           avatar: userObj.avatar ?? null,
+          ...(mustChangePassword ? { mustChangePassword: true } : {}),
         };
       } else if (entrance === 'student') {
         if (!studentId) {

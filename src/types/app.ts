@@ -160,6 +160,8 @@ export interface SessionType {
   email?: string;
   /** ͷ�� URL��/uploads/avatars/...����δ����ʱΪ undefined */
   avatar?: string;
+  /** SEC-AUTH-06: 仍在使用种子默认密码（admin/admin、teacher/teacher），须强制改密 */
+  mustChangePassword?: boolean;
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────────

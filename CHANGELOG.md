@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **默认密码强制改密（SEC-AUTH-06）(`server/routes/roster.ts`, `server/middleware/auth.ts`, `server.ts`, `ForcedPasswordChangeGate.tsx`)**：
+  - **漏洞**：种子账号 admin/admin、teacher/teacher 初始化后仅有 console 警告，登录与前端均无强制改密流程，弱口令可被无限期沿用。
+  - **打标**：教师/管理员入口登录成功时检测「密码 = 用户名」（默认种子的精确特征）→ 会话写入 `mustChangePassword` 标记，登录响应与 `/api/auth/session` 均暴露（页面刷新后依然强制）。
+  - **前端强制**：App 外壳在 `session.mustChangePassword` 时不渲染任何应用内容，改为全屏 `ForcedPasswordChangeGate`（旧密码 + 新密码 + 确认，本地强度/一致性校验，走既有 `POST /api/auth/change-password`）。
+  - **服务端兜底**：新增 `enforcePasswordChanged` 中间件 —— 带标记会话发起非 GET 请求（豁免 `/api/auth/change-password`、`logout`、`session`、`me`）一律 403 `FORBIDDEN_DEFAULT_PASSWORD`，防止绕过前端直接调写接口；GET 保持可用（会话恢复需要）。改密成功后当前会话标记清除、其余设备会话删除，写操作即时恢复。
+  - **范围界定**：仅覆盖 users 表（teacher/administrator 种子默认密码）；学生默认口令 '123456'（roster.ts 建号）属另一议题。旧存量会话无标记 → 下次登录后生效。
+  - **测试**：`force-password-change.test.ts` 4 例（打标、写拦截 + GET 放行 + 非默认账号不受影响、session 暴露标记、改密后恢复）；`ForcedPasswordChangeGate.test.tsx` 5 例（本地校验、提交流程、服务端拒绝）。
+
 - **CSP 收紧：生产 scriptSrc 去 'unsafe-inline'、connectSrc 去任意出站 (`server.ts`, `server/routes/shared.ts`, `bridge.ts`, `courseware.ts`, `resources.ts`, `HtmlAppletFrame.tsx`)**：
   - **收紧内容**：全局 helmet CSP —— ① 生产 `scriptSrc` 移除 `'unsafe-inline'`（SPA 构建产物无内联脚本，已验证 dist/index.html）；② `connectSrc` 移除 `'http: https:'`（等于无出站限制，前端可外传任意数据；前端所有 API 调用均走同源相对路径，已验证）。开发态保留 `unsafe-inline`/`unsafe-eval`（Vite HMR 与 React Refresh 需要）。
   - **为什么此前收不了（CSP 继承）**：`<iframe srcdoc>` 文档与未设自有 CSP 头的 HTML 路由都会**继承父页面（helmet）CSP** —— 直接删 `unsafe-inline` 会拦掉所有第三方课件的内联脚本。整改为此补齐了课件文档的自有宽松 CSP：

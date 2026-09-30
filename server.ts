@@ -66,6 +66,7 @@ import {
   checkIsTeacherOrAdmin,
   getActorId,
   requireAuth,
+  enforcePasswordChanged,
 } from './server/middleware/auth.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
@@ -378,6 +379,10 @@ async function startServer() {
       });
     },
   });
+
+  // SEC-AUTH-06: 默认密码强制改密 —— 种子账号（admin/admin、teacher/teacher）登录后
+  // 会话带 mustChangePassword 标记，除查询/登出/改密外的写操作一律 403（前端另有全屏改密门）
+  app.use(enforcePasswordChanged);
 
   // SEC-AUTH-SOCKET: Socket.IO 连接握手鉴权中间件，阻止匿名连接与身份伪造
   io.use((socket, next) => {

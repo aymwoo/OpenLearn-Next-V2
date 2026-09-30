@@ -50,6 +50,7 @@ import { ToastContainer } from './features/shared/ToastContainer';
 import { RightSidebar } from './features/shared/RightSidebar';
 import { AppModals } from './components/AppModals';
 import { useLmsBridge } from './services/lms-bridge';
+import ForcedPasswordChangeGate from './components/ForcedPasswordChangeGate';
 import { useAppPolling } from './hooks/useAppPolling';
 import { useAgentChat } from './hooks/useAgentChat';
 import { useClassroomSocket } from './hooks/useClassroomSocket';
@@ -1689,6 +1690,19 @@ export default function App() {
 
   if (!session) {
     return <LoginPage onLoginSuccess={handleLoginSuccess} lang={lang} />;
+  }
+
+  // SEC-AUTH-06: 默认密码强制改密门 —— 种子账号（admin/admin、teacher/teacher）改密前
+  // 不渲染应用外壳；服务端 enforcePasswordChanged 对写操作兜底拦截
+  if (session.mustChangePassword) {
+    return (
+      <ForcedPasswordChangeGate
+        lang={lang}
+        username={session.username}
+        onDone={() => setSession({ ...session, mustChangePassword: false })}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   return (
