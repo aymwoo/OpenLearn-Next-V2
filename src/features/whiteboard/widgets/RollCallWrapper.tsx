@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Sparkles,
   Trash2,
@@ -146,6 +146,40 @@ export function RollCallWrapper({
     submitted: boolean;
   } | null>(data.evaluation || null);
 
+  /**
+   * 服务端图元数据 → 组件本地状态的反向同步。
+   *
+   * 教师端点击后有本地乐观更新，但学生端（`readOnly`）完全依赖服务端数据：
+   * 白板图元被更新后 `data` 会变，若不回填本地 state，学生看到的仍是上一次
+   * 抽中的学生。用签名去重，避免教师端自己的写回把正在播放的滚轮动画打断。
+   */
+  const remoteSignature = useMemo(
+    () =>
+      JSON.stringify([
+        data.pickedTime ?? null,
+        data.selectedStudent?.id ?? null,
+        data.evaluation?.rating ?? null,
+        data.evaluation?.submitted ?? null,
+      ]),
+    [data.pickedTime, data.selectedStudent, data.evaluation],
+  );
+  const lastAppliedSignatureRef = useRef<string | null>(null);
+
+  /** 始终指向最新一次渲染的图元数据，避免异步回调里用闭包里的旧 data 覆盖服务端状态。 */
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
+  useEffect(() => {
+    // 远端还没有抽中结果时，保留本地状态（教师端乐观更新 / 学生端等待中）
+    if (data.pickedTime == null) return;
+    if (lastAppliedSignatureRef.current === remoteSignature) return;
+    lastAppliedSignatureRef.current = remoteSignature;
+    setSelectedStudent((data.selectedStudent as PickerStudent) ?? null);
+    setEvaluation((data.evaluation as any) ?? null);
+    setIsRolling(false);
+    setTempDisplayStudent(null);
+  }, [remoteSignature, data.pickedTime, data.selectedStudent, data.evaluation]);
+
   // 从真实后端按班级拉取学生及提问频次画像
   useEffect(() => {
     if (!selectedClassId) return;
@@ -221,7 +255,7 @@ export function RollCallWrapper({
         // 持久化到白板图元数据
         if (onElementUpdate) {
           void onElementUpdate(elementId, {
-            ...data,
+            ...dataRef.current,
             classId: selectedClassId,
             pickerMode,
             difficulty,
@@ -296,7 +330,7 @@ export function RollCallWrapper({
     // 更新白板图元
     if (onElementUpdate) {
       void onElementUpdate(elementId, {
-        ...data,
+        ...dataRef.current,
         evaluation: newEval,
       });
     }

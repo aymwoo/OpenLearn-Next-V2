@@ -5,8 +5,11 @@ import { SocketService, setSocketInstance } from '../services/socket-service';
 import { UIService } from '../services/ui-service';
 import { StorageService } from '../services/storage-service';
 import { whiteboardViewStore } from '../store/whiteboardViewStore';
+import { pointsLedgerStore } from '../store/pointsLedgerStore';
+import { appStore } from '../store/appStore';
 import { whiteboardEventSlot } from '../features/whiteboard/events';
 import { errorStore } from '../store/errorStore';
+import { EVALUATION_CONFIGS, type EvaluationRating } from '../features/whiteboard/services/fair-picker-engine';
 import type { Lesson, StudentType } from '../types/app';
 
 export interface UseClassroomSocketOptions {
@@ -38,7 +41,7 @@ export interface UseClassroomSocketOptions {
   fetchStudentDashboard: (id: string) => Promise<void> | void;
   fetchStudents: () => Promise<void> | void;
   fetchElements: (roomId: string) => Promise<void> | void;
-  setPickedAlertData?: (data: { studentId: string; studentName: string } | null) => void;
+  setPickedAlertData?: (data: { studentId: string; studentName: string; rollcallId?: string } | null) => void;
   setPickedAnnouncement?: (data: { studentName: string; studentId: string } | null) => void;
 }
 
@@ -152,6 +155,30 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     const syncPresenceAndRooms = () => {
       // Join global whiteboard broadcast room
       socket.emit('join-room', 'whiteboard-broadcast');
+      // Join global classroom broadcast room（倒计时/投票/抢答/阶段等课堂事件）。
+      // 连接即加入，因此停留在仪表盘的学生也能收到并预热课堂状态。
+      socket.emit('join-room', 'classroom-broadcast');
+
+      /**
+       * 教师端也要加入**当前所教班级**的房间。
+       *
+       * 此前班级房间只有学生在 `register-student` 时加入（服务端 `presence.ts`），
+       * 于是投 `class-<classId>` 的事件一律到不了教师。而有两类事件恰好是
+       * 「教师自己既产生又需要看到」的：
+       *   - `classroom:icebreaker_updated` —— 破冰心情统计只有教师端的
+       *     `PreClassDiagnosticHub` 会展示（学生只负责打卡）；
+       *   - `classroom:groups_changed` / `classroom:stage_changed` 的班级兜底分支。
+       *
+       * 读 store 而非加 prop：这是「当前视图」而非会话属性；`join-room` 是通用的，
+       * 服务端无需为教师新增分支。
+       *
+       * 已知取舍：服务端没有通用的 `leave-room`，教师切换班级时会累积旧班级房间。
+       * 由于消费端一律按 `classId` 过滤，功能上无影响，故不为此新增服务端接口。
+       */
+      const liveClassId = appStore.getState().liveClassSelectedClassId;
+      if (activeRoleRef.current === 'teacher' && liveClassId) {
+        socket.emit('join-room', `class-${liveClassId}`);
+      }
 
       // Register student presence if active role is student
       if (activeRoleRef.current === 'student' && activeStudentIdRef.current) {
@@ -295,8 +322,13 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
         data.studentId === activeStudentIdRef.current;
 
       if (isCurrentStudent) {
-        // 1. 被抽中的学生：着重提示（弹出模态框 + 强提醒Toast）
-        setPickedAlertDataRef.current?.({ studentId: data.studentId, studentName: data.studentName });
+        // 1. 被抽中的学生：屏幕级强提示（全屏抽中弹窗 + 提示音效 + 强提醒Toast）。
+        //    刻意不写入通知消息列表——点名是即时互动，需要的是屏幕级提醒而非铃铛里的一条静默记录。
+        setPickedAlertDataRef.current?.({
+          studentId: data.studentId,
+          studentName: data.studentName,
+          rollcallId: data.rollcallId,
+        });
 
         const msg =
           langRef.current === 'zh'
@@ -330,6 +362,106 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
         },
         ...prev,
       ]);
+    });
+
+    /**
+     * 点名评价 / 金币到账。
+     *
+     * 此前服务端一直在发这两个事件，但前端**零监听** —— 教师给学生评价并发金币，
+     * 学生端一条提示都收不到（只能靠白板刷新看到徽章，拿不到「奖励到账」的反馈）。
+     *
+     * 刻意**只订阅 `rollcall:evaluated`**：它与 `student:coins_awarded` 在服务端
+     * 同一个 `if (io)` 块里为同一次动作发出，payload 更完整（含 rating/badge）。
+     * 同时订阅两者会让同一次奖励弹两次提示。
+     */
+    socket.on('rollcall:evaluated', (data: any) => {
+      if (activeRoleRef.current !== 'student') return;
+      // 跨课节过滤（事件投递到常驻课堂广播房间，会覆盖全平台客户端）
+      if (data?.lessonId && selectedLessonRef.current && data.lessonId !== selectedLessonRef.current) return;
+
+      const isMe = !!activeStudentIdRef.current && data?.studentId === activeStudentIdRef.current;
+      const isZh = langRef.current === 'zh';
+      // 评价的徽章/文案直接复用点名引擎的配置，避免两处标签各写一份而漂移
+      const cfg = EVALUATION_CONFIGS[data?.rating as EvaluationRating];
+      if (!cfg) return;
+
+      if (isMe) {
+        // 被评价者：奖励到账是明确的正反馈，给足存在感
+        addToast(
+          isZh
+            ? `${cfg.badge} ${cfg.label} +${data.rewardCoins} 金币`
+            : `${cfg.badge} ${cfg.labelEn} +${data.rewardCoins} coins`,
+          isZh
+            ? `老师在随机抽问中给了你「${cfg.label}」的评价，成长金币 +${data.rewardCoins} 已到账！`
+            : `The teacher rated you "${cfg.labelEn}" in the random pick. +${data.rewardCoins} growth coins credited!`,
+          'success',
+        );
+        if (activeStudentIdRef.current) {
+          fetchStudentDashboard(activeStudentIdRef.current);
+        }
+      } else {
+        // 全班其他学生：轻量播报，维持课堂的公开感
+        addToast(
+          isZh ? `${cfg.badge} 课堂表现评定` : `${cfg.badge} Classroom Evaluation`,
+          isZh
+            ? `老师给【${data.studentName || '某位同学'}】评了「${cfg.label}」。`
+            : `The teacher rated "${data.studentName || 'a student'}" as "${cfg.labelEn}".`,
+          'info',
+        );
+      }
+
+      setLiveClassFeed((prev) => [
+        {
+          id: `feed-eval-${data.rollcallId || data.studentId}-${data.timestamp || Date.now()}`,
+          time: new Date(data.timestamp || Date.now()).toLocaleTimeString(),
+          type: 'picked',
+          message: isZh
+            ? `点名评价：${data.studentName || '学生'} 获评「${cfg.label}」+${data.rewardCoins}金币。`
+            : `Roll-call evaluation: "${data.studentName || 'a student'}" rated ${cfg.labelEn} +${data.rewardCoins} coins.`,
+        },
+        ...prev,
+      ]);
+    });
+
+    /**
+     * 积分台账变更（`points.awarded` → `classroom:points_awarded`）。
+     *
+     * 该事件此前**全平台零监听**，后果是：
+     *  - 被加分的学生端收不到任何提示；
+     *  - 教师在自己已打开的「成长档案 / 积分榜」里加分后界面不刷新 ——
+     *    提示说「已发放」，数字却还是旧的。
+     *
+     * 事件是**全局广播**（积分是账户级事实、不隶属某一课节），所以：
+     *  - 只有**被加分的那个学生**会收到 toast（否则全平台都会弹，纯噪音）；
+     *  - 所有人都把事件写进 `pointsLedgerStore`，供已打开的积分类 UI 自行 refetch。
+     */
+    socket.on('classroom:points_awarded', (data: any) => {
+      if (!data?.studentId) return;
+      const isZh = langRef.current === 'zh';
+      const delta = Number(data.deltaPoints) || 0;
+
+      pointsLedgerStore.getState().record({
+        studentId: data.studentId,
+        classId: data.classId ?? '',
+        deltaPoints: delta,
+        reason: data.reason ?? '',
+        dimensionId: data.dimensionId,
+        createdAt: data.createdAt,
+      });
+
+      const isMe = !!activeStudentIdRef.current && data.studentId === activeStudentIdRef.current;
+      if (isMe) {
+        addToast(
+          isZh ? (delta >= 0 ? '🎁 获得成长积分' : '📉 积分调整') : delta >= 0 ? 'Points earned' : 'Points adjusted',
+          isZh
+            ? `${delta >= 0 ? '+' : ''}${delta} 积分${data.reason ? `：${data.reason}` : ''}`
+            : `${delta >= 0 ? '+' : ''}${delta} points${data.reason ? `: ${data.reason}` : ''}`,
+          delta >= 0 ? 'success' : 'warning',
+        );
+        if (activeStudentIdRef.current) {
+          fetchStudentDashboard(activeStudentIdRef.current);
+        }
+      }
     });
 
     socket.on('student-acknowledged', (data: any) => {

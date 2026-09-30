@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Terminal } from 'lucide-react';
 import { WidgetTitleBar } from './WidgetTitleBar';
 
@@ -43,6 +43,19 @@ export function CodeSandboxWrapper({
 }) {
   const [code, setCode] = useState(data.code || "console.log('Hello from sandbox!');");
   const [output, setOutput] = useState('');
+
+  /**
+   * 服务端图元数据 → 本地 state 的反向同步。
+   *
+   * 教师端改代码后会持久化并广播刷新，学生端的 `data` 因此会变；
+   * 若不回填，本地 `code` 会一直停在打开时的那份，学生看到的仍是旧代码。
+   * 范式与 `RevealPresentationWrapper` 一致。
+   */
+  useEffect(() => {
+    if (data.code !== undefined && data.code !== code) {
+      setCode(data.code);
+    }
+  }, [data.code]);
 
   const runCode = () => {
     setOutput('Running in isolated Web Worker...');

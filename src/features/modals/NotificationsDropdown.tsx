@@ -1,5 +1,5 @@
 import React from 'react';
-import { ClipboardList, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ClipboardList, CheckCircle2 } from 'lucide-react';
 
 interface NotificationsDropdownProps {
   isOpen: boolean;
@@ -92,8 +92,6 @@ export function NotificationsDropdown({
                     <div className="mt-0.5">
                       {notif.type === 'new_assignment' ? (
                         <ClipboardList size={16} className="text-indigo-500" />
-                      ) : notif.type === 'rollcall_picked' ? (
-                        <Sparkles size={16} className="text-amber-500 animate-pulse" />
                       ) : (
                         <CheckCircle2 size={16} className="text-green-500" />
                       )}

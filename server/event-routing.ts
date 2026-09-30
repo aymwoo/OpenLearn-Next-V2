@@ -13,7 +13,13 @@
 
 import type { Server } from 'socket.io';
 import type { PlatformEvent } from '../packages/core/event-bus/index.js';
-import { classRoom } from './presence.js';
+import { classRoom, isRealLessonRoom, WHITEBOARD_BROADCAST_ROOM } from './presence.js';
+
+/**
+ * 转发 `presence.ts` 的定义，避免房间名出现两份来源：
+ * 事件路由表与 presence 的 socket 处理器必须投到同一批房间。
+ */
+export { WHITEBOARD_BROADCAST_ROOM };
 
 /**
  * Minimal structural view of the kernel database the routes need.
@@ -60,8 +66,6 @@ export interface SocketRoute<TPayload = any> {
   readonly description: string;
 }
 
-export const WHITEBOARD_BROADCAST_ROOM = 'whiteboard-broadcast';
-
 const TITLE_SQL = 'SELECT title FROM assignments WHERE id = ?';
 const ELEMENT_SQL = 'SELECT * FROM whiteboard_elements WHERE id = ?';
 const SCHEDULE_SQL = 'SELECT class_id FROM schedules WHERE lesson_id = ? LIMIT 1';
@@ -74,9 +78,12 @@ function lessonRoom(event: PlatformEvent<any>): string[] | null {
   return typeof lessonId === 'string' && lessonId ? [lessonId] : [];
 }
 
+// 「真实课节」判定收敛在 presence.ts，课堂事件路由与之共用同一规则。
+
 function lessonAndBroadcastRooms(event: PlatformEvent<any>): string[] | null {
   const rooms = lessonRoom(event);
-  return rooms === null || rooms.length === 0 ? [] : [...rooms, WHITEBOARD_BROADCAST_ROOM];
+  if (rooms === null || rooms.length === 0) return [];
+  return rooms.some(isRealLessonRoom) ? [...rooms, WHITEBOARD_BROADCAST_ROOM] : rooms;
 }
 
 function refreshMessage(event: PlatformEvent<any>) {
@@ -84,16 +91,67 @@ function refreshMessage(event: PlatformEvent<any>) {
 }
 
 /**
- * 点名元素落库 + 广播 `student-picked`。
- * 逻辑逐行保持与原有实现一致（含幂等：同一 rollcallId 只插入一次）。
+ * 白板元素更新的广播策略。
+ *
+ * 背景：`whiteboard.element_updated` 曾经是纯 effect-only 路由（`rooms: () => []`），
+ * 因为它承载的主要是拖拽/缩放这类高频几何更新，广播会让全班反复全量重拉。
+ * 但同一事件也承载**语义型内容更新**（改题面、改代码、翻幻灯片、抽中学生），
+ * 这些必须让学生看到 —— 缺了就会复现「教师端已改、学生端卡在旧状态」。
+ *
+ * 判定准则（不看「是否持久化」，看「学生是否必须看到」）：
+ *   ① 改变了学生要读的内容（题面、代码、幻灯片、点名结果）
+ *   ② 改变了课堂进行中的状态（抽中、公布答案、绑定作业）
+ *   ③ 改变了学生下一步能做什么（组件出现/消失）
+ *
+ * 这里的实现是**按元素类型的声明式策略**，而不是逐组件在路由 `effect` 里开洞：
+ * - 落在 `LAYOUT_ONLY_ELEMENT_TYPES` 里的类型：纯几何/视图，不广播
+ * - 其余（含未登记的新类型）：广播 —— **fail-safe 方向**。
+ *   未登记类型最多导致一次多余的刷新；反过来若默认不广播，
+ *   新加的语义型组件会静默不同步，那正是本次要根治的病。
+ *
+ * 为什么放在服务端而不是前端：元素 `type` 本来就在 `whiteboard_elements` 行里，
+ * 且两条持久化路径（`LiveClassroomView` 直接 PUT、`LessonEditorView` 走 800ms
+ * 防抖 autosave）最终都汇聚到 `whiteboard.update` 命令 —— 放这里一次覆盖两条，
+ * 无需在前端写两遍判定逻辑。
  */
-function handleRollcallElement(elementId: string, deps: SocketRouteDeps): void {
+const LAYOUT_ONLY_ELEMENT_TYPES: ReadonlySet<string> = new Set([
+  // 静态图元：位置/尺寸/笔迹
+  'text',
+  'rectangle',
+  'rect',
+  'circle',
+  'shape',
+  'pen',
+  'highlighter',
+  // 页面元数据已有专用事件（`page-meta-update` / `page-change`），
+  // 走白板通用刷新反而重复
+  'page_meta',
+]);
+
+/** 点名后刷新课节房间 + 广播房间的学生端白板。 */
+function broadcastWhiteboardRefresh(event: PlatformEvent<any>, deps: SocketRouteDeps): void {
+  const refresh = attachMeta(refreshMessage(event), event);
+  for (const room of lessonAndBroadcastRooms(event) ?? []) {
+    if (room) deps.io.to(room).emit('whiteboard-sync', refresh);
+  }
+}
+
+/**
+ * 点名抽中落库 + 广播 `student-picked`。
+ *
+ * 幂等：同一 `rollcallId` 只落库、只广播一次（`pickedTime` 参与 id 计算，
+ * 因此重复抽中不同学生会得到不同的 id，而拖拽等无谓更新不会产生新记录）。
+ *
+ * @returns 本次是否**新抽中**了一名学生。调用方据此决定要不要额外广播白板刷新：
+ *   `element_drawn` 路由的 `rooms` 已经广播过 refresh，无需重复；
+ *   `element_updated` 是 effect-only，才需要在这里补。
+ */
+function persistRollcallPick(el: any, elementId: string, deps: SocketRouteDeps): boolean {
   try {
-    const el = deps.db.prepare(ELEMENT_SQL).get(elementId) as any;
-    if (!el || el.type !== 'rollcall') return;
+    if (!el || el.type !== 'rollcall') return false;
 
     const elData = JSON.parse(el.data);
-    if (!elData?.selectedStudent || elData.status !== 'picked') return;
+    if (!elData?.selectedStudent || elData.status !== 'picked') return false;
 
     const studentId = elData.selectedStudent.id;
     const studentName = elData.selectedStudent.name;
@@ -110,7 +168,7 @@ function handleRollcallElement(elementId: string, deps: SocketRouteDeps): void {
     const rollcallId = `rollcall-${elementId}-${pickedTime}`;
 
     const exists = deps.db.prepare(ROLLCALL_EXISTS_SQL).get(rollcallId);
-    if (exists) return;
+    if (exists) return false;
 
     deps.db.prepare(ROLLCALL_INSERT_SQL).run(rollcallId, studentId, classId, lessonId, pickedTime);
     console.log(`[Rollcall] Saved rollcall for student ${studentId} (${studentName})`);
@@ -123,9 +181,45 @@ function handleRollcallElement(elementId: string, deps: SocketRouteDeps): void {
       lessonId,
       pickedTime,
     });
+
+    return true;
   } catch (e) {
     console.error('Error handling rollcall element:', e);
+    return false;
   }
+}
+
+/**
+ * `whiteboard.element_updated` 的统一处理：按元素类型决定是否广播刷新。
+ *
+ * 两条持久化路径都会走到这里，因此这是「语义型更新必须同步、学生端实时跟上」
+ * 唯一且不漏的收敛点。
+ */
+function handleElementUpdatedEffect(event: PlatformEvent<any>, deps: SocketRouteDeps): void {
+  const elementId = (event.payload as any)?.elementId;
+  if (typeof elementId !== 'string' || !elementId) return;
+
+  let el: any;
+  try {
+    el = deps.db.prepare(ELEMENT_SQL).get(elementId);
+  } catch (e) {
+    console.error('[event-routing] failed to load whiteboard element:', e);
+    return;
+  }
+  // 元素查不到（已删除等）：无内容可同步，也不必刷新
+  if (!el) return;
+
+  // 点名：只在**真正抽中新学生**时补一次刷新，拖拽等无谓更新不触发
+  if (el.type === 'rollcall') {
+    if (persistRollcallPick(el, elementId, deps)) {
+      broadcastWhiteboardRefresh(event, deps);
+    }
+    return;
+  }
+
+  if (LAYOUT_ONLY_ELEMENT_TYPES.has(el.type)) return;
+
+  broadcastWhiteboardRefresh(event, deps);
 }
 
 export const SOCKET_ROUTES: readonly SocketRoute[] = [
@@ -159,7 +253,10 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
     map: refreshMessage,
     effect: (event, deps) => {
       if ((event.payload as any)?.type === 'rollcall') {
-        handleRollcallElement((event.payload as any).elementId, deps);
+        // element_drawn 自身的 rooms 已经广播 refresh，此处只负责落库 + student-picked
+        const elementId = (event.payload as any).elementId;
+        if (typeof elementId !== 'string' || !elementId) return;
+        persistRollcallPick(deps.db.prepare(ELEMENT_SQL).get(elementId) as any, elementId, deps);
       }
     },
     description: '白板元素新增 → 课节房间 + 广播房间刷新（点名元素另落库）',
@@ -167,30 +264,32 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
   {
     eventType: 'whiteboard.element_updated',
     socketEvent: 'whiteboard-sync',
+    // 投递由 effect 按元素类型决定：布局型静默，语义型广播刷新。
+    // 这里保持 rooms: [] 避免 effect 与投递重复发送。
     rooms: () => [],
-    effect: (event, deps) => handleRollcallElement((event.payload as any)?.elementId, deps),
-    description: '白板元素更新 → 仅处理点名落库，不触发全量刷新',
+    effect: handleElementUpdatedEffect,
+    description: '白板元素更新 → 布局型静默；语义型（题面/代码/幻灯片/点名等）广播课节+广播房间刷新',
   },
   {
     eventType: 'whiteboard.batch_drawn',
     socketEvent: 'whiteboard-sync',
-    rooms: lessonRoom,
+    rooms: lessonAndBroadcastRooms,
     map: refreshMessage,
-    description: '白板批量绘制 → 课节房间刷新',
+    description: '白板批量绘制 → 课节房间 + 广播房间刷新',
   },
   {
     eventType: 'whiteboard.element_deleted',
     socketEvent: 'whiteboard-sync',
-    rooms: lessonRoom,
+    rooms: lessonAndBroadcastRooms,
     map: refreshMessage,
-    description: '白板元素删除 → 课节房间刷新',
+    description: '白板元素删除 → 课节房间 + 广播房间刷新',
   },
   {
     eventType: 'whiteboard.cleared',
     socketEvent: 'whiteboard-sync',
-    rooms: lessonRoom,
+    rooms: lessonAndBroadcastRooms,
     map: refreshMessage,
-    description: '白板清空 → 课节房间刷新',
+    description: '白板清空 → 课节房间 + 广播房间刷新',
   },
   {
     eventType: 'whiteboard.quiz_answered',
@@ -220,6 +319,19 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
   },
 
   // ── 题库与随堂测验插件（@openlearn/plugin-exam-bank）───────────────────
+  //
+  // ⚠️ 这三条路由是**平台为外部插件预留的契约**，不是悬空代码：
+  //
+  //  - 考试银行插件**不在本仓**（`v2_plugins/` 下只有 courseware-hub /
+  //    ext-homework-hub / openlearn-workhub / scratch-editor-deploy），
+  //    所以本仓既没有它的 `eventBus.publish`（producer），也没有它的前端
+  //    `socket.on`（consumer）—— 机械核对事件名时必然显示「两端皆无」。
+  //  - **请勿删除**：删了之后插件一旦装上就会静默失效，而「代码看起来接好了、
+  //    实际什么都不发生」正是本次审计反复撞上的失败模式。
+  //  - 消费端在插件自己的前端代码里；该方向后续还会继续扩展功能。
+  //
+  // 与上面被删除的 `spotlight:*` 性质不同：spotlight 是「曾经有过、现在两端都空了」，
+  // exambank 是「插件还没进这个仓」。空路由 vs 前置契约，处置相反。
   {
     eventType: 'exambank.survey.published',
     socketEvent: 'exambank-survey-state',
@@ -300,26 +412,21 @@ export const SOCKET_ROUTES: readonly SocketRoute[] = [
   {
     eventType: 'points.awarded',
     socketEvent: 'classroom:points_awarded',
+    // 积分是全平台账户级事实（可来自作业评分、课堂归因、插件），不隶属某一课节，
+    // 故走全局广播。消费端按 payload.studentId 过滤自己的那条。
     rooms: () => null,
-    description: '课堂归因加分/扣分变更 → 全局广播',
+    description: '积分/金币变更 → 全局广播（消费端按 studentId 过滤）',
   },
 
-  // ── 聚焦（spotlight）────────────────────────────────────────────────────
-  // 历史遗留：内核侧同时存在 `spotlight:state_updated`（冒号）与
-  // `spotlight.state_updated`（点号）两种拼写，两者都投递到同一个 socket 名。
-  // 收敛命名时会一并清理，此处先双轨保持兼容。
-  {
-    eventType: 'spotlight:state_updated',
-    socketEvent: 'spotlight:state_updated',
-    rooms: () => null,
-    description: '聚焦状态更新（旧冒号拼写）→ 全局广播',
-  },
-  {
-    eventType: 'spotlight.state_updated',
-    socketEvent: 'spotlight:state_updated',
-    rooms: () => null,
-    description: '聚焦状态更新（点号拼写）→ 全局广播',
-  },
+  // ── 关于被删除的 spotlight 路由 ──────────────────────────────────────────
+  // 原先这里有两条 `spotlight:state_updated`（冒号）/ `spotlight.state_updated`
+  // （点号）双拼写路由，注释说是「历史遗留，先双轨保持兼容」。
+  //
+  // 走查结论：**既无 producer 也无 consumer** —— 全仓（含插件目录）没有任何
+  // 一处 publish 这两个事件，也没有任何一处 socket.on 它们的 socket 名。
+  // 「双轨兼容」保护的是一个不存在的两端，代价是让后来者以为聚焦功能已经打通。
+  // 故删除。若将来真的要做聚焦，需要连同内核事件与前端消费端一起加，
+  // 而不是留一条空路由占位。
 ];
 
 function buildMeta(event: PlatformEvent): EventMeta {

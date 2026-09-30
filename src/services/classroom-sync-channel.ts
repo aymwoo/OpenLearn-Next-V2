@@ -7,7 +7,8 @@
  * 3. 双向互动闭环：支持教师端教学指令广播与学生端动作（举手/签到/作答）即时回传。
  */
 
-import { getOptionalSocket } from './socket-service';
+import type { Socket } from 'socket.io-client';
+import { getOptionalSocket, onSocketInstance } from './socket-service';
 
 export interface ClassroomCountdownState {
   lessonId: string | null;
@@ -58,7 +59,16 @@ export class ClassroomSyncChannel {
   private messageListeners: ((msg: ClassroomSyncMessage) => void)[] = [];
   private lessonId: string | null = null;
   private classId: string | null = null;
-  private socketCleanup?: () => void;
+  /** 当前已挂上 socket 监听的实例；用于识别 socket 被替换后需要换绑 */
+  private socketBoundTo: Socket | null = null;
+  /** 「socket 就绪」订阅的退订函数 */
+  private offSocketReady: (() => void) | null = null;
+
+  private readonly handleRemoteSync = (data: { lessonId?: string; message?: ClassroomSyncMessage }) => {
+    if (this.isDestroyed || !data?.message) return;
+    if (this.lessonId && data.lessonId && data.lessonId !== this.lessonId) return;
+    this.emitToListeners(data.message);
+  };
 
   constructor(channelName: string = CLASSROOM_SYNC_CHANNEL_NAME, lessonId?: string | null, classId?: string | null) {
     this.lessonId = lessonId || null;
@@ -73,18 +83,39 @@ export class ClassroomSyncChannel {
       };
     }
 
-    // 2. 远端跨机 Socket.IO 双轨监听
+    // 2. 远端跨机 Socket.IO
+    //
+    //    这里**不能**在构造时 `getOptionalSocket()` 取一次：socket 由
+    //    `useClassroomSocket` 的 effect 注入，而 React 的 passive effect 是
+    //    子先于父执行的 —— 在子组件 effect 里构造 channel 时 socket 必然还是 null，
+    //    于是监听**永久缺失且不报错**。而 `postMessage` 每次都重新取 socket，
+    //    症状是「发正常、收静默失效」这种不对称故障，且同机多标签页因
+    //    BroadcastChannel 是独立通路而完全看不出来。
+    //
+    //    改为订阅「socket 就绪」：已就绪则立即绑定，否则等它出现时再绑定。
+    this.offSocketReady = onSocketInstance(() => this.ensureSocketBound());
+  }
+
+  /**
+   * 幂等地把远端监听挂到当前 socket 上。
+   *
+   * 两条触发路径：
+   * - `onSocketInstance` 回调 —— 覆盖「socket 后于 channel 出现」；
+   * - `onMessage` / `postMessage` —— 覆盖「socket 实例被替换（重连换实例）」。
+   */
+  private ensureSocketBound(): void {
+    if (this.isDestroyed) return;
     const socket = getOptionalSocket();
-    if (socket) {
-      const handleRemoteSync = (data: { lessonId?: string; message?: ClassroomSyncMessage }) => {
-        if (this.isDestroyed || !data?.message) return;
-        if (this.lessonId && data.lessonId && data.lessonId !== this.lessonId) return;
-        this.emitToListeners(data.message);
-      };
-      socket.on('classroom:sync_message', handleRemoteSync);
-      this.socketCleanup = () => {
-        socket.off('classroom:sync_message', handleRemoteSync);
-      };
+    if (!socket || socket === this.socketBoundTo) return;
+    this.unbindSocket();
+    socket.on('classroom:sync_message', this.handleRemoteSync);
+    this.socketBoundTo = socket;
+  }
+
+  private unbindSocket(): void {
+    if (this.socketBoundTo) {
+      this.socketBoundTo.off('classroom:sync_message', this.handleRemoteSync);
+      this.socketBoundTo = null;
     }
   }
 
@@ -107,6 +138,7 @@ export class ClassroomSyncChannel {
    * 注册消息监听器
    */
   public onMessage(listener: (msg: ClassroomSyncMessage) => void): () => void {
+    this.ensureSocketBound();
     this.messageListeners.push(listener);
     return () => {
       this.messageListeners = this.messageListeners.filter((l) => l !== listener);
@@ -118,6 +150,7 @@ export class ClassroomSyncChannel {
    */
   public postMessage(msg: ClassroomSyncMessage): void {
     if (this.isDestroyed) return;
+    this.ensureSocketBound();
     if (this.channel) {
       try {
         this.channel.postMessage(msg);
@@ -245,10 +278,9 @@ export class ClassroomSyncChannel {
   public destroy(): void {
     this.isDestroyed = true;
     this.messageListeners = [];
-    if (this.socketCleanup) {
-      this.socketCleanup();
-      this.socketCleanup = undefined;
-    }
+    this.offSocketReady?.();
+    this.offSocketReady = null;
+    this.unbindSocket();
     if (this.channel) {
       this.channel.close();
       this.channel = null;

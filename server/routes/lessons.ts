@@ -3,6 +3,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
+import { classRoom } from '../presence.js';
 import type { ServerContext } from '../context.js';
 
 /**
@@ -1115,7 +1116,15 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
       classIcebreakerMap.set(classId, current);
 
       if (ctx.io) {
-        ctx.io.emit('classroom:icebreaker_updated', {
+        // 班级维度事件 → 投班级房间。原为全局 io.emit，会把 A 班的破冰统计
+        // 推给全平台客户端。
+        //
+        // ⚠️ 消费方是**教师端**的 `PreClassDiagnosticHub`（在教师专属的
+        // LiveClassroomView → PreClassReadyView 内），学生只打卡、不看统计。
+        // 班级房间原先只有学生在 register-student 时加入，教师加房间是后补的 ——
+        // 若哪天教师端又没 join 班级房间，这个事件就会对唯一的消费方静默失效。
+        // 详见 docs/classroom-time-flow-audit.md。
+        ctx.io.to(classRoom(classId)).emit('classroom:icebreaker_updated', {
           classId,
           stats: current,
         });

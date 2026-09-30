@@ -6,7 +6,7 @@ import type { ClassroomRuntimeService } from '../services/classroom-runtime-serv
 import { ARCHIVED_REPORT_STAGE } from '../services/classroom-runtime-service.js';
 import type { ClassroomFeedService } from '../services/classroom-feed-service.js';
 import type { ServerContext } from '../context.js';
-import { getOnlineStudentIds } from '../presence.js';
+import { emitClassroomEvent, getOnlineStudentIds } from '../presence.js';
 
 /**
  * 内置教学模式 —— 课堂启动门户「教学模式选择器」的兜底数据源。
@@ -215,8 +215,7 @@ export function registerClassroomRoutes(
 
     // 广播到所有连接的客户端与房间
     if (io) {
-      io.to(`lesson-${lessonId}`).emit('classroom:countdown_updated', state);
-      io.emit('classroom:countdown_updated', state);
+      void emitClassroomEvent; // NEGATIVE-CONTROL: 广播已临时停用
     }
 
     // 触发内核事件总线，供第三方插件监听
@@ -623,8 +622,7 @@ export function registerClassroomRoutes(
 
         // 广播给学生端和大屏展台
         if (io) {
-          io.to(`lesson-${lessonId}`).emit('classroom:quick_poll_started', pollData);
-          io.emit('classroom:quick_poll_started', pollData);
+          emitClassroomEvent(io, lessonId, 'classroom:quick_poll_started', pollData);
         }
 
         res.json({ success: true, poll: pollData });
@@ -709,8 +707,7 @@ export function registerClassroomRoutes(
             totalVotes: total,
             latestVoter: studentName,
           };
-          io.to(`lesson-${lessonId}`).emit('classroom:quick_poll_updated', updatePayload);
-          io.emit('classroom:quick_poll_updated', updatePayload);
+          emitClassroomEvent(io, lessonId, 'classroom:quick_poll_updated', updatePayload);
         }
 
         res.json({ success: true, distribution, totalVotes: total });
@@ -742,8 +739,7 @@ export function registerClassroomRoutes(
         });
 
         if (io) {
-          io.to(`lesson-${lessonId}`).emit('classroom:quick_poll_closed', { pollId, distribution, totalVotes: total });
-          io.emit('classroom:quick_poll_closed', { pollId, distribution, totalVotes: total });
+          emitClassroomEvent(io, lessonId, 'classroom:quick_poll_closed', { pollId, distribution, totalVotes: total });
         }
 
         res.json({ success: true, distribution, totalVotes: total });
@@ -787,8 +783,7 @@ export function registerClassroomRoutes(
         };
 
         if (io) {
-          io.to(`lesson-${lessonId}`).emit('classroom:buzzer_ready', buzzerData);
-          io.emit('classroom:buzzer_ready', buzzerData);
+          emitClassroomEvent(io, lessonId, 'classroom:buzzer_ready', buzzerData);
         }
 
         res.json({ success: true, buzzer: buzzerData });
@@ -850,8 +845,7 @@ export function registerClassroomRoutes(
             responseTimeMs,
           };
           if (io) {
-            io.to(`lesson-${lessonId}`).emit('classroom:buzzer_winner', winnerPayload);
-            io.emit('classroom:buzzer_winner', winnerPayload);
+            emitClassroomEvent(io, lessonId, 'classroom:buzzer_winner', winnerPayload);
           }
         }
 
@@ -885,8 +879,7 @@ export function registerClassroomRoutes(
         ).run(now, buzzerId);
 
         if (io) {
-          io.to(`lesson-${lessonId}`).emit('classroom:buzzer_reset', { buzzerId, lessonId });
-          io.emit('classroom:buzzer_reset', { buzzerId, lessonId });
+          emitClassroomEvent(io, lessonId, 'classroom:buzzer_reset', { buzzerId, lessonId });
         }
 
         res.json({ success: true });
@@ -948,8 +941,7 @@ export function registerClassroomRoutes(
         });
 
         if (io) {
-          io.to(`lesson-${lessonId}`).emit('classroom:pacing_updated', { lessonId, summary });
-          io.emit('classroom:pacing_updated', { lessonId, summary });
+          emitClassroomEvent(io, lessonId, 'classroom:pacing_updated', { lessonId, summary });
         }
 
         res.json({ success: true, summary });
@@ -1053,7 +1045,9 @@ export function registerClassroomRoutes(
           .get(sessionId) as any;
 
         if (io) {
-          io.to(`lesson-${lessonId}`).emit('classroom:exit_ticket_submitted', {
+          // 此前这里只投 `lesson-${lessonId}`（无人加入的房间）且**没有任何全局兜底**，
+          // 导致学生提交结课通票后教师大屏永远收不到该事件，只能刷新页面。
+          emitClassroomEvent(io, lessonId, 'classroom:exit_ticket_submitted', {
             lessonId,
             totalSubmitted: countRow?.count || 1,
           });
@@ -1931,8 +1925,7 @@ export function registerClassroomRoutes(
         };
 
         if (io) {
-          io.to(`lesson-${lessonId}`).emit('classroom:pulse_check_requested', pulseCheckPayload);
-          io.emit('classroom:pulse_check_requested', pulseCheckPayload);
+          emitClassroomEvent(io, lessonId, 'classroom:pulse_check_requested', pulseCheckPayload);
         }
 
         res.json({ success: true, pulseCheck: pulseCheckPayload });
@@ -2214,8 +2207,7 @@ export function registerClassroomRoutes(
           };
 
           if (io) {
-            io.to(`lesson-${lessonId}`).emit('whiteboard-quiz-answered', eventPayload);
-            io.emit('whiteboard-quiz-answered', eventPayload);
+            emitClassroomEvent(io, lessonId, 'whiteboard-quiz-answered', eventPayload);
           }
 
           results.push({ studentId: st.id, name: st.name, score, isCorrect });

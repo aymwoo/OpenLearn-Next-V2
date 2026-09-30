@@ -8,6 +8,7 @@ import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, req
 import { validateMagicBytes, BLOCKED_EXTENSIONS, generateStudentNumber } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
+import { emitClassroomEvent } from '../presence.js';
 import type { ServerContext } from '../context.js';
 
 export function registerRosterRoutes(ctx: ServerContext) {
@@ -1698,9 +1699,17 @@ export function registerRosterRoutes(ctx: ServerContext) {
       };
 
       if (io) {
-        io.emit('rollcall:evaluated', payload);
-        io.emit('student:coins_awarded', {
+        // 投递到「课节房间 + 常驻课堂广播房间」：原为全局 io.emit，会推给
+        // 全平台客户端（A 课节的评价事件串到 B 课节）。消费端按 lessonId 过滤，
+        // 但那是运气，不是设计。
+        emitClassroomEvent(io, lessonId ?? null, 'rollcall:evaluated', payload);
+        // 金币到账的通用信号：补 lessonId/classId，否则消费端无从按课节过滤。
+        // 注意与上面同源同动作，消费端只应订阅其中之一，否则会双重提示。
+        emitClassroomEvent(io, lessonId ?? null, 'student:coins_awarded', {
           studentId,
+          studentName,
+          classId,
+          lessonId,
           coins: rewardCoins,
           reason: `课堂抽问答对激励 (${rating})`,
         });
@@ -1730,6 +1739,16 @@ export function registerRosterRoutes(ctx: ServerContext) {
     };
   };
 
+  /**
+   * 广播「分组方案已变更」。
+   *
+   * ⚠️ 刻意保持「有 producer、无 consumer」：分组 API 写的是 `class_groups.member_ids`，
+   * 而唯一的前端分组 UI（`ClassroomLeaderboardModal`）是按 `students[].groupName`
+   * 自行分组的 —— **两套互不相通的数据源**，且本事件的 payload 不含分组数据。
+   * 把它接到那个 UI 上会是虚构的集成（刷了也读不到新数据），只会造成
+   * 「已经打通」的错觉。故在数据模型对齐之前不接线。
+   * 详见 docs/classroom-time-flow-audit.md。
+   */
   const publishGroupsChanged = (payload: { classId: string; scope: 'default' | 'temporary'; source?: string }) => {
     if (io) {
       io.to(`class-${payload.classId}`).emit('classroom:groups_changed', {

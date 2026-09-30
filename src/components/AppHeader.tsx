@@ -6,7 +6,6 @@ import {
   LayoutTemplate,
   Database,
   ClipboardList,
-  Sparkles,
   CheckCircle2,
   Eye,
   LogOut,
@@ -317,8 +316,6 @@ export function AppHeader(props: AppHeaderProps) {
                               <div className="mt-0.5">
                                 {notif.type === 'new_assignment' ? (
                                   <ClipboardList size={16} className="text-indigo-500" />
-                                ) : notif.type === 'rollcall_picked' ? (
-                                  <Sparkles size={16} className="text-amber-500 animate-pulse" />
                                 ) : (
                                   <CheckCircle2 size={16} className="text-green-500" />
                                 )}

@@ -121,7 +121,7 @@ describe('setupPresence', () => {
     expect(m.globalEmitted.some((e) => e.event === 'student-active-segment-changed')).toBe(false);
   });
 
-  it('whiteboard-event publishes to the event bus and emits whiteboard-sync to the raw lessonId room', () => {
+  it('whiteboard-event publishes to the event bus and refreshes both the lesson room and the broadcast room', () => {
     const m = buildMocks();
     const socket = m.connect();
     socket._emitted.length = 0;
@@ -144,14 +144,39 @@ describe('setupPresence', () => {
     });
 
     // Emit goes to the raw lessonId ('L1'), NOT the `lesson-L1` roomName.
+    // 广播房间一并投递：只投课节房间会漏掉没 join 课节房间的学生
+    // （停在仪表盘 / 作业工作区 / 课件标签页）。
+    // roomId 必带：`useClassroomSocket` 的处理函数是 `if (type === 'refresh' && roomId)`，
+    // 缺 roomId 会静默丢弃这条刷新。
     expect(socket._emitted).toEqual([
       {
         scope: 'socket-room',
         room: 'L1',
         event: 'whiteboard-sync',
-        payload: { type: 'refresh', sourceEvent: 'whiteboard.element_drawn' },
+        payload: { type: 'refresh', roomId: 'L1', sourceEvent: 'whiteboard.element_drawn' },
+      },
+      {
+        scope: 'socket-room',
+        room: 'whiteboard-broadcast',
+        event: 'whiteboard-sync',
+        payload: { type: 'refresh', roomId: 'L1', sourceEvent: 'whiteboard.element_drawn' },
       },
     ]);
+  });
+
+  it('whiteboard-event without a lessonId publishes to the bus but refreshes nobody', () => {
+    const m = buildMocks();
+    const socket = m.connect();
+    socket._emitted.length = 0;
+    socket.trigger('whiteboard-event', {
+      type: 'whiteboard.element_drawn',
+      payload: { elementId: 'e1' },
+      id: 'x',
+      timestamp: 123,
+    });
+
+    expect(m.eventBus.publish).toHaveBeenCalledTimes(1);
+    expect(socket._emitted).toEqual([]);
   });
 
   it('teacher-broadcast-segment updates the shared segment map and broadcasts the change', () => {

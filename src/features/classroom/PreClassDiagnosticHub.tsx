@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { onSocketInstance } from '../../services/socket-service';
 import {
   BrainCircuit,
   AlertTriangle,
@@ -53,6 +54,8 @@ export function PreClassDiagnosticHub({ lessonId, classId, lang = 'zh' }: PreCla
   const [data, setData] = useState<DiagnosticData | null>(null);
   const [loading, setLoading] = useState(false);
   const [expandedMistake, setExpandedMistake] = useState<number | null>(1);
+  /** 实时推送的破冰统计；优先于接口返回的快照（见下方订阅 effect） */
+  const [liveIcebreaker, setLiveIcebreaker] = useState<DiagnosticData['icebreakerStats'] | null>(null);
 
   const fetchDiagnostic = () => {
     if (!lessonId) return;
@@ -77,6 +80,43 @@ export function PreClassDiagnosticHub({ lessonId, classId, lang = 'zh' }: PreCla
     fetchDiagnostic();
   }, [lessonId, classId]);
 
+  // 切换课节/班级时清空上一份实时值，避免与新班级数据混用
+  useEffect(() => {
+    setLiveIcebreaker(null);
+  }, [lessonId, classId]);
+
+  /**
+   * 实时接收破冰心情统计。
+   *
+   * 此前 `classroom:icebreaker_updated`（学生打卡后服务端广播）**全平台无监听**，
+   * 教师只能重新加载页面才看到统计变化。而这个 UI 位于教师端的
+   * `PreClassReadyView`（`LiveClassroomView` 仅由 `TeacherView` 挂载）——
+   * 学生只负责打卡、不看统计，所以它天然是「只有教师需要也只有教师看」的面。
+   *
+   * 事件 payload **自带 stats**，故直接采用，不必重新拉诊断接口。
+   * 组件内直接订阅（经 `onSocketInstance` 等待 socket 就绪），不绕全局 store：
+   * 展示逻辑就在这里。
+   */
+  useEffect(() => {
+    if (!classId) return;
+    let detach: (() => void) | null = null;
+    const off = onSocketInstance((socket) => {
+      const handler = (payload: any) => {
+        // 教师切换班级后可能仍留在旧班级房间里（服务端无通用 leave-room），
+        // 故必须按 classId 过滤，避免把别的班的统计画到本页
+        if (!payload || payload.classId !== classId || !payload.stats) return;
+        setLiveIcebreaker(payload.stats);
+      };
+      detach?.();
+      socket.on('classroom:icebreaker_updated', handler);
+      detach = () => socket.off('classroom:icebreaker_updated', handler);
+    });
+    return () => {
+      off();
+      detach?.();
+    };
+  }, [classId]);
+
   if (!lessonId) {
     return null;
   }
@@ -91,7 +131,8 @@ export function PreClassDiagnosticHub({ lessonId, classId, lang = 'zh' }: PreCla
 
   const topMistakes = data?.topMistakes || [];
 
-  const icebreaker = data?.icebreakerStats || { fullPower: 0, needCoffee: 0, needHelp: 0 };
+  // 实时推送优先于接口快照：学生打卡后无需等重新拉取
+  const icebreaker = liveIcebreaker || data?.icebreakerStats || { fullPower: 0, needCoffee: 0, needHelp: 0 };
   const rawTotalIcebreaker = icebreaker.fullPower + icebreaker.needCoffee + icebreaker.needHelp;
   const hasIcebreaker = rawTotalIcebreaker > 0;
   const totalIcebreaker = Math.max(1, rawTotalIcebreaker);

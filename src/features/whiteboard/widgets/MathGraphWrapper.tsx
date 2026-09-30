@@ -226,6 +226,19 @@ export function MathGraphWrapper({
   const [containerDimensions, setContainerDimensions] = useState({ width: 400, height: 300 });
   const graphContainerRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * 服务端图元数据 → 本地 state 的反向同步。
+   *
+   * 教师端改公式后会持久化并广播刷新，学生端的 `data` 因此会变；
+   * 若不回填，本地 `equation` 会一直停在打开时的那份，学生看到的仍是旧公式。
+   * 范式与 `RevealPresentationWrapper` 一致。
+   */
+  useEffect(() => {
+    if (data.equation !== undefined && data.equation !== equation) {
+      setEquation(data.equation);
+    }
+  }, [data.equation]);
+
   useEffect(() => {
     if (!graphContainerRef.current) return;
     const observer = new ResizeObserver((entries) => {

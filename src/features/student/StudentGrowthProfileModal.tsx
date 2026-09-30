@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { usePointsLedgerStore } from '../../store/pointsLedgerStore';
 import {
   Trophy,
   Lightbulb,
@@ -85,6 +86,11 @@ export function StudentGrowthProfileModal({
 }: StudentGrowthProfileModalProps) {
   const [awardingPoints, setAwardingPoints] = useState(false);
   const [internalProgress, setInternalProgress] = useState<StudentProgressType[]>([]);
+  /**
+   * 积分台账版本号。服务端每次 `classroom:points_awarded` 广播都会让它自增，
+   * 把它纳入下方取数 effect 的依赖即可在加分后自动重拉。
+   */
+  const pointsVersion = usePointsLedgerStore((s) => s.version);
 
   // Automatically fetch student progress history when not provided via prop
   useEffect(() => {
@@ -113,7 +119,10 @@ export function StudentGrowthProfileModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, student?.id, progressHistory]);
+    // `pointsVersion` 参与依赖：教师在本弹窗内加分（或任何来源的积分变更）后，
+    // 服务端会广播 `classroom:points_awarded` → 写入 pointsLedgerStore → version 自增，
+    // 这里随之重拉。否则会出现「提示已发放、数字却还是旧的」。
+  }, [isOpen, student?.id, progressHistory, pointsVersion]);
 
   const activeProgressHistory = progressHistory !== undefined ? progressHistory : internalProgress;
 

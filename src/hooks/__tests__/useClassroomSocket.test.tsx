@@ -32,6 +32,8 @@ vi.mock('socket.io-client', () => ({
 
 import { useClassroomSocket, type UseClassroomSocketOptions } from '../useClassroomSocket';
 import { whiteboardViewStore } from '../../store/whiteboardViewStore';
+import { pointsLedgerStore } from '../../store/pointsLedgerStore';
+import { appStore } from '../../store/appStore';
 
 const STUDENT_SESSION = { role: 'student', studentId: 'stu-1', name: 'Alice' } as never;
 const ASSIGNMENT = { id: 'a1', class_id: 'c1', title: 'HW1' };
@@ -307,3 +309,141 @@ describe('useClassroomSocket — 教师端最大化视图同步', () => {
   });
 });
 
+/**
+ * 积分台账变更（`classroom:points_awarded`）的消费端。
+ *
+ * 该事件此前全平台零监听，导致：被加分的学生收不到提示；教师在已打开的
+ * 「成长档案 / 积分榜」里加分后界面不刷新（提示已发放、数字却还是旧的）。
+ */
+describe('useClassroomSocket — 积分台账变更', () => {
+  beforeEach(() => {
+    socketHandlers.clear();
+    pointsLedgerStore.getState().reset();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const award = (over: Record<string, unknown> = {}) => ({
+    id: 'pl-1',
+    studentId: 'stu-1',
+    classId: 'c1',
+    dimensionId: 'attribution',
+    deltaPoints: 5,
+    reason: '课堂表现优异',
+    createdAt: 1_700_000_000_000,
+    ...over,
+  });
+
+  it('被加分的学生收到提示并刷新自己的学情数据', () => {
+    const addToast = vi.fn();
+    const fetchStudentDashboard = vi.fn();
+    const options = makeOptions({ addToast, fetchStudentDashboard, activeStudentId: 'stu-1' });
+    renderHook(() => useClassroomSocket(options));
+
+    trigger('classroom:points_awarded', award());
+
+    expect(addToast).toHaveBeenCalledWith('🎁 获得成长积分', expect.stringContaining('+5 积分'), 'success');
+    expect(fetchStudentDashboard).toHaveBeenCalledWith('stu-1');
+  });
+
+  it('扣分走 warning 且文案为负', () => {
+    const addToast = vi.fn();
+    const options = makeOptions({ addToast, activeStudentId: 'stu-1' });
+    renderHook(() => useClassroomSocket(options));
+
+    trigger('classroom:points_awarded', award({ deltaPoints: -3, reason: '课堂纪律扣分' }));
+
+    expect(addToast).toHaveBeenCalledWith('📉 积分调整', expect.stringContaining('-3 积分'), 'warning');
+  });
+
+  it('事件是全局广播 → 别人被加分时自己不该弹提示，但仍要记录以供积分类 UI 刷新', () => {
+    const addToast = vi.fn();
+    const options = makeOptions({ addToast, activeStudentId: 'stu-9' });
+    renderHook(() => useClassroomSocket(options));
+
+    trigger('classroom:points_awarded', award({ studentId: 'stu-1' }));
+
+    // 全平台都会收到这条广播，若无差别提示就是纯噪音
+    expect(addToast).not.toHaveBeenCalled();
+    // 但仍要落 store，教师侧已打开的积分弹窗据此重拉
+    expect(pointsLedgerStore.getState().lastEvent).toMatchObject({ studentId: 'stu-1', deltaPoints: 5 });
+    expect(pointsLedgerStore.getState().version).toBeGreaterThan(0);
+  });
+
+  it('缺少 studentId 的畸形 payload 被忽略', () => {
+    const addToast = vi.fn();
+    const options = makeOptions({ addToast });
+    renderHook(() => useClassroomSocket(options));
+
+    trigger('classroom:points_awarded', { deltaPoints: 5 });
+
+    expect(addToast).not.toHaveBeenCalled();
+    expect(pointsLedgerStore.getState().lastEvent).toBeNull();
+  });
+});
+
+/**
+ * 教师端也必须加入当前所教班级房间。
+ *
+ * 此前班级房间只有学生在 `register-student` 时加入（服务端 `presence.ts`），
+ * 于是投 `class-<classId>` 的事件一律到不了教师。而有两类事件恰好是
+ * 「教师自己既产生又需要看到」的：
+ *   - `classroom:icebreaker_updated` —— 破冰统计只有教师端 `PreClassDiagnosticHub` 展示；
+ *   - `classroom:groups_changed` / `classroom:stage_changed` 的班级兜底分支。
+ *
+ * 这条测试就是上一轮把 icebreaker 从全局广播改投班级房间后**差点回归**的护栏。
+ */
+describe('useClassroomSocket — 教师端加入当前班级房间', () => {
+  beforeEach(() => {
+    socketHandlers.clear();
+    // fakeSocket 是跨用例共享的，emit 的调用历史必须显式清空，
+    // 否则 joinedRooms() 会混入上一个用例的 join
+    fakeSocket.emit.mockClear();
+    appStore.setState({ liveClassSelectedClassId: 'cls_t1' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+  });
+
+  afterEach(() => {
+    appStore.setState({ liveClassSelectedClassId: null });
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const joinedRooms = (): string[] => fakeSocket.emit.mock.calls.map((c) => c[1]).filter(Boolean) as string[];
+
+  it('教师进入课堂时 join 当前所教班级房间', () => {
+    const options = makeOptions({ activeRole: 'teacher', activeStudentId: null, selectedLesson: 'l1' });
+    renderHook(() => useClassroomSocket(options));
+
+    expect(joinedRooms()).toContain('class-cls_t1');
+  });
+
+  it('学生不靠这条路径加入班级房间（由服务端 register-student 负责）', () => {
+    const options = makeOptions({ activeRole: 'student', activeStudentId: 'stu-1', selectedLesson: 'l1' });
+    renderHook(() => useClassroomSocket(options));
+
+    // 学生端的班级房间由服务端按其所属班级加入，前端不需要也不应猜
+    expect(joinedRooms()).not.toContain('class-cls_t1');
+  });
+
+  it('未选班级时不加入任何班级房间', () => {
+    appStore.setState({ liveClassSelectedClassId: null });
+    const options = makeOptions({ activeRole: 'teacher', activeStudentId: null, selectedLesson: 'l1' });
+    renderHook(() => useClassroomSocket(options));
+
+    expect(joinedRooms().some((r) => r.startsWith('class-'))).toBe(false);
+  });
+
+  it('教师无论是否在课节都至少加入两个常驻广播房间', () => {
+    const options = makeOptions({ activeRole: 'teacher', activeStudentId: null, selectedLesson: null });
+    renderHook(() => useClassroomSocket(options));
+
+    const rooms = joinedRooms();
+    expect(rooms).toContain('whiteboard-broadcast');
+    expect(rooms).toContain('classroom-broadcast');
+  });
+});

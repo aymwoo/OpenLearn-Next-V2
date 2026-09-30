@@ -21,6 +21,84 @@ export interface PresenceDeps {
 /** 班级房间名。与课节房间（直接用 lessonId）互不冲突。 */
 export const classRoom = (classId: string): string => `class-${classId}`;
 
+/**
+ * 全局白板广播房间名。
+ *
+ * 每个客户端在连接时都会 `join-room 'whiteboard-broadcast'`（见
+ * `useClassroomSocket.syncPresenceAndRooms`），**不依赖当前停留在哪个视图**。
+ * 这与班级房间同理：学生在仪表盘 / 作业工作区 / 课件标签页时都可能没 join 课节房间，
+ * 仅投课节房间会让这些学生收不到白板变更。
+ */
+export const WHITEBOARD_BROADCAST_ROOM = 'whiteboard-broadcast';
+
+/**
+ * 常驻课堂广播房间名。
+ *
+ * 与白板广播房间同构：连接即加入，课堂事件（倒计时 / 投票 / 抢答 / 阶段 / 节奏信号）
+ * 同时投递到「课节房间 + 本房间」，使**尚未进入课节视图**的客户端也能收到并预热状态。
+ */
+export const CLASSROOM_BROADCAST_ROOM = 'classroom-broadcast';
+
+/**
+ * 是否为「真实课节」房间。
+ *
+ * 作业工作区会给白板挂一个按学生隔离的**伪课节** id：
+ * `assignment-<assignmentId>-student-<studentId>`（`StudentAssignmentWorkPanel`）。
+ * 它不是一节课，不能进任何常驻广播房间：
+ * - 每个客户端都会收到，本无意义地重拉；
+ * - 更糟的是客户端处理器在「当前没有选中课节」时会执行
+ *   `setSelectedLesson(roomId)` + `setStudentViewStatus('lesson')`，
+ *   把学生拉进一个并不存在的课节视图。
+ *
+ * 伪课节仍投递到它自己的房间即可 —— 在该作业工作区的学生会正确收到。
+ */
+export function isRealLessonRoom(roomId: string): boolean {
+  return !roomId.startsWith('assignment-');
+}
+
+/**
+ * 课堂事件的投递房间。
+ *
+ * 历史上服务端有 13 处投到 `lesson-${lessonId}`（**带前缀**），而客户端加入的
+ * 课节房间是**裸 lessonId**（`enter-lesson` 的 `socket.join(data.lessonId)`），
+ * 那些投递打进了无人加入的房间；其中 11 处靠紧随其后的 `io.emit(...)` 全局广播
+ * 掩盖，于是功能看似正常、代价是全平台串流量。`classroom:exit_ticket_submitted`
+ * 没有全局兜底，因此彻底失效。
+ */
+export function classroomEventRooms(lessonId: string | null | undefined): string[] {
+  if (typeof lessonId !== 'string' || !lessonId) return [CLASSROOM_BROADCAST_ROOM];
+  if (!isRealLessonRoom(lessonId)) return [lessonId];
+  return [lessonId, CLASSROOM_BROADCAST_ROOM];
+}
+
+/**
+ * 课堂事件投递所需的最小 io 能力。
+ *
+ * 刻意只声明用到的那一截：真实的 `Server` 满足它，单元测试的轻量 mock 也满足，
+ * 而 `Pick<Server, 'to'>` 会把 `BroadcastOperator` 的全部方法都拖进类型契约。
+ */
+export interface ClassroomEventEmitter {
+  to: (room: string) => { emit: (event: string, ...args: unknown[]) => void };
+}
+
+/**
+ * 投递一个课堂事件到「课节房间 + 常驻课堂广播房间」。
+ *
+ * 取代原先的「幽灵房间投递 + 紧跟一行全局 `io.emit`」写法：
+ * 房间归属显式化，且每个事件只发一次。
+ */
+export function emitClassroomEvent(
+  io: ClassroomEventEmitter | null | undefined,
+  lessonId: string | null | undefined,
+  event: string,
+  payload: unknown,
+): void {
+  if (!io) return;
+  for (const room of classroomEventRooms(lessonId)) {
+    io.to(room).emit(event, payload);
+  }
+}
+
 /** 教师端广播白板最大化视图时下发给学生的 Socket.IO 事件名 */
 export const WHITEBOARD_FULLSCREEN_CHANGED = 'whiteboard-fullscreen-changed';
 
@@ -145,15 +223,23 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceD
           correlationId: data.payload.lessonId,
         });
 
-        // 2. 广播到课程房间的其他客户端
+        // 2. 广播到「课节房间 + 全局白板广播房间」的其他客户端。
+        //
+        //    房间口径与 `server/event-routing.ts` 的 `element_drawn` 对齐：只投课节房间
+        //    会漏掉那些没 join 课节房间的学生（停在仪表盘 / 作业工作区 / 课件标签页）。
+        //    `socket.to(...)` 而非 `io.to(...)`：发布者本人已在 `onElementUpdate`
+        //    之后本地 `fetchElements` 过，无需再拉一次。
         const lessonId = data.payload.lessonId;
         if (lessonId) {
-          const roomName = lessonId.startsWith('assignment-') ? lessonId : `lesson-${lessonId}`;
-          // 注意：emit 到原始 lessonId（非 roomName），与历史行为一致
-          socket.to(data.payload.lessonId).emit('whiteboard-sync', {
-            type: 'refresh',
+          // roomId 是客户端的硬性要求：`useClassroomSocket` 的处理函数是
+          // `if (type === 'refresh' && roomId)`，缺 roomId 会静默丢弃这条刷新。
+          const message = {
+            type: 'refresh' as const,
+            roomId: lessonId,
             sourceEvent: data.type,
-          });
+          };
+          socket.to(lessonId).emit('whiteboard-sync', message);
+          socket.to(WHITEBOARD_BROADCAST_ROOM).emit('whiteboard-sync', message);
         }
       },
     );

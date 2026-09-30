@@ -48,21 +48,9 @@ export function useStudentNotifications(
       }
     }
 
-    const rollcalls = studentDashboardData.rollcalls || [];
-    for (const r of rollcalls) {
-      notifs.push({
-        id: r.id,
-        type: 'rollcall_picked',
-        title: lang === 'zh' ? '⚡️ 随机提问选中通知' : '⚡️ Random Pick Notification',
-        message:
-          lang === 'zh'
-            ? `您已被老师在课程"${r.lesson_title || '课堂'}"中随机选中提问！请立即确认您的出勤与注意。`
-            : `You have been randomly picked by the teacher in lesson "${r.lesson_title || 'Class'}"! Please pay immediate attention.`,
-        date: r.picked_time,
-        relatedId: r.lesson_id,
-      });
-    }
-
+    // 点名（rollcall）刻意不进入通知消息列表：它属于「即时课堂互动」而非「待办消息」。
+    // 抽中提醒走屏幕级强提示（全屏抽中弹窗 + 音效 + 顶部班级横幅），
+    // 以及仪表盘的点名警报区；塞进通知铃铛只会变成一条无人注意的静默记录。
     return notifs.sort((a: any, b: any) => b.date - a.date);
   }, [activeRole, studentDashboardData, lang]);
 

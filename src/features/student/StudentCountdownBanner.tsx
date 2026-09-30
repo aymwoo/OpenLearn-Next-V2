@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Clock, Volume2, VolumeX, ChevronUp, ChevronDown, Sparkles, CheckCircle2 } from 'lucide-react';
 import { ClassroomSyncChannel, type ClassroomCountdownState } from '../../services/classroom-sync-channel';
+import { onSocketInstance } from '../../services/socket-service';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
 
 export interface StudentCountdownBannerProps {
@@ -94,6 +95,29 @@ export function StudentCountdownBanner({
 
     fetchServerCountdown();
 
+    /**
+     * 直接订阅服务端唯一权威广播 `classroom:countdown_updated`。
+     *
+     * 为什么必须有这条：原先本组件的三个数据源分别只覆盖「同机 BroadcastChannel /
+     * 同文档 window 事件 / 挂载那一瞬的 GET」，而教师端大屏（`useStageDisplayFeed`）
+     * 却监听了这个 socket 事件 —— 于是**教师中途启动的倒计时，远程学生永远看不到**。
+     *
+     * 用 `onSocketInstance` 而非 `getOptionalSocket()`：本组件是 App 的子节点，
+     * 它的 effect 先于 App 里创建 socket 的 effect 执行，此刻 socket 必然还不存在
+     * （详见 `socket-service.onSocketInstance` 的注释）。
+     */
+    let detachSocket: (() => void) | null = null;
+    const offSocket = onSocketInstance((socket) => {
+      const onCountdownUpdated = (payload: any) => {
+        // 事件投递到常驻课堂广播房间，会覆盖全平台客户端 → 必须按课节过滤
+        if (!payload || (payload.lessonId && payload.lessonId !== lessonId)) return;
+        setCountdown(payload);
+      };
+      detachSocket?.();
+      socket.on('classroom:countdown_updated', onCountdownUpdated);
+      detachSocket = () => socket.off('classroom:countdown_updated', onCountdownUpdated);
+    });
+
     // 监听全局 window 事件
     const onCountdownUpdated = (e: any) => {
       if (e.detail) {
@@ -104,12 +128,32 @@ export function StudentCountdownBanner({
 
     return () => {
       unsub?.();
+      offSocket();
+      detachSocket?.();
       if (!propSyncChannel && typeof syncChannel?.destroy === 'function') {
         syncChannel.destroy();
       }
       window.removeEventListener('openlearn:countdown:updated', onCountdownUpdated);
     };
   }, [lessonId, lang]);
+
+  /**
+   * 复位「已响过结束提示音」的标记。
+   *
+   * 此前 `hasFinishedAlerted` 一旦置 true 就再无复位路径，导致：
+   * - 教师发起**第二次**倒计时，结束时不再响提示音；
+   * - 且下面的渲染条件含 `&& !hasFinishedAlerted`，横幅会永久停在「时间已截止」。
+   *
+   * 判定「新一轮」用 `endsAt` 变化而非时间戳倒推：暂停/恢复不会改 `endsAt`，
+   * 而教师重新 start / add_time 一定会给出新的 `endsAt`。
+   */
+  const lastAlertedEndsAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!countdown?.isRunning || !countdown.endsAt) return;
+    if (lastAlertedEndsAtRef.current === countdown.endsAt) return;
+    lastAlertedEndsAtRef.current = countdown.endsAt;
+    setHasFinishedAlerted(false);
+  }, [countdown?.isRunning, countdown?.endsAt]);
 
   // 2. 本地平滑时钟推进
   useEffect(() => {

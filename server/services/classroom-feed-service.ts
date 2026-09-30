@@ -12,6 +12,7 @@ import type Database from 'better-sqlite3';
 import type { Server } from 'socket.io';
 import type { PlatformEvent } from '../../packages/core/event-bus/index.js';
 import { ARCHIVED_REPORT_STAGE } from './classroom-runtime-service.js';
+import { emitClassroomEvent } from '../presence.js';
 
 /** 计入动态流的事件类型 → feed type 映射（与前端 deriveHighlights 的 HIGHLIGHT_TYPES 口径对齐并扩展） */
 const FEED_EVENT_TYPES: Record<string, string> = {
@@ -144,7 +145,9 @@ export class ClassroomFeedService {
           actorName: row.actor_name,
           _meta: { eventId: event.id, type: event.type, source: event.source, timestamp: row.created_at },
         };
-        this.io.to(`lesson-${lessonId}`).emit('classroom:feed_appended', socketPayload);
+        // 课节房间 + 常驻课堂广播房间（此前只投 `lesson-${lessonId}` 幽灵房间，
+        // 全靠紧跟的 class- 兜底才「能用」）
+        emitClassroomEvent(this.io, lessonId, 'classroom:feed_appended', socketPayload);
         if (class_id) this.io.to(`class-${class_id}`).emit('classroom:feed_appended', socketPayload);
       }
     } catch (e) {

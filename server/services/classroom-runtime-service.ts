@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { Server } from 'socket.io';
+import { emitClassroomEvent } from '../presence.js';
 import type {
   ClassroomLifecycleStage,
   ClassroomStageGuard,
@@ -127,11 +128,11 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
         fromStage: currentStage,
         timestamp: now,
       };
-      this.io.to(`lesson-${lessonId}`).emit('classroom:stage_changed', payload);
+      // 课节房间 + 常驻课堂广播房间
+      emitClassroomEvent(this.io, lessonId, 'classroom:stage_changed', payload);
       if (classId) {
         this.io.to(`class-${classId}`).emit('classroom:stage_changed', payload);
       }
-      this.io.emit('classroom:stage_event', payload);
     }
 
     return { success: true, stage: toStage };

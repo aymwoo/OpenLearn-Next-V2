@@ -119,7 +119,11 @@ export default function App() {
   const isStudentTabMode = isStudentLiveMode || isStudentPreviewMode;
 
   const [isFollowingTeacher, setIsFollowingTeacher] = useState(true);
-  const [pickedAlertData, setPickedAlertData] = useState<{ studentId: string; studentName: string } | null>(null);
+  const [pickedAlertData, setPickedAlertData] = useState<{
+    studentId: string;
+    studentName: string;
+    rollcallId?: string;
+  } | null>(null);
   const [pickedAnnouncement, setPickedAnnouncement] = useState<{ studentName: string; studentId: string } | null>(null);
 
   // 全班随机抽问横幅自动消失（8秒后自动淡出）
@@ -2302,6 +2306,19 @@ export default function App() {
                       const channel = new ClassroomSyncChannel(undefined, selectedLesson, liveClassSelectedClassId);
                       channel.acknowledgePick(pickedAlertData.studentId);
                       channel.destroy();
+                      // 同一 ID 也用于仪表盘顶部的点名警报区：在弹窗里确认答到后
+                      // 应同步标记为已读，避免同一次点名在两处重复提醒。
+                      if (pickedAlertData.rollcallId) {
+                        const rollcallId = pickedAlertData.rollcallId;
+                        if (activeStudentId) {
+                          fetch(`/api/students/${activeStudentId}/read_notifications`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ notificationId: rollcallId }),
+                          }).catch(console.error);
+                        }
+                        setReadNotifications((prev) => new Set(prev).add(rollcallId));
+                      }
                       setPickedAlertData(null);
                       addToast(
                         lang === 'zh' ? '🙋‍♂️ 已确认答到' : '🙋‍♂️ Acknowledged',

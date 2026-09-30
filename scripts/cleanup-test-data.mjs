@@ -106,6 +106,18 @@ const cleanupTx = db.transaction(() => {
     try {
       db.prepare(`DELETE FROM student_lesson_progress WHERE student_id IN (${sPlaceholders})`).run(...studentIds);
     } catch {}
+    // 点名评价记录（含课堂金币）—— 实时同步 e2e 会写入
+    try {
+      db.prepare(`DELETE FROM student_rollcalls WHERE student_id IN (${sPlaceholders})`).run(...studentIds);
+    } catch {}
+    // 积分台账流水 —— 加分/扣分用例会写入
+    try {
+      db.prepare(`DELETE FROM student_point_logs WHERE student_id IN (${sPlaceholders})`).run(...studentIds);
+    } catch {}
+    // 点名已读回执
+    try {
+      db.prepare(`DELETE FROM student_read_notifications WHERE student_id IN (${sPlaceholders})`).run(...studentIds);
+    } catch {}
 
     const delStudents = db.prepare(`DELETE FROM students WHERE id IN (${sPlaceholders})`).run(...studentIds);
     console.log(`  ✓ Successfully deleted ${delStudents.changes} test students.`);
@@ -124,6 +136,30 @@ const cleanupTx = db.transaction(() => {
     db.prepare(`DELETE FROM student_seats WHERE class_id IN (${cPlaceholders})`).run(...classIds);
     db.prepare(`DELETE FROM class_students WHERE class_id IN (${cPlaceholders})`).run(...classIds);
     db.prepare(`DELETE FROM schedules WHERE class_id IN (${cPlaceholders})`).run(...classIds);
+    // 分组方案按 class_id 关联，SQLite 默认无级联 —— 班级被删后会留下孤儿行
+    try {
+      db.prepare(`DELETE FROM class_groups WHERE class_id IN (${cPlaceholders})`).run(...classIds);
+    } catch {}
+    // 课堂会话挂在 class_id 上，而按 lesson_id 的级联清理只覆盖测试**课节**；
+    // 若用例只建班不建课节，投票/抢答/通票/动态流都会残留
+    try {
+      const sessions = db.prepare(`SELECT id FROM classroom_sessions WHERE class_id IN (${cPlaceholders})`).all(...classIds);
+      if (sessions.length > 0) {
+        const ids = sessions.map((s) => s.id);
+        const p2 = ids.map(() => '?').join(',');
+        try {
+          db.prepare(
+            `DELETE FROM classroom_poll_votes WHERE poll_id IN (SELECT id FROM classroom_quick_polls WHERE session_id IN (${p2}))`,
+          ).run(...ids);
+        } catch {}
+        for (const t of ['classroom_quick_polls', 'classroom_buzzers', 'classroom_exit_tickets', 'classroom_feed', 'classroom_danmaku']) {
+          try {
+            db.prepare(`DELETE FROM ${t} WHERE session_id IN (${p2})`).run(...ids);
+          } catch {}
+        }
+        db.prepare(`DELETE FROM classroom_sessions WHERE id IN (${p2})`).run(...ids);
+      }
+    } catch {}
 
     const delClasses = db.prepare(`DELETE FROM classes WHERE id IN (${cPlaceholders})`).run(...classIds);
     console.log(`  ✓ Successfully deleted ${delClasses.changes} test classes.`);
