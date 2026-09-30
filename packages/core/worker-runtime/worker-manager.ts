@@ -39,7 +39,7 @@ import { NodeWorkerTransport } from './transport.js';
 import type { IWorkerTransport } from './types.js';
 import { ServiceHost } from './service-host.js';
 import type { Manifest } from '../esm-loader/manifest-schema.js';
-import { createLogger } from '../../../server/utils/logger.js';
+import { createLogger } from '../observability/logger.js';
 import { WorkerActivateError, WorkerTimeoutError } from './errors.js';
 import { v7 as uuidv7 } from 'uuid';
 import { IEventBusServiceToken } from '../di/index.js';

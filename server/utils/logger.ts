@@ -1,45 +1,9 @@
-import pino from 'pino';
-import fs from 'node:fs';
-import path from 'node:path';
-
-const level = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
-
-// Ensure logs directory exists
-const logDir = path.resolve(process.cwd(), 'logs');
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir, { recursive: true });
-}
-const logFile = path.join(logDir, 'openlearn.log');
-
-const streams = [];
-
-if (process.env.NODE_ENV !== 'production') {
-  streams.push({
-    level,
-    stream: pino.transport({
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:HH:MM:ss.l',
-        ignore: 'pid,hostname',
-      },
-    }) as any,
-  });
-} else {
-  streams.push({
-    level,
-    stream: process.stdout,
-  });
-}
-
-streams.push({
-  level,
-  stream: fs.createWriteStream(logFile, { flags: 'a' }),
-});
-
-export const logger = pino({ level }, pino.multistream(streams));
-
-/** 创建带组件标签的子 logger */
-export function createLogger(component: string): pino.Logger {
-  return logger.child({ component });
-}
+/**
+ * 兼容 re-export：实现已下沉至 core 层（SEC/ARCH 分层整改，2026-09-30）。
+ *
+ * 此前 packages/core/worker-runtime 与 plugin-host 反向 import 本文件，
+ * 违反「app → kernel，绝不反向」的分层规则。实现移至
+ * `packages/core/observability/logger.ts`，本文件仅为既有导入路径保留 ——
+ * server 侧新代码请直接 import core 的 observability/logger。
+ */
+export { logger, createLogger } from '../../packages/core/observability/logger.js';

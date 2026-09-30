@@ -22,7 +22,7 @@ import { PluginHttpRouter } from './http-router.js';
 import type { Token } from '../di/token.js';
 import type { ResourceTracker } from './resource-tracker.js';
 import type { ServiceRegistry } from '../di/service-registry.js';
-import { createLogger } from '../../../server/utils/logger.js';
+import { createLogger } from '../observability/logger.js';
 import {
   ICommandBusServiceToken,
   IEventBusServiceToken,

@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **架构分层修复：logger 下沉至 core，消灭 core→server 反向依赖 (`packages/core/observability/logger.ts`, `server/utils/logger.ts`, `layering.test.ts`)**：
+  - **问题**（2026-09-25 审计 H-7，2026-09-30 审计架构高危 1，拖逾一版）：`packages/core/worker-runtime/worker-manager.ts` 与 `plugin-host/context-builder.ts` 反向 import `server/utils/logger.js` —— 依赖方向必须是「应用 → 内核」，绝不能反向。
+  - **整改**：logger 实现下沉至 `packages/core/observability/logger.ts`（pino multistream，无应用层特有逻辑），`server/utils/logger.ts` 改为兼容 re-export（server 侧当前无生产消费者，仅存量路径保留）。顺带修正 dev pino-pretty `translateTime` 缺失分钟段的笔误（`SYS:HH:ss.l` → `SYS:HH:mm:ss.l`）。
+  - **防回归**：新增 `packages/core/__tests__/layering.test.ts` 分层守卫 —— 扫描 core 全部生产源码，任何 `import server/**` 即失败（core 的 `__tests__` 集成测试豁免）。
+
 - **学生默认口令 123456 治理（SEC-AUTH-06b）(`server/routes/roster.ts`, `ClassStudentsPanel.tsx`)**：
   - **漏洞**：`POST /api/students` 在教师未提供密码（或仍填 123456）时硬编码默认口令 `123456` —— 全校通吃的可猜测口令，配合公开学号即可冒充任意学生。
   - **创建侧**：未提供密码时改为生成 12 位随机初始密码（排除易混淆字符），bcrypt 落库，明文**仅在创建响应中返回一次**；前端注册成功弹窗追加「初始密码（仅显示这一次，请立即分发给学生）」提示，并把提示语从「默认 123456」改为「留空将自动生成」。教师显式提供的非 123456 密码行为不变。
