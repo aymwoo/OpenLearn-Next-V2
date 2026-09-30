@@ -330,6 +330,7 @@ export function SystemResourceLibraryModal(props: SystemResourceLibraryModalProp
                         <iframe
                           src={`/api/resources/${selectedLibraryResourceId}/`}
                           sandbox="allow-scripts"
+                          data-lms-bridge="true"
                           className="w-full h-full border-none bg-white font-sans"
                           title="Interactive Resource Preview"
                         />

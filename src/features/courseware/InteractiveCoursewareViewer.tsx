@@ -98,6 +98,7 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
         <iframe
           src={`/api/courseware/${coursewareId}`}
           sandbox="allow-scripts allow-forms allow-downloads"
+          data-lms-bridge="true"
           allowFullScreen
           className="w-full h-full border-none"
           title="Interactive Courseware"

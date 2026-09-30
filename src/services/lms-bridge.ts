@@ -67,23 +67,35 @@ async function adoptAttempt(attemptId: string): Promise<string> {
 }
 
 /**
+ * 受管辖课件 iframe 判定：仅 `data-lms-bridge` 标记的 iframe（平台渲染课件/资源的宿主：
+ * InteractiveCoursewareViewer / HtmlAppletFrame / SystemResourceLibraryModal）可与 LMS Bridge 通信。
+ *
+ * Why: 沙箱课件运行在不透明 origin（event.origin === 'null'）中，origin 白名单不可行；
+ * 以「source → 受管辖 iframe」绑定为准，防止页面中其他 iframe（LTI 外链、插件 blob、
+ * 未经平台注入 SDK 的第三方内容）伪造 LMS_SUBMIT 提交分数或窃取进度响应。
+ */
+function isFromManagedIframe(source: MessageEventSource | null): boolean {
+  if (typeof document === 'undefined' || !source) return false;
+  try {
+    const managed = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe[data-lms-bridge]'));
+    return managed.some((f) => f.contentWindow === source);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Validates and processes incoming LMS messages from sandboxed courseware iframes.
  */
 export async function processLmsMessage(event: MessageEvent): Promise<void> {
   const data = event.data;
   if (!data || typeof data !== 'object') return;
 
-  // Security: Verify that event.source is an iframe within the current document
-  if (typeof window !== 'undefined' && typeof document !== 'undefined' && event.source) {
-    try {
-      const iframes = Array.from(document.querySelectorAll('iframe'));
-      const isFromValidIframe = iframes.some((f) => f.contentWindow === event.source);
-      if (!isFromValidIframe && event.source !== window) {
-        // Drop message from unknown external window / popup
-        return;
-      }
-    } catch {
-      // Ignore DOM query errors
+  // Security: 仅接受受管辖课件 iframe（data-lms-bridge）或同窗口自身的消息，
+  // 丢弃未知外部窗口 / 弹窗 / 未标记 iframe 的消息
+  if (typeof window !== 'undefined' && event.source) {
+    if (event.source !== window && !isFromManagedIframe(event.source)) {
+      return;
     }
   }
 
@@ -94,7 +106,9 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
   // Try to extract attemptId from sending iframe if same-origin is accessible
   if (!attemptId && event.source) {
     try {
-      const iframe = Array.from(document.querySelectorAll('iframe')).find((f) => f.contentWindow === event.source);
+      const iframe = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe[data-lms-bridge]')).find(
+        (f) => f.contentWindow === event.source,
+      );
       if (iframe && iframe.contentWindow) {
         const iframeWindow = iframe.contentWindow as any;
         if (iframeWindow.__LMS_STUDENT__?.attempt_id) {
@@ -123,14 +137,10 @@ export async function processLmsMessage(event: MessageEvent): Promise<void> {
     const requestId = data.requestId as string | undefined;
     const source = event.source as Window | null;
     if (requestId && source && typeof source.postMessage === 'function') {
-      // SEC-AUTH: 确保接收方必须为 DOM 中受管辖的合法 iframe
-      if (typeof document !== 'undefined') {
-        const iframes = Array.from(document.querySelectorAll('iframe'));
-        const isFromValidIframe = iframes.some((f) => f.contentWindow === source);
-        if (!isFromValidIframe && source !== window) {
-          console.warn('[LMS Bridge Security] Dropping response to untrusted window');
-          return;
-        }
+      // SEC-AUTH: 确保接收方必须为受管辖的合法课件 iframe（data-lms-bridge）
+      if (source !== window && !isFromManagedIframe(source)) {
+        console.warn('[LMS Bridge Security] Dropping response to untrusted window');
+        return;
       }
 
       let progress: Record<string, unknown> | null;

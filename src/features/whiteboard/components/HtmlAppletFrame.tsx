@@ -282,6 +282,7 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
           src={src}
           srcDoc={src ? undefined : wrapSrcDocWithBridge(data.code || '', lessonId)}
           sandbox="allow-scripts allow-forms allow-downloads"
+          data-lms-bridge="true"
           referrerPolicy="no-referrer"
           title={title ?? data.title ?? 'Interactive Courseware'}
           {...({ credentialless: 'true' } as any)}
