@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **测试体系审计：补上认证链路的负面测试，修复 4 个存活的变异**：
+  - **审计方法**：覆盖率会骗人 —— 一段代码被执行到不代表它被验证过。因此向生产代码注入 11 个真实 Bug，观察测试套件能否发现。**结果是 8 个存活（变异存活率 73%）**，且存活名单里包含完整的认证绕过：把 `server/routes/roster.ts` 教师入口的 `verifyPassword(...)` 结果替换成硬编码 `{ valid: true }`（即任何密码都能登录），当时全量 2243 个测试**依然全绿**。
+  - **根因一：登录负面路径完全无覆盖**。全仓库 `grep "Incorrect password|wrongPassword|badPassword" --include=*.test.ts` **零结果**。既有测试只覆盖成功路径 —— `class-passcode-auth.test.ts` 的 7 次 `/api/auth/login` 全部走**学生入口**；3 个 Playwright spec 一律用正确的 `admin/admin` 且只断言 `ok()` 为真。教师入口 `verifyPassword()` 的错误密码路径从未被验证。
+  - **根因二：测试覆盖了代码路径，但覆盖的是不产生差异的部分**。`security_hardening.test.ts:87` 确实调用了 `getActorId`，但用 `stu_alice` 这种不含 `:` 和空白的 userId —— `auth.ts` 的 actorId 净化（`.replace(/[:\s]/g, '_').slice(0, 64)`）对它的输出毫无影响，所以删掉净化逻辑断言结果不变。这是「假测试」的典型形态。
+  - **修复一**：新增 `server/__tests__/auth-login-negative.test.ts`（18 个用例）。建立**能区分对错的成对断言** —— 每个负面用例配一个正向对照，确保测试在「校验逻辑被删除」时变红、在「校验逻辑正常」时变绿。覆盖：教师入口错误密码 / 空密码 / 大小写错误 / 跨账号密码 / SHA-256 旧哈希账号的正确与错误密码及自动升级、禁用账号即使密码正确也必须 403、入参门禁、未知 entrance；学生入口错误密码与不存在的学号。并断言**任何失败的登录尝试都不得写入 `client_sessions`**。
+  - **修复二**：新增 `server/__tests__/auth-middleware-hardening.test.ts`（33 个用例）。用**真正含注入字符**的输入锁死加固行为：`usr_a:administrator` / `usr b\tc` / `usr_d:student:administrator` 三种注入均被净化且 actorId 分段数恒为 3；200 字符 id 截断到 64；`superadmin` / `ADMIN`（大小写变体）/ `root` 全部降级为 `anonymous` 且无法通过任何特权角色门禁；过期 session 被删除；`requireAuth('admin')` 与 `('administrator')` 等价。
+  - **反向验证（变异重注入确认）**：MUT-N1（登录不校验密码）、MUT-N4（禁用账号可登录）、MUT-M2a（删除 role 白名单）、MUT-M2b（删除 actorId 净化）—— 修复前 4 个全部存活，修复后 4 个全部被杀。
+  - **同时修正了 4 处「我写错了预期」**：教师空密码实际是 400（`!password` 门禁先命中）而非 401；未知 entrance 实际是 400 `'Unsupported entry type'`；cookie `=` 前有空格时 `getCookieToken` 返回 null（当前是严格匹配，真实浏览器按 RFC 6265 不会产出这种形式）；非法角色在 `requireAuth()` 无参门禁下会被放行（无参只校验「已登录」，角色鉴权靠 capability 层）。全部按**断言真实且正确的行为**修正，未放宽任何断言。
+
 - **统一两种「全屏」的内容来源：白板全屏改为渲染真实组件，不再降级为简化版**：
   - **先纠正上一轮的一处错误结论**：我当时判断「`fullscreenRendererRegistry` 从未被注册，所有组件都落到 `DefaultFullscreenRenderer` 字段预览兜底」。这个判断是错的 —— 注册调用在 `InteractiveWhiteboard` 顶部（不在注册表文件内），实际有 5 个宿主内置渲染器。但**结论方向不变，甚至更糟**：那批渲染器是**逐类型手写的第二套实现**，与画布内的真实组件已经漂移。最直接的证据是 `assignment` 的全屏版渲染出一个 `Upload File` 按钮 —— **没有任何 `onClick`**，而画布内的真实组件是「提交作业」且绑定真实提交弹窗；`rollcall` 全屏版只剩一个被抽中的姓名，丢掉了全部操作能力；`timer` 是纯文本倒计时。
   - **改为宿主注入真实组件**：`FullscreenOverlay` 新增 `renderContent(size)` 逃生口（与 `BrowserFullscreenHost` 同一模式），由 `InteractiveWhiteboard` 复用 `renderElement` 渲染。两种全屏从此看的是同一个组件，不会再各自漂移。
