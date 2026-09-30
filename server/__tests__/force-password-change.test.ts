@@ -123,4 +123,78 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
     const sessionBody: any = await sessionRes.json();
     expect(sessionBody.session?.mustChangePassword).toBe(false);
   });
+
+  it('SEC-AUTH-06b: 建学生未提供密码 → 随机初始密码一次性返回，123456 失效', async () => {
+    const login = await post('/api/auth/login', undefined, { entrance: 'teacher', username: normalUsername, password: normalPwd });
+    const teacherToken = (login.headers.get('set-cookie') || '').split(';')[0].split('=')[1];
+
+    const createRes = await post('/api/students', teacherToken, { name: '随机口令学生', email: '' });
+    expect(createRes.status).toBe(200);
+    const created: any = await createRes.json();
+    expect(created.initial_password).toMatch(/^[a-zA-Z0-9]{12}$/);
+
+    // 123456 不再能登录该学生
+    const legacyLogin = await post('/api/auth/login', undefined, {
+      entrance: 'student',
+      studentId: created.student_number,
+      password: '123456',
+    });
+    expect(legacyLogin.status).toBe(401);
+
+    // 随机初始密码可登录，且不打标（非默认口令）
+    const okLogin = await post('/api/auth/login', undefined, {
+      entrance: 'student',
+      studentId: created.student_number,
+      password: created.initial_password,
+    });
+    expect(okLogin.status).toBe(200);
+    const okBody: any = await okLogin.json();
+    expect(okBody.session?.mustChangePassword).toBeUndefined();
+
+    kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(created.id);
+    kernelContainer.db.prepare('DELETE FROM client_sessions WHERE session_data LIKE ?').run(`%${created.id}%`);
+  });
+
+  it('SEC-AUTH-06b: 存量 123456 学生个人密码登录打标；班级口令登录不打标；改密后恢复', async () => {
+    const now = Date.now();
+    const sid = 'stu-force-legacy';
+    const classId = 'cls-force-legacy';
+    kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(sid);
+    kernelContainer.db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
+    kernelContainer.db
+      .prepare('INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(sid, 'STU-FORCE-1', '存量学生', '', bcrypt.hashSync('123456', 10), now);
+    kernelContainer.db
+      .prepare('INSERT INTO classes (id, name, class_passcode, class_passcode_expires_at, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(classId, '口令班', 'passcode-xyz', now + 3600000, now);
+    kernelContainer.db.prepare('INSERT INTO class_students (class_id, student_id, joined_at) VALUES (?, ?, ?)').run(classId, sid, now);
+
+    // 个人密码 123456 登录 → 打标
+    const login = await post('/api/auth/login', undefined, { entrance: 'student', studentId: 'STU-FORCE-1', password: '123456' });
+    expect(login.status).toBe(200);
+    const body: any = await login.json();
+    expect(body.session?.mustChangePassword).toBe(true);
+    const token = (login.headers.get('set-cookie') || '').split(';')[0].split('=')[1];
+
+    // 写操作被兜底中间件拦截
+    const blocked = await post('/api/lessons', token);
+    expect(blocked.status).toBe(403);
+
+    // 班级口令登录不打标（与个人密码无关）
+    const passcodeLogin = await post('/api/auth/login', undefined, { entrance: 'student', studentId: 'STU-FORCE-1', password: 'passcode-xyz' });
+    expect(passcodeLogin.status).toBe(200);
+    const passcodeBody: any = await passcodeLogin.json();
+    expect(passcodeBody.session?.mustChangePassword).toBeUndefined();
+
+    // 改密 → 清标，写操作恢复
+    const change = await post('/api/auth/change-password', token, { oldPassword: '123456', newPassword: 'MyNew-Pw123' });
+    expect(change.status).toBe(200);
+    const afterPost = await post('/api/lessons', token);
+    expect(afterPost.status).toBe(200);
+
+    kernelContainer.db.prepare('DELETE FROM students WHERE id = ?').run(sid);
+    kernelContainer.db.prepare('DELETE FROM class_students WHERE student_id = ?').run(sid);
+    kernelContainer.db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
+    kernelContainer.db.prepare('DELETE FROM client_sessions WHERE session_data LIKE ?').run(`%${sid}%`);
+  });
 });

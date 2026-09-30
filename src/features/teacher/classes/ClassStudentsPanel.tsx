@@ -185,14 +185,14 @@ export function ClassStudentsPanel({
               const student_number = studentNumberPrompt ? studentNumberPrompt.trim() : undefined;
               const email =
                 window.prompt(lang === 'zh' ? '请输入学生邮箱 (可选):' : 'Enter student email (optional):') || '';
-              const password =
-                window.prompt(
-                  lang === 'zh'
-                    ? '请输入登录密码 (可选，默认 123456):'
-                    : 'Enter login password (optional, default 123456):',
-                ) || '123456';
+              const password = window.prompt(
+                lang === 'zh'
+                  ? '请输入登录密码 (可选，留空将自动生成随机初始密码):'
+                  : 'Enter login password (optional, leave blank to auto-generate a random initial password):',
+              ) || '';
 
-              // 1. Create a new student record
+              // 1. Create a new student record（SEC-AUTH-06：不再默认 123456，
+              //    留空时由服务端生成随机初始密码并在响应中一次性返回）
               const createRes = await fetch('/api/students', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -209,11 +209,24 @@ export function ClassStudentsPanel({
                 if (linkRes.ok) {
                   await fetchStudents();
                   await fetchClassStudents(cls.id);
+                  const parts: string[] = [];
                   if (newStudent.student_number) {
-                    alert(
+                    parts.push(
                       lang === 'zh'
-                        ? `学生 [${newStudent.name}] 注册成功！分配学号: ${newStudent.student_number}`
-                        : `Student [${newStudent.name}] created! Student number: ${newStudent.student_number}`,
+                        ? `分配学号: ${newStudent.student_number}`
+                        : `Student number: ${newStudent.student_number}`,
+                    );
+                  }
+                  if (newStudent.initial_password) {
+                    parts.push(
+                      lang === 'zh'
+                        ? `初始密码（仅显示这一次，请立即分发给学生）: ${newStudent.initial_password}`
+                        : `Initial password (shown only once, hand it to the student now): ${newStudent.initial_password}`,
+                    );
+                  }
+                  if (parts.length) {
+                    alert(
+                      `${lang === 'zh' ? `学生 [${name}] 注册成功！` : `Student [${name}] created!`}\n${parts.join('\n')}`,
                     );
                   }
                 }

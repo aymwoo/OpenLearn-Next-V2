@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **学生默认口令 123456 治理（SEC-AUTH-06b）(`server/routes/roster.ts`, `ClassStudentsPanel.tsx`)**：
+  - **漏洞**：`POST /api/students` 在教师未提供密码（或仍填 123456）时硬编码默认口令 `123456` —— 全校通吃的可猜测口令，配合公开学号即可冒充任意学生。
+  - **创建侧**：未提供密码时改为生成 12 位随机初始密码（排除易混淆字符），bcrypt 落库，明文**仅在创建响应中返回一次**；前端注册成功弹窗追加「初始密码（仅显示这一次，请立即分发给学生）」提示，并把提示语从「默认 123456」改为「留空将自动生成」。教师显式提供的非 123456 密码行为不变。
+  - **登录侧（存量账号）**：学生以个人密码 `123456` 登录成功 → 会话打 `mustChangePassword` 标记，复用 SEC-AUTH-06 全套管线（前端全屏改密门 + `enforcePasswordChanged` 写操作拦截 + 改密清标）。**班级口令登录不打标**（与个人密码无关，且学生可能从未持有个人密码）。
+  - **测试**：`force-password-change.test.ts` 新增 2 例（创建即随机口令 + 123456 失效 + 随机口令登录不打标；存量 123456 登录打标 + 写拦截 + 口令登录不打标 + 改密恢复）。
+
 - **默认密码强制改密（SEC-AUTH-06）(`server/routes/roster.ts`, `server/middleware/auth.ts`, `server.ts`, `ForcedPasswordChangeGate.tsx`)**：
   - **漏洞**：种子账号 admin/admin、teacher/teacher 初始化后仅有 console 警告，登录与前端均无强制改密流程，弱口令可被无限期沿用。
   - **打标**：教师/管理员入口登录成功时检测「密码 = 用户名」（默认种子的精确特征）→ 会话写入 `mustChangePassword` 标记，登录响应与 `/api/auth/session` 均暴露（页面刷新后依然强制）。

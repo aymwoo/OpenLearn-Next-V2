@@ -405,6 +405,15 @@ export function registerRosterRoutes(ctx: ServerContext) {
         kernelContainer.db
           .prepare('DELETE FROM client_sessions WHERE id != ? AND session_data LIKE ?')
           .run(token, `%${session.studentId}%`);
+        // SEC-AUTH-06: 改密成功后清除当前会话的默认密码标记（其余会话已被删除）
+        try {
+          const updatedSession = { ...session, mustChangePassword: false };
+          kernelContainer.db
+            .prepare('UPDATE client_sessions SET session_data = ? WHERE id = ?')
+            .run(JSON.stringify(updatedSession), token);
+        } catch (clearErr) {
+          console.warn('[Auth] Failed to clear mustChangePassword flag:', clearErr);
+        }
         return res.json({ success: true, message: 'Password changed. All other devices have been logged out.' });
       }
 
@@ -723,6 +732,9 @@ export function registerRosterRoutes(ctx: ServerContext) {
           });
         }
 
+        // SEC-AUTH-06: 学生仍以初始默认口令 123456 完成个人密码登录 → 强制改密标记
+        //（班级口令登录不打标：该路径与个人密码无关）
+        const studentMustChangePassword = matchesOwnPassword && providedPassword === '123456';
         sessionData = {
           role: 'student',
           userId: studentObj.id,
@@ -730,6 +742,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
           name: studentObj.name,
           email: studentObj.email,
           avatar: studentObj.avatar ?? null,
+          ...(studentMustChangePassword ? { mustChangePassword: true } : {}),
         };
       }
 
@@ -1009,6 +1022,16 @@ export function registerRosterRoutes(ctx: ServerContext) {
   });
   // --------------------------------------
 
+  // SEC-AUTH-06: 生成随机初始密码（排除易混淆字符，12 位，字母+数字）
+  // 明文仅在创建响应中返回一次，供教师分发；库中只存 bcrypt 哈希
+  function generateInitialPassword(): string {
+    const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = crypto.randomBytes(12);
+    let out = '';
+    for (let i = 0; i < 12; i++) out += alphabet[bytes[i] % alphabet.length];
+    return out;
+  }
+
   app.post('/api/students', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { name, email, password, student_number } = req.body;
@@ -1019,17 +1042,30 @@ export function registerRosterRoutes(ctx: ServerContext) {
         finalNum = generateStudentNumber(kernelContainer.db);
       }
 
-      // SEC-AUTH-01: 使用 bcrypt 哈希存储学生密码
-      const hashedPassword =
-        password && password.trim() !== '' && password !== '123456'
-          ? bcryptHashPassword(password)
-          : bcryptHashPassword('123456');
+      // SEC-AUTH-06: 不再默认 '123456'（全校通吃的可猜测口令）。教师未提供（或仍填
+      // 123456）时生成随机初始密码，明文仅在本次响应返回给教师分发；存量 123456
+      // 账号在登录时被标记 mustChangePassword 强制改密（见 /api/auth/login 学生入口）
+      const teacherPwd = typeof password === 'string' ? password.trim() : '';
+      let initialPassword: string | null = null;
+      let finalPlain: string;
+      if (teacherPwd && teacherPwd !== '123456') {
+        finalPlain = teacherPwd;
+      } else {
+        initialPassword = generateInitialPassword();
+        finalPlain = initialPassword;
+      }
+      const hashedPassword = bcryptHashPassword(finalPlain);
       kernelContainer.db
         .prepare(
           'INSERT INTO students (id, student_number, name, email, password, created_at) VALUES (?, ?, ?, ?, ?, ?)',
         )
         .run(studentId, finalNum, name, email || '', hashedPassword, Date.now());
-      res.json({ success: true, id: studentId, student_number: finalNum });
+      res.json({
+        success: true,
+        id: studentId,
+        student_number: finalNum,
+        ...(initialPassword ? { initial_password: initialPassword } : {}),
+      });
     } catch (e: any) {
       sendSafeError(res, e);
     }
