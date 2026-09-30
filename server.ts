@@ -183,15 +183,22 @@ async function startServer() {
           // blob: — 插件前端加载通道：FrontendPluginHost 将插件源码包装为 Blob URL
           // 再 dynamic import（见 src/plugin-host/plugin-host.ts activateRemotePlugin）。
           // 缺失会导致所有插件前端激活失败（CSP 违规），扩展点永不渲染。
-          scriptSrc: isProduction
-            ? ["'self'", "'unsafe-inline'", 'blob:']
-            : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'blob:'],
+          //
+          // SEC-NET-02: 生产 scriptSrc 不再含 'unsafe-inline' —— SPA 构建产物无内联
+          // 脚本；第三方课件 HTML 由独立路由直出并用自有宽松 CSP 覆盖
+          // （setCoursewareDocumentCsp，见 server/routes/shared.ts），不再继承全局头。
+          // 手写 HTML 课件已改经 POST /api/courseware/inline 落库走 /runtime 加载
+          // （srcdoc 会继承父页面 CSP，是此前无法收紧的根因）。
+          scriptSrc: isProduction ? ["'self'", 'blob:'] : ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'blob:'],
           scriptSrcAttr: ["'unsafe-inline'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
           styleSrcAttr: ["'unsafe-inline'"],
           imgSrc: ["'self'", 'data:', 'blob:'],
           fontSrc: ["'self'", 'data:'],
-          connectSrc: ["'self'", 'ws:', 'wss:', 'http:', 'https:'],
+          // SEC-NET-02: 去掉 'http: https:'（等于无出站限制，前端可外传任意数据）。
+          // 前端所有 API 调用均走同源相对路径，WebSocket 同源（ws:/wss: 兜底旧浏览器
+          // 对 'self' 覆盖 ws 协议的实现差异）。
+          connectSrc: ["'self'", 'ws:', 'wss:'],
           frameSrc: ["'self'", 'blob:', 'data:', ...frameAllowedOrigins, ...ltiAllowedOrigins],
           frameAncestors: ["'self'", ...frameAllowedOrigins, ...ltiAllowedOrigins],
           objectSrc: ["'none'"],

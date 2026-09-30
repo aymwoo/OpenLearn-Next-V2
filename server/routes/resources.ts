@@ -9,7 +9,7 @@ import {
 } from '../../packages/plugins/ai-submit-injector.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
-import { injectLmsSdk } from './shared.js';
+import { injectLmsSdk, setCoursewareDocumentCsp } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
 
 export function registerResourcesRoutes(ctx: ServerContext) {
@@ -67,10 +67,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
 
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         // SEC-FIX: 防止首方存储型 XSS，为独立直出的 HTML 强制声明沙箱隔离策略，显式放行内联事件
-        res.setHeader(
-          'Content-Security-Policy',
-          "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline';",
-        );
+        setCoursewareDocumentCsp(res);
         let html = resource.content || '';
         const baseTag = `<base href="/api/resources/${req.params.id}/">`;
         if (html.toLowerCase().includes('<head>')) {
@@ -141,6 +138,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       }
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      setCoursewareDocumentCsp(res);
       let html = indexFile.content || '';
       const baseTag = `<base href="/api/resources/${req.params.id}/">`;
       if (html.toLowerCase().includes('<head>')) {
@@ -176,6 +174,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
           return res.status(404).send('Not found for single page HTML resource');
         }
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        setCoursewareDocumentCsp(res);
         let html = resource.content || '';
         html = injectLmsSdk(html, req, { id: resource.id, name: resource.name, uuid: resource.id });
         return res.send(html);
@@ -203,6 +202,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
           return res.status(404).send('No index.html or entrypoint found in resource folder');
         }
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        setCoursewareDocumentCsp(res);
         let html = indexFile.content || '';
         const baseTag = `<base href="/api/resources/${req.params.id}/">`;
         if (html.toLowerCase().includes('<head>')) {
@@ -267,10 +267,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
       } else {
         let content = fileObj.content;
         if (contentType.startsWith('text/html')) {
-          res.setHeader(
-            'Content-Security-Policy',
-            "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline';",
-          );
+          setCoursewareDocumentCsp(res);
           content = injectLmsSdk(content, req, { id: resource.id, name: resource.name, uuid: resource.id });
         }
         return res.send(content);

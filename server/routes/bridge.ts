@@ -2,7 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
-import { injectLmsSdk, collectCoursewareRuntimeScripts } from './shared.js';
+import { injectLmsSdk, collectCoursewareRuntimeScripts, setCoursewareDocumentCsp } from './shared.js';
 import { verifyCoursewareToken } from '../utils/courseware-access.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
@@ -256,12 +256,8 @@ export function registerBridgeRoutes(ctx: ServerContext) {
 
       const isHtml = ext === '.html' || ext === '.htm';
       if (isHtml) {
-        res.setHeader(
-          'Content-Security-Policy',
-          // frame-ancestors 'self'（SEC-AUTH）：本路由的自有 CSP 会覆盖 Helmet 全局头，
-          // 若不含 frame-ancestors 则外部站点可任意 iframe 嵌入课件内容
-          "sandbox allow-scripts allow-forms allow-downloads; frame-ancestors 'self'; default-src 'self' 'unsafe-inline' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline';",
-        );
+        // SEC-AUTH: frame-ancestors 'self' 挡外部站点嵌入（本自有 CSP 覆盖 Helmet 全局头）
+        setCoursewareDocumentCsp(res);
         let html = fs.readFileSync(filePath, 'utf8');
         html = injectLmsSdk(html, req, { id: courseware.id, name: courseware.name, uuid: courseware.uuid });
         return res.send(html);

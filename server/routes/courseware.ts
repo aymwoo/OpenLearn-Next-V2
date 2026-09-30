@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getCookieToken, getValidSession, getActorId, requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
-import { injectLmsSdk } from './shared.js';
+import { injectLmsSdk, setCoursewareDocumentCsp } from './shared.js';
 import { aggregateAttemptScore, describeAggregation } from '../../packages/plugins/courseware-score.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
@@ -580,6 +580,41 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     res.json({ token: mintCoursewareToken(req.params.id) });
   });
 
+  /**
+   * 手写 HTML 课件的服务端落库（SEC-NET-02 CSP 收紧的配套改造）。
+   *
+   * 背景：HtmlAppletFrame 原先用 `<iframe srcdoc>` 承载手写 HTML —— srcdoc 文档
+   * **继承父页面 CSP**，若全局 CSP 收紧（scriptSrc 去 'unsafe-inline'），课件内联
+   * 脚本会被拦。改造后前端把 code 经本端点落库（按内容 sha256 幂等去重），改走
+   * `/runtime/inline-<hash>/` 加载 —— 该路由有自有宽松 CSP（setCoursewareDocumentCsp），
+   * 课件内联脚本不受全局收紧影响。
+   *
+   * 鉴权：requireAuth()（任意登录角色）—— 学生端也要渲染同一元素，不能限教师；
+   * 内容幂等去重 + 512KB 上限限制存储滥用。
+   */
+  app.post('/api/courseware/inline', requireAuth(), (req, res) => {
+    try {
+      const code = typeof req.body?.code === 'string' ? req.body.code : '';
+      if (!code.trim()) {
+        return res.status(400).json({ error: 'Missing code' });
+      }
+      if (code.length > 512 * 1024) {
+        return res.status(413).json({ error: 'Inline courseware too large (512KB max)' });
+      }
+      const hash = crypto.createHash('sha256').update(code).digest('hex').slice(0, 16);
+      const uuid = `inline-${hash}`;
+      const existing = kernelContainer.db.prepare('SELECT id FROM system_resources WHERE id = ?').get(uuid);
+      if (!existing) {
+        kernelContainer.db
+          .prepare('INSERT OR REPLACE INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)')
+          .run(uuid, 'index.html', 'html', code, Date.now());
+      }
+      res.json({ uuid });
+    } catch (e: any) {
+      sendSafeError(res, e);
+    }
+  });
+
   app.get('/api/courseware/:id', (req, res) => {
     try {
       // SEC-AUTH: 沙箱 iframe 不带会话 cookie，无法 requireAuth；
@@ -599,6 +634,9 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
       }
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      // SEC-NET-02: 课件 HTML 是第三方内容直出，须用自有宽松 CSP 覆盖 helmet 全局头，
+      // 使平台自身文档的全局 CSP 得以收紧（scriptSrc 无 'unsafe-inline'）
+      setCoursewareDocumentCsp(res);
       const html = injectLmsSdk(node.content || '', req, { id: node.id, name: node.name, uuid: node.id });
       res.send(html);
     } catch (e: any) {

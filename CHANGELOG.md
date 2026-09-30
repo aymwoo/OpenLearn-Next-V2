@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **CSP 收紧：生产 scriptSrc 去 'unsafe-inline'、connectSrc 去任意出站 (`server.ts`, `server/routes/shared.ts`, `bridge.ts`, `courseware.ts`, `resources.ts`, `HtmlAppletFrame.tsx`)**：
+  - **收紧内容**：全局 helmet CSP —— ① 生产 `scriptSrc` 移除 `'unsafe-inline'`（SPA 构建产物无内联脚本，已验证 dist/index.html）；② `connectSrc` 移除 `'http: https:'`（等于无出站限制，前端可外传任意数据；前端所有 API 调用均走同源相对路径，已验证）。开发态保留 `unsafe-inline`/`unsafe-eval`（Vite HMR 与 React Refresh 需要）。
+  - **为什么此前收不了（CSP 继承）**：`<iframe srcdoc>` 文档与未设自有 CSP 头的 HTML 路由都会**继承父页面（helmet）CSP** —— 直接删 `unsafe-inline` 会拦掉所有第三方课件的内联脚本。整改为此补齐了课件文档的自有宽松 CSP：
+    - `shared.ts` 新增 `COURSEWARE_DOCUMENT_CSP` + `setCoursewareDocumentCsp()`（sandbox + frame-ancestors 'self' + 内联放行），bridge.ts / resources.ts / courseware.ts 六处 HTML 直出点统一使用（原先只有 2 处有、且互不一致）；
+    - **手写 HTML 课件改造**：HtmlAppletFrame 原用 `<iframe srcdoc>` 承载 `data.code` —— srcdoc 继承父页面 CSP，是全局 CSP 无法收紧的根因。现改为 `POST /api/courseware/inline`（任意登录角色，按内容 sha256 幂等去重，512KB 上限）落库 `system_resources`，经 `/runtime/inline-<hash>/` 加载（自有宽松 CSP + Bridge SDK + 已有的 SEC-AUTH 门控）。落库失败降级回 srcDoc 渲染（HTML 可见、脚本受限于全局 CSP）。
+  - **测试**：`courseware-access-token.test.ts` 新增 2 例（inline 幂等落库 + 经 /runtime 加载的 CSP 断言、401/400/413 校验），并在完整链路用例中断言课件响应 CSP 含 `frame-ancestors 'self'`。
+
 - **Socket 层房间归属与白板信令权限校验 (`server/presence.ts`, `server.ts`, `presence.test.ts`)**：
   - **漏洞**：`join-room` 无任何归属校验，任意已登录 socket 可加入任意 `class-<id>` / 课节房间，跨班收听锁屏、全屏、随机点名等课堂广播；`whiteboard-update` / `whiteboard-event` 无角色校验，**学生可向任意课节房间注入绘制与 refresh 事件**（HTTP 侧 `whiteboard.update` 命令有校验，socket 侧裸奔）；`student-acknowledge-pick` 可伪造他人 studentId 确认答到；`enter-lesson` 只校验身份伪造不校验班级归属。
   - **`join-room` 放行规则**：常驻广播房间（`whiteboard-broadcast` / `classroom-broadcast`）对所有人开放；教师/管理员任意房间；学生仅可加入①绑定自己的作业伪课节 `assignment-*-student-<自己>`，②自己所属的班级房间（经 `lookupStudentClassIds`），③开课班级为自己班级的课节房间（经新增 `lookupLessonClassId`，映射查 `classroom_sessions`；未开课的课节返回 null 不设限，自学场景不受影响）。

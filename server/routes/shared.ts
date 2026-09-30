@@ -25,6 +25,25 @@ export function validateMagicBytes(buffer: Buffer, fileName: string): boolean {
 export const BLOCKED_EXTENSIONS = ['.exe', '.sh', '.bat', '.cmd', '.dll', '.so', '.dylib', '.scr', '.msi', '.ps1'];
 
 /**
+ * 课件/资源独立直出 HTML 的沙箱 CSP（SEC-NET-02）。
+ *
+ * 这些文档由平台替第三方课件内容直出（含用户内联脚本/内联事件，无法改造为
+ * 无内联形态），因此配**自有宽松 CSP** 覆盖 helmet 全局头。正因这些响应不再
+ * 继承全局 CSP，平台自身文档（SPA）的全局 CSP 得以收紧
+ * （scriptSrc 去 'unsafe-inline'、connectSrc 去 http:/https:，见 server.ts）。
+ *
+ * frame-ancestors 'self'：防外部站点嵌入课件内容（本指令在该覆盖头缺失时，
+ * 外部站点可任意 iframe 嵌入——见 2026-09-30 安全审计）。
+ */
+export const COURSEWARE_DOCUMENT_CSP =
+  "sandbox allow-scripts allow-forms allow-downloads; frame-ancestors 'self'; default-src 'self' 'unsafe-inline' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline';";
+
+/** 为课件/资源 HTML 响应设置自有宽松 CSP（覆盖 helmet 全局头）。 */
+export function setCoursewareDocumentCsp(res: { setHeader: (name: string, value: string) => void }): void {
+  res.setHeader('Content-Security-Policy', COURSEWARE_DOCUMENT_CSP);
+}
+
+/**
  * 收集插件通过「课件运行时脚本扩展点」注册的脚本。
  *
  * 课件 iframe 处于 `credentialless` + sandbox（无 allow-same-origin）的 opaque origin 中，

@@ -104,15 +104,46 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
   // SEC-AUTH: /runtime 课件 HTML 入口的短时访问 token（见 server/utils/courseware-access.ts）。
   // 正常浏览器靠 Sec-Fetch 元数据放行即可，这里铸造 token 作为旧浏览器/特殊 webview 的兜底。
   const [runtimeToken, setRuntimeToken] = useState<string | null>(null);
+  // SEC-NET-02: 手写 HTML 课件经服务端落库（POST /api/courseware/inline）后改走
+  // /runtime/inline-<hash>/ 加载 —— srcdoc 文档会继承父页面 CSP，全局 CSP 收紧后
+  // 课件内联脚本会被拦；服务端直出的 /runtime 文档有自有宽松 CSP，不受影响。
+  const [inlineUuid, setInlineUuid] = useState<string | null>(null);
+
+  const customSrc = coursewareSourceRegistry.resolve(data, { lessonId });
+  const isInlineOnly = !!data.code && !data.coursewareUuid && !data.resourceId && !customSrc;
+  const effectiveUuid = data.coursewareUuid ?? (isInlineOnly ? inlineUuid : null);
 
   useEffect(() => {
-    const uuid = data.coursewareUuid;
-    if (!uuid) {
+    if (!isInlineOnly || !data.code) {
+      setInlineUuid(null);
+      return;
+    }
+    let cancelled = false;
+    fetch('/api/courseware/inline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: data.code }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((j: { uuid?: unknown }) => {
+        if (!cancelled && typeof j?.uuid === 'string' && j.uuid) setInlineUuid(j.uuid);
+      })
+      .catch(() => {
+        // 落库失败不阻断渲染：降级回 srcDoc（内联脚本在收紧后的全局 CSP 下会被拦，
+        // 但页面 HTML 仍可见），由教师重新保存元素恢复
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isInlineOnly, data.code]);
+
+  useEffect(() => {
+    if (!effectiveUuid) {
       setRuntimeToken(null);
       return;
     }
     let cancelled = false;
-    fetch(`/api/courseware/${encodeURIComponent(uuid)}/access-token`)
+    fetch(`/api/courseware/${encodeURIComponent(effectiveUuid)}/access-token`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((j: { token?: unknown }) => {
         if (!cancelled && typeof j?.token === 'string' && j.token) setRuntimeToken(j.token);
@@ -123,7 +154,7 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
     return () => {
       cancelled = true;
     };
-  }, [data.coursewareUuid]);
+  }, [effectiveUuid]);
 
   useEffect(() => {
     const uuid = data.coursewareUuid;
@@ -268,12 +299,13 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
     return () => window.removeEventListener('message', messageHandler);
   }, [mounted, elementId, data.title, data.coursewareUuid, lessonId]);
 
-  const customSrc = coursewareSourceRegistry.resolve(data, { lessonId });
-  const src = data.coursewareUuid
-    ? `/runtime/${data.coursewareUuid}/${runtimeToken ? `?ct=${encodeURIComponent(runtimeToken)}` : ''}`
-    : data.resourceId
-      ? `/api/resources/${data.resourceId}/`
-      : (customSrc ?? undefined);
+  const src =
+    data.coursewareUuid
+      ? `/runtime/${data.coursewareUuid}/${runtimeToken ? `?ct=${encodeURIComponent(runtimeToken)}` : ''}`
+      : data.resourceId
+        ? `/api/resources/${data.resourceId}/`
+        : (customSrc ??
+          (inlineUuid ? `/runtime/${inlineUuid}/${runtimeToken ? `?ct=${encodeURIComponent(runtimeToken)}` : ''}` : undefined));
 
   const submittedAttempts = attempts.filter((a) => a.finished_at !== null && a.finished_at !== undefined);
   const scoredAttempts = submittedAttempts.filter((a) => a.score !== null && a.score !== undefined);
