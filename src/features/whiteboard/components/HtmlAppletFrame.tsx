@@ -101,6 +101,29 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
 
   const [attempts, setAttempts] = useState<CoursewareAttempt[]>([]);
   const [showScores, setShowScores] = useState(false);
+  // SEC-AUTH: /runtime 课件 HTML 入口的短时访问 token（见 server/utils/courseware-access.ts）。
+  // 正常浏览器靠 Sec-Fetch 元数据放行即可，这里铸造 token 作为旧浏览器/特殊 webview 的兜底。
+  const [runtimeToken, setRuntimeToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const uuid = data.coursewareUuid;
+    if (!uuid) {
+      setRuntimeToken(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/courseware/${encodeURIComponent(uuid)}/access-token`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((j: { token?: unknown }) => {
+        if (!cancelled && typeof j?.token === 'string' && j.token) setRuntimeToken(j.token);
+      })
+      .catch(() => {
+        // 铸造失败不阻断渲染：现代浏览器仍可经 Sec-Fetch 元数据通过门控
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [data.coursewareUuid]);
 
   useEffect(() => {
     const uuid = data.coursewareUuid;
@@ -247,7 +270,7 @@ export function HtmlAppletFrame({ data, lessonId, elementId, className, title, l
 
   const customSrc = coursewareSourceRegistry.resolve(data, { lessonId });
   const src = data.coursewareUuid
-    ? `/runtime/${data.coursewareUuid}/`
+    ? `/runtime/${data.coursewareUuid}/${runtimeToken ? `?ct=${encodeURIComponent(runtimeToken)}` : ''}`
     : data.resourceId
       ? `/api/resources/${data.resourceId}/`
       : (customSrc ?? undefined);

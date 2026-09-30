@@ -3,6 +3,7 @@ import fs from 'fs';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { injectLmsSdk, collectCoursewareRuntimeScripts } from './shared.js';
+import { verifyCoursewareToken } from '../utils/courseware-access.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 
@@ -36,6 +37,27 @@ export function registerBridgeRoutes(ctx: ServerContext) {
     try {
       const { uuid } = req.params;
       let subpath = req.params[0] || '';
+
+      // SEC-AUTH: /runtime 原先完全无鉴权 —— 未认证者可读取任意课件文件，且触发
+      // courseware 行自动登记（INSERT）与磁盘自愈写。沙箱 iframe 的请求不带会话
+      // cookie，无法 requireAuth，改为以下放行规则（缺一不可的判据见各注释）：
+      // 1. `?ct=` 短时 HMAC token：父页面（已认证）经 /api/courseware/:id/access-token
+      //    铸造，与 uuid 绑定 —— 覆盖无 Sec-Fetch 元数据的旧浏览器/特殊 webview
+      // 2. `Sec-Fetch-Site: same-origin`：父应用同源上下文发起（缩略图/父页面直接取资源）
+      // 3. `Sec-Fetch-Dest` 存在且非 `document`：沙箱 iframe（opaque origin）内发起的
+      //    子资源/子框架请求 —— 其 initiator 为不透明 origin，Site 恒为 cross-site，
+      //    只能以「浏览器自动添加了 Dest 元数据且非顶级文档导航」判定
+      // 直连（地址栏 Dest=document、curl 无元数据）→ 401，且早于任何 DB/磁盘写。
+      // 外部站点 iframe 嵌入由下方 HTML 响应的 `frame-ancestors 'self'` 挡下；
+      // 伪造 Sec-Fetch 头仅限非浏览器客户端（残余风险已知，资源本身非机密）。
+      const hasToken = verifyCoursewareToken(uuid, typeof req.query.ct === 'string' ? req.query.ct : null);
+      const dest = req.headers['sec-fetch-dest'];
+      const site = req.headers['sec-fetch-site'];
+      const browserInitiated =
+        site === 'same-origin' || (typeof dest === 'string' && dest !== '' && dest !== 'document');
+      if (!hasToken && !browserInitiated) {
+        return res.status(401).send('Courseware access token missing or invalid');
+      }
 
       // 1. Courseware 查询（支持 uuid 或 id 匹配）
       let courseware = kernelContainer.db
@@ -236,7 +258,9 @@ export function registerBridgeRoutes(ctx: ServerContext) {
       if (isHtml) {
         res.setHeader(
           'Content-Security-Policy',
-          "sandbox allow-scripts allow-forms allow-downloads; default-src 'self' 'unsafe-inline' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline';",
+          // frame-ancestors 'self'（SEC-AUTH）：本路由的自有 CSP 会覆盖 Helmet 全局头，
+          // 若不含 frame-ancestors 则外部站点可任意 iframe 嵌入课件内容
+          "sandbox allow-scripts allow-forms allow-downloads; frame-ancestors 'self'; default-src 'self' 'unsafe-inline' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:; script-src-attr 'unsafe-inline'; style-src-attr 'unsafe-inline';",
         );
         let html = fs.readFileSync(filePath, 'utf8');
         html = injectLmsSdk(html, req, { id: courseware.id, name: courseware.name, uuid: courseware.uuid });

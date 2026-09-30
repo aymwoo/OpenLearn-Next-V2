@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **课件内容路由鉴权：短时签名 token + Sec-Fetch 元数据门控 (`server/utils/courseware-access.ts`, `server/routes/courseware.ts`, `server/routes/bridge.ts`, `InteractiveCoursewareViewer.tsx`, `HtmlAppletFrame.tsx`)**：
+  - **漏洞**：`GET /api/courseware/:id` 与 `/runtime/:uuid/*` 完全无鉴权 —— 未认证者可读取任意课件 HTML/文件，且 `/runtime` 的自动登记（INSERT courseware 行）与磁盘自愈写可被未认证 GET 触发（未认证写原语）。两条路由均为课件 iframe 的 src，而沙箱 iframe（无 `allow-same-origin` + `credentialless`）的请求**不带会话 cookie**，无法直接 `requireAuth`（会把所有课件加载打成 401）。
+  - **两步 token 鉴权**：已认证父页面经 `GET /api/courseware/:id/access-token`（`requireAuth()`）铸造 `<exp>.<hmac(id,exp)>` 短时 token（HMAC-SHA256 + timing-safe 验签，密钥每进程启动随机生成，默认 30 分钟有效），iframe src 以 `?ct=` 携带，路由验签（与 id/uuid 绑定 + 有效期）后放行。`/api/courseware/:id` 的 401 判定位于 courseware 行自动登记**之前**。
+  - **`/runtime` 的放行规则更宽**（需服务子资源与多页导航）：有效 token｜`Sec-Fetch-Site: same-origin`（父应用同源上下文）｜`Sec-Fetch-Dest` 存在且非 `document`（沙箱 iframe 内发起的子资源/子框架请求——opaque initiator 的 Site 恒为 cross-site，只能以「浏览器自动添加了 Dest 元数据且非顶级文档导航」判定）。地址栏直连与 curl（无元数据）→ 401；`HtmlAppletFrame` 挂载时铸造 token 作为旧浏览器兜底。
+  - **`frame-ancestors 'self'`**：`/runtime` HTML 响应的自有 CSP 原先不含 frame-ancestors（覆盖了 Helmet 全局头），外部站点可任意 iframe 嵌入课件内容，已补上。
+  - **已知残余风险**：非浏览器客户端可伪造 Sec-Fetch 头绕过元数据判定（但无法伪造 HMAC token）——课件资源本身非机密数据，接受。
+  - **测试**：`courseware-access-token.test.ts` 9 例（签名工具 + 路由门控，含无 token 不产生写副作用）；`bridge.test.ts` 补 2 例（无 token/伪造/绑错 id 401、Sec-Fetch 放行与 Dest=document 拒绝）并断言 CSP 含 `frame-ancestors 'self'`。
+
 - **LMS Bridge 仅信任受管辖课件 iframe (`src/services/lms-bridge.ts`, `InteractiveCoursewareViewer.tsx`, `HtmlAppletFrame.tsx`, `SystemResourceLibraryModal.tsx`)**：
   - **漏洞**：`processLmsMessage` 顶层来源校验只要求「`event.source` 是文档中的任意 iframe」—— LTI 外链、插件 blob、资源预览等第三方 iframe 同样能通过，可伪造 `LMS_SUBMIT` 以任意 `attempt_id` 提交分数（后端 attempt 归属校验限制了越权范围，故为中危而非高危）。
   - **为何不用 origin 白名单**：沙箱课件运行在不透明 origin（`event.origin === 'null'`）中，没有可白名单的具体 origin 值。改用更严格的 **source → 受管辖 iframe 绑定**：新增 `isFromManagedIframe()`，顶层校验、`attemptId` 回读、`LMS_GET_PROGRESS` 定向响应三处均只信任带 `data-lms-bridge` 标记的 iframe（或同窗口自身）。

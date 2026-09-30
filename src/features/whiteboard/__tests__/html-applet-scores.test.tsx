@@ -40,6 +40,14 @@ const emitSocket = (event: string, ...args: any[]) => {
   for (const h of socketHandlers[event] ?? []) h(...args);
 };
 
+// SEC-AUTH: HtmlAppletFrame 挂载时会额外铸造 /runtime 访问 token，按 URL 过滤后
+// 只统计 attempts 拉取，避免 token 请求干扰精确计数断言
+const attemptsCalls = () => fetchMock.mock.calls.filter(([u]) => String(u).includes('/attempts?'));
+
+function mintOk() {
+  return Promise.resolve({ ok: true, json: async () => ({ token: 'test.sig' }) });
+}
+
 describe('HtmlAppletFrame score overlay', () => {
   it('does not render score toggle when there are no attempts', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => [] });
@@ -56,39 +64,42 @@ describe('HtmlAppletFrame score overlay', () => {
   });
 
   it('fetches attempts on mount, then toggles panel via button', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => [
-        {
-          attemptId: 'a-1',
-          studentId: 's-1',
-          studentName: '小明',
-          score: 88,
-          completion: 1,
-          started_at: 1735689600000,
-          finished_at: 1735689700000,
-          status: 'finished',
-        },
-        {
-          attemptId: 'a-2',
-          studentId: 's-2',
-          studentName: '小红',
-          score: 45,
-          completion: 0.6,
-          started_at: 1735689600000,
-          finished_at: 1735689700000,
-          status: 'finished',
-        },
-      ],
+    fetchMock.mockImplementation((url: any) => {
+      if (String(url).includes('/access-token')) return mintOk();
+      return Promise.resolve({
+        ok: true,
+        json: async () => [
+          {
+            attemptId: 'a-1',
+            studentId: 's-1',
+            studentName: '小明',
+            score: 88,
+            completion: 1,
+            started_at: 1735689600000,
+            finished_at: 1735689700000,
+            status: 'finished',
+          },
+          {
+            attemptId: 'a-2',
+            studentId: 's-2',
+            studentName: '小红',
+            score: 45,
+            completion: 0.6,
+            started_at: 1735689600000,
+            finished_at: 1735689700000,
+            status: 'finished',
+          },
+        ],
+      });
     });
 
     render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-123' }} lessonId="lesson-1" />);
 
     // 拉取了一次
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(attemptsCalls()).toHaveLength(1);
     });
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/courseware/attempts?coursewareUuid=abc-123');
+    expect(String(attemptsCalls()[0][0])).toBe('/api/courseware/attempts?coursewareUuid=abc-123');
 
     // 订阅了 socket
     expect(mockSocket.on).toHaveBeenCalledWith('courseware-attempt-updated', expect.any(Function));
@@ -116,33 +127,36 @@ describe('HtmlAppletFrame score overlay', () => {
   });
 
   it('refetches attempts on courseware-attempt-updated socket event', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => [
-        {
-          attemptId: 'a-1',
-          studentId: 's-1',
-          studentName: '小明',
-          score: 70,
-          completion: 1,
-          started_at: 1,
-          finished_at: 2,
-          status: 'finished',
-        },
-      ],
+    fetchMock.mockImplementation((url: any) => {
+      if (String(url).includes('/access-token')) return mintOk();
+      return Promise.resolve({
+        ok: true,
+        json: async () => [
+          {
+            attemptId: 'a-1',
+            studentId: 's-1',
+            studentName: '小明',
+            score: 70,
+            completion: 1,
+            started_at: 1,
+            finished_at: 2,
+            status: 'finished',
+          },
+        ],
+      });
     });
     render(<HtmlAppletFrame data={{ title: '课件', coursewareUuid: 'abc-456' }} lessonId="lesson-1" />);
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(attemptsCalls()).toHaveLength(1);
     });
 
     // 模拟服务端推送
     emitSocket('courseware-attempt-updated', { attemptId: 'a-1', type: 'submit' });
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(attemptsCalls()).toHaveLength(2);
     });
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/courseware/attempts?coursewareUuid=abc-456');
+    expect(String(attemptsCalls()[1][0])).toBe('/api/courseware/attempts?coursewareUuid=abc-456');
   });
 
   it('unsubscribes on unmount to avoid memory leak', async () => {
