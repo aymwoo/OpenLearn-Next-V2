@@ -26,8 +26,10 @@ import * as path from 'path';
 import { v7 as uuidv7 } from 'uuid';
 import { manifestSchema, type Manifest } from './manifest-schema.js';
 
-/** ZIP 包中所有文件的未压缩大小上限（10MB），用于 ZIP bomb 防护 */
-const MAX_UNCOMPRESSED_SIZE = 300 * 1024 * 1024;
+/** ZIP 包中所有文件的未压缩大小上限（默认 300MB），用于 ZIP bomb 防护，支持环境变量 OPENLEARN_MAX_ZIP_SIZE 覆盖 */
+export function getMaxUncompressedSize(): number {
+  return Number(process.env.OPENLEARN_MAX_ZIP_SIZE) || 300 * 1024 * 1024;
+}
 
 /**
  * 将插件入口代码（含相对导入）通过 esbuild 打包为单 ESM bundle。
@@ -134,9 +136,10 @@ export async function validateAndBundleZip(zipBuffer: Buffer): Promise<{
     }
   }
 
-  if (totalUncompressed > MAX_UNCOMPRESSED_SIZE) {
+  const maxLimit = getMaxUncompressedSize();
+  if (totalUncompressed > maxLimit) {
     throw new Error(
-      `ZIP bomb prevention: total uncompressed size ${totalUncompressed} bytes exceeds limit of ${MAX_UNCOMPRESSED_SIZE} bytes`,
+      `ZIP bomb prevention: total uncompressed size ${totalUncompressed} bytes exceeds limit of ${maxLimit} bytes`,
     );
   }
 

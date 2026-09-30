@@ -50,6 +50,7 @@ import { io } from 'socket.io-client';
 import { resolvePluginCommandType } from '../../packages/core/plugin-host/plugin-namespace';
 import { ExtensionPointRenderer } from '../plugin-host/extension-point-renderer';
 import { ClassroomSyncChannel, CLASSROOM_SYNC_CHANNEL_NAME } from '../services/classroom-sync-channel';
+import { getOptionalSocket } from '../services/socket-service';
 import { useErrorStore, errorStore } from '../store/errorStore';
 import { ClassroomInteractiveCockpit } from '../features/classroom/ClassroomInteractiveCockpit';
 import { PreClassReadyView } from '../features/classroom/PreClassReadyView';
@@ -76,7 +77,7 @@ function DynamicIcon({ name, ...props }: { name: string; [key: string]: any }) {
   return React.createElement(IconComponent, props);
 }
 
-interface LiveClassroomViewProps {
+export interface LiveClassroomViewProps {
   selectedLesson: string | null;
   setSelectedLesson: (id: string | null) => void;
   lessons: any[];
@@ -1166,8 +1167,20 @@ export function LiveClassroomView({
           'success',
         );
 
-        // 跨窗口同步：向独立学生视窗派发点名事件
-        syncChannelRef.current?.broadcastPickStudent(finalStudent.id, finalStudent.name);
+        // 跨窗口与全网同步：向学生端派发随机抽问点名事件
+        if (syncChannelRef.current) {
+          syncChannelRef.current.broadcastPickStudent(finalStudent.id, finalStudent.name);
+        } else {
+          const socket = getOptionalSocket();
+          if (socket) {
+            socket.emit('teacher-pick-student', {
+              studentId: finalStudent.id,
+              studentName: finalStudent.name,
+              lessonId: selectedLesson,
+              classId: liveClassSelectedClassId,
+            });
+          }
+        }
 
         // Recover highlight after 8 seconds
         setTimeout(() => {

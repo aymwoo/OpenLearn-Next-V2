@@ -97,13 +97,16 @@ afterEach(() => {
   whiteboardViewStore.getState().setRemoteFullscreenElementId(null);
 });
 
+const dummyAdd = vi.fn(async () => {});
+const dummyUpdate = vi.fn(async () => {});
+
 function renderBoard(overrides: Record<string, unknown> = {}) {
   return render(
     <InteractiveWhiteboard
       lessonId="l1"
       elements={ELEMENTS}
-      onElementAdd={vi.fn(async () => {}) as any}
-      onElementUpdate={vi.fn(async () => {}) as any}
+      onElementAdd={dummyAdd}
+      onElementUpdate={dummyUpdate}
       userRole="teacher"
       {...overrides}
     />,
@@ -182,7 +185,7 @@ describe('浏览器全屏 · 进入与退出', () => {
 
   it('原生全屏不可用时静默降级为「仅占满视口」，不抛错', async () => {
     // 删除原生 API 模拟不支持
-    const el = document.documentElement as any;
+    const el = document.documentElement as HTMLElement & { requestFullscreen?: unknown };
     const saved = el.requestFullscreen;
     delete el.requestFullscreen;
 
@@ -377,8 +380,8 @@ describe('浏览器全屏 · 集成路径（宿主真实渲染）', () => {
               data: JSON.stringify({ ...c.extra, x: 20, y: 20, width: 400, height: 300 }),
             },
           ]}
-          onElementAdd={vi.fn(async () => {}) as any}
-          onElementUpdate={vi.fn(async () => {}) as any}
+          onElementAdd={dummyAdd}
+          onElementUpdate={dummyUpdate}
           userRole="teacher"
           hidePageBar
         />,
@@ -416,8 +419,8 @@ describe('浏览器全屏 · 集成路径（宿主真实渲染）', () => {
             data: JSON.stringify({ title: '互动课件', x: 20, y: 20, width: 400, height: 300 }),
           },
         ]}
-        onElementAdd={vi.fn(async () => {}) as any}
-        onElementUpdate={vi.fn(async () => {}) as any}
+        onElementAdd={dummyAdd}
+        onElementUpdate={dummyUpdate}
         userRole="teacher"
         hidePageBar
       />,
@@ -445,8 +448,8 @@ describe('浏览器全屏 · 集成路径（宿主真实渲染）', () => {
             data: JSON.stringify({ title: '互动课件', x: 20, y: 20, width: 400, height: 300 }),
           },
         ]}
-        onElementAdd={vi.fn(async () => {}) as any}
-        onElementUpdate={vi.fn(async () => {}) as any}
+        onElementAdd={dummyAdd}
+        onElementUpdate={dummyUpdate}
         userRole="teacher"
         hidePageBar
       />,
@@ -474,8 +477,8 @@ describe('白板全屏 · 渲染真实组件', () => {
       <InteractiveWhiteboard
         lessonId="l1"
         elements={[{ id: 'el-1', type, data: JSON.stringify({ x: 20, y: 20, width: 400, height: 300, ...data }) }]}
-        onElementAdd={vi.fn(async () => {}) as any}
-        onElementUpdate={vi.fn(async () => {}) as any}
+        onElementAdd={dummyAdd}
+        onElementUpdate={dummyUpdate}
         userRole="teacher"
         hidePageBar
       />,

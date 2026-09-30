@@ -182,6 +182,31 @@ describe('setupPresence', () => {
     ]);
   });
 
+  it('teacher-pick-student broadcasts student-picked globally and to lesson/class room', () => {
+    const m = buildMocks();
+    const socket = m.connect();
+    socket.trigger('teacher-pick-student', { studentId: 's1', studentName: 'Alice', lessonId: 'L1', classId: 'c1' });
+
+    const pickedEvents = m.globalEmitted.filter((e) => e.event === 'student-picked');
+    expect(pickedEvents.length).toBeGreaterThanOrEqual(1);
+    expect(pickedEvents[0].payload).toMatchObject({
+      studentId: 's1',
+      studentName: 'Alice',
+      lessonId: 'L1',
+      classId: 'c1',
+    });
+  });
+
+  it('student-acknowledge-pick broadcasts student-acknowledged globally', () => {
+    const m = buildMocks();
+    const socket = m.connect();
+    socket.trigger('student-acknowledge-pick', { studentId: 's1', lessonId: 'L1' });
+
+    const ackEvents = m.globalEmitted.filter((e) => e.event === 'student-acknowledged');
+    expect(ackEvents.length).toBe(1);
+    expect(ackEvents[0].payload).toEqual({ studentId: 's1', lessonId: 'L1' });
+  });
+
   it('disconnect removes the student and broadcasts an empty presence-update', () => {
     const m = buildMocks();
     const socket = m.connect();

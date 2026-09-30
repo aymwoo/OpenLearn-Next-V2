@@ -1,4 +1,79 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import path from 'node:path';
+import fs from 'node:fs';
+import Database from 'better-sqlite3';
+
+function purgeLessonClassroomFlowFromDb() {
+  const dbPath = path.resolve(process.cwd(), 'packages/core/db/educational_os.db');
+  if (!fs.existsSync(dbPath)) return;
+  const db = new Database(dbPath);
+  try {
+    const e2eLessons = db
+      .prepare("SELECT id FROM lessons WHERE title LIKE 'E2E 课程编辑与开课%'")
+      .all() as { id: string }[];
+
+    if (e2eLessons.length > 0) {
+      const lessonIds = e2eLessons.map((l) => l.id);
+      const placeholders = lessonIds.map(() => '?').join(',');
+
+      db.prepare(`DELETE FROM whiteboard_elements WHERE lesson_id IN (${placeholders})`).run(...lessonIds);
+      db.prepare(`DELETE FROM student_lesson_progress WHERE lesson_id IN (${placeholders})`).run(...lessonIds);
+      db.prepare(`DELETE FROM schedules WHERE lesson_id IN (${placeholders})`).run(...lessonIds);
+      db.prepare(`DELETE FROM assignments WHERE lesson_id IN (${placeholders})`).run(...lessonIds);
+      db.prepare(`DELETE FROM classroom_sessions WHERE lesson_id IN (${placeholders})`).run(...lessonIds);
+      db.prepare(`DELETE FROM lessons WHERE id IN (${placeholders})`).run(...lessonIds);
+    }
+
+    const e2eClasses = db
+      .prepare("SELECT id FROM classes WHERE name LIKE 'E2E 授课班级%'")
+      .all() as { id: string }[];
+
+    if (e2eClasses.length > 0) {
+      const classIds = e2eClasses.map((c) => c.id);
+      const placeholders = classIds.map(() => '?').join(',');
+      db.prepare(`DELETE FROM student_seats WHERE class_id IN (${placeholders})`).run(...classIds);
+      db.prepare(`DELETE FROM class_students WHERE class_id IN (${placeholders})`).run(...classIds);
+      db.prepare(`DELETE FROM schedules WHERE class_id IN (${placeholders})`).run(...classIds);
+      db.prepare(`DELETE FROM classes WHERE id IN (${placeholders})`).run(...classIds);
+    }
+  } finally {
+    db.close();
+  }
+}
+
+async function cleanupLessonClassroomFlowViaApi(request: APIRequestContext) {
+  await request
+    .post('/api/auth/login', {
+      data: { entrance: 'teacher', username: 'admin', password: 'admin' },
+    })
+    .catch(() => {});
+
+  try {
+    const listRes = await request.get('/api/lessons');
+    if (listRes.ok()) {
+      const lessons = await listRes.json();
+      const arr = Array.isArray(lessons) ? lessons : [];
+      for (const l of arr) {
+        if (l.title?.startsWith('E2E 课程编辑与开课')) {
+          await request.delete(`/api/lessons/${encodeURIComponent(l.id)}`).catch(() => {});
+        }
+      }
+    }
+  } catch {}
+
+  try {
+    const cRes = await request.get('/api/classes');
+    if (cRes.ok()) {
+      const classes = await cRes.json();
+      const arr = Array.isArray(classes) ? classes : [];
+      for (const c of arr) {
+        if (c.name?.startsWith('E2E 授课班级')) {
+          await request.delete(`/api/classes/${encodeURIComponent(c.id)}`).catch(() => {});
+        }
+      }
+    }
+  } catch {}
+}
 
 async function loginAsAdmin(page: Page): Promise<void> {
   await page.addInitScript(() => {
@@ -48,97 +123,109 @@ async function courseHasElement(request: APIRequestContext, lessonId: string, ty
   return Array.isArray(elements) && elements.some((element) => element.type === type);
 }
 
-test('管理员可编辑课程、保存回读并按所选班级与模式开课', async ({ page, request }) => {
-  test.setTimeout(180_000);
+test.describe('课程管理与课堂工作流 E2E 测试', () => {
+  test.beforeAll(async ({ request }) => {
+    await cleanupLessonClassroomFlowViaApi(request);
+    purgeLessonClassroomFlowFromDb();
+  });
 
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const courseTitle = `E2E 课程编辑与开课 ${suffix}`;
-  const className = `E2E 授课班级 ${suffix}`;
-  const segmentTitle = `E2E 已保存环节 ${suffix}`;
-  const createdClassIds: string[] = [];
-  let lessonId: string | null = null;
+  test.afterAll(async ({ request }) => {
+    await cleanupLessonClassroomFlowViaApi(request);
+    purgeLessonClassroomFlowFromDb();
+  });
 
-  try {
-    const loginResponse = await request.post('/api/auth/login', {
-      data: { entrance: 'teacher', username: 'admin', password: 'admin' },
-    });
-    expect(loginResponse.ok()).toBeTruthy();
+  test('管理员可编辑课程、保存回读并按所选班级与模式开课', async ({ page, request }) => {
+    test.setTimeout(180_000);
 
-    const classResponse = await request.post('/api/classes', {
-      data: { name: className, description: 'Playwright classroom-flow fixture' },
-    });
-    expect(classResponse.ok()).toBeTruthy();
-    const classData = (await classResponse.json()) as { id: string };
-    createdClassIds.push(classData.id);
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const courseTitle = `E2E 课程编辑与开课 ${suffix}`;
+    const className = `E2E 授课班级 ${suffix}`;
+    const segmentTitle = `E2E 已保存环节 ${suffix}`;
+    const createdClassIds: string[] = [];
+    let lessonId: string | null = null;
 
-    const lessonResponse = await request.post('/api/lessons', {
-      data: { title: courseTitle, content: 'Playwright persistence and classroom flow fixture.' },
-    });
-    expect(lessonResponse.ok()).toBeTruthy();
-    const lessonData = (await lessonResponse.json()) as { result?: { lessonId?: string } };
-    lessonId = lessonData.result?.lessonId ?? null;
-    expect(lessonId).toBeTruthy();
-
-    await loginAsAdmin(page);
-    await openCourseEditor(page, courseTitle);
-
-    await page.getByRole('button', { name: /加环节/ }).click();
-    const segmentName = page.getByLabel('环节名称');
-    await expect(segmentName).toBeVisible();
-    await segmentName.fill(segmentTitle);
-    await expect.poll(() => courseHasSegment(request, courseTitle, segmentTitle)).toBe(true);
-
-    const helloPaletteCard = page
-      .locator('[title="点击编辑并添加到画板，或拖拽到画板"]')
-      .filter({ hasText: '问候插件' });
-    await expect(helloPaletteCard).toBeVisible();
-    await helloPaletteCard.click();
-    await expect(page.getByText('编辑：问候插件')).toBeVisible();
-    await page.getByRole('button', { name: '添加到画板' }).click();
-    await expect.poll(() => courseHasElement(request, lessonId!, 'hello-world')).toBe(true);
-
-    await page.getByRole('button', { name: '返回课程库' }).click();
-    await openCourseEditor(page, courseTitle);
-    await expect(page.getByLabel('环节名称')).toHaveValue(segmentTitle);
-    await expect(page.getByText('Hello World 插件')).toBeVisible();
-    await expect.poll(() => courseHasElement(request, lessonId!, 'hello-world')).toBe(true);
-
-    await page.locator('button:has-text("互动课堂")').first().click();
-    await expect(page.getByText('选择授课课程')).toBeVisible();
-    await page.getByRole('button', { name: new RegExp(courseTitle) }).click();
-
-    const classSearch = page.getByRole('searchbox', { name: '搜索班级' });
-    await classSearch.fill(className);
-    await page.getByRole('button', { name: new RegExp(className) }).click();
-    await page.getByRole('radio', { name: /讲授式/ }).click();
-    await page.getByRole('button', { name: /开始上课/ }).click();
-    await expect(page.locator('#pre-class-ready-view')).toBeVisible();
-
-    await expect
-      .poll(async () => {
-        const response = await request.get(`/api/classroom/sessions/${lessonId}`);
-        if (!response.ok()) return null;
-        const data = (await response.json()) as { session?: Record<string, unknown> };
-        if (!data.session) return null;
-        return {
-          lesson_id: data.session.lesson_id,
-          class_id: data.session.class_id,
-          teaching_mode_id: data.session.teaching_mode_id,
-          stage: data.session.stage,
-        };
-      })
-      .toEqual({
-        lesson_id: lessonId,
-        class_id: classData.id,
-        teaching_mode_id: 'lecture',
-        stage: 'PRE_CLASS_READY',
+    try {
+      const loginResponse = await request.post('/api/auth/login', {
+        data: { entrance: 'teacher', username: 'admin', password: 'admin' },
       });
-  } finally {
-    if (lessonId) {
-      await request.delete(`/api/lessons/${lessonId}`).catch(() => undefined);
+      expect(loginResponse.ok()).toBeTruthy();
+
+      const classResponse = await request.post('/api/classes', {
+        data: { name: className, description: 'Playwright classroom-flow fixture' },
+      });
+      expect(classResponse.ok()).toBeTruthy();
+      const classData = (await classResponse.json()) as { id: string };
+      createdClassIds.push(classData.id);
+
+      const lessonResponse = await request.post('/api/lessons', {
+        data: { title: courseTitle, content: 'Playwright persistence and classroom flow fixture.' },
+      });
+      expect(lessonResponse.ok()).toBeTruthy();
+      const lessonData = (await lessonResponse.json()) as { result?: { lessonId?: string } };
+      lessonId = lessonData.result?.lessonId ?? null;
+      expect(lessonId).toBeTruthy();
+
+      await loginAsAdmin(page);
+      await openCourseEditor(page, courseTitle);
+
+      await page.getByRole('button', { name: /加环节/ }).click();
+      const segmentName = page.getByLabel('环节名称');
+      await expect(segmentName).toBeVisible();
+      await segmentName.fill(segmentTitle);
+      await expect.poll(() => courseHasSegment(request, courseTitle, segmentTitle)).toBe(true);
+
+      const helloPaletteCard = page
+        .locator('[title="点击编辑并添加到画板，或拖拽到画板"]')
+        .filter({ hasText: '问候插件' });
+      await expect(helloPaletteCard).toBeVisible();
+      await helloPaletteCard.click();
+      await expect(page.getByText('编辑：问候插件')).toBeVisible();
+      await page.getByRole('button', { name: '添加到画板' }).click();
+      await expect.poll(() => courseHasElement(request, lessonId!, 'hello-world')).toBe(true);
+
+      await page.getByRole('button', { name: '返回课程库' }).click();
+      await openCourseEditor(page, courseTitle);
+      await expect(page.getByLabel('环节名称')).toHaveValue(segmentTitle);
+      await expect(page.getByText('Hello World 插件')).toBeVisible();
+      await expect.poll(() => courseHasElement(request, lessonId!, 'hello-world')).toBe(true);
+
+      await page.locator('button:has-text("互动课堂")').first().click();
+      await expect(page.getByText('选择授课课程')).toBeVisible();
+      await page.getByRole('button', { name: new RegExp(courseTitle) }).click();
+
+      const classSearch = page.getByRole('searchbox', { name: '搜索班级' });
+      await classSearch.fill(className);
+      await page.getByRole('button', { name: new RegExp(className) }).click();
+      await page.getByRole('radio', { name: /讲授式/ }).click();
+      await page.getByRole('button', { name: /开始上课/ }).click();
+      await expect(page.locator('#pre-class-ready-view')).toBeVisible();
+
+      await expect
+        .poll(async () => {
+          const response = await request.get(`/api/classroom/sessions/${lessonId}`);
+          if (!response.ok()) return null;
+          const data = (await response.json()) as { session?: Record<string, unknown> };
+          if (!data.session) return null;
+          return {
+            lesson_id: data.session.lesson_id,
+            class_id: data.session.class_id,
+            teaching_mode_id: data.session.teaching_mode_id,
+            stage: data.session.stage,
+          };
+        })
+        .toEqual({
+          lesson_id: lessonId,
+          class_id: classData.id,
+          teaching_mode_id: 'lecture',
+          stage: 'PRE_CLASS_READY',
+        });
+    } finally {
+      if (lessonId) {
+        await request.delete(`/api/lessons/${lessonId}`).catch(() => undefined);
+      }
+      for (const classId of createdClassIds) {
+        await request.delete(`/api/classes/${classId}`).catch(() => undefined);
+      }
     }
-    for (const classId of createdClassIds) {
-      await request.delete(`/api/classes/${classId}`).catch(() => undefined);
-    }
-  }
+  });
 });

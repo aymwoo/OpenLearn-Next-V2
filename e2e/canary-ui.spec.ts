@@ -80,6 +80,15 @@ function purgeCanaryDirectFromDb() {
       db.prepare('DELETE FROM student_seats WHERE student_id = ?').run(s.id);
       db.prepare('DELETE FROM class_students WHERE student_id = ?').run(s.id);
     }
+
+    // 5. 删除测试金丝雀课程
+    const canaryLessons = db
+      .prepare('SELECT id FROM lessons WHERE title LIKE ?')
+      .all('%金丝雀%') as { id: string }[];
+    for (const l of canaryLessons) {
+      db.prepare('DELETE FROM whiteboard_elements WHERE lesson_id = ?').run(l.id);
+      db.prepare('DELETE FROM lessons WHERE id = ?').run(l.id);
+    }
   } finally {
     db.close();
   }
@@ -144,6 +153,20 @@ async function cleanupAllCanaryData(request: any) {
       for (const s of arr) {
         if (s.name?.includes('探针') || s.student_number?.includes('CANARY')) {
           await request.delete(`/api/students/${encodeURIComponent(s.id)}`).catch(() => {});
+        }
+      }
+    }
+  } catch {}
+
+  // 4.5 清理所有金丝雀测试课程
+  try {
+    const lesRes = await request.get('/api/lessons');
+    if (lesRes.ok()) {
+      const lessons = await lesRes.json();
+      const arr = Array.isArray(lessons) ? lessons : [];
+      for (const l of arr) {
+        if (l.title?.includes('金丝雀') || l.title?.includes('canary')) {
+          await request.delete(`/api/lessons/${encodeURIComponent(l.id)}`).catch(() => {});
         }
       }
     }
@@ -316,35 +339,58 @@ test.describe('金丝雀阶段 7：前端扩展槽位与 UI 真实渲染', () =>
     await page.screenshot({ path: SEATING_SCREENSHOT, fullPage: true });
     expect(fs.existsSync(SEATING_SCREENSHOT)).toBe(true);
 
-    // 8. 记录测试证据
+    // 8. 记录测试证据（动态提取实际渲染状态，杜绝硬编码假证据）
+    const toolbarText = (await toolbarExt.textContent())?.trim() ?? '';
+    const legendText = (await legendExt.textContent())?.trim() ?? '';
+    const summaryText = (await summaryTotal.textContent())?.trim() ?? '';
+    const actualBadgeCount = await seatBadges.count();
+    const screenshotSaved = fs.existsSync(SEATING_SCREENSHOT);
+
     const LOG_DIR = path.resolve(process.cwd(), 'artifacts/logs');
     fs.mkdirSync(LOG_DIR, { recursive: true });
     fs.writeFileSync(
       path.join(LOG_DIR, 'canary_stage7_deep_slots_evidence.log'),
       `[${new Date().toISOString()}] Stage 7 Deep Seating Slots Verified:
-- Seating Toolbar Rendered: true (Room: 机房A-101)
-- Seating Legend Rendered: true
-- Seating Summary Rendered: true (Assigned: 3)
-- Seating Seat Badges Count: 3
-- Seating Screenshot: ${SEATING_SCREENSHOT}
+- Seating Toolbar Rendered: ${Boolean(toolbarText)} (Room: ${toolbarText.replace(/[\n\r]+/g, ' ')})
+- Seating Legend Rendered: ${Boolean(legendText)}
+- Seating Summary Rendered: ${Boolean(summaryText)} (Text: ${summaryText})
+- Seating Seat Badges Count: ${actualBadgeCount}
+- Seating Screenshot: ${screenshotSaved ? SEATING_SCREENSHOT : 'FAILED'}
 `,
     );
   });
 
-  test('7.4 & 7.9 白板工具栏锚点与自动保存槽位状态展示 (Generates Artifact: Screenshot)', async ({ page }) => {
+  test('7.4 & 7.9 白板工具栏锚点与自动保存槽位状态展示 (Generates Artifact: Screenshot)', async ({ page, request }) => {
     await ensureLoggedIn(page);
+
+    // 确保存在金丝雀测试课程供测试点击 (自建独立 fixture，不依赖现有数据库数据)
+    await request
+      .post('/api/lessons', {
+        data: {
+          title: '金丝雀白板测试课',
+          content: '# 金丝雀备课教案',
+        },
+      })
+      .catch(() => {});
 
     // 1. 导航到「课程管理」
     const coursesTab = page.locator('button:has-text("课程管理")').first();
     await expect(coursesTab).toBeVisible({ timeout: 10000 });
     await coursesTab.click();
 
-    // 2. 点击首个课程进入备课编辑器 (LessonEditorView)
-    const viewCourseBtn = page
+    // 2. 定位并点击金丝雀课程或首个课程进入备课编辑器 (LessonEditorView)
+    const canaryCard = page.locator('div:has-text("金丝雀白板测试课")').first();
+    const canaryBtn = canaryCard.locator('button[title*="查看与编辑"], button[title*="查看只读"], button:has-text("查看教案")').first();
+    const fallbackBtn = page
       .locator('button[title*="查看与编辑"], button[title*="查看只读"], button:has-text("查看教案")')
       .first();
-    await expect(viewCourseBtn).toBeVisible({ timeout: 10000 });
-    await viewCourseBtn.click();
+
+    if (await canaryBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await canaryBtn.click();
+    } else {
+      await expect(fallbackBtn).toBeVisible({ timeout: 10000 });
+      await fallbackBtn.click();
+    }
 
     // 3. 验证 7.9.a 白板自动保存状态扩展槽位 (whiteboard.autosave.status)
     const autosaveStatus = page.locator('[data-testid="canary-autosave-status"]');
@@ -365,15 +411,20 @@ test.describe('金丝雀阶段 7：前端扩展槽位与 UI 真实渲染', () =>
     await page.screenshot({ path: WHITEBOARD_SCREENSHOT, fullPage: true });
     expect(fs.existsSync(WHITEBOARD_SCREENSHOT)).toBe(true);
 
-    // 7. 写入补充日志证据
+    // 7. 写入动态读取的证据日志 (内容来自实际断言结果)
+    const statusText = await autosaveStatus.innerText().catch(() => '');
+    const actionText = await autosaveAction.innerText().catch(() => '');
+    const anchorVisible = await anchorBtn.isVisible().catch(() => false);
+    const screenshotSaved = fs.existsSync(WHITEBOARD_SCREENSHOT);
+
     const LOG_DIR = path.resolve(process.cwd(), 'artifacts/logs');
     fs.appendFileSync(
       path.join(LOG_DIR, 'canary_stage7_deep_slots_evidence.log'),
       `[${new Date().toISOString()}] Stage 7 Whiteboard & Anchor Slots Verified:
-- Whiteboard Autosave Status Rendered: true
-- Whiteboard Autosave Action Rendered: true
-- Whiteboard Anchor Button Rendered: true
-- Whiteboard Screenshot: ${WHITEBOARD_SCREENSHOT}
+- Whiteboard Autosave Status Rendered: ${Boolean(statusText)} (Text: ${statusText})
+- Whiteboard Autosave Action Rendered: ${Boolean(actionText)} (Text: ${actionText})
+- Whiteboard Anchor Button Rendered: ${anchorVisible}
+- Whiteboard Screenshot: ${screenshotSaved ? WHITEBOARD_SCREENSHOT : 'FAILED'}
 `,
     );
   });

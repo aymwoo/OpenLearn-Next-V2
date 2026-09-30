@@ -48,5 +48,24 @@ export default defineConfig({
     testTimeout: 60000,
     hookTimeout: 60000,
     fileParallelism: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'html'],
+      exclude: [
+        '**/node_modules/**',
+        '**/__tests__/**',
+        '**/__mocks__/**',
+        'e2e/**',
+        'dist/**',
+        'v2_plugins/**',
+        'scripts/**',
+      ],
+      thresholds: {
+        lines: 54,
+        branches: 44,
+        functions: 50,
+        statements: 54,
+      },
+    },
   },
 });

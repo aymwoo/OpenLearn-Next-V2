@@ -38,6 +38,8 @@ export interface UseClassroomSocketOptions {
   fetchStudentDashboard: (id: string) => Promise<void> | void;
   fetchStudents: () => Promise<void> | void;
   fetchElements: (roomId: string) => Promise<void> | void;
+  setPickedAlertData?: (data: { studentId: string; studentName: string } | null) => void;
+  setPickedAnnouncement?: (data: { studentName: string; studentId: string } | null) => void;
 }
 
 export function useClassroomSocket(options: UseClassroomSocketOptions) {
@@ -69,6 +71,8 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     fetchStudentDashboard,
     fetchStudents,
     fetchElements,
+    setPickedAlertData,
+    setPickedAnnouncement,
   } = options;
 
   const socketRef = useRef<any>(null);
@@ -81,6 +85,8 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
   const selectedAssignmentRef = useRef<any>(null);
   const studentViewStatusRef = useRef(studentViewStatus);
   const studentLessonTabRef = useRef(studentLessonTab);
+  const setPickedAlertDataRef = useRef(setPickedAlertData);
+  const setPickedAnnouncementRef = useRef(setPickedAnnouncement);
   /**
    * 被教师「最大化视图」打断前的学生视图。
    * 教师在互动课堂里最大化组件时会把学生强行拉到该课节的白板全屏，
@@ -120,6 +126,12 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
   useEffect(() => {
     selectedAssignmentRef.current = selectedAssignment;
   }, [selectedAssignment]);
+  useEffect(() => {
+    setPickedAlertDataRef.current = setPickedAlertData;
+  }, [setPickedAlertData]);
+  useEffect(() => {
+    setPickedAnnouncementRef.current = setPickedAnnouncement;
+  }, [setPickedAnnouncement]);
   // Main Socket Connection & Event Registration
   useEffect(() => {
     if (!session) return;
@@ -277,19 +289,33 @@ export function useClassroomSocket(options: UseClassroomSocketOptions) {
     });
 
     socket.on('student-picked', (data: any) => {
-      if (
+      const isCurrentStudent =
         activeRoleRef.current === 'student' &&
         activeStudentIdRef.current &&
-        data.studentId === activeStudentIdRef.current
-      ) {
+        data.studentId === activeStudentIdRef.current;
+
+      if (isCurrentStudent) {
+        // 1. 被抽中的学生：着重提示（弹出模态框 + 强提醒Toast）
+        setPickedAlertDataRef.current?.({ studentId: data.studentId, studentName: data.studentName });
+
         const msg =
           langRef.current === 'zh'
-            ? `闪电警报！您已被老师在课程随机提问点名中抽中！请立即集中注意力参与课堂。`
+            ? `闪电警报！您已被老师在课程随机抽问中抽中！请立即集中注意力参与课堂回答。`
             : `Attention alert! You have been randomly picked by the teacher! Please pay immediate attention.`;
 
-        addToast(langRef.current === 'zh' ? '⚡️ 随机点名提问' : '⚡️ Classroom Pick Alert', msg, 'warning');
+        addToast(langRef.current === 'zh' ? '⚡️ 闪电抽问：老师抽中了你！' : '⚡️ Classroom Pick Alert', msg, 'warning');
 
         fetchStudentDashboard(activeStudentIdRef.current);
+      } else if (activeRoleRef.current === 'student') {
+        // 2. 全班其他学生：向全班提示被抽中的学生
+        const studentName = data.studentName || '同学';
+        setPickedAnnouncementRef.current?.({ studentName, studentId: data.studentId });
+        const msg =
+          langRef.current === 'zh'
+            ? `老师在课堂中随机抽中了【${studentName}】同学回答问题！`
+            : `Teacher randomly selected [${studentName}] to answer!`;
+
+        addToast(langRef.current === 'zh' ? '🎯 课堂随机抽问' : '🎯 Classroom Random Pick', msg, 'info');
       }
 
       setLiveClassFeed((prev) => [

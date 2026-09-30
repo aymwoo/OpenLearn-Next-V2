@@ -65,12 +65,15 @@ describe('Classroom Workflow Stage Specific Views', () => {
       expect(onStartClass).toHaveBeenCalledTimes(1);
 
       // Broadcast pre-class quick notice
-      const bellButtons = screen.getAllByRole('button');
-      const reminderBtn = bellButtons.find((b) => b.textContent?.includes('即将上课提醒'));
-      if (reminderBtn) {
-        fireEvent.click(reminderBtn);
-        expect(onBroadcastNotice).toHaveBeenCalledWith(expect.stringContaining('还有 5 分钟即将开始授课'));
-      }
+      const presetBtn = screen.getByRole('button', { name: '预备教材' });
+      expect(presetBtn).toBeDefined();
+      fireEvent.click(presetBtn);
+
+      const broadcastBtn = screen.getByRole('button', { name: '广播到学生端' });
+      expect(broadcastBtn).toBeDefined();
+      fireEvent.click(broadcastBtn);
+
+      expect(onBroadcastNotice).toHaveBeenCalledWith(expect.stringContaining('请大家翻到课本对应章节'));
     });
   });
 

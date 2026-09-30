@@ -21,15 +21,18 @@ export function extractScoreCommentCompletion(payload: any) {
 
     for (const key in obj) {
       const lowerKey = key.toLowerCase();
+      const val = obj[key];
 
-      if (keysToSearch.score.includes(lowerKey) && score === undefined) {
-        score = obj[key];
-      }
-      if (keysToSearch.comment.includes(lowerKey) && comment === undefined) {
-        comment = obj[key];
-      }
-      if (keysToSearch.completion.includes(lowerKey) && completion === undefined) {
-        completion = obj[key];
+      if (val !== null && typeof val !== 'object') {
+        if (keysToSearch.score.includes(lowerKey) && score === undefined) {
+          score = val;
+        }
+        if (keysToSearch.comment.includes(lowerKey) && comment === undefined) {
+          comment = val;
+        }
+        if (keysToSearch.completion.includes(lowerKey) && completion === undefined) {
+          completion = val;
+        }
       }
     }
 
@@ -37,14 +40,18 @@ export function extractScoreCommentCompletion(payload: any) {
       if (obj[key] && typeof obj[key] === 'object') {
         for (const subKey in obj[key]) {
           const lowerSubKey = subKey.toLowerCase();
-          if (keysToSearch.score.includes(lowerSubKey) && score === undefined) {
-            score = obj[key][subKey];
-          }
-          if (keysToSearch.comment.includes(lowerSubKey) && comment === undefined) {
-            comment = obj[key][subKey];
-          }
-          if (keysToSearch.completion.includes(lowerSubKey) && completion === undefined) {
-            completion = obj[key][subKey];
+          const subVal = obj[key][subKey];
+
+          if (subVal !== null && typeof subVal !== 'object') {
+            if (keysToSearch.score.includes(lowerSubKey) && score === undefined) {
+              score = subVal;
+            }
+            if (keysToSearch.comment.includes(lowerSubKey) && comment === undefined) {
+              comment = subVal;
+            }
+            if (keysToSearch.completion.includes(lowerSubKey) && completion === undefined) {
+              completion = subVal;
+            }
           }
         }
       }

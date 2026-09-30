@@ -311,6 +311,40 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceD
       io.emit('teacher-switched-lesson', data);
     });
 
+    // 教师端随机抽问/点名广播
+    socket.on(
+      'teacher-pick-student',
+      (data: { studentId: string; studentName: string; lessonId?: string; classId?: string }) => {
+        if (session && !isTeacherOrAdmin) {
+          console.warn(`[Presence Security] Unauthorized teacher-pick-student by ${session?.userId}`);
+          return socket.emit('error', { message: 'Forbidden: Only teachers or administrators can pick students' });
+        }
+        if (!data?.studentId) return;
+        console.log(`[Presence] Teacher picked student ${data.studentName} (${data.studentId}) for lesson ${data.lessonId}`);
+        const payload = {
+          studentId: data.studentId,
+          studentName: data.studentName,
+          lessonId: data.lessonId,
+          classId: data.classId,
+          pickedTime: Date.now(),
+        };
+        if (data.lessonId) {
+          io.to(data.lessonId).emit('student-picked', payload);
+        }
+        if (data.classId) {
+          io.to(classRoom(data.classId)).emit('student-picked', payload);
+        }
+        io.emit('student-picked', payload);
+      },
+    );
+
+    // 学生端确认答到回传广播
+    socket.on('student-acknowledge-pick', (data: { studentId: string; lessonId?: string }) => {
+      if (!data?.studentId) return;
+      console.log(`[Presence] Student acknowledged pick: ${data.studentId}`);
+      io.emit('student-acknowledged', { studentId: data.studentId, lessonId: data.lessonId });
+    });
+
     // 教师端课堂控制信令总线（透传至课节房间内所有远程学生端）
     socket.on('teacher-sync-message', (data: { lessonId: string; message: any }) => {
       if (session && !isTeacherOrAdmin) return;

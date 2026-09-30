@@ -3,9 +3,10 @@ import { expect } from 'vitest';
 import path from 'path';
 
 const nodeUint8Array = new TextEncoder().encode('').constructor;
-global.Uint8Array = nodeUint8Array as any;
+global.Uint8Array = nodeUint8Array as unknown as typeof Uint8Array;
 global.TextEncoder = TextEncoder;
-global.TextDecoder = TextDecoder as any;
+global.TextDecoder = TextDecoder as unknown as typeof TextDecoder;
+process.env.OPENLEARN_MAX_ZIP_SIZE = process.env.OPENLEARN_MAX_ZIP_SIZE || String(5 * 1024 * 1024);
 
 /**
  * 服务端集成测试的 Schema 兜底。

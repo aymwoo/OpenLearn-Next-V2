@@ -183,6 +183,15 @@ export class ClassroomSyncChannel {
 
   public broadcastPickStudent(studentId: string, studentName: string): void {
     this.postMessage({ type: 'TEACHER_PICK_STUDENT', payload: { studentId, studentName } });
+    const socket = getOptionalSocket();
+    if (socket) {
+      socket.emit('teacher-pick-student', {
+        studentId,
+        studentName,
+        lessonId: this.lessonId,
+        classId: this.classId,
+      });
+    }
   }
 
   public broadcastSyncTimer(timeRemaining: number, isRunning: boolean): void {
@@ -220,6 +229,10 @@ export class ClassroomSyncChannel {
 
   public acknowledgePick(studentId: string): void {
     this.postMessage({ type: 'STUDENT_ACKNOWLEDGE_PICK', payload: { studentId } });
+    const socket = getOptionalSocket();
+    if (socket) {
+      socket.emit('student-acknowledge-pick', { studentId, lessonId: this.lessonId });
+    }
   }
 
   public sendHeartbeat(studentId: string): void {

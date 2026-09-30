@@ -158,4 +158,30 @@ describe('ClassroomSyncChannel', () => {
 
     channel.destroy();
   });
+
+  it('emits socket events on broadcastPickStudent and acknowledgePick when socket is available', async () => {
+    const { setSocketInstance } = await import('../socket-service');
+    const mockEmit = vi.fn();
+    const mockSocket: any = { emit: mockEmit, on: vi.fn(), off: vi.fn() };
+    setSocketInstance(mockSocket);
+
+    const channel = new ClassroomSyncChannel('test_sync', 'L1', 'C1');
+    channel.broadcastPickStudent('s101', 'Alice');
+    expect(mockEmit).toHaveBeenCalledWith('teacher-pick-student', {
+      studentId: 's101',
+      studentName: 'Alice',
+      lessonId: 'L1',
+      classId: 'C1',
+    });
+
+    channel.acknowledgePick('s101');
+    expect(mockEmit).toHaveBeenCalledWith('student-acknowledge-pick', {
+      studentId: 's101',
+      lessonId: 'L1',
+    });
+
+    channel.destroy();
+    setSocketInstance(null as any);
+  });
 });
+

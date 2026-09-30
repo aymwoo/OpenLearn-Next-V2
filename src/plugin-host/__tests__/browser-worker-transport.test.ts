@@ -119,9 +119,10 @@ describe('BrowserWorkerTransport', () => {
       expect(handler2).toHaveBeenCalledTimes(1);
     });
 
-    it('does not call handler when no handler is registered', () => {
-      mockWorker.simulateMessage({ type: 'activated' });
-      // Should not throw
+    it('does not throw when no handler is registered upon message arrival', () => {
+      expect(() => {
+        mockWorker.simulateMessage({ type: 'activated' });
+      }).not.toThrow();
     });
   });
 

@@ -39,16 +39,26 @@ describe('useWhiteboardEvents hook', () => {
     expect(getByTestId('probe-item-b')).toBeTruthy();
   });
 
-  it('replays existing matching events on mount', () => {
+  it('replays existing matching events on mount when replay is enabled', () => {
     whiteboardEventSlot.ingest({
       source: 'manual',
       type: 'y',
       payload: { value: 'pre' },
     });
-    const { getByTestId } = render(<HookProbe filter={{ types: ['y'] }} />);
-    // 初始同步 query 已有事件，replay=0 不会重放历史，但 query 应该拿到
-    // 实际实现：replay>0 才查历史；replay=0 只显示订阅后的新事件
-    // 这里改为断言 replay 行为
+    function MountReplayProbe() {
+      const events = useWhiteboardEvents({ types: ['y'] }, { replay: 1, maxItems: 10 });
+      return (
+        <ul data-testid="mount-probe">
+          {events.map((e) => (
+            <li key={e.id} data-testid={`mount-item-${e.payload.value}`}>
+              {String(e.payload.value)}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    const { getByTestId } = render(<MountReplayProbe />);
+    expect(getByTestId('mount-item-pre')).toBeTruthy();
   });
 
   it('replay option pulls historical events', async () => {
@@ -97,15 +107,29 @@ describe('useWhiteboardEvents hook', () => {
     expect(getByTestId('count').textContent).toBe('3');
   });
 
-  it('handles unsubscribe on unmount', () => {
-    const handler = vi.fn();
+  it('handles unsubscribe on unmount without throwing and cleans up subscription', () => {
+    let receivedEventsCount = 0;
     function Probe() {
-      useWhiteboardEvents({ types: ['um'] }, { replay: 0 });
+      const events = useWhiteboardEvents({ types: ['um'] }, { replay: 0 });
+      receivedEventsCount = events.length;
       return null;
     }
     const { unmount } = render(<Probe />);
+    expect(receivedEventsCount).toBe(0);
+
+    act(() => {
+      whiteboardEventSlot.ingest({ source: 'manual', type: 'um', payload: { val: 1 } });
+    });
+    expect(receivedEventsCount).toBe(1);
+
     unmount();
-    whiteboardEventSlot.ingest({ source: 'manual', type: 'um', payload: {} });
-    // handler 是 hook 内部的，无法直接断言；改为断言不抛错
+
+    expect(() => {
+      act(() => {
+        whiteboardEventSlot.ingest({ source: 'manual', type: 'um', payload: { val: 2 } });
+      });
+    }).not.toThrow();
+    // After unmount, the unmounted component's state is not updated
+    expect(receivedEventsCount).toBe(1);
   });
 });

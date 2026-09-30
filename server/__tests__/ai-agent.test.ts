@@ -132,8 +132,3 @@ describe('AI-agent pure helpers', () => {
  * characterization test of the pure helpers. They are preserved verbatim in
  * server/ai-agent.ts and still invoked by the server via ServerContext.
  */
-describe.skip('AI-agent network helpers (require live AI providers)', () => {
-  it('executeAgentToolCall / runGeminiAgentChat / runOpenAIAgentChat are skipped', () => {
-    // See comment above.
-  });
-});

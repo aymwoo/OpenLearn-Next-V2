@@ -81,6 +81,14 @@ import {
   type DropZoneActionType,
   type StackDirection,
 } from './utils/auto-tiling';
+import {
+  belongsToPage,
+  filterCurrentPageElements,
+  createPageItem,
+  renamePageItem,
+  duplicatePageItem,
+  movePageItem,
+} from './utils/pagination-utils';
 import { useWhiteboardViewStore } from '../../store/whiteboardViewStore';
 import { usePluginHostStore } from '../../plugin-host/plugin-host-store';
 import { ExtensionPointRenderer } from '../../plugin-host/extension-point-renderer';
@@ -479,34 +487,15 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     }, [pages]);
 
     const belongsToCurrentPage = useCallback(
-      (el: WhiteboardElement): boolean => {
-        if (el.type === 'page_meta') return false;
-        try {
-          const data = JSON.parse(el.data);
-          const elPage = data.page ?? 0;
-          const currentObj = pages[currentPage];
-          return data.pageId && currentObj?.id ? data.pageId === currentObj.id : elPage === currentPage;
-        } catch (e) {
-          return currentPage === 0;
-        }
-      },
+      (el: WhiteboardElement): boolean => belongsToPage(el, currentPage, pages),
       [pages, currentPage],
     );
 
     /** 当前页 + 当前环节下应渲染的元素（画布渲染用） */
     const getCurrentPageElements = useCallback(
       (): WhiteboardElement[] =>
-        safeElements.filter((el) => {
-          if (!belongsToCurrentPage(el)) return false;
-          try {
-            const data = JSON.parse(el.data);
-            if (activeSegmentId && data.segmentId && data.segmentId !== activeSegmentId) return false;
-            return true;
-          } catch (e) {
-            return currentPage === 0;
-          }
-        }),
-      [safeElements, belongsToCurrentPage, activeSegmentId, currentPage],
+        filterCurrentPageElements(safeElements, currentPage, pages, activeSegmentId) as WhiteboardElement[],
+      [safeElements, currentPage, pages, activeSegmentId],
     );
 
     // 会话保存：教师切页时防抖回写（课堂会话恢复用）。学生端不发（视图跟随广播）。
@@ -569,21 +558,15 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     };
 
     const handleAddPage = (customTitle?: string) => {
-      const nextIdx = pages.length;
-      const newPage: WhiteboardPageItem = {
-        id: `page-${Date.now()}-${nextIdx}`,
-        title: customTitle || `P${nextIdx + 1} · 备课页面`,
-        order: nextIdx,
-      };
-      const nextPages = [...pages, newPage];
-      setPages(nextPages);
-      setCurrentPage(nextIdx);
-      savePagesConfig(nextPages);
+      const { newPages, newIndex } = createPageItem(pages, customTitle);
+      setPages(newPages);
+      setCurrentPage(newIndex);
+      savePagesConfig(newPages);
       if (socketRef.current) {
         socketRef.current.emit('whiteboard-update', {
           roomId: lessonId,
           type: 'page-change',
-          payload: { page: nextIdx },
+          payload: { page: newIndex },
         });
       }
     };
@@ -593,7 +576,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
         setEditingPageIdx(null);
         return;
       }
-      const nextPages = pages.map((p, i) => (i === idx ? { ...p, title: newTitle.trim() } : p));
+      const nextPages = renamePageItem(pages, idx, newTitle);
       setPages(nextPages);
       savePagesConfig(nextPages);
       setEditingPageIdx(null);
@@ -603,21 +586,13 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     const handleDuplicatePage = (idx: number) => {
       const targetPage = pages[idx];
       if (!targetPage) return;
-      const newIdx = idx + 1;
-      const newPage: WhiteboardPageItem = {
-        id: `page-${Date.now()}-${newIdx}`,
-        title: `${targetPage.title} (副本)`,
-        order: newIdx,
-      };
+      const dupResult = duplicatePageItem(pages, idx);
+      if (!dupResult) return;
+      const { newPages, newIndex, newPage } = dupResult;
 
-      const nextPages = [
-        ...pages.slice(0, newIdx),
-        newPage,
-        ...pages.slice(newIdx).map((p) => ({ ...p, order: p.order + 1 })),
-      ];
-      setPages(nextPages);
-      setCurrentPage(newIdx);
-      savePagesConfig(nextPages);
+      setPages(newPages);
+      setCurrentPage(newIndex);
+      savePagesConfig(newPages);
 
       const pageElements = safeElements.filter(
         (el) =>
@@ -638,7 +613,7 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
           if (onElementAdd) {
             onElementAdd(el.type, {
               ...d,
-              page: newIdx,
+              page: newIndex,
               pageId: newPage.id,
               x: (d.x ?? 100) + 20,
               y: (d.y ?? 100) + 20,
@@ -694,25 +669,17 @@ export const InteractiveWhiteboard = forwardRef<WhiteboardHandle, InteractiveWhi
     };
 
     const handleMovePage = (idx: number, direction: 'left' | 'right') => {
-      const targetIdx = direction === 'left' ? idx - 1 : idx + 1;
-      if (targetIdx < 0 || targetIdx >= pages.length) return;
-
-      const nextPages = [...pages];
-      const item = nextPages[idx];
-      nextPages[idx] = nextPages[targetIdx];
-      nextPages[targetIdx] = item;
-
-      nextPages.forEach((p, i) => {
-        p.order = i;
-      });
-      setPages(nextPages);
+      const moveResult = movePageItem(pages, idx, direction);
+      if (!moveResult) return;
+      const { newPages, targetIndex } = moveResult;
+      setPages(newPages);
 
       if (currentPage === idx) {
-        setCurrentPage(targetIdx);
-      } else if (currentPage === targetIdx) {
+        setCurrentPage(targetIndex);
+      } else if (currentPage === targetIndex) {
         setCurrentPage(idx);
       }
-      savePagesConfig(nextPages);
+      savePagesConfig(newPages);
     };
     // currentDrawing holds the shape currently being drawn, so elements is source of truth for others.
     const [currentDrawing, setCurrentDrawing] = useState<any>(null);

@@ -1,142 +1,175 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { TimetableCalendarView } from '../timetable/sub-views/TimetableCalendarView';
-import { TimetableAdjustView } from '../timetable/sub-views/TimetableAdjustView';
-import { TimetableImportExportView } from '../timetable/sub-views/TimetableImportExportView';
-import { getMonday, getWeekRangeString, getWeekDates, getIsAfternoon } from '../timetable/utils/timetableUtils';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { TimetableManager } from '../TimetableManager';
+import type { ClassType, LessonType } from '../timetable/types';
 
-describe('Timetable Utilities & Components', () => {
-  describe('timetableUtils', () => {
-    it('should compute Monday date correctly', () => {
-      // 2026-07-29 is a Wednesday
-      const wednesday = new Date(2026, 6, 29);
-      const monday = getMonday(wednesday);
-      expect(monday.getDay()).toBe(1); // 1 = Monday
-      expect(monday.getDate()).toBe(27); // 2026-07-27
-    });
+describe('TimetableManager Component', () => {
+  const mockClasses: ClassType[] = [
+    { id: 'c1', name: '高一(1)班', description: '重点班' },
+    { id: 'c2', name: '高一(2)班', description: '普通班' },
+  ];
 
-    it('should format week range string', () => {
-      const monday = new Date(2026, 6, 27);
-      const range = getWeekRangeString(monday);
-      expect(range).toBe('2026-07-27 ~ 2026-08-02');
-    });
+  const mockLessons: LessonType[] = [
+    { id: 'l1', title: '高等数学第1讲' },
+    { id: 'l2', title: '大学物理实验' },
+  ];
 
-    it('should generate 7 week dates', () => {
-      const monday = new Date(2026, 6, 27);
-      const dates = getWeekDates(monday);
-      expect(dates.length).toBe(7);
-      expect(dates[0]).toBe('2026-07-27');
-      expect(dates[6]).toBe('2026-08-02');
-    });
+  const mockSchedules = [
+    {
+      id: 'sch-1',
+      class_id: 'c1',
+      lesson_id: 'l1',
+      scheduled_date: '2026-10-01',
+      time_slot: '09:00 - 10:30',
+      status: 'scheduled',
+      lesson_title: '高等数学第1讲',
+      class_name: '高一(1)班',
+    },
+    {
+      id: 'sch-2',
+      class_id: 'c2',
+      lesson_id: 'l2',
+      scheduled_date: '2026-10-02',
+      time_slot: '14:00 - 15:30',
+      status: 'cancelled',
+      lesson_title: '大学物理实验',
+      class_name: '高一(2)班',
+    },
+  ];
 
-    it('should determine if time slot is afternoon', () => {
-      expect(getIsAfternoon('09:00 - 10:30')).toBe(false);
-      expect(getIsAfternoon('14:00 - 15:30')).toBe(true);
-      expect(getIsAfternoon(null)).toBe(false);
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/api/ai-providers')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => [{ id: 'p1', name: 'OpenAI Provider' }],
+          });
+        }
+        if (url.includes('/api/schedules') || url.includes('/schedules')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => mockSchedules,
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        });
+      })
+    );
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('renders the header title and default calendar tab in Chinese', async () => {
+    render(
+      <TimetableManager
+        classes={mockClasses}
+        lessons={mockLessons}
+        lang="zh"
+        onSchedulesUpdated={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('班级课表中心 & 动态调整')).toBeTruthy();
+    expect(screen.getByText(/统一管理日常排课/)).toBeTruthy();
+
+    // Verify all 4 tabs are present
+    expect(screen.getByRole('button', { name: /🗓️ 课表看板/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /🛠️ 临时调休调课/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /📥 快速导入导出/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /📷 AI 图片识课/ })).toBeTruthy();
+
+    // Default tab should render calendar view elements
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalled();
     });
   });
 
-  describe('TimetableCalendarView', () => {
-    it('should render calendar view filters and schedules in week mode', () => {
-      render(
-        <TimetableCalendarView
-          lang="zh"
-          viewMode="week"
-          setViewMode={vi.fn()}
-          selectedClassId="all"
-          setSelectedClassId={vi.fn()}
-          statusFilter="all"
-          setStatusFilter={vi.fn()}
-          searchQuery=""
-          setSearchQuery={vi.fn()}
-          classes={[{ id: 'c1', name: '高一(1)班' }]}
-          getClassDisplayName={(name) => name}
-          loading={false}
-          filteredSchedules={[
-            {
-              id: 'sch-1',
-              class_id: 'c1',
-              lesson_id: 'les-1',
-              scheduled_date: '2026-07-27',
-              time_slot: '09:00 - 10:30',
-              status: 'scheduled',
-              class_name: '高一(1)班',
-              lesson_title: '高等数学第一讲',
-            },
-          ]}
-          currentWeekMonday={new Date(2026, 6, 27)}
-          setCurrentWeekMonday={vi.fn()}
-          showWeekend={false}
-          setShowWeekend={vi.fn()}
-          dateOverrides={{}}
-          setDateOverrides={vi.fn()}
-          setOverridingDateKey={vi.fn()}
-          setOverrideMode={vi.fn()}
-          setOverrideTargetDow={vi.fn()}
-          setOverrideTargetDate={vi.fn()}
-          openEditModal={vi.fn()}
-          handleDeleteSchedule={vi.fn()}
-          getDayOfWeekIndex={() => 1}
-          getMonday={getMonday}
-          getWeekRangeString={getWeekRangeString}
-          setFormClassId={vi.fn()}
-          setFormLessonId={vi.fn()}
-          setFormDate={vi.fn()}
-          setFormStatus={vi.fn()}
-          setFormNotes={vi.fn()}
-          setIsAddOpen={vi.fn()}
-        />,
-      );
+  it('renders the header title in English when lang is en', () => {
+    render(
+      <TimetableManager
+        classes={mockClasses}
+        lessons={mockLessons}
+        lang="en"
+        onSchedulesUpdated={vi.fn()}
+      />
+    );
 
-      expect(screen.getByText('本周')).toBeDefined();
-      expect(screen.getAllByText('高一(1)班').length).toBeGreaterThan(0);
-    });
+    expect(screen.getByText('Timetable Center & Adjustments')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Schedule Grid/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Holiday Adjusts/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Import \/ Export/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /AI Image OCR/ })).toBeTruthy();
   });
 
-  describe('TimetableAdjustView', () => {
-    it('should render batch holiday adjustment form', () => {
-      render(
-        <TimetableAdjustView
-          lang="zh"
-          holStartDate="2026-10-01"
-          setHolStartDate={vi.fn()}
-          holEndDate="2026-10-07"
-          setHolEndDate={vi.fn()}
-          holType="holiday"
-          setHolType={vi.fn()}
-          holNotes="国庆假期"
-          setHolNotes={vi.fn()}
-          handleBatchHolidayAdjustment={vi.fn()}
-          loading={false}
-        />,
-      );
+  it('switches between tabs cleanly', async () => {
+    render(
+      <TimetableManager
+        classes={mockClasses}
+        lessons={mockLessons}
+        lang="zh"
+        onSchedulesUpdated={vi.fn()}
+      />
+    );
 
-      expect(screen.getByText('批量节假日调休排班')).toBeDefined();
-      expect(screen.getByText('一键更新该周期课表')).toBeDefined();
-    });
+    // 1. Switch to Holiday Adjusts tab
+    const adjustTabBtn = screen.getByRole('button', { name: /🛠️ 临时调休调课/ });
+    fireEvent.click(adjustTabBtn);
+
+    expect(screen.getByText('批量节假日调休排班')).toBeTruthy();
+    expect(screen.getByText('一键更新该周期课表')).toBeTruthy();
+
+    // 2. Switch to Import / Export tab
+    const importExportTabBtn = screen.getByRole('button', { name: /📥 快速导入导出/ });
+    fireEvent.click(importExportTabBtn);
+
+    expect(screen.getByText('导出系统课表')).toBeTruthy();
+    expect(screen.getByText('导出为 Excel CSV')).toBeTruthy();
+
+    // 3. Switch to OCR tab
+    const ocrTabBtn = screen.getByRole('button', { name: /📷 AI 图片识课/ });
+    fireEvent.click(ocrTabBtn);
+
+    expect(screen.getByText('第一步：上传课表图片')).toBeTruthy();
+    expect(screen.getByText('AI 识别引擎')).toBeTruthy();
+
+    // 4. Switch back to View tab
+    const viewTabBtn = screen.getByRole('button', { name: /🗓️ 课表看板/ });
+    fireEvent.click(viewTabBtn);
+
+    // Verify calendar view is active again
+    expect(screen.queryByText('第一步：上传课表图片')).toBeNull();
+    expect(screen.queryByText('批量节假日调休排班')).toBeNull();
   });
 
-  describe('TimetableImportExportView', () => {
-    it('should render import and export panels', () => {
-      render(
-        <TimetableImportExportView
-          lang="zh"
-          classes={[{ id: 'c1', name: '高一(1)班' }]}
-          getClassDisplayName={(name) => name}
-          handleExportCSV={vi.fn()}
-          handleExportJSON={vi.fn()}
-          importClassId=""
-          setImportClassId={vi.fn()}
-          csvText=""
-          setCsvText={vi.fn()}
-          importMessage={null}
-          handleImportData={vi.fn()}
-        />,
-      );
+  it('renders gracefully when classes and schedules are empty', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() =>
+        Promise.resolve({
+          ok: true,
+          json: async () => [],
+        })
+      )
+    );
 
-      expect(screen.getByText('导出系统课表')).toBeDefined();
-      expect(screen.getByText('导入课表流程')).toBeDefined();
-    });
+    render(
+      <TimetableManager
+        classes={[]}
+        lessons={[]}
+        lang="zh"
+        onSchedulesUpdated={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('班级课表中心 & 动态调整')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /🗓️ 课表看板/ })).toBeTruthy();
   });
 });

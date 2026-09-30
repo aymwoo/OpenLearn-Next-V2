@@ -28,5 +28,6 @@
 ## 3. 模块演进机制
 
 - 内核子系统（`packages/core/*`）与插件（`packages/plugins/*`、`v2_plugins/*`）分层演进：内核 API 变更须同步 `@openlearn/plugin-sdk` 类型（版本随平台发布）；
+- `v2_plugins/` 为独立外部插件集合（作为 submodule / 独立仓库管理），其单元测试由各插件目录独立执行；平台主仓库通过 `@openlearn/plugin-test-kit` 与探针插件验证插件接入标准与内核接口规范；
 - 文档↔代码一致性由 `audit-tools/` 三脚本 + CI `docs-drift-audit` job 守护（见 [docs-drift-audit](../developer-guide/docs-drift-audit)），提交钩子自动运行；
 - 破坏性变更记录于 `CHANGELOG.md`（平台）与 `packages/plugin-sdk/CHANGELOG.md`（SDK），迁移路径见 [version-migration](../migration/version-migration)。

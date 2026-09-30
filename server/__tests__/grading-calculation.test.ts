@@ -21,6 +21,9 @@ describe('学期成绩结算计算漏洞回归测试（未交作业/缺考 0 分
 
   const studentCharlieId = 'stu-grade-charlie'; // 在空班级中
 
+  const classAttendanceId = 'cls-grade-attendance';
+  const scheduleId = 'sch-grade-att-01';
+
   const cookie = (token: string) => ({ Cookie: `edu_os_token=${token}` });
 
   beforeAll(async () => {
@@ -101,7 +104,37 @@ describe('学期成绩结算计算漏洞回归测试（未交作业/缺考 0 分
     );
     // 注意：Bob 不插入 exam_scores（缺考）
 
-    // 5. 启动测试 Express 服务并挂载 grading 路由
+    // 5. 考勤测试班级与排课
+    db.prepare('INSERT OR REPLACE INTO classes (id, name, created_at) VALUES (?, ?, ?)').run(
+      classAttendanceId,
+      '考勤测试班级',
+      now,
+    );
+
+    const attStudents = [
+      { id: 'stu-att-1', num: 'NUM_ATT_1', name: 'Att1', status: 'present' },
+      { id: 'stu-att-2', num: 'NUM_ATT_2', name: 'Att2', status: 'present' },
+      { id: 'stu-att-3', num: 'NUM_ATT_3', name: 'Att3', status: 'late' },
+      { id: 'stu-att-4', num: 'NUM_ATT_4', name: 'Att4', status: 'absent' },
+    ];
+
+    for (const s of attStudents) {
+      insertStudent.run(s.id, s.num, s.name, now);
+      enroll.run(classAttendanceId, s.id, now);
+    }
+
+    const todayDate = new Date().toISOString().split('T')[0];
+    db.prepare(
+      'INSERT OR REPLACE INTO schedules (id, class_id, lesson_id, scheduled_date, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(scheduleId, classAttendanceId, 'lesson-placeholder', todayDate, now);
+
+    for (const s of attStudents) {
+      db.prepare(
+        'INSERT OR REPLACE INTO attendance (schedule_id, student_id, status, recorded_at) VALUES (?, ?, ?, ?)',
+      ).run(scheduleId, s.id, s.status, now);
+    }
+
+    // 6. 启动测试 Express 服务并挂载 grading 路由
     app = express();
     app.use(express.json());
     const ctx: any = { app, io: { emit: () => undefined } };
@@ -124,9 +157,12 @@ describe('学期成绩结算计算漏洞回归测试（未交作业/缺考 0 分
     db.prepare('DELETE FROM exam_scores WHERE exam_id = ?').run('exam-grade-01');
     db.prepare('DELETE FROM exams WHERE class_id = ?').run(classWithWorkId);
 
-    db.prepare('DELETE FROM class_students WHERE class_id IN (?, ?)').run(classWithWorkId, classEmptyId);
-    db.prepare('DELETE FROM students WHERE id IN (?, ?, ?)').run(studentAliceId, studentBobId, studentCharlieId);
-    db.prepare('DELETE FROM classes WHERE id IN (?, ?)').run(classWithWorkId, classEmptyId);
+    db.prepare('DELETE FROM attendance WHERE schedule_id = ?').run(scheduleId);
+    db.prepare('DELETE FROM schedules WHERE id = ?').run(scheduleId);
+    db.prepare('DELETE FROM class_students WHERE class_id IN (?, ?, ?)').run(classWithWorkId, classEmptyId, classAttendanceId);
+    db.prepare('DELETE FROM students WHERE id IN (?, ?, ?) OR id LIKE ?').run(studentAliceId, studentBobId, studentCharlieId, 'stu-att-%');
+    db.prepare('DELETE FROM classes WHERE id IN (?, ?, ?)').run(classWithWorkId, classEmptyId, classAttendanceId);
+    db.prepare('DELETE FROM class_grade_weights WHERE class_id IN (?, ?)').run(classWithWorkId, classEmptyId);
   });
 
   it('班级有已发布作业和考试时：未提交作业的学生应计 0 分，缺考学生应计 0 分（修复前误判为 100 分）', async () => {
@@ -191,5 +227,93 @@ describe('学期成绩结算计算漏洞回归测试（未交作业/缺考 0 分
     expect(charlie!.assignmentScore).toBe(100);
     expect(charlie!.examScore).toBe(100);
     expect(charlie!.totalScore).toBe(100);
+  });
+
+  it('出勤率计算：出勤率必须将「迟到（late）」学生纳入出勤统计分子（MUT-N2 回归锁）', async () => {
+    const res = await fetch(`${baseUrl}/api/classes/${classAttendanceId}/attendance-summary`, {
+      headers: cookie(teacherToken),
+    });
+    expect(res.status).toBe(200);
+
+    const data = (await res.json()) as Array<{
+      id: string;
+      present: number;
+      late: number;
+      absent: number;
+      total: number;
+      attendanceRate: number;
+    }>;
+
+    const item = data.find((d) => d.id === scheduleId);
+    expect(item).toBeDefined();
+    expect(item!.present).toBe(2);
+    expect(item!.late).toBe(1);
+    expect(item!.absent).toBe(1);
+    expect(item!.total).toBe(4);
+    // 关键断言（MUT-N2）：出勤率 = Math.round((2 + 1) / 4 * 100) = 75%
+    // 若漏算 late，则为 2 / 4 = 50%，测试变红！
+    expect(item!.attendanceRate).toBe(75);
+  });
+
+  describe('成绩权重设置校验（MUT-N3 回归锁）', () => {
+    it('权重和不等于 1.0 或 100% 时必须拒绝并返回 400', async () => {
+      // 0-1 尺度：和为 0.8 时拒绝
+      const res1 = await fetch(`${baseUrl}/api/classes/${classWithWorkId}/grade-weights`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+        body: JSON.stringify({
+          attendance_weight: 0.1,
+          progress_weight: 0.2,
+          assignment_weight: 0.3,
+          exam_weight: 0.2,
+        }),
+      });
+      expect(res1.status).toBe(400);
+      const data1 = (await res1.json()) as { error: string };
+      expect(data1.error).toBe('Weights sum must equal 1.0 or 100%');
+
+      // 百分比尺度：和为 120% 时拒绝
+      const res2 = await fetch(`${baseUrl}/api/classes/${classWithWorkId}/grade-weights`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+        body: JSON.stringify({
+          attendance_weight: 30,
+          progress_weight: 30,
+          assignment_weight: 30,
+          exam_weight: 30,
+        }),
+      });
+      expect(res2.status).toBe(400);
+      const data2 = (await res2.json()) as { error: string };
+      expect(data2.error).toBe('Weights sum must equal 1.0 or 100%');
+    });
+
+    it('权重和等于 1.0 或 100% 时必须成功保存并返回 200', async () => {
+      // 0-1 尺度
+      const res1 = await fetch(`${baseUrl}/api/classes/${classWithWorkId}/grade-weights`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+        body: JSON.stringify({
+          attendance_weight: 0.15,
+          progress_weight: 0.25,
+          assignment_weight: 0.35,
+          exam_weight: 0.25,
+        }),
+      });
+      expect(res1.status).toBe(200);
+
+      // 百分比尺度
+      const res2 = await fetch(`${baseUrl}/api/classes/${classWithWorkId}/grade-weights`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...cookie(teacherToken) },
+        body: JSON.stringify({
+          attendance_weight: 15,
+          progress_weight: 25,
+          assignment_weight: 35,
+          exam_weight: 25,
+        }),
+      });
+      expect(res2.status).toBe(200);
+    });
   });
 });

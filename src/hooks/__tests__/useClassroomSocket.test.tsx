@@ -250,4 +250,60 @@ describe('useClassroomSocket — 教师端最大化视图同步', () => {
     expect(options.fetchElements).toHaveBeenCalledWith('l1');
     expect(whiteboardViewStore.getState().remoteFullscreenElementId).toBeNull();
   });
+
+  describe('student-picked 随机抽问广播提示', () => {
+    it('着重提示被抽中的学生并弹出模态框', () => {
+      const setPickedAlertData = vi.fn();
+      const addToast = vi.fn();
+      const options = makeOptions({
+        activeRole: 'student',
+        activeStudentId: 'stu-1',
+        setPickedAlertData,
+        addToast,
+      });
+      renderHook(() => useClassroomSocket(options));
+
+      trigger('student-picked', {
+        studentId: 'stu-1',
+        studentName: 'Alice',
+        lessonId: 'l1',
+      });
+
+      expect(setPickedAlertData).toHaveBeenCalledWith({
+        studentId: 'stu-1',
+        studentName: 'Alice',
+      });
+      expect(addToast).toHaveBeenCalledWith(
+        '⚡️ 闪电抽问：老师抽中了你！',
+        expect.stringContaining('闪电警报！您已被老师在课程随机抽问中抽中'),
+        'warning',
+      );
+    });
+
+    it('向全班其他学生广播提示被抽中的学生姓名', () => {
+      const setPickedAlertData = vi.fn();
+      const addToast = vi.fn();
+      const options = makeOptions({
+        activeRole: 'student',
+        activeStudentId: 'stu-1',
+        setPickedAlertData,
+        addToast,
+      });
+      renderHook(() => useClassroomSocket(options));
+
+      trigger('student-picked', {
+        studentId: 'stu-2',
+        studentName: 'Bob',
+        lessonId: 'l1',
+      });
+
+      expect(setPickedAlertData).not.toHaveBeenCalled();
+      expect(addToast).toHaveBeenCalledWith(
+        '🎯 课堂随机抽问',
+        expect.stringContaining('老师在课堂中随机抽中了【Bob】同学回答问题！'),
+        'info',
+      );
+    });
+  });
 });
+

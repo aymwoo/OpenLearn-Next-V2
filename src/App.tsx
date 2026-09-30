@@ -120,6 +120,42 @@ export default function App() {
 
   const [isFollowingTeacher, setIsFollowingTeacher] = useState(true);
   const [pickedAlertData, setPickedAlertData] = useState<{ studentId: string; studentName: string } | null>(null);
+  const [pickedAnnouncement, setPickedAnnouncement] = useState<{ studentName: string; studentId: string } | null>(null);
+
+  // 全班随机抽问横幅自动消失（8秒后自动淡出）
+  useEffect(() => {
+    if (pickedAnnouncement) {
+      const timer = setTimeout(() => {
+        setPickedAnnouncement(null);
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [pickedAnnouncement]);
+
+  // 被抽中学生端着重播放提示音效（Web Audio API）
+  useEffect(() => {
+    if (pickedAlertData) {
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const now = ctx.currentTime;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(587.33, now); // D5
+          osc.frequency.exponentialRampToValueAtTime(880.0, now + 0.25); // A5
+          gain.gain.setValueAtTime(0.25, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.8);
+        }
+      } catch (_) {}
+    }
+  }, [pickedAlertData]);
+
   const liveClassSelectedClassId = useAppStore((s) => s.liveClassSelectedClassId);
   const setLiveClassSelectedClassId = useAppStore((s) => s.setLiveClassSelectedClassId);
   const liveClassIsActive = useAppStore((s) => s.liveClassIsActive);
@@ -1438,6 +1474,8 @@ export default function App() {
     fetchStudentDashboard,
     fetchStudents,
     fetchElements,
+    setPickedAlertData,
+    setPickedAnnouncement,
   });
 
   const downloadCSVTemplate = (type: 'class' | 'student') => {
@@ -1566,12 +1604,30 @@ export default function App() {
           break;
         }
         case 'TEACHER_PICK_STUDENT': {
-          if (
-            !activeStudentId ||
-            activeStudentId === msg.payload.studentId ||
-            liveStudentParam === msg.payload.studentId
-          ) {
+          const isCurrentStudent =
+            (activeStudentId && activeStudentId === msg.payload.studentId) ||
+            (liveStudentParam && liveStudentParam === msg.payload.studentId);
+
+          if (isCurrentStudent || (!activeStudentId && !liveStudentParam)) {
+            // 被抽中的学生（或独立视窗）：着重提示（模态框 + 强提醒Toast）
             setPickedAlertData(msg.payload);
+            addToast(
+              lang === 'zh' ? '⚡️ 闪电抽问：老师抽中了你！' : '⚡️ Classroom Pick Alert',
+              lang === 'zh'
+                ? '闪电警报！您已被老师在课程随机抽问中抽中！请立即集中注意力参与课堂回答。'
+                : 'Attention alert! You have been randomly picked by the teacher! Please pay immediate attention.',
+              'warning',
+            );
+          } else {
+            // 全班其他学生：向全班提示被抽中的学生（顶部横幅 + 提示Toast）
+            setPickedAnnouncement({ studentName: msg.payload.studentName, studentId: msg.payload.studentId });
+            addToast(
+              lang === 'zh' ? '🎯 课堂随机抽问' : '🎯 Classroom Random Pick',
+              lang === 'zh'
+                ? `老师在课堂中随机抽中了【${msg.payload.studentName}】同学回答问题！`
+                : `Teacher randomly selected [${msg.payload.studentName}] to answer!`,
+              'info',
+            );
           }
           break;
         }
@@ -2187,40 +2243,63 @@ export default function App() {
             setShowCoursewareHub={setShowCoursewareHub}
           />
 
-          {/* 课堂随机提问/点名互动应答模态框 (Student Picked Alert Modal) */}
+          {/* 全班随机抽问结果通知横幅 (Classroom Pick Announcement Banner) */}
+          {pickedAnnouncement && !pickedAlertData && (
+            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9990] animate-in slide-in-from-top-4 duration-300 pointer-events-auto max-w-lg w-auto">
+              <div className="flex items-center gap-3 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full shadow-xl shadow-amber-500/25 backdrop-blur-xs text-sm font-bold border border-amber-300/40">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white" />
+                </span>
+                <Sparkles size={16} className="text-amber-200 shrink-0" />
+                <span className="truncate">
+                  {lang === 'zh'
+                    ? `🎯 课堂抽问：老师随机抽中了【${pickedAnnouncement.studentName}】同学回答问题！`
+                    : `🎯 Classroom Pick: Teacher randomly selected [${pickedAnnouncement.studentName}] to answer!`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPickedAnnouncement(null)}
+                  className="ml-2 hover:bg-white/20 rounded-full p-1 transition-colors cursor-pointer text-white/80 hover:text-white shrink-0"
+                  aria-label="Close announcement"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 课堂随机提问/点名互动应答模态框 (Student Picked Alert Modal - 着重提示被抽中学生) */}
           {pickedAlertData && (
-            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-              <div className="bg-surface border-2 border-amber-500 rounded-2xl shadow-2xl p-6 max-w-md w-full text-center space-y-4 animate-in zoom-in-95 duration-300">
-                <div className="w-16 h-16 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto animate-bounce">
-                  <Sparkles size={36} />
+            <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="bg-surface border-4 border-amber-500 rounded-3xl shadow-2xl shadow-amber-500/40 ring-8 ring-amber-500/20 p-7 max-w-md w-full text-center space-y-5 animate-in zoom-in-95 duration-300">
+                <div className="relative w-20 h-20 mx-auto">
+                  <div className="absolute inset-0 bg-amber-500/30 rounded-full animate-ping" />
+                  <div className="relative w-20 h-20 bg-gradient-to-tr from-amber-500 to-orange-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-amber-500/40">
+                    <Sparkles size={40} className="animate-pulse" />
+                  </div>
                 </div>
-                <h3 className="text-xl font-black text-main">
-                  {lang === 'zh' ? '⚡️ 闪电点名：老师选中了你！' : '⚡️ Classroom Pick: Teacher Selected You!'}
-                </h3>
-                <p className="text-sm text-muted">
-                  {lang === 'zh' ? (
-                    <>
-                      老师在课堂点名中抽中了【
-                      <span className="font-bold text-amber-600 dark:text-amber-400">
-                        {pickedAlertData.studentName}
-                      </span>
-                      】，请立即集中注意力参与课堂互动回答！
-                    </>
-                  ) : (
-                    <>
-                      The teacher selected{' '}
-                      <span className="font-bold text-amber-600 dark:text-amber-400">
-                        {pickedAlertData.studentName}
-                      </span>{' '}
-                      to answer in class. Please respond now!
-                    </>
-                  )}
-                </p>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-black text-main tracking-tight">
+                    {lang === 'zh' ? '⚡️ 闪电抽问：老师抽中了你！' : '⚡️ Classroom Pick: Teacher Selected You!'}
+                  </h3>
+                  <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-black text-lg">
+                    <span>🎯</span>
+                    <span>{pickedAlertData.studentName}</span>
+                  </div>
+                  <p className="text-sm text-muted leading-relaxed">
+                    {lang === 'zh' ? (
+                      <>老师在课堂随机抽问中抽中了你，请立即集中注意力参与互动回答！</>
+                    ) : (
+                      <>The teacher selected you in the classroom random pick. Please respond and participate now!</>
+                    )}
+                  </p>
+                </div>
                 <div className="pt-2">
                   <button
                     type="button"
                     onClick={() => {
-                      const channel = new ClassroomSyncChannel();
+                      const channel = new ClassroomSyncChannel(undefined, selectedLesson, liveClassSelectedClassId);
                       channel.acknowledgePick(pickedAlertData.studentId);
                       channel.destroy();
                       setPickedAlertData(null);
@@ -2230,9 +2309,9 @@ export default function App() {
                         'success',
                       );
                     }}
-                    className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-black text-sm rounded-xl shadow-lg shadow-amber-500/30 transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                    className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-black text-base rounded-2xl shadow-xl shadow-amber-500/35 transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2"
                   >
-                    <CheckCircle2 size={18} />
+                    <CheckCircle2 size={20} />
                     <span>
                       {lang === 'zh' ? '🙋‍♂️ 我已准备好 / 确认答到 (反馈给老师)' : '🙋‍♂️ Ready / Acknowledge to Teacher'}
                     </span>

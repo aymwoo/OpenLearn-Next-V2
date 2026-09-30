@@ -116,11 +116,13 @@ export async function buildPoisonZip(variant: string): Promise<Buffer> {
     }
 
     case 'bomb': {
-      // 构造未压缩大小超过 300MB 的文件（301MB 稀疏 Buffer），启用 level 1 快速压缩
+      // 构造未压缩大小超过上限的文件（根据 OPENLEARN_MAX_ZIP_SIZE 动态计算，测试环境 5MB 上限 + 1MB 即可触发）
+      const maxLimit = Number(process.env.OPENLEARN_MAX_ZIP_SIZE) || 300 * 1024 * 1024;
+      const bombBytes = maxLimit + 1024 * 1024;
       const zip = new JSZip();
       zip.file('manifest.json', JSON.stringify(template, null, 2));
       zip.file('index.js', indexJs);
-      zip.file('padding.bin', Buffer.alloc(301 * 1024 * 1024, 0));
+      zip.file('padding.bin', Buffer.alloc(bombBytes, 0));
       return zip.generateAsync({
         type: 'nodebuffer',
         compression: 'DEFLATE',

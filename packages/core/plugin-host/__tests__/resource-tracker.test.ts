@@ -21,18 +21,15 @@ describe('ResourceTracker', () => {
 
   // ── Test 1: track 追加资源 ────────────────────────────────────────
 
-  it('track 追加资源 — 同一 pluginId 多次 track 后内部状态正确', () => {
+  it('track 追加资源 — 仅记录资源，未调用 disposeAll 前不触发 dispose', () => {
     const d1 = { dispose: vi.fn() };
     const d2 = { dispose: vi.fn() };
 
     tracker.track('plugin-a', d1);
     tracker.track('plugin-a', d2);
 
-    // 通过 spy 验证：一次性 disposeAll，断言 dispose 各被调一次
-    tracker.disposeAll('plugin-a');
-
-    expect(d1.dispose).toHaveBeenCalledTimes(1);
-    expect(d2.dispose).toHaveBeenCalledTimes(1);
+    expect(d1.dispose).not.toHaveBeenCalled();
+    expect(d2.dispose).not.toHaveBeenCalled();
   });
 
   // ── Test 2: disposeAll 调用所有已追踪资源的 dispose ─────────────────

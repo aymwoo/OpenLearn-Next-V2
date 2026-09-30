@@ -338,17 +338,62 @@ describe('通用考试课件得分采集 → 学习情况 / 学期成绩 全链�
     });
   });
 
-  // ── 通用课件的消息兼容性守护 ─────────────────────────────────
-  it('extractScoreCommentCompletion 能从 3 套通用课件 payload 中提取出分数', () => {
-    const samples = [
-      { type: 'simple-quiz payload', payload: { score: 60, completion: 1.0, comment: 'simple-quiz 提交' } },
-      { type: 'result-screen payload', payload: { score: 80, completion: 1.0, comment: '结算页自动提取得分' } },
-      { type: 'fill-answers payload', payload: { score: 40, completion: 0.4 } },
+  // ── 通用课件的消息兼容性守护（MUT-M3 回归锁） ───────────────────────
+  it('extractScoreCommentCompletion 能从扁平及嵌套课件 payload 中准确提取具体数值与评语', () => {
+    const flatSamples = [
+      {
+        type: 'simple-quiz payload',
+        payload: { score: 60, completion: 1.0, comment: 'simple-quiz 提交' },
+        expectedScore: 60,
+        expectedCompletion: 1.0,
+        expectedComment: 'simple-quiz 提交',
+      },
+      {
+        type: 'result-screen payload',
+        payload: { score: 80, completion: 1.0, comment: '结算页自动提取得分' },
+        expectedScore: 80,
+        expectedCompletion: 1.0,
+        expectedComment: '结算页自动提取得分',
+      },
+      {
+        type: 'fill-answers payload',
+        payload: { score: 40, completion: 0.4 },
+        expectedScore: 40,
+        expectedCompletion: 0.4,
+        expectedComment: undefined,
+      },
     ];
-    for (const { payload } of samples) {
+
+    for (const { type, payload, expectedScore, expectedCompletion, expectedComment } of flatSamples) {
       const extracted = extractScoreCommentCompletion(payload);
-      expect(extracted.score).toBeDefined();
-      expect(typeof extracted.score).toBe('number');
+      expect(extracted.score, `${type} 分数提取不匹配`).toBe(expectedScore);
+      expect(extracted.completion, `${type} 完成度提取不匹配`).toBe(expectedCompletion);
+      expect(extracted.comment, `${type} 评语提取不匹配`).toBe(expectedComment);
+    }
+
+    // 关键断言（MUT-M3）：嵌套对象形式的分数提取必须生效
+    const nestedSamples = [
+      {
+        type: 'nested-result payload',
+        payload: { result: { score: 95, comment: '做得好', completion: 1.0 } },
+        expectedScore: 95,
+        expectedCompletion: 1.0,
+        expectedComment: '做得好',
+      },
+      {
+        type: 'nested-data payload',
+        payload: { data: { points: 88, feedback: '优秀' }, status: { progress: 0.9 } },
+        expectedScore: 88,
+        expectedCompletion: 0.9,
+        expectedComment: '优秀',
+      },
+    ];
+
+    for (const { type, payload, expectedScore, expectedCompletion, expectedComment } of nestedSamples) {
+      const extracted = extractScoreCommentCompletion(payload);
+      expect(extracted.score, `${type} 嵌套分数提取失败`).toBe(expectedScore);
+      expect(extracted.completion, `${type} 嵌套完成度提取失败`).toBe(expectedCompletion);
+      expect(extracted.comment, `${type} 嵌套评语提取失败`).toBe(expectedComment);
     }
   });
 });

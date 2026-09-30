@@ -11,13 +11,6 @@ describe('Tailwind CSS v4 Scanning Checks', () => {
 
     const cssContent = fs.readFileSync(indexCssPath, 'utf-8');
 
-    const isImplemented = cssContent.includes('@source');
-    if (!isImplemented) {
-      // Wave 0 placeholder assertion
-      expect(cssContent).toBeDefined();
-      return;
-    }
-
     expect(cssContent).toContain('@source');
     expect(cssContent).toMatch(/@source\s+['"]\.\.\/packages\/mfe-\*\/\*\*\/\*\.\{ts,tsx\}['"]/);
   });

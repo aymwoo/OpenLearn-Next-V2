@@ -10,6 +10,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **课堂互动随机抽问：全网双轨广播信令打通与全班/被抽中学生强弱分层提示 (`presence.ts`, `classroom-sync-channel.ts`, `useClassroomSocket.ts`, `App.tsx`, `LiveClassroomView.tsx`)**：
+  - **信令全网双轨广播**：在教师端「学生专注力监控」控制台点击「抽问」时，由 `ClassroomSyncChannel` 结合 Socket.IO 向全网派发 `teacher-pick-student` 事件；服务端 `server/presence.ts` 增加角色鉴权与全局/房间分发（`student-picked`），打通跨机远程真实学生端。
+  - **被抽中学生端着重提示**：
+    - 弹出全屏强交互聚焦模态框，设计金黄呼吸光环（`border-4 border-amber-500 shadow-2xl ring-8 ring-amber-500/20`）、动态波纹图标与专属姓名高亮徽章；
+    - 触发 Web Audio API 专属上升和弦提示音（Chime），防止学生分心漏听；
+    - 弹出高优先级强提醒警告 Toast（“⚡️ 闪电抽问：老师抽中了你！请立即集中注意力参与课堂回答”）；
+    - 提供一键交互「🙋‍♂️ 我已准备好 / 确认答到 (反馈给老师)」按钮，点击后向教师中控台回发 `student-acknowledge-pick` 举手答到信号。
+  - **全班其他学生端同步提示**：
+    - 全班其他学生端同步弹出友好通知 Toast（“🎯 课堂随机抽问：老师在课堂中随机抽中了【XXX】同学回答问题！”）；
+    - 顶部居中渲染带呼吸光效的浮动播报胶囊横幅（8 秒自动淡出或手动关闭），让全班第一时间获知发言同学姓名。
+  - **回归与单元测试**：在 `server/__tests__/presence.test.ts`、`src/hooks/__tests__/useClassroomSocket.test.tsx`、`src/services/__tests__/classroom-sync-channel.test.ts` 补全 100% 覆盖的测试断言。
+
+- **测试数据清理加固与班级测试学生数据恢复 (`scripts/cleanup-test-data.mjs`, `e2e/classroom-interactive-flow.spec.ts`)**：
+  - **通配符误伤根因排查**：查明上一轮清理测试课程时清理脚本使用 SQLite `name LIKE '测试学生_%'`，由于 `_` 在 SQL LIKE 中代表单字符通配符，意外误删了系统示范班原有的正式测试学生 `测试学生A`~`测试学生E`（学号 `TEST001`~`TEST005`）。
+  - **无损数据恢复**：从系统插件元数据中提取原始快照，以原有 UUID、姓名与学号完整恢复 5 名学生，重新无缝连结其历史课堂点名、答题与加分记录；同时修复孤儿学生「小明」(`S001`) 的班级绑定，重新将 6 名学生完整关联至「人工智能与创意编程示范班」与「test」班。
+  - **防护加固**：清理脚本与 E2E 规格中的测试学生过滤模式升级为严格匹配时间戳格式 `STU_%-%`，彻底杜绝自动化清理误伤常规学生数据。
+
+- **测试套件与架构审计闭环修复 (`e2e/global-setup.ts`, `e2e/global-teardown.ts`, `playwright.config.ts`, `scripts/cleanup-test-data.mjs`, `src/components/__tests__/TimetableSubviews.test.tsx`, `src/features/whiteboard/utils/pagination-utils.ts`)**：
+  - **E2E 遗留测试课程与数据生命周期隔离**：增加 Playwright 全局 setup 与 teardown 生命周期钩子，在测试前后自动隔离并彻底清理测试课程与临时测试探针，避免 E2E 测试课程堆积污染用户课程列表。
+  - **测试审计报告遗留问题修复**：完成测试审计报告要求的治理项，修复白板分页计算工具、课表子视图拆分测试、AI 规划器、课件打分抽取与 Tailwind 扫描测试用例，保证测试套件完整健壮。
+
 - **测试体系审计：补上认证链路的负面测试，修复 4 个存活的变异**：
   - **审计方法**：覆盖率会骗人 —— 一段代码被执行到不代表它被验证过。因此向生产代码注入 11 个真实 Bug，观察测试套件能否发现。**结果是 8 个存活（变异存活率 73%）**，且存活名单里包含完整的认证绕过：把 `server/routes/roster.ts` 教师入口的 `verifyPassword(...)` 结果替换成硬编码 `{ valid: true }`（即任何密码都能登录），当时全量 2243 个测试**依然全绿**。
   - **根因一：登录负面路径完全无覆盖**。全仓库 `grep "Incorrect password|wrongPassword|badPassword" --include=*.test.ts` **零结果**。既有测试只覆盖成功路径 —— `class-passcode-auth.test.ts` 的 7 次 `/api/auth/login` 全部走**学生入口**；3 个 Playwright spec 一律用正确的 `admin/admin` 且只断言 `ok()` 为真。教师入口 `verifyPassword()` 的错误密码路径从未被验证。

@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import { LiveClassroomView } from '../LiveClassroomView';
+import { LiveClassroomView, type LiveClassroomViewProps } from '../LiveClassroomView';
 
 // Mock child components & dependencies
 vi.mock('../LazyWhiteboard', () => ({
@@ -32,7 +32,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
   let openMock: ReturnType<typeof vi.fn>;
   let broadcastPostMock: ReturnType<typeof vi.fn>;
 
-  const defaultProps = {
+  const defaultProps: LiveClassroomViewProps = {
     selectedLesson: 'lesson-101',
     setSelectedLesson: vi.fn(),
     lessons: [{ id: 'lesson-101', title: '物理探究实验课' }],
@@ -89,6 +89,14 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
 
     openMock = vi.fn();
     vi.stubGlobal('open', openMock);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({}),
+      }),
+    );
   });
 
   afterEach(() => {
@@ -98,7 +106,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
   });
 
   it('renders "学生视角预览 (独立Tab)" button instead of the old inline role toggle', () => {
-    render(<LiveClassroomView {...(defaultProps as any)} />);
+    render(<LiveClassroomView {...defaultProps} />);
 
     // Old role toggle buttons should not exist
     expect(screen.queryByText('👨‍🏫 教师模式')).toBeNull();
@@ -106,7 +114,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
 
     // New independent tab button should exist
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
-    expect(tabButton).toBeDefined();
+    expect(tabButton).toBeTruthy();
   });
 
   it('calls window.open with student_live URL params and "_blank" when "学生视角预览 (独立Tab)" is clicked', async () => {
@@ -116,7 +124,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     };
     openMock.mockReturnValue(fakeTab);
 
-    render(<LiveClassroomView {...(defaultProps as any)} />);
+    render(<LiveClassroomView {...defaultProps} />);
 
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     fireEvent.click(tabButton);
@@ -135,7 +143,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
 
     // Button should now show "已联动 (激活Tab)"
     await waitFor(() => {
-      expect(screen.getByText(/学生端已联动 \(激活Tab\)/)).toBeDefined();
+      expect(screen.getByText(/学生端已联动 \(激活Tab\)/)).toBeTruthy();
     });
 
     // Clicking it again should call .focus() instead of window.open
@@ -148,7 +156,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     openMock.mockReturnValue(null); // Simulated browser popup blocker
     const addToastMock = vi.fn();
 
-    render(<LiveClassroomView {...(defaultProps as any)} addToast={addToastMock} />);
+    render(<LiveClassroomView {...defaultProps} addToast={addToastMock} />);
 
     const tabButton = screen.getByRole('button', { name: /学生视角预览 \(独立Tab\)/ });
     fireEvent.click(tabButton);
@@ -169,9 +177,9 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       }),
     );
 
-    render(<LiveClassroomView {...(defaultProps as any)} />);
+    render(<LiveClassroomView {...defaultProps} />);
 
-    expect(await screen.findByTestId('pre-class-ready-view')).toBeDefined();
+    expect(await screen.findByTestId('pre-class-ready-view')).toBeTruthy();
   });
 
   it('renders sidebar whiteboard outline and teaching progress sections in teaching mode', async () => {
@@ -195,34 +203,34 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       }),
     );
 
-    render(<LiveClassroomView {...(defaultProps as any)} />);
+    render(<LiveClassroomView {...defaultProps} />);
 
     // Should display the sidebar outline section title
     await waitFor(() => {
-      expect(screen.getByText('白板页面大纲')).toBeDefined();
+      expect(screen.getByText('白板页面大纲')).toBeTruthy();
     });
 
     // Should display the teaching steps section title
-    expect(screen.getByText('教学环节进度表')).toBeDefined();
+    expect(screen.getByText('教学环节进度表')).toBeTruthy();
 
     // Should display timeline segment titles
-    expect(screen.getByText('导入环节')).toBeDefined();
-    expect(screen.getByText('探究环节')).toBeDefined();
+    expect(screen.getByText('导入环节')).toBeTruthy();
+    expect(screen.getByText('探究环节')).toBeTruthy();
 
     // Should display the add page button in the outline header
     const addPageButton = screen.getByTitle('新建白板页面');
-    expect(addPageButton).toBeDefined();
+    expect(addPageButton).toBeTruthy();
   });
 
   it('renders 在线课堂 and read-only class badge without class select dropdown', () => {
-    render(<LiveClassroomView {...(defaultProps as any)} />);
+    render(<LiveClassroomView {...defaultProps} />);
 
     // Topbar title is "🔴 在线课堂"
-    expect(screen.getByText('🔴 在线课堂')).toBeDefined();
+    expect(screen.getByText('🔴 在线课堂')).toBeTruthy();
     expect(screen.queryByText(/智能授课工作流控制中心/)).toBeNull();
 
     // Read-only class badge
-    expect(screen.getByText('高一1班')).toBeDefined();
+    expect(screen.getByText('高一1班')).toBeTruthy();
     // No class dropdown selector
     expect(screen.queryByText('-- 选择授课班级 --')).toBeNull();
   });
@@ -231,7 +239,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     const setSelectedLessonMock = vi.fn();
     const fetchElementsMock = vi.fn().mockResolvedValue(undefined);
 
-    const propsWithTwoLessons = {
+    const propsWithTwoLessons: LiveClassroomViewProps = {
       ...defaultProps,
       setSelectedLesson: setSelectedLessonMock,
       fetchElements: fetchElementsMock,
@@ -241,7 +249,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       ],
     };
 
-    render(<LiveClassroomView {...(propsWithTwoLessons as any)} />);
+    render(<LiveClassroomView {...propsWithTwoLessons} />);
 
     const selectEl = screen.getByRole('combobox');
     const switchBtn = screen.getByRole('button', { name: /切换/ });
@@ -258,7 +266,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     // Click switch button to open confirmation modal
     fireEvent.click(switchBtn);
 
-    expect(screen.getByText('确认切换上课课程？')).toBeDefined();
+    expect(screen.getByText('确认切换上课课程？')).toBeTruthy();
     expect(screen.getAllByText('第二节：机械能守恒').length).toBeGreaterThanOrEqual(2);
 
     // Click confirm button
@@ -291,7 +299,7 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
     );
 
     const setLiveClassFeedMock = vi.fn();
-    const props = {
+    const props: LiveClassroomViewProps = {
       ...defaultProps,
       liveClassFeed: [
         { id: '1', time: '10:00:01', type: 'info', message: '张小明 进入了课堂' },
@@ -300,40 +308,40 @@ describe('LiveClassroomView - Student Pop-up & Sync', () => {
       setLiveClassFeed: setLiveClassFeedMock,
     };
 
-    render(<LiveClassroomView {...(props as any)} />);
+    render(<LiveClassroomView {...props} />);
 
     // 1. Student focus console header & pick button
     await waitFor(() => {
-      expect(screen.getByText('学生专注力监控')).toBeDefined();
+      expect(screen.getByText('学生专注力监控')).toBeTruthy();
     });
-    expect(screen.getByRole('button', { name: /抽问/ })).toBeDefined();
-    expect(screen.getByText(/🔒 0\/2/)).toBeDefined();
+    expect(screen.getByRole('button', { name: /抽问/ })).toBeTruthy();
+    expect(screen.getByText(/🔒 0\/2/)).toBeTruthy();
 
     // Students rendered
-    expect(screen.getByText('张小明')).toBeDefined();
-    expect(screen.getByText('李华')).toBeDefined();
+    expect(screen.getByText('张小明')).toBeTruthy();
+    expect(screen.getByText('李华')).toBeTruthy();
 
     // 2. Live feed header, count & clear button
-    expect(screen.getByText('课堂互动反馈流')).toBeDefined();
+    expect(screen.getByText('课堂互动反馈流')).toBeTruthy();
     expect(screen.getAllByText('2').length).toBeGreaterThanOrEqual(1); // feed length badge
-    expect(screen.getByText('收起')).toBeDefined();
-    expect(screen.getByText('张小明 进入了课堂')).toBeDefined();
-    expect(screen.getByText('李华 提交了随堂练习')).toBeDefined();
+    expect(screen.getByText('收起')).toBeTruthy();
+    expect(screen.getByText('张小明 进入了课堂')).toBeTruthy();
+    expect(screen.getByText('李华 提交了随堂练习')).toBeTruthy();
 
     // 3. Test collapse
     const collapseBtn = screen.getByText('收起');
     fireEvent.click(collapseBtn);
 
     // After collapse, text becomes '展开', and feed list items are hidden
-    expect(screen.getByText('展开')).toBeDefined();
+    expect(screen.getByText('展开')).toBeTruthy();
     expect(screen.queryByText('张小明 进入了课堂')).toBeNull();
 
     // 4. Test expand
     const expandBtn = screen.getByText('展开');
     fireEvent.click(expandBtn);
 
-    expect(screen.getByText('收起')).toBeDefined();
-    expect(screen.getByText('张小明 进入了课堂')).toBeDefined();
+    expect(screen.getByText('收起')).toBeTruthy();
+    expect(screen.getByText('张小明 进入了课堂')).toBeTruthy();
 
     // 5. Test clear feed
     const clearBtn = screen.getByRole('button', { name: /Clear/ });

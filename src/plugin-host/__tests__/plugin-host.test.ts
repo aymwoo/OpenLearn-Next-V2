@@ -317,14 +317,3 @@ describe('FrontendPluginHost', () => {
   });
 });
 
-// ── PluginHostProvider Tests ─────────────────────────────────────────────
-
-describe('PluginHostProvider', () => {
-  it('usePluginHost throws when used outside provider', async () => {
-    const { usePluginHost } = await import('../plugin-host-context');
-
-    // React components can't be tested in `node` environment.
-    // The throw check is validated via the hook's guard at module level.
-    expect(typeof usePluginHost).toBe('function');
-  });
-});

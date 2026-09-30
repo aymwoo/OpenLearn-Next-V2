@@ -51,32 +51,44 @@ describe('Plugin SDK Compatibility Layer (P7-B6 EU-01)', () => {
     expect(ICommandBusServiceToken.name).toBe('@openlearn/core:ICommandBusService');
   });
 
-  it('should export all unified foundation facades and classes', () => {
-    expect(PluginRuntimeAdapter).toBeDefined();
-    expect(PluginRuntimeComposition).toBeDefined();
-    expect(PluginContextAdapter).toBeDefined();
-    expect(PluginLifecycleManager).toBeDefined();
-    expect(PluginCapabilityGateway).toBeDefined();
-    expect(UnifiedExtensionRegistry).toBeDefined();
-    expect(PluginDistributionManager).toBeDefined();
+  it('should export all unified foundation facades and classes as constructors', () => {
+    const classes = [
+      PluginRuntimeAdapter,
+      PluginRuntimeComposition,
+      PluginContextAdapter,
+      PluginLifecycleManager,
+      PluginCapabilityGateway,
+      UnifiedExtensionRegistry,
+      PluginDistributionManager,
+    ];
+    for (const cls of classes) {
+      expect(typeof cls).toBe('function');
+      expect(cls.prototype).toBeDefined();
+    }
   });
 
   it('P7-A2: should surface unified plugin facade DI tokens (consumable via ctx.resolve)', () => {
-    expect(IPluginLifecycleManagerToken).toBeDefined();
+    const tokens = [
+      IPluginLifecycleManagerToken,
+      IPluginDistributionManagerToken,
+      IPluginRuntimeCompositionToken,
+      IUnifiedExtensionRegistryToken,
+      IPluginCapabilityGatewayToken,
+      ICapabilityRegistryToken,
+    ];
+    for (const token of tokens) {
+      expect(typeof token.name).toBe('string');
+      expect(token.name).toMatch(/^@openlearn\/(core|plugins):/);
+    }
     expect(IPluginLifecycleManagerToken.name).toBe('@openlearn/core:IPluginLifecycleManager');
-    expect(IPluginDistributionManagerToken).toBeDefined();
     expect(IPluginDistributionManagerToken.name).toBe('@openlearn/core:IPluginDistributionManager');
-    expect(IPluginRuntimeCompositionToken).toBeDefined();
-    expect(IUnifiedExtensionRegistryToken).toBeDefined();
-    expect(IPluginCapabilityGatewayToken).toBeDefined();
-    expect(ICapabilityRegistryToken).toBeDefined();
   });
 
   it('P7-A2: should surface distribution facade type alias', () => {
     // IPluginDistributionManager is a type export; assert the value-side counterpart
     // exists so the surface is coherent for plugins resolving the facade at runtime.
-    expect(PluginDistributionManager).toBeDefined();
-    expect(IPluginDistributionManagerToken).toBeDefined();
+    expect(typeof PluginDistributionManager).toBe('function');
+    expect(IPluginDistributionManagerToken.name).toBe('@openlearn/core:IPluginDistributionManager');
     const _typeCheck: IPluginDistributionManager | null = null;
     expect(_typeCheck).toBeNull();
   });
