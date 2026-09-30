@@ -470,6 +470,14 @@ async function startServer() {
           class_id: string;
         }[]
       ).map((row) => row.class_id),
+    // SEC-AUTH: join-room / enter-lesson 的课节房间归属校验 —— 开课中的课节
+    // 仅班级成员可进入（映射在 classroom_sessions；未开课的课节返回 null 不设限）
+    lookupLessonClassId: (lessonId: string) => {
+      const row = kernelContainer.db
+        .prepare('SELECT class_id FROM classroom_sessions WHERE lesson_id = ? ORDER BY created_at DESC LIMIT 1')
+        .get(lessonId) as { class_id: string } | undefined;
+      return row?.class_id ?? null;
+    },
   });
 
   // ── 健康检查端点 (OBS-HEALTH-01) ──────────────────────────────────

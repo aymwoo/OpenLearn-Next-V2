@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **Socket 层房间归属与白板信令权限校验 (`server/presence.ts`, `server.ts`, `presence.test.ts`)**：
+  - **漏洞**：`join-room` 无任何归属校验，任意已登录 socket 可加入任意 `class-<id>` / 课节房间，跨班收听锁屏、全屏、随机点名等课堂广播；`whiteboard-update` / `whiteboard-event` 无角色校验，**学生可向任意课节房间注入绘制与 refresh 事件**（HTTP 侧 `whiteboard.update` 命令有校验，socket 侧裸奔）；`student-acknowledge-pick` 可伪造他人 studentId 确认答到；`enter-lesson` 只校验身份伪造不校验班级归属。
+  - **`join-room` 放行规则**：常驻广播房间（`whiteboard-broadcast` / `classroom-broadcast`）对所有人开放；教师/管理员任意房间；学生仅可加入①绑定自己的作业伪课节 `assignment-*-student-<自己>`，②自己所属的班级房间（经 `lookupStudentClassIds`），③开课班级为自己班级的课节房间（经新增 `lookupLessonClassId`，映射查 `classroom_sessions`；未开课的课节返回 null 不设限，自学场景不受影响）。
+  - **白板信令同口径**：教师可写任意房间；学生仅可写自己伪课节房间（作业工作区学生作画的合法路径保留）。`whiteboard-event` 被拒时连 EventBus 审计也不写。
+  - **`enter-lesson` 补班级归属校验**（同 join-room 口径）；**`student-acknowledge-pick` 补本人校验**（复用既有 `session.userId !== data.studentId` 口径，静默丢弃）。
+  - **测试环境兼容**：握手鉴权在 `NODE_ENV=test` 豁免时 socket 无 session，所有新校验遵循既有 `if (session && ...)` 口径直接放行，e2e 流程零影响。
+  - **测试**：`presence.test.ts` 新增 10 例（广播房间放行、跨班班级房间拒绝、开课/未开课课节房间、伪课节归属、白板信令角色矩阵、答到伪造拒绝、无会话放行口径）。
+
 - **课件内容路由鉴权：短时签名 token + Sec-Fetch 元数据门控 (`server/utils/courseware-access.ts`, `server/routes/courseware.ts`, `server/routes/bridge.ts`, `InteractiveCoursewareViewer.tsx`, `HtmlAppletFrame.tsx`)**：
   - **漏洞**：`GET /api/courseware/:id` 与 `/runtime/:uuid/*` 完全无鉴权 —— 未认证者可读取任意课件 HTML/文件，且 `/runtime` 的自动登记（INSERT courseware 行）与磁盘自愈写可被未认证 GET 触发（未认证写原语）。两条路由均为课件 iframe 的 src，而沙箱 iframe（无 `allow-same-origin` + `credentialless`）的请求**不带会话 cookie**，无法直接 `requireAuth`（会把所有课件加载打成 401）。
   - **两步 token 鉴权**：已认证父页面经 `GET /api/courseware/:id/access-token`（`requireAuth()`）铸造 `<exp>.<hmac(id,exp)>` 短时 token（HMAC-SHA256 + timing-safe 验签，密钥每进程启动随机生成，默认 30 分钟有效），iframe src 以 `?ct=` 携带，路由验签（与 id/uuid 绑定 + 有效期）后放行。`/api/courseware/:id` 的 401 判定位于 courseware 行自动登记**之前**。

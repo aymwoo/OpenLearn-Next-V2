@@ -16,6 +16,14 @@ export interface PresenceDeps {
    * 缺省不传时退化为“仅课节房间投递”，保持向后兼容。
    */
   lookupStudentClassIds?: (studentId: string) => string[];
+  /**
+   * 查询课节当前（最近一次）开课的班级 id；无课堂会话返回 null。
+   *
+   * SEC-AUTH：`join-room` / `enter-lesson` 需用它判定学生与课节房间的归属
+   * （课节房间本身无前缀、与班级无直接外键，映射在 classroom_sessions）。
+   * 缺省不传时学生对课节房间不设限，保持向后兼容。
+   */
+  lookupLessonClassId?: (lessonId: string) => string | null;
 }
 
 /** 班级房间名。与课节房间（直接用 lessonId）互不冲突。 */
@@ -54,6 +62,17 @@ export const CLASSROOM_BROADCAST_ROOM = 'classroom-broadcast';
  */
 export function isRealLessonRoom(roomId: string): boolean {
   return !roomId.startsWith('assignment-');
+}
+
+/**
+ * 解析作业工作区伪课节 `assignment-<assignmentId>-student-<studentId>` 中的 studentId。
+ * 非伪课节返回 null。学生客户端只允许写/加入绑定**自己**的伪课节房间（SEC-AUTH）。
+ */
+export function pseudoRoomStudentId(roomId: string): string | null {
+  if (typeof roomId !== 'string' || !roomId.startsWith('assignment-')) return null;
+  const marker = '-student-';
+  const idx = roomId.lastIndexOf(marker);
+  return idx >= 0 ? roomId.slice(idx + marker.length) : null;
 }
 
 /**
@@ -121,7 +140,7 @@ export function getOnlineStudentIds(): string[] {
   return globalOnlineStudentsGetter ? globalOnlineStudentsGetter() : [];
 }
 
-export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceDeps): void {
+export function setupPresence({ io, eventBus, lookupStudentClassIds, lookupLessonClassId }: PresenceDeps): void {
   // In-memory status maps
   const onlineStudents = new Map<string, { socketId: string; name: string }>();
   const activeStudentLessons = new Map<string, string>(); // studentId -> lessonId
@@ -139,6 +158,41 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceD
     let registeredStudentId: string | null = null;
     const session = socket.data?.session;
     const isTeacherOrAdmin = session?.role === 'teacher' || session?.role === 'administrator';
+
+    // ── SEC-AUTH: 房间归属校验 ────────────────────────────────────
+    // 握手鉴权在 NODE_ENV=test 下豁免（此时 socket 无 session），与各处理器的
+    // `if (session && ...)` 口径一致：无会话一律放行，生产行为由握手层兜底。
+
+    /** 常驻广播房间：任何已连接客户端（教师/学生）都允许加入 */
+    const PUBLIC_BROADCAST_ROOMS = new Set([WHITEBOARD_BROADCAST_ROOM, CLASSROOM_BROADCAST_ROOM]);
+
+    const studentClassIds = (userId: string): string[] => lookupStudentClassIds?.(userId) ?? [];
+
+    /** join-room / enter-lesson 的课节房间归属：学生须属于开课班级；未开课（自学）不设限 */
+    const canJoinLessonRoom = (lessonId: string): boolean => {
+      const lessonClassId = lookupLessonClassId?.(lessonId) ?? null;
+      if (lessonClassId === null) return true;
+      return studentClassIds(session.userId!).includes(lessonClassId);
+    };
+
+    const canJoinRoom = (roomId: unknown): boolean => {
+      if (!session) return true;
+      if (typeof roomId !== 'string' || !roomId) return false;
+      if (PUBLIC_BROADCAST_ROOMS.has(roomId)) return true;
+      if (isTeacherOrAdmin) return true;
+      // 作业工作区伪课节：学生仅可加入绑定自己的房间
+      const pseudoSid = pseudoRoomStudentId(roomId);
+      if (pseudoSid !== null) return pseudoSid === session.userId;
+      if (roomId.startsWith('class-')) return studentClassIds(session.userId!).includes(roomId.slice('class-'.length));
+      return canJoinLessonRoom(roomId);
+    };
+
+    /** 白板写信令（whiteboard-update / whiteboard-event）：教师任意房间；学生仅自己的伪课节 */
+    const canWriteWhiteboardRoom = (roomId: unknown): boolean => {
+      if (!session) return true;
+      if (isTeacherOrAdmin) return true;
+      return typeof roomId === 'string' && pseudoRoomStudentId(roomId) === session.userId;
+    };
 
     socket.on('register-student', (data: { studentId: string; name: string }) => {
       // SEC-AUTH: 阻止学生客户端伪造他人 studentId
@@ -166,6 +220,11 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceD
     socket.on('enter-lesson', (data: { studentId: string; lessonId: string }) => {
       if (session && !isTeacherOrAdmin && session.userId !== data.studentId) {
         return socket.emit('error', { message: 'Forbidden: Cannot enter lesson for another student' });
+      }
+      // SEC-AUTH: 课节房间归属 —— 开课中的课节仅班级成员可进入（防止跨班收听锁屏/点名广播）
+      if (session && !isTeacherOrAdmin && !canJoinLessonRoom(data.lessonId)) {
+        console.warn(`[Presence Security] Student ${session.userId} denied enter-lesson ${data.lessonId}`);
+        return socket.emit('error', { message: 'Forbidden: Not allowed to enter this lesson' });
       }
       activeStudentLessons.set(data.studentId, data.lessonId);
       socket.join(data.lessonId);
@@ -196,10 +255,21 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceD
     });
 
     socket.on('join-room', (roomId: string) => {
+      // SEC-AUTH: 房间归属校验 —— 任意登录者不得加入任意房间收听跨班广播
+      if (!canJoinRoom(roomId)) {
+        console.warn(`[Presence Security] ${session?.userId} denied join-room ${roomId}`);
+        return socket.emit('error', { message: 'Forbidden: Not allowed to join this room' });
+      }
       socket.join(roomId);
     });
 
     socket.on('whiteboard-update', (data: { roomId: string; type: string; payload: any }) => {
+      // SEC-AUTH: 教师可写任意房间；学生仅可写自己作业工作区的伪课节房间
+      // （课堂白板对学生只读；HTTP 侧 whiteboard.update 命令已有同口径校验）
+      if (!canWriteWhiteboardRoom(data?.roomId)) {
+        console.warn(`[Presence Security] ${session?.userId} denied whiteboard-update for room ${data?.roomId}`);
+        return;
+      }
       // 实时绘制事件（temp-draw, temp-end, segment-change）：直接广播，不经过 EventBus
       socket.to(data.roomId).emit('whiteboard-sync', data);
     });
@@ -213,6 +283,11 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceD
         id: string;
         timestamp: number;
       }) => {
+        // SEC-AUTH: 与 whiteboard-update 同口径 —— 教师可写任意课节；学生仅自己的伪课节
+        if (!canWriteWhiteboardRoom(data?.payload?.lessonId)) {
+          console.warn(`[Presence Security] ${session?.userId} denied whiteboard-event for ${data?.payload?.lessonId}`);
+          return;
+        }
         // 1. 发布到服务端 EventBus（自动写入 events 表，审计日志）
         eventBus.publish({
           id: data.id,
@@ -427,6 +502,11 @@ export function setupPresence({ io, eventBus, lookupStudentClassIds }: PresenceD
     // 学生端确认答到回传广播
     socket.on('student-acknowledge-pick', (data: { studentId: string; lessonId?: string }) => {
       if (!data?.studentId) return;
+      // SEC-AUTH: 阻止学生伪造他人 studentId 确认答到
+      if (session && !isTeacherOrAdmin && session.userId !== data.studentId) {
+        console.warn(`[Presence Security] Student ${session.userId} attempted to acknowledge as ${data.studentId}`);
+        return;
+      }
       console.log(`[Presence] Student acknowledged pick: ${data.studentId}`);
       io.emit('student-acknowledged', { studentId: data.studentId, lessonId: data.lessonId });
     });

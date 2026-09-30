@@ -18,7 +18,13 @@ type Emitted = {
  * clear it between tests so the enter-lesson / teacher-broadcast-segment paths
  * are isolated.
  */
-function buildMocks(opts: { studentClassIds?: Record<string, string[]>; lookupThrows?: boolean } = {}) {
+function buildMocks(
+  opts: {
+    studentClassIds?: Record<string, string[]>;
+    lookupThrows?: boolean;
+    lessonClassIds?: Record<string, string | null>;
+  } = {},
+) {
   const globalEmitted: Emitted[] = [];
   const connectionHandlers: ((socket: any) => void)[] = [];
 
@@ -48,15 +54,20 @@ function buildMocks(opts: { studentClassIds?: Record<string, string[]>; lookupTh
       if (opts.lookupThrows) throw new Error('db unavailable');
       return opts.studentClassIds?.[studentId] ?? [];
     },
+    lookupLessonClassId: (lessonId: string) => {
+      const v = opts.lessonClassIds?.[lessonId];
+      return v === undefined ? null : v;
+    },
   } as any;
   setupPresence(deps);
 
-  function connect(customId = 'sock-1') {
+  function connect(customId = 'sock-1', session?: any) {
     const socketEmitted: Emitted[] = [];
     const joinedRooms: string[] = [];
     const socketHandlers = new Map<string, (data: any) => void>();
     const socket = {
       id: customId,
+      data: { session },
       on: (event: string, cb: (data: any) => void) => socketHandlers.set(event, cb),
       emit: (event: string, payload: unknown) => socketEmitted.push({ scope: 'socket', event, payload }),
       to: (room: string) => ({
@@ -345,6 +356,114 @@ describe('setupPresence', () => {
           payload: { lessonId: 'L1', elementId: null, mode: 'board' },
         },
       ]);
+    });
+  });
+
+  describe('SEC-AUTH: join-room / 白板信令 / 答到归属校验', () => {
+    const teacherSession = { userId: 'usr_t', role: 'teacher' };
+    const studentSession = { userId: 's1', role: 'student' };
+
+    it('常驻广播房间任何已连接客户端均可加入', () => {
+      const m = buildMocks();
+      const socket = m.connect('sock-1', studentSession);
+      socket.trigger('join-room', 'whiteboard-broadcast');
+      socket.trigger('join-room', 'classroom-broadcast');
+      expect(socket._joinedRooms).toEqual(['whiteboard-broadcast', 'classroom-broadcast']);
+    });
+
+    it('学生可加入自己所属的班级房间，跨班被拒', () => {
+      const m = buildMocks({ studentClassIds: { s1: ['c1'] } });
+      const socket = m.connect('sock-1', studentSession);
+      socket.trigger('join-room', 'class-c1');
+      socket.trigger('join-room', 'class-c2');
+      expect(socket._joinedRooms).toEqual(['class-c1']);
+      expect(socket._emitted.some((e) => e.event === 'error')).toBe(true);
+    });
+
+    it('教师可加入任意班级与课节房间', () => {
+      const m = buildMocks({ studentClassIds: { s1: ['c1'] } });
+      const socket = m.connect('sock-1', teacherSession);
+      socket.trigger('join-room', 'class-c9');
+      socket.trigger('join-room', 'L1');
+      expect(socket._joinedRooms).toEqual(['class-c9', 'L1']);
+    });
+
+    it('学生加入开课课节房间须属于开课班级；未开课课节不设限', () => {
+      const m = buildMocks({
+        studentClassIds: { s1: ['c1'] },
+        lessonClassIds: { L_live: 'c9', L_self: null },
+      });
+      const socket = m.connect('sock-1', studentSession);
+      socket.trigger('join-room', 'L_live'); // 开课班级 c9 ≠ 学生班级 c1 → 拒
+      socket.trigger('join-room', 'L_self'); // 无课堂会话 → 允许（自学）
+      expect(socket._joinedRooms).toEqual(['L_self']);
+    });
+
+    it('学生可加入绑定自己的作业伪课节房间，他人的被拒', () => {
+      const m = buildMocks();
+      const socket = m.connect('sock-1', studentSession);
+      socket.trigger('join-room', 'assignment-a1-student-s1');
+      socket.trigger('join-room', 'assignment-a1-student-s2');
+      expect(socket._joinedRooms).toEqual(['assignment-a1-student-s1']);
+    });
+
+    it('无会话 socket（测试环境握手豁免口径）不设限', () => {
+      const m = buildMocks();
+      const socket = m.connect();
+      socket.trigger('join-room', 'class-anything');
+      expect(socket._joinedRooms).toEqual(['class-anything']);
+    });
+
+    it('enter-lesson 对开课课节做同样的班级归属校验', () => {
+      const m = buildMocks({
+        studentClassIds: { s1: ['c1'] },
+        lessonClassIds: { L_live: 'c9' },
+      });
+      const socket = m.connect('sock-1', studentSession);
+      socket.trigger('register-student', { studentId: 's1', name: 'Stu' });
+      socket._joinedRooms.length = 0;
+      socket.trigger('enter-lesson', { studentId: 's1', lessonId: 'L_live' });
+      expect(socket._joinedRooms).toEqual([]); // 未 join 课节房间（register-student join 的班级房间已清空重计）
+      expect(socket._emitted.some((e) => e.event === 'error')).toBe(true);
+    });
+
+    it('whiteboard-update：教师放行，学生仅可写自己的伪课节房间', () => {
+      const m = buildMocks();
+      const teacher = m.connect('sock-t', teacherSession);
+      teacher.trigger('whiteboard-update', { roomId: 'L1', type: 'temp-draw', payload: {} });
+      expect(teacher._emitted.filter((e) => e.scope === 'socket-room')).toHaveLength(1);
+
+      const student = m.connect('sock-s', studentSession);
+      student.trigger('whiteboard-update', { roomId: 'assignment-a1-student-s1', type: 'temp-draw', payload: {} });
+      expect(student._emitted.filter((e) => e.scope === 'socket-room')).toHaveLength(1);
+
+      student.trigger('whiteboard-update', { roomId: 'L1', type: 'temp-draw', payload: {} });
+      student.trigger('whiteboard-update', { roomId: 'assignment-a1-student-s2', type: 'temp-draw', payload: {} });
+      expect(student._emitted.filter((e) => e.scope === 'socket-room')).toHaveLength(1); // 仍只有自己房间那条
+    });
+
+    it('whiteboard-event：学生向课节房间注入 refresh 被拒（EventBus 也不写）', () => {
+      const m = buildMocks();
+      const socket = m.connect('sock-1', studentSession);
+      socket._emitted.length = 0; // 清掉连接时的初始 presence-update
+      socket.trigger('whiteboard-event', {
+        type: 'whiteboard.element_drawn',
+        payload: { lessonId: 'L1', elementId: 'e1' },
+        id: 'x',
+        timestamp: 1,
+      });
+      expect(m.eventBus.publish).not.toHaveBeenCalled();
+      expect(socket._emitted).toEqual([]);
+    });
+
+    it('student-acknowledge-pick：学生只能以本人身份确认答到', () => {
+      const m = buildMocks();
+      const socket = m.connect('sock-1', studentSession);
+      socket.trigger('student-acknowledge-pick', { studentId: 's2', lessonId: 'L1' });
+      expect(m.globalEmitted.filter((e) => e.event === 'student-acknowledged')).toHaveLength(0);
+
+      socket.trigger('student-acknowledge-pick', { studentId: 's1', lessonId: 'L1' });
+      expect(m.globalEmitted.filter((e) => e.event === 'student-acknowledged')).toHaveLength(1);
     });
   });
 
