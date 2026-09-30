@@ -20,7 +20,17 @@ beforeAll(async () => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
+
+// SEC-AUTH: InteractiveCoursewareViewer 先经 /access-token 铸造短时 token，
+// 拿到 token 前渲染「课件加载中」占位而非 iframe。测试环境 mock 铸造端点。
+function stubAccessTokenMint() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(new Response(JSON.stringify({ token: '1759000000000.testsig' }), { status: 200 })),
+  );
+}
 
 describe('LazyCourseware', () => {
   it('renders without error and shows placeholder when coursewareId is null', async () => {
@@ -35,6 +45,7 @@ describe('LazyCourseware', () => {
   });
 
   it('renders interactive courseware iframe when coursewareId is provided', async () => {
+    stubAccessTokenMint();
     render(<LazyCourseware coursewareId="courseware-123" />);
 
     await waitFor(
@@ -42,12 +53,14 @@ describe('LazyCourseware', () => {
         const iframe = screen.getByTitle('Interactive Courseware') as HTMLIFrameElement;
         expect(iframe).toBeTruthy();
         expect(iframe.src).toContain('/api/courseware/courseware-123');
+        expect(iframe.src).toContain('?ct=');
       },
       { timeout: LAZY_TIMEOUT },
     );
   });
 
   it('handles onClose callback correctly', async () => {
+    stubAccessTokenMint();
     const handleClose = vi.fn();
     render(<LazyCourseware coursewareId="courseware-123" onClose={handleClose} />);
 

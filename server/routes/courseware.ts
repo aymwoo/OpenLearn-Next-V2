@@ -9,6 +9,7 @@ import { aggregateAttemptScore, describeAggregation } from '../../packages/plugi
 import { sendSafeError } from '../utils/error-handler.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import { extractScoreCommentCompletion } from '../utils/score-extract.js';
+import { mintCoursewareToken, verifyCoursewareToken } from '../utils/courseware-access.js';
 import {
   autoRecordAttempt,
   autoRecordForLesson,
@@ -570,8 +571,23 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
     }
   });
 
+  /**
+   * 铸造课件 HTML 访问 token：供已认证的父页面取回后拼进 iframe src（`?ct=`）。
+   * 沙箱 iframe 的请求不携带会话 cookie（见 server/utils/courseware-access.ts），
+   * 这是 `GET /api/courseware/:id` 唯一可行的鉴权通道。
+   */
+  app.get('/api/courseware/:id/access-token', requireAuth(), (req, res) => {
+    res.json({ token: mintCoursewareToken(req.params.id) });
+  });
+
   app.get('/api/courseware/:id', (req, res) => {
     try {
+      // SEC-AUTH: 沙箱 iframe 不带会话 cookie，无法 requireAuth；
+      // 改为验证父页面铸造的短时 HMAC token（与 :id 绑定 + 有效期），未带/无效一律 401，
+      // 同时挡住「未认证读取课件 HTML」与「未认证触发 courseware 行自动登记」两个面。
+      if (!verifyCoursewareToken(req.params.id, typeof req.query.ct === 'string' ? req.query.ct : null)) {
+        return res.status(401).send('Courseware access token missing or invalid');
+      }
       const node = kernelContainer.db.prepare('SELECT * FROM vfs_nodes WHERE id = ?').get(req.params.id) as any;
       if (!node || node.type !== 'file') return res.status(404).send('Courseware not found');
 

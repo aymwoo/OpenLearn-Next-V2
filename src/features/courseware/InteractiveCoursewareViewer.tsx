@@ -11,6 +11,7 @@ interface InteractiveCoursewareViewerProps {
 
 export function InteractiveCoursewareViewer({ coursewareId, onClose }: InteractiveCoursewareViewerProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { theme } = useThemeStore();
 
@@ -27,6 +28,25 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, []);
+
+  // SEC-AUTH: 课件 HTML 路由要求短时访问 token（沙箱 iframe 不带会话 cookie，
+  // 由持有会话的父页面先铸造，拼进 iframe src 的 ?ct= 参数）
+  useEffect(() => {
+    let cancelled = false;
+    setAccessToken(null);
+    if (!coursewareId) return;
+    fetch(`/api/courseware/${encodeURIComponent(coursewareId)}/access-token`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((j: { token?: unknown }) => {
+        if (!cancelled && typeof j?.token === 'string' && j.token) setAccessToken(j.token);
+      })
+      .catch((e) => {
+        console.warn('[InteractiveCoursewareViewer] Failed to mint courseware access token:', e);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [coursewareId]);
 
   const toggleFullscreen = () => {
     const element = containerRef.current;
@@ -95,15 +115,21 @@ export function InteractiveCoursewareViewer({ coursewareId, onClose }: Interacti
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <ExtensionPointRenderer slot="courseware.viewer.overlay" slotProps={{ coursewareId }} />
         </div>
-        <iframe
-          src={`/api/courseware/${coursewareId}`}
-          sandbox="allow-scripts allow-forms allow-downloads"
-          data-lms-bridge="true"
-          allowFullScreen
-          className="w-full h-full border-none"
-          title="Interactive Courseware"
-          onLoad={handleIframeLoad}
-        />
+        {accessToken ? (
+          <iframe
+            src={`/api/courseware/${coursewareId}?ct=${encodeURIComponent(accessToken)}`}
+            sandbox="allow-scripts allow-forms allow-downloads"
+            data-lms-bridge="true"
+            allowFullScreen
+            className="w-full h-full border-none"
+            title="Interactive Courseware"
+            onLoad={handleIframeLoad}
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 bg-slate-50">
+            课件加载中…
+          </div>
+        )}
       </div>
     </div>
   );
