@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **LMS Bridge 仅信任受管辖课件 iframe (`src/services/lms-bridge.ts`, `InteractiveCoursewareViewer.tsx`, `HtmlAppletFrame.tsx`, `SystemResourceLibraryModal.tsx`)**：
+  - **漏洞**：`processLmsMessage` 顶层来源校验只要求「`event.source` 是文档中的任意 iframe」—— LTI 外链、插件 blob、资源预览等第三方 iframe 同样能通过，可伪造 `LMS_SUBMIT` 以任意 `attempt_id` 提交分数（后端 attempt 归属校验限制了越权范围，故为中危而非高危）。
+  - **为何不用 origin 白名单**：沙箱课件运行在不透明 origin（`event.origin === 'null'`）中，没有可白名单的具体 origin 值。改用更严格的 **source → 受管辖 iframe 绑定**：新增 `isFromManagedIframe()`，顶层校验、`attemptId` 回读、`LMS_GET_PROGRESS` 定向响应三处均只信任带 `data-lms-bridge` 标记的 iframe（或同窗口自身）。
+  - **标记宿主**：`data-lms-bridge="true"` 加在三处合法发送方—— `InteractiveCoursewareViewer`（`/api/courseware/:id`）、`HtmlAppletFrame`（`/runtime/:uuid/` 与 `srcDoc` + Bridge SDK）、`SystemResourceLibraryModal` 资源预览（`/api/resources/` 路由同样注入 `injectLmsSdk`）。新增课件 iframe 宿主时**必须**带此标记，否则课件上报会被静默丢弃。
+  - **测试**：新增 `src/services/__tests__/lms-bridge.test.ts` 5 例（未标记 iframe / 未知外部窗口的消息丢弃且不触发任何请求、合法 iframe 的 adopt+submit 链路、`LMS_GET_PROGRESS` 仅响应受管辖 iframe）。
+
 - **课堂事件投递口径统一为「课节房间 + 常驻课堂广播房间」，并接上点名评价消费端 (`server/presence.ts`, `server/routes/classroom.ts`, `server/routes/roster.ts`, `server/services/classroom-*-service.ts`, `useClassroomSocket.ts`, `docs/classroom-time-flow-audit.md`)**：
   - **幽灵房间（13 处，已修）**：客户端加入的课节房间是**裸 lessonId**（`presence.ts` `socket.join(data.lessonId)`、`InteractiveWhiteboard` `join-room(lessonId)`），但服务端 13 处投到带前缀的 `lesson-${lessonId}` —— 无人加入的房间。其中 11 处后面紧跟 `io.emit(...)` 全局广播把失效**掩盖**了，功能看似正常、代价是全平台串流量。
   - **实现**：`presence.ts` 成为房间口径唯一真源，新增 `CLASSROOM_BROADCAST_ROOM`（与 `WHITEBOARD_BROADCAST_ROOM` 同构，连接即加入，停在仪表盘的学生也能收到并预热）、`classroomEventRooms()` / `emitClassroomEvent()`。13 处投递全部改走统一入口。
