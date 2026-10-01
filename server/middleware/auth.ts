@@ -2,6 +2,7 @@
  * 认证中间件：Session 解析、角色检查、Capability 检查
  */
 import type { Request, Response, NextFunction } from 'express';
+import type { Socket } from 'socket.io';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 
 // ── Session 工具函数 ──────────────────────────────────────────────
@@ -168,8 +169,66 @@ export function enforcePasswordChanged(req: Request, res: Response, next: NextFu
   next();
 }
 
+/**
+ * Socket.IO 连接握手鉴权（SEC-AUTH-SOCKET）。
+ *
+ * 从 cookie `edu_os_token=` 或 `socket.handshake.auth.token` 取 token 并校验
+ * session；同时兜底 SEC-AUTH-06 —— 带 mustChangePassword 标记的会话直接拒绝
+ * 连接（与 HTTP 层 enforcePasswordChanged 同码 FORBIDDEN_DEFAULT_PASSWORD）。
+ * 改密/登出走 HTTP 豁免路径，不受影响；ForcedPasswordChangeGate 全屏期间
+ * socket 静默重连无害。
+ *
+ * 测试环境支持未带 token 的 mock 连接（无 session 不拦，保持原顺序语义）。
+ */
+export function socketAuthMiddleware(socket: Socket, next: (err?: Error) => void): void {
+  try {
+    const cookieHeader = socket.handshake.headers.cookie;
+    let token: string | null = null;
+    if (cookieHeader) {
+      const parts = cookieHeader.split(';');
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (trimmed.startsWith('edu_os_token=')) {
+          token = trimmed.substring('edu_os_token='.length);
+          break;
+        }
+      }
+    }
+    if (!token && socket.handshake.auth?.token) {
+      token = socket.handshake.auth.token;
+    }
+
+    // 测试环境支持未带 token 的 mock 连接
+    if (process.env.NODE_ENV === 'test' && !token) {
+      return next();
+    }
+
+    if (!token) {
+      return next(new Error('Authentication required: missing edu_os_token'));
+    }
+
+    const session = getValidSession(token);
+    if (!session) {
+      return next(new Error('Authentication required: session expired or invalid'));
+    }
+
+    // SEC-AUTH-06 兜底：默认密码未改的会话不允许建立 socket 连接
+    if ((session as any).mustChangePassword) {
+      return next(new Error('FORBIDDEN_DEFAULT_PASSWORD'));
+    }
+
+    socket.data.session = session;
+    socket.data.userId = session.userId;
+    socket.data.role = session.role;
+    next();
+  } catch (err: any) {
+    next(new Error(`Authentication error: ${err.message}`));
+  }
+}
+
 /** 教师/管理员检查（旧版兼容包装） */
-export function checkIsTeacherOrAdmin(req: Request): boolean {  const token = getCookieToken(req);
+export function checkIsTeacherOrAdmin(req: Request): boolean {
+  const token = getCookieToken(req);
   if (!token) return false;
   try {
     const session = getValidSession(token);

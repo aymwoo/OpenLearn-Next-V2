@@ -62,11 +62,11 @@ import { verifyPassword, hashPassword as bcryptHashPassword } from './packages/c
 import { encryptApiKey, decryptApiKey, maskApiKey, detectPromptInjection } from './server/utils/crypto.js';
 import {
   getCookieToken,
-  getValidSession,
   checkIsTeacherOrAdmin,
   getActorId,
   requireAuth,
   enforcePasswordChanged,
+  socketAuthMiddleware,
 } from './server/middleware/auth.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
@@ -384,47 +384,9 @@ async function startServer() {
   // 会话带 mustChangePassword 标记，除查询/登出/改密外的写操作一律 403（前端另有全屏改密门）
   app.use(enforcePasswordChanged);
 
-  // SEC-AUTH-SOCKET: Socket.IO 连接握手鉴权中间件，阻止匿名连接与身份伪造
-  io.use((socket, next) => {
-    try {
-      const cookieHeader = socket.handshake.headers.cookie;
-      let token: string | null = null;
-      if (cookieHeader) {
-        const parts = cookieHeader.split(';');
-        for (const part of parts) {
-          const trimmed = part.trim();
-          if (trimmed.startsWith('edu_os_token=')) {
-            token = trimmed.substring('edu_os_token='.length);
-            break;
-          }
-        }
-      }
-      if (!token && socket.handshake.auth?.token) {
-        token = socket.handshake.auth.token;
-      }
-
-      // 测试环境支持未带 token 的 mock 连接
-      if (process.env.NODE_ENV === 'test' && !token) {
-        return next();
-      }
-
-      if (!token) {
-        return next(new Error('Authentication required: missing edu_os_token'));
-      }
-
-      const session = getValidSession(token);
-      if (!session) {
-        return next(new Error('Authentication required: session expired or invalid'));
-      }
-
-      socket.data.session = session;
-      socket.data.userId = session.userId;
-      socket.data.role = session.role;
-      next();
-    } catch (err: any) {
-      next(new Error(`Authentication error: ${err.message}`));
-    }
-  });
+  // SEC-AUTH-SOCKET: Socket.IO 连接握手鉴权中间件，阻止匿名连接与身份伪造；
+  // 含 SEC-AUTH-06 兜底 —— mustChangePassword 会话握手直接拒绝（见 auth.ts）。
+  io.use(socketAuthMiddleware);
   kernelContainer.pluginHost.setSocketIO(io);
   ctx.io = io;
   registerOsRoutes(ctx);

@@ -68,10 +68,35 @@ describe('isSafeExternalUrl', () => {
     ['http://169.254.1.1/a.zip', 'link-local'],
     ['http://224.0.0.1/a.zip', 'multicast'],
     ['http://[::1]/a.zip', 'IPv6 loopback'],
+    // SEC-LOW-02: IPv6 私网/保留段字面量
+    ['http://[::ffff:127.0.0.1]/a.zip', 'IPv4-mapped IPv6 loopback'],
+    ['http://[::ffff:10.0.0.1]/a.zip', 'IPv4-mapped IPv6 private'],
+    ['http://[fd00::1]/a.zip', 'IPv6 ULA fc00::/7'],
+    ['http://[fe80::1]/a.zip', 'IPv6 link-local'],
+    ['http://[ff02::1]/a.zip', 'IPv6 multicast'],
+    ['http://[::]/a.zip', 'IPv6 unspecified'],
+    // SEC-LOW-02: IP 编码绕过（十进制整数 / 十六进制 / 八进制）
+    ['http://2130706433/a.zip', 'decimal integer loopback'],
+    ['http://0x7f000001/a.zip', 'hex integer loopback'],
+    ['http://0x7f.0.0.1/a.zip', 'hex octet loopback'],
+    ['http://0177.0.0.1/a.zip', 'octal octet loopback'],
+    // 超出 32 位的十进制主机名：WHATWG URL 解析器识别为 IPv4 但校验失败，
+    // new URL 直接抛错 → 走 Invalid URL format 拒绝
+    ['http://12345678901/a.zip', 'out-of-range decimal (URL parser throws)'],
+    ['http://999.1.1.1/a.zip', 'invalid octet (URL parser throws)'],
   ])('rejects %s (%s)', (url) => {
     const result = isSafeExternalUrl(url);
     expect(result.safe).toBe(false);
     expect(result.reason).toBeTruthy();
+  });
+
+  it.each([
+    ['https://abc123.com/a.zip', 'domain containing digits'],
+    ['https://1x.dev/a.zip', 'short domain starting with digit'],
+    ['http://8.8.8.8/a.zip', 'public IPv4'],
+    ['http://[2001:db8::1]/a.zip', 'public IPv6 (documentation range)'],
+  ])('accepts %s (%s)', (url) => {
+    expect(isSafeExternalUrl(url).safe).toBe(true);
   });
 
   it('reports invalid URL syntax instead of throwing', () => {

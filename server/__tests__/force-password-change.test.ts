@@ -2,9 +2,11 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import express from 'express';
 import { createServer, type Server } from 'http';
 import type { AddressInfo } from 'net';
+import { Server as SocketServer } from 'socket.io';
+import { io as ioClient, type Socket as ClientSocket } from 'socket.io-client';
 import bcrypt from 'bcryptjs';
 import { registerRosterRoutes } from '../routes/roster.js';
-import { enforcePasswordChanged } from '../middleware/auth.js';
+import { enforcePasswordChanged, socketAuthMiddleware } from '../middleware/auth.js';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
 
 /**
@@ -196,5 +198,99 @@ describe('SEC-AUTH-06: 默认密码强制改密', () => {
     kernelContainer.db.prepare('DELETE FROM class_students WHERE student_id = ?').run(sid);
     kernelContainer.db.prepare('DELETE FROM classes WHERE id = ?').run(classId);
     kernelContainer.db.prepare('DELETE FROM client_sessions WHERE session_data LIKE ?').run(`%${sid}%`);
+  });
+});
+
+describe('SEC-AUTH-06: Socket 层 mustChangePassword 握手全拒', () => {
+  let app: express.Express;
+  let server: Server;
+  let io: SocketServer;
+  let baseUrl: string;
+
+  const defaultUserId = 'usr-force-default';
+  const defaultUsername = 'force_default_admin';
+  const normalUserId = 'usr-force-normal';
+  const normalUsername = 'force_normal_teacher';
+  const normalPwd = 'S3curePass!42';
+
+  const post = (path: string, token?: string, body?: Record<string, unknown>) =>
+    fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Cookie: `edu_os_token=${token}` } : {}) },
+      body: JSON.stringify(body ?? {}),
+    });
+
+  const tryConnect = (token?: string): Promise<{ error?: string }> =>
+    new Promise((resolve) => {
+      const client = ioClient(baseUrl, {
+        transports: ['websocket'],
+        forceNew: true,
+        reconnection: false,
+        timeout: 3000,
+        ...(token ? { extraHeaders: { Cookie: `edu_os_token=${token}` } } : {}),
+      });
+      const finish = (result: { error?: string }) => {
+        client.close();
+        resolve(result);
+      };
+      client.on('connect', () => finish({}));
+      client.on('connect_error', (err: Error) => finish({ error: err.message }));
+    });
+
+  beforeAll(async () => {
+    app = express();
+    app.use(express.json());
+    registerRosterRoutes({ app, io: undefined, loginLimiter: (_req: any, _res: any, next: () => void) => next() } as any);
+    server = createServer(app);
+    io = new SocketServer(server, { cors: { origin: '*' } });
+    io.use(socketAuthMiddleware);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+    const now = Date.now();
+    kernelContainer.db.prepare('DELETE FROM users WHERE id IN (?, ?)').run(defaultUserId, normalUserId);
+    kernelContainer.db
+      .prepare('INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(defaultUserId, defaultUsername, bcrypt.hashSync(defaultUsername, 10), 'administrator', '默认密码管理员', now);
+    kernelContainer.db
+      .prepare('INSERT OR REPLACE INTO users (id, username, password_hash, role, name, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(normalUserId, normalUsername, bcrypt.hashSync(normalPwd, 10), 'teacher', '正常教师', now);
+  });
+
+  afterAll(async () => {
+    io.close();
+    kernelContainer.db.prepare('DELETE FROM users WHERE id IN (?, ?)').run(defaultUserId, normalUserId);
+    kernelContainer.db
+      .prepare('DELETE FROM client_sessions WHERE session_data LIKE ? OR session_data LIKE ?')
+      .run(`%${defaultUserId}%`, `%${normalUserId}%`);
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it('带 mustChangePassword 标记的会话握手被拒（FORBIDDEN_DEFAULT_PASSWORD）', async () => {
+    const login = await post('/api/auth/login', undefined, { entrance: 'teacher', username: defaultUsername, password: defaultUsername });
+    expect(login.status).toBe(200);
+    const token = (login.headers.get('set-cookie') || '').split(';')[0].split('=')[1];
+
+    const result = await tryConnect(token);
+    expect(result.error).toBe('FORBIDDEN_DEFAULT_PASSWORD');
+  });
+
+  it('正常密码会话连接成功；无 token + test 环境放行不受影响', async () => {
+    const login = await post('/api/auth/login', undefined, { entrance: 'teacher', username: normalUsername, password: normalPwd });
+    const normalToken = (login.headers.get('set-cookie') || '').split(';')[0].split('=')[1];
+    expect((await tryConnect(normalToken)).error).toBeUndefined();
+
+    // NODE_ENV=test 无 token 放行（存量 mock 用例依赖此口径）
+    expect((await tryConnect()).error).toBeUndefined();
+  });
+
+  it('改密后同一会话可正常建立 socket 连接', async () => {
+    const login = await post('/api/auth/login', undefined, { entrance: 'teacher', username: defaultUsername, password: defaultUsername });
+    const token = (login.headers.get('set-cookie') || '').split(';')[0].split('=')[1];
+    expect((await tryConnect(token)).error).toBe('FORBIDDEN_DEFAULT_PASSWORD');
+
+    const change = await post('/api/auth/change-password', token, { oldPassword: defaultUsername, newPassword: 'BrandNew-Pw9' });
+    expect(change.status).toBe(200);
+    expect((await tryConnect(token)).error).toBeUndefined();
   });
 });
