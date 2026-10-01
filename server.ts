@@ -69,6 +69,7 @@ import {
   socketAuthMiddleware,
 } from './server/middleware/auth.js';
 import { csrfGuard } from './server/middleware/csrf.js';
+import { sendSafeError } from './server/utils/error-handler.js';
 import { BRIDGE_SDK_CODE } from './server/utils/bridge-sdk.js';
 import { ServerBootstrapAdapter } from './packages/core/bootstrap/index.js';
 
@@ -511,6 +512,13 @@ async function startServer() {
   }
 
   const HOST = process.env.HOST || '0.0.0.0';
+
+  // Phase B2: 全局 Express 错误处理兜底 —— 任何 next(err) / 同步抛错统一走
+  // sendSafeError（生产不泄露内部信息），必须在全部路由与 SPA 兜底之后注册。
+  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error('[Unhandled API Error]:', err);
+    sendSafeError(res, err, 500);
+  });
 
   httpServer.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {

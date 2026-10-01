@@ -26,12 +26,13 @@
 
 import type { Express, Request, Response } from 'express';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { randomId } from '../utils/id.js';
 import { requireAuth, getActorId } from '../middleware/auth.js';
 import { sendSafeError } from '../utils/error-handler.js';
 
 /** 统一的 id 生成（与仓库既有风格一致：时间戳 + 随机后缀） */
 function makeId(prefix: string): string {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+  return randomId(`${prefix}_`);
 }
 
 /** 取当前登录用户的「学生身份 id」（用于学生端自助操作） */

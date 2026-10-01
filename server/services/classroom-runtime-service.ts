@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { randomId } from '../utils/id.js';
 import type { Server } from 'socket.io';
 import { emitClassroomEvent } from '../presence.js';
 import type {
@@ -44,7 +45,7 @@ export class ClassroomRuntimeService implements IClassroomLifecycleService, IInt
       .get(lessonId, ARCHIVED_REPORT_STAGE) as any;
 
     if (!session) {
-      const id = `cs_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const id = randomId('cs_');
       const checkinCode = Math.floor(1000 + Math.random() * 9000).toString();
       const now = Date.now();
       this.db

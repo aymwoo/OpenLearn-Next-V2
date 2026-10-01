@@ -11,7 +11,7 @@ export function registerProcessesRoutes(ctx: ServerContext) {
       const list = kernelContainer.db.prepare('SELECT * FROM pending_commands ORDER BY created_at DESC').all();
       res.json(list);
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 

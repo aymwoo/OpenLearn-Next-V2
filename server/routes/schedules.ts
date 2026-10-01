@@ -3,6 +3,7 @@ import { decryptApiKey } from '../utils/crypto.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ServerContext, StoredAIProvider } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { randomId } from '../utils/id.js';
 import { parsePagination } from '../utils/pagination.js';
 
 export function registerSchedulesRoutes(ctx: ServerContext) {
@@ -178,7 +179,7 @@ export function registerSchedulesRoutes(ctx: ServerContext) {
 
       const transaction = db.transaction((items) => {
         for (const item of items) {
-          const id = 'sch-' + Math.random().toString(36).slice(2, 10);
+          const id = randomId('sch-');
           insertStmt.run(
             id,
             req.params.classId,

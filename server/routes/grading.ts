@@ -8,6 +8,7 @@ import { decryptApiKey } from '../utils/crypto.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ServerContext, StoredAIProvider } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { randomId } from '../utils/id.js';
 
 export function registerGradingRoutes(ctx: ServerContext) {
   const { app } = ctx;
@@ -208,7 +209,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
     try {
       const { title, description, max_score } = req.body;
       if (!title) return res.status(400).json({ error: 'Title is required' });
-      const examId = 'exam-' + Math.random().toString(36).substring(2, 10);
+      const examId = randomId('exam-');
       kernelContainer.db
         .prepare(
           `
@@ -582,7 +583,7 @@ export function registerGradingRoutes(ctx: ServerContext) {
 
       const transaction = kernelContainer.db.transaction((reportsList) => {
         for (const r of reportsList) {
-          const reportId = r.id || 'rep-' + Math.random().toString(36).substring(2, 10);
+          const reportId = r.id || randomId('rep-');
           insertStmt.run(
             reportId,
             r.studentId,

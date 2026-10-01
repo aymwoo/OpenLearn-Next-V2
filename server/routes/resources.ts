@@ -9,6 +9,7 @@ import {
 } from '../../packages/plugins/ai-submit-injector.js';
 import { requireAuth } from '../middleware/auth.js';
 import { isPathInsideRoot } from '../utils/path-guard.js';
+import { randomId } from '../utils/id.js';
 import type { ServerContext } from '../context.js';
 import { injectLmsSdk, setCoursewareDocumentCsp } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
@@ -289,7 +290,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
         return res.status(400).json({ error: 'Name and type are required' });
       }
 
-      const id = 'res_' + Math.random().toString(36).substring(2, 10);
+      const id = randomId('res_');
       const createdAt = Date.now();
 
       kernelContainer.db
@@ -302,7 +303,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
           if (!hasDataSubmission(content) && hasScoreDisplay(content)) {
             const modified = await injectScoreSubmissionUsingAI(kernelContainer.db, content);
             if (modified && modified !== content) {
-              const newId = 'res_' + Math.random().toString(36).substring(2, 10);
+              const newId = randomId('res_');
               const newName = `[自动提交版] ${name}`;
               kernelContainer.db
                 .prepare('INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)')
@@ -332,7 +333,7 @@ export function registerResourcesRoutes(ctx: ServerContext) {
                   }
                   return f;
                 });
-                const newId = 'res_' + Math.random().toString(36).substring(2, 10);
+                const newId = randomId('res_');
                 const newName = `[自动提交版] ${name}`;
                 kernelContainer.db
                   .prepare('INSERT INTO system_resources (id, name, type, content, created_at) VALUES (?, ?, ?, ?, ?)')

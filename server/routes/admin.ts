@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { kernelContainer } from '../../packages/core/kernel/index.js';
+import { randomId } from '../utils/id.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
 import { generateStudentNumber } from './shared.js';
@@ -127,7 +128,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
           if (!clsName) continue;
 
           // Generate a random ID for the class
-          const classId = Math.random().toString(36).slice(2);
+          const classId = randomId();
           insertClass.run(classId, clsName, clsDesc, Date.now());
 
           const studentsList = cls.students || [];
@@ -147,7 +148,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
             }
 
             if (!studentId) {
-              studentId = Math.random().toString(36).slice(2);
+              studentId = randomId();
               const studentNumber = generateStudentNumber(db) || `ST_${studentId}`;
               insertStudent.run(studentId, studentNumber, stName, stEmail, Date.now());
             }
@@ -200,7 +201,7 @@ export function registerAdminRoutes(ctx: ServerContext) {
         }
 
         if (!studentId) {
-          studentId = Math.random().toString(36).slice(2);
+          studentId = randomId();
           const finalNum = stNum && stNum.trim() !== '' ? stNum.trim() : `ST_${studentId}`;
           insertStudent.run(studentId, finalNum, stName, stEmail, Date.now());
           imported.push({ id: studentId, student_number: finalNum, name: stName, email: stEmail, new: true });

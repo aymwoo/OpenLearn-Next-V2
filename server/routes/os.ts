@@ -247,7 +247,7 @@ export function registerOsRoutes(ctx: ServerContext) {
     try {
       res.json({ success: true, personas: listAIPersonas() });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 

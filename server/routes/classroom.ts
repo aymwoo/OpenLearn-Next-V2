@@ -6,6 +6,8 @@ import type { ClassroomRuntimeService } from '../services/classroom-runtime-serv
 import { ARCHIVED_REPORT_STAGE } from '../services/classroom-runtime-service.js';
 import type { ClassroomFeedService } from '../services/classroom-feed-service.js';
 import type { ServerContext } from '../context.js';
+import { sendSafeError } from '../utils/error-handler.js';
+import { randomId } from '../utils/id.js';
 import { emitClassroomEvent, getOnlineStudentIds } from '../presence.js';
 
 /**
@@ -130,7 +132,7 @@ export function registerClassroomRoutes(
   const publishCountdownEvent = (type: string, payload: any) => {
     try {
       void kernelContainer.eventBus.publish({
-        id: `evt-cd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: randomId('evt-cd-'),
         type,
         source: 'classroom.countdown',
         payload,
@@ -415,7 +417,7 @@ export function registerClassroomRoutes(
           feedReplay,
         });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -430,7 +432,7 @@ export function registerClassroomRoutes(
         const countdown = getCountdownForLesson(lessonId);
         res.json({ success: true, countdown });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -446,7 +448,7 @@ export function registerClassroomRoutes(
         const countdown = applyCountdownAction(lessonId, action, { duration, addSeconds, label });
         res.json({ success: true, countdown });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -488,7 +490,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true, session });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -540,7 +542,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true, viewState: settings.viewState ?? {} });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -566,7 +568,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true, stage: result.stage });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -597,7 +599,7 @@ export function registerClassroomRoutes(
           'ACTIVE',
         );
 
-        const pollId = `poll_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const pollId = randomId('poll_');
         const now = Date.now();
 
         db.prepare(
@@ -627,7 +629,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true, poll: pollData });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -672,7 +674,7 @@ export function registerClassroomRoutes(
           return res.status(400).json({ error: 'Invalid vote option' });
         }
 
-        const voteId = `vote_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const voteId = randomId('vote_');
         const now = Date.now();
 
         db.prepare(
@@ -712,7 +714,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true, distribution, totalVotes: total });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -744,7 +746,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true, distribution, totalVotes: total });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -762,7 +764,7 @@ export function registerClassroomRoutes(
         const teacherId = getActorId(req) || 'teacher';
         const session = await classroomService.getOrCreateSession(lessonId, teacherId);
 
-        const buzzerId = `bz_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const buzzerId = randomId('bz_');
         const now = Date.now();
 
         db.prepare(
@@ -788,7 +790,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true, buzzer: buzzerData });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -857,7 +859,7 @@ export function registerClassroomRoutes(
             : { studentId: buzzer.winner_student_id, studentName: buzzer.winner_student_name },
         });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -884,7 +886,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -914,7 +916,7 @@ export function registerClassroomRoutes(
           .get(lessonId) as any;
         const sessionId = activeSession ? activeSession.id : `s_${lessonId}`;
 
-        const signalId = `ps_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const signalId = randomId('ps_');
         db.prepare(
           `
         INSERT INTO classroom_pacing_signals (id, session_id, student_id, signal_type, created_at)
@@ -946,7 +948,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true, summary });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -979,7 +981,7 @@ export function registerClassroomRoutes(
           .get(lessonId) as any;
         const sessionId = activeSession ? activeSession.id : `s_${lessonId}`;
 
-        const ticketId = `ticket_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const ticketId = randomId('ticket_');
         const now = Date.now();
 
         try {
@@ -1055,7 +1057,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true, totalSubmitted: countRow?.count || 1 });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -1120,7 +1122,7 @@ export function registerClassroomRoutes(
           submissions: rows,
         });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -1350,7 +1352,7 @@ export function registerClassroomRoutes(
         exitTicketSubmitted,
       });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 
@@ -1531,7 +1533,7 @@ export function registerClassroomRoutes(
           students: studentBreakdown,
         });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -1557,7 +1559,7 @@ export function registerClassroomRoutes(
 
       res.json({ success: true, sessions: activeSessions });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 
@@ -1585,7 +1587,7 @@ export function registerClassroomRoutes(
 
       res.json({ success: true, modes: [...merged, ...extra].sort((a, b) => a.sortOrder - b.sortOrder) });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 
@@ -1623,7 +1625,7 @@ export function registerClassroomRoutes(
       );
       res.json({ success: true, id });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 
@@ -1681,7 +1683,7 @@ export function registerClassroomRoutes(
 
       res.json({ success: true, id, created: false });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 
@@ -1695,7 +1697,7 @@ export function registerClassroomRoutes(
       if (!info.changes) return res.status(404).json({ error: `Teaching mode "${id}" not found` });
       res.json({ success: true, id });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 
@@ -1722,7 +1724,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true, sessionId: session.id, teachingModeId: modeValidation.id });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -1894,7 +1896,7 @@ export function registerClassroomRoutes(
           timeline: timelineData,
         });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -1930,7 +1932,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true, pulseCheck: pulseCheckPayload });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -2073,7 +2075,7 @@ export function registerClassroomRoutes(
           },
         });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -2132,7 +2134,7 @@ export function registerClassroomRoutes(
         },
       });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 
@@ -2215,7 +2217,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true, count: results.length, submissions: results });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -2257,7 +2259,7 @@ export function registerClassroomRoutes(
 
         res.json({ success: true, presets });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -2276,7 +2278,7 @@ export function registerClassroomRoutes(
           return;
         }
 
-        const id = `preset_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const id = randomId('preset_');
         const now = Date.now();
 
         db.prepare(
@@ -2301,7 +2303,7 @@ export function registerClassroomRoutes(
           },
         });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -2377,7 +2379,7 @@ export function registerClassroomRoutes(
           },
         });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );
@@ -2396,7 +2398,7 @@ export function registerClassroomRoutes(
         }
         res.json({ success: true });
       } catch (e: any) {
-        res.status(500).json({ error: e.message });
+        sendSafeError(res, e, 500);
       }
     },
   );

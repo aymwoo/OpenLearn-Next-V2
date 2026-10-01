@@ -13,6 +13,7 @@
  *      不产生重复行、不叠加总分。
  */
 
+import crypto from 'crypto';
 import type { SqliteLike } from '../../packages/plugins/courseware-score.js';
 import { resolveScoreConfig, type CoursewareScoreConfig } from '../../packages/plugins/courseware-score.js';
 
@@ -339,13 +340,9 @@ export function markStudentAbsent(
 }
 
 function randomHex(bytes: number): string {
-  // Node 与 Worker 两侧都可用；避免为 8 个字节引入 node:crypto 依赖
-  let out = '';
-  for (let i = 0; i < bytes; i++)
-    out += Math.floor(Math.random() * 256)
-      .toString(16)
-      .padStart(2, '0');
-  return out;
+  // Phase B3: 改用 crypto 随机源（Math.random 可预测，生成的 assignment 主键
+  // 存在枚举/伪造风险）。Node 与 Worker 两侧均可用 node:crypto。
+  return crypto.randomBytes(bytes).toString('hex');
 }
 
 /** 查找或创建「互动课件: {name}」作业壳行（自动录入与缺考标记共用同一套作业定位口径） */

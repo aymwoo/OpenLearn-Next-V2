@@ -7,6 +7,7 @@ import { verifyPassword, hashPassword as bcryptHashPassword } from '../../packag
 import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, getActorId, requireAuth } from '../middleware/auth.js';
 import { validateMagicBytes, BLOCKED_EXTENSIONS, generateStudentNumber } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { randomId } from '../utils/id.js';
 import { parsePagination } from '../utils/pagination.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import { emitClassroomEvent } from '../presence.js';
@@ -102,7 +103,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.post('/api/classes', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { name, description } = req.body;
-      const classId = Math.random().toString(36).slice(2);
+      const classId = randomId();
       kernelContainer.db
         .prepare('INSERT INTO classes (id, name, description, created_at) VALUES (?, ?, ?, ?)')
         .run(classId, name, description || '', Date.now());
@@ -868,7 +869,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       );
       res.json({ success: true });
     } catch (e: any) {
-      res.status(550).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 
@@ -890,7 +891,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       );
       res.json({ success: true });
     } catch (e: any) {
-      res.status(550).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 
@@ -900,7 +901,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const users = await kernelContainer.commandBus.execute(cmd);
       res.json(users);
     } catch (e: any) {
-      res.status(550).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 
@@ -921,7 +922,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
-      res.status(550).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 
@@ -943,7 +944,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
-      res.status(550).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 
@@ -959,7 +960,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
       const result = await kernelContainer.commandBus.execute(cmd);
       res.json(result);
     } catch (e: any) {
-      res.status(550).json({ error: e.message });
+      sendSafeError(res, e, 500);
     }
   });
 
@@ -976,7 +977,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.post('/api/labs', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { room_number, rows, cols } = req.body;
-      const id = 'lab_' + Math.random().toString(36).slice(2, 10);
+      const id = randomId('lab_');
       kernelContainer.db
         .prepare('INSERT INTO computer_labs (id, room_number, rows, cols, created_at) VALUES (?, ?, ?, ?, ?)')
         .run(id, room_number, parseInt(rows), parseInt(cols), Date.now());
@@ -1074,7 +1075,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
   app.post('/api/students', requireAuth('teacher', 'administrator'), (req, res) => {
     try {
       const { name, email, password, student_number } = req.body;
-      const studentId = Math.random().toString(36).slice(2);
+      const studentId = randomId();
 
       let finalNum = student_number && student_number.trim() !== '' ? student_number.trim() : '';
       if (!finalNum) {
@@ -1355,7 +1356,7 @@ export function registerRosterRoutes(ctx: ServerContext) {
 
         let finalNum = stNum;
         if (!studentId) {
-          studentId = Math.random().toString(36).slice(2);
+          studentId = randomId();
           if (!finalNum) {
             finalNum = generateStudentNumber(db) || `ST_${studentId}`;
           }
