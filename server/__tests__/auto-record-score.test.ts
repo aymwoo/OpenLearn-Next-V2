@@ -68,7 +68,7 @@ function seedAttempt(opts: {
 function submissionRow(attemptCoursewareName: string, studentId: string) {
   return db
     .prepare(
-      `SELECT s.score, s.feedback FROM assignment_submissions s
+      `SELECT s.score, s.feedback, s.status, s.source FROM assignment_submissions s
        JOIN assignments a ON a.id = s.assignment_id
        WHERE a.class_id = ? AND a.lesson_id = ? AND a.title = ? AND s.student_id = ?`,
     )
@@ -138,6 +138,12 @@ beforeEach(() => {
   db.exec(`
     ALTER TABLE courseware_score_config ADD COLUMN auto_record_enabled INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE courseware_score_config ADD COLUMN auto_record_min_completion REAL NOT NULL DEFAULT 0;
+  `);
+
+  // 模拟 013 迁移：成绩来源列 + 自动录入更新策略列
+  db.exec(`
+    ALTER TABLE assignment_submissions ADD COLUMN source TEXT;
+    ALTER TABLE courseware_score_config ADD COLUMN auto_record_strategy TEXT NOT NULL DEFAULT 'latest';
   `);
 
   db.prepare('INSERT INTO classes (id, name) VALUES (?, ?)').run(CLASS_ID, '一班');
@@ -358,17 +364,19 @@ describe('autoRecordForLesson 批量补录', () => {
     expect(reasons).toEqual(expect.arrayContaining(['att_a:ok', 'att_b:missing-score', 'att_c:below-min-completion']));
   });
 
-  it('重复补录不会重复记分', () => {
+  it('重复补录幂等：auto 行按 latest 刷新为最新分但不产生重复行', () => {
     seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 90 });
     enableRule();
 
     const first = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
     expect(first.recorded).toBe(1);
 
+    // migration 013 行为变更：auto 行不再硬跳过（旧分永不更新），而是按 latest 刷新；
+    // 幂等保证不变 —— 永远只有一行，不重复记分。
     const second = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
-    expect(second.recorded).toBe(0);
-    expect(second.skipped).toBe(1);
-    expect(second.details[0].reason).toBe('already-recorded');
+    expect(second.recorded).toBe(1);
+    expect(submissionRow('分数乐园', 's1').score).toBe(90);
+    expect(submissionRow('分数乐园', 's1').source).toBe('auto');
 
     const count = db
       .prepare(
@@ -377,6 +385,155 @@ describe('autoRecordForLesson 批量补录', () => {
       )
       .get(LESSON) as { n: number };
     expect(count.n).toBe(1);
+  });
+
+  it('学生重做课件后，latest 策略把 auto 行刷新为最新分', () => {
+    const now = Date.now();
+    // att_a 先发生（旧分 90），att_a2 是重做（新分 70）—— 显式时间戳保证 finished_at 排序
+    db.prepare(
+      'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, finished_at, status) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('att_a', 'cw_1', 's1', now - 10000, now - 9000, 'completed');
+    db.prepare(
+      'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('res-att_a', 'att_a', 90, 'ok', 1, '{}');
+    db.prepare(
+      'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, finished_at, status) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('att_a2', 'cw_1', 's1', now - 1000, now, 'completed');
+    db.prepare(
+      'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('res-att_a2', 'att_a2', 70, 'ok', 1, '{}');
+    enableRule();
+
+    autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(submissionRow('分数乐园', 's1').score).toBe(70);
+    expect(submissionRow('分数乐园', 's1').source).toBe('auto');
+  });
+
+  it('同一学生多条 attempt 只处理最新一条（避免回写最旧分）', () => {
+    // att_old 分更高但更早（finished_at 更小）；att_new 是最新 attempt
+    const now = Date.now();
+    db.prepare(
+      'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, finished_at, status) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('att_old', 'cw_1', 's1', now - 10000, now - 9000, 'completed');
+    db.prepare(
+      'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('res-att_old', 'att_old', 95, 'ok', 1, '{}');
+    db.prepare(
+      'INSERT INTO courseware_attempt (id, courseware_id, student_id, started_at, finished_at, status) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('att_new', 'cw_1', 's1', now - 1000, now, 'completed');
+    db.prepare(
+      'INSERT INTO submission_result (id, attempt_id, score, comment, completion, extra_json) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('res-att_new', 'att_new', 60, 'ok', 1, '{}');
+    enableRule();
+
+    const report = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(report.recorded).toBe(1);
+    expect(submissionRow('分数乐园', 's1').score).toBe(60);
+  });
+
+  it('highest 策略：新分不高于已录分数时保持原分（not-higher）', () => {
+    seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 90 });
+    enableRule();
+    saveScoreConfig(db as any, { coursewareId: '*', autoRecordStrategy: 'highest' });
+
+    const first = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(first.recorded).toBe(1);
+    expect(submissionRow('分数乐园', 's1').score).toBe(90);
+
+    // 学生重做，分更低 → 保持 90
+    seedAttempt({ attemptId: 'att_a2', studentId: 's1', score: 70 });
+    const second = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(second.recorded).toBe(0);
+    expect(second.skipped).toBe(1);
+    expect(second.details[0].reason).toBe('not-higher');
+    expect(submissionRow('分数乐园', 's1').score).toBe(90);
+  });
+
+  it('highest 策略：新分更高时正常覆盖', () => {
+    seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 70 });
+    enableRule();
+    saveScoreConfig(db as any, { coursewareId: '*', autoRecordStrategy: 'highest' });
+
+    autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(submissionRow('分数乐园', 's1').score).toBe(70);
+
+    seedAttempt({ attemptId: 'att_a2', studentId: 's1', score: 95 });
+    autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(submissionRow('分数乐园', 's1').score).toBe(95);
+  });
+
+  it('自动路径不覆盖教师手动录入/调整过的分数（manual-protected）', () => {
+    seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 90 });
+    enableRule();
+
+    // 教师先手动录入 85
+    const manual = promoteAttemptToGrade(db as any, 'att_a', {
+      lessonId: LESSON,
+      classId: CLASS_ID,
+      sourceLabel: '教师在课堂中保存录入',
+      source: 'manual',
+      ignoreMinCompletion: true,
+      ignoreNotFinished: true,
+    });
+    // 手动路径写入后教师改分场景：直接把行改成 85 + source='manual'（模拟教师改判）
+    db.prepare(
+      `UPDATE assignment_submissions SET score = 85, source = 'manual',
+       feedback = '由教师在学期成绩页手动调整' WHERE student_id = 's1'`,
+    ).run();
+    expect(manual.ok).toBe(true);
+
+    // 学生重做出 95 分的新 attempt，自动规则不得冲掉手动分
+    seedAttempt({ attemptId: 'att_a2', studentId: 's1', score: 95 });
+    const report = autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+    expect(report.details[0].reason).toBe('manual-protected');
+    expect(submissionRow('分数乐园', 's1').score).toBe(85);
+    expect(submissionRow('分数乐园', 's1').source).toBe('manual');
+  });
+
+  it('自动录入写 source=auto，手动录入写 source=manual', () => {
+    seedAttempt({ attemptId: 'att_auto', studentId: 's1', score: 88 });
+    seedAttempt({ attemptId: 'att_manual', studentId: 's2', score: 66 });
+    enableRule();
+
+    autoRecordAttempt(db as any, 'att_auto', { lessonId: LESSON, classId: CLASS_ID });
+    promoteAttemptToGrade(db as any, 'att_manual', {
+      lessonId: LESSON,
+      classId: CLASS_ID,
+      sourceLabel: '教师在课堂中保存录入',
+      source: 'manual',
+      ignoreMinCompletion: true,
+      ignoreNotFinished: true,
+    });
+
+    expect(submissionRow('分数乐园', 's1').source).toBe('auto');
+    expect(submissionRow('分数乐园', 's2').source).toBe('manual');
+  });
+
+  it('skip（manual 保护/缺考保护）时不推进 student_lesson_progress', () => {
+    seedAttempt({ attemptId: 'att_a', studentId: 's1', score: 90 });
+    enableRule();
+
+    // 先手动录入，再把行改回「未完成进度」状态以便观察 skip 分支
+    promoteAttemptToGrade(db as any, 'att_a', {
+      lessonId: LESSON,
+      classId: CLASS_ID,
+      source: 'manual',
+      ignoreMinCompletion: true,
+      ignoreNotFinished: true,
+    });
+    db.prepare(
+      `UPDATE assignment_submissions SET score = 85, source = 'manual' WHERE student_id = 's1'`,
+    ).run();
+    db.prepare(`UPDATE student_lesson_progress SET completed = 0, progress_percent = 40 WHERE student_id = 's1'`).run();
+
+    seedAttempt({ attemptId: 'att_a2', studentId: 's1', score: 95 });
+    autoRecordForLesson(db as any, { lessonId: LESSON, classId: CLASS_ID });
+
+    const progress = db
+      .prepare(`SELECT completed, progress_percent FROM student_lesson_progress WHERE student_id = ?`)
+      .get('s1') as any;
+    expect(progress.completed).toBe(0);
+    expect(progress.progress_percent).toBe(40);
   });
 
   it('报告里带出学生姓名，便于教师核对', () => {

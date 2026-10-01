@@ -525,6 +525,7 @@ export function registerCoursewareRoutes(ctx: ServerContext) {
         lessonId,
         classId,
         sourceLabel: '教师在课堂中保存录入',
+        source: 'manual',
         ignoreMinCompletion: true,
         ignoreNotFinished: true,
       });

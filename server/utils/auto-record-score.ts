@@ -34,7 +34,10 @@ export interface PromoteResult {
     | 'missing-score'
     | 'below-min-completion'
     | 'rule-disabled'
-    | 'already-recorded';
+    | 'already-recorded'
+    | 'manual-protected'
+    | 'absent-protected'
+    | 'not-higher';
   score?: number;
   assignmentId?: string;
   studentId?: string;
@@ -96,6 +99,18 @@ export interface PromoteOptions {
   /** 强制忽略完成度门槛（手动录入时教师已自行判断） */
   ignoreMinCompletion?: boolean;
   /**
+   * 成绩来源（migration 013 的 assignment_submissions.source 列）：
+   * - 'manual'（默认）：教师录入/改判，落库后受自动规则保护（auto 路径遇 manual 行跳过）；
+   * - 'auto'：规则自动录入，遇 manual/缺考行跳过，auto 行按 strategy 刷新。
+   */
+  source?: 'manual' | 'auto';
+  /**
+   * 自动录入的分数更新策略（仅 source='auto' 时生效）：
+   * - 'latest'（默认）：取最新 attempt 分数覆盖；
+   * - 'highest'：仅新分高于已录分数才覆盖（鼓励重做）。
+   */
+  strategy?: 'latest' | 'highest';
+  /**
    * 忽略「必须已完成」的状态校验。
    * 仅供**手动**录入使用：教师显式点「录入成绩」本身就是判断，不应被规则收窄能力
    * （历史上教师可以对 SAVE_PROGRESS 中途的 attempt 手工录入）。
@@ -148,13 +163,46 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
   const assignmentTitle = `互动课件: ${coursewareName}`;
   const now = Date.now();
   const sourceLabel = options.sourceLabel ?? '教师在课堂中保存录入';
+  const source = options.source ?? 'manual';
+  const strategy = options.strategy ?? 'latest';
 
-  const run = (): string => {
-    const existing = db
+  type RunOutcome = { assignmentId?: string; skipReason?: PromoteResult['reason'] };
+
+  const run = (): RunOutcome => {
+    // 自动路径守卫：先查已有成绩行（经 assignments 的课节/班级/课件标题定位，无需建行）
+    if (source === 'auto') {
+      const existing = db
+        .prepare(
+          `SELECT s.score, s.status, s.source FROM assignment_submissions s
+           JOIN assignments a ON a.id = s.assignment_id
+           WHERE a.class_id = ? AND a.lesson_id = ? AND a.title = ? AND s.student_id = ?
+           LIMIT 1`,
+        )
+        .get(classId, lessonId, assignmentTitle, attempt.student_id) as
+        | { score: number | null; status: string | null; source: string | null }
+        | undefined;
+      if (existing) {
+        // 教师手动录入/改判的分数受保护，自动规则绝不覆盖（否则手改分会被课件分冲掉）
+        if (existing.source === 'manual') return { skipReason: 'manual-protected' };
+        // 教师标记的缺考行受保护（教师改判走手动路径显式覆盖）
+        if (existing.status === 'absent') return { skipReason: 'absent-protected' };
+        // highest 策略：仅新分更高才覆盖（无已录分数视为可覆盖）
+        if (
+          strategy === 'highest' &&
+          existing.score !== null &&
+          existing.score !== undefined &&
+          finalScore <= existing.score
+        ) {
+          return { skipReason: 'not-higher' };
+        }
+      }
+    }
+
+    const existingAssignment = db
       .prepare('SELECT id FROM assignments WHERE class_id = ? AND lesson_id = ? AND title = ?')
       .get(classId, lessonId, assignmentTitle) as { id: string } | undefined;
 
-    let assignmentId = existing?.id;
+    let assignmentId = existingAssignment?.id;
     if (!assignmentId) {
       assignmentId = 'ast-cw-' + randomHex(8);
       db.prepare(
@@ -170,17 +218,18 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
       );
     }
 
-    // 幂等：同一 assignment + student 只保留一行，重跑即覆盖
+    // 幂等：同一 assignment + student 只保留一行，重跑即覆盖（source 随本次写入刷新）
     db.prepare(
-      `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'graded')
+      `INSERT INTO assignment_submissions (assignment_id, student_id, content, score, feedback, submitted_at, graded_at, status, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'graded', ?)
        ON CONFLICT(assignment_id, student_id) DO UPDATE SET
          content = excluded.content,
          score = excluded.score,
          feedback = excluded.feedback,
          submitted_at = excluded.submitted_at,
          graded_at = excluded.graded_at,
-         status = 'graded'`,
+         status = 'graded',
+         source = excluded.source`,
     ).run(
       assignmentId,
       attempt.student_id,
@@ -189,6 +238,7 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
       `由${sourceLabel}。课件完成度: ${Math.round(completion * 100)}%。课件原始反馈: ${attempt.comment || '—'}`,
       now,
       now,
+      source,
     );
 
     db.prepare(
@@ -199,17 +249,29 @@ export function promoteAttemptToGrade(db: SqliteLike, attemptId: string, options
          progress_percent = 100`,
     ).run(attempt.student_id, lessonId, now);
 
-    return assignmentId;
+    return { assignmentId };
   };
 
   // better-sqlite3 风格的 transaction；非事务环境（Worker RPC 代理）直接执行。
   // 必须以 db.transaction(run)() 调用：解构出 transaction 再调会丢失 this 绑定。
-  const assignmentId = typeof (db as any).transaction === 'function' ? (db as any).transaction(run)() : run();
+  const outcome: RunOutcome =
+    typeof (db as any).transaction === 'function' ? (db as any).transaction(run)() : run();
+
+  // 跳过时整体不落库（含 student_lesson_progress 不推进），
+  // 避免「分数被保护但进度被自动置 100」的不一致。
+  if (outcome.skipReason) {
+    return {
+      ok: false,
+      reason: outcome.skipReason,
+      score: finalScore,
+      studentId: attempt.student_id,
+    };
+  }
 
   return {
     ok: true,
     score: finalScore,
-    assignmentId,
+    assignmentId: outcome.assignmentId,
     studentId: attempt.student_id,
     coursewareName,
   };
@@ -285,6 +347,8 @@ export function autoRecordAttempt(
     classId: context.classId,
     minCompletion: decision.rule.auto_record_min_completion,
     sourceLabel: '自动录入规则',
+    source: 'auto',
+    strategy: decision.rule.auto_record_strategy,
   });
   return { ...result, ruleSource: decision.ruleSource };
 }
@@ -307,10 +371,11 @@ export interface AutoRecordReport {
 }
 
 /**
- * 批量补录：把某个课节 + 班级下已提交但尚未录入的 attempt 按规则补录。
+ * 批量补录：把某个课节 + 班级下已提交的 attempt 按规则补录/刷新。
  *
- * 「尚未录入」的判定：assignment_submissions 里不存在
- * (互动课件:{name} 作业, studentId) 这一行。已录入的跳过，保证幂等。
+ * 来源判定（migration 013）：manual 行与缺考行跳过（受保护）；
+ * auto 行按配置策略刷新 —— 'latest' 取最新 attempt 分覆盖，'highest' 仅更高才覆盖。
+ * 同一 (学生, 课件) 的多条 attempt 只处理最新一条。
  */
 export function autoRecordForLesson(
   db: SqliteLike,
@@ -341,6 +406,16 @@ export function autoRecordForLesson(
 
   const report: AutoRecordReport = { recorded: 0, skipped: 0, details: [] };
 
+  // 同一 (学生, 课件) 只补录最新一条 attempt：latest 策略刷新为最新分，
+  // highest 策略也只应与最新 attempt 比较（旧行已按 finished_at DESC 排序，首个即最新）。
+  const seenPairs = new Set<string>();
+  const dedupedRows = rows.filter((row) => {
+    const key = `${row.student_id}::${row.courseware_name ?? ''}`;
+    if (seenPairs.has(key)) return false;
+    seenPairs.add(key);
+    return true;
+  });
+
   // 学生姓名：仅用于报告可读性，查询失败不阻断录入。
   // 注意 students 表没有 class_id 列，必须经 class_students 关联（本项目的老坑）。
   const studentNames = new Map<string, string>();
@@ -358,13 +433,15 @@ export function autoRecordForLesson(
     /* 名单查询失败不阻断 */
   }
 
-  for (const row of rows) {
+  for (const row of dedupedRows) {
     const attemptId = String(row.attempt_id);
     const studentId = String(row.student_id);
     const coursewareName = String(row.courseware_name ?? '互动课件');
 
-    // 幂等：已经录过同一课件的这一行就跳过，不重复覆盖教师手动调整过的分数
-    if (hasRecordedGrade(db, classId, lessonId, coursewareName, studentId)) {
+    // 已有成绩行时按来源/状态判定：手动行与缺考行受保护；
+    // auto 行不再硬跳过 —— latest 策略需要刷新为最新分（migration 013 行为变更）。
+    const existingGrade = getRecordedGrade(db, classId, lessonId, coursewareName, studentId);
+    if (existingGrade?.source === 'manual') {
       report.skipped += 1;
       report.details.push({
         attemptId,
@@ -373,7 +450,20 @@ export function autoRecordForLesson(
         coursewareName,
         score: normalizePercentScore(row.score),
         recorded: false,
-        reason: 'already-recorded',
+        reason: 'manual-protected',
+      });
+      continue;
+    }
+    if (existingGrade?.status === 'absent') {
+      report.skipped += 1;
+      report.details.push({
+        attemptId,
+        studentId,
+        studentName: studentNames.get(studentId) ?? studentId,
+        coursewareName,
+        score: normalizePercentScore(row.score),
+        recorded: false,
+        reason: 'absent-protected',
       });
       continue;
     }
@@ -398,26 +488,28 @@ export function autoRecordForLesson(
   return report;
 }
 
-/** 该（课节, 班级, 课件, 学生）是否已有学期成绩行 */
-function hasRecordedGrade(
+/** 该（课节, 班级, 课件, 学生）的已有成绩行（含来源/状态，供自动路径守卫判定；无则 null） */
+function getRecordedGrade(
   db: SqliteLike,
   classId: string,
   lessonId: string,
   coursewareName: string,
   studentId: string,
-): boolean {
+): { score: number | null; status: string | null; source: string | null } | null {
   try {
     const row = db
       .prepare(
-        `SELECT 1 AS hit FROM assignment_submissions s
+        `SELECT s.score, s.status, s.source FROM assignment_submissions s
          JOIN assignments a ON a.id = s.assignment_id
          WHERE a.class_id = ? AND a.lesson_id = ? AND a.title = ? AND s.student_id = ?
          LIMIT 1`,
       )
-      .get(classId, lessonId, `互动课件: ${coursewareName}`, studentId);
-    return !!row;
+      .get(classId, lessonId, `互动课件: ${coursewareName}`, studentId) as
+      | { score: number | null; status: string | null; source: string | null }
+      | undefined;
+    return row ?? null;
   } catch (e) {
-    return false;
+    return null;
   }
 }
 
@@ -430,6 +522,9 @@ export const PROMOTE_REASON_TEXT: Record<NonNullable<PromoteResult['reason']>, s
   'below-min-completion': '完成度未达到规则设定的门槛',
   'rule-disabled': '自动录入规则未开启',
   'already-recorded': '已录入学期成绩，无需重复录入',
+  'manual-protected': '教师已手动录入/调整过该分数，自动规则不覆盖',
+  'absent-protected': '该生已被标记缺考，自动规则不覆盖（教师改判请走手动录入）',
+  'not-higher': '本次分数未高于已录分数（最高分策略），保持原分',
 };
 
 export function describePromoteReason(reason: PromoteResult['reason'] | undefined): string {

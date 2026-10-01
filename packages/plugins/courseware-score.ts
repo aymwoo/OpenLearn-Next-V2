@@ -51,6 +51,12 @@ export interface CoursewareScoreConfig {
    * 0 表示不设门槛。
    */
   auto_record_min_completion: number;
+  /**
+   * 自动录入的分数更新策略（对 source='auto' 的成绩行生效；手动行永远受保护）：
+   * - 'latest'（默认）：学生重做课件后，取最新一次 attempt 分数覆盖；
+   * - 'highest'：仅新分高于已录分数才覆盖（鼓励重做，保留历史最佳）。
+   */
+  auto_record_strategy: 'latest' | 'highest';
   updated_at: number;
 }
 
@@ -93,6 +99,7 @@ export const DEFAULT_SCORE_CONFIG: CoursewareScoreConfig = {
   // 自动录入默认关闭：必须由教师显式开启，避免升级后行为突变
   auto_record_enabled: false,
   auto_record_min_completion: 0,
+  auto_record_strategy: 'latest',
   updated_at: 0,
 };
 
@@ -122,6 +129,14 @@ export function clamp(value: number, min: number, max: number): number {
   if (value < min) return min;
   if (value > max) return max;
   return value;
+}
+
+/**
+ * 自动录入更新策略归一：只认 'latest'/'highest'（大小写/连字符宽容），非法值回落 'latest'。
+ */
+export function normalizeAutoRecordStrategy(value: unknown): 'latest' | 'highest' {
+  const text = typeof value === 'string' ? value.trim().toLowerCase().replace(/[\s-]+/g, '_') : '';
+  return text === 'highest' ? 'highest' : 'latest';
 }
 
 /**
@@ -360,6 +375,7 @@ export function normalizeScoreConfig(row: any): CoursewareScoreConfig {
     // SQLite 用 INTEGER 存布尔：0/1 → false，其余非空值（含 'true'）视为开启
     auto_record_enabled: isTruthyFlag(row.auto_record_enabled),
     auto_record_min_completion: clamp(toNumber(row.auto_record_min_completion) ?? 0, 0, 1),
+    auto_record_strategy: normalizeAutoRecordStrategy(row.auto_record_strategy),
     updated_at: updatedAt ?? 0,
   };
 }
@@ -422,6 +438,9 @@ export interface SaveScoreConfigInput {
   /** 自动录入的完成度门槛，0~1 */
   autoRecordMinCompletion?: number | string;
   auto_record_min_completion?: number | string;
+  /** 自动录入的分数更新策略：'latest'（最新，默认）| 'highest'（仅更高才覆盖） */
+  autoRecordStrategy?: string;
+  auto_record_strategy?: string;
 }
 
 function pickInput<T>(
@@ -476,6 +495,15 @@ export function saveScoreConfig(db: SqliteLike, input: SaveScoreConfigInput): Co
   const autoRecordMinCompletion = toNumber(
     pickInput<string | number>(input, 'autoRecordMinCompletion', 'auto_record_min_completion'),
   );
+  const strategyRaw = pickInput<string>(input, 'autoRecordStrategy', 'auto_record_strategy');
+  if (
+    strategyRaw !== undefined &&
+    strategyRaw !== null &&
+    String(strategyRaw).trim() !== '' &&
+    !['latest', 'highest'].includes(String(strategyRaw).trim().toLowerCase())
+  ) {
+    throw new Error(`save_score_config: unknown autoRecordStrategy "${strategyRaw}" (expected latest / highest)`);
+  }
 
   if (rawFull !== undefined && rawFull !== null && rawFull <= 0)
     throw new Error('save_score_config: rawFullScore must be > 0');
@@ -514,45 +542,36 @@ export function saveScoreConfig(db: SqliteLike, input: SaveScoreConfigInput): Co
       autoRecordMinCompletion !== undefined
         ? clamp(autoRecordMinCompletion, 0, 1)
         : (existing?.auto_record_min_completion ?? 0),
+    auto_record_strategy:
+      strategyRaw === undefined || strategyRaw === null || String(strategyRaw).trim() === ''
+        ? (existing?.auto_record_strategy ?? 'latest')
+        : normalizeAutoRecordStrategy(strategyRaw),
     updated_at: Date.now(),
   };
 
-  // 自动录入两列由迁移 012 引入。老库尚未应用该迁移时优雅降级为旧版语句，
-  // 避免整个成绩配置写入 500（其余字段照常保存，仅自动录入规则不可配置）。
+  // 自动录入三列由迁移 012/013 引入。老库尚未应用迁移时优雅降级，
+  // 缺哪列就少写哪列，避免整个成绩配置写入 500（其余字段照常保存）。
   const hasAutoRecordColumns = tableHasColumns(db, SCORE_CONFIG_TABLE, [
     'auto_record_enabled',
     'auto_record_min_completion',
   ]);
+  const hasStrategyColumn = tableHasColumns(db, SCORE_CONFIG_TABLE, ['auto_record_strategy']);
 
-  db.prepare(
-    hasAutoRecordColumns
-      ? `INSERT INTO ${SCORE_CONFIG_TABLE}
-       (courseware_id, courseware_name, score_policy, score_fields, raw_full_score, target_full_score, weight_percentage, lesson_id, auto_record_enabled, auto_record_min_completion, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(courseware_id) DO UPDATE SET
-       courseware_name = excluded.courseware_name,
-       score_policy = excluded.score_policy,
-       score_fields = excluded.score_fields,
-       raw_full_score = excluded.raw_full_score,
-       target_full_score = excluded.target_full_score,
-       weight_percentage = excluded.weight_percentage,
-       lesson_id = excluded.lesson_id,
-       auto_record_enabled = excluded.auto_record_enabled,
-       auto_record_min_completion = excluded.auto_record_min_completion,
-       updated_at = excluded.updated_at`
-      : `INSERT INTO ${SCORE_CONFIG_TABLE}
-       (courseware_id, courseware_name, score_policy, score_fields, raw_full_score, target_full_score, weight_percentage, lesson_id, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(courseware_id) DO UPDATE SET
-       courseware_name = excluded.courseware_name,
-       score_policy = excluded.score_policy,
-       score_fields = excluded.score_fields,
-       raw_full_score = excluded.raw_full_score,
-       target_full_score = excluded.target_full_score,
-       weight_percentage = excluded.weight_percentage,
-       lesson_id = excluded.lesson_id,
-       updated_at = excluded.updated_at`,
-  ).run(
+  // 动态拼列：基线 8 列 + 自动录入 2 列（012）+ 更新策略 1 列（013）+ updated_at
+  const columns = [
+    'courseware_id',
+    'courseware_name',
+    'score_policy',
+    'score_fields',
+    'raw_full_score',
+    'target_full_score',
+    'weight_percentage',
+    'lesson_id',
+    ...(hasAutoRecordColumns ? ['auto_record_enabled', 'auto_record_min_completion'] : []),
+    ...(hasStrategyColumn ? ['auto_record_strategy'] : []),
+    'updated_at',
+  ];
+  const values: unknown[] = [
     next.courseware_id,
     next.courseware_name,
     next.score_policy,
@@ -562,8 +581,20 @@ export function saveScoreConfig(db: SqliteLike, input: SaveScoreConfigInput): Co
     next.weight_percentage,
     next.lesson_id,
     ...(hasAutoRecordColumns ? [next.auto_record_enabled ? 1 : 0, next.auto_record_min_completion] : []),
+    ...(hasStrategyColumn ? [next.auto_record_strategy] : []),
     next.updated_at,
-  );
+  ];
+  const updatable = columns.filter((c) => c !== 'courseware_id');
+  const placeholders = columns.map(() => '?').join(', ');
+  const updateSet = updatable.map((c) => `${c} = excluded.${c}`).join(', ');
+
+  db.prepare(
+    `INSERT INTO ${SCORE_CONFIG_TABLE}
+       (${columns.join(', ')})
+     VALUES (${placeholders})
+     ON CONFLICT(courseware_id) DO UPDATE SET
+       ${updateSet}`,
+  ).run(...values);
 
   return next;
 }

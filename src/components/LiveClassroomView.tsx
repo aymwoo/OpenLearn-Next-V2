@@ -397,10 +397,15 @@ export function LiveClassroomView({
   const [submissionFilter, setSubmissionFilter] = useState<'all' | 'submitted' | 'started'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // ── 自动录入成绩规则（可在 UI 中开关与调整门槛） ──────────────────────
-  const [autoRecordRule, setAutoRecordRule] = useState<{ enabled: boolean; minCompletion: number }>({
+  // ── 自动录入成绩规则（可在 UI 中开关与调整门槛/更新策略） ──────────────
+  const [autoRecordRule, setAutoRecordRule] = useState<{
+    enabled: boolean;
+    minCompletion: number;
+    strategy: 'latest' | 'highest';
+  }>({
     enabled: false,
     minCompletion: 0,
+    strategy: 'latest',
   });
   const [autoRecordRuleLoaded, setAutoRecordRuleLoaded] = useState(false);
   const [savingAutoRecordRule, setSavingAutoRecordRule] = useState(false);
@@ -516,6 +521,7 @@ export function LiveClassroomView({
       setAutoRecordRule({
         enabled: Boolean(config?.auto_record_enabled ?? config?.autoRecordEnabled),
         minCompletion: Number(config?.auto_record_min_completion ?? config?.autoRecordMinCompletion ?? 0) || 0,
+        strategy: config?.auto_record_strategy === 'highest' || config?.autoRecordStrategy === 'highest' ? 'highest' : 'latest',
       });
     } catch {
       // 静默：规则读取失败不应阻断页面
@@ -524,7 +530,7 @@ export function LiveClassroomView({
     }
   }, []);
 
-  const saveAutoRecordRule = async (next: { enabled: boolean; minCompletion: number }) => {
+  const saveAutoRecordRule = async (next: { enabled: boolean; minCompletion: number; strategy: 'latest' | 'highest' }) => {
     const previous = autoRecordRule;
     setAutoRecordRule(next); // 乐观更新，失败时回滚
     setSavingAutoRecordRule(true);
@@ -538,6 +544,7 @@ export function LiveClassroomView({
             coursewareId: '*',
             autoRecordEnabled: next.enabled,
             autoRecordMinCompletion: next.minCompletion,
+            autoRecordStrategy: next.strategy,
           },
         }),
       });
@@ -2082,6 +2089,31 @@ export function LiveClassroomView({
                           <span className="text-[11px] font-bold font-mono text-main w-9 text-right">
                             {Math.round(autoRecordRule.minCompletion * 100)}%
                           </span>
+                        </label>
+                      )}
+
+                      {autoRecordRule.enabled && (
+                        <label className="flex items-center gap-1.5 select-none">
+                          <span className="text-[11px] text-muted whitespace-nowrap">
+                            {lang === 'zh' ? '更新策略' : 'Update policy'}
+                          </span>
+                          <select
+                            value={autoRecordRule.strategy}
+                            disabled={savingAutoRecordRule}
+                            onChange={(e) => {
+                              const strategy = e.target.value === 'highest' ? 'highest' : 'latest';
+                              void saveAutoRecordRule({ ...autoRecordRule, strategy });
+                            }}
+                            className="text-[11px] px-1.5 py-0.5 bg-surface border border-theme rounded-lg text-main cursor-pointer disabled:opacity-50"
+                            title={
+                              lang === 'zh'
+                                ? '自动录入行被学生重做后的分数取法：最新 = 取最新一次提交；最高 = 仅新分更高才覆盖。教师手动录入的分数永远受保护。'
+                                : 'How auto-recorded rows update on resubmission: latest = newest attempt wins; highest = only overwrite when higher. Manual scores are always protected.'
+                            }
+                          >
+                            <option value="latest">{lang === 'zh' ? '最新一次' : 'Latest'}</option>
+                            <option value="highest">{lang === 'zh' ? '最高分' : 'Highest'}</option>
+                          </select>
                         </label>
                       )}
 

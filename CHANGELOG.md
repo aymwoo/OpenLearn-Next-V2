@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **成绩录入来源保护与更新策略：manual/auto 分流 + 最新/最高策略 (`migrations/013`, `server/utils/auto-record-score.ts`, `packages/plugins/courseware-score.ts`, `LiveClassroomView.tsx`)**：
+  - **问题**（2026-09-30 审计教学缺口 2a/2b）：实时自动录入无条件 upsert 覆盖 → 教师手改分会被课件分冲掉；批量补录只要已有成绩行就跳过 → 学生重做课件后自动录入的旧分永不更新。根因是成绩行无法区分手动/自动来源。
+  - **来源分流**：新增 `assignment_submissions.source` 列（'manual'/'auto'，按 feedback 前缀回填存量）。自动路径遇 manual 行跳过（manual-protected）——手改分永远受保护；手动路径总是覆盖并写 manual（教师显式改判优先）。
+  - **更新策略**：新增 `courseware_score_config.auto_record_strategy`（默认 'latest'）。auto 行在学生重做后按策略刷新：'latest' 取最新一次提交分；'highest' 仅新分更高才覆盖（鼓励重做）。教师可在课堂页自动录入规则条上切换。批量补录对同一 (学生, 课件) 只处理最新一条 attempt；skip 分支整体不落库（进度也不推进）。
+  - **测试**：`auto-record-score.test.ts` 新增 7 例（来源写入、manual 保护、latest 刷新、highest 保持/覆盖、多 attempt 取最新、skip 不推进进度），1 例改写为新语义。
+
 - **修复：抽人弹窗重复 —— `student-picked` 广播收敛单次投递 (`server/presence.ts`, `src/hooks/useClassroomSocket.ts`)**：
   - **问题**（2026-09-30 审计教学缺口 1）：`teacher-pick-student` 对同一事件做 lesson 房间 + class 房间 + 全局三重投递，学生 socket 同时命中多房间时收到 2-3 次相同事件 → 被抽中学生全屏弹窗/Toast 重复弹出。
   - **服务端**：删除两个房间定向 emit，仅保留 `io.emit`（全局广播本就是前两者的超集，语义等价、每端恰好一次）。白板 rollcall 的独立 emit 保留（独立触发源，已有 DB 幂等）。
