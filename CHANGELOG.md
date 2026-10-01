@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **GET 幂等：attendance-summary 移除假考勤播种 (`server/routes/grading.ts`)**：
+  - **问题**（路线图 A4-1，2026-10-01 核实仍在）：`GET /api/classes/:classId/attendance-summary` 会在无课表时随机生成 7 个假课表（sch-auto- 前缀）并按 80/12/8% 比例写入全班假考勤；GET 请求产生写副作用，破坏幂等性，且假数据对教师具有欺骗性。
+  - **整改**：两段播种逻辑整体删除，GET 变纯读。真实考勤由课堂流程 / 教师点名写入；前端图表对空数据已有优雅空态；存量 sch-auto- 假数据保留读取，随图表 30 天时间窗自然过滤。
+  - **测试**：grading-calculation.test.ts 新增「纯读断言」（GET 前后 schedules 与 sch-auto- 考勤行数不变）。
+
 - **随堂练习并发竞态根治：白板测验计数改事件驱动，新增 quiz-counts 轻量端点 (`server/routes/lessons.ts`, `InteractiveWhiteboard.tsx`, `QuizFullscreenView.tsx`)**：
   - **问题**（路线图 A2 残留）：quiz-submit 仍保留白板元素 data JSON 的读-改-写 —— 同题多名学生并发提交时互相覆盖丢成绩；此前已把权威数据迁入 `lesson_quiz_submissions` 原子 upsert，但 JSON 写入路径未摘除。
   - **后端**：彻底移除 JSON 读改写与降级 catch，关系表为唯一权威；新增 `GET /api/lessons/:id/quiz-counts`（所有登录角色可访问，仅返回各测验元素提交计数，不含答案与学生明细，防学生越权读答案）；删除无人消费的 `whiteboard-sync element-updated` 广播。

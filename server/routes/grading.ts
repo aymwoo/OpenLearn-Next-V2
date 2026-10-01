@@ -26,9 +26,6 @@ export function registerGradingRoutes(ctx: ServerContext) {
         )
         .all(classId) as any[];
 
-      // Get lessons in the database to link to auto-generated schedules if needed
-      const lessons = db.prepare('SELECT id FROM lessons LIMIT 5').all() as any[];
-
       // Verify if there are any schedules for this class
       let schedules = db
         .prepare(
@@ -41,77 +38,9 @@ export function registerGradingRoutes(ctx: ServerContext) {
         )
         .all(classId) as any[];
 
-      // If no schedules exist at all, let's create a few realistic past schedules
-      // over the last 30 days to populate the chart
-      if (schedules.length === 0 && lessons.length > 0 && classStudents.length > 0) {
-        const dateOffsets = [4, 8, 12, 16, 20, 24, 28]; // past days
-        const nowMs = Date.now();
-
-        for (let i = 0; i < dateOffsets.length; i++) {
-          const offsetDays = dateOffsets[i];
-          const schDate = new Date();
-          schDate.setDate(schDate.getDate() - offsetDays);
-          const dateStr = schDate.toISOString().split('T')[0];
-
-          const schId = 'sch-auto-' + classId + '-' + offsetDays;
-          const lessonId = lessons[i % lessons.length].id;
-
-          // Insert schedule
-          db.prepare(
-            `
-            INSERT OR IGNORE INTO schedules (id, class_id, lesson_id, scheduled_date, created_at)
-            VALUES (?, ?, ?, ?, ?)
-          `,
-          ).run(schId, classId, lessonId, dateStr, nowMs - offsetDays * 24 * 60 * 60 * 1000);
-
-          // Seed attendance for all students of this class
-          for (const s of classStudents) {
-            // Roll a status: 80% present, 12% late, 8% absent
-            const rand = Math.random();
-            const status = rand < 0.8 ? 'present' : rand < 0.92 ? 'late' : 'absent';
-
-            db.prepare(
-              `
-              INSERT OR IGNORE INTO attendance (schedule_id, student_id, status, recorded_at)
-              VALUES (?, ?, ?, ?)
-            `,
-            ).run(schId, s.student_id, status, nowMs - offsetDays * 24 * 60 * 60 * 1000);
-          }
-        }
-
-        // Re-fetch since we just created them
-        schedules = db
-          .prepare(
-            `
-          SELECT s.*, COALESCE(l.title, '未设定内�? (上课时自由选择)') as lesson_title
-          FROM schedules s
-          LEFT JOIN lessons l ON s.lesson_id = l.id
-          WHERE s.class_id = ?
-        `,
-          )
-          .all(classId) as any[];
-      }
-
-      // If schedules exist, make sure each has attendance filled for students who are in the class
-      // just in case we scheduled a class but did not record attendance yet
-      for (const sch of schedules) {
-        const attendanceCount = db
-          .prepare('SELECT COUNT(*) as count FROM attendance WHERE schedule_id = ?')
-          .get(sch.id) as any;
-        if (attendanceCount && attendanceCount.count === 0 && classStudents.length > 0) {
-          const nowMs = Date.now();
-          for (const s of classStudents) {
-            const rand = Math.random();
-            const status = rand < 0.85 ? 'present' : rand < 0.95 ? 'late' : 'absent';
-            db.prepare(
-              `
-              INSERT OR IGNORE INTO attendance (schedule_id, student_id, status, recorded_at)
-              VALUES (?, ?, ?, ?)
-            `,
-            ).run(sch.id, s.student_id, status, nowMs);
-          }
-        }
-      }
+      // DATA-INT-03: GET 请求必须幂等 —— 此处历史上会随机播种假课表与假考勤
+      // （80/12/8% 分布的 INSERT），已整体移除。真实考勤由课堂流程 / 教师点名写入；
+      // 前端图表对空数据有优雅空态。存量 sch-auto- 假数据保留读取，随图表时间窗自然过滤。
 
       // Now query details for each schedule to calculate actual attendance rates
       const summary = schedules.map((sch) => {

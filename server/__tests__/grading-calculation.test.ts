@@ -255,6 +255,37 @@ describe('学期成绩结算计算漏洞回归测试（未交作业/缺考 0 分
     expect(item!.attendanceRate).toBe(75);
   });
 
+  it('DATA-INT-03: attendance-summary 为纯读 —— 空数据班级不再播种假考勤', async () => {
+    const db = kernelContainer.db;
+    // classWithWorkId 所在班级无 schedules（结算测试用的是 semester-grades 路径），
+    // 历史上首次 GET 会随机生成 sch-auto- 课表 + 假考勤写入 DB。
+    const before = (
+      db.prepare('SELECT COUNT(*) AS n FROM schedules WHERE class_id = ?').get(classWithWorkId) as any
+    ).n;
+    const attendanceBefore = (
+      db.prepare(
+        'SELECT COUNT(*) AS n FROM attendance WHERE schedule_id LIKE ?',
+      ).get('sch-auto-%') as any
+    ).n;
+
+    const res = await fetch(`${baseUrl}/api/classes/${classWithWorkId}/attendance-summary`, {
+      headers: cookie(teacherToken),
+    });
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as Array<{ id: string }>;
+    expect(Array.isArray(data)).toBe(true);
+
+    // GET 后无新增 schedule、无 sch-auto- 假考勤写入
+    const after = (
+      db.prepare('SELECT COUNT(*) AS n FROM schedules WHERE class_id = ?').get(classWithWorkId) as any
+    ).n;
+    expect(after).toBe(before);
+    const attendanceAfter = (
+      db.prepare('SELECT COUNT(*) AS n FROM attendance WHERE schedule_id LIKE ?').get('sch-auto-%') as any
+    ).n;
+    expect(attendanceAfter).toBe(attendanceBefore);
+  });
+
   describe('成绩权重设置校验（MUT-N3 回归锁）', () => {
     it('权重和不等于 1.0 或 100% 时必须拒绝并返回 400', async () => {
       // 0-1 尺度：和为 0.8 时拒绝
