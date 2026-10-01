@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **CSRF 门控 + 错误处理统一 + ID 安全化 + 内存泄漏治理 + AI Provider 可靠性（路线图 Phase B1-B5）**：
+  - **B1 CSRF**：新增全局写请求门控 `server/middleware/csrf.ts`（复用 bridge.ts Sec-Fetch-Site/Dest 判定模式）—— cross-site 写请求 403；豁免沙箱课件直连端点（attempts log/submit/adopt，Origin:null）与 /api/auth/login；头缺失放行由 SameSite=Lax 兜底。cookie 原有 HttpOnly+SameSite=Lax 不变。
+  - **B2 错误处理**：classroom.ts 32 处裸泄 `e.message` 改 `sendSafeError`；roster.ts 6 处非标准 550 改 500（前端无依赖）；server.ts 新增四参全局 error handler 兜底，生产 500 不泄露内部信息。
+  - **B3 ID 安全化**：新增 `server/utils/id.ts` randomId（crypto.randomBytes 8B hex），替换 roster/admin/classroom/grading/resources/schedules/peer-review/runtime-service 共 18 处可预测的 `Math.random().toString(36)` 主键；randomHex 同步改 crypto 源。
+  - **B4 内存泄漏**：MF_REMOTE_CACHE 5 分钟 TTL 惰性过期 + 100 条容量淘汰；lessonActiveSegments 在课时结课（stage→ARCHIVED_REPORT）与课时删除时清理；event-bus subscribe 返回取消函数（向后兼容）+ 同类型 >50 订阅告警（index 与 EventRegistry 双实现）。
+  - **B5 AI 可靠性**：新增 `packages/core/ai/utils/fetch-with-retry.ts`（30s AbortController 超时 + 429/5xx/网络错误指数退避最多 3 次），接入 ai-agent agent loop 与 provider-gateway。
+  - **测试**：csrf.test.ts 8 例、pagination 相关、memory-hygiene 5 例、event-bus-port 2 例、fetch-with-retry 5 例。
+
 - **Breaking Changes**：
   - **列表端点分页信封（A7）**：`GET /api/lessons`、`/api/students`、`/api/classes`、`/api/schedules`、`/api/courseware/attempts` 响应从裸数组改为 `{ data, total, page, pageSize }` 信封。新增 `?page=`（默认 1）与 `?pageSize=`（默认 50，上限 500，`all` 返回全量）参数。需要全量数据的消费方传 `pageSize=all`；前端 10 处消费点已同步追平。子资源端点（如 `/api/classes/:classId/schedules`）本轮维持裸数组。
 
