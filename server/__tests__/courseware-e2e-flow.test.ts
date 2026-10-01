@@ -254,13 +254,16 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
       { headers: { Cookie: `edu_os_token=${teacherToken}` } },
     );
     expect(filterRes.status).toBe(200);
-    const filterRows = (await filterRes.json()) as Array<{
+    // A7: 响应为 { data, total, page, pageSize } 信封
+    const filterEnvelope: any = await filterRes.json();
+    const filterRows = filterEnvelope.data as Array<{
       attemptId: string;
       studentId: string;
       coursewareUuid: string;
       score: number;
       isPromoted: number;
     }>;
+    expect(filterEnvelope.total).toBe(1);
     expect(filterRows.length).toBe(1);
     expect(filterRows[0].attemptId).toBe(attemptId);
     expect(filterRows[0].studentId).toBe(studentId);
@@ -313,11 +316,11 @@ describe('Courseware E2E flow — student score captured & promoted to assignmen
     expect(emittedEvents.some((e) => e.event === 'student-progress-updated')).toBe(true);
 
     // F.5 — isPromoted 计数现在 >= 1
-    const filterRowsAfter = (await (
+    const filterRowsAfter = ((await (
       await fetch(`${baseUrl}/api/courseware/attempts?coursewareUuid=${encodeURIComponent(coursewareUuid)}`, {
         headers: { Cookie: `edu_os_token=${teacherToken}` },
       })
-    ).json()) as Array<{ isPromoted: number }>;
+    ).json()) as any).data as Array<{ isPromoted: number }>;
     expect(filterRowsAfter[0].isPromoted).toBeGreaterThanOrEqual(1);
 
     // F.6 — 幂等：第二次 promote 不会重复建作业，submission 行只增不改
