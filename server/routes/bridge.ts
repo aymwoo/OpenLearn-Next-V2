@@ -4,6 +4,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { BRIDGE_SDK_CODE } from '../utils/bridge-sdk.js';
 import { injectLmsSdk, collectCoursewareRuntimeScripts, setCoursewareDocumentCsp } from './shared.js';
 import { verifyCoursewareToken } from '../utils/courseware-access.js';
+import { isPathInsideRoot } from '../utils/path-guard.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 
@@ -124,15 +125,18 @@ export function registerBridgeRoutes(ctx: ServerContext) {
                 if (f.path && f.content !== undefined) {
                   const cleanRel = f.path.replace(/\\/g, '/').replace(/^\/+/, '');
                   const target = path.resolve(storageDir, cleanRel);
-                  if (target.startsWith(storageDir)) {
-                    fs.mkdirSync(path.dirname(target), { recursive: true });
-                    const isBin = /\.(png|jpe?g|gif|webp|ico)$/i.test(cleanRel);
-                    if (isBin) {
-                      const cleanBase64 = f.content.replace(/^data:[^;]+;base64,/, '');
-                      fs.writeFileSync(target, Buffer.from(cleanBase64, 'base64'));
-                    } else {
-                      fs.writeFileSync(target, f.content, 'utf8');
-                    }
+                  // SEC-LOW-01: 严格根内判定；磁盘缓存自愈路径，越界条目告警跳过不阻塞
+                  if (!isPathInsideRoot(storageDir, target)) {
+                    console.warn('[bridge] skip path escape:', f.path);
+                    continue;
+                  }
+                  fs.mkdirSync(path.dirname(target), { recursive: true });
+                  const isBin = /\.(png|jpe?g|gif|webp|ico)$/i.test(cleanRel);
+                  if (isBin) {
+                    const cleanBase64 = f.content.replace(/^data:[^;]+;base64,/, '');
+                    fs.writeFileSync(target, Buffer.from(cleanBase64, 'base64'));
+                  } else {
+                    fs.writeFileSync(target, f.content, 'utf8');
                   }
                 }
               }
@@ -149,7 +153,8 @@ export function registerBridgeRoutes(ctx: ServerContext) {
       }
 
       let filePath = path.resolve(storageDir, subpath);
-      if (!filePath.startsWith(storageDir)) {
+      // SEC-LOW-01: 严格根内判定（裸 startsWith 前缀可被同级目录逃逸）
+      if (!isPathInsideRoot(storageDir, filePath)) {
         return res.status(403).send('Access denied');
       }
 

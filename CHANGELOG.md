@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **路径安全：抽公共 path-guard 守卫，修复 4 处裸前缀哨兵 (`server/utils/path-guard.ts`, `resources.ts`, `bridge.ts`, `assignment-hub.ts`)**：
+  - **漏洞**（2026-09-30 审计低危遗留 1）：`target.startsWith(storageDir)` 裸前缀判断可被同级目录逃逸 —— root=`storage/courseware/res` 时 `storage/courseware/res2/evil.txt` 同样通过校验，可越界写/读文件。
+  - **整改**：新增 `server/utils/path-guard.ts`（`isPathInsideRoot` root 补尾分隔符严格前缀 + `safeJoin` 越界返回 null），替换 resources.ts:123 / bridge.ts:127（解包自愈路径，越界条目由静默跳过升级为告警跳过，不阻塞出课）、bridge.ts:152（读路径保持 403）、assignment-hub.ts:450（读路径 404，原尾分隔符哨兵语义等价收敛）。
+  - **测试**：新增 `path-guard.test.ts` 13 例（同级前缀逃逸为核心回归）；security_hardening / bridge 既有断言全过。
+
 - **缺考语义与考勤联动：手动标缺考 + 批量补录自动生成 (`server/utils/auto-record-score.ts`, `server/routes/courseware.ts`, `server/routes/grading.ts`, `LiveClassroomView.tsx`)**：
   - **问题**（2026-09-30 审计教学缺口 2c）：成绩体系完全没有缺考语义 —— 教师无法把缺席学生标为缺考，自动录入也不会为缺考学生留痕，结算前只能靠人工记忆。
   - **手动标缺考**：新增 `markStudentAbsent` + `POST /api/courseware/attempts/mark-absent`，写入 `status='absent'`、`score=NULL`、`source='manual'` 的成绩行（幂等）；课堂页「学生提交数据」每行新增「标缺考」按钮。

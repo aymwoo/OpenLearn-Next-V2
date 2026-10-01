@@ -20,6 +20,7 @@ import { getActorId, requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { validateMagicBytes, SIZE_LIMITS, BLOCKED_EXTENSIONS } from '../utils/upload.js';
+import { isPathInsideRoot } from '../utils/path-guard.js';
 import {
   ALLOWED_ASSIGNMENT_EXT,
   ZIP_CONTAINER_EXT,
@@ -445,9 +446,8 @@ export function registerAssignmentHubRoutes(ctx: ServerContext) {
       }
 
       const absPath = path.resolve(process.cwd(), file.stored_path);
-      // 尾部分隔符哨兵：startsWith 裸前缀会让 storage/assignments2/ 逃逸通过
-      const root = path.join(process.cwd(), 'storage', 'assignments') + path.sep;
-      if (!absPath.startsWith(root) || !fs.existsSync(absPath)) {
+      // SEC-LOW-01: 统一走 path-guard 严格根内判定（原尾分隔符哨兵语义等价）
+      if (!isPathInsideRoot(path.join(process.cwd(), 'storage', 'assignments'), absPath) || !fs.existsSync(absPath)) {
         return res.status(404).json({ success: false, error: 'File not found on disk' });
       }
 

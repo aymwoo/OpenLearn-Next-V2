@@ -8,6 +8,7 @@ import {
   injectScoreSubmissionUsingAI,
 } from '../../packages/plugins/ai-submit-injector.js';
 import { requireAuth } from '../middleware/auth.js';
+import { isPathInsideRoot } from '../utils/path-guard.js';
 import type { ServerContext } from '../context.js';
 import { injectLmsSdk, setCoursewareDocumentCsp } from './shared.js';
 import { sendSafeError } from '../utils/error-handler.js';
@@ -120,15 +121,19 @@ export function registerResourcesRoutes(ctx: ServerContext) {
             if (f.path && f.content !== undefined) {
               const cleanRel = f.path.replace(/\\/g, '/').replace(/^\/+/, '');
               const target = path.resolve(storageDir, cleanRel);
-              if (target.startsWith(storageDir)) {
-                fs.mkdirSync(path.dirname(target), { recursive: true });
-                const isBin = /\.(png|jpe?g|gif|webp|ico)$/i.test(cleanRel);
-                if (isBin) {
-                  const cleanBase64 = f.content.replace(/^data:[^;]+;base64,/, '');
-                  fs.writeFileSync(target, Buffer.from(cleanBase64, 'base64'));
-                } else {
-                  fs.writeFileSync(target, f.content, 'utf8');
-                }
+              // SEC-LOW-01: 严格根内判定（裸 startsWith 前缀可被同级目录逃逸）。
+              // 此处是磁盘缓存自愈（正文来自 DB），越界条目告警跳过、不阻塞出课。
+              if (!isPathInsideRoot(storageDir, target)) {
+                console.warn('[resources] skip path escape:', f.path);
+                continue;
+              }
+              fs.mkdirSync(path.dirname(target), { recursive: true });
+              const isBin = /\.(png|jpe?g|gif|webp|ico)$/i.test(cleanRel);
+              if (isBin) {
+                const cleanBase64 = f.content.replace(/^data:[^;]+;base64,/, '');
+                fs.writeFileSync(target, Buffer.from(cleanBase64, 'base64'));
+              } else {
+                fs.writeFileSync(target, f.content, 'utf8');
               }
             }
           }
