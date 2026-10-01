@@ -7,7 +7,7 @@
  * with the ServiceRegistry (ServiceEventBus) and BootstrapPipeline.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EventBus } from '../event-bus-runtime/EventBus.js';
 import { ServiceEventBus } from '../service-registry/index.js';
 

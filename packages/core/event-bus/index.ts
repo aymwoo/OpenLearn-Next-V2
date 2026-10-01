@@ -18,7 +18,11 @@ export type EventSubscriber = (event: PlatformEvent) => void | Promise<void>;
  */
 export interface EventBusPort {
   publish(event: PlatformEvent): Promise<void>;
-  subscribe(eventType: string, handler: EventSubscriber): void;
+  /**
+   * Phase B4: 返回取消订阅函数（原先返回 void）。原有调用方忽略返回值不受影响；
+   * 长生命周期调用方应持有并在销毁时调用，防订阅者无限累积（内存泄漏）。
+   */
+  subscribe(eventType: string, handler: EventSubscriber): () => void;
 }
 
 export interface EventBusOptions {
@@ -68,6 +72,8 @@ export interface DispatchResult {
 
 const DEFAULT_HANDLER_TIMEOUT_MS = 2000;
 const DEFAULT_MAX_SAME_TYPE_DEPTH = 3;
+/** Phase B4: 同一事件类型订阅数超过该值时告警（防订阅者累积泄漏） */
+const MAX_SUBSCRIBERS_PER_TYPE = 50;
 
 type DispatchChain = ReadonlyMap<string, number>;
 
@@ -107,11 +113,27 @@ export class EventBus {
     };
   }
 
-  public subscribe(eventType: string, subscriber: EventSubscriber): void {
+  /**
+   * Registers a subscriber and returns an unsubscribe function.
+   *
+   * Phase B4: 原先返回 void，调用方无法便捷退订 —— 长生命周期对象反复订阅
+   * 同一类型会导致监听器无限累积。返回的函数内部即 {@link unsubscribe}，
+   * 忽略返回值的既有调用方完全兼容。
+   */
+  public subscribe(eventType: string, subscriber: EventSubscriber): () => void {
     if (!this.subscribers.has(eventType)) {
       this.subscribers.set(eventType, new Set());
     }
-    this.subscribers.get(eventType)!.add(subscriber);
+    const set = this.subscribers.get(eventType)!;
+    set.add(subscriber);
+    if (set.size > MAX_SUBSCRIBERS_PER_TYPE) {
+      console.warn(
+        `[EventBus] Event type "${eventType}" has ${set.size} subscribers ` +
+          `(> ${MAX_SUBSCRIBERS_PER_TYPE}). Possible listener leak — check for ` +
+          `re-subscription without unsubscribe.`,
+      );
+    }
+    return () => this.unsubscribe(eventType, subscriber);
   }
 
   /**

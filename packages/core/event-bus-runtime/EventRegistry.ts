@@ -23,6 +23,13 @@ export class EventRegistry {
       this.byType.set(eventType, set);
     }
     set.add(handler);
+    // Phase B4: 同类型订阅数超阈值告警（防监听器累积泄漏）
+    if (set.size > 50) {
+      console.warn(
+        `[EventRegistry] Event type "${eventType}" has ${set.size} subscribers ` +
+          `(> 50). Possible listener leak — check for re-subscription without unsubscribe.`,
+      );
+    }
     return new EventSubscriber({
       id: handler.id,
       eventType,

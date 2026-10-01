@@ -5,6 +5,7 @@ import { sendSafeError } from '../utils/error-handler.js';
 import { CLASSROOM_EVENTS, publishClassroomEvent } from '../classroom-events.js';
 import { classRoom } from '../presence.js';
 import { parsePagination } from '../utils/pagination.js';
+import { lessonActiveSegments } from '../shared-state.js';
 import type { ServerContext } from '../context.js';
 
 /**
@@ -881,6 +882,9 @@ Provide a short, friendly, and helpful hint (1-2 sentences) directly related to 
         return kernelContainer.db.prepare('DELETE FROM lessons WHERE id = ?').run(id);
       });
       const result = delTx() as any;
+
+      // Phase B4: 课时删除后清理活跃 segment 缓存，防 Map 无限增长
+      lessonActiveSegments.delete(id);
 
       if (result.changes === 0) {
         return res.status(404).json({ error: 'Lesson not found' });

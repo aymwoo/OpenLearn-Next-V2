@@ -3,6 +3,7 @@ import { kernelContainer } from '../../packages/core/kernel/index.js';
 import { getCookieToken, getValidSession, checkIsTeacherOrAdmin, requireAuth } from '../middleware/auth.js';
 import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
+import { cacheGetMfRemote, cacheSetMfRemote } from '../shared-state.js';
 
 // ── SEC: 诊断上报轻量节流 ───────────────────────────────────────────────
 // 该端点每次调用都会写一行 events 审计记录并向全体在线用户广播，
@@ -123,8 +124,8 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
         return res.json({ success: true, result: rows });
       }
 
-      // Cache-first strategy (D-24)
-      const cached = MF_REMOTE_CACHE.get(name);
+      // Cache-first strategy (D-24)；Phase B4: TTL 惰性过期 + 容量上限
+      const cached = cacheGetMfRemote(name);
       if (cached) {
         return res.json({ success: true, result: cached });
       }
@@ -146,7 +147,7 @@ export function registerWorkspaceRoutes(ctx: ServerContext) {
       };
 
       // Populate cache (D-24)
-      MF_REMOTE_CACHE.set(name, result);
+      cacheSetMfRemote(name, result.entry, result.meta);
 
       res.json({ success: true, result });
     } catch (e: any) {

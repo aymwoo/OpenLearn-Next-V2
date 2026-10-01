@@ -9,6 +9,7 @@ import type { ServerContext } from '../context.js';
 import { sendSafeError } from '../utils/error-handler.js';
 import { randomId } from '../utils/id.js';
 import { emitClassroomEvent, getOnlineStudentIds } from '../presence.js';
+import { lessonActiveSegments } from '../shared-state.js';
 
 /**
  * 内置教学模式 —— 课堂启动门户「教学模式选择器」的兜底数据源。
@@ -564,6 +565,12 @@ export function registerClassroomRoutes(
         const result = await classroomService.transitionStage(lessonId, stage, teacherId, classId);
         if (!result.success) {
           return res.status(403).json({ error: result.reason || 'Stage transition blocked' });
+        }
+
+        // Phase B4: 课时进入 ARCHIVED_REPORT（结课）后清理活跃 segment 缓存，
+        // 防止长期运行时 Map 无限增长
+        if (stage === ARCHIVED_REPORT_STAGE) {
+          lessonActiveSegments.delete(lessonId);
         }
 
         res.json({ success: true, stage: result.stage });
