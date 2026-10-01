@@ -252,3 +252,73 @@ describe('DATA-INT-01: 班级导入整批事务', () => {
     db.prepare('DELETE FROM classes WHERE id = ?').run(classRow.id);
   });
 });
+
+describe('PERF-N1: eval-grades 批量归并与逐条查询等价', () => {
+  it('两条提交各自的互评/评分正确聚合（IN + Map 归并结果等价）', async () => {
+    const { registerLessonsRoutes } = await import('../routes/lessons.js');
+    registerLessonsRoutes({ app, io: undefined } as any);
+
+    const now = Date.now();
+    const lessonId = 'lesson-perf-n1';
+    // 测试库跨运行持久：清理固定 ID 种子残留
+    db.prepare('DELETE FROM plugin_peer_reviews WHERE submission_id IN (?, ?)').run('psub-p1', 'psub-p2');
+    db.prepare('DELETE FROM plugin_grades WHERE submission_id IN (?, ?)').run('psub-p1', 'psub-p2');
+    db.prepare('DELETE FROM plugin_submissions WHERE lesson_id = ?').run(lessonId);
+    db.prepare('DELETE FROM students WHERE id IN (?, ?, ?)').run('stu-p1', 'stu-p2', 'stu-p3');
+    db.prepare(
+      'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run('stu-p1', 'STU-P1', '学生一', '', now);
+    db.prepare(
+      'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run('stu-p2', 'STU-P2', '学生二', '', now);
+    db.prepare(
+      'INSERT INTO students (id, student_number, name, email, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run('stu-p3', 'STU-P3', '学生三', '', now);
+    db.prepare('INSERT INTO plugin_submissions (id, lesson_id, student_id, version, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)').run(
+      'psub-p1',
+      lessonId,
+      'stu-p1',
+      now,
+      now,
+    );
+    db.prepare('INSERT INTO plugin_submissions (id, lesson_id, student_id, version, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)').run(
+      'psub-p2',
+      lessonId,
+      'stu-p2',
+      now,
+      now,
+    );
+    // p1: 两条互评 (80+90 → 均分 85)，有评分 77
+    db.prepare(
+      'INSERT INTO plugin_peer_reviews (id, submission_id, reviewer_id, score, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run('prev-p1', 'psub-p1', 'stu-p2', 80, now);
+    db.prepare(
+      'INSERT INTO plugin_peer_reviews (id, submission_id, reviewer_id, score, created_at) VALUES (?, ?, ?, ?, ?)',
+    ).run('prev-p2', 'psub-p1', 'stu-p3', 90, now);
+    db.prepare(
+      'INSERT INTO plugin_grades (id, submission_id, calculated_final_score, status, graded_at) VALUES (?, ?, ?, ?, ?)',
+    ).run('pgr-p1', 'psub-p1', 77, 'graded', now);
+
+    const res = await fetch(`${baseUrl}/api/lessons/${lessonId}/eval-grades`, {
+      headers: { Cookie: `edu_os_token=${token}` },
+    });
+    expect(res.status).toBe(200);
+    const result: any = await res.json();
+
+    const r1 = result.find((r: any) => r.id === 'psub-p1');
+    expect(r1.peerReviews).toHaveLength(2);
+    expect(r1.peerAverageScore).toBe(85);
+    expect(r1.grade.calculated_final_score).toBe(77);
+
+    const r2 = result.find((r: any) => r.id === 'psub-p2');
+    expect(r2.peerReviews).toHaveLength(0);
+    expect(r2.peerAverageScore).toBe(0);
+    expect(r2.grade).toBeNull();
+
+    // 清理
+    db.prepare('DELETE FROM plugin_peer_reviews WHERE submission_id IN (?, ?)').run('psub-p1', 'psub-p2');
+    db.prepare('DELETE FROM plugin_grades WHERE submission_id = ?').run('psub-p1');
+    db.prepare('DELETE FROM plugin_submissions WHERE lesson_id = ?').run(lessonId);
+    db.prepare('DELETE FROM students WHERE id IN (?, ?, ?)').run('stu-p1', 'stu-p2', 'stu-p3');
+  });
+});

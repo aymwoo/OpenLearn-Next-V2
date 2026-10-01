@@ -525,19 +525,66 @@ export const AssignmentEvalPlugin = {
         const studentId = payload.studentId as string | undefined;
         if (!studentId) return { success: true, assignments: rows };
 
-        const assignments = rows.map((row) => {
-          const submission = db
+        // PERF-N1: 批量取该学生的提交与评分（原来循环内逐条查询 1+2N → 1+2），
+        // 按 assignment_id / submission_id 建 Map 归并；分批 500 防 SQLite 参数上限。
+        const assignmentIds = rows.map((r) => r.id);
+        const submissionsByAssignment = new Map<
+          string,
+          { id: string; version: number; file_path: string | null; updated_at: number }
+        >();
+        const gradesBySubmission = new Map<string, { calculated_final_score: number; status: string }>();
+        for (let i = 0; i < assignmentIds.length; i += 500) {
+          const batch = assignmentIds.slice(i, i + 500);
+          if (batch.length === 0) break;
+          const placeholders = batch.map(() => '?').join(', ');
+
+          const submissionRows = db
             .prepare(
-              'SELECT id, version, file_path, updated_at FROM plugin_submissions WHERE assignment_id = ? AND student_id = ?',
+              `SELECT id, assignment_id, version, file_path, updated_at FROM plugin_submissions
+               WHERE assignment_id IN (${placeholders}) AND student_id = ?`,
             )
-            .get(row.id, studentId) as
-            { id: string; version: number; file_path: string | null; updated_at: number } | undefined;
-          const grade = submission
-            ? (db
-                .prepare('SELECT calculated_final_score, status FROM plugin_grades WHERE submission_id = ?')
-                .get(submission.id) as { calculated_final_score: number; status: string } | undefined)
-            : undefined;
-          return { ...row, submission: submission || null, grade: grade || null };
+            .all(...batch, studentId) as Array<{
+            id: string;
+            assignment_id: string;
+            version: number;
+            file_path: string | null;
+            updated_at: number;
+          }>;
+          for (const s of submissionRows) {
+            submissionsByAssignment.set(s.assignment_id, {
+              id: s.id,
+              version: s.version,
+              file_path: s.file_path,
+              updated_at: s.updated_at,
+            });
+          }
+
+          if (submissionRows.length > 0) {
+            const submissionIdList = submissionRows.map((s) => s.id);
+            const gradePlaceholders = submissionIdList.map(() => '?').join(', ');
+            const gradeRows = db
+              .prepare(
+                `SELECT submission_id, calculated_final_score, status FROM plugin_grades
+                 WHERE submission_id IN (${gradePlaceholders})`,
+              )
+              .all(...submissionIdList) as Array<{
+              submission_id: string;
+              calculated_final_score: number;
+              status: string;
+            }>;
+            for (const g of gradeRows) {
+              gradesBySubmission.set(g.submission_id, {
+                calculated_final_score: g.calculated_final_score,
+                status: g.status,
+              });
+            }
+          }
+        }
+
+        const assignments = rows.map((row) => {
+          const submission = submissionsByAssignment.get(row.id) || null;
+          const grade = submission ? (gradesBySubmission.get(submission.id) || null) : null;
+          return { ...row, submission, grade };
         });
         return { success: true, assignments };
       },

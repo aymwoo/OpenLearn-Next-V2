@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+- **性能：eval-grades 与 assignment.list N+1 查询消除 (`server/routes/lessons.ts`, `packages/plugins/assignment-eval.ts`)**：
+  - **问题**（路线图 A5-a/b）：eval-grades 循环内对每条提交各查一次互评与评分（1+2N，200 条提交 = 401 次查询）；assignment.list 的 studentId 分支同样 1+2N。
+  - **整改**：改为按 id 分批 500（SQLite 参数上限保护）的 `IN (...)` 批量查询 + Map 归并，聚合语义不变。
+  - **测试**：eval-grades 等价性用例（两条提交的互评均分/评分/空值分支）。
+
 - **GET 幂等：attendance-summary 移除假考勤播种 (`server/routes/grading.ts`)**：
   - **问题**（路线图 A4-1，2026-10-01 核实仍在）：`GET /api/classes/:classId/attendance-summary` 会在无课表时随机生成 7 个假课表（sch-auto- 前缀）并按 80/12/8% 比例写入全班假考勤；GET 请求产生写副作用，破坏幂等性，且假数据对教师具有欺骗性。
   - **整改**：两段播种逻辑整体删除，GET 变纯读。真实考勤由课堂流程 / 教师点名写入；前端图表对空数据已有优雅空态；存量 sch-auto- 假数据保留读取，随图表 30 天时间窗自然过滤。

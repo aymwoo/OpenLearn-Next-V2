@@ -214,19 +214,46 @@ export function registerLessonsRoutes(ctx: ServerContext) {
         )
         .all(lessonId) as any[];
 
-      const result = [];
-      for (const sub of submissions) {
-        // Query peer reviews with reviewer names
-        const reviews = kernelContainer.db
+      // PERF-N1: 批量取本课节全部互评与评分（原来在循环内逐条查询，1+2N → 1+2），
+      // 按 submission_id 建 Map 归并。SQLite 参数上限保护：每批 500 个 id。
+      const submissionIds = submissions.map((s) => s.id);
+      const reviewsBySubmission = new Map<string, any[]>();
+      const gradesBySubmission = new Map<string, any>();
+      for (let i = 0; i < submissionIds.length; i += 500) {
+        const batch = submissionIds.slice(i, i + 500);
+        if (batch.length === 0) break;
+        const placeholders = batch.map(() => '?').join(', ');
+
+        const reviewRows = kernelContainer.db
           .prepare(
             `
           SELECT pr.*, s.name as reviewer_name
           FROM plugin_peer_reviews pr
           LEFT JOIN students s ON pr.reviewer_id = s.id
-          WHERE pr.submission_id = ?
+          WHERE pr.submission_id IN (${placeholders})
         `,
           )
-          .all(sub.id) as any[];
+          .all(...batch) as any[];
+        for (const review of reviewRows) {
+          let list = reviewsBySubmission.get(review.submission_id);
+          if (!list) {
+            list = [];
+            reviewsBySubmission.set(review.submission_id, list);
+          }
+          list.push(review);
+        }
+
+        const gradeRows = kernelContainer.db
+          .prepare(`SELECT * FROM plugin_grades WHERE submission_id IN (${placeholders})`)
+          .all(...batch) as any[];
+        for (const grade of gradeRows) {
+          gradesBySubmission.set(grade.submission_id, grade);
+        }
+      }
+
+      const result = [];
+      for (const sub of submissions) {
+        const reviews = reviewsBySubmission.get(sub.id) || [];
 
         let peerAverageScore = 0;
         if (reviews.length > 0) {
@@ -234,14 +261,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
           peerAverageScore = Math.round(sum / reviews.length);
         }
 
-        // Query grade details
-        const grade = kernelContainer.db
-          .prepare(
-            `
-          SELECT * FROM plugin_grades WHERE submission_id = ?
-        `,
-          )
-          .get(sub.id) as any;
+        const grade = gradesBySubmission.get(sub.id) || null;
 
         result.push({
           id: sub.id,
@@ -254,7 +274,7 @@ export function registerLessonsRoutes(ctx: ServerContext) {
           updatedAt: sub.updated_at,
           peerReviews: reviews,
           peerAverageScore,
-          grade: grade || null,
+          grade,
         });
       }
 
